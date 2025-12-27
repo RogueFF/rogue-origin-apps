@@ -557,6 +557,7 @@
       gap: 8px;
     }
     .step-image-preview { 
+      position: relative;
       width: 160px; 
       height: 100px; 
       background: var(--bg-card); 
@@ -744,6 +745,104 @@
       .step-item { flex-direction: column; }
       .step-image { width: 100%; }
       .step-image-preview { width: 100%; }
+    }
+
+    /* Annotation Editor */
+    .annotation-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 12px 16px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .tool-group {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .tool-btn {
+      width: 36px;
+      height: 36px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+    .tool-btn:hover {
+      background: var(--green);
+      color: white;
+      border-color: var(--green);
+    }
+    .tool-btn.active {
+      background: var(--green);
+      color: white;
+      border-color: var(--green);
+    }
+    .tool-btn i { font-size: 18px; }
+    .annotation-toolbar input[type="color"] {
+      width: 36px;
+      height: 36px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      padding: 2px;
+    }
+    .annotation-toolbar select {
+      height: 36px;
+      padding: 0 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-card);
+    }
+    .annotation-canvas-container {
+      position: relative;
+      overflow: auto;
+      max-height: 60vh;
+      background: #f0f0f0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    #annotationCanvas {
+      background: white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      cursor: crosshair;
+    }
+
+    /* Step image annotation button */
+    .step-image-actions {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      display: flex;
+      gap: 4px;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .step-image:hover .step-image-actions {
+      opacity: 1;
+    }
+    .step-image-btn {
+      width: 28px;
+      height: 28px;
+      border: none;
+      background: rgba(0,0,0,0.6);
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .step-image-btn:hover {
+      background: var(--green);
     }
   </style>
 </head>
@@ -1010,7 +1109,7 @@
       <div class="modal-body" id="viewModalBody"></div>
       <div class="modal-footer">
         <button class="header-btn" onclick="closeModal('viewModal')">Close</button>
-        <button class="header-btn" onclick="exportPDF()">
+        <button class="header-btn" onclick="openModal('pdfModal')">
           <i class="ph-duotone ph-file-pdf"></i>
           Export PDF
         </button>
@@ -1041,6 +1140,117 @@
         <button class="header-btn primary" onclick="downloadQR()">
           <i class="ph-duotone ph-download"></i>
           Download QR
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PDF Options Modal -->
+  <div class="modal" id="pdfModal">
+    <div class="modal-box" style="max-width: 500px;">
+      <div class="modal-header">
+        <h2>Export PDF Options</h2>
+        <button class="modal-close" onclick="closeModal('pdfModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Layout</label>
+          <select id="pdfLayout" class="form-input">
+            <option value="text">Text Only (Compact)</option>
+            <option value="2col" selected>2 Steps Per Page (With Images)</option>
+            <option value="4col">4 Steps Per Page (With Images)</option>
+            <option value="6col">6 Steps Per Page (Grid)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Options</label>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
+              <input type="checkbox" id="pdfIncludeQR" checked> Include QR Code
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
+              <input type="checkbox" id="pdfIncludeHeader" checked> Include Header
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
+              <input type="checkbox" id="pdfIncludeFooter" checked> Include Footer with Page Numbers
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="header-btn" onclick="closeModal('pdfModal')">Cancel</button>
+        <button class="header-btn primary" onclick="generatePDF()">
+          <i class="ph-duotone ph-file-pdf"></i>
+          Generate PDF
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Image Annotation Editor Modal -->
+  <div class="modal" id="annotationModal">
+    <div class="modal-box" style="max-width: 900px; max-height: 90vh;">
+      <div class="modal-header">
+        <h2>Annotate Image</h2>
+        <button class="modal-close" onclick="closeAnnotationEditor()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 0;">
+        <div class="annotation-toolbar">
+          <div class="tool-group">
+            <button class="tool-btn active" data-tool="select" title="Select">
+              <i class="ph-duotone ph-cursor"></i>
+            </button>
+            <button class="tool-btn" data-tool="arrow" title="Arrow">
+              <i class="ph-duotone ph-arrow-up-right"></i>
+            </button>
+            <button class="tool-btn" data-tool="line" title="Line">
+              <i class="ph-duotone ph-line-segment"></i>
+            </button>
+            <button class="tool-btn" data-tool="rect" title="Rectangle">
+              <i class="ph-duotone ph-rectangle"></i>
+            </button>
+            <button class="tool-btn" data-tool="circle" title="Circle">
+              <i class="ph-duotone ph-circle"></i>
+            </button>
+            <button class="tool-btn" data-tool="freehand" title="Freehand">
+              <i class="ph-duotone ph-pencil"></i>
+            </button>
+            <button class="tool-btn" data-tool="highlighter" title="Highlighter">
+              <i class="ph-duotone ph-highlighter-circle"></i>
+            </button>
+            <button class="tool-btn" data-tool="text" title="Text">
+              <i class="ph-duotone ph-text-t"></i>
+            </button>
+            <button class="tool-btn" data-tool="callout" title="Numbered Callout">
+              <i class="ph-duotone ph-number-circle-one"></i>
+            </button>
+          </div>
+          <div class="tool-group">
+            <input type="color" id="annotationColor" value="#e53935" title="Color">
+            <select id="annotationSize" title="Size">
+              <option value="2">Thin</option>
+              <option value="4" selected>Medium</option>
+              <option value="8">Thick</option>
+            </select>
+          </div>
+          <div class="tool-group">
+            <button class="tool-btn" onclick="undoAnnotation()" title="Undo">
+              <i class="ph-duotone ph-arrow-counter-clockwise"></i>
+            </button>
+            <button class="tool-btn" onclick="clearAnnotations()" title="Clear All">
+              <i class="ph-duotone ph-trash"></i>
+            </button>
+          </div>
+        </div>
+        <div class="annotation-canvas-container">
+          <canvas id="annotationCanvas"></canvas>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="header-btn" onclick="closeAnnotationEditor()">Cancel</button>
+        <button class="header-btn primary" onclick="saveAnnotation()">
+          <i class="ph-duotone ph-check"></i>
+          Save Annotation
         </button>
       </div>
     </div>
@@ -1389,7 +1599,15 @@
           <div class="step-image">
             <div class="step-image-preview" onclick="uploadStepImage(${i})">
               ${step.image ? 
-                `<img src="${step.image}" alt="Step image">` : 
+                `<img src="${step.image}" alt="Step image">
+                 <div class="step-image-actions" onclick="event.stopPropagation()">
+                   <button class="step-image-btn" onclick="openAnnotationEditor(${i})" title="Annotate">
+                     <i class="ph-duotone ph-pencil-circle"></i>
+                   </button>
+                   <button class="step-image-btn" onclick="clearStepImage(${i})" title="Remove">
+                     <i class="ph-duotone ph-x"></i>
+                   </button>
+                 </div>` : 
                 `<div class="placeholder">
                   <i class="ph-duotone ph-camera"></i>
                   <span>Add Photo</span>
@@ -1450,6 +1668,13 @@
         renderSteps();
       };
       reader.readAsDataURL(file);
+    }
+
+    function clearStepImage(index) {
+      if (confirm('Remove this image?')) {
+        editingSteps[index].image = '';
+        renderSteps();
+      }
     }
 
     function setupDragDrop() {
@@ -1673,28 +1898,52 @@
       showToast('SOP Deleted', 'success');
     }
 
-    // PDF Export
-    function exportPDF() {
+    // PDF Export with Options
+    function generatePDF() {
       const sop = sops.find(s => s.id === currentSopId);
       if (!sop) return;
       
+      closeModal('pdfModal');
       showToast('Generating PDF...', 'success');
+      
+      const layout = document.getElementById('pdfLayout').value;
+      const includeQR = document.getElementById('pdfIncludeQR').checked;
+      const includeHeader = document.getElementById('pdfIncludeHeader').checked;
+      const includeFooter = document.getElementById('pdfIncludeFooter').checked;
       
       try {
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF('p', 'mm', 'letter');
         const pageW = 215.9, pageH = 279.4, margin = 15;
         let y = margin;
+        let pageNum = 1;
         
-        // Header
-        pdf.setFillColor(102, 137, 113);
-        pdf.rect(0, 0, pageW, 25, 'F');
-        pdf.setTextColor(255, 255, 255);
-        pdf.setFontSize(11);
-        pdf.setFont('helvetica', 'bold');
-        pdf.text('ROGUE ORIGIN - Standard Operating Procedure', margin, 16);
+        const addHeader = () => {
+          if (!includeHeader) return 35;
+          pdf.setFillColor(102, 137, 113);
+          pdf.rect(0, 0, pageW, 25, 'F');
+          pdf.setTextColor(255, 255, 255);
+          pdf.setFontSize(11);
+          pdf.setFont('helvetica', 'bold');
+          pdf.text('ROGUE ORIGIN - Standard Operating Procedure', margin, 16);
+          return 35;
+        };
         
-        y = 35;
+        const addFooter = (pageNumber) => {
+          if (!includeFooter) return;
+          pdf.setFontSize(8);
+          pdf.setTextColor(138, 154, 142);
+          pdf.text(sop.docNum + '  |  Page ' + pageNumber + '  |  ' + new Date().toLocaleDateString(), pageW / 2, pageH - 10, { align: 'center' });
+        };
+        
+        const newPage = () => {
+          addFooter(pageNum);
+          pdf.addPage();
+          pageNum++;
+          return addHeader();
+        };
+        
+        y = addHeader();
         
         // Title
         pdf.setTextColor(45, 58, 46);
@@ -1707,72 +1956,423 @@
         pdf.setTextColor(90, 107, 95);
         pdf.setFont('helvetica', 'normal');
         pdf.text(sop.docNum + '  |  Rev ' + sop.revision + '  |  ' + sop.dept, margin, y);
-        y += 15;
+        y += 10;
+        
+        // QR Code
+        if (includeQR) {
+          const baseUrl = 'https://rogueff.github.io/rogue-origin-apps/sop-manager.html';
+          const qrUrl = baseUrl + '?view=' + sop.id;
+          pdf.setFontSize(8);
+          pdf.text('Scan for digital version:', pageW - margin - 35, 40);
+          // Add QR as link text (actual image would require async loading)
+          pdf.setTextColor(102, 137, 113);
+          pdf.textWithLink('[QR]', pageW - margin - 15, 40, { url: qrUrl });
+          pdf.setTextColor(90, 107, 95);
+        }
+        
+        y += 5;
         
         // Description
         if (sop.description) {
+          pdf.setFontSize(10);
           const descLines = pdf.splitTextToSize(sop.description, pageW - margin * 2);
-          pdf.text(descLines.slice(0, 3), margin, y);
-          y += Math.min(descLines.length, 3) * 5 + 10;
+          pdf.text(descLines.slice(0, 4), margin, y);
+          y += Math.min(descLines.length, 4) * 5 + 10;
         }
         
-        // Steps header
-        pdf.setFontSize(12);
-        pdf.setTextColor(45, 58, 46);
-        pdf.setFont('helvetica', 'bold');
-        pdf.text('PROCEDURE STEPS', margin, y);
-        y += 8;
-        
-        pdf.setFontSize(10);
-        pdf.setFont('helvetica', 'normal');
-        
-        for (let i = 0; i < sop.steps.length; i++) {
-          const step = sop.steps[i];
-          
-          if (y > pageH - 40) {
-            pdf.addPage();
-            y = margin;
-          }
-          
-          // Step number circle
-          pdf.setFillColor(102, 137, 113);
-          pdf.circle(margin + 4, y, 4, 'F');
-          pdf.setTextColor(255, 255, 255);
-          pdf.setFontSize(9);
-          pdf.text(String(i + 1), margin + 2, y + 1);
-          
-          // Step title
+        // Steps
+        if (layout === 'text') {
+          // Compact text-only layout
+          pdf.setFontSize(12);
           pdf.setTextColor(45, 58, 46);
-          pdf.setFontSize(11);
           pdf.setFont('helvetica', 'bold');
-          pdf.text(step.title || 'Step ' + (i + 1), margin + 12, y + 1);
-          y += 7;
+          pdf.text('PROCEDURE STEPS', margin, y);
+          y += 8;
           
-          // Step description
-          if (step.description) {
+          for (let i = 0; i < sop.steps.length; i++) {
+            const step = sop.steps[i];
+            if (y > pageH - 40) { y = newPage(); }
+            
+            pdf.setFillColor(102, 137, 113);
+            pdf.circle(margin + 4, y, 4, 'F');
+            pdf.setTextColor(255, 255, 255);
             pdf.setFontSize(9);
-            pdf.setFont('helvetica', 'normal');
-            pdf.setTextColor(90, 107, 95);
-            const stepLines = pdf.splitTextToSize(step.description, pageW - margin * 2 - 12);
-            pdf.text(stepLines.slice(0, 5), margin + 12, y);
-            y += Math.min(stepLines.length, 5) * 4 + 8;
+            pdf.text(String(i + 1), margin + 2, y + 1);
+            
+            pdf.setTextColor(45, 58, 46);
+            pdf.setFontSize(11);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text(step.title || 'Step ' + (i + 1), margin + 12, y + 1);
+            y += 7;
+            
+            if (step.description) {
+              pdf.setFontSize(9);
+              pdf.setFont('helvetica', 'normal');
+              pdf.setTextColor(90, 107, 95);
+              const stepLines = pdf.splitTextToSize(step.description, pageW - margin * 2 - 12);
+              pdf.text(stepLines, margin + 12, y);
+              y += stepLines.length * 4 + 6;
+            }
+          }
+        } else {
+          // Image layouts
+          const cols = layout === '2col' ? 1 : (layout === '4col' ? 2 : 3);
+          const rows = layout === '2col' ? 2 : 2;
+          const stepsPerPage = cols * rows;
+          const cellW = (pageW - margin * 2 - (cols - 1) * 10) / cols;
+          const cellH = layout === '2col' ? 100 : (layout === '4col' ? 90 : 70);
+          
+          for (let i = 0; i < sop.steps.length; i++) {
+            const step = sop.steps[i];
+            const posOnPage = i % stepsPerPage;
+            
+            if (i > 0 && posOnPage === 0) {
+              y = newPage();
+              y += 10;
+            }
+            
+            const col = posOnPage % cols;
+            const row = Math.floor(posOnPage / cols);
+            const x = margin + col * (cellW + 10);
+            const cellY = y + row * (cellH + 10);
+            
+            // Step box
+            pdf.setDrawColor(200, 200, 200);
+            pdf.setFillColor(250, 250, 250);
+            pdf.roundedRect(x, cellY, cellW, cellH, 3, 3, 'FD');
+            
+            // Step number
+            pdf.setFillColor(102, 137, 113);
+            pdf.circle(x + 10, cellY + 10, 6, 'F');
+            pdf.setTextColor(255, 255, 255);
+            pdf.setFontSize(10);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text(String(i + 1), x + 8, cellY + 12);
+            
+            // Step title
+            pdf.setTextColor(45, 58, 46);
+            pdf.setFontSize(10);
+            pdf.text(step.title || 'Step ' + (i + 1), x + 20, cellY + 12);
+            
+            // Step description
+            if (step.description) {
+              pdf.setFontSize(8);
+              pdf.setFont('helvetica', 'normal');
+              pdf.setTextColor(90, 107, 95);
+              const maxChars = layout === '6col' ? 80 : 150;
+              const desc = step.description.length > maxChars ? step.description.substring(0, maxChars) + '...' : step.description;
+              const lines = pdf.splitTextToSize(desc, cellW - 10);
+              pdf.text(lines.slice(0, layout === '6col' ? 3 : 5), x + 5, cellY + 22);
+            }
+            
+            // Image placeholder
+            if (step.image) {
+              const imgY = cellY + (layout === '6col' ? 35 : 45);
+              const imgH = cellH - (layout === '6col' ? 40 : 50);
+              pdf.setFillColor(240, 240, 240);
+              pdf.rect(x + 5, imgY, cellW - 10, imgH, 'F');
+              pdf.setFontSize(7);
+              pdf.setTextColor(150, 150, 150);
+              pdf.text('[Image]', x + cellW/2, imgY + imgH/2, { align: 'center' });
+            }
           }
         }
         
-        // Footer
-        pdf.setFontSize(8);
-        pdf.setTextColor(138, 154, 142);
-        pdf.text(sop.docNum + '  |  Generated ' + new Date().toLocaleDateString(), pageW / 2, pageH - 10, { align: 'center' });
+        addFooter(pageNum);
         
-        // Save
         const filename = sop.docNum.replace(/[^a-z0-9]/gi, '-') + '.pdf';
         pdf.save(filename);
-        
         showToast('PDF exported!', 'success');
       } catch (err) {
         console.error('PDF Error:', err);
         showToast('Error generating PDF', 'error');
       }
+    }
+    
+    // Keep simple exportPDF for backwards compatibility
+    function exportPDF() {
+      openModal('pdfModal');
+    }
+
+    // =============================================
+    // IMAGE ANNOTATION EDITOR
+    // =============================================
+    let annotationCanvas, annotationCtx;
+    let annotationImage = null;
+    let annotationStepIndex = null;
+    let currentTool = 'select';
+    let isDrawing = false;
+    let startX, startY;
+    let annotations = [];
+    let undoStack = [];
+    let calloutNumber = 1;
+    let freehandPath = [];
+
+    function openAnnotationEditor(stepIndex) {
+      const step = editingSteps[stepIndex];
+      if (!step || !step.image) {
+        showToast('Add an image first', 'error');
+        return;
+      }
+      
+      annotationStepIndex = stepIndex;
+      annotations = [];
+      undoStack = [];
+      calloutNumber = 1;
+      
+      const img = new Image();
+      img.onload = function() {
+        annotationImage = img;
+        annotationCanvas = document.getElementById('annotationCanvas');
+        annotationCtx = annotationCanvas.getContext('2d');
+        
+        // Size canvas to image (max 800px wide)
+        const maxW = 800;
+        const scale = img.width > maxW ? maxW / img.width : 1;
+        annotationCanvas.width = img.width * scale;
+        annotationCanvas.height = img.height * scale;
+        
+        redrawAnnotations();
+        openModal('annotationModal');
+        setupAnnotationEvents();
+      };
+      img.src = step.image;
+    }
+
+    function setupAnnotationEvents() {
+      const canvas = annotationCanvas;
+      
+      // Tool selection
+      document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
+        btn.onclick = () => {
+          document.querySelectorAll('.tool-btn[data-tool]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentTool = btn.dataset.tool;
+        };
+      });
+      
+      canvas.onmousedown = (e) => {
+        if (currentTool === 'select') return;
+        
+        const rect = canvas.getBoundingClientRect();
+        startX = e.clientX - rect.left;
+        startY = e.clientY - rect.top;
+        isDrawing = true;
+        freehandPath = [{ x: startX, y: startY }];
+      };
+      
+      canvas.onmousemove = (e) => {
+        if (!isDrawing) return;
+        
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        if (currentTool === 'freehand' || currentTool === 'highlighter') {
+          freehandPath.push({ x, y });
+          redrawAnnotations();
+          drawFreehandPreview(freehandPath);
+        } else {
+          redrawAnnotations();
+          drawPreview(startX, startY, x, y);
+        }
+      };
+      
+      canvas.onmouseup = (e) => {
+        if (!isDrawing) return;
+        isDrawing = false;
+        
+        const rect = canvas.getBoundingClientRect();
+        const endX = e.clientX - rect.left;
+        const endY = e.clientY - rect.top;
+        const color = document.getElementById('annotationColor').value;
+        const size = parseInt(document.getElementById('annotationSize').value);
+        
+        if (currentTool === 'freehand' || currentTool === 'highlighter') {
+          annotations.push({
+            type: currentTool,
+            path: [...freehandPath],
+            color: currentTool === 'highlighter' ? color + '60' : color,
+            size: currentTool === 'highlighter' ? size * 4 : size
+          });
+        } else if (currentTool === 'text') {
+          const text = prompt('Enter text:');
+          if (text) {
+            annotations.push({ type: 'text', x: startX, y: startY, text, color, size: size * 4 });
+          }
+        } else if (currentTool === 'callout') {
+          annotations.push({ type: 'callout', x: startX, y: startY, number: calloutNumber++, color, size });
+        } else {
+          annotations.push({
+            type: currentTool,
+            x1: startX, y1: startY,
+            x2: endX, y2: endY,
+            color, size
+          });
+        }
+        
+        undoStack.push([...annotations]);
+        redrawAnnotations();
+      };
+      
+      canvas.onmouseleave = () => {
+        if (isDrawing) {
+          isDrawing = false;
+          redrawAnnotations();
+        }
+      };
+    }
+
+    function drawPreview(x1, y1, x2, y2) {
+      const ctx = annotationCtx;
+      const color = document.getElementById('annotationColor').value;
+      const size = parseInt(document.getElementById('annotationSize').value);
+      
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = size;
+      ctx.lineCap = 'round';
+      
+      if (currentTool === 'arrow') {
+        drawArrow(ctx, x1, y1, x2, y2);
+      } else if (currentTool === 'line') {
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      } else if (currentTool === 'rect') {
+        ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+      } else if (currentTool === 'circle') {
+        const rx = Math.abs(x2 - x1) / 2;
+        const ry = Math.abs(y2 - y1) / 2;
+        ctx.beginPath();
+        ctx.ellipse(x1 + (x2 - x1) / 2, y1 + (y2 - y1) / 2, rx, ry, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    function drawFreehandPreview(path) {
+      const ctx = annotationCtx;
+      const color = document.getElementById('annotationColor').value;
+      const size = parseInt(document.getElementById('annotationSize').value);
+      
+      ctx.strokeStyle = currentTool === 'highlighter' ? color + '60' : color;
+      ctx.lineWidth = currentTool === 'highlighter' ? size * 4 : size;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      
+      ctx.beginPath();
+      ctx.moveTo(path[0].x, path[0].y);
+      for (let i = 1; i < path.length; i++) {
+        ctx.lineTo(path[i].x, path[i].y);
+      }
+      ctx.stroke();
+    }
+
+    function drawArrow(ctx, x1, y1, x2, y2) {
+      const headLen = 15;
+      const angle = Math.atan2(y2 - y1, x2 - x1);
+      
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      
+      ctx.beginPath();
+      ctx.moveTo(x2, y2);
+      ctx.lineTo(x2 - headLen * Math.cos(angle - Math.PI / 6), y2 - headLen * Math.sin(angle - Math.PI / 6));
+      ctx.moveTo(x2, y2);
+      ctx.lineTo(x2 - headLen * Math.cos(angle + Math.PI / 6), y2 - headLen * Math.sin(angle + Math.PI / 6));
+      ctx.stroke();
+    }
+
+    function redrawAnnotations() {
+      const ctx = annotationCtx;
+      
+      // Clear and draw base image
+      ctx.clearRect(0, 0, annotationCanvas.width, annotationCanvas.height);
+      if (annotationImage) {
+        ctx.drawImage(annotationImage, 0, 0, annotationCanvas.width, annotationCanvas.height);
+      }
+      
+      // Draw all annotations
+      for (const ann of annotations) {
+        ctx.strokeStyle = ann.color;
+        ctx.fillStyle = ann.color;
+        ctx.lineWidth = ann.size;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        
+        if (ann.type === 'arrow') {
+          drawArrow(ctx, ann.x1, ann.y1, ann.x2, ann.y2);
+        } else if (ann.type === 'line') {
+          ctx.beginPath();
+          ctx.moveTo(ann.x1, ann.y1);
+          ctx.lineTo(ann.x2, ann.y2);
+          ctx.stroke();
+        } else if (ann.type === 'rect') {
+          ctx.strokeRect(ann.x1, ann.y1, ann.x2 - ann.x1, ann.y2 - ann.y1);
+        } else if (ann.type === 'circle') {
+          const rx = Math.abs(ann.x2 - ann.x1) / 2;
+          const ry = Math.abs(ann.y2 - ann.y1) / 2;
+          ctx.beginPath();
+          ctx.ellipse(ann.x1 + (ann.x2 - ann.x1) / 2, ann.y1 + (ann.y2 - ann.y1) / 2, rx, ry, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (ann.type === 'freehand' || ann.type === 'highlighter') {
+          ctx.beginPath();
+          ctx.moveTo(ann.path[0].x, ann.path[0].y);
+          for (let i = 1; i < ann.path.length; i++) {
+            ctx.lineTo(ann.path[i].x, ann.path[i].y);
+          }
+          ctx.stroke();
+        } else if (ann.type === 'text') {
+          ctx.font = `${ann.size}px Arial`;
+          ctx.fillText(ann.text, ann.x, ann.y);
+        } else if (ann.type === 'callout') {
+          const r = 14;
+          ctx.beginPath();
+          ctx.arc(ann.x, ann.y, r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = 'white';
+          ctx.font = 'bold 14px Arial';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(ann.number, ann.x, ann.y);
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'alphabetic';
+        }
+      }
+    }
+
+    function undoAnnotation() {
+      if (annotations.length > 0) {
+        annotations.pop();
+        redrawAnnotations();
+      }
+    }
+
+    function clearAnnotations() {
+      if (confirm('Clear all annotations?')) {
+        annotations = [];
+        calloutNumber = 1;
+        redrawAnnotations();
+      }
+    }
+
+    function closeAnnotationEditor() {
+      closeModal('annotationModal');
+      annotationImage = null;
+      annotationStepIndex = null;
+    }
+
+    function saveAnnotation() {
+      if (annotationStepIndex === null) return;
+      
+      const dataUrl = annotationCanvas.toDataURL('image/png');
+      editingSteps[annotationStepIndex].image = dataUrl;
+      renderSteps();
+      closeAnnotationEditor();
+      showToast('Annotation saved!', 'success');
     }
 
     // UI Helpers
