@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rogue Origin - Operations Apps</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    :root {
+      --gold: #e4aa4f;
+      --gold-light: #f0cb60;
+      --green: #668971;
+      --green-dark: #4a6b54;
+      --bg: #faf8f5;
+      --bg-card: #ffffff;
+      --border: #e8e4de;
+      --text: #2d3a2e;
+      --text-muted: #5a6b5f;
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+    
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    
+    .header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+    
+    .logo {
+      height: 60px;
+      margin-bottom: 16px;
+    }
+    
+    .header h1 {
+      font-size: 28px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    
+    .header p {
+      color: var(--text-muted);
+      font-size: 15px;
+    }
+    
+    .apps-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 20px;
+    }
+    
+    .app-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      text-decoration: none;
+      color: inherit;
+      transition: all 0.2s;
+      display: block;
+    }
+    
+    .app-card:hover {
+      border-color: var(--green);
+      box-shadow: 0 8px 24px rgba(102, 137, 113, 0.12);
+      transform: translateY(-2px);
+    }
+    
+    .app-icon {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, var(--green), var(--green-dark));
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+    
+    .app-icon i {
+      font-size: 24px;
+      color: white;
+    }
+    
+    .app-icon.gold {
+      background: linear-gradient(135deg, var(--gold), var(--gold-light));
+    }
+    
+    .app-card h3 {
+      font-size: 17px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    
+    .app-card p {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    
+    .footer {
+      text-align: center;
+      margin-top: 48px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <img src="https://lh3.googleusercontent.com/d/1nqCO3wXziung_kuFMOnP2M0FWJRjFBUU" alt="Rogue Origin" class="logo">
+      <h1>Operations Apps</h1>
+      <p>Production tools and dashboards for Rogue Origin</p>
+    </div>
+    
+    <div class="apps-grid">
+      <a href="sop-manager.html" class="app-card">
+        <div class="app-icon">
+          <i class="ph-duotone ph-clipboard-text"></i>
+        </div>
+        <h3>SOP Manager</h3>
+        <p>Create, edit, and manage Standard Operating Procedures with QR codes and PDF export.</p>
+      </a>
+      
+      <a href="scoreboard.html" class="app-card">
+        <div class="app-icon gold">
+          <i class="ph-duotone ph-timer"></i>
+        </div>
+        <h3>Production Scoreboard</h3>
+        <p>Real-time trimming metrics with bag timer and crew productivity tracking.</p>
+      </a>
+      
+      <a href="kanban.html" class="app-card">
+        <div class="app-icon">
+          <i class="ph-duotone ph-kanban"></i>
+        </div>
+        <h3>Supply Kanban</h3>
+        <p>Track supply levels and reorder points with visual kanban cards.</p>
+      </a>
+      
+      <a href="barcode.html" class="app-card">
+        <div class="app-icon gold">
+          <i class="ph-duotone ph-barcode"></i>
+        </div>
+        <h3>Barcode Printer</h3>
+        <p>Generate and print barcode labels for inventory management.</p>
+      </a>
+      
+      <a href="ops-hub.html" class="app-card">
+        <div class="app-icon">
+          <i class="ph-duotone ph-squares-four"></i>
+        </div>
+        <h3>Operations Hub</h3>
+        <p>Central dashboard integrating all production tools and KPIs.</p>
+      </a>
+    </div>
+    
+    <div class="footer">
+      <p>Rogue Origin © 2024 • Built with Claude</p>
+    </div>
+  </div>
+</body>
+</html>

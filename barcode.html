@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html>
+<head>
+  
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rogue Origin - Label Printer</title>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    :root {
+      /* Rogue Origin Brand Colors - Light Theme */
+      --gold: #e4aa4f;
+      --gold-light: #f0cb60;
+      --green: #668971;
+      --sungrown: #bf8e4e;
+      --greenhouse: #8f9263;
+      --indoor: #62758d;
+      --bg: #faf8f5;
+      --bg-card: #ffffff;
+      --border: #e8e4de;
+      --text: #2d3a2e;
+      --text-muted: #8a9a8e;
+    }
+    
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body { 
+      font-family: system-ui, -apple-system, sans-serif; 
+      background: var(--bg); 
+      color: var(--text);
+      padding: 20px; 
+      min-height: 100vh;
+    }
+    
+    .container { 
+      max-width: 1200px; 
+      margin: 0 auto; 
+      background: var(--bg-card); 
+      padding: 30px; 
+      border-radius: 16px; 
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      border: 1px solid var(--border);
+    }
+    
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 25px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    .logo {
+      max-width: 280px;
+      height: auto;
+      margin-bottom: 8px;
+    }
+    
+    .subtitle {
+      color: var(--green);
+      font-size: 14px;
+      letter-spacing: 1px;
+      margin-top: 10px;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    
+    /* Cultivar Selector */
+    .cultivar-selector { 
+      background: linear-gradient(135deg, var(--green) 0%, #5a7a63 100%); 
+      padding: 24px; 
+      border-radius: 12px; 
+      margin-bottom: 24px;
+      box-shadow: 0 4px 12px rgba(102,137,113,0.2);
+    }
+    
+    .cultivar-label { 
+      color: #fff; 
+      font-size: 13px; 
+      font-weight: 600; 
+      margin-bottom: 10px; 
+      text-align: center;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    
+    .cultivar-dropdown { 
+      width: 100%; 
+      padding: 16px; 
+      font-size: 18px; 
+      font-weight: 600; 
+      border: 2px solid var(--gold); 
+      border-radius: 10px; 
+      background: var(--bg-card); 
+      color: var(--text);
+      cursor: pointer; 
+      text-align: center;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .cultivar-dropdown:focus { 
+      outline: none; 
+      box-shadow: 0 0 0 4px rgba(228, 170, 79, 0.2); 
+    }
+    
+    /* Current Cultivar */
+    .current-cultivar { 
+      background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 100%); 
+      color: #fff; 
+      padding: 20px; 
+      border-radius: 12px; 
+      margin-bottom: 24px; 
+      text-align: center; 
+      display: none;
+      box-shadow: 0 4px 12px rgba(228,170,79,0.25);
+    }
+    
+    .current-cultivar.show { display: block; }
+    .current-cultivar h2 { font-size: 28px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 1px; text-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+    .current-cultivar p { font-size: 13px; opacity: 0.9; }
+    
+    /* Product Sections */
+    .product-sections { 
+      display: grid; 
+      grid-template-columns: 1fr 1fr; 
+      gap: 20px; 
+      margin-bottom: 24px; 
+    }
+    
+    @media (max-width: 768px) { 
+      .product-sections { grid-template-columns: 1fr; } 
+    }
+    
+    .product-section { 
+      background: var(--bg-card); 
+      border-radius: 12px; 
+      padding: 20px; 
+      border: 2px solid;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    
+    .product-section.tops { border-color: var(--green); }
+    .product-section.smalls { border-color: var(--sungrown); }
+    
+    .section-header { 
+      font-size: 20px; 
+      font-weight: 700; 
+      margin-bottom: 16px; 
+      padding-bottom: 12px; 
+      border-bottom: 2px solid; 
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    
+    .section-header.tops { color: var(--green); border-color: var(--green); }
+    .section-header.smalls { color: var(--sungrown); border-color: var(--sungrown); }
+    
+    /* Size Buttons */
+    .size-buttons { 
+      display: grid; 
+      grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); 
+      gap: 10px; 
+    }
+    
+    .size-btn { 
+      padding: 18px 10px; 
+      font-size: 14px; 
+      font-weight: 700; 
+      border: none; 
+      border-radius: 10px; 
+      cursor: pointer; 
+      transition: all 0.2s; 
+      text-align: center;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .size-btn:hover { transform: translateY(-2px); }
+    .size-btn:active { transform: scale(0.97); }
+    
+    .size-btn.tops { 
+      background: var(--green); 
+      color: white; 
+    }
+    .size-btn.tops:hover { 
+      box-shadow: 0 4px 12px rgba(102, 137, 113, 0.35); 
+    }
+    
+    .size-btn.smalls { 
+      background: var(--sungrown); 
+      color: white; 
+    }
+    .size-btn.smalls:hover { 
+      box-shadow: 0 4px 12px rgba(191, 142, 78, 0.35); 
+    }
+    
+    .size-btn.disabled { 
+      background: var(--border); 
+      color: var(--text-muted);
+      cursor: not-allowed; 
+    }
+    .size-btn.disabled:hover { 
+      transform: none; 
+      box-shadow: none; 
+    }
+    
+    /* Last Printed */
+    .last-printed { 
+      background: var(--bg); 
+      border: 2px solid var(--green); 
+      padding: 18px; 
+      border-radius: 12px; 
+      margin-bottom: 24px; 
+      display: none;
+      text-align: center;
+    }
+    
+    .last-printed.show { display: block; }
+    .last-printed-label { font-weight: 600; color: var(--green); text-transform: uppercase; letter-spacing: 0.5px; font-size: 12px; }
+    .last-printed-value { font-size: 20px; font-weight: 700; color: var(--text); margin-left: 8px; }
+    
+    .print-again-btn { 
+      margin-top: 12px; 
+      padding: 12px 28px; 
+      background: var(--gold); 
+      color: #fff; 
+      border: none; 
+      border-radius: 8px; 
+      cursor: pointer; 
+      font-weight: 600;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      transition: all 0.2s;
+    }
+    .print-again-btn:hover { 
+      box-shadow: 0 4px 12px rgba(228, 170, 79, 0.35);
+      transform: translateY(-1px);
+    }
+    
+    /* Search */
+    .search-section { 
+      background: var(--bg); 
+      padding: 16px; 
+      border-radius: 12px; 
+      margin-bottom: 24px; 
+      border: 1px solid var(--border);
+    }
+    
+    .search-input { 
+      padding: 14px 16px; 
+      border: 1px solid var(--border); 
+      border-radius: 10px; 
+      font-size: 15px; 
+      width: 100%;
+      background: var(--bg-card);
+      color: var(--text);
+    }
+    
+    .search-input:focus {
+      outline: none;
+      border-color: var(--green);
+      box-shadow: 0 0 0 3px rgba(102, 137, 113, 0.1);
+    }
+    
+    .search-input::placeholder {
+      color: var(--text-muted);
+    }
+    
+    .search-hint { font-size: 11px; color: var(--text-muted); margin-top: 8px; }
+    
+    /* Search Results */
+    .quick-print-section { margin-bottom: 24px; display: none; }
+    .quick-print-section.show { display: block; }
+    .quick-print-title { font-size: 14px; font-weight: 600; color: var(--green); margin-bottom: 12px; text-align: center; text-transform: uppercase; letter-spacing: 0.5px; }
+    .quick-print-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+    
+    .quick-print-card { 
+      background: var(--green); 
+      padding: 14px; 
+      border-radius: 10px; 
+      cursor: pointer; 
+      transition: all 0.2s;
+      border: 2px solid transparent;
+    }
+    .quick-print-card:hover { 
+      transform: translateY(-2px); 
+      box-shadow: 0 6px 16px rgba(0,0,0,0.1);
+      border-color: var(--gold);
+    }
+    .quick-print-name { font-weight: 700; font-size: 13px; color: #fff; text-transform: uppercase; letter-spacing: 0.3px; }
+    .quick-print-barcode { font-family: monospace; font-size: 11px; color: var(--gold-light); margin-top: 4px; }
+    
+    /* Toolbar */
+    .toolbar { 
+      display: flex; 
+      gap: 10px; 
+      flex-wrap: wrap; 
+      justify-content: center; 
+      padding-top: 20px; 
+      border-top: 1px solid var(--border);
+    }
+    
+    button { 
+      padding: 12px 20px; 
+      background: var(--green); 
+      color: white; 
+      border: none; 
+      border-radius: 8px; 
+      cursor: pointer; 
+      font-size: 13px; 
+      font-weight: 600;
+      transition: all 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    button:hover { 
+      transform: translateY(-1px);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.12);
+    }
+    button.secondary { background: var(--indoor); }
+    button.gold { background: var(--gold); }
+    button.outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    button.outline:hover { border-color: var(--green); background: var(--bg); }
+    
+    /* No Cultivar */
+    .no-cultivar { 
+      text-align: center; 
+      padding: 50px; 
+      background: var(--bg); 
+      border-radius: 12px;
+      border: 2px dashed var(--border);
+    }
+    .no-cultivar h3 { color: var(--green); margin-bottom: 8px; font-size: 18px; text-transform: uppercase; letter-spacing: 1px; }
+    .no-cultivar p { color: var(--text-muted); }
+    
+    /* Modals */
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 1000; backdrop-filter: blur(2px); }
+    .modal-content { 
+      position: absolute; 
+      top: 50%; 
+      left: 50%; 
+      transform: translate(-50%, -50%); 
+      background: var(--bg-card); 
+      padding: 28px; 
+      border-radius: 16px; 
+      max-width: 500px; 
+      width: 90%; 
+      max-height: 90vh; 
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+    }
+    
+    .modal-content h2 {
+      color: var(--text);
+      margin-bottom: 20px;
+      font-size: 18px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; margin-bottom: 6px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-size: 11px; }
+    
+    input[type="text"], textarea { 
+      padding: 12px 14px; 
+      border: 1px solid var(--border); 
+      border-radius: 8px; 
+      font-size: 14px; 
+      width: 100%;
+      background: var(--bg);
+      color: var(--text);
+    }
+    
+    input[type="text"]:focus, textarea:focus {
+      outline: none;
+      border-color: var(--green);
+      box-shadow: 0 0 0 3px rgba(102,137,113,0.1);
+    }
+    
+    .modal-buttons { display: flex; gap: 10px; margin-top: 24px; justify-content: flex-end; }
+    
+    .loading { text-align: center; padding: 50px; color: var(--green); font-size: 16px; text-transform: uppercase; letter-spacing: 1px; }
+    
+    .message { 
+      padding: 14px 18px; 
+      margin-bottom: 20px; 
+      border-radius: 10px; 
+      display: none; 
+      font-weight: 600; 
+      text-align: center;
+      font-size: 13px;
+    }
+    .message.success { background: rgba(102,137,113,0.1); color: var(--green); border: 1px solid var(--green); }
+    .message.error { background: rgba(201,85,61,0.1); color: #c9553d; border: 1px solid #c9553d; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <img src="https://rogueorigin.com/cdn/shop/files/RO_HORIZONTALOGO_17c996f3-9354-4a52-aa57-39d393599904.png" alt="Rogue Origin" class="logo">
+      <div class="subtitle"><i class="ph-duotone ph-tag" style="margin-right:6px"></i> Label Printer</div>
+    </div>
+    
+    <div id="message" class="message"></div>
+    
+    <!-- Cultivar Selector -->
+    <div class="cultivar-selector">
+      <div class="cultivar-label"><i class="ph-duotone ph-plant" style="margin-right:6px"></i> Select Cultivar</div>
+      <select id="cultivarSelect" class="cultivar-dropdown" onchange="selectCultivar()">
+        <option value="">-- Choose Cultivar --</option>
+      </select>
+    </div>
+    
+    <!-- Current Cultivar -->
+    <div id="currentCultivar" class="current-cultivar">
+      <h2 id="cultivarName">Lifter</h2>
+      <p>Click a size below to print</p>
+    </div>
+    
+    <!-- Last Printed -->
+    <div id="lastPrinted" class="last-printed">
+      <span class="last-printed-label">✅ Last Printed:</span>
+      <span id="lastPrintedValue" class="last-printed-value"></span>
+      <br>
+      <button class="print-again-btn" onclick="printLastAgain()">🖨️ Print Again</button>
+    </div>
+    
+    <!-- Product Sections -->
+    <div id="productSections" class="product-sections" style="display: none;">
+      <div class="product-section tops">
+        <div class="section-header tops"><i class="ph-duotone ph-package" style="margin-right:6px"></i> Tops</div>
+        <div id="topsButtons" class="size-buttons"></div>
+      </div>
+      <div class="product-section smalls">
+        <div class="section-header smalls"><i class="ph-duotone ph-package" style="margin-right:6px"></i> Smalls</div>
+        <div id="smallsButtons" class="size-buttons"></div>
+      </div>
+    </div>
+    
+    <!-- No Cultivar -->
+    <div id="noCultivar" class="no-cultivar">
+      <h3>👆 Select a Cultivar</h3>
+      <p>Choose which cultivar you're bagging to see available sizes</p>
+    </div>
+    
+    <!-- Search -->
+    <div class="search-section">
+      <input type="text" id="searchBox" class="search-input" placeholder="🔍 Search for any product..." onkeyup="handleSearch()">
+      <div class="search-hint">Type product name, SKU, or barcode</div>
+    </div>
+    
+    <!-- Search Results -->
+    <div id="searchResults" class="quick-print-section"></div>
+    
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <button onclick="showAddModal()"><i class="ph-duotone ph-plus" style="margin-right:6px"></i> Add Product</button>
+      <button class="secondary" onclick="showImportModal()">📥 Import</button>
+      <button class="secondary" onclick="exportToCSV()">📤 Export</button>
+      <button class="gold" onclick="showPrintHelp()">❓ Print Setup</button>
+      <button class="outline" onclick="loadProducts()">🔄 Refresh</button>
+    </div>
+    
+    <div id="loading" class="loading">Loading Products...</div>
+  </div>
+  
+  <!-- Modals -->
+  <div id="productModal" class="modal">
+    <div class="modal-content">
+      <h2 id="modalTitle">Add Product</h2>
+      <div class="form-group">
+        <label>Product Name:</label>
+        <input type="text" id="productHeader" placeholder="e.g., Lifter Tops 1 LB" maxlength="25">
+      </div>
+      <div class="form-group">
+        <label>SKU:</label>
+        <input type="text" id="productSKU" placeholder="e.g., LIFT-TOPS-1LB">
+      </div>
+      <div class="form-group">
+        <label>Barcode:</label>
+        <input type="text" id="productBarcode" placeholder="e.g., 1234567890">
+      </div>
+      <div class="modal-buttons">
+        <button class="outline" onclick="closeModal()">Cancel</button>
+        <button onclick="saveProduct()">Save</button>
+      </div>
+    </div>
+  </div>
+  
+  <div id="importModal" class="modal">
+    <div class="modal-content">
+      <h2>Import CSV</h2>
+      <div class="form-group">
+        <label>Paste CSV data (Header,SKU,Barcode):</label>
+        <textarea id="csvText" rows="10"></textarea>
+      </div>
+      <div class="modal-buttons">
+        <button class="outline" onclick="closeImportModal()">Cancel</button>
+        <button onclick="importCSV()">Import</button>
+      </div>
+    </div>
+  </div>
+  
+  <div id="printHelpModal" class="modal">
+    <div class="modal-content">
+      <h2>🖨️ Print Setup</h2>
+      <p style="margin-bottom: 15px; color: var(--text-muted);">Configure your Bixolon printer:</p>
+      <ul style="margin: 0 0 15px 20px; color: var(--text);">
+        <li>Paper size: <strong style="color: var(--gold);">1.65" × 0.5"</strong></li>
+        <li>Margins: <strong style="color: var(--gold);">None</strong></li>
+        <li>Headers/Footers: <strong style="color: var(--gold);">Off</strong></li>
+      </ul>
+      <div class="modal-buttons">
+        <button onclick="document.getElementById('printHelpModal').style.display='none'">Got it!</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var products = [];
+    var selectedCultivar = '';
+    var lastPrintedProduct = null;
+    var sizeOrder = ['1 OZ', '1/4 LB', '1/2 LB', '1 LB', '10 LB', '5KG', '10KG'];
+    
+    window.onload = function() { loadProducts(); };
+    
+    function loadProducts() {
+      document.getElementById('loading').style.display = 'block';
+      
+      google.script.run
+        .withSuccessHandler(function(data) {
+          products = data || [];
+          populateCultivarDropdown();
+          document.getElementById('loading').style.display = 'none';
+          showMessage('Loaded ' + products.length + ' products', 'success');
+        })
+        .withFailureHandler(function(error) {
+          document.getElementById('loading').style.display = 'none';
+          showMessage('Error: ' + error.message, 'error');
+        })
+        .getProducts();
+    }
+    
+    function parseProductName(name) {
+      var parts = (name || '').trim().split(' ');
+      var size = null;
+      var type = null;
+      var cultivar = null;
+      
+      if (parts.length > 0) {
+        var lastPart = parts[parts.length - 1].toUpperCase();
+        if (/^\d+KG$/.test(lastPart)) {
+          size = lastPart;
+          parts = parts.slice(0, -1);
+        }
+      }
+      
+      if (!size) {
+        for (var i = parts.length - 1; i >= 0; i--) {
+          var potential = parts.slice(i).join(' ').toUpperCase();
+          if (/^(1|1\/2|1\/4|5|10)\s*(OZ|LB)$/i.test(potential)) {
+            size = potential;
+            parts = parts.slice(0, i);
+            break;
+          }
+        }
+      }
+      
+      if (parts.length > 0) {
+        var lastWord = parts[parts.length - 1];
+        if (/^(Tops|Smalls|Trim|Shake|Flower)$/i.test(lastWord)) {
+          type = lastWord.charAt(0).toUpperCase() + lastWord.slice(1).toLowerCase();
+          parts = parts.slice(0, -1);
+        }
+      }
+      
+      cultivar = parts.join(' ');
+      return { cultivar: cultivar, type: type, size: size };
+    }
+    
+    function populateCultivarDropdown() {
+      var cultivars = {};
+      products.forEach(function(p) {
+        var parsed = parseProductName(p.header);
+        if (parsed.cultivar) {
+          cultivars[parsed.cultivar] = (cultivars[parsed.cultivar] || 0) + 1;
+        }
+      });
+      
+      var select = document.getElementById('cultivarSelect');
+      select.innerHTML = '<option value="">-- Choose Cultivar (' + Object.keys(cultivars).length + ') --</option>';
+      
+      Object.keys(cultivars).sort().forEach(function(c) {
+        var opt = document.createElement('option');
+        opt.value = c;
+        opt.textContent = c + ' (' + cultivars[c] + ')';
+        select.appendChild(opt);
+      });
+    }
+    
+    function selectCultivar() {
+      selectedCultivar = document.getElementById('cultivarSelect').value;
+      
+      if (!selectedCultivar) {
+        document.getElementById('currentCultivar').classList.remove('show');
+        document.getElementById('productSections').style.display = 'none';
+        document.getElementById('noCultivar').style.display = 'block';
+        return;
+      }
+      
+      document.getElementById('cultivarName').innerHTML = '<i class="ph-duotone ph-plant" style="margin-right:6px"></i> ' + selectedCultivar;
+      document.getElementById('currentCultivar').classList.add('show');
+      document.getElementById('productSections').style.display = 'grid';
+      document.getElementById('noCultivar').style.display = 'none';
+      
+      buildSizeButtons();
+    }
+    
+    function buildSizeButtons() {
+      var topsContainer = document.getElementById('topsButtons');
+      var smallsContainer = document.getElementById('smallsButtons');
+      topsContainer.innerHTML = '';
+      smallsContainer.innerHTML = '';
+      
+      var cultivarProducts = products.filter(function(p) {
+        var parsed = parseProductName(p.header);
+        return parsed.cultivar === selectedCultivar;
+      });
+      
+      var tops = {};
+      var smalls = {};
+      
+      cultivarProducts.forEach(function(p) {
+        var parsed = parseProductName(p.header);
+        if (parsed.type === 'Tops') {
+          tops[parsed.size] = p;
+        } else if (parsed.type === 'Smalls') {
+          smalls[parsed.size] = p;
+        }
+      });
+      
+      sizeOrder.forEach(function(size) {
+        var btn = document.createElement('button');
+        btn.className = 'size-btn tops';
+        btn.textContent = size;
+        if (tops[size]) {
+          btn.onclick = function() { printProduct(tops[size]); };
+        } else {
+          btn.className += ' disabled';
+        }
+        topsContainer.appendChild(btn);
+      });
+      
+      sizeOrder.forEach(function(size) {
+        var btn = document.createElement('button');
+        btn.className = 'size-btn smalls';
+        btn.textContent = size;
+        if (smalls[size]) {
+          btn.onclick = function() { printProduct(smalls[size]); };
+        } else {
+          btn.className += ' disabled';
+        }
+        smallsContainer.appendChild(btn);
+      });
+    }
+    
+    function printProduct(product) {
+      lastPrintedProduct = product;
+      document.getElementById('lastPrintedValue').textContent = product.header;
+      document.getElementById('lastPrinted').classList.add('show');
+      printBarcode(product.barcode, product.header);
+    }
+    
+    function printLastAgain() {
+      if (lastPrintedProduct) {
+        printBarcode(lastPrintedProduct.barcode, lastPrintedProduct.header);
+      }
+    }
+    
+    function handleSearch() {
+      var search = document.getElementById('searchBox').value.toLowerCase().trim();
+      var resultsDiv = document.getElementById('searchResults');
+      
+      if (!search) {
+        resultsDiv.classList.remove('show');
+        return;
+      }
+      
+      var filtered = products.filter(function(p) {
+        return (p.header && p.header.toLowerCase().indexOf(search) >= 0) ||
+               (p.sku && p.sku.toLowerCase().indexOf(search) >= 0) ||
+               (p.barcode && String(p.barcode).indexOf(search) >= 0);
+      });
+      
+      if (filtered.length === 0) {
+        resultsDiv.innerHTML = '<div class="quick-print-title">No results found</div>';
+        resultsDiv.classList.add('show');
+        return;
+      }
+      
+      var html = '<div class="quick-print-title">🔍 Results (' + filtered.length + ')</div>';
+      html += '<div class="quick-print-grid">';
+      
+      filtered.slice(0, 20).forEach(function(p) {
+        html += '<div class="quick-print-card" onclick="printProduct(products.find(function(x){return x.barcode===\'' + p.barcode + '\'}))">';
+        html += '<div class="quick-print-name">' + p.header + '</div>';
+        html += '<div class="quick-print-barcode">' + p.barcode + '</div>';
+        html += '</div>';
+      });
+      
+      html += '</div>';
+      resultsDiv.innerHTML = html;
+      resultsDiv.classList.add('show');
+    }
+    
+    function printBarcode(barcode, name) {
+      var barcodeUrl = 'https://barcode.tec-it.com/barcode.ashx?data=' + encodeURIComponent(barcode) + 
+                       '&code=Code128&dpi=203&modulewidth=fit&height=35&hidetext=1';
+      
+      var iframe = document.getElementById('printFrame');
+      if (!iframe) {
+        iframe = document.createElement('iframe');
+        iframe.id = 'printFrame';
+        iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:none;';
+        document.body.appendChild(iframe);
+      }
+      
+      var doc = iframe.contentWindow.document;
+      doc.open();
+      doc.write('<!DOCTYPE html><html><head><style>');
+      doc.write('@page { size: 1.65in 0.5in; margin: 0 0.15in !important; }');
+      doc.write('@media print { html, body { width: 1.35in !important; height: 0.5in !important; margin: 0 !important; padding: 0 !important; overflow: hidden; } }');
+      doc.write('body { margin: 0; padding: 0; font-family: Arial; }');
+      doc.write('.label { width: 1.35in; height: 0.5in; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1px; }');
+      doc.write('.name { font-size: 6pt; font-weight: bold; margin-bottom: 1px; }');
+      doc.write('.barcode { width: 1.3in; height: 0.35in; }');
+      doc.write('</style></head><body>');
+      doc.write('<div class="label">');
+      doc.write('<div class="name">' + name.substring(0, 25) + '</div>');
+      doc.write('<img class="barcode" src="' + barcodeUrl + '">');
+      doc.write('</div></body></html>');
+      doc.close();
+      
+      var img = doc.querySelector('img');
+      img.onload = function() {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      };
+      
+      if (img.complete) {
+        setTimeout(function() {
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+        }, 100);
+      }
+      
+      showMessage('Printing: ' + name, 'success');
+    }
+    
+    var currentEditRow = null;
+    
+    function showAddModal() {
+      document.getElementById('modalTitle').textContent = 'Add Product';
+      document.getElementById('productHeader').value = '';
+      document.getElementById('productSKU').value = '';
+      document.getElementById('productBarcode').value = '';
+      currentEditRow = null;
+      document.getElementById('productModal').style.display = 'block';
+    }
+    
+    function closeModal() { document.getElementById('productModal').style.display = 'none'; }
+    function showImportModal() { document.getElementById('importModal').style.display = 'block'; }
+    function closeImportModal() { document.getElementById('importModal').style.display = 'none'; }
+    function showPrintHelp() { document.getElementById('printHelpModal').style.display = 'block'; }
+    
+    function saveProduct() {
+      var h = document.getElementById('productHeader').value.trim();
+      var s = document.getElementById('productSKU').value.trim();
+      var b = document.getElementById('productBarcode').value.trim();
+      if (!h || !s || !b) { alert('Please fill all fields'); return; }
+      
+      google.script.run.withSuccessHandler(function(r) {
+        showMessage(r.message, r.success ? 'success' : 'error');
+        if (r.success) { loadProducts(); closeModal(); }
+      }).addProduct(h, s, b);
+    }
+    
+    function importCSV() {
+      var csv = document.getElementById('csvText').value.trim();
+      if (!csv) { alert('Paste CSV data'); return; }
+      
+      google.script.run.withSuccessHandler(function(r) {
+        showMessage(r.message, r.success ? 'success' : 'error');
+        if (r.success) { loadProducts(); closeImportModal(); }
+      }).importCSV(csv);
+    }
+    
+    function exportToCSV() {
+      var csv = 'Header,SKU,Barcode\n';
+      products.forEach(function(p) {
+        csv += '"' + (p.header||'') + '","' + (p.sku||'') + '","' + (p.barcode||'') + '"\n';
+      });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([csv], {type: 'text/csv'}));
+      a.download = 'products.csv';
+      a.click();
+    }
+    
+    function showMessage(text, type) {
+      var m = document.getElementById('message');
+      m.textContent = text;
+      m.className = 'message ' + type;
+      m.style.display = 'block';
+      setTimeout(function() { m.style.display = 'none'; }, 3000);
+    }
+    
+    window.onclick = function(e) {
+      if (e.target.className && e.target.className.indexOf('modal') >= 0) e.target.style.display = 'none';
+    };
+  </script>
+</body>
+</html>

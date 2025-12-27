@@ -1,0 +1,1371 @@
+<!DOCTYPE html>
+<html>
+<head>
+  
+  <meta charset="UTF-8">
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    :root {
+      /* Rogue Origin Brand Colors - Light Theme */
+      --gold: #e4aa4f;
+      --gold-light: #f0cb60;
+      --gold-dim: rgba(228,170,79,0.15);
+      --green: #668971;
+      --green-dim: rgba(102,137,113,0.15);
+      --sungrown: #bf8e4e;
+      --sungrown-dim: rgba(191,142,78,0.15);
+      --greenhouse: #8f9263;
+      --indoor: #62758d;
+      --bg: #faf8f5;
+      --bg-card: #ffffff;
+      --border: #e8e4de;
+      --text: #2d3a2e;
+      --text-muted: #8a9a8e;
+      --sidebar-bg: #1a1f16;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    
+    /* Header */
+    .header { background: var(--bg-card); border-bottom: 1px solid var(--border); padding: 16px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .header-inner { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .logo { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; }
+    .brand h1 { color: var(--text); font-size: 18px; font-weight: 600; }
+    .brand p { color: var(--green); font-size: 11px; }
+    .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn { padding: 10px 16px; border: none; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 500; transition: all 0.15s; }
+    .btn-green { background: var(--green); color: #fff; }
+    .btn-green:hover { background: #5a7a63; box-shadow: 0 2px 8px rgba(102,137,113,0.3); }
+    .btn-gold { background: var(--gold); color: #fff; }
+    .btn-gold:hover { background: #d99a3f; box-shadow: 0 2px 8px rgba(228,170,79,0.3); }
+    .btn-sungrown { background: var(--sungrown); color: #fff; }
+    .btn-sungrown:hover { background: #a97d42; }
+    .btn-indoor { background: var(--indoor); color: #fff; }
+    .btn-indoor:hover { background: #56687d; }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .btn-outline:hover { background: var(--bg); border-color: var(--green); }
+    
+    /* Toolbar */
+    .toolbar { padding: 12px 20px; background: var(--bg-card); border-bottom: 1px solid var(--border); }
+    .toolbar-inner { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+    .filters { display: flex; gap: 10px; flex-wrap: wrap; }
+    input, select { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; color: var(--text); font-size: 14px; }
+    input:focus, select:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px rgba(102,137,113,0.1); }
+    input::placeholder { color: var(--text-muted); }
+    .toggle { display: flex; background: var(--bg); border-radius: 8px; padding: 3px; border: 1px solid var(--border); }
+    .toggle button { padding: 6px 14px; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; background: transparent; color: var(--text-muted); transition: all 0.15s; }
+    .toggle button.on { background: var(--green); color: #fff; }
+    
+    /* Stats */
+    .stats { padding: 8px 20px; background: var(--bg); border-bottom: 1px solid var(--border); font-size: 12px; }
+    .stats-inner { max-width: 1400px; margin: 0 auto; display: flex; gap: 20px; }
+    .stats span { color: var(--text-muted); }
+    .stats strong { color: var(--green); }
+    
+    /* Main */
+    .main { padding: 20px; max-width: 1400px; margin: 0 auto; }
+    .loading, .empty { text-align: center; padding: 60px; color: var(--text-muted); }
+    .loading-icon { font-size: 48px; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    
+    /* Grid */
+    .grid { display: block; }
+    .grid-inner { margin: -8px; }
+    .grid-inner::after { content: ''; display: table; clear: both; }
+    .card { float: left; width: 23%; margin: 8px 1%; background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border); overflow: hidden; transition: all 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+    .card:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,0,0,0.08); border-color: var(--green); }
+    
+    @media (max-width: 1200px) { .card { width: 31.33%; } }
+    @media (max-width: 900px) { .card { width: 48%; } }
+    @media (max-width: 600px) { .card { width: 100%; } }
+    
+    /* Mini card preview */
+    .card-preview { height: 170px; position: relative; background: var(--green); cursor: pointer; }
+    .card-preview-border { position: absolute; inset: 0; border: 3px solid var(--gold); border-radius: 12px 12px 0 0; pointer-events: none; }
+    .card-preview-inner { position: absolute; top: 6px; left: 6px; right: 6px; bottom: 6px; border: 2px solid var(--gold); border-radius: 8px; pointer-events: none; }
+    
+    .card-preview-content { position: absolute; inset: 12px; display: flex; flex-direction: column; }
+    .card-preview-header { border-bottom: 2px solid #1a1f16; padding-bottom: 4px; margin-bottom: 4px; }
+    .card-preview-header h3 { font-size: 13px; color: #1a1f16; text-transform: uppercase; font-weight: 700; margin: 0; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .card-preview-loc { font-size: 9px; color: #1a1f16; opacity: 0.7; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    
+    .card-preview-body { flex: 1; display: flex; gap: 10px; margin-top: 4px; }
+    .card-preview-left { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+    .card-preview-field { line-height: 1.2; }
+    .card-preview-field small { font-size: 8px; color: #1a1f16; text-transform: uppercase; opacity: 0.6; display: block; }
+    .card-preview-field span { font-size: 12px; color: #1a1f16; font-weight: 700; }
+    .card-preview-right { display: flex; flex-direction: column; align-items: flex-end; }
+    .card-preview-img { width: 65px; height: 48px; background: #fff; border-radius: 4px; border: 2px solid var(--gold); display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 16px; }
+    .card-preview-img img { width: 100%; height: 100%; object-fit: cover; }
+    .card-preview-price { margin-top: 6px; background: var(--gold); padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; color: #1a1f16; }
+    .card-preview-logo { position: absolute; bottom: 12px; left: 12px; width: 20px; height: 20px; border-radius: 50%; }
+    
+    /* Card actions */
+    .card-actions { display: flex; background: var(--bg); border-top: 1px solid var(--border); border-radius: 0 0 12px 12px; overflow: hidden; }
+    .card-actions button { flex: 1; background: transparent; border: none; border-right: 1px solid var(--border); padding: 12px; cursor: pointer; font-size: 16px; transition: all 0.15s; display: flex; align-items: center; justify-content: center; }
+    .card-actions button:last-child { border-right: none; }
+    .card-actions button.reorder { background: var(--gold-dim); color: var(--gold); }
+    .card-actions button.reorder:hover { background: var(--gold); color: #fff; }
+    .card-actions button.preview-btn { background: var(--green-dim); color: var(--green); }
+    .card-actions button.preview-btn:hover { background: var(--green); color: #fff; }
+    .card-actions button.edit-btn { background: var(--sungrown-dim); color: var(--sungrown); }
+    .card-actions button.edit-btn:hover { background: var(--sungrown); color: #fff; }
+    .card-actions button.del { background: rgba(201,85,61,0.12); color: #c9553d; }
+    .card-actions button.del:hover { background: #c9553d; color: #fff; }
+    
+    /* Table */
+    .table { background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border); overflow: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 700px; }
+    th { text-align: left; padding: 14px; background: var(--bg); color: var(--text); font-size: 11px; text-transform: uppercase; font-weight: 600; border-bottom: 1px solid var(--border); }
+    th:hover { cursor: pointer; color: var(--green); }
+    td { padding: 14px; border-bottom: 1px solid var(--border); }
+    tr:hover { background: var(--bg); }
+    td.name { color: var(--green); font-weight: 600; }
+    td.price { color: var(--gold); font-weight: 600; }
+    
+    /* Modals */
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 100; backdrop-filter: blur(2px); }
+    .modal-box { background: var(--bg-card); border-radius: 16px; width: 100%; max-width: 500px; max-height: 90vh; overflow: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+    .modal-head { padding: 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .modal-head h2 { color: var(--text); font-size: 18px; font-weight: 600; }
+    .modal-close { background: none; border: none; color: var(--text-muted); font-size: 28px; cursor: pointer; padding: 0; line-height: 1; }
+    .modal-close:hover { color: var(--text); }
+    .modal-body { padding: 20px; }
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding-top: 16px; border-top: 1px solid var(--border); margin-top: 8px; }
+    
+    /* Drop zone */
+    .drop-zone { position: relative; border: 2px dashed var(--border); border-radius: 8px; padding: 4px; transition: all 0.2s; }
+    .drop-zone.drag-over { border-color: var(--gold); background: rgba(228,170,79,0.1); }
+    .drop-zone input { border: none !important; background: transparent; }
+    .drop-zone-preview { display: none; margin-top: 8px; }
+    .drop-zone-preview.has-image { display: flex; align-items: center; gap: 8px; }
+    .drop-zone-preview img { width: 60px; height: 45px; object-fit: cover; border-radius: 4px; border: 2px solid var(--gold); }
+    .drop-zone-preview button { background: #c9553d; border: none; padding: 4px 8px; border-radius: 4px; color: #fff; cursor: pointer; font-size: 11px; }
+    
+    /* Toast */
+    .toast { position: fixed; bottom: 20px; right: 20px; padding: 14px 20px; border-radius: 10px; color: #fff; font-size: 14px; z-index: 200; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .toast.ok { background: var(--green); }
+    .toast.err { background: #c9553d; }
+    
+    /* Print preview */
+    .print-preview { background: var(--bg); padding: 16px; border-radius: 12px; margin-top: 12px; border: 1px solid var(--border); }
+    .kanban { width: 100%; max-width: 420px; aspect-ratio: 6/4; border-radius: 10px; position: relative; padding: 14px; margin: 0 auto; }
+    .kanban.green { background: var(--green); color: #1a1f16; }
+    .kanban.red { background: #bd4a28; color: var(--gold-light); }
+    .kanban-border { position: absolute; inset: 0; border: 5px solid var(--gold); border-radius: 10px; pointer-events: none; }
+    .kanban-inner { position: absolute; inset: 14px; border: 4px solid var(--gold); border-radius: 8px; pointer-events: none; }
+    .kanban-content { height: 100%; padding: 14px 18px; display: flex; flex-direction: column; }
+    .kanban-header { border-bottom: 3px solid currentColor; padding-bottom: 5px; margin-bottom: 3px; }
+    .kanban-header h3 { font-size: 20px; text-transform: uppercase; margin: 0; font-weight: 700; letter-spacing: 1px; }
+    .kanban-loc { text-align: right; font-size: 11px; font-weight: 700; margin-bottom: 3px; }
+    .kanban-body { flex: 1; display: flex; gap: 12px; }
+    .kanban-left { flex: 1; display: flex; flex-direction: column; justify-content: flex-start; max-height: 85px; }
+    .kanban-field { margin-bottom: 6px; }
+    .kanban-field small { font-size: 8px; text-transform: uppercase; opacity: 0.8; display: block; margin-bottom: 1px; font-weight: 600; }
+    .kanban-field span { font-size: 14px; font-weight: 700; }
+    .kanban-right { display: flex; flex-direction: column; align-items: flex-end; justify-content: center; }
+    .kanban-img { width: 110px; height: 80px; background: #fff; border-radius: 6px; border: 3px solid var(--gold); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .kanban-img img { width: 100%; height: 100%; object-fit: cover; }
+    .kanban-price { margin-top: 10px; background: var(--gold); padding: 6px 22px; border-radius: 16px; font-size: 15px; font-weight: 700; color: #1a1f16; }
+    .kanban-logo { position: absolute; bottom: 18px; left: 18px; width: 40px; height: 40px; border-radius: 50%; }
+    .kanban-back { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .kanban-back h3 { font-size: 24px; text-transform: uppercase; margin-bottom: 14px; font-weight: 700; letter-spacing: 1px; }
+    .kanban-qr { width: 120px; height: 120px; background: #fff; border-radius: 8px; border: 3px solid var(--gold); display: flex; align-items: center; justify-content: center; }
+    .kanban-qr img { width: 92%; height: 92%; }
+    
+    .preview-btns { display: flex; justify-content: center; gap: 10px; margin-bottom: 12px; }
+    
+    /* Empty state */
+    .empty { background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border); margin-top: 20px; }
+    .empty h3 { color: var(--text); margin-bottom: 8px; }
+    .empty p { color: var(--text-muted); margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <div class="brand">
+        <img class="logo" src="https://i.imgur.com/PvrTPb2.png" alt="Logo">
+        <div><h1>Kanban Card Manager</h1><p>Supply Closet Inventory System</p></div>
+      </div>
+      <div class="btns">
+        <button class="btn btn-outline" onclick="openHelp()"><i class="ph-duotone ph-question"></i> Help</button>
+        <button class="btn btn-indoor" onclick="refresh()"><i class="ph-duotone ph-arrows-clockwise"></i> Refresh</button>
+        <button class="btn btn-sungrown" onclick="openPrint()"><i class="ph-duotone ph-printer" style="margin-right:6px"></i> Print Cards</button>
+        <button class="btn btn-green" onclick="openAdd()"><i class="ph-duotone ph-plus" style="margin-right:6px"></i> Add Card</button>
+        <button id="langBtn" class="btn btn-outline" onclick="toggleLang()">🇪🇸 Español</button>
+      </div>
+    </div>
+  </header>
+  
+  <div class="toolbar">
+    <div class="toolbar-inner">
+      <div class="filters">
+        <input type="text" id="search" placeholder="🔍 Search..." oninput="filter()" style="width:200px">
+        <select id="supplierFilter" onchange="filter()"><option value="">All Suppliers</option></select>
+      </div>
+      <div class="toggle">
+        <button id="gridBtn" class="on" onclick="setView('grid')">Grid</button>
+        <button id="listBtn" onclick="setView('list')">List</button>
+      </div>
+    </div>
+  </div>
+  
+  <div class="stats">
+    <div class="stats-inner">
+      <span><span id="totalLabel">Total</span>: <strong id="total">0</strong></span>
+      <span><span id="showingLabel">Showing</span>: <strong id="showing">0</strong></span>
+      <span><span id="suppliersLabel">Suppliers</span>: <strong id="suppliers">0</strong></span>
+    </div>
+  </div>
+  
+  <main class="main">
+    <div id="loading" class="loading"><div class="loading-icon">⏳</div><p>Loading from Google Sheet...</p></div>
+    <div id="empty" class="empty" style="display:none"><div style="font-size:48px;opacity:0.5"><i class="ph-duotone ph-package"></i></div><h3>No cards found</h3><p>Add your first kanban card to get started.</p><button class="btn btn-green" onclick="openAdd()"><i class="ph-duotone ph-plus" style="margin-right:6px"></i> Add First Card</button></div>
+    <div id="gridView" class="grid" style="display:none"></div>
+    <div id="listView" class="table" style="display:none"></div>
+  </main>
+  
+  <!-- Edit Modal -->
+  <div id="editModal" class="modal" style="display:none">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2 id="modalTitle">Add Card</h2>
+        <button class="modal-close" onclick="closeEdit()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="editId">
+        <div class="form-group">
+          <label class="form-label">Item Name *</label>
+          <input type="text" id="editItem" style="width:100%" placeholder="e.g., Dust Masks">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Supplier</label>
+            <input type="text" id="editSupplier" list="supplierList" style="width:100%" placeholder="Select or type...">
+            <datalist id="supplierList">
+              <option value="Amazon">
+              <option value="Walmart">
+              <option value="Uline">
+            </datalist>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Order Qty</label>
+            <input type="text" id="editQty" style="width:100%" placeholder="x3">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Delivery Time</label>
+            <input type="text" id="editDelivery" list="deliveryList" style="width:100%" placeholder="Select or type...">
+            <datalist id="deliveryList">
+              <option value="1 Day">
+              <option value="3 Days">
+              <option value="5 Days">
+              <option value="1 Week">
+              <option value="2 Weeks">
+            </datalist>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Price</label>
+            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+              <span style="padding:8px 10px;color:var(--gold);background:var(--bg-card);border-right:1px solid var(--border)">$</span>
+              <input type="text" id="editPrice" style="flex:1;border:none;background:transparent;padding:8px 10px" placeholder="0.00">
+              <span style="padding:8px 10px;color:var(--gold);background:var(--bg-card);border-left:1px solid var(--border)">/Pc</span>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Location (Crumbtrail)</label>
+          <input type="text" id="editLoc" style="width:100%" placeholder="Supply Rack > A-3">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Order URL</label>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="editUrl" style="flex:1" placeholder="https://amazon.com/...">
+            <button type="button" class="btn btn-gold" onclick="autoFillFromUrl()">🔍 Auto-fill</button>
+          </div>
+          <p style="font-size:10px;color:var(--text-muted);margin-top:4px">Paste a product URL and click Auto-fill to fetch title, price & image</p>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Picture URL</label>
+          <div id="imageDropZone" class="drop-zone">
+            <input type="text" id="editPic" style="width:100%" placeholder="https://...image.jpg or drag image here">
+            <div class="drop-zone-preview" id="imagePreview"></div>
+          </div>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:4px">💡 Drag an image from any website and drop it here</div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn btn-outline" onclick="closeEdit()">Cancel</button>
+          <button class="btn btn-green" onclick="saveCard()"><i class="ph-duotone ph-floppy-disk" style="margin-right:6px"></i> Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Print Modal -->
+  <div id="printModal" class="modal" style="display:none">
+    <div class="modal-box" style="max-width:700px">
+      <div class="modal-head">
+        <h2><i class="ph-duotone ph-printer" style="margin-right:8px"></i> Print Cards</h2>
+        <button class="modal-close" onclick="closePrint()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Print Size</label>
+            <select id="printSize" style="width:100%" onchange="updatePrintCount()">
+              <option value="card">Card (6" × 4")</option>
+              <option value="tag">Price Tag (4" × 2")</option>
+              <option value="shop">Shop Card (6" × 4")</option>
+              <option value="full">Full Sheet (8.5" × 11")</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Card Color</label>
+            <select id="printColor" style="width:100%" onchange="updatePrintCount()">
+              <option value="green">Green</option>
+              <option value="red">Red</option>
+              <option value="both">Both Colors</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Include</label>
+            <select id="printSide" style="width:100%" onchange="updatePrintCount()">
+              <option value="both">Front + Back (separate pages)</option>
+              <option value="front">Front Only</option>
+              <option value="back">Back Only</option>
+            </select>
+          </div>
+          <div class="form-group" style="display:flex;align-items:flex-end">
+            <div id="printSizeInfo" style="padding:10px;background:var(--bg);border-radius:8px;color:var(--text-muted);font-size:11px;width:100%;border:1px solid var(--border)">2 cards per page</div>
+          </div>
+        </div>
+        <div style="margin:12px 0">
+          <label class="form-label">Select Cards to Print</label>
+          <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+            <input type="text" id="printSearch" placeholder="Search cards..." oninput="filterPrintCards()" style="flex:1">
+            <button class="btn btn-outline" style="padding:6px 12px;font-size:12px" onclick="selectAllPrint(true)">Select All</button>
+            <button class="btn btn-outline" style="padding:6px 12px;font-size:12px" onclick="selectAllPrint(false)">Deselect All</button>
+          </div>
+          <div id="printCardList" style="max-height:200px;overflow-y:auto;background:var(--bg);border-radius:8px;padding:8px;border:1px solid var(--border)"></div>
+        </div>
+        <div style="padding:12px;background:var(--bg);border-radius:8px;margin-top:12px;border:1px solid var(--border)">
+          <span style="color:var(--text-muted)">Selected:</span> <strong id="printCount" style="color:var(--green)">0</strong>
+          <span style="color:var(--text-muted);margin-left:16px">Pages:</span> <strong id="printPages" style="color:var(--green)">0</strong>
+          <span style="color:var(--text-muted);font-size:11px;margin-left:8px">(each side = 1 page)</span>
+        </div>
+        <div class="modal-foot">
+          <button class="btn btn-outline" onclick="closePrint()">Cancel</button>
+          <button class="btn btn-green" onclick="doPrint()"><i class="ph-duotone ph-printer" style="margin-right:6px"></i> Print</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Preview Modal -->
+  <div id="previewModal" class="modal" style="display:none">
+    <div class="modal-box" style="max-width:500px">
+      <div class="modal-head">
+        <h2><i class="ph-duotone ph-eye" style="margin-right:8px"></i> Card Preview</h2>
+        <button class="modal-close" onclick="closePreview()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="preview-btns">
+          <div class="toggle">
+            <button id="prevFront" class="on" onclick="setPreviewSide('front')">Front</button>
+            <button id="prevBack" onclick="setPreviewSide('back')">Back</button>
+          </div>
+          <div class="toggle">
+            <button id="prevGreen" class="on" onclick="setPreviewColor('green')" style="background:#668971;color:white;border:none;padding:6px 12px;border-radius:4px">Green</button>
+            <button id="prevRed" onclick="setPreviewColor('red')" style="background:#bd4a28;color:white;border:none;padding:6px 12px;border-radius:4px">Red</button>
+          </div>
+        </div>
+        <div class="print-preview" id="previewArea"></div>
+        <div style="margin-top:12px">
+          <label class="form-label">Print Size</label>
+          <select id="previewPrintSize" style="width:100%" onchange="updatePreviewSizeInfo()">
+            <option value="card">Card (6" × 4")</option>
+            <option value="tag">Price Tag (4" × 2")</option>
+            <option value="shop">Shop Card (6" × 4")</option>
+            <option value="full">Full Sheet (8.5" × 11")</option>
+          </select>
+          <div id="previewSizeInfo" style="margin-top:6px;padding:8px 10px;background:var(--bg);border-radius:6px;color:var(--text-muted);font-size:11px;border:1px solid var(--border)">2 cards per page (front/back)</div>
+        </div>
+        <div class="modal-foot" style="justify-content:center;margin-top:12px">
+          <button class="btn btn-sungrown" onclick="printOne()"><i class="ph-duotone ph-printer" style="margin-right:6px"></i> Print This Card</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Help Modal -->
+  <div id="helpModal" class="modal" style="display:none">
+    <div class="modal-box" style="max-width:600px">
+      <div class="modal-head">
+        <h2 id="helpModalTitle"><i class="ph-duotone ph-question" style="margin-right:8px"></i> How to Use</h2>
+        <button class="modal-close" onclick="closeHelp()">&times;</button>
+      </div>
+      <div class="modal-body" style="max-height:70vh;overflow-y:auto">
+        <div style="line-height:1.6">
+          <h4 style="color:var(--green);margin:0 0 8px 0" id="helpH1"><i class="ph-duotone ph-crosshair" style="margin-right:6px"></i> What is this?</h4>
+          <p style="margin:0 0 16px 0;color:var(--text-muted)" id="helpP1">A two-bin Kanban system for supply closet inventory. Each item has two cards (green & red) that signal when to reorder.</p>
+          
+          <h4 style="color:var(--green);margin:0 0 8px 0" id="helpH2"><i class="ph-duotone ph-circles-three" style="margin-right:6px"></i> How the Card System Works</h4>
+          <ol style="margin:0 0 16px 0;padding-left:20px;color:var(--text-muted)">
+            <li id="helpLi1">Place <strong style="color:var(--green)">GREEN card</strong> in front bin, <strong style="color:#bd4a28">RED card</strong> in back bin</li>
+            <li id="helpLi2">When front bin empties, move GREEN card to "Reorder" area</li>
+            <li id="helpLi3">Order the item using the QR code on the card back</li>
+            <li id="helpLi4">When stock arrives, return GREEN card to front bin</li>
+            <li id="helpLi5">If back bin empties before restock, RED card signals urgency</li>
+          </ol>
+          
+          <h4 style="color:var(--green);margin:0 0 8px 0" id="helpH3"><i class="ph-duotone ph-plus" style="margin-right:6px"></i> Adding Cards</h4>
+          <p style="margin:0 0 16px 0;color:var(--text-muted)" id="helpP3">Click <strong>"Add Card"</strong> and fill in the item details. For images, you can paste a URL or drag & drop an image directly from any website into the Picture URL field.</p>
+          
+          <h4 style="color:var(--green);margin:0 0 8px 0" id="helpH4"><i class="ph-duotone ph-pencil-simple" style="margin-right:6px"></i> Editing & Deleting</h4>
+          <p style="margin:0 0 16px 0;color:var(--text-muted)" id="helpP4">Click any card to preview it. Use the <strong>"Edit"</strong> button to modify details or <strong>"Delete"</strong> to remove the card.</p>
+          
+          <h4 style="color:var(--green);margin:0 0 8px 0" id="helpH5"><i class="ph-duotone ph-printer" style="margin-right:6px"></i> Printing Cards</h4>
+          <ul style="margin:0 0 16px 0;padding-left:20px;color:var(--text-muted)">
+            <li id="helpPrint1"><strong>Single card:</strong> Click a card → choose print size → "Print This Card"</li>
+            <li id="helpPrint2"><strong>Batch print:</strong> Click "Print Cards" → select items → choose size & colors → Print</li>
+            <li id="helpPrint3"><strong>Print sizes:</strong> Card (6"×4"), Shop Card (6"×4" alternate), or Full Sheet (8.5"×11")</li>
+          </ul>
+          
+          <h4 style="color:var(--green);margin:0 0 8px 0" id="helpH6"><i class="ph-duotone ph-arrows-clockwise" style="margin-right:6px"></i> Reordering Cards</h4>
+          <p style="margin:0 0 16px 0;color:var(--text-muted)" id="helpP6">Click <strong>"Reorder"</strong> button above the grid to drag and rearrange cards. Click <strong>"Done"</strong> when finished.</p>
+          
+          <h4 style="color:var(--green);margin:0 0 8px 0" id="helpH7">🔍 Filtering & Search</h4>
+          <p style="margin:0 0 16px 0;color:var(--text-muted)" id="helpP7">Use the search box to find items by name. Filter by supplier or location using the dropdown menus.</p>
+          
+          <h4 style="color:var(--green);margin:0 0 8px 0" id="helpH8">🇪🇸 Language</h4>
+          <p style="margin:0 0 0 0;color:var(--text-muted)" id="helpP8">Click <strong>"Español"</strong> to switch card labels to Spanish for bilingual workplaces.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div id="toasts"></div>
+
+<script>
+var allCards = [];
+var filtered = [];
+var view = 'grid';
+var sortColumn = 'item';
+var sortDirection = 'asc';
+var previewCard = null;
+var previewSide = 'front';
+var previewColor = 'green';
+var currentLang = 'en';
+
+// Custom options storage
+var defaultSuppliers = ['Amazon', 'Walmart', 'Uline'];
+var defaultDeliveryTimes = ['1 Day', '3 Days', '5 Days', '1 Week', '2 Weeks'];
+var customSuppliers = [];
+var customDeliveryTimes = [];
+
+function loadCustomOptions() {
+  try {
+    var savedSuppliers = localStorage.getItem('kanbanSuppliers');
+    var savedDelivery = localStorage.getItem('kanbanDeliveryTimes');
+    if (savedSuppliers) customSuppliers = JSON.parse(savedSuppliers);
+    if (savedDelivery) customDeliveryTimes = JSON.parse(savedDelivery);
+  } catch(e) {}
+  updateOptionLists();
+}
+
+function saveCustomOption(type, value) {
+  if (!value || value.trim() === '') return;
+  value = value.trim();
+  
+  if (type === 'supplier') {
+    if (defaultSuppliers.indexOf(value) === -1 && customSuppliers.indexOf(value) === -1) {
+      customSuppliers.push(value);
+      try { localStorage.setItem('kanbanSuppliers', JSON.stringify(customSuppliers)); } catch(e) {}
+      updateOptionLists();
+    }
+  } else if (type === 'delivery') {
+    if (defaultDeliveryTimes.indexOf(value) === -1 && customDeliveryTimes.indexOf(value) === -1) {
+      customDeliveryTimes.push(value);
+      try { localStorage.setItem('kanbanDeliveryTimes', JSON.stringify(customDeliveryTimes)); } catch(e) {}
+      updateOptionLists();
+    }
+  }
+}
+
+function updateOptionLists() {
+  var supplierList = document.getElementById('supplierList');
+  var deliveryList = document.getElementById('deliveryList');
+  
+  if (supplierList) {
+    var allSuppliers = defaultSuppliers.concat(customSuppliers);
+    supplierList.innerHTML = allSuppliers.map(function(s) { return '<option value="' + s + '">'; }).join('');
+  }
+  
+  if (deliveryList) {
+    var allDelivery = defaultDeliveryTimes.concat(customDeliveryTimes);
+    deliveryList.innerHTML = allDelivery.map(function(d) { return '<option value="' + d + '">'; }).join('');
+  }
+}
+
+var translations = {
+  en: {
+    title: 'Kanban Card Manager',
+    subtitle: 'Supply Closet Inventory System',
+    help: 'Help',
+    refresh: 'Refresh',
+    printCards: 'Print Cards',
+    addCard: 'Add Card',
+    loading: 'Loading cards from Google Sheet...',
+    noCards: 'No cards found',
+    noCardsMsg: 'Add your first kanban card to get started.',
+    addFirst: 'Add First Card',
+    showing: 'Showing',
+    of: 'of',
+    cards: 'cards',
+    suppliers: 'suppliers',
+    search: 'Search items...',
+    allSuppliers: 'All Suppliers',
+    gridView: 'Grid',
+    listView: 'List',
+    item: 'Item',
+    supplier: 'Supplier',
+    orderQty: 'Order Qty',
+    delivery: 'Delivery',
+    price: 'Price',
+    location: 'Location',
+    actions: 'Actions',
+    preview: 'Preview',
+    edit: 'Edit',
+    delete: 'Delete',
+    cardPreview: 'Card Preview',
+    front: 'Front',
+    back: 'Back',
+    printThisCard: 'Print This Card',
+    scanToOrder: 'Scan To Order',
+    confirmDelete: 'Delete this card?',
+    cardSaved: 'Card saved!',
+    cardDeleted: 'Card deleted!',
+    errorPrefix: 'Error: '
+  },
+  es: {
+    title: 'Gestor de Tarjetas Kanban',
+    subtitle: 'Sistema de Inventario de Suministros',
+    help: 'Ayuda',
+    refresh: 'Actualizar',
+    printCards: 'Imprimir',
+    addCard: 'Agregar',
+    loading: 'Cargando tarjetas de Google Sheet...',
+    noCards: 'No se encontraron tarjetas',
+    noCardsMsg: 'Agregue su primera tarjeta kanban para comenzar.',
+    addFirst: 'Agregar Primera Tarjeta',
+    showing: 'Mostrando',
+    of: 'de',
+    cards: 'tarjetas',
+    suppliers: 'proveedores',
+    search: 'Buscar artículos...',
+    allSuppliers: 'Todos los Proveedores',
+    gridView: 'Cuadrícula',
+    listView: 'Lista',
+    item: 'Artículo',
+    supplier: 'Proveedor',
+    orderQty: 'Cantidad',
+    delivery: 'Entrega',
+    price: 'Precio',
+    location: 'Ubicación',
+    actions: 'Acciones',
+    preview: 'Vista Previa',
+    edit: 'Editar',
+    delete: 'Eliminar',
+    cardPreview: 'Vista Previa de Tarjeta',
+    front: 'Frente',
+    back: 'Reverso',
+    printThisCard: 'Imprimir Esta Tarjeta',
+    scanToOrder: 'Escanear para Pedir',
+    confirmDelete: '¿Eliminar esta tarjeta?',
+    cardSaved: '¡Tarjeta guardada!',
+    cardDeleted: '¡Tarjeta eliminada!',
+    errorPrefix: 'Error: '
+  }
+};
+
+function t(key) {
+  return translations[currentLang][key] || translations['en'][key] || key;
+}
+
+function toggleLang() {
+  currentLang = currentLang === 'en' ? 'es' : 'en';
+  updateAllText();
+  filter();
+  try { localStorage.setItem('kanbanLang', currentLang); } catch(e) {}
+}
+
+function init() {
+  try {
+    var savedLang = localStorage.getItem('kanbanLang');
+    if (savedLang) currentLang = savedLang;
+  } catch(e) {}
+  loadCustomOptions();
+  updateAllText();
+  setupImageDrop();
+  load();
+}
+
+function setupImageDrop() {
+  var dropZone = document.getElementById('imageDropZone');
+  var input = document.getElementById('editPic');
+  var preview = document.getElementById('imagePreview');
+  
+  if (!dropZone) return;
+  
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(function(eventName) {
+    dropZone.addEventListener(eventName, function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  });
+  
+  ['dragenter', 'dragover'].forEach(function(eventName) {
+    dropZone.addEventListener(eventName, function() {
+      dropZone.classList.add('drag-over');
+    });
+  });
+  
+  ['dragleave', 'drop'].forEach(function(eventName) {
+    dropZone.addEventListener(eventName, function() {
+      dropZone.classList.remove('drag-over');
+    });
+  });
+  
+  dropZone.addEventListener('drop', function(e) {
+    var html = e.dataTransfer.getData('text/html');
+    var text = e.dataTransfer.getData('text/plain');
+    var url = '';
+    
+    if (html) {
+      var match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+      if (match && match[1]) url = match[1];
+    }
+    
+    if (!url && text) {
+      if (text.match(/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp)/i) || text.match(/^https?:\/\/.+/i)) {
+        url = text;
+      }
+    }
+    
+    if (!url && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      toast('Please drag an image from a website, not a file', 'err');
+      return;
+    }
+    
+    if (url) {
+      input.value = url;
+      updateImagePreview(url);
+      toast('Image URL captured!', 'ok');
+    } else {
+      toast('Could not get image URL', 'err');
+    }
+  });
+  
+  input.addEventListener('input', function() { updateImagePreview(input.value); });
+  input.addEventListener('change', function() { updateImagePreview(input.value); });
+}
+
+function updateImagePreview(url) {
+  var preview = document.getElementById('imagePreview');
+  if (!preview) return;
+  
+  if (url && url.trim()) {
+    preview.innerHTML = '<img src="' + url + '" onerror="this.style.display=\'none\'"><button type="button" onclick="clearImageUrl()">✕ Clear</button>';
+    preview.classList.add('has-image');
+  } else {
+    preview.innerHTML = '';
+    preview.classList.remove('has-image');
+  }
+}
+
+function clearImageUrl() {
+  document.getElementById('editPic').value = '';
+  updateImagePreview('');
+}
+
+function updateAllText() {
+  try {
+    document.querySelector('.brand h1').textContent = t('title');
+    document.querySelector('.brand p').textContent = t('subtitle');
+    var langBtn = document.getElementById('langBtn');
+    if (langBtn) langBtn.textContent = currentLang === 'en' ? '🇪🇸 Español' : '🇺🇸 English';
+    var loadingP = document.querySelector('#loading p');
+    if (loadingP) loadingP.textContent = t('loading');
+    var emptyH3 = document.querySelector('#empty h3');
+    var emptyP = document.querySelector('#empty p');
+    if (emptyH3) emptyH3.textContent = t('noCards');
+    if (emptyP) emptyP.textContent = t('noCardsMsg');
+    var searchEl = document.getElementById('search');
+    if (searchEl) searchEl.placeholder = t('search');
+  } catch(e) {
+    console.log('Error updating text:', e);
+  }
+}
+
+var savedScrollPos = 0;
+var savedSearchQuery = '';
+var savedSupplierFilter = '';
+
+function load(preserveFilters) {
+  if (!preserveFilters) {
+    savedScrollPos = window.scrollY || document.documentElement.scrollTop || 0;
+    savedSearchQuery = '';
+    savedSupplierFilter = '';
+  }
+  show('loading'); hide('empty'); hide('gridView'); hide('listView');
+  google.script.run.withSuccessHandler(function(r) { onLoad(r, preserveFilters); }).withFailureHandler(onErr).getCards();
+}
+
+function onLoad(r, preserveFilters) {
+  hide('loading');
+  if (!r.success) { toast(r.error, 'err'); return; }
+  allCards = r.cards;
+  updateSuppliers();
+  
+  if (preserveFilters) {
+    document.getElementById('search').value = savedSearchQuery;
+    document.getElementById('supplierFilter').value = savedSupplierFilter;
+  }
+  
+  filter();
+  setTimeout(function() { window.scrollTo(0, savedScrollPos); }, 50);
+}
+
+function onErr(e) {
+  hide('loading');
+  toast('Error: ' + e, 'err');
+}
+
+function updateSuppliers() {
+  var s = {};
+  allCards.forEach(function(c) { if (c.supplier) s[c.supplier] = 1; });
+  var sel = document.getElementById('supplierFilter');
+  sel.innerHTML = '<option value="">All Suppliers</option>';
+  Object.keys(s).forEach(function(k) { sel.innerHTML += '<option>' + k + '</option>'; });
+  document.getElementById('suppliers').textContent = Object.keys(s).length;
+}
+
+function filter() {
+  var q = document.getElementById('search').value.toLowerCase();
+  var sup = document.getElementById('supplierFilter').value;
+  filtered = allCards.filter(function(c) {
+    var match = c.item.toLowerCase().indexOf(q) >= 0 || c.supplier.toLowerCase().indexOf(q) >= 0 || c.crumbtrail.toLowerCase().indexOf(q) >= 0;
+    var matchSup = !sup || c.supplier === sup;
+    return match && matchSup;
+  });
+  document.getElementById('total').textContent = allCards.length;
+  document.getElementById('showing').textContent = filtered.length;
+  render();
+}
+
+function render() {
+  if (filtered.length === 0) { show('empty'); hide('gridView'); hide('listView'); return; }
+  hide('empty');
+  if (view === 'grid') { renderGrid(); show('gridView'); hide('listView'); }
+  else { renderList(); hide('gridView'); show('listView'); }
+}
+
+function renderGrid() {
+  var html = '<div class="grid-inner">';
+  var logoUrl = 'https://i.imgur.com/PvrTPb2.png';
+  filtered.forEach(function(c) {
+    html += '<div class="card">' +
+      '<div class="card-preview" onclick="preview(' + c.id + ')">' +
+      '<div class="card-preview-border"></div>' +
+      '<div class="card-preview-inner"></div>' +
+      '<div class="card-preview-content">' +
+      '<div class="card-preview-header"><h3>' + esc(c.item) + '</h3></div>' +
+      '<div class="card-preview-loc">' + esc(c.crumbtrail) + '</div>' +
+      '<div class="card-preview-body">' +
+      '<div class="card-preview-left">' +
+      '<div class="card-preview-field"><small>' + t('supplier') + '</small><span>' + esc(c.supplier) + '</span></div>' +
+      '<div class="card-preview-field"><small>' + t('orderQty') + '</small><span>' + esc(c.orderQty) + '</span></div>' +
+      '<div class="card-preview-field"><small>' + t('delivery') + '</small><span>' + esc(c.deliveryTime) + '</span></div>' +
+      '</div>' +
+      '<div class="card-preview-right">' +
+      '<div class="card-preview-img">' + (c.picture ? '<img src="' + esc(c.picture) + '" onerror="this.outerHTML=\'📷\'">' : '📷') + '</div>' +
+      '<div class="card-preview-price">' + esc(c.price || '$0') + '</div>' +
+      '</div></div></div>' +
+      '<img class="card-preview-logo" src="' + logoUrl + '">' +
+      '</div>' +
+      '<div class="card-actions">' +
+      '<button class="reorder" onclick="reorder(' + c.id + ')" title="Reorder"><i class="ph-duotone ph-shopping-cart"></i></button>' +
+      '<button class="preview-btn" onclick="preview(' + c.id + ')" title="Preview"><i class="ph-duotone ph-eye"></i></button>' +
+      '<button class="edit-btn" onclick="openEdit(' + c.id + ')" title="Edit"><i class="ph-duotone ph-pencil-simple"></i></button>' +
+      '<button class="del" onclick="del(' + c.id + ')" title="Delete"><i class="ph-duotone ph-trash"></i></button>' +
+      '</div></div>';
+  });
+  html += '</div>';
+  document.getElementById('gridView').innerHTML = html;
+}
+
+function renderList() {
+  var sorted = filtered.slice().sort(function(a, b) {
+    var valA, valB;
+    switch(sortColumn) {
+      case 'item': valA = (a.item || '').toLowerCase(); valB = (b.item || '').toLowerCase(); break;
+      case 'supplier': valA = (a.supplier || '').toLowerCase(); valB = (b.supplier || '').toLowerCase(); break;
+      case 'location': valA = (a.crumbtrail || '').toLowerCase(); valB = (b.crumbtrail || '').toLowerCase(); break;
+      case 'price': 
+        var priceA = (a.price || '').toString().replace(/[^0-9.]/g,'');
+        var priceB = (b.price || '').toString().replace(/[^0-9.]/g,'');
+        valA = parseFloat(priceA) || 0; 
+        valB = parseFloat(priceB) || 0; 
+        break;
+      default: valA = (a.item || '').toLowerCase(); valB = (b.item || '').toLowerCase();
+    }
+    if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+    if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+    return 0;
+  });
+  
+  function sortIcon(col) {
+    if (sortColumn === col) return sortDirection === 'asc' ? ' ▲' : ' ▼';
+    return ' ⇅';
+  }
+  
+  var html = '<table><thead><tr>' +
+    '<th onclick="sortBy(\'item\')">' + t('item') + sortIcon('item') + '</th>' +
+    '<th onclick="sortBy(\'supplier\')">' + t('supplier') + sortIcon('supplier') + '</th>' +
+    '<th onclick="sortBy(\'location\')">' + t('location') + sortIcon('location') + '</th>' +
+    '<th>' + t('orderQty') + '</th>' +
+    '<th>' + t('delivery') + '</th>' +
+    '<th onclick="sortBy(\'price\')">' + t('price') + sortIcon('price') + '</th>' +
+    '<th>' + t('actions') + '</th></tr></thead><tbody>';
+  sorted.forEach(function(c) {
+    html += '<tr><td class="name">' + esc(c.item) + '</td><td>' + esc(c.supplier) + '</td><td style="font-size:11px">' + esc(c.crumbtrail) + '</td>' +
+      '<td>' + esc(c.orderQty) + '</td><td>' + esc(c.deliveryTime) + '</td><td class="price">' + esc(c.price) + '</td>' +
+      '<td><button class="btn" style="padding:4px 8px;font-size:11px;background:var(--gold-dim);color:var(--gold)" onclick="reorder(' + c.id + ')"><i class="ph-duotone ph-shopping-cart"></i></button> <button class="btn btn-indoor" style="padding:4px 8px;font-size:11px" onclick="preview(' + c.id + ')"><i class="ph-duotone ph-eye"></i></button> <button class="btn btn-indoor" style="padding:4px 8px;font-size:11px" onclick="openEdit(' + c.id + ')"><i class="ph-duotone ph-pencil-simple"></i></button> <button class="btn" style="padding:4px 8px;font-size:11px;background:rgba(201,85,61,0.12);color:#c9553d" onclick="del(' + c.id + ')"><i class="ph-duotone ph-trash"></i></button></td></tr>';
+  });
+  html += '</tbody></table>';
+  document.getElementById('listView').innerHTML = html;
+}
+
+function sortBy(column) {
+  if (sortColumn === column) {
+    sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+  } else {
+    sortColumn = column;
+    sortDirection = 'asc';
+  }
+  renderList();
+}
+
+function setView(v) {
+  view = v;
+  document.getElementById('gridBtn').className = v === 'grid' ? 'on' : '';
+  document.getElementById('listBtn').className = v === 'list' ? 'on' : '';
+  render();
+}
+
+function refresh() { toast('Refreshing...', 'ok'); load(); }
+
+function openAdd() {
+  savedScrollPos = window.scrollY || document.documentElement.scrollTop || 0;
+  savedSearchQuery = document.getElementById('search').value;
+  savedSupplierFilter = document.getElementById('supplierFilter').value;
+  document.getElementById('modalTitle').innerHTML = '<i class="ph-duotone ph-plus" style="margin-right:8px"></i> Add Card';
+  document.getElementById('editId').value = '';
+  document.getElementById('editItem').value = '';
+  document.getElementById('editSupplier').value = 'Amazon';
+  document.getElementById('editQty').value = '';
+  document.getElementById('editDelivery').value = '1 Day';
+  document.getElementById('editPrice').value = '';
+  document.getElementById('editLoc').value = '';
+  document.getElementById('editUrl').value = '';
+  document.getElementById('editPic').value = '';
+  updateImagePreview('');
+  show('editModal');
+}
+
+function openEdit(id) {
+  savedScrollPos = window.scrollY || document.documentElement.scrollTop || 0;
+  savedSearchQuery = document.getElementById('search').value;
+  savedSupplierFilter = document.getElementById('supplierFilter').value;
+  var c = allCards.find(function(x) { return x.id === id; });
+  if (!c) return;
+  document.getElementById('modalTitle').innerHTML = '<i class="ph-duotone ph-pencil-simple" style="margin-right:8px"></i> Edit Card';
+  document.getElementById('editId').value = c.id;
+  document.getElementById('editItem').value = c.item;
+  document.getElementById('editSupplier').value = c.supplier || 'Amazon';
+  document.getElementById('editQty').value = c.orderQty;
+  document.getElementById('editDelivery').value = c.deliveryTime || '1 Day';
+  var priceVal = (c.price || '').replace(/^\$/, '').replace(/\/Pc$/i, '');
+  document.getElementById('editPrice').value = priceVal;
+  document.getElementById('editLoc').value = c.crumbtrail;
+  document.getElementById('editUrl').value = c.url;
+  document.getElementById('editPic').value = c.picture;
+  updateImagePreview(c.picture || '');
+  show('editModal');
+}
+
+function closeEdit() { hide('editModal'); }
+
+function saveCard() {
+  var supplierVal = document.getElementById('editSupplier').value.trim();
+  var deliveryVal = document.getElementById('editDelivery').value.trim();
+  var priceVal = document.getElementById('editPrice').value.trim();
+  if (priceVal && !priceVal.startsWith('$')) {
+    priceVal = '$' + priceVal + '/Pc';
+  }
+  
+  var data = {
+    id: document.getElementById('editId').value ? parseInt(document.getElementById('editId').value) : null,
+    item: document.getElementById('editItem').value.trim(),
+    supplier: supplierVal,
+    orderQty: document.getElementById('editQty').value.trim(),
+    deliveryTime: deliveryVal,
+    price: priceVal,
+    crumbtrail: document.getElementById('editLoc').value.trim(),
+    url: document.getElementById('editUrl').value.trim(),
+    picture: document.getElementById('editPic').value.trim(),
+    orderWhen: 'Green Card Signal',
+    imageFile: ''
+  };
+  if (!data.item) { toast('Item name required', 'err'); return; }
+  
+  saveCustomOption('supplier', supplierVal);
+  saveCustomOption('delivery', deliveryVal);
+  
+  closeEdit();
+  show('loading');
+  if (data.id) {
+    google.script.run.withSuccessHandler(onSave).withFailureHandler(onErr).updateCard(data);
+  } else {
+    google.script.run.withSuccessHandler(onSave).withFailureHandler(onErr).addCard(data);
+  }
+}
+
+function onSave(r) {
+  if (r.success) { toast(r.message, 'ok'); load(true); }
+  else { hide('loading'); toast(r.error, 'err'); }
+}
+
+function reorder(id) {
+  var c = allCards.find(function(x) { return x.id === id; });
+  if (!c) return;
+  if (!c.url) { toast('No order URL available', 'err'); return; }
+  window.open(c.url, '_blank');
+}
+
+function del(id) {
+  if (!confirm(t('confirmDelete'))) return;
+  savedScrollPos = window.scrollY || document.documentElement.scrollTop || 0;
+  savedSearchQuery = document.getElementById('search').value;
+  savedSupplierFilter = document.getElementById('supplierFilter').value;
+  show('loading');
+  google.script.run.withSuccessHandler(onSave).withFailureHandler(onErr).deleteCard(id);
+}
+
+function preview(id) {
+  previewCard = allCards.find(function(x) { return x.id === id; });
+  if (!previewCard) return;
+  previewSide = 'front';
+  previewColor = 'green';
+  updatePreviewBtns();
+  renderPreview();
+  show('previewModal');
+}
+
+function closePreview() { hide('previewModal'); }
+function openHelp() { show('helpModal'); }
+function closeHelp() { hide('helpModal'); }
+
+function autoFillFromUrl() {
+  var url = document.getElementById('editUrl').value.trim();
+  if (!url) { toast('Please enter a URL first', 'err'); return; }
+  toast('Fetching product info...', 'ok');
+  
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result.success) {
+        if (result.title) document.getElementById('editItem').value = result.title;
+        if (result.price) document.getElementById('editPrice').value = result.price;
+        if (result.image) {
+          document.getElementById('editPic').value = result.image;
+          updateImagePreview(result.image);
+        }
+        if (result.supplier) document.getElementById('editSupplier').value = result.supplier;
+        
+        var found = [];
+        if (result.title) found.push('title');
+        if (result.price) found.push('price');
+        if (result.image) found.push('image');
+        
+        if (found.length > 0) toast('Found: ' + found.join(', '), 'ok');
+        else toast('Could not extract product info', 'err');
+      } else {
+        toast(result.error || 'Failed to fetch URL', 'err');
+      }
+    })
+    .withFailureHandler(function(err) { toast('Error: ' + err.message, 'err'); })
+    .fetchProductInfo(url);
+}
+
+function setPreviewSide(s) { previewSide = s; updatePreviewBtns(); renderPreview(); }
+function setPreviewColor(c) { previewColor = c; updatePreviewBtns(); renderPreview(); }
+
+function updatePreviewBtns() {
+  document.getElementById('prevFront').className = previewSide === 'front' ? 'on' : '';
+  document.getElementById('prevBack').className = previewSide === 'back' ? 'on' : '';
+  document.getElementById('prevGreen').className = previewColor === 'green' ? 'on' : '';
+  document.getElementById('prevRed').className = previewColor === 'red' ? 'on' : '';
+}
+
+function renderPreview() {
+  document.getElementById('previewArea').innerHTML = cardHtml(previewCard, previewColor, previewSide);
+}
+
+function cardHtml(c, color, side, size) {
+  var qrSize = size === 'full' ? '300x300' : '200x200';
+  var qr = c.url ? 'https://api.qrserver.com/v1/create-qr-code/?size=' + qrSize + '&data=' + encodeURIComponent(c.url) : '';
+  var logoUrl = 'https://i.imgur.com/PvrTPb2.png';
+  
+  if (side === 'back') {
+    return '<div class="kanban ' + color + '"><div class="kanban-border"></div><div class="kanban-inner"></div>' +
+      '<div class="kanban-back"><h3>' + t('scanToOrder') + '</h3>' +
+      '<div class="kanban-qr">' + (qr ? '<img src="' + qr + '">' : 'No URL') + '</div>' +
+      '</div><img class="kanban-logo" src="' + logoUrl + '"></div>';
+  }
+  
+  return '<div class="kanban ' + color + '"><div class="kanban-border"></div><div class="kanban-inner"></div>' +
+    '<div class="kanban-content"><div class="kanban-header"><h3>' + esc(c.item) + '</h3></div>' +
+    '<div class="kanban-loc">' + esc(c.crumbtrail) + '</div>' +
+    '<div class="kanban-body"><div class="kanban-left">' +
+    '<div class="kanban-field"><small>' + t('supplier') + '</small><span>' + esc(c.supplier) + '</span></div>' +
+    '<div class="kanban-field"><small>' + t('orderQty') + '</small><span>' + esc(c.orderQty) + '</span></div>' +
+    '<div class="kanban-field"><small>' + t('delivery') + '</small><span>' + esc(c.deliveryTime) + '</span></div></div>' +
+    '<div class="kanban-right"><div class="kanban-img">' + (c.picture ? '<img src="' + esc(c.picture) + '" onerror="this.outerHTML=\'📷\'">' : '📷') + '</div>' +
+    '<div class="kanban-price">' + esc(c.price || '$0') + '</div></div></div></div>' +
+    '<img class="kanban-logo" src="' + logoUrl + '"></div>';
+}
+
+// Print functions
+var printSelections = {};
+
+function openPrint() {
+  document.getElementById('printSearch').value = '';
+  printSelections = {};
+  buildPrintCardList('');
+  updatePrintCount();
+  show('printModal');
+}
+
+function buildPrintCardList(searchTerm) {
+  var html = '';
+  var term = (searchTerm || '').toLowerCase();
+  allCards.forEach(function(c) {
+    var matchesSearch = !term || 
+      c.item.toLowerCase().indexOf(term) >= 0 || 
+      c.supplier.toLowerCase().indexOf(term) >= 0 ||
+      c.crumbtrail.toLowerCase().indexOf(term) >= 0;
+    
+    if (matchesSearch) {
+      var isChecked = printSelections[c.id] === true;
+      html += '<label style="display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid var(--border);cursor:pointer">' +
+        '<input type="checkbox" class="print-check" value="' + c.id + '"' + (isChecked ? ' checked' : '') + ' onchange="togglePrintSelection(' + c.id + ', this.checked)">' +
+        '<span style="color:var(--green);flex:1;font-weight:500">' + esc(c.item) + '</span>' +
+        '<span style="color:var(--text-muted);font-size:11px">' + esc(c.supplier) + '</span>' +
+        '</label>';
+    }
+  });
+  document.getElementById('printCardList').innerHTML = html || '<p style="color:var(--text-muted);text-align:center;padding:20px">No cards found</p>';
+}
+
+function togglePrintSelection(id, checked) {
+  if (checked) printSelections[id] = true;
+  else delete printSelections[id];
+  updatePrintCount();
+}
+
+function filterPrintCards() {
+  var term = document.getElementById('printSearch').value;
+  buildPrintCardList(term);
+  updatePrintCount();
+}
+
+function closePrint() { hide('printModal'); }
+
+function selectAllPrint(checked) {
+  var boxes = document.querySelectorAll('.print-check');
+  boxes.forEach(function(cb) { 
+    cb.checked = checked;
+    var id = parseInt(cb.value);
+    if (checked) printSelections[id] = true;
+    else delete printSelections[id];
+  });
+  updatePrintCount();
+}
+
+function getSelectedCardIds() {
+  return Object.keys(printSelections).map(function(id) { return parseInt(id); });
+}
+
+function updatePrintCount() {
+  var selectedIds = getSelectedCardIds();
+  var side = document.getElementById('printSide').value;
+  var size = document.getElementById('printSize').value;
+  var color = document.getElementById('printColor').value;
+  var sidesCount = side === 'both' ? 2 : 1;
+  var colorsCount = color === 'both' ? 2 : 1;
+  var cardsPerPage = (size === 'full') ? 1 : 2;
+  var pages = Math.ceil((selectedIds.length * sidesCount * colorsCount) / cardsPerPage);
+  
+  document.getElementById('printCount').textContent = selectedIds.length;
+  document.getElementById('printPages').textContent = pages;
+  
+  var sizeInfo = {
+    'card': '6"×4" cards, 2 per page',
+    'tag': '4"×2" tags, compact layout',
+    'shop': '6"×4" shop cards, bolder text',
+    'full': '7.5"×5" full sheet, 1 per page'
+  };
+  document.getElementById('printSizeInfo').textContent = sizeInfo[size] || '';
+}
+
+function updatePreviewSizeInfo() {
+  var size = document.getElementById('previewPrintSize').value;
+  var sizeInfo = {
+    'card': '6"×4" cards, 2 per page (green + red)',
+    'tag': '4"×2" compact tags, 2 per page',
+    'shop': '6"×4" shop cards with bolder text',
+    'full': '7.5"×5" full sheet, 1 card per page'
+  };
+  document.getElementById('previewSizeInfo').textContent = sizeInfo[size] || '';
+}
+
+function printOne() {
+  if (!previewCard) return;
+  var size = document.getElementById('previewPrintSize').value;
+  closePreview();
+  printOneCard(previewCard, size);
+}
+
+function getPrintCSS(size) {
+  var base = '@page{size:letter;margin:0}*{box-sizing:border-box;margin:0;padding:0}' +
+    'body{font-family:system-ui,sans-serif;background:#faf8f5;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+    '.page{page-break-after:always;width:8.5in;height:11in;margin:0;display:flex;justify-content:center;box-sizing:border-box}' +
+    '.page:last-child{page-break-after:auto}' +
+    '.kanban{border-radius:8px;position:relative;flex-shrink:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+    '.kanban.green{background:#668971 !important;color:#1a1f16 !important}' +
+    '.kanban.red{background:#bd4a28 !important;color:#f0cb60 !important}' +
+    '.kanban-border{position:absolute;inset:0;border:5px solid #e4aa4f;border-radius:10px}' +
+    '.kanban-inner{position:absolute;border:4px solid #e4aa4f;border-radius:8px}' +
+    '.kanban-content{height:100%;display:flex;flex-direction:column}' +
+    '.kanban-header{border-bottom:3px solid currentColor}' +
+    '.kanban-header h3{text-transform:uppercase;margin:0;font-weight:700;letter-spacing:1px}' +
+    '.kanban-loc{text-align:right;font-weight:700}' +
+    '.kanban-body{flex:1;display:flex}' +
+    '.kanban-left{flex:1;display:flex;flex-direction:column;justify-content:flex-start}' +
+    '.kanban-field small{text-transform:uppercase;opacity:0.8;display:block;font-weight:600}' +
+    '.kanban-field span{font-weight:700}' +
+    '.kanban-right{display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-start}' +
+    '.kanban-img{background:#fff;border-radius:8px;border:4px solid #e4aa4f;display:flex;align-items:center;justify-content:center;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+    '.kanban-img img{width:100%;height:100%;object-fit:contain}' +
+    '.kanban-price{background:#e4aa4f;border-radius:25px;font-weight:700;color:#1a1f16;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+    '.kanban-logo{position:absolute;border-radius:50%}' +
+    '.kanban-back{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center}' +
+    '.kanban-back h3{text-transform:uppercase;font-weight:700;letter-spacing:2px}' +
+    '.kanban-qr{background:#fff;border-radius:10px;border:4px solid #e4aa4f;display:flex;align-items:center;justify-content:center;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+    '.kanban-qr img{width:92%;height:92%}' +
+    '.no-print{padding:12px;background:#1a1f16;color:#fff;position:fixed;top:0;left:0;right:0;z-index:100}' +
+    '.no-print button{padding:10px 20px;border:none;border-radius:6px;cursor:pointer;margin-right:8px}' +
+    '@media print{.no-print{display:none}.print-wrapper{padding-top:0 !important}body{background:#fff}}';
+  
+  if (size === 'tag') {
+    // 4" x 2" price tag - compact horizontal layout
+    return base +
+      '.page{padding:0.5in 0;flex-wrap:wrap;align-content:flex-start;gap:0.25in}' +
+      '.page-inner{display:contents}' +
+      '.kanban{width:4in;height:2in;padding:6px}' +
+      '.kanban-inner{inset:10px}' +
+      '.kanban-content{padding:8px 10px}' +
+      '.kanban-header{padding-bottom:4px;margin-bottom:4px;border-width:2px}' +
+      '.kanban-header h3{font-size:14px}' +
+      '.kanban-loc{font-size:10px;margin-bottom:2px}' +
+      '.kanban-body{gap:8px}' +
+      '.kanban-left{padding-top:2px;padding-bottom:20px}' +
+      '.kanban-field{margin-bottom:3px}' +
+      '.kanban-field small{font-size:7px;margin-bottom:0}' +
+      '.kanban-field span{font-size:11px}' +
+      '.kanban-right{padding-top:2px}' +
+      '.kanban-img{width:70px;height:50px;border-width:2px}' +
+      '.kanban-price{margin-top:4px;padding:3px 12px;font-size:11px}' +
+      '.kanban-logo{bottom:8px;left:8px;width:22px;height:22px}' +
+      '.kanban-back h3{font-size:16px;margin-bottom:8px}' +
+      '.kanban-qr{width:70px;height:70px;border-width:2px}' +
+      '.kanban-border{border-width:3px}' +
+      '.kanban-inner{border-width:2px}';
+  } else if (size === 'shop') {
+    // 6" x 4" shop card - larger text, bolder
+    return base +
+      '.page{padding:1.375in 0 0 0}' +
+      '.page-inner{display:flex;flex-direction:column;align-items:center;gap:0.25in}' +
+      '.kanban{width:6in;height:4in;padding:12px}' +
+      '.kanban-inner{inset:14px}' +
+      '.kanban-content{padding:20px 24px}' +
+      '.kanban-header{padding-bottom:10px;margin-bottom:8px}' +
+      '.kanban-header h3{font-size:30px}' +
+      '.kanban-loc{font-size:20px;margin-bottom:6px}' +
+      '.kanban-body{gap:20px}' +
+      '.kanban-left{padding-top:4px;padding-bottom:45px}' +
+      '.kanban-field{margin-bottom:10px}' +
+      '.kanban-field small{font-size:13px;margin-bottom:2px}' +
+      '.kanban-field span{font-size:26px}' +
+      '.kanban-right{padding-top:4px}' +
+      '.kanban-img{width:180px;height:130px}' +
+      '.kanban-price{margin-top:12px;padding:10px 36px;font-size:26px}' +
+      '.kanban-logo{bottom:22px;left:22px;width:50px;height:50px}' +
+      '.kanban-back h3{font-size:48px;margin-bottom:32px}' +
+      '.kanban-qr{width:220px;height:220px}';
+  } else if (size === 'full') {
+    // 8.5" x 11" full sheet - one card per page, maximum size
+    return base +
+      '.page{padding:0.5in;align-items:center}' +
+      '.page-inner{display:flex;flex-direction:column;align-items:center;width:100%;height:100%}' +
+      '.kanban{width:7.5in;height:5in;padding:16px}' +
+      '.kanban-inner{inset:18px}' +
+      '.kanban-content{padding:28px 32px}' +
+      '.kanban-header{padding-bottom:12px;margin-bottom:10px}' +
+      '.kanban-header h3{font-size:38px}' +
+      '.kanban-loc{font-size:24px;margin-bottom:8px}' +
+      '.kanban-body{gap:28px}' +
+      '.kanban-left{padding-top:6px;padding-bottom:55px}' +
+      '.kanban-field{margin-bottom:14px}' +
+      '.kanban-field small{font-size:15px;margin-bottom:3px}' +
+      '.kanban-field span{font-size:32px}' +
+      '.kanban-right{padding-top:6px}' +
+      '.kanban-img{width:240px;height:180px}' +
+      '.kanban-price{margin-top:16px;padding:12px 44px;font-size:32px}' +
+      '.kanban-logo{bottom:28px;left:28px;width:60px;height:60px}' +
+      '.kanban-back h3{font-size:56px;margin-bottom:40px}' +
+      '.kanban-qr{width:300px;height:300px}';
+  } else {
+    // Default: 6" x 4" card
+    return base +
+      '.page{padding:1.375in 0 0 0}' +
+      '.page-inner{display:flex;flex-direction:column;align-items:center;gap:0.25in}' +
+      '.kanban{width:6in;height:4in;padding:12px}' +
+      '.kanban-inner{inset:14px}' +
+      '.kanban-content{padding:20px 24px}' +
+      '.kanban-header{padding-bottom:8px;margin-bottom:6px}' +
+      '.kanban-header h3{font-size:26px}' +
+      '.kanban-loc{font-size:18px;margin-bottom:4px}' +
+      '.kanban-body{gap:20px}' +
+      '.kanban-left{padding-top:4px;padding-bottom:45px}' +
+      '.kanban-field{margin-bottom:8px}' +
+      '.kanban-field small{font-size:12px;margin-bottom:1px}' +
+      '.kanban-field span{font-size:22px}' +
+      '.kanban-right{padding-top:4px}' +
+      '.kanban-img{width:180px;height:130px}' +
+      '.kanban-price{margin-top:12px;padding:8px 32px;font-size:22px}' +
+      '.kanban-logo{bottom:22px;left:22px;width:50px;height:50px}' +
+      '.kanban-back h3{font-size:42px;margin-bottom:28px}' +
+      '.kanban-qr{width:200px;height:200px}';
+  }
+}
+
+function printOneCard(card, size) {
+  var allHtml = [];
+  if (size === 'full') {
+    // One card per page for full size
+    allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(card, 'green', 'front', size) + '</div></div>');
+    allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(card, 'red', 'front', size) + '</div></div>');
+    allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(card, 'green', 'back', size) + '</div></div>');
+    allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(card, 'red', 'back', size) + '</div></div>');
+  } else {
+    allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(card, 'green', 'front', size) + cardHtml(card, 'red', 'front', size) + '</div></div>');
+    allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(card, 'green', 'back', size) + cardHtml(card, 'red', 'back', size) + '</div></div>');
+  }
+  
+  var html = '<!DOCTYPE html><html><head><title>Kanban Cards</title><style>' +
+    getPrintCSS(size) +
+    '</style></head><body>' +
+    '<div class="no-print"><button onclick="window.print()" style="background:#668971;color:#fff">Print</button>' +
+    '<button onclick="window.close()" style="background:#62758d;color:#fff">Close</button>' +
+    '<span style="margin-left:12px;color:#8f9263">' + allHtml.length + ' page(s) • ' + size.toUpperCase() + '</span></div>' +
+    '<div class="print-wrapper" style="padding-top:50px">' + allHtml.join('') + '</div></body></html>';
+  
+  var win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+}
+
+function doPrint() {
+  var selectedIds = getSelectedCardIds();
+  if (selectedIds.length === 0) { toast('No cards selected', 'err'); return; }
+  
+  var cards = allCards.filter(function(c) { return selectedIds.indexOf(c.id) >= 0; });
+  closePrint();
+  printCards(cards);
+}
+
+function printCards(cards) {
+  var color = document.getElementById('printColor').value;
+  var side = document.getElementById('printSide').value;
+  var size = document.getElementById('printSize').value;
+  var sides = side === 'both' ? ['front', 'back'] : [side];
+  
+  var allHtml = [];
+  cards.forEach(function(c) {
+    sides.forEach(function(sd) {
+      if (size === 'full') {
+        // One card per page for full size
+        if (color === 'both') {
+          allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(c, 'green', sd, size) + '</div></div>');
+          allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(c, 'red', sd, size) + '</div></div>');
+        } else {
+          allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(c, color, sd, size) + '</div></div>');
+        }
+      } else {
+        if (color === 'both') {
+          allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(c, 'green', sd, size) + cardHtml(c, 'red', sd, size) + '</div></div>');
+        } else {
+          allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(c, color, sd, size) + '</div></div>');
+        }
+      }
+    });
+  });
+  
+  var html = '<!DOCTYPE html><html><head><title>Kanban Cards</title><style>' +
+    getPrintCSS(size) +
+    '</style></head><body>' +
+    '<div class="no-print"><button onclick="window.print()" style="background:#668971;color:#fff">Print</button>' +
+    '<button onclick="window.close()" style="background:#62758d;color:#fff">Close</button>' +
+    '<span style="margin-left:12px;color:#8f9263">' + allHtml.length + ' page(s) • ' + size.toUpperCase() + '</span></div>' +
+    '<div class="print-wrapper" style="padding-top:50px">' + allHtml.join('') + '</div></body></html>';
+  
+  var win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+}
+
+// Helpers
+function show(id) { document.getElementById(id).style.display = id.indexOf('Modal') >= 0 ? 'flex' : 'block'; }
+function hide(id) { document.getElementById(id).style.display = 'none'; }
+function esc(s) { return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : ''; }
+function toast(msg, type) {
+  var t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.textContent = msg;
+  document.getElementById('toasts').appendChild(t);
+  setTimeout(function() { t.remove(); }, 3000);
+}
+
+init();
+</script>
+</body>
+</html>

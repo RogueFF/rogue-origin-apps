@@ -1,0 +1,1790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SOP Manager - Rogue Origin</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    :root {
+      --gold: #e4aa4f;
+      --gold-light: #f0cb60;
+      --gold-dim: rgba(228,170,79,0.15);
+      --green: #668971;
+      --green-dim: rgba(102,137,113,0.15);
+      --green-dark: #4a6b54;
+      --sungrown: #bf8e4e;
+      --sungrown-dim: rgba(191,142,78,0.15);
+      --greenhouse: #8f9263;
+      --indoor: #62758d;
+      --danger: #c45c4a;
+      --danger-dim: rgba(196,92,74,0.12);
+      --bg: #faf8f5;
+      --bg-card: #ffffff;
+      --border: #e8e4de;
+      --border-light: rgba(102,137,113,0.15);
+      --text: #2d3a2e;
+      --text-muted: #5a6b5f;
+      --text-light: #8a9a8e;
+      --sidebar-bg: #1a1f16;
+      --sidebar-width: 240px;
+      --sidebar-collapsed: 68px;
+    }
+    
+    /* Dark Mode */
+    body.dark-mode {
+      --bg: #1a1f16;
+      --bg-card: #252b22;
+      --border: rgba(228,170,79,0.2);
+      --border-light: rgba(228,170,79,0.1);
+      --text: #e8e4dc;
+      --text-muted: #a8b5a9;
+      --text-light: #6b7a6f;
+      --gold-dim: rgba(228,170,79,0.2);
+      --green-dim: rgba(102,137,113,0.2);
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { 
+      font-family: 'Inter', system-ui, -apple-system, sans-serif; 
+      background: var(--bg); 
+      color: var(--text); 
+      min-height: 100vh; 
+      display: flex;
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      opacity: 0.03;
+      pointer-events: none;
+      z-index: 0;
+    }
+    body.dark-mode::before { opacity: 0.04; }
+
+    /* Sidebar */
+    .sidebar {
+      width: var(--sidebar-width);
+      background: var(--sidebar-bg);
+      padding: 16px 12px;
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      height: 100vh;
+      overflow-y: auto;
+      z-index: 50;
+      transition: width 0.3s ease, padding 0.3s ease;
+    }
+    .sidebar.collapsed { width: var(--sidebar-collapsed); padding: 16px 8px; }
+    .sidebar.collapsed .brand h1,
+    .sidebar.collapsed .nav-item span:not(.icon),
+    .sidebar.collapsed .nav-section,
+    .sidebar.collapsed .sidebar-toggle-label { display: none; }
+    .sidebar.collapsed .brand { justify-content: center; padding: 0; }
+    .sidebar.collapsed .nav-item { justify-content: center; padding: 11px; }
+    .sidebar.collapsed .nav-item .icon { margin: 0; width: auto; }
+    .sidebar.collapsed .sidebar-toggle { justify-content: center; }
+    
+    .sidebar-toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      color: #6b7280;
+      cursor: pointer;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      transition: all 0.2s;
+    }
+    .sidebar-toggle:hover { background: #2a3026; color: #fff; }
+    .sidebar-toggle i { font-size: 18px; }
+    .sidebar-toggle-label { font-size: 11px; font-weight: 500; }
+    
+    .brand { display: flex; align-items: center; gap: 12px; padding: 0 12px; margin-bottom: 20px; }
+    .logo { width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0; }
+    .brand h1 { font-size: 15px; font-weight: 600; color: #fff; white-space: nowrap; }
+    
+    .nav-section { margin-top: 16px; margin-bottom: 8px; padding: 0 14px; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #6b7280; font-weight: 600; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 10px; color: #9ca3af; text-decoration: none; margin-bottom: 4px; transition: all 0.2s; font-size: 13px; font-weight: 500; cursor: pointer; }
+    .nav-item:hover { background: #2a3026; color: #fff; }
+    .nav-item.active { background: var(--gold); color: var(--sidebar-bg); }
+    .nav-item .icon { width: 22px; text-align: center; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+    
+    .sidebar-footer { margin-top: auto; padding-top: 14px; border-top: 1px solid #2a3026; }
+    .sidebar-stats { padding: 0 14px; }
+    .sidebar-stat { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; font-size: 12px; color: #9ca3af; }
+    .sidebar-stat-value { font-weight: 600; color: var(--gold); }
+
+    /* Main Content */
+    .main { flex: 1; margin-left: var(--sidebar-width); min-height: 100vh; display: flex; flex-direction: column; transition: margin-left 0.3s ease; position: relative; z-index: 1; }
+    body.sidebar-collapsed .main { margin-left: var(--sidebar-collapsed); }
+
+    /* Header */
+    .header { 
+      background: var(--bg-card); 
+      padding: 12px 24px; 
+      display: flex; 
+      align-items: center; 
+      justify-content: space-between; 
+      border-bottom: 1px solid var(--border); 
+      position: sticky; 
+      top: 0; 
+      z-index: 40;
+    }
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .header-logo { height: 32px; width: auto; }
+    .header-title { font-size: 18px; font-weight: 600; color: var(--text); }
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    
+    .header-btn { 
+      background: var(--bg); 
+      color: var(--text-muted); 
+      border: 1px solid var(--border); 
+      padding: 8px 14px; 
+      border-radius: 8px; 
+      font-weight: 500; 
+      font-size: 13px; 
+      cursor: pointer; 
+      display: flex; 
+      align-items: center; 
+      gap: 6px; 
+      transition: all 0.2s; 
+    }
+    .header-btn:hover { background: var(--green-dim); color: var(--green); border-color: var(--green); }
+    .header-btn.primary { background: var(--green); color: #fff; border-color: var(--green); }
+    .header-btn.primary:hover { background: var(--green-dark); }
+    .header-btn i { font-size: 16px; }
+    
+    .dark-mode-toggle { 
+      background: var(--bg); 
+      border: 1px solid var(--border); 
+      border-radius: 20px; 
+      padding: 6px 10px; 
+      cursor: pointer; 
+      display: flex; 
+      align-items: center; 
+      gap: 6px; 
+      font-size: 12px; 
+      color: var(--text-muted); 
+      transition: all 0.2s; 
+    }
+    .dark-mode-toggle:hover { border-color: var(--gold); color: var(--gold); }
+    body.dark-mode .dark-mode-toggle { background: var(--gold-dim); border-color: var(--gold); color: var(--gold); }
+
+    /* Toolbar */
+    .toolbar { 
+      background: var(--bg-card); 
+      padding: 12px 24px; 
+      border-bottom: 1px solid var(--border); 
+      display: flex; 
+      align-items: center; 
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .toolbar-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .toolbar-right { display: flex; align-items: center; gap: 10px; }
+    
+    .search-box { 
+      position: relative; 
+      width: 280px;
+    }
+    .search-box input { 
+      width: 100%;
+      background: var(--bg); 
+      border: 1px solid var(--border); 
+      border-radius: 8px; 
+      padding: 10px 12px 10px 36px; 
+      color: var(--text); 
+      font-size: 13px; 
+    }
+    .search-box input:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px var(--green-dim); }
+    .search-box input::placeholder { color: var(--text-light); }
+    .search-box i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-light); font-size: 16px; }
+    
+    select { 
+      background: var(--bg); 
+      border: 1px solid var(--border); 
+      border-radius: 8px; 
+      padding: 10px 12px; 
+      color: var(--text); 
+      font-size: 13px; 
+      cursor: pointer;
+    }
+    select:focus { outline: none; border-color: var(--green); }
+    
+    .view-toggle { display: flex; background: var(--bg); border-radius: 8px; padding: 3px; border: 1px solid var(--border); }
+    .view-toggle button { 
+      padding: 6px 12px; 
+      border: none; 
+      border-radius: 6px; 
+      font-size: 14px; 
+      cursor: pointer; 
+      background: transparent; 
+      color: var(--text-muted); 
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+    }
+    .view-toggle button.active { background: var(--green); color: #fff; }
+
+    /* Content Area */
+    .content { padding: 24px; flex: 1; }
+    
+    /* Stats Bar */
+    .stats-bar { 
+      display: flex; 
+      gap: 16px; 
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .stat-card { 
+      background: var(--bg-card); 
+      border: 1px solid var(--border); 
+      border-radius: 12px; 
+      padding: 16px 20px; 
+      min-width: 140px;
+      flex: 1;
+    }
+    .stat-card-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-light); margin-bottom: 4px; font-weight: 500; }
+    .stat-card-value { font-size: 28px; font-weight: 700; color: var(--text); }
+    .stat-card-value.gold { color: var(--gold); }
+    .stat-card-value.green { color: var(--green); }
+
+    /* SOP Grid */
+    .sop-grid { 
+      display: grid; 
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); 
+      gap: 20px; 
+    }
+    
+    .sop-card { 
+      background: var(--bg-card); 
+      border: 1px solid var(--border); 
+      border-radius: 12px; 
+      overflow: hidden; 
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    .sop-card:hover { 
+      transform: translateY(-2px); 
+      box-shadow: 0 8px 24px rgba(0,0,0,0.08); 
+      border-color: var(--green); 
+    }
+    
+    .sop-card-header { 
+      padding: 16px; 
+      border-bottom: 1px solid var(--border); 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: flex-start;
+    }
+    .sop-card-title { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+    .sop-card-dept { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 4px; }
+    .sop-card-rev { 
+      background: var(--green-dim); 
+      color: var(--green); 
+      font-size: 11px; 
+      font-weight: 600; 
+      padding: 4px 8px; 
+      border-radius: 6px; 
+    }
+    
+    .sop-card-preview { 
+      height: 140px; 
+      background: var(--bg); 
+      display: flex; 
+      align-items: center; 
+      justify-content: center;
+      overflow: hidden;
+    }
+    .sop-card-preview img { width: 100%; height: 100%; object-fit: cover; }
+    .sop-card-preview-empty { color: var(--text-light); display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    .sop-card-preview-empty i { font-size: 32px; }
+    
+    .sop-card-meta { 
+      padding: 12px 16px; 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center;
+      background: var(--bg);
+    }
+    .sop-card-steps { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 4px; }
+    .sop-card-tags { display: flex; gap: 6px; }
+    .sop-tag { 
+      background: var(--gold-dim); 
+      color: var(--gold); 
+      font-size: 10px; 
+      font-weight: 600; 
+      padding: 3px 8px; 
+      border-radius: 4px; 
+      text-transform: uppercase;
+    }
+    .sop-tag.safety { background: var(--danger-dim); color: var(--danger); }
+    .sop-tag.quality { background: var(--green-dim); color: var(--green); }
+    
+    .sop-card-actions { 
+      display: flex; 
+      border-top: 1px solid var(--border); 
+    }
+    .sop-card-actions button { 
+      flex: 1; 
+      background: transparent; 
+      border: none; 
+      border-right: 1px solid var(--border); 
+      padding: 12px; 
+      cursor: pointer; 
+      font-size: 14px; 
+      color: var(--text-muted);
+      transition: all 0.15s; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center;
+      gap: 6px;
+    }
+    .sop-card-actions button:last-child { border-right: none; }
+    .sop-card-actions button:hover { background: var(--bg); color: var(--green); }
+    .sop-card-actions button.qr-btn:hover { background: var(--gold-dim); color: var(--gold); }
+    .sop-card-actions button.del-btn:hover { background: var(--danger-dim); color: var(--danger); }
+
+    /* SOP List View */
+    .sop-list { display: none; }
+    .sop-list.active { display: block; }
+    .sop-grid.hidden { display: none; }
+    
+    .sop-table { 
+      background: var(--bg-card); 
+      border: 1px solid var(--border); 
+      border-radius: 12px; 
+      overflow: hidden; 
+    }
+    .sop-table table { width: 100%; border-collapse: collapse; }
+    .sop-table th { 
+      text-align: left; 
+      padding: 14px 16px; 
+      background: var(--bg); 
+      font-size: 11px; 
+      text-transform: uppercase; 
+      letter-spacing: 0.5px;
+      color: var(--text-muted); 
+      font-weight: 600; 
+      border-bottom: 1px solid var(--border); 
+    }
+    .sop-table td { 
+      padding: 14px 16px; 
+      border-bottom: 1px solid var(--border); 
+      font-size: 13px;
+    }
+    .sop-table tr:last-child td { border-bottom: none; }
+    .sop-table tr:hover { background: var(--bg); cursor: pointer; }
+    .sop-table .title-cell { font-weight: 600; color: var(--green); }
+    .sop-table .actions-cell { display: flex; gap: 8px; }
+    .sop-table .actions-cell button { 
+      background: var(--bg); 
+      border: 1px solid var(--border); 
+      padding: 6px 10px; 
+      border-radius: 6px; 
+      cursor: pointer; 
+      color: var(--text-muted);
+      transition: all 0.15s;
+    }
+    .sop-table .actions-cell button:hover { border-color: var(--green); color: var(--green); }
+
+    /* Modal */
+    .modal { 
+      position: fixed; 
+      inset: 0; 
+      background: rgba(0,0,0,0.5); 
+      display: none; 
+      align-items: center; 
+      justify-content: center; 
+      padding: 20px; 
+      z-index: 100; 
+      backdrop-filter: blur(4px);
+    }
+    .modal.active { display: flex; }
+    
+    .modal-box { 
+      background: var(--bg-card); 
+      border-radius: 16px; 
+      width: 100%; 
+      max-width: 900px; 
+      max-height: 90vh; 
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .modal-box.wide { max-width: 1100px; }
+    
+    .modal-header { 
+      padding: 20px 24px; 
+      border-bottom: 1px solid var(--border); 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+    }
+    .modal-header h2 { font-size: 18px; font-weight: 600; color: var(--text); }
+    .modal-close { 
+      background: none; 
+      border: none; 
+      color: var(--text-muted); 
+      font-size: 24px; 
+      cursor: pointer; 
+      padding: 4px;
+      line-height: 1;
+      border-radius: 6px;
+      transition: all 0.15s;
+    }
+    .modal-close:hover { background: var(--bg); color: var(--text); }
+    
+    .modal-body { 
+      padding: 24px; 
+      overflow-y: auto; 
+      flex: 1;
+    }
+    
+    .modal-footer { 
+      padding: 16px 24px; 
+      border-top: 1px solid var(--border); 
+      display: flex; 
+      justify-content: flex-end; 
+      gap: 10px; 
+      background: var(--bg);
+    }
+
+    /* Form Elements */
+    .form-group { margin-bottom: 20px; }
+    .form-label { 
+      display: block; 
+      font-size: 12px; 
+      font-weight: 600; 
+      color: var(--text-muted); 
+      margin-bottom: 6px; 
+      text-transform: uppercase; 
+      letter-spacing: 0.5px; 
+    }
+    .form-input { 
+      width: 100%; 
+      background: var(--bg); 
+      border: 1px solid var(--border); 
+      border-radius: 8px; 
+      padding: 12px; 
+      color: var(--text); 
+      font-size: 14px; 
+    }
+    .form-input:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px var(--green-dim); }
+    textarea.form-input { min-height: 80px; resize: vertical; font-family: inherit; }
+    
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+    /* Steps Editor */
+    .steps-section { margin-top: 24px; }
+    .steps-header { 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+      margin-bottom: 16px; 
+    }
+    .steps-header h3 { font-size: 14px; font-weight: 600; color: var(--text); }
+    
+    .steps-list { display: flex; flex-direction: column; gap: 12px; }
+    
+    .step-item { 
+      background: var(--bg); 
+      border: 1px solid var(--border); 
+      border-radius: 10px; 
+      padding: 16px;
+      display: flex;
+      gap: 16px;
+      transition: all 0.2s;
+    }
+    .step-item:hover { border-color: var(--green); }
+    .step-item.dragging { opacity: 0.5; }
+    
+    .step-number { 
+      width: 36px; 
+      height: 36px; 
+      background: var(--green); 
+      color: #fff; 
+      border-radius: 50%; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center; 
+      font-weight: 700; 
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    
+    .step-content { flex: 1; min-width: 0; }
+    .step-title-input { 
+      width: 100%; 
+      background: var(--bg-card); 
+      border: 1px solid var(--border); 
+      border-radius: 6px; 
+      padding: 10px; 
+      color: var(--text); 
+      font-size: 14px; 
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .step-title-input:focus { outline: none; border-color: var(--green); }
+    
+    .step-desc-input { 
+      width: 100%; 
+      background: var(--bg-card); 
+      border: 1px solid var(--border); 
+      border-radius: 6px; 
+      padding: 10px; 
+      color: var(--text); 
+      font-size: 13px; 
+      min-height: 60px;
+      resize: vertical;
+      font-family: inherit;
+    }
+    .step-desc-input:focus { outline: none; border-color: var(--green); }
+    
+    .step-image { 
+      width: 160px; 
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .step-image-preview { 
+      width: 160px; 
+      height: 100px; 
+      background: var(--bg-card); 
+      border: 2px dashed var(--border); 
+      border-radius: 8px; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center;
+      overflow: hidden;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .step-image-preview:hover { border-color: var(--gold); background: var(--gold-dim); }
+    .step-image-preview img { width: 100%; height: 100%; object-fit: cover; }
+    .step-image-preview .placeholder { 
+      color: var(--text-light); 
+      font-size: 11px; 
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .step-image-preview .placeholder i { font-size: 24px; }
+    
+    .step-icons { display: flex; gap: 6px; }
+    .step-icon-btn { 
+      width: 32px; 
+      height: 32px; 
+      border: 1px solid var(--border); 
+      border-radius: 6px; 
+      background: var(--bg-card); 
+      cursor: pointer; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center;
+      font-size: 14px;
+      color: var(--text-muted);
+      transition: all 0.15s;
+    }
+    .step-icon-btn:hover { border-color: var(--gold); color: var(--gold); }
+    .step-icon-btn.active { background: var(--gold); color: #fff; border-color: var(--gold); }
+    .step-icon-btn.safety { color: var(--danger); }
+    .step-icon-btn.safety.active { background: var(--danger); color: #fff; border-color: var(--danger); }
+    .step-icon-btn.quality { color: var(--green); }
+    .step-icon-btn.quality.active { background: var(--green); color: #fff; border-color: var(--green); }
+    
+    .step-actions { 
+      display: flex; 
+      flex-direction: column; 
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .step-action-btn { 
+      width: 32px; 
+      height: 32px; 
+      border: none; 
+      border-radius: 6px; 
+      background: var(--bg-card); 
+      cursor: pointer; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center;
+      font-size: 14px;
+      color: var(--text-muted);
+      transition: all 0.15s;
+    }
+    .step-action-btn:hover { background: var(--border); color: var(--text); }
+    .step-action-btn.drag { cursor: grab; }
+    .step-action-btn.drag:active { cursor: grabbing; }
+    .step-action-btn.delete:hover { background: var(--danger-dim); color: var(--danger); }
+
+    /* QR Modal */
+    .qr-modal-content { text-align: center; padding: 20px; }
+    .qr-canvas { margin: 20px auto; }
+    .qr-url { 
+      background: var(--bg); 
+      padding: 12px; 
+      border-radius: 8px; 
+      font-size: 12px; 
+      color: var(--text-muted); 
+      word-break: break-all;
+      margin-top: 16px;
+    }
+
+    /* View SOP Modal */
+    .view-sop-header { 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: flex-start;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .view-sop-title { font-size: 24px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+    .view-sop-meta { display: flex; gap: 16px; flex-wrap: wrap; }
+    .view-sop-meta-item { font-size: 13px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+    .view-sop-qr { width: 100px; height: 100px; background: #fff; border-radius: 8px; padding: 8px; }
+    .view-sop-qr canvas { width: 100% !important; height: 100% !important; }
+    
+    .view-step { 
+      display: flex; 
+      gap: 20px; 
+      padding: 20px; 
+      background: var(--bg); 
+      border-radius: 12px; 
+      margin-bottom: 16px;
+    }
+    .view-step-number { 
+      width: 48px; 
+      height: 48px; 
+      background: var(--green); 
+      color: #fff; 
+      border-radius: 50%; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center; 
+      font-weight: 700; 
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+    .view-step-content { flex: 1; }
+    .view-step-title { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+    .view-step-title .icon { font-size: 18px; }
+    .view-step-title .icon.safety { color: var(--danger); }
+    .view-step-title .icon.quality { color: var(--green); }
+    .view-step-desc { font-size: 14px; color: var(--text-muted); line-height: 1.5; }
+    .view-step-image { 
+      width: 200px; 
+      height: 140px; 
+      border-radius: 8px; 
+      overflow: hidden;
+      flex-shrink: 0;
+      border: 2px solid var(--border);
+    }
+    .view-step-image img { width: 100%; height: 100%; object-fit: cover; }
+
+    /* Empty State */
+    .empty-state { 
+      text-align: center; 
+      padding: 60px 20px; 
+      color: var(--text-muted);
+    }
+    .empty-state i { font-size: 64px; margin-bottom: 16px; opacity: 0.5; }
+    .empty-state h3 { font-size: 18px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+    .empty-state p { font-size: 14px; margin-bottom: 20px; }
+
+    /* Toast */
+    .toast { 
+      position: fixed; 
+      bottom: 24px; 
+      right: 24px; 
+      padding: 14px 20px; 
+      border-radius: 10px; 
+      color: #fff; 
+      font-size: 14px; 
+      z-index: 200; 
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      display: none;
+      align-items: center;
+      gap: 10px;
+    }
+    .toast.show { display: flex; animation: slideIn 0.3s ease; }
+    .toast.success { background: var(--green); }
+    .toast.error { background: var(--danger); }
+    @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    /* Loading */
+    .loading { 
+      display: flex; 
+      align-items: center; 
+      justify-content: center; 
+      padding: 60px; 
+      color: var(--text-muted);
+    }
+    .loading i { font-size: 32px; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .main { margin-left: 0 !important; }
+      .sop-grid { grid-template-columns: 1fr; }
+      .form-row, .form-row-3 { grid-template-columns: 1fr; }
+      .step-item { flex-direction: column; }
+      .step-image { width: 100%; }
+      .step-image-preview { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-toggle" onclick="toggleSidebar()">
+      <i class="ph-duotone ph-list"></i>
+      <span class="sidebar-toggle-label">Collapse</span>
+    </div>
+    <div class="brand">
+      <img src="https://lh3.googleusercontent.com/d/1VEmuLRP15C4S3UYM_RrvkGsU9E4m1sOs" class="logo" alt="Logo">
+      <h1>SOP Manager</h1>
+    </div>
+    
+    <div class="nav-section">Navigation</div>
+    <div class="nav-item active" onclick="showView('all')">
+      <span class="icon"><i class="ph-duotone ph-files"></i></span>
+      <span>All SOPs</span>
+    </div>
+    <div class="nav-item" onclick="showView('recent')">
+      <span class="icon"><i class="ph-duotone ph-clock"></i></span>
+      <span>Recent</span>
+    </div>
+    <div class="nav-item" onclick="showView('drafts')">
+      <span class="icon"><i class="ph-duotone ph-pencil-simple"></i></span>
+      <span>Drafts</span>
+    </div>
+    
+    <div class="nav-section">Departments</div>
+    <div class="nav-item" onclick="filterByDept('Production')">
+      <span class="icon"><i class="ph-duotone ph-factory"></i></span>
+      <span>Production</span>
+    </div>
+    <div class="nav-item" onclick="filterByDept('Packaging')">
+      <span class="icon"><i class="ph-duotone ph-package"></i></span>
+      <span>Packaging</span>
+    </div>
+    <div class="nav-item" onclick="filterByDept('Quality')">
+      <span class="icon"><i class="ph-duotone ph-seal-check"></i></span>
+      <span>Quality</span>
+    </div>
+    <div class="nav-item" onclick="filterByDept('Maintenance')">
+      <span class="icon"><i class="ph-duotone ph-wrench"></i></span>
+      <span>Maintenance</span>
+    </div>
+    
+    <div class="sidebar-footer">
+      <div class="sidebar-stats">
+        <div class="sidebar-stat">
+          <span>Total SOPs</span>
+          <span class="sidebar-stat-value" id="sidebarTotal">0</span>
+        </div>
+        <div class="sidebar-stat">
+          <span>Published</span>
+          <span class="sidebar-stat-value" id="sidebarPublished">0</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <img src="https://lh3.googleusercontent.com/d/1nqCO3wXziung_kuFMOnP2M0FWJRjFBUU" alt="Rogue Origin" class="header-logo">
+        <span class="header-title">Standard Operating Procedures</span>
+      </div>
+      <div class="header-right">
+        <button class="dark-mode-toggle" onclick="toggleDarkMode()">
+          <i class="ph-duotone ph-moon"></i>
+          <span>Dark</span>
+        </button>
+        <button class="header-btn primary" onclick="openCreateModal()">
+          <i class="ph-duotone ph-plus"></i>
+          New SOP
+        </button>
+      </div>
+    </header>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <div class="search-box">
+          <i class="ph-duotone ph-magnifying-glass"></i>
+          <input type="text" id="searchInput" placeholder="Search SOPs..." oninput="filterSOPs()">
+        </div>
+        <select id="deptFilter" onchange="filterSOPs()">
+          <option value="">All Departments</option>
+          <option value="Production">Production</option>
+          <option value="Packaging">Packaging</option>
+          <option value="Quality">Quality</option>
+          <option value="Maintenance">Maintenance</option>
+        </select>
+        <select id="tagFilter" onchange="filterSOPs()">
+          <option value="">All Tags</option>
+          <option value="safety">Safety</option>
+          <option value="quality">Quality</option>
+          <option value="critical">Critical</option>
+        </select>
+      </div>
+      <div class="toolbar-right">
+        <div class="view-toggle">
+          <button class="active" onclick="setView('grid')" id="gridViewBtn"><i class="ph-duotone ph-squares-four"></i></button>
+          <button onclick="setView('list')" id="listViewBtn"><i class="ph-duotone ph-list"></i></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+      <!-- Stats -->
+      <div class="stats-bar">
+        <div class="stat-card">
+          <div class="stat-card-label">Total SOPs</div>
+          <div class="stat-card-value" id="statTotal">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">Published</div>
+          <div class="stat-card-value green" id="statPublished">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">Drafts</div>
+          <div class="stat-card-value gold" id="statDrafts">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">This Month</div>
+          <div class="stat-card-value" id="statMonth">0</div>
+        </div>
+      </div>
+
+      <!-- Grid View -->
+      <div class="sop-grid" id="sopGrid"></div>
+
+      <!-- List View -->
+      <div class="sop-list" id="sopList">
+        <div class="sop-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Department</th>
+                <th>Steps</th>
+                <th>Revision</th>
+                <th>Updated</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="sopTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div class="empty-state" id="emptyState" style="display: none;">
+        <i class="ph-duotone ph-files"></i>
+        <h3>No SOPs Found</h3>
+        <p>Create your first Standard Operating Procedure to get started.</p>
+        <button class="header-btn primary" onclick="openCreateModal()">
+          <i class="ph-duotone ph-plus"></i>
+          Create SOP
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Create/Edit Modal -->
+  <div class="modal" id="editModal">
+    <div class="modal-box wide">
+      <div class="modal-header">
+        <h2 id="modalTitle">Create New SOP</h2>
+        <button class="modal-close" onclick="closeModal('editModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">SOP Title *</label>
+            <input type="text" class="form-input" id="sopTitle" placeholder="e.g., Trimming Machine Setup">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Department *</label>
+            <select class="form-input" id="sopDept">
+              <option value="">Select Department</option>
+              <option value="Production">Production</option>
+              <option value="Packaging">Packaging</option>
+              <option value="Quality">Quality</option>
+              <option value="Maintenance">Maintenance</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="form-row-3">
+          <div class="form-group">
+            <label class="form-label">Document Number</label>
+            <input type="text" class="form-input" id="sopDocNum" placeholder="SOP-001">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Revision</label>
+            <input type="text" class="form-input" id="sopRevision" placeholder="1.0" value="1.0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Status</label>
+            <select class="form-input" id="sopStatus">
+              <option value="draft">Draft</option>
+              <option value="published">Published</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Description</label>
+          <textarea class="form-input" id="sopDesc" placeholder="Brief description of this procedure..."></textarea>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Tags</label>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+              <input type="checkbox" id="tagSafety"> <span class="sop-tag safety">Safety</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+              <input type="checkbox" id="tagQuality"> <span class="sop-tag quality">Quality</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+              <input type="checkbox" id="tagCritical"> <span class="sop-tag">Critical</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Steps Section -->
+        <div class="steps-section">
+          <div class="steps-header">
+            <h3><i class="ph-duotone ph-list-numbers"></i> Procedure Steps</h3>
+            <button class="header-btn" onclick="addStep()">
+              <i class="ph-duotone ph-plus"></i>
+              Add Step
+            </button>
+          </div>
+          <div class="steps-list" id="stepsList"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="header-btn" onclick="closeModal('editModal')">Cancel</button>
+        <button class="header-btn" onclick="saveSOP('draft')">
+          <i class="ph-duotone ph-floppy-disk"></i>
+          Save Draft
+        </button>
+        <button class="header-btn primary" onclick="saveSOP('published')">
+          <i class="ph-duotone ph-check-circle"></i>
+          Publish
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- View SOP Modal -->
+  <div class="modal" id="viewModal">
+    <div class="modal-box wide">
+      <div class="modal-header">
+        <h2>View SOP</h2>
+        <button class="modal-close" onclick="closeModal('viewModal')">&times;</button>
+      </div>
+      <div class="modal-body" id="viewModalBody"></div>
+      <div class="modal-footer">
+        <button class="header-btn" onclick="closeModal('viewModal')">Close</button>
+        <button class="header-btn" onclick="exportPDF()">
+          <i class="ph-duotone ph-file-pdf"></i>
+          Export PDF
+        </button>
+        <button class="header-btn primary" onclick="editCurrentSOP()">
+          <i class="ph-duotone ph-pencil-simple"></i>
+          Edit
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- QR Modal -->
+  <div class="modal" id="qrModal">
+    <div class="modal-box" style="max-width: 400px;">
+      <div class="modal-header">
+        <h2>SOP QR Code</h2>
+        <button class="modal-close" onclick="closeModal('qrModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="qr-modal-content">
+          <canvas id="qrCanvas"></canvas>
+          <p style="margin-top: 16px; color: var(--text-muted); font-size: 13px;">Scan to view this SOP on any device</p>
+          <div class="qr-url" id="qrUrl"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="header-btn" onclick="closeModal('qrModal')">Close</button>
+        <button class="header-btn primary" onclick="downloadQR()">
+          <i class="ph-duotone ph-download"></i>
+          Download QR
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast">
+    <i class="ph-duotone ph-check-circle"></i>
+    <span id="toastMsg"></span>
+  </div>
+
+  <script>
+    // State
+    let sops = [];
+    let currentSopId = null;
+    let editingSteps = [];
+    let currentView = 'grid';
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+      loadFromStorage();
+      renderSOPs();
+      updateStats();
+      
+      // Load sidebar state
+      if (localStorage.getItem('sopSidebarCollapsed') === 'true') {
+        document.getElementById('sidebar').classList.add('collapsed');
+        document.body.classList.add('sidebar-collapsed');
+      }
+      
+      // Load dark mode
+      if (localStorage.getItem('sopDarkMode') === 'true') {
+        document.body.classList.add('dark-mode');
+      }
+    });
+
+    // Storage
+    function loadFromStorage() {
+      const stored = localStorage.getItem('rogueOriginSOPs');
+      if (stored) {
+        sops = JSON.parse(stored);
+      } else {
+        // Demo data
+        sops = [
+          {
+            id: 1,
+            title: 'Trimming Machine Daily Startup',
+            dept: 'Production',
+            docNum: 'SOP-PRD-001',
+            revision: '2.1',
+            status: 'published',
+            description: 'Standard procedure for starting the trimming machine at the beginning of each shift.',
+            tags: ['safety', 'critical'],
+            steps: [
+              { title: 'Safety Check', description: 'Verify all safety guards are in place and emergency stop is functional.', image: '', safety: true, quality: false },
+              { title: 'Power On', description: 'Turn on main power switch located on the right side of the machine.', image: '', safety: false, quality: false },
+              { title: 'Warm Up', description: 'Allow machine to warm up for 5 minutes before operation.', image: '', safety: false, quality: true },
+              { title: 'Test Run', description: 'Run machine empty for 30 seconds to verify proper operation.', image: '', safety: false, quality: true }
+            ],
+            createdAt: '2024-12-01',
+            updatedAt: '2024-12-20'
+          },
+          {
+            id: 2,
+            title: 'Package Sealing Procedure',
+            dept: 'Packaging',
+            docNum: 'SOP-PKG-003',
+            revision: '1.0',
+            status: 'published',
+            description: 'How to properly seal product packages for shipping.',
+            tags: ['quality'],
+            steps: [
+              { title: 'Prepare Package', description: 'Ensure package is filled to correct weight and contents are settled.', image: '', safety: false, quality: true },
+              { title: 'Seal Application', description: 'Apply heat seal for 3 seconds at 180°C.', image: '', safety: true, quality: true }
+            ],
+            createdAt: '2024-12-10',
+            updatedAt: '2024-12-15'
+          },
+          {
+            id: 3,
+            title: 'Daily Equipment Cleaning',
+            dept: 'Maintenance',
+            docNum: 'SOP-MNT-002',
+            revision: '1.2',
+            status: 'draft',
+            description: 'End of day cleaning procedures for all production equipment.',
+            tags: ['safety'],
+            steps: [
+              { title: 'Power Down', description: 'Turn off all equipment and wait for complete stop.', image: '', safety: true, quality: false },
+              { title: 'Wipe Down', description: 'Use approved cleaning solution to wipe all surfaces.', image: '', safety: false, quality: false }
+            ],
+            createdAt: '2024-12-05',
+            updatedAt: '2024-12-22'
+          }
+        ];
+        saveToStorage();
+      }
+    }
+
+    function saveToStorage() {
+      localStorage.setItem('rogueOriginSOPs', JSON.stringify(sops));
+    }
+
+    // Render
+    function renderSOPs() {
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      const deptFilter = document.getElementById('deptFilter').value;
+      const tagFilter = document.getElementById('tagFilter').value;
+      
+      let filtered = sops.filter(sop => {
+        const matchSearch = sop.title.toLowerCase().includes(search) || 
+                           sop.description.toLowerCase().includes(search) ||
+                           sop.docNum.toLowerCase().includes(search);
+        const matchDept = !deptFilter || sop.dept === deptFilter;
+        const matchTag = !tagFilter || sop.tags.includes(tagFilter);
+        return matchSearch && matchDept && matchTag;
+      });
+      
+      // Grid view
+      const grid = document.getElementById('sopGrid');
+      if (filtered.length === 0) {
+        grid.innerHTML = '';
+        document.getElementById('emptyState').style.display = 'block';
+      } else {
+        document.getElementById('emptyState').style.display = 'none';
+        grid.innerHTML = filtered.map(sop => `
+          <div class="sop-card" onclick="viewSOP(${sop.id})">
+            <div class="sop-card-header">
+              <div>
+                <div class="sop-card-title">${escapeHtml(sop.title)}</div>
+                <div class="sop-card-dept">
+                  <i class="ph-duotone ph-folder"></i>
+                  ${sop.dept} • ${sop.docNum}
+                </div>
+              </div>
+              <div class="sop-card-rev">${sop.status === 'draft' ? 'DRAFT' : 'v' + sop.revision}</div>
+            </div>
+            <div class="sop-card-preview">
+              ${sop.steps[0]?.image ? 
+                `<img src="${sop.steps[0].image}" alt="Preview">` : 
+                `<div class="sop-card-preview-empty">
+                  <i class="ph-duotone ph-image"></i>
+                  <span>${sop.steps.length} steps</span>
+                </div>`
+              }
+            </div>
+            <div class="sop-card-meta">
+              <div class="sop-card-steps">
+                <i class="ph-duotone ph-list-numbers"></i>
+                ${sop.steps.length} steps
+              </div>
+              <div class="sop-card-tags">
+                ${sop.tags.map(tag => `<span class="sop-tag ${tag}">${tag}</span>`).join('')}
+              </div>
+            </div>
+            <div class="sop-card-actions" onclick="event.stopPropagation()">
+              <button onclick="viewSOP(${sop.id})" title="View">
+                <i class="ph-duotone ph-eye"></i>
+              </button>
+              <button onclick="editSOP(${sop.id})" title="Edit">
+                <i class="ph-duotone ph-pencil-simple"></i>
+              </button>
+              <button class="qr-btn" onclick="event.stopPropagation(); showQR(${sop.id})" title="QR Code">
+                <i class="ph-duotone ph-qr-code"></i>
+              </button>
+              <button class="del-btn" onclick="deleteSOP(${sop.id})" title="Delete">
+                <i class="ph-duotone ph-trash"></i>
+              </button>
+            </div>
+          </div>
+        `).join('');
+      }
+      
+      // Table view
+      const tableBody = document.getElementById('sopTableBody');
+      tableBody.innerHTML = filtered.map(sop => `
+        <tr onclick="viewSOP(${sop.id})">
+          <td class="title-cell">${escapeHtml(sop.title)}</td>
+          <td>${sop.dept}</td>
+          <td>${sop.steps.length}</td>
+          <td>${sop.status === 'draft' ? '<span style="color: var(--gold)">Draft</span>' : 'v' + sop.revision}</td>
+          <td>${formatDate(sop.updatedAt)}</td>
+          <td class="actions-cell" onclick="event.stopPropagation()">
+            <button onclick="editSOP(${sop.id})" title="Edit"><i class="ph-duotone ph-pencil-simple"></i></button>
+            <button onclick="showQR(${sop.id})" title="QR"><i class="ph-duotone ph-qr-code"></i></button>
+            <button onclick="deleteSOP(${sop.id})" title="Delete"><i class="ph-duotone ph-trash"></i></button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function updateStats() {
+      const total = sops.length;
+      const published = sops.filter(s => s.status === 'published').length;
+      const drafts = sops.filter(s => s.status === 'draft').length;
+      const thisMonth = sops.filter(s => {
+        const d = new Date(s.updatedAt);
+        const now = new Date();
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      }).length;
+      
+      document.getElementById('statTotal').textContent = total;
+      document.getElementById('statPublished').textContent = published;
+      document.getElementById('statDrafts').textContent = drafts;
+      document.getElementById('statMonth').textContent = thisMonth;
+      document.getElementById('sidebarTotal').textContent = total;
+      document.getElementById('sidebarPublished').textContent = published;
+    }
+
+    // View toggle
+    function setView(view) {
+      currentView = view;
+      document.getElementById('gridViewBtn').classList.toggle('active', view === 'grid');
+      document.getElementById('listViewBtn').classList.toggle('active', view === 'list');
+      document.getElementById('sopGrid').classList.toggle('hidden', view === 'list');
+      document.getElementById('sopList').classList.toggle('active', view === 'list');
+    }
+
+    // Filter
+    function filterSOPs() {
+      renderSOPs();
+    }
+
+    function filterByDept(dept) {
+      document.getElementById('deptFilter').value = dept;
+      filterSOPs();
+      // Update nav active state
+      document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+    }
+
+    function showView(view) {
+      document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+      event.target.closest('.nav-item').classList.add('active');
+      
+      if (view === 'all') {
+        document.getElementById('deptFilter').value = '';
+        document.getElementById('searchInput').value = '';
+      } else if (view === 'drafts') {
+        // Filter to show only drafts - would need status filter
+      }
+      filterSOPs();
+    }
+
+    // Modal functions
+    function openModal(id) {
+      document.getElementById(id).classList.add('active');
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('active');
+    }
+
+    // Create/Edit SOP
+    function openCreateModal() {
+      currentSopId = null;
+      editingSteps = [{ title: '', description: '', image: '', safety: false, quality: false }];
+      
+      document.getElementById('modalTitle').textContent = 'Create New SOP';
+      document.getElementById('sopTitle').value = '';
+      document.getElementById('sopDept').value = '';
+      document.getElementById('sopDocNum').value = generateDocNum();
+      document.getElementById('sopRevision').value = '1.0';
+      document.getElementById('sopStatus').value = 'draft';
+      document.getElementById('sopDesc').value = '';
+      document.getElementById('tagSafety').checked = false;
+      document.getElementById('tagQuality').checked = false;
+      document.getElementById('tagCritical').checked = false;
+      
+      renderSteps();
+      openModal('editModal');
+    }
+
+    function editSOP(id) {
+      const sop = sops.find(s => s.id === id);
+      if (!sop) return;
+      
+      currentSopId = id;
+      editingSteps = JSON.parse(JSON.stringify(sop.steps));
+      
+      document.getElementById('modalTitle').textContent = 'Edit SOP';
+      document.getElementById('sopTitle').value = sop.title;
+      document.getElementById('sopDept').value = sop.dept;
+      document.getElementById('sopDocNum').value = sop.docNum;
+      document.getElementById('sopRevision').value = sop.revision;
+      document.getElementById('sopStatus').value = sop.status;
+      document.getElementById('sopDesc').value = sop.description;
+      document.getElementById('tagSafety').checked = sop.tags.includes('safety');
+      document.getElementById('tagQuality').checked = sop.tags.includes('quality');
+      document.getElementById('tagCritical').checked = sop.tags.includes('critical');
+      
+      renderSteps();
+      openModal('editModal');
+    }
+
+    function generateDocNum() {
+      const num = sops.length + 1;
+      return 'SOP-' + String(num).padStart(3, '0');
+    }
+
+    // Steps management
+    function renderSteps() {
+      const container = document.getElementById('stepsList');
+      container.innerHTML = editingSteps.map((step, i) => `
+        <div class="step-item" draggable="true" data-index="${i}">
+          <div class="step-number">${i + 1}</div>
+          <div class="step-content">
+            <input type="text" class="step-title-input" placeholder="Step title..." 
+                   value="${escapeHtml(step.title)}" onchange="updateStep(${i}, 'title', this.value)">
+            <textarea class="step-desc-input" placeholder="Describe this step in detail..."
+                      onchange="updateStep(${i}, 'description', this.value)">${escapeHtml(step.description)}</textarea>
+            <div class="step-icons">
+              <button class="step-icon-btn safety ${step.safety ? 'active' : ''}" 
+                      onclick="toggleStepIcon(${i}, 'safety')" title="Safety Warning">
+                <i class="ph-duotone ph-warning"></i>
+              </button>
+              <button class="step-icon-btn quality ${step.quality ? 'active' : ''}" 
+                      onclick="toggleStepIcon(${i}, 'quality')" title="Quality Check">
+                <i class="ph-duotone ph-seal-check"></i>
+              </button>
+            </div>
+          </div>
+          <div class="step-image">
+            <div class="step-image-preview" onclick="uploadStepImage(${i})">
+              ${step.image ? 
+                `<img src="${step.image}" alt="Step image">` : 
+                `<div class="placeholder">
+                  <i class="ph-duotone ph-camera"></i>
+                  <span>Add Photo</span>
+                </div>`
+              }
+            </div>
+            <input type="file" id="stepImageInput${i}" accept="image/*" style="display:none" onchange="handleStepImage(${i}, this)">
+          </div>
+          <div class="step-actions">
+            <button class="step-action-btn drag" title="Drag to reorder">
+              <i class="ph-duotone ph-dots-six-vertical"></i>
+            </button>
+            <button class="step-action-btn delete" onclick="removeStep(${i})" title="Delete step">
+              <i class="ph-duotone ph-trash"></i>
+            </button>
+          </div>
+        </div>
+      `).join('');
+      
+      // Setup drag and drop
+      setupDragDrop();
+    }
+
+    function addStep() {
+      editingSteps.push({ title: '', description: '', image: '', safety: false, quality: false });
+      renderSteps();
+    }
+
+    function removeStep(index) {
+      if (editingSteps.length <= 1) {
+        showToast('SOP must have at least one step', 'error');
+        return;
+      }
+      editingSteps.splice(index, 1);
+      renderSteps();
+    }
+
+    function updateStep(index, field, value) {
+      editingSteps[index][field] = value;
+    }
+
+    function toggleStepIcon(index, icon) {
+      editingSteps[index][icon] = !editingSteps[index][icon];
+      renderSteps();
+    }
+
+    function uploadStepImage(index) {
+      document.getElementById('stepImageInput' + index).click();
+    }
+
+    function handleStepImage(index, input) {
+      const file = input.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        editingSteps[index].image = e.target.result;
+        renderSteps();
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function setupDragDrop() {
+      const items = document.querySelectorAll('.step-item');
+      items.forEach(item => {
+        item.addEventListener('dragstart', handleDragStart);
+        item.addEventListener('dragover', handleDragOver);
+        item.addEventListener('drop', handleDrop);
+        item.addEventListener('dragend', handleDragEnd);
+      });
+    }
+
+    let draggedIndex = null;
+    function handleDragStart(e) {
+      draggedIndex = parseInt(this.dataset.index);
+      this.classList.add('dragging');
+    }
+
+    function handleDragOver(e) {
+      e.preventDefault();
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      const targetIndex = parseInt(this.dataset.index);
+      if (draggedIndex !== null && draggedIndex !== targetIndex) {
+        const [removed] = editingSteps.splice(draggedIndex, 1);
+        editingSteps.splice(targetIndex, 0, removed);
+        renderSteps();
+      }
+    }
+
+    function handleDragEnd() {
+      this.classList.remove('dragging');
+      draggedIndex = null;
+    }
+
+    // Save SOP
+    function saveSOP(status) {
+      const title = document.getElementById('sopTitle').value.trim();
+      const dept = document.getElementById('sopDept').value;
+      
+      if (!title) {
+        showToast('Please enter a title', 'error');
+        return;
+      }
+      if (!dept) {
+        showToast('Please select a department', 'error');
+        return;
+      }
+      
+      // Collect tags
+      const tags = [];
+      if (document.getElementById('tagSafety').checked) tags.push('safety');
+      if (document.getElementById('tagQuality').checked) tags.push('quality');
+      if (document.getElementById('tagCritical').checked) tags.push('critical');
+      
+      const sopData = {
+        title: title,
+        dept: dept,
+        docNum: document.getElementById('sopDocNum').value || generateDocNum(),
+        revision: document.getElementById('sopRevision').value || '1.0',
+        status: status || document.getElementById('sopStatus').value,
+        description: document.getElementById('sopDesc').value,
+        tags: tags,
+        steps: editingSteps.filter(s => s.title || s.description),
+        updatedAt: new Date().toISOString().split('T')[0]
+      };
+      
+      if (currentSopId) {
+        // Update existing
+        const index = sops.findIndex(s => s.id === currentSopId);
+        if (index !== -1) {
+          sopData.id = currentSopId;
+          sopData.createdAt = sops[index].createdAt;
+          // Increment revision if publishing
+          if (status === 'published' && sops[index].status === 'draft') {
+            sopData.revision = incrementRevision(sopData.revision);
+          }
+          sops[index] = sopData;
+        }
+      } else {
+        // Create new
+        sopData.id = Date.now();
+        sopData.createdAt = sopData.updatedAt;
+        sops.unshift(sopData);
+      }
+      
+      saveToStorage();
+      renderSOPs();
+      updateStats();
+      closeModal('editModal');
+      showToast(status === 'published' ? 'SOP Published!' : 'Draft Saved!', 'success');
+    }
+
+    function incrementRevision(rev) {
+      const parts = rev.split('.');
+      parts[parts.length - 1] = parseInt(parts[parts.length - 1]) + 1;
+      return parts.join('.');
+    }
+
+    // View SOP
+    function viewSOP(id) {
+      const sop = sops.find(s => s.id === id);
+      if (!sop) return;
+      
+      currentSopId = id;
+      
+      // Generate QR
+      const qrUrl = window.location.href.split('?')[0] + '?view=' + id;
+      
+      const body = document.getElementById('viewModalBody');
+      body.innerHTML = `
+        <div class="view-sop-header">
+          <div>
+            <div class="view-sop-title">${escapeHtml(sop.title)}</div>
+            <div class="view-sop-meta">
+              <div class="view-sop-meta-item">
+                <i class="ph-duotone ph-folder"></i>
+                ${sop.dept}
+              </div>
+              <div class="view-sop-meta-item">
+                <i class="ph-duotone ph-hash"></i>
+                ${sop.docNum}
+              </div>
+              <div class="view-sop-meta-item">
+                <i class="ph-duotone ph-git-branch"></i>
+                Rev ${sop.revision}
+              </div>
+              <div class="view-sop-meta-item">
+                <i class="ph-duotone ph-calendar"></i>
+                ${formatDate(sop.updatedAt)}
+              </div>
+            </div>
+            ${sop.description ? `<p style="margin-top: 12px; color: var(--text-muted); font-size: 14px;">${escapeHtml(sop.description)}</p>` : ''}
+          </div>
+          <div class="view-sop-qr" id="viewQrCode"></div>
+        </div>
+        
+        ${sop.steps.map((step, i) => `
+          <div class="view-step">
+            <div class="view-step-number">${i + 1}</div>
+            <div class="view-step-content">
+              <div class="view-step-title">
+                ${escapeHtml(step.title)}
+                ${step.safety ? '<i class="ph-duotone ph-warning icon safety"></i>' : ''}
+                ${step.quality ? '<i class="ph-duotone ph-seal-check icon quality"></i>' : ''}
+              </div>
+              <div class="view-step-desc">${escapeHtml(step.description)}</div>
+            </div>
+            ${step.image ? `
+              <div class="view-step-image">
+                <img src="${step.image}" alt="Step ${i + 1}">
+              </div>
+            ` : ''}
+          </div>
+        `).join('')}
+      `;
+      
+      // Generate QR code
+      setTimeout(() => {
+        QRCode.toCanvas(document.createElement('canvas'), qrUrl, { width: 84 }, function(error, canvas) {
+          if (!error) {
+            const container = document.getElementById('viewQrCode');
+            if (container) {
+              container.innerHTML = '';
+              container.appendChild(canvas);
+            }
+          }
+        });
+      }, 100);
+      
+      openModal('viewModal');
+    }
+
+    function editCurrentSOP() {
+      closeModal('viewModal');
+      editSOP(currentSopId);
+    }
+
+    // QR Code
+    function showQR(id) {
+      const sop = sops.find(s => s.id === id);
+      if (!sop) return;
+      
+      currentSopId = id;
+      const url = window.location.href.split('?')[0] + '?view=' + id;
+      
+      document.getElementById('qrUrl').textContent = url;
+      
+      QRCode.toCanvas(document.getElementById('qrCanvas'), url, { width: 200 }, function(error) {
+        if (error) console.error(error);
+      });
+      
+      openModal('qrModal');
+    }
+
+    function downloadQR() {
+      const canvas = document.getElementById('qrCanvas');
+      const link = document.createElement('a');
+      link.download = 'sop-qr-' + currentSopId + '.png';
+      link.href = canvas.toDataURL();
+      link.click();
+    }
+
+    // Delete
+    function deleteSOP(id) {
+      if (!confirm('Are you sure you want to delete this SOP?')) return;
+      
+      sops = sops.filter(s => s.id !== id);
+      saveToStorage();
+      renderSOPs();
+      updateStats();
+      showToast('SOP Deleted', 'success');
+    }
+
+    // PDF Export
+    function exportPDF() {
+      const sop = sops.find(s => s.id === currentSopId);
+      if (!sop) return;
+      
+      showToast('Generating PDF...', 'success');
+      
+      try {
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'letter');
+        const pageW = 215.9, pageH = 279.4, margin = 15;
+        let y = margin;
+        
+        // Header
+        pdf.setFillColor(102, 137, 113);
+        pdf.rect(0, 0, pageW, 25, 'F');
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFontSize(11);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('ROGUE ORIGIN - Standard Operating Procedure', margin, 16);
+        
+        y = 35;
+        
+        // Title
+        pdf.setTextColor(45, 58, 46);
+        pdf.setFontSize(22);
+        pdf.text(sop.title, margin, y);
+        y += 12;
+        
+        // Meta
+        pdf.setFontSize(10);
+        pdf.setTextColor(90, 107, 95);
+        pdf.setFont('helvetica', 'normal');
+        pdf.text(sop.docNum + '  |  Rev ' + sop.revision + '  |  ' + sop.dept, margin, y);
+        y += 15;
+        
+        // Description
+        if (sop.description) {
+          const descLines = pdf.splitTextToSize(sop.description, pageW - margin * 2);
+          pdf.text(descLines.slice(0, 3), margin, y);
+          y += Math.min(descLines.length, 3) * 5 + 10;
+        }
+        
+        // Steps header
+        pdf.setFontSize(12);
+        pdf.setTextColor(45, 58, 46);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('PROCEDURE STEPS', margin, y);
+        y += 8;
+        
+        pdf.setFontSize(10);
+        pdf.setFont('helvetica', 'normal');
+        
+        for (let i = 0; i < sop.steps.length; i++) {
+          const step = sop.steps[i];
+          
+          if (y > pageH - 40) {
+            pdf.addPage();
+            y = margin;
+          }
+          
+          // Step number circle
+          pdf.setFillColor(102, 137, 113);
+          pdf.circle(margin + 4, y, 4, 'F');
+          pdf.setTextColor(255, 255, 255);
+          pdf.setFontSize(9);
+          pdf.text(String(i + 1), margin + 2, y + 1);
+          
+          // Step title
+          pdf.setTextColor(45, 58, 46);
+          pdf.setFontSize(11);
+          pdf.setFont('helvetica', 'bold');
+          pdf.text(step.title || 'Step ' + (i + 1), margin + 12, y + 1);
+          y += 7;
+          
+          // Step description
+          if (step.description) {
+            pdf.setFontSize(9);
+            pdf.setFont('helvetica', 'normal');
+            pdf.setTextColor(90, 107, 95);
+            const stepLines = pdf.splitTextToSize(step.description, pageW - margin * 2 - 12);
+            pdf.text(stepLines.slice(0, 5), margin + 12, y);
+            y += Math.min(stepLines.length, 5) * 4 + 8;
+          }
+        }
+        
+        // Footer
+        pdf.setFontSize(8);
+        pdf.setTextColor(138, 154, 142);
+        pdf.text(sop.docNum + '  |  Generated ' + new Date().toLocaleDateString(), pageW / 2, pageH - 10, { align: 'center' });
+        
+        // Save
+        const filename = sop.docNum.replace(/[^a-z0-9]/gi, '-') + '.pdf';
+        pdf.save(filename);
+        
+        showToast('PDF exported!', 'success');
+      } catch (err) {
+        console.error('PDF Error:', err);
+        showToast('Error generating PDF', 'error');
+      }
+    }
+
+    // UI Helpers
+    function toggleSidebar() {
+      const sidebar = document.getElementById('sidebar');
+      sidebar.classList.toggle('collapsed');
+      document.body.classList.toggle('sidebar-collapsed');
+      localStorage.setItem('sopSidebarCollapsed', sidebar.classList.contains('collapsed'));
+    }
+
+    function toggleDarkMode() {
+      document.body.classList.toggle('dark-mode');
+      localStorage.setItem('sopDarkMode', document.body.classList.contains('dark-mode'));
+    }
+
+    function showToast(msg, type) {
+      const toast = document.getElementById('toast');
+      const icon = toast.querySelector('i');
+      document.getElementById('toastMsg').textContent = msg;
+      toast.className = 'toast show ' + type;
+      icon.className = type === 'success' ? 'ph-duotone ph-check-circle' : 'ph-duotone ph-warning-circle';
+      setTimeout(() => { toast.classList.remove('show'); }, 3000);
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '';
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    // Check for direct view link
+    const urlParams = new URLSearchParams(window.location.search);
+    const viewId = urlParams.get('view');
+    if (viewId) {
+      setTimeout(() => viewSOP(parseInt(viewId)), 500);
+    }
+  </script>
+</body>
+</html>

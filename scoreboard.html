@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html>
+<head>
+  
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Production Scoreboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
+    
+    :root {
+      /* Rogue Origin Brand Colors */
+      --gold: #e4aa4f;
+      --gold-light: #f0cb60;
+      --green: #668971;
+      --green-bright: #7a9d87;
+      --sungrown: #bf8e4e;
+      --greenhouse: #8f9263;
+      --indoor: #62758d;
+      
+      /* Status Colors */
+      --status-green: #4ade80;
+      --status-yellow: #fde047;
+      --status-red: #f87171;
+      --status-gray: #94a3b8;
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; }
+    body { display: flex; transition: background 0.5s ease; }
+    
+    /* Dynamic Status Backgrounds - kept but refined */
+    body.ahead { background: linear-gradient(145deg, #0d2818 0%, #1a4d2e 50%, #0d2818 100%); }
+    body.on-target { background: linear-gradient(145deg, #2d2a0d 0%, #4d4a1a 50%, #2d2a0d 100%); }
+    body.behind { background: linear-gradient(145deg, #2d0d0d 0%, #4d1a1a 50%, #2d0d0d 100%); }
+    body.idle { background: linear-gradient(145deg, #1a1f16 0%, #2d3a2e 50%, #1a1f16 100%); }
+    
+    .main-panel { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px 30px; height: 100vh; overflow: hidden; }
+    
+    .timer-panel { width: 380px; min-width: 380px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px; border-left: 2px solid rgba(228,170,79,0.2); height: 100vh; transition: background 0.5s ease; }
+    .timer-panel.green { background: linear-gradient(180deg, rgba(102, 137, 113, 0.4) 0%, rgba(102, 137, 113, 0.2) 100%); }
+    .timer-panel.yellow { background: linear-gradient(180deg, rgba(228, 170, 79, 0.4) 0%, rgba(228, 170, 79, 0.2) 100%); }
+    .timer-panel.red { background: linear-gradient(180deg, rgba(239, 68, 68, 0.3) 0%, rgba(185, 28, 28, 0.2) 100%); }
+    .timer-panel.neutral { background: rgba(0,0,0,0.4); }
+    
+    .scoreboard { text-align: center; width: 100%; max-width: 1400px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
+    
+    /* Status Badge - uses brand gold border */
+    .status-badge { display: inline-flex; align-items: center; gap: 16px; padding: 12px 36px; border-radius: 60px; font-size: 28px; font-weight: 700; text-transform: uppercase; letter-spacing: 3px; }
+    body.ahead .status-badge { background: rgba(102, 137, 113, 0.3); color: var(--status-green); border: 3px solid var(--status-green); }
+    body.on-target .status-badge { background: rgba(228, 170, 79, 0.3); color: var(--gold-light); border: 3px solid var(--gold); }
+    body.behind .status-badge { background: rgba(239, 68, 68, 0.2); color: var(--status-red); border: 3px solid var(--status-red); }
+    body.idle .status-badge { background: rgba(148, 163, 184, 0.2); color: var(--status-gray); border: 3px solid var(--status-gray); }
+    .status-icon { font-size: 32px; display: flex; align-items: center; justify-content: center; }
+    
+    /* Hour Cards - refined with brand accents */
+    .hour-cards { display: flex; justify-content: center; gap: 25px; flex-wrap: wrap; }
+    .hour-card { background: rgba(0,0,0,0.4); border-radius: 20px; padding: 16px 40px; min-width: 320px; border: 2px solid rgba(228,170,79,0.15); }
+    .hour-card.last-hour { border: 3px solid rgba(228,170,79,0.3); }
+    .hour-card.current-hour { border: 3px solid rgba(102, 137, 113, 0.6); background: rgba(102, 137, 113, 0.15); animation: currentHourPulse 2s ease-in-out infinite; }
+    .hour-card-header { font-size: 14px; color: var(--gold); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 6px; }
+    .hour-card.current-hour .hour-card-header { color: var(--green-bright); }
+    .hour-card-timeslot { font-size: 16px; color: rgba(255,255,255,0.4); margin-bottom: 8px; }
+    .lbs-row { display: flex; align-items: baseline; justify-content: center; gap: 10px; margin-bottom: 4px; }
+    .actual-lbs { font-size: 72px; font-weight: 900; line-height: 1; color: #ffffff; text-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+    .hour-card.current-hour .actual-lbs { color: var(--green-bright); font-size: 60px; }
+    .separator { font-size: 42px; font-weight: 300; color: rgba(255,255,255,0.4); }
+    .target-lbs { font-size: 42px; font-weight: 700; color: rgba(255,255,255,0.5); }
+    .lbs-unit { font-size: 16px; font-weight: 600; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 2px; }
+    .percentage-display { margin: 4px 0; }
+    .percentage-value { font-size: 36px; font-weight: 900; }
+    .hour-card.current-hour .percentage-value { color: var(--green-bright); }
+    .percentage-label { font-size: 13px; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 1px; }
+    
+    /* Chart Container - brand styling */
+    .chart-container {
+      background: rgba(0,0,0,0.4);
+      border-radius: 16px;
+      padding: 14px 20px;
+      margin: 0 auto;
+      width: 100%;
+      max-width: 850px;
+      display: block;
+      border: 1px solid rgba(228,170,79,0.15);
+    }
+    .chart-header {
+      font-size: 12px;
+      color: var(--gold);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: 8px;
+      text-align: left;
+    }
+    .chart-wrapper {
+      height: 120px;
+      position: relative;
+    }
+    
+    /* Daily Progress - brand accent */
+    .daily-progress { background: rgba(0,0,0,0.4); border-radius: 20px; padding: 16px 40px; display: inline-block; min-width: 520px; border: 2px solid rgba(228,170,79,0.2); }
+    .daily-header { font-size: 13px; color: var(--gold); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px; }
+    .daily-numbers { display: flex; align-items: baseline; justify-content: center; gap: 10px; margin-bottom: 8px; }
+    .daily-actual { font-size: 48px; font-weight: 800; color: #fff; }
+    .daily-sep { font-size: 32px; color: rgba(255,255,255,0.4); }
+    .daily-target { font-size: 32px; font-weight: 600; color: rgba(255,255,255,0.5); }
+    .daily-unit { font-size: 18px; color: rgba(255,255,255,0.5); margin-left: 6px; }
+    .daily-delta { font-size: 22px; font-weight: 700; margin-left: 14px; padding: 5px 14px; border-radius: 20px; }
+    .daily-delta.positive { background: rgba(102, 137, 113, 0.3); color: var(--status-green); }
+    .daily-delta.negative { background: rgba(248, 113, 113, 0.2); color: var(--status-red); }
+    .daily-delta.neutral { background: rgba(228, 170, 79, 0.2); color: var(--gold-light); }
+    
+    /* Progress Bar - brand colors */
+    .progress-bar-container { display: flex; align-items: center; gap: 12px; }
+    .progress-bar { flex: 1; height: 12px; background: rgba(255,255,255,0.1); border-radius: 6px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 6px; transition: width 0.5s ease; }
+    body.ahead .progress-fill { background: var(--green); }
+    body.on-target .progress-fill { background: var(--gold); }
+    body.behind .progress-fill { background: var(--status-red); }
+    body.idle .progress-fill { background: var(--status-gray); }
+    .progress-hours { font-size: 16px; color: rgba(255,255,255,0.5); min-width: 70px; }
+    
+    .daily-projection { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(228,170,79,0.2); display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+    .projection-label { font-size: 13px; color: rgba(255,255,255,0.5); text-transform: uppercase; }
+    .projection-value { font-size: 28px; font-weight: 800; color: #fff; }
+    .projection-goal { font-size: 18px; color: rgba(255,255,255,0.5); }
+    .projection-delta { font-size: 18px; font-weight: 700; padding: 4px 12px; border-radius: 12px; }
+    .projection-delta.positive { background: rgba(102, 137, 113, 0.3); color: var(--status-green); }
+    .projection-delta.negative { background: rgba(248, 113, 113, 0.2); color: var(--status-red); }
+    .projection-delta.neutral { background: rgba(228, 170, 79, 0.2); color: var(--gold-light); }
+    
+    /* Comparison Pills - brand styling */
+    .comparisons { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+    .comparison-pill { display: flex; align-items: center; gap: 6px; padding: 8px 14px; background: rgba(0,0,0,0.4); border-radius: 20px; font-size: 16px; font-weight: 600; border: 1px solid rgba(228,170,79,0.15); }
+    .comparison-label { color: rgba(255,255,255,0.5); }
+    .comparison-value { font-weight: 700; padding: 3px 8px; border-radius: 10px; }
+    .comparison-value.positive { background: rgba(102, 137, 113, 0.3); color: var(--status-green); }
+    .comparison-value.negative { background: rgba(248, 113, 113, 0.2); color: var(--status-red); }
+    .comparison-value.neutral { background: rgba(228, 170, 79, 0.2); color: var(--gold-light); }
+    .streak-pill { background: rgba(228, 170, 79, 0.2); border: 2px solid rgba(228, 170, 79, 0.4); }
+    .streak-icon { font-size: 18px; }
+    .streak-value { color: var(--gold); font-weight: 700; }
+    
+    /* Info Bar - brand styling */
+    .info-bar { display: inline-flex; align-items: center; background: rgba(0,0,0,0.4); border-radius: 30px; padding: 8px 14px; gap: 6px; flex-wrap: wrap; justify-content: center; border: 1px solid rgba(228,170,79,0.15); }
+    .info-section { display: flex; align-items: center; gap: 6px; padding: 6px 12px; color: rgba(255,255,255,0.8); font-size: 18px; font-weight: 600; }
+    .info-divider { width: 2px; height: 28px; background: rgba(228,170,79,0.3); }
+    .info-icon { font-size: 22px; }
+    .stat-group { display: flex; flex-direction: column; align-items: center; padding: 0 12px; }
+    .stat-group .label { font-size: 11px; color: var(--gold); text-transform: uppercase; }
+    .stat-group .value { font-size: 22px; font-weight: 700; }
+    
+    /* Time/Strain Display - brand colors */
+    .time-display { position: fixed; top: 20px; right: 420px; text-align: right; }
+    .time-display .time { font-size: 42px; font-weight: 700; color: rgba(255,255,255,0.9); }
+    .time-display .date { font-size: 16px; color: var(--gold); }
+    .strain-display { position: fixed; top: 20px; left: 25px; }
+    .strain-label { font-size: 12px; color: var(--gold); text-transform: uppercase; letter-spacing: 1px; }
+    .strain-name { font-size: 28px; font-weight: 700; color: rgba(255,255,255,0.9); max-width: 400px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .strain-rate-indicator { margin-top: 3px; }
+    
+    /* Language Toggle - brand styling */
+    .lang-toggle { position: fixed; bottom: 20px; left: 25px; display: flex; gap: 6px; }
+    .lang-btn { padding: 6px 14px; border: 2px solid rgba(228,170,79,0.3); background: rgba(0,0,0,0.4); color: rgba(255,255,255,0.6); font-size: 14px; font-weight: 600; border-radius: 12px; cursor: pointer; transition: all 0.2s; }
+    .lang-btn:hover { border-color: var(--gold); }
+    .lang-btn.active { background: var(--gold); border-color: var(--gold); color: #1a1f16; }
+    
+    /* Help Button - brand styling */
+    .help-btn { position: fixed; bottom: 20px; right: 420px; width: 45px; height: 45px; border-radius: 50%; background: rgba(0,0,0,0.4); border: 2px solid rgba(228,170,79,0.3); color: var(--gold); font-size: 24px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease; }
+    .help-btn:hover { background: var(--gold); border-color: var(--gold); color: #1a1f16; }
+    
+    /* Help Modal - brand styling */
+    .help-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; align-items: center; justify-content: center; padding: 40px; }
+    .help-modal.active { display: flex; }
+    .help-content { background: linear-gradient(145deg, #1a1f16 0%, #2d3a2e 100%); border-radius: 24px; padding: 40px; max-width: 900px; max-height: 85vh; overflow-y: auto; border: 2px solid var(--gold); }
+    .help-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 1px solid rgba(228,170,79,0.3); }
+    .help-title { font-size: 28px; font-weight: 700; color: #fff; }
+    .help-close { width: 40px; height: 40px; border-radius: 50%; background: rgba(0,0,0,0.3); border: 2px solid rgba(228,170,79,0.3); color: var(--gold); font-size: 22px; cursor: pointer; transition: all 0.2s; }
+    .help-close:hover { background: rgba(248, 113, 113, 0.2); border-color: var(--status-red); color: var(--status-red); }
+    .help-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+    .help-item { background: rgba(0,0,0,0.3); border-radius: 14px; padding: 18px; border: 1px solid rgba(228,170,79,0.1); }
+    .help-item-title { font-size: 15px; font-weight: 700; color: var(--gold); margin-bottom: 6px; }
+    .help-item-desc { font-size: 14px; color: rgba(255,255,255,0.7); line-height: 1.5; }
+    .help-colors { display: flex; gap: 15px; margin-top: 20px; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 12px; }
+    .help-color { display: flex; align-items: center; gap: 6px; font-size: 14px; color: rgba(255,255,255,0.7); }
+    .help-dot { width: 14px; height: 14px; border-radius: 50%; }
+    .help-dot.green { background: var(--green); }
+    .help-dot.yellow { background: var(--gold); }
+    .help-dot.red { background: var(--status-red); }
+    
+    /* Timer Panel Elements - brand styling */
+    .timer-header { font-size: 16px; font-weight: 700; color: var(--gold); text-transform: uppercase; letter-spacing: 3px; margin-bottom: 15px; }
+    .timer-display { position: relative; width: 220px; height: 220px; margin-bottom: 15px; }
+    .timer-ring { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .timer-ring-bg { fill: none; stroke: rgba(228,170,79,0.15); stroke-width: 12; }
+    .timer-ring-progress { fill: none; stroke-width: 12; stroke-linecap: round; transition: stroke-dashoffset 1s linear, stroke 0.3s ease; }
+    .timer-ring-progress.green { stroke: var(--green); }
+    .timer-ring-progress.yellow { stroke: var(--gold); }
+    .timer-ring-progress.red { stroke: var(--status-red); }
+    .timer-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+    .timer-value { font-size: 48px; font-weight: 900; color: #fff; line-height: 1; font-variant-numeric: tabular-nums; }
+    .timer-value.green { color: var(--green-bright); }
+    .timer-value.yellow { color: var(--gold); }
+    .timer-value.red { color: var(--status-red); }
+    .timer-label { font-size: 14px; color: rgba(255,255,255,0.5); margin-top: 6px; }
+    .timer-target { font-size: 14px; color: rgba(255,255,255,0.4); margin-bottom: 15px; }
+    .timer-target span { color: var(--gold); font-weight: 600; }
+    
+    /* Manual Button - brand styling */
+    .manual-btn { width: 100%; padding: 16px 24px; background: linear-gradient(135deg, var(--green) 0%, #5a7a63 100%); border: none; border-radius: 16px; color: white; font-size: 18px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: all 0.2s ease; margin-bottom: 15px; box-shadow: 0 4px 12px rgba(102,137,113,0.3); }
+    .manual-btn:hover { transform: scale(1.02); box-shadow: 0 6px 16px rgba(102,137,113,0.4); }
+    .manual-btn:active { transform: scale(0.98); }
+    .manual-btn .icon { font-size: 22px; }
+    .manual-btn.success { background: linear-gradient(135deg, var(--gold) 0%, var(--sungrown) 100%); box-shadow: 0 4px 12px rgba(228,170,79,0.3); }
+    
+    /* Timer Stats - brand styling */
+    .timer-stats { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+    .timer-stat { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(0,0,0,0.3); border-radius: 10px; border: 1px solid rgba(228,170,79,0.1); }
+    .timer-stat-label { font-size: 13px; color: var(--gold); }
+    .timer-stat-value { font-size: 16px; font-weight: 700; color: rgba(255,255,255,0.9); }
+    .timer-stat-value.positive { color: var(--green-bright); }
+    .timer-stat-value.negative { color: var(--status-red); }
+    
+    /* Animations */
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+    @keyframes currentHourPulse { 0%, 100% { border-color: rgba(102, 137, 113, 0.6); } 50% { border-color: rgba(102, 137, 113, 0.9); } }
+    body.ahead .status-badge { animation: pulse 2s ease-in-out infinite; }
+    body.behind .status-badge { animation: pulse 1.5s ease-in-out infinite; }
+    .timer-display.overtime .timer-ring-progress { animation: pulse 1s ease-in-out infinite; }
+  </style>
+</head>
+<body class="idle">
+  <div class="strain-display">
+    <div class="strain-label" id="strainLabel">Line 1 • Current Strain</div>
+    <div class="strain-name" id="strainName">—</div>
+    <div class="strain-rate-indicator" id="strainRateIndicator"></div>
+  </div>
+  <div class="time-display">
+    <div class="time" id="clock">--:--</div>
+    <div class="date" id="date">Loading...</div>
+  </div>
+  <div class="lang-toggle">
+    <button class="lang-btn active" id="btnEn" onclick="setLanguage('en')">EN</button>
+    <button class="lang-btn" id="btnEs" onclick="setLanguage('es')">ES</button>
+  </div>
+  <button class="help-btn" onclick="toggleHelp()">?</button>
+  
+  <div class="help-modal" id="helpModal" onclick="if(event.target===this)toggleHelp()">
+    <div class="help-content">
+      <div class="help-header">
+        <div class="help-title" id="helpTitle"><i class="ph-duotone ph-chart-pie-slice" style="margin-right:8px"></i> Understanding the Scoreboard</div>
+        <button class="help-close" onclick="toggleHelp()">✕</button>
+      </div>
+      <div class="help-grid">
+        <div class="help-item">
+          <div class="help-item-title"><i class="ph-duotone ph-package" style="margin-right:6px"></i> Last Hour (Completed)</div>
+          <div class="help-item-desc" id="helpLastHour">Production from the last completed hour. Target adjusts for breaks.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-item-title"><i class="ph-duotone ph-timer" style="margin-right:6px"></i> Current Hour</div>
+          <div class="help-item-desc" id="helpCurrentHour">Current crew count and target for the hour in progress.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-item-title"><i class="ph-duotone ph-trend-up" style="margin-right:6px"></i> Today's Progress</div>
+          <div class="help-item-desc" id="helpToday">Total so far vs target. "Up 5.2" = 5.2 lbs ahead of target.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-item-title">🔮 End of Day</div>
+          <div class="help-item-desc" id="helpProjection">Projected final output if you maintain current pace.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-item-title">🎯 Target Rate</div>
+          <div class="help-item-desc" id="helpTarget">Expected lbs/trimmer/hr based on this strain's 30-day history.</div>
+        </div>
+        <div class="help-item">
+          <div class="help-item-title">⏲ Bag Timer</div>
+          <div class="help-item-desc" id="helpTimer">Time since last 5kg bag. Tracks pace between completions.</div>
+        </div>
+      </div>
+      <div class="help-colors">
+        <div class="help-color"><div class="help-dot green"></div><span id="helpGreen">Green = Ahead (105%+)</span></div>
+        <div class="help-color"><div class="help-dot yellow"></div><span id="helpYellow">Yellow = On Target (90-105%)</span></div>
+        <div class="help-color"><div class="help-dot red"></div><span id="helpRed">Red = Behind (&lt;90%)</span></div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="main-panel">
+    <div class="scoreboard">
+      <div class="status-badge">
+        <span class="status-icon" id="statusIcon"><i class="ph-duotone ph-pause"></i></span>
+        <span id="statusText">WAITING</span>
+      </div>
+      <div class="hour-cards">
+        <div class="hour-card last-hour">
+          <div class="hour-card-header" id="lastHourHeader">Last Hour</div>
+          <div class="hour-card-timeslot" id="lastHourTimeslot">—</div>
+          <div class="lbs-row">
+            <span class="actual-lbs" id="lastHourLbs">—</span>
+            <span class="separator">/</span>
+            <span class="target-lbs" id="lastHourTarget">—</span>
+          </div>
+          <div class="lbs-unit" id="lbsUnit">lbs</div>
+          <div class="percentage-display">
+            <div class="percentage-value" id="lastHourPct">—%</div>
+            <div class="percentage-label" id="ofTargetLabel">of target</div>
+          </div>
+        </div>
+        <div class="hour-card current-hour" id="currentHourCard" style="display:none;">
+          <div class="hour-card-header" id="currentHourHeader"><i class="ph-duotone ph-timer" style="margin-right:6px"></i> Current Hour</div>
+          <div class="hour-card-timeslot" id="currentHourTimeslot">—</div>
+          <div class="lbs-row">
+            <span class="actual-lbs" id="currentHourTrimmers">—</span>
+            <span class="lbs-unit" style="font-size:18px;margin-left:10px" id="trimmersSmallLabel">trimmers</span>
+          </div>
+          <div class="percentage-display">
+            <div class="percentage-value" id="currentHourTargetLbs">—</div>
+            <div class="percentage-label" id="lbsTargetLabel">lbs target</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="daily-progress">
+        <div class="daily-header" id="dailyHeader">Line 1 Today</div>
+        <div class="daily-numbers">
+          <span class="daily-actual" id="dailyActual">—</span>
+          <span class="daily-sep">/</span>
+          <span class="daily-target" id="dailyTarget">—</span>
+          <span class="daily-unit">lbs</span>
+          <span class="daily-delta" id="dailyDelta">—</span>
+        </div>
+        <div class="progress-bar-container">
+          <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+          <span class="progress-hours" id="progressHours">0 hrs</span>
+        </div>
+        <div class="daily-projection">
+          <span class="projection-label" id="projectionLabel">End of day:</span>
+          <span class="projection-value" id="projectionValue">—</span>
+          <span class="projection-goal" id="projectionGoal"></span>
+          <span class="projection-delta" id="projectionDelta">—</span>
+        </div>
+      </div>
+      <div class="comparisons">
+        <div class="comparison-pill" id="vsYesterdayPill" style="display:none"><span class="comparison-label" id="vsYesterdayLabel">vs Yesterday</span><span class="comparison-value" id="vsYesterdayValue">—</span></div>
+        <div class="comparison-pill" id="vs7DayPill" style="display:none"><span class="comparison-label" id="vs7DayLabel">vs 7-Day Avg</span><span class="comparison-value" id="vs7DayValue">—</span></div>
+        <div class="comparison-pill streak-pill" id="streakPill" style="display:none"><span class="streak-icon"><i class="ph-duotone ph-fire"></i></span><span class="streak-value" id="streakValue">0</span><span class="comparison-label" id="streakLabel">hr streak</span></div>
+      </div>
+      <div class="info-bar">
+        <div class="info-section"><span class="info-icon"><i class="ph-duotone ph-users-three"></i></span><span><span id="crewCount">—</span> <span id="trimmersLabel">Trimmers</span></span></div>
+        <div class="info-divider"></div>
+        <div class="info-section"><span class="info-icon"><i class="ph-duotone ph-crosshair"></i></span><span><span id="targetRateLabel">Target:</span> <span id="targetRate">—</span> lbs/hr</span></div>
+        <div class="info-divider"></div>
+        <div class="stat-group"><span class="label" id="avgTargetLabel">AVG</span><span class="value" id="avgPercentage">—</span></div>
+        <div class="info-divider"></div>
+        <div class="stat-group"><span class="label" id="bestHourLabel">BEST</span><span class="value" id="bestHour">—</span></div>
+      </div>
+      
+      <!-- Hourly Rate Chart - Bottom -->
+      <div class="chart-container" id="chartContainer" style="display:none;">
+        <div class="chart-header" id="chartHeader">Hourly Performance (lbs/trimmer)</div>
+        <div class="chart-wrapper">
+          <canvas id="hourlyChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="timer-panel neutral" id="timerPanel">
+    <div class="timer-header" id="timerHeader">5KG Bag Timer</div>
+    <div class="timer-display" id="timerDisplay">
+      <svg class="timer-ring" viewBox="0 0 220 220">
+        <circle class="timer-ring-bg" cx="110" cy="110" r="95"/>
+        <circle class="timer-ring-progress green" id="timerRing" cx="110" cy="110" r="95" stroke-dasharray="597" stroke-dashoffset="0"/>
+      </svg>
+      <div class="timer-center">
+        <div class="timer-value green" id="timerValue">--:--</div>
+        <div class="timer-label" id="timerLabel">remaining</div>
+      </div>
+    </div>
+    <div class="timer-target">Target: <span id="timerTargetTime">--:--</span> • <span id="timerTrimmers">0</span> trimmers</div>
+    <button class="manual-btn" id="manualBtn" onclick="logManualEntry()"><span class="icon"><i class="ph-duotone ph-package"></i></span><span id="manualBtnText">5KG Bag Complete</span></button>
+    <div class="timer-stats">
+      <div class="timer-stat"><span class="timer-stat-label" id="bagsTodayLabel">Bags Today</span><span class="timer-stat-value" id="bagsToday">0</span></div>
+      <div class="timer-stat"><span class="timer-stat-label" id="avgTodayLabel">Avg Today</span><span class="timer-stat-value" id="avgToday">--:--</span></div>
+      <div class="timer-stat"><span class="timer-stat-label" id="vsTargetLabel">vs Target</span><span class="timer-stat-value" id="vsTarget">—</span></div>
+    </div>
+  </div>
+
+  <script>
+    let data=null,timerData=null,currentLang='en',lastBagTimestamp=null,hourlyChart=null;
+    const t={en:{currentStrain:'Line 1 • Current Strain',lastHour:'Last Hour (Completed)',currentHour:'Current Hour',lbs:'lbs',trimmers:'trimmers',ofTarget:'vs target',lbsTarget:'lbs target',trimmersLabel:'Line 1 Trimmers',targetRate:'Target:',avgLbs:'AVG',bestLbs:'BEST',todaysProgress:'LINE 1 TODAY',endOfDay:'End of day:',lbsGoal:'lbs goal',upBy:'Up',downBy:'Down',vsYesterday:'vs Yesterday',vs7Day:'vs 7-Day Avg',hrStreak:'hr streak',hrs:'hrs',aheadOfTarget:'AHEAD OF TARGET',onTarget:'ON TARGET',behindTarget:'BEHIND TARGET',waiting:'WAITING FOR DATA',bagTimer:'5KG BAG TIMER',remaining:'remaining',overtime:'OVERTIME',bagComplete:'5KG Bag Complete',logged:'Logged!',bagsToday:'Bags Today',avgToday:'Avg Today',vsTargetTimer:'vs Target',strainRate:'Strain-specific rate',fallbackRate:'Using avg rate',helpTitle:'Understanding the Scoreboard',helpGreen:'Green = Ahead (105%+)',helpYellow:'Yellow = On Target (90-105%)',helpRed:'Red = Behind (<90%)',chartHeader:'HOURLY PERFORMANCE (LBS/TRIMMER)',onBreak:'ON BREAK',paused:'PAUSED'},es:{currentStrain:'Línea 1 • Variedad Actual',lastHour:'Última Hora (Completa)',currentHour:'Hora Actual',lbs:'lbs',trimmers:'triminadores',ofTarget:'vs meta',lbsTarget:'lbs meta',trimmersLabel:'Triminadores L1',targetRate:'Meta:',avgLbs:'PROM',bestLbs:'MEJOR',todaysProgress:'LÍNEA 1 HOY',endOfDay:'Fin del día:',lbsGoal:'lbs meta',upBy:'Arriba',downBy:'Abajo',vsYesterday:'vs Ayer',vs7Day:'vs Prom 7 Días',hrStreak:'hrs seguidas',hrs:'hrs',aheadOfTarget:'ARRIBA DE LA META',onTarget:'EN LA META',behindTarget:'DEBAJO DE LA META',waiting:'ESPERANDO DATOS',bagTimer:'TEMPORIZADOR 5KG',remaining:'restante',overtime:'TIEMPO EXTRA',bagComplete:'Bolsa 5KG Lista',logged:'¡Registrado!',bagsToday:'Bolsas Hoy',avgToday:'Prom Hoy',vsTargetTimer:'vs Meta',strainRate:'Tasa específica',fallbackRate:'Usando tasa prom',helpTitle:'Entendiendo el Marcador',helpGreen:'Verde = Adelante (105%+)',helpYellow:'Amarillo = En Meta (90-105%)',helpRed:'Rojo = Atrás (<90%)',chartHeader:'RENDIMIENTO POR HORA (LBS/TRIMINADOR)',onBreak:'EN DESCANSO',paused:'PAUSADO'}};
+    
+    // Break schedule: [startHour, startMin, endHour, endMin]
+    const BREAKS = [
+      [9, 0, 9, 10],      // 9:00-9:10 AM break
+      [12, 0, 12, 30],    // 12:00-12:30 PM lunch
+      [14, 0, 14, 10],    // 2:00-2:10 PM break
+      [16, 20, 16, 30]    // 4:20-4:30 PM cleanup/EOD
+    ];
+    const WORKDAY_START = 7 * 60;  // 7:00 AM in minutes
+    const WORKDAY_END = 16 * 60 + 30;  // 4:30 PM in minutes
+    
+    function getWorkingSecondsSince(startTime) {
+      if (!startTime) return 0;
+      const now = new Date();
+      
+      // If different day, return 0 (timer resets daily)
+      if (startTime.toDateString() !== now.toDateString()) {
+        return 0;
+      }
+      
+      let startMins = startTime.getHours() * 60 + startTime.getMinutes();
+      const startSecs = startTime.getSeconds();
+      let nowMins = now.getHours() * 60 + now.getMinutes();
+      let nowSecs = now.getSeconds();
+      
+      // Before workday - no time elapsed
+      if (nowMins < WORKDAY_START) return 0;
+      
+      // Cap at workday end
+      if (nowMins >= WORKDAY_END) {
+        nowMins = WORKDAY_END;
+        nowSecs = 0;
+      }
+      
+      // If start was before workday, adjust to workday start
+      if (startMins < WORKDAY_START) {
+        startMins = WORKDAY_START;
+      }
+      
+      // Check if we're currently in a break - if so, cap nowMins/nowSecs to break start
+      for (const [bStartH, bStartM, bEndH, bEndM] of BREAKS) {
+        const breakStart = bStartH * 60 + bStartM;
+        const breakEnd = bEndH * 60 + bEndM;
+        if (nowMins >= breakStart && nowMins < breakEnd) {
+          // We're in a break - freeze time at break start
+          nowMins = breakStart;
+          nowSecs = 0;
+          break;
+        }
+      }
+      
+      // Calculate total seconds
+      let totalSecs = (nowMins * 60 + nowSecs) - (startMins * 60 + startSecs);
+      
+      // Subtract any completed break time that overlaps our range
+      for (const [bStartH, bStartM, bEndH, bEndM] of BREAKS) {
+        const breakStartSecs = (bStartH * 60 + bStartM) * 60;
+        const breakEndSecs = (bEndH * 60 + bEndM) * 60;
+        const rangeStartSecs = startMins * 60 + startSecs;
+        const rangeEndSecs = nowMins * 60 + nowSecs;
+        
+        if (breakEndSecs > rangeStartSecs && breakStartSecs < rangeEndSecs) {
+          const overlapStart = Math.max(breakStartSecs, rangeStartSecs);
+          const overlapEnd = Math.min(breakEndSecs, rangeEndSecs);
+          if (overlapEnd > overlapStart) {
+            totalSecs -= (overlapEnd - overlapStart);
+          }
+        }
+      }
+      
+      return Math.max(0, totalSecs);
+    }
+    
+    function isOnBreakOrAfterHours() {
+      const now = new Date();
+      const nowMins = now.getHours() * 60 + now.getMinutes();
+      
+      // Before workday
+      if (nowMins < WORKDAY_START) return { onBreak: true, afterHours: true };
+      
+      // After workday end
+      if (nowMins >= WORKDAY_END) return { onBreak: true, afterHours: true };
+      
+      // Check if currently in a break
+      for (const [bStartH, bStartM, bEndH, bEndM] of BREAKS) {
+        const breakStart = bStartH * 60 + bStartM;
+        const breakEnd = bEndH * 60 + bEndM;
+        if (nowMins >= breakStart && nowMins < breakEnd) {
+          return { onBreak: true, afterHours: false };
+        }
+      }
+      
+      return { onBreak: false, afterHours: false };
+    }
+    
+    function toggleHelp(){document.getElementById('helpModal').classList.toggle('active');document.getElementById('helpTitle').textContent=t[currentLang].helpTitle;document.getElementById('helpGreen').textContent=t[currentLang].helpGreen;document.getElementById('helpYellow').textContent=t[currentLang].helpYellow;document.getElementById('helpRed').textContent=t[currentLang].helpRed;}
+    document.addEventListener('DOMContentLoaded',function(){updateClock();setInterval(updateClock,1000);loadData();setInterval(loadData,15000);setInterval(renderTimer,1000);});
+    function setLanguage(lang){currentLang=lang;document.getElementById('btnEn').classList.toggle('active',lang==='en');document.getElementById('btnEs').classList.toggle('active',lang==='es');document.getElementById('strainLabel').textContent=t[lang].currentStrain;document.getElementById('lastHourHeader').textContent=t[lang].lastHour;document.getElementById('currentHourHeader').textContent=t[lang].currentHour;document.getElementById('lbsUnit').textContent=t[lang].lbs;document.getElementById('trimmersSmallLabel').textContent=t[lang].trimmers;document.getElementById('ofTargetLabel').textContent=t[lang].ofTarget;document.getElementById('lbsTargetLabel').textContent=t[lang].lbsTarget;document.getElementById('trimmersLabel').textContent=t[lang].trimmersLabel;document.getElementById('targetRateLabel').textContent=t[lang].targetRate;document.getElementById('avgTargetLabel').textContent=t[lang].avgLbs;document.getElementById('bestHourLabel').textContent=t[lang].bestLbs;document.getElementById('dailyHeader').textContent=t[lang].todaysProgress;document.getElementById('vsYesterdayLabel').textContent=t[lang].vsYesterday;document.getElementById('vs7DayLabel').textContent=t[lang].vs7Day;document.getElementById('streakLabel').textContent=t[lang].hrStreak;document.getElementById('timerHeader').textContent=t[lang].bagTimer;document.getElementById('manualBtnText').textContent=t[lang].bagComplete;document.getElementById('bagsTodayLabel').textContent=t[lang].bagsToday;document.getElementById('avgTodayLabel').textContent=t[lang].avgToday;document.getElementById('vsTargetLabel').textContent=t[lang].vsTargetTimer;document.getElementById('chartHeader').textContent=t[lang].chartHeader;updateClock();renderScoreboard();renderTimer();}
+    function updateClock(){const now=new Date(),h=now.getHours()%12||12,m=now.getMinutes().toString().padStart(2,'0'),ap=now.getHours()>=12?'PM':'AM';document.getElementById('clock').textContent=`${h}:${m} ${ap}`;document.getElementById('date').textContent=now.toLocaleDateString(currentLang==='es'?'es-MX':'en-US',{weekday:'long',month:'short',day:'numeric'});}
+    function loadData(){google.script.run.withSuccessHandler(function(r){data=r.scoreboard;timerData=r.timer;if(timerData&&timerData.lastBagTime)lastBagTimestamp=new Date(timerData.lastBagTime);renderScoreboard();renderTimer();}).withFailureHandler(function(e){console.error(e);}).getScoreboardWithTimerData();}
+    
+    function renderHourlyChart(hourlyRates, targetRate) {
+      const container = document.getElementById('chartContainer');
+      if (!hourlyRates || hourlyRates.length === 0) {
+        container.style.display = 'none';
+        return;
+      }
+      container.style.display = 'block';
+      
+      const labels = hourlyRates.map(h => {
+        // Shorten time slot labels: "9:00 AM – 10:00 AM" -> "9-10"
+        const match = h.timeSlot.match(/(\d+):\d+\s*(AM|PM)\s*[–-]\s*(\d+):\d+/i);
+        if (match) {
+          let start = parseInt(match[1]);
+          let end = parseInt(match[3]);
+          return `${start}-${end}`;
+        }
+        return h.timeSlot;
+      });
+      
+      const rates = hourlyRates.map(h => parseFloat(h.rate.toFixed(2)));
+      const targets = hourlyRates.map(h => parseFloat(h.target.toFixed(2)));
+      
+      // Color bars based on performance - using brand colors
+      const barColors = hourlyRates.map(h => {
+        const pct = (h.rate / h.target) * 100;
+        if (pct >= 105) return '#668971';  // Brand green
+        if (pct >= 90) return '#e4aa4f';   // Brand gold
+        return '#f87171';                   // Red
+      });
+      
+      // If chart exists, update data instead of recreating
+      if (hourlyChart) {
+        hourlyChart.data.labels = labels;
+        hourlyChart.data.datasets[0].data = rates;
+        hourlyChart.data.datasets[0].backgroundColor = barColors;
+        hourlyChart.data.datasets[1].data = targets;
+        hourlyChart.update('none');
+        return;
+      }
+      
+      const ctx = document.getElementById('hourlyChart').getContext('2d');
+      
+      hourlyChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Actual',
+              data: rates,
+              backgroundColor: barColors,
+              borderRadius: 4,
+              barThickness: 32
+            },
+            {
+              label: 'Target',
+              data: targets,
+              type: 'line',
+              borderColor: 'rgba(228,170,79,0.6)',
+              borderWidth: 2,
+              borderDash: [5, 5],
+              pointRadius: 0,
+              fill: false
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return context.dataset.label + ': ' + context.parsed.y + ' lbs/hr';
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { color: 'rgba(255,255,255,0.6)', font: { size: 12 } }
+            },
+            y: {
+              beginAtZero: true,
+              grid: { color: 'rgba(228,170,79,0.1)' },
+              ticks: { color: 'rgba(255,255,255,0.6)', font: { size: 12 } }
+            }
+          }
+        }
+      });
+    }
+    
+    function renderScoreboard(){if(!data)return;const lastHourLbs=data.lastHourLbs||0,lastHourTarget=data.lastHourTarget||0,lastHourTrimmers=data.lastHourTrimmers||0,lastTimeSlot=data.lastTimeSlot||'—',currentHourTrimmers=data.currentHourTrimmers||0,currentHourTarget=data.currentHourTarget||0,currentTimeSlot=data.currentTimeSlot||'',targetRate=data.targetRate||0,strain=data.strain||'—',todayLbs=data.todayLbs||0,todayTarget=data.todayTarget||0,todayPct=data.todayPercentage||0,hoursLogged=data.hoursLogged||0,avgPct=data.avgPercentage||0,bestPct=data.bestPercentage||0,streak=data.streak||0,lastHourPct=lastHourTarget>0?(lastHourLbs/lastHourTarget)*100:0,lastHourDelta=lastHourLbs-lastHourTarget,statusPct=todayPct>0?todayPct:avgPct;let status='idle',statusIcon='⏸',statusKey='waiting';if(todayLbs>0||lastHourLbs>0){if(statusPct>=105){status='ahead';statusIcon='🔥';statusKey='aheadOfTarget';}else if(statusPct>=90){status='on-target';statusIcon='✓';statusKey='onTarget';}else if(statusPct>0){status='behind';statusIcon='⚠';statusKey='behindTarget';}}document.body.className=status;document.getElementById('statusIcon').textContent=statusIcon;document.getElementById('statusText').textContent=t[currentLang][statusKey];document.getElementById('lastHourLbs').textContent=lastHourLbs>0?lastHourLbs.toFixed(1):'—';document.getElementById('lastHourTarget').textContent=lastHourTarget>0?lastHourTarget.toFixed(1):'—';document.getElementById('lastHourTimeslot').textContent=lastTimeSlot;
+    // Show lbs delta instead of percentage
+    const lhp = document.getElementById('lastHourPct');
+    if(lastHourTarget>0){const deltaAbs=Math.abs(lastHourDelta).toFixed(1);if(lastHourDelta>=0.05){lhp.textContent=`+${deltaAbs} lbs`;lhp.style.color='#7a9d87';}else if(lastHourDelta<=-0.05){lhp.textContent=`-${deltaAbs} lbs`;lhp.style.color='#f87171';}else{lhp.textContent=`0 lbs`;lhp.style.color='#e4aa4f';}}else{lhp.textContent='—';lhp.style.color='rgba(255,255,255,0.5)';}
+    const chc=document.getElementById('currentHourCard');if(currentHourTrimmers>0){chc.style.display='block';document.getElementById('currentHourTrimmers').textContent=currentHourTrimmers;document.getElementById('currentHourTimeslot').textContent=currentTimeSlot;document.getElementById('currentHourTargetLbs').textContent=currentHourTarget>0?currentHourTarget.toFixed(1):'—';}else{chc.style.display='none';}
+    
+    // Render the hourly chart
+    renderHourlyChart(data.hourlyRates, targetRate);
+    
+    document.getElementById('dailyActual').textContent=todayLbs>0?todayLbs.toFixed(1):'—';document.getElementById('dailyTarget').textContent=todayTarget>0?todayTarget.toFixed(1):'—';const todayDelta=data.todayDelta||0,dde=document.getElementById('dailyDelta');if(todayTarget>0){const da=Math.abs(todayDelta).toFixed(1);if(todayDelta>=0.1){dde.textContent=`↑ ${t[currentLang].upBy} ${da}`;dde.className='daily-delta positive';}else if(todayDelta<=-0.1){dde.textContent=`↓ ${t[currentLang].downBy} ${da}`;dde.className='daily-delta negative';}else{dde.textContent='= On pace';dde.className='daily-delta neutral';}}else{dde.textContent='—';dde.className='daily-delta neutral';}const effectiveHours=data.effectiveHours||hoursLogged;document.getElementById('progressHours').textContent=`${effectiveHours.toFixed(1)} ${t[currentLang].hrs}`;document.getElementById('progressFill').style.width=`${Math.min(100,todayPct||avgPct||0)}%`;const projectedTotal=data.projectedTotal||0,dailyGoal=data.dailyGoal||0,projectedDelta=data.projectedDelta||0;document.getElementById('projectionLabel').textContent=t[currentLang].endOfDay;document.getElementById('projectionValue').textContent=projectedTotal>0?projectedTotal.toFixed(1):'—';document.getElementById('projectionGoal').textContent=dailyGoal>0?`/ ${dailyGoal.toFixed(1)} ${t[currentLang].lbsGoal}`:'';const pde=document.getElementById('projectionDelta');if(dailyGoal>0&&projectedTotal>0){const pda=Math.abs(projectedDelta).toFixed(1);if(projectedDelta>=0.5){pde.textContent=`↑ +${pda}`;pde.className='projection-delta positive';}else if(projectedDelta<=-0.5){pde.textContent=`↓ -${pda}`;pde.className='projection-delta negative';}else{pde.textContent='= On pace';pde.className='projection-delta neutral';}}else{pde.textContent='—';pde.className='projection-delta neutral';}renderComparison('vsYesterday',data.vsYesterday);renderComparison('vs7Day',data.vs7Day);document.getElementById('streakPill').style.display=streak>=2?'flex':'none';document.getElementById('streakValue').textContent=streak;const displayTrimmers=currentHourTrimmers>0?currentHourTrimmers:lastHourTrimmers;document.getElementById('crewCount').textContent=displayTrimmers>0?displayTrimmers:'—';document.getElementById('targetRate').textContent=targetRate>0?targetRate.toFixed(2):'—';document.getElementById('strainName').textContent=strain||'—';const avgEl=document.getElementById('avgPercentage'),bestEl=document.getElementById('bestHour');
+    if(data.avgDelta!==undefined&&data.avgDelta!==0){avgEl.textContent=(data.avgDelta>=0?'+':'')+data.avgDelta.toFixed(1);avgEl.style.color=data.avgDelta>=0.05?'#7a9d87':data.avgDelta<=-0.05?'#f87171':'#e4aa4f';}else if(data.avgDelta===0){avgEl.textContent='0';avgEl.style.color='#e4aa4f';}else{avgEl.textContent='—';avgEl.style.color='rgba(255,255,255,0.9)';}
+    if(data.bestDelta!==undefined&&data.bestDelta!==0){bestEl.textContent=(data.bestDelta>=0?'+':'')+data.bestDelta.toFixed(1);bestEl.style.color=data.bestDelta>=0.05?'#7a9d87':data.bestDelta<=-0.05?'#f87171':'#e4aa4f';}else if(data.bestDelta===0){bestEl.textContent='0';bestEl.style.color='#e4aa4f';}else{bestEl.textContent='—';bestEl.style.color='rgba(255,255,255,0.9)';}
+    const sri=document.getElementById('strainRateIndicator');if(data.usingStrainRate){sri.innerHTML=`<span style="font-size:12px;color:rgba(122,157,135,0.9)">${t[currentLang].strainRate}</span>`;}else if(strain&&strain!=='—'){sri.innerHTML=`<span style="font-size:12px;color:rgba(228,170,79,0.9)">${t[currentLang].fallbackRate}</span>`;}else{sri.innerHTML='';}}
+    function renderTimer(){const targetSec=(timerData&&timerData.targetSeconds)||0,trimmers=(timerData&&timerData.currentTrimmers)||0,bagsToday=(timerData&&timerData.bagsToday)||0,avgSecToday=(timerData&&timerData.avgSecondsToday)||0;
+      
+      // Get break/after hours status
+      const breakStatus = isOnBreakOrAfterHours();
+      
+      // Calculate working time (excludes breaks)
+      let elapsedSec=0;
+      if(lastBagTimestamp)elapsedSec=getWorkingSecondsSince(lastBagTimestamp);
+      
+      let remainingSec=targetSec>0?targetSec-elapsedSec:elapsedSec;
+      const isOvertime=targetSec>0&&remainingSec<0&&!breakStatus.onBreak;
+      const displaySec=Math.abs(targetSec>0?remainingSec:elapsedSec);
+      
+      let colorClass='neutral';
+      if(targetSec>0||elapsedSec>0){
+        colorClass='green';
+        if(breakStatus.onBreak){
+          colorClass='yellow';
+        }else if(targetSec>0){
+          if(isOvertime)colorClass='red';
+          else if(remainingSec<targetSec*0.2)colorClass='yellow';
+        }
+      }
+      
+      const tp=document.getElementById('timerPanel'),tv=document.getElementById('timerValue'),tl=document.getElementById('timerLabel'),tr=document.getElementById('timerRing'),td=document.getElementById('timerDisplay');
+      
+      // Update panel background color
+      tp.className='timer-panel '+colorClass;
+      
+      // Show paused state during breaks/after hours
+      if(breakStatus.onBreak){
+        tv.textContent=breakStatus.afterHours?'--:--':formatTime(displaySec);
+        tv.className='timer-value yellow';
+        tl.textContent=breakStatus.afterHours?t[currentLang].paused:t[currentLang].onBreak;
+      }else{
+        tv.textContent=(targetSec>0||elapsedSec>0)?formatTime(displaySec):'--:--';
+        tv.className='timer-value '+(colorClass==='neutral'?'':colorClass);
+        tl.textContent=(targetSec===0&&elapsedSec>0)?(currentLang==='es'?'transcurrido':'elapsed'):isOvertime?t[currentLang].overtime:t[currentLang].remaining;
+      }
+      
+      const circ=2*Math.PI*95;let prog=0;
+      if(breakStatus.onBreak){
+        // Keep ring at current position during breaks
+        prog=targetSec>0&&elapsedSec>0?Math.min(1,elapsedSec/targetSec):0;
+      }else if(targetSec>0){
+        prog=isOvertime?1:elapsedSec/targetSec;
+      }
+      tr.style.strokeDashoffset=circ*(1-Math.min(1,prog));
+      tr.className='timer-ring-progress '+(colorClass==='neutral'?'green':colorClass);
+      td.classList.toggle('overtime',isOvertime&&!breakStatus.onBreak);
+      
+      document.getElementById('timerTargetTime').textContent=targetSec>0?formatTime(targetSec):'--:--';document.getElementById('timerTrimmers').textContent=trimmers||'—';document.getElementById('bagsToday').textContent=bagsToday;document.getElementById('avgToday').textContent=avgSecToday>0?formatTime(avgSecToday):'--:--';const vt=document.getElementById('vsTarget');if(avgSecToday>0&&targetSec>0){const diff=targetSec-avgSecToday,dm=Math.round(diff/60);if(dm>0){vt.textContent=`+${dm} min`;vt.className='timer-stat-value positive';}else if(dm<0){vt.textContent=`${dm} min`;vt.className='timer-stat-value negative';}else{vt.textContent='On pace';vt.className='timer-stat-value';}}else{vt.textContent='—';vt.className='timer-stat-value';}}
+    function formatTime(s){return`${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;}
+    function logManualEntry(){const btn=document.getElementById('manualBtn'),txt=document.getElementById('manualBtnText');btn.disabled=true;btn.classList.add('success');txt.textContent=t[currentLang].logged;google.script.run.withSuccessHandler(function(){lastBagTimestamp=new Date();renderTimer();setTimeout(loadData,1000);setTimeout(function(){btn.disabled=false;btn.classList.remove('success');txt.textContent=t[currentLang].bagComplete;},2000);}).withFailureHandler(function(e){console.error(e);btn.disabled=false;btn.classList.remove('success');txt.textContent=t[currentLang].bagComplete;}).logManualBagCompletion();}
+    function renderComparison(prefix,value){const pill=document.getElementById(prefix+'Pill'),ve=document.getElementById(prefix+'Value');if(value===null||value===undefined){pill.style.display='none';return;}pill.style.display='flex';const r=Math.round(value);ve.textContent=`${r>=0?'+':''}${r}%`;ve.classList.remove('positive','negative','neutral');ve.classList.add(r>2?'positive':r<-2?'negative':'neutral');}
+  </script>
+</body>
+</html>
