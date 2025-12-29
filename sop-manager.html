@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SOP Manager">
   <title>SOP Manager - Rogue Origin</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
@@ -34,6 +37,7 @@
       --bg: #faf8f4;
       --bg-warm: #f3efe7;
       --bg-card: #ffffff;
+      --bg-dark: #2d3a2e;
       --border: #e4ddd0;
       --border-light: rgba(102,137,113,0.15);
       --text: #2d3a2e;
@@ -357,8 +361,9 @@
     .step-desc-input:focus { outline: none; border-color: var(--green); }
     
     .step-image { width: 140px; flex-shrink: 0; }
-    .step-image-preview { width: 140px; height: 90px; background: var(--bg-card); border: 2px dashed var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; cursor: pointer; }
+    .step-image-preview { width: 100%; height: 120px; background: var(--bg-card); border: 2px dashed var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; cursor: pointer; }
     .step-image-preview:hover { border-color: var(--gold); background: var(--gold-dim); }
+    .step-image-preview.has-image { border-style: solid; }
     .step-image-preview img { width: 100%; height: 100%; object-fit: cover; }
     .step-image-preview .placeholder { color: var(--text-light); font-size: 10px; text-align: center; }
     .step-image-preview .placeholder i { font-size: 20px; display: block; margin-bottom: 4px; }
@@ -465,6 +470,11 @@
     
     .settings-api-key { background: var(--bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border); }
     
+    /* Language Switch */
+    .lang-switch { background: var(--gold); color: #fff; border: none; padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s; }
+    .lang-switch:hover { background: var(--gold-light); transform: scale(1.05); }
+    .lang-switch i { font-size: 16px; }
+    
     /* Requests Modal */
     .requests-tabs { display: flex; gap: 4px; margin-bottom: 16px; background: var(--bg); padding: 4px; border-radius: 10px; }
     .requests-tab { flex: 1; padding: 10px 16px; border: none; background: transparent; color: var(--text-muted); font-size: 13px; font-weight: 500; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
@@ -521,6 +531,74 @@
       .toolbar-left { width: 100%; }
       .search-box { width: 100%; }
     }
+    
+    /* iPad Optimization (768px - 1024px) */
+    @media (min-width: 768px) and (max-width: 1024px) {
+      .sop-grid { grid-template-columns: repeat(2, 1fr); gap: 16px; }
+      .header { padding: 16px 20px; }
+      .header-title { font-size: 16px; }
+      .content { padding: 20px; }
+      .stats-bar { gap: 12px; }
+      .stat-card { padding: 14px 16px; }
+      .toolbar { padding: 14px 20px; gap: 12px; flex-wrap: wrap; }
+      .modal-box { max-height: 90vh; }
+      .modal-box.wide { width: 95%; max-width: 800px; }
+      .form-input, .filter-select { font-size: 16px !important; padding: 14px 16px; } /* Prevents iOS zoom */
+      .step-item { gap: 12px; }
+      .step-content { flex: 1; }
+      .step-title-input, .step-desc-input { font-size: 16px !important; padding: 14px; }
+      .step-image { width: 140px; min-height: 140px; }
+      .step-image-preview { min-height: 120px; }
+      .step-actions { flex-direction: column; gap: 8px; }
+      .step-action-btn, .step-ai-btn { width: 44px; height: 44px; } /* Larger touch targets */
+      .step-icon-btn { width: 44px; height: 44px; }
+      .header-btn { padding: 12px 18px; font-size: 14px; }
+      .header-btn.primary { padding: 12px 20px; }
+      .inline-add-btn { width: 44px; height: 44px; }
+      .modal-close { width: 44px; height: 44px; font-size: 28px; }
+      .sop-card-actions button { width: 44px; height: 44px; }
+    }
+    
+    /* iPad Pro and larger tablets */
+    @media (min-width: 1024px) and (max-width: 1366px) {
+      .sop-grid { grid-template-columns: repeat(3, 1fr); }
+      .modal-box.wide { width: 90%; max-width: 900px; }
+    }
+    
+    /* Touch device optimizations */
+    @media (pointer: coarse) {
+      .header-btn, .inline-add-btn, .step-action-btn, .step-ai-btn, .step-icon-btn, 
+      .sop-card-actions button, .settings-add-btn, .request-item-actions button {
+        min-height: 44px;
+        min-width: 44px;
+      }
+      .sop-card { cursor: pointer; }
+      .sop-card:active { transform: scale(0.98); }
+      .step-image-preview:active { opacity: 0.8; }
+      .form-input:focus, .filter-select:focus { font-size: 16px; } /* Prevent zoom on iOS */
+    }
+    
+    /* Camera button styles */
+    .step-image-actions { display: flex; flex-direction: row; gap: 4px; position: absolute; bottom: 6px; left: 6px; right: 6px; flex-wrap: wrap; justify-content: center; }
+    .step-image-btn { background: rgba(0,0,0,0.7); color: #fff; border: none; padding: 6px 10px; border-radius: 6px; font-size: 10px; cursor: pointer; display: flex; align-items: center; gap: 4px; white-space: nowrap; transition: all 0.2s; backdrop-filter: blur(4px); position: relative; }
+    .step-image-btn:hover, .step-image-btn:active { background: var(--green); }
+    .step-image-btn i { font-size: 12px; }
+    .step-image-preview { position: relative; overflow: hidden; }
+    .step-image-preview img { width: 100%; height: 100%; object-fit: cover; }
+    .step-image-preview .placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; min-height: 100px; color: var(--text-light); cursor: pointer; }
+    .step-image-preview .placeholder i { font-size: 28px; margin-bottom: 4px; }
+    
+    /* Custom tooltips */
+    [data-tooltip] { position: relative; }
+    [data-tooltip]:hover::after { content: attr(data-tooltip); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: var(--bg-dark); color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 11px; white-space: nowrap; z-index: 100; margin-bottom: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+    [data-tooltip]:hover::before { content: ''; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); border: 6px solid transparent; border-top-color: var(--bg-dark); margin-bottom: -6px; z-index: 100; }
+    
+    /* Landscape mode adjustments for iPad */
+    @media (min-width: 768px) and (max-width: 1024px) and (orientation: landscape) {
+      .modal-box { max-height: 85vh; }
+      .modal-body { max-height: 60vh; overflow-y: auto; }
+      .steps-list { max-height: 40vh; overflow-y: auto; }
+    }
   </style>
 </head>
 <body>
@@ -531,10 +609,11 @@
         <span class="header-title">Standard Operating Procedures</span>
       </div>
       <div class="header-right">
-        <button class="dark-mode-toggle" onclick="toggleDarkMode()"><i class="ph-duotone ph-moon"></i><span>Dark</span></button>
+        <button class="lang-switch" onclick="toggleAppLang()" title="Switch Language"><span id="appLangLabel">EN</span> <i class="ph-duotone ph-translate"></i></button>
+        <button class="dark-mode-toggle" onclick="toggleDarkMode()"><i class="ph-duotone ph-moon"></i><span data-i18n="dark">Dark</span></button>
         <button class="header-btn" onclick="openSettingsModal()"><i class="ph-duotone ph-gear"></i></button>
-        <button class="header-btn" onclick="openRequestsModal()" id="requestsBtn"><i class="ph-duotone ph-clipboard-text"></i> Requests <span class="request-badge" id="requestBadge" style="display:none;">0</span></button>
-        <button class="header-btn primary" onclick="openCreateModal()"><i class="ph-duotone ph-plus"></i> New SOP</button>
+        <button class="header-btn" onclick="openRequestsModal()" id="requestsBtn"><i class="ph-duotone ph-clipboard-text"></i> <span data-i18n="requests">Requests</span> <span class="request-badge" id="requestBadge" style="display:none;">0</span></button>
+        <button class="header-btn primary" onclick="openCreateModal()"><i class="ph-duotone ph-plus"></i> <span data-i18n="newSop">New SOP</span></button>
       </div>
     </header>
     <div class="toolbar">
@@ -679,6 +758,283 @@
     let settings={departments:[{name:'Production',icon:'ph-factory'},{name:'Packaging',icon:'ph-package'},{name:'Quality',icon:'ph-seal-check'},{name:'Maintenance',icon:'ph-wrench'}],tags:[{name:'safety',color:'danger'},{name:'quality',color:'green'},{name:'critical',color:'gold'}]};
     let editLang='en', viewLang='en';
     let sopRequests=[], currentRequestTab='pending', editingRequestId=null;
+    let appLang='en';
+    
+    // App UI Translations
+    const i18n = {
+      en: {
+        // Header
+        headerTitle: 'Standard Operating Procedures',
+        dark: 'Dark',
+        requests: 'Requests',
+        newSop: 'New SOP',
+        // Stats
+        total: 'Total',
+        published: 'Published',
+        drafts: 'Drafts',
+        requestsLabel: 'Requests',
+        thisMonth: 'This Month',
+        // Toolbar
+        searchPlaceholder: 'Search SOPs...',
+        allSops: 'All SOPs',
+        publishedFilter: 'Published',
+        draftsFilter: 'Drafts',
+        allDepts: 'All Departments',
+        allTags: 'All Tags',
+        // Empty state
+        noSopsFound: 'No SOPs Found',
+        createFirst: 'Create your first SOP to get started.',
+        createSop: 'Create SOP',
+        // Edit Modal
+        createNewSop: 'Create New SOP',
+        editSop: 'Edit SOP',
+        sopTitle: 'SOP Title',
+        sopTitlePlaceholder: 'e.g., Trimming Machine Setup',
+        department: 'Department',
+        writingLanguage: 'Writing Language',
+        autoTranslateTo: 'Auto-translate to',
+        createsBoth: 'Creates both language versions',
+        docNumber: 'Document Number',
+        revision: 'Revision',
+        status: 'Status',
+        draft: 'Draft',
+        description: 'Description',
+        descPlaceholder: 'Brief description...',
+        tags: 'Tags',
+        steps: 'Steps',
+        add: 'Add',
+        aiImproveAll: 'AI Improve All',
+        cancel: 'Cancel',
+        saveDraft: 'Save Draft',
+        publish: 'Publish',
+        improve: 'Improve',
+        // Steps
+        stepTitlePlaceholder: 'Step title...',
+        stepDescPlaceholder: 'Description...',
+        tapToAdd: 'Tap to add',
+        camera: 'Camera',
+        gallery: 'Gallery',
+        remove: 'Remove',
+        // Tooltips
+        tipCamera: 'Take a photo using your device camera',
+        tipGallery: 'Choose an existing image from your photo library',
+        tipRemove: 'Remove this image',
+        tipAiStep: "Use AI to improve this step's title and description",
+        tipDeleteStep: 'Delete this step',
+        tipSafety: 'Mark as Safety Warning',
+        tipQuality: 'Mark as Quality Checkpoint',
+        // View Modal
+        viewSop: 'View SOP',
+        pdf: 'PDF',
+        edit: 'Edit',
+        close: 'Close',
+        // Requests Modal
+        sopRequests: 'SOP Requests',
+        pending: 'Pending',
+        completed: 'Completed',
+        newRequestTitle: 'New Request Title',
+        newRequestPlaceholder: 'e.g., Trimming Machine Cleaning Procedure',
+        priority: 'Priority',
+        low: 'Low',
+        medium: 'Medium',
+        high: 'High',
+        assignTo: 'Assign To',
+        assigneePlaceholder: 'Name or leave blank',
+        dueDate: 'Due Date',
+        notesDesc: 'Notes / Description',
+        whatShouldCover: 'What should this SOP cover?',
+        addRequest: 'Add Request',
+        createSopBtn: 'Create SOP',
+        done: 'Done',
+        delete: 'Delete',
+        overdue: 'OVERDUE',
+        created: 'Created',
+        noPending: 'No pending SOP requests',
+        noCompleted: 'No completed requests',
+        // Settings
+        settings: 'Settings',
+        aiFeatures: 'AI Features',
+        apiKeyLabel: 'Anthropic API Key',
+        apiKeyPlaceholder: 'sk-ant-api03-...',
+        getKeyAt: 'Get your key at',
+        apiConfigured: 'API key configured - AI features enabled',
+        addApiKey: 'Add API key to enable AI features',
+        departments: 'Departments',
+        atLeastOneDept: 'At least one department required',
+        atLeastOneTag: 'At least one tag required',
+        // PDF Modal
+        exportPdf: 'Export PDF',
+        layout: 'Layout',
+        textOnly: 'Text Only',
+        perPage2: '2 Per Page',
+        perPage4: '4 Per Page',
+        options: 'Options',
+        includeQr: 'Include QR Code',
+        bilingual: 'Bilingual (EN + ES)',
+        language: 'Language',
+        generatePdf: 'Generate PDF',
+        // QR Modal
+        qrCode: 'QR Code',
+        scanToView: 'Scan to view this SOP',
+        download: 'Download',
+        // Toasts
+        saved: 'Saved!',
+        publishedToast: 'Published!',
+        deleted: 'Deleted',
+        requestAdded: 'Request added',
+        markedComplete: 'Marked complete',
+        updated: 'Updated',
+        enterTitle: 'Enter title',
+        selectDept: 'Select dept',
+        needOneStep: 'Need 1 step',
+        enterTextFirst: 'Enter some text first',
+        addApiKeyFirst: 'Add API key in Settings first',
+        descImproved: 'Description improved!',
+        titleImproved: 'Title improved!',
+        stepImproved: 'Step improved!',
+        allStepsImproved: 'All steps improved!',
+        apiKeySaved: 'API key saved!',
+        invalidApiKey: 'Invalid API key',
+        aiUnavailable: 'AI service unavailable'
+      },
+      es: {
+        // Header
+        headerTitle: 'Procedimientos Operativos Estándar',
+        dark: 'Oscuro',
+        requests: 'Solicitudes',
+        newSop: 'Nuevo SOP',
+        // Stats
+        total: 'Total',
+        published: 'Publicados',
+        drafts: 'Borradores',
+        requestsLabel: 'Solicitudes',
+        thisMonth: 'Este Mes',
+        // Toolbar
+        searchPlaceholder: 'Buscar SOPs...',
+        allSops: 'Todos los SOPs',
+        publishedFilter: 'Publicados',
+        draftsFilter: 'Borradores',
+        allDepts: 'Todos los Departamentos',
+        allTags: 'Todas las Etiquetas',
+        // Empty state
+        noSopsFound: 'No se encontraron SOPs',
+        createFirst: 'Crea tu primer SOP para comenzar.',
+        createSop: 'Crear SOP',
+        // Edit Modal
+        createNewSop: 'Crear Nuevo SOP',
+        editSop: 'Editar SOP',
+        sopTitle: 'Título del SOP',
+        sopTitlePlaceholder: 'ej., Configuración de Máquina de Recorte',
+        department: 'Departamento',
+        writingLanguage: 'Idioma de Escritura',
+        autoTranslateTo: 'Auto-traducir a',
+        createsBoth: 'Crea ambas versiones de idioma',
+        docNumber: 'Número de Documento',
+        revision: 'Revisión',
+        status: 'Estado',
+        draft: 'Borrador',
+        description: 'Descripción',
+        descPlaceholder: 'Descripción breve...',
+        tags: 'Etiquetas',
+        steps: 'Pasos',
+        add: 'Agregar',
+        aiImproveAll: 'IA Mejorar Todo',
+        cancel: 'Cancelar',
+        saveDraft: 'Guardar Borrador',
+        publish: 'Publicar',
+        improve: 'Mejorar',
+        // Steps
+        stepTitlePlaceholder: 'Título del paso...',
+        stepDescPlaceholder: 'Descripción...',
+        tapToAdd: 'Toca para agregar',
+        camera: 'Cámara',
+        gallery: 'Galería',
+        remove: 'Eliminar',
+        // Tooltips
+        tipCamera: 'Toma una foto con la cámara de tu dispositivo',
+        tipGallery: 'Elige una imagen de tu biblioteca de fotos',
+        tipRemove: 'Eliminar esta imagen',
+        tipAiStep: 'Usa IA para mejorar el título y descripción de este paso',
+        tipDeleteStep: 'Eliminar este paso',
+        tipSafety: 'Marcar como Advertencia de Seguridad',
+        tipQuality: 'Marcar como Punto de Control de Calidad',
+        // View Modal
+        viewSop: 'Ver SOP',
+        pdf: 'PDF',
+        edit: 'Editar',
+        close: 'Cerrar',
+        // Requests Modal
+        sopRequests: 'Solicitudes de SOP',
+        pending: 'Pendientes',
+        completed: 'Completados',
+        newRequestTitle: 'Título de Nueva Solicitud',
+        newRequestPlaceholder: 'ej., Procedimiento de Limpieza de Máquina',
+        priority: 'Prioridad',
+        low: 'Baja',
+        medium: 'Media',
+        high: 'Alta',
+        assignTo: 'Asignar A',
+        assigneePlaceholder: 'Nombre o dejar vacío',
+        dueDate: 'Fecha Límite',
+        notesDesc: 'Notas / Descripción',
+        whatShouldCover: '¿Qué debe cubrir este SOP?',
+        addRequest: 'Agregar Solicitud',
+        createSopBtn: 'Crear SOP',
+        done: 'Listo',
+        delete: 'Eliminar',
+        overdue: 'VENCIDO',
+        created: 'Creado',
+        noPending: 'No hay solicitudes pendientes',
+        noCompleted: 'No hay solicitudes completadas',
+        // Settings
+        settings: 'Configuración',
+        aiFeatures: 'Funciones de IA',
+        apiKeyLabel: 'Clave API de Anthropic',
+        apiKeyPlaceholder: 'sk-ant-api03-...',
+        getKeyAt: 'Obtén tu clave en',
+        apiConfigured: 'Clave API configurada - Funciones IA habilitadas',
+        addApiKey: 'Agrega clave API para habilitar funciones IA',
+        departments: 'Departamentos',
+        atLeastOneDept: 'Se requiere al menos un departamento',
+        atLeastOneTag: 'Se requiere al menos una etiqueta',
+        // PDF Modal
+        exportPdf: 'Exportar PDF',
+        layout: 'Diseño',
+        textOnly: 'Solo Texto',
+        perPage2: '2 Por Página',
+        perPage4: '4 Por Página',
+        options: 'Opciones',
+        includeQr: 'Incluir Código QR',
+        bilingual: 'Bilingüe (EN + ES)',
+        language: 'Idioma',
+        generatePdf: 'Generar PDF',
+        // QR Modal
+        qrCode: 'Código QR',
+        scanToView: 'Escanea para ver este SOP',
+        download: 'Descargar',
+        // Toasts
+        saved: '¡Guardado!',
+        publishedToast: '¡Publicado!',
+        deleted: 'Eliminado',
+        requestAdded: 'Solicitud agregada',
+        markedComplete: 'Marcado completo',
+        updated: 'Actualizado',
+        enterTitle: 'Ingresa título',
+        selectDept: 'Selecciona depto',
+        needOneStep: 'Necesitas 1 paso',
+        enterTextFirst: 'Ingresa texto primero',
+        addApiKeyFirst: 'Agrega clave API en Configuración',
+        descImproved: '¡Descripción mejorada!',
+        titleImproved: '¡Título mejorado!',
+        stepImproved: '¡Paso mejorado!',
+        allStepsImproved: '¡Todos los pasos mejorados!',
+        apiKeySaved: '¡Clave API guardada!',
+        invalidApiKey: 'Clave API inválida',
+        aiUnavailable: 'Servicio IA no disponible'
+      }
+    };
+    
+    function t(key) { return i18n[appLang][key] || i18n['en'][key] || key; }
     
     // Translation API (using LibreTranslate or MyMemory free API)
     async function translateText(text, from, to) {
@@ -801,10 +1157,10 @@
       
       document.getElementById('viewModalBody').innerHTML = langNotice + '<div class="view-sop-header"><div><div class="view-sop-title">' + esc(title) + '</div><div class="view-sop-meta"><div class="view-sop-meta-item"><i class="ph-duotone ph-folder"></i> ' + s.dept + '</div><div class="view-sop-meta-item"><i class="ph-duotone ph-hash"></i> ' + s.docNum + '</div><div class="view-sop-meta-item"><i class="ph-duotone ph-git-branch"></i> Rev ' + s.revision + '</div><div class="view-sop-meta-item"><i class="ph-duotone ph-calendar"></i> ' + fmtDate(s.updatedAt) + '</div></div>' + (desc ? '<p style="margin-top:12px;color:var(--text-muted)">' + esc(desc) + '</p>' : '') + '</div><div class="view-sop-qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=78x78&data=' + encodeURIComponent(u) + '" width="78" height="78"></div></div>' + stepsHtml;
     }
-    document.addEventListener('DOMContentLoaded',function(){loadSettings();loadFromStorage();renderSOPs();updateStats();updateDropdowns();if(localStorage.getItem('sopDarkMode')==='true')document.body.classList.add('dark-mode');const v=new URLSearchParams(window.location.search).get('view');if(v)setTimeout(()=>viewSOP(parseInt(v)),500);});
+    document.addEventListener('DOMContentLoaded',function(){loadSettings();loadFromStorage();renderSOPs();updateStats();updateDropdowns();loadAppLang();if(localStorage.getItem('sopDarkMode')==='true')document.body.classList.add('dark-mode');const v=new URLSearchParams(window.location.search).get('view');if(v)setTimeout(()=>viewSOP(parseInt(v)),500);});
     function loadSettings(){const s=localStorage.getItem('sopSettings');if(s){const p=JSON.parse(s);if(p.departments)p.departments.filter(d=>!d.default).forEach(d=>{if(!settings.departments.find(x=>x.name===d.name))settings.departments.push(d);});if(p.tags)p.tags.filter(t=>!t.default).forEach(t=>{if(!settings.tags.find(x=>x.name===t.name))settings.tags.push(t);});}}
     function saveSettings(){localStorage.setItem('sopSettings',JSON.stringify(settings));updateDropdowns();}
-    function updateDropdowns(){document.getElementById('deptFilter').innerHTML='<option value="">All Depts</option>'+settings.departments.map(d=>'<option value="'+d.name+'">'+d.name+'</option>').join('');document.getElementById('sopDept').innerHTML='<option value="">Select Dept</option>'+settings.departments.map(d=>'<option value="'+d.name+'">'+d.name+'</option>').join('');document.getElementById('tagFilter').innerHTML='<option value="">All Tags</option>'+settings.tags.map(t=>'<option value="'+t.name+'">'+t.name.charAt(0).toUpperCase()+t.name.slice(1)+'</option>').join('');renderEditTags();}
+    function updateDropdowns(){document.getElementById('deptFilter').innerHTML='<option value="">'+t('allDepts')+'</option>'+settings.departments.map(d=>'<option value="'+d.name+'">'+d.name+'</option>').join('');document.getElementById('sopDept').innerHTML='<option value="">'+t('selectDept')+'</option>'+settings.departments.map(d=>'<option value="'+d.name+'">'+d.name+'</option>').join('');document.getElementById('tagFilter').innerHTML='<option value="">'+t('allTags')+'</option>'+settings.tags.map(t=>'<option value="'+t.name+'">'+t.name.charAt(0).toUpperCase()+t.name.slice(1)+'</option>').join('');renderEditTags();}
     function renderEditTags(){document.getElementById('editTagsList').innerHTML=settings.tags.map(t=>'<div class="tag-item"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="tag_'+t.name+'"><span class="sop-tag '+t.color+'">'+t.name+'</span></label><button type="button" class="tag-delete" onclick="deleteTagInline(\''+t.name+'\')" title="Delete tag"><i class="ph-duotone ph-x"></i></button></div>').join('')+'<button type="button" class="add-tag-btn" onclick="showInlineAdd(\'tag\')"><i class="ph-duotone ph-plus"></i> Add</button>';renderInlineTagColors();}
     function openSettingsModal(){renderSettingsDepts();renderSettingsTags();loadApiKeyToInput();openModal('settingsModal');}
     function renderSettingsDepts(){document.getElementById('settingsDeptList').innerHTML=settings.departments.map(d=>'<div class="settings-item"><i class="ph-duotone '+(d.icon||'ph-folder')+'"></i><span>'+d.name+'</span><button class="item-delete" onclick="deleteDepartment(\''+d.name+'\')"><i class="ph-duotone ph-x"></i></button></div>').join('');}
@@ -833,12 +1189,34 @@
     function closeModal(id){document.getElementById(id).classList.remove('active');}
     function openCreateModal(){currentSopId=null;editingSteps=[{title:'',description:'',image:'',safety:false,quality:false}];window.sopTranslations=null;editLang='en';setEditLang('en');document.getElementById('modalTitle').innerHTML='<i class="ph-duotone ph-file-text"></i> Create New SOP';document.getElementById('sopTitle').value='';document.getElementById('sopDept').value='';document.getElementById('sopDocNum').value='SOP-'+String(sops.length+1).padStart(3,'0');document.getElementById('sopRevision').value='1.0';document.getElementById('sopStatus').value='draft';document.getElementById('sopDesc').value='';settings.tags.forEach(t=>{const c=document.getElementById('tag_'+t.name);if(c)c.checked=false;});renderSteps();openModal('editModal');}
     function editSOP(id){const s=sops.find(x=>x.id===id);if(!s)return;currentSopId=id;editingSteps=JSON.parse(JSON.stringify(s.steps));document.getElementById('modalTitle').innerHTML='<i class="ph-duotone ph-pencil-simple"></i> Edit SOP';document.getElementById('sopTitle').value=s.title;document.getElementById('sopDept').value=s.dept;document.getElementById('sopDocNum').value=s.docNum;document.getElementById('sopRevision').value=s.revision;document.getElementById('sopStatus').value=s.status;document.getElementById('sopDesc').value=s.description;settings.tags.forEach(t=>{const c=document.getElementById('tag_'+t.name);if(c)c.checked=s.tags.includes(t.name);});renderSteps();openModal('editModal');}
-    function renderSteps(){document.getElementById('stepsList').innerHTML=editingSteps.map((s,i)=>'<div class="step-item"><div class="step-number">'+(i+1)+'</div><div class="step-content"><input type="text" class="step-title-input" placeholder="Step title..." value="'+esc(s.title)+'" onchange="updateStep('+i+',\'title\',this.value)"><textarea class="step-desc-input" placeholder="Description..." onchange="updateStep('+i+',\'description\',this.value)">'+esc(s.description)+'</textarea><div class="step-icons"><button class="step-icon-btn safety '+(s.safety?'active':'')+'" onclick="toggleIcon('+i+',\'safety\')"><i class="ph-duotone ph-warning"></i></button><button class="step-icon-btn quality '+(s.quality?'active':'')+'" onclick="toggleIcon('+i+',\'quality\')"><i class="ph-duotone ph-seal-check"></i></button></div></div><div class="step-image"><div class="step-image-preview" onclick="document.getElementById(\'si'+i+'\').click()">'+(s.image?'<img src="'+s.image+'">':'<div class="placeholder"><i class="ph-duotone ph-camera"></i>Photo</div>')+'</div><input type="file" id="si'+i+'" accept="image/*" style="display:none" onchange="handleImg('+i+',this)"></div><div class="step-actions"><button class="step-ai-btn" onclick="aiImproveStep('+i+')" title="AI Improve"><i class="ph-duotone ph-sparkle"></i></button><button class="step-action-btn delete" onclick="removeStep('+i+')"><i class="ph-duotone ph-trash"></i></button></div></div>').join('');}
+    function renderSteps(){document.getElementById('stepsList').innerHTML=editingSteps.map((s,i)=>'<div class="step-item"><div class="step-number">'+(i+1)+'</div><div class="step-content"><input type="text" class="step-title-input" placeholder="'+t('stepTitlePlaceholder')+'" value="'+esc(s.title)+'" onchange="updateStep('+i+',\'title\',this.value)"><textarea class="step-desc-input" placeholder="'+t('stepDescPlaceholder')+'" onchange="updateStep('+i+',\'description\',this.value)">'+esc(s.description)+'</textarea><div class="step-icons"><button class="step-icon-btn safety '+(s.safety?'active':'')+'" onclick="toggleIcon('+i+',\'safety\')" title="'+t('tipSafety')+'"><i class="ph-duotone ph-warning"></i></button><button class="step-icon-btn quality '+(s.quality?'active':'')+'" onclick="toggleIcon('+i+',\'quality\')" title="'+t('tipQuality')+'"><i class="ph-duotone ph-seal-check"></i></button></div></div><div class="step-image"><div class="step-image-preview">'+(s.image?'<img src="'+s.image+'" onclick="document.getElementById(\'sc'+i+'\').click()">':'<div class="placeholder" onclick="document.getElementById(\'sc'+i+'\').click()"><i class="ph-duotone ph-camera"></i>'+t('tapToAdd')+'</div>')+'<div class="step-image-actions"><button type="button" class="step-image-btn" onclick="document.getElementById(\'sc'+i+'\').click()" title="'+t('tipCamera')+'"><i class="ph-duotone ph-camera"></i> '+t('camera')+'</button><button type="button" class="step-image-btn" onclick="document.getElementById(\'si'+i+'\').click()" title="'+t('tipGallery')+'"><i class="ph-duotone ph-image"></i> '+t('gallery')+'</button>'+(s.image?'<button type="button" class="step-image-btn" onclick="clearStepImage('+i+')" title="'+t('tipRemove')+'"><i class="ph-duotone ph-trash"></i> '+t('remove')+'</button>':'')+'</div></div><input type="file" id="sc'+i+'" accept="image/*" capture="environment" style="display:none" onchange="handleImg('+i+',this)"><input type="file" id="si'+i+'" accept="image/*" style="display:none" onchange="handleImg('+i+',this)"></div><div class="step-actions"><button class="step-ai-btn" onclick="aiImproveStep('+i+')" title="'+t('tipAiStep')+'"><i class="ph-duotone ph-sparkle"></i></button><button class="step-action-btn delete" onclick="removeStep('+i+')" title="'+t('tipDeleteStep')+'"><i class="ph-duotone ph-trash"></i></button></div></div>').join('');}
     function addStep(){editingSteps.push({title:'',description:'',image:'',safety:false,quality:false});renderSteps();}
     function removeStep(i){if(editingSteps.length<=1){showToast('Need 1 step','error');return;}editingSteps.splice(i,1);renderSteps();}
     function updateStep(i,f,v){editingSteps[i][f]=v;}
     function toggleIcon(i,k){editingSteps[i][k]=!editingSteps[i][k];renderSteps();}
-    function handleImg(i,inp){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{editingSteps[i].image=e.target.result;renderSteps();};r.readAsDataURL(f);}
+    function handleImg(i,inp){const f=inp.files[0];if(!f)return;
+      // Resize image if too large (for storage efficiency)
+      const maxSize = 800;
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = new Image();
+        img.onload = () => {
+          let w = img.width, h = img.height;
+          if (w > maxSize || h > maxSize) {
+            if (w > h) { h = h * (maxSize / w); w = maxSize; }
+            else { w = w * (maxSize / h); h = maxSize; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          editingSteps[i].image = canvas.toDataURL('image/jpeg', 0.85);
+          renderSteps();
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(f);
+    }
+    function clearStepImage(i){editingSteps[i].image='';renderSteps();}
     function saveSOP(st){const ti=document.getElementById('sopTitle').value.trim(),de=document.getElementById('sopDept').value;if(!ti){showToast('Enter title','error');return;}if(!de){showToast('Select dept','error');return;}const tg=[];settings.tags.forEach(t=>{const c=document.getElementById('tag_'+t.name);if(c&&c.checked)tg.push(t.name);});const trans=window.sopTranslations||{};const d={title:ti,dept:de,docNum:document.getElementById('sopDocNum').value||'SOP-'+String(sops.length+1).padStart(3,'0'),revision:document.getElementById('sopRevision').value||'1.0',status:st,description:document.getElementById('sopDesc').value,tags:tg,steps:editingSteps.filter(s=>s.title||s.description),updatedAt:new Date().toISOString().split('T')[0],title_en:trans.title_en||ti,title_es:trans.title_es||'',desc_en:trans.desc_en||document.getElementById('sopDesc').value,desc_es:trans.desc_es||''};if(currentSopId){const i=sops.findIndex(s=>s.id===currentSopId);if(i!==-1){d.id=currentSopId;d.createdAt=sops[i].createdAt;sops[i]=d;}}else{d.id=Date.now();d.createdAt=d.updatedAt;sops.unshift(d);if(window.creatingFromRequestId){const r=sopRequests.find(x=>x.id===window.creatingFromRequestId);if(r){r.completed=true;r.completedAt=d.updatedAt;r.sopId=d.id;}window.creatingFromRequestId=null;updateRequestBadge();}}window.sopTranslations=null;saveToStorage();renderSOPs();updateStats();closeModal('editModal');showToast(st==='published'?'Published!':'Saved!','success');}
     function viewSOP(id){const s=sops.find(x=>x.id===id);if(!s)return;currentSopId=id;viewLang='en';document.querySelectorAll('#viewLangToggle button').forEach(b=>b.classList.toggle('active',b.textContent==='EN'));renderViewSOP(s);openModal('viewModal');}
     function editCurrentSOP(){closeModal('viewModal');editSOP(currentSopId);}
@@ -872,7 +1250,7 @@
       const list=currentRequestTab==='pending'?pending:completed;
       const container=document.getElementById('requestList');
       if(list.length===0){
-        container.innerHTML='<div class="request-empty"><i class="ph-duotone ph-clipboard-text"></i><p>'+(currentRequestTab==='pending'?'No pending SOP requests':'No completed requests')+'</p></div>';
+        container.innerHTML='<div class="request-empty"><i class="ph-duotone ph-clipboard-text"></i><p>'+(currentRequestTab==='pending'?t('noPending'):t('noCompleted'))+'</p></div>';
         return;
       }
       container.innerHTML=list.sort((a,b)=>{
@@ -880,24 +1258,25 @@
         return pOrder[a.priority]-pOrder[b.priority];
       }).map(r=>{
         const isOverdue=r.dueDate&&new Date(r.dueDate)<new Date()&&!r.completed;
+        const prioText = {high:t('high'),medium:t('medium'),low:t('low')}[r.priority];
         return '<div class="request-item '+(r.completed?'completed':'')+'">'+
           '<div class="request-item-header">'+
             '<div class="request-item-title">'+esc(r.title)+'</div>'+
-            '<span class="request-item-priority '+r.priority+'">'+r.priority+'</span>'+
+            '<span class="request-item-priority '+r.priority+'">'+prioText+'</span>'+
           '</div>'+
           (r.notes?'<div class="request-item-desc">'+esc(r.notes)+'</div>':'')+
           '<div class="request-item-meta">'+
             (r.dept?'<span><i class="ph-duotone ph-folder"></i>'+r.dept+'</span>':'')+
             (r.assignee?'<span><i class="ph-duotone ph-user"></i>'+esc(r.assignee)+'</span>':'')+
-            (r.dueDate?'<span style="'+(isOverdue?'color:var(--danger);font-weight:600;':'')+'"><i class="ph-duotone ph-calendar"></i>'+(isOverdue?'OVERDUE: ':'')+fmtDate(r.dueDate)+'</span>':'')+
-            '<span><i class="ph-duotone ph-clock"></i>Created '+fmtDate(r.createdAt)+'</span>'+
-            (r.completedAt?'<span style="color:var(--green);"><i class="ph-duotone ph-check-circle"></i>Done '+fmtDate(r.completedAt)+'</span>':'')+
+            (r.dueDate?'<span style="'+(isOverdue?'color:var(--danger);font-weight:600;':'')+'"><i class="ph-duotone ph-calendar"></i>'+(isOverdue?t('overdue')+': ':'')+fmtDate(r.dueDate)+'</span>':'')+
+            '<span><i class="ph-duotone ph-clock"></i>'+t('created')+' '+fmtDate(r.createdAt)+'</span>'+
+            (r.completedAt?'<span style="color:var(--green);"><i class="ph-duotone ph-check-circle"></i>'+t('done')+' '+fmtDate(r.completedAt)+'</span>':'')+
           '</div>'+
           '<div class="request-item-actions">'+
             (r.completed?
-              '<button class="request-action-delete" onclick="deleteRequest('+r.id+')"><i class="ph-duotone ph-trash"></i> Delete</button>':
-              '<button class="request-action-create" onclick="createFromRequest('+r.id+')"><i class="ph-duotone ph-plus"></i> Create SOP</button>'+
-              '<button class="request-action-complete" onclick="completeRequest('+r.id+')"><i class="ph-duotone ph-check"></i> Done</button>'+
+              '<button class="request-action-delete" onclick="deleteRequest('+r.id+')"><i class="ph-duotone ph-trash"></i> '+t('delete')+'</button>':
+              '<button class="request-action-create" onclick="createFromRequest('+r.id+')"><i class="ph-duotone ph-plus"></i> '+t('createSopBtn')+'</button>'+
+              '<button class="request-action-complete" onclick="completeRequest('+r.id+')"><i class="ph-duotone ph-check"></i> '+t('done')+'</button>'+
               '<button class="request-action-edit" onclick="editRequest('+r.id+')"><i class="ph-duotone ph-pencil-simple"></i></button>'+
               '<button class="request-action-delete" onclick="deleteRequest('+r.id+')"><i class="ph-duotone ph-trash"></i></button>'
             )+
@@ -1509,9 +1888,56 @@ Original: ${text}`
     }
     
     function toggleDarkMode(){document.body.classList.toggle('dark-mode');localStorage.setItem('sopDarkMode',document.body.classList.contains('dark-mode'));}
+    
+    function toggleAppLang(){
+      appLang = appLang === 'en' ? 'es' : 'en';
+      localStorage.setItem('sopAppLang', appLang);
+      applyTranslations();
+      updateDropdowns();
+      renderSOPs();
+      updateStats();
+      renderSteps();
+    }
+    
+    function applyTranslations(){
+      document.getElementById('appLangLabel').textContent = appLang.toUpperCase();
+      document.querySelector('.header-title').textContent = t('headerTitle');
+      
+      // Header buttons
+      document.querySelector('[data-i18n="dark"]').textContent = t('dark');
+      document.querySelector('[data-i18n="requests"]').textContent = t('requests');
+      document.querySelector('[data-i18n="newSop"]').textContent = t('newSop');
+      
+      // Stats
+      document.querySelectorAll('.stat-card-label')[0].textContent = t('total');
+      document.querySelectorAll('.stat-card-label')[1].textContent = t('published');
+      document.querySelectorAll('.stat-card-label')[2].textContent = t('drafts');
+      document.querySelectorAll('.stat-card-label')[3].textContent = t('requestsLabel');
+      document.querySelectorAll('.stat-card-label')[4].textContent = t('thisMonth');
+      
+      // Toolbar
+      document.getElementById('searchInput').placeholder = t('searchPlaceholder');
+      const statusFilter = document.getElementById('statusFilter');
+      statusFilter.options[0].text = t('allSops');
+      statusFilter.options[1].text = t('publishedFilter');
+      statusFilter.options[2].text = t('draftsFilter');
+      
+      // Empty state
+      const emptyH3 = document.querySelector('#emptyState h3');
+      const emptyP = document.querySelector('#emptyState p');
+      const emptyBtn = document.querySelector('#emptyState button');
+      if(emptyH3) emptyH3.textContent = t('noSopsFound');
+      if(emptyP) emptyP.textContent = t('createFirst');
+      if(emptyBtn) emptyBtn.innerHTML = '<i class="ph-duotone ph-plus"></i> ' + t('createSop');
+    }
+    
+    function loadAppLang(){
+      appLang = localStorage.getItem('sopAppLang') || 'en';
+      applyTranslations();
+    }
     function showToast(m,t){const e=document.getElementById('toast');document.getElementById('toastMsg').textContent=m;e.className='toast show '+t;e.querySelector('i').className=t==='success'?'ph-duotone ph-check-circle':'ph-duotone ph-warning-circle';setTimeout(()=>e.classList.remove('show'),3000);}
     function esc(t){if(!t)return'';const d=document.createElement('div');d.textContent=t;return d.innerHTML;}
-    function fmtDate(s){if(!s)return'';return new Date(s).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}
+    function fmtDate(s){if(!s)return'';return new Date(s).toLocaleDateString(appLang==='es'?'es-ES':'en-US',{month:'short',day:'numeric',year:'numeric'});}
   </script>
 </body>
 </html>
