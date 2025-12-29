@@ -1549,8 +1549,9 @@
       
       currentSopId = id;
       
-      // Generate QR URL
-      const qrUrl = window.location.href.split('?')[0] + '?view=' + id;
+      // Generate QR URL - use GitHub Pages URL
+      const baseUrl = 'https://rogueff.github.io/rogue-origin-apps/sop-manager.html';
+      const qrUrl = baseUrl + '?view=' + id;
       
       const body = document.getElementById('viewModalBody');
       body.innerHTML = `
@@ -1603,14 +1604,18 @@
       // Generate QR code using qrcode.js
       setTimeout(() => {
         const container = document.getElementById('viewQrCode');
-        if (container && typeof QRCode !== 'undefined') {
+        if (container) {
+          // Create a new canvas element
+          const canvas = document.createElement('canvas');
           container.innerHTML = '';
-          QRCode.toCanvas(container, qrUrl, { 
+          container.appendChild(canvas);
+          
+          QRCode.toCanvas(canvas, qrUrl, { 
             width: 84,
             margin: 1,
             color: { dark: '#2d3a2e', light: '#ffffff' }
-          }, function(error) {
-            if (error) console.error('QR Error:', error);
+          }).catch(function(error) {
+            console.error('View QR Error:', error);
           });
         }
       }, 100);
@@ -1629,21 +1634,25 @@
       if (!sop) return;
       
       currentSopId = id;
-      const url = window.location.href.split('?')[0] + '?view=' + id;
+      // Use GitHub Pages URL for the QR code
+      const baseUrl = 'https://rogueff.github.io/rogue-origin-apps/sop-manager.html';
+      const url = baseUrl + '?view=' + id;
       
       document.getElementById('qrUrl').textContent = url;
       
       // Use qrcode.js library to render to canvas
       const canvas = document.getElementById('qrCanvas');
-      if (typeof QRCode !== 'undefined') {
-        QRCode.toCanvas(canvas, url, { 
-          width: 200,
-          margin: 2,
-          color: { dark: '#2d3a2e', light: '#ffffff' }
-        }, function(error) {
-          if (error) console.error('QR Error:', error);
-        });
-      }
+      QRCode.toCanvas(canvas, url, { 
+        width: 200,
+        margin: 2,
+        color: { dark: '#2d3a2e', light: '#ffffff' }
+      }).then(function() {
+        console.log('QR generated successfully');
+      }).catch(function(error) {
+        console.error('QR Error:', error);
+        // Fallback: try with just the URL
+        QRCode.toCanvas(canvas, url, { width: 200 });
+      });
       
       openModal('qrModal');
     }
