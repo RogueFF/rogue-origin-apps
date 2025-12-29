@@ -1602,20 +1602,17 @@
       `;
       
       // Generate QR code using qrcode.js
-      setTimeout(() => {
+      setTimeout(function() {
         const container = document.getElementById('viewQrCode');
-        if (container) {
-          // Create a new canvas element
-          const canvas = document.createElement('canvas');
+        if (container && typeof QRCode !== 'undefined') {
           container.innerHTML = '';
+          const canvas = document.createElement('canvas');
           container.appendChild(canvas);
-          
           QRCode.toCanvas(canvas, qrUrl, { 
             width: 84,
-            margin: 1,
-            color: { dark: '#2d3a2e', light: '#ffffff' }
-          }).catch(function(error) {
-            console.error('View QR Error:', error);
+            margin: 1
+          }, function(error) {
+            if (error) console.error('View QR Error:', error);
           });
         }
       }, 100);
@@ -1640,29 +1637,33 @@
       
       document.getElementById('qrUrl').textContent = url;
       
-      // Use qrcode.js library to render to canvas
-      const canvas = document.getElementById('qrCanvas');
-      QRCode.toCanvas(canvas, url, { 
-        width: 200,
-        margin: 2,
-        color: { dark: '#2d3a2e', light: '#ffffff' }
-      }).then(function() {
-        console.log('QR generated successfully');
-      }).catch(function(error) {
-        console.error('QR Error:', error);
-        // Fallback: try with just the URL
-        QRCode.toCanvas(canvas, url, { width: 200 });
-      });
-      
+      // Open modal first
       openModal('qrModal');
+      
+      // Then generate QR code
+      setTimeout(function() {
+        const canvas = document.getElementById('qrCanvas');
+        if (canvas && typeof QRCode !== 'undefined') {
+          QRCode.toCanvas(canvas, url, { 
+            width: 200,
+            margin: 2
+          }, function(error) {
+            if (error) {
+              console.error('QR Error:', error);
+            }
+          });
+        }
+      }, 100);
     }
 
     function downloadQR() {
       const canvas = document.getElementById('qrCanvas');
-      const link = document.createElement('a');
-      link.download = 'sop-qr-' + currentSopId + '.png';
-      link.href = canvas.toDataURL('image/png');
-      link.click();
+      if (canvas) {
+        const link = document.createElement('a');
+        link.download = 'sop-qr-' + currentSopId + '.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      }
     }
 
     // Delete
@@ -1708,6 +1709,120 @@
         // Meta
         pdf.setFontSize(10);
         pdf.setTextColor(90, 107, 95);
+        pdf.setFont('helvetica', 'normal');
+        pdf.text(sop.docNum + '  |  Rev ' + sop.revision + '  |  ' + sop.dept, margin, y);
+        y += 15;
+        
+        // Description
+        if (sop.description) {
+          const descLines = pdf.splitTextToSize(sop.description, pageW - margin * 2);
+          pdf.text(descLines.slice(0, 3), margin, y);
+          y += Math.min(descLines.length, 3) * 5 + 10;
+        }
+        
+        // Steps header
+        pdf.setFontSize(12);
+        pdf.setTextColor(45, 58, 46);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('PROCEDURE STEPS', margin, y);
+        y += 8;
+        
+        pdf.setFontSize(10);
+        pdf.setFont('helvetica', 'normal');
+        
+        for (let i = 0; i < sop.steps.length; i++) {
+          const step = sop.steps[i];
+          
+          if (y > pageH - 40) {
+            pdf.addPage();
+            y = margin;
+          }
+          
+          // Step number circle
+          pdf.setFillColor(102, 137, 113);
+          pdf.circle(margin + 4, y, 4, 'F');
+          pdf.setTextColor(255, 255, 255);
+          pdf.setFontSize(9);
+          pdf.text(String(i + 1), margin + 2, y + 1);
+          
+          // Step title
+          pdf.setTextColor(45, 58, 46);
+          pdf.setFontSize(11);
+          pdf.setFont('helvetica', 'bold');
+          pdf.text(step.title || 'Step ' + (i + 1), margin + 12, y + 1);
+          y += 7;
+          
+          // Step description
+          if (step.description) {
+            pdf.setFontSize(9);
+            pdf.setFont('helvetica', 'normal');
+            pdf.setTextColor(90, 107, 95);
+            const stepLines = pdf.splitTextToSize(step.description, pageW - margin * 2 - 12);
+            pdf.text(stepLines.slice(0, 5), margin + 12, y);
+            y += Math.min(stepLines.length, 5) * 4 + 8;
+          }
+        }
+        
+        // Footer
+        pdf.setFontSize(8);
+        pdf.setTextColor(138, 154, 142);
+        pdf.text(sop.docNum + '  |  Generated ' + new Date().toLocaleDateString(), pageW / 2, pageH - 10, { align: 'center' });
+        
+        // Save
+        const filename = sop.docNum.replace(/[^a-z0-9]/gi, '-') + '.pdf';
+        pdf.save(filename);
+        
+        showToast('PDF exported!', 'success');
+      } catch (err) {
+        console.error('PDF Error:', err);
+        showToast('Error generating PDF', 'error');
+      }
+    }
+
+    // UI Helpers
+    function toggleSidebar() {
+      const sidebar = document.getElementById('sidebar');
+      sidebar.classList.toggle('collapsed');
+      document.body.classList.toggle('sidebar-collapsed');
+      localStorage.setItem('sopSidebarCollapsed', sidebar.classList.contains('collapsed'));
+    }
+
+    function toggleDarkMode() {
+      document.body.classList.toggle('dark-mode');
+      localStorage.setItem('sopDarkMode', document.body.classList.contains('dark-mode'));
+    }
+
+    function showToast(msg, type) {
+      const toast = document.getElementById('toast');
+      const icon = toast.querySelector('i');
+      document.getElementById('toastMsg').textContent = msg;
+      toast.className = 'toast show ' + type;
+      icon.className = type === 'success' ? 'ph-duotone ph-check-circle' : 'ph-duotone ph-warning-circle';
+      setTimeout(() => { toast.classList.remove('show'); }, 3000);
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '';
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    // Check for direct view link
+    const urlParams = new URLSearchParams(window.location.search);
+    const viewId = urlParams.get('view');
+    if (viewId) {
+      setTimeout(() => viewSOP(parseInt(viewId)), 500);
+    }
+  </script>
+</body>
+</html>
         pdf.setFont('helvetica', 'normal');
         pdf.text(sop.docNum + '  |  Rev ' + sop.revision + '  |  ' + sop.dept, margin, y);
         y += 15;
