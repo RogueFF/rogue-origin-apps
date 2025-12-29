@@ -383,6 +383,7 @@
     .integration-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
     .integration-icon.kanban { background: var(--green-dim); color: var(--green); }
     .integration-icon.scoreboard { background: var(--gold-dim); color: var(--gold); }
+    .integration-icon.sop { background: var(--indoor-dim); color: var(--indoor); }
     .integration-icon.bags { background: var(--sungrown-dim); color: var(--sungrown); }
     .integration-title { font-size: 12px; font-weight: 600; color: var(--text); }
     .integration-stats { display: flex; flex-direction: column; gap: 6px; }
@@ -558,6 +559,7 @@
     <div class="nav-item" data-view="kanban" onclick="switchView('kanban')"><span class="icon"><i class="ph-duotone ph-package"></i></span><span>Supply Kanban</span></div>
     <div class="nav-item" data-view="scoreboard" onclick="switchView('scoreboard')"><span class="icon"><i class="ph-duotone ph-gauge"></i></span><span>Scoreboard</span></div>
     <div class="nav-item" data-view="barcode" onclick="switchView('barcode')"><span class="icon"><i class="ph-duotone ph-barcode"></i></span><span>Barcode Printer</span></div>
+    <div class="nav-item" data-view="sop" onclick="switchView('sop')"><span class="icon"><i class="ph-duotone ph-book-open-text"></i></span><span>SOP Manager</span></div>
     <div class="nav-section">Coming Soon</div>
     <div class="nav-item disabled"><span class="icon"><i class="ph-duotone ph-clipboard-text"></i></span><span>Orders</span></div>
     <div class="nav-item disabled"><span class="icon"><i class="ph-duotone ph-users-three"></i></span><span>Staff</span></div>
@@ -685,6 +687,17 @@
             <div class="integration-stat"><span class="integration-stat-label">vs Target</span><span class="integration-stat-value" id="bagsVsTarget">—</span></div>
           </div>
         </div>
+        <div class="integration-card draggable-widget" id="widget-sop" data-widget-id="widget-sop" data-widget="sop" onclick="switchView('sop')" style="cursor:pointer;">
+          <div class="integration-header">
+            <div class="integration-icon sop"><i class="ph-duotone ph-book-open-text"></i></div>
+            <div class="integration-title">SOP Manager</div>
+          </div>
+          <div class="integration-stats">
+            <div class="integration-stat"><span class="integration-stat-label">Status</span><span class="integration-stat-value good">Active</span></div>
+            <div class="integration-stat"><span class="integration-stat-label">Feature</span><span class="integration-stat-value">EN/ES</span></div>
+            <div class="integration-stat"><span class="integration-stat-label">Export</span><span class="integration-stat-value">PDF</span></div>
+          </div>
+        </div>
 
         <!-- Last Hour Production -->
         <div class="current-card draggable-widget" id="widget-current" data-widget-id="widget-current" data-widget="current">
@@ -767,21 +780,28 @@
     <div class="app-view" id="kanbanView">
       <div class="app-iframe-container">
         <button class="app-expand-btn" onclick="openAppNewTab('kanban')" title="Open in new tab"><i class="ph ph-arrow-square-out"></i></button>
-        <iframe class="app-iframe" id="kanbanFrame" data-src="https://script.google.com/macros/s/AKfycbxoIJ4CUZeMJyBVTqr6J2dhi7FirfCgU2h5rWbFvq7QWhULsJPoCPEnr-oMeSjnu6Et/exec"></iframe>
+        <iframe class="app-iframe" id="kanbanFrame" data-src="https://rogueff.github.io/rogue-origin-apps/kanban.html"></iframe>
       </div>
     </div>
 
     <div class="app-view" id="scoreboardView">
       <div class="app-iframe-container">
         <button class="app-expand-btn" onclick="openAppNewTab('scoreboard')" title="Open in new tab"><i class="ph ph-arrow-square-out"></i></button>
-        <iframe class="app-iframe" id="scoreboardFrame" data-src="https://script.google.com/macros/s/AKfycbx00OPDLf47rolb73zW_RYpuP-CrjZZ1qAbAgWREGuV5-Z7JezR34SSf6ARFJD5_zY2/exec?page=scoreboard"></iframe>
+        <iframe class="app-iframe" id="scoreboardFrame" data-src="https://rogueff.github.io/rogue-origin-apps/scoreboard.html"></iframe>
       </div>
     </div>
 
     <div class="app-view" id="barcodeView">
       <div class="app-iframe-container">
         <button class="app-expand-btn" onclick="openAppNewTab('barcode')" title="Open in new tab"><i class="ph ph-arrow-square-out"></i></button>
-        <iframe class="app-iframe" id="barcodeFrame" data-src="https://script.google.com/macros/s/AKfycbw7E0oVCTPQfEi6tSDpL_FVk2XrgE6jsoM7I8Ei62VUO_L9tU1bKyH7OwkWOxSG5TGYmw/exec"></iframe>
+        <iframe class="app-iframe" id="barcodeFrame" data-src="https://rogueff.github.io/rogue-origin-apps/barcode.html"></iframe>
+      </div>
+    </div>
+
+    <div class="app-view" id="sopView">
+      <div class="app-iframe-container">
+        <button class="app-expand-btn" onclick="openAppNewTab('sop')" title="Open in new tab"><i class="ph ph-arrow-square-out"></i></button>
+        <iframe class="app-iframe" id="sopFrame" data-src="https://rogueff.github.io/rogue-origin-apps/sop-manager.html"></iframe>
       </div>
     </div>
   </main>
@@ -807,6 +827,7 @@
       { id: 'kanban', label: 'Supply Kanban', icon: 'ph-duotone ph-package', color: 'green', default: true },
       { id: 'scoreboard', label: 'Live Scoreboard', icon: 'ph-duotone ph-gauge', color: 'gold', default: true },
       { id: 'bags', label: '5KG Bag Timer', icon: 'ph-duotone ph-timer', color: 'sungrown', default: true },
+      { id: 'sop', label: 'SOP Manager', icon: 'ph-duotone ph-book-open-text', color: 'indoor', default: true },
       { id: 'current', label: 'Current Production', icon: 'ph-duotone ph-pulse', color: 'green', default: true },
       { id: 'hourlyChart', label: 'Hourly Chart', icon: 'ph-duotone ph-chart-bar', color: 'indoor', default: true },
       { id: 'rateChart', label: 'Rate Chart', icon: 'ph-duotone ph-trend-up', color: 'indoor', default: true },
@@ -821,9 +842,10 @@
     ];
 
     var appUrls = {
-      kanban: 'https://script.google.com/macros/s/AKfycbxoIJ4CUZeMJyBVTqr6J2dhi7FirfCgU2h5rWbFvq7QWhULsJPoCPEnr-oMeSjnu6Et/exec',
-      scoreboard: 'https://script.google.com/macros/s/AKfycbx00OPDLf47rolb73zW_RYpuP-CrjZZ1qAbAgWREGuV5-Z7JezR34SSf6ARFJD5_zY2/exec?page=scoreboard',
-      barcode: 'https://script.google.com/macros/s/AKfycbw7E0oVCTPQfEi6tSDpL_FVk2XrgE6jsoM7I8Ei62VUO_L9tU1bKyH7OwkWOxSG5TGYmw/exec'
+      kanban: 'https://rogueff.github.io/rogue-origin-apps/kanban.html',
+      scoreboard: 'https://rogueff.github.io/rogue-origin-apps/scoreboard.html',
+      barcode: 'https://rogueff.github.io/rogue-origin-apps/barcode.html',
+      sop: 'https://rogueff.github.io/rogue-origin-apps/sop-manager.html'
     };
 
     var brandColors = { green: '#668971', greenLight: 'rgba(102,137,113,0.2)', gold: '#e4aa4f', sungrown: '#bf8e4e', indoor: '#62758d', indoorLight: 'rgba(98,117,141,0.3)' };
@@ -836,6 +858,13 @@
     var sidebarCollapsed = false;
     var darkMode = false;
     var dailyTarget = 200; // Daily production target in lbs
+    
+    // API Configuration for GitHub Pages
+    var API_URL = 'https://script.google.com/macros/s/AKfycbyjW_MjwakdqItdUhtIZbipPDA04NUfmZjZ34XH-sw0BHMmlPrfB75S1_mZDp6tzppy/exec';
+    
+    // Detect environment: Apps Script or GitHub Pages
+    var isAppsScript = typeof google !== 'undefined' && google.script && google.script.run;
+    
     Chart.defaults.font.family = 'Inter, system-ui, sans-serif';
 
     document.addEventListener('DOMContentLoaded', function() {
@@ -927,12 +956,13 @@
       document.getElementById('kanbanView').classList.toggle('active', view === 'kanban');
       document.getElementById('scoreboardView').classList.toggle('active', view === 'scoreboard');
       document.getElementById('barcodeView').classList.toggle('active', view === 'barcode');
+      document.getElementById('sopView').classList.toggle('active', view === 'sop');
       
       // Show/hide dashboard controls
       document.getElementById('dashboardControls').style.display = view === 'dashboard' ? 'flex' : 'none';
       
       // Update page title
-      var titles = { dashboard: 'Operations Dashboard', kanban: 'Supply Kanban', scoreboard: 'Scoreboard / Bag Timer', barcode: 'Barcode Printer' };
+      var titles = { dashboard: 'Operations Dashboard', kanban: 'Supply Kanban', scoreboard: 'Scoreboard / Bag Timer', barcode: 'Barcode Printer', sop: 'SOP Manager' };
       // pageTitle removed - using header logo instead
       document.title = 'Rogue Origin - ' + (titles[view] || 'Operations Hub');
       
@@ -1215,7 +1245,10 @@
         var pme = new Date(today.getFullYear(), today.getMonth(), 0);
         ps = formatDateInput(pms); pe = formatDateInput(pme);
       }
-      google.script.run.withSuccessHandler(function(r) {
+      
+      if (isAppsScript) {
+        // Apps Script mode
+        google.script.run.withSuccessHandler(function(r) {
         google.script.run.withSuccessHandler(function(pr) {
           document.getElementById('loadingOverlay').classList.add('hidden');
           showSkeletons(false);
@@ -1231,6 +1264,33 @@
           }
         }).withFailureHandler(onError).getProductionDashboardData(ps, pe);
       }).withFailureHandler(onError).getProductionDashboardData(cs, ce);
+      } else {
+        // GitHub Pages mode - use fetch helper
+        loadCompareDataFetch(cs, ce, ps, pe);
+      }
+    }
+    
+    // Helper for GitHub Pages compare mode
+    function loadCompareDataFetch(cs, ce, ps, pe) {
+      Promise.all([
+        fetch(API_URL + '?action=dashboard&start=' + encodeURIComponent(cs) + '&end=' + encodeURIComponent(ce)).then(function(r) { return r.json(); }),
+        fetch(API_URL + '?action=dashboard&start=' + encodeURIComponent(ps) + '&end=' + encodeURIComponent(pe)).then(function(r) { return r.json(); })
+      ]).then(function(results) {
+        document.getElementById('loadingOverlay').classList.add('hidden');
+        showSkeletons(false);
+        
+        var currentResult = results[0].success ? results[0].data : null;
+        var prevResult = results[1].success ? results[1].data : null;
+        
+        var newDataStr = JSON.stringify(currentResult) + JSON.stringify(prevResult);
+        var oldDataStr = (data ? JSON.stringify(data) : '') + (compareData ? JSON.stringify(compareData) : '');
+        
+        if (newDataStr !== oldDataStr) {
+          data = currentResult;
+          compareData = prevResult;
+          renderAll();
+        }
+      }).catch(function(error) { onError(error); });
     }
 
     // Utility functions
@@ -1412,8 +1472,23 @@
       if (!data) {
         showSkeletons(true);
       }
-      // Silent background fetch - no UI changes
-      google.script.run.withSuccessHandler(onDataLoaded).withFailureHandler(onError).getProductionDashboardData(s, e);
+      
+      if (isAppsScript) {
+        // Apps Script mode
+        google.script.run.withSuccessHandler(onDataLoaded).withFailureHandler(onError).getProductionDashboardData(s, e);
+      } else {
+        // GitHub Pages mode - use API
+        fetch(API_URL + '?action=dashboard&start=' + encodeURIComponent(s) + '&end=' + encodeURIComponent(e))
+          .then(function(response) { return response.json(); })
+          .then(function(result) {
+            if (result.success && result.data) {
+              onDataLoaded(result.data);
+            } else {
+              onError(result.error || 'Unknown error');
+            }
+          })
+          .catch(function(error) { onError(error); });
+      }
     }
 
     function refreshData() {
