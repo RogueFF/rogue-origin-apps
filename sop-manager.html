@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SOP Manager - Rogue Origin</title>
@@ -557,7 +558,6 @@
       gap: 8px;
     }
     .step-image-preview { 
-      position: relative;
       width: 160px; 
       height: 100px; 
       background: var(--bg-card); 
@@ -746,268 +746,6 @@
       .step-image { width: 100%; }
       .step-image-preview { width: 100%; }
     }
-
-    /* Annotation Editor */
-    .annotation-toolbar {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      padding: 12px 16px;
-      background: var(--bg);
-      border-bottom: 1px solid var(--border);
-      flex-wrap: wrap;
-    }
-    .tool-group {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-    .tool-btn {
-      width: 36px;
-      height: 36px;
-      border: 1px solid var(--border);
-      background: var(--bg-card);
-      border-radius: 6px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.15s;
-    }
-    .tool-btn:hover {
-      background: var(--green);
-      color: white;
-      border-color: var(--green);
-    }
-    .tool-btn.active {
-      background: var(--green);
-      color: white;
-      border-color: var(--green);
-    }
-    .tool-btn i { font-size: 18px; }
-    .annotation-toolbar input[type="color"] {
-      width: 36px;
-      height: 36px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      cursor: pointer;
-      padding: 2px;
-    }
-    .annotation-toolbar select {
-      height: 36px;
-      padding: 0 8px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: var(--bg-card);
-    }
-    .annotation-canvas-container {
-      position: relative;
-      overflow: auto;
-      max-height: 60vh;
-      background: #f0f0f0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    }
-    #annotationCanvas {
-      background: white;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      cursor: crosshair;
-    }
-
-    /* Step image annotation button */
-    .step-image-actions {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      display: flex;
-      gap: 4px;
-      opacity: 0;
-      transition: opacity 0.2s;
-    }
-    .step-image:hover .step-image-actions {
-      opacity: 1;
-    }
-    .step-image-btn {
-      width: 28px;
-      height: 28px;
-      border: none;
-      background: rgba(0,0,0,0.6);
-      color: white;
-      border-radius: 4px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .step-image-btn:hover {
-      background: var(--green);
-    }
-
-    /* PDF Layout Options */
-    .pdf-layout-options {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-    .pdf-layout-option {
-      cursor: pointer;
-    }
-    .pdf-layout-card {
-      width: 110px;
-      padding: 12px;
-      border: 2px solid var(--border);
-      border-radius: 10px;
-      text-align: center;
-      transition: all 0.2s;
-      background: var(--bg-card);
-    }
-    .pdf-layout-card:hover {
-      border-color: var(--green);
-    }
-    .pdf-layout-card.selected {
-      border-color: var(--green);
-      background: rgba(102, 137, 113, 0.08);
-    }
-    .pdf-layout-option input:checked + .pdf-layout-card {
-      border-color: var(--green);
-      background: rgba(102, 137, 113, 0.08);
-    }
-    .pdf-layout-preview {
-      height: 60px;
-      background: var(--bg);
-      border-radius: 4px;
-      margin-bottom: 8px;
-      padding: 6px;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      gap: 3px;
-    }
-    .pdf-layout-preview.text-preview .line {
-      height: 4px;
-      background: var(--border);
-      border-radius: 2px;
-    }
-    .pdf-layout-preview.text-preview .line.short {
-      width: 60%;
-    }
-    .pdf-layout-preview.grid-preview {
-      display: grid;
-      gap: 4px;
-      align-content: center;
-    }
-    .pdf-layout-preview.grid-preview.cols-1 {
-      grid-template-columns: 1fr;
-    }
-    .pdf-layout-preview.grid-preview.cols-2 {
-      grid-template-columns: 1fr 1fr;
-    }
-    .pdf-layout-preview.grid-preview.cols-3 {
-      grid-template-columns: 1fr 1fr 1fr;
-    }
-    .pdf-layout-preview .box {
-      background: var(--green);
-      opacity: 0.3;
-      border-radius: 2px;
-      min-height: 20px;
-    }
-    .pdf-layout-card span {
-      font-size: 11px;
-      color: var(--text-muted);
-      font-weight: 500;
-    }
-
-    /* Translation Modal */
-    .translate-direction {
-      display: flex;
-      gap: 10px;
-    }
-    .translate-dir-btn {
-      flex: 1;
-      padding: 12px;
-      border: 2px solid var(--border);
-      border-radius: 10px;
-      background: var(--bg-card);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      transition: all 0.2s;
-    }
-    .translate-dir-btn:hover {
-      border-color: var(--green);
-    }
-    .translate-dir-btn.active {
-      border-color: var(--green);
-      background: rgba(102, 137, 113, 0.08);
-    }
-    .translate-dir-btn .lang-from,
-    .translate-dir-btn .lang-to {
-      font-weight: 500;
-      font-size: 13px;
-    }
-    .translate-dir-btn i {
-      color: var(--green);
-    }
-    .translate-note {
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      padding: 12px;
-      background: var(--gold-dim);
-      border-radius: 8px;
-      font-size: 12px;
-      color: var(--text-muted);
-      margin-top: 8px;
-    }
-    .translate-note i {
-      font-size: 16px;
-      color: var(--gold);
-      flex-shrink: 0;
-    }
-    .translate-dir-btn .flag {
-      font-size: 20px;
-    }
-
-    /* Language Toggle */
-    .lang-toggle {
-      display: flex;
-      background: var(--bg);
-      border-radius: 8px;
-      padding: 3px;
-      margin-left: auto;
-      margin-right: 16px;
-    }
-    .lang-btn {
-      padding: 6px 14px;
-      border: none;
-      background: transparent;
-      border-radius: 6px;
-      font-weight: 600;
-      font-size: 12px;
-      cursor: pointer;
-      color: var(--text-muted);
-      transition: all 0.2s;
-    }
-    .lang-btn:hover {
-      color: var(--text);
-    }
-    .lang-btn.active {
-      background: var(--green);
-      color: white;
-    }
-    .lang-btn.loading {
-      opacity: 0.6;
-      pointer-events: none;
-    }
-
-    @keyframes spin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
   </style>
 </head>
 <body>
@@ -1018,7 +756,7 @@
       <span class="sidebar-toggle-label">Collapse</span>
     </div>
     <div class="brand">
-      <img src="https://lh3.googleusercontent.com/d/1VEmuLRP15C4S3UYM_RrvkGsU9E4m1sOs" class="logo" alt="Logo">
+      <img src="https://i.imgur.com/UYEbNiI.png" class="logo" alt="Logo">
       <h1>SOP Manager</h1>
     </div>
     
@@ -1251,10 +989,6 @@
       </div>
       <div class="modal-footer">
         <button class="header-btn" onclick="closeModal('editModal')">Cancel</button>
-        <button class="header-btn" onclick="openTranslateModal('edit')">
-          <i class="ph-duotone ph-translate"></i>
-          Translate
-        </button>
         <button class="header-btn" onclick="saveSOP('draft')">
           <i class="ph-duotone ph-floppy-disk"></i>
           Save Draft
@@ -1267,82 +1001,17 @@
     </div>
   </div>
 
-  <!-- Translation Modal -->
-  <div class="modal" id="translateModal">
-    <div class="modal-box" style="max-width: 450px;">
-      <div class="modal-header">
-        <h2>Translate SOP</h2>
-        <button class="modal-close" onclick="closeModal('translateModal')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="translate-direction">
-          <button class="translate-dir-btn active" data-from="en" data-to="es" onclick="setTranslateDirection('en', 'es', this)">
-            <span class="flag">🇺🇸</span>
-            <span>English</span>
-            <i class="ph-duotone ph-arrow-right"></i>
-            <span class="flag">🇲🇽</span>
-            <span>Español</span>
-          </button>
-          <button class="translate-dir-btn" data-from="es" data-to="en" onclick="setTranslateDirection('es', 'en', this)">
-            <span class="flag">🇲🇽</span>
-            <span>Español</span>
-            <i class="ph-duotone ph-arrow-right"></i>
-            <span class="flag">🇺🇸</span>
-            <span>English</span>
-          </button>
-        </div>
-        <div class="form-group" style="margin-top: 16px;">
-          <label>What to translate</label>
-          <div style="display: flex; flex-direction: column; gap: 8px;">
-            <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
-              <input type="checkbox" id="translateTitle" checked> Title
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
-              <input type="checkbox" id="translateDesc" checked> Description
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
-              <input type="checkbox" id="translateSteps" checked> All Step Titles & Descriptions
-            </label>
-          </div>
-        </div>
-        <div id="translateStatus" style="margin-top: 12px; padding: 10px; background: var(--bg); border-radius: 6px; display: none;">
-          <i class="ph-duotone ph-spinner" style="animation: spin 1s linear infinite;"></i>
-          <span id="translateStatusText">Translating...</span>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="header-btn" onclick="closeModal('translateModal')">Cancel</button>
-        <button class="header-btn primary" onclick="translateSOP()">
-          <i class="ph-duotone ph-translate"></i>
-          Translate
-        </button>
-      </div>
-    </div>
-  </div>
-
   <!-- View SOP Modal -->
   <div class="modal" id="viewModal">
     <div class="modal-box wide">
       <div class="modal-header">
         <h2>View SOP</h2>
-        <div class="lang-toggle">
-          <button class="lang-btn active" onclick="setViewLanguage('en')" id="langBtnEn">
-            <span>EN</span>
-          </button>
-          <button class="lang-btn" onclick="setViewLanguage('es')" id="langBtnEs">
-            <span>ES</span>
-          </button>
-        </div>
         <button class="modal-close" onclick="closeModal('viewModal')">&times;</button>
       </div>
       <div class="modal-body" id="viewModalBody"></div>
       <div class="modal-footer">
         <button class="header-btn" onclick="closeModal('viewModal')">Close</button>
-        <button class="header-btn" onclick="openTranslateModal()">
-          <i class="ph-duotone ph-copy"></i>
-          Create Translation
-        </button>
-        <button class="header-btn" onclick="openModal('pdfModal')">
+        <button class="header-btn" onclick="exportPDF()">
           <i class="ph-duotone ph-file-pdf"></i>
           Export PDF
         </button>
@@ -1363,7 +1032,7 @@
       </div>
       <div class="modal-body">
         <div class="qr-modal-content">
-          <img id="qrImage" width="200" height="200" style="display: block; margin: 0 auto; border: 1px solid #e8e4de; border-radius: 8px;">
+          <img id="qrImage" width="200" height="200" style="border: 1px solid var(--border); border-radius: 8px;">
           <p style="margin-top: 16px; color: var(--text-muted); font-size: 13px;">Scan to view this SOP on any device</p>
           <div class="qr-url" id="qrUrl"></div>
         </div>
@@ -1373,217 +1042,6 @@
         <button class="header-btn primary" onclick="downloadQR()">
           <i class="ph-duotone ph-download"></i>
           Download QR
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- PDF Options Modal -->
-  <div class="modal" id="pdfModal">
-    <div class="modal-box" style="max-width: 550px;">
-      <div class="modal-header">
-        <h2>Export PDF Options</h2>
-        <button class="modal-close" onclick="closeModal('pdfModal')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label>Layout</label>
-          <div class="pdf-layout-options">
-            <label class="pdf-layout-option">
-              <input type="radio" name="pdfLayout" value="text" hidden>
-              <div class="pdf-layout-card">
-                <div class="pdf-layout-preview text-preview">
-                  <div class="line"></div>
-                  <div class="line"></div>
-                  <div class="line short"></div>
-                  <div class="line"></div>
-                  <div class="line"></div>
-                </div>
-                <span>Text Only</span>
-              </div>
-            </label>
-            <label class="pdf-layout-option">
-              <input type="radio" name="pdfLayout" value="2col" checked hidden>
-              <div class="pdf-layout-card selected">
-                <div class="pdf-layout-preview grid-preview cols-1">
-                  <div class="box"></div>
-                  <div class="box"></div>
-                </div>
-                <span>2 Per Page</span>
-              </div>
-            </label>
-            <label class="pdf-layout-option">
-              <input type="radio" name="pdfLayout" value="4col" hidden>
-              <div class="pdf-layout-card">
-                <div class="pdf-layout-preview grid-preview cols-2">
-                  <div class="box"></div>
-                  <div class="box"></div>
-                  <div class="box"></div>
-                  <div class="box"></div>
-                </div>
-                <span>4 Per Page</span>
-              </div>
-            </label>
-            <label class="pdf-layout-option">
-              <input type="radio" name="pdfLayout" value="6col" hidden>
-              <div class="pdf-layout-card">
-                <div class="pdf-layout-preview grid-preview cols-3">
-                  <div class="box"></div>
-                  <div class="box"></div>
-                  <div class="box"></div>
-                  <div class="box"></div>
-                  <div class="box"></div>
-                  <div class="box"></div>
-                </div>
-                <span>6 Per Page</span>
-              </div>
-            </label>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Options</label>
-          <div style="display: flex; flex-direction: column; gap: 8px;">
-            <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
-              <input type="checkbox" id="pdfIncludeQR" checked> Include QR Code
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
-              <input type="checkbox" id="pdfIncludeHeader" checked> Include Header
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
-              <input type="checkbox" id="pdfIncludeFooter" checked> Include Footer with Page Numbers
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
-              <input type="checkbox" id="pdfBilingual"> Bilingual (English + Spanish)
-            </label>
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="header-btn" onclick="closeModal('pdfModal')">Cancel</button>
-        <button class="header-btn primary" onclick="generatePDF()" id="generatePdfBtn">
-          <i class="ph-duotone ph-file-pdf"></i>
-          Generate PDF
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Image Annotation Editor Modal -->
-  <div class="modal" id="annotationModal">
-    <div class="modal-box" style="max-width: 900px; max-height: 90vh;">
-      <div class="modal-header">
-        <h2>Annotate Image</h2>
-        <button class="modal-close" onclick="closeAnnotationEditor()">&times;</button>
-      </div>
-      <div class="modal-body" style="padding: 0;">
-        <div class="annotation-toolbar">
-          <div class="tool-group">
-            <button class="tool-btn active" data-tool="select" title="Select">
-              <i class="ph-duotone ph-cursor"></i>
-            </button>
-            <button class="tool-btn" data-tool="arrow" title="Arrow">
-              <i class="ph-duotone ph-arrow-up-right"></i>
-            </button>
-            <button class="tool-btn" data-tool="line" title="Line">
-              <i class="ph-duotone ph-line-segment"></i>
-            </button>
-            <button class="tool-btn" data-tool="rect" title="Rectangle">
-              <i class="ph-duotone ph-rectangle"></i>
-            </button>
-            <button class="tool-btn" data-tool="circle" title="Circle">
-              <i class="ph-duotone ph-circle"></i>
-            </button>
-            <button class="tool-btn" data-tool="freehand" title="Freehand">
-              <i class="ph-duotone ph-pencil"></i>
-            </button>
-            <button class="tool-btn" data-tool="highlighter" title="Highlighter">
-              <i class="ph-duotone ph-highlighter-circle"></i>
-            </button>
-            <button class="tool-btn" data-tool="text" title="Text">
-              <i class="ph-duotone ph-text-t"></i>
-            </button>
-            <button class="tool-btn" data-tool="callout" title="Numbered Callout">
-              <i class="ph-duotone ph-number-circle-one"></i>
-            </button>
-          </div>
-          <div class="tool-group">
-            <input type="color" id="annotationColor" value="#e53935" title="Color">
-            <select id="annotationSize" title="Size">
-              <option value="2">Thin</option>
-              <option value="4" selected>Medium</option>
-              <option value="8">Thick</option>
-            </select>
-          </div>
-          <div class="tool-group">
-            <button class="tool-btn" onclick="undoAnnotation()" title="Undo">
-              <i class="ph-duotone ph-arrow-counter-clockwise"></i>
-            </button>
-            <button class="tool-btn" onclick="clearAnnotations()" title="Clear All">
-              <i class="ph-duotone ph-trash"></i>
-            </button>
-          </div>
-        </div>
-        <div class="annotation-canvas-container">
-          <canvas id="annotationCanvas"></canvas>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="header-btn" onclick="closeAnnotationEditor()">Cancel</button>
-        <button class="header-btn primary" onclick="saveAnnotation()">
-          <i class="ph-duotone ph-check"></i>
-          Save Annotation
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Translation Modal -->
-  <div class="modal" id="translateModal">
-    <div class="modal-box" style="max-width: 450px;">
-      <div class="modal-header">
-        <h2>Translate SOP</h2>
-        <button class="modal-close" onclick="closeModal('translateModal')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label>Translation Direction</label>
-          <div class="translate-direction">
-            <button class="translate-dir-btn active" onclick="setTranslateDir('en-es')" id="btnEnEs">
-              <span class="lang-from">English</span>
-              <i class="ph-duotone ph-arrow-right"></i>
-              <span class="lang-to">Español</span>
-            </button>
-            <button class="translate-dir-btn" onclick="setTranslateDir('es-en')" id="btnEsEn">
-              <span class="lang-from">Español</span>
-              <i class="ph-duotone ph-arrow-right"></i>
-              <span class="lang-to">English</span>
-            </button>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>What to Translate</label>
-          <div style="display: flex; flex-direction: column; gap: 8px;">
-            <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
-              <input type="checkbox" id="translateTitle" checked> Title
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
-              <input type="checkbox" id="translateDesc" checked> Description
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
-              <input type="checkbox" id="translateSteps" checked> All Step Titles & Descriptions
-            </label>
-          </div>
-        </div>
-        <div class="translate-note">
-          <i class="ph-duotone ph-info"></i>
-          <span>This will create a translated copy. Original will not be modified.</span>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="header-btn" onclick="closeModal('translateModal')">Cancel</button>
-        <button class="header-btn primary" onclick="translateSOP()" id="translateBtn">
-          <i class="ph-duotone ph-translate"></i>
-          Translate
         </button>
       </div>
     </div>
@@ -1603,8 +1061,8 @@
     let currentView = 'grid';
 
     // Initialize
-    document.addEventListener('DOMContentLoaded', async function() {
-      await loadFromStorage();
+    document.addEventListener('DOMContentLoaded', function() {
+      loadFromStorage();
       renderSOPs();
       updateStats();
       
@@ -1618,105 +1076,73 @@
       if (localStorage.getItem('sopDarkMode') === 'true') {
         document.body.classList.add('dark-mode');
       }
-      
-      // PDF layout card selection
-      document.querySelectorAll('.pdf-layout-option input').forEach(input => {
-        input.addEventListener('change', function() {
-          document.querySelectorAll('.pdf-layout-card').forEach(card => card.classList.remove('selected'));
-          this.nextElementSibling.classList.add('selected');
-        });
-      });
     });
 
-    // =============================================
-    // API CONFIGURATION - EDIT THIS LINE
-    // =============================================
-    const API_URL = 'https://script.google.com/macros/s/AKfycbzKdcQH9xkSt7ueeNtCuYrpSSQE9Qfwr01h66Cj0sK2FlBn3eIwSV1uDqpB8lqvk2BT/exec';
-    // Example: const API_URL = 'https://script.google.com/macros/s/ABC123xyz/exec';
-    
-    // Storage - API version
-    async function loadFromStorage() {
-      // If no API URL, use localStorage fallback
-      if (!API_URL) {
-        const stored = localStorage.getItem('rogueOriginSOPs');
-        if (stored) {
-          sops = JSON.parse(stored);
-        } else {
-          loadDemoData();
-        }
-        return;
-      }
-      
-      try {
-        showToast('Loading SOPs...', 'success');
-        const response = await fetch(API_URL + '?action=getSOPs');
-        const result = await response.json();
-        
-        if (result.success && result.sops) {
-          sops = result.sops;
-          if (sops.length === 0) {
-            loadDemoData();
-          }
-        } else {
-          console.error('API Error:', result.error);
-          loadFromLocalStorage();
-        }
-      } catch (err) {
-        console.error('Fetch Error:', err);
-        loadFromLocalStorage();
-      }
-    }
-    
-    function loadFromLocalStorage() {
+    // Storage
+    function loadFromStorage() {
       const stored = localStorage.getItem('rogueOriginSOPs');
       if (stored) {
         sops = JSON.parse(stored);
       } else {
-        loadDemoData();
+        // Demo data
+        sops = [
+          {
+            id: 1,
+            title: 'Trimming Machine Daily Startup',
+            dept: 'Production',
+            docNum: 'SOP-PRD-001',
+            revision: '2.1',
+            status: 'published',
+            description: 'Standard procedure for starting the trimming machine at the beginning of each shift.',
+            tags: ['safety', 'critical'],
+            steps: [
+              { title: 'Safety Check', description: 'Verify all safety guards are in place and emergency stop is functional.', image: '', safety: true, quality: false },
+              { title: 'Power On', description: 'Turn on main power switch located on the right side of the machine.', image: '', safety: false, quality: false },
+              { title: 'Warm Up', description: 'Allow machine to warm up for 5 minutes before operation.', image: '', safety: false, quality: true },
+              { title: 'Test Run', description: 'Run machine empty for 30 seconds to verify proper operation.', image: '', safety: false, quality: true }
+            ],
+            createdAt: '2024-12-01',
+            updatedAt: '2024-12-20'
+          },
+          {
+            id: 2,
+            title: 'Package Sealing Procedure',
+            dept: 'Packaging',
+            docNum: 'SOP-PKG-003',
+            revision: '1.0',
+            status: 'published',
+            description: 'How to properly seal product packages for shipping.',
+            tags: ['quality'],
+            steps: [
+              { title: 'Prepare Package', description: 'Ensure package is filled to correct weight and contents are settled.', image: '', safety: false, quality: true },
+              { title: 'Seal Application', description: 'Apply heat seal for 3 seconds at 180°C.', image: '', safety: true, quality: true }
+            ],
+            createdAt: '2024-12-10',
+            updatedAt: '2024-12-15'
+          },
+          {
+            id: 3,
+            title: 'Daily Equipment Cleaning',
+            dept: 'Maintenance',
+            docNum: 'SOP-MNT-002',
+            revision: '1.2',
+            status: 'draft',
+            description: 'End of day cleaning procedures for all production equipment.',
+            tags: ['safety'],
+            steps: [
+              { title: 'Power Down', description: 'Turn off all equipment and wait for complete stop.', image: '', safety: true, quality: false },
+              { title: 'Wipe Down', description: 'Use approved cleaning solution to wipe all surfaces.', image: '', safety: false, quality: false }
+            ],
+            createdAt: '2024-12-05',
+            updatedAt: '2024-12-22'
+          }
+        ];
+        saveToStorage();
       }
-    }
-    
-    function loadDemoData() {
-      sops = [
-        {
-          id: 1,
-          title: 'Trimming Machine Daily Startup',
-          dept: 'Production',
-          docNum: 'SOP-PRD-001',
-          revision: '2.1',
-          status: 'published',
-          description: 'Standard procedure for starting the trimming machine at the beginning of each shift.',
-          tags: ['safety', 'critical'],
-          steps: [
-            { title: 'Safety Check', description: 'Verify all safety guards are in place and emergency stop is functional.', image: '', safety: true, quality: false },
-            { title: 'Power On', description: 'Turn on main power switch located on the right side of the machine.', image: '', safety: false, quality: false },
-            { title: 'Warm Up', description: 'Allow machine to warm up for 5 minutes before operation.', image: '', safety: false, quality: true },
-            { title: 'Test Run', description: 'Run machine empty for 30 seconds to verify proper operation.', image: '', safety: false, quality: true }
-          ],
-          createdAt: '2024-12-01',
-          updatedAt: '2024-12-20'
-        }
-      ];
-      saveToStorage();
     }
 
-    async function saveToStorage() {
-      // Always save to localStorage as backup
+    function saveToStorage() {
       localStorage.setItem('rogueOriginSOPs', JSON.stringify(sops));
-      
-      // If API URL configured, also save to Google Sheets
-      if (API_URL) {
-        try {
-          await fetch(API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'saveSOPs', sops: sops }),
-            mode: 'no-cors'
-          });
-        } catch (err) {
-          console.error('Save Error:', err);
-        }
-      }
     }
 
     // Render
@@ -1940,15 +1366,7 @@
           <div class="step-image">
             <div class="step-image-preview" onclick="uploadStepImage(${i})">
               ${step.image ? 
-                `<img src="${step.image}" alt="Step image">
-                 <div class="step-image-actions" onclick="event.stopPropagation()">
-                   <button class="step-image-btn" onclick="openAnnotationEditor(${i})" title="Annotate">
-                     <i class="ph-duotone ph-pencil-circle"></i>
-                   </button>
-                   <button class="step-image-btn" onclick="clearStepImage(${i})" title="Remove">
-                     <i class="ph-duotone ph-x"></i>
-                   </button>
-                 </div>` : 
+                `<img src="${step.image}" alt="Step image">` : 
                 `<div class="placeholder">
                   <i class="ph-duotone ph-camera"></i>
                   <span>Add Photo</span>
@@ -2009,13 +1427,6 @@
         renderSteps();
       };
       reader.readAsDataURL(file);
-    }
-
-    function clearStepImage(index) {
-      if (confirm('Remove this image?')) {
-        editingSteps[index].image = '';
-        renderSteps();
-      }
     }
 
     function setupDragDrop() {
@@ -2123,14 +1534,71 @@
       if (!sop) return;
       
       currentSopId = id;
-      currentViewLang = 'en';
       
-      // Reset language toggle to English
-      document.getElementById('langBtnEn').classList.add('active');
-      document.getElementById('langBtnEs').classList.remove('active');
+      // Generate QR
+      const qrUrl = window.location.href.split('?')[0] + '?view=' + id;
       
-      // Show SOP content
-      updateViewModalContent(sop);
+      const body = document.getElementById('viewModalBody');
+      body.innerHTML = `
+        <div class="view-sop-header">
+          <div>
+            <div class="view-sop-title">${escapeHtml(sop.title)}</div>
+            <div class="view-sop-meta">
+              <div class="view-sop-meta-item">
+                <i class="ph-duotone ph-folder"></i>
+                ${sop.dept}
+              </div>
+              <div class="view-sop-meta-item">
+                <i class="ph-duotone ph-hash"></i>
+                ${sop.docNum}
+              </div>
+              <div class="view-sop-meta-item">
+                <i class="ph-duotone ph-git-branch"></i>
+                Rev ${sop.revision}
+              </div>
+              <div class="view-sop-meta-item">
+                <i class="ph-duotone ph-calendar"></i>
+                ${formatDate(sop.updatedAt)}
+              </div>
+            </div>
+            ${sop.description ? `<p style="margin-top: 12px; color: var(--text-muted); font-size: 14px;">${escapeHtml(sop.description)}</p>` : ''}
+          </div>
+          <div class="view-sop-qr" id="viewQrCode"></div>
+        </div>
+        
+        ${sop.steps.map((step, i) => `
+          <div class="view-step">
+            <div class="view-step-number">${i + 1}</div>
+            <div class="view-step-content">
+              <div class="view-step-title">
+                ${escapeHtml(step.title)}
+                ${step.safety ? '<i class="ph-duotone ph-warning icon safety"></i>' : ''}
+                ${step.quality ? '<i class="ph-duotone ph-seal-check icon quality"></i>' : ''}
+              </div>
+              <div class="view-step-desc">${escapeHtml(step.description)}</div>
+            </div>
+            ${step.image ? `
+              <div class="view-step-image">
+                <img src="${step.image}" alt="Step ${i + 1}">
+              </div>
+            ` : ''}
+          </div>
+        `).join('')}
+      `;
+      
+      // Generate QR code using Google Charts
+      setTimeout(() => {
+        const container = document.getElementById('viewQrCode');
+        if (container) {
+          const img = document.createElement('img');
+          img.src = 'https://chart.googleapis.com/chart?cht=qr&chs=84x84&chl=' + encodeURIComponent(qrUrl);
+          img.width = 84;
+          img.height = 84;
+          container.innerHTML = '';
+          container.appendChild(img);
+        }
+      }, 100);
+      
       openModal('viewModal');
     }
 
@@ -2139,26 +1607,17 @@
       editSOP(currentSopId);
     }
 
-    // QR Code
+    // QR Code - uses Google Charts API
     function showQR(id) {
-      const sop = sops.find(s => s.id == id); // Use == for flexible comparison
-      if (!sop) {
-        showToast('SOP not found', 'error');
-        return;
-      }
+      const sop = sops.find(s => s.id === id);
+      if (!sop) return;
       
       currentSopId = id;
-      
-      // Use GitHub Pages URL for QR codes
-      const baseUrl = 'https://rogueff.github.io/rogue-origin-apps/sop-manager.html';
-      const url = baseUrl + '?view=' + id;
+      const url = window.location.href.split('?')[0] + '?view=' + id;
       
       document.getElementById('qrUrl').textContent = url;
+      document.getElementById('qrImage').src = 'https://chart.googleapis.com/chart?cht=qr&chs=200x200&chl=' + encodeURIComponent(url);
       
-      // Set QR image using QR Server API
-      document.getElementById('qrImage').src = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(url);
-      
-      // Open modal
       openModal('qrModal');
     }
 
@@ -2181,865 +1640,105 @@
       showToast('SOP Deleted', 'success');
     }
 
-    // PDF Export with Options
-    async function generatePDF() {
+    // PDF Export
+    function exportPDF() {
       const sop = sops.find(s => s.id === currentSopId);
       if (!sop) return;
       
-      const layout = document.querySelector('input[name="pdfLayout"]:checked').value;
-      const includeQR = document.getElementById('pdfIncludeQR').checked;
-      const includeHeader = document.getElementById('pdfIncludeHeader').checked;
-      const includeFooter = document.getElementById('pdfIncludeFooter').checked;
-      const bilingual = document.getElementById('pdfBilingual').checked;
-      
-      // Update button to show progress
-      const btn = document.getElementById('generatePdfBtn');
-      const originalText = btn.innerHTML;
-      btn.disabled = true;
-      
-      if (bilingual) {
-        btn.innerHTML = '<i class="ph-duotone ph-spinner ph-spin"></i> Translating...';
-      }
-      
-      closeModal('pdfModal');
-      showToast(bilingual ? 'Translating & generating PDF...' : 'Generating PDF...', 'success');
+      showToast('Generating PDF...', 'success');
       
       try {
-        // Get Spanish translation if bilingual
-        let sopEs = null;
-        if (bilingual) {
-          sopEs = await getTranslatedSOP(sop, 'en', 'es');
-        }
-        
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF('p', 'mm', 'letter');
         const pageW = 215.9, pageH = 279.4, margin = 15;
         let y = margin;
-        let pageNum = 1;
         
-        const addHeader = (isBilingual) => {
-          if (!includeHeader) return 35;
-          pdf.setFillColor(102, 137, 113);
-          pdf.rect(0, 0, pageW, 25, 'F');
-          pdf.setTextColor(255, 255, 255);
-          pdf.setFontSize(11);
-          pdf.setFont('helvetica', 'bold');
-          const headerText = isBilingual ? 'ROGUE ORIGIN - SOP (EN/ES)' : 'ROGUE ORIGIN - Standard Operating Procedure';
-          pdf.text(headerText, margin, 16);
-          return 35;
-        };
-        
-        const addFooter = (pageNumber) => {
-          if (!includeFooter) return;
-          pdf.setFontSize(8);
-          pdf.setTextColor(138, 154, 142);
-          pdf.text(sop.docNum + '  |  Page ' + pageNumber + '  |  ' + new Date().toLocaleDateString(), pageW / 2, pageH - 10, { align: 'center' });
-        };
-        
-        const newPage = () => {
-          addFooter(pageNum);
-          pdf.addPage();
-          pageNum++;
-          return addHeader(bilingual);
-        };
-        
-        y = addHeader(bilingual);
-        
-        // Title (bilingual shows both)
-        pdf.setTextColor(45, 58, 46);
-        pdf.setFontSize(bilingual ? 18 : 22);
+        // Header
+        pdf.setFillColor(102, 137, 113);
+        pdf.rect(0, 0, pageW, 25, 'F');
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFontSize(11);
         pdf.setFont('helvetica', 'bold');
-        pdf.text(sop.title, margin, y);
-        y += bilingual ? 8 : 12;
+        pdf.text('ROGUE ORIGIN - Standard Operating Procedure', margin, 16);
         
-        if (bilingual && sopEs) {
-          pdf.setFontSize(14);
-          pdf.setTextColor(102, 137, 113);
-          pdf.setFont('helvetica', 'italic');
-          pdf.text(sopEs.title, margin, y);
-          y += 10;
-        }
+        y = 35;
+        
+        // Title
+        pdf.setTextColor(45, 58, 46);
+        pdf.setFontSize(22);
+        pdf.text(sop.title, margin, y);
+        y += 12;
         
         // Meta
         pdf.setFontSize(10);
         pdf.setTextColor(90, 107, 95);
         pdf.setFont('helvetica', 'normal');
         pdf.text(sop.docNum + '  |  Rev ' + sop.revision + '  |  ' + sop.dept, margin, y);
-        y += 10;
+        y += 15;
         
-        // QR Code
-        if (includeQR) {
-          const baseUrl = 'https://rogueff.github.io/rogue-origin-apps/sop-manager.html';
-          const qrUrl = baseUrl + '?view=' + sop.id;
-          pdf.setFontSize(8);
-          pdf.text('Scan for digital version:', pageW - margin - 35, 40);
-          pdf.setTextColor(102, 137, 113);
-          pdf.textWithLink('[QR]', pageW - margin - 15, 40, { url: qrUrl });
-          pdf.setTextColor(90, 107, 95);
-        }
-        
-        y += 5;
-        
-        // Description (bilingual shows both)
+        // Description
         if (sop.description) {
-          pdf.setFontSize(10);
-          pdf.setTextColor(45, 58, 46);
           const descLines = pdf.splitTextToSize(sop.description, pageW - margin * 2);
           pdf.text(descLines.slice(0, 3), margin, y);
-          y += Math.min(descLines.length, 3) * 5 + 3;
-          
-          if (bilingual && sopEs && sopEs.description) {
-            pdf.setFontSize(9);
-            pdf.setTextColor(102, 137, 113);
-            pdf.setFont('helvetica', 'italic');
-            const descLinesEs = pdf.splitTextToSize(sopEs.description, pageW - margin * 2);
-            pdf.text(descLinesEs.slice(0, 3), margin, y);
-            y += Math.min(descLinesEs.length, 3) * 4 + 5;
-            pdf.setFont('helvetica', 'normal');
-          } else {
-            y += 7;
-          }
+          y += Math.min(descLines.length, 3) * 5 + 10;
         }
         
-        // Steps
-        if (layout === 'text') {
-          // Compact text-only layout
-          pdf.setFontSize(12);
+        // Steps header
+        pdf.setFontSize(12);
+        pdf.setTextColor(45, 58, 46);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('PROCEDURE STEPS', margin, y);
+        y += 8;
+        
+        pdf.setFontSize(10);
+        pdf.setFont('helvetica', 'normal');
+        
+        for (let i = 0; i < sop.steps.length; i++) {
+          const step = sop.steps[i];
+          
+          if (y > pageH - 40) {
+            pdf.addPage();
+            y = margin;
+          }
+          
+          // Step number circle
+          pdf.setFillColor(102, 137, 113);
+          pdf.circle(margin + 4, y, 4, 'F');
+          pdf.setTextColor(255, 255, 255);
+          pdf.setFontSize(9);
+          pdf.text(String(i + 1), margin + 2, y + 1);
+          
+          // Step title
           pdf.setTextColor(45, 58, 46);
+          pdf.setFontSize(11);
           pdf.setFont('helvetica', 'bold');
-          pdf.text(bilingual ? 'PROCEDURE STEPS / PASOS DEL PROCEDIMIENTO' : 'PROCEDURE STEPS', margin, y);
-          y += 8;
+          pdf.text(step.title || 'Step ' + (i + 1), margin + 12, y + 1);
+          y += 7;
           
-          for (let i = 0; i < sop.steps.length; i++) {
-            const step = sop.steps[i];
-            const stepEs = bilingual && sopEs ? sopEs.steps[i] : null;
-            
-            if (y > pageH - (bilingual ? 55 : 40)) { y = newPage(); }
-            
-            pdf.setFillColor(102, 137, 113);
-            pdf.circle(margin + 4, y, 4, 'F');
-            pdf.setTextColor(255, 255, 255);
+          // Step description
+          if (step.description) {
             pdf.setFontSize(9);
-            pdf.text(String(i + 1), margin + 2, y + 1);
-            
-            // English title
-            pdf.setTextColor(45, 58, 46);
-            pdf.setFontSize(11);
-            pdf.setFont('helvetica', 'bold');
-            pdf.text(step.title || 'Step ' + (i + 1), margin + 12, y + 1);
-            y += 6;
-            
-            // Spanish title
-            if (bilingual && stepEs && stepEs.title) {
-              pdf.setFontSize(10);
-              pdf.setTextColor(102, 137, 113);
-              pdf.setFont('helvetica', 'italic');
-              pdf.text(stepEs.title, margin + 12, y);
-              y += 5;
-            }
-            
-            // English description
-            if (step.description) {
-              pdf.setFontSize(9);
-              pdf.setFont('helvetica', 'normal');
-              pdf.setTextColor(90, 107, 95);
-              const stepLines = pdf.splitTextToSize(step.description, pageW - margin * 2 - 12);
-              pdf.text(stepLines.slice(0, 4), margin + 12, y);
-              y += Math.min(stepLines.length, 4) * 4 + 2;
-            }
-            
-            // Spanish description
-            if (bilingual && stepEs && stepEs.description) {
-              pdf.setFontSize(8);
-              pdf.setFont('helvetica', 'italic');
-              pdf.setTextColor(102, 137, 113);
-              const stepLinesEs = pdf.splitTextToSize(stepEs.description, pageW - margin * 2 - 12);
-              pdf.text(stepLinesEs.slice(0, 3), margin + 12, y);
-              y += Math.min(stepLinesEs.length, 3) * 3.5 + 4;
-              pdf.setFont('helvetica', 'normal');
-            } else {
-              y += 4;
-            }
-          }
-        } else {
-          // Image layouts - for bilingual, use 2-column with EN left, ES right
-          if (bilingual) {
-            // Bilingual grid layout
-            const colW = (pageW - margin * 2 - 10) / 2;
-            
-            for (let i = 0; i < sop.steps.length; i++) {
-              const step = sop.steps[i];
-              const stepEs = sopEs ? sopEs.steps[i] : null;
-              
-              if (y > pageH - 80) { y = newPage(); y += 10; }
-              
-              // Step number header
-              pdf.setFillColor(102, 137, 113);
-              pdf.circle(margin + 4, y, 5, 'F');
-              pdf.setTextColor(255, 255, 255);
-              pdf.setFontSize(10);
-              pdf.setFont('helvetica', 'bold');
-              pdf.text(String(i + 1), margin + 2, y + 1.5);
-              
-              pdf.setTextColor(45, 58, 46);
-              pdf.setFontSize(10);
-              pdf.text('Step ' + (i + 1) + ' / Paso ' + (i + 1), margin + 14, y + 1);
-              y += 10;
-              
-              // Left column - English
-              pdf.setDrawColor(200, 200, 200);
-              pdf.setFillColor(252, 252, 250);
-              pdf.roundedRect(margin, y, colW, 55, 2, 2, 'FD');
-              
-              pdf.setFontSize(8);
-              pdf.setTextColor(102, 137, 113);
-              pdf.setFont('helvetica', 'bold');
-              pdf.text('ENGLISH', margin + 3, y + 6);
-              
-              pdf.setFontSize(9);
-              pdf.setTextColor(45, 58, 46);
-              pdf.text(step.title || 'Step ' + (i + 1), margin + 3, y + 14);
-              
-              if (step.description) {
-                pdf.setFontSize(8);
-                pdf.setFont('helvetica', 'normal');
-                pdf.setTextColor(90, 107, 95);
-                const lines = pdf.splitTextToSize(step.description, colW - 6);
-                pdf.text(lines.slice(0, 5), margin + 3, y + 22);
-              }
-              
-              // Right column - Spanish
-              const rightX = margin + colW + 10;
-              pdf.setDrawColor(200, 200, 200);
-              pdf.setFillColor(248, 252, 248);
-              pdf.roundedRect(rightX, y, colW, 55, 2, 2, 'FD');
-              
-              pdf.setFontSize(8);
-              pdf.setTextColor(102, 137, 113);
-              pdf.setFont('helvetica', 'bold');
-              pdf.text('ESPAÑOL', rightX + 3, y + 6);
-              
-              if (stepEs) {
-                pdf.setFontSize(9);
-                pdf.setTextColor(45, 58, 46);
-                pdf.text(stepEs.title || 'Paso ' + (i + 1), rightX + 3, y + 14);
-                
-                if (stepEs.description) {
-                  pdf.setFontSize(8);
-                  pdf.setFont('helvetica', 'normal');
-                  pdf.setTextColor(90, 107, 95);
-                  const linesEs = pdf.splitTextToSize(stepEs.description, colW - 6);
-                  pdf.text(linesEs.slice(0, 5), rightX + 3, y + 22);
-                }
-              }
-              
-              y += 62;
-            }
-          } else {
-            // Standard image layouts (unchanged)
-            const cols = layout === '2col' ? 1 : (layout === '4col' ? 2 : 3);
-            const rows = layout === '2col' ? 2 : 2;
-            const stepsPerPage = cols * rows;
-            const cellW = (pageW - margin * 2 - (cols - 1) * 10) / cols;
-            const cellH = layout === '2col' ? 100 : (layout === '4col' ? 90 : 70);
-            
-            for (let i = 0; i < sop.steps.length; i++) {
-              const step = sop.steps[i];
-              const posOnPage = i % stepsPerPage;
-              
-              if (i > 0 && posOnPage === 0) {
-                y = newPage();
-                y += 10;
-              }
-              
-              const col = posOnPage % cols;
-              const row = Math.floor(posOnPage / cols);
-              const x = margin + col * (cellW + 10);
-              const cellY = y + row * (cellH + 10);
-              
-              // Step box
-              pdf.setDrawColor(200, 200, 200);
-              pdf.setFillColor(250, 250, 250);
-              pdf.roundedRect(x, cellY, cellW, cellH, 3, 3, 'FD');
-              
-              // Step number
-              pdf.setFillColor(102, 137, 113);
-              pdf.circle(x + 10, cellY + 10, 6, 'F');
-              pdf.setTextColor(255, 255, 255);
-              pdf.setFontSize(10);
-              pdf.setFont('helvetica', 'bold');
-              pdf.text(String(i + 1), x + 8, cellY + 12);
-              
-              // Step title
-              pdf.setTextColor(45, 58, 46);
-              pdf.setFontSize(10);
-              pdf.text(step.title || 'Step ' + (i + 1), x + 20, cellY + 12);
-              
-              // Step description
-              if (step.description) {
-                pdf.setFontSize(8);
-                pdf.setFont('helvetica', 'normal');
-                pdf.setTextColor(90, 107, 95);
-                const maxChars = layout === '6col' ? 80 : 150;
-                const desc = step.description.length > maxChars ? step.description.substring(0, maxChars) + '...' : step.description;
-                const lines = pdf.splitTextToSize(desc, cellW - 10);
-                pdf.text(lines.slice(0, layout === '6col' ? 3 : 5), x + 5, cellY + 22);
-              }
-              
-              // Image placeholder
-              if (step.image) {
-                const imgY = cellY + (layout === '6col' ? 35 : 45);
-                const imgH = cellH - (layout === '6col' ? 40 : 50);
-                pdf.setFillColor(240, 240, 240);
-                pdf.rect(x + 5, imgY, cellW - 10, imgH, 'F');
-                pdf.setFontSize(7);
-                pdf.setTextColor(150, 150, 150);
-                pdf.text('[Image]', x + cellW/2, imgY + imgH/2, { align: 'center' });
-              }
-            }
+            pdf.setFont('helvetica', 'normal');
+            pdf.setTextColor(90, 107, 95);
+            const stepLines = pdf.splitTextToSize(step.description, pageW - margin * 2 - 12);
+            pdf.text(stepLines.slice(0, 5), margin + 12, y);
+            y += Math.min(stepLines.length, 5) * 4 + 8;
           }
         }
         
-        addFooter(pageNum);
+        // Footer
+        pdf.setFontSize(8);
+        pdf.setTextColor(138, 154, 142);
+        pdf.text(sop.docNum + '  |  Generated ' + new Date().toLocaleDateString(), pageW / 2, pageH - 10, { align: 'center' });
         
-        const filename = sop.docNum.replace(/[^a-z0-9]/gi, '-') + (bilingual ? '-bilingual' : '') + '.pdf';
+        // Save
+        const filename = sop.docNum.replace(/[^a-z0-9]/gi, '-') + '.pdf';
         pdf.save(filename);
+        
         showToast('PDF exported!', 'success');
       } catch (err) {
         console.error('PDF Error:', err);
         showToast('Error generating PDF', 'error');
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = originalText;
-      }
-    }
-    
-    // Keep simple exportPDF for backwards compatibility
-    function exportPDF() {
-      openModal('pdfModal');
-    }
-
-    // =============================================
-    // IMAGE ANNOTATION EDITOR
-    // =============================================
-    let annotationCanvas, annotationCtx;
-    let annotationImage = null;
-    let annotationStepIndex = null;
-    let currentTool = 'select';
-    let isDrawing = false;
-    let startX, startY;
-    let annotations = [];
-    let undoStack = [];
-    let calloutNumber = 1;
-    let freehandPath = [];
-
-    function openAnnotationEditor(stepIndex) {
-      const step = editingSteps[stepIndex];
-      if (!step || !step.image) {
-        showToast('Add an image first', 'error');
-        return;
-      }
-      
-      annotationStepIndex = stepIndex;
-      annotations = [];
-      undoStack = [];
-      calloutNumber = 1;
-      
-      const img = new Image();
-      img.onload = function() {
-        annotationImage = img;
-        annotationCanvas = document.getElementById('annotationCanvas');
-        annotationCtx = annotationCanvas.getContext('2d');
-        
-        // Size canvas to image (max 800px wide)
-        const maxW = 800;
-        const scale = img.width > maxW ? maxW / img.width : 1;
-        annotationCanvas.width = img.width * scale;
-        annotationCanvas.height = img.height * scale;
-        
-        redrawAnnotations();
-        openModal('annotationModal');
-        setupAnnotationEvents();
-      };
-      img.src = step.image;
-    }
-
-    function setupAnnotationEvents() {
-      const canvas = annotationCanvas;
-      
-      // Tool selection
-      document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
-        btn.onclick = () => {
-          document.querySelectorAll('.tool-btn[data-tool]').forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-          currentTool = btn.dataset.tool;
-        };
-      });
-      
-      canvas.onmousedown = (e) => {
-        if (currentTool === 'select') return;
-        
-        const rect = canvas.getBoundingClientRect();
-        startX = e.clientX - rect.left;
-        startY = e.clientY - rect.top;
-        isDrawing = true;
-        freehandPath = [{ x: startX, y: startY }];
-      };
-      
-      canvas.onmousemove = (e) => {
-        if (!isDrawing) return;
-        
-        const rect = canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        
-        if (currentTool === 'freehand' || currentTool === 'highlighter') {
-          freehandPath.push({ x, y });
-          redrawAnnotations();
-          drawFreehandPreview(freehandPath);
-        } else {
-          redrawAnnotations();
-          drawPreview(startX, startY, x, y);
-        }
-      };
-      
-      canvas.onmouseup = (e) => {
-        if (!isDrawing) return;
-        isDrawing = false;
-        
-        const rect = canvas.getBoundingClientRect();
-        const endX = e.clientX - rect.left;
-        const endY = e.clientY - rect.top;
-        const color = document.getElementById('annotationColor').value;
-        const size = parseInt(document.getElementById('annotationSize').value);
-        
-        if (currentTool === 'freehand' || currentTool === 'highlighter') {
-          annotations.push({
-            type: currentTool,
-            path: [...freehandPath],
-            color: currentTool === 'highlighter' ? color + '60' : color,
-            size: currentTool === 'highlighter' ? size * 4 : size
-          });
-        } else if (currentTool === 'text') {
-          const text = prompt('Enter text:');
-          if (text) {
-            annotations.push({ type: 'text', x: startX, y: startY, text, color, size: size * 4 });
-          }
-        } else if (currentTool === 'callout') {
-          annotations.push({ type: 'callout', x: startX, y: startY, number: calloutNumber++, color, size });
-        } else {
-          annotations.push({
-            type: currentTool,
-            x1: startX, y1: startY,
-            x2: endX, y2: endY,
-            color, size
-          });
-        }
-        
-        undoStack.push([...annotations]);
-        redrawAnnotations();
-      };
-      
-      canvas.onmouseleave = () => {
-        if (isDrawing) {
-          isDrawing = false;
-          redrawAnnotations();
-        }
-      };
-    }
-
-    function drawPreview(x1, y1, x2, y2) {
-      const ctx = annotationCtx;
-      const color = document.getElementById('annotationColor').value;
-      const size = parseInt(document.getElementById('annotationSize').value);
-      
-      ctx.strokeStyle = color;
-      ctx.fillStyle = color;
-      ctx.lineWidth = size;
-      ctx.lineCap = 'round';
-      
-      if (currentTool === 'arrow') {
-        drawArrow(ctx, x1, y1, x2, y2);
-      } else if (currentTool === 'line') {
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.stroke();
-      } else if (currentTool === 'rect') {
-        ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
-      } else if (currentTool === 'circle') {
-        const rx = Math.abs(x2 - x1) / 2;
-        const ry = Math.abs(y2 - y1) / 2;
-        ctx.beginPath();
-        ctx.ellipse(x1 + (x2 - x1) / 2, y1 + (y2 - y1) / 2, rx, ry, 0, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-    }
-
-    function drawFreehandPreview(path) {
-      const ctx = annotationCtx;
-      const color = document.getElementById('annotationColor').value;
-      const size = parseInt(document.getElementById('annotationSize').value);
-      
-      ctx.strokeStyle = currentTool === 'highlighter' ? color + '60' : color;
-      ctx.lineWidth = currentTool === 'highlighter' ? size * 4 : size;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      
-      ctx.beginPath();
-      ctx.moveTo(path[0].x, path[0].y);
-      for (let i = 1; i < path.length; i++) {
-        ctx.lineTo(path[i].x, path[i].y);
-      }
-      ctx.stroke();
-    }
-
-    function drawArrow(ctx, x1, y1, x2, y2) {
-      const headLen = 15;
-      const angle = Math.atan2(y2 - y1, x2 - x1);
-      
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
-      ctx.stroke();
-      
-      ctx.beginPath();
-      ctx.moveTo(x2, y2);
-      ctx.lineTo(x2 - headLen * Math.cos(angle - Math.PI / 6), y2 - headLen * Math.sin(angle - Math.PI / 6));
-      ctx.moveTo(x2, y2);
-      ctx.lineTo(x2 - headLen * Math.cos(angle + Math.PI / 6), y2 - headLen * Math.sin(angle + Math.PI / 6));
-      ctx.stroke();
-    }
-
-    function redrawAnnotations() {
-      const ctx = annotationCtx;
-      
-      // Clear and draw base image
-      ctx.clearRect(0, 0, annotationCanvas.width, annotationCanvas.height);
-      if (annotationImage) {
-        ctx.drawImage(annotationImage, 0, 0, annotationCanvas.width, annotationCanvas.height);
-      }
-      
-      // Draw all annotations
-      for (const ann of annotations) {
-        ctx.strokeStyle = ann.color;
-        ctx.fillStyle = ann.color;
-        ctx.lineWidth = ann.size;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        
-        if (ann.type === 'arrow') {
-          drawArrow(ctx, ann.x1, ann.y1, ann.x2, ann.y2);
-        } else if (ann.type === 'line') {
-          ctx.beginPath();
-          ctx.moveTo(ann.x1, ann.y1);
-          ctx.lineTo(ann.x2, ann.y2);
-          ctx.stroke();
-        } else if (ann.type === 'rect') {
-          ctx.strokeRect(ann.x1, ann.y1, ann.x2 - ann.x1, ann.y2 - ann.y1);
-        } else if (ann.type === 'circle') {
-          const rx = Math.abs(ann.x2 - ann.x1) / 2;
-          const ry = Math.abs(ann.y2 - ann.y1) / 2;
-          ctx.beginPath();
-          ctx.ellipse(ann.x1 + (ann.x2 - ann.x1) / 2, ann.y1 + (ann.y2 - ann.y1) / 2, rx, ry, 0, 0, Math.PI * 2);
-          ctx.stroke();
-        } else if (ann.type === 'freehand' || ann.type === 'highlighter') {
-          ctx.beginPath();
-          ctx.moveTo(ann.path[0].x, ann.path[0].y);
-          for (let i = 1; i < ann.path.length; i++) {
-            ctx.lineTo(ann.path[i].x, ann.path[i].y);
-          }
-          ctx.stroke();
-        } else if (ann.type === 'text') {
-          ctx.font = `${ann.size}px Arial`;
-          ctx.fillText(ann.text, ann.x, ann.y);
-        } else if (ann.type === 'callout') {
-          const r = 14;
-          ctx.beginPath();
-          ctx.arc(ann.x, ann.y, r, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = 'white';
-          ctx.font = 'bold 14px Arial';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(ann.number, ann.x, ann.y);
-          ctx.textAlign = 'left';
-          ctx.textBaseline = 'alphabetic';
-        }
-      }
-    }
-
-    function undoAnnotation() {
-      if (annotations.length > 0) {
-        annotations.pop();
-        redrawAnnotations();
-      }
-    }
-
-    function clearAnnotations() {
-      if (confirm('Clear all annotations?')) {
-        annotations = [];
-        calloutNumber = 1;
-        redrawAnnotations();
-      }
-    }
-
-    function closeAnnotationEditor() {
-      closeModal('annotationModal');
-      annotationImage = null;
-      annotationStepIndex = null;
-    }
-
-    function saveAnnotation() {
-      if (annotationStepIndex === null) return;
-      
-      const dataUrl = annotationCanvas.toDataURL('image/png');
-      editingSteps[annotationStepIndex].image = dataUrl;
-      renderSteps();
-      closeAnnotationEditor();
-      showToast('Annotation saved!', 'success');
-    }
-
-    // =============================================
-    // TRANSLATION
-    // =============================================
-    let translateDirection = 'en-es';
-    let translateContext = 'view'; // 'view' or 'edit'
-    let currentViewLang = 'en';
-    let translationCache = {}; // Cache translations to avoid re-fetching
-
-    function setTranslateDir(dir) {
-      translateDirection = dir;
-      document.getElementById('btnEnEs').classList.toggle('active', dir === 'en-es');
-      document.getElementById('btnEsEn').classList.toggle('active', dir === 'es-en');
-    }
-
-    async function setViewLanguage(lang) {
-      if (lang === currentViewLang) return;
-      
-      const sop = sops.find(s => s.id === currentSopId);
-      if (!sop) return;
-      
-      // Update toggle buttons
-      document.getElementById('langBtnEn').classList.toggle('active', lang === 'en');
-      document.getElementById('langBtnEs').classList.toggle('active', lang === 'es');
-      document.getElementById('langBtnEn').classList.add('loading');
-      document.getElementById('langBtnEs').classList.add('loading');
-      
-      currentViewLang = lang;
-      
-      if (lang === 'en') {
-        // Show original English
-        updateViewModalContent(sop);
-      } else {
-        // Translate to Spanish
-        const translatedSOP = await getTranslatedSOP(sop, 'en', 'es');
-        updateViewModalContent(translatedSOP, true);
-      }
-      
-      document.getElementById('langBtnEn').classList.remove('loading');
-      document.getElementById('langBtnEs').classList.remove('loading');
-    }
-
-    async function getTranslatedSOP(sop, fromLang, toLang) {
-      const cacheKey = `${sop.id}-${toLang}`;
-      
-      // Return cached version if available
-      if (translationCache[cacheKey]) {
-        return translationCache[cacheKey];
-      }
-      
-      // Create translated copy
-      const translated = JSON.parse(JSON.stringify(sop));
-      
-      // Translate title
-      if (sop.title) {
-        translated.title = await translateText(sop.title, fromLang, toLang);
-      }
-      
-      // Translate description
-      if (sop.description) {
-        translated.description = await translateText(sop.description, fromLang, toLang);
-      }
-      
-      // Translate steps
-      if (sop.steps) {
-        for (let i = 0; i < translated.steps.length; i++) {
-          if (translated.steps[i].title) {
-            translated.steps[i].title = await translateText(sop.steps[i].title, fromLang, toLang);
-          }
-          if (translated.steps[i].description) {
-            translated.steps[i].description = await translateText(sop.steps[i].description, fromLang, toLang);
-          }
-        }
-      }
-      
-      // Cache it
-      translationCache[cacheKey] = translated;
-      return translated;
-    }
-
-    function updateViewModalContent(sop, isTranslated = false) {
-      const baseUrl = 'https://rogueff.github.io/rogue-origin-apps/sop-manager.html';
-      const qrUrl = baseUrl + '?view=' + sop.id;
-      
-      const body = document.getElementById('viewModalBody');
-      body.innerHTML = `
-        <div class="view-sop-header">
-          <div>
-            <div class="view-sop-title">${escapeHtml(sop.title)}${isTranslated ? ' <span style="color: var(--green); font-size: 14px;">(ES)</span>' : ''}</div>
-            <div class="view-sop-meta">
-              <div class="view-sop-meta-item">
-                <i class="ph-duotone ph-folder"></i>
-                ${sop.dept}
-              </div>
-              <div class="view-sop-meta-item">
-                <i class="ph-duotone ph-hash"></i>
-                ${sop.docNum}
-              </div>
-              <div class="view-sop-meta-item">
-                <i class="ph-duotone ph-git-branch"></i>
-                Rev ${sop.revision}
-              </div>
-            </div>
-          </div>
-          <div class="view-sop-qr" id="viewQrCode"></div>
-        </div>
-        ${sop.description ? `<div class="view-sop-desc">${escapeHtml(sop.description)}</div>` : ''}
-        <div class="view-sop-steps">
-          <h3>${isTranslated ? 'Pasos del Procedimiento' : 'Procedure Steps'}</h3>
-          ${sop.steps.map((step, i) => `
-            <div class="view-step">
-              <div class="view-step-num">${i + 1}</div>
-              <div class="view-step-content">
-                <div class="view-step-title">
-                  ${step.safety ? '<i class="ph-duotone ph-warning" style="color: #e53935;"></i>' : ''}
-                  ${step.quality ? '<i class="ph-duotone ph-seal-check" style="color: var(--green);"></i>' : ''}
-                  ${escapeHtml(step.title) || (isTranslated ? 'Paso' : 'Step') + ' ' + (i + 1)}
-                </div>
-                ${step.description ? `<div class="view-step-desc">${escapeHtml(step.description)}</div>` : ''}
-                ${step.image ? `<img src="${step.image}" class="view-step-img" alt="Step image">` : ''}
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      `;
-      
-      // Generate QR code
-      setTimeout(() => {
-        const container = document.getElementById('viewQrCode');
-        if (container) {
-          const img = document.createElement('img');
-          img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=84x84&data=' + encodeURIComponent(qrUrl);
-          img.width = 84;
-          img.height = 84;
-          container.innerHTML = '';
-          container.appendChild(img);
-        }
-      }, 100);
-    }
-
-    function openTranslateModal(context = 'view') {
-      translateContext = context;
-      openModal('translateModal');
-    }
-
-    async function translateText(text, fromLang, toLang) {
-      if (!text || text.trim() === '') return text;
-      
-      try {
-        // Using MyMemory Translation API (free, no key required)
-        const langPair = `${fromLang}|${toLang}`;
-        const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${langPair}`;
-        
-        const response = await fetch(url);
-        const data = await response.json();
-        
-        if (data.responseStatus === 200 && data.responseData) {
-          return data.responseData.translatedText;
-        }
-        return text;
-      } catch (err) {
-        console.error('Translation error:', err);
-        return text;
-      }
-    }
-
-    async function translateSOP() {
-      const sop = sops.find(s => s.id === currentSopId);
-      if (!sop) return;
-      
-      const translateTitle = document.getElementById('translateTitle').checked;
-      const translateDesc = document.getElementById('translateDesc').checked;
-      const translateSteps = document.getElementById('translateSteps').checked;
-      
-      const fromLang = translateDirection === 'en-es' ? 'en' : 'es';
-      const toLang = translateDirection === 'en-es' ? 'es' : 'en';
-      const langSuffix = toLang === 'es' ? ' (ES)' : ' (EN)';
-      
-      // Disable button and show progress
-      const btn = document.getElementById('translateBtn');
-      const originalText = btn.innerHTML;
-      btn.disabled = true;
-      btn.innerHTML = '<i class="ph-duotone ph-spinner ph-spin"></i> Translating...';
-      
-      try {
-        // Create a copy of the SOP
-        const translatedSOP = JSON.parse(JSON.stringify(sop));
-        translatedSOP.id = Date.now();
-        translatedSOP.createdAt = new Date().toISOString().split('T')[0];
-        translatedSOP.updatedAt = translatedSOP.createdAt;
-        
-        // Update doc number
-        translatedSOP.docNum = sop.docNum + '-' + toLang.toUpperCase();
-        
-        // Translate title
-        if (translateTitle && sop.title) {
-          translatedSOP.title = await translateText(sop.title, fromLang, toLang);
-          translatedSOP.title += langSuffix;
-        }
-        
-        // Translate description
-        if (translateDesc && sop.description) {
-          translatedSOP.description = await translateText(sop.description, fromLang, toLang);
-        }
-        
-        // Translate steps
-        if (translateSteps && sop.steps) {
-          for (let i = 0; i < translatedSOP.steps.length; i++) {
-            const step = translatedSOP.steps[i];
-            if (step.title) {
-              step.title = await translateText(step.title, fromLang, toLang);
-            }
-            if (step.description) {
-              step.description = await translateText(step.description, fromLang, toLang);
-            }
-            // Update button progress
-            btn.innerHTML = `<i class="ph-duotone ph-spinner ph-spin"></i> Step ${i + 1}/${translatedSOP.steps.length}...`;
-          }
-        }
-        
-        // Add to SOPs list
-        sops.push(translatedSOP);
-        await saveToStorage();
-        renderSOPs();
-        updateStats();
-        
-        closeModal('translateModal');
-        closeModal('viewModal');
-        closeModal('editModal');
-        
-        showToast(`Translated SOP created: ${translatedSOP.docNum}`, 'success');
-        
-        // Open the new translated SOP
-        setTimeout(() => viewSOP(translatedSOP.id), 300);
-        
-      } catch (err) {
-        console.error('Translation error:', err);
-        showToast('Translation failed. Please try again.', 'error');
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = originalText;
       }
     }
 
