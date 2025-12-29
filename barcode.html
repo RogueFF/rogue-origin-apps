@@ -525,23 +525,44 @@
     var lastPrintedProduct = null;
     var sizeOrder = ['1 OZ', '1/4 LB', '1/2 LB', '1 LB', '10 LB', '5KG', '10KG'];
     
+    // API Configuration for GitHub Pages - will be updated after deployment
+    var API_URL = 'https://script.google.com/macros/s/AKfycbw7E0oVCTPQfEi6tSDpL_FVk2XrgE6jsoM7I8Ei62VUO_L9tU1bKyH7OwkWOxSG5TGYmw/exec';
+    
+    // Detect environment: Apps Script or GitHub Pages
+    var isAppsScript = typeof google !== 'undefined' && google.script && google.script.run;
+    
     window.onload = function() { loadProducts(); };
     
     function loadProducts() {
       document.getElementById('loading').style.display = 'block';
       
-      google.script.run
-        .withSuccessHandler(function(data) {
-          products = data || [];
-          populateCultivarDropdown();
-          document.getElementById('loading').style.display = 'none';
-          showMessage('Loaded ' + products.length + ' products', 'success');
-        })
-        .withFailureHandler(function(error) {
-          document.getElementById('loading').style.display = 'none';
-          showMessage('Error: ' + error.message, 'error');
-        })
-        .getProducts();
+      if (isAppsScript) {
+        google.script.run
+          .withSuccessHandler(function(data) {
+            products = data || [];
+            populateCultivarDropdown();
+            document.getElementById('loading').style.display = 'none';
+            showMessage('Loaded ' + products.length + ' products', 'success');
+          })
+          .withFailureHandler(function(error) {
+            document.getElementById('loading').style.display = 'none';
+            showMessage('Error: ' + error.message, 'error');
+          })
+          .getProducts();
+      } else {
+        fetch(API_URL + '?action=products')
+          .then(function(response) { return response.json(); })
+          .then(function(data) {
+            products = data.products || [];
+            populateCultivarDropdown();
+            document.getElementById('loading').style.display = 'none';
+            showMessage('Loaded ' + products.length + ' products', 'success');
+          })
+          .catch(function(error) {
+            document.getElementById('loading').style.display = 'none';
+            showMessage('Error: ' + error.message, 'error');
+          });
+      }
     }
     
     function parseProductName(name) {
@@ -782,20 +803,46 @@
       var b = document.getElementById('productBarcode').value.trim();
       if (!h || !s || !b) { alert('Please fill all fields'); return; }
       
-      google.script.run.withSuccessHandler(function(r) {
+      function handleResult(r) {
         showMessage(r.message, r.success ? 'success' : 'error');
         if (r.success) { loadProducts(); closeModal(); }
-      }).addProduct(h, s, b);
+      }
+      
+      if (isAppsScript) {
+        google.script.run.withSuccessHandler(handleResult).addProduct(h, s, b);
+      } else {
+        fetch(API_URL + '?action=add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ header: h, sku: s, barcode: b })
+        })
+          .then(function(response) { return response.json(); })
+          .then(handleResult)
+          .catch(function(e) { showMessage('Error: ' + e.message, 'error'); });
+      }
     }
     
     function importCSV() {
       var csv = document.getElementById('csvText').value.trim();
       if (!csv) { alert('Paste CSV data'); return; }
       
-      google.script.run.withSuccessHandler(function(r) {
+      function handleResult(r) {
         showMessage(r.message, r.success ? 'success' : 'error');
         if (r.success) { loadProducts(); closeImportModal(); }
-      }).importCSV(csv);
+      }
+      
+      if (isAppsScript) {
+        google.script.run.withSuccessHandler(handleResult).importCSV(csv);
+      } else {
+        fetch(API_URL + '?action=import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ csv: csv })
+        })
+          .then(function(response) { return response.json(); })
+          .then(handleResult)
+          .catch(function(e) { showMessage('Error: ' + e.message, 'error'); });
+      }
     }
     
     function exportToCSV() {
