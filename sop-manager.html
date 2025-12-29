@@ -632,7 +632,12 @@
 
     /* QR Modal */
     .qr-modal-content { text-align: center; padding: 20px; }
-    .qr-canvas { margin: 20px auto; }
+    .qr-modal-content canvas { 
+      border: 1px solid var(--border); 
+      border-radius: 8px;
+      margin: 0 auto;
+      display: block;
+    }
     .qr-url { 
       background: var(--bg); 
       padding: 12px; 
@@ -655,8 +660,17 @@
     .view-sop-title { font-size: 24px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
     .view-sop-meta { display: flex; gap: 16px; flex-wrap: wrap; }
     .view-sop-meta-item { font-size: 13px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
-    .view-sop-qr { width: 100px; height: 100px; background: #fff; border-radius: 8px; padding: 8px; }
-    .view-sop-qr canvas { width: 100% !important; height: 100% !important; }
+    .view-sop-qr { 
+      width: 100px; 
+      height: 100px; 
+      background: #fff; 
+      border-radius: 8px; 
+      padding: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .view-sop-qr canvas { width: 84px !important; height: 84px !important; }
     
     .view-step { 
       display: flex; 
@@ -1032,7 +1046,7 @@
       </div>
       <div class="modal-body">
         <div class="qr-modal-content">
-          <img id="qrImage" width="200" height="200" style="border: 1px solid var(--border); border-radius: 8px;">
+          <canvas id="qrCanvas"></canvas>
           <p style="margin-top: 16px; color: var(--text-muted); font-size: 13px;">Scan to view this SOP on any device</p>
           <div class="qr-url" id="qrUrl"></div>
         </div>
@@ -1535,7 +1549,7 @@
       
       currentSopId = id;
       
-      // Generate QR
+      // Generate QR URL
       const qrUrl = window.location.href.split('?')[0] + '?view=' + id;
       
       const body = document.getElementById('viewModalBody');
@@ -1586,16 +1600,18 @@
         `).join('')}
       `;
       
-      // Generate QR code using Google Charts
+      // Generate QR code using qrcode.js
       setTimeout(() => {
         const container = document.getElementById('viewQrCode');
-        if (container) {
-          const img = document.createElement('img');
-          img.src = 'https://chart.googleapis.com/chart?cht=qr&chs=84x84&chl=' + encodeURIComponent(qrUrl);
-          img.width = 84;
-          img.height = 84;
+        if (container && typeof QRCode !== 'undefined') {
           container.innerHTML = '';
-          container.appendChild(img);
+          QRCode.toCanvas(container, qrUrl, { 
+            width: 84,
+            margin: 1,
+            color: { dark: '#2d3a2e', light: '#ffffff' }
+          }, function(error) {
+            if (error) console.error('QR Error:', error);
+          });
         }
       }, 100);
       
@@ -1607,7 +1623,7 @@
       editSOP(currentSopId);
     }
 
-    // QR Code - uses Google Charts API
+    // QR Code - uses qrcode.js library
     function showQR(id) {
       const sop = sops.find(s => s.id === id);
       if (!sop) return;
@@ -1616,16 +1632,27 @@
       const url = window.location.href.split('?')[0] + '?view=' + id;
       
       document.getElementById('qrUrl').textContent = url;
-      document.getElementById('qrImage').src = 'https://chart.googleapis.com/chart?cht=qr&chs=200x200&chl=' + encodeURIComponent(url);
+      
+      // Use qrcode.js library to render to canvas
+      const canvas = document.getElementById('qrCanvas');
+      if (typeof QRCode !== 'undefined') {
+        QRCode.toCanvas(canvas, url, { 
+          width: 200,
+          margin: 2,
+          color: { dark: '#2d3a2e', light: '#ffffff' }
+        }, function(error) {
+          if (error) console.error('QR Error:', error);
+        });
+      }
       
       openModal('qrModal');
     }
 
     function downloadQR() {
-      const img = document.getElementById('qrImage');
+      const canvas = document.getElementById('qrCanvas');
       const link = document.createElement('a');
       link.download = 'sop-qr-' + currentSopId + '.png';
-      link.href = img.src;
+      link.href = canvas.toDataURL('image/png');
       link.click();
     }
 
