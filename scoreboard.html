@@ -228,6 +228,169 @@
     body.ahead .status-badge { animation: pulse 2s ease-in-out infinite; }
     body.behind .status-badge { animation: pulse 1.5s ease-in-out infinite; }
     .timer-display.overtime .timer-ring-progress { animation: pulse 1s ease-in-out infinite; }
+    
+    /* ============================================
+       RESPONSIVE STYLES
+       ============================================ */
+    
+    /* Large screens (< 1400px) - Slightly reduce sizes */
+    @media (max-width: 1400px) {
+      .timer-panel { width: 340px; min-width: 340px; padding: 20px; }
+      .time-display { right: 380px; }
+      .help-btn { right: 380px; }
+      .actual-lbs { font-size: 60px; }
+      .hour-card { padding: 14px 30px; min-width: 280px; }
+      .daily-progress { min-width: 450px; padding: 14px 30px; }
+      .daily-actual { font-size: 42px; }
+      .strain-name { font-size: 24px; max-width: 300px; }
+      .time-display .time { font-size: 36px; }
+      .chart-container { max-width: 700px; }
+    }
+    
+    /* Medium screens (< 1200px) - More compact */
+    @media (max-width: 1200px) {
+      .timer-panel { width: 300px; min-width: 300px; padding: 15px; }
+      .time-display { right: 340px; }
+      .help-btn { right: 340px; }
+      .main-panel { padding: 15px 20px; }
+      .scoreboard { gap: 10px; }
+      .actual-lbs { font-size: 52px; }
+      .hour-card.current-hour .actual-lbs { font-size: 48px; }
+      .separator { font-size: 32px; }
+      .target-lbs { font-size: 32px; }
+      .hour-card { padding: 12px 24px; min-width: 250px; }
+      .daily-progress { min-width: 400px; padding: 12px 24px; }
+      .daily-actual { font-size: 36px; }
+      .daily-target { font-size: 26px; }
+      .projection-value { font-size: 24px; }
+      .timer-display { width: 180px; height: 180px; }
+      .timer-value { font-size: 40px; }
+      .strain-name { font-size: 22px; max-width: 250px; }
+      .time-display .time { font-size: 32px; }
+      .info-section { font-size: 16px; padding: 4px 10px; }
+      .stat-group .value { font-size: 18px; }
+      .chart-container { max-width: 600px; }
+      .chart-wrapper { height: 100px; }
+    }
+    
+    /* Tablets / Small laptops (< 1024px) - Stack layout */
+    @media (max-width: 1024px) {
+      html, body { overflow: auto; height: auto; min-height: 100vh; }
+      body { flex-direction: column; }
+      .main-panel { height: auto; min-height: auto; padding: 80px 20px 20px; order: 1; }
+      .timer-panel { width: 100%; min-width: 100%; height: auto; border-left: none; border-top: 2px solid rgba(228,170,79,0.2); padding: 20px; order: 2; flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 20px; }
+      .time-display { right: 20px; top: 15px; }
+      .help-btn { right: 20px; bottom: auto; top: 70px; }
+      .strain-display { top: 15px; }
+      .strain-name { font-size: 20px; max-width: 200px; }
+      .time-display .time { font-size: 28px; }
+      .timer-header { display: none; }
+      .timer-display { width: 160px; height: 160px; margin-bottom: 0; }
+      .timer-value { font-size: 36px; }
+      .timer-target { margin-bottom: 0; }
+      .manual-btn { width: auto; padding: 14px 30px; margin-bottom: 0; }
+      .timer-stats { width: auto; flex-direction: row; gap: 10px; }
+      .timer-stat { padding: 8px 12px; }
+      .hour-cards { gap: 15px; }
+      .hour-card { min-width: 220px; padding: 12px 20px; }
+      .actual-lbs { font-size: 48px; }
+      .daily-progress { min-width: 350px; }
+      .chart-container { max-width: 500px; }
+    }
+    
+    /* Small tablets (< 768px) */
+    @media (max-width: 768px) {
+      .main-panel { padding: 70px 15px 15px; }
+      .scoreboard { gap: 8px; }
+      .strain-display { left: 15px; }
+      .strain-name { font-size: 16px; max-width: 150px; }
+      .strain-label { font-size: 10px; }
+      .time-display { right: 15px; }
+      .time-display .time { font-size: 24px; }
+      .time-display .date { font-size: 12px; }
+      .hour-cards { gap: 10px; }
+      .hour-card { min-width: 180px; padding: 10px 16px; border-radius: 14px; }
+      .hour-card-header { font-size: 11px; letter-spacing: 1px; }
+      .hour-card-timeslot { font-size: 12px; }
+      .actual-lbs { font-size: 40px; }
+      .hour-card.current-hour .actual-lbs { font-size: 36px; }
+      .separator { font-size: 26px; }
+      .target-lbs { font-size: 26px; }
+      .lbs-unit { font-size: 12px; }
+      .percentage-value { font-size: 28px; }
+      .daily-progress { min-width: auto; width: 100%; max-width: 350px; padding: 12px 16px; }
+      .daily-header { font-size: 11px; }
+      .daily-actual { font-size: 32px; }
+      .daily-target { font-size: 22px; }
+      .daily-delta { font-size: 16px; padding: 4px 10px; }
+      .projection-value { font-size: 22px; }
+      .projection-goal { font-size: 14px; }
+      .projection-delta { font-size: 14px; }
+      .comparisons { gap: 8px; }
+      .comparison-pill { padding: 6px 10px; font-size: 13px; }
+      .info-bar { padding: 6px 10px; gap: 4px; }
+      .info-section { font-size: 14px; padding: 4px 8px; gap: 4px; }
+      .info-icon { font-size: 18px; }
+      .info-divider { height: 20px; }
+      .stat-group .label { font-size: 9px; }
+      .stat-group .value { font-size: 16px; }
+      .timer-panel { padding: 15px; gap: 15px; }
+      .timer-display { width: 140px; height: 140px; }
+      .timer-value { font-size: 32px; }
+      .timer-target { font-size: 12px; }
+      .manual-btn { padding: 12px 24px; font-size: 16px; }
+      .timer-stats { gap: 8px; }
+      .timer-stat { padding: 6px 10px; }
+      .timer-stat-label { font-size: 11px; }
+      .timer-stat-value { font-size: 14px; }
+      .chart-container { max-width: 100%; padding: 10px 14px; }
+      .chart-header { font-size: 10px; }
+      .chart-wrapper { height: 80px; }
+      .lang-toggle { left: 15px; bottom: 15px; }
+      .lang-btn { padding: 4px 10px; font-size: 12px; }
+      .help-btn { width: 36px; height: 36px; font-size: 18px; top: 60px; }
+    }
+    
+    /* Mobile phones (< 480px) */
+    @media (max-width: 480px) {
+      .main-panel { padding: 60px 10px 10px; }
+      .scoreboard { gap: 6px; }
+      .strain-display { left: 10px; top: 10px; }
+      .strain-name { font-size: 14px; max-width: 120px; }
+      .time-display { right: 10px; top: 10px; }
+      .time-display .time { font-size: 20px; }
+      .hour-cards { flex-direction: column; align-items: center; gap: 8px; }
+      .hour-card { width: 100%; max-width: 280px; min-width: auto; padding: 10px 14px; }
+      .actual-lbs { font-size: 36px; }
+      .hour-card.current-hour .actual-lbs { font-size: 32px; }
+      .separator { font-size: 22px; }
+      .target-lbs { font-size: 22px; }
+      .percentage-value { font-size: 24px; }
+      .daily-progress { padding: 10px 14px; }
+      .daily-actual { font-size: 28px; }
+      .daily-target { font-size: 20px; }
+      .daily-delta { font-size: 14px; margin-left: 8px; }
+      .progress-hours { font-size: 12px; min-width: 50px; }
+      .daily-projection { gap: 6px; }
+      .projection-label { font-size: 11px; }
+      .projection-value { font-size: 20px; }
+      .comparisons { flex-direction: column; align-items: center; }
+      .info-bar { flex-direction: column; gap: 6px; padding: 8px; }
+      .info-divider { width: 80%; height: 1px; }
+      .info-section { width: 100%; justify-content: center; }
+      .timer-panel { flex-direction: column; align-items: center; padding: 15px 10px; }
+      .timer-display { width: 120px; height: 120px; }
+      .timer-value { font-size: 28px; }
+      .timer-stats { flex-direction: column; width: 100%; max-width: 280px; }
+      .manual-btn { width: 100%; max-width: 280px; }
+      .chart-container { display: none; } /* Hide chart on mobile */
+      .help-btn { top: 50px; right: 10px; width: 32px; height: 32px; font-size: 16px; }
+      .lang-toggle { left: 10px; bottom: 10px; }
+      .lang-btn { padding: 3px 8px; font-size: 11px; }
+      .help-content { padding: 20px; }
+      .help-grid { grid-template-columns: 1fr; }
+      .help-colors { flex-direction: column; gap: 8px; }
+    }
   </style>
 </head>
 <body class="idle">
@@ -487,7 +650,7 @@
     
     function toggleHelp(){document.getElementById('helpModal').classList.toggle('active');document.getElementById('helpTitle').textContent=t[currentLang].helpTitle;document.getElementById('helpGreen').textContent=t[currentLang].helpGreen;document.getElementById('helpYellow').textContent=t[currentLang].helpYellow;document.getElementById('helpRed').textContent=t[currentLang].helpRed;}
     
-    // API Configuration for GitHub Pages - UPDATE THIS AFTER DEPLOYING Scoreboard-API.gs
+    // API Configuration for GitHub Pages
     var API_URL = 'https://script.google.com/macros/s/AKfycbxDAHSFl9cedGS49L3Lf5ztqy-SSToYigyA30ZtsdpmWNAR9H61X_Mm48JOOTGqqr-Z/exec';
     
     // Detect environment: Apps Script (google.script.run available) or GitHub Pages (use fetch)
