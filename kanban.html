@@ -465,6 +465,12 @@ var previewSide = 'front';
 var previewColor = 'green';
 var currentLang = 'en';
 
+// API Configuration for GitHub Pages - Deploy Kanban-API.gs and paste URL here
+var API_URL = 'https://script.google.com/macros/s/AKfycbzVxbQLZVr21vnINQi9b8LphvLnJNQW76Fmd1aDd6dgDvZEq-GiB3aVXcxP-e6rat_X/exec';
+
+// Detect environment: Apps Script (google.script.run available) or GitHub Pages (use fetch)
+var isAppsScript = typeof google !== 'undefined' && google.script && google.script.run;
+
 // Custom options storage
 var defaultSuppliers = ['Amazon', 'Walmart', 'Uline'];
 var defaultDeliveryTimes = ['1 Day', '3 Days', '5 Days', '1 Week', '2 Weeks'];
@@ -726,7 +732,15 @@ function load(preserveFilters) {
     savedSupplierFilter = '';
   }
   show('loading'); hide('empty'); hide('gridView'); hide('listView');
-  google.script.run.withSuccessHandler(function(r) { onLoad(r, preserveFilters); }).withFailureHandler(onErr).getCards();
+  
+  if (isAppsScript) {
+    google.script.run.withSuccessHandler(function(r) { onLoad(r, preserveFilters); }).withFailureHandler(onErr).getCards();
+  } else {
+    fetch(API_URL + '?action=cards')
+      .then(function(response) { return response.json(); })
+      .then(function(r) { onLoad(r, preserveFilters); })
+      .catch(function(e) { onErr(e.message); });
+  }
 }
 
 function onLoad(r, preserveFilters) {
@@ -942,10 +956,23 @@ function saveCard() {
   
   closeEdit();
   show('loading');
-  if (data.id) {
-    google.script.run.withSuccessHandler(onSave).withFailureHandler(onErr).updateCard(data);
+  
+  if (isAppsScript) {
+    if (data.id) {
+      google.script.run.withSuccessHandler(onSave).withFailureHandler(onErr).updateCard(data);
+    } else {
+      google.script.run.withSuccessHandler(onSave).withFailureHandler(onErr).addCard(data);
+    }
   } else {
-    google.script.run.withSuccessHandler(onSave).withFailureHandler(onErr).addCard(data);
+    var action = data.id ? 'update' : 'add';
+    fetch(API_URL + '?action=' + action, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    })
+      .then(function(response) { return response.json(); })
+      .then(onSave)
+      .catch(function(e) { onErr(e.message); });
   }
 }
 
@@ -967,7 +994,19 @@ function del(id) {
   savedSearchQuery = document.getElementById('search').value;
   savedSupplierFilter = document.getElementById('supplierFilter').value;
   show('loading');
-  google.script.run.withSuccessHandler(onSave).withFailureHandler(onErr).deleteCard(id);
+  
+  if (isAppsScript) {
+    google.script.run.withSuccessHandler(onSave).withFailureHandler(onErr).deleteCard(id);
+  } else {
+    fetch(API_URL + '?action=delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id })
+    })
+      .then(function(response) { return response.json(); })
+      .then(onSave)
+      .catch(function(e) { onErr(e.message); });
+  }
 }
 
 function preview(id) {
@@ -989,30 +1028,43 @@ function autoFillFromUrl() {
   if (!url) { toast('Please enter a URL first', 'err'); return; }
   toast('Fetching product info...', 'ok');
   
-  google.script.run
-    .withSuccessHandler(function(result) {
-      if (result.success) {
-        if (result.title) document.getElementById('editItem').value = result.title;
-        if (result.price) document.getElementById('editPrice').value = result.price;
-        if (result.image) {
-          document.getElementById('editPic').value = result.image;
-          updateImagePreview(result.image);
-        }
-        if (result.supplier) document.getElementById('editSupplier').value = result.supplier;
-        
-        var found = [];
-        if (result.title) found.push('title');
-        if (result.price) found.push('price');
-        if (result.image) found.push('image');
-        
-        if (found.length > 0) toast('Found: ' + found.join(', '), 'ok');
-        else toast('Could not extract product info', 'err');
-      } else {
-        toast(result.error || 'Failed to fetch URL', 'err');
+  function handleResult(result) {
+    if (result.success) {
+      if (result.title) document.getElementById('editItem').value = result.title;
+      if (result.price) document.getElementById('editPrice').value = result.price;
+      if (result.image) {
+        document.getElementById('editPic').value = result.image;
+        updateImagePreview(result.image);
       }
+      if (result.supplier) document.getElementById('editSupplier').value = result.supplier;
+      
+      var found = [];
+      if (result.title) found.push('title');
+      if (result.price) found.push('price');
+      if (result.image) found.push('image');
+      
+      if (found.length > 0) toast('Found: ' + found.join(', '), 'ok');
+      else toast('Could not extract product info', 'err');
+    } else {
+      toast(result.error || 'Failed to fetch URL', 'err');
+    }
+  }
+  
+  if (isAppsScript) {
+    google.script.run
+      .withSuccessHandler(handleResult)
+      .withFailureHandler(function(err) { toast('Error: ' + err.message, 'err'); })
+      .fetchProductInfo(url);
+  } else {
+    fetch(API_URL + '?action=fetchProduct', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: url })
     })
-    .withFailureHandler(function(err) { toast('Error: ' + err.message, 'err'); })
-    .fetchProductInfo(url);
+      .then(function(response) { return response.json(); })
+      .then(handleResult)
+      .catch(function(e) { toast('Error: ' + e.message, 'err'); });
+  }
 }
 
 function setPreviewSide(s) { previewSide = s; updatePreviewBtns(); renderPreview(); }
