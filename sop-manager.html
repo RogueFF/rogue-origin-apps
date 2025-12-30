@@ -1750,7 +1750,6 @@
       try {
         const response = await fetch(proxyUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             apiKey: apiKey,
             body: {
@@ -1913,7 +1912,6 @@ Original: ${text}`
       try {
         const response = await fetch(proxyUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             apiKey: apiKey,
             body: {
