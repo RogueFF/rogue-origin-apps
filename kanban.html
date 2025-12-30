@@ -1093,12 +1093,13 @@ function cardHtml(c, color, side, size) {
       '</div><img class="kanban-logo" src="' + logoUrl + '"></div>';
   }
   
-  // Shop labels have simplified layout - only header, picture, logo, crumbtrail
+  // Shop labels have simplified layout - header, picture, price, logo, crumbtrail
   if (size === 'shop') {
     return '<div class="kanban ' + color + '"><div class="kanban-border"></div><div class="kanban-inner"></div>' +
       '<div class="kanban-content"><div class="kanban-header"><h3>' + esc(c.item) + '</h3></div>' +
       '<div class="kanban-body" style="justify-content:center;align-items:center">' +
-      '<div class="kanban-right" style="justify-content:center"><div class="kanban-img">' + (c.picture ? '<img src="' + esc(c.picture) + '" onerror="this.outerHTML=\'📷\'">' : '📷') + '</div></div></div>' +
+      '<div class="kanban-right" style="justify-content:center;align-items:center"><div class="kanban-img">' + (c.picture ? '<img src="' + esc(c.picture) + '" onerror="this.outerHTML=\'📷\'">' : '📷') + '</div>' +
+      '<div class="kanban-price">' + esc(c.price || '$0') + '</div></div></div>' +
       '<div class="kanban-loc" style="position:absolute;bottom:20px;right:24px">' + esc(c.crumbtrail) + '</div></div>' +
       '<img class="kanban-logo" src="' + logoUrl + '"></div>';
   }
@@ -1272,7 +1273,7 @@ function getPrintCSS(size) {
       '.kanban-border{border-width:3px}' +
       '.kanban-inner{border-width:2px}';
   } else if (size === 'shop') {
-    // 6" x 3" shop label - simplified with just header, picture, logo, crumbtrail
+    // 6" x 3" shop label - simplified with header, picture, price, logo, crumbtrail
     return base +
       '.page{padding:0.75in 0 0 0}' +
       '.page-inner{display:flex;flex-direction:column;align-items:center;gap:0.25in}' +
@@ -1286,7 +1287,7 @@ function getPrintCSS(size) {
       '.kanban-left{display:none}' +
       '.kanban-right{padding-top:0;justify-content:center;align-items:center}' +
       '.kanban-img{width:140px;height:100px}' +
-      '.kanban-price{display:none}' +
+      '.kanban-price{margin-top:8px;padding:6px 24px;font-size:18px}' +
       '.kanban-logo{bottom:16px;left:16px;width:40px;height:40px}' +
       '.kanban-back h3{font-size:36px;margin-bottom:20px}' +
       '.kanban-qr{width:150px;height:150px}';
