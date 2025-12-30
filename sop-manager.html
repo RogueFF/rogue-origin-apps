@@ -647,7 +647,7 @@
   <div class="modal" id="viewModal"><div class="modal-box wide"><div class="modal-header"><h2><i class="ph-duotone ph-eye"></i> View SOP</h2><div style="display:flex;align-items:center;gap:12px;"><div class="lang-toggle" id="viewLangToggle"><button class="active" onclick="setViewLang('en')">EN</button><button onclick="setViewLang('es')">ES</button></div><button class="modal-close" onclick="closeModal('viewModal')">&times;</button></div></div><div class="modal-body" id="viewModalBody"></div><div class="modal-footer"><button class="header-btn" onclick="closeModal('viewModal')">Close</button><button class="header-btn" onclick="openModal('pdfModal')"><i class="ph-duotone ph-file-pdf"></i> PDF</button><button class="header-btn primary" onclick="editCurrentSOP()"><i class="ph-duotone ph-pencil-simple"></i> Edit</button></div></div></div>
   <div class="modal" id="qrModal"><div class="modal-box small"><div class="modal-header"><h2><i class="ph-duotone ph-qr-code"></i> QR Code</h2><button class="modal-close" onclick="closeModal('qrModal')">&times;</button></div><div class="modal-body"><div class="qr-modal-content"><img id="qrImage" width="200" height="200" style="display:block;margin:0 auto;border-radius:8px;"><p style="margin-top:16px;color:var(--text-muted);font-size:13px;">Scan to view this SOP</p><div class="qr-url" id="qrUrl"></div></div></div><div class="modal-footer"><button class="header-btn" onclick="closeModal('qrModal')">Close</button><button class="header-btn primary" onclick="downloadQR()"><i class="ph-duotone ph-download"></i> Download</button></div></div></div>
   <div class="modal" id="pdfModal"><div class="modal-box small"><div class="modal-header"><h2><i class="ph-duotone ph-file-pdf"></i> Export PDF</h2><button class="modal-close" onclick="closeModal('pdfModal')">&times;</button></div><div class="modal-body"><div class="form-group"><label class="form-label">Layout</label><div class="pdf-layout-options"><label class="pdf-layout-option"><input type="radio" name="pdfLayout" value="text"><div class="pdf-layout-card"><div class="pdf-layout-preview"><div class="line"></div><div class="line"></div><div class="line short"></div></div><span>Text Only</span></div></label><label class="pdf-layout-option"><input type="radio" name="pdfLayout" value="2col" checked><div class="pdf-layout-card"><div class="pdf-layout-preview grid-preview cols-1"><div class="box"></div><div class="box"></div></div><span>2 Per Page</span></div></label><label class="pdf-layout-option"><input type="radio" name="pdfLayout" value="4col"><div class="pdf-layout-card"><div class="pdf-layout-preview grid-preview cols-2"><div class="box"></div><div class="box"></div><div class="box"></div><div class="box"></div></div><span>4 Per Page</span></div></label></div></div><div class="form-group"><label class="form-label">Options</label><div style="display:flex;flex-direction:column;gap:8px;"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="pdfIncludeQR" checked> Include QR Code</label><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="pdfBilingual"> Bilingual (EN + ES)</label></div></div><div class="form-group"><label class="form-label">Language</label><div style="display:flex;gap:8px;"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="pdfLang" value="en" checked> English</label><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="pdfLang" value="es"> Español</label></div></div></div><div class="modal-footer"><button class="header-btn" onclick="closeModal('pdfModal')">Cancel</button><button class="header-btn primary" onclick="generatePDF()" id="generatePdfBtn"><i class="ph-duotone ph-file-pdf"></i> Generate PDF</button></div></div></div>
-  <div class="modal" id="settingsModal"><div class="modal-box small"><div class="modal-header"><h2><i class="ph-duotone ph-gear"></i> Settings</h2><button class="modal-close" onclick="closeModal('settingsModal')">&times;</button></div><div class="modal-body"><div class="settings-section"><div class="settings-section-title"><i class="ph-duotone ph-sparkle"></i> AI Features</div><div class="settings-api-key"><label style="font-size:12px;color:var(--text-muted);margin-bottom:6px;display:block;">Anthropic API Key</label><div style="display:flex;gap:8px;"><input type="password" id="apiKeyInput" class="form-input" placeholder="sk-ant-api03-..." style="flex:1;font-size:12px;" onchange="saveApiKey()"><button class="header-btn" onclick="toggleApiKeyVisibility()" style="padding:8px 12px;"><i class="ph-duotone ph-eye" id="apiKeyEyeIcon"></i></button></div><div class="settings-note" style="margin-top:6px;">Get your key at <a href="https://console.anthropic.com" target="_blank" style="color:var(--gold);">console.anthropic.com</a></div><div id="apiKeyStatus" style="margin-top:8px;font-size:11px;"></div></div></div><div class="settings-section"><div class="settings-section-title"><i class="ph-duotone ph-buildings"></i> Departments</div><div class="settings-list" id="settingsDeptList"></div><div class="settings-add-form"><input type="text" id="newDeptInput" placeholder="New department..." onkeypress="if(event.key==='Enter')addDepartment()"><button class="settings-add-btn" onclick="addDepartment()"><i class="ph-duotone ph-plus"></i></button></div><div class="settings-note">At least one department required</div></div><div class="settings-section"><div class="settings-section-title"><i class="ph-duotone ph-tag"></i> Tags</div><div class="settings-list" id="settingsTagList"></div><div class="settings-add-form"><input type="text" id="newTagInput" placeholder="New tag..." onkeypress="if(event.key==='Enter')addTag()"><div class="tag-color-picker"><div class="tag-color-option gold selected" data-color="gold" onclick="selectTagColor('gold')"></div><div class="tag-color-option green" data-color="green" onclick="selectTagColor('green')"></div><div class="tag-color-option sungrown" data-color="sungrown" onclick="selectTagColor('sungrown')"></div><div class="tag-color-option greenhouse" data-color="greenhouse" onclick="selectTagColor('greenhouse')"></div><div class="tag-color-option indoor" data-color="indoor" onclick="selectTagColor('indoor')"></div><div class="tag-color-option danger" data-color="danger" onclick="selectTagColor('danger')"></div></div><button class="settings-add-btn" onclick="addTag()"><i class="ph-duotone ph-plus"></i></button></div><div class="settings-note">At least one tag required</div></div></div><div class="modal-footer"><button class="header-btn primary" onclick="closeModal('settingsModal')"><i class="ph-duotone ph-check"></i> Done</button></div></div></div>
+  <div class="modal" id="settingsModal"><div class="modal-box small"><div class="modal-header"><h2><i class="ph-duotone ph-gear"></i> Settings</h2><button class="modal-close" onclick="closeModal('settingsModal')">&times;</button></div><div class="modal-body"><div class="settings-section"><div class="settings-section-title"><i class="ph-duotone ph-sparkle"></i> AI Features</div><div class="settings-api-key"><label style="font-size:12px;color:var(--text-muted);margin-bottom:6px;display:block;">Anthropic API Key</label><div style="display:flex;gap:8px;"><input type="password" id="apiKeyInput" class="form-input" placeholder="sk-ant-api03-..." style="flex:1;font-size:12px;" onchange="saveApiKey()"><button class="header-btn" onclick="toggleApiKeyVisibility()" style="padding:8px 12px;"><i class="ph-duotone ph-eye" id="apiKeyEyeIcon"></i></button><button class="header-btn" onclick="testApiConnection()" style="padding:8px 12px;" title="Test Connection"><i class="ph-duotone ph-plugs-connected"></i></button></div><div style="margin-top:10px;"><label style="font-size:12px;color:var(--text-muted);margin-bottom:6px;display:block;">Proxy URL (Cloudflare Worker)</label><input type="text" id="proxyUrlInput" class="form-input" placeholder="https://your-worker.username.workers.dev" style="font-size:12px;" onchange="saveProxyUrl()"></div><div class="settings-note" style="margin-top:8px;padding:10px;background:var(--green-dim);border-radius:6px;border-left:3px solid var(--green);"><i class="ph-duotone ph-check-circle" style="color:var(--green);"></i> <strong>Improve buttons work without API!</strong> Uses smart rules to fix formatting. Add API key + Proxy URL for advanced AI rewriting.</div><div class="settings-note" style="margin-top:6px;">Get API key at <a href="https://console.anthropic.com" target="_blank" style="color:var(--gold);">console.anthropic.com</a></div><div id="apiKeyStatus" style="margin-top:8px;font-size:11px;"></div></div></div><div class="settings-section"><div class="settings-section-title"><i class="ph-duotone ph-buildings"></i> Departments</div><div class="settings-list" id="settingsDeptList"></div><div class="settings-add-form"><input type="text" id="newDeptInput" placeholder="New department..." onkeypress="if(event.key==='Enter')addDepartment()"><button class="settings-add-btn" onclick="addDepartment()"><i class="ph-duotone ph-plus"></i></button></div><div class="settings-note">At least one department required</div></div><div class="settings-section"><div class="settings-section-title"><i class="ph-duotone ph-tag"></i> Tags</div><div class="settings-list" id="settingsTagList"></div><div class="settings-add-form"><input type="text" id="newTagInput" placeholder="New tag..." onkeypress="if(event.key==='Enter')addTag()"><div class="tag-color-picker"><div class="tag-color-option gold selected" data-color="gold" onclick="selectTagColor('gold')"></div><div class="tag-color-option green" data-color="green" onclick="selectTagColor('green')"></div><div class="tag-color-option sungrown" data-color="sungrown" onclick="selectTagColor('sungrown')"></div><div class="tag-color-option greenhouse" data-color="greenhouse" onclick="selectTagColor('greenhouse')"></div><div class="tag-color-option indoor" data-color="indoor" onclick="selectTagColor('indoor')"></div><div class="tag-color-option danger" data-color="danger" onclick="selectTagColor('danger')"></div></div><button class="settings-add-btn" onclick="addTag()"><i class="ph-duotone ph-plus"></i></button></div><div class="settings-note">At least one tag required</div></div></div><div class="modal-footer"><button class="header-btn primary" onclick="closeModal('settingsModal')"><i class="ph-duotone ph-check"></i> Done</button></div></div></div>
   
   <div class="modal" id="requestsModal">
     <div class="modal-box wide">
@@ -1671,26 +1671,31 @@
       const key = document.getElementById('apiKeyInput').value.trim();
       if (key) {
         localStorage.setItem('sopAnthropicApiKey', key);
-        updateApiKeyStatus(true);
         showToast('API key saved!', 'success');
       } else {
         localStorage.removeItem('sopAnthropicApiKey');
-        updateApiKeyStatus(false);
       }
+      updateApiKeyStatus(!!key && !!getProxyUrl());
     }
     
     function loadApiKeyToInput() {
       const key = localStorage.getItem('sopAnthropicApiKey') || '';
+      const proxyUrl = localStorage.getItem('sopProxyUrl') || '';
       document.getElementById('apiKeyInput').value = key;
-      updateApiKeyStatus(!!key);
+      document.getElementById('proxyUrlInput').value = proxyUrl;
+      updateApiKeyStatus(!!key && !!proxyUrl);
     }
     
-    function updateApiKeyStatus(hasKey) {
+    function updateApiKeyStatus(ready) {
       const status = document.getElementById('apiKeyStatus');
-      if (hasKey) {
-        status.innerHTML = '<span style="color:var(--green);"><i class="ph-duotone ph-check-circle"></i> API key configured - AI features enabled</span>';
+      if (ready) {
+        status.innerHTML = '<span style="color:var(--green);"><i class="ph-duotone ph-check-circle"></i> API configured - click test button to verify</span>';
+      } else if (getApiKey() && !getProxyUrl()) {
+        status.innerHTML = '<span style="color:var(--gold);"><i class="ph-duotone ph-info"></i> Add Proxy URL to enable AI</span>';
+      } else if (!getApiKey() && getProxyUrl()) {
+        status.innerHTML = '<span style="color:var(--gold);"><i class="ph-duotone ph-info"></i> Add API Key to enable AI</span>';
       } else {
-        status.innerHTML = '<span style="color:var(--text-light);"><i class="ph-duotone ph-info"></i> Add API key to enable AI features</span>';
+        status.innerHTML = '<span style="color:var(--text-light);"><i class="ph-duotone ph-info"></i> Rule-based improve active. Add API + Proxy for AI.</span>';
       }
     }
     
@@ -1710,17 +1715,188 @@
       return localStorage.getItem('sopAnthropicApiKey') || '';
     }
     
+    function getProxyUrl() {
+      return localStorage.getItem('sopProxyUrl') || '';
+    }
+    
+    function saveProxyUrl() {
+      const url = document.getElementById('proxyUrlInput').value.trim();
+      if (url) {
+        localStorage.setItem('sopProxyUrl', url);
+        showToast('Proxy URL saved!', 'success');
+      } else {
+        localStorage.removeItem('sopProxyUrl');
+      }
+      updateApiKeyStatus(!!getApiKey() && !!url);
+    }
+    
+    async function testApiConnection() {
+      const apiKey = getApiKey();
+      const proxyUrl = getProxyUrl();
+      
+      if (!apiKey) {
+        showToast('Enter API key first', 'error');
+        return;
+      }
+      
+      if (!proxyUrl) {
+        showToast('Enter Proxy URL first', 'error');
+        return;
+      }
+      
+      const statusEl = document.getElementById('apiKeyStatus');
+      statusEl.innerHTML = '<span style="color:var(--gold);"><i class="ph-duotone ph-spinner"></i> Testing connection...</span>';
+      
+      try {
+        const response = await fetch(proxyUrl, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey
+          },
+          body: JSON.stringify({
+            model: 'claude-3-5-sonnet-20241022',
+            max_tokens: 10,
+            messages: [{ role: 'user', content: 'Say "OK"' }]
+          })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.content) {
+            statusEl.innerHTML = '<span style="color:var(--green);"><i class="ph-duotone ph-check-circle"></i> Connection successful! AI features ready.</span>';
+            showToast('API connected!', 'success');
+          } else if (data.error) {
+            statusEl.innerHTML = '<span style="color:var(--danger);"><i class="ph-duotone ph-x-circle"></i> API Error: ' + (data.error.message || data.error) + '</span>';
+          }
+        } else {
+          const err = await response.json().catch(() => ({}));
+          console.error('API test error:', response.status, err);
+          
+          if (response.status === 401) {
+            statusEl.innerHTML = '<span style="color:var(--danger);"><i class="ph-duotone ph-x-circle"></i> Invalid API key</span>';
+          } else {
+            statusEl.innerHTML = '<span style="color:var(--danger);"><i class="ph-duotone ph-x-circle"></i> Error: ' + (err.error?.message || response.status) + '</span>';
+          }
+        }
+      } catch (e) {
+        console.error('Connection test error:', e);
+        statusEl.innerHTML = '<span style="color:var(--danger);"><i class="ph-duotone ph-x-circle"></i> Connection failed - check Proxy URL</span>';
+      }
+    }
+    
     // AI Improve Functions
     async function aiImproveText(text, type) {
       const apiKey = getApiKey();
-      if (!apiKey) {
-        showToast('Add API key in Settings first', 'error');
+      
+      if (!text || text.trim().length < 3) {
+        showToast(t('enterTextFirst'), 'error');
         return null;
       }
       
-      if (!text || text.trim().length < 3) {
-        showToast('Enter some text first', 'error');
-        return null;
+      // Try API first if key exists
+      if (apiKey) {
+        const result = await tryApiImprove(text, type, apiKey);
+        if (result) return result;
+      }
+      
+      // Fallback to rule-based improvement
+      return ruleBasedImprove(text, type);
+    }
+    
+    function ruleBasedImprove(text, type) {
+      let improved = text.trim();
+      
+      // Common abbreviations to expand
+      const abbrevs = {
+        'temp': 'temperature', 'temps': 'temperatures',
+        'min': 'minutes', 'mins': 'minutes', 
+        'sec': 'seconds', 'secs': 'seconds',
+        'hr': 'hour', 'hrs': 'hours',
+        'approx': 'approximately', 'approx.': 'approximately',
+        'eq': 'equipment', 'equip': 'equipment',
+        'maint': 'maintenance', 'mfg': 'manufacturing',
+        'qty': 'quantity', 'amt': 'amount',
+        'req': 'required', 'reqd': 'required',
+        'std': 'standard', 'spec': 'specification',
+        'info': 'information', 'config': 'configuration',
+        'auth': 'authorized', 'cert': 'certified',
+        'dept': 'department', 'mgr': 'manager',
+        'pls': 'please', 'thru': 'through',
+        'w/': 'with', 'w/o': 'without',
+        '&': 'and', 'vs': 'versus'
+      };
+      
+      // Action verbs for step titles
+      const actionVerbs = ['Verify', 'Check', 'Inspect', 'Confirm', 'Ensure', 'Review', 
+        'Prepare', 'Set up', 'Configure', 'Adjust', 'Clean', 'Sanitize', 
+        'Start', 'Activate', 'Power on', 'Initialize', 'Begin',
+        'Stop', 'Shut down', 'Power off', 'Deactivate', 'Complete',
+        'Record', 'Document', 'Log', 'Note', 'Enter',
+        'Apply', 'Install', 'Attach', 'Connect', 'Secure',
+        'Remove', 'Detach', 'Disconnect', 'Release'];
+      
+      // Expand abbreviations (case-insensitive word boundaries)
+      Object.entries(abbrevs).forEach(([abbr, full]) => {
+        const regex = new RegExp('\\b' + abbr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi');
+        improved = improved.replace(regex, full);
+      });
+      
+      // Type-specific improvements
+      if (type === 'title' || type === 'stepTitle') {
+        // Title Case
+        improved = improved.split(' ').map((word, i) => {
+          const lower = word.toLowerCase();
+          // Keep small words lowercase unless first word
+          if (i > 0 && ['a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with'].includes(lower)) {
+            return lower;
+          }
+          return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        }).join(' ');
+        
+        // For step titles, ensure it starts with action verb if it doesn't
+        if (type === 'stepTitle') {
+          const firstWord = improved.split(' ')[0].toLowerCase();
+          const hasActionVerb = actionVerbs.some(v => v.toLowerCase() === firstWord);
+          if (!hasActionVerb && improved.length > 0) {
+            // Try to infer an action verb
+            const lowerText = improved.toLowerCase();
+            if (lowerText.includes('check') || lowerText.includes('verify') || lowerText.includes('inspect')) {
+              improved = 'Verify ' + improved.charAt(0).toLowerCase() + improved.slice(1);
+            } else if (lowerText.includes('clean') || lowerText.includes('sanitize') || lowerText.includes('wash')) {
+              improved = 'Clean ' + improved.charAt(0).toLowerCase() + improved.slice(1);
+            } else if (lowerText.includes('start') || lowerText.includes('begin') || lowerText.includes('power')) {
+              improved = 'Start ' + improved.charAt(0).toLowerCase() + improved.slice(1);
+            }
+          }
+        }
+        
+        // Remove trailing period from titles
+        improved = improved.replace(/\.$/, '');
+        
+      } else if (type === 'description' || type === 'stepDescription') {
+        // Capitalize first letter
+        improved = improved.charAt(0).toUpperCase() + improved.slice(1);
+        
+        // Ensure ends with period
+        if (!/[.!?]$/.test(improved)) {
+          improved += '.';
+        }
+        
+        // Fix double spaces
+        improved = improved.replace(/\s+/g, ' ');
+        
+        // Capitalize after periods
+        improved = improved.replace(/\.\s+([a-z])/g, (m, c) => '. ' + c.toUpperCase());
+      }
+      
+      return improved;
+    }
+    
+    async function tryApiImprove(text, type, apiKey) {
+      const proxyUrl = getProxyUrl();
+      if (!proxyUrl) {
+        return null; // No proxy, fall back to rule-based
       }
       
       const prompts = {
@@ -1739,13 +1915,11 @@ Original: ${text}`
       };
       
       try {
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
+        const response = await fetch(proxyUrl, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-            'anthropic-dangerous-direct-browser-access': 'true'
+            'x-api-key': apiKey
           },
           body: JSON.stringify({
             model: 'claude-3-5-sonnet-20241022',
@@ -1755,23 +1929,15 @@ Original: ${text}`
         });
         
         if (!response.ok) {
-          const err = await response.json();
-          console.error('API error:', err);
-          if (response.status === 401) {
-            showToast('Invalid API key', 'error');
-          } else {
-            showToast('AI request failed', 'error');
-          }
-          return null;
+          console.error('API error:', response.status);
+          return null; // Fall back to rule-based
         }
         
         const data = await response.json();
-        const improved = data.content?.[0]?.text?.trim();
-        return improved || null;
+        return data.content?.[0]?.text?.trim() || null;
       } catch (e) {
-        console.error('AI improve error:', e);
-        showToast('AI service unavailable', 'error');
-        return null;
+        console.error('AI API error:', e);
+        return null; // Fall back to rule-based
       }
     }
     
