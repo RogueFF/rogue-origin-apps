@@ -321,7 +321,7 @@
             <select id="printSize" style="width:100%" onchange="updatePrintCount()">
               <option value="card">Card (6" × 4")</option>
               <option value="tag">Price Tag (4" × 2")</option>
-              <option value="shop">Shop Card (6" × 4")</option>
+              <option value="shop">Shop Label (6" × 3")</option>
               <option value="full">Full Sheet (8.5" × 11")</option>
             </select>
           </div>
@@ -393,7 +393,7 @@
           <select id="previewPrintSize" style="width:100%" onchange="updatePreviewSizeInfo()">
             <option value="card">Card (6" × 4")</option>
             <option value="tag">Price Tag (4" × 2")</option>
-            <option value="shop">Shop Card (6" × 4")</option>
+            <option value="shop">Shop Label (6" × 3")</option>
             <option value="full">Full Sheet (8.5" × 11")</option>
           </select>
           <div id="previewSizeInfo" style="margin-top:6px;padding:8px 10px;background:var(--bg);border-radius:6px;color:var(--text-muted);font-size:11px;border:1px solid var(--border)">2 cards per page (front/back)</div>
@@ -436,7 +436,7 @@
           <ul style="margin:0 0 16px 0;padding-left:20px;color:var(--text-muted)">
             <li id="helpPrint1"><strong>Single card:</strong> Click a card → choose print size → "Print This Card"</li>
             <li id="helpPrint2"><strong>Batch print:</strong> Click "Print Cards" → select items → choose size & colors → Print</li>
-            <li id="helpPrint3"><strong>Print sizes:</strong> Card (6"×4"), Shop Card (6"×4" alternate), or Full Sheet (8.5"×11")</li>
+            <li id="helpPrint3"><strong>Print sizes:</strong> Card (6"×4"), Shop Label (6"×3"), or Full Sheet (8.5"×11")</li>
           </ul>
           
           <h4 style="color:var(--green);margin:0 0 8px 0" id="helpH6"><i class="ph-duotone ph-arrows-clockwise" style="margin-right:6px"></i> Reordering Cards</h4>
@@ -1093,6 +1093,16 @@ function cardHtml(c, color, side, size) {
       '</div><img class="kanban-logo" src="' + logoUrl + '"></div>';
   }
   
+  // Shop labels have simplified layout - only header, picture, logo, crumbtrail
+  if (size === 'shop') {
+    return '<div class="kanban ' + color + '"><div class="kanban-border"></div><div class="kanban-inner"></div>' +
+      '<div class="kanban-content"><div class="kanban-header"><h3>' + esc(c.item) + '</h3></div>' +
+      '<div class="kanban-body" style="justify-content:center;align-items:center">' +
+      '<div class="kanban-right" style="justify-content:center"><div class="kanban-img">' + (c.picture ? '<img src="' + esc(c.picture) + '" onerror="this.outerHTML=\'📷\'">' : '📷') + '</div></div></div>' +
+      '<div class="kanban-loc" style="position:absolute;bottom:20px;right:24px">' + esc(c.crumbtrail) + '</div></div>' +
+      '<img class="kanban-logo" src="' + logoUrl + '"></div>';
+  }
+  
   return '<div class="kanban ' + color + '"><div class="kanban-border"></div><div class="kanban-inner"></div>' +
     '<div class="kanban-content"><div class="kanban-header"><h3>' + esc(c.item) + '</h3></div>' +
     '<div class="kanban-loc">' + esc(c.crumbtrail) + '</div>' +
@@ -1182,7 +1192,7 @@ function updatePrintCount() {
   var sizeInfo = {
     'card': '6"×4" cards, 2 per page',
     'tag': '4"×2" tags, compact layout',
-    'shop': '6"×4" shop cards, bolder text',
+    'shop': '6"×3" shop labels, simplified',
     'full': '7.5"×5" full sheet, 1 per page'
   };
   document.getElementById('printSizeInfo').textContent = sizeInfo[size] || '';
@@ -1193,7 +1203,7 @@ function updatePreviewSizeInfo() {
   var sizeInfo = {
     'card': '6"×4" cards, 2 per page (green + red)',
     'tag': '4"×2" compact tags, 2 per page',
-    'shop': '6"×4" shop cards with bolder text',
+    'shop': '6"×3" shop labels, simplified layout',
     'full': '7.5"×5" full sheet, 1 card per page'
   };
   document.getElementById('previewSizeInfo').textContent = sizeInfo[size] || '';
@@ -1262,27 +1272,24 @@ function getPrintCSS(size) {
       '.kanban-border{border-width:3px}' +
       '.kanban-inner{border-width:2px}';
   } else if (size === 'shop') {
-    // 6" x 4" shop card - larger text, bolder
+    // 6" x 3" shop label - simplified with just header, picture, logo, crumbtrail
     return base +
-      '.page{padding:1.375in 0 0 0}' +
+      '.page{padding:0.75in 0 0 0}' +
       '.page-inner{display:flex;flex-direction:column;align-items:center;gap:0.25in}' +
-      '.kanban{width:6in;height:4in;padding:12px}' +
-      '.kanban-inner{inset:14px}' +
-      '.kanban-content{padding:20px 24px}' +
-      '.kanban-header{padding-bottom:10px;margin-bottom:8px}' +
-      '.kanban-header h3{font-size:30px}' +
-      '.kanban-loc{font-size:20px;margin-bottom:6px}' +
-      '.kanban-body{gap:20px}' +
-      '.kanban-left{padding-top:4px;padding-bottom:45px}' +
-      '.kanban-field{margin-bottom:10px}' +
-      '.kanban-field small{font-size:13px;margin-bottom:2px}' +
-      '.kanban-field span{font-size:26px}' +
-      '.kanban-right{padding-top:4px}' +
-      '.kanban-img{width:180px;height:130px}' +
-      '.kanban-price{margin-top:12px;padding:10px 36px;font-size:26px}' +
-      '.kanban-logo{bottom:22px;left:22px;width:50px;height:50px}' +
-      '.kanban-back h3{font-size:48px;margin-bottom:32px}' +
-      '.kanban-qr{width:220px;height:220px}';
+      '.kanban{width:6in;height:3in;padding:10px}' +
+      '.kanban-inner{inset:12px}' +
+      '.kanban-content{padding:14px 18px;position:relative}' +
+      '.kanban-header{padding-bottom:6px;margin-bottom:0}' +
+      '.kanban-header h3{font-size:28px}' +
+      '.kanban-loc{font-size:14px;margin-bottom:0;position:absolute;bottom:16px;right:20px}' +
+      '.kanban-body{flex:1;justify-content:center;align-items:center}' +
+      '.kanban-left{display:none}' +
+      '.kanban-right{padding-top:0;justify-content:center;align-items:center}' +
+      '.kanban-img{width:140px;height:100px}' +
+      '.kanban-price{display:none}' +
+      '.kanban-logo{bottom:16px;left:16px;width:40px;height:40px}' +
+      '.kanban-back h3{font-size:36px;margin-bottom:20px}' +
+      '.kanban-qr{width:150px;height:150px}';
   } else if (size === 'full') {
     // 8.5" x 11" full sheet - one card per page, maximum size
     return base +
