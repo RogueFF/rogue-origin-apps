@@ -297,14 +297,21 @@
     .manual-btn.btn-neutral { background: linear-gradient(135deg, #64748b 0%, #475569 100%); box-shadow: 0 4px 12px rgba(100, 116, 139, 0.4); }
     @keyframes btnPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.02); } }
     
-    /* Cycle History */
+    /* Cycle History Container */
     .cycle-history { width: 100%; max-width: 400px; margin-top: 10px; }
     .cycle-history-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
     .cycle-history-title { font-size: 12px; color: var(--gold); text-transform: uppercase; letter-spacing: 1px; }
+    .cycle-history-nav { display: flex; gap: 4px; align-items: center; }
+    .cycle-nav-btn { background: none; border: none; color: rgba(255,255,255,0.5); font-size: 16px; cursor: pointer; padding: 4px 8px; border-radius: 4px; line-height: 1; }
+    .cycle-nav-btn:hover { background: rgba(255,255,255,0.1); color: var(--gold); }
+    .cycle-mode-label { font-size: 10px; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; }
     .cycle-history-toggle { background: none; border: none; color: rgba(255,255,255,0.5); font-size: 12px; cursor: pointer; padding: 4px 8px; border-radius: 4px; }
     .cycle-history-toggle:hover { background: rgba(255,255,255,0.1); color: var(--gold); }
+    .cycle-content { min-height: 120px; }
+    .cycle-content.collapsed { max-height: 0; overflow: hidden; min-height: 0; }
+    
+    /* Mode 1: List (original) */
     .cycle-list { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; }
-    .cycle-list.collapsed { max-height: 0; overflow: hidden; }
     .cycle-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: rgba(0,0,0,0.3); border-radius: 8px; border-left: 3px solid; font-size: 13px; }
     .cycle-item.early { border-left-color: #22c55e; }
     .cycle-item.on-time { border-left-color: #facc15; }
@@ -315,9 +322,78 @@
     .cycle-item-delta.early { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
     .cycle-item-delta.on-time { background: rgba(250, 204, 21, 0.2); color: #fde047; }
     .cycle-item-delta.overtime { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+    
+    /* Mode 2: Donut Summary */
+    .cycle-donut { display: flex; align-items: center; gap: 16px; }
+    .cycle-donut-ring { position: relative; width: 90px; height: 90px; flex-shrink: 0; }
+    .cycle-donut-ring canvas { width: 100%; height: 100%; }
+    .cycle-donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .cycle-donut-count { font-size: 28px; font-weight: 900; color: #fff; line-height: 1; }
+    .cycle-donut-label { font-size: 10px; color: rgba(255,255,255,0.5); text-transform: uppercase; }
+    .cycle-donut-stats { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+    .cycle-donut-stat { display: flex; justify-content: space-between; align-items: center; }
+    .cycle-donut-stat-label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: rgba(255,255,255,0.7); }
+    .cycle-donut-stat-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .cycle-donut-stat-value { font-size: 16px; font-weight: 700; }
+    .cycle-donut-latest { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); }
+    .cycle-donut-latest-label { font-size: 9px; color: rgba(255,255,255,0.4); text-transform: uppercase; margin-bottom: 6px; }
+    .cycle-donut-latest-items { display: flex; gap: 8px; }
+    .cycle-donut-latest-item { flex: 1; padding: 8px; border-radius: 8px; text-align: center; }
+    .cycle-donut-latest-time { font-size: 15px; font-weight: 700; }
+    .cycle-donut-latest-num { font-size: 10px; color: rgba(255,255,255,0.5); }
+    
+    /* Mode 3: Sparkline Bars */
+    .cycle-sparkline { display: flex; flex-direction: column; }
+    .cycle-sparkline-bars { position: relative; height: 80px; display: flex; align-items: flex-end; gap: 2px; padding-bottom: 2px; }
+    .cycle-sparkline-bar { flex: 1; min-width: 6px; max-width: 20px; border-radius: 3px 3px 0 0; transition: opacity 0.2s; cursor: default; position: relative; }
+    .cycle-sparkline-bar:hover { opacity: 0.8; }
+    .cycle-sparkline-bar.early { background: #22c55e; }
+    .cycle-sparkline-bar.on-time { background: #facc15; }
+    .cycle-sparkline-bar.overtime { background: #ef4444; }
+    .cycle-sparkline-target { position: absolute; left: 0; right: 0; border-top: 2px dashed rgba(255,255,255,0.4); pointer-events: none; }
+    .cycle-sparkline-labels { display: flex; justify-content: space-between; font-size: 10px; color: rgba(255,255,255,0.4); margin-top: 4px; }
+    .cycle-sparkline-tooltip { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.9); padding: 4px 8px; border-radius: 4px; font-size: 11px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 0.2s; z-index: 10; }
+    .cycle-sparkline-bar:hover .cycle-sparkline-tooltip { opacity: 1; }
+    
+    /* Mode 4: Color Chips Grid */
+    .cycle-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .cycle-chip { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: rgba(0,0,0,0.6); cursor: default; transition: transform 0.2s; position: relative; }
+    .cycle-chip:hover { transform: scale(1.1); }
+    .cycle-chip.early { background: #22c55e; }
+    .cycle-chip.on-time { background: #facc15; }
+    .cycle-chip.overtime { background: #ef4444; }
+    .cycle-chip-tooltip { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.9); padding: 4px 8px; border-radius: 4px; font-size: 11px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 0.2s; color: #fff; margin-bottom: 4px; z-index: 10; }
+    .cycle-chip:hover .cycle-chip-tooltip { opacity: 1; }
+    .cycle-chips-legend { display: flex; gap: 12px; margin-top: 10px; font-size: 11px; }
+    .cycle-chips-legend-item { display: flex; align-items: center; gap: 4px; color: rgba(255,255,255,0.6); }
+    .cycle-chips-legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+    
+    /* Mode 5: Horizontal Scroll Cards */
+    .cycle-cards { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x mandatory; }
+    .cycle-cards::-webkit-scrollbar { height: 4px; }
+    .cycle-cards::-webkit-scrollbar-track { background: rgba(255,255,255,0.1); border-radius: 2px; }
+    .cycle-cards::-webkit-scrollbar-thumb { background: var(--gold); border-radius: 2px; }
+    .cycle-card { flex-shrink: 0; width: 70px; padding: 10px 8px; border-radius: 10px; text-align: center; scroll-snap-align: start; border-left: 3px solid; }
+    .cycle-card.early { background: rgba(34, 197, 94, 0.15); border-left-color: #22c55e; }
+    .cycle-card.on-time { background: rgba(250, 204, 21, 0.15); border-left-color: #facc15; }
+    .cycle-card.overtime { background: rgba(239, 68, 68, 0.15); border-left-color: #ef4444; }
+    .cycle-card-num { font-size: 10px; color: rgba(255,255,255,0.5); }
+    .cycle-card-time { font-size: 15px; font-weight: 700; color: #fff; margin: 4px 0; }
+    .cycle-card-delta { font-size: 11px; font-weight: 600; }
+    .cycle-card.early .cycle-card-delta { color: #4ade80; }
+    .cycle-card.on-time .cycle-card-delta { color: #fde047; }
+    .cycle-card.overtime .cycle-card-delta { color: #f87171; }
+    
+    /* Fullscreen adjustments */
     .timer-panel.fullscreen .cycle-history { max-width: 500px; }
     .timer-panel.fullscreen .cycle-list { max-height: 250px; }
     .timer-panel.fullscreen .cycle-item { padding: 10px 16px; font-size: 15px; }
+    .timer-panel.fullscreen .cycle-donut-ring { width: 110px; height: 110px; }
+    .timer-panel.fullscreen .cycle-donut-count { font-size: 34px; }
+    .timer-panel.fullscreen .cycle-sparkline-bars { height: 100px; }
+    .timer-panel.fullscreen .cycle-chip { width: 42px; height: 42px; font-size: 12px; }
+    .timer-panel.fullscreen .cycle-card { width: 85px; padding: 12px 10px; }
+    .timer-panel.fullscreen .cycle-card-time { font-size: 18px; }
     
     /* Celebration Animation */
     .celebration { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3000; }
@@ -691,9 +767,14 @@
     <div class="cycle-history" id="cycleHistory">
       <div class="cycle-history-header">
         <span class="cycle-history-title" id="cycleHistoryTitle">Today's Cycles</span>
-        <button class="cycle-history-toggle" id="cycleToggle" onclick="toggleCycleHistory()">Hide</button>
+        <div class="cycle-history-nav">
+          <button class="cycle-nav-btn" onclick="prevCycleMode()" title="Previous view">‹</button>
+          <span class="cycle-mode-label" id="cycleModeLabel">List</span>
+          <button class="cycle-nav-btn" onclick="nextCycleMode()" title="Next view">›</button>
+          <button class="cycle-history-toggle" id="cycleToggle" onclick="toggleCycleHistory()">Hide</button>
+        </div>
       </div>
-      <div class="cycle-list" id="cycleList"></div>
+      <div class="cycle-content" id="cycleContent"></div>
     </div>
   </div>
   
@@ -749,6 +830,33 @@
     // Cycle history
     let cycleHistory = [];
     let cycleHistoryCollapsed = false;
+    let cycleDisplayMode = 0; // 0=donut, 1=sparkline, 2=chips, 3=cards, 4=list
+    const cycleModes = ['Donut', 'Bars', 'Grid', 'Cards', 'List'];
+    
+    // Load cycle mode preference
+    function loadCycleMode() {
+      try {
+        const saved = localStorage.getItem('cycleDisplayMode');
+        if (saved !== null) cycleDisplayMode = parseInt(saved) || 0;
+      } catch(e) {}
+    }
+    loadCycleMode();
+    
+    function saveCycleMode() {
+      try { localStorage.setItem('cycleDisplayMode', cycleDisplayMode); } catch(e) {}
+    }
+    
+    function nextCycleMode() {
+      cycleDisplayMode = (cycleDisplayMode + 1) % cycleModes.length;
+      saveCycleMode();
+      renderCycleHistory();
+    }
+    
+    function prevCycleMode() {
+      cycleDisplayMode = (cycleDisplayMode - 1 + cycleModes.length) % cycleModes.length;
+      saveCycleMode();
+      renderCycleHistory();
+    }
     
     // Load cycle history from localStorage
     function loadLocalCycleHistory() {
@@ -912,9 +1020,9 @@
     
     function toggleCycleHistory() {
       cycleHistoryCollapsed = !cycleHistoryCollapsed;
-      const list = document.getElementById('cycleList');
+      const content = document.getElementById('cycleContent');
       const toggle = document.getElementById('cycleToggle');
-      list.classList.toggle('collapsed', cycleHistoryCollapsed);
+      content.classList.toggle('collapsed', cycleHistoryCollapsed);
       toggle.textContent = cycleHistoryCollapsed ? 'Show' : 'Hide';
     }
     
@@ -944,8 +1052,11 @@
     }
     
     function renderCycleHistory() {
-      const list = document.getElementById('cycleList');
+      const container = document.getElementById('cycleContent');
+      const modeLabel = document.getElementById('cycleModeLabel');
       const bagsFromAPI = (timerData && timerData.bagsToday) || 0;
+      
+      if (modeLabel) modeLabel.textContent = cycleModes[cycleDisplayMode];
       
       // If we have no cycle history but API shows bags completed, show summary
       if (cycleHistory.length === 0 && bagsFromAPI > 0) {
@@ -954,7 +1065,7 @@
         const delta = targetSec - avgSec;
         const status = delta > 10 ? 'early' : delta < -10 ? 'overtime' : 'on-time';
         
-        list.innerHTML = `<div class="cycle-item ${status}" style="justify-content:center;gap:20px;">
+        container.innerHTML = `<div class="cycle-item ${status}" style="justify-content:center;gap:20px;">
           <span style="color:rgba(255,255,255,0.7);">${bagsFromAPI} bags completed today</span>
           <span class="cycle-item-delta ${status}">avg ${formatTime(avgSec)}</span>
         </div>
@@ -963,24 +1074,188 @@
       }
       
       if (cycleHistory.length === 0) {
-        list.innerHTML = `<div style="text-align:center;color:rgba(255,255,255,0.4);padding:10px;font-size:12px;">${t[currentLang].noBags}</div>`;
+        container.innerHTML = `<div style="text-align:center;color:rgba(255,255,255,0.4);padding:10px;font-size:12px;">${t[currentLang].noBags}</div>`;
         return;
       }
       
-      list.innerHTML = cycleHistory.map((c, i) => {
-        const deltaSec = Math.abs(c.delta);
-        const deltaMin = Math.floor(deltaSec / 60);
-        const deltaSecs = deltaSec % 60;
-        const deltaStr = deltaMin > 0 ? `${deltaMin}:${deltaSecs.toString().padStart(2,'0')}` : `${deltaSecs}s`;
-        const sign = c.delta > 10 ? '-' : c.delta < -10 ? '+' : '±';
-        const label = c.delta > 10 ? (currentLang === 'es' ? 'antes' : 'early') : c.delta < -10 ? (currentLang === 'es' ? 'tarde' : 'late') : '';
+      // Render based on current mode
+      switch(cycleDisplayMode) {
+        case 0: renderCycleDonut(container); break;
+        case 1: renderCycleSparkline(container); break;
+        case 2: renderCycleChips(container); break;
+        case 3: renderCycleCards(container); break;
+        case 4: renderCycleList(container); break;
+        default: renderCycleDonut(container);
+      }
+    }
+    
+    // Mode 0: Donut Summary
+    function renderCycleDonut(container) {
+      const early = cycleHistory.filter(c => c.status === 'early').length;
+      const ontime = cycleHistory.filter(c => c.status === 'on-time').length;
+      const late = cycleHistory.filter(c => c.status === 'overtime').length;
+      const total = cycleHistory.length;
+      const latest = cycleHistory.slice(0, 3);
+      
+      container.innerHTML = `
+        <div class="cycle-donut">
+          <div class="cycle-donut-ring">
+            <canvas id="donutCanvas" width="90" height="90"></canvas>
+            <div class="cycle-donut-center">
+              <span class="cycle-donut-count">${total}</span>
+              <span class="cycle-donut-label">bags</span>
+            </div>
+          </div>
+          <div class="cycle-donut-stats">
+            <div class="cycle-donut-stat">
+              <span class="cycle-donut-stat-label"><span class="cycle-donut-stat-dot" style="background:#22c55e"></span> Early</span>
+              <span class="cycle-donut-stat-value" style="color:#4ade80">${early}</span>
+            </div>
+            <div class="cycle-donut-stat">
+              <span class="cycle-donut-stat-label"><span class="cycle-donut-stat-dot" style="background:#facc15"></span> On Time</span>
+              <span class="cycle-donut-stat-value" style="color:#fde047">${ontime}</span>
+            </div>
+            <div class="cycle-donut-stat">
+              <span class="cycle-donut-stat-label"><span class="cycle-donut-stat-dot" style="background:#ef4444"></span> Late</span>
+              <span class="cycle-donut-stat-value" style="color:#f87171">${late}</span>
+            </div>
+          </div>
+        </div>
+        ${latest.length > 0 ? `
+        <div class="cycle-donut-latest">
+          <div class="cycle-donut-latest-label">Latest</div>
+          <div class="cycle-donut-latest-items">
+            ${latest.map((c, i) => {
+              const trimmersLabel = c.trimmers ? `${c.trimmers}T` : '';
+              return `
+              <div class="cycle-donut-latest-item" style="background:${c.status === 'early' ? 'rgba(34,197,94,0.2)' : c.status === 'overtime' ? 'rgba(239,68,68,0.2)' : 'rgba(250,204,21,0.2)'}">
+                <div class="cycle-donut-latest-time" style="color:${c.status === 'early' ? '#4ade80' : c.status === 'overtime' ? '#f87171' : '#fde047'}">${formatTime(c.time)}</div>
+                <div class="cycle-donut-latest-num">#${total - i} ${trimmersLabel ? `<span style="opacity:0.5">${trimmersLabel}</span>` : ''}</div>
+              </div>
+            `}).join('')}
+          </div>
+        </div>
+        ` : ''}
+      `;
+      
+      // Draw donut
+      const canvas = document.getElementById('donutCanvas');
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        const centerX = 45, centerY = 45, radius = 38, lineWidth = 12;
+        ctx.clearRect(0, 0, 90, 90);
         
-        return `<div class="cycle-item ${c.status}">
-          <span class="cycle-item-num">#${cycleHistory.length - i}</span>
-          <span class="cycle-item-time">${formatTime(c.time)}</span>
-          <span class="cycle-item-delta ${c.status}">${sign}${deltaStr} ${label}</span>
-        </div>`;
-      }).join('');
+        // Draw segments
+        let startAngle = -Math.PI / 2;
+        const segments = [
+          { count: early, color: '#22c55e' },
+          { count: ontime, color: '#facc15' },
+          { count: late, color: '#ef4444' }
+        ];
+        
+        segments.forEach(seg => {
+          if (seg.count > 0) {
+            const sliceAngle = (seg.count / total) * 2 * Math.PI;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, startAngle, startAngle + sliceAngle);
+            ctx.strokeStyle = seg.color;
+            ctx.lineWidth = lineWidth;
+            ctx.stroke();
+            startAngle += sliceAngle;
+          }
+        });
+      }
+    }
+    
+    // Mode 1: Sparkline Bars with per-bag target markers
+    function renderCycleSparkline(container) {
+      const reversed = [...cycleHistory].reverse();
+      const maxTime = Math.max(...reversed.map(c => Math.max(c.time, c.target || 0)), 300);
+      
+      container.innerHTML = `
+        <div class="cycle-sparkline">
+          <div class="cycle-sparkline-bars">
+            ${reversed.map((c, i) => {
+              const height = (c.time / maxTime) * 100;
+              const targetHeight = ((c.target || 300) / maxTime) * 100;
+              const trimmersLabel = c.trimmers ? ` • ${c.trimmers}T` : '';
+              const targetLabel = c.target ? ` (target ${formatTime(c.target)})` : '';
+              return `<div class="cycle-sparkline-bar ${c.status}" style="height:${height}%" title="#${i+1}: ${formatTime(c.time)}">
+                <div class="cycle-sparkline-tooltip">#${i+1}: ${formatTime(c.time)}${trimmersLabel}${targetLabel}</div>
+                <div style="position:absolute;bottom:${targetHeight}%;left:-2px;right:-2px;height:2px;background:rgba(255,255,255,0.5);border-radius:1px;"></div>
+              </div>`;
+            }).join('')}
+          </div>
+          <div class="cycle-sparkline-labels">
+            <span>Oldest</span>
+            <span style="color:rgba(255,255,255,0.6)">— = target (varies by crew)</span>
+            <span>Latest</span>
+          </div>
+        </div>
+      `; 
+    }
+    
+    // Mode 2: Color Chips Grid
+    function renderCycleChips(container) {
+      const reversed = [...cycleHistory].reverse();
+      
+      container.innerHTML = `
+        <div class="cycle-chips">
+          ${reversed.map((c, i) => {
+            const trimmersLabel = c.trimmers ? ` • ${c.trimmers}T` : '';
+            return `
+            <div class="cycle-chip ${c.status}">
+              ${i + 1}
+              <div class="cycle-chip-tooltip">${formatTime(c.time)}${trimmersLabel}<br><span style="opacity:0.7">${c.status === 'early' ? 'early' : c.status === 'overtime' ? 'late' : 'on time'}</span></div>
+            </div>
+          `}).join('')}
+        </div>
+        <div class="cycle-chips-legend">
+          <div class="cycle-chips-legend-item"><span class="cycle-chips-legend-dot" style="background:#22c55e"></span> Early</div>
+          <div class="cycle-chips-legend-item"><span class="cycle-chips-legend-dot" style="background:#facc15"></span> On Time</div>
+          <div class="cycle-chips-legend-item"><span class="cycle-chips-legend-dot" style="background:#ef4444"></span> Late</div>
+        </div>
+      `;
+    }
+    
+    // Mode 3: Horizontal Scroll Cards
+    function renderCycleCards(container) {
+      container.innerHTML = `
+        <div class="cycle-cards">
+          ${cycleHistory.map((c, i) => {
+            const deltaSec = Math.abs(c.delta);
+            const deltaStr = formatTime(deltaSec);
+            const sign = c.delta > 10 ? '↑' : c.delta < -10 ? '↓' : '•';
+            const trimmersLabel = c.trimmers ? `${c.trimmers}T` : '';
+            return `<div class="cycle-card ${c.status}">
+              <div class="cycle-card-num">#${cycleHistory.length - i} <span style="opacity:0.5">${trimmersLabel}</span></div>
+              <div class="cycle-card-time">${formatTime(c.time)}</div>
+              <div class="cycle-card-delta">${sign}${deltaStr}</div>
+            </div>`;
+          }).join('')}
+        </div>
+      `;
+    }
+    
+    // Mode 4: List (original) - now shows trimmers
+    function renderCycleList(container) {
+      container.innerHTML = `<div class="cycle-list">
+        ${cycleHistory.map((c, i) => {
+          const deltaSec = Math.abs(c.delta);
+          const deltaMin = Math.floor(deltaSec / 60);
+          const deltaSecs = deltaSec % 60;
+          const deltaStr = deltaMin > 0 ? `${deltaMin}:${deltaSecs.toString().padStart(2,'0')}` : `${deltaSecs}s`;
+          const sign = c.delta > 10 ? '-' : c.delta < -10 ? '+' : '±';
+          const label = c.delta > 10 ? (currentLang === 'es' ? 'antes' : 'early') : c.delta < -10 ? (currentLang === 'es' ? 'tarde' : 'late') : '';
+          const trimmersInfo = c.trimmers ? `<span style="color:rgba(255,255,255,0.4);font-size:10px;margin-left:4px;">(${c.trimmers}T)</span>` : '';
+          
+          return `<div class="cycle-item ${c.status}">
+            <span class="cycle-item-num">#${cycleHistory.length - i}${trimmersInfo}</span>
+            <span class="cycle-item-time">${formatTime(c.time)}</span>
+            <span class="cycle-item-delta ${c.status}">${sign}${deltaStr} ${label}</span>
+          </div>`;
+        }).join('')}
+      </div>`;
     }
     
     function triggerCelebration(isEarly) {
@@ -1239,6 +1514,8 @@
             target: target,
             delta: delta,
             status: status,
+            trimmers: c.trimmers || null,
+            hour: c.hour || null,
             timestamp: c.timestamp ? new Date(c.timestamp) : new Date()
           };
         }).reverse(); // Most recent first
