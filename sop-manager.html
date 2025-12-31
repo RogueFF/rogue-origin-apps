@@ -455,6 +455,24 @@
     /* Request Badge */
     .request-badge { background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 10px; margin-left: 4px; }
     
+    /* AI Generate Modal */
+    .ai-gen-checkbox { display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:all 0.2s; }
+    .ai-gen-checkbox:hover { border-color:var(--gold);background:var(--gold-dim); }
+    .ai-gen-checkbox input { width:18px;height:18px;accent-color:var(--gold); }
+    .ai-gen-checkbox input:checked + span { color:var(--gold);font-weight:500; }
+    .ai-gen-checkbox span { display:flex;align-items:center;gap:8px;font-size:13px; }
+    .ai-gen-checkbox span i { font-size:16px; }
+    .ai-gen-spinner { width:50px;height:50px;border:4px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .ai-gen-result { background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:16px;transition:all 0.2s; }
+    .ai-gen-result:hover { border-color:var(--gold); }
+    .ai-gen-result.selected { border-color:var(--green);background:var(--green-dim); }
+    .ai-gen-result-header { display:flex;align-items:flex-start;gap:12px; }
+    .ai-gen-result-header input { width:20px;height:20px;accent-color:var(--green);flex-shrink:0;margin-top:2px; }
+    .ai-gen-result-title { font-weight:600;margin-bottom:4px; }
+    .ai-gen-result-meta { font-size:12px;color:var(--text-muted); }
+    .ai-gen-result-steps { font-size:11px;color:var(--text-light);margin-top:8px;padding-top:8px;border-top:1px solid var(--border); }
+    
     /* AI Improve Button */
     .ai-improve-btn { background: linear-gradient(135deg, var(--gold) 0%, var(--sungrown) 100%); color: #fff; border: none; padding: 4px 10px; border-radius: 6px; font-size: 10px; font-weight: 600; cursor: pointer; margin-left: 8px; transition: all 0.2s; display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
     .ai-improve-btn:hover { transform: scale(1.05); box-shadow: 0 2px 8px rgba(228,170,79,0.4); }
@@ -614,6 +632,7 @@
         <button class="dark-mode-toggle" onclick="toggleDarkMode()"><i class="ph-duotone ph-moon"></i><span data-i18n="dark">Dark</span></button>
         <button class="header-btn" onclick="openSettingsModal()"><i class="ph-duotone ph-gear"></i></button>
         <button class="header-btn" onclick="openRequestsModal()" id="requestsBtn"><i class="ph-duotone ph-clipboard-text"></i> <span data-i18n="requests">Requests</span> <span class="request-badge" id="requestBadge" style="display:none;">0</span></button>
+        <button class="header-btn" onclick="openAIGenerateModal()" style="background:linear-gradient(135deg,rgba(228,170,79,0.15),rgba(102,137,113,0.15));border-color:var(--gold);"><i class="ph-duotone ph-robot"></i> <span>AI Generate</span></button>
         <button class="header-btn primary" onclick="openCreateModal()"><i class="ph-duotone ph-plus"></i> <span data-i18n="newSop">New SOP</span></button>
       </div>
     </header>
@@ -648,7 +667,80 @@
   <div class="modal" id="viewModal"><div class="modal-box wide"><div class="modal-header"><h2><i class="ph-duotone ph-eye"></i> View SOP</h2><div style="display:flex;align-items:center;gap:12px;"><div class="lang-toggle" id="viewLangToggle"><button class="active" onclick="setViewLang('en')">EN</button><button onclick="setViewLang('es')">ES</button></div><button class="modal-close" onclick="closeModal('viewModal')">&times;</button></div></div><div class="modal-body" id="viewModalBody"></div><div class="modal-footer"><button class="header-btn" onclick="closeModal('viewModal')">Close</button><button class="header-btn" onclick="openModal('pdfModal')"><i class="ph-duotone ph-file-pdf"></i> PDF</button><button class="header-btn primary" onclick="editCurrentSOP()"><i class="ph-duotone ph-pencil-simple"></i> Edit</button></div></div></div>
   <div class="modal" id="qrModal"><div class="modal-box small"><div class="modal-header"><h2><i class="ph-duotone ph-qr-code"></i> QR Code</h2><button class="modal-close" onclick="closeModal('qrModal')">&times;</button></div><div class="modal-body"><div class="qr-modal-content"><img id="qrImage" width="200" height="200" style="display:block;margin:0 auto;border-radius:8px;"><p style="margin-top:16px;color:var(--text-muted);font-size:13px;">Scan to view this SOP</p><div class="qr-url" id="qrUrl"></div></div></div><div class="modal-footer"><button class="header-btn" onclick="closeModal('qrModal')">Close</button><button class="header-btn primary" onclick="downloadQR()"><i class="ph-duotone ph-download"></i> Download</button></div></div></div>
   <div class="modal" id="pdfModal"><div class="modal-box small"><div class="modal-header"><h2><i class="ph-duotone ph-file-pdf"></i> Export PDF</h2><button class="modal-close" onclick="closeModal('pdfModal')">&times;</button></div><div class="modal-body"><div class="form-group"><label class="form-label">Layout</label><div class="pdf-layout-options"><label class="pdf-layout-option"><input type="radio" name="pdfLayout" value="text"><div class="pdf-layout-card"><div class="pdf-layout-preview"><div class="line"></div><div class="line"></div><div class="line short"></div></div><span>Text Only</span></div></label><label class="pdf-layout-option"><input type="radio" name="pdfLayout" value="2col" checked><div class="pdf-layout-card"><div class="pdf-layout-preview grid-preview cols-1"><div class="box"></div><div class="box"></div></div><span>2 Per Page</span></div></label><label class="pdf-layout-option"><input type="radio" name="pdfLayout" value="4col"><div class="pdf-layout-card"><div class="pdf-layout-preview grid-preview cols-2"><div class="box"></div><div class="box"></div><div class="box"></div><div class="box"></div></div><span>4 Per Page</span></div></label></div></div><div class="form-group"><label class="form-label">Options</label><div style="display:flex;flex-direction:column;gap:8px;"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="pdfIncludeQR" checked> Include QR Code</label><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="pdfBilingual"> Bilingual (EN + ES)</label></div></div><div class="form-group"><label class="form-label">Language</label><div style="display:flex;gap:8px;"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="pdfLang" value="en" checked> English</label><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="pdfLang" value="es"> Español</label></div></div></div><div class="modal-footer"><button class="header-btn" onclick="closeModal('pdfModal')">Cancel</button><button class="header-btn primary" onclick="generatePDF()" id="generatePdfBtn"><i class="ph-duotone ph-file-pdf"></i> Generate PDF</button></div></div></div>
-  <div class="modal" id="settingsModal"><div class="modal-box small"><div class="modal-header"><h2><i class="ph-duotone ph-gear"></i> Settings</h2><button class="modal-close" onclick="closeModal('settingsModal')">&times;</button></div><div class="modal-body"><div class="settings-section"><div class="settings-section-title"><i class="ph-duotone ph-sparkle"></i> AI Features</div><div class="settings-api-key"><label style="font-size:12px;color:var(--text-muted);margin-bottom:6px;display:block;">Anthropic API Key</label><div style="display:flex;gap:8px;"><input type="password" id="apiKeyInput" class="form-input" placeholder="sk-ant-api03-..." style="flex:1;font-size:12px;" onchange="saveApiKey()"><button class="header-btn" onclick="toggleApiKeyVisibility()" style="padding:8px 12px;" title="Show/Hide"><i class="ph-duotone ph-eye" id="apiKeyEyeIcon"></i></button></div><div style="margin-top:10px;"><label style="font-size:12px;color:var(--text-muted);margin-bottom:6px;display:block;">Proxy URL (Google Apps Script Web App)</label><input type="text" id="proxyUrlInput" class="form-input" placeholder="https://script.google.com/macros/s/.../exec" style="font-size:12px;" onchange="saveProxyUrl()"></div><button class="header-btn primary" onclick="testApiConnection()" style="margin-top:12px;width:100%;"><i class="ph-duotone ph-plugs-connected"></i> Test Connection</button><div id="apiKeyStatus" style="margin-top:10px;font-size:12px;padding:10px;background:var(--bg);border-radius:6px;"></div><div class="settings-note" style="margin-top:8px;padding:10px;background:var(--green-dim);border-radius:6px;border-left:3px solid var(--green);"><i class="ph-duotone ph-check-circle" style="color:var(--green);"></i> <strong>Improve buttons work without API!</strong> Uses smart rules to fix formatting. Add API key + Proxy URL for advanced AI rewriting.</div><div class="settings-note" style="margin-top:6px;">Get API key at <a href="https://console.anthropic.com" target="_blank" style="color:var(--gold);">console.anthropic.com</a></div></div></div><div class="settings-section"><div class="settings-section-title"><i class="ph-duotone ph-buildings"></i> Departments</div><div class="settings-list" id="settingsDeptList"></div><div class="settings-add-form"><input type="text" id="newDeptInput" placeholder="New department..." onkeypress="if(event.key==='Enter')addDepartment()"><button class="settings-add-btn" onclick="addDepartment()"><i class="ph-duotone ph-plus"></i></button></div><div class="settings-note">At least one department required</div></div><div class="settings-section"><div class="settings-section-title"><i class="ph-duotone ph-tag"></i> Tags</div><div class="settings-list" id="settingsTagList"></div><div class="settings-add-form"><input type="text" id="newTagInput" placeholder="New tag..." onkeypress="if(event.key==='Enter')addTag()"><div class="tag-color-picker"><div class="tag-color-option gold selected" data-color="gold" onclick="selectTagColor('gold')"></div><div class="tag-color-option green" data-color="green" onclick="selectTagColor('green')"></div><div class="tag-color-option sungrown" data-color="sungrown" onclick="selectTagColor('sungrown')"></div><div class="tag-color-option greenhouse" data-color="greenhouse" onclick="selectTagColor('greenhouse')"></div><div class="tag-color-option indoor" data-color="indoor" onclick="selectTagColor('indoor')"></div><div class="tag-color-option danger" data-color="danger" onclick="selectTagColor('danger')"></div></div><button class="settings-add-btn" onclick="addTag()"><i class="ph-duotone ph-plus"></i></button></div><div class="settings-note">At least one tag required</div></div></div><div class="modal-footer"><button class="header-btn primary" onclick="closeModal('settingsModal')"><i class="ph-duotone ph-check"></i> Done</button></div></div></div>
+  <div class="modal" id="settingsModal"><div class="modal-box small"><div class="modal-header"><h2><i class="ph-duotone ph-gear"></i> Settings</h2><button class="modal-close" onclick="closeModal('settingsModal')">&times;</button></div><div class="modal-body"><div class="settings-section"><div class="settings-section-title"><i class="ph-duotone ph-sparkle"></i> AI Features</div><div class="settings-api-key"><label style="font-size:12px;color:var(--text-muted);margin-bottom:6px;display:block;">Anthropic API Key</label><div style="display:flex;gap:8px;"><input type="password" id="apiKeyInput" class="form-input" placeholder="sk-ant-api03-..." style="flex:1;font-size:12px;" onchange="saveApiKey()"><button class="header-btn" onclick="toggleApiKeyVisibility()" style="padding:8px 12px;" title="Show/Hide"><i class="ph-duotone ph-eye" id="apiKeyEyeIcon"></i></button></div><div style="margin-top:10px;"><label style="font-size:12px;color:var(--text-muted);margin-bottom:6px;display:block;">Proxy URL (Google Apps Script Web App)</label><input type="text" id="proxyUrlInput" class="form-input" placeholder="https://script.google.com/macros/s/.../exec" style="font-size:12px;" onchange="saveProxyUrl()"></div><button class="header-btn primary" onclick="testApiConnection()" style="margin-top:12px;width:100%;"><i class="ph-duotone ph-plugs-connected"></i> Test Connection</button><div id="apiKeyStatus" style="margin-top:10px;font-size:12px;padding:10px;background:var(--bg);border-radius:6px;"></div><div class="settings-note" style="margin-top:8px;padding:10px;background:var(--green-dim);border-radius:6px;border-left:3px solid var(--green);"><i class="ph-duotone ph-check-circle" style="color:var(--green);"></i> <strong>AI Features Pre-Configured!</strong> API key and proxy are set up for team use. All AI features are ready to go.</div><div class="settings-note" style="margin-top:6px;">Override with your own key at <a href="https://console.anthropic.com" target="_blank" style="color:var(--gold);">console.anthropic.com</a></div></div></div><div class="settings-section"><div class="settings-section-title"><i class="ph-duotone ph-buildings"></i> Departments</div><div class="settings-list" id="settingsDeptList"></div><div class="settings-add-form"><input type="text" id="newDeptInput" placeholder="New department..." onkeypress="if(event.key==='Enter')addDepartment()"><button class="settings-add-btn" onclick="addDepartment()"><i class="ph-duotone ph-plus"></i></button></div><div class="settings-note">At least one department required</div></div><div class="settings-section"><div class="settings-section-title"><i class="ph-duotone ph-tag"></i> Tags</div><div class="settings-list" id="settingsTagList"></div><div class="settings-add-form"><input type="text" id="newTagInput" placeholder="New tag..." onkeypress="if(event.key==='Enter')addTag()"><div class="tag-color-picker"><div class="tag-color-option gold selected" data-color="gold" onclick="selectTagColor('gold')"></div><div class="tag-color-option green" data-color="green" onclick="selectTagColor('green')"></div><div class="tag-color-option sungrown" data-color="sungrown" onclick="selectTagColor('sungrown')"></div><div class="tag-color-option greenhouse" data-color="greenhouse" onclick="selectTagColor('greenhouse')"></div><div class="tag-color-option indoor" data-color="indoor" onclick="selectTagColor('indoor')"></div><div class="tag-color-option danger" data-color="danger" onclick="selectTagColor('danger')"></div></div><button class="settings-add-btn" onclick="addTag()"><i class="ph-duotone ph-plus"></i></button></div><div class="settings-note">At least one tag required</div></div></div><div class="modal-footer"><button class="header-btn primary" onclick="closeModal('settingsModal')"><i class="ph-duotone ph-check"></i> Done</button></div></div></div>
+
+  <!-- AI Generate Modal -->
+  <div class="modal" id="aiGenerateModal">
+    <div class="modal-box wide">
+      <div class="modal-header">
+        <h2><i class="ph-duotone ph-robot"></i> AI Generate SOPs</h2>
+        <button class="modal-close" onclick="closeModal('aiGenerateModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="aiGenStep1">
+          <div class="form-group">
+            <label class="form-label"><i class="ph-duotone ph-truck"></i> Equipment / Machine Name *</label>
+            <input type="text" class="form-input" id="aiGenEquipment" placeholder="e.g., John Deere 7210R Tractor, Vitamix 5200 Blender, Twister T4">
+            <div style="font-size:11px;color:var(--text-light);margin-top:6px;">Enter make/model for best results. Claude will search for official documentation.</div>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label"><i class="ph-duotone ph-buildings"></i> Department</label>
+            <select class="form-input" id="aiGenDept"></select>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label"><i class="ph-duotone ph-list-checks"></i> SOPs to Generate</label>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-top:8px;">
+              <label class="ai-gen-checkbox"><input type="checkbox" id="aiGenDaily" checked><span><i class="ph-duotone ph-sun"></i> Daily Pre-Op Inspection</span></label>
+              <label class="ai-gen-checkbox"><input type="checkbox" id="aiGenStartup" checked><span><i class="ph-duotone ph-power"></i> Startup & Shutdown</span></label>
+              <label class="ai-gen-checkbox"><input type="checkbox" id="aiGenService" checked><span><i class="ph-duotone ph-wrench"></i> Scheduled Service</span></label>
+              <label class="ai-gen-checkbox"><input type="checkbox" id="aiGenCleaning"><span><i class="ph-duotone ph-broom"></i> Cleaning Procedure</span></label>
+              <label class="ai-gen-checkbox"><input type="checkbox" id="aiGenSafety"><span><i class="ph-duotone ph-warning"></i> Safety Procedures</span></label>
+              <label class="ai-gen-checkbox"><input type="checkbox" id="aiGenTroubleshoot"><span><i class="ph-duotone ph-first-aid-kit"></i> Troubleshooting</span></label>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label"><i class="ph-duotone ph-note"></i> Additional Context (Optional)</label>
+            <textarea class="form-input" id="aiGenContext" placeholder="Any specific details about your use case, environment, or special requirements..." rows="2"></textarea>
+          </div>
+          
+          <div style="background:var(--gold-dim);border:1px solid var(--gold);border-radius:10px;padding:14px;margin-top:16px;">
+            <div style="display:flex;align-items:flex-start;gap:12px;">
+              <i class="ph-duotone ph-info" style="font-size:20px;color:var(--gold);flex-shrink:0;margin-top:2px;"></i>
+              <div>
+                <div style="font-weight:600;color:var(--gold);margin-bottom:4px;">How it works</div>
+                <div style="font-size:12px;color:var(--text-muted);line-height:1.5;">Claude will search the web for official manuals, service guides, and documentation for your equipment, then generate comprehensive SOPs based on manufacturer recommendations. Estimated cost: ~$0.15-0.30 per equipment.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div id="aiGenStep2" style="display:none;">
+          <div id="aiGenProgress" style="text-align:center;padding:40px 20px;">
+            <div class="ai-gen-spinner"></div>
+            <div style="margin-top:20px;font-weight:600;color:var(--gold);" id="aiGenProgressTitle">Searching for documentation...</div>
+            <div style="margin-top:8px;font-size:13px;color:var(--text-muted);" id="aiGenProgressSub">This may take 30-60 seconds</div>
+            <div style="margin-top:16px;font-size:12px;color:var(--text-light);" id="aiGenProgressLog"></div>
+          </div>
+        </div>
+        
+        <div id="aiGenStep3" style="display:none;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <div style="font-weight:600;color:var(--green);"><i class="ph-duotone ph-check-circle"></i> Generated <span id="aiGenCount">0</span> SOPs</div>
+            <div style="font-size:12px;color:var(--text-muted);">Review and select which to import</div>
+          </div>
+          <div id="aiGenResults" style="display:flex;flex-direction:column;gap:12px;max-height:400px;overflow-y:auto;"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="header-btn" onclick="closeModal('aiGenerateModal')">Cancel</button>
+        <button class="header-btn primary" id="aiGenStartBtn" onclick="startAIGenerate()"><i class="ph-duotone ph-sparkle"></i> Generate SOPs</button>
+        <button class="header-btn primary" id="aiGenImportBtn" onclick="importGeneratedSOPs()" style="display:none;"><i class="ph-duotone ph-download"></i> Import Selected</button>
+      </div>
+    </div>
+  </div>
   
   <div class="modal" id="requestsModal">
     <div class="modal-box wide">
@@ -755,6 +847,10 @@
   
   <div class="toast" id="toast"><i class="ph-duotone ph-check-circle"></i><span id="toastMsg"></span></div>
   <script>
+    // Default API configuration (for shared team use)
+    const DEFAULT_API_KEY = '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';
+    const DEFAULT_PROXY_URL = 'https://script.google.com/macros/s/AKfycbyyDNEHl78fewANzo_9j2zvMES_4HIFOdD8QbwE52kdhJOcWfwig7vcSV53cQal7bQj/exec';
+    
     let sops=[], currentSopId=null, editingSteps=[], selectedTagColor='gold';
     let settings={departments:[{name:'Production',icon:'ph-factory'},{name:'Packaging',icon:'ph-package'},{name:'Quality',icon:'ph-seal-check'},{name:'Maintenance',icon:'ph-wrench'}],tags:[{name:'safety',color:'danger'},{name:'quality',color:'green'},{name:'critical',color:'gold'}]};
     let editLang='en', viewLang='en';
@@ -1730,8 +1826,8 @@
     }
     
     function loadApiKeyToInput() {
-      const key = localStorage.getItem('sopAnthropicApiKey') || '';
-      const proxyUrl = localStorage.getItem('sopProxyUrl') || '';
+      const key = getApiKey();
+      const proxyUrl = getProxyUrl();
       document.getElementById('apiKeyInput').value = key;
       document.getElementById('proxyUrlInput').value = proxyUrl;
       updateApiKeyStatus(!!key && !!proxyUrl);
@@ -1739,8 +1835,11 @@
     
     function updateApiKeyStatus(ready) {
       const status = document.getElementById('apiKeyStatus');
-      if (ready) {
-        status.innerHTML = '<span style="color:var(--green);"><i class="ph-duotone ph-check-circle"></i> API configured - click test button to verify</span>';
+      const usingDefaults = getApiKey() === DEFAULT_API_KEY && getProxyUrl() === DEFAULT_PROXY_URL;
+      if (ready && usingDefaults) {
+        status.innerHTML = '<span style="color:var(--green);"><i class="ph-duotone ph-check-circle"></i> Using team API - ready to go!</span>';
+      } else if (ready) {
+        status.innerHTML = '<span style="color:var(--green);"><i class="ph-duotone ph-check-circle"></i> Custom API configured</span>';
       } else if (getApiKey() && !getProxyUrl()) {
         status.innerHTML = '<span style="color:var(--gold);"><i class="ph-duotone ph-info"></i> Add Proxy URL to enable AI</span>';
       } else if (!getApiKey() && getProxyUrl()) {
@@ -1763,11 +1862,11 @@
     }
     
     function getApiKey() {
-      return localStorage.getItem('sopAnthropicApiKey') || '';
+      return localStorage.getItem('sopAnthropicApiKey') || DEFAULT_API_KEY;
     }
     
     function getProxyUrl() {
-      return localStorage.getItem('sopProxyUrl') || '';
+      return localStorage.getItem('sopProxyUrl') || DEFAULT_PROXY_URL;
     }
     
     function saveProxyUrl() {
@@ -2149,6 +2248,281 @@ Original: ${text}`
     function showToast(m,t){const e=document.getElementById('toast');document.getElementById('toastMsg').textContent=m;e.className='toast show '+t;e.querySelector('i').className=t==='success'?'ph-duotone ph-check-circle':'ph-duotone ph-warning-circle';setTimeout(()=>e.classList.remove('show'),3000);}
     function esc(t){if(!t)return'';const d=document.createElement('div');d.textContent=t;return d.innerHTML;}
     function fmtDate(s){if(!s)return'';return new Date(s).toLocaleDateString(appLang==='es'?'es-ES':'en-US',{month:'short',day:'numeric',year:'numeric'});}
+    
+    // ============================================
+    // AI Generate SOPs Feature
+    // ============================================
+    let generatedSOPs = [];
+    
+    function openAIGenerateModal() {
+      // API is pre-configured with defaults, so no need to check
+      
+      // Reset modal state
+      document.getElementById('aiGenStep1').style.display = 'block';
+      document.getElementById('aiGenStep2').style.display = 'none';
+      document.getElementById('aiGenStep3').style.display = 'none';
+      document.getElementById('aiGenStartBtn').style.display = 'inline-flex';
+      document.getElementById('aiGenImportBtn').style.display = 'none';
+      document.getElementById('aiGenEquipment').value = '';
+      document.getElementById('aiGenContext').value = '';
+      document.getElementById('aiGenResults').innerHTML = '';
+      generatedSOPs = [];
+      
+      // Populate department dropdown
+      const deptSelect = document.getElementById('aiGenDept');
+      deptSelect.innerHTML = settings.departments.map(d => 
+        `<option value="${d.name}">${d.name}</option>`
+      ).join('');
+      // Default to Equipment if exists, else first
+      const equipDept = settings.departments.find(d => d.name === 'Equipment');
+      if (equipDept) deptSelect.value = 'Equipment';
+      
+      openModal('aiGenerateModal');
+    }
+    
+    async function startAIGenerate() {
+      const equipment = document.getElementById('aiGenEquipment').value.trim();
+      if (!equipment) {
+        showToast('Please enter equipment name', 'error');
+        return;
+      }
+      
+      const dept = document.getElementById('aiGenDept').value;
+      const context = document.getElementById('aiGenContext').value.trim();
+      
+      // Get selected SOP types
+      const sopTypes = [];
+      if (document.getElementById('aiGenDaily').checked) sopTypes.push('daily_inspection');
+      if (document.getElementById('aiGenStartup').checked) sopTypes.push('startup_shutdown');
+      if (document.getElementById('aiGenService').checked) sopTypes.push('scheduled_service');
+      if (document.getElementById('aiGenCleaning').checked) sopTypes.push('cleaning');
+      if (document.getElementById('aiGenSafety').checked) sopTypes.push('safety');
+      if (document.getElementById('aiGenTroubleshoot').checked) sopTypes.push('troubleshooting');
+      
+      if (sopTypes.length === 0) {
+        showToast('Select at least one SOP type', 'error');
+        return;
+      }
+      
+      // Show progress
+      document.getElementById('aiGenStep1').style.display = 'none';
+      document.getElementById('aiGenStep2').style.display = 'block';
+      document.getElementById('aiGenStartBtn').style.display = 'none';
+      
+      try {
+        updateAIGenProgress('Searching for documentation...', `Finding manuals and specs for ${equipment}`);
+        
+        const apiKey = getApiKey();
+        const proxyUrl = getProxyUrl();
+        
+        // Build the prompt
+        const sopTypeDescriptions = {
+          'daily_inspection': 'Daily Pre-Operation Inspection - checks before each use',
+          'startup_shutdown': 'Safe Startup and Shutdown Procedures',
+          'scheduled_service': 'Scheduled Maintenance/Service intervals (include part numbers if found)',
+          'cleaning': 'Cleaning and Sanitation Procedures',
+          'safety': 'Safety Procedures and Hazard Awareness',
+          'troubleshooting': 'Common Issues and Troubleshooting Guide'
+        };
+        
+        const selectedDescriptions = sopTypes.map(t => sopTypeDescriptions[t]).join('\n- ');
+        
+        const systemPrompt = `You are an expert technical writer creating Standard Operating Procedures (SOPs) for equipment maintenance and operation. 
+
+Your task is to search for official documentation, manuals, and service guides for the specified equipment, then create comprehensive SOPs based on manufacturer recommendations.
+
+IMPORTANT: You must output ONLY valid JSON - no markdown, no explanation, no code blocks. Just the raw JSON array.
+
+Output format - a JSON array of SOP objects:
+[
+  {
+    "title": "Equipment Name - SOP Type",
+    "docNum": "EQ-XXX-001",
+    "description": "Brief 1-2 sentence description",
+    "tags": ["tag1", "tag2"],
+    "steps": [
+      {"title": "Step Title (action verb)", "description": "Detailed step description with specifics", "safety": true/false, "quality": true/false}
+    ]
+  }
+]
+
+Guidelines:
+- Include specific part numbers, fluid capacities, torque specs when found
+- Mark steps as safety:true if they involve hazards, PPE, or safety checks
+- Mark steps as quality:true if they're quality control checkpoints
+- Each SOP should have 8-15 detailed steps
+- Step titles should start with action verbs
+- Include manufacturer-specific terminology and recommendations`;
+
+        const userPrompt = `Search for official documentation for: ${equipment}
+
+Create SOPs for the following types:
+- ${selectedDescriptions}
+
+Department: ${dept}
+${context ? `Additional context: ${context}` : ''}
+
+Search for:
+1. Official operator's manual / owner's manual
+2. Service/maintenance manual
+3. Parts diagrams with part numbers
+4. Safety guidelines
+5. Maintenance schedules and intervals
+
+Then generate comprehensive SOPs based on what you find. Include specific details like:
+- Fluid types and capacities
+- Filter part numbers
+- Service intervals (hours or time-based)
+- Safety warnings from the manual
+- Torque specifications
+- Step-by-step procedures
+
+Output ONLY the JSON array, nothing else.`;
+
+        updateAIGenProgress('Generating SOPs...', 'Claude is researching and writing procedures');
+        
+        // Call Claude API with web search
+        const response = await fetch(proxyUrl, {
+          method: 'POST',
+          body: JSON.stringify({
+            apiKey: apiKey,
+            body: {
+              model: 'claude-sonnet-4-20250514',
+              max_tokens: 8000,
+              tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+              system: systemPrompt,
+              messages: [{ role: 'user', content: userPrompt }]
+            }
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (data.error) {
+          throw new Error(data.error.message || 'API error');
+        }
+        
+        // Extract text from response (may have multiple content blocks due to tool use)
+        let responseText = '';
+        if (data.content) {
+          for (const block of data.content) {
+            if (block.type === 'text') {
+              responseText += block.text;
+            }
+          }
+        }
+        
+        // Parse the JSON response
+        let sopsArray;
+        try {
+          // Try to extract JSON from the response (handle markdown code blocks)
+          let jsonStr = responseText;
+          const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+          if (jsonMatch) {
+            jsonStr = jsonMatch[0];
+          }
+          sopsArray = JSON.parse(jsonStr);
+        } catch (parseError) {
+          console.error('Parse error:', parseError, responseText);
+          throw new Error('Failed to parse AI response. Please try again.');
+        }
+        
+        if (!Array.isArray(sopsArray) || sopsArray.length === 0) {
+          throw new Error('No SOPs generated. Try a different equipment name.');
+        }
+        
+        // Process and store generated SOPs
+        generatedSOPs = sopsArray.map((sop, idx) => ({
+          id: Date.now() + idx,
+          title: sop.title || `${equipment} SOP ${idx + 1}`,
+          dept: dept,
+          docNum: sop.docNum || `EQ-GEN-${String(idx + 1).padStart(3, '0')}`,
+          revision: '1.0',
+          status: 'draft',
+          description: sop.description || '',
+          tags: sop.tags || ['generated'],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          steps: (sop.steps || []).map(step => ({
+            title: step.title || 'Step',
+            description: step.description || '',
+            image: '',
+            safety: step.safety || false,
+            quality: step.quality || false
+          })),
+          selected: true
+        }));
+        
+        // Show results
+        showAIGenResults();
+        
+      } catch (error) {
+        console.error('AI Generate error:', error);
+        showToast(error.message || 'Failed to generate SOPs', 'error');
+        // Go back to step 1
+        document.getElementById('aiGenStep1').style.display = 'block';
+        document.getElementById('aiGenStep2').style.display = 'none';
+        document.getElementById('aiGenStartBtn').style.display = 'inline-flex';
+      }
+    }
+    
+    function updateAIGenProgress(title, sub, log) {
+      document.getElementById('aiGenProgressTitle').textContent = title;
+      document.getElementById('aiGenProgressSub').textContent = sub;
+      if (log) document.getElementById('aiGenProgressLog').textContent = log;
+    }
+    
+    function showAIGenResults() {
+      document.getElementById('aiGenStep2').style.display = 'none';
+      document.getElementById('aiGenStep3').style.display = 'block';
+      document.getElementById('aiGenImportBtn').style.display = 'inline-flex';
+      document.getElementById('aiGenCount').textContent = generatedSOPs.length;
+      
+      const resultsDiv = document.getElementById('aiGenResults');
+      resultsDiv.innerHTML = generatedSOPs.map((sop, idx) => `
+        <div class="ai-gen-result ${sop.selected ? 'selected' : ''}" onclick="toggleAIGenSOP(${idx})">
+          <div class="ai-gen-result-header">
+            <input type="checkbox" ${sop.selected ? 'checked' : ''} onclick="event.stopPropagation(); toggleAIGenSOP(${idx})">
+            <div>
+              <div class="ai-gen-result-title">${esc(sop.title)}</div>
+              <div class="ai-gen-result-meta">${esc(sop.docNum)} • ${sop.steps.length} steps</div>
+              ${sop.description ? `<div class="ai-gen-result-meta" style="margin-top:4px;">${esc(sop.description)}</div>` : ''}
+            </div>
+          </div>
+          <div class="ai-gen-result-steps">
+            <strong>Steps:</strong> ${sop.steps.slice(0, 5).map(s => esc(s.title)).join(' → ')}${sop.steps.length > 5 ? ' → ...' : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+    
+    function toggleAIGenSOP(idx) {
+      generatedSOPs[idx].selected = !generatedSOPs[idx].selected;
+      showAIGenResults();
+    }
+    
+    function importGeneratedSOPs() {
+      const toImport = generatedSOPs.filter(s => s.selected);
+      if (toImport.length === 0) {
+        showToast('Select at least one SOP to import', 'error');
+        return;
+      }
+      
+      // Clean up the SOPs for import (remove 'selected' flag)
+      const cleanSOPs = toImport.map(sop => {
+        const { selected, ...clean } = sop;
+        return clean;
+      });
+      
+      // Add to existing SOPs
+      sops.push(...cleanSOPs);
+      saveToStorage();
+      renderSOPs();
+      updateStats();
+      
+      closeModal('aiGenerateModal');
+      showToast(`Imported ${cleanSOPs.length} SOPs successfully!`, 'success');
+    }
   </script>
 </body>
 </html>
