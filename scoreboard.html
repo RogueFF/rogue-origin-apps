@@ -37,6 +37,17 @@
     body.behind { background: linear-gradient(145deg, #2d0d0d 0%, #4d1a1a 50%, #2d0d0d 100%); }
     body.idle { background: linear-gradient(145deg, #1a1f16 0%, #2d3a2e 50%, #1a1f16 100%); }
     
+    /* Vivid Timer-based Backgrounds */
+    body.timer-green { background: linear-gradient(145deg, #052e16 0%, #14532d 50%, #052e16 100%); }
+    body.timer-yellow { background: linear-gradient(145deg, #422006 0%, #713f12 50%, #422006 100%); }
+    body.timer-red { background: linear-gradient(145deg, #450a0a 0%, #7f1d1d 50%, #450a0a 100%); animation: redBackgroundPulse 1.5s ease-in-out infinite; }
+    body.timer-neutral { background: linear-gradient(145deg, #1a1f16 0%, #2d3a2e 50%, #1a1f16 100%); }
+    
+    @keyframes redBackgroundPulse { 
+      0%, 100% { background: linear-gradient(145deg, #450a0a 0%, #7f1d1d 50%, #450a0a 100%); } 
+      50% { background: linear-gradient(145deg, #5c1010 0%, #991b1b 50%, #5c1010 100%); } 
+    }
+    
     .main-panel { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px 30px; height: 100vh; overflow: hidden; }
     
     .timer-panel { width: 380px; min-width: 380px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px; border-left: 2px solid rgba(228,170,79,0.2); height: 100vh; transition: background 0.5s ease, width 0.4s ease, min-width 0.4s ease; position: relative; }
@@ -44,6 +55,12 @@
     body.timer-fullscreen .main-panel { display: none; }
     body.timer-fullscreen .time-display { right: 20px; }
     body.timer-fullscreen .help-btn { right: 20px; }
+    
+    /* Vivid Timer Panel Backgrounds */
+    .timer-panel.green { background: linear-gradient(180deg, rgba(34, 197, 94, 0.5) 0%, rgba(22, 163, 74, 0.3) 100%); border-left-color: rgba(34, 197, 94, 0.5); box-shadow: inset 0 0 30px rgba(34, 197, 94, 0.2); }
+    .timer-panel.yellow { background: linear-gradient(180deg, rgba(250, 204, 21, 0.5) 0%, rgba(234, 179, 8, 0.3) 100%); border-left-color: rgba(250, 204, 21, 0.5); box-shadow: inset 0 0 30px rgba(250, 204, 21, 0.2); }
+    .timer-panel.red { background: linear-gradient(180deg, rgba(239, 68, 68, 0.5) 0%, rgba(220, 38, 38, 0.3) 100%); border-left-color: rgba(239, 68, 68, 0.5); box-shadow: inset 0 0 30px rgba(239, 68, 68, 0.2); }
+    .timer-panel.neutral { background: rgba(0,0,0,0.4); }
     
     /* Drag Handle */
     .drag-handle { position: absolute; left: 0; top: 0; bottom: 0; width: 24px; cursor: ew-resize; display: flex; align-items: center; justify-content: center; opacity: 0.5; transition: opacity 0.2s, background 0.2s; z-index: 10; }
@@ -69,6 +86,25 @@
     .timer-panel.fullscreen .timer-stat-label { font-size: 15px; }
     .timer-panel.fullscreen .timer-stat-value { font-size: 20px; }
     .timer-panel.fullscreen .timer-ring-bg, .timer-panel.fullscreen .timer-ring-progress { stroke-width: 14; }
+    
+    /* Debug Panel */
+    .debug-panel { display: none; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.95); border: 2px solid var(--gold); border-radius: 16px; padding: 16px 20px; z-index: 2000; min-width: 320px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+    .debug-panel.active { display: block; }
+    .debug-header { display: flex; justify-content: space-between; align-items: center; font-size: 16px; font-weight: 700; color: var(--gold); margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(228,170,79,0.3); }
+    .debug-close { background: none; border: none; color: rgba(255,255,255,0.5); font-size: 18px; cursor: pointer; padding: 0 4px; }
+    .debug-close:hover { color: #f87171; }
+    .debug-controls { display: flex; flex-direction: column; gap: 10px; }
+    .debug-label { font-size: 12px; color: rgba(255,255,255,0.6); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+    .debug-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
+    .debug-buttons button { padding: 8px 12px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: #fff; font-size: 13px; cursor: pointer; transition: all 0.2s; }
+    .debug-buttons button:hover { background: rgba(228,170,79,0.3); border-color: var(--gold); }
+    .debug-divider { height: 1px; background: rgba(228,170,79,0.2); margin: 8px 0; }
+    .debug-reset { width: 100%; padding: 10px; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 8px; color: #f87171; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .debug-reset:hover { background: rgba(239, 68, 68, 0.3); }
+    .debug-hint { margin-top: 10px; font-size: 11px; color: rgba(255,255,255,0.4); text-align: center; }
+    .debug-hint kbd { background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; font-family: monospace; }
+    .debug-indicator { display: none; position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(239, 68, 68, 0.9); color: white; padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; z-index: 1999; }
+    body.debug-active .debug-indicator { display: block; }
     .timer-panel.green { background: linear-gradient(180deg, rgba(102, 137, 113, 0.4) 0%, rgba(102, 137, 113, 0.2) 100%); }
     .timer-panel.yellow { background: linear-gradient(180deg, rgba(228, 170, 79, 0.4) 0%, rgba(228, 170, 79, 0.2) 100%); }
     .timer-panel.red { background: linear-gradient(180deg, rgba(239, 68, 68, 0.3) 0%, rgba(185, 28, 28, 0.2) 100%); }
@@ -222,41 +258,45 @@
     .timer-header { font-size: 16px; font-weight: 700; color: var(--gold); text-transform: uppercase; letter-spacing: 3px; margin-bottom: 15px; }
     .timer-display { position: relative; width: 220px; height: 220px; margin-bottom: 15px; }
     .timer-ring { width: 100%; height: 100%; transform: rotate(-90deg); }
-    .timer-ring-bg { fill: none; stroke: rgba(228,170,79,0.15); stroke-width: 12; }
+    .timer-ring-bg { fill: none; stroke: rgba(255,255,255,0.1); stroke-width: 12; }
     .timer-ring-progress { fill: none; stroke-width: 12; stroke-linecap: round; transition: stroke-dashoffset 1s linear, stroke 0.3s ease; }
-    .timer-ring-progress.green { stroke: var(--green); }
-    .timer-ring-progress.yellow { stroke: var(--gold); }
-    .timer-ring-progress.red { stroke: var(--status-red); }
+    .timer-ring-progress.green { stroke: #22c55e; filter: drop-shadow(0 0 8px rgba(34, 197, 94, 0.6)); }
+    .timer-ring-progress.yellow { stroke: #facc15; filter: drop-shadow(0 0 8px rgba(250, 204, 21, 0.6)); }
+    .timer-ring-progress.red { stroke: #ef4444; filter: drop-shadow(0 0 12px rgba(239, 68, 68, 0.8)); }
     .timer-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
     .timer-value { font-size: 48px; font-weight: 900; color: #fff; line-height: 1; font-variant-numeric: tabular-nums; }
-    .timer-value.green { color: var(--green-bright); }
-    .timer-value.yellow { color: var(--gold); }
-    .timer-value.red { color: var(--status-red); }
+    .timer-value.green { color: #4ade80; text-shadow: 0 0 20px rgba(34, 197, 94, 0.5); }
+    .timer-value.yellow { color: #fde047; text-shadow: 0 0 20px rgba(250, 204, 21, 0.5); }
+    .timer-value.red { color: #f87171; text-shadow: 0 0 20px rgba(239, 68, 68, 0.5); animation: urgentPulse 0.8s ease-in-out infinite; }
     .timer-label { font-size: 14px; color: rgba(255,255,255,0.5); margin-top: 6px; }
     .timer-target { font-size: 14px; color: rgba(255,255,255,0.4); margin-bottom: 15px; }
     .timer-target span { color: var(--gold); font-weight: 600; }
     
-    /* Manual Button - brand styling */
-    .manual-btn { width: 100%; padding: 16px 24px; background: linear-gradient(135deg, var(--green) 0%, #5a7a63 100%); border: none; border-radius: 16px; color: white; font-size: 18px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: all 0.2s ease; margin-bottom: 15px; box-shadow: 0 4px 12px rgba(102,137,113,0.3); }
-    .manual-btn:hover { transform: scale(1.02); box-shadow: 0 6px 16px rgba(102,137,113,0.4); }
+    /* Manual Button - vivid styling */
+    .manual-btn { width: 100%; padding: 16px 24px; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); border: none; border-radius: 16px; color: white; font-size: 18px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: all 0.2s ease; margin-bottom: 15px; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4); }
+    .manual-btn:hover { transform: scale(1.02); box-shadow: 0 6px 20px rgba(34, 197, 94, 0.5); }
     .manual-btn:active { transform: scale(0.98); }
     .manual-btn .icon { font-size: 22px; }
-    .manual-btn.success { background: linear-gradient(135deg, var(--gold) 0%, var(--sungrown) 100%); box-shadow: 0 4px 12px rgba(228,170,79,0.3); }
+    .manual-btn.success { background: linear-gradient(135deg, #facc15 0%, #eab308 100%); box-shadow: 0 4px 12px rgba(250, 204, 21, 0.4); color: #1a1f16; }
     
     /* Timer Stats - brand styling */
     .timer-stats { width: 100%; display: flex; flex-direction: column; gap: 8px; }
     .timer-stat { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(0,0,0,0.3); border-radius: 10px; border: 1px solid rgba(228,170,79,0.1); }
     .timer-stat-label { font-size: 13px; color: var(--gold); }
     .timer-stat-value { font-size: 16px; font-weight: 700; color: rgba(255,255,255,0.9); }
-    .timer-stat-value.positive { color: var(--green-bright); }
-    .timer-stat-value.negative { color: var(--status-red); }
+    .timer-stat-value.positive { color: #4ade80; }
+    .timer-stat-value.negative { color: #f87171; }
     
     /* Animations */
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+    @keyframes urgentPulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.85; transform: scale(1.02); } }
     @keyframes currentHourPulse { 0%, 100% { border-color: rgba(102, 137, 113, 0.6); } 50% { border-color: rgba(102, 137, 113, 0.9); } }
     body.ahead .status-badge { animation: pulse 2s ease-in-out infinite; }
     body.behind .status-badge { animation: pulse 1.5s ease-in-out infinite; }
-    .timer-display.overtime .timer-ring-progress { animation: pulse 1s ease-in-out infinite; }
+    .timer-display.overtime .timer-ring-progress { animation: overtimePulse 0.8s ease-in-out infinite; }
+    .timer-display.overtime { animation: overtimeGlow 0.8s ease-in-out infinite; }
+    @keyframes overtimePulse { 0%, 100% { opacity: 1; stroke-width: 12; } 50% { opacity: 0.7; stroke-width: 14; } }
+    @keyframes overtimeGlow { 0%, 100% { filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.3)); } 50% { filter: drop-shadow(0 0 25px rgba(239, 68, 68, 0.6)); } }
     
     /* ============================================
        RESPONSIVE STYLES
@@ -431,7 +471,7 @@
     }
   </style>
 </head>
-<body class="idle">
+<body class="idle timer-neutral">
   <div class="strain-display">
     <div class="strain-label" id="strainLabel">Line 1 • Current Strain</div>
     <div class="strain-name" id="strainName">—</div>
@@ -590,8 +630,91 @@
     </div>
   </div>
 
+  <!-- Debug Panel -->
+  <div class="debug-indicator" id="debugIndicator">⚠ Debug Mode Active</div>
+  <div class="debug-panel" id="debugPanel">
+    <div class="debug-header">🛠 Timer Debug <button class="debug-close" onclick="toggleDebug()">✕</button></div>
+    <div class="debug-controls">
+      <div class="debug-label">Timer State:</div>
+      <div class="debug-buttons">
+        <button onclick="setDebugState('green')">🟢 Green</button>
+        <button onclick="setDebugState('yellow')">🟡 Yellow</button>
+        <button onclick="setDebugState('red')">🔴 Red/Overtime</button>
+        <button onclick="setDebugState('neutral')">⚫ Neutral</button>
+      </div>
+      <div class="debug-label">Simulate Time:</div>
+      <div class="debug-buttons">
+        <button onclick="simulateTime(0)">Just Started</button>
+        <button onclick="simulateTime(50)">50%</button>
+        <button onclick="simulateTime(85)">85% (Yellow)</button>
+        <button onclick="simulateTime(110)">110% (Overtime)</button>
+      </div>
+      <div class="debug-label">Break Status:</div>
+      <div class="debug-buttons">
+        <button onclick="simulateBreak(false)">Working</button>
+        <button onclick="simulateBreak(true)">On Break</button>
+      </div>
+      <div class="debug-divider"></div>
+      <button class="debug-reset" onclick="resetDebug()">↻ Reset to Live</button>
+    </div>
+    <div class="debug-hint">Press <kbd>D</kbd> to toggle this panel</div>
+  </div>
+
   <script>
     let data=null,timerData=null,currentLang='en',lastBagTimestamp=null,hourlyChart=null;
+    
+    // Debug mode variables
+    let debugMode = false;
+    let debugState = null;
+    let debugElapsedPercent = null;
+    let debugOnBreak = null;
+    
+    function toggleDebug() {
+      const panel = document.getElementById('debugPanel');
+      panel.classList.toggle('active');
+    }
+    
+    function setDebugState(state) {
+      debugMode = true;
+      debugState = state;
+      debugElapsedPercent = null;
+      document.body.classList.add('debug-active');
+      renderTimer();
+    }
+    
+    function simulateTime(percent) {
+      debugMode = true;
+      debugState = null;
+      debugElapsedPercent = percent;
+      document.body.classList.add('debug-active');
+      renderTimer();
+    }
+    
+    function simulateBreak(onBreak) {
+      debugMode = true;
+      debugOnBreak = onBreak;
+      document.body.classList.add('debug-active');
+      renderTimer();
+    }
+    
+    function resetDebug() {
+      debugMode = false;
+      debugState = null;
+      debugElapsedPercent = null;
+      debugOnBreak = null;
+      document.body.classList.remove('debug-active');
+      renderTimer();
+    }
+    
+    // Keyboard shortcut to toggle debug panel
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'd' || e.key === 'D') {
+        // Don't trigger if typing in an input
+        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+          toggleDebug();
+        }
+      }
+    });
     const t={en:{currentStrain:'Line 1 • Current Strain',lastHour:'Last Hour (Completed)',currentHour:'Current Hour',lbs:'lbs',trimmers:'trimmers',ofTarget:'vs target',lbsTarget:'lbs target',trimmersLabel:'Line 1 Trimmers',targetRate:'Target:',avgLbs:'AVG',bestLbs:'BEST',todaysProgress:'LINE 1 TODAY',endOfDay:'End of day:',lbsGoal:'lbs goal',upBy:'Up',downBy:'Down',vsYesterday:'vs Yesterday',vs7Day:'vs 7-Day Avg',hrStreak:'hr streak',hrs:'hrs',aheadOfTarget:'AHEAD OF TARGET',onTarget:'ON TARGET',behindTarget:'BEHIND TARGET',waiting:'WAITING FOR DATA',bagTimer:'5KG BAG TIMER',remaining:'remaining',overtime:'OVERTIME',bagComplete:'5KG Bag Complete',logged:'Logged!',bagsToday:'Bags Today',avgToday:'Avg Today',vsTargetTimer:'vs Target',strainRate:'Strain-specific rate',fallbackRate:'Using avg rate',helpTitle:'Understanding the Scoreboard',helpGreen:'Green = Ahead (105%+)',helpYellow:'Yellow = On Target (90-105%)',helpRed:'Red = Behind (<90%)',chartHeader:'HOURLY PERFORMANCE (LBS/TRIMMER)',onBreak:'ON BREAK',paused:'PAUSED'},es:{currentStrain:'Línea 1 • Variedad Actual',lastHour:'Última Hora (Completa)',currentHour:'Hora Actual',lbs:'lbs',trimmers:'triminadores',ofTarget:'vs meta',lbsTarget:'lbs meta',trimmersLabel:'Triminadores L1',targetRate:'Meta:',avgLbs:'PROM',bestLbs:'MEJOR',todaysProgress:'LÍNEA 1 HOY',endOfDay:'Fin del día:',lbsGoal:'lbs meta',upBy:'Arriba',downBy:'Abajo',vsYesterday:'vs Ayer',vs7Day:'vs Prom 7 Días',hrStreak:'hrs seguidas',hrs:'hrs',aheadOfTarget:'ARRIBA DE LA META',onTarget:'EN LA META',behindTarget:'DEBAJO DE LA META',waiting:'ESPERANDO DATOS',bagTimer:'TEMPORIZADOR 5KG',remaining:'restante',overtime:'TIEMPO EXTRA',bagComplete:'Bolsa 5KG Lista',logged:'¡Registrado!',bagsToday:'Bolsas Hoy',avgToday:'Prom Hoy',vsTargetTimer:'vs Meta',strainRate:'Tasa específica',fallbackRate:'Usando tasa prom',helpTitle:'Entendiendo el Marcador',helpGreen:'Verde = Adelante (105%+)',helpYellow:'Amarillo = En Meta (90-105%)',helpRed:'Rojo = Atrás (<90%)',chartHeader:'RENDIMIENTO POR HORA (LBS/TRIMINADOR)',onBreak:'EN DESCANSO',paused:'PAUSADO'}};
     
     // Break schedule: [startHour, startMin, endHour, endMin]
@@ -825,7 +948,11 @@
       });
     }
     
-    function renderScoreboard(){if(!data)return;const lastHourLbs=data.lastHourLbs||0,lastHourTarget=data.lastHourTarget||0,lastHourTrimmers=data.lastHourTrimmers||0,lastTimeSlot=data.lastTimeSlot||'—',currentHourTrimmers=data.currentHourTrimmers||0,currentHourTarget=data.currentHourTarget||0,currentTimeSlot=data.currentTimeSlot||'',targetRate=data.targetRate||0,strain=data.strain||'—',todayLbs=data.todayLbs||0,todayTarget=data.todayTarget||0,todayPct=data.todayPercentage||0,hoursLogged=data.hoursLogged||0,avgPct=data.avgPercentage||0,bestPct=data.bestPercentage||0,streak=data.streak||0,lastHourPct=lastHourTarget>0?(lastHourLbs/lastHourTarget)*100:0,lastHourDelta=lastHourLbs-lastHourTarget,statusPct=todayPct>0?todayPct:avgPct;let status='idle',statusIcon='⏸',statusKey='waiting';if(todayLbs>0||lastHourLbs>0){if(statusPct>=105){status='ahead';statusIcon='🔥';statusKey='aheadOfTarget';}else if(statusPct>=90){status='on-target';statusIcon='✓';statusKey='onTarget';}else if(statusPct>0){status='behind';statusIcon='⚠';statusKey='behindTarget';}}document.body.className=status;document.getElementById('statusIcon').textContent=statusIcon;document.getElementById('statusText').textContent=t[currentLang][statusKey];document.getElementById('lastHourLbs').textContent=lastHourLbs>0?lastHourLbs.toFixed(1):'—';document.getElementById('lastHourTarget').textContent=lastHourTarget>0?lastHourTarget.toFixed(1):'—';document.getElementById('lastHourTimeslot').textContent=lastTimeSlot;
+    function renderScoreboard(){if(!data)return;const lastHourLbs=data.lastHourLbs||0,lastHourTarget=data.lastHourTarget||0,lastHourTrimmers=data.lastHourTrimmers||0,lastTimeSlot=data.lastTimeSlot||'—',currentHourTrimmers=data.currentHourTrimmers||0,currentHourTarget=data.currentHourTarget||0,currentTimeSlot=data.currentTimeSlot||'',targetRate=data.targetRate||0,strain=data.strain||'—',todayLbs=data.todayLbs||0,todayTarget=data.todayTarget||0,todayPct=data.todayPercentage||0,hoursLogged=data.hoursLogged||0,avgPct=data.avgPercentage||0,bestPct=data.bestPercentage||0,streak=data.streak||0,lastHourPct=lastHourTarget>0?(lastHourLbs/lastHourTarget)*100:0,lastHourDelta=lastHourLbs-lastHourTarget,statusPct=todayPct>0?todayPct:avgPct;let status='idle',statusIcon='⏸',statusKey='waiting';if(todayLbs>0||lastHourLbs>0){if(statusPct>=105){status='ahead';statusIcon='🔥';statusKey='aheadOfTarget';}else if(statusPct>=90){status='on-target';statusIcon='✓';statusKey='onTarget';}else if(statusPct>0){status='behind';statusIcon='⚠';statusKey='behindTarget';}}
+    // Update status classes without overriding timer background
+    document.body.classList.remove('ahead','on-target','behind','idle');
+    document.body.classList.add(status);
+    document.getElementById('statusIcon').textContent=statusIcon;document.getElementById('statusText').textContent=t[currentLang][statusKey];document.getElementById('lastHourLbs').textContent=lastHourLbs>0?lastHourLbs.toFixed(1):'—';document.getElementById('lastHourTarget').textContent=lastHourTarget>0?lastHourTarget.toFixed(1):'—';document.getElementById('lastHourTimeslot').textContent=lastTimeSlot;
     // Show lbs delta instead of percentage
     const lhp = document.getElementById('lastHourPct');
     if(lastHourTarget>0){const deltaAbs=Math.abs(lastHourDelta).toFixed(1);if(lastHourDelta>=0.05){lhp.textContent=`+${deltaAbs} lbs`;lhp.style.color='#7a9d87';}else if(lastHourDelta<=-0.05){lhp.textContent=`-${deltaAbs} lbs`;lhp.style.color='#f87171';}else{lhp.textContent=`0 lbs`;lhp.style.color='#e4aa4f';}}else{lhp.textContent='—';lhp.style.color='rgba(255,255,255,0.5)';}
@@ -840,56 +967,88 @@
     const sri=document.getElementById('strainRateIndicator');if(data.usingStrainRate){sri.innerHTML=`<span style="font-size:12px;color:rgba(122,157,135,0.9)">${t[currentLang].strainRate}</span>`;}else if(strain&&strain!=='—'){sri.innerHTML=`<span style="font-size:12px;color:rgba(228,170,79,0.9)">${t[currentLang].fallbackRate}</span>`;}else{sri.innerHTML='';}}
     function renderTimer(){const targetSec=(timerData&&timerData.targetSeconds)||0,trimmers=(timerData&&timerData.currentTrimmers)||0,bagsToday=(timerData&&timerData.bagsToday)||0,avgSecToday=(timerData&&timerData.avgSecondsToday)||0;
       
-      // Get break/after hours status
-      const breakStatus = isOnBreakOrAfterHours();
+      // Get break/after hours status (can be overridden by debug)
+      let breakStatus = debugOnBreak !== null ? { onBreak: debugOnBreak, afterHours: false } : isOnBreakOrAfterHours();
       
       // Calculate working time (excludes breaks)
       let elapsedSec=0;
       if(lastBagTimestamp)elapsedSec=getWorkingSecondsSince(lastBagTimestamp);
       
-      let remainingSec=targetSec>0?targetSec-elapsedSec:elapsedSec;
-      const isOvertime=targetSec>0&&remainingSec<0&&!breakStatus.onBreak;
-      const displaySec=Math.abs(targetSec>0?remainingSec:elapsedSec);
+      // Debug mode: simulate elapsed time as percentage of target
+      const debugTargetSec = targetSec > 0 ? targetSec : 300; // Default 5 min for testing
+      if (debugMode && debugElapsedPercent !== null) {
+        elapsedSec = Math.round(debugTargetSec * (debugElapsedPercent / 100));
+      }
+      
+      const effectiveTarget = debugMode ? debugTargetSec : targetSec;
+      let remainingSec=effectiveTarget>0?effectiveTarget-elapsedSec:elapsedSec;
+      const isOvertime=effectiveTarget>0&&remainingSec<0&&!breakStatus.onBreak;
+      const displaySec=Math.abs(effectiveTarget>0?remainingSec:elapsedSec);
       
       let colorClass='neutral';
-      if(targetSec>0||elapsedSec>0){
+      
+      // Debug mode: direct state override
+      if (debugMode && debugState) {
+        colorClass = debugState;
+      } else if(effectiveTarget>0||elapsedSec>0){
         colorClass='green';
         if(breakStatus.onBreak){
           colorClass='yellow';
-        }else if(targetSec>0){
+        }else if(effectiveTarget>0){
           if(isOvertime)colorClass='red';
-          else if(remainingSec<targetSec*0.2)colorClass='yellow';
+          else if(remainingSec<effectiveTarget*0.2)colorClass='yellow';
         }
       }
       
       const tp=document.getElementById('timerPanel'),tv=document.getElementById('timerValue'),tl=document.getElementById('timerLabel'),tr=document.getElementById('timerRing'),td=document.getElementById('timerDisplay');
       
-      // Update panel background color
-      tp.className='timer-panel '+colorClass;
+      // Update panel background color (preserve fullscreen and dragging classes)
+      const isFs = tp.classList.contains('fullscreen');
+      const isDr = tp.classList.contains('dragging');
+      tp.className='timer-panel '+colorClass + (isFs ? ' fullscreen' : '') + (isDr ? ' dragging' : '');
+      
+      // Update body background based on timer status
+      document.body.classList.remove('timer-green', 'timer-yellow', 'timer-red', 'timer-neutral');
+      document.body.classList.add('timer-' + colorClass);
       
       // Show paused state during breaks/after hours
-      if(breakStatus.onBreak){
+      if(breakStatus.onBreak && !debugMode){
         tv.textContent=breakStatus.afterHours?'--:--':formatTime(displaySec);
         tv.className='timer-value yellow';
         tl.textContent=breakStatus.afterHours?t[currentLang].paused:t[currentLang].onBreak;
       }else{
-        tv.textContent=(targetSec>0||elapsedSec>0)?formatTime(displaySec):'--:--';
+        const showTime = debugMode || effectiveTarget>0 || elapsedSec>0;
+        tv.textContent=showTime?formatTime(displaySec):'--:--';
         tv.className='timer-value '+(colorClass==='neutral'?'':colorClass);
-        tl.textContent=(targetSec===0&&elapsedSec>0)?(currentLang==='es'?'transcurrido':'elapsed'):isOvertime?t[currentLang].overtime:t[currentLang].remaining;
+        const isOT = debugState === 'red' || isOvertime;
+        tl.textContent=(effectiveTarget===0&&elapsedSec>0&&!debugMode)?(currentLang==='es'?'transcurrido':'elapsed'):isOT?t[currentLang].overtime:t[currentLang].remaining;
       }
       
       const circ=2*Math.PI*95;let prog=0;
-      if(breakStatus.onBreak){
+      if(breakStatus.onBreak && !debugMode){
         // Keep ring at current position during breaks
-        prog=targetSec>0&&elapsedSec>0?Math.min(1,elapsedSec/targetSec):0;
-      }else if(targetSec>0){
-        prog=isOvertime?1:elapsedSec/targetSec;
+        prog=effectiveTarget>0&&elapsedSec>0?Math.min(1,elapsedSec/effectiveTarget):0;
+      }else if(effectiveTarget>0){
+        const isOT = debugState === 'red' || isOvertime;
+        prog=isOT?1:elapsedSec/effectiveTarget;
       }
+      // Debug mode progress override
+      if (debugMode && debugElapsedPercent !== null) {
+        prog = Math.min(1, debugElapsedPercent / 100);
+      } else if (debugMode && debugState === 'red') {
+        prog = 1;
+      } else if (debugMode && debugState === 'yellow') {
+        prog = 0.85;
+      } else if (debugMode && debugState === 'green') {
+        prog = 0.4;
+      }
+      
       tr.style.strokeDashoffset=circ*(1-Math.min(1,prog));
       tr.className='timer-ring-progress '+(colorClass==='neutral'?'green':colorClass);
-      td.classList.toggle('overtime',isOvertime&&!breakStatus.onBreak);
+      const showOvertime = debugState === 'red' || (isOvertime && !breakStatus.onBreak);
+      td.classList.toggle('overtime', showOvertime);
       
-      document.getElementById('timerTargetTime').textContent=targetSec>0?formatTime(targetSec):'--:--';document.getElementById('timerTrimmers').textContent=trimmers||'—';document.getElementById('bagsToday').textContent=bagsToday;document.getElementById('avgToday').textContent=avgSecToday>0?formatTime(avgSecToday):'--:--';const vt=document.getElementById('vsTarget');if(avgSecToday>0&&targetSec>0){const diff=targetSec-avgSecToday,dm=Math.round(diff/60);if(dm>0){vt.textContent=`+${dm} min`;vt.className='timer-stat-value positive';}else if(dm<0){vt.textContent=`${dm} min`;vt.className='timer-stat-value negative';}else{vt.textContent='On pace';vt.className='timer-stat-value';}}else{vt.textContent='—';vt.className='timer-stat-value';}}
+      document.getElementById('timerTargetTime').textContent=effectiveTarget>0?formatTime(effectiveTarget):'--:--';document.getElementById('timerTrimmers').textContent=trimmers||'—';document.getElementById('bagsToday').textContent=bagsToday;document.getElementById('avgToday').textContent=avgSecToday>0?formatTime(avgSecToday):'--:--';const vt=document.getElementById('vsTarget');if(avgSecToday>0&&effectiveTarget>0){const diff=effectiveTarget-avgSecToday,dm=Math.round(diff/60);if(dm>0){vt.textContent=`+${dm} min`;vt.className='timer-stat-value positive';}else if(dm<0){vt.textContent=`${dm} min`;vt.className='timer-stat-value negative';}else{vt.textContent='On pace';vt.className='timer-stat-value';}}else{vt.textContent='—';vt.className='timer-stat-value';}}
     function formatTime(s){return`${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;}
     function logManualEntry(){
       const btn=document.getElementById('manualBtn'),txt=document.getElementById('manualBtnText');
