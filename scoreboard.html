@@ -39,7 +39,36 @@
     
     .main-panel { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px 30px; height: 100vh; overflow: hidden; }
     
-    .timer-panel { width: 380px; min-width: 380px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px; border-left: 2px solid rgba(228,170,79,0.2); height: 100vh; transition: background 0.5s ease; }
+    .timer-panel { width: 380px; min-width: 380px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px; border-left: 2px solid rgba(228,170,79,0.2); height: 100vh; transition: background 0.5s ease, width 0.4s ease, min-width 0.4s ease; position: relative; }
+    .timer-panel.fullscreen { width: 100vw; min-width: 100vw; border-left: none; }
+    body.timer-fullscreen .main-panel { display: none; }
+    body.timer-fullscreen .time-display { right: 20px; }
+    body.timer-fullscreen .help-btn { right: 20px; }
+    
+    /* Drag Handle */
+    .drag-handle { position: absolute; left: 0; top: 0; bottom: 0; width: 24px; cursor: ew-resize; display: flex; align-items: center; justify-content: center; opacity: 0.5; transition: opacity 0.2s, background 0.2s; z-index: 10; }
+    .drag-handle:hover { opacity: 1; background: rgba(228,170,79,0.1); }
+    .drag-handle::before { content: ''; width: 4px; height: 50px; background: rgba(228,170,79,0.4); border-radius: 2px; transition: background 0.2s; }
+    .drag-handle:hover::before { background: var(--gold); }
+    .timer-panel.fullscreen .drag-handle { left: auto; right: 0; }
+    .timer-panel.dragging { transition: none; }
+    
+    /* Expand hint arrow */
+    .expand-hint { position: absolute; left: 30px; top: 50%; transform: translateY(-50%); color: rgba(228,170,79,0.4); font-size: 20px; pointer-events: none; transition: opacity 0.3s; }
+    .timer-panel.fullscreen .expand-hint { left: auto; right: 30px; transform: translateY(-50%) rotate(180deg); }
+    .timer-panel:hover .expand-hint { opacity: 0; }
+    
+    /* Fullscreen timer enhancements */
+    .timer-panel.fullscreen .timer-display { width: 300px; height: 300px; margin-bottom: 25px; }
+    .timer-panel.fullscreen .timer-value { font-size: 72px; }
+    .timer-panel.fullscreen .timer-header { font-size: 22px; margin-bottom: 25px; }
+    .timer-panel.fullscreen .timer-target { font-size: 18px; margin-bottom: 25px; }
+    .timer-panel.fullscreen .manual-btn { font-size: 22px; padding: 20px 40px; margin-bottom: 25px; }
+    .timer-panel.fullscreen .timer-stats { flex-direction: row; gap: 20px; justify-content: center; }
+    .timer-panel.fullscreen .timer-stat { padding: 14px 24px; }
+    .timer-panel.fullscreen .timer-stat-label { font-size: 15px; }
+    .timer-panel.fullscreen .timer-stat-value { font-size: 20px; }
+    .timer-panel.fullscreen .timer-ring-bg, .timer-panel.fullscreen .timer-ring-progress { stroke-width: 14; }
     .timer-panel.green { background: linear-gradient(180deg, rgba(102, 137, 113, 0.4) 0%, rgba(102, 137, 113, 0.2) 100%); }
     .timer-panel.yellow { background: linear-gradient(180deg, rgba(228, 170, 79, 0.4) 0%, rgba(228, 170, 79, 0.2) 100%); }
     .timer-panel.red { background: linear-gradient(180deg, rgba(239, 68, 68, 0.3) 0%, rgba(185, 28, 28, 0.2) 100%); }
@@ -279,12 +308,21 @@
       body { flex-direction: column; }
       .main-panel { height: auto; min-height: auto; padding: 80px 20px 20px; order: 1; }
       .timer-panel { width: 100%; min-width: 100%; height: auto; border-left: none; border-top: 2px solid rgba(228,170,79,0.2); padding: 20px; order: 2; flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 20px; }
+      .timer-panel.fullscreen { height: 100vh; flex-direction: column; flex-wrap: nowrap; }
+      body.timer-fullscreen { overflow: hidden; }
+      body.timer-fullscreen .main-panel { display: none; }
+      .drag-handle { width: 100%; height: 20px; top: 0; left: 0; right: 0; bottom: auto; cursor: ns-resize; }
+      .drag-handle::before { width: 50px; height: 4px; }
+      .timer-panel.fullscreen .drag-handle { top: auto; bottom: 0; }
+      .expand-hint { top: 8px; left: 50%; transform: translateX(-50%) rotate(-90deg); }
+      .timer-panel.fullscreen .expand-hint { top: auto; bottom: 8px; left: 50%; right: auto; transform: translateX(-50%) rotate(90deg); }
       .time-display { right: 20px; top: 15px; }
       .help-btn { right: 20px; bottom: auto; top: 70px; }
       .strain-display { top: 15px; }
       .strain-name { font-size: 20px; max-width: 200px; }
       .time-display .time { font-size: 28px; }
       .timer-header { display: none; }
+      .timer-panel.fullscreen .timer-header { display: block; }
       .timer-display { width: 160px; height: 160px; margin-bottom: 0; }
       .timer-value { font-size: 36px; }
       .timer-target { margin-bottom: 0; }
@@ -530,6 +568,8 @@
   </div>
   
   <div class="timer-panel neutral" id="timerPanel">
+    <div class="drag-handle" id="dragHandle"></div>
+    <div class="expand-hint" id="expandHint">◀</div>
     <div class="timer-header" id="timerHeader">5KG Bag Timer</div>
     <div class="timer-display" id="timerDisplay">
       <svg class="timer-ring" viewBox="0 0 220 220">
@@ -902,6 +942,130 @@
       }
     }
     function renderComparison(prefix,value){const pill=document.getElementById(prefix+'Pill'),ve=document.getElementById(prefix+'Value');if(value===null||value===undefined){pill.style.display='none';return;}pill.style.display='flex';const r=Math.round(value);ve.textContent=`${r>=0?'+':''}${r}%`;ve.classList.remove('positive','negative','neutral');ve.classList.add(r>2?'positive':r<-2?'negative':'neutral');}
+    
+    // Drag-to-expand timer panel functionality
+    (function() {
+      const timerPanel = document.getElementById('timerPanel');
+      const dragHandle = document.getElementById('dragHandle');
+      const expandHint = document.getElementById('expandHint');
+      let isDragging = false;
+      let startX = 0;
+      let startY = 0;
+      let isFullscreen = false;
+      const DRAG_THRESHOLD = 100; // pixels to drag before toggling
+      
+      function isVerticalMode() {
+        return window.innerWidth <= 1024;
+      }
+      
+      function updateHint() {
+        if (isVerticalMode()) {
+          expandHint.textContent = isFullscreen ? '▼' : '▲';
+        } else {
+          expandHint.textContent = isFullscreen ? '▶' : '◀';
+        }
+      }
+      
+      function toggleFullscreen(toFullscreen) {
+        isFullscreen = toFullscreen;
+        timerPanel.classList.toggle('fullscreen', isFullscreen);
+        document.body.classList.toggle('timer-fullscreen', isFullscreen);
+        updateHint();
+        // Save preference
+        try { localStorage.setItem('timerFullscreen', isFullscreen); } catch(e) {}
+      }
+      
+      // Load saved preference
+      try {
+        const saved = localStorage.getItem('timerFullscreen');
+        if (saved === 'true') {
+          toggleFullscreen(true);
+        }
+      } catch(e) {}
+      
+      // Update hint on resize
+      window.addEventListener('resize', updateHint);
+      updateHint();
+      
+      // Mouse events
+      dragHandle.addEventListener('mousedown', function(e) {
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        timerPanel.classList.add('dragging');
+        e.preventDefault();
+      });
+      
+      document.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+      });
+      
+      document.addEventListener('mouseup', function(e) {
+        if (!isDragging) return;
+        isDragging = false;
+        timerPanel.classList.remove('dragging');
+        
+        if (isVerticalMode()) {
+          // Vertical dragging (up/down)
+          const deltaY = startY - e.clientY;
+          if (!isFullscreen && deltaY > DRAG_THRESHOLD) {
+            toggleFullscreen(true);
+          } else if (isFullscreen && deltaY < -DRAG_THRESHOLD) {
+            toggleFullscreen(false);
+          }
+        } else {
+          // Horizontal dragging (left/right)
+          const deltaX = startX - e.clientX;
+          if (!isFullscreen && deltaX > DRAG_THRESHOLD) {
+            toggleFullscreen(true);
+          } else if (isFullscreen && deltaX < -DRAG_THRESHOLD) {
+            toggleFullscreen(false);
+          }
+        }
+      });
+      
+      // Touch events for mobile
+      dragHandle.addEventListener('touchstart', function(e) {
+        isDragging = true;
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        timerPanel.classList.add('dragging');
+      }, { passive: true });
+      
+      document.addEventListener('touchmove', function(e) {
+        if (!isDragging) return;
+      }, { passive: true });
+      
+      document.addEventListener('touchend', function(e) {
+        if (!isDragging) return;
+        isDragging = false;
+        timerPanel.classList.remove('dragging');
+        
+        const endX = e.changedTouches[0].clientX;
+        const endY = e.changedTouches[0].clientY;
+        
+        if (isVerticalMode()) {
+          const deltaY = startY - endY;
+          if (!isFullscreen && deltaY > DRAG_THRESHOLD) {
+            toggleFullscreen(true);
+          } else if (isFullscreen && deltaY < -DRAG_THRESHOLD) {
+            toggleFullscreen(false);
+          }
+        } else {
+          const deltaX = startX - endX;
+          if (!isFullscreen && deltaX > DRAG_THRESHOLD) {
+            toggleFullscreen(true);
+          } else if (isFullscreen && deltaX < -DRAG_THRESHOLD) {
+            toggleFullscreen(false);
+          }
+        }
+      });
+      
+      // Double-click/tap to toggle
+      dragHandle.addEventListener('dblclick', function() {
+        toggleFullscreen(!isFullscreen);
+      });
+    })();
   </script>
 </body>
 </html>
