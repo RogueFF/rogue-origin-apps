@@ -285,12 +285,54 @@
     .timer-target { font-size: 14px; color: rgba(255,255,255,0.4); margin-bottom: 15px; }
     .timer-target span { color: var(--gold); font-weight: 600; }
     
-    /* Manual Button - vivid styling */
-    .manual-btn { width: 100%; padding: 16px 24px; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); border: none; border-radius: 16px; color: white; font-size: 18px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: all 0.2s ease; margin-bottom: 15px; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4); }
+    /* Manual Button - vivid styling with state colors */
+    .manual-btn { width: 100%; padding: 16px 24px; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); border: none; border-radius: 16px; color: white; font-size: 18px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: all 0.3s ease; margin-bottom: 15px; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4); }
     .manual-btn:hover { transform: scale(1.02); box-shadow: 0 6px 20px rgba(34, 197, 94, 0.5); }
     .manual-btn:active { transform: scale(0.98); }
     .manual-btn .icon { font-size: 22px; }
     .manual-btn.success { background: linear-gradient(135deg, #facc15 0%, #eab308 100%); box-shadow: 0 4px 12px rgba(250, 204, 21, 0.4); color: #1a1f16; }
+    .manual-btn.btn-green { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4); }
+    .manual-btn.btn-yellow { background: linear-gradient(135deg, #facc15 0%, #eab308 100%); box-shadow: 0 4px 12px rgba(250, 204, 21, 0.4); color: #1a1f16; }
+    .manual-btn.btn-red { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4); animation: btnPulse 0.8s ease-in-out infinite; }
+    .manual-btn.btn-neutral { background: linear-gradient(135deg, #64748b 0%, #475569 100%); box-shadow: 0 4px 12px rgba(100, 116, 139, 0.4); }
+    @keyframes btnPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.02); } }
+    
+    /* Cycle History */
+    .cycle-history { width: 100%; max-width: 400px; margin-top: 10px; }
+    .cycle-history-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .cycle-history-title { font-size: 12px; color: var(--gold); text-transform: uppercase; letter-spacing: 1px; }
+    .cycle-history-toggle { background: none; border: none; color: rgba(255,255,255,0.5); font-size: 12px; cursor: pointer; padding: 4px 8px; border-radius: 4px; }
+    .cycle-history-toggle:hover { background: rgba(255,255,255,0.1); color: var(--gold); }
+    .cycle-list { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; }
+    .cycle-list.collapsed { max-height: 0; overflow: hidden; }
+    .cycle-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: rgba(0,0,0,0.3); border-radius: 8px; border-left: 3px solid; font-size: 13px; }
+    .cycle-item.early { border-left-color: #22c55e; }
+    .cycle-item.on-time { border-left-color: #facc15; }
+    .cycle-item.overtime { border-left-color: #ef4444; }
+    .cycle-item-num { color: rgba(255,255,255,0.5); min-width: 30px; }
+    .cycle-item-time { color: #fff; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .cycle-item-delta { font-weight: 700; padding: 2px 8px; border-radius: 10px; font-size: 12px; }
+    .cycle-item-delta.early { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+    .cycle-item-delta.on-time { background: rgba(250, 204, 21, 0.2); color: #fde047; }
+    .cycle-item-delta.overtime { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+    .timer-panel.fullscreen .cycle-history { max-width: 500px; }
+    .timer-panel.fullscreen .cycle-list { max-height: 250px; }
+    .timer-panel.fullscreen .cycle-item { padding: 10px 16px; font-size: 15px; }
+    
+    /* Celebration Animation */
+    .celebration { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3000; }
+    .confetti { position: absolute; width: 10px; height: 10px; opacity: 0; }
+    @keyframes confettiFall {
+      0% { transform: translateY(-100px) rotate(0deg); opacity: 1; }
+      100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+    }
+    .celebration-text { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 48px; font-weight: 900; color: #4ade80; text-shadow: 0 0 30px rgba(34, 197, 94, 0.8); opacity: 0; animation: celebrateText 2s ease-out forwards; z-index: 3001; pointer-events: none; }
+    @keyframes celebrateText {
+      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+      20% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+      40% { transform: translate(-50%, -50%) scale(1); }
+      100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+    }
     
     /* Timer Stats - brand styling */
     .timer-stats { width: 100%; display: flex; flex-direction: column; gap: 8px; }
@@ -387,6 +429,8 @@
       .actual-lbs { font-size: 48px; }
       .daily-progress { min-width: 350px; }
       .chart-container { max-width: 500px; }
+      .cycle-history { max-width: 100%; order: 10; }
+      .timer-panel.fullscreen .cycle-history { max-width: 500px; }
     }
     
     /* Small tablets (< 768px) */
@@ -641,7 +685,18 @@
       <div class="timer-stat"><span class="timer-stat-label" id="avgTodayLabel">Avg Today</span><span class="timer-stat-value" id="avgToday">--:--</span></div>
       <div class="timer-stat"><span class="timer-stat-label" id="vsTargetLabel">vs Target</span><span class="timer-stat-value" id="vsTarget">—</span></div>
     </div>
+    
+    <div class="cycle-history" id="cycleHistory">
+      <div class="cycle-history-header">
+        <span class="cycle-history-title" id="cycleHistoryTitle">Today's Cycles</span>
+        <button class="cycle-history-toggle" id="cycleToggle" onclick="toggleCycleHistory()">Hide</button>
+      </div>
+      <div class="cycle-list" id="cycleList"></div>
+    </div>
   </div>
+  
+  <!-- Celebration container -->
+  <div class="celebration" id="celebration"></div>
 
   <!-- Debug Panel -->
   <div class="debug-indicator" id="debugIndicator">⚠ Debug Mode Active</div>
@@ -667,6 +722,12 @@
         <button onclick="simulateBreak(false)">Working</button>
         <button onclick="simulateBreak(true)">On Break</button>
       </div>
+      <div class="debug-label">Test Celebration:</div>
+      <div class="debug-buttons">
+        <button onclick="addCycleToHistory(240, 300)">🎉 Early Finish</button>
+        <button onclick="addCycleToHistory(295, 300)">✓ On Time</button>
+        <button onclick="addCycleToHistory(360, 300)">⚠ Overtime</button>
+      </div>
       <div class="debug-divider"></div>
       <button class="debug-reset" onclick="resetDebug()">↻ Reset to Live</button>
     </div>
@@ -681,6 +742,153 @@
     let debugState = null;
     let debugElapsedPercent = null;
     let debugOnBreak = null;
+    
+    // Cycle history
+    let cycleHistory = [];
+    let cycleHistoryCollapsed = false;
+    
+    // Sound effects using Web Audio API
+    let audioContext = null;
+    function playSuccessSound(isEarly) {
+      try {
+        if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        const now = audioContext.currentTime;
+        
+        // Create oscillators for a pleasant chime
+        const frequencies = isEarly ? [523.25, 659.25, 783.99, 1046.50] : [523.25, 659.25, 783.99]; // C5, E5, G5, (C6 for early)
+        
+        frequencies.forEach((freq, i) => {
+          const osc = audioContext.createOscillator();
+          const gain = audioContext.createGain();
+          
+          osc.connect(gain);
+          gain.connect(audioContext.destination);
+          
+          osc.frequency.value = freq;
+          osc.type = 'sine';
+          
+          const startTime = now + (i * 0.1);
+          gain.gain.setValueAtTime(0, startTime);
+          gain.gain.linearRampToValueAtTime(0.3, startTime + 0.05);
+          gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.5);
+          
+          osc.start(startTime);
+          osc.stop(startTime + 0.6);
+        });
+        
+        // Add a bonus flourish for early finish
+        if (isEarly) {
+          setTimeout(() => {
+            [1318.51, 1567.98, 2093.00].forEach((freq, i) => { // E6, G6, C7
+              const osc = audioContext.createOscillator();
+              const gain = audioContext.createGain();
+              osc.connect(gain);
+              gain.connect(audioContext.destination);
+              osc.frequency.value = freq;
+              osc.type = 'sine';
+              const startTime = audioContext.currentTime + (i * 0.08);
+              gain.gain.setValueAtTime(0, startTime);
+              gain.gain.linearRampToValueAtTime(0.2, startTime + 0.03);
+              gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.3);
+              osc.start(startTime);
+              osc.stop(startTime + 0.4);
+            });
+          }, 400);
+        }
+      } catch(e) { console.log('Audio not supported'); }
+    }
+    
+    function toggleCycleHistory() {
+      cycleHistoryCollapsed = !cycleHistoryCollapsed;
+      const list = document.getElementById('cycleList');
+      const toggle = document.getElementById('cycleToggle');
+      list.classList.toggle('collapsed', cycleHistoryCollapsed);
+      toggle.textContent = cycleHistoryCollapsed ? 'Show' : 'Hide';
+    }
+    
+    function addCycleToHistory(cycleTimeSec, targetSec) {
+      const delta = targetSec - cycleTimeSec;
+      const deltaSec = Math.abs(delta);
+      let status = 'on-time';
+      if (delta > 10) status = 'early';
+      else if (delta < -10) status = 'overtime';
+      
+      cycleHistory.unshift({
+        num: cycleHistory.length + 1,
+        time: cycleTimeSec,
+        target: targetSec,
+        delta: delta,
+        status: status,
+        timestamp: new Date()
+      });
+      
+      renderCycleHistory();
+      
+      // Trigger celebration if early or on-time
+      if (status === 'early' || status === 'on-time') {
+        triggerCelebration(status === 'early');
+      }
+    }
+    
+    function renderCycleHistory() {
+      const list = document.getElementById('cycleList');
+      if (cycleHistory.length === 0) {
+        list.innerHTML = `<div style="text-align:center;color:rgba(255,255,255,0.4);padding:10px;font-size:12px;">${t[currentLang].noBags}</div>`;
+        return;
+      }
+      
+      list.innerHTML = cycleHistory.map((c, i) => {
+        const deltaSec = Math.abs(c.delta);
+        const deltaMin = Math.floor(deltaSec / 60);
+        const deltaSecs = deltaSec % 60;
+        const deltaStr = deltaMin > 0 ? `${deltaMin}:${deltaSecs.toString().padStart(2,'0')}` : `${deltaSecs}s`;
+        const sign = c.delta > 10 ? '-' : c.delta < -10 ? '+' : '±';
+        const label = c.delta > 10 ? (currentLang === 'es' ? 'antes' : 'early') : c.delta < -10 ? (currentLang === 'es' ? 'tarde' : 'late') : '';
+        
+        return `<div class="cycle-item ${c.status}">
+          <span class="cycle-item-num">#${cycleHistory.length - i}</span>
+          <span class="cycle-item-time">${formatTime(c.time)}</span>
+          <span class="cycle-item-delta ${c.status}">${sign}${deltaStr} ${label}</span>
+        </div>`;
+      }).join('');
+    }
+    
+    function triggerCelebration(isEarly) {
+      // Play sound
+      playSuccessSound(isEarly);
+      
+      // Show celebration text
+      const text = document.createElement('div');
+      text.className = 'celebration-text';
+      text.textContent = isEarly ? '🎉 EARLY!' : '✓ ON TIME!';
+      text.style.color = isEarly ? '#4ade80' : '#fde047';
+      document.body.appendChild(text);
+      setTimeout(() => text.remove(), 2000);
+      
+      // Create confetti
+      const celebration = document.getElementById('celebration');
+      const colors = isEarly ? ['#22c55e', '#4ade80', '#86efac', '#fde047'] : ['#facc15', '#fde047', '#fef08a', '#22c55e'];
+      
+      for (let i = 0; i < 50; i++) {
+        const confetti = document.createElement('div');
+        confetti.className = 'confetti';
+        confetti.style.left = Math.random() * 100 + '%';
+        confetti.style.top = '-10px';
+        confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+        confetti.style.borderRadius = Math.random() > 0.5 ? '50%' : '0';
+        confetti.style.width = (Math.random() * 10 + 5) + 'px';
+        confetti.style.height = (Math.random() * 10 + 5) + 'px';
+        confetti.style.animation = `confettiFall ${Math.random() * 2 + 1.5}s ease-out forwards`;
+        confetti.style.animationDelay = Math.random() * 0.5 + 's';
+        celebration.appendChild(confetti);
+      }
+      
+      // Clean up confetti
+      setTimeout(() => {
+        celebration.innerHTML = '';
+      }, 3500);
+    }
     
     function toggleDebug() {
       const panel = document.getElementById('debugPanel');
@@ -715,8 +923,10 @@
       debugState = null;
       debugElapsedPercent = null;
       debugOnBreak = null;
+      cycleHistory = [];
       document.body.classList.remove('debug-active');
       renderTimer();
+      renderCycleHistory();
     }
     
     // Keyboard shortcut to toggle debug panel
@@ -728,7 +938,7 @@
         }
       }
     });
-    const t={en:{currentStrain:'Line 1 • Current Strain',lastHour:'Last Hour (Completed)',currentHour:'Current Hour',lbs:'lbs',trimmers:'trimmers',ofTarget:'vs target',lbsTarget:'lbs target',trimmersLabel:'Line 1 Trimmers',targetRate:'Target:',avgLbs:'AVG',bestLbs:'BEST',todaysProgress:'LINE 1 TODAY',endOfDay:'End of day:',lbsGoal:'lbs goal',upBy:'Up',downBy:'Down',vsYesterday:'vs Yesterday',vs7Day:'vs 7-Day Avg',hrStreak:'hr streak',hrs:'hrs',aheadOfTarget:'AHEAD OF TARGET',onTarget:'ON TARGET',behindTarget:'BEHIND TARGET',waiting:'WAITING FOR DATA',bagTimer:'5KG BAG TIMER',remaining:'remaining',overtime:'OVERTIME',bagComplete:'5KG Bag Complete',logged:'Logged!',bagsToday:'Bags Today',avgToday:'Avg Today',vsTargetTimer:'vs Target',strainRate:'Strain-specific rate',fallbackRate:'Using avg rate',helpTitle:'Understanding the Scoreboard',helpGreen:'Green = Ahead (105%+)',helpYellow:'Yellow = On Target (90-105%)',helpRed:'Red = Behind (<90%)',chartHeader:'HOURLY PERFORMANCE (LBS/TRIMMER)',onBreak:'ON BREAK',paused:'PAUSED'},es:{currentStrain:'Línea 1 • Variedad Actual',lastHour:'Última Hora (Completa)',currentHour:'Hora Actual',lbs:'lbs',trimmers:'triminadores',ofTarget:'vs meta',lbsTarget:'lbs meta',trimmersLabel:'Triminadores L1',targetRate:'Meta:',avgLbs:'PROM',bestLbs:'MEJOR',todaysProgress:'LÍNEA 1 HOY',endOfDay:'Fin del día:',lbsGoal:'lbs meta',upBy:'Arriba',downBy:'Abajo',vsYesterday:'vs Ayer',vs7Day:'vs Prom 7 Días',hrStreak:'hrs seguidas',hrs:'hrs',aheadOfTarget:'ARRIBA DE LA META',onTarget:'EN LA META',behindTarget:'DEBAJO DE LA META',waiting:'ESPERANDO DATOS',bagTimer:'TEMPORIZADOR 5KG',remaining:'restante',overtime:'TIEMPO EXTRA',bagComplete:'Bolsa 5KG Lista',logged:'¡Registrado!',bagsToday:'Bolsas Hoy',avgToday:'Prom Hoy',vsTargetTimer:'vs Meta',strainRate:'Tasa específica',fallbackRate:'Usando tasa prom',helpTitle:'Entendiendo el Marcador',helpGreen:'Verde = Adelante (105%+)',helpYellow:'Amarillo = En Meta (90-105%)',helpRed:'Rojo = Atrás (<90%)',chartHeader:'RENDIMIENTO POR HORA (LBS/TRIMINADOR)',onBreak:'EN DESCANSO',paused:'PAUSADO'}};
+    const t={en:{currentStrain:'Line 1 • Current Strain',lastHour:'Last Hour (Completed)',currentHour:'Current Hour',lbs:'lbs',trimmers:'trimmers',ofTarget:'vs target',lbsTarget:'lbs target',trimmersLabel:'Line 1 Trimmers',targetRate:'Target:',avgLbs:'AVG',bestLbs:'BEST',todaysProgress:'LINE 1 TODAY',endOfDay:'End of day:',lbsGoal:'lbs goal',upBy:'Up',downBy:'Down',vsYesterday:'vs Yesterday',vs7Day:'vs 7-Day Avg',hrStreak:'hr streak',hrs:'hrs',aheadOfTarget:'AHEAD OF TARGET',onTarget:'ON TARGET',behindTarget:'BEHIND TARGET',waiting:'WAITING FOR DATA',bagTimer:'5KG BAG TIMER',remaining:'remaining',overtime:'OVERTIME',bagComplete:'5KG Bag Complete',logged:'Logged!',bagsToday:'Bags Today',avgToday:'Avg Today',vsTargetTimer:'vs Target',strainRate:'Strain-specific rate',fallbackRate:'Using avg rate',helpTitle:'Understanding the Scoreboard',helpGreen:'Green = Ahead (105%+)',helpYellow:'Yellow = On Target (90-105%)',helpRed:'Red = Behind (<90%)',chartHeader:'HOURLY PERFORMANCE (LBS/TRIMMER)',onBreak:'ON BREAK',paused:'PAUSED',todaysCycles:"Today's Cycles",noBags:'No bags completed yet'},es:{currentStrain:'Línea 1 • Variedad Actual',lastHour:'Última Hora (Completa)',currentHour:'Hora Actual',lbs:'lbs',trimmers:'triminadores',ofTarget:'vs meta',lbsTarget:'lbs meta',trimmersLabel:'Triminadores L1',targetRate:'Meta:',avgLbs:'PROM',bestLbs:'MEJOR',todaysProgress:'LÍNEA 1 HOY',endOfDay:'Fin del día:',lbsGoal:'lbs meta',upBy:'Arriba',downBy:'Abajo',vsYesterday:'vs Ayer',vs7Day:'vs Prom 7 Días',hrStreak:'hrs seguidas',hrs:'hrs',aheadOfTarget:'ARRIBA DE LA META',onTarget:'EN LA META',behindTarget:'DEBAJO DE LA META',waiting:'ESPERANDO DATOS',bagTimer:'TEMPORIZADOR 5KG',remaining:'restante',overtime:'TIEMPO EXTRA',bagComplete:'Bolsa 5KG Lista',logged:'¡Registrado!',bagsToday:'Bolsas Hoy',avgToday:'Prom Hoy',vsTargetTimer:'vs Meta',strainRate:'Tasa específica',fallbackRate:'Usando tasa prom',helpTitle:'Entendiendo el Marcador',helpGreen:'Verde = Adelante (105%+)',helpYellow:'Amarillo = En Meta (90-105%)',helpRed:'Rojo = Atrás (<90%)',chartHeader:'RENDIMIENTO POR HORA (LBS/TRIMINADOR)',onBreak:'EN DESCANSO',paused:'PAUSADO',todaysCycles:'Ciclos de Hoy',noBags:'Sin bolsas completadas'}};
     
     // Break schedule: [startHour, startMin, endHour, endMin]
     const BREAKS = [
@@ -832,8 +1042,8 @@
     // Detect environment: Apps Script (google.script.run available) or GitHub Pages (use fetch)
     var isAppsScript = typeof google !== 'undefined' && google.script && google.script.run;
     
-    document.addEventListener('DOMContentLoaded',function(){updateClock();setInterval(updateClock,1000);loadData();setInterval(loadData,15000);setInterval(renderTimer,1000);});
-    function setLanguage(lang){currentLang=lang;document.getElementById('btnEn').classList.toggle('active',lang==='en');document.getElementById('btnEs').classList.toggle('active',lang==='es');document.getElementById('strainLabel').textContent=t[lang].currentStrain;document.getElementById('lastHourHeader').textContent=t[lang].lastHour;document.getElementById('currentHourHeader').textContent=t[lang].currentHour;document.getElementById('lbsUnit').textContent=t[lang].lbs;document.getElementById('trimmersSmallLabel').textContent=t[lang].trimmers;document.getElementById('ofTargetLabel').textContent=t[lang].ofTarget;document.getElementById('lbsTargetLabel').textContent=t[lang].lbsTarget;document.getElementById('trimmersLabel').textContent=t[lang].trimmersLabel;document.getElementById('targetRateLabel').textContent=t[lang].targetRate;document.getElementById('avgTargetLabel').textContent=t[lang].avgLbs;document.getElementById('bestHourLabel').textContent=t[lang].bestLbs;document.getElementById('dailyHeader').textContent=t[lang].todaysProgress;document.getElementById('vsYesterdayLabel').textContent=t[lang].vsYesterday;document.getElementById('vs7DayLabel').textContent=t[lang].vs7Day;document.getElementById('streakLabel').textContent=t[lang].hrStreak;document.getElementById('timerHeader').textContent=t[lang].bagTimer;document.getElementById('manualBtnText').textContent=t[lang].bagComplete;document.getElementById('bagsTodayLabel').textContent=t[lang].bagsToday;document.getElementById('avgTodayLabel').textContent=t[lang].avgToday;document.getElementById('vsTargetLabel').textContent=t[lang].vsTargetTimer;document.getElementById('chartHeader').textContent=t[lang].chartHeader;updateClock();renderScoreboard();renderTimer();}
+    document.addEventListener('DOMContentLoaded',function(){updateClock();setInterval(updateClock,1000);loadData();setInterval(loadData,15000);setInterval(renderTimer,1000);renderCycleHistory();});
+    function setLanguage(lang){currentLang=lang;document.getElementById('btnEn').classList.toggle('active',lang==='en');document.getElementById('btnEs').classList.toggle('active',lang==='es');document.getElementById('strainLabel').textContent=t[lang].currentStrain;document.getElementById('lastHourHeader').textContent=t[lang].lastHour;document.getElementById('currentHourHeader').textContent=t[lang].currentHour;document.getElementById('lbsUnit').textContent=t[lang].lbs;document.getElementById('trimmersSmallLabel').textContent=t[lang].trimmers;document.getElementById('ofTargetLabel').textContent=t[lang].ofTarget;document.getElementById('lbsTargetLabel').textContent=t[lang].lbsTarget;document.getElementById('trimmersLabel').textContent=t[lang].trimmersLabel;document.getElementById('targetRateLabel').textContent=t[lang].targetRate;document.getElementById('avgTargetLabel').textContent=t[lang].avgLbs;document.getElementById('bestHourLabel').textContent=t[lang].bestLbs;document.getElementById('dailyHeader').textContent=t[lang].todaysProgress;document.getElementById('vsYesterdayLabel').textContent=t[lang].vsYesterday;document.getElementById('vs7DayLabel').textContent=t[lang].vs7Day;document.getElementById('streakLabel').textContent=t[lang].hrStreak;document.getElementById('timerHeader').textContent=t[lang].bagTimer;document.getElementById('manualBtnText').textContent=t[lang].bagComplete;document.getElementById('bagsTodayLabel').textContent=t[lang].bagsToday;document.getElementById('avgTodayLabel').textContent=t[lang].avgToday;document.getElementById('vsTargetLabel').textContent=t[lang].vsTargetTimer;document.getElementById('chartHeader').textContent=t[lang].chartHeader;document.getElementById('cycleHistoryTitle').textContent=t[lang].todaysCycles;updateClock();renderScoreboard();renderTimer();renderCycleHistory();}
     function updateClock(){const now=new Date(),h=now.getHours()%12||12,m=now.getMinutes().toString().padStart(2,'0'),ap=now.getHours()>=12?'PM':'AM';document.getElementById('clock').textContent=`${h}:${m} ${ap}`;document.getElementById('date').textContent=now.toLocaleDateString(currentLang==='es'?'es-MX':'en-US',{weekday:'long',month:'short',day:'numeric'});}
     
     function loadData(){
@@ -1061,12 +1271,34 @@
       const showOvertime = debugState === 'red' || (isOvertime && !breakStatus.onBreak);
       td.classList.toggle('overtime', showOvertime);
       
-      document.getElementById('timerTargetTime').textContent=effectiveTarget>0?formatTime(effectiveTarget):'--:--';document.getElementById('timerTrimmers').textContent=trimmers||'—';document.getElementById('bagsToday').textContent=bagsToday;document.getElementById('avgToday').textContent=avgSecToday>0?formatTime(avgSecToday):'--:--';const vt=document.getElementById('vsTarget');if(avgSecToday>0&&effectiveTarget>0){const diff=effectiveTarget-avgSecToday,dm=Math.round(diff/60);if(dm>0){vt.textContent=`+${dm} min`;vt.className='timer-stat-value positive';}else if(dm<0){vt.textContent=`${dm} min`;vt.className='timer-stat-value negative';}else{vt.textContent='On pace';vt.className='timer-stat-value';}}else{vt.textContent='—';vt.className='timer-stat-value';}}
+      document.getElementById('timerTargetTime').textContent=effectiveTarget>0?formatTime(effectiveTarget):'--:--';document.getElementById('timerTrimmers').textContent=trimmers||'—';document.getElementById('bagsToday').textContent=bagsToday;document.getElementById('avgToday').textContent=avgSecToday>0?formatTime(avgSecToday):'--:--';const vt=document.getElementById('vsTarget');if(avgSecToday>0&&effectiveTarget>0){const diff=effectiveTarget-avgSecToday,dm=Math.round(diff/60);if(dm>0){vt.textContent=`+${dm} min`;vt.className='timer-stat-value positive';}else if(dm<0){vt.textContent=`${dm} min`;vt.className='timer-stat-value negative';}else{vt.textContent='On pace';vt.className='timer-stat-value';}}else{vt.textContent='—';vt.className='timer-stat-value';}
+      
+      // Update button color to match timer state
+      const btn = document.getElementById('manualBtn');
+      btn.classList.remove('btn-green', 'btn-yellow', 'btn-red', 'btn-neutral');
+      if (!btn.classList.contains('success')) {
+        btn.classList.add('btn-' + colorClass);
+      }
+    }
     function formatTime(s){return`${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;}
     function logManualEntry(){
       const btn=document.getElementById('manualBtn'),txt=document.getElementById('manualBtnText');
+      
+      // Calculate elapsed time before resetting
+      const targetSec = (timerData && timerData.targetSeconds) || 300;
+      let elapsedSec = 0;
+      if (lastBagTimestamp) {
+        elapsedSec = getWorkingSecondsSince(lastBagTimestamp);
+      }
+      
+      // Add to cycle history if there was a valid cycle
+      if (elapsedSec > 0) {
+        addCycleToHistory(elapsedSec, targetSec);
+      }
+      
       btn.disabled=true;
       btn.classList.add('success');
+      btn.classList.remove('btn-green', 'btn-yellow', 'btn-red', 'btn-neutral');
       txt.textContent=t[currentLang].logged;
       
       if (isAppsScript) {
