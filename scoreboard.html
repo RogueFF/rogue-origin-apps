@@ -466,6 +466,7 @@
     .cycle-card.early .cycle-card-delta { color: #4ade80; }
     .cycle-card.on-time .cycle-card-delta { color: #fde047; }
     .cycle-card.overtime .cycle-card-delta { color: #f87171; }
+    .cycle-card-meta { font-size: 9px; color: rgba(255,255,255,0.5); margin-top: 2px; }
     
     /* Fullscreen adjustments */
     .timer-panel.fullscreen .cycle-history { max-width: 500px; }
@@ -1293,15 +1294,23 @@
       try {
         const saved = localStorage.getItem('cycleHistory');
         const savedDate = localStorage.getItem('cycleHistoryDate');
+        const savedVersion = localStorage.getItem('cycleHistoryVersion');
         const today = new Date().toDateString();
+        const currentVersion = '2'; // Increment when data format changes
         
-        // Only load if saved today (reset daily)
-        if (saved && savedDate === today) {
-          cycleHistory = JSON.parse(saved);
+        // Only load if saved today AND version matches
+        if (saved && savedDate === today && savedVersion === currentVersion) {
+          const parsed = JSON.parse(saved);
+          // Restore Date objects from ISO strings
+          cycleHistory = parsed.map(c => ({
+            ...c,
+            timestamp: c.timestamp ? new Date(c.timestamp) : null
+          }));
         } else {
-          // Clear old data
+          // Clear old/incompatible data
           localStorage.removeItem('cycleHistory');
           localStorage.removeItem('cycleHistoryDate');
+          localStorage.removeItem('cycleHistoryVersion');
         }
       } catch(e) { console.log('Could not load cycle history'); }
     }
@@ -1311,6 +1320,7 @@
       try {
         localStorage.setItem('cycleHistory', JSON.stringify(cycleHistory));
         localStorage.setItem('cycleHistoryDate', new Date().toDateString());
+        localStorage.setItem('cycleHistoryVersion', '2');
       } catch(e) { console.log('Could not save cycle history'); }
     }
     
@@ -1557,13 +1567,21 @@
           <div class="cycle-donut-latest-items">
             ${latest.map((c, i) => {
               const trimmersLabel = c.trimmers ? `${c.trimmers}T` : '';
-              const timeStr = c.timestamp ? new Date(c.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
-              const targetStr = c.target ? formatTime(c.target) : '';
+              let timeStr = '';
+              if (c.timestamp) {
+                try {
+                  const ts = c.timestamp instanceof Date ? c.timestamp : new Date(c.timestamp);
+                  if (!isNaN(ts.getTime())) {
+                    timeStr = ts.toLocaleTimeString([], {hour: 'numeric', minute:'2-digit'});
+                  }
+                } catch(e) {}
+              }
+              const targetStr = (c.target && c.target > 0) ? formatTime(c.target) : '';
               return `
               <div class="cycle-donut-latest-item" style="background:${c.status === 'early' ? 'rgba(34,197,94,0.2)' : c.status === 'overtime' ? 'rgba(239,68,68,0.2)' : 'rgba(250,204,21,0.2)'}">
                 <div class="cycle-donut-latest-time" style="color:${c.status === 'early' ? '#4ade80' : c.status === 'overtime' ? '#f87171' : '#fde047'}">${formatTime(c.time)}</div>
                 <div class="cycle-donut-latest-num">#${total - i} ${trimmersLabel ? `<span style="opacity:0.5">${trimmersLabel}</span>` : ''}</div>
-                <div style="font-size:9px;color:rgba(255,255,255,0.4);margin-top:2px;">${timeStr}${targetStr ? ` • tgt ${targetStr}` : ''}</div>
+                ${(timeStr || targetStr) ? `<div style="font-size:9px;color:rgba(255,255,255,0.4);margin-top:2px;">${timeStr}${targetStr ? ` • ${targetStr}` : ''}</div>` : ''}
               </div>
             `}).join('')}
           </div>
@@ -1612,12 +1630,20 @@
               const height = (c.time / maxTime) * 100;
               const targetHeight = ((c.target || 300) / maxTime) * 100;
               const trimmersLabel = c.trimmers ? `${c.trimmers}T` : '';
-              const targetLabel = c.target ? formatTime(c.target) : '';
-              const timeStr = c.timestamp ? new Date(c.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+              const targetLabel = (c.target && c.target > 0) ? formatTime(c.target) : '';
+              let timeStr = '';
+              if (c.timestamp) {
+                try {
+                  const ts = c.timestamp instanceof Date ? c.timestamp : new Date(c.timestamp);
+                  if (!isNaN(ts.getTime())) {
+                    timeStr = ts.toLocaleTimeString([], {hour: 'numeric', minute:'2-digit'});
+                  }
+                } catch(e) {}
+              }
               return `<div class="cycle-sparkline-bar ${c.status}" style="height:${height}%" title="#${i+1}: ${formatTime(c.time)}">
                 <div class="cycle-sparkline-tooltip">
                   <div style="font-weight:700">#${i+1}: ${formatTime(c.time)}</div>
-                  <div style="opacity:0.7;font-size:10px;">${timeStr}${trimmersLabel ? ` • ${trimmersLabel}` : ''}</div>
+                  ${(timeStr || trimmersLabel) ? `<div style="opacity:0.7;font-size:10px;">${timeStr}${trimmersLabel ? ` • ${trimmersLabel}` : ''}</div>` : ''}
                   ${targetLabel ? `<div style="opacity:0.7;font-size:10px;">Target: ${targetLabel}</div>` : ''}
                 </div>
                 <div style="position:absolute;bottom:${targetHeight}%;left:-2px;right:-2px;height:2px;background:rgba(255,255,255,0.5);border-radius:1px;"></div>
@@ -1641,15 +1667,23 @@
         <div class="cycle-chips">
           ${reversed.map((c, i) => {
             const trimmersLabel = c.trimmers ? `${c.trimmers}T` : '';
-            const targetLabel = c.target ? formatTime(c.target) : '';
-            const timeStr = c.timestamp ? new Date(c.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+            const targetLabel = (c.target && c.target > 0) ? formatTime(c.target) : '';
+            let timeStr = '';
+            if (c.timestamp) {
+              try {
+                const ts = c.timestamp instanceof Date ? c.timestamp : new Date(c.timestamp);
+                if (!isNaN(ts.getTime())) {
+                  timeStr = ts.toLocaleTimeString([], {hour: 'numeric', minute:'2-digit'});
+                }
+              } catch(e) {}
+            }
             return `
             <div class="cycle-chip ${c.status}">
               ${i + 1}
               <div class="cycle-chip-tooltip">
                 <div style="font-weight:700">${formatTime(c.time)}</div>
                 <div style="opacity:0.7">${c.status === 'early' ? '✓ early' : c.status === 'overtime' ? '✗ late' : '• on time'}</div>
-                <div style="opacity:0.6;font-size:10px;margin-top:2px;">${timeStr}${trimmersLabel ? ` • ${trimmersLabel}` : ''}</div>
+                ${(timeStr || trimmersLabel) ? `<div style="opacity:0.6;font-size:10px;margin-top:2px;">${timeStr}${trimmersLabel ? ` • ${trimmersLabel}` : ''}</div>` : ''}
                 ${targetLabel ? `<div style="opacity:0.6;font-size:10px;">Target: ${targetLabel}</div>` : ''}
               </div>
             </div>
@@ -1672,14 +1706,23 @@
             const deltaStr = formatTime(deltaSec);
             const sign = c.delta > 10 ? '↑' : c.delta < -10 ? '↓' : '•';
             const trimmersLabel = c.trimmers ? `${c.trimmers}T` : '';
-            const timeStr = c.timestamp ? new Date(c.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
-            const targetStr = c.target ? formatTime(c.target) : '';
+            // Handle timestamp - could be Date object or string
+            let timeStr = '';
+            if (c.timestamp) {
+              try {
+                const ts = c.timestamp instanceof Date ? c.timestamp : new Date(c.timestamp);
+                if (!isNaN(ts.getTime())) {
+                  timeStr = ts.toLocaleTimeString([], {hour: 'numeric', minute:'2-digit'});
+                }
+              } catch(e) {}
+            }
+            const targetStr = (c.target && c.target > 0) ? formatTime(c.target) : '';
             return `<div class="cycle-card ${c.status}">
-              <div class="cycle-card-num">#${cycleHistory.length - i} <span style="opacity:0.5">${trimmersLabel}</span></div>
+              <div class="cycle-card-num">#${cycleHistory.length - i} ${trimmersLabel ? `<span style="opacity:0.5">${trimmersLabel}</span>` : ''}</div>
               <div class="cycle-card-time">${formatTime(c.time)}</div>
               <div class="cycle-card-delta">${sign}${deltaStr}</div>
-              <div style="font-size:9px;color:rgba(255,255,255,0.5);margin-top:4px;">${timeStr}</div>
-              ${targetStr ? `<div style="font-size:9px;color:rgba(255,255,255,0.4);">tgt ${targetStr}</div>` : ''}
+              ${timeStr ? `<div class="cycle-card-meta">${timeStr}</div>` : ''}
+              ${targetStr ? `<div class="cycle-card-meta">tgt ${targetStr}</div>` : ''}
             </div>`;
           }).join('')}
         </div>
@@ -1697,14 +1740,23 @@
           const sign = c.delta > 10 ? '-' : c.delta < -10 ? '+' : '±';
           const label = c.delta > 10 ? (currentLang === 'es' ? 'antes' : 'early') : c.delta < -10 ? (currentLang === 'es' ? 'tarde' : 'late') : '';
           const trimmersInfo = c.trimmers ? `${c.trimmers}T` : '';
-          const timeStr = c.timestamp ? new Date(c.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
-          const targetStr = c.target ? formatTime(c.target) : '';
+          // Handle timestamp
+          let timeStr = '';
+          if (c.timestamp) {
+            try {
+              const ts = c.timestamp instanceof Date ? c.timestamp : new Date(c.timestamp);
+              if (!isNaN(ts.getTime())) {
+                timeStr = ts.toLocaleTimeString([], {hour: 'numeric', minute:'2-digit'});
+              }
+            } catch(e) {}
+          }
+          const targetStr = (c.target && c.target > 0) ? formatTime(c.target) : '';
           
           return `<div class="cycle-item ${c.status}">
             <span class="cycle-item-num">#${cycleHistory.length - i}</span>
-            <span style="color:rgba(255,255,255,0.5);font-size:11px;min-width:50px;">${timeStr}</span>
+            ${timeStr ? `<span style="color:rgba(255,255,255,0.5);font-size:11px;min-width:55px;">${timeStr}</span>` : ''}
             <span class="cycle-item-time">${formatTime(c.time)}</span>
-            <span style="color:rgba(255,255,255,0.4);font-size:10px;">${targetStr ? `/ ${targetStr}` : ''}${trimmersInfo ? ` • ${trimmersInfo}` : ''}</span>
+            <span style="color:rgba(255,255,255,0.4);font-size:10px;">${targetStr ? `/${targetStr}` : ''}${trimmersInfo ? ` ${trimmersInfo}` : ''}</span>
             <span class="cycle-item-delta ${c.status}">${sign}${deltaStr} ${label}</span>
           </div>`;
         }).join('')}
