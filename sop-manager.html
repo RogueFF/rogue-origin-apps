@@ -522,6 +522,7 @@
     .toast.success { background: var(--green); }
     .toast.error { background: var(--danger); }
     @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
     @media (max-width: 768px) {
       .sop-grid { grid-template-columns: 1fr; }
@@ -1161,21 +1162,29 @@
       const s = sops.find(x => x.id === currentSopId);
       if (!s) return;
       
-      // If switching to Spanish and no saved translation, translate on-the-fly
+      // If switching to Spanish and no saved translation, translate on-the-fly with Claude
       if (lang === 'es' && !s.title_es) {
-        showToast('Translating...', 'success');
+        const esBtn = document.querySelector('#viewLangToggle button:last-child');
+        esBtn.innerHTML = '<i class="ph-duotone ph-spinner" style="animation:spin 1s linear infinite;"></i>';
+        esBtn.disabled = true;
+        
         try {
+          showToast('Translating with Claude AI...', 'success');
           s.title_es = await translateText(s.title, 'en', 'es');
           if (s.description) s.desc_es = await translateText(s.description, 'en', 'es');
           for (let step of s.steps) {
             if (step.title && !step.title_es) step.title_es = await translateText(step.title, 'en', 'es');
             if (step.description && !step.desc_es) step.desc_es = await translateText(step.description, 'en', 'es');
           }
-          // Optionally save translations
           saveToStorage();
+          showToast('Translation complete!', 'success');
         } catch (e) {
           console.error('Translation error:', e);
+          showToast('Translation failed', 'error');
         }
+        
+        esBtn.innerHTML = 'ES';
+        esBtn.disabled = false;
       }
       
       renderViewSOP(s);
@@ -1194,7 +1203,8 @@
         return '<div class="view-step"><div class="view-step-number">' + (i + 1) + '</div><div class="view-step-content"><div class="view-step-title">' + esc(stepTitle) + (st.safety ? ' <i class="ph-duotone ph-warning icon safety"></i>' : '') + (st.quality ? ' <i class="ph-duotone ph-seal-check icon quality"></i>' : '') + '</div><div class="view-step-desc">' + esc(stepDesc) + '</div></div>' + (st.image ? '<div class="view-step-image"><img src="' + st.image + '"></div>' : '') + '</div>';
       }).join('');
       
-      const langNotice = (lang === 'es' && !s.title_es) ? '<div class="translation-notice"><i class="ph-duotone ph-translate"></i> Auto-translated from English. Translation may not be perfect.</div>' : '';
+      const hasApiKey = getApiKey() && getProxyUrl();
+      const langNotice = (lang === 'es' && s.title_es) ? '<div class="translation-notice"><i class="ph-duotone ph-sparkle"></i> ' + (hasApiKey ? 'Translated by Claude AI' : 'Auto-translated') + '</div>' : '';
       
       document.getElementById('viewModalBody').innerHTML = langNotice + '<div class="view-sop-header"><div><div class="view-sop-title">' + esc(title) + '</div><div class="view-sop-meta"><div class="view-sop-meta-item"><i class="ph-duotone ph-folder"></i> ' + s.dept + '</div><div class="view-sop-meta-item"><i class="ph-duotone ph-hash"></i> ' + s.docNum + '</div><div class="view-sop-meta-item"><i class="ph-duotone ph-git-branch"></i> Rev ' + s.revision + '</div><div class="view-sop-meta-item"><i class="ph-duotone ph-calendar"></i> ' + fmtDate(s.updatedAt) + '</div></div>' + (desc ? '<p style="margin-top:12px;color:var(--text-muted)">' + esc(desc) + '</p>' : '') + '</div><div class="view-sop-qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=78x78&data=' + encodeURIComponent(u) + '" width="78" height="78"></div></div>' + stepsHtml;
     }
