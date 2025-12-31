@@ -88,6 +88,34 @@
     .timer-panel.fullscreen .expand-hint { left: auto; right: 6px; }
     .drag-handle:hover ~ .expand-hint { opacity: 0; }
     
+    /* Mobile fullscreen toggle button */
+    .fullscreen-toggle { 
+      display: none; 
+      position: absolute; 
+      top: 10px; 
+      right: 10px; 
+      width: 40px; 
+      height: 40px; 
+      background: rgba(228,170,79,0.2); 
+      border: 1px solid rgba(228,170,79,0.4); 
+      border-radius: 10px; 
+      color: var(--gold); 
+      font-size: 20px; 
+      cursor: pointer; 
+      z-index: 15;
+      transition: all 0.2s ease;
+    }
+    .fullscreen-toggle:hover { background: rgba(228,170,79,0.3); }
+    .fullscreen-toggle:active { transform: scale(0.95); }
+    @media (max-width: 1024px) {
+      .fullscreen-toggle { display: flex; align-items: center; justify-content: center; }
+    }
+    .timer-panel.fullscreen .fullscreen-toggle { 
+      top: auto;
+      bottom: 10px;
+      right: 10px;
+    }
+    
     /* Fullscreen timer enhancements */
     .timer-panel.fullscreen .timer-display { width: 300px; height: 300px; margin-bottom: 25px; }
     .timer-panel.fullscreen .timer-value { font-size: 72px; }
@@ -300,6 +328,9 @@
     /* Pause Button */
     .timer-btn-row { display: flex; gap: 10px; width: 100%; margin-bottom: 15px; }
     .timer-btn-row .manual-btn { flex: 1; margin-bottom: 0; }
+    @media (max-width: 480px) {
+      .timer-btn-row { max-width: 280px; gap: 8px; }
+    }
     .pause-btn { flex: 0 0 auto; padding: 16px 20px; background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); border: none; border-radius: 16px; color: white; font-size: 18px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(249, 115, 22, 0.4); }
     .pause-btn:hover { transform: scale(1.02); box-shadow: 0 6px 20px rgba(249, 115, 22, 0.5); }
     .pause-btn:active { transform: scale(0.98); }
@@ -334,6 +365,20 @@
     .pause-banner.visible { transform: translateY(0); }
     .pause-banner-time { font-size: 24px; font-weight: 900; font-variant-numeric: tabular-nums; }
     .pause-banner-reason { opacity: 0.9; }
+    
+    /* Mobile pause modal/banner adjustments */
+    @media (max-width: 480px) {
+      .pause-modal { padding: 20px; max-width: 95%; }
+      .pause-modal-title { font-size: 20px; }
+      .pause-modal-subtitle { font-size: 13px; }
+      .pause-modal-reasons { gap: 6px; }
+      .pause-reason-btn { padding: 12px 14px; font-size: 14px; }
+      .pause-custom-input { padding: 12px 14px; font-size: 14px; }
+      .pause-modal-btn { padding: 12px 16px; font-size: 15px; }
+      .pause-banner { padding: 10px 15px; gap: 10px; font-size: 14px; flex-wrap: wrap; }
+      .pause-banner-time { font-size: 20px; }
+      .pause-banner-reason { font-size: 12px; width: 100%; text-align: center; margin-top: -5px; }
+    }
     
     /* Cycle History Container */
     .cycle-history { width: 100%; max-width: 400px; margin-top: 10px; }
@@ -411,7 +456,7 @@
     .cycle-cards::-webkit-scrollbar { height: 4px; }
     .cycle-cards::-webkit-scrollbar-track { background: rgba(255,255,255,0.1); border-radius: 2px; }
     .cycle-cards::-webkit-scrollbar-thumb { background: var(--gold); border-radius: 2px; }
-    .cycle-card { flex-shrink: 0; width: 70px; padding: 10px 8px; border-radius: 10px; text-align: center; scroll-snap-align: start; border-left: 3px solid; }
+    .cycle-card { flex-shrink: 0; width: 80px; padding: 10px 8px; border-radius: 10px; text-align: center; scroll-snap-align: start; border-left: 3px solid; }
     .cycle-card.early { background: rgba(34, 197, 94, 0.15); border-left-color: #22c55e; }
     .cycle-card.on-time { background: rgba(250, 204, 21, 0.15); border-left-color: #facc15; }
     .cycle-card.overtime { background: rgba(239, 68, 68, 0.15); border-left-color: #ef4444; }
@@ -430,7 +475,7 @@
     .timer-panel.fullscreen .cycle-donut-count { font-size: 34px; }
     .timer-panel.fullscreen .cycle-sparkline-bars { height: 100px; }
     .timer-panel.fullscreen .cycle-chip { width: 42px; height: 42px; font-size: 12px; }
-    .timer-panel.fullscreen .cycle-card { width: 85px; padding: 12px 10px; }
+    .timer-panel.fullscreen .cycle-card { width: 95px; padding: 12px 10px; }
     .timer-panel.fullscreen .cycle-card-time { font-size: 18px; }
     
     /* Celebration Animation */
@@ -642,6 +687,314 @@
       .help-grid { grid-template-columns: 1fr; }
       .help-colors { flex-direction: column; gap: 8px; }
     }
+    
+    /* ========================================
+       MOBILE FULLSCREEN TIMER OPTIMIZATION
+       ======================================== */
+    
+    /* Tablet fullscreen (< 1024px) */
+    @media (max-width: 1024px) {
+      .timer-panel.fullscreen {
+        padding: 20px;
+        padding-top: 60px;
+        padding-bottom: 40px;
+        justify-content: flex-start;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .timer-panel.fullscreen .timer-header { 
+        font-size: 18px; 
+        margin-bottom: 15px;
+      }
+      .timer-panel.fullscreen .timer-display { 
+        width: 220px; 
+        height: 220px; 
+        margin-bottom: 15px;
+        flex-shrink: 0;
+      }
+      .timer-panel.fullscreen .timer-value { font-size: 52px; }
+      .timer-panel.fullscreen .timer-label { font-size: 13px; }
+      .timer-panel.fullscreen .timer-target { 
+        font-size: 15px; 
+        margin-bottom: 15px;
+      }
+      .timer-panel.fullscreen .timer-btn-row {
+        width: 100%;
+        max-width: 400px;
+        margin-bottom: 15px;
+      }
+      .timer-panel.fullscreen .manual-btn { 
+        font-size: 18px; 
+        padding: 16px 24px;
+      }
+      .timer-panel.fullscreen .pause-btn {
+        font-size: 18px;
+        padding: 16px 20px;
+      }
+      .timer-panel.fullscreen .timer-stats { 
+        flex-direction: row; 
+        flex-wrap: wrap;
+        gap: 10px; 
+        justify-content: center;
+        width: 100%;
+        max-width: 450px;
+        margin-bottom: 15px;
+      }
+      .timer-panel.fullscreen .timer-stat { 
+        padding: 10px 16px;
+        min-width: 120px;
+      }
+      .timer-panel.fullscreen .cycle-history {
+        width: 100%;
+        max-width: 450px;
+      }
+    }
+    
+    /* Small tablet fullscreen (< 768px) */
+    @media (max-width: 768px) {
+      .timer-panel.fullscreen {
+        padding: 15px;
+        padding-top: 50px;
+        padding-bottom: 35px;
+      }
+      .timer-panel.fullscreen .timer-header { 
+        font-size: 16px; 
+        margin-bottom: 12px;
+      }
+      .timer-panel.fullscreen .timer-display { 
+        width: 200px; 
+        height: 200px; 
+        margin-bottom: 12px;
+      }
+      .timer-panel.fullscreen .timer-value { font-size: 48px; }
+      .timer-panel.fullscreen .timer-target { 
+        font-size: 14px; 
+        margin-bottom: 12px;
+      }
+      .timer-panel.fullscreen .timer-btn-row {
+        max-width: 350px;
+      }
+      .timer-panel.fullscreen .manual-btn { 
+        font-size: 16px; 
+        padding: 14px 20px;
+      }
+      .timer-panel.fullscreen .pause-btn {
+        font-size: 16px;
+        padding: 14px 18px;
+      }
+      .timer-panel.fullscreen .timer-stats { 
+        max-width: 380px;
+        gap: 8px;
+      }
+      .timer-panel.fullscreen .timer-stat { 
+        padding: 8px 14px;
+        min-width: 110px;
+      }
+      .timer-panel.fullscreen .timer-stat-label { font-size: 12px; }
+      .timer-panel.fullscreen .timer-stat-value { font-size: 16px; }
+      .timer-panel.fullscreen .cycle-history {
+        max-width: 380px;
+      }
+      .timer-panel.fullscreen .cycle-donut { flex-direction: column; align-items: center; gap: 12px; }
+      .timer-panel.fullscreen .cycle-donut-ring { width: 90px; height: 90px; }
+      .timer-panel.fullscreen .cycle-donut-stats { width: 100%; }
+      .timer-panel.fullscreen .cycle-cards { justify-content: flex-start; }
+      .timer-panel.fullscreen .cycle-card { width: 75px; }
+    }
+    
+    /* Mobile phone fullscreen (< 480px) */
+    @media (max-width: 480px) {
+      .timer-panel.fullscreen {
+        padding: 10px;
+        padding-top: 45px;
+        padding-bottom: 30px;
+      }
+      .timer-panel.fullscreen .drag-handle {
+        height: 30px;
+      }
+      .timer-panel.fullscreen .timer-header { 
+        font-size: 14px; 
+        margin-bottom: 8px;
+        letter-spacing: 2px;
+      }
+      .timer-panel.fullscreen .timer-display { 
+        width: 180px; 
+        height: 180px; 
+        margin-bottom: 8px;
+      }
+      .timer-panel.fullscreen .timer-value { font-size: 42px; }
+      .timer-panel.fullscreen .timer-label { font-size: 11px; }
+      .timer-panel.fullscreen .timer-ring-bg, 
+      .timer-panel.fullscreen .timer-ring-progress { 
+        stroke-width: 10; 
+      }
+      .timer-panel.fullscreen .timer-target { 
+        font-size: 13px; 
+        margin-bottom: 10px;
+      }
+      .timer-panel.fullscreen .timer-btn-row {
+        max-width: 100%;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      .timer-panel.fullscreen .manual-btn { 
+        font-size: 15px; 
+        padding: 12px 16px;
+        border-radius: 12px;
+      }
+      .timer-panel.fullscreen .manual-btn .icon { font-size: 18px; }
+      .timer-panel.fullscreen .pause-btn {
+        font-size: 15px;
+        padding: 12px 14px;
+        border-radius: 12px;
+      }
+      .timer-panel.fullscreen .timer-stats { 
+        flex-direction: column;
+        max-width: 100%;
+        gap: 6px;
+        margin-bottom: 10px;
+      }
+      .timer-panel.fullscreen .timer-stat { 
+        padding: 8px 12px;
+        width: 100%;
+        min-width: auto;
+      }
+      .timer-panel.fullscreen .timer-stat-label { font-size: 11px; }
+      .timer-panel.fullscreen .timer-stat-value { font-size: 15px; }
+      .timer-panel.fullscreen .cycle-history {
+        max-width: 100%;
+        margin-top: 5px;
+      }
+      .timer-panel.fullscreen .cycle-history-header {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .timer-panel.fullscreen .cycle-history-title { font-size: 11px; }
+      .timer-panel.fullscreen .cycle-nav-btn { padding: 6px 10px; font-size: 14px; }
+      .timer-panel.fullscreen .cycle-mode-label { font-size: 9px; }
+      .timer-panel.fullscreen .cycle-history-toggle { font-size: 11px; }
+      
+      /* Donut adjustments */
+      .timer-panel.fullscreen .cycle-donut { 
+        flex-direction: column; 
+        align-items: center; 
+        gap: 10px; 
+      }
+      .timer-panel.fullscreen .cycle-donut-ring { width: 80px; height: 80px; }
+      .timer-panel.fullscreen .cycle-donut-count { font-size: 24px; }
+      .timer-panel.fullscreen .cycle-donut-label { font-size: 9px; }
+      .timer-panel.fullscreen .cycle-donut-stats { 
+        width: 100%; 
+        flex-direction: row;
+        justify-content: space-around;
+      }
+      .timer-panel.fullscreen .cycle-donut-stat { flex-direction: column; align-items: center; }
+      .timer-panel.fullscreen .cycle-donut-stat-label { font-size: 10px; }
+      .timer-panel.fullscreen .cycle-donut-stat-value { font-size: 18px; }
+      .timer-panel.fullscreen .cycle-donut-latest { margin-top: 8px; padding-top: 8px; }
+      .timer-panel.fullscreen .cycle-donut-latest-items { gap: 6px; }
+      .timer-panel.fullscreen .cycle-donut-latest-item { padding: 6px; }
+      .timer-panel.fullscreen .cycle-donut-latest-time { font-size: 14px; }
+      
+      /* Sparkline adjustments */
+      .timer-panel.fullscreen .cycle-sparkline-bars { height: 70px; }
+      .timer-panel.fullscreen .cycle-sparkline-labels { font-size: 9px; }
+      
+      /* Chips adjustments */
+      .timer-panel.fullscreen .cycle-chip { width: 32px; height: 32px; font-size: 10px; }
+      .timer-panel.fullscreen .cycle-chips-legend { font-size: 10px; gap: 8px; }
+      
+      /* Cards adjustments */
+      .timer-panel.fullscreen .cycle-card { width: 70px; padding: 8px 6px; }
+      .timer-panel.fullscreen .cycle-card-num { font-size: 9px; }
+      .timer-panel.fullscreen .cycle-card-time { font-size: 14px; margin: 2px 0; }
+      .timer-panel.fullscreen .cycle-card-delta { font-size: 10px; }
+      
+      /* List adjustments */
+      .timer-panel.fullscreen .cycle-list { max-height: 150px; }
+      .timer-panel.fullscreen .cycle-item { 
+        padding: 6px 10px; 
+        font-size: 12px;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+      .timer-panel.fullscreen .cycle-item-num { min-width: 24px; font-size: 11px; }
+      .timer-panel.fullscreen .cycle-item-time { font-size: 13px; }
+      .timer-panel.fullscreen .cycle-item-delta { font-size: 10px; padding: 2px 6px; }
+    }
+    
+    /* Extra small phones (< 360px) */
+    @media (max-width: 360px) {
+      .timer-panel.fullscreen .timer-display { 
+        width: 150px; 
+        height: 150px; 
+      }
+      .timer-panel.fullscreen .timer-value { font-size: 36px; }
+      .timer-panel.fullscreen .cycle-donut-ring { width: 70px; height: 70px; }
+      .timer-panel.fullscreen .cycle-chip { width: 28px; height: 28px; font-size: 9px; }
+      .timer-panel.fullscreen .cycle-card { width: 60px; }
+    }
+    
+    /* Landscape mobile optimization */
+    @media (max-height: 500px) and (orientation: landscape) {
+      .timer-panel.fullscreen {
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: flex-start;
+        padding: 10px 20px;
+        padding-top: 35px;
+        gap: 15px;
+      }
+      .timer-panel.fullscreen .timer-header { 
+        width: 100%;
+        text-align: center;
+        margin-bottom: 5px;
+      }
+      .timer-panel.fullscreen .timer-display { 
+        width: 120px; 
+        height: 120px;
+        margin-bottom: 0;
+      }
+      .timer-panel.fullscreen .timer-value { font-size: 32px; }
+      .timer-panel.fullscreen .timer-target { 
+        position: absolute;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        margin: 0;
+      }
+      .timer-panel.fullscreen .timer-btn-row {
+        flex-direction: column;
+        max-width: 180px;
+        gap: 8px;
+      }
+      .timer-panel.fullscreen .manual-btn { 
+        padding: 10px 16px;
+        font-size: 14px;
+      }
+      .timer-panel.fullscreen .pause-btn {
+        padding: 10px 14px;
+        font-size: 14px;
+      }
+      .timer-panel.fullscreen .timer-stats { 
+        flex-direction: column;
+        max-width: 130px;
+        gap: 5px;
+      }
+      .timer-panel.fullscreen .timer-stat { padding: 6px 10px; }
+      .timer-panel.fullscreen .timer-stat-label { font-size: 10px; }
+      .timer-panel.fullscreen .timer-stat-value { font-size: 14px; }
+      .timer-panel.fullscreen .cycle-history {
+        max-width: 200px;
+        max-height: calc(100vh - 60px);
+        overflow-y: auto;
+      }
+      .timer-panel.fullscreen .cycle-list { max-height: 100px; }
+      .timer-panel.fullscreen .cycle-donut { flex-direction: column; gap: 8px; }
+      .timer-panel.fullscreen .cycle-donut-ring { width: 60px; height: 60px; }
+      .timer-panel.fullscreen .cycle-sparkline-bars { height: 50px; }
+    }
   </style>
 </head>
 <body class="idle timer-neutral">
@@ -783,6 +1136,7 @@
   <div class="timer-panel neutral" id="timerPanel">
     <div class="drag-handle" id="dragHandle"></div>
     <div class="expand-hint" id="expandHint">◀</div>
+    <button class="fullscreen-toggle" id="fullscreenToggle" onclick="toggleTimerFullscreen()"><i class="ph-duotone ph-arrows-out"></i></button>
     <div class="timer-header" id="timerHeader">5KG Bag Timer</div>
     <div class="timer-display" id="timerDisplay">
       <svg class="timer-ring" viewBox="0 0 220 220">
@@ -1203,10 +1557,13 @@
           <div class="cycle-donut-latest-items">
             ${latest.map((c, i) => {
               const trimmersLabel = c.trimmers ? `${c.trimmers}T` : '';
+              const timeStr = c.timestamp ? new Date(c.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+              const targetStr = c.target ? formatTime(c.target) : '';
               return `
               <div class="cycle-donut-latest-item" style="background:${c.status === 'early' ? 'rgba(34,197,94,0.2)' : c.status === 'overtime' ? 'rgba(239,68,68,0.2)' : 'rgba(250,204,21,0.2)'}">
                 <div class="cycle-donut-latest-time" style="color:${c.status === 'early' ? '#4ade80' : c.status === 'overtime' ? '#f87171' : '#fde047'}">${formatTime(c.time)}</div>
                 <div class="cycle-donut-latest-num">#${total - i} ${trimmersLabel ? `<span style="opacity:0.5">${trimmersLabel}</span>` : ''}</div>
+                <div style="font-size:9px;color:rgba(255,255,255,0.4);margin-top:2px;">${timeStr}${targetStr ? ` • tgt ${targetStr}` : ''}</div>
               </div>
             `}).join('')}
           </div>
@@ -1254,10 +1611,15 @@
             ${reversed.map((c, i) => {
               const height = (c.time / maxTime) * 100;
               const targetHeight = ((c.target || 300) / maxTime) * 100;
-              const trimmersLabel = c.trimmers ? ` • ${c.trimmers}T` : '';
-              const targetLabel = c.target ? ` (target ${formatTime(c.target)})` : '';
+              const trimmersLabel = c.trimmers ? `${c.trimmers}T` : '';
+              const targetLabel = c.target ? formatTime(c.target) : '';
+              const timeStr = c.timestamp ? new Date(c.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
               return `<div class="cycle-sparkline-bar ${c.status}" style="height:${height}%" title="#${i+1}: ${formatTime(c.time)}">
-                <div class="cycle-sparkline-tooltip">#${i+1}: ${formatTime(c.time)}${trimmersLabel}${targetLabel}</div>
+                <div class="cycle-sparkline-tooltip">
+                  <div style="font-weight:700">#${i+1}: ${formatTime(c.time)}</div>
+                  <div style="opacity:0.7;font-size:10px;">${timeStr}${trimmersLabel ? ` • ${trimmersLabel}` : ''}</div>
+                  ${targetLabel ? `<div style="opacity:0.7;font-size:10px;">Target: ${targetLabel}</div>` : ''}
+                </div>
                 <div style="position:absolute;bottom:${targetHeight}%;left:-2px;right:-2px;height:2px;background:rgba(255,255,255,0.5);border-radius:1px;"></div>
               </div>`;
             }).join('')}
@@ -1278,11 +1640,18 @@
       container.innerHTML = `
         <div class="cycle-chips">
           ${reversed.map((c, i) => {
-            const trimmersLabel = c.trimmers ? ` • ${c.trimmers}T` : '';
+            const trimmersLabel = c.trimmers ? `${c.trimmers}T` : '';
+            const targetLabel = c.target ? formatTime(c.target) : '';
+            const timeStr = c.timestamp ? new Date(c.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
             return `
             <div class="cycle-chip ${c.status}">
               ${i + 1}
-              <div class="cycle-chip-tooltip">${formatTime(c.time)}${trimmersLabel}<br><span style="opacity:0.7">${c.status === 'early' ? 'early' : c.status === 'overtime' ? 'late' : 'on time'}</span></div>
+              <div class="cycle-chip-tooltip">
+                <div style="font-weight:700">${formatTime(c.time)}</div>
+                <div style="opacity:0.7">${c.status === 'early' ? '✓ early' : c.status === 'overtime' ? '✗ late' : '• on time'}</div>
+                <div style="opacity:0.6;font-size:10px;margin-top:2px;">${timeStr}${trimmersLabel ? ` • ${trimmersLabel}` : ''}</div>
+                ${targetLabel ? `<div style="opacity:0.6;font-size:10px;">Target: ${targetLabel}</div>` : ''}
+              </div>
             </div>
           `}).join('')}
         </div>
@@ -1303,17 +1672,21 @@
             const deltaStr = formatTime(deltaSec);
             const sign = c.delta > 10 ? '↑' : c.delta < -10 ? '↓' : '•';
             const trimmersLabel = c.trimmers ? `${c.trimmers}T` : '';
+            const timeStr = c.timestamp ? new Date(c.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+            const targetStr = c.target ? formatTime(c.target) : '';
             return `<div class="cycle-card ${c.status}">
               <div class="cycle-card-num">#${cycleHistory.length - i} <span style="opacity:0.5">${trimmersLabel}</span></div>
               <div class="cycle-card-time">${formatTime(c.time)}</div>
               <div class="cycle-card-delta">${sign}${deltaStr}</div>
+              <div style="font-size:9px;color:rgba(255,255,255,0.5);margin-top:4px;">${timeStr}</div>
+              ${targetStr ? `<div style="font-size:9px;color:rgba(255,255,255,0.4);">tgt ${targetStr}</div>` : ''}
             </div>`;
           }).join('')}
         </div>
       `;
     }
     
-    // Mode 4: List (original) - now shows trimmers
+    // Mode 4: List (original) - now shows trimmers, timestamp, target
     function renderCycleList(container) {
       container.innerHTML = `<div class="cycle-list">
         ${cycleHistory.map((c, i) => {
@@ -1323,11 +1696,15 @@
           const deltaStr = deltaMin > 0 ? `${deltaMin}:${deltaSecs.toString().padStart(2,'0')}` : `${deltaSecs}s`;
           const sign = c.delta > 10 ? '-' : c.delta < -10 ? '+' : '±';
           const label = c.delta > 10 ? (currentLang === 'es' ? 'antes' : 'early') : c.delta < -10 ? (currentLang === 'es' ? 'tarde' : 'late') : '';
-          const trimmersInfo = c.trimmers ? `<span style="color:rgba(255,255,255,0.4);font-size:10px;margin-left:4px;">(${c.trimmers}T)</span>` : '';
+          const trimmersInfo = c.trimmers ? `${c.trimmers}T` : '';
+          const timeStr = c.timestamp ? new Date(c.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+          const targetStr = c.target ? formatTime(c.target) : '';
           
           return `<div class="cycle-item ${c.status}">
-            <span class="cycle-item-num">#${cycleHistory.length - i}${trimmersInfo}</span>
+            <span class="cycle-item-num">#${cycleHistory.length - i}</span>
+            <span style="color:rgba(255,255,255,0.5);font-size:11px;min-width:50px;">${timeStr}</span>
             <span class="cycle-item-time">${formatTime(c.time)}</span>
+            <span style="color:rgba(255,255,255,0.4);font-size:10px;">${targetStr ? `/ ${targetStr}` : ''}${trimmersInfo ? ` • ${trimmersInfo}` : ''}</span>
             <span class="cycle-item-delta ${c.status}">${sign}${deltaStr} ${label}</span>
           </div>`;
         }).join('')}
@@ -2043,6 +2420,7 @@
       const timerPanel = document.getElementById('timerPanel');
       const dragHandle = document.getElementById('dragHandle');
       const expandHint = document.getElementById('expandHint');
+      const fullscreenToggleBtn = document.getElementById('fullscreenToggle');
       let isDragging = false;
       let startX = 0;
       let startY = 0;
@@ -2059,6 +2437,12 @@
         } else {
           expandHint.textContent = isFullscreen ? '▶' : '◀';
         }
+        // Update fullscreen toggle button icon
+        if (fullscreenToggleBtn) {
+          fullscreenToggleBtn.innerHTML = isFullscreen 
+            ? '<i class="ph-duotone ph-arrows-in"></i>' 
+            : '<i class="ph-duotone ph-arrows-out"></i>';
+        }
       }
       
       function toggleFullscreen(toFullscreen) {
@@ -2070,6 +2454,11 @@
         try { localStorage.setItem('timerFullscreen', isFullscreen); } catch(e) {}
       }
       
+      // Expose global toggle function for button
+      window.toggleTimerFullscreen = function() {
+        toggleFullscreen(!isFullscreen);
+      };
+      
       // Load saved preference
       try {
         const saved = localStorage.getItem('timerFullscreen');
@@ -2080,7 +2469,7 @@
       
       // Update hint on resize
       window.addEventListener('resize', updateHint);
-      updateHint();
+      updateHint(); // Initial update
       
       // Mouse events
       dragHandle.addEventListener('mousedown', function(e) {
