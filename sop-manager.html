@@ -473,6 +473,34 @@
     .ai-gen-result-meta { font-size:12px;color:var(--text-muted); }
     .ai-gen-result-steps { font-size:11px;color:var(--text-light);margin-top:8px;padding-top:8px;border-top:1px solid var(--border); }
     
+    /* AI Gen Source Toggle */
+    .ai-gen-source-toggle { display:flex;gap:10px;margin-top:8px; }
+    .source-btn { flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 12px;background:var(--bg);border:2px solid var(--border);border-radius:10px;cursor:pointer;transition:all 0.2s;font-size:14px;font-weight:500;color:var(--text-muted); }
+    .source-btn:hover { border-color:var(--gold);background:var(--gold-dim); }
+    .source-btn.active { border-color:var(--green);background:var(--green-dim);color:var(--green); }
+    .source-btn i { font-size:24px; }
+    .source-cost { font-size:11px;font-weight:400;opacity:0.7; }
+    
+    /* File Upload Zone */
+    .file-upload-zone { border:2px dashed var(--border);border-radius:10px;padding:30px 20px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--bg); }
+    .file-upload-zone:hover { border-color:var(--gold);background:var(--gold-dim); }
+    .file-upload-zone.has-file { border-color:var(--green);background:var(--green-dim);border-style:solid; }
+    .file-upload-zone.dragover { border-color:var(--gold);background:var(--gold-dim);transform:scale(1.02); }
+    
+    /* Source Toggle */
+    .ai-gen-source-toggle { display:flex;gap:10px;margin-top:8px; }
+    .source-btn { flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 12px;background:var(--bg);border:2px solid var(--border);border-radius:10px;cursor:pointer;transition:all 0.2s;font-size:14px;font-weight:500;color:var(--text-muted); }
+    .source-btn:hover { border-color:var(--gold);background:var(--gold-dim); }
+    .source-btn.active { border-color:var(--gold);background:var(--gold-dim);color:var(--gold); }
+    .source-btn i { font-size:24px; }
+    .source-cost { font-size:11px;font-weight:400;opacity:0.7; }
+    
+    /* File Upload Zone */
+    .file-upload-zone { border:2px dashed var(--border);border-radius:10px;padding:30px 20px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--bg); }
+    .file-upload-zone:hover { border-color:var(--gold);background:var(--gold-dim); }
+    .file-upload-zone.has-file { border-color:var(--green);background:var(--green-dim);border-style:solid; }
+    .file-upload-zone.dragover { border-color:var(--gold);background:var(--gold-dim);transform:scale(1.02); }
+    
     /* AI Improve Button */
     .ai-improve-btn { background: linear-gradient(135deg, var(--gold) 0%, var(--sungrown) 100%); color: #fff; border: none; padding: 4px 10px; border-radius: 6px; font-size: 10px; font-weight: 600; cursor: pointer; margin-left: 8px; transition: all 0.2s; display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
     .ai-improve-btn:hover { transform: scale(1.05); box-shadow: 0 2px 8px rgba(228,170,79,0.4); }
@@ -667,7 +695,7 @@
   <div class="modal" id="viewModal"><div class="modal-box wide"><div class="modal-header"><h2><i class="ph-duotone ph-eye"></i> View SOP</h2><div style="display:flex;align-items:center;gap:12px;"><div class="lang-toggle" id="viewLangToggle"><button class="active" onclick="setViewLang('en')">EN</button><button onclick="setViewLang('es')">ES</button></div><button class="modal-close" onclick="closeModal('viewModal')">&times;</button></div></div><div class="modal-body" id="viewModalBody"></div><div class="modal-footer"><button class="header-btn" onclick="closeModal('viewModal')">Close</button><button class="header-btn" onclick="openModal('pdfModal')"><i class="ph-duotone ph-file-pdf"></i> PDF</button><button class="header-btn primary" onclick="editCurrentSOP()"><i class="ph-duotone ph-pencil-simple"></i> Edit</button></div></div></div>
   <div class="modal" id="qrModal"><div class="modal-box small"><div class="modal-header"><h2><i class="ph-duotone ph-qr-code"></i> QR Code</h2><button class="modal-close" onclick="closeModal('qrModal')">&times;</button></div><div class="modal-body"><div class="qr-modal-content"><img id="qrImage" width="200" height="200" style="display:block;margin:0 auto;border-radius:8px;"><p style="margin-top:16px;color:var(--text-muted);font-size:13px;">Scan to view this SOP</p><div class="qr-url" id="qrUrl"></div></div></div><div class="modal-footer"><button class="header-btn" onclick="closeModal('qrModal')">Close</button><button class="header-btn primary" onclick="downloadQR()"><i class="ph-duotone ph-download"></i> Download</button></div></div></div>
   <div class="modal" id="pdfModal"><div class="modal-box small"><div class="modal-header"><h2><i class="ph-duotone ph-file-pdf"></i> Export PDF</h2><button class="modal-close" onclick="closeModal('pdfModal')">&times;</button></div><div class="modal-body"><div class="form-group"><label class="form-label">Layout</label><div class="pdf-layout-options"><label class="pdf-layout-option"><input type="radio" name="pdfLayout" value="text"><div class="pdf-layout-card"><div class="pdf-layout-preview"><div class="line"></div><div class="line"></div><div class="line short"></div></div><span>Text Only</span></div></label><label class="pdf-layout-option"><input type="radio" name="pdfLayout" value="2col" checked><div class="pdf-layout-card"><div class="pdf-layout-preview grid-preview cols-1"><div class="box"></div><div class="box"></div></div><span>2 Per Page</span></div></label><label class="pdf-layout-option"><input type="radio" name="pdfLayout" value="4col"><div class="pdf-layout-card"><div class="pdf-layout-preview grid-preview cols-2"><div class="box"></div><div class="box"></div><div class="box"></div><div class="box"></div></div><span>4 Per Page</span></div></label></div></div><div class="form-group"><label class="form-label">Options</label><div style="display:flex;flex-direction:column;gap:8px;"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="pdfIncludeQR" checked> Include QR Code</label><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="pdfBilingual"> Bilingual (EN + ES)</label></div></div><div class="form-group"><label class="form-label">Language</label><div style="display:flex;gap:8px;"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="pdfLang" value="en" checked> English</label><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="pdfLang" value="es"> Español</label></div></div></div><div class="modal-footer"><button class="header-btn" onclick="closeModal('pdfModal')">Cancel</button><button class="header-btn primary" onclick="generatePDF()" id="generatePdfBtn"><i class="ph-duotone ph-file-pdf"></i> Generate PDF</button></div></div></div>
-  <div class="modal" id="settingsModal"><div class="modal-box small"><div class="modal-header"><h2><i class="ph-duotone ph-gear"></i> Settings</h2><button class="modal-close" onclick="closeModal('settingsModal')">&times;</button></div><div class="modal-body"><div class="settings-section"><div class="settings-section-title"><i class="ph-duotone ph-sparkle"></i> AI Features</div><div class="settings-api-key"><label style="font-size:12px;color:var(--text-muted);margin-bottom:6px;display:block;">Anthropic API Key</label><div style="display:flex;gap:8px;"><input type="password" id="apiKeyInput" class="form-input" placeholder="sk-ant-api03-..." style="flex:1;font-size:12px;" onchange="saveApiKey()"><button class="header-btn" onclick="toggleApiKeyVisibility()" style="padding:8px 12px;" title="Show/Hide"><i class="ph-duotone ph-eye" id="apiKeyEyeIcon"></i></button></div><div style="margin-top:10px;"><label style="font-size:12px;color:var(--text-muted);margin-bottom:6px;display:block;">Proxy URL (Google Apps Script Web App)</label><input type="text" id="proxyUrlInput" class="form-input" placeholder="https://script.google.com/macros/s/.../exec" style="font-size:12px;" onchange="saveProxyUrl()"></div><button class="header-btn primary" onclick="testApiConnection()" style="margin-top:12px;width:100%;"><i class="ph-duotone ph-plugs-connected"></i> Test Connection</button><div id="apiKeyStatus" style="margin-top:10px;font-size:12px;padding:10px;background:var(--bg);border-radius:6px;"></div><div class="settings-note" style="margin-top:8px;padding:10px;background:var(--green-dim);border-radius:6px;border-left:3px solid var(--green);"><i class="ph-duotone ph-check-circle" style="color:var(--green);"></i> <strong>AI Features Pre-Configured!</strong> API key and proxy are set up for team use. All AI features are ready to go.</div><div class="settings-note" style="margin-top:6px;">Override with your own key at <a href="https://console.anthropic.com" target="_blank" style="color:var(--gold);">console.anthropic.com</a></div></div></div><div class="settings-section"><div class="settings-section-title"><i class="ph-duotone ph-buildings"></i> Departments</div><div class="settings-list" id="settingsDeptList"></div><div class="settings-add-form"><input type="text" id="newDeptInput" placeholder="New department..." onkeypress="if(event.key==='Enter')addDepartment()"><button class="settings-add-btn" onclick="addDepartment()"><i class="ph-duotone ph-plus"></i></button></div><div class="settings-note">At least one department required</div></div><div class="settings-section"><div class="settings-section-title"><i class="ph-duotone ph-tag"></i> Tags</div><div class="settings-list" id="settingsTagList"></div><div class="settings-add-form"><input type="text" id="newTagInput" placeholder="New tag..." onkeypress="if(event.key==='Enter')addTag()"><div class="tag-color-picker"><div class="tag-color-option gold selected" data-color="gold" onclick="selectTagColor('gold')"></div><div class="tag-color-option green" data-color="green" onclick="selectTagColor('green')"></div><div class="tag-color-option sungrown" data-color="sungrown" onclick="selectTagColor('sungrown')"></div><div class="tag-color-option greenhouse" data-color="greenhouse" onclick="selectTagColor('greenhouse')"></div><div class="tag-color-option indoor" data-color="indoor" onclick="selectTagColor('indoor')"></div><div class="tag-color-option danger" data-color="danger" onclick="selectTagColor('danger')"></div></div><button class="settings-add-btn" onclick="addTag()"><i class="ph-duotone ph-plus"></i></button></div><div class="settings-note">At least one tag required</div></div></div><div class="modal-footer"><button class="header-btn primary" onclick="closeModal('settingsModal')"><i class="ph-duotone ph-check"></i> Done</button></div></div></div>
+  <div class="modal" id="settingsModal"><div class="modal-box small"><div class="modal-header"><h2><i class="ph-duotone ph-gear"></i> Settings</h2><button class="modal-close" onclick="closeModal('settingsModal')">&times;</button></div><div class="modal-body"><div class="settings-section"><div class="settings-section-title"><i class="ph-duotone ph-sparkle"></i> AI Features</div><div class="settings-api-key"><div class="settings-note" style="padding:12px;background:var(--green-dim);border-radius:8px;border-left:3px solid var(--green);margin-bottom:12px;"><i class="ph-duotone ph-check-circle" style="color:var(--green);"></i> <strong>AI Features Ready!</strong> API key is securely stored on the server. All AI features work automatically.</div><label style="font-size:12px;color:var(--text-muted);margin-bottom:6px;display:block;">Proxy URL (Google Apps Script)</label><input type="text" id="proxyUrlInput" class="form-input" placeholder="https://script.google.com/macros/s/.../exec" style="font-size:12px;" onchange="saveProxyUrl()"><button class="header-btn primary" onclick="testApiConnection()" style="margin-top:12px;width:100%;"><i class="ph-duotone ph-plugs-connected"></i> Test Connection</button><div id="apiKeyStatus" style="margin-top:10px;font-size:12px;padding:10px;background:var(--bg);border-radius:6px;"></div></div></div><div class="settings-section"><div class="settings-section-title"><i class="ph-duotone ph-buildings"></i> Departments</div><div class="settings-list" id="settingsDeptList"></div><div class="settings-add-form"><input type="text" id="newDeptInput" placeholder="New department..." onkeypress="if(event.key==='Enter')addDepartment()"><button class="settings-add-btn" onclick="addDepartment()"><i class="ph-duotone ph-plus"></i></button></div><div class="settings-note">At least one department required</div></div><div class="settings-section"><div class="settings-section-title"><i class="ph-duotone ph-tag"></i> Tags</div><div class="settings-list" id="settingsTagList"></div><div class="settings-add-form"><input type="text" id="newTagInput" placeholder="New tag..." onkeypress="if(event.key==='Enter')addTag()"><div class="tag-color-picker"><div class="tag-color-option gold selected" data-color="gold" onclick="selectTagColor('gold')"></div><div class="tag-color-option green" data-color="green" onclick="selectTagColor('green')"></div><div class="tag-color-option sungrown" data-color="sungrown" onclick="selectTagColor('sungrown')"></div><div class="tag-color-option greenhouse" data-color="greenhouse" onclick="selectTagColor('greenhouse')"></div><div class="tag-color-option indoor" data-color="indoor" onclick="selectTagColor('indoor')"></div><div class="tag-color-option danger" data-color="danger" onclick="selectTagColor('danger')"></div></div><button class="settings-add-btn" onclick="addTag()"><i class="ph-duotone ph-plus"></i></button></div><div class="settings-note">At least one tag required</div></div></div><div class="modal-footer"><button class="header-btn primary" onclick="closeModal('settingsModal')"><i class="ph-duotone ph-check"></i> Done</button></div></div></div>
 
   <!-- AI Generate Modal -->
   <div class="modal" id="aiGenerateModal">
@@ -681,7 +709,32 @@
           <div class="form-group">
             <label class="form-label"><i class="ph-duotone ph-truck"></i> Equipment / Machine Name *</label>
             <input type="text" class="form-input" id="aiGenEquipment" placeholder="e.g., John Deere 7210R Tractor, Vitamix 5200 Blender, Twister T4">
-            <div style="font-size:11px;color:var(--text-light);margin-top:6px;">Enter make/model for best results. Claude will search for official documentation.</div>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label"><i class="ph-duotone ph-file-search"></i> Documentation Source</label>
+            <div class="ai-gen-source-toggle">
+              <button type="button" class="source-btn active" onclick="setAIGenSource('search')" id="sourceSearchBtn">
+                <i class="ph-duotone ph-globe"></i> Web Search
+                <span class="source-cost">~$0.15-0.30</span>
+              </button>
+              <button type="button" class="source-btn" onclick="setAIGenSource('upload')" id="sourceUploadBtn">
+                <i class="ph-duotone ph-file-pdf"></i> Upload Manual
+                <span class="source-cost">~$0.02-0.05</span>
+              </button>
+            </div>
+          </div>
+          
+          <div class="form-group" id="aiGenUploadSection" style="display:none;">
+            <label class="form-label"><i class="ph-duotone ph-upload"></i> Upload Equipment Manual (PDF)</label>
+            <div class="file-upload-zone" id="fileUploadZone" onclick="document.getElementById('aiGenPdfInput').click()">
+              <input type="file" id="aiGenPdfInput" accept=".pdf" style="display:none;" onchange="handlePdfUpload(event)">
+              <div id="fileUploadContent">
+                <i class="ph-duotone ph-file-pdf" style="font-size:32px;color:var(--gold);"></i>
+                <div style="margin-top:8px;font-weight:500;">Click to upload or drag & drop</div>
+                <div style="font-size:12px;color:var(--text-light);margin-top:4px;">PDF files up to 20MB</div>
+              </div>
+            </div>
           </div>
           
           <div class="form-group">
@@ -706,12 +759,12 @@
             <textarea class="form-input" id="aiGenContext" placeholder="Any specific details about your use case, environment, or special requirements..." rows="2"></textarea>
           </div>
           
-          <div style="background:var(--gold-dim);border:1px solid var(--gold);border-radius:10px;padding:14px;margin-top:16px;">
+          <div style="background:var(--green-dim);border:1px solid var(--green);border-radius:10px;padding:14px;margin-top:16px;" id="aiGenInfoBox">
             <div style="display:flex;align-items:flex-start;gap:12px;">
-              <i class="ph-duotone ph-info" style="font-size:20px;color:var(--gold);flex-shrink:0;margin-top:2px;"></i>
+              <i class="ph-duotone ph-info" style="font-size:20px;color:var(--green);flex-shrink:0;margin-top:2px;"></i>
               <div>
-                <div style="font-weight:600;color:var(--gold);margin-bottom:4px;">How it works</div>
-                <div style="font-size:12px;color:var(--text-muted);line-height:1.5;">Claude will search the web for official manuals, service guides, and documentation for your equipment, then generate comprehensive SOPs based on manufacturer recommendations. Estimated cost: ~$0.15-0.30 per equipment.</div>
+                <div style="font-weight:600;color:var(--green);margin-bottom:4px;" id="aiGenInfoTitle">Web Search Mode</div>
+                <div style="font-size:12px;color:var(--text-muted);line-height:1.5;" id="aiGenInfoText">Claude will search the web for official manuals, service guides, and documentation for your equipment, then generate comprehensive SOPs based on manufacturer recommendations.</div>
               </div>
             </div>
           </div>
@@ -847,8 +900,7 @@
   
   <div class="toast" id="toast"><i class="ph-duotone ph-check-circle"></i><span id="toastMsg"></span></div>
   <script>
-    // Default API configuration (for shared team use)
-    const DEFAULT_API_KEY = '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';
+    // Default proxy URL (API key is stored securely in Apps Script)
     const DEFAULT_PROXY_URL = 'https://script.google.com/macros/s/AKfycbyyDNEHl78fewANzo_9j2zvMES_4HIFOdD8QbwE52kdhJOcWfwig7vcSV53cQal7bQj/exec';
     
     let sops=[], currentSopId=null, editingSteps=[], selectedTagColor='gold';
@@ -1133,15 +1185,14 @@
     
     function t(key) { return i18n[appLang][key] || i18n['en'][key] || key; }
     
-    // Translation API (using LibreTranslate or MyMemory free API)
+    // Translation API (using Claude or MyMemory free API)
     async function translateText(text, from, to) {
       if (!text || text.trim() === '') return '';
       
-      const apiKey = getApiKey();
       const proxyUrl = getProxyUrl();
       
-      // If no API configured, fall back to free API
-      if (!apiKey || !proxyUrl) {
+      // If no proxy configured, fall back to free API
+      if (!proxyUrl) {
         return translateTextFree(text, from, to);
       }
       
@@ -1152,7 +1203,7 @@
         const response = await fetch(proxyUrl, {
           method: 'POST',
           body: JSON.stringify({
-            apiKey: apiKey,
+            action: 'anthropic',
             body: {
               model: 'claude-3-5-haiku-20241022',
               max_tokens: 500,
@@ -1299,8 +1350,8 @@
         return '<div class="view-step"><div class="view-step-number">' + (i + 1) + '</div><div class="view-step-content"><div class="view-step-title">' + esc(stepTitle) + (st.safety ? ' <i class="ph-duotone ph-warning icon safety"></i>' : '') + (st.quality ? ' <i class="ph-duotone ph-seal-check icon quality"></i>' : '') + '</div><div class="view-step-desc">' + esc(stepDesc) + '</div></div>' + (st.image ? '<div class="view-step-image"><img src="' + st.image + '"></div>' : '') + '</div>';
       }).join('');
       
-      const hasApiKey = getApiKey() && getProxyUrl();
-      const langNotice = (lang === 'es' && s.title_es) ? '<div class="translation-notice"><i class="ph-duotone ph-sparkle"></i> ' + (hasApiKey ? 'Translated by Claude AI' : 'Auto-translated') + '</div>' : '';
+      const hasProxy = !!getProxyUrl();
+      const langNotice = (lang === 'es' && s.title_es) ? '<div class="translation-notice"><i class="ph-duotone ph-sparkle"></i> ' + (hasProxy ? 'Translated by Claude AI' : 'Auto-translated') + '</div>' : '';
       
       document.getElementById('viewModalBody').innerHTML = langNotice + '<div class="view-sop-header"><div><div class="view-sop-title">' + esc(title) + '</div><div class="view-sop-meta"><div class="view-sop-meta-item"><i class="ph-duotone ph-folder"></i> ' + s.dept + '</div><div class="view-sop-meta-item"><i class="ph-duotone ph-hash"></i> ' + s.docNum + '</div><div class="view-sop-meta-item"><i class="ph-duotone ph-git-branch"></i> Rev ' + s.revision + '</div><div class="view-sop-meta-item"><i class="ph-duotone ph-calendar"></i> ' + fmtDate(s.updatedAt) + '</div></div>' + (desc ? '<p style="margin-top:12px;color:var(--text-muted)">' + esc(desc) + '</p>' : '') + '</div><div class="view-sop-qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=78x78&data=' + encodeURIComponent(u) + '" width="78" height="78"></div></div>' + stepsHtml;
     }
@@ -1813,56 +1864,21 @@
         showToast('PDF saved!','success');
       }catch(e){console.error(e);showToast('PDF error: '+e.message,'error');}
     }
-    // API Key Management
-    function saveApiKey() {
-      const key = document.getElementById('apiKeyInput').value.trim();
-      if (key) {
-        localStorage.setItem('sopAnthropicApiKey', key);
-        showToast('API key saved!', 'success');
-      } else {
-        localStorage.removeItem('sopAnthropicApiKey');
-      }
-      updateApiKeyStatus(!!key && !!getProxyUrl());
-    }
-    
+    // Proxy URL Management (API key is stored server-side in Apps Script)
     function loadApiKeyToInput() {
-      const key = getApiKey();
       const proxyUrl = getProxyUrl();
-      document.getElementById('apiKeyInput').value = key;
       document.getElementById('proxyUrlInput').value = proxyUrl;
-      updateApiKeyStatus(!!key && !!proxyUrl);
+      updateApiKeyStatus();
     }
     
-    function updateApiKeyStatus(ready) {
+    function updateApiKeyStatus() {
       const status = document.getElementById('apiKeyStatus');
-      const usingDefaults = getApiKey() === DEFAULT_API_KEY && getProxyUrl() === DEFAULT_PROXY_URL;
-      if (ready && usingDefaults) {
-        status.innerHTML = '<span style="color:var(--green);"><i class="ph-duotone ph-check-circle"></i> Using team API - ready to go!</span>';
-      } else if (ready) {
-        status.innerHTML = '<span style="color:var(--green);"><i class="ph-duotone ph-check-circle"></i> Custom API configured</span>';
-      } else if (getApiKey() && !getProxyUrl()) {
+      const proxyUrl = getProxyUrl();
+      if (proxyUrl) {
+        status.innerHTML = '<span style="color:var(--green);"><i class="ph-duotone ph-check-circle"></i> Proxy configured - AI features ready!</span>';
+      } else {
         status.innerHTML = '<span style="color:var(--gold);"><i class="ph-duotone ph-info"></i> Add Proxy URL to enable AI</span>';
-      } else if (!getApiKey() && getProxyUrl()) {
-        status.innerHTML = '<span style="color:var(--gold);"><i class="ph-duotone ph-info"></i> Add API Key to enable AI</span>';
-      } else {
-        status.innerHTML = '<span style="color:var(--text-light);"><i class="ph-duotone ph-info"></i> Rule-based improve active. Add API + Proxy for AI.</span>';
       }
-    }
-    
-    function toggleApiKeyVisibility() {
-      const input = document.getElementById('apiKeyInput');
-      const icon = document.getElementById('apiKeyEyeIcon');
-      if (input.type === 'password') {
-        input.type = 'text';
-        icon.className = 'ph-duotone ph-eye-slash';
-      } else {
-        input.type = 'password';
-        icon.className = 'ph-duotone ph-eye';
-      }
-    }
-    
-    function getApiKey() {
-      return localStorage.getItem('sopAnthropicApiKey') || DEFAULT_API_KEY;
     }
     
     function getProxyUrl() {
@@ -1877,17 +1893,11 @@
       } else {
         localStorage.removeItem('sopProxyUrl');
       }
-      updateApiKeyStatus(!!getApiKey() && !!url);
+      updateApiKeyStatus();
     }
     
     async function testApiConnection() {
-      const apiKey = getApiKey();
       const proxyUrl = getProxyUrl();
-      
-      if (!apiKey) {
-        showToast('Enter API key first', 'error');
-        return;
-      }
       
       if (!proxyUrl) {
         showToast('Enter Proxy URL first', 'error');
@@ -1901,7 +1911,7 @@
         const response = await fetch(proxyUrl, {
           method: 'POST',
           body: JSON.stringify({
-            apiKey: apiKey,
+            action: 'anthropic',
             body: {
               model: 'claude-3-5-haiku-20241022',
               max_tokens: 10,
@@ -1932,16 +1942,15 @@
     
     // AI Improve Functions
     async function aiImproveText(text, type) {
-      const apiKey = getApiKey();
-      
       if (!text || text.trim().length < 3) {
         showToast(t('enterTextFirst'), 'error');
         return null;
       }
       
-      // Try API first if key exists
-      if (apiKey) {
-        const result = await tryApiImprove(text, type, apiKey);
+      // Try API first if proxy is configured
+      const proxyUrl = getProxyUrl();
+      if (proxyUrl) {
+        const result = await tryApiImprove(text, type);
         if (result) return result;
       }
       
@@ -2038,7 +2047,7 @@
       return improved;
     }
     
-    async function tryApiImprove(text, type, apiKey) {
+    async function tryApiImprove(text, type) {
       const proxyUrl = getProxyUrl();
       if (!proxyUrl) {
         return null; // No proxy, fall back to rule-based
@@ -2063,7 +2072,7 @@ Original: ${text}`
         const response = await fetch(proxyUrl, {
           method: 'POST',
           body: JSON.stringify({
-            apiKey: apiKey,
+            action: 'anthropic',
             body: {
               model: 'claude-3-5-haiku-20241022',
               max_tokens: 200,
@@ -2253,10 +2262,11 @@ Original: ${text}`
     // AI Generate SOPs Feature
     // ============================================
     let generatedSOPs = [];
+    let aiGenSource = 'search'; // 'search' or 'upload'
+    let uploadedPdfData = null;
+    let uploadedPdfName = '';
     
     function openAIGenerateModal() {
-      // API is pre-configured with defaults, so no need to check
-      
       // Reset modal state
       document.getElementById('aiGenStep1').style.display = 'block';
       document.getElementById('aiGenStep2').style.display = 'none';
@@ -2268,6 +2278,13 @@ Original: ${text}`
       document.getElementById('aiGenResults').innerHTML = '';
       generatedSOPs = [];
       
+      // Reset source to search
+      aiGenSource = 'search';
+      uploadedPdfData = null;
+      uploadedPdfName = '';
+      setAIGenSource('search');
+      resetFileUpload();
+      
       // Populate department dropdown
       const deptSelect = document.getElementById('aiGenDept');
       deptSelect.innerHTML = settings.departments.map(d => 
@@ -2277,13 +2294,135 @@ Original: ${text}`
       const equipDept = settings.departments.find(d => d.name === 'Equipment');
       if (equipDept) deptSelect.value = 'Equipment';
       
+      // Setup drag and drop
+      setupDragAndDrop();
+      
       openModal('aiGenerateModal');
+    }
+    
+    function setAIGenSource(source) {
+      aiGenSource = source;
+      
+      // Update button states
+      document.getElementById('sourceSearchBtn').classList.toggle('active', source === 'search');
+      document.getElementById('sourceUploadBtn').classList.toggle('active', source === 'upload');
+      
+      // Show/hide upload section
+      document.getElementById('aiGenUploadSection').style.display = source === 'upload' ? 'block' : 'none';
+      
+      // Update info box
+      const infoBox = document.getElementById('aiGenInfoBox');
+      const infoTitle = document.getElementById('aiGenInfoTitle');
+      const infoText = document.getElementById('aiGenInfoText');
+      
+      if (source === 'search') {
+        infoBox.style.background = 'var(--gold-dim)';
+        infoBox.style.borderColor = 'var(--gold)';
+        infoBox.querySelector('i').style.color = 'var(--gold)';
+        infoTitle.style.color = 'var(--gold)';
+        infoTitle.textContent = 'Web Search Mode';
+        infoText.textContent = 'Claude will search the web for official manuals, service guides, and documentation for your equipment, then generate comprehensive SOPs based on manufacturer recommendations.';
+      } else {
+        infoBox.style.background = 'var(--green-dim)';
+        infoBox.style.borderColor = 'var(--green)';
+        infoBox.querySelector('i').style.color = 'var(--green)';
+        infoTitle.style.color = 'var(--green)';
+        infoTitle.textContent = 'Upload Mode (Recommended)';
+        infoText.textContent = 'Upload your equipment manual PDF directly. More accurate results and 5-10x cheaper than web search. Claude will extract all relevant procedures from the document.';
+      }
+    }
+    
+    function setupDragAndDrop() {
+      const zone = document.getElementById('fileUploadZone');
+      if (!zone) return;
+      
+      zone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        zone.classList.add('dragover');
+      });
+      
+      zone.addEventListener('dragleave', () => {
+        zone.classList.remove('dragover');
+      });
+      
+      zone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        zone.classList.remove('dragover');
+        const files = e.dataTransfer.files;
+        if (files.length > 0 && files[0].type === 'application/pdf') {
+          handlePdfFile(files[0]);
+        } else {
+          showToast('Please upload a PDF file', 'error');
+        }
+      });
+    }
+    
+    function handlePdfUpload(event) {
+      const file = event.target.files[0];
+      if (file) {
+        handlePdfFile(file);
+      }
+    }
+    
+    function handlePdfFile(file) {
+      if (file.size > 20 * 1024 * 1024) { // 20MB limit
+        showToast('File too large. Maximum 20MB.', 'error');
+        return;
+      }
+      
+      uploadedPdfName = file.name;
+      
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        // Extract base64 data (remove the data:application/pdf;base64, prefix)
+        const base64 = e.target.result.split(',')[1];
+        uploadedPdfData = base64;
+        
+        // Update UI
+        const zone = document.getElementById('fileUploadZone');
+        const content = document.getElementById('fileUploadContent');
+        zone.classList.add('has-file');
+        content.innerHTML = `
+          <i class="ph-duotone ph-file-pdf" style="font-size:32px;color:var(--green);"></i>
+          <div style="margin-top:8px;font-weight:500;color:var(--green);">${esc(uploadedPdfName)}</div>
+          <div style="font-size:12px;color:var(--text-light);margin-top:4px;">${(file.size / 1024 / 1024).toFixed(2)} MB</div>
+          <button type="button" onclick="event.stopPropagation(); resetFileUpload();" style="margin-top:8px;padding:4px 12px;background:var(--danger-dim);color:var(--danger);border:1px solid var(--danger);border-radius:6px;font-size:12px;cursor:pointer;">Remove</button>
+        `;
+        
+        showToast('PDF uploaded successfully!', 'success');
+      };
+      reader.readAsDataURL(file);
+    }
+    
+    function resetFileUpload() {
+      uploadedPdfData = null;
+      uploadedPdfName = '';
+      
+      const zone = document.getElementById('fileUploadZone');
+      const content = document.getElementById('fileUploadContent');
+      const input = document.getElementById('aiGenPdfInput');
+      
+      if (zone) zone.classList.remove('has-file');
+      if (input) input.value = '';
+      if (content) {
+        content.innerHTML = `
+          <i class="ph-duotone ph-file-pdf" style="font-size:32px;color:var(--gold);"></i>
+          <div style="margin-top:8px;font-weight:500;">Click to upload or drag & drop</div>
+          <div style="font-size:12px;color:var(--text-light);margin-top:4px;">PDF files up to 20MB</div>
+        `;
+      }
     }
     
     async function startAIGenerate() {
       const equipment = document.getElementById('aiGenEquipment').value.trim();
       if (!equipment) {
         showToast('Please enter equipment name', 'error');
+        return;
+      }
+      
+      // Check if upload mode but no file
+      if (aiGenSource === 'upload' && !uploadedPdfData) {
+        showToast('Please upload a PDF manual', 'error');
         return;
       }
       
@@ -2310,9 +2449,6 @@ Original: ${text}`
       document.getElementById('aiGenStartBtn').style.display = 'none';
       
       try {
-        updateAIGenProgress('Searching for documentation...', `Finding manuals and specs for ${equipment}`);
-        
-        const apiKey = getApiKey();
         const proxyUrl = getProxyUrl();
         
         // Build the prompt
@@ -2329,7 +2465,7 @@ Original: ${text}`
         
         const systemPrompt = `You are an expert technical writer creating Standard Operating Procedures (SOPs) for equipment maintenance and operation. 
 
-Your task is to search for official documentation, manuals, and service guides for the specified equipment, then create comprehensive SOPs based on manufacturer recommendations.
+Your task is to analyze the provided documentation and create comprehensive SOPs based on manufacturer recommendations.
 
 IMPORTANT: You must output ONLY valid JSON - no markdown, no explanation, no code blocks. Just the raw JSON array.
 
@@ -2354,7 +2490,73 @@ Guidelines:
 - Step titles should start with action verbs
 - Include manufacturer-specific terminology and recommendations`;
 
-        const userPrompt = `Search for official documentation for: ${equipment}
+        let response;
+        
+        if (aiGenSource === 'upload') {
+          // PDF Upload Mode
+          updateAIGenProgress('Reading uploaded manual...', `Analyzing ${uploadedPdfName}`);
+          
+          const userPrompt = `Analyze this equipment manual for: ${equipment}
+
+Create SOPs for the following types:
+- ${selectedDescriptions}
+
+Department: ${dept}
+${context ? `Additional context: ${context}` : ''}
+
+Extract from the manual:
+- Maintenance procedures and schedules
+- Part numbers and specifications
+- Safety warnings and precautions
+- Operating procedures
+- Troubleshooting guides
+
+Generate comprehensive SOPs based on the document content. Include specific details like:
+- Fluid types and capacities
+- Filter part numbers  
+- Service intervals (hours or time-based)
+- Safety warnings from the manual
+- Torque specifications
+- Step-by-step procedures
+
+Output ONLY the JSON array, nothing else.`;
+
+          updateAIGenProgress('Generating SOPs...', 'Claude is extracting procedures from the manual');
+          
+          response = await fetch(proxyUrl, {
+            method: 'POST',
+            body: JSON.stringify({
+              action: 'anthropic',
+              body: {
+                model: 'claude-sonnet-4-20250514',
+                max_tokens: 8000,
+                system: systemPrompt,
+                messages: [{ 
+                  role: 'user', 
+                  content: [
+                    {
+                      type: 'document',
+                      source: {
+                        type: 'base64',
+                        media_type: 'application/pdf',
+                        data: uploadedPdfData
+                      }
+                    },
+                    {
+                      type: 'text',
+                      text: userPrompt
+                    }
+                  ]
+                }]
+              }
+            })
+          });
+          
+        } else {
+          // Web Search Mode
+          updateAIGenProgress('Searching for documentation...', `Finding manuals and specs for ${equipment}`);
+          
+          const userPrompt = `Search for official documentation for: ${equipment}
 
 Create SOPs for the following types:
 - ${selectedDescriptions}
@@ -2379,22 +2581,22 @@ Then generate comprehensive SOPs based on what you find. Include specific detail
 
 Output ONLY the JSON array, nothing else.`;
 
-        updateAIGenProgress('Generating SOPs...', 'Claude is researching and writing procedures');
-        
-        // Call Claude API with web search
-        const response = await fetch(proxyUrl, {
-          method: 'POST',
-          body: JSON.stringify({
-            apiKey: apiKey,
-            body: {
-              model: 'claude-sonnet-4-20250514',
-              max_tokens: 8000,
-              tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-              system: systemPrompt,
-              messages: [{ role: 'user', content: userPrompt }]
-            }
-          })
-        });
+          updateAIGenProgress('Generating SOPs...', 'Claude is researching and writing procedures');
+          
+          response = await fetch(proxyUrl, {
+            method: 'POST',
+            body: JSON.stringify({
+              action: 'anthropic',
+              body: {
+                model: 'claude-sonnet-4-20250514',
+                max_tokens: 8000,
+                tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+                system: systemPrompt,
+                messages: [{ role: 'user', content: userPrompt }]
+              }
+            })
+          });
+        }
         
         const data = await response.json();
         
