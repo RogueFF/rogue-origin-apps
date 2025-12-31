@@ -51,10 +51,23 @@
     .main-panel { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px 30px; height: 100vh; overflow: hidden; }
     
     .timer-panel { width: 380px; min-width: 380px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px; border-left: 2px solid rgba(228,170,79,0.2); height: 100vh; transition: background 0.5s ease, width 0.4s ease, min-width 0.4s ease; position: relative; }
-    .timer-panel.fullscreen { width: 100vw; min-width: 100vw; border-left: none; }
+    .timer-panel.fullscreen { 
+      position: fixed; 
+      top: 0; 
+      left: 0; 
+      right: 0; 
+      bottom: 0; 
+      width: 100vw; 
+      min-width: 100vw; 
+      height: 100vh; 
+      border-left: none; 
+      z-index: 100; 
+    }
     body.timer-fullscreen .main-panel { display: none; }
-    body.timer-fullscreen .time-display { right: 20px; }
-    body.timer-fullscreen .help-btn { right: 20px; }
+    body.timer-fullscreen .time-display { right: 20px; z-index: 101; }
+    body.timer-fullscreen .help-btn { right: 20px; z-index: 101; }
+    body.timer-fullscreen .strain-display { z-index: 101; }
+    body.timer-fullscreen .lang-toggle { z-index: 101; }
     
     /* Vivid Timer Panel Backgrounds */
     .timer-panel.green { background: linear-gradient(180deg, rgba(34, 197, 94, 0.5) 0%, rgba(22, 163, 74, 0.3) 100%); border-left-color: rgba(34, 197, 94, 0.5); box-shadow: inset 0 0 30px rgba(34, 197, 94, 0.2); }
@@ -67,13 +80,13 @@
     .drag-handle:hover { opacity: 1; background: rgba(228,170,79,0.1); }
     .drag-handle::before { content: ''; width: 4px; height: 50px; background: rgba(228,170,79,0.4); border-radius: 2px; transition: background 0.2s; }
     .drag-handle:hover::before { background: var(--gold); }
-    .timer-panel.fullscreen .drag-handle { left: auto; right: 0; }
+    .timer-panel.fullscreen .drag-handle { left: auto; right: 0; border-left: 2px solid rgba(228,170,79,0.2); }
     .timer-panel.dragging { transition: none; }
     
     /* Expand hint arrow */
-    .expand-hint { position: absolute; left: 30px; top: 50%; transform: translateY(-50%); color: rgba(228,170,79,0.4); font-size: 20px; pointer-events: none; transition: opacity 0.3s; }
-    .timer-panel.fullscreen .expand-hint { left: auto; right: 30px; transform: translateY(-50%) rotate(180deg); }
-    .timer-panel:hover .expand-hint { opacity: 0; }
+    .expand-hint { position: absolute; left: 6px; top: 50%; transform: translateY(-50%); color: rgba(228,170,79,0.6); font-size: 16px; pointer-events: none; transition: opacity 0.3s, left 0.3s, right 0.3s; z-index: 11; }
+    .timer-panel.fullscreen .expand-hint { left: auto; right: 6px; }
+    .drag-handle:hover ~ .expand-hint { opacity: 0; }
     
     /* Fullscreen timer enhancements */
     .timer-panel.fullscreen .timer-display { width: 300px; height: 300px; margin-bottom: 25px; }
@@ -103,7 +116,7 @@
     .debug-reset:hover { background: rgba(239, 68, 68, 0.3); }
     .debug-hint { margin-top: 10px; font-size: 11px; color: rgba(255,255,255,0.4); text-align: center; }
     .debug-hint kbd { background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; font-family: monospace; }
-    .debug-indicator { display: none; position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(239, 68, 68, 0.9); color: white; padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; z-index: 1999; }
+    .debug-indicator { display: none; position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(239, 68, 68, 0.9); color: white; padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; z-index: 2001; }
     body.debug-active .debug-indicator { display: block; }
     .timer-panel.green { background: linear-gradient(180deg, rgba(102, 137, 113, 0.4) 0%, rgba(102, 137, 113, 0.2) 100%); }
     .timer-panel.yellow { background: linear-gradient(180deg, rgba(228, 170, 79, 0.4) 0%, rgba(228, 170, 79, 0.2) 100%); }
@@ -347,15 +360,15 @@
       html, body { overflow: auto; height: auto; min-height: 100vh; }
       body { flex-direction: column; }
       .main-panel { height: auto; min-height: auto; padding: 80px 20px 20px; order: 1; }
-      .timer-panel { width: 100%; min-width: 100%; height: auto; border-left: none; border-top: 2px solid rgba(228,170,79,0.2); padding: 20px; order: 2; flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 20px; }
-      .timer-panel.fullscreen { height: 100vh; flex-direction: column; flex-wrap: nowrap; }
+      .timer-panel { width: 100%; min-width: 100%; height: auto; border-left: none; border-top: 2px solid rgba(228,170,79,0.2); padding: 20px; order: 2; flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 20px; position: relative; }
+      .timer-panel.fullscreen { position: fixed; top: 0; left: 0; right: 0; bottom: 0; height: 100vh; flex-direction: column; flex-wrap: nowrap; z-index: 100; }
       body.timer-fullscreen { overflow: hidden; }
       body.timer-fullscreen .main-panel { display: none; }
-      .drag-handle { width: 100%; height: 20px; top: 0; left: 0; right: 0; bottom: auto; cursor: ns-resize; }
+      .drag-handle { width: 100%; height: 24px; top: 0; left: 0; right: 0; bottom: auto; cursor: ns-resize; }
       .drag-handle::before { width: 50px; height: 4px; }
       .timer-panel.fullscreen .drag-handle { top: auto; bottom: 0; }
-      .expand-hint { top: 8px; left: 50%; transform: translateX(-50%) rotate(-90deg); }
-      .timer-panel.fullscreen .expand-hint { top: auto; bottom: 8px; left: 50%; right: auto; transform: translateX(-50%) rotate(90deg); }
+      .expand-hint { top: 6px; left: 50%; transform: translateX(-50%); }
+      .timer-panel.fullscreen .expand-hint { top: auto; bottom: 6px; left: 50%; right: auto; transform: translateX(-50%); }
       .time-display { right: 20px; top: 15px; }
       .help-btn { right: 20px; bottom: auto; top: 70px; }
       .strain-display { top: 15px; }
