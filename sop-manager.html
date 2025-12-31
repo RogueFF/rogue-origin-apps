@@ -1039,15 +1039,56 @@
     // Translation API (using LibreTranslate or MyMemory free API)
     async function translateText(text, from, to) {
       if (!text || text.trim() === '') return '';
+      
+      const apiKey = getApiKey();
+      const proxyUrl = getProxyUrl();
+      
+      // If no API configured, fall back to free API
+      if (!apiKey || !proxyUrl) {
+        return translateTextFree(text, from, to);
+      }
+      
+      const fromLang = from === 'en' ? 'English' : 'Spanish';
+      const toLang = to === 'en' ? 'English' : 'Spanish';
+      
       try {
-        // Using MyMemory free translation API (no key needed, 5000 chars/day)
+        const response = await fetch(proxyUrl, {
+          method: 'POST',
+          body: JSON.stringify({
+            apiKey: apiKey,
+            body: {
+              model: 'claude-3-5-haiku-20241022',
+              max_tokens: 500,
+              messages: [{ 
+                role: 'user', 
+                content: `Translate the following text from ${fromLang} to ${toLang}. This is for a cannabis production facility SOP, so use appropriate industry terminology. Only return the translation, nothing else.\n\nText: ${text}` 
+              }]
+            }
+          })
+        });
+        
+        const data = await response.json();
+        if (data.content && data.content[0]) {
+          return data.content[0].text.trim();
+        }
+        return translateTextFree(text, from, to); // fallback
+      } catch (e) {
+        console.error('Claude translation error:', e);
+        return translateTextFree(text, from, to); // fallback
+      }
+    }
+    
+    // Fallback free translation API
+    async function translateTextFree(text, from, to) {
+      if (!text || text.trim() === '') return '';
+      try {
         const langPair = from + '|' + to;
         const response = await fetch('https://api.mymemory.translated.net/get?q=' + encodeURIComponent(text) + '&langpair=' + langPair);
         const data = await response.json();
         if (data.responseStatus === 200 && data.responseData) {
           return data.responseData.translatedText;
         }
-        return text; // fallback to original
+        return text;
       } catch (e) {
         console.error('Translation error:', e);
         return text;
