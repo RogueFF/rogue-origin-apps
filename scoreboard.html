@@ -297,6 +297,44 @@
     .manual-btn.btn-neutral { background: linear-gradient(135deg, #64748b 0%, #475569 100%); box-shadow: 0 4px 12px rgba(100, 116, 139, 0.4); }
     @keyframes btnPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.02); } }
     
+    /* Pause Button */
+    .timer-btn-row { display: flex; gap: 10px; width: 100%; margin-bottom: 15px; }
+    .timer-btn-row .manual-btn { flex: 1; margin-bottom: 0; }
+    .pause-btn { flex: 0 0 auto; padding: 16px 20px; background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); border: none; border-radius: 16px; color: white; font-size: 18px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(249, 115, 22, 0.4); }
+    .pause-btn:hover { transform: scale(1.02); box-shadow: 0 6px 20px rgba(249, 115, 22, 0.5); }
+    .pause-btn:active { transform: scale(0.98); }
+    .pause-btn.paused { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4); animation: pausedPulse 1.5s ease-in-out infinite; }
+    @keyframes pausedPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+    .timer-panel.fullscreen .pause-btn { font-size: 22px; padding: 20px 28px; }
+    
+    /* Pause Modal */
+    .pause-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 5000; opacity: 0; visibility: hidden; transition: all 0.3s ease; }
+    .pause-modal-overlay.visible { opacity: 1; visibility: visible; }
+    .pause-modal { background: linear-gradient(145deg, #1a1f16 0%, #2d3a2e 100%); border-radius: 20px; padding: 30px; max-width: 400px; width: 90%; border: 2px solid var(--gold); box-shadow: 0 20px 60px rgba(0,0,0,0.5); transform: scale(0.9); transition: transform 0.3s ease; }
+    .pause-modal-overlay.visible .pause-modal { transform: scale(1); }
+    .pause-modal-title { color: var(--gold); font-size: 24px; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
+    .pause-modal-subtitle { color: rgba(255,255,255,0.6); font-size: 14px; margin-bottom: 20px; }
+    .pause-modal-reasons { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+    .pause-reason-btn { padding: 14px 18px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; color: #fff; font-size: 15px; cursor: pointer; text-align: left; transition: all 0.2s ease; }
+    .pause-reason-btn:hover { background: rgba(228,170,79,0.2); border-color: var(--gold); }
+    .pause-reason-btn.selected { background: rgba(228,170,79,0.3); border-color: var(--gold); }
+    .pause-custom-input { width: 100%; padding: 14px 18px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; color: #fff; font-size: 15px; margin-bottom: 20px; outline: none; transition: border-color 0.2s; }
+    .pause-custom-input:focus { border-color: var(--gold); }
+    .pause-custom-input::placeholder { color: rgba(255,255,255,0.4); }
+    .pause-modal-buttons { display: flex; gap: 12px; }
+    .pause-modal-btn { flex: 1; padding: 14px 20px; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; }
+    .pause-modal-btn.cancel { background: rgba(255,255,255,0.1); color: #fff; }
+    .pause-modal-btn.cancel:hover { background: rgba(255,255,255,0.2); }
+    .pause-modal-btn.confirm { background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); color: #fff; }
+    .pause-modal-btn.confirm:hover { transform: scale(1.02); }
+    .pause-modal-btn.confirm:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    
+    /* Pause Banner */
+    .pause-banner { position: fixed; top: 0; left: 0; right: 0; background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); color: #fff; padding: 12px 20px; display: flex; align-items: center; justify-content: center; gap: 15px; font-size: 16px; font-weight: 600; z-index: 4000; transform: translateY(-100%); transition: transform 0.3s ease; }
+    .pause-banner.visible { transform: translateY(0); }
+    .pause-banner-time { font-size: 24px; font-weight: 900; font-variant-numeric: tabular-nums; }
+    .pause-banner-reason { opacity: 0.9; }
+    
     /* Cycle History Container */
     .cycle-history { width: 100%; max-width: 400px; margin-top: 10px; }
     .cycle-history-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
@@ -757,7 +795,10 @@
       </div>
     </div>
     <div class="timer-target">Target: <span id="timerTargetTime">--:--</span> • <span id="timerTrimmers">0</span> trimmers</div>
-    <button class="manual-btn" id="manualBtn" onclick="logManualEntry()"><span class="icon"><i class="ph-duotone ph-package"></i></span><span id="manualBtnText">5KG Bag Complete</span></button>
+    <div class="timer-btn-row">
+      <button class="manual-btn" id="manualBtn" onclick="logManualEntry()"><span class="icon"><i class="ph-duotone ph-package"></i></span><span id="manualBtnText">5KG Bag Complete</span></button>
+      <button class="pause-btn" id="pauseBtn" onclick="handlePauseClick()"><i class="ph-duotone ph-pause"></i></button>
+    </div>
     <div class="timer-stats">
       <div class="timer-stat"><span class="timer-stat-label" id="bagsTodayLabel">Bags Today</span><span class="timer-stat-value" id="bagsToday">0</span></div>
       <div class="timer-stat"><span class="timer-stat-label" id="avgTodayLabel">Avg Today</span><span class="timer-stat-value" id="avgToday">--:--</span></div>
@@ -780,6 +821,34 @@
   
   <!-- Celebration container -->
   <div class="celebration" id="celebration"></div>
+  
+  <!-- Pause Modal -->
+  <div class="pause-modal-overlay" id="pauseModal">
+    <div class="pause-modal">
+      <div class="pause-modal-title"><i class="ph-duotone ph-pause-circle"></i> Pause Timer</div>
+      <div class="pause-modal-subtitle">Select or enter the reason for pausing:</div>
+      <div class="pause-modal-reasons">
+        <button class="pause-reason-btn" onclick="selectPauseReason(this, 'Equipment issue')">🔧 Equipment issue</button>
+        <button class="pause-reason-btn" onclick="selectPauseReason(this, 'Material shortage')">📦 Material shortage</button>
+        <button class="pause-reason-btn" onclick="selectPauseReason(this, 'Quality check')">🔍 Quality check</button>
+        <button class="pause-reason-btn" onclick="selectPauseReason(this, 'Shift change')">👥 Shift change</button>
+        <button class="pause-reason-btn" onclick="selectPauseReason(this, 'Cleaning')">🧹 Cleaning</button>
+      </div>
+      <input type="text" class="pause-custom-input" id="pauseCustomReason" placeholder="Or type a custom reason..." oninput="onCustomReasonInput()">
+      <div class="pause-modal-buttons">
+        <button class="pause-modal-btn cancel" onclick="closePauseModal()">Cancel</button>
+        <button class="pause-modal-btn confirm" id="pauseConfirmBtn" onclick="confirmPause()" disabled>Pause Timer</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Pause Banner -->
+  <div class="pause-banner" id="pauseBanner">
+    <i class="ph-duotone ph-pause-circle" style="font-size:24px;"></i>
+    <span>PAUSED</span>
+    <span class="pause-banner-time" id="pauseTime">0:00</span>
+    <span class="pause-banner-reason" id="pauseReasonDisplay">—</span>
+  </div>
 
   <!-- Debug Panel -->
   <div class="debug-indicator" id="debugIndicator">⚠ Debug Mode Active</div>
@@ -820,6 +889,13 @@
 
   <script>
     let data=null,timerData=null,currentLang='en',lastBagTimestamp=null,hourlyChart=null;
+    
+    // Pause state
+    let isPaused = false;
+    let pauseStartTime = null;
+    let pauseReason = '';
+    let pauseId = null;
+    let pauseInterval = null;
     
     // Debug mode variables
     let debugMode = false;
@@ -1642,9 +1718,17 @@
       // Get break/after hours status (can be overridden by debug)
       let breakStatus = debugOnBreak !== null ? { onBreak: debugOnBreak, afterHours: false } : isOnBreakOrAfterHours();
       
+      // Check if manually paused
+      const isManuallyPaused = isPaused;
+      
       // Calculate working time (excludes breaks)
       let elapsedSec=0;
-      if(lastBagTimestamp)elapsedSec=getWorkingSecondsSince(lastBagTimestamp);
+      if(lastBagTimestamp && !isManuallyPaused)elapsedSec=getWorkingSecondsSince(lastBagTimestamp);
+      else if(lastBagTimestamp && isManuallyPaused && pauseStartTime) {
+        // Show elapsed time up until pause started
+        elapsedSec = getWorkingSecondsSince(lastBagTimestamp) - Math.floor((new Date() - pauseStartTime) / 1000);
+        if (elapsedSec < 0) elapsedSec = 0;
+      }
       
       // Debug mode: simulate elapsed time as percentage of target
       const debugTargetSec = targetSec > 0 ? targetSec : 300; // Default 5 min for testing
@@ -1654,7 +1738,7 @@
       
       const effectiveTarget = debugMode ? debugTargetSec : targetSec;
       let remainingSec=effectiveTarget>0?effectiveTarget-elapsedSec:elapsedSec;
-      const isOvertime=effectiveTarget>0&&remainingSec<0&&!breakStatus.onBreak;
+      const isOvertime=effectiveTarget>0&&remainingSec<0&&!breakStatus.onBreak&&!isManuallyPaused;
       const displaySec=Math.abs(effectiveTarget>0?remainingSec:elapsedSec);
       
       let colorClass='neutral';
@@ -1662,6 +1746,8 @@
       // Debug mode: direct state override
       if (debugMode && debugState) {
         colorClass = debugState;
+      } else if (isManuallyPaused) {
+        colorClass = 'yellow';
       } else if(effectiveTarget>0||elapsedSec>0){
         colorClass='green';
         if(breakStatus.onBreak){
@@ -1683,8 +1769,12 @@
       document.body.classList.remove('timer-green', 'timer-yellow', 'timer-red', 'timer-neutral');
       document.body.classList.add('timer-' + colorClass);
       
-      // Show paused state during breaks/after hours
-      if(breakStatus.onBreak && !debugMode){
+      // Show paused state during manual pause, breaks, or after hours
+      if(isManuallyPaused){
+        tv.textContent=formatTime(displaySec);
+        tv.className='timer-value yellow';
+        tl.textContent=currentLang==='es'?'PAUSADO':'PAUSED';
+      }else if(breakStatus.onBreak && !debugMode){
         tv.textContent=breakStatus.afterHours?'--:--':formatTime(displaySec);
         tv.className='timer-value yellow';
         tl.textContent=breakStatus.afterHours?t[currentLang].paused:t[currentLang].onBreak;
@@ -1697,7 +1787,10 @@
       }
       
       const circ=2*Math.PI*95;let prog=0;
-      if(breakStatus.onBreak && !debugMode){
+      if(isManuallyPaused){
+        // Keep ring at current position during manual pause
+        prog=effectiveTarget>0&&elapsedSec>0?Math.min(1,elapsedSec/effectiveTarget):0;
+      }else if(breakStatus.onBreak && !debugMode){
         // Keep ring at current position during breaks
         prog=effectiveTarget>0&&elapsedSec>0?Math.min(1,elapsedSec/effectiveTarget):0;
       }else if(effectiveTarget>0){
@@ -1717,7 +1810,7 @@
       
       tr.style.strokeDashoffset=circ*(1-Math.min(1,prog));
       tr.className='timer-ring-progress '+(colorClass==='neutral'?'green':colorClass);
-      const showOvertime = debugState === 'red' || (isOvertime && !breakStatus.onBreak);
+      const showOvertime = debugState === 'red' || (isOvertime && !breakStatus.onBreak && !isManuallyPaused);
       td.classList.toggle('overtime', showOvertime);
       
       document.getElementById('timerTargetTime').textContent=effectiveTarget>0?formatTime(effectiveTarget):'--:--';document.getElementById('timerTrimmers').textContent=trimmers||'—';document.getElementById('bagsToday').textContent=bagsToday;document.getElementById('avgToday').textContent=avgSecToday>0?formatTime(avgSecToday):'--:--';const vt=document.getElementById('vsTarget');if(avgSecToday>0&&effectiveTarget>0){const diff=effectiveTarget-avgSecToday,dm=Math.round(diff/60);if(dm>0){vt.textContent=`+${dm} min`;vt.className='timer-stat-value positive';}else if(dm<0){vt.textContent=`${dm} min`;vt.className='timer-stat-value negative';}else{vt.textContent='On pace';vt.className='timer-stat-value';}}else{vt.textContent='—';vt.className='timer-stat-value';}
@@ -1794,6 +1887,155 @@
           });
       }
     }
+    
+    // ========== PAUSE FUNCTIONALITY ==========
+    function handlePauseClick() {
+      if (isPaused) {
+        // Resume
+        resumeTimer();
+      } else {
+        // Show pause modal
+        openPauseModal();
+      }
+    }
+    
+    function openPauseModal() {
+      const modal = document.getElementById('pauseModal');
+      const customInput = document.getElementById('pauseCustomReason');
+      const confirmBtn = document.getElementById('pauseConfirmBtn');
+      
+      // Reset modal state
+      document.querySelectorAll('.pause-reason-btn').forEach(btn => btn.classList.remove('selected'));
+      customInput.value = '';
+      confirmBtn.disabled = true;
+      pauseReason = '';
+      
+      modal.classList.add('visible');
+    }
+    
+    function closePauseModal() {
+      document.getElementById('pauseModal').classList.remove('visible');
+    }
+    
+    function selectPauseReason(btn, reason) {
+      document.querySelectorAll('.pause-reason-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      document.getElementById('pauseCustomReason').value = '';
+      pauseReason = reason;
+      document.getElementById('pauseConfirmBtn').disabled = false;
+    }
+    
+    function onCustomReasonInput() {
+      const customInput = document.getElementById('pauseCustomReason');
+      const customReason = customInput.value.trim();
+      
+      if (customReason) {
+        document.querySelectorAll('.pause-reason-btn').forEach(b => b.classList.remove('selected'));
+        pauseReason = customReason;
+        document.getElementById('pauseConfirmBtn').disabled = false;
+      } else if (!pauseReason) {
+        document.getElementById('pauseConfirmBtn').disabled = true;
+      }
+    }
+    
+    function confirmPause() {
+      closePauseModal();
+      startPause();
+    }
+    
+    function startPause() {
+      isPaused = true;
+      pauseStartTime = new Date();
+      
+      // Update UI
+      const pauseBtn = document.getElementById('pauseBtn');
+      pauseBtn.classList.add('paused');
+      pauseBtn.innerHTML = '<i class="ph-duotone ph-play"></i>';
+      
+      const banner = document.getElementById('pauseBanner');
+      document.getElementById('pauseReasonDisplay').textContent = pauseReason;
+      banner.classList.add('visible');
+      
+      // Start counting pause time
+      updatePauseTimer();
+      pauseInterval = setInterval(updatePauseTimer, 1000);
+      
+      // Log to Google Sheets
+      logPauseToSheet();
+    }
+    
+    function updatePauseTimer() {
+      if (!pauseStartTime) return;
+      const elapsed = Math.floor((new Date() - pauseStartTime) / 1000);
+      document.getElementById('pauseTime').textContent = formatTime(elapsed);
+    }
+    
+    function resumeTimer() {
+      const pauseDuration = pauseStartTime ? Math.floor((new Date() - pauseStartTime) / 1000) : 0;
+      
+      isPaused = false;
+      
+      // Clear interval
+      if (pauseInterval) {
+        clearInterval(pauseInterval);
+        pauseInterval = null;
+      }
+      
+      // Update UI
+      const pauseBtn = document.getElementById('pauseBtn');
+      pauseBtn.classList.remove('paused');
+      pauseBtn.innerHTML = '<i class="ph-duotone ph-pause"></i>';
+      
+      document.getElementById('pauseBanner').classList.remove('visible');
+      
+      // Adjust lastBagTimestamp to account for pause duration
+      if (lastBagTimestamp && pauseDuration > 0) {
+        lastBagTimestamp = new Date(lastBagTimestamp.getTime() + (pauseDuration * 1000));
+      }
+      
+      // Log resume to Google Sheets
+      logResumeToSheet(pauseDuration);
+      
+      // Reset pause state
+      pauseStartTime = null;
+      pauseReason = '';
+    }
+    
+    function logPauseToSheet() {
+      if (!API_URL) return;
+      
+      fetch(API_URL + '?action=logPause', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: pauseReason })
+      })
+      .then(response => response.json())
+      .then(result => {
+        if (result.success) {
+          pauseId = result.pauseId;
+          console.log('Pause logged:', result);
+        }
+      })
+      .catch(err => console.error('Failed to log pause:', err));
+    }
+    
+    function logResumeToSheet(duration) {
+      if (!API_URL || !pauseId) return;
+      
+      fetch(API_URL + '?action=logResume', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pauseId: pauseId, duration: duration })
+      })
+      .then(response => response.json())
+      .then(result => {
+        console.log('Resume logged:', result);
+        pauseId = null;
+      })
+      .catch(err => console.error('Failed to log resume:', err));
+    }
+    // ========== END PAUSE FUNCTIONALITY ==========
+    
     function renderComparison(prefix,value){const pill=document.getElementById(prefix+'Pill'),ve=document.getElementById(prefix+'Value');if(value===null||value===undefined){pill.style.display='none';return;}pill.style.display='flex';const r=Math.round(value);ve.textContent=`${r>=0?'+':''}${r}%`;ve.classList.remove('positive','negative','neutral');ve.classList.add(r>2?'positive':r<-2?'negative':'neutral');}
     
     // Drag-to-expand timer panel functionality
