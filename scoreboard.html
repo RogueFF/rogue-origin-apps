@@ -222,12 +222,6 @@
     .timer-stat-value.positive { color: var(--green-bright); }
     .timer-stat-value.negative { color: var(--status-red); }
     
-    /* Bag counts sub-display */
-    .bag-counts { display: flex; gap: 12px; font-size: 14px; }
-    .bag-count-item { display: flex; align-items: center; gap: 4px; }
-    .bag-count-label { color: rgba(255,255,255,0.5); font-size: 12px; }
-    .bag-count-value { font-weight: 700; color: rgba(255,255,255,0.9); }
-    
     /* Animations */
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
     @keyframes currentHourPulse { 0%, 100% { border-color: rgba(102, 137, 113, 0.6); } 50% { border-color: rgba(102, 137, 113, 0.9); } }
@@ -444,7 +438,7 @@
         </div>
         <div class="help-item">
           <div class="help-item-title">⏲ Bag Timer</div>
-          <div class="help-item-desc" id="helpTimer">Time since last bag (5kg or 10lb). Tracks pace between completions.</div>
+          <div class="help-item-desc" id="helpTimer">Time since last 5kg bag. Tracks pace between completions.</div>
         </div>
       </div>
       <div class="help-colors">
@@ -536,7 +530,7 @@
   </div>
   
   <div class="timer-panel neutral" id="timerPanel">
-    <div class="timer-header" id="timerHeader">Bag Timer</div>
+    <div class="timer-header" id="timerHeader">5KG Bag Timer</div>
     <div class="timer-display" id="timerDisplay">
       <svg class="timer-ring" viewBox="0 0 220 220">
         <circle class="timer-ring-bg" cx="110" cy="110" r="95"/>
@@ -550,19 +544,7 @@
     <div class="timer-target">Target: <span id="timerTargetTime">--:--</span> • <span id="timerTrimmers">0</span> trimmers</div>
     <button class="manual-btn" id="manualBtn" onclick="logManualEntry()"><span class="icon"><i class="ph-duotone ph-package"></i></span><span id="manualBtnText">5KG Bag Complete</span></button>
     <div class="timer-stats">
-      <div class="timer-stat">
-        <span class="timer-stat-label" id="bagsTodayLabel">Bags Today</span>
-        <div class="bag-counts">
-          <div class="bag-count-item">
-            <span class="bag-count-value" id="bags5kgToday">0</span>
-            <span class="bag-count-label">5kg</span>
-          </div>
-          <div class="bag-count-item">
-            <span class="bag-count-value" id="bags10lbToday">0</span>
-            <span class="bag-count-label">10lb tops</span>
-          </div>
-        </div>
-      </div>
+      <div class="timer-stat"><span class="timer-stat-label" id="bagsTodayLabel">Bags Today</span><span class="timer-stat-value" id="bagsToday">0</span></div>
       <div class="timer-stat"><span class="timer-stat-label" id="avgTodayLabel">Avg Today</span><span class="timer-stat-value" id="avgToday">--:--</span></div>
       <div class="timer-stat"><span class="timer-stat-label" id="vsTargetLabel">vs Target</span><span class="timer-stat-value" id="vsTarget">—</span></div>
     </div>
@@ -570,13 +552,13 @@
 
   <script>
     let data=null,timerData=null,currentLang='en',lastBagTimestamp=null,hourlyChart=null;
-    const t={en:{currentStrain:'Line 1 • Current Strain',lastHour:'Last Hour (Completed)',currentHour:'Current Hour',lbs:'lbs',trimmers:'trimmers',ofTarget:'vs target',lbsTarget:'lbs target',trimmersLabel:'Line 1 Trimmers',targetRate:'Target:',avgLbs:'AVG',bestLbs:'BEST',todaysProgress:'LINE 1 TODAY',endOfDay:'End of day:',lbsGoal:'lbs goal',upBy:'Up',downBy:'Down',vsYesterday:'vs Yesterday',vs7Day:'vs 7-Day Avg',hrStreak:'hr streak',hrs:'hrs',aheadOfTarget:'AHEAD OF TARGET',onTarget:'ON TARGET',behindTarget:'BEHIND TARGET',waiting:'WAITING FOR DATA',bagTimer:'BAG TIMER',remaining:'remaining',overtime:'OVERTIME',bagComplete:'5KG Bag Complete',logged:'Logged!',bagsToday:'Bags Today',avgToday:'Avg Today',vsTargetTimer:'vs Target',strainRate:'Strain-specific rate',fallbackRate:'Using avg rate',helpTitle:'Understanding the Scoreboard',helpGreen:'Green = Ahead (105%+)',helpYellow:'Yellow = On Target (90-105%)',helpRed:'Red = Behind (<90%)',chartHeader:'HOURLY PERFORMANCE (LBS/TRIMMER)',onBreak:'ON BREAK',paused:'PAUSED'},es:{currentStrain:'Línea 1 • Variedad Actual',lastHour:'Última Hora (Completa)',currentHour:'Hora Actual',lbs:'lbs',trimmers:'triminadores',ofTarget:'vs meta',lbsTarget:'lbs meta',trimmersLabel:'Triminadores L1',targetRate:'Meta:',avgLbs:'PROM',bestLbs:'MEJOR',todaysProgress:'LÍNEA 1 HOY',endOfDay:'Fin del día:',lbsGoal:'lbs meta',upBy:'Arriba',downBy:'Abajo',vsYesterday:'vs Ayer',vs7Day:'vs Prom 7 Días',hrStreak:'hrs seguidas',hrs:'hrs',aheadOfTarget:'ARRIBA DE LA META',onTarget:'EN LA META',behindTarget:'DEBAJO DE LA META',waiting:'ESPERANDO DATOS',bagTimer:'TEMPORIZADOR',remaining:'restante',overtime:'TIEMPO EXTRA',bagComplete:'Bolsa 5KG Lista',logged:'¡Registrado!',bagsToday:'Bolsas Hoy',avgToday:'Prom Hoy',vsTargetTimer:'vs Meta',strainRate:'Tasa específica',fallbackRate:'Usando tasa prom',helpTitle:'Entendiendo el Marcador',helpGreen:'Verde = Adelante (105%+)',helpYellow:'Amarillo = En Meta (90-105%)',helpRed:'Rojo = Atrás (<90%)',chartHeader:'RENDIMIENTO POR HORA (LBS/TRIMINADOR)',onBreak:'EN DESCANSO',paused:'PAUSADO'}};
+    const t={en:{currentStrain:'Line 1 • Current Strain',lastHour:'Last Hour (Completed)',currentHour:'Current Hour',lbs:'lbs',trimmers:'trimmers',ofTarget:'vs target',lbsTarget:'lbs target',trimmersLabel:'Line 1 Trimmers',targetRate:'Target:',avgLbs:'AVG',bestLbs:'BEST',todaysProgress:'LINE 1 TODAY',endOfDay:'End of day:',lbsGoal:'lbs goal',upBy:'Up',downBy:'Down',vsYesterday:'vs Yesterday',vs7Day:'vs 7-Day Avg',hrStreak:'hr streak',hrs:'hrs',aheadOfTarget:'AHEAD OF TARGET',onTarget:'ON TARGET',behindTarget:'BEHIND TARGET',waiting:'WAITING FOR DATA',bagTimer:'5KG BAG TIMER',remaining:'remaining',overtime:'OVERTIME',bagComplete:'5KG Bag Complete',logged:'Logged!',bagsToday:'Bags Today',avgToday:'Avg Today',vsTargetTimer:'vs Target',strainRate:'Strain-specific rate',fallbackRate:'Using avg rate',helpTitle:'Understanding the Scoreboard',helpGreen:'Green = Ahead (105%+)',helpYellow:'Yellow = On Target (90-105%)',helpRed:'Red = Behind (<90%)',chartHeader:'HOURLY PERFORMANCE (LBS/TRIMMER)',onBreak:'ON BREAK',paused:'PAUSED'},es:{currentStrain:'Línea 1 • Variedad Actual',lastHour:'Última Hora (Completa)',currentHour:'Hora Actual',lbs:'lbs',trimmers:'triminadores',ofTarget:'vs meta',lbsTarget:'lbs meta',trimmersLabel:'Triminadores L1',targetRate:'Meta:',avgLbs:'PROM',bestLbs:'MEJOR',todaysProgress:'LÍNEA 1 HOY',endOfDay:'Fin del día:',lbsGoal:'lbs meta',upBy:'Arriba',downBy:'Abajo',vsYesterday:'vs Ayer',vs7Day:'vs Prom 7 Días',hrStreak:'hrs seguidas',hrs:'hrs',aheadOfTarget:'ARRIBA DE LA META',onTarget:'EN LA META',behindTarget:'DEBAJO DE LA META',waiting:'ESPERANDO DATOS',bagTimer:'TEMPORIZADOR 5KG',remaining:'restante',overtime:'TIEMPO EXTRA',bagComplete:'Bolsa 5KG Lista',logged:'¡Registrado!',bagsToday:'Bolsas Hoy',avgToday:'Prom Hoy',vsTargetTimer:'vs Meta',strainRate:'Tasa específica',fallbackRate:'Usando tasa prom',helpTitle:'Entendiendo el Marcador',helpGreen:'Verde = Adelante (105%+)',helpYellow:'Amarillo = En Meta (90-105%)',helpRed:'Rojo = Atrás (<90%)',chartHeader:'RENDIMIENTO POR HORA (LBS/TRIMINADOR)',onBreak:'EN DESCANSO',paused:'PAUSADO'}};
     
     // Break schedule: [startHour, startMin, endHour, endMin]
     const BREAKS = [
       [9, 0, 9, 10],      // 9:00-9:10 AM break
       [12, 0, 12, 30],    // 12:00-12:30 PM lunch
-      [14, 0, 14, 10],    // 2:00-2:10 PM break
+      [14, 30, 14, 40],   // 2:30-2:40 PM break
       [16, 20, 16, 30]    // 4:20-4:30 PM cleanup/EOD
     ];
     const WORKDAY_START = 7 * 60;  // 7:00 AM in minutes
@@ -816,7 +798,7 @@
     if(data.avgDelta!==undefined&&data.avgDelta!==0){avgEl.textContent=(data.avgDelta>=0?'+':'')+data.avgDelta.toFixed(1);avgEl.style.color=data.avgDelta>=0.05?'#7a9d87':data.avgDelta<=-0.05?'#f87171':'#e4aa4f';}else if(data.avgDelta===0){avgEl.textContent='0';avgEl.style.color='#e4aa4f';}else{avgEl.textContent='—';avgEl.style.color='rgba(255,255,255,0.9)';}
     if(data.bestDelta!==undefined&&data.bestDelta!==0){bestEl.textContent=(data.bestDelta>=0?'+':'')+data.bestDelta.toFixed(1);bestEl.style.color=data.bestDelta>=0.05?'#7a9d87':data.bestDelta<=-0.05?'#f87171':'#e4aa4f';}else if(data.bestDelta===0){bestEl.textContent='0';bestEl.style.color='#e4aa4f';}else{bestEl.textContent='—';bestEl.style.color='rgba(255,255,255,0.9)';}
     const sri=document.getElementById('strainRateIndicator');if(data.usingStrainRate){sri.innerHTML=`<span style="font-size:12px;color:rgba(122,157,135,0.9)">${t[currentLang].strainRate}</span>`;}else if(strain&&strain!=='—'){sri.innerHTML=`<span style="font-size:12px;color:rgba(228,170,79,0.9)">${t[currentLang].fallbackRate}</span>`;}else{sri.innerHTML='';}}
-    function renderTimer(){const targetSec=(timerData&&timerData.targetSeconds)||0,trimmers=(timerData&&timerData.currentTrimmers)||0,bags5kg=(timerData&&timerData.bags5kgToday)||0,bags10lb=(timerData&&timerData.bags10lbToday)||0,avgSecToday=(timerData&&timerData.avgSecondsToday)||0;
+    function renderTimer(){const targetSec=(timerData&&timerData.targetSeconds)||0,trimmers=(timerData&&timerData.currentTrimmers)||0,bagsToday=(timerData&&timerData.bagsToday)||0,avgSecToday=(timerData&&timerData.avgSecondsToday)||0;
       
       // Get break/after hours status
       const breakStatus = isOnBreakOrAfterHours();
@@ -867,22 +849,7 @@
       tr.className='timer-ring-progress '+(colorClass==='neutral'?'green':colorClass);
       td.classList.toggle('overtime',isOvertime&&!breakStatus.onBreak);
       
-      document.getElementById('timerTargetTime').textContent=targetSec>0?formatTime(targetSec):'--:--';
-      document.getElementById('timerTrimmers').textContent=trimmers||'—';
-      
-      // Update separate bag counts
-      document.getElementById('bags5kgToday').textContent=bags5kg;
-      document.getElementById('bags10lbToday').textContent=bags10lb;
-      
-      document.getElementById('avgToday').textContent=avgSecToday>0?formatTime(avgSecToday):'--:--';
-      const vt=document.getElementById('vsTarget');
-      if(avgSecToday>0&&targetSec>0){
-        const diff=targetSec-avgSecToday,dm=Math.round(diff/60);
-        if(dm>0){vt.textContent=`+${dm} min`;vt.className='timer-stat-value positive';}
-        else if(dm<0){vt.textContent=`${dm} min`;vt.className='timer-stat-value negative';}
-        else{vt.textContent='On pace';vt.className='timer-stat-value';}
-      }else{vt.textContent='—';vt.className='timer-stat-value';}
-    }
+      document.getElementById('timerTargetTime').textContent=targetSec>0?formatTime(targetSec):'--:--';document.getElementById('timerTrimmers').textContent=trimmers||'—';document.getElementById('bagsToday').textContent=bagsToday;document.getElementById('avgToday').textContent=avgSecToday>0?formatTime(avgSecToday):'--:--';const vt=document.getElementById('vsTarget');if(avgSecToday>0&&targetSec>0){const diff=targetSec-avgSecToday,dm=Math.round(diff/60);if(dm>0){vt.textContent=`+${dm} min`;vt.className='timer-stat-value positive';}else if(dm<0){vt.textContent=`${dm} min`;vt.className='timer-stat-value negative';}else{vt.textContent='On pace';vt.className='timer-stat-value';}}else{vt.textContent='—';vt.className='timer-stat-value';}}
     function formatTime(s){return`${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;}
     function logManualEntry(){
       const btn=document.getElementById('manualBtn'),txt=document.getElementById('manualBtnText');
@@ -909,10 +876,10 @@
             btn.classList.remove('success');
             txt.textContent=t[currentLang].bagComplete;
           })
-          .logManualBagCompletion('5 kg.');
+          .logManualBagCompletion();
       } else {
         // Running on GitHub Pages - use fetch API
-        fetch(API_URL + '?action=logBag&size=5%20kg.', { method: 'POST' })
+        fetch(API_URL + '?action=logBag', { method: 'POST' })
           .then(function(response) { return response.json(); })
           .then(function(r) {
             if (r.success) {
