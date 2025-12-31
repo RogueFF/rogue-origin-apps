@@ -326,12 +326,14 @@
       0% { transform: translateY(-100px) rotate(0deg); opacity: 1; }
       100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
     }
-    .celebration-text { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 48px; font-weight: 900; color: #4ade80; text-shadow: 0 0 30px rgba(34, 197, 94, 0.8); opacity: 0; animation: celebrateText 2s ease-out forwards; z-index: 3001; pointer-events: none; }
+    .celebration-text { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 48px; font-weight: 900; color: #4ade80; text-shadow: 0 0 30px rgba(34, 197, 94, 0.8), 0 0 60px rgba(34, 197, 94, 0.4); opacity: 0; animation: celebrateText 3s ease-out forwards; z-index: 3001; pointer-events: none; text-align: center; }
     @keyframes celebrateText {
-      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
-      20% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
-      40% { transform: translate(-50%, -50%) scale(1); }
-      100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5) rotate(-10deg); }
+      15% { opacity: 1; transform: translate(-50%, -50%) scale(1.3) rotate(5deg); }
+      30% { transform: translate(-50%, -50%) scale(1) rotate(-3deg); }
+      45% { transform: translate(-50%, -50%) scale(1.1) rotate(2deg); }
+      60% { transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+      100% { opacity: 0; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
     }
     
     /* Timer Stats - brand styling */
@@ -724,9 +726,10 @@
       </div>
       <div class="debug-label">Test Celebration:</div>
       <div class="debug-buttons">
-        <button onclick="addCycleToHistory(240, 300)">🎉 Early Finish</button>
+        <button onclick="addCycleToHistory(240, 300)">🎺 Early (Mariachi!)</button>
         <button onclick="addCycleToHistory(295, 300)">✓ On Time</button>
         <button onclick="addCycleToHistory(360, 300)">⚠ Overtime</button>
+        <button onclick="playMariachi()" style="background:rgba(34,197,94,0.3);border-color:#22c55e;">🔊 Test Sound</button>
       </div>
       <div class="debug-divider"></div>
       <button class="debug-reset" onclick="resetDebug()">↻ Reset to Live</button>
@@ -747,56 +750,164 @@
     let cycleHistory = [];
     let cycleHistoryCollapsed = false;
     
+    // Load cycle history from localStorage
+    function loadLocalCycleHistory() {
+      try {
+        const saved = localStorage.getItem('cycleHistory');
+        const savedDate = localStorage.getItem('cycleHistoryDate');
+        const today = new Date().toDateString();
+        
+        // Only load if saved today (reset daily)
+        if (saved && savedDate === today) {
+          cycleHistory = JSON.parse(saved);
+        } else {
+          // Clear old data
+          localStorage.removeItem('cycleHistory');
+          localStorage.removeItem('cycleHistoryDate');
+        }
+      } catch(e) { console.log('Could not load cycle history'); }
+    }
+    
+    // Save cycle history to localStorage
+    function saveLocalCycleHistory() {
+      try {
+        localStorage.setItem('cycleHistory', JSON.stringify(cycleHistory));
+        localStorage.setItem('cycleHistoryDate', new Date().toDateString());
+      } catch(e) { console.log('Could not save cycle history'); }
+    }
+    
+    // Load on startup
+    loadLocalCycleHistory();
+    
     // Sound effects using Web Audio API
     let audioContext = null;
+    
     function playSuccessSound(isEarly) {
+      if (isEarly) {
+        playMariachi();
+      } else {
+        playChime();
+      }
+    }
+    
+    function playChime() {
       try {
         if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
         
+        // Pleasant chime for on-time
         const now = audioContext.currentTime;
-        
-        // Create oscillators for a pleasant chime
-        const frequencies = isEarly ? [523.25, 659.25, 783.99, 1046.50] : [523.25, 659.25, 783.99]; // C5, E5, G5, (C6 for early)
+        const frequencies = [523.25, 659.25, 783.99]; // C5, E5, G5
         
         frequencies.forEach((freq, i) => {
           const osc = audioContext.createOscillator();
           const gain = audioContext.createGain();
-          
           osc.connect(gain);
           gain.connect(audioContext.destination);
-          
           osc.frequency.value = freq;
           osc.type = 'sine';
-          
           const startTime = now + (i * 0.1);
           gain.gain.setValueAtTime(0, startTime);
           gain.gain.linearRampToValueAtTime(0.3, startTime + 0.05);
           gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.5);
-          
           osc.start(startTime);
           osc.stop(startTime + 0.6);
         });
-        
-        // Add a bonus flourish for early finish
-        if (isEarly) {
-          setTimeout(() => {
-            [1318.51, 1567.98, 2093.00].forEach((freq, i) => { // E6, G6, C7
-              const osc = audioContext.createOscillator();
-              const gain = audioContext.createGain();
-              osc.connect(gain);
-              gain.connect(audioContext.destination);
-              osc.frequency.value = freq;
-              osc.type = 'sine';
-              const startTime = audioContext.currentTime + (i * 0.08);
-              gain.gain.setValueAtTime(0, startTime);
-              gain.gain.linearRampToValueAtTime(0.2, startTime + 0.03);
-              gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.3);
-              osc.start(startTime);
-              osc.stop(startTime + 0.4);
-            });
-          }, 400);
-        }
       } catch(e) { console.log('Audio not supported'); }
+    }
+    
+    function playMariachi() {
+      try {
+        if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        const now = audioContext.currentTime;
+      
+      // Mariachi trumpet fanfare melody - celebratory Mexican style!
+      // Notes: Short festive "¡Arriba!" style fanfare
+      const melody = [
+        // First phrase - attention getter
+        { freq: 523.25, start: 0, dur: 0.15 },      // C5
+        { freq: 523.25, start: 0.15, dur: 0.15 },   // C5
+        { freq: 783.99, start: 0.3, dur: 0.3 },     // G5
+        
+        // Second phrase - celebration
+        { freq: 659.25, start: 0.7, dur: 0.12 },    // E5
+        { freq: 783.99, start: 0.82, dur: 0.12 },   // G5
+        { freq: 1046.50, start: 0.94, dur: 0.4 },   // C6 (high!)
+        
+        // Third phrase - triumphant finish
+        { freq: 783.99, start: 1.4, dur: 0.1 },     // G5
+        { freq: 880.00, start: 1.5, dur: 0.1 },     // A5
+        { freq: 987.77, start: 1.6, dur: 0.1 },     // B5
+        { freq: 1046.50, start: 1.7, dur: 0.5 },    // C6
+        
+        // Final flourish - the "¡Olé!" moment
+        { freq: 1318.51, start: 2.3, dur: 0.08 },   // E6
+        { freq: 1567.98, start: 2.38, dur: 0.08 },  // G6
+        { freq: 2093.00, start: 2.46, dur: 0.6 },   // C7
+      ];
+      
+      melody.forEach(note => {
+        playTrumpetNote(note.freq, now + note.start, note.dur);
+      });
+      
+      // Add a second trumpet harmony for richness
+      const harmony = [
+        { freq: 392.00, start: 0.3, dur: 0.3 },     // G4
+        { freq: 523.25, start: 0.94, dur: 0.4 },    // C5
+        { freq: 659.25, start: 1.7, dur: 0.5 },     // E5
+        { freq: 1046.50, start: 2.46, dur: 0.6 },   // C6
+      ];
+      
+      harmony.forEach(note => {
+        playTrumpetNote(note.freq, now + note.start, note.dur, 0.15);
+      });
+      } catch(e) { console.log('Audio not supported'); }
+    }
+    
+    function playTrumpetNote(freq, startTime, duration, volume = 0.25) {
+      // Create a trumpet-like sound using multiple oscillators
+      const fundamental = audioContext.createOscillator();
+      const harmonic2 = audioContext.createOscillator();
+      const harmonic3 = audioContext.createOscillator();
+      
+      const gainNode = audioContext.createGain();
+      const masterGain = audioContext.createGain();
+      
+      // Mix oscillators for brass-like timbre
+      fundamental.connect(gainNode);
+      harmonic2.connect(gainNode);
+      harmonic3.connect(gainNode);
+      gainNode.connect(masterGain);
+      masterGain.connect(audioContext.destination);
+      
+      // Fundamental frequency
+      fundamental.frequency.value = freq;
+      fundamental.type = 'sawtooth';
+      
+      // Add harmonics for brass sound
+      harmonic2.frequency.value = freq * 2;
+      harmonic2.type = 'sawtooth';
+      
+      harmonic3.frequency.value = freq * 3;
+      harmonic3.type = 'sine';
+      
+      // Trumpet-like envelope - quick attack, sustained, quick release
+      masterGain.gain.setValueAtTime(0, startTime);
+      masterGain.gain.linearRampToValueAtTime(volume, startTime + 0.02); // Quick attack
+      masterGain.gain.setValueAtTime(volume * 0.8, startTime + 0.05);    // Slight dip
+      masterGain.gain.linearRampToValueAtTime(volume * 0.7, startTime + duration - 0.05);
+      masterGain.gain.linearRampToValueAtTime(0, startTime + duration);
+      
+      // Relative volumes of harmonics
+      gainNode.gain.value = 0.5;
+      
+      fundamental.start(startTime);
+      harmonic2.start(startTime);
+      harmonic3.start(startTime);
+      
+      fundamental.stop(startTime + duration + 0.1);
+      harmonic2.stop(startTime + duration + 0.1);
+      harmonic3.stop(startTime + duration + 0.1);
     }
     
     function toggleCycleHistory() {
@@ -823,6 +934,7 @@
         timestamp: new Date()
       });
       
+      saveLocalCycleHistory(); // Persist to localStorage
       renderCycleHistory();
       
       // Trigger celebration if early or on-time
@@ -833,6 +945,23 @@
     
     function renderCycleHistory() {
       const list = document.getElementById('cycleList');
+      const bagsFromAPI = (timerData && timerData.bagsToday) || 0;
+      
+      // If we have no cycle history but API shows bags completed, show summary
+      if (cycleHistory.length === 0 && bagsFromAPI > 0) {
+        const avgSec = (timerData && timerData.avgSecondsToday) || 0;
+        const targetSec = (timerData && timerData.targetSeconds) || 300;
+        const delta = targetSec - avgSec;
+        const status = delta > 10 ? 'early' : delta < -10 ? 'overtime' : 'on-time';
+        
+        list.innerHTML = `<div class="cycle-item ${status}" style="justify-content:center;gap:20px;">
+          <span style="color:rgba(255,255,255,0.7);">${bagsFromAPI} bags completed today</span>
+          <span class="cycle-item-delta ${status}">avg ${formatTime(avgSec)}</span>
+        </div>
+        <div style="text-align:center;color:rgba(255,255,255,0.4);padding:8px;font-size:11px;">Individual times shown as bags are completed</div>`;
+        return;
+      }
+      
       if (cycleHistory.length === 0) {
         list.innerHTML = `<div style="text-align:center;color:rgba(255,255,255,0.4);padding:10px;font-size:12px;">${t[currentLang].noBags}</div>`;
         return;
@@ -861,16 +990,18 @@
       // Show celebration text
       const text = document.createElement('div');
       text.className = 'celebration-text';
-      text.textContent = isEarly ? '🎉 EARLY!' : '✓ ON TIME!';
+      text.textContent = isEarly ? '🎺 ¡ARRIBA!' : '✓ ON TIME!';
       text.style.color = isEarly ? '#4ade80' : '#fde047';
+      if (isEarly) text.style.fontSize = '64px';
       document.body.appendChild(text);
-      setTimeout(() => text.remove(), 2000);
+      setTimeout(() => text.remove(), 3000);
       
-      // Create confetti
+      // Create confetti - more for early finish!
       const celebration = document.getElementById('celebration');
-      const colors = isEarly ? ['#22c55e', '#4ade80', '#86efac', '#fde047'] : ['#facc15', '#fde047', '#fef08a', '#22c55e'];
+      const colors = isEarly ? ['#22c55e', '#4ade80', '#86efac', '#fde047', '#ef4444', '#ffffff'] : ['#facc15', '#fde047', '#fef08a', '#22c55e'];
+      const confettiCount = isEarly ? 100 : 50;
       
-      for (let i = 0; i < 50; i++) {
+      for (let i = 0; i < confettiCount; i++) {
         const confetti = document.createElement('div');
         confetti.className = 'confetti';
         confetti.style.left = Math.random() * 100 + '%';
@@ -887,7 +1018,7 @@
       // Clean up confetti
       setTimeout(() => {
         celebration.innerHTML = '';
-      }, 3500);
+      }, 4000);
     }
     
     function toggleDebug() {
@@ -924,6 +1055,10 @@
       debugElapsedPercent = null;
       debugOnBreak = null;
       cycleHistory = [];
+      try {
+        localStorage.removeItem('cycleHistory');
+        localStorage.removeItem('cycleHistoryDate');
+      } catch(e) {}
       document.body.classList.remove('debug-active');
       renderTimer();
       renderCycleHistory();
@@ -1054,8 +1189,13 @@
             data = r.scoreboard;
             timerData = r.timer;
             if (timerData && timerData.lastBagTime) lastBagTimestamp = new Date(timerData.lastBagTime);
+            // Load cycle history from API if available
+            if (timerData && timerData.cycleHistory && timerData.cycleHistory.length > 0) {
+              loadCycleHistoryFromAPI(timerData.cycleHistory, timerData.targetSeconds || 300);
+            }
             renderScoreboard();
             renderTimer();
+            renderCycleHistory(); // Update cycle history display
           })
           .withFailureHandler(function(e){ console.error(e); })
           .getScoreboardWithTimerData();
@@ -1067,12 +1207,44 @@
             data = r.scoreboard;
             timerData = r.timer;
             if (timerData && timerData.lastBagTime) lastBagTimestamp = new Date(timerData.lastBagTime);
+            // Load cycle history from API if available
+            if (timerData && timerData.cycleHistory && timerData.cycleHistory.length > 0) {
+              loadCycleHistoryFromAPI(timerData.cycleHistory, timerData.targetSeconds || 300);
+            }
             renderScoreboard();
             renderTimer();
+            renderCycleHistory(); // Update cycle history display
           })
           .catch(function(e) {
             console.error('Load error:', e);
           });
+      }
+    }
+    
+    function loadCycleHistoryFromAPI(apiCycles, defaultTarget) {
+      // Only load if we don't have local data or API has more entries
+      // This prevents overwriting locally added cycles
+      if (cycleHistory.length === 0 || apiCycles.length > cycleHistory.length) {
+        cycleHistory = apiCycles.map((c, i) => {
+          const cycleTime = c.cycleTime || c.time || c.seconds || 0;
+          const target = c.target || c.targetSeconds || defaultTarget;
+          const delta = target - cycleTime;
+          let status = 'on-time';
+          if (delta > 10) status = 'early';
+          else if (delta < -10) status = 'overtime';
+          
+          return {
+            num: i + 1,
+            time: cycleTime,
+            target: target,
+            delta: delta,
+            status: status,
+            timestamp: c.timestamp ? new Date(c.timestamp) : new Date()
+          };
+        }).reverse(); // Most recent first
+        
+        saveLocalCycleHistory(); // Save to localStorage
+        renderCycleHistory();
       }
     }
     
