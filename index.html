@@ -982,12 +982,13 @@
       document.getElementById('scoreboardView').classList.toggle('active', view === 'scoreboard');
       document.getElementById('barcodeView').classList.toggle('active', view === 'barcode');
       document.getElementById('sopView').classList.toggle('active', view === 'sop');
+      document.getElementById('ordersView').classList.toggle('active', view === 'orders');
       
       // Show/hide dashboard controls
       document.getElementById('dashboardControls').style.display = view === 'dashboard' ? 'flex' : 'none';
       
       // Update page title
-      var titles = { dashboard: 'Operations Dashboard', kanban: 'Supply Kanban', scoreboard: 'Scoreboard / Bag Timer', barcode: 'Barcode Printer', sop: 'SOP Manager' };
+      var titles = { dashboard: 'Operations Dashboard', kanban: 'Supply Kanban', scoreboard: 'Scoreboard / Bag Timer', barcode: 'Barcode Printer', sop: 'SOP Manager', orders: 'Order Management' };
       // pageTitle removed - using header logo instead
       document.title = 'Rogue Origin - ' + (titles[view] || 'Operations Hub');
       
