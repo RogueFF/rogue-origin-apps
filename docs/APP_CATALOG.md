@@ -705,18 +705,53 @@ function getExtendedDailyDataLine1_(ss, timezone, days) {
 
 ---
 
-## App 4: Kanban Board
+## App 4: Kanban Board (Supply Closet Inventory)
 
 ### Overview
 
 | Property | Value |
 |----------|-------|
-| **Purpose** | Task and inventory management |
-| **Frontend** | `kanban.html` (~600 lines) |
+| **Purpose** | Supply closet inventory management with printable cards |
+| **Frontend** | `kanban.html` (~2,100 lines) |
 | **Backend** | Kanban Code.gs (~350 lines) |
 | **Sheet ID** | `19UW_tWY6c53lEydXqULAqC3Ffv1C20PDZMKnV6K-byQ` |
 | **Status** | ✅ Active |
-| **Primary Users** | Koa (task management) |
+| **Primary Users** | Koa (management), Floor team (viewing) |
+
+### Key Features
+
+| Feature | Description |
+|---------|-------------|
+| **Supply Cards** | Create cards for each supply item with name, supplier, price, quantity, image |
+| **Card Printing** | Print cards with QR codes linking to order URLs |
+| **Interactive Tutorial** | 21-step hand-holding tutorial for new users |
+| **Auto-fill** | Paste product URL to auto-fetch name, price, and image |
+| **Search & Filter** | Find items by name or filter by supplier |
+| **Grid/List Views** | Toggle between card grid and list table views |
+| **Status Colors** | Green (in stock), Gold (low), Orange (critical) |
+
+### Tutorial System
+
+The Kanban app includes a comprehensive 21-step interactive tutorial:
+
+**Part 1: Page Overview (Steps 1-8)**
+- Welcome, header buttons, search/filter, card explanation, action buttons
+
+**Part 2: Create a Card (Steps 9-19)**
+- Opens Add Card modal
+- Guides through each field: Item Name, Supplier, Quantity, Price, Delivery, Location, URL, Auto-fill, Image
+- User actually fills in fields and saves
+
+**Part 3: Print Cards (Steps 20-22)**
+- Opens Print modal, select cards, print button, celebration
+
+**Tutorial Elements:**
+- Gold graduation cap button (bottom-right) starts tutorial
+- Spotlight highlights current element
+- Tooltips with tips and encouragement
+- Progress dots show completion
+- Confetti celebration on finish
+- Remembers if user has seen tutorial (localStorage)
 
 ### API Endpoints
 
