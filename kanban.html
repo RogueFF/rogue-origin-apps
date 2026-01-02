@@ -1055,8 +1055,9 @@ function saveCard() {
     var action = data.id ? 'update' : 'add';
     fetch(API_URL + '?action=' + action, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(data),
+      redirect: 'follow'
     })
       .then(function(response) { return response.json(); })
       .then(onSave)
@@ -1088,8 +1089,9 @@ function del(id) {
   } else {
     fetch(API_URL + '?action=delete', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: id })
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ id: id }),
+      redirect: 'follow'
     })
       .then(function(response) { return response.json(); })
       .then(onSave)
@@ -1146,8 +1148,9 @@ function autoFillFromUrl() {
   } else {
     fetch(API_URL + '?action=fetchProduct', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: url })
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ url: url }),
+      redirect: 'follow'
     })
       .then(function(response) { return response.json(); })
       .then(handleResult)
