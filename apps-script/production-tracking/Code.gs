@@ -672,7 +672,7 @@ function getProductionDashboardData(startDate, endDate) {
         end: endStr,
         label: startStr === endStr ? 'Today' : startStr + ' to ' + endStr
       },
-      totals: {
+      today: {
         totalTops: totalTops,
         totalSmalls: totalSmalls,
         totalLbs: totalLbs,
