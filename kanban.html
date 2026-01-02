@@ -602,7 +602,7 @@
           <label class="form-label">Order URL</label>
           <div style="display:flex;gap:8px">
             <input type="text" id="editUrl" style="flex:1" placeholder="https://amazon.com/...">
-            <button type="button" class="btn btn-gold" onclick="autoFillFromUrl()">🔍 Auto-fill</button>
+            <button type="button" id="autofillBtn" class="btn btn-gold" onclick="autoFillFromUrl()">🔍 Auto-fill</button>
           </div>
           <p style="font-size:10px;color:var(--text-muted);margin-top:4px">Paste a product URL and click Auto-fill to fetch title, price & image</p>
         </div>
@@ -616,7 +616,7 @@
         </div>
         <div class="modal-foot">
           <button class="btn btn-outline" onclick="closeEdit()">Cancel</button>
-          <button class="btn btn-green" onclick="saveCard()"><i class="ph-duotone ph-floppy-disk" style="margin-right:6px"></i> Save</button>
+          <button id="editSave" class="btn btn-green" onclick="saveCard()"><i class="ph-duotone ph-floppy-disk" style="margin-right:6px"></i> Save</button>
         </div>
       </div>
     </div>
@@ -678,7 +678,7 @@
         </div>
         <div class="modal-foot">
           <button class="btn btn-outline" onclick="closePrint()">Cancel</button>
-          <button class="btn btn-green" onclick="doPrint()"><i class="ph-duotone ph-printer" style="margin-right:6px"></i> Print</button>
+          <button id="printBtn" class="btn btn-green" onclick="doPrint()"><i class="ph-duotone ph-printer" style="margin-right:6px"></i> Print</button>
         </div>
       </div>
     </div>
@@ -1823,78 +1823,173 @@ var tutorialStep = 0;
 var tutorialActive = false;
 
 var tutorialSteps = [
+  // PART 1: Page Overview
   {
-    target: null, // Welcome - no target
+    target: null,
     title: '<i class="ph-duotone ph-hand-waving"></i> Welcome to Kanban Cards!',
-    text: 'Let me show you how to create supply cards for your inventory system. This quick tour will guide you through each field.',
-    tip: '🎯 This takes about 1 minute',
-    icon: 'ph-hand-waving',
+    text: 'I\'ll walk you through everything step by step. First, let me show you around the page, then we\'ll create a real card together!',
+    tip: '⏱️ This takes about 2-3 minutes',
     position: 'center'
   },
   {
+    target: '.header',
+    title: '<i class="ph-duotone ph-layout"></i> This is the Header',
+    text: 'Up here you\'ll find all the main buttons. Let me show you what each one does.',
+    tip: '👆 The header stays at the top so you can always access these buttons'
+  },
+  {
+    target: '[onclick="refresh()"]',
+    title: '<i class="ph-duotone ph-arrows-clockwise"></i> Refresh Button',
+    text: 'Click this to reload all cards from the database. Use it if someone else added new cards.',
+    tip: '🔄 Good habit: Refresh at the start of your shift to see the latest cards'
+  },
+  {
+    target: '[onclick="openPrint()"]',
+    title: '<i class="ph-duotone ph-printer"></i> Print Cards Button',
+    text: 'This opens the print screen where you can select cards and print them. Each card gets a QR code!',
+    tip: '🖨️ We\'ll use this at the end to print the card we create'
+  },
+  {
+    target: '[onclick="openAdd()"]',
+    title: '<i class="ph-duotone ph-plus-circle"></i> Add Card Button',
+    text: 'This is the big one! Click this whenever you need to add a new supply item to your inventory.',
+    tip: '✨ We\'ll click this soon to create your first card'
+  },
+  {
+    target: '.search-bar',
+    title: '<i class="ph-duotone ph-magnifying-glass"></i> Search & Filter',
+    text: 'Type here to search for items by name. Use the dropdown to filter by supplier (Amazon, Walmart, etc.).',
+    tip: '🔍 Try searching for "trash" or "soap" to find items quickly'
+  },
+  {
+    target: '.card:first-child',
+    title: '<i class="ph-duotone ph-cards"></i> This is a Supply Card',
+    text: 'Each card shows: the item name (top), supplier, quantity to order, price, and delivery time. The green header means it\'s in stock.',
+    tip: '🟢 Green = In Stock | 🟡 Gold = Low/Reorder | 🟠 Orange = Critical'
+  },
+  {
+    target: '.card:first-child .card-actions',
+    title: '<i class="ph-duotone ph-cursor-click"></i> Card Action Buttons',
+    text: 'Every card has these 4 buttons: 🛒 Mark for reorder, 👁️ Preview the printable card, ✏️ Edit the card, 🗑️ Delete the card.',
+    tip: '💡 Hover over any button to see what it does'
+  },
+  // PART 2: Let's Create a Card
+  {
+    target: null,
+    title: '<i class="ph-duotone ph-rocket"></i> Now Let\'s Create a Card!',
+    text: 'You\'ve seen how the page works. Now I\'ll guide you through creating a real card. Ready?',
+    tip: '🎯 Click Next and we\'ll open the Add Card form',
+    position: 'center',
+    action: 'openModal'
+  },
+  {
     target: '#editItem',
-    title: '<i class="ph-duotone ph-text-aa"></i> Item Name',
-    text: 'Start by entering a clear, descriptive name for your supply item. This is the main title that appears on the card.',
-    tip: '💡 Use names your team will recognize, like "Nitrile Gloves - Large"',
-    icon: 'ph-text-aa'
+    title: '<i class="ph-duotone ph-text-aa"></i> Step 1: Item Name',
+    text: 'Type a name for your supply item. Be specific so everyone knows what it is. Try typing: "Tutorial Test Card"',
+    tip: '✏️ Go ahead and type in this box now!',
+    inputExample: 'Tutorial Test Card'
   },
   {
     target: '#editSupplier',
-    title: '<i class="ph-duotone ph-storefront"></i> Supplier',
-    text: 'Select or type the supplier name. Common options like Amazon, Walmart, and Uline are pre-filled.',
-    tip: '💡 Adding a supplier helps track where to reorder from',
-    icon: 'ph-storefront'
+    title: '<i class="ph-duotone ph-storefront"></i> Step 2: Supplier',
+    text: 'Click the dropdown and pick a supplier, or type a custom one. Try selecting "Amazon".',
+    tip: '🏪 This tells you where to buy it when you need to reorder'
   },
   {
     target: '#editQty',
-    title: '<i class="ph-duotone ph-package"></i> Order Quantity',
-    text: 'Enter how many to order when restocking. Use formats like "x3" or "2 boxes".',
-    tip: '💡 Match this to your typical order size',
-    icon: 'ph-package'
+    title: '<i class="ph-duotone ph-package"></i> Step 3: Order Quantity',
+    text: 'How many should you order when restocking? Type something like "x2" or "1 box".',
+    tip: '📦 Match this to your typical order size'
   },
   {
     target: '#editPrice',
-    title: '<i class="ph-duotone ph-currency-dollar"></i> Price',
-    text: 'Enter the price per unit. This helps with budgeting and comparing suppliers.',
-    tip: '💡 Just enter the number - the $ sign is automatic',
-    icon: 'ph-currency-dollar'
+    title: '<i class="ph-duotone ph-currency-dollar"></i> Step 4: Price',
+    text: 'Enter the price per item or per order. Just type the number - we add the $ sign automatically. Try: "9.99"',
+    tip: '💰 This helps track costs and compare suppliers'
+  },
+  {
+    target: '#editDelivery',
+    title: '<i class="ph-duotone ph-truck"></i> Step 5: Delivery Time',
+    text: 'How long does shipping usually take? Type something like "1 Day" or "2-3 Days".',
+    tip: '🚚 Helps with planning when to reorder'
+  },
+  {
+    target: '#editLoc',
+    title: '<i class="ph-duotone ph-map-pin"></i> Step 6: Location',
+    text: 'Where is this item stored? Use a format like "Cleaning Rack > Shelf 2". This prints on the card!',
+    tip: '📍 Example: "Cleaning Rack > F-1" means Cleaning Rack, slot F-1'
   },
   {
     target: '#editUrl',
-    title: '<i class="ph-duotone ph-link"></i> Order URL + Auto-fill',
-    text: 'Paste the product URL here. Click "Auto-fill" to automatically fetch the product name, price, and image!',
-    tip: '✨ This is the magic button - try it with any Amazon or supplier link!',
-    icon: 'ph-link'
+    title: '<i class="ph-duotone ph-link"></i> Step 7: Order URL (Optional)',
+    text: 'Paste a link to the product page. This becomes a QR code on the printed card!',
+    tip: '🔗 The QR code lets you scan and go straight to the order page'
+  },
+  {
+    target: '#autofillBtn',
+    title: '<i class="ph-duotone ph-magic-wand"></i> Magic Auto-fill Button!',
+    text: 'If you paste an Amazon or supplier URL first, click this button to automatically fill in the name, price, and image!',
+    tip: '✨ This is a huge time-saver when adding lots of products'
   },
   {
     target: '#imageDropZone',
-    title: '<i class="ph-duotone ph-image"></i> Product Image',
-    text: 'Add an image URL or drag & drop an image directly from any website. The image appears on the front of your card.',
-    tip: '🖼️ Drag an image from a browser tab and drop it right here!',
-    icon: 'ph-image'
+    title: '<i class="ph-duotone ph-image"></i> Step 8: Product Image',
+    text: 'Drag an image from any website and drop it here, OR paste an image URL. This shows on the card.',
+    tip: '🖼️ Try dragging an image from Google Images or the product page'
   },
   {
-    target: null, // Completion - no target
-    title: '<i class="ph-duotone ph-confetti"></i> You\'re Ready!',
-    text: 'That\'s it! Click Save to create your card. You can print cards with QR codes for easy reordering.',
-    tip: '🎉 Pro tip: Use the Print Cards button to print multiple cards at once',
-    icon: 'ph-confetti',
+    target: '#editSave',
+    title: '<i class="ph-duotone ph-floppy-disk"></i> Save Your Card!',
+    text: 'You did it! All the fields are explained. Now click the green Save button to create your card.',
+    tip: '✅ Click Save now! (Don\'t worry, you can edit or delete it later)',
+    action: 'waitForSave'
+  },
+  // PART 3: After Saving
+  {
+    target: null,
+    title: '<i class="ph-duotone ph-check-circle"></i> Card Created!',
+    text: 'Awesome! Your card is now saved. Let me show you one more thing - how to print it!',
+    tip: '🎉 Your card is in the system. Now let\'s print it!',
+    position: 'center',
+    action: 'showPrintModal'
+  },
+  {
+    target: '#printCardList',
+    title: '<i class="ph-duotone ph-check-square"></i> Select Cards to Print',
+    text: 'Check the boxes next to any cards you want to print. You can select as many as you need - they\'ll all print together.',
+    tip: '☑️ Click a checkbox now to select a card!'
+  },
+  {
+    target: '#printBtn',
+    title: '<i class="ph-duotone ph-printer"></i> Print Your Cards!',
+    text: 'Once you\'ve selected cards, click this green Print button. It opens a print preview showing your cards with QR codes!',
+    tip: '🖨️ The QR codes link directly to the product order page'
+  },
+  {
+    target: null,
+    title: '<i class="ph-duotone ph-trophy"></i> You\'re a Kanban Pro!',
+    text: 'That\'s everything! You can now create cards, edit them, and print them. The gold button in the corner restarts this tutorial anytime.',
+    tip: '🌟 Go forth and organize your supplies!',
     position: 'center',
     isLast: true
   }
 ];
 
+var tutorialCreatedCard = false;
+
 function startTutorial() {
   tutorialStep = 0;
   tutorialActive = true;
+  tutorialCreatedCard = false;
 
   // Hide the start button
   document.getElementById('tutorialBtn').style.display = 'none';
 
-  // Open the Add Card modal
-  openEdit();
+  // Close any open modals first
+  closeEdit();
+  closePrint();
 
-  // Wait for modal to open, then start
+  // Start with page overview (no modal)
   setTimeout(function() {
     document.getElementById('tutorialOverlay').style.display = 'block';
     document.getElementById('tutorialBackdrop').style.display = 'block';
@@ -2007,6 +2102,32 @@ function showTutorialStep() {
 
 function nextTutorialStep() {
   if (tutorialStep < tutorialSteps.length - 1) {
+    var currentStep = tutorialSteps[tutorialStep];
+
+    // Handle special actions before advancing
+    if (currentStep.action === 'openModal') {
+      // Open the Add Card modal before showing next step
+      openEdit();
+      setTimeout(function() {
+        tutorialStep++;
+        showTutorialStep();
+      }, 400);
+      return;
+    }
+
+    if (currentStep.action === 'showPrintModal') {
+      // Open the Print modal before showing next step
+      closePrint(); // Close first to reset
+      setTimeout(function() {
+        openPrint();
+        setTimeout(function() {
+          tutorialStep++;
+          showTutorialStep();
+        }, 400);
+      }, 200);
+      return;
+    }
+
     tutorialStep++;
     showTutorialStep();
   } else {
@@ -2016,6 +2137,13 @@ function nextTutorialStep() {
 
 function prevTutorialStep() {
   if (tutorialStep > 0) {
+    var prevStep = tutorialSteps[tutorialStep - 1];
+
+    // If going back from modal steps to page overview, close modal
+    if (prevStep.action === 'openModal') {
+      closeEdit();
+    }
+
     tutorialStep--;
     showTutorialStep();
   }
@@ -2028,8 +2156,13 @@ function endTutorial(completed) {
   document.getElementById('tutorialBackdrop').style.display = 'none';
   document.getElementById('tutorialBackdrop').classList.remove('active');
   document.getElementById('tutorialTooltip').classList.remove('active');
+  document.getElementById('tutorialSpotlight').style.display = 'none';
   document.getElementById('tutorialBtn').style.display = 'flex';
   document.getElementById('tutorialBtn').classList.remove('pulse');
+
+  // Close any open modals
+  closeEdit();
+  closePrint();
 
   // Mark tutorial as seen
   localStorage.setItem('kanbanTutorialSeen', 'true');
@@ -2038,7 +2171,7 @@ function endTutorial(completed) {
     // Confetti celebration!
     createConfetti();
     setTimeout(function() {
-      toast('🎉 Tutorial complete! You\'re ready to create cards!', 'ok');
+      toast('🎉 Tutorial complete! You\'re a Kanban pro now!', 'ok');
     }, 500);
   }
 }
