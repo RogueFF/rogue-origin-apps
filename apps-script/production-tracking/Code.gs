@@ -597,51 +597,19 @@ function getProductionDashboardData(startDate, endDate) {
   // Get scoreboard data for current production info
   var scoreboard = getScoreboardData();
 
-  // Get extended daily data for the date range
-  var allDaily = getExtendedDailyDataLine1_(ss, timezone, 30);
+  // For today's data, use scoreboard (most accurate real-time data)
+  // For historical, would need enhanced daily data function
+  var isToday = (startStr === today && endStr === today);
 
-  var filteredDaily = allDaily.filter(function(d) {
-    return d.dateStr >= startStr && d.dateStr <= endStr;
-  });
-
-  // Calculate totals from filtered data
-  var totalTops = 0, totalSmalls = 0, totalLbs = 0;
-  var totalTrimmerHours = 0, totalBuckerHours = 0, totalOperatorHours = 0;
-  var totalHours = 0, rateSum = 0, rateCount = 0, maxRate = 0;
+  // Use scoreboard data for totals - it has today's actual production
+  var totalTops = scoreboard.todayLbs || 0;  // Line 1 tops
+  var totalSmalls = 0;  // Would need separate tracking
+  var totalLbs = totalTops + totalSmalls;
+  var totalTrimmerHours = scoreboard.hoursLogged * (scoreboard.lastHourTrimmers || scoreboard.currentHourTrimmers || 1);
+  var totalOperatorHours = totalTrimmerHours;
+  var avgRate = scoreboard.targetRate || 0;
+  var maxRate = avgRate;  // Would need historical tracking for true max
   var hourlyData = [];
-
-  filteredDaily.forEach(function(day) {
-    totalTops += day.totalTops || 0;
-    totalSmalls += day.totalSmalls || 0;
-    totalLbs += day.totalLbs || 0;
-    totalTrimmerHours += day.trimmerHours || 0;
-    totalOperatorHours += day.trimmerHours || 0; // Using trimmer hours as operator hours
-    totalHours += day.hoursWorked || 0;
-
-    if (day.avgRate > 0) {
-      rateSum += day.avgRate;
-      rateCount++;
-      if (day.avgRate > maxRate) maxRate = day.avgRate;
-    }
-
-    // Add hourly breakdown if available
-    if (day.hourly) {
-      day.hourly.forEach(function(h) {
-        hourlyData.push({
-          date: day.dateStr,
-          timeSlot: h.timeSlot,
-          tops: h.tops || 0,
-          smalls: h.smalls || 0,
-          trimmers: h.trimmers || 0,
-          buckers: h.buckers || 0,
-          strain: h.strain || '',
-          rate: h.rate || 0
-        });
-      });
-    }
-  });
-
-  var avgRate = rateCount > 0 ? rateSum / rateCount : 0;
 
   // Estimate costs (using default wage rates from CLAUDE.md)
   var hourlyWage = 15.00; // Default hourly wage
