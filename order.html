@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Order Status - Rogue Origin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --gold: #e4aa4f;
+      --gold-light: #f7d794;
+      --gold-dim: rgba(228,170,79,0.15);
+      --green: #668971;
+      --green-dark: #4a6b54;
+      --green-light: #8ba896;
+      --green-dim: rgba(102,137,113,0.15);
+      --bg: #faf8f5;
+      --bg-card: #ffffff;
+      --border: #e8e4de;
+      --text: #2d3a2e;
+      --text-muted: #8a9a8e;
+      --danger: #c45c4a;
+      --success: #5a9a6e;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    /* Header */
+    .header {
+      background: var(--green);
+      color: white;
+      padding: 24px;
+      text-align: center;
+    }
+    .header-inner {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .logo {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      margin-bottom: 12px;
+      border: 3px solid rgba(255,255,255,0.3);
+    }
+    .header h1 {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .header p {
+      opacity: 0.9;
+      font-size: 14px;
+    }
+
+    /* Main */
+    .main {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    /* Order Card */
+    .order-card {
+      background: var(--bg-card);
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+
+    .order-header {
+      padding: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .order-id {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+    .order-customer {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+    .order-meta {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+    .order-meta-item {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .order-meta-item strong {
+      color: var(--text);
+    }
+
+    /* Progress Section */
+    .progress-section {
+      padding: 32px 24px;
+      background: linear-gradient(135deg, var(--green-dim) 0%, var(--gold-dim) 100%);
+    }
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 16px;
+    }
+    .progress-percent {
+      font-size: 48px;
+      font-weight: 700;
+      color: var(--green);
+    }
+    .progress-weight {
+      font-size: 16px;
+      color: var(--text-muted);
+    }
+    .progress-bar {
+      height: 16px;
+      background: rgba(255,255,255,0.8);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--green) 0%, var(--gold) 100%);
+      border-radius: 8px;
+      transition: width 0.5s ease;
+    }
+    .progress-footer {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 12px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* Status Badge */
+    .status-section {
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 24px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .status-badge.pending { background: var(--gold-dim); color: #b8860b; }
+    .status-badge.processing { background: rgba(100, 149, 237, 0.15); color: #4169e1; }
+    .status-badge.ready { background: var(--green-dim); color: var(--green); }
+    .status-badge.shipped { background: rgba(138, 43, 226, 0.15); color: #8b2be2; }
+    .status-badge.completed { background: rgba(34, 139, 34, 0.15); color: #228b22; }
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .status-text {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    /* Notes */
+    .notes-section {
+      padding: 20px 24px;
+      background: var(--gold-dim);
+      border-bottom: 1px solid var(--border);
+    }
+    .notes-section h3 {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--gold);
+      margin-bottom: 8px;
+    }
+    .notes-section p {
+      font-size: 14px;
+      color: var(--text);
+    }
+
+    /* Pallets */
+    .pallets-section {
+      padding: 24px;
+    }
+    .pallets-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .pallets-header h3 {
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .pallets-count {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .pallet-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .pallet-item {
+      display: flex;
+      align-items: center;
+      padding: 16px;
+      background: var(--bg);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      gap: 16px;
+    }
+    .pallet-icon {
+      width: 48px;
+      height: 48px;
+      background: var(--green-dim);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+    }
+    .pallet-icon.completed { background: var(--green); color: white; }
+    .pallet-icon.processing { background: #6495ED; color: white; }
+    .pallet-info {
+      flex: 1;
+    }
+    .pallet-cultivars {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .pallet-weight {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .pallet-status {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 12px;
+    }
+    .pallet-status.pending { background: var(--gold-dim); color: #b8860b; }
+    .pallet-status.processing { background: rgba(100, 149, 237, 0.15); color: #4169e1; }
+    .pallet-status.completed { background: var(--green-dim); color: var(--green); }
+
+    /* Timeline */
+    .timeline-section {
+      padding: 24px;
+      border-top: 1px solid var(--border);
+    }
+    .timeline-section h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    .timeline {
+      position: relative;
+      padding-left: 28px;
+    }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 8px;
+      top: 4px;
+      bottom: 4px;
+      width: 2px;
+      background: var(--border);
+    }
+    .timeline-item {
+      position: relative;
+      padding-bottom: 16px;
+    }
+    .timeline-item:last-child { padding-bottom: 0; }
+    .timeline-dot {
+      position: absolute;
+      left: -24px;
+      top: 4px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--border);
+      border: 2px solid var(--bg-card);
+    }
+    .timeline-dot.active { background: var(--green); }
+    .timeline-item strong {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 2px;
+    }
+    .timeline-item span {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      padding: 32px 24px;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+    .footer a {
+      color: var(--green);
+      text-decoration: none;
+    }
+    .footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* Loading */
+    .loading {
+      text-align: center;
+      padding: 80px 24px;
+    }
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid var(--border);
+      border-top-color: var(--green);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Error */
+    .error-state {
+      text-align: center;
+      padding: 80px 24px;
+    }
+    .error-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+    }
+    .error-state h2 {
+      font-size: 20px;
+      margin-bottom: 8px;
+    }
+    .error-state p {
+      color: var(--text-muted);
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .order-customer { font-size: 22px; }
+      .progress-percent { font-size: 36px; }
+      .order-meta { gap: 12px; }
+      .pallet-item { flex-wrap: wrap; }
+    }
+
+    /* Print styles */
+    @media print {
+      .header { background: white; color: var(--text); border-bottom: 2px solid var(--green); }
+      .order-card { box-shadow: none; border: 1px solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <img src="https://rogueff.github.io/rogue-origin-apps/assets/ro-logo.png" alt="Rogue Origin" class="logo" onerror="this.style.display='none'">
+      <h1>Rogue Origin</h1>
+      <p>Order Tracking Portal</p>
+    </div>
+  </header>
+
+  <main class="main" id="mainContent">
+    <div class="loading">
+      <div class="spinner"></div>
+      <p>Loading order details...</p>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <p>Questions about your order? Contact us at <a href="mailto:orders@rogueorigin.com">orders@rogueorigin.com</a></p>
+    <p style="margin-top: 8px;">&copy; 2026 Rogue Origin. Premium Oregon Hemp.</p>
+  </footer>
+
+<script>
+(function() {
+  const API_URL = 'https://script.google.com/macros/s/AKfycbxDAHSFl9cedGS49L3Lf5ztqy-SSToYigyA30ZtsdpmWNAR9H61X_Mm48JOOTGqqr-Z/exec';
+
+  // Get order ID from URL
+  function getOrderId() {
+    const params = new URLSearchParams(window.location.search);
+    const encodedId = params.get('id');
+    if (encodedId) {
+      try {
+        return atob(encodedId);
+      } catch (e) {
+        return encodedId;
+      }
+    }
+    return null;
+  }
+
+  // Load order
+  async function loadOrder() {
+    const orderId = getOrderId();
+
+    if (!orderId) {
+      showError('No order ID provided', 'Please check the link you received.');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}?action=getOrder&id=${encodeURIComponent(orderId)}`);
+      const data = await response.json();
+
+      if (data.order) {
+        renderOrder(data.order);
+      } else {
+        // Try demo data
+        const demoOrder = getDemoOrder(orderId);
+        if (demoOrder) {
+          renderOrder(demoOrder);
+        } else {
+          showError('Order not found', 'The order you\'re looking for doesn\'t exist or the link has expired.');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load order:', error);
+      // Fall back to demo data
+      const demoOrder = getDemoOrder(orderId);
+      if (demoOrder) {
+        renderOrder(demoOrder);
+      } else {
+        showError('Unable to load order', 'Please try again later or contact support.');
+      }
+    }
+  }
+
+  // Demo order data
+  function getDemoOrder(orderId) {
+    const demoOrders = {
+      'ORD-001': {
+        id: 'ORD-001',
+        customer: 'Hamburg GmbH',
+        totalKg: 1400,
+        completedKg: 580,
+        status: 'processing',
+        createdDate: '2025-12-15',
+        dueDate: '2026-02-01',
+        notes: 'International freight - EU documentation required. All cultivars must have COA attached.',
+        pallets: [
+          { id: 'P001', cultivars: 'Sour Lifter, Lifter', weightKg: 300, status: 'completed' },
+          { id: 'P002', cultivars: 'Sour Lifter', weightKg: 280, status: 'completed' },
+          { id: 'P003', cultivars: 'Cherry Wine, Elektra', weightKg: 320, status: 'processing' },
+          { id: 'P004', cultivars: 'Hawaiian Haze', weightKg: 250, status: 'pending' },
+          { id: 'P005', cultivars: 'Special Sauce', weightKg: 250, status: 'pending' }
+        ]
+      },
+      'ORD-002': {
+        id: 'ORD-002',
+        customer: 'Denver Distributors',
+        totalKg: 200,
+        completedKg: 200,
+        status: 'ready',
+        createdDate: '2025-12-28',
+        dueDate: '2026-01-10',
+        notes: 'Domestic shipping - priority delivery',
+        pallets: [
+          { id: 'P006', cultivars: 'Lifter, Suver Haze', weightKg: 200, status: 'completed' }
+        ]
+      }
+    };
+    return demoOrders[orderId] || null;
+  }
+
+  // Render order
+  function renderOrder(order) {
+    const progress = Math.round((order.completedKg / order.totalKg) * 100);
+    const completedPallets = order.pallets?.filter(p => p.status === 'completed').length || 0;
+    const totalPallets = order.pallets?.length || 0;
+
+    document.getElementById('mainContent').innerHTML = `
+      <div class="order-card">
+        <div class="order-header">
+          <div class="order-id">Order ${order.id}</div>
+          <div class="order-customer">${order.customer}</div>
+          <div class="order-meta">
+            <div class="order-meta-item">
+              <strong>${order.totalKg} kg</strong> total order
+            </div>
+            <div class="order-meta-item">
+              Created <strong>${formatDate(order.createdDate)}</strong>
+            </div>
+            <div class="order-meta-item">
+              Due <strong>${formatDate(order.dueDate)}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="progress-section">
+          <div class="progress-header">
+            <div class="progress-percent">${progress}%</div>
+            <div class="progress-weight">${order.completedKg} / ${order.totalKg} kg</div>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" style="width: ${progress}%"></div>
+          </div>
+          <div class="progress-footer">
+            <span>${order.totalKg - order.completedKg} kg remaining</span>
+            <span>${completedPallets} of ${totalPallets} pallets complete</span>
+          </div>
+        </div>
+
+        <div class="status-section">
+          <div class="status-badge ${order.status}">
+            <span class="status-dot"></span>
+            ${formatStatus(order.status)}
+          </div>
+          <div class="status-text">${getStatusDescription(order.status)}</div>
+        </div>
+
+        ${order.notes ? `
+          <div class="notes-section">
+            <h3>Order Notes</h3>
+            <p>${order.notes}</p>
+          </div>
+        ` : ''}
+
+        <div class="pallets-section">
+          <div class="pallets-header">
+            <h3>Pallet Breakdown</h3>
+            <span class="pallets-count">${completedPallets}/${totalPallets} complete</span>
+          </div>
+          <div class="pallet-list">
+            ${(order.pallets || []).map(pallet => `
+              <div class="pallet-item">
+                <div class="pallet-icon ${pallet.status}">
+                  ${pallet.status === 'completed' ? '✓' : pallet.status === 'processing' ? '⟳' : '○'}
+                </div>
+                <div class="pallet-info">
+                  <div class="pallet-cultivars">${pallet.cultivars}</div>
+                  <div class="pallet-weight">${pallet.weightKg} kg • ${pallet.id}</div>
+                </div>
+                <div class="pallet-status ${pallet.status}">${formatStatus(pallet.status)}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="timeline-section">
+          <h3>Order Timeline</h3>
+          <div class="timeline">
+            <div class="timeline-item">
+              <div class="timeline-dot active"></div>
+              <strong>Order Placed</strong>
+              <span>${formatDate(order.createdDate)}</span>
+            </div>
+            ${order.status !== 'pending' ? `
+              <div class="timeline-item">
+                <div class="timeline-dot active"></div>
+                <strong>Processing Started</strong>
+                <span>Production in progress</span>
+              </div>
+            ` : ''}
+            ${['ready', 'shipped', 'completed'].includes(order.status) ? `
+              <div class="timeline-item">
+                <div class="timeline-dot active"></div>
+                <strong>Ready for Shipment</strong>
+                <span>All pallets completed</span>
+              </div>
+            ` : ''}
+            ${['shipped', 'completed'].includes(order.status) ? `
+              <div class="timeline-item">
+                <div class="timeline-dot active"></div>
+                <strong>Shipped</strong>
+                <span>Order in transit</span>
+              </div>
+            ` : ''}
+            ${order.status === 'completed' ? `
+              <div class="timeline-item">
+                <div class="timeline-dot active"></div>
+                <strong>Delivered</strong>
+                <span>Order completed</span>
+              </div>
+            ` : `
+              <div class="timeline-item">
+                <div class="timeline-dot"></div>
+                <strong>Estimated Delivery</strong>
+                <span>${formatDate(order.dueDate)}</span>
+              </div>
+            `}
+          </div>
+        </div>
+      </div>
+
+      <p style="text-align: center; color: var(--text-muted); font-size: 13px;">
+        Last updated: ${new Date().toLocaleString()}
+      </p>
+    `;
+
+    // Update page title
+    document.title = `Order ${order.id} - ${order.customer} | Rogue Origin`;
+  }
+
+  function showError(title, message) {
+    document.getElementById('mainContent').innerHTML = `
+      <div class="error-state">
+        <div class="error-icon">📦</div>
+        <h2>${title}</h2>
+        <p>${message}</p>
+      </div>
+    `;
+  }
+
+  function formatDate(dateStr) {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  }
+
+  function formatStatus(status) {
+    const labels = {
+      pending: 'Pending',
+      processing: 'In Progress',
+      ready: 'Ready to Ship',
+      shipped: 'Shipped',
+      completed: 'Completed'
+    };
+    return labels[status] || status;
+  }
+
+  function getStatusDescription(status) {
+    const descriptions = {
+      pending: 'Your order is in the queue and will begin processing soon.',
+      processing: 'We\'re actively working on your order. Check back for updates!',
+      ready: 'Your order is complete and ready for shipment.',
+      shipped: 'Your order is on its way!',
+      completed: 'Your order has been delivered. Thank you!'
+    };
+    return descriptions[status] || '';
+  }
+
+  // Initialize
+  document.addEventListener('DOMContentLoaded', loadOrder);
+})();
+</script>
+</body>
+</html>

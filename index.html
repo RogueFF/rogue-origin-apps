@@ -577,8 +577,8 @@
     <div class="nav-item" data-view="scoreboard" onclick="switchView('scoreboard')"><span class="icon"><i class="ph-duotone ph-gauge"></i></span><span>Scoreboard</span></div>
     <div class="nav-item" data-view="barcode" onclick="switchView('barcode')"><span class="icon"><i class="ph-duotone ph-barcode"></i></span><span>Barcode Printer</span></div>
     <div class="nav-item" data-view="sop" onclick="switchView('sop')"><span class="icon"><i class="ph-duotone ph-book-open-text"></i></span><span>SOP Manager</span></div>
+    <div class="nav-item" data-view="orders" onclick="switchView('orders')"><span class="icon"><i class="ph-duotone ph-clipboard-text"></i></span><span>Orders</span></div>
     <div class="nav-section">Coming Soon</div>
-    <div class="nav-item disabled"><span class="icon"><i class="ph-duotone ph-clipboard-text"></i></span><span>Orders</span></div>
     <div class="nav-item disabled"><span class="icon"><i class="ph-duotone ph-users-three"></i></span><span>Staff</span></div>
     <div class="nav-item disabled"><span class="icon"><i class="ph-duotone ph-chart-line-up"></i></span><span>Reports</span></div>
     <div class="nav-item disabled"><span class="icon"><i class="ph-duotone ph-gear"></i></span><span>Settings</span></div>
@@ -815,6 +815,13 @@
       </div>
     </div>
 
+    <div class="app-view" id="ordersView">
+      <div class="app-iframe-container">
+        <button class="app-expand-btn" onclick="openAppNewTab('orders')" title="Open in new tab"><i class="ph ph-arrow-square-out"></i></button>
+        <iframe class="app-iframe" id="ordersFrame" data-src="https://rogueff.github.io/rogue-origin-apps/orders.html"></iframe>
+      </div>
+    </div>
+
     <div class="app-view" id="sopView">
       <div class="app-iframe-container">
         <button class="app-expand-btn" onclick="openAppNewTab('sop')" title="Open in new tab"><i class="ph ph-arrow-square-out"></i></button>
@@ -862,7 +869,8 @@
       kanban: 'https://rogueff.github.io/rogue-origin-apps/kanban.html',
       scoreboard: 'https://rogueff.github.io/rogue-origin-apps/scoreboard.html',
       barcode: 'https://rogueff.github.io/rogue-origin-apps/barcode.html',
-      sop: 'https://rogueff.github.io/rogue-origin-apps/sop-manager.html'
+      sop: 'https://rogueff.github.io/rogue-origin-apps/sop-manager.html',
+      orders: 'https://rogueff.github.io/rogue-origin-apps/orders.html'
     };
 
     var brandColors = { green: '#668971', greenLight: 'rgba(102,137,113,0.2)', gold: '#e4aa4f', sungrown: '#bf8e4e', indoor: '#62758d', indoorLight: 'rgba(98,117,141,0.3)' };
