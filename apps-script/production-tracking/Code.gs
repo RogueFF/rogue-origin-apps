@@ -588,19 +588,17 @@ function getProductionDashboardData(startDate, endDate) {
   var ss = SpreadsheetApp.openById(SHEET_ID);
   var timezone = ss.getSpreadsheetTimeZone();
 
-  // Parse dates or default to today
-  var start = startDate ? new Date(startDate) : new Date();
-  var end = endDate ? new Date(endDate) : new Date();
+  // Use date strings directly to avoid timezone issues
+  // Frontend sends YYYY-MM-DD format
+  var today = Utilities.formatDate(new Date(), timezone, 'yyyy-MM-dd');
+  var startStr = startDate && startDate.match(/^\d{4}-\d{2}-\d{2}$/) ? startDate : today;
+  var endStr = endDate && endDate.match(/^\d{4}-\d{2}-\d{2}$/) ? endDate : today;
 
   // Get scoreboard data for current production info
   var scoreboard = getScoreboardData();
 
   // Get extended daily data for the date range
   var allDaily = getExtendedDailyDataLine1_(ss, timezone, 30);
-
-  // Filter to requested date range
-  var startStr = Utilities.formatDate(start, timezone, 'yyyy-MM-dd');
-  var endStr = Utilities.formatDate(end, timezone, 'yyyy-MM-dd');
 
   var filteredDaily = allDaily.filter(function(d) {
     return d.dateStr >= startStr && d.dateStr <= endStr;
