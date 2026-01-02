@@ -2057,6 +2057,40 @@
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     border: 1px solid var(--border-light);
   }
+  .ai-message.assistant .ai-feedback {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-light);
+  }
+  .ai-feedback-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 3px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-muted);
+    transition: all 0.2s;
+  }
+  .ai-feedback-btn:hover {
+    border-color: var(--green);
+    color: var(--green);
+  }
+  .ai-feedback-btn.selected {
+    background: var(--green);
+    border-color: var(--green);
+    color: white;
+  }
+  .ai-feedback-btn.selected-bad {
+    background: var(--danger, #c45c4a);
+    border-color: var(--danger, #c45c4a);
+    color: white;
+  }
   .ai-message .data-card {
     background: var(--bg);
     border: 1px solid var(--border);
@@ -2203,6 +2237,7 @@
 (function() {
   const AI_API_URL = 'https://script.google.com/macros/s/AKfycbxDAHSFl9cedGS49L3Lf5ztqy-SSToYigyA30ZtsdpmWNAR9H61X_Mm48JOOTGqqr-Z/exec';
   let aiHistory = [];
+  let lastQuestion = '';  // Track for feedback
 
   window.aiToggleChat = function() {
     const panel = document.getElementById('aiChatPanel');
@@ -2230,6 +2265,8 @@
     const msg = input.value.trim();
     if (!msg) return;
 
+    lastQuestion = msg;  // Track for feedback
+
     // Add user message
     const userEl = document.createElement('div');
     userEl.className = 'ai-message user';
@@ -2248,7 +2285,6 @@
     try {
       aiHistory.push({ role: 'user', content: msg });
       
-      // Use POST with text/plain to avoid CORS preflight
       const payload = JSON.stringify({
         action: 'chat',
         message: msg,
@@ -2269,7 +2305,16 @@
         aiHistory.push({ role: 'assistant', content: data.response });
         const assistEl = document.createElement('div');
         assistEl.className = 'ai-message assistant';
-        assistEl.innerHTML = data.response;
+        
+        // Add response content + feedback buttons
+        const responseId = 'resp-' + Date.now();
+        assistEl.innerHTML = `
+          <div class="ai-response-content">${data.response}</div>
+          <div class="ai-feedback" id="${responseId}">
+            <button class="ai-feedback-btn" onclick="aiFeedback('${responseId}', 'good', '${encodeURIComponent(lastQuestion)}')">👍 Helpful</button>
+            <button class="ai-feedback-btn" onclick="aiFeedback('${responseId}', 'bad', '${encodeURIComponent(lastQuestion)}')">👎 Not quite</button>
+          </div>
+        `;
         messages.appendChild(assistEl);
       } else {
         throw new Error(data.error || 'Unknown error');
@@ -2283,6 +2328,65 @@
       console.error('AI Error:', err);
     }
     messages.scrollTop = messages.scrollHeight;
+  };
+
+  // Feedback handler
+  window.aiFeedback = async function(responseId, rating, encodedQuestion) {
+    const feedbackDiv = document.getElementById(responseId);
+    if (!feedbackDiv) return;
+    
+    const question = decodeURIComponent(encodedQuestion);
+    
+    // Update UI
+    const buttons = feedbackDiv.querySelectorAll('.ai-feedback-btn');
+    buttons.forEach(btn => {
+      btn.disabled = true;
+      btn.style.opacity = '0.5';
+    });
+    
+    const selectedBtn = rating === 'good' ? buttons[0] : buttons[1];
+    selectedBtn.classList.add(rating === 'good' ? 'selected' : 'selected-bad');
+    selectedBtn.style.opacity = '1';
+    
+    // If negative feedback, prompt for correction
+    if (rating === 'bad') {
+      setTimeout(() => {
+        feedbackDiv.innerHTML = `
+          <span style="font-size:11px;color:var(--text-muted);">👎 Logged. Want to correct me?</span>
+          <button class="ai-feedback-btn" onclick="aiPromptCorrection()">Add correction</button>
+        `;
+      }, 500);
+    } else {
+      setTimeout(() => {
+        feedbackDiv.innerHTML = '<span style="font-size:11px;color:var(--green);">👍 Thanks!</span>';
+      }, 500);
+    }
+    
+    // Log feedback to server
+    try {
+      await fetch(AI_API_URL + '?action=chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          feedback: {
+            question: question,
+            rating: rating,
+            timestamp: new Date().toISOString()
+          }
+        }),
+        redirect: 'follow'
+      });
+    } catch (e) {
+      console.log('Feedback logging error:', e);
+    }
+  };
+  
+  // Prompt user to add a correction
+  window.aiPromptCorrection = function() {
+    const input = document.getElementById('aiInput');
+    input.value = 'Actually, ';
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
   };
 })();
 </script>
