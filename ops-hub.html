@@ -2400,6 +2400,69 @@
   // TEXT-TO-SPEECH (Speech Synthesis API)
   // ============================================
   let currentUtterance = null;
+  let preferredVoices = { en: null, es: null };
+
+  // Find the best natural-sounding voice for each language
+  function loadPreferredVoices() {
+    const voices = speechSynthesis.getVoices();
+    if (!voices.length) return;
+
+    // Priority order for natural-sounding English voices
+    const enPriority = [
+      'Google US English',           // Chrome - very natural
+      'Google UK English Female',    // Chrome - natural British
+      'Google UK English Male',      // Chrome - natural British
+      'Samantha',                    // macOS - natural
+      'Karen',                       // macOS - natural Australian
+      'Daniel',                      // macOS - natural British
+      'Microsoft Zira',              // Windows - decent
+      'Microsoft David',             // Windows - decent
+    ];
+
+    // Priority order for natural-sounding Spanish voices
+    const esPriority = [
+      'Google español',              // Chrome - natural
+      'Google español de Estados Unidos', // Chrome - natural US Spanish
+      'Paulina',                     // macOS - natural Mexican
+      'Monica',                      // macOS - natural Castilian
+      'Microsoft Sabina',            // Windows
+    ];
+
+    // Find best English voice
+    for (const name of enPriority) {
+      const voice = voices.find(v => v.name.includes(name) || v.name === name);
+      if (voice) {
+        preferredVoices.en = voice;
+        console.log('Selected English voice:', voice.name);
+        break;
+      }
+    }
+    // Fallback to any English voice
+    if (!preferredVoices.en) {
+      preferredVoices.en = voices.find(v => v.lang.startsWith('en')) || null;
+    }
+
+    // Find best Spanish voice
+    for (const name of esPriority) {
+      const voice = voices.find(v => v.name.includes(name) || v.name === name);
+      if (voice) {
+        preferredVoices.es = voice;
+        console.log('Selected Spanish voice:', voice.name);
+        break;
+      }
+    }
+    // Fallback to any Spanish voice
+    if (!preferredVoices.es) {
+      preferredVoices.es = voices.find(v => v.lang.startsWith('es')) || null;
+    }
+  }
+
+  // Load voices when available (they load async in some browsers)
+  if (speechSynthesis.onvoiceschanged !== undefined) {
+    speechSynthesis.onvoiceschanged = loadPreferredVoices;
+  }
+  // Also try loading immediately
+  loadPreferredVoices();
 
   window.aiSpeak = function(contentId, buttonEl) {
     const content = document.getElementById(contentId);
@@ -2427,11 +2490,22 @@
     const text = content.textContent || content.innerText;
     if (!text.trim()) return;
 
-    // Create utterance
+    // Create utterance with natural voice settings
     currentUtterance = new SpeechSynthesisUtterance(text);
-    currentUtterance.lang = localStorage.getItem('ro_language') === 'es' ? 'es-ES' : 'en-US';
-    currentUtterance.rate = 0.95;  // Slightly slower for clarity
-    currentUtterance.pitch = 1.0;
+
+    // Select the best voice for the current language
+    const isSpanish = localStorage.getItem('ro_language') === 'es';
+    const selectedVoice = isSpanish ? preferredVoices.es : preferredVoices.en;
+
+    if (selectedVoice) {
+      currentUtterance.voice = selectedVoice;
+    }
+    currentUtterance.lang = isSpanish ? 'es-ES' : 'en-US';
+
+    // Natural speech settings - smooth and conversational
+    currentUtterance.rate = 1.0;    // Natural pace
+    currentUtterance.pitch = 1.0;   // Natural pitch
+    currentUtterance.volume = 1.0;  // Full volume
 
     // Update button state
     buttonEl.classList.add('speaking');
