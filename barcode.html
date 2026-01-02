@@ -400,17 +400,33 @@
     
     .loading { text-align: center; padding: 50px; color: var(--green); font-size: 16px; text-transform: uppercase; letter-spacing: 1px; }
     
-    .message { 
-      padding: 14px 18px; 
-      margin-bottom: 20px; 
-      border-radius: 10px; 
-      display: none; 
-      font-weight: 600; 
+    .message {
+      padding: 14px 18px;
+      margin-bottom: 20px;
+      border-radius: 10px;
+      display: none;
+      font-weight: 600;
       text-align: center;
       font-size: 13px;
     }
     .message.success { background: rgba(102,137,113,0.1); color: var(--green); border: 1px solid var(--green); }
     .message.error { background: rgba(201,85,61,0.1); color: #c9553d; border: 1px solid #c9553d; }
+
+    /* Mobile improvements */
+    @media (max-width: 480px) {
+      .container { padding: 16px; }
+      .header { padding: 16px; }
+      .logo { max-width: 200px; }
+      .subtitle { font-size: 14px; }
+      .product-section { padding: 16px; }
+      .section-header { font-size: 16px; }
+      .product-row { padding: 12px; }
+      button, .outline { min-height: 44px; padding: 12px 16px; }
+      select { min-height: 44px; padding: 12px 14px; }
+      input[type="text"], input[type="number"] { min-height: 44px; padding: 12px 14px; font-size: 16px; }
+      .search-input { font-size: 16px; } /* Prevents iOS zoom */
+      .modal-content { padding: 20px; }
+    }
   </style>
 </head>
 <body>

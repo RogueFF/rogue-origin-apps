@@ -464,7 +464,23 @@
       .current-stats { grid-template-columns: repeat(3, 1fr); }
       .mobile-menu-btn { display: flex !important; }
     }
-    @media (max-width: 600px) { .kpi-row { grid-template-columns: 1fr 1fr; } .header { flex-wrap: wrap; gap: 8px; } .settings-panel { width: 100%; } }
+    @media (max-width: 600px) {
+      .kpi-row { grid-template-columns: 1fr 1fr; }
+      .header { flex-wrap: wrap; gap: 8px; }
+      .settings-panel { width: 100%; left: 0; right: 0; }
+      .header-btn { padding: 10px 14px; font-size: 12px; min-height: 44px; }
+      .header-btn svg { width: 16px; height: 16px; }
+      .nav-item { padding: 14px 16px; min-height: 48px; }
+      .date-chip { padding: 8px 14px; min-height: 40px; }
+      .toolbar { flex-wrap: wrap; gap: 8px; }
+      .toolbar-btn { padding: 10px 14px; min-height: 44px; }
+    }
+
+    @media (max-width: 400px) {
+      .kpi-row { grid-template-columns: 1fr; }
+      .header-right { width: 100%; justify-content: flex-end; }
+      .welcome { font-size: 18px; }
+    }
     
     .mobile-menu-btn { display: none; background: none; border: none; color: var(--text); cursor: pointer; padding: 4px; }
     
@@ -2269,11 +2285,28 @@
 
   @media (max-width: 480px) {
     .ai-chat-panel {
-      width: calc(100vw - 24px);
-      height: calc(100vh - 100px);
-      right: -8px;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100vw;
+      height: 100vh;
+      max-height: 100vh;
+      border-radius: 0;
+      border: none;
     }
     .ai-chat-toggle { width: 54px; height: 54px; }
+    .ai-chat-header { padding: 16px; }
+    .ai-chat-header-text h3 { font-size: 16px; }
+    .ai-voice-mode-toggle { padding: 8px 14px; }
+    .ai-quick-actions { padding: 12px; gap: 8px; }
+    .ai-quick-btn { padding: 10px 14px; font-size: 13px; min-height: 44px; }
+    .ai-chat-messages { padding: 12px; }
+    .ai-chat-input-area { padding: 12px; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+    .ai-chat-input { padding: 14px 16px; font-size: 16px; } /* Prevents iOS zoom */
+    .ai-voice-btn { width: 44px; height: 44px; }
+    .ai-chat-send { width: 44px; height: 44px; }
   }
 </style>
 
