@@ -970,12 +970,12 @@
     // View switching
     function switchView(view) {
       currentView = view;
-      
+
       // Update nav items
       document.querySelectorAll('.nav-item[data-view]').forEach(function(item) {
         item.classList.toggle('active', item.dataset.view === view);
       });
-      
+
       // Show/hide views
       document.getElementById('dashboardView').classList.toggle('active', view === 'dashboard');
       document.getElementById('kanbanView').classList.toggle('active', view === 'kanban');
@@ -983,15 +983,26 @@
       document.getElementById('barcodeView').classList.toggle('active', view === 'barcode');
       document.getElementById('sopView').classList.toggle('active', view === 'sop');
       document.getElementById('ordersView').classList.toggle('active', view === 'orders');
-      
+
       // Show/hide dashboard controls
       document.getElementById('dashboardControls').style.display = view === 'dashboard' ? 'flex' : 'none';
-      
+
+      // Hide AI chat when viewing iframe apps (they have their own UI elements)
+      var aiWidget = document.querySelector('.ai-chat-widget');
+      if (aiWidget) {
+        aiWidget.style.display = (view === 'dashboard' || view === 'orders') ? 'block' : 'none';
+        // Also close the chat panel if open
+        if (view !== 'dashboard' && view !== 'orders') {
+          var panel = document.querySelector('.ai-chat-panel');
+          if (panel) panel.classList.remove('open');
+        }
+      }
+
       // Update page title
       var titles = { dashboard: 'Operations Dashboard', kanban: 'Supply Kanban', scoreboard: 'Scoreboard / Bag Timer', barcode: 'Barcode Printer', sop: 'SOP Manager', orders: 'Order Management' };
       // pageTitle removed - using header logo instead
       document.title = 'Rogue Origin - ' + (titles[view] || 'Operations Hub');
-      
+
       // Lazy load iframes
       if (view !== 'dashboard') {
         var frameId = view + 'Frame';
@@ -1000,7 +1011,7 @@
           frame.src = frame.dataset.src;
         }
       }
-      
+
       // Close mobile sidebar
       document.getElementById('sidebar').classList.remove('mobile-open');
     }
