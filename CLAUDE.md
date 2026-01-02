@@ -277,12 +277,14 @@
 
 | # | App | Frontend | Backend | Sheet | Status | Primary Users |
 |---|-----|----------|---------|-------|--------|---------------|
-| 1 | **Ops Hub** | ops-hub.html | Production Code.gs | Production | ✅ Active | All |
+| 1 | **Ops Hub** | index.html | Production Code.gs | Production | ✅ Active | All |
 | 2 | **AI Agent** | (in Ops Hub) | Production Code.gs | Production | ✅ Active | Boss, Koa |
 | 3 | **Scoreboard** | scoreboard.html | Production Code.gs | Production | ✅ Active | Floor team |
 | 4 | **SOP Manager** | sop-manager.html | SOP Code.gs | SOP | ✅ Active | All |
 | 5 | **Kanban** | kanban.html | Kanban Code.gs | Kanban | ✅ Active | Koa |
 | 6 | **Barcode Manager** | barcode.html | Barcode Code.gs | Barcode | ✅ Active | Packaging |
+| 7 | **Order Management** | orders.html | (pending) | Orders | ✅ Active | Sales, Koa |
+| 8 | **Customer Portal** | order.html | (pending) | Orders | ✅ Active | Customers |
 
 ### System Architecture
 
@@ -1474,7 +1476,7 @@ Transform Rogue Origin's operations into a data-driven, AI-assisted system that:
 
 ---
 
-### 🔄 Phase 2: Customer Order Dashboard (Weeks 3-5) — NEXT PRIORITY
+### ✅ Phase 2: Customer Order Dashboard (Weeks 3-5) — ~80% COMPLETE
 
 **Objective**: Give wholesale customers visibility into their orders with a professional, branded experience.
 
@@ -1482,49 +1484,60 @@ Transform Rogue Origin's operations into a data-driven, AI-assisted system that:
 
 | Deliverable | Status | Target |
 |-------------|--------|--------|
-| Create clean Orders schema | 📋 Planned | New sheet tab |
-| Migrate Hamburg order data | 📋 Planned | 1400kg order |
-| Connect to production for progress | 📋 Planned | Auto-calculate % |
+| Create clean Orders schema | ✅ Done | In orders.html |
+| Migrate Hamburg order data | ✅ Done | Demo data included |
+| Connect to production for progress | 📋 Pending | Need backend API |
 
-**Proposed Orders Schema**:
+**Implemented Orders Schema**:
 ```
-Orders Sheet:
-| OrderID | Customer | TotalKg | Status | CreatedDate | DueDate | Notes |
-
-Pallets Sheet:
-| PalletID | OrderID | Strains | WeightKg | Status | TIVETracker | Location |
-
-Progress View (calculated):
-| OrderID | TotalKg | CompletedKg | Remaining | PercentComplete | ETA |
+Order Object:
+{
+  id: 'ORD-001',
+  customer: 'Hamburg GmbH',
+  totalKg: 1400,
+  completedKg: 580,
+  status: 'pending|processing|ready|shipped|completed',
+  createdDate: '2025-12-15',
+  dueDate: '2026-02-01',
+  notes: 'Order notes...',
+  pallets: [
+    { id: 'P001', cultivars: 'Sour Lifter, Lifter', weightKg: 300, status: 'completed' },
+    ...
+  ]
+}
 ```
 
 #### 2.2 Customer Portal
 
 | Deliverable | Status | Notes |
 |-------------|--------|-------|
-| Private link access (no login) | 📋 Planned | Hash-based URL |
-| Order overview page | 📋 Planned | Total, %, ETA |
-| Pallet breakdown view | 📋 Planned | Status per pallet |
-| Current pallet detail | 📋 Planned | Strains, progress bar |
-| TIVE tracking embed/link | 📋 Planned | Shipment tracking |
-| RO branding | 📋 Planned | Professional look |
+| Private link access (no login) | ✅ Done | Base64-encoded order ID |
+| Order overview page | ✅ Done | Progress %, kg remaining |
+| Pallet breakdown view | ✅ Done | Status per pallet |
+| Current pallet detail | ✅ Done | Cultivars, weight, status |
+| TIVE tracking embed/link | 📋 Deferred | Add later |
+| RO branding | ✅ Done | Professional green/gold theme |
 
-**Proposed URL Structure**:
+**Customer Portal URL**:
 ```
-https://rogueff.github.io/rogue-origin-apps/order/{orderHash}
+https://rogueff.github.io/rogue-origin-apps/order.html?id={base64EncodedOrderId}
 ```
 
 #### 2.3 Internal Order Management
 
 | Deliverable | Status | Notes |
 |-------------|--------|-------|
-| Order entry form | 📋 Planned | For sales rep |
-| Pallet configuration | 📋 Planned | Strains, quantities |
-| Status updates | 📋 Planned | Manual + automatic |
-| Commercial invoice generation | 📋 Planned | PDF export |
-| COA attachment workflow | 📋 Planned | Link to lab reports |
+| Order entry form | ✅ Done | orders.html modal |
+| Pallet configuration | ✅ Done | Add/remove pallets with cultivars |
+| Status updates | ✅ Done | Dropdown per order/pallet |
+| Commercial invoice generation | 📋 Pending | Future enhancement |
+| COA attachment workflow | 📋 Pending | Future enhancement |
 
-**AI Integration**:
+**New Files**:
+- `orders.html` - Internal order management UI
+- `order.html` - Customer-facing order portal
+
+**AI Integration** (Pending):
 - Add `get_order_progress(order_id)` tool
 - Enable: "When will the Hamburg order be done?"
 - Enable: "What's the status of order #123?"
