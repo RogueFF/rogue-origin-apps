@@ -464,7 +464,23 @@
       .current-stats { grid-template-columns: repeat(3, 1fr); }
       .mobile-menu-btn { display: flex !important; }
     }
-    @media (max-width: 600px) { .kpi-row { grid-template-columns: 1fr 1fr; } .header { flex-wrap: wrap; gap: 8px; } .settings-panel { width: 100%; } }
+    @media (max-width: 600px) {
+      .kpi-row { grid-template-columns: 1fr 1fr; }
+      .header { flex-wrap: wrap; gap: 8px; }
+      .settings-panel { width: 100%; left: 0; right: 0; }
+      .header-btn { padding: 10px 14px; font-size: 12px; min-height: 44px; }
+      .header-btn svg { width: 16px; height: 16px; }
+      .nav-item { padding: 14px 16px; min-height: 48px; }
+      .date-chip { padding: 8px 14px; min-height: 40px; }
+      .toolbar { flex-wrap: wrap; gap: 8px; }
+      .toolbar-btn { padding: 10px 14px; min-height: 44px; }
+    }
+
+    @media (max-width: 400px) {
+      .kpi-row { grid-template-columns: 1fr; }
+      .header-right { width: 100%; justify-content: flex-end; }
+      .welcome { font-size: 18px; }
+    }
     
     .mobile-menu-btn { display: none; background: none; border: none; color: var(--text); cursor: pointer; padding: 4px; }
     
@@ -2018,6 +2034,9 @@
     justify-content: center;
     font-size: 16px;
   }
+  .ai-chat-header-text {
+    flex: 1;
+  }
   .ai-chat-header-text h3 {
     font-size: 15px;
     font-weight: 600;
@@ -2026,6 +2045,29 @@
   .ai-chat-header-text span {
     font-size: 11px;
     opacity: 0.8;
+  }
+  .ai-voice-mode-toggle {
+    background: rgba(255,255,255,0.2);
+    border: none;
+    border-radius: 20px;
+    padding: 6px 12px;
+    color: white;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+  }
+  .ai-voice-mode-toggle:hover {
+    background: rgba(255,255,255,0.3);
+  }
+  .ai-voice-mode-toggle.active {
+    background: rgba(255,255,255,0.9);
+    color: var(--green);
+  }
+  .ai-voice-mode-toggle .icon {
+    font-size: 14px;
   }
   .ai-chat-messages {
     flex: 1;
@@ -2190,13 +2232,81 @@
   .ai-chat-send:hover { background: var(--green-dark); }
   .ai-chat-send:disabled { background: var(--text-light); cursor: not-allowed; }
   .ai-chat-send svg { width: 16px; height: 16px; fill: white; }
+
+  /* Voice Input Button */
+  .ai-voice-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: var(--bg-card);
+    border: 2px solid var(--border);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    font-size: 16px;
+  }
+  .ai-voice-btn:hover { border-color: var(--green); background: var(--bg-main); }
+  .ai-voice-btn.listening {
+    background: var(--danger);
+    border-color: var(--danger);
+    animation: pulse-voice 1.5s infinite;
+  }
+  .ai-voice-btn.not-supported { opacity: 0.4; cursor: not-allowed; }
+  @keyframes pulse-voice {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+  }
+
+  /* Speak Button on Messages */
+  .ai-speak-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    margin-right: 6px;
+    transition: all 0.2s;
+  }
+  .ai-speak-btn:hover { background: var(--bg-main); border-color: var(--green); }
+  .ai-speak-btn.speaking { background: var(--gold); border-color: var(--gold); }
+
+  /* Voice Status Indicator */
+  .ai-voice-status {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 4px;
+    display: none;
+  }
+  .ai-voice-status.active { display: block; color: var(--danger); }
+
   @media (max-width: 480px) {
     .ai-chat-panel {
-      width: calc(100vw - 24px);
-      height: calc(100vh - 100px);
-      right: -8px;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100vw;
+      height: 100vh;
+      max-height: 100vh;
+      border-radius: 0;
+      border: none;
     }
     .ai-chat-toggle { width: 54px; height: 54px; }
+    .ai-chat-header { padding: 16px; }
+    .ai-chat-header-text h3 { font-size: 16px; }
+    .ai-voice-mode-toggle { padding: 8px 14px; }
+    .ai-quick-actions { padding: 12px; gap: 8px; }
+    .ai-quick-btn { padding: 10px 14px; font-size: 13px; min-height: 44px; }
+    .ai-chat-messages { padding: 12px; }
+    .ai-chat-input-area { padding: 12px; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+    .ai-chat-input { padding: 14px 16px; font-size: 16px; } /* Prevents iOS zoom */
+    .ai-voice-btn { width: 44px; height: 44px; }
+    .ai-chat-send { width: 44px; height: 44px; }
   }
 </style>
 
@@ -2208,6 +2318,10 @@
         <h3>Rogue Origin Assistant</h3>
         <span>Ask about production, bags, crew</span>
       </div>
+      <button class="ai-voice-mode-toggle active" id="aiVoiceModeToggle" onclick="aiToggleVoiceMode()" title="Toggle voice responses">
+        <span class="icon">🔊</span>
+        <span class="label">Voice</span>
+      </button>
     </div>
     <div class="ai-quick-actions">
       <button class="ai-quick-btn" onclick="aiAskQuestion('How are we doing today?')">📊 Status</button>
@@ -2220,9 +2334,11 @@
         Hi! I can help with production status, bag counts, crew info, and more. What would you like to know?
       </div>
     </div>
+    <div class="ai-voice-status" id="aiVoiceStatus">🎤 Listening...</div>
     <div class="ai-chat-input-area">
-      <input type="text" class="ai-chat-input" id="aiInput" placeholder="Ask a question..." onkeypress="if(event.key==='Enter')aiSendMessage()">
-      <button class="ai-chat-send" onclick="aiSendMessage()">
+      <input type="text" class="ai-chat-input" id="aiInput" placeholder="Ask a question..." onkeypress="if(event.key==='Enter')aiSendMessage()" aria-label="Chat input">
+      <button class="ai-voice-btn" id="aiVoiceBtn" onclick="aiToggleVoice()" title="Voice input" aria-label="Voice input">🎤</button>
+      <button class="ai-chat-send" onclick="aiSendMessage()" aria-label="Send message">
         <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
       </button>
     </div>
@@ -2239,7 +2355,291 @@
   let aiHistory = [];
   let lastQuestion = '';  // Track for feedback
 
+  // ============================================
+  // VOICE MODE (Auto-speak responses)
+  // ============================================
+  // Default to ON - user can toggle off for text-only
+  let voiceModeEnabled = localStorage.getItem('ro_voice_mode') !== 'false';
+
+  // Initialize toggle button state on load
+  setTimeout(() => {
+    const toggle = document.getElementById('aiVoiceModeToggle');
+    if (toggle) {
+      updateVoiceModeButton(toggle);
+    }
+  }, 0);
+
+  function updateVoiceModeButton(toggle) {
+    if (voiceModeEnabled) {
+      toggle.classList.add('active');
+      toggle.querySelector('.icon').textContent = '🔊';
+      toggle.querySelector('.label').textContent = 'Voice';
+      toggle.title = 'Voice mode ON - click to switch to text only';
+    } else {
+      toggle.classList.remove('active');
+      toggle.querySelector('.icon').textContent = '💬';
+      toggle.querySelector('.label').textContent = 'Text';
+      toggle.title = 'Text mode - click to enable voice responses';
+    }
+  }
+
+  window.aiToggleVoiceMode = function() {
+    voiceModeEnabled = !voiceModeEnabled;
+    localStorage.setItem('ro_voice_mode', voiceModeEnabled ? 'true' : 'false');
+
+    const toggle = document.getElementById('aiVoiceModeToggle');
+    if (toggle) {
+      updateVoiceModeButton(toggle);
+    }
+
+    // Stop any current speech when turning off
+    if (!voiceModeEnabled && speechSynthesis.speaking) {
+      speechSynthesis.cancel();
+    }
+  };
+
+  // ============================================
+  // VOICE INPUT (Web Speech API)
+  // ============================================
+  let recognition = null;
+  let isListening = false;
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  // Initialize voice recognition if supported
+  if (SpeechRecognition) {
+    recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = localStorage.getItem('ro_language') === 'es' ? 'es-ES' : 'en-US';
+
+    recognition.onstart = function() {
+      isListening = true;
+      const btn = document.getElementById('aiVoiceBtn');
+      const status = document.getElementById('aiVoiceStatus');
+      if (btn) { btn.classList.add('listening'); btn.textContent = '⏹️'; }
+      if (status) { status.classList.add('active'); status.textContent = '🎤 Listening... (tap to stop)'; }
+    };
+
+    recognition.onend = function() {
+      isListening = false;
+      const btn = document.getElementById('aiVoiceBtn');
+      const status = document.getElementById('aiVoiceStatus');
+      if (btn) { btn.classList.remove('listening'); btn.textContent = '🎤'; }
+      if (status) status.classList.remove('active');
+    };
+
+    recognition.onresult = function(event) {
+      const input = document.getElementById('aiInput');
+      let finalTranscript = '';
+      let interimTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      // Show interim results while speaking
+      if (interimTranscript) {
+        input.value = interimTranscript;
+        input.style.color = 'var(--text-muted)';
+      }
+
+      // When final, set the value and optionally auto-send
+      if (finalTranscript) {
+        input.value = finalTranscript;
+        input.style.color = '';
+        // Auto-send after voice input completes
+        setTimeout(() => {
+          if (input.value.trim()) {
+            window.aiSendMessage();
+          }
+        }, 500);
+      }
+    };
+
+    recognition.onerror = function(event) {
+      console.error('Speech recognition error:', event.error);
+      isListening = false;
+      const btn = document.getElementById('aiVoiceBtn');
+      const status = document.getElementById('aiVoiceStatus');
+      if (btn) { btn.classList.remove('listening'); btn.textContent = '🎤'; }
+      if (status) {
+        status.classList.add('active');
+        status.textContent = event.error === 'not-allowed'
+          ? '❌ Microphone access denied'
+          : '❌ Voice error: ' + event.error;
+        setTimeout(() => status.classList.remove('active'), 3000);
+      }
+    };
+  } else {
+    // Mark voice button as not supported
+    setTimeout(() => {
+      const btn = document.getElementById('aiVoiceBtn');
+      if (btn) {
+        btn.classList.add('not-supported');
+        btn.title = 'Voice input not supported in this browser';
+      }
+    }, 100);
+  }
+
+  window.aiToggleVoice = function() {
+    if (!recognition) {
+      alert('Voice input is not supported in your browser. Try Chrome or Edge.');
+      return;
+    }
+
+    // Update language based on current setting
+    recognition.lang = localStorage.getItem('ro_language') === 'es' ? 'es-ES' : 'en-US';
+
+    if (isListening) {
+      recognition.stop();
+    } else {
+      recognition.start();
+    }
+  };
+
+  // ============================================
+  // TEXT-TO-SPEECH (Speech Synthesis API)
+  // ============================================
+  let currentUtterance = null;
+  let preferredVoices = { en: null, es: null };
+
+  // Find the best natural-sounding voice for each language
+  function loadPreferredVoices() {
+    const voices = speechSynthesis.getVoices();
+    if (!voices.length) return;
+
+    // Priority order for natural-sounding English voices
+    const enPriority = [
+      'Google US English',           // Chrome - very natural
+      'Google UK English Female',    // Chrome - natural British
+      'Google UK English Male',      // Chrome - natural British
+      'Samantha',                    // macOS - natural
+      'Karen',                       // macOS - natural Australian
+      'Daniel',                      // macOS - natural British
+      'Microsoft Zira',              // Windows - decent
+      'Microsoft David',             // Windows - decent
+    ];
+
+    // Priority order for natural-sounding Spanish voices
+    const esPriority = [
+      'Google español',              // Chrome - natural
+      'Google español de Estados Unidos', // Chrome - natural US Spanish
+      'Paulina',                     // macOS - natural Mexican
+      'Monica',                      // macOS - natural Castilian
+      'Microsoft Sabina',            // Windows
+    ];
+
+    // Find best English voice
+    for (const name of enPriority) {
+      const voice = voices.find(v => v.name.includes(name) || v.name === name);
+      if (voice) {
+        preferredVoices.en = voice;
+        console.log('Selected English voice:', voice.name);
+        break;
+      }
+    }
+    // Fallback to any English voice
+    if (!preferredVoices.en) {
+      preferredVoices.en = voices.find(v => v.lang.startsWith('en')) || null;
+    }
+
+    // Find best Spanish voice
+    for (const name of esPriority) {
+      const voice = voices.find(v => v.name.includes(name) || v.name === name);
+      if (voice) {
+        preferredVoices.es = voice;
+        console.log('Selected Spanish voice:', voice.name);
+        break;
+      }
+    }
+    // Fallback to any Spanish voice
+    if (!preferredVoices.es) {
+      preferredVoices.es = voices.find(v => v.lang.startsWith('es')) || null;
+    }
+  }
+
+  // Load voices when available (they load async in some browsers)
+  if (speechSynthesis.onvoiceschanged !== undefined) {
+    speechSynthesis.onvoiceschanged = loadPreferredVoices;
+  }
+  // Also try loading immediately
+  loadPreferredVoices();
+
+  window.aiSpeak = function(contentId, buttonEl) {
+    const content = document.getElementById(contentId);
+    if (!content) return;
+
+    // If already speaking this message, stop it
+    if (speechSynthesis.speaking && buttonEl.classList.contains('speaking')) {
+      speechSynthesis.cancel();
+      buttonEl.classList.remove('speaking');
+      buttonEl.textContent = '🔊 Speak';
+      return;
+    }
+
+    // Stop any current speech
+    if (speechSynthesis.speaking) {
+      speechSynthesis.cancel();
+      // Reset all speak buttons
+      document.querySelectorAll('.ai-speak-btn.speaking').forEach(btn => {
+        btn.classList.remove('speaking');
+        btn.textContent = '🔊 Speak';
+      });
+    }
+
+    // Get text content, stripping any HTML
+    const text = content.textContent || content.innerText;
+    if (!text.trim()) return;
+
+    // Create utterance with natural voice settings
+    currentUtterance = new SpeechSynthesisUtterance(text);
+
+    // Select the best voice for the current language
+    const isSpanish = localStorage.getItem('ro_language') === 'es';
+    const selectedVoice = isSpanish ? preferredVoices.es : preferredVoices.en;
+
+    if (selectedVoice) {
+      currentUtterance.voice = selectedVoice;
+    }
+    currentUtterance.lang = isSpanish ? 'es-ES' : 'en-US';
+
+    // Natural speech settings - smooth and conversational
+    currentUtterance.rate = 1.0;    // Natural pace
+    currentUtterance.pitch = 1.0;   // Natural pitch
+    currentUtterance.volume = 1.0;  // Full volume
+
+    // Update button state
+    buttonEl.classList.add('speaking');
+    buttonEl.textContent = '⏹️ Stop';
+
+    currentUtterance.onend = function() {
+      buttonEl.classList.remove('speaking');
+      buttonEl.textContent = '🔊 Speak';
+    };
+
+    currentUtterance.onerror = function(event) {
+      console.error('Speech synthesis error:', event.error);
+      buttonEl.classList.remove('speaking');
+      buttonEl.textContent = '🔊 Speak';
+    };
+
+    speechSynthesis.speak(currentUtterance);
+  };
+
   window.aiToggleChat = function() {
+    // Stop any ongoing voice activity when closing
+    if (speechSynthesis.speaking) {
+      speechSynthesis.cancel();
+    }
+    if (isListening && recognition) {
+      recognition.stop();
+    }
+
     const panel = document.getElementById('aiChatPanel');
     const chatIcon = document.getElementById('aiChatIcon');
     const closeIcon = document.getElementById('aiCloseIcon');
@@ -2305,17 +2705,29 @@
         aiHistory.push({ role: 'assistant', content: data.response });
         const assistEl = document.createElement('div');
         assistEl.className = 'ai-message assistant';
-        
-        // Add response content + feedback buttons
+
+        // Add response content + speak button + feedback buttons
         const responseId = 'resp-' + Date.now();
         assistEl.innerHTML = `
-          <div class="ai-response-content">${data.response}</div>
+          <div class="ai-response-content" id="content-${responseId}">${data.response}</div>
           <div class="ai-feedback" id="${responseId}">
+            <button class="ai-speak-btn" id="speak-${responseId}" onclick="aiSpeak('content-${responseId}', this)" title="Read aloud">🔊 Speak</button>
             <button class="ai-feedback-btn" onclick="aiFeedback('${responseId}', 'good', '${encodeURIComponent(lastQuestion)}')">👍 Helpful</button>
             <button class="ai-feedback-btn" onclick="aiFeedback('${responseId}', 'bad', '${encodeURIComponent(lastQuestion)}')">👎 Not quite</button>
           </div>
         `;
         messages.appendChild(assistEl);
+
+        // Auto-speak response if voice mode is enabled
+        if (voiceModeEnabled) {
+          // Small delay to ensure DOM is ready
+          setTimeout(() => {
+            const speakBtn = document.getElementById('speak-' + responseId);
+            if (speakBtn) {
+              aiSpeak('content-' + responseId, speakBtn);
+            }
+          }, 100);
+        }
       } else {
         throw new Error(data.error || 'Unknown error');
       }
