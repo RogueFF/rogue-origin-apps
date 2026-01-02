@@ -589,7 +589,6 @@ function getProductionDashboardData(startDate, endDate) {
   var timezone = ss.getSpreadsheetTimeZone();
 
   // Use date strings directly to avoid timezone issues
-  // Frontend sends YYYY-MM-DD format
   var today = Utilities.formatDate(new Date(), timezone, 'yyyy-MM-dd');
   var startStr = startDate && startDate.match(/^\d{4}-\d{2}-\d{2}$/) ? startDate : today;
   var endStr = endDate && endDate.match(/^\d{4}-\d{2}-\d{2}$/) ? endDate : today;
@@ -597,25 +596,48 @@ function getProductionDashboardData(startDate, endDate) {
   // Get scoreboard data for current production info
   var scoreboard = getScoreboardData();
 
-  // For today's data, use scoreboard (most accurate real-time data)
-  // For historical, would need enhanced daily data function
-  var isToday = (startStr === today && endStr === today);
+  // Get bag timer data for dashboard
+  var bagTimer = getBagTimerData();
 
-  // Use scoreboard data for totals - it has today's actual production
-  var totalTops = scoreboard.todayLbs || 0;  // Line 1 tops
-  var totalSmalls = 0;  // Would need separate tracking
+  // Use scoreboard data for totals
+  var totalTops = scoreboard.todayLbs || 0;
+  var totalSmalls = 0;
   var totalLbs = totalTops + totalSmalls;
-  var totalTrimmerHours = scoreboard.hoursLogged * (scoreboard.lastHourTrimmers || scoreboard.currentHourTrimmers || 1);
-  var totalBuckerHours = 0;  // Bucking tracked separately if needed
+  var hoursWorked = scoreboard.hoursLogged || 0;
+  var trimmers = scoreboard.lastHourTrimmers || scoreboard.currentHourTrimmers || 0;
+  var totalTrimmerHours = hoursWorked * trimmers;
+  var totalBuckerHours = 0;
   var totalOperatorHours = totalTrimmerHours + totalBuckerHours;
-  var avgRate = scoreboard.targetRate || 0;
-  var maxRate = avgRate;  // Would need historical tracking for true max
-  var hourlyData = [];
 
-  // Estimate costs (using default wage rates from CLAUDE.md)
-  var hourlyWage = 15.00; // Default hourly wage
+  // Calculate rates
+  var currentRate = scoreboard.lastHourTrimmers > 0 ? (scoreboard.lastHourLbs / scoreboard.lastHourTrimmers) : 0;
+  var avgRate = scoreboard.targetRate || 0;
+  var maxRate = Math.max(currentRate, avgRate);
+  var lbsPerHour = hoursWorked > 0 ? totalLbs / hoursWorked : 0;
+
+  // Build hourly data from scoreboard's hourly rates if available
+  var hourlyData = [];
+  if (scoreboard.hourlyRates && scoreboard.hourlyRates.length > 0) {
+    hourlyData = scoreboard.hourlyRates.map(function(hr) {
+      return { label: hr.timeSlot || '', rate: hr.rate || 0 };
+    });
+  }
+
+  // Estimate costs (using default wage rates)
+  var hourlyWage = 15.00;
   var totalLaborCost = totalOperatorHours * hourlyWage;
   var costPerLb = totalLbs > 0 ? totalLaborCost / totalLbs : 0;
+  var avgCostPerTop = totalTops > 0 ? totalLaborCost / totalTops : 0;
+  var avgCostPerSmall = totalSmalls > 0 ? totalLaborCost / totalSmalls : 0;
+
+  // Get weekly/historical summary
+  var dailyData = getExtendedDailyDataLine1_(ss, timezone, 7);
+  var weeklyTops = 0, weeklySmalls = 0, bestRate = 0;
+  dailyData.forEach(function(d) {
+    weeklyTops += d.totalTops || 0;
+    weeklySmalls += d.totalSmalls || 0;
+    if (d.avgRate > bestRate) bestRate = d.avgRate;
+  });
 
   // Build last completed hour info
   var lastCompleted = null;
@@ -624,12 +646,20 @@ function getProductionDashboardData(startDate, endDate) {
       strain: scoreboard.strain || 'Unknown',
       timeSlot: scoreboard.lastTimeSlot || '',
       tops: scoreboard.lastHourLbs || 0,
-      smalls: 0, // Scoreboard doesn't track smalls separately
+      smalls: 0,
       trimmers: scoreboard.lastHourTrimmers || 0,
       buckers: 0,
-      rate: scoreboard.lastHourTrimmers > 0 ? scoreboard.lastHourLbs / scoreboard.lastHourTrimmers : 0
+      rate: currentRate
     };
   }
+
+  // Format bag timer data for dashboard
+  var bagTimerFormatted = {
+    bagsToday: (bagTimer.fiveKgToday || 0) + (bagTimer.tenLbToday || 0),
+    avgTime: bagTimer.avgCycleSeconds > 0 ? Math.round(bagTimer.avgCycleSeconds / 60) + ' min' : '—',
+    avgMinutes: bagTimer.avgCycleSeconds > 0 ? bagTimer.avgCycleSeconds / 60 : 0,
+    vsTarget: bagTimer.avgCycle7Day > 0 ? Math.round((bagTimer.avgCycleSeconds - bagTimer.avgCycle7Day) / 60) + ' min' : '—'
+  };
 
   return {
     success: true,
@@ -643,15 +673,26 @@ function getProductionDashboardData(startDate, endDate) {
         totalTops: totalTops,
         totalSmalls: totalSmalls,
         totalLbs: totalLbs,
+        currentRate: currentRate,
         avgRate: avgRate,
         maxRate: maxRate,
-        trimmers: scoreboard.lastHourTrimmers || scoreboard.currentHourTrimmers || 0,
+        lbsPerHour: lbsPerHour,
+        trimmers: trimmers,
         buckers: 0,
+        hoursWorked: hoursWorked,
         totalTrimmerHours: totalTrimmerHours,
         totalBuckerHours: totalBuckerHours,
         totalOperatorHours: totalOperatorHours,
         totalLaborCost: totalLaborCost,
-        costPerLb: costPerLb
+        costPerLb: costPerLb,
+        avgCostPerTop: avgCostPerTop,
+        avgCostPerSmall: avgCostPerSmall
+      },
+      weekly: {
+        totalDays: dailyData.length,
+        totalTops: weeklyTops,
+        totalSmalls: weeklySmalls,
+        bestRate: bestRate
       },
       lastCompleted: lastCompleted,
       hourly: hourlyData,
@@ -663,7 +704,8 @@ function getProductionDashboardData(startDate, endDate) {
         todayTarget: scoreboard.todayTarget,
         todayPercentage: scoreboard.todayPercentage
       },
-      strains: [] // Can be populated with strain breakdown if needed
+      bagTimer: bagTimerFormatted,
+      strains: []
     }
   };
 }
@@ -890,6 +932,8 @@ function getExtendedDailyDataLine1_(ss, timezone, days) {
           if (!dailyMap[dateKey]) {
             dailyMap[dateKey] = {
               date: new Date(currentDate),
+              totalTops: dayData.totalLbs,
+              totalSmalls: 0,
               avgRate: dayData.totalTrimmerHours > 0 ? dayData.totalLbs / dayData.totalTrimmerHours : 0
             };
           }
@@ -924,6 +968,8 @@ function getExtendedDailyDataLine1_(ss, timezone, days) {
       if (!dailyMap[dateKey2]) {
         dailyMap[dateKey2] = {
           date: new Date(currentDate),
+          totalTops: dayData.totalLbs,
+          totalSmalls: 0,
           avgRate: dayData.totalTrimmerHours > 0 ? dayData.totalLbs / dayData.totalTrimmerHours : 0
         };
       }
