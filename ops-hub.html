@@ -2018,6 +2018,9 @@
     justify-content: center;
     font-size: 16px;
   }
+  .ai-chat-header-text {
+    flex: 1;
+  }
   .ai-chat-header-text h3 {
     font-size: 15px;
     font-weight: 600;
@@ -2026,6 +2029,29 @@
   .ai-chat-header-text span {
     font-size: 11px;
     opacity: 0.8;
+  }
+  .ai-voice-mode-toggle {
+    background: rgba(255,255,255,0.2);
+    border: none;
+    border-radius: 20px;
+    padding: 6px 12px;
+    color: white;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+  }
+  .ai-voice-mode-toggle:hover {
+    background: rgba(255,255,255,0.3);
+  }
+  .ai-voice-mode-toggle.active {
+    background: rgba(255,255,255,0.9);
+    color: var(--green);
+  }
+  .ai-voice-mode-toggle .icon {
+    font-size: 14px;
   }
   .ai-chat-messages {
     flex: 1;
@@ -2259,6 +2285,10 @@
         <h3>Rogue Origin Assistant</h3>
         <span>Ask about production, bags, crew</span>
       </div>
+      <button class="ai-voice-mode-toggle active" id="aiVoiceModeToggle" onclick="aiToggleVoiceMode()" title="Toggle voice responses">
+        <span class="icon">🔊</span>
+        <span class="label">Voice</span>
+      </button>
     </div>
     <div class="ai-quick-actions">
       <button class="ai-quick-btn" onclick="aiAskQuestion('How are we doing today?')">📊 Status</button>
@@ -2291,6 +2321,49 @@
   const AI_API_URL = 'https://script.google.com/macros/s/AKfycbxDAHSFl9cedGS49L3Lf5ztqy-SSToYigyA30ZtsdpmWNAR9H61X_Mm48JOOTGqqr-Z/exec';
   let aiHistory = [];
   let lastQuestion = '';  // Track for feedback
+
+  // ============================================
+  // VOICE MODE (Auto-speak responses)
+  // ============================================
+  // Default to ON - user can toggle off for text-only
+  let voiceModeEnabled = localStorage.getItem('ro_voice_mode') !== 'false';
+
+  // Initialize toggle button state on load
+  setTimeout(() => {
+    const toggle = document.getElementById('aiVoiceModeToggle');
+    if (toggle) {
+      updateVoiceModeButton(toggle);
+    }
+  }, 0);
+
+  function updateVoiceModeButton(toggle) {
+    if (voiceModeEnabled) {
+      toggle.classList.add('active');
+      toggle.querySelector('.icon').textContent = '🔊';
+      toggle.querySelector('.label').textContent = 'Voice';
+      toggle.title = 'Voice mode ON - click to switch to text only';
+    } else {
+      toggle.classList.remove('active');
+      toggle.querySelector('.icon').textContent = '💬';
+      toggle.querySelector('.label').textContent = 'Text';
+      toggle.title = 'Text mode - click to enable voice responses';
+    }
+  }
+
+  window.aiToggleVoiceMode = function() {
+    voiceModeEnabled = !voiceModeEnabled;
+    localStorage.setItem('ro_voice_mode', voiceModeEnabled ? 'true' : 'false');
+
+    const toggle = document.getElementById('aiVoiceModeToggle');
+    if (toggle) {
+      updateVoiceModeButton(toggle);
+    }
+
+    // Stop any current speech when turning off
+    if (!voiceModeEnabled && speechSynthesis.speaking) {
+      speechSynthesis.cancel();
+    }
+  };
 
   // ============================================
   // VOICE INPUT (Web Speech API)
@@ -2599,18 +2672,29 @@
         aiHistory.push({ role: 'assistant', content: data.response });
         const assistEl = document.createElement('div');
         assistEl.className = 'ai-message assistant';
-        
+
         // Add response content + speak button + feedback buttons
         const responseId = 'resp-' + Date.now();
         assistEl.innerHTML = `
           <div class="ai-response-content" id="content-${responseId}">${data.response}</div>
           <div class="ai-feedback" id="${responseId}">
-            <button class="ai-speak-btn" onclick="aiSpeak('content-${responseId}', this)" title="Read aloud">🔊 Speak</button>
+            <button class="ai-speak-btn" id="speak-${responseId}" onclick="aiSpeak('content-${responseId}', this)" title="Read aloud">🔊 Speak</button>
             <button class="ai-feedback-btn" onclick="aiFeedback('${responseId}', 'good', '${encodeURIComponent(lastQuestion)}')">👍 Helpful</button>
             <button class="ai-feedback-btn" onclick="aiFeedback('${responseId}', 'bad', '${encodeURIComponent(lastQuestion)}')">👎 Not quite</button>
           </div>
         `;
         messages.appendChild(assistEl);
+
+        // Auto-speak response if voice mode is enabled
+        if (voiceModeEnabled) {
+          // Small delay to ensure DOM is ready
+          setTimeout(() => {
+            const speakBtn = document.getElementById('speak-' + responseId);
+            if (speakBtn) {
+              aiSpeak('content-' + responseId, speakBtn);
+            }
+          }, 100);
+        }
       } else {
         throw new Error(data.error || 'Unknown error');
       }
