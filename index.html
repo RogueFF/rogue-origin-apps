@@ -2248,14 +2248,18 @@
     try {
       aiHistory.push({ role: 'user', content: msg });
       
+      // Use POST with text/plain to avoid CORS preflight
+      const payload = JSON.stringify({
+        action: 'chat',
+        message: msg,
+        history: aiHistory.slice(-10)
+      });
+      
       const response = await fetch(AI_API_URL + '?action=chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'chat',
-          message: msg,
-          history: aiHistory.slice(-10)
-        })
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: payload,
+        redirect: 'follow'
       });
       
       const data = await response.json();
