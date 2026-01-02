@@ -606,7 +606,8 @@ function getProductionDashboardData(startDate, endDate) {
   var totalSmalls = 0;  // Would need separate tracking
   var totalLbs = totalTops + totalSmalls;
   var totalTrimmerHours = scoreboard.hoursLogged * (scoreboard.lastHourTrimmers || scoreboard.currentHourTrimmers || 1);
-  var totalOperatorHours = totalTrimmerHours;
+  var totalBuckerHours = 0;  // Bucking tracked separately if needed
+  var totalOperatorHours = totalTrimmerHours + totalBuckerHours;
   var avgRate = scoreboard.targetRate || 0;
   var maxRate = avgRate;  // Would need historical tracking for true max
   var hourlyData = [];
