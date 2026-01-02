@@ -1,912 +1,2033 @@
-// =====================================================
-// SOP Manager - Code.gs
-// Rogue Origin Standard Operating Procedures System
-// Google Sheets Backend + Anthropic API Proxy
-// With Server-Side Caching for Performance
-// =====================================================
-
-// Configuration
-const SOP_SPREADSHEET_ID = '1iCIObV6YwAdNq0YSjFqJdf7V1HTaQEiJhBWv8M43kmQ';
-const SOP_SHEET_NAME = 'SOPs';
-const STEPS_SHEET_NAME = 'SOP_Steps';
-const REQUESTS_SHEET_NAME = 'SOP_Requests';
-const SETTINGS_SHEET_NAME = 'SOP_Settings';
-const CACHE_DURATION = 300; // 5 minutes in seconds
-
-// =====================================================
-// Cache Helpers
-// =====================================================
-
-function getCache() {
-  return CacheService.getScriptCache();
-}
-
-function getCachedData(key) {
-  const cache = getCache();
-  const cached = cache.get(key);
-  if (cached) {
-    try {
-      return JSON.parse(cached);
-    } catch (e) {
-      return null;
-    }
-  }
-  return null;
-}
-
-function setCachedData(key, data) {
-  const cache = getCache();
-  try {
-    cache.put(key, JSON.stringify(data), CACHE_DURATION);
-  } catch (e) {
-    // Cache might fail for large data, that's okay
-    console.log('Cache write failed:', e);
-  }
-}
-
-function invalidateCache() {
-  const cache = getCache();
-  cache.removeAll(['sops_data', 'requests_data', 'settings_data', 'last_modified']);
-  // Update last modified timestamp
-  cache.put('last_modified', new Date().toISOString(), 86400); // 24 hours
-}
-
-function getLastModified() {
-  const cache = getCache();
-  return cache.get('last_modified') || new Date().toISOString();
-}
-
-// =====================================================
-// Web App Entry Points
-// =====================================================
-
-function doGet(e) {
-  const action = e.parameter.action;
-  const clientLastSync = e.parameter.lastSync; // Client sends their last sync time
-  let output;
-  
-  try {
-    switch(action) {
-      case 'getSOPs':
-        output = getAllSOPsCached();
-        break;
-      case 'getSOP':
-        output = getSOP(e.parameter.id);
-        break;
-      case 'getRequests':
-        output = getAllRequestsCached();
-        break;
-      case 'getSettings':
-        output = getSettingsCached();
-        break;
-      case 'checkSync':
-        // Quick endpoint - just returns if client needs to refresh
-        const serverLastMod = getLastModified();
-        const needsSync = !clientLastSync || new Date(serverLastMod) > new Date(clientLastSync);
-        output = { 
-          success: true, 
-          needsSync: needsSync, 
-          serverTime: serverLastMod 
-        };
-        break;
-      case 'getAllData':
-        // Single call to get everything - more efficient for initial load
-        output = {
-          success: true,
-          sops: getAllSOPsCached().data || [],
-          requests: getAllRequestsCached().data || [],
-          settings: getSettingsCached().data || {},
-          lastModified: getLastModified()
-        };
-        break;
-      case 'test':
-        output = { success: true, message: 'SOP Manager API is running', timestamp: new Date().toISOString() };
-        break;
-      default:
-        // Serve the web app
-        const template = HtmlService.createTemplateFromFile('Index');
-        return template.evaluate()
-          .setTitle('SOP Manager - Rogue Origin')
-          .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
-          .addMetaTag('viewport', 'width=device-width, initial-scale=1');
-    }
-  } catch (error) {
-    output = { success: false, error: error.message };
-  }
-  
-  return ContentService
-    .createTextOutput(JSON.stringify(output))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-function doPost(e) {
-  let output;
-  
-  try {
-    const data = JSON.parse(e.postData.contents);
-    const action = data.action;
-    
-    // Handle Anthropic API proxy requests
-    if (action === 'anthropic' && data.body) {
-      return handleAnthropicRequest(data);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SOP Manager">
+  <title>SOP Manager - Rogue Origin</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    :root {
+      --gold: #e4aa4f;
+      --gold-light: #f0cb60;
+      --gold-dim: rgba(228,170,79,0.12);
+      --green: #668971;
+      --green-light: #7a9d86;
+      --green-dim: rgba(102,137,113,0.12);
+      --green-dark: #4a6b54;
+      --sungrown: #bf8e4e;
+      --sungrown-dim: rgba(191,142,78,0.12);
+      --greenhouse: #8f9263;
+      --greenhouse-dim: rgba(143,146,99,0.12);
+      --indoor: #62758d;
+      --indoor-dim: rgba(98,117,141,0.12);
+      --danger: #c45c4a;
+      --danger-dim: rgba(196,92,74,0.12);
+      --bg: #faf8f4;
+      --bg-warm: #f3efe7;
+      --bg-card: #ffffff;
+      --bg-dark: #2d3a2e;
+      --border: #e4ddd0;
+      --border-light: rgba(102,137,113,0.15);
+      --text: #2d3a2e;
+      --text-muted: #5a6b5f;
+      --text-light: #94a397;
+      --header-bg: #2d3a2e;
+      --header-text: #faf8f4;
     }
     
-    // Handle SOP CRUD operations - invalidate cache on any write
-    switch(action) {
-      case 'createSOP':
-        output = createSOP(data.sop);
-        if (output.success) invalidateCache();
-        break;
-      case 'updateSOP':
-        output = updateSOP(data.sop);
-        if (output.success) invalidateCache();
-        break;
-      case 'deleteSOP':
-        output = deleteSOP(data.id);
-        if (output.success) invalidateCache();
-        break;
-      case 'createRequest':
-        output = createRequest(data.request);
-        if (output.success) invalidateCache();
-        break;
-      case 'updateRequest':
-        output = updateRequest(data.request);
-        if (output.success) invalidateCache();
-        break;
-      case 'deleteRequest':
-        output = deleteRequest(data.id);
-        if (output.success) invalidateCache();
-        break;
-      case 'saveSettings':
-        output = saveSettings(data.settings);
-        if (output.success) invalidateCache();
-        break;
-      default:
-        output = { success: false, error: 'Unknown action: ' + action };
+    body.dark-mode {
+      --bg: #1a1f16;
+      --bg-warm: #22291e;
+      --bg-card: #252b22;
+      --border: rgba(228,170,79,0.2);
+      --border-light: rgba(228,170,79,0.1);
+      --text: #e8e4dc;
+      --text-muted: #a8b5a9;
+      --text-light: #6b7a6f;
+      --gold-dim: rgba(228,170,79,0.18);
+      --green-dim: rgba(102,137,113,0.18);
+      --sungrown-dim: rgba(191,142,78,0.18);
+      --greenhouse-dim: rgba(143,146,99,0.18);
+      --indoor-dim: rgba(98,117,141,0.18);
+      --header-bg: #12160f;
     }
     
-    // Include new lastModified time in response for writes
-    if (output.success) {
-      output.lastModified = getLastModified();
-    }
-  } catch (error) {
-    output = { success: false, error: error.message };
-  }
-  
-  return ContentService
-    .createTextOutput(JSON.stringify(output))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-// =====================================================
-// Anthropic API Proxy
-// =====================================================
-
-function handleAnthropicRequest(data) {
-  try {
-    // Get API key from Script Properties (secure server-side storage)
-    const apiKey = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
     
-    if (!apiKey) {
-      return ContentService
-        .createTextOutput(JSON.stringify({ error: 'API key not configured in Script Properties' }))
-        .setMimeType(ContentService.MimeType.JSON);
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      opacity: 0.03;
+      pointer-events: none;
+      z-index: 0;
     }
     
-    const response = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01'
-      },
-      payload: JSON.stringify(data.body),
-      muteHttpExceptions: true
-    });
+    .main { min-height: 100vh; display: flex; flex-direction: column; position: relative; z-index: 1; }
+
+    .header { 
+      background: var(--header-bg); 
+      padding: 14px 24px; 
+      display: flex; 
+      align-items: center; 
+      justify-content: space-between; 
+      border-bottom: 3px solid var(--gold);
+      position: sticky; 
+      top: 0; 
+      z-index: 40;
+    }
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .header-logo { height: 38px; }
+    .header-title { font-size: 18px; font-weight: 600; color: var(--header-text); letter-spacing: -0.3px; }
+    .header-right { display: flex; align-items: center; gap: 10px; }
     
-    return ContentService
-      .createTextOutput(response.getContentText())
-      .setMimeType(ContentService.MimeType.JSON);
-      
-  } catch (error) {
-    return ContentService
-      .createTextOutput(JSON.stringify({ error: error.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}
-
-// =====================================================
-// Spreadsheet Setup
-// =====================================================
-
-function setupSpreadsheet() {
-  const ss = SpreadsheetApp.openById(SOP_SPREADSHEET_ID);
-  
-  // Create SOPs sheet
-  let sopSheet = ss.getSheetByName(SOP_SHEET_NAME);
-  if (!sopSheet) {
-    sopSheet = ss.insertSheet(SOP_SHEET_NAME);
-    sopSheet.appendRow([
-      'ID', 'Title', 'Title_ES', 'Department', 'DocNum', 'Revision', 'Status', 
-      'Description', 'Desc_ES', 'Tags', 'CreatedAt', 'UpdatedAt'
-    ]);
-    sopSheet.setFrozenRows(1);
-    sopSheet.getRange(1, 1, 1, 12).setFontWeight('bold').setBackground('#668971').setFontColor('#fff');
-  }
-  
-  // Create Steps sheet
-  let stepsSheet = ss.getSheetByName(STEPS_SHEET_NAME);
-  if (!stepsSheet) {
-    stepsSheet = ss.insertSheet(STEPS_SHEET_NAME);
-    stepsSheet.appendRow([
-      'SOP_ID', 'StepNumber', 'Title', 'Title_ES', 'Description', 'Desc_ES',
-      'ImageURL', 'SafetyFlag', 'QualityFlag'
-    ]);
-    stepsSheet.setFrozenRows(1);
-    stepsSheet.getRange(1, 1, 1, 9).setFontWeight('bold').setBackground('#668971').setFontColor('#fff');
-  }
-  
-  // Create Requests sheet
-  let requestsSheet = ss.getSheetByName(REQUESTS_SHEET_NAME);
-  if (!requestsSheet) {
-    requestsSheet = ss.insertSheet(REQUESTS_SHEET_NAME);
-    requestsSheet.appendRow([
-      'ID', 'Title', 'Department', 'Priority', 'Assignee', 'DueDate',
-      'Notes', 'Completed', 'CompletedAt', 'CreatedAt', 'SOPId'
-    ]);
-    requestsSheet.setFrozenRows(1);
-    requestsSheet.getRange(1, 1, 1, 11).setFontWeight('bold').setBackground('#668971').setFontColor('#fff');
-  }
-  
-  // Create Settings sheet
-  let settingsSheet = ss.getSheetByName(SETTINGS_SHEET_NAME);
-  if (!settingsSheet) {
-    settingsSheet = ss.insertSheet(SETTINGS_SHEET_NAME);
-    settingsSheet.appendRow(['Key', 'Value']);
-    settingsSheet.appendRow(['departments', JSON.stringify([
-      {name:'Production',icon:'ph-factory'},
-      {name:'Packaging',icon:'ph-package'},
-      {name:'Quality',icon:'ph-seal-check'},
-      {name:'Maintenance',icon:'ph-wrench'}
-    ])]);
-    settingsSheet.appendRow(['tags', JSON.stringify([
-      {name:'safety',color:'danger'},
-      {name:'quality',color:'green'},
-      {name:'critical',color:'gold'}
-    ])]);
-    settingsSheet.setFrozenRows(1);
-    settingsSheet.getRange(1, 1, 1, 2).setFontWeight('bold').setBackground('#668971').setFontColor('#fff');
-  }
-  
-  return { success: true, message: 'Spreadsheet setup complete' };
-}
-
-// =====================================================
-// Cached Data Functions
-// =====================================================
-
-function getAllSOPsCached() {
-  // Try cache first
-  const cached = getCachedData('sops_data');
-  if (cached) {
-    return cached;
-  }
-  
-  // Cache miss - fetch from sheet
-  const result = getAllSOPs();
-  if (result.success) {
-    setCachedData('sops_data', result);
-  }
-  return result;
-}
-
-function getAllRequestsCached() {
-  const cached = getCachedData('requests_data');
-  if (cached) {
-    return cached;
-  }
-  
-  const result = getAllRequests();
-  if (result.success) {
-    setCachedData('requests_data', result);
-  }
-  return result;
-}
-
-function getSettingsCached() {
-  const cached = getCachedData('settings_data');
-  if (cached) {
-    return cached;
-  }
-  
-  const result = getSettings();
-  if (result.success) {
-    setCachedData('settings_data', result);
-  }
-  return result;
-}
-
-// =====================================================
-// SOP CRUD Operations
-// =====================================================
-
-function getAllSOPs() {
-  try {
-    const ss = SpreadsheetApp.openById(SOP_SPREADSHEET_ID);
-    const sopSheet = ss.getSheetByName(SOP_SHEET_NAME);
-    const stepsSheet = ss.getSheetByName(STEPS_SHEET_NAME);
+    .header-btn { 
+      background: rgba(255,255,255,0.08); 
+      color: var(--header-text); 
+      border: 1px solid rgba(255,255,255,0.15); 
+      padding: 8px 14px; 
+      border-radius: 8px; 
+      font-weight: 500; 
+      font-size: 13px; 
+      cursor: pointer; 
+      display: flex; 
+      align-items: center; 
+      gap: 6px; 
+      transition: all 0.2s; 
+    }
+    .header-btn:hover { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.25); }
+    .header-btn.primary { background: var(--gold); color: var(--header-bg); border-color: var(--gold); font-weight: 600; }
+    .header-btn.primary:hover { background: var(--gold-light); }
     
-    if (!sopSheet) {
-      return { success: true, data: [] };
+    .dark-mode-toggle { 
+      background: rgba(255,255,255,0.08); 
+      border: 1px solid rgba(255,255,255,0.15); 
+      border-radius: 8px; 
+      padding: 8px 12px; 
+      cursor: pointer; 
+      display: flex; 
+      align-items: center; 
+      gap: 6px; 
+      font-size: 13px; 
+      color: var(--header-text); 
+    }
+    .dark-mode-toggle:hover { background: rgba(255,255,255,0.15); }
+    body.dark-mode .dark-mode-toggle { background: var(--gold-dim); border-color: var(--gold); color: var(--gold); }
+
+    .toolbar { 
+      background: var(--bg-card); 
+      padding: 14px 24px; 
+      border-bottom: 1px solid var(--border); 
+      display: flex; 
+      align-items: center; 
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .toolbar-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .toolbar-right { display: flex; align-items: center; gap: 8px; }
+    
+    .search-box { position: relative; width: 240px; }
+    .search-box input { 
+      width: 100%;
+      background: var(--bg); 
+      border: 1px solid var(--border); 
+      border-radius: 8px; 
+      padding: 10px 12px 10px 38px; 
+      color: var(--text); 
+      font-size: 13px; 
+    }
+    .search-box input:focus { outline: none; border-color: var(--green); background: var(--bg-card); }
+    .search-box input::placeholder { color: var(--text-light); }
+    .search-box i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-light); }
+    
+    .filter-select { 
+      background: var(--bg); 
+      border: 1px solid var(--border); 
+      border-radius: 8px; 
+      padding: 10px 12px; 
+      color: var(--text); 
+      font-size: 13px; 
+      cursor: pointer;
+      min-width: 130px;
+    }
+    .filter-select:focus { outline: none; border-color: var(--green); }
+    
+    .view-toggle { display: flex; background: var(--bg); border-radius: 8px; padding: 3px; border: 1px solid var(--border); }
+    .view-toggle button { 
+      padding: 7px 12px; 
+      border: none; 
+      border-radius: 6px; 
+      cursor: pointer; 
+      background: transparent; 
+      color: var(--text-muted);
+      font-size: 16px;
+    }
+    .view-toggle button.active { background: var(--green); color: #fff; }
+
+    .content { padding: 24px; flex: 1; background: var(--bg); }
+    
+    .stats-bar { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+    .stat-card { 
+      background: var(--bg-card); 
+      border: 1px solid var(--border); 
+      border-radius: 12px; 
+      padding: 18px 22px; 
+      min-width: 130px;
+      flex: 1;
+      max-width: 180px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      border-top: 3px solid var(--border);
+    }
+    .stat-card:nth-child(1) { border-top-color: var(--gold); }
+    .stat-card:nth-child(2) { border-top-color: var(--green); }
+    .stat-card:nth-child(3) { border-top-color: var(--sungrown); }
+    .stat-card:nth-child(4) { border-top-color: var(--danger); }
+    .stat-card:nth-child(5) { border-top-color: var(--indoor); }
+    .stat-card-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-light); margin-bottom: 6px; font-weight: 600; }
+    .stat-card-value { font-size: 32px; font-weight: 700; }
+    .stat-card-value.gold { color: var(--gold); }
+    .stat-card-value.danger { color: var(--danger); }
+    .stat-card-value.green { color: var(--green); }
+    .stat-card-value.sungrown { color: var(--sungrown); }
+    .stat-card-value.indoor { color: var(--indoor); }
+
+    .sop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+    
+    .sop-card { 
+      background: var(--bg-card); 
+      border: 1px solid var(--border); 
+      border-radius: 12px; 
+      overflow: hidden; 
+      transition: all 0.2s;
+      cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .sop-card:hover { 
+      transform: translateY(-3px); 
+      box-shadow: 0 8px 24px rgba(45,58,46,0.12); 
+      border-color: var(--green); 
     }
     
-    // Get all SOPs
-    const sopData = sopSheet.getDataRange().getValues();
-    if (sopData.length <= 1) {
-      return { success: true, data: [] };
+    .sop-card-header { padding: 16px 18px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; background: linear-gradient(to bottom, var(--bg-card), var(--bg)); }
+    .sop-card-title { font-size: 15px; font-weight: 600; margin-bottom: 5px; line-height: 1.3; color: var(--text); }
+    .sop-card-dept { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 4px; }
+    .sop-card-rev { background: var(--green); color: #fff; font-size: 10px; font-weight: 600; padding: 4px 10px; border-radius: 6px; white-space: nowrap; }
+    .sop-card-rev.draft { background: var(--gold); color: var(--header-bg); }
+    
+    .sop-card-preview { height: 100px; background: var(--bg-warm); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .sop-card-preview img { width: 100%; height: 100%; object-fit: cover; }
+    .sop-card-preview-empty { color: var(--text-light); display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 12px; }
+    .sop-card-preview-empty i { font-size: 28px; opacity: 0.5; }
+    
+    .sop-card-meta { padding: 12px 18px; display: flex; justify-content: space-between; align-items: center; background: var(--bg); }
+    .sop-card-steps { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 5px; font-weight: 500; }
+    .sop-card-tags { display: flex; gap: 5px; flex-wrap: wrap; }
+    .sop-tag { background: var(--gold-dim); color: var(--gold); font-size: 9px; font-weight: 700; padding: 3px 7px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
+    .sop-tag.danger { background: var(--danger-dim); color: var(--danger); }
+    .sop-tag.green { background: var(--green-dim); color: var(--green); }
+    .sop-tag.sungrown { background: var(--sungrown-dim); color: var(--sungrown); }
+    .sop-tag.greenhouse { background: var(--greenhouse-dim); color: var(--greenhouse); }
+    .sop-tag.indoor, .sop-tag.blue { background: var(--indoor-dim); color: var(--indoor); }
+    .sop-tag.purple { background: rgba(139,92,246,0.12); color: #8b5cf6; }
+    
+    .sop-card-actions { display: flex; border-top: 1px solid var(--border); background: var(--bg-card); }
+    .sop-card-actions button { 
+      flex: 1; 
+      background: transparent; 
+      border: none; 
+      border-right: 1px solid var(--border); 
+      padding: 12px; 
+      cursor: pointer; 
+      color: var(--text-muted);
+      transition: all 0.15s;
+      font-size: 15px;
+    }
+    .sop-card-actions button:last-child { border-right: none; }
+    .sop-card-actions button:hover { background: var(--green-dim); color: var(--green); }
+    .sop-card-actions button.qr-btn:hover { background: var(--gold-dim); color: var(--gold); }
+    .sop-card-actions button.del-btn:hover { background: var(--danger-dim); color: var(--danger); }
+
+    .sop-list { display: none; }
+    .sop-list.active { display: block; }
+    .sop-grid.hidden { display: none; }
+    
+    .sop-table { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+    .sop-table table { width: 100%; border-collapse: collapse; }
+    .sop-table th { text-align: left; padding: 14px 18px; background: var(--bg); font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); font-weight: 700; border-bottom: 1px solid var(--border); }
+    .sop-table td { padding: 14px 18px; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .sop-table tr:last-child td { border-bottom: none; }
+    .sop-table tr:hover { background: var(--bg); cursor: pointer; }
+    .sop-table .title-cell { font-weight: 600; color: var(--green); }
+    .sop-table .actions-cell { display: flex; gap: 6px; }
+    .sop-table .actions-cell button { background: var(--bg); border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px; cursor: pointer; color: var(--text-muted); font-size: 14px; }
+    .sop-table .actions-cell button:hover { border-color: var(--green); color: var(--green); background: var(--green-dim); }
+
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .empty-state i { font-size: 64px; margin-bottom: 16px; color: var(--green); opacity: 0.4; }
+    .empty-state h3 { font-size: 18px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+    .empty-state p { margin-bottom: 20px; }
+
+    .loading-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .loading-state .spinner { width: 48px; height: 48px; border: 4px solid var(--border); border-top-color: var(--green); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .modal { position: fixed; inset: 0; background: rgba(26,31,22,0.6); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 100; backdrop-filter: blur(4px); }
+    .modal.active { display: flex; }
+    
+    .modal-box { background: var(--bg-card); border-radius: 16px; width: 100%; max-width: 900px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+    .modal-box.wide { max-width: 1100px; }
+    .modal-box.small { max-width: 500px; }
+    
+    .modal-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: var(--header-bg); }
+    .modal-header h2 { font-size: 17px; font-weight: 600; display: flex; align-items: center; gap: 10px; color: var(--header-text); }
+    .modal-close { background: rgba(255,255,255,0.1); border: none; color: var(--header-text); font-size: 20px; cursor: pointer; padding: 6px 10px; border-radius: 6px; line-height: 1; }
+    .modal-close:hover { background: rgba(255,255,255,0.2); }
+    
+    .modal-body { padding: 24px; overflow-y: auto; flex: 1; background: var(--bg-card); }
+    .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; background: var(--bg); }
+    
+    .modal-footer .header-btn { 
+      background: var(--bg-card); 
+      color: var(--text-muted); 
+      border: 1px solid var(--border); 
+    }
+    .modal-footer .header-btn:hover { background: var(--green-dim); color: var(--green); border-color: var(--green); }
+    .modal-footer .header-btn.primary { background: var(--green); color: #fff; border-color: var(--green); }
+    .modal-footer .header-btn.primary:hover { background: var(--green-dark); }
+
+    .form-group { margin-bottom: 20px; }
+    .form-label { display: block; font-size: 11px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .form-input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; color: var(--text); font-size: 14px; }
+    .form-input:focus { outline: none; border-color: var(--green); background: var(--bg-card); }
+    textarea.form-input { min-height: 80px; resize: vertical; font-family: inherit; }
+    
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+    .steps-section { margin-top: 24px; }
+    .steps-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .steps-header h3 { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; color: var(--text); }
+    .steps-list { display: flex; flex-direction: column; gap: 12px; }
+    
+    .step-item { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px; display: flex; gap: 16px; }
+    .step-item:hover { border-color: var(--green); }
+    .step-number { width: 32px; height: 32px; background: var(--green); color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0; }
+    .step-content { flex: 1; min-width: 0; }
+    .step-title-input { width: 100%; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 10px; color: var(--text); font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+    .step-title-input:focus { outline: none; border-color: var(--green); }
+    .step-desc-input { width: 100%; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 10px; color: var(--text); font-size: 13px; min-height: 50px; resize: vertical; font-family: inherit; }
+    .step-desc-input:focus { outline: none; border-color: var(--green); }
+    
+    .step-image { width: 140px; flex-shrink: 0; }
+    .step-image-preview { width: 100%; height: 120px; background: var(--bg-card); border: 2px dashed var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; cursor: pointer; position: relative; }
+    .step-image-preview:hover { border-color: var(--gold); background: var(--gold-dim); }
+    .step-image-preview.has-image { border-style: solid; }
+    .step-image-preview img { width: 100%; height: 100%; object-fit: cover; }
+    .step-image-preview .placeholder { color: var(--text-light); font-size: 10px; text-align: center; }
+    .step-image-preview .placeholder i { font-size: 20px; display: block; margin-bottom: 4px; }
+    
+    .step-icons { display: flex; gap: 6px; margin-top: 8px; }
+    .step-icon-btn { width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--text-muted); }
+    .step-icon-btn:hover { border-color: var(--gold); color: var(--gold); }
+    .step-icon-btn.active { background: var(--gold); color: #fff; border-color: var(--gold); }
+    .step-icon-btn.safety.active { background: var(--danger); border-color: var(--danger); }
+    .step-icon-btn.quality.active { background: var(--green); border-color: var(--green); }
+    
+    .step-actions { display: flex; flex-direction: column; gap: 4px; }
+    .step-action-btn { width: 30px; height: 30px; border: none; border-radius: 6px; background: var(--bg-card); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 14px; }
+    .step-action-btn:hover { background: var(--border); }
+    .step-action-btn.delete:hover { background: var(--danger-dim); color: var(--danger); }
+
+    .inline-add-btn { width: 38px; height: 38px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 16px; flex-shrink: 0; }
+    .inline-add-btn:hover { border-color: var(--green); color: var(--green); background: var(--green-dim); }
+    .inline-add-btn.save { background: var(--green); color: #fff; border-color: var(--green); }
+    .inline-add-btn.save:hover { background: var(--green-dark); }
+    .inline-add-btn.cancel { background: var(--bg); }
+    .inline-add-btn.cancel:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-dim); }
+    
+    .tag-item { display: flex; align-items: center; gap: 4px; }
+    .tag-item .tag-delete { background: none; border: none; color: var(--text-light); cursor: pointer; font-size: 12px; padding: 2px; border-radius: 3px; opacity: 0.6; }
+    .tag-item .tag-delete:hover { color: var(--danger); opacity: 1; }
+    .add-tag-btn { background: var(--bg); border: 1px dashed var(--border); border-radius: 6px; padding: 3px 10px; font-size: 11px; color: var(--text-light); cursor: pointer; display: flex; align-items: center; gap: 4px; }
+    .add-tag-btn:hover { border-color: var(--green); color: var(--green); border-style: solid; }
+    .tag-color-picker-mini { display: flex; gap: 4px; }
+    .tag-color-picker-mini .color-dot { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
+    .tag-color-picker-mini .color-dot:hover { transform: scale(1.15); }
+    .tag-color-picker-mini .color-dot.selected { border-color: var(--text); }
+
+    .qr-modal-content { text-align: center; padding: 20px; }
+    .qr-url { background: var(--bg); padding: 12px; border-radius: 8px; font-size: 11px; color: var(--text-muted); word-break: break-all; margin-top: 16px; }
+
+    .view-sop-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+    .view-sop-title { font-size: 22px; font-weight: 700; margin-bottom: 8px; color: var(--text); }
+    .view-sop-meta { display: flex; gap: 16px; flex-wrap: wrap; }
+    .view-sop-meta-item { font-size: 13px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+    .view-sop-qr { width: 90px; height: 90px; background: #fff; border-radius: 8px; padding: 6px; flex-shrink: 0; border: 1px solid var(--border); }
+    
+    .view-step { display: flex; gap: 16px; padding: 18px; background: var(--bg); border-radius: 10px; margin-bottom: 12px; border-left: 4px solid var(--green); }
+    .view-step-number { width: 40px; height: 40px; background: var(--green); color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; flex-shrink: 0; }
+    .view-step-content { flex: 1; }
+    .view-step-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; color: var(--text); }
+    .view-step-title .icon.safety { color: var(--danger); }
+    .view-step-title .icon.quality { color: var(--green); }
+    .view-step-desc { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+    .view-step-image { width: 160px; height: 100px; border-radius: 8px; overflow: hidden; flex-shrink: 0; border: 2px solid var(--border); }
+    .view-step-image img { width: 100%; height: 100%; object-fit: cover; }
+
+    .settings-section { margin-bottom: 28px; }
+    .settings-section-title { font-size: 13px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; color: var(--text); }
+    .settings-section-title i { color: var(--green); font-size: 18px; }
+    .settings-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    .settings-item { display: flex; align-items: center; gap: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+    .settings-item:hover { border-color: var(--green); }
+    .settings-item .item-delete { background: none; border: none; color: var(--text-light); cursor: pointer; padding: 2px; border-radius: 4px; font-size: 14px; }
+    .settings-item .item-delete:hover { color: var(--danger); background: var(--danger-dim); }
+    .settings-add-form { display: flex; gap: 8px; margin-top: 12px; }
+    .settings-add-form input { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 13px; color: var(--text); }
+    .settings-add-form input:focus { outline: none; border-color: var(--green); }
+    .settings-add-btn { background: var(--green); color: white; border: none; border-radius: 8px; padding: 10px 14px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+    .settings-add-btn:hover { background: var(--green-dark); }
+    .settings-note { font-size: 11px; color: var(--text-light); margin-top: 8px; }
+    .tag-color-picker { display: flex; gap: 6px; align-items: center; }
+    .tag-color-option { width: 24px; height: 24px; border-radius: 6px; border: 2px solid transparent; cursor: pointer; }
+    .tag-color-option:hover { transform: scale(1.1); }
+    .tag-color-option.selected { border-color: var(--text); box-shadow: 0 0 0 2px var(--bg-card); }
+    .tag-color-option.gold { background: var(--gold); }
+    .tag-color-option.green { background: var(--green); }
+    .tag-color-option.danger { background: var(--danger); }
+    .tag-color-option.sungrown { background: var(--sungrown); }
+    .tag-color-option.greenhouse { background: var(--greenhouse); }
+    .tag-color-option.indoor { background: var(--indoor); }
+
+    .lang-toggle { display: flex; background: var(--bg); border-radius: 8px; padding: 3px; border: 1px solid var(--border); }
+    .lang-toggle button { padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; background: transparent; color: var(--text-muted); font-size: 12px; font-weight: 600; }
+    .lang-toggle button.active { background: var(--green); color: #fff; }
+    .lang-toggle button:hover:not(.active) { background: var(--bg-warm); }
+    .translate-btn { background: var(--sungrown-dim); border: 1px solid var(--sungrown); color: var(--sungrown); padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+    .translate-btn:hover { background: var(--sungrown); color: #fff; }
+    .translate-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .translation-notice { background: var(--sungrown-dim); border: 1px solid var(--sungrown); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: var(--sungrown); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+
+    .pdf-layout-options { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+    .pdf-layout-option { cursor: pointer; }
+    .pdf-layout-option input { display: none; }
+    .pdf-layout-card { width: 100px; padding: 12px; border: 2px solid var(--border); border-radius: 10px; text-align: center; transition: all 0.2s; background: var(--bg-card); }
+    .pdf-layout-card:hover { border-color: var(--green); }
+    .pdf-layout-option input:checked + .pdf-layout-card { border-color: var(--green); background: var(--green-dim); }
+    .pdf-layout-preview { height: 50px; background: var(--bg); border-radius: 4px; margin-bottom: 8px; padding: 6px; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
+    .pdf-layout-preview .line { height: 4px; background: var(--border); border-radius: 2px; }
+    .pdf-layout-preview .line.short { width: 60%; }
+    .pdf-layout-preview.grid-preview { display: grid; gap: 4px; align-content: center; }
+    .pdf-layout-preview.grid-preview.cols-1 { grid-template-columns: 1fr; }
+    .pdf-layout-preview.grid-preview.cols-2 { grid-template-columns: 1fr 1fr; }
+    .pdf-layout-preview .box { background: var(--green); opacity: 0.3; border-radius: 2px; min-height: 16px; }
+    .pdf-layout-card span { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+
+    .request-badge { background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 10px; margin-left: 4px; }
+
+    .requests-tabs { display: flex; gap: 4px; margin-bottom: 16px; background: var(--bg); padding: 4px; border-radius: 10px; }
+    .requests-tab { flex: 1; padding: 10px 16px; border: none; background: transparent; color: var(--text-muted); font-size: 13px; font-weight: 500; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
+    .requests-tab:hover { background: var(--bg-card); }
+    .requests-tab.active { background: var(--bg-card); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .requests-tab .tab-count { background: var(--gold-dim); color: var(--gold); padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 6px; }
+    .requests-tab.active .tab-count { background: var(--gold); color: #fff; }
+    
+    .request-list { display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto; }
+    .request-item { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px; transition: all 0.2s; }
+    .request-item:hover { border-color: var(--green); }
+    .request-item.completed { opacity: 0.6; }
+    .request-item-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
+    .request-item-title { font-weight: 600; color: var(--text); font-size: 14px; flex: 1; }
+    .request-item-priority { font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 6px; text-transform: uppercase; }
+    .request-item-priority.high { background: var(--danger-dim); color: var(--danger); }
+    .request-item-priority.medium { background: var(--gold-dim); color: var(--gold); }
+    .request-item-priority.low { background: var(--green-dim); color: var(--green); }
+    .request-item-desc { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; line-height: 1.5; }
+    .request-item-meta { display: flex; gap: 16px; font-size: 11px; color: var(--text-light); flex-wrap: wrap; align-items: center; }
+    .request-item-meta i { margin-right: 4px; }
+    .request-item-actions { display: flex; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+    .request-item-actions button { padding: 6px 12px; font-size: 11px; border-radius: 6px; border: none; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s; }
+    .request-action-create { background: var(--green); color: #fff; }
+    .request-action-create:hover { background: var(--green-dark); }
+    .request-action-complete { background: var(--gold-dim); color: var(--gold); }
+    .request-action-complete:hover { background: var(--gold); color: #fff; }
+    .request-action-delete { background: var(--danger-dim); color: var(--danger); }
+    .request-action-delete:hover { background: var(--danger); color: #fff; }
+    .request-action-edit { background: var(--bg-card); color: var(--text-muted); border: 1px solid var(--border); }
+    .request-action-edit:hover { border-color: var(--green); color: var(--green); }
+    
+    .request-empty { text-align: center; padding: 40px 20px; color: var(--text-muted); }
+    .request-empty i { font-size: 48px; margin-bottom: 12px; opacity: 0.3; }
+    .request-empty p { font-size: 14px; }
+    
+    .add-request-form { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+    .add-request-form .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .add-request-form .form-input { font-size: 13px; padding: 10px 12px; }
+    .add-request-form .form-label { font-size: 11px; margin-bottom: 4px; }
+
+    .ai-improve-btn { background: linear-gradient(135deg, var(--gold) 0%, var(--sungrown) 100%); color: #fff; border: none; padding: 4px 10px; border-radius: 6px; font-size: 10px; font-weight: 600; cursor: pointer; margin-left: 8px; transition: all 0.2s; display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
+    .ai-improve-btn:hover { transform: scale(1.05); box-shadow: 0 2px 8px rgba(228,170,79,0.4); }
+    .ai-improve-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    .ai-improve-btn.loading { animation: pulse 1s infinite; }
+    .ai-improve-btn i { font-size: 12px; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+    
+    .step-ai-btn { background: linear-gradient(135deg, var(--gold) 0%, var(--sungrown) 100%); color: #fff; border: none; width: 28px; height: 28px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+    .step-ai-btn:hover { transform: scale(1.1); box-shadow: 0 2px 8px rgba(228,170,79,0.4); }
+    .step-ai-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    .step-ai-btn i { font-size: 14px; }
+
+    .lang-switch { background: var(--gold); color: #fff; border: none; padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s; }
+    .lang-switch:hover { background: var(--gold-light); transform: scale(1.05); }
+    .lang-switch i { font-size: 16px; }
+
+    .toast { position: fixed; bottom: 24px; right: 24px; padding: 14px 20px; border-radius: 10px; color: #fff; font-size: 14px; z-index: 200; box-shadow: 0 4px 20px rgba(0,0,0,0.25); display: none; align-items: center; gap: 10px; }
+    .toast.show { display: flex; animation: slideIn 0.3s ease; }
+    .toast.success { background: var(--green); }
+    .toast.error { background: var(--danger); }
+    @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    @media (max-width: 768px) {
+      .sop-grid { grid-template-columns: 1fr; }
+      .form-row, .form-row-3 { grid-template-columns: 1fr; }
+      .step-item { flex-direction: column; }
+      .step-image { width: 100%; }
+      .toolbar-left { width: 100%; }
+      .search-box { width: 100%; }
+      .header-right { flex-wrap: wrap; }
     }
     
-    const sopHeaders = sopData.shift();
+    @media (min-width: 768px) and (max-width: 1024px) {
+      .sop-grid { grid-template-columns: repeat(2, 1fr); gap: 16px; }
+      .form-input, .filter-select { font-size: 16px !important; padding: 14px 16px; }
+      .step-title-input, .step-desc-input { font-size: 16px !important; padding: 14px; }
+      .step-action-btn, .step-ai-btn { width: 44px; height: 44px; }
+      .step-icon-btn { width: 44px; height: 44px; }
+      .header-btn { padding: 12px 18px; font-size: 14px; }
+      .inline-add-btn { width: 44px; height: 44px; }
+    }
     
-    // Get all steps
-    let allSteps = [];
-    if (stepsSheet) {
-      const stepsData = stepsSheet.getDataRange().getValues();
-      if (stepsData.length > 1) {
-        stepsData.shift(); // Remove header
-        allSteps = stepsData.map(row => ({
-          sopId: row[0],
-          stepNumber: row[1],
-          title: row[2],
-          title_es: row[3],
-          description: row[4],
-          desc_es: row[5],
-          image: row[6],
-          safety: row[7] === true || row[7] === 'TRUE',
-          quality: row[8] === true || row[8] === 'TRUE'
-        }));
+    @media (pointer: coarse) {
+      .header-btn, .inline-add-btn, .step-action-btn, .step-ai-btn, .step-icon-btn, 
+      .sop-card-actions button, .settings-add-btn, .request-item-actions button {
+        min-height: 44px;
+        min-width: 44px;
       }
     }
+  </style>
+</head>
+<body>
+  <main class="main">
+    <header class="header">
+      <div class="header-left">
+        <img src="https://i.imgur.com/UYEbNiI.png" alt="Rogue Origin" class="header-logo">
+        <span class="header-title">Standard Operating Procedures</span>
+      </div>
+      <div class="header-right">
+        <button class="lang-switch" onclick="toggleAppLang()" title="Switch Language"><span id="appLangLabel">EN</span> <i class="ph-duotone ph-translate"></i></button>
+        <button class="dark-mode-toggle" onclick="toggleDarkMode()"><i class="ph-duotone ph-moon"></i><span>Dark</span></button>
+        <button class="header-btn" onclick="openSettingsModal()"><i class="ph-duotone ph-gear"></i></button>
+        <button class="header-btn" onclick="openRequestsModal()" id="requestsBtn"><i class="ph-duotone ph-clipboard-text"></i> Requests <span class="request-badge" id="requestBadge" style="display:none;">0</span></button>
+        <button class="header-btn" onclick="refresh()"><i class="ph-duotone ph-arrows-clockwise"></i></button>
+        <button class="header-btn primary" onclick="openCreateModal()"><i class="ph-duotone ph-plus"></i> New SOP</button>
+      </div>
+    </header>
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <div class="search-box"><i class="ph-duotone ph-magnifying-glass"></i><input type="text" id="searchInput" placeholder="Search SOPs..." oninput="filterSOPs()"></div>
+        <select class="filter-select" id="statusFilter" onchange="filterSOPs()"><option value="">All SOPs</option><option value="published">Published</option><option value="draft">Drafts</option></select>
+        <select class="filter-select" id="deptFilter" onchange="filterSOPs()"></select>
+        <select class="filter-select" id="tagFilter" onchange="filterSOPs()"></select>
+      </div>
+      <div class="toolbar-right">
+        <div class="view-toggle">
+          <button class="active" onclick="setView('grid')" id="gridViewBtn"><i class="ph-duotone ph-squares-four"></i></button>
+          <button onclick="setView('list')" id="listViewBtn"><i class="ph-duotone ph-list"></i></button>
+        </div>
+      </div>
+    </div>
+    <div class="content">
+      <div class="stats-bar">
+        <div class="stat-card"><div class="stat-card-label">Total</div><div class="stat-card-value gold" id="statTotal">0</div></div>
+        <div class="stat-card"><div class="stat-card-label">Published</div><div class="stat-card-value green" id="statPublished">0</div></div>
+        <div class="stat-card"><div class="stat-card-label">Drafts</div><div class="stat-card-value sungrown" id="statDrafts">0</div></div>
+        <div class="stat-card" style="cursor:pointer;" onclick="openRequestsModal()"><div class="stat-card-label">Requests</div><div class="stat-card-value danger" id="statRequests">0</div></div>
+        <div class="stat-card"><div class="stat-card-label">This Month</div><div class="stat-card-value indoor" id="statMonth">0</div></div>
+      </div>
+      <div id="loadingState" class="loading-state"><div class="spinner"></div><p>Loading SOPs from Google Sheets...</p></div>
+      <div class="sop-grid" id="sopGrid" style="display:none;"></div>
+      <div class="sop-list" id="sopList"><div class="sop-table"><table><thead><tr><th>Title</th><th>Department</th><th>Steps</th><th>Status</th><th>Updated</th><th>Actions</th></tr></thead><tbody id="sopTableBody"></tbody></table></div></div>
+      <div class="empty-state" id="emptyState" style="display:none;"><i class="ph-duotone ph-files"></i><h3>No SOPs Found</h3><p>Create your first SOP to get started.</p><button class="header-btn primary" onclick="openCreateModal()"><i class="ph-duotone ph-plus"></i> Create SOP</button></div>
+    </div>
+  </main>
+
+  <!-- Edit Modal -->
+  <div class="modal" id="editModal">
+    <div class="modal-box wide">
+      <div class="modal-header">
+        <h2 id="modalTitle"><i class="ph-duotone ph-file-text"></i> Create New SOP</h2>
+        <button class="modal-close" onclick="closeModal('editModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">SOP Title * <button type="button" class="ai-improve-btn" onclick="aiImproveTitle()" title="AI Improve"><i class="ph-duotone ph-sparkle"></i> Improve</button></label>
+            <input type="text" class="form-input" id="sopTitle" placeholder="e.g., Trimming Machine Setup">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Department *</label>
+            <div style="display:flex;gap:8px;">
+              <select class="form-input" id="sopDept" style="flex:1;"></select>
+              <button type="button" class="inline-add-btn" onclick="showInlineAdd('dept')" title="Add Department"><i class="ph-duotone ph-plus"></i></button>
+            </div>
+            <div class="inline-add-field" id="inlineAddDept" style="display:none;margin-top:8px;">
+              <div style="display:flex;gap:8px;">
+                <input type="text" class="form-input" id="newDeptInline" placeholder="New department..." style="flex:1;" onkeypress="if(event.key==='Enter'){addDeptInline();event.preventDefault();}">
+                <button type="button" class="inline-add-btn save" onclick="addDeptInline()"><i class="ph-duotone ph-check"></i></button>
+                <button type="button" class="inline-add-btn cancel" onclick="hideInlineAdd('dept')"><i class="ph-duotone ph-x"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="form-group" style="background:var(--bg);padding:14px;border-radius:10px;border:1px solid var(--border);">
+          <label class="form-label" style="margin-bottom:10px;">Writing Language</label>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div class="lang-toggle" id="editLangToggle">
+              <button class="active" onclick="setEditLang('en')">English</button>
+              <button onclick="setEditLang('es')">Español</button>
+            </div>
+            <button type="button" class="translate-btn" id="autoTranslateBtn" onclick="autoTranslateSOP()">
+              <i class="ph-duotone ph-translate"></i> <span id="translateBtnText">Auto-translate to Español</span>
+            </button>
+            <span style="font-size:11px;color:var(--text-light);">Creates both language versions</span>
+          </div>
+        </div>
+        <div class="form-row-3">
+          <div class="form-group">
+            <label class="form-label">Document Number</label>
+            <input type="text" class="form-input" id="sopDocNum" placeholder="SOP-001">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Revision</label>
+            <input type="text" class="form-input" id="sopRevision" value="1.0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Status</label>
+            <select class="form-input" id="sopStatus">
+              <option value="draft">Draft</option>
+              <option value="published">Published</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description <button type="button" class="ai-improve-btn" onclick="aiImproveDescription()" title="AI Improve"><i class="ph-duotone ph-sparkle"></i> Improve</button></label>
+          <textarea class="form-input" id="sopDesc" placeholder="Brief description..."></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tags</label>
+          <div id="editTagsList" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;"></div>
+          <div class="inline-add-field" id="inlineAddTag" style="display:none;margin-top:10px;">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <input type="text" class="form-input" id="newTagInline" placeholder="New tag..." style="width:140px;" onkeypress="if(event.key==='Enter'){addTagInline();event.preventDefault();}">
+              <div class="tag-color-picker-mini" id="inlineTagColors"></div>
+              <button type="button" class="inline-add-btn save" onclick="addTagInline()"><i class="ph-duotone ph-check"></i></button>
+              <button type="button" class="inline-add-btn cancel" onclick="hideInlineAdd('tag')"><i class="ph-duotone ph-x"></i></button>
+            </div>
+          </div>
+        </div>
+        <div class="steps-section">
+          <div class="steps-header">
+            <h3><i class="ph-duotone ph-list-numbers"></i> Steps</h3>
+            <div style="display:flex;gap:8px;">
+              <button class="ai-improve-btn" id="aiImproveAllBtn" onclick="aiImproveAllSteps()" style="padding:6px 12px;"><i class="ph-duotone ph-sparkle"></i> AI Improve All</button>
+              <button class="header-btn" style="background:var(--bg);color:var(--text-muted);border:1px solid var(--border);" onclick="addStep()"><i class="ph-duotone ph-plus"></i> Add</button>
+            </div>
+          </div>
+          <div class="steps-list" id="stepsList"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="header-btn" onclick="closeModal('editModal')">Cancel</button>
+        <button class="header-btn" onclick="saveSOP('draft')"><i class="ph-duotone ph-floppy-disk"></i> Save Draft</button>
+        <button class="header-btn primary" onclick="saveSOP('published')"><i class="ph-duotone ph-check-circle"></i> Publish</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- View Modal -->
+  <div class="modal" id="viewModal">
+    <div class="modal-box wide">
+      <div class="modal-header">
+        <h2><i class="ph-duotone ph-eye"></i> View SOP</h2>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div class="lang-toggle" id="viewLangToggle">
+            <button class="active" onclick="setViewLang('en')">EN</button>
+            <button onclick="setViewLang('es')">ES</button>
+          </div>
+          <button class="modal-close" onclick="closeModal('viewModal')">&times;</button>
+        </div>
+      </div>
+      <div class="modal-body" id="viewModalBody"></div>
+      <div class="modal-footer">
+        <button class="header-btn" onclick="closeModal('viewModal')">Close</button>
+        <button class="header-btn" onclick="openModal('pdfModal')"><i class="ph-duotone ph-file-pdf"></i> PDF</button>
+        <button class="header-btn primary" onclick="editCurrentSOP()"><i class="ph-duotone ph-pencil-simple"></i> Edit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- QR Modal -->
+  <div class="modal" id="qrModal">
+    <div class="modal-box small">
+      <div class="modal-header">
+        <h2><i class="ph-duotone ph-qr-code"></i> QR Code</h2>
+        <button class="modal-close" onclick="closeModal('qrModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="qr-modal-content">
+          <img id="qrImage" width="200" height="200" style="display:block;margin:0 auto;border-radius:8px;">
+          <p style="margin-top:16px;color:var(--text-muted);font-size:13px;">Scan to view this SOP</p>
+          <div class="qr-url" id="qrUrl"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="header-btn" onclick="closeModal('qrModal')">Close</button>
+        <button class="header-btn primary" onclick="downloadQR()"><i class="ph-duotone ph-download"></i> Download</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PDF Modal -->
+  <div class="modal" id="pdfModal">
+    <div class="modal-box small">
+      <div class="modal-header">
+        <h2><i class="ph-duotone ph-file-pdf"></i> Export PDF</h2>
+        <button class="modal-close" onclick="closeModal('pdfModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Layout</label>
+          <div class="pdf-layout-options">
+            <label class="pdf-layout-option"><input type="radio" name="pdfLayout" value="text"><div class="pdf-layout-card"><div class="pdf-layout-preview"><div class="line"></div><div class="line"></div><div class="line short"></div></div><span>Text Only</span></div></label>
+            <label class="pdf-layout-option"><input type="radio" name="pdfLayout" value="2col" checked><div class="pdf-layout-card"><div class="pdf-layout-preview grid-preview cols-1"><div class="box"></div><div class="box"></div></div><span>2 Per Page</span></div></label>
+            <label class="pdf-layout-option"><input type="radio" name="pdfLayout" value="4col"><div class="pdf-layout-card"><div class="pdf-layout-preview grid-preview cols-2"><div class="box"></div><div class="box"></div><div class="box"></div><div class="box"></div></div><span>4 Per Page</span></div></label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Options</label>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="pdfIncludeQR" checked> Include QR Code</label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="pdfBilingual"> Bilingual (EN + ES)</label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Language</label>
+          <div style="display:flex;gap:8px;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="pdfLang" value="en" checked> English</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="pdfLang" value="es"> Español</label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="header-btn" onclick="closeModal('pdfModal')">Cancel</button>
+        <button class="header-btn primary" onclick="generatePDF()" id="generatePdfBtn"><i class="ph-duotone ph-file-pdf"></i> Generate PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal" id="settingsModal">
+    <div class="modal-box small">
+      <div class="modal-header">
+        <h2><i class="ph-duotone ph-gear"></i> Settings</h2>
+        <button class="modal-close" onclick="closeModal('settingsModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="settings-section">
+          <div class="settings-section-title"><i class="ph-duotone ph-sparkle"></i> AI Features</div>
+          <div style="padding:12px;background:var(--green-dim);border-radius:8px;border-left:3px solid var(--green);margin-bottom:12px;">
+            <i class="ph-duotone ph-check-circle" style="color:var(--green);"></i> <strong>AI Features Ready!</strong> API key is securely stored on the server.
+          </div>
+          <button class="header-btn primary" onclick="testApiConnection()" style="width:100%;"><i class="ph-duotone ph-plugs-connected"></i> Test Connection</button>
+          <div id="apiKeyStatus" style="margin-top:10px;font-size:12px;padding:10px;background:var(--bg);border-radius:6px;"></div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title"><i class="ph-duotone ph-buildings"></i> Departments</div>
+          <div class="settings-list" id="settingsDeptList"></div>
+          <div class="settings-add-form">
+            <input type="text" id="newDeptInput" placeholder="New department..." onkeypress="if(event.key==='Enter')addDepartment()">
+            <button class="settings-add-btn" onclick="addDepartment()"><i class="ph-duotone ph-plus"></i></button>
+          </div>
+          <div class="settings-note">At least one department required</div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title"><i class="ph-duotone ph-tag"></i> Tags</div>
+          <div class="settings-list" id="settingsTagList"></div>
+          <div class="settings-add-form">
+            <input type="text" id="newTagInput" placeholder="New tag..." onkeypress="if(event.key==='Enter')addTag()">
+            <div class="tag-color-picker">
+              <div class="tag-color-option gold selected" data-color="gold" onclick="selectTagColor('gold')"></div>
+              <div class="tag-color-option green" data-color="green" onclick="selectTagColor('green')"></div>
+              <div class="tag-color-option sungrown" data-color="sungrown" onclick="selectTagColor('sungrown')"></div>
+              <div class="tag-color-option greenhouse" data-color="greenhouse" onclick="selectTagColor('greenhouse')"></div>
+              <div class="tag-color-option indoor" data-color="indoor" onclick="selectTagColor('indoor')"></div>
+              <div class="tag-color-option danger" data-color="danger" onclick="selectTagColor('danger')"></div>
+            </div>
+            <button class="settings-add-btn" onclick="addTag()"><i class="ph-duotone ph-plus"></i></button>
+          </div>
+          <div class="settings-note">At least one tag required</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="header-btn primary" onclick="closeModal('settingsModal')"><i class="ph-duotone ph-check"></i> Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Requests Modal -->
+  <div class="modal" id="requestsModal">
+    <div class="modal-box wide">
+      <div class="modal-header">
+        <h2><i class="ph-duotone ph-clipboard-text"></i> SOP Requests</h2>
+        <button class="modal-close" onclick="closeModal('requestsModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="requests-tabs">
+          <button class="requests-tab active" onclick="setRequestTab('pending')" id="tabPending">Pending <span class="tab-count" id="pendingCount">0</span></button>
+          <button class="requests-tab" onclick="setRequestTab('completed')" id="tabCompleted">Completed <span class="tab-count" id="completedCount">0</span></button>
+        </div>
+        <div class="add-request-form" id="addRequestForm">
+          <div class="form-group" style="margin-bottom:12px;">
+            <label class="form-label">New Request Title *</label>
+            <input type="text" class="form-input" id="reqTitle" placeholder="e.g., Trimming Machine Cleaning Procedure">
+          </div>
+          <div class="form-row" style="margin-bottom:12px;">
+            <div class="form-group">
+              <label class="form-label">Department</label>
+              <select class="form-input" id="reqDept"></select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Priority</label>
+              <select class="form-input" id="reqPriority">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row" style="margin-bottom:12px;">
+            <div class="form-group">
+              <label class="form-label">Assign To</label>
+              <input type="text" class="form-input" id="reqAssignee" placeholder="Name or leave blank">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Due Date</label>
+              <input type="date" class="form-input" id="reqDueDate">
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:12px;">
+            <label class="form-label">Notes / Description</label>
+            <textarea class="form-input" id="reqNotes" placeholder="What should this SOP cover?" rows="2"></textarea>
+          </div>
+          <button class="header-btn primary" onclick="addRequest()" style="width:100%;"><i class="ph-duotone ph-plus"></i> Add Request</button>
+        </div>
+        <div class="request-list" id="requestList"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="header-btn" onclick="closeModal('requestsModal')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"><i class="ph-duotone ph-check-circle"></i><span id="toastMsg"></span></div>
+
+  <script>
+    // =====================================================
+    // API Configuration - Google Sheets Backend
+    // =====================================================
+    const API_URL = 'https://script.google.com/macros/s/AKfycbyyDNEHl78fewANzo_9j2zvMES_4HIFOdD8QbwE52kdhJOcWfwig7vcSV53cQal7bQj/exec';
     
-    // Build SOP objects with steps
-    const sops = sopData.map(row => {
-      const sopId = row[0];
-      const sopSteps = allSteps
-        .filter(s => s.sopId == sopId)
-        .sort((a, b) => a.stepNumber - b.stepNumber)
-        .map(s => ({
-          title: s.title,
-          title_es: s.title_es,
-          description: s.description,
-          desc_es: s.desc_es,
-          image: s.image,
-          safety: s.safety,
-          quality: s.quality
-        }));
+    // =====================================================
+    // State
+    // =====================================================
+    let sops = [];
+    let sopRequests = [];
+    let currentSopId = null;
+    let editingSteps = [];
+    let selectedTagColor = 'gold';
+    let editLang = 'en';
+    let viewLang = 'en';
+    let currentRequestTab = 'pending';
+    let appLang = 'en';
+    let isLoading = false;
+    
+    let settings = {
+      departments: [
+        {name:'Production',icon:'ph-factory'},
+        {name:'Packaging',icon:'ph-package'},
+        {name:'Quality',icon:'ph-seal-check'},
+        {name:'Maintenance',icon:'ph-wrench'}
+      ],
+      tags: [
+        {name:'safety',color:'danger'},
+        {name:'quality',color:'green'},
+        {name:'critical',color:'gold'}
+      ]
+    };
+    
+    // =====================================================
+    // Data Loading & Saving (API-based)
+    // =====================================================
+    
+    async function loadData() {
+      isLoading = true;
+      showLoading();
       
-      return {
-        id: sopId,
-        title: row[1],
-        title_es: row[2],
-        dept: row[3],
-        docNum: row[4],
-        revision: row[5],
-        status: row[6],
-        description: row[7],
-        desc_es: row[8],
-        tags: row[9] ? row[9].split(',').map(t => t.trim()).filter(t => t) : [],
-        createdAt: row[10],
-        updatedAt: row[11],
-        steps: sopSteps
+      try {
+        // Load SOPs
+        const sopsResponse = await fetch(API_URL + '?action=getSOPs');
+        const sopsResult = await sopsResponse.json();
+        if (sopsResult.success) {
+          sops = sopsResult.data || [];
+        } else {
+          console.error('Failed to load SOPs:', sopsResult.error);
+          sops = [];
+        }
+        
+        // Load Requests
+        const reqResponse = await fetch(API_URL + '?action=getRequests');
+        const reqResult = await reqResponse.json();
+        if (reqResult.success) {
+          sopRequests = reqResult.data || [];
+        } else {
+          sopRequests = [];
+        }
+        
+        // Load Settings
+        const settingsResponse = await fetch(API_URL + '?action=getSettings');
+        const settingsResult = await settingsResponse.json();
+        if (settingsResult.success && settingsResult.data) {
+          if (settingsResult.data.departments) settings.departments = settingsResult.data.departments;
+          if (settingsResult.data.tags) settings.tags = settingsResult.data.tags;
+        }
+        
+      } catch (e) {
+        console.error('Error loading data:', e);
+        showToast('Error loading data: ' + e.message, 'error');
+      }
+      
+      isLoading = false;
+      hideLoading();
+      renderSOPs();
+      updateStats();
+      updateDropdowns();
+    }
+    
+    async function saveSOP(status) {
+      const title = document.getElementById('sopTitle').value.trim();
+      const dept = document.getElementById('sopDept').value;
+      
+      if (!title) { showToast('Enter title', 'error'); return; }
+      if (!dept) { showToast('Select department', 'error'); return; }
+      if (editingSteps.length === 0) { showToast('Add at least 1 step', 'error'); return; }
+      
+      const sopData = {
+        id: currentSopId,
+        title: title,
+        title_es: window.sopTranslations?.title_es || '',
+        dept: dept,
+        docNum: document.getElementById('sopDocNum').value.trim() || generateDocNum(),
+        revision: document.getElementById('sopRevision').value.trim() || '1.0',
+        status: status,
+        description: document.getElementById('sopDesc').value.trim(),
+        desc_es: window.sopTranslations?.desc_es || '',
+        tags: getSelectedTags(),
+        steps: editingSteps.map(s => ({
+          title: s.title || '',
+          title_es: s.title_es || '',
+          description: s.description || '',
+          desc_es: s.desc_es || '',
+          image: s.image || '',
+          safety: s.safety || false,
+          quality: s.quality || false
+        }))
       };
-    });
-    
-    return { success: true, data: sops };
-    
-  } catch (error) {
-    console.error('getAllSOPs error:', error);
-    return { success: false, error: error.message };
-  }
-}
-
-function getSOP(sopId) {
-  try {
-    const result = getAllSOPs();
-    if (!result.success) return result;
-    
-    const sop = result.data.find(s => s.id == sopId);
-    if (!sop) {
-      return { success: false, error: 'SOP not found' };
-    }
-    
-    return { success: true, data: sop };
-    
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-}
-
-function createSOP(sopData) {
-  try {
-    const ss = SpreadsheetApp.openById(SOP_SPREADSHEET_ID);
-    let sopSheet = ss.getSheetByName(SOP_SHEET_NAME);
-    let stepsSheet = ss.getSheetByName(STEPS_SHEET_NAME);
-    
-    // Auto-setup if sheets don't exist
-    if (!sopSheet || !stepsSheet) {
-      setupSpreadsheet();
-      sopSheet = ss.getSheetByName(SOP_SHEET_NAME);
-      stepsSheet = ss.getSheetByName(STEPS_SHEET_NAME);
-    }
-    
-    const now = new Date().toISOString().split('T')[0];
-    const sopId = Date.now();
-    
-    // Generate doc number if not provided
-    const docNum = sopData.docNum || ('SOP-' + String(sopSheet.getLastRow()).padStart(3, '0'));
-    
-    // Add SOP record
-    sopSheet.appendRow([
-      sopId,
-      sopData.title || '',
-      sopData.title_es || '',
-      sopData.dept || '',
-      docNum,
-      sopData.revision || '1.0',
-      sopData.status || 'draft',
-      sopData.description || '',
-      sopData.desc_es || '',
-      (sopData.tags || []).join(','),
-      now,
-      now
-    ]);
-    
-    // Add steps
-    if (sopData.steps && sopData.steps.length > 0) {
-      const stepRows = sopData.steps.map((step, i) => [
-        sopId,
-        i + 1,
-        step.title || '',
-        step.title_es || '',
-        step.description || '',
-        step.desc_es || '',
-        step.image || '',
-        step.safety || false,
-        step.quality || false
-      ]);
       
-      if (stepRows.length > 0) {
-        stepsSheet.getRange(stepsSheet.getLastRow() + 1, 1, stepRows.length, 9).setValues(stepRows);
+      showLoading();
+      
+      try {
+        const action = currentSopId ? 'updateSOP' : 'createSOP';
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({ action: action, sop: sopData })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showToast(status === 'published' ? 'Published!' : 'Saved!', 'success');
+          closeModal('editModal');
+          await loadData();
+        } else {
+          showToast('Error: ' + result.error, 'error');
+        }
+      } catch (e) {
+        showToast('Error saving: ' + e.message, 'error');
+      }
+      
+      hideLoading();
+    }
+    
+    async function deleteSOP(id) {
+      if (!confirm('Delete this SOP?')) return;
+      
+      showLoading();
+      
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({ action: 'deleteSOP', id: id })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showToast('Deleted', 'success');
+          await loadData();
+        } else {
+          showToast('Error: ' + result.error, 'error');
+        }
+      } catch (e) {
+        showToast('Error deleting: ' + e.message, 'error');
+      }
+      
+      hideLoading();
+    }
+    
+    async function addRequest() {
+      const title = document.getElementById('reqTitle').value.trim();
+      if (!title) { showToast('Enter title', 'error'); return; }
+      
+      const reqData = {
+        title: title,
+        dept: document.getElementById('reqDept').value,
+        priority: document.getElementById('reqPriority').value,
+        assignee: document.getElementById('reqAssignee').value.trim(),
+        dueDate: document.getElementById('reqDueDate').value,
+        notes: document.getElementById('reqNotes').value.trim()
+      };
+      
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({ action: 'createRequest', request: reqData })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showToast('Request added', 'success');
+          document.getElementById('reqTitle').value = '';
+          document.getElementById('reqNotes').value = '';
+          await loadData();
+          renderRequests();
+        } else {
+          showToast('Error: ' + result.error, 'error');
+        }
+      } catch (e) {
+        showToast('Error: ' + e.message, 'error');
       }
     }
     
-    return { success: true, id: sopId, message: 'SOP created' };
-    
-  } catch (error) {
-    console.error('createSOP error:', error);
-    return { success: false, error: error.message };
-  }
-}
-
-function updateSOP(sopData) {
-  try {
-    const ss = SpreadsheetApp.openById(SOP_SPREADSHEET_ID);
-    const sopSheet = ss.getSheetByName(SOP_SHEET_NAME);
-    const stepsSheet = ss.getSheetByName(STEPS_SHEET_NAME);
-    
-    if (!sopSheet) {
-      return { success: false, error: 'SOPs sheet not found' };
-    }
-    
-    const now = new Date().toISOString().split('T')[0];
-    const sopId = sopData.id;
-    
-    // Find the SOP row
-    const data = sopSheet.getDataRange().getValues();
-    let rowIndex = -1;
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][0] == sopId) {
-        rowIndex = i + 1;
-        break;
+    async function completeRequest(id) {
+      const req = sopRequests.find(r => r.id == id);
+      if (!req) return;
+      
+      req.completed = true;
+      
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({ action: 'updateRequest', request: req })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showToast('Marked complete', 'success');
+          await loadData();
+          renderRequests();
+        }
+      } catch (e) {
+        showToast('Error: ' + e.message, 'error');
       }
     }
     
-    if (rowIndex === -1) {
-      return { success: false, error: 'SOP not found' };
+    async function deleteRequest(id) {
+      if (!confirm('Delete this request?')) return;
+      
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({ action: 'deleteRequest', id: id })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showToast('Deleted', 'success');
+          await loadData();
+          renderRequests();
+        }
+      } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+      }
     }
     
-    // Update SOP record (preserve createdAt)
-    sopSheet.getRange(rowIndex, 2, 1, 10).setValues([[
-      sopData.title || '',
-      sopData.title_es || '',
-      sopData.dept || '',
-      sopData.docNum || '',
-      sopData.revision || '1.0',
-      sopData.status || 'draft',
-      sopData.description || '',
-      sopData.desc_es || '',
-      (sopData.tags || []).join(','),
-      now
-    ]]);
+    // =====================================================
+    // UI Rendering
+    // =====================================================
     
-    // Delete old steps
-    if (stepsSheet) {
-      const stepsData = stepsSheet.getDataRange().getValues();
-      for (let i = stepsData.length - 1; i > 0; i--) {
-        if (stepsData[i][0] == sopId) {
-          stepsSheet.deleteRow(i + 1);
+    function showLoading() {
+      document.getElementById('loadingState').style.display = 'block';
+      document.getElementById('sopGrid').style.display = 'none';
+      document.getElementById('emptyState').style.display = 'none';
+    }
+    
+    function hideLoading() {
+      document.getElementById('loadingState').style.display = 'none';
+    }
+    
+    function renderSOPs() {
+      const grid = document.getElementById('sopGrid');
+      const tbody = document.getElementById('sopTableBody');
+      const empty = document.getElementById('emptyState');
+      
+      const filtered = getFilteredSOPs();
+      
+      if (filtered.length === 0) {
+        grid.style.display = 'none';
+        empty.style.display = 'block';
+        return;
+      }
+      
+      empty.style.display = 'none';
+      grid.style.display = 'grid';
+      
+      // Grid view
+      grid.innerHTML = filtered.map(s => {
+        const firstImg = s.steps && s.steps.length > 0 && s.steps[0].image ? s.steps[0].image : null;
+        const tags = (s.tags || []).slice(0, 3).map(t => {
+          const tagDef = settings.tags.find(x => x.name === t);
+          const color = tagDef ? tagDef.color : 'gold';
+          return '<span class="sop-tag ' + color + '">' + esc(t) + '</span>';
+        }).join('');
+        
+        return '<div class="sop-card" onclick="viewSOP(' + s.id + ')">' +
+          '<div class="sop-card-header">' +
+            '<div><div class="sop-card-title">' + esc(s.title) + '</div>' +
+            '<div class="sop-card-dept"><i class="ph-duotone ph-folder"></i> ' + esc(s.dept) + '</div></div>' +
+            '<span class="sop-card-rev ' + (s.status === 'draft' ? 'draft' : '') + '">' + (s.status === 'draft' ? 'Draft' : 'v' + s.revision) + '</span>' +
+          '</div>' +
+          '<div class="sop-card-preview">' + 
+            (firstImg ? '<img src="' + firstImg + '" onerror="this.outerHTML=\'<div class=sop-card-preview-empty><i class=ph-duotone\\ ph-image></i>No image</div>\'">' : '<div class="sop-card-preview-empty"><i class="ph-duotone ph-image"></i>No image</div>') +
+          '</div>' +
+          '<div class="sop-card-meta">' +
+            '<div class="sop-card-steps"><i class="ph-duotone ph-list-numbers"></i> ' + (s.steps ? s.steps.length : 0) + ' steps</div>' +
+            '<div class="sop-card-tags">' + tags + '</div>' +
+          '</div>' +
+          '<div class="sop-card-actions">' +
+            '<button onclick="event.stopPropagation();viewSOP(' + s.id + ')"><i class="ph-duotone ph-eye"></i></button>' +
+            '<button class="qr-btn" onclick="event.stopPropagation();showQR(' + s.id + ')"><i class="ph-duotone ph-qr-code"></i></button>' +
+            '<button onclick="event.stopPropagation();editSOP(' + s.id + ')"><i class="ph-duotone ph-pencil-simple"></i></button>' +
+            '<button class="del-btn" onclick="event.stopPropagation();deleteSOP(' + s.id + ')"><i class="ph-duotone ph-trash"></i></button>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+      
+      // Table view
+      tbody.innerHTML = filtered.map(s => {
+        return '<tr onclick="viewSOP(' + s.id + ')">' +
+          '<td class="title-cell">' + esc(s.title) + '</td>' +
+          '<td>' + esc(s.dept) + '</td>' +
+          '<td>' + (s.steps ? s.steps.length : 0) + '</td>' +
+          '<td><span class="sop-card-rev ' + (s.status === 'draft' ? 'draft' : '') + '">' + (s.status === 'draft' ? 'Draft' : 'Published') + '</span></td>' +
+          '<td>' + fmtDate(s.updatedAt) + '</td>' +
+          '<td class="actions-cell">' +
+            '<button onclick="event.stopPropagation();editSOP(' + s.id + ')"><i class="ph-duotone ph-pencil-simple"></i></button>' +
+            '<button onclick="event.stopPropagation();deleteSOP(' + s.id + ')"><i class="ph-duotone ph-trash"></i></button>' +
+          '</td>' +
+        '</tr>';
+      }).join('');
+    }
+    
+    function getFilteredSOPs() {
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      const status = document.getElementById('statusFilter').value;
+      const dept = document.getElementById('deptFilter').value;
+      const tag = document.getElementById('tagFilter').value;
+      
+      return sops.filter(s => {
+        if (search && !s.title.toLowerCase().includes(search) && !(s.description || '').toLowerCase().includes(search)) return false;
+        if (status && s.status !== status) return false;
+        if (dept && s.dept !== dept) return false;
+        if (tag && !(s.tags || []).includes(tag)) return false;
+        return true;
+      });
+    }
+    
+    function filterSOPs() {
+      renderSOPs();
+    }
+    
+    function updateStats() {
+      document.getElementById('statTotal').textContent = sops.length;
+      document.getElementById('statPublished').textContent = sops.filter(s => s.status === 'published').length;
+      document.getElementById('statDrafts').textContent = sops.filter(s => s.status === 'draft').length;
+      
+      const pendingRequests = sopRequests.filter(r => !r.completed).length;
+      document.getElementById('statRequests').textContent = pendingRequests;
+      
+      const badge = document.getElementById('requestBadge');
+      if (pendingRequests > 0) {
+        badge.textContent = pendingRequests;
+        badge.style.display = 'inline';
+      } else {
+        badge.style.display = 'none';
+      }
+      
+      const thisMonth = new Date();
+      const monthStart = new Date(thisMonth.getFullYear(), thisMonth.getMonth(), 1);
+      document.getElementById('statMonth').textContent = sops.filter(s => new Date(s.createdAt || s.updatedAt) >= monthStart).length;
+    }
+    
+    function updateDropdowns() {
+      const deptFilter = document.getElementById('deptFilter');
+      const sopDept = document.getElementById('sopDept');
+      const reqDept = document.getElementById('reqDept');
+      const tagFilter = document.getElementById('tagFilter');
+      
+      deptFilter.innerHTML = '<option value="">All Departments</option>' + settings.departments.map(d => '<option value="' + d.name + '">' + d.name + '</option>').join('');
+      sopDept.innerHTML = '<option value="">Select department...</option>' + settings.departments.map(d => '<option value="' + d.name + '">' + d.name + '</option>').join('');
+      reqDept.innerHTML = '<option value="">Any</option>' + settings.departments.map(d => '<option value="' + d.name + '">' + d.name + '</option>').join('');
+      tagFilter.innerHTML = '<option value="">All Tags</option>' + settings.tags.map(t => '<option value="' + t.name + '">' + t.name.charAt(0).toUpperCase() + t.name.slice(1) + '</option>').join('');
+      
+      renderEditTags();
+    }
+    
+    function renderEditTags() {
+      const list = document.getElementById('editTagsList');
+      list.innerHTML = settings.tags.map(t => 
+        '<div class="tag-item"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="tag_' + t.name + '"><span class="sop-tag ' + t.color + '">' + t.name + '</span></label></div>'
+      ).join('') + '<button type="button" class="add-tag-btn" onclick="showInlineAdd(\'tag\')"><i class="ph-duotone ph-plus"></i> Add</button>';
+      renderInlineTagColors();
+    }
+    
+    function getSelectedTags() {
+      return settings.tags.filter(t => {
+        const cb = document.getElementById('tag_' + t.name);
+        return cb && cb.checked;
+      }).map(t => t.name);
+    }
+    
+    function renderRequests() {
+      const list = document.getElementById('requestList');
+      const pending = sopRequests.filter(r => !r.completed);
+      const completed = sopRequests.filter(r => r.completed);
+      
+      document.getElementById('pendingCount').textContent = pending.length;
+      document.getElementById('completedCount').textContent = completed.length;
+      
+      const reqs = currentRequestTab === 'pending' ? pending : completed;
+      
+      if (reqs.length === 0) {
+        list.innerHTML = '<div class="request-empty"><i class="ph-duotone ph-clipboard"></i><p>' + (currentRequestTab === 'pending' ? 'No pending requests' : 'No completed requests') + '</p></div>';
+        return;
+      }
+      
+      list.innerHTML = reqs.map(r => {
+        const isOverdue = r.dueDate && new Date(r.dueDate) < new Date() && !r.completed;
+        return '<div class="request-item ' + (r.completed ? 'completed' : '') + '">' +
+          '<div class="request-item-header">' +
+            '<div class="request-item-title">' + esc(r.title) + '</div>' +
+            '<span class="request-item-priority ' + r.priority + '">' + r.priority + '</span>' +
+          '</div>' +
+          (r.notes ? '<div class="request-item-desc">' + esc(r.notes) + '</div>' : '') +
+          '<div class="request-item-meta">' +
+            (r.dept ? '<span><i class="ph-duotone ph-folder"></i>' + esc(r.dept) + '</span>' : '') +
+            (r.assignee ? '<span><i class="ph-duotone ph-user"></i>' + esc(r.assignee) + '</span>' : '') +
+            (r.dueDate ? '<span' + (isOverdue ? ' style="color:var(--danger)"' : '') + '><i class="ph-duotone ph-calendar"></i>' + r.dueDate + (isOverdue ? ' OVERDUE' : '') + '</span>' : '') +
+            '<span><i class="ph-duotone ph-clock"></i>Created ' + fmtDate(r.createdAt) + '</span>' +
+          '</div>' +
+          '<div class="request-item-actions">' +
+            (!r.completed ? '<button class="request-action-create" onclick="createSOPFromRequest(' + r.id + ')"><i class="ph-duotone ph-file-plus"></i> Create SOP</button>' : '') +
+            (!r.completed ? '<button class="request-action-complete" onclick="completeRequest(' + r.id + ')"><i class="ph-duotone ph-check"></i> Done</button>' : '') +
+            '<button class="request-action-delete" onclick="deleteRequest(' + r.id + ')"><i class="ph-duotone ph-trash"></i></button>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+    
+    // =====================================================
+    // Modal Management
+    // =====================================================
+    
+    function openModal(id) {
+      document.getElementById(id).classList.add('active');
+    }
+    
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('active');
+    }
+    
+    function openCreateModal() {
+      currentSopId = null;
+      editingSteps = [{ title: '', description: '', image: '', safety: false, quality: false }];
+      window.sopTranslations = {};
+      
+      document.getElementById('modalTitle').innerHTML = '<i class="ph-duotone ph-file-text"></i> Create New SOP';
+      document.getElementById('sopTitle').value = '';
+      document.getElementById('sopDept').value = '';
+      document.getElementById('sopDocNum').value = '';
+      document.getElementById('sopRevision').value = '1.0';
+      document.getElementById('sopStatus').value = 'draft';
+      document.getElementById('sopDesc').value = '';
+      
+      settings.tags.forEach(t => {
+        const cb = document.getElementById('tag_' + t.name);
+        if (cb) cb.checked = false;
+      });
+      
+      renderSteps();
+      openModal('editModal');
+    }
+    
+    function editSOP(id) {
+      const s = sops.find(x => x.id == id);
+      if (!s) return;
+      
+      currentSopId = id;
+      editingSteps = (s.steps || []).map(st => ({ ...st }));
+      if (editingSteps.length === 0) {
+        editingSteps = [{ title: '', description: '', image: '', safety: false, quality: false }];
+      }
+      
+      window.sopTranslations = {
+        title_es: s.title_es || '',
+        desc_es: s.desc_es || ''
+      };
+      
+      document.getElementById('modalTitle').innerHTML = '<i class="ph-duotone ph-pencil-simple"></i> Edit SOP';
+      document.getElementById('sopTitle').value = s.title;
+      document.getElementById('sopDept').value = s.dept;
+      document.getElementById('sopDocNum').value = s.docNum || '';
+      document.getElementById('sopRevision').value = s.revision || '1.0';
+      document.getElementById('sopStatus').value = s.status || 'draft';
+      document.getElementById('sopDesc').value = s.description || '';
+      
+      settings.tags.forEach(t => {
+        const cb = document.getElementById('tag_' + t.name);
+        if (cb) cb.checked = (s.tags || []).includes(t.name);
+      });
+      
+      renderSteps();
+      openModal('editModal');
+    }
+    
+    function editCurrentSOP() {
+      closeModal('viewModal');
+      editSOP(currentSopId);
+    }
+    
+    function viewSOP(id) {
+      const s = sops.find(x => x.id == id);
+      if (!s) return;
+      
+      currentSopId = id;
+      viewLang = 'en';
+      document.querySelectorAll('#viewLangToggle button').forEach(b => b.classList.toggle('active', b.textContent === 'EN'));
+      renderViewSOP(s);
+      openModal('viewModal');
+    }
+    
+    function renderViewSOP(s) {
+      if (!s) return;
+      const lang = viewLang;
+      const title = s['title_' + lang] || s.title;
+      const desc = s['desc_' + lang] || s.description;
+      const u = window.location.origin + window.location.pathname + '?view=' + s.id;
+      
+      const stepsHtml = (s.steps || []).map((st, i) => {
+        const stepTitle = st['title_' + lang] || st.title;
+        const stepDesc = st['desc_' + lang] || st.description;
+        return '<div class="view-step"><div class="view-step-number">' + (i + 1) + '</div><div class="view-step-content"><div class="view-step-title">' + esc(stepTitle) + (st.safety ? ' <i class="ph-duotone ph-warning icon safety"></i>' : '') + (st.quality ? ' <i class="ph-duotone ph-seal-check icon quality"></i>' : '') + '</div><div class="view-step-desc">' + esc(stepDesc) + '</div></div>' + (st.image ? '<div class="view-step-image"><img src="' + st.image + '"></div>' : '') + '</div>';
+      }).join('');
+      
+      document.getElementById('viewModalBody').innerHTML = 
+        '<div class="view-sop-header"><div><div class="view-sop-title">' + esc(title) + '</div>' +
+        '<div class="view-sop-meta">' +
+          '<div class="view-sop-meta-item"><i class="ph-duotone ph-folder"></i> ' + s.dept + '</div>' +
+          '<div class="view-sop-meta-item"><i class="ph-duotone ph-hash"></i> ' + (s.docNum || 'N/A') + '</div>' +
+          '<div class="view-sop-meta-item"><i class="ph-duotone ph-git-branch"></i> Rev ' + (s.revision || '1.0') + '</div>' +
+          '<div class="view-sop-meta-item"><i class="ph-duotone ph-calendar"></i> ' + fmtDate(s.updatedAt) + '</div>' +
+        '</div>' +
+        (desc ? '<p style="margin-top:12px;color:var(--text-muted)">' + esc(desc) + '</p>' : '') +
+        '</div>' +
+        '<div class="view-sop-qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=78x78&data=' + encodeURIComponent(u) + '" width="78" height="78"></div></div>' +
+        stepsHtml;
+    }
+    
+    function showQR(id) {
+      const s = sops.find(x => x.id == id);
+      if (!s) return;
+      
+      currentSopId = id;
+      const u = window.location.origin + window.location.pathname + '?view=' + id;
+      document.getElementById('qrImage').src = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(u);
+      document.getElementById('qrUrl').textContent = u;
+      openModal('qrModal');
+    }
+    
+    function downloadQR() {
+      const img = document.getElementById('qrImage');
+      const a = document.createElement('a');
+      a.href = img.src;
+      a.download = 'sop-qr-' + currentSopId + '.png';
+      a.click();
+    }
+    
+    function openRequestsModal() {
+      renderRequests();
+      openModal('requestsModal');
+    }
+    
+    function openSettingsModal() {
+      renderSettingsDepts();
+      renderSettingsTags();
+      openModal('settingsModal');
+    }
+    
+    function setRequestTab(tab) {
+      currentRequestTab = tab;
+      document.getElementById('tabPending').classList.toggle('active', tab === 'pending');
+      document.getElementById('tabCompleted').classList.toggle('active', tab === 'completed');
+      document.getElementById('addRequestForm').style.display = tab === 'pending' ? 'block' : 'none';
+      renderRequests();
+    }
+    
+    function createSOPFromRequest(id) {
+      const req = sopRequests.find(r => r.id == id);
+      if (!req) return;
+      
+      closeModal('requestsModal');
+      openCreateModal();
+      
+      document.getElementById('sopTitle').value = req.title;
+      if (req.dept) document.getElementById('sopDept').value = req.dept;
+    }
+    
+    // =====================================================
+    // Steps Management
+    // =====================================================
+    
+    function renderSteps() {
+      const list = document.getElementById('stepsList');
+      list.innerHTML = editingSteps.map((s, i) => 
+        '<div class="step-item" data-index="' + i + '">' +
+          '<div class="step-number">' + (i + 1) + '</div>' +
+          '<div class="step-content">' +
+            '<input type="text" class="step-title-input" placeholder="Step title..." value="' + esc(s.title) + '" onchange="updateStep(' + i + ',\'title\',this.value)">' +
+            '<textarea class="step-desc-input" placeholder="Description..." onchange="updateStep(' + i + ',\'description\',this.value)">' + esc(s.description) + '</textarea>' +
+            '<div class="step-icons">' +
+              '<button type="button" class="step-icon-btn safety ' + (s.safety ? 'active' : '') + '" onclick="toggleStepFlag(' + i + ',\'safety\')" title="Safety Warning"><i class="ph-duotone ph-warning"></i></button>' +
+              '<button type="button" class="step-icon-btn quality ' + (s.quality ? 'active' : '') + '" onclick="toggleStepFlag(' + i + ',\'quality\')" title="Quality Checkpoint"><i class="ph-duotone ph-seal-check"></i></button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="step-image">' +
+            '<div class="step-image-preview ' + (s.image ? 'has-image' : '') + '" onclick="promptStepImage(' + i + ')">' +
+              (s.image ? '<img src="' + s.image + '">' : '<div class="placeholder"><i class="ph-duotone ph-image"></i>Add image</div>') +
+            '</div>' +
+          '</div>' +
+          '<div class="step-actions">' +
+            '<button type="button" class="step-ai-btn" onclick="aiImproveStep(' + i + ')" title="AI Improve"><i class="ph-duotone ph-sparkle"></i></button>' +
+            '<button type="button" class="step-action-btn" onclick="moveStep(' + i + ',-1)" title="Move Up"><i class="ph-duotone ph-caret-up"></i></button>' +
+            '<button type="button" class="step-action-btn" onclick="moveStep(' + i + ',1)" title="Move Down"><i class="ph-duotone ph-caret-down"></i></button>' +
+            '<button type="button" class="step-action-btn delete" onclick="removeStep(' + i + ')" title="Delete"><i class="ph-duotone ph-trash"></i></button>' +
+          '</div>' +
+        '</div>'
+      ).join('');
+    }
+    
+    function addStep() {
+      editingSteps.push({ title: '', description: '', image: '', safety: false, quality: false });
+      renderSteps();
+    }
+    
+    function removeStep(i) {
+      if (editingSteps.length === 1) {
+        showToast('Need at least 1 step', 'error');
+        return;
+      }
+      editingSteps.splice(i, 1);
+      renderSteps();
+    }
+    
+    function updateStep(i, field, value) {
+      editingSteps[i][field] = value;
+    }
+    
+    function toggleStepFlag(i, flag) {
+      editingSteps[i][flag] = !editingSteps[i][flag];
+      renderSteps();
+    }
+    
+    function moveStep(i, dir) {
+      const newIndex = i + dir;
+      if (newIndex < 0 || newIndex >= editingSteps.length) return;
+      [editingSteps[i], editingSteps[newIndex]] = [editingSteps[newIndex], editingSteps[i]];
+      renderSteps();
+    }
+    
+    function promptStepImage(i) {
+      const url = prompt('Enter image URL:', editingSteps[i].image || '');
+      if (url !== null) {
+        editingSteps[i].image = url;
+        renderSteps();
+      }
+    }
+    
+    // =====================================================
+    // Settings Management
+    // =====================================================
+    
+    function renderSettingsDepts() {
+      document.getElementById('settingsDeptList').innerHTML = settings.departments.map(d => 
+        '<div class="settings-item"><i class="ph-duotone ' + (d.icon || 'ph-folder') + '"></i><span>' + d.name + '</span><button class="item-delete" onclick="deleteDepartment(\'' + d.name + '\')"><i class="ph-duotone ph-x"></i></button></div>'
+      ).join('');
+    }
+    
+    function renderSettingsTags() {
+      document.getElementById('settingsTagList').innerHTML = settings.tags.map(t => 
+        '<div class="settings-item"><span class="sop-tag ' + t.color + '">' + t.name + '</span><button class="item-delete" onclick="deleteTag(\'' + t.name + '\')"><i class="ph-duotone ph-x"></i></button></div>'
+      ).join('');
+    }
+    
+    function addDepartment() {
+      const input = document.getElementById('newDeptInput');
+      const name = input.value.trim();
+      if (!name) return;
+      if (settings.departments.find(d => d.name.toLowerCase() === name.toLowerCase())) {
+        showToast('Already exists', 'error');
+        return;
+      }
+      settings.departments.push({ name: name, icon: 'ph-folder' });
+      saveSettingsToServer();
+      renderSettingsDepts();
+      updateDropdowns();
+      input.value = '';
+      showToast('Added', 'success');
+    }
+    
+    function deleteDepartment(name) {
+      if (settings.departments.length <= 1) {
+        showToast('Need at least 1', 'error');
+        return;
+      }
+      settings.departments = settings.departments.filter(d => d.name !== name);
+      saveSettingsToServer();
+      renderSettingsDepts();
+      updateDropdowns();
+      showToast('Deleted', 'success');
+    }
+    
+    function selectTagColor(color) {
+      selectedTagColor = color;
+      document.querySelectorAll('.tag-color-option').forEach(e => e.classList.toggle('selected', e.dataset.color === color));
+    }
+    
+    function addTag() {
+      const input = document.getElementById('newTagInput');
+      const name = input.value.trim().toLowerCase();
+      if (!name) return;
+      if (settings.tags.find(t => t.name === name)) {
+        showToast('Already exists', 'error');
+        return;
+      }
+      settings.tags.push({ name: name, color: selectedTagColor });
+      saveSettingsToServer();
+      renderSettingsTags();
+      updateDropdowns();
+      input.value = '';
+      showToast('Added', 'success');
+    }
+    
+    function deleteTag(name) {
+      if (settings.tags.length <= 1) {
+        showToast('Need at least 1', 'error');
+        return;
+      }
+      settings.tags = settings.tags.filter(t => t.name !== name);
+      saveSettingsToServer();
+      renderSettingsTags();
+      updateDropdowns();
+      showToast('Deleted', 'success');
+    }
+    
+    async function saveSettingsToServer() {
+      try {
+        await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({ action: 'saveSettings', settings: settings })
+        });
+      } catch (e) {
+        console.error('Error saving settings:', e);
+      }
+    }
+    
+    function showInlineAdd(type) {
+      document.getElementById('inlineAdd' + type.charAt(0).toUpperCase() + type.slice(1)).style.display = 'block';
+    }
+    
+    function hideInlineAdd(type) {
+      document.getElementById('inlineAdd' + type.charAt(0).toUpperCase() + type.slice(1)).style.display = 'none';
+    }
+    
+    function addDeptInline() {
+      const input = document.getElementById('newDeptInline');
+      const name = input.value.trim();
+      if (!name) return;
+      if (settings.departments.find(d => d.name.toLowerCase() === name.toLowerCase())) {
+        showToast('Already exists', 'error');
+        return;
+      }
+      settings.departments.push({ name: name, icon: 'ph-folder' });
+      saveSettingsToServer();
+      updateDropdowns();
+      document.getElementById('sopDept').value = name;
+      input.value = '';
+      hideInlineAdd('dept');
+      showToast('Added', 'success');
+    }
+    
+    function renderInlineTagColors() {
+      const container = document.getElementById('inlineTagColors');
+      if (!container) return;
+      const colors = ['gold', 'green', 'sungrown', 'greenhouse', 'indoor', 'danger'];
+      container.innerHTML = colors.map(c => 
+        '<div class="color-dot ' + (c === selectedTagColor ? 'selected' : '') + '" style="background:var(--' + c + ')" onclick="selectInlineTagColor(\'' + c + '\')"></div>'
+      ).join('');
+    }
+    
+    function selectInlineTagColor(color) {
+      selectedTagColor = color;
+      renderInlineTagColors();
+    }
+    
+    function addTagInline() {
+      const input = document.getElementById('newTagInline');
+      const name = input.value.trim().toLowerCase();
+      if (!name) return;
+      if (settings.tags.find(t => t.name === name)) {
+        showToast('Already exists', 'error');
+        return;
+      }
+      settings.tags.push({ name: name, color: selectedTagColor });
+      saveSettingsToServer();
+      updateDropdowns();
+      input.value = '';
+      hideInlineAdd('tag');
+      showToast('Added', 'success');
+    }
+    
+    // =====================================================
+    // AI Features
+    // =====================================================
+    
+    async function callAI(prompt) {
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({
+            action: 'anthropic',
+            body: {
+              model: 'claude-3-5-haiku-20241022',
+              max_tokens: 500,
+              messages: [{ role: 'user', content: prompt }]
+            }
+          })
+        });
+        
+        const data = await response.json();
+        if (data.content && data.content[0]) {
+          return data.content[0].text.trim();
+        }
+        return null;
+      } catch (e) {
+        console.error('AI error:', e);
+        return null;
+      }
+    }
+    
+    async function aiImproveTitle() {
+      const input = document.getElementById('sopTitle');
+      const current = input.value.trim();
+      if (!current) { showToast('Enter text first', 'error'); return; }
+      
+      const btn = document.querySelector('[onclick="aiImproveTitle()"]');
+      btn.disabled = true;
+      btn.classList.add('loading');
+      
+      const improved = await callAI('Improve this SOP title to be clearer, more professional, and action-oriented. Keep it concise (under 10 words). Only return the improved title, nothing else:\n\n' + current);
+      
+      if (improved) {
+        input.value = improved;
+        showToast('Title improved!', 'success');
+      } else {
+        showToast('AI unavailable', 'error');
+      }
+      
+      btn.disabled = false;
+      btn.classList.remove('loading');
+    }
+    
+    async function aiImproveDescription() {
+      const input = document.getElementById('sopDesc');
+      const current = input.value.trim();
+      if (!current) { showToast('Enter text first', 'error'); return; }
+      
+      const btn = document.querySelector('[onclick="aiImproveDescription()"]');
+      btn.disabled = true;
+      btn.classList.add('loading');
+      
+      const improved = await callAI('Improve this SOP description to be clearer and more professional. Keep it brief (2-3 sentences max). Only return the improved description:\n\n' + current);
+      
+      if (improved) {
+        input.value = improved;
+        showToast('Description improved!', 'success');
+      } else {
+        showToast('AI unavailable', 'error');
+      }
+      
+      btn.disabled = false;
+      btn.classList.remove('loading');
+    }
+    
+    async function aiImproveStep(i) {
+      const step = editingSteps[i];
+      if (!step.title && !step.description) {
+        showToast('Enter text first', 'error');
+        return;
+      }
+      
+      const btn = document.querySelectorAll('.step-ai-btn')[i];
+      btn.disabled = true;
+      
+      const improved = await callAI('Improve this SOP step. Make the title action-oriented and clear. Make the description specific with measurable details where possible. Return as JSON: {"title": "...", "description": "..."}\n\nCurrent title: ' + (step.title || 'None') + '\nCurrent description: ' + (step.description || 'None'));
+      
+      if (improved) {
+        try {
+          const parsed = JSON.parse(improved);
+          if (parsed.title) editingSteps[i].title = parsed.title;
+          if (parsed.description) editingSteps[i].description = parsed.description;
+          renderSteps();
+          showToast('Step improved!', 'success');
+        } catch (e) {
+          showToast('AI response error', 'error');
+        }
+      } else {
+        showToast('AI unavailable', 'error');
+      }
+      
+      btn.disabled = false;
+    }
+    
+    async function aiImproveAllSteps() {
+      const btn = document.getElementById('aiImproveAllBtn');
+      btn.disabled = true;
+      btn.classList.add('loading');
+      
+      for (let i = 0; i < editingSteps.length; i++) {
+        if (editingSteps[i].title || editingSteps[i].description) {
+          await aiImproveStep(i);
         }
       }
       
-      // Add new steps
-      if (sopData.steps && sopData.steps.length > 0) {
-        const stepRows = sopData.steps.map((step, i) => [
-          sopId,
-          i + 1,
-          step.title || '',
-          step.title_es || '',
-          step.description || '',
-          step.desc_es || '',
-          step.image || '',
-          step.safety || false,
-          step.quality || false
+      btn.disabled = false;
+      btn.classList.remove('loading');
+      showToast('All steps improved!', 'success');
+    }
+    
+    async function testApiConnection() {
+      const status = document.getElementById('apiKeyStatus');
+      status.innerHTML = '<i class="ph-duotone ph-spinner" style="animation:spin 1s linear infinite"></i> Testing...';
+      
+      try {
+        const response = await fetch(API_URL + '?action=test');
+        const result = await response.json();
+        
+        if (result.success) {
+          status.innerHTML = '<i class="ph-duotone ph-check-circle" style="color:var(--green)"></i> Connection successful!';
+        } else {
+          status.innerHTML = '<i class="ph-duotone ph-x-circle" style="color:var(--danger)"></i> ' + result.error;
+        }
+      } catch (e) {
+        status.innerHTML = '<i class="ph-duotone ph-x-circle" style="color:var(--danger)"></i> Connection failed: ' + e.message;
+      }
+    }
+    
+    // =====================================================
+    // Translation
+    // =====================================================
+    
+    async function translateText(text, from, to) {
+      if (!text || text.trim() === '') return '';
+      
+      const fromLang = from === 'en' ? 'English' : 'Spanish';
+      const toLang = to === 'en' ? 'English' : 'Spanish';
+      
+      const translated = await callAI('Translate the following text from ' + fromLang + ' to ' + toLang + '. This is for a cannabis production facility SOP. Only return the translation:\n\n' + text);
+      return translated || text;
+    }
+    
+    function setEditLang(lang) {
+      editLang = lang;
+      document.querySelectorAll('#editLangToggle button').forEach(b => b.classList.toggle('active', b.textContent.toLowerCase().includes(lang === 'en' ? 'eng' : 'esp')));
+      document.getElementById('translateBtnText').textContent = lang === 'en' ? 'Auto-translate to Español' : 'Auto-traducir a English';
+    }
+    
+    async function autoTranslateSOP() {
+      const btn = document.getElementById('autoTranslateBtn');
+      const btnText = document.getElementById('translateBtnText');
+      const origText = btnText.textContent;
+      btn.disabled = true;
+      btnText.textContent = 'Translating...';
+      
+      const fromLang = editLang;
+      const toLang = editLang === 'en' ? 'es' : 'en';
+      
+      try {
+        const title = document.getElementById('sopTitle').value;
+        const desc = document.getElementById('sopDesc').value;
+        
+        const [transTitle, transDesc] = await Promise.all([
+          translateText(title, fromLang, toLang),
+          translateText(desc, fromLang, toLang)
         ]);
         
-        if (stepRows.length > 0) {
-          stepsSheet.getRange(stepsSheet.getLastRow() + 1, 1, stepRows.length, 9).setValues(stepRows);
+        for (let i = 0; i < editingSteps.length; i++) {
+          const step = editingSteps[i];
+          if (step.title) {
+            step['title_' + toLang] = await translateText(step.title, fromLang, toLang);
+            step['title_' + fromLang] = step.title;
+          }
+          if (step.description) {
+            step['desc_' + toLang] = await translateText(step.description, fromLang, toLang);
+            step['desc_' + fromLang] = step.description;
+          }
         }
-      }
-    }
-    
-    return { success: true, message: 'SOP updated' };
-    
-  } catch (error) {
-    console.error('updateSOP error:', error);
-    return { success: false, error: error.message };
-  }
-}
-
-function deleteSOP(sopId) {
-  try {
-    const ss = SpreadsheetApp.openById(SOP_SPREADSHEET_ID);
-    const sopSheet = ss.getSheetByName(SOP_SHEET_NAME);
-    const stepsSheet = ss.getSheetByName(STEPS_SHEET_NAME);
-    
-    // Delete SOP row
-    if (sopSheet) {
-      const sopData = sopSheet.getDataRange().getValues();
-      for (let i = sopData.length - 1; i > 0; i--) {
-        if (sopData[i][0] == sopId) {
-          sopSheet.deleteRow(i + 1);
-          break;
-        }
-      }
-    }
-    
-    // Delete associated steps
-    if (stepsSheet) {
-      const stepsData = stepsSheet.getDataRange().getValues();
-      for (let i = stepsData.length - 1; i > 0; i--) {
-        if (stepsData[i][0] == sopId) {
-          stepsSheet.deleteRow(i + 1);
-        }
-      }
-    }
-    
-    return { success: true, message: 'SOP deleted' };
-    
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-}
-
-// =====================================================
-// Request CRUD Operations
-// =====================================================
-
-function getAllRequests() {
-  try {
-    const ss = SpreadsheetApp.openById(SOP_SPREADSHEET_ID);
-    const sheet = ss.getSheetByName(REQUESTS_SHEET_NAME);
-    
-    if (!sheet) {
-      return { success: true, data: [] };
-    }
-    
-    const data = sheet.getDataRange().getValues();
-    if (data.length <= 1) {
-      return { success: true, data: [] };
-    }
-    
-    data.shift(); // Remove header
-    
-    const requests = data.map(row => ({
-      id: row[0],
-      title: row[1],
-      dept: row[2],
-      priority: row[3],
-      assignee: row[4],
-      dueDate: row[5],
-      notes: row[6],
-      completed: row[7] === true || row[7] === 'TRUE',
-      completedAt: row[8],
-      createdAt: row[9],
-      sopId: row[10]
-    }));
-    
-    return { success: true, data: requests };
-    
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-}
-
-function createRequest(reqData) {
-  try {
-    const ss = SpreadsheetApp.openById(SOP_SPREADSHEET_ID);
-    let sheet = ss.getSheetByName(REQUESTS_SHEET_NAME);
-    
-    if (!sheet) {
-      setupSpreadsheet();
-      sheet = ss.getSheetByName(REQUESTS_SHEET_NAME);
-    }
-    
-    const now = new Date().toISOString().split('T')[0];
-    const reqId = Date.now();
-    
-    sheet.appendRow([
-      reqId,
-      reqData.title || '',
-      reqData.dept || '',
-      reqData.priority || 'medium',
-      reqData.assignee || '',
-      reqData.dueDate || '',
-      reqData.notes || '',
-      false,
-      '',
-      now,
-      ''
-    ]);
-    
-    return { success: true, id: reqId, message: 'Request created' };
-    
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-}
-
-function updateRequest(reqData) {
-  try {
-    const ss = SpreadsheetApp.openById(SOP_SPREADSHEET_ID);
-    const sheet = ss.getSheetByName(REQUESTS_SHEET_NAME);
-    
-    if (!sheet) {
-      return { success: false, error: 'Requests sheet not found' };
-    }
-    
-    const data = sheet.getDataRange().getValues();
-    let rowIndex = -1;
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][0] == reqData.id) {
-        rowIndex = i + 1;
-        break;
-      }
-    }
-    
-    if (rowIndex === -1) {
-      return { success: false, error: 'Request not found' };
-    }
-    
-    const now = new Date().toISOString().split('T')[0];
-    
-    sheet.getRange(rowIndex, 2, 1, 10).setValues([[
-      reqData.title || '',
-      reqData.dept || '',
-      reqData.priority || 'medium',
-      reqData.assignee || '',
-      reqData.dueDate || '',
-      reqData.notes || '',
-      reqData.completed || false,
-      reqData.completed ? now : '',
-      data[rowIndex - 1][9], // Preserve createdAt
-      reqData.sopId || ''
-    ]]);
-    
-    return { success: true, message: 'Request updated' };
-    
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-}
-
-function deleteRequest(reqId) {
-  try {
-    const ss = SpreadsheetApp.openById(SOP_SPREADSHEET_ID);
-    const sheet = ss.getSheetByName(REQUESTS_SHEET_NAME);
-    
-    if (!sheet) {
-      return { success: false, error: 'Requests sheet not found' };
-    }
-    
-    const data = sheet.getDataRange().getValues();
-    for (let i = data.length - 1; i > 0; i--) {
-      if (data[i][0] == reqId) {
-        sheet.deleteRow(i + 1);
-        break;
-      }
-    }
-    
-    return { success: true, message: 'Request deleted' };
-    
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-}
-
-// =====================================================
-// Settings
-// =====================================================
-
-function getSettings() {
-  try {
-    const ss = SpreadsheetApp.openById(SOP_SPREADSHEET_ID);
-    const sheet = ss.getSheetByName(SETTINGS_SHEET_NAME);
-    
-    if (!sheet) {
-      // Return defaults
-      return {
-        success: true,
-        data: {
-          departments: [
-            {name:'Production',icon:'ph-factory'},
-            {name:'Packaging',icon:'ph-package'},
-            {name:'Quality',icon:'ph-seal-check'},
-            {name:'Maintenance',icon:'ph-wrench'}
-          ],
-          tags: [
-            {name:'safety',color:'danger'},
-            {name:'quality',color:'green'},
-            {name:'critical',color:'gold'}
-          ]
-        }
-      };
-    }
-    
-    const data = sheet.getDataRange().getValues();
-    const settings = {};
-    
-    for (let i = 1; i < data.length; i++) {
-      try {
-        settings[data[i][0]] = JSON.parse(data[i][1]);
+        
+        window.sopTranslations = {
+          ['title_' + fromLang]: title,
+          ['title_' + toLang]: transTitle,
+          ['desc_' + fromLang]: desc,
+          ['desc_' + toLang]: transDesc
+        };
+        
+        showToast('Translated! (' + fromLang.toUpperCase() + ' → ' + toLang.toUpperCase() + ')', 'success');
       } catch (e) {
-        settings[data[i][0]] = data[i][1];
+        console.error('Translation failed:', e);
+        showToast('Translation failed', 'error');
       }
+      
+      btn.disabled = false;
+      btnText.textContent = origText;
     }
     
-    return { success: true, data: settings };
-    
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-}
-
-function saveSettings(settingsData) {
-  try {
-    const ss = SpreadsheetApp.openById(SOP_SPREADSHEET_ID);
-    let sheet = ss.getSheetByName(SETTINGS_SHEET_NAME);
-    
-    if (!sheet) {
-      setupSpreadsheet();
-      sheet = ss.getSheetByName(SETTINGS_SHEET_NAME);
+    async function setViewLang(lang) {
+      viewLang = lang;
+      document.querySelectorAll('#viewLangToggle button').forEach(b => b.classList.toggle('active', b.textContent === lang.toUpperCase()));
+      const s = sops.find(x => x.id === currentSopId);
+      if (!s) return;
+      
+      if (lang === 'es' && !s.title_es) {
+        const esBtn = document.querySelector('#viewLangToggle button:last-child');
+        esBtn.innerHTML = '<i class="ph-duotone ph-spinner" style="animation:spin 1s linear infinite"></i>';
+        esBtn.disabled = true;
+        
+        try {
+          showToast('Translating...', 'success');
+          s.title_es = await translateText(s.title, 'en', 'es');
+          if (s.description) s.desc_es = await translateText(s.description, 'en', 'es');
+          for (let step of (s.steps || [])) {
+            if (step.title && !step.title_es) step.title_es = await translateText(step.title, 'en', 'es');
+            if (step.description && !step.desc_es) step.desc_es = await translateText(step.description, 'en', 'es');
+          }
+          showToast('Translation complete!', 'success');
+        } catch (e) {
+          console.error('Translation error:', e);
+          showToast('Translation failed', 'error');
+        }
+        
+        esBtn.innerHTML = 'ES';
+        esBtn.disabled = false;
+      }
+      
+      renderViewSOP(s);
     }
     
-    // Clear existing data (except header)
-    const lastRow = sheet.getLastRow();
-    if (lastRow > 1) {
-      sheet.deleteRows(2, lastRow - 1);
+    // =====================================================
+    // PDF Generation
+    // =====================================================
+    
+    function generatePDF() {
+      const s = sops.find(x => x.id === currentSopId);
+      if (!s) return;
+      
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      
+      const lang = document.querySelector('input[name="pdfLang"]:checked').value;
+      const title = s['title_' + lang] || s.title;
+      const desc = s['desc_' + lang] || s.description;
+      
+      doc.setFontSize(20);
+      doc.setTextColor(45, 58, 46);
+      doc.text(title, 20, 25);
+      
+      doc.setFontSize(10);
+      doc.setTextColor(90, 107, 95);
+      doc.text('Department: ' + s.dept + '  |  Doc #: ' + (s.docNum || 'N/A') + '  |  Rev: ' + (s.revision || '1.0'), 20, 35);
+      
+      if (desc) {
+        doc.setFontSize(11);
+        doc.text(doc.splitTextToSize(desc, 170), 20, 45);
+      }
+      
+      let y = desc ? 60 : 45;
+      
+      (s.steps || []).forEach((step, i) => {
+        if (y > 250) {
+          doc.addPage();
+          y = 20;
+        }
+        
+        const stepTitle = step['title_' + lang] || step.title;
+        const stepDesc = step['desc_' + lang] || step.description;
+        
+        doc.setFontSize(12);
+        doc.setTextColor(102, 137, 113);
+        doc.text((i + 1) + '. ' + stepTitle, 20, y);
+        
+        if (stepDesc) {
+          doc.setFontSize(10);
+          doc.setTextColor(90, 107, 95);
+          const lines = doc.splitTextToSize(stepDesc, 170);
+          doc.text(lines, 25, y + 7);
+          y += 7 + (lines.length * 5);
+        }
+        
+        y += 10;
+      });
+      
+      if (document.getElementById('pdfIncludeQR').checked) {
+        const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=60x60&data=' + encodeURIComponent(window.location.origin + window.location.pathname + '?view=' + s.id);
+        // Note: Would need to convert QR to base64 for proper embedding
+      }
+      
+      doc.save('SOP-' + (s.docNum || s.id) + '.pdf');
+      closeModal('pdfModal');
+      showToast('PDF generated!', 'success');
     }
     
-    // Add settings rows
-    if (settingsData.departments) {
-      sheet.appendRow(['departments', JSON.stringify(settingsData.departments)]);
-    }
-    if (settingsData.tags) {
-      sheet.appendRow(['tags', JSON.stringify(settingsData.tags)]);
-    }
+    // =====================================================
+    // Utilities
+    // =====================================================
     
-    return { success: true, message: 'Settings saved' };
-    
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-}
-
-// =====================================================
-// Image Storage (Google Drive)
-// =====================================================
-
-function saveImageToDrive(base64Data, filename) {
-  try {
-    const base64Content = base64Data.replace(/^data:image\/\w+;base64,/, '');
-    const blob = Utilities.newBlob(Utilities.base64Decode(base64Content), 'image/png', filename);
-    
-    let folder;
-    const folders = DriveApp.getFoldersByName('SOP_Images');
-    if (folders.hasNext()) {
-      folder = folders.next();
-    } else {
-      folder = DriveApp.createFolder('SOP_Images');
+    function setView(v) {
+      document.getElementById('gridViewBtn').classList.toggle('active', v === 'grid');
+      document.getElementById('listViewBtn').classList.toggle('active', v === 'list');
+      document.getElementById('sopGrid').classList.toggle('hidden', v !== 'grid');
+      document.getElementById('sopList').classList.toggle('active', v === 'list');
     }
     
-    const file = folder.createFile(blob);
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    function toggleDarkMode() {
+      document.body.classList.toggle('dark-mode');
+      localStorage.setItem('sopDarkMode', document.body.classList.contains('dark-mode'));
+    }
     
-    return 'https://drive.google.com/uc?export=view&id=' + file.getId();
+    function toggleAppLang() {
+      appLang = appLang === 'en' ? 'es' : 'en';
+      document.getElementById('appLangLabel').textContent = appLang.toUpperCase();
+      localStorage.setItem('sopAppLang', appLang);
+    }
     
-  } catch (error) {
-    console.error('saveImageToDrive error:', error);
-    return null;
-  }
-}
-
-// =====================================================
-// Include Helper (for Apps Script serving)
-// =====================================================
-
-function include(filename) {
-  return HtmlService.createHtmlOutputFromFile(filename).getContent();
-}
-
-// =====================================================
-// Test Functions
-// =====================================================
-
-function testSetup() {
-  const result = setupSpreadsheet();
-  console.log('Setup result:', result);
-}
-
-function testGetAllSOPs() {
-  const result = getAllSOPs();
-  console.log('Get all SOPs:', JSON.stringify(result, null, 2));
-}
-
-function testGetRequests() {
-  const result = getAllRequests();
-  console.log('Get requests:', JSON.stringify(result, null, 2));
-}
-
-function testGetSettings() {
-  const result = getSettings();
-  console.log('Get settings:', JSON.stringify(result, null, 2));
-}
-
-function testAnthropicConnection() {
-  const apiKey = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
-  
-  if (!apiKey) {
-    console.log('No API key found in Script Properties');
-    return;
-  }
-  
-  try {
-    const response = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01'
-      },
-      payload: JSON.stringify({
-        model: 'claude-3-5-haiku-20241022',
-        max_tokens: 10,
-        messages: [{ role: 'user', content: 'Say OK' }]
-      }),
-      muteHttpExceptions: true
+    function refresh() {
+      showToast('Refreshing...', 'success');
+      loadData();
+    }
+    
+    function generateDocNum() {
+      return 'SOP-' + String(sops.length + 1).padStart(3, '0');
+    }
+    
+    function fmtDate(d) {
+      if (!d) return 'N/A';
+      const date = new Date(d);
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+    
+    function esc(s) {
+      if (!s) return '';
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    
+    function showToast(msg, type) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMsg');
+      toast.className = 'toast show ' + type;
+      toastMsg.textContent = msg;
+      setTimeout(() => { toast.className = 'toast'; }, 3000);
+    }
+    
+    // =====================================================
+    // Initialize
+    // =====================================================
+    
+    document.addEventListener('DOMContentLoaded', function() {
+      // Load preferences
+      if (localStorage.getItem('sopDarkMode') === 'true') {
+        document.body.classList.add('dark-mode');
+      }
+      if (localStorage.getItem('sopAppLang')) {
+        appLang = localStorage.getItem('sopAppLang');
+        document.getElementById('appLangLabel').textContent = appLang.toUpperCase();
+      }
+      
+      // Load data from API
+      loadData();
+      
+      // Check for view parameter
+      const urlParams = new URLSearchParams(window.location.search);
+      const viewId = urlParams.get('view');
+      if (viewId) {
+        setTimeout(() => viewSOP(parseInt(viewId)), 1000);
+      }
     });
-    
-    console.log('Anthropic API response:', response.getContentText());
-  } catch (error) {
-    console.log('Error:', error.toString());
-  }
-}
+  </script>
+</body>
+</html>
