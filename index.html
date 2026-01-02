@@ -1949,5 +1949,338 @@
       }
     }
   </script>
+
+<!-- ========================================== -->
+<!-- AI CHAT WIDGET - Rogue Origin Assistant   -->
+<!-- ========================================== -->
+<style>
+  .ai-chat-widget {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 9999;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  .ai-chat-toggle {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: var(--green);
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s, background 0.2s;
+  }
+  .ai-chat-toggle:hover {
+    transform: scale(1.05);
+    background: var(--green-dark);
+  }
+  .ai-chat-toggle svg {
+    width: 28px;
+    height: 28px;
+    fill: white;
+  }
+  .ai-chat-panel {
+    position: absolute;
+    bottom: 70px;
+    right: 0;
+    width: 380px;
+    max-width: calc(100vw - 40px);
+    height: 500px;
+    max-height: calc(100vh - 100px);
+    background: var(--bg-card);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .ai-chat-panel.open { display: flex; }
+  .ai-chat-header {
+    background: var(--green);
+    color: white;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .ai-chat-header-icon {
+    width: 32px;
+    height: 32px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+  }
+  .ai-chat-header-text h3 {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0;
+  }
+  .ai-chat-header-text span {
+    font-size: 11px;
+    opacity: 0.8;
+  }
+  .ai-chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: var(--bg);
+  }
+  .ai-message {
+    max-width: 85%;
+    padding: 10px 14px;
+    border-radius: 16px;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .ai-message.user {
+    background: var(--green);
+    color: white;
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+  }
+  .ai-message.assistant {
+    background: var(--bg-card);
+    color: var(--text);
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    border: 1px solid var(--border-light);
+  }
+  .ai-message .data-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    margin-top: 8px;
+  }
+  .ai-message .data-card h4 {
+    font-size: 12px;
+    color: var(--green);
+    margin: 0 0 8px 0;
+    font-weight: 600;
+  }
+  .ai-message .data-card .metric {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .ai-message .data-card .metric:last-child { border-bottom: none; }
+  .ai-message .data-card .metric-label { color: var(--text-muted); }
+  .ai-message .data-card .metric-value { font-weight: 600; color: var(--text); }
+  .ai-typing {
+    display: flex;
+    gap: 4px;
+    padding: 12px 14px;
+  }
+  .ai-typing span {
+    width: 8px;
+    height: 8px;
+    background: var(--text-light);
+    border-radius: 50%;
+    animation: aiBounce 1.4s infinite ease-in-out;
+  }
+  .ai-typing span:nth-child(1) { animation-delay: -0.32s; }
+  .ai-typing span:nth-child(2) { animation-delay: -0.16s; }
+  @keyframes aiBounce {
+    0%, 80%, 100% { transform: scale(0); }
+    40% { transform: scale(1); }
+  }
+  .ai-quick-actions {
+    padding: 8px 12px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border-light);
+  }
+  .ai-quick-btn {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 5px 10px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--text-muted);
+  }
+  .ai-quick-btn:hover {
+    background: var(--green);
+    color: white;
+    border-color: var(--green);
+  }
+  .ai-chat-input-area {
+    padding: 12px;
+    background: var(--bg-card);
+    border-top: 1px solid var(--border-light);
+    display: flex;
+    gap: 8px;
+  }
+  .ai-chat-input {
+    flex: 1;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 10px 14px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .ai-chat-input:focus { border-color: var(--green); }
+  .ai-chat-input::placeholder { color: var(--text-light); }
+  .ai-chat-send {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: var(--green);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+  }
+  .ai-chat-send:hover { background: var(--green-dark); }
+  .ai-chat-send:disabled { background: var(--text-light); cursor: not-allowed; }
+  .ai-chat-send svg { width: 16px; height: 16px; fill: white; }
+  @media (max-width: 480px) {
+    .ai-chat-panel {
+      width: calc(100vw - 24px);
+      height: calc(100vh - 100px);
+      right: -8px;
+    }
+    .ai-chat-toggle { width: 54px; height: 54px; }
+  }
+</style>
+
+<div class="ai-chat-widget">
+  <div class="ai-chat-panel" id="aiChatPanel">
+    <div class="ai-chat-header">
+      <div class="ai-chat-header-icon">🌿</div>
+      <div class="ai-chat-header-text">
+        <h3>Rogue Origin Assistant</h3>
+        <span>Ask about production, bags, crew</span>
+      </div>
+    </div>
+    <div class="ai-quick-actions">
+      <button class="ai-quick-btn" onclick="aiAskQuestion('How are we doing today?')">📊 Status</button>
+      <button class="ai-quick-btn" onclick="aiAskQuestion('How many bags completed?')">📦 Bags</button>
+      <button class="ai-quick-btn" onclick="aiAskQuestion('What is our current rate?')">⚡ Rate</button>
+      <button class="ai-quick-btn" onclick="aiAskQuestion('How many people working?')">👥 Crew</button>
+    </div>
+    <div class="ai-chat-messages" id="aiMessages">
+      <div class="ai-message assistant">
+        Hi! I can help with production status, bag counts, crew info, and more. What would you like to know?
+      </div>
+    </div>
+    <div class="ai-chat-input-area">
+      <input type="text" class="ai-chat-input" id="aiInput" placeholder="Ask a question..." onkeypress="if(event.key==='Enter')aiSendMessage()">
+      <button class="ai-chat-send" onclick="aiSendMessage()">
+        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
+    </div>
+  </div>
+  <button class="ai-chat-toggle" onclick="aiToggleChat()">
+    <svg viewBox="0 0 24 24" id="aiChatIcon"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>
+    <svg viewBox="0 0 24 24" id="aiCloseIcon" style="display:none;"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+  </button>
+</div>
+
+<script>
+(function() {
+  const AI_API_URL = 'https://script.google.com/macros/s/AKfycbxDAHSFl9cedGS49L3Lf5ztqy-SSToYigyA30ZtsdpmWNAR9H61X_Mm48JOOTGqqr-Z/exec';
+  let aiHistory = [];
+
+  window.aiToggleChat = function() {
+    const panel = document.getElementById('aiChatPanel');
+    const chatIcon = document.getElementById('aiChatIcon');
+    const closeIcon = document.getElementById('aiCloseIcon');
+    panel.classList.toggle('open');
+    if (panel.classList.contains('open')) {
+      chatIcon.style.display = 'none';
+      closeIcon.style.display = 'block';
+      document.getElementById('aiInput').focus();
+    } else {
+      chatIcon.style.display = 'block';
+      closeIcon.style.display = 'none';
+    }
+  };
+
+  window.aiAskQuestion = function(q) {
+    document.getElementById('aiInput').value = q;
+    aiSendMessage();
+  };
+
+  window.aiSendMessage = async function() {
+    const input = document.getElementById('aiInput');
+    const messages = document.getElementById('aiMessages');
+    const msg = input.value.trim();
+    if (!msg) return;
+
+    // Add user message
+    const userEl = document.createElement('div');
+    userEl.className = 'ai-message user';
+    userEl.textContent = msg;
+    messages.appendChild(userEl);
+    input.value = '';
+    messages.scrollTop = messages.scrollHeight;
+
+    // Typing indicator
+    const typingEl = document.createElement('div');
+    typingEl.className = 'ai-message assistant';
+    typingEl.innerHTML = '<div class="ai-typing"><span></span><span></span><span></span></div>';
+    messages.appendChild(typingEl);
+    messages.scrollTop = messages.scrollHeight;
+
+    try {
+      aiHistory.push({ role: 'user', content: msg });
+      
+      const response = await fetch(AI_API_URL + '?action=chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'chat',
+          message: msg,
+          history: aiHistory.slice(-10)
+        })
+      });
+      
+      const data = await response.json();
+      typingEl.remove();
+      
+      if (data.success && data.response) {
+        aiHistory.push({ role: 'assistant', content: data.response });
+        const assistEl = document.createElement('div');
+        assistEl.className = 'ai-message assistant';
+        assistEl.innerHTML = data.response;
+        messages.appendChild(assistEl);
+      } else {
+        throw new Error(data.error || 'Unknown error');
+      }
+    } catch (err) {
+      typingEl.remove();
+      const errEl = document.createElement('div');
+      errEl.className = 'ai-message assistant';
+      errEl.textContent = 'Sorry, something went wrong. ' + (err.message || '');
+      messages.appendChild(errEl);
+      console.error('AI Error:', err);
+    }
+    messages.scrollTop = messages.scrollHeight;
+  };
+})();
+</script>
 </body>
 </html>
