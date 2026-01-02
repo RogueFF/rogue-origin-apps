@@ -2190,6 +2190,57 @@
   .ai-chat-send:hover { background: var(--green-dark); }
   .ai-chat-send:disabled { background: var(--text-light); cursor: not-allowed; }
   .ai-chat-send svg { width: 16px; height: 16px; fill: white; }
+
+  /* Voice Input Button */
+  .ai-voice-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: var(--bg-card);
+    border: 2px solid var(--border);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    font-size: 16px;
+  }
+  .ai-voice-btn:hover { border-color: var(--green); background: var(--bg-main); }
+  .ai-voice-btn.listening {
+    background: var(--danger);
+    border-color: var(--danger);
+    animation: pulse-voice 1.5s infinite;
+  }
+  .ai-voice-btn.not-supported { opacity: 0.4; cursor: not-allowed; }
+  @keyframes pulse-voice {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+  }
+
+  /* Speak Button on Messages */
+  .ai-speak-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    margin-right: 6px;
+    transition: all 0.2s;
+  }
+  .ai-speak-btn:hover { background: var(--bg-main); border-color: var(--green); }
+  .ai-speak-btn.speaking { background: var(--gold); border-color: var(--gold); }
+
+  /* Voice Status Indicator */
+  .ai-voice-status {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 4px;
+    display: none;
+  }
+  .ai-voice-status.active { display: block; color: var(--danger); }
+
   @media (max-width: 480px) {
     .ai-chat-panel {
       width: calc(100vw - 24px);
@@ -2220,9 +2271,11 @@
         Hi! I can help with production status, bag counts, crew info, and more. What would you like to know?
       </div>
     </div>
+    <div class="ai-voice-status" id="aiVoiceStatus">🎤 Listening...</div>
     <div class="ai-chat-input-area">
-      <input type="text" class="ai-chat-input" id="aiInput" placeholder="Ask a question..." onkeypress="if(event.key==='Enter')aiSendMessage()">
-      <button class="ai-chat-send" onclick="aiSendMessage()">
+      <input type="text" class="ai-chat-input" id="aiInput" placeholder="Ask a question..." onkeypress="if(event.key==='Enter')aiSendMessage()" aria-label="Chat input">
+      <button class="ai-voice-btn" id="aiVoiceBtn" onclick="aiToggleVoice()" title="Voice input" aria-label="Voice input">🎤</button>
+      <button class="ai-chat-send" onclick="aiSendMessage()" aria-label="Send message">
         <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
       </button>
     </div>
@@ -2239,7 +2292,174 @@
   let aiHistory = [];
   let lastQuestion = '';  // Track for feedback
 
+  // ============================================
+  // VOICE INPUT (Web Speech API)
+  // ============================================
+  let recognition = null;
+  let isListening = false;
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  // Initialize voice recognition if supported
+  if (SpeechRecognition) {
+    recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = localStorage.getItem('ro_language') === 'es' ? 'es-ES' : 'en-US';
+
+    recognition.onstart = function() {
+      isListening = true;
+      const btn = document.getElementById('aiVoiceBtn');
+      const status = document.getElementById('aiVoiceStatus');
+      if (btn) { btn.classList.add('listening'); btn.textContent = '⏹️'; }
+      if (status) { status.classList.add('active'); status.textContent = '🎤 Listening... (tap to stop)'; }
+    };
+
+    recognition.onend = function() {
+      isListening = false;
+      const btn = document.getElementById('aiVoiceBtn');
+      const status = document.getElementById('aiVoiceStatus');
+      if (btn) { btn.classList.remove('listening'); btn.textContent = '🎤'; }
+      if (status) status.classList.remove('active');
+    };
+
+    recognition.onresult = function(event) {
+      const input = document.getElementById('aiInput');
+      let finalTranscript = '';
+      let interimTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      // Show interim results while speaking
+      if (interimTranscript) {
+        input.value = interimTranscript;
+        input.style.color = 'var(--text-muted)';
+      }
+
+      // When final, set the value and optionally auto-send
+      if (finalTranscript) {
+        input.value = finalTranscript;
+        input.style.color = '';
+        // Auto-send after voice input completes
+        setTimeout(() => {
+          if (input.value.trim()) {
+            window.aiSendMessage();
+          }
+        }, 500);
+      }
+    };
+
+    recognition.onerror = function(event) {
+      console.error('Speech recognition error:', event.error);
+      isListening = false;
+      const btn = document.getElementById('aiVoiceBtn');
+      const status = document.getElementById('aiVoiceStatus');
+      if (btn) { btn.classList.remove('listening'); btn.textContent = '🎤'; }
+      if (status) {
+        status.classList.add('active');
+        status.textContent = event.error === 'not-allowed'
+          ? '❌ Microphone access denied'
+          : '❌ Voice error: ' + event.error;
+        setTimeout(() => status.classList.remove('active'), 3000);
+      }
+    };
+  } else {
+    // Mark voice button as not supported
+    setTimeout(() => {
+      const btn = document.getElementById('aiVoiceBtn');
+      if (btn) {
+        btn.classList.add('not-supported');
+        btn.title = 'Voice input not supported in this browser';
+      }
+    }, 100);
+  }
+
+  window.aiToggleVoice = function() {
+    if (!recognition) {
+      alert('Voice input is not supported in your browser. Try Chrome or Edge.');
+      return;
+    }
+
+    // Update language based on current setting
+    recognition.lang = localStorage.getItem('ro_language') === 'es' ? 'es-ES' : 'en-US';
+
+    if (isListening) {
+      recognition.stop();
+    } else {
+      recognition.start();
+    }
+  };
+
+  // ============================================
+  // TEXT-TO-SPEECH (Speech Synthesis API)
+  // ============================================
+  let currentUtterance = null;
+
+  window.aiSpeak = function(contentId, buttonEl) {
+    const content = document.getElementById(contentId);
+    if (!content) return;
+
+    // If already speaking this message, stop it
+    if (speechSynthesis.speaking && buttonEl.classList.contains('speaking')) {
+      speechSynthesis.cancel();
+      buttonEl.classList.remove('speaking');
+      buttonEl.textContent = '🔊 Speak';
+      return;
+    }
+
+    // Stop any current speech
+    if (speechSynthesis.speaking) {
+      speechSynthesis.cancel();
+      // Reset all speak buttons
+      document.querySelectorAll('.ai-speak-btn.speaking').forEach(btn => {
+        btn.classList.remove('speaking');
+        btn.textContent = '🔊 Speak';
+      });
+    }
+
+    // Get text content, stripping any HTML
+    const text = content.textContent || content.innerText;
+    if (!text.trim()) return;
+
+    // Create utterance
+    currentUtterance = new SpeechSynthesisUtterance(text);
+    currentUtterance.lang = localStorage.getItem('ro_language') === 'es' ? 'es-ES' : 'en-US';
+    currentUtterance.rate = 0.95;  // Slightly slower for clarity
+    currentUtterance.pitch = 1.0;
+
+    // Update button state
+    buttonEl.classList.add('speaking');
+    buttonEl.textContent = '⏹️ Stop';
+
+    currentUtterance.onend = function() {
+      buttonEl.classList.remove('speaking');
+      buttonEl.textContent = '🔊 Speak';
+    };
+
+    currentUtterance.onerror = function(event) {
+      console.error('Speech synthesis error:', event.error);
+      buttonEl.classList.remove('speaking');
+      buttonEl.textContent = '🔊 Speak';
+    };
+
+    speechSynthesis.speak(currentUtterance);
+  };
+
   window.aiToggleChat = function() {
+    // Stop any ongoing voice activity when closing
+    if (speechSynthesis.speaking) {
+      speechSynthesis.cancel();
+    }
+    if (isListening && recognition) {
+      recognition.stop();
+    }
+
     const panel = document.getElementById('aiChatPanel');
     const chatIcon = document.getElementById('aiChatIcon');
     const closeIcon = document.getElementById('aiCloseIcon');
@@ -2306,11 +2526,12 @@
         const assistEl = document.createElement('div');
         assistEl.className = 'ai-message assistant';
         
-        // Add response content + feedback buttons
+        // Add response content + speak button + feedback buttons
         const responseId = 'resp-' + Date.now();
         assistEl.innerHTML = `
-          <div class="ai-response-content">${data.response}</div>
+          <div class="ai-response-content" id="content-${responseId}">${data.response}</div>
           <div class="ai-feedback" id="${responseId}">
+            <button class="ai-speak-btn" onclick="aiSpeak('content-${responseId}', this)" title="Read aloud">🔊 Speak</button>
             <button class="ai-feedback-btn" onclick="aiFeedback('${responseId}', 'good', '${encodeURIComponent(lastQuestion)}')">👍 Helpful</button>
             <button class="ai-feedback-btn" onclick="aiFeedback('${responseId}', 'bad', '${encodeURIComponent(lastQuestion)}')">👎 Not quite</button>
           </div>
