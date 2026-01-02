@@ -1723,7 +1723,17 @@ function gatherProductionContext() {
   } catch (error) {
     Logger.log('Error gathering context: ' + error.message);
   }
-  
+
+  // Get orders summary for AI context
+  try {
+    var ordersSummary = getOrdersSummary();
+    if (ordersSummary) {
+      context.orders = ordersSummary;
+    }
+  } catch (error) {
+    Logger.log('Error getting orders summary: ' + error.message);
+  }
+
   return context;
 }
 
@@ -1764,7 +1774,9 @@ function buildSystemPrompt(context) {
     '- Target rate: ' + (context.rates.targetRate || 1.0).toFixed(2) + ' lbs/person/hour\n' +
     '- vs Yesterday: ' + formatComparison(context.rates.vsYesterday) + '\n' +
     '- vs 7-day avg: ' + formatComparison(context.rates.vs7Day) + '\n\n' +
-    
+
+    buildOrdersPromptSection(context.orders) + '\n\n' +
+
     'RESPONSE GUIDELINES:\n' +
     '1. Be concise and friendly - the boss reads this on his phone\n' +
     '2. Lead with the most important number or insight\n' +
@@ -1788,6 +1800,41 @@ function formatComparison(value) {
   if (isNaN(num)) return 'N/A';
   if (num > 0) return '+' + num.toFixed(1) + '%';
   return num.toFixed(1) + '%';
+}
+
+/**
+ * Builds the orders section for AI system prompt
+ */
+function buildOrdersPromptSection(ordersData) {
+  if (!ordersData || !ordersData.orders || ordersData.orders.length === 0) {
+    return 'ACTIVE ORDERS:\n- No active orders currently';
+  }
+
+  var section = 'ACTIVE ORDERS (' + ordersData.activeOrders + ' orders):\n' +
+    '- Total pending: ' + ordersData.pendingKg + ' kg\n' +
+    '- In progress: ' + ordersData.inProgressKg + ' kg remaining\n' +
+    '- Ready to ship: ' + ordersData.readyToShipKg + ' kg\n\n' +
+    'Order Details:';
+
+  for (var i = 0; i < ordersData.orders.length; i++) {
+    var order = ordersData.orders[i];
+    var remaining = order.totalKg - order.completedKg;
+    section += '\n  ' + order.customer + ' (' + order.id + '):\n' +
+      '    - ' + order.totalKg + ' kg total, ' + order.completedKg + ' kg done (' + order.percentComplete + '%)\n' +
+      '    - ' + remaining + ' kg remaining\n' +
+      '    - Status: ' + order.status + '\n' +
+      '    - Due: ' + (order.dueDate || 'Not set');
+  }
+
+  // Add estimation help
+  section += '\n\nORDER ESTIMATION FORMULAS:\n' +
+    '- 1 kg = 2.205 lbs\n' +
+    '- 5kg bag = 11.02 lbs\n' +
+    '- Hours needed = remaining_lbs / (trimmers × rate)\n' +
+    '- Days needed = hours / 7.5 effective hours per day\n' +
+    '- When estimating ETAs, exclude weekends';
+
+  return section;
 }
 
 /**
