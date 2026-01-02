@@ -56,6 +56,15 @@
 | **API Key Location** | Script Properties → `ANTHROPIC_API_KEY` |
 | **Context Window** | ~4KB system prompt |
 
+### Git Workflow
+
+**Work directly on `main` branch - no PRs required.**
+
+- Commit and push changes directly to `main`
+- Use clear, descriptive commit messages
+- No feature branches or pull requests needed
+- Changes deploy automatically via GitHub Pages
+
 ---
 
 ## Company Overview
