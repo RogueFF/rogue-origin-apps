@@ -64,11 +64,15 @@ function getTimeSlotMultiplier(timeSlot) {
  **********************************************************/
 function doGet(e) {
   var action = (e && e.parameter && e.parameter.action) || '';
-  
+
   var result = {};
   try {
     if (action === 'scoreboard') {
       result = getScoreboardWithTimerData();
+    } else if (action === 'dashboard') {
+      var start = e.parameter.start || '';
+      var end = e.parameter.end || '';
+      result = getProductionDashboardData(start, end);
     } else if (action === 'getOrders') {
       result = getOrders();
     } else if (action === 'getOrder') {
@@ -77,10 +81,10 @@ function doGet(e) {
       result = { ok: true, message: 'API is working', timestamp: new Date().toISOString() };
     } else {
       // No action specified - return API info
-      result = { 
-        ok: true, 
+      result = {
+        ok: true,
         message: 'Rogue Origin Production API',
-        endpoints: ['scoreboard', 'test'],
+        endpoints: ['scoreboard', 'dashboard', 'test'],
         timestamp: new Date().toISOString()
       };
     }
@@ -89,7 +93,7 @@ function doGet(e) {
     console.error('doGet error:', err.message, err.stack);
     result = { error: err.message };
   }
-  
+
   return ContentService.createTextOutput(JSON.stringify(result))
     .setMimeType(ContentService.MimeType.JSON);
 }
@@ -575,6 +579,126 @@ function getTrimmersForHour_(hourlyTrimmers, hour, fallback) {
   }
   
   return fallback || 0;
+}
+
+/**********************************************************
+ * Dashboard Data - For Ops Hub Dashboard
+ **********************************************************/
+function getProductionDashboardData(startDate, endDate) {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var timezone = ss.getSpreadsheetTimeZone();
+
+  // Parse dates or default to today
+  var start = startDate ? new Date(startDate) : new Date();
+  var end = endDate ? new Date(endDate) : new Date();
+
+  // Get scoreboard data for current production info
+  var scoreboard = getScoreboardData();
+
+  // Get extended daily data for the date range
+  var allDaily = getExtendedDailyDataLine1_(ss, timezone, 30);
+
+  // Filter to requested date range
+  var startStr = Utilities.formatDate(start, timezone, 'yyyy-MM-dd');
+  var endStr = Utilities.formatDate(end, timezone, 'yyyy-MM-dd');
+
+  var filteredDaily = allDaily.filter(function(d) {
+    return d.dateStr >= startStr && d.dateStr <= endStr;
+  });
+
+  // Calculate totals from filtered data
+  var totalTops = 0, totalSmalls = 0, totalLbs = 0;
+  var totalTrimmerHours = 0, totalBuckerHours = 0, totalOperatorHours = 0;
+  var totalHours = 0, rateSum = 0, rateCount = 0, maxRate = 0;
+  var hourlyData = [];
+
+  filteredDaily.forEach(function(day) {
+    totalTops += day.totalTops || 0;
+    totalSmalls += day.totalSmalls || 0;
+    totalLbs += day.totalLbs || 0;
+    totalTrimmerHours += day.trimmerHours || 0;
+    totalOperatorHours += day.trimmerHours || 0; // Using trimmer hours as operator hours
+    totalHours += day.hoursWorked || 0;
+
+    if (day.avgRate > 0) {
+      rateSum += day.avgRate;
+      rateCount++;
+      if (day.avgRate > maxRate) maxRate = day.avgRate;
+    }
+
+    // Add hourly breakdown if available
+    if (day.hourly) {
+      day.hourly.forEach(function(h) {
+        hourlyData.push({
+          date: day.dateStr,
+          timeSlot: h.timeSlot,
+          tops: h.tops || 0,
+          smalls: h.smalls || 0,
+          trimmers: h.trimmers || 0,
+          buckers: h.buckers || 0,
+          strain: h.strain || '',
+          rate: h.rate || 0
+        });
+      });
+    }
+  });
+
+  var avgRate = rateCount > 0 ? rateSum / rateCount : 0;
+
+  // Estimate costs (using default wage rates from CLAUDE.md)
+  var hourlyWage = 15.00; // Default hourly wage
+  var totalLaborCost = totalOperatorHours * hourlyWage;
+  var costPerLb = totalLbs > 0 ? totalLaborCost / totalLbs : 0;
+
+  // Build last completed hour info
+  var lastCompleted = null;
+  if (scoreboard.lastHourLbs > 0) {
+    lastCompleted = {
+      strain: scoreboard.strain || 'Unknown',
+      timeSlot: scoreboard.lastTimeSlot || '',
+      tops: scoreboard.lastHourLbs || 0,
+      smalls: 0, // Scoreboard doesn't track smalls separately
+      trimmers: scoreboard.lastHourTrimmers || 0,
+      buckers: 0,
+      rate: scoreboard.lastHourTrimmers > 0 ? scoreboard.lastHourLbs / scoreboard.lastHourTrimmers : 0
+    };
+  }
+
+  return {
+    success: true,
+    data: {
+      dateRange: {
+        start: startStr,
+        end: endStr,
+        label: startStr === endStr ? 'Today' : startStr + ' to ' + endStr
+      },
+      totals: {
+        totalTops: totalTops,
+        totalSmalls: totalSmalls,
+        totalLbs: totalLbs,
+        avgRate: avgRate,
+        maxRate: maxRate,
+        trimmers: scoreboard.lastHourTrimmers || scoreboard.currentHourTrimmers || 0,
+        buckers: 0,
+        totalTrimmerHours: totalTrimmerHours,
+        totalBuckerHours: totalBuckerHours,
+        totalOperatorHours: totalOperatorHours,
+        totalLaborCost: totalLaborCost,
+        costPerLb: costPerLb
+      },
+      lastCompleted: lastCompleted,
+      hourly: hourlyData,
+      current: {
+        strain: scoreboard.strain,
+        trimmers: scoreboard.currentHourTrimmers,
+        targetRate: scoreboard.targetRate,
+        todayLbs: scoreboard.todayLbs,
+        todayTarget: scoreboard.todayTarget,
+        todayPercentage: scoreboard.todayPercentage
+      },
+      strains: [] // Can be populated with strain breakdown if needed
+    }
+  };
 }
 
 /**********************************************************
