@@ -2035,6 +2035,9 @@
     justify-content: center;
     font-size: 16px;
   }
+  .ai-chat-header-text {
+    flex: 1;
+  }
   .ai-chat-header-text h3 {
     font-size: 15px;
     font-weight: 600;
@@ -2043,6 +2046,29 @@
   .ai-chat-header-text span {
     font-size: 11px;
     opacity: 0.8;
+  }
+  .ai-voice-mode-toggle {
+    background: rgba(255,255,255,0.2);
+    border: none;
+    border-radius: 20px;
+    padding: 6px 12px;
+    color: white;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+  }
+  .ai-voice-mode-toggle:hover {
+    background: rgba(255,255,255,0.3);
+  }
+  .ai-voice-mode-toggle.active {
+    background: rgba(255,255,255,0.9);
+    color: var(--green);
+  }
+  .ai-voice-mode-toggle .icon {
+    font-size: 14px;
   }
   .ai-chat-messages {
     flex: 1;
@@ -2302,7 +2328,7 @@
     .ai-quick-btn { padding: 10px 14px; font-size: 13px; min-height: 44px; }
     .ai-chat-messages { padding: 12px; }
     .ai-chat-input-area { padding: 12px; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
-    .ai-chat-input { padding: 14px 16px; font-size: 16px; }
+    .ai-chat-input { padding: 14px 16px; font-size: 16px; } /* Prevents iOS zoom */
     .ai-voice-btn { width: 44px; height: 44px; }
     .ai-chat-send { width: 44px; height: 44px; }
   }
@@ -2356,8 +2382,10 @@
   // ============================================
   // VOICE MODE (Auto-speak responses)
   // ============================================
+  // Default to ON - user can toggle off for text-only
   let voiceModeEnabled = localStorage.getItem('ro_voice_mode') !== 'false';
 
+  // Initialize toggle button state on load
   setTimeout(() => {
     const toggle = document.getElementById('aiVoiceModeToggle');
     if (toggle) updateVoiceModeButton(toggle);
