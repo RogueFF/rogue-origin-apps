@@ -9,6 +9,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <script src="https://js.puter.com/v2/"></script>
   <style>
     :root {
       --gold: #e4aa4f; --gold-light: #f0cb60; --gold-dim: rgba(228,170,79,0.15);
@@ -2381,7 +2382,11 @@
     localStorage.setItem('ro_voice_mode', voiceModeEnabled ? 'true' : 'false');
     const toggle = document.getElementById('aiVoiceModeToggle');
     if (toggle) updateVoiceModeButton(toggle);
-    if (!voiceModeEnabled && speechSynthesis.speaking) speechSynthesis.cancel();
+    // Stop any playing audio when switching to text mode
+    if (!voiceModeEnabled) {
+      if (typeof stopSpeaking === 'function') stopSpeaking();
+      if (speechSynthesis.speaking) speechSynthesis.cancel();
+    }
   };
 
   // ============================================
@@ -2461,84 +2466,107 @@
   };
 
   // ============================================
-  // TEXT-TO-SPEECH (Speech Synthesis API)
+  // TEXT-TO-SPEECH (Puter.js with OpenAI TTS)
   // ============================================
-  let currentUtterance = null;
-  let preferredVoices = { en: null, es: null };
+  let currentAudio = null;
+  let isSpeaking = false;
 
-  function loadPreferredVoices() {
-    const voices = speechSynthesis.getVoices();
-    if (!voices.length) return;
-
-    const enPriority = ['Google US English', 'Google UK English Female', 'Google UK English Male', 'Samantha', 'Karen', 'Daniel', 'Microsoft Zira', 'Microsoft David'];
-    const esPriority = ['Google español', 'Google español de Estados Unidos', 'Paulina', 'Monica', 'Microsoft Sabina'];
-
-    for (const name of enPriority) {
-      const voice = voices.find(v => v.name.includes(name) || v.name === name);
-      if (voice) { preferredVoices.en = voice; break; }
+  // Stop any currently playing audio
+  function stopSpeaking() {
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+      currentAudio = null;
     }
-    if (!preferredVoices.en) preferredVoices.en = voices.find(v => v.lang.startsWith('en')) || null;
-
-    for (const name of esPriority) {
-      const voice = voices.find(v => v.name.includes(name) || v.name === name);
-      if (voice) { preferredVoices.es = voice; break; }
-    }
-    if (!preferredVoices.es) preferredVoices.es = voices.find(v => v.lang.startsWith('es')) || null;
+    isSpeaking = false;
+    document.querySelectorAll('.ai-speak-btn.speaking').forEach(btn => {
+      btn.classList.remove('speaking');
+      btn.textContent = '🔊 Speak';
+    });
   }
 
-  if (speechSynthesis.onvoiceschanged !== undefined) {
-    speechSynthesis.onvoiceschanged = loadPreferredVoices;
-  }
-  loadPreferredVoices();
-
-  window.aiSpeak = function(contentId, buttonEl) {
+  window.aiSpeak = async function(contentId, buttonEl) {
     const content = document.getElementById(contentId);
     if (!content) return;
 
-    if (speechSynthesis.speaking && buttonEl.classList.contains('speaking')) {
-      speechSynthesis.cancel();
-      buttonEl.classList.remove('speaking');
-      buttonEl.textContent = '🔊 Speak';
+    // If currently speaking this one, stop it
+    if (isSpeaking && buttonEl.classList.contains('speaking')) {
+      stopSpeaking();
       return;
     }
 
-    if (speechSynthesis.speaking) {
-      speechSynthesis.cancel();
-      document.querySelectorAll('.ai-speak-btn.speaking').forEach(btn => {
-        btn.classList.remove('speaking');
-        btn.textContent = '🔊 Speak';
-      });
-    }
+    // Stop any other audio playing
+    stopSpeaking();
 
     const text = content.textContent || content.innerText;
     if (!text.trim()) return;
 
-    currentUtterance = new SpeechSynthesisUtterance(text);
-    const isSpanish = localStorage.getItem('ro_language') === 'es';
-    const selectedVoice = isSpanish ? preferredVoices.es : preferredVoices.en;
-    if (selectedVoice) currentUtterance.voice = selectedVoice;
-    currentUtterance.lang = isSpanish ? 'es-ES' : 'en-US';
-    currentUtterance.rate = 1.0;
-    currentUtterance.pitch = 1.0;
-
+    // Show speaking state
     buttonEl.classList.add('speaking');
-    buttonEl.textContent = '⏹️ Stop';
+    buttonEl.textContent = '⏳ Loading...';
+    isSpeaking = true;
 
-    currentUtterance.onend = function() {
+    try {
+      const isSpanish = localStorage.getItem('ro_language') === 'es';
+
+      // Use OpenAI TTS via Puter.js for natural-sounding voice
+      // 'nova' is warm and natural, 'alloy' is neutral, 'shimmer' is expressive
+      const audio = await puter.ai.txt2speech(text, {
+        provider: 'openai',
+        model: 'gpt-4o-mini-tts',
+        voice: 'nova', // Natural, warm female voice
+        response_format: 'mp3',
+        instructions: isSpanish
+          ? 'Habla en español de manera clara y amigable, como un asistente profesional.'
+          : 'Speak clearly and warmly, like a friendly professional assistant. Be conversational but concise.'
+      });
+
+      currentAudio = audio;
+      buttonEl.textContent = '⏹️ Stop';
+
+      audio.onended = function() {
+        buttonEl.classList.remove('speaking');
+        buttonEl.textContent = '🔊 Speak';
+        isSpeaking = false;
+        currentAudio = null;
+      };
+
+      audio.onerror = function() {
+        console.error('Audio playback error');
+        buttonEl.classList.remove('speaking');
+        buttonEl.textContent = '🔊 Speak';
+        isSpeaking = false;
+        currentAudio = null;
+      };
+
+      audio.play();
+
+    } catch (error) {
+      console.error('TTS Error:', error);
       buttonEl.classList.remove('speaking');
       buttonEl.textContent = '🔊 Speak';
-    };
+      isSpeaking = false;
 
-    currentUtterance.onerror = function() {
-      buttonEl.classList.remove('speaking');
-      buttonEl.textContent = '🔊 Speak';
-    };
-
-    speechSynthesis.speak(currentUtterance);
+      // Fallback to browser TTS if Puter.js fails
+      try {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = localStorage.getItem('ro_language') === 'es' ? 'es-ES' : 'en-US';
+        utterance.onend = () => {
+          buttonEl.classList.remove('speaking');
+          buttonEl.textContent = '🔊 Speak';
+        };
+        buttonEl.classList.add('speaking');
+        buttonEl.textContent = '⏹️ Stop';
+        speechSynthesis.speak(utterance);
+      } catch (fallbackError) {
+        console.error('Fallback TTS also failed:', fallbackError);
+      }
+    }
   };
 
   window.aiToggleChat = function() {
-    if (speechSynthesis.speaking) speechSynthesis.cancel();
+    stopSpeaking(); // Stop Puter.js audio
+    if (speechSynthesis.speaking) speechSynthesis.cancel(); // Stop fallback TTS
     if (isListening && recognition) recognition.stop();
 
     const panel = document.getElementById('aiChatPanel');
