@@ -1,60 +1,127 @@
-# Rogue Origin Apps
+# Rogue Origin Apps - Setup Package
 
-A suite of web applications for cannabis cultivation and processing operations management.
+## What's Inside
 
-## Applications
+```
+rogue-origin-package/
+├── CLAUDE.md                           ← AI context file (repo root)
+├── PROJECT_STRUCTURE.md                ← Folder organization
+├── README.md                           ← This file
+│
+├── frontend/
+│   └── ops-hub.html                    ← Dashboard + AI Agent
+│
+├── apps-script/
+│   ├── production-tracking/
+│   │   ├── Code.gs                     ← Full backend (~1,900 lines)
+│   │   └── AI_AGENT_FUNCTIONS.gs       ← AI functions only (if adding)
+│   │
+│   └── barcode-manager/
+│       └── Code.gs
+│
+└── docs/
+    ├── APP_CATALOG.md                  ← Technical reference (all apps)
+    └── CODEBASE_INVENTORY.md           ← File/function inventory
+```
 
-| Application | File | Description |
-|-------------|------|-------------|
-| **Operations Hub** | `index.html` | Main production dashboard with KPIs, efficiency charts, and trimmer productivity metrics |
-| **Production Scoreboard** | `scoreboard.html` | Full-screen real-time status display with timers and color-coded production status |
-| **SOP Manager** | `sop-manager.html` | Standard Operating Procedures management system |
-| **Supply Kanban** | `kanban.html` | Kanban card system for supply closet inventory tracking |
-| **Label Printer** | `barcode.html` | Barcode and label generator for cultivar identification |
+## Documentation Overview
 
-## Features
+### CLAUDE.md
+The main context file for Claude Code. Put this in your repo root.
 
-- **Real-time dashboards** - Live production metrics and KPIs
-- **Dark mode** - Toggle-able theme across all applications
-- **Responsive design** - Works on desktop, tablet, and mobile
-- **Multi-language support** - English and Spanish
-- **Drag-and-drop** - Reorderable cards and panels
-- **Print-ready** - Kanban cards and labels designed for printing
+**Contents:**
+- Quick reference table (Sheet IDs, URLs, colors)
+- Company overview and production metrics
+- Complete app inventory with status
+- Architecture diagram
+- Standard code patterns (dual-mode, CORS, bilingual)
+- User personas and their needs
+- **Full project roadmap with phases**
+- File structure reference
+- Development guidelines
 
-## Tech Stack
+### docs/APP_CATALOG.md
+Comprehensive technical reference for all 5 apps.
 
-- **Frontend**: HTML5, CSS3, Vanilla JavaScript
-- **Charts**: Chart.js with datalabels plugin
-- **Icons**: Phosphor Icons
-- **Backend**: Google Apps Script + Google Sheets
-- **Drag & Drop**: Sortable.js
+**Contents:**
+- System architecture diagrams
+- Full API endpoint reference for each app
+- Key functions with status indicators
+- Sheet IDs and deployment info
+- AI Agent data flow and capabilities
+- Shared patterns (bilingual, error handling, brand colors)
+- Deployment reference
 
-## Setup
+### docs/CODEBASE_INVENTORY.md
+Detailed file-by-file technical inventory.
 
-1. Clone the repository
-2. Configure Google Apps Script endpoints in each application
-3. Set up corresponding Google Sheets for data storage
-4. Serve the HTML files via any web server
+**Contents:**
+- All frontend and backend files with line counts
+- Every function in Production Code.gs with status
+- Sheet tabs inventory
+- External integrations status
+- Removed/deprecated code log
+- Known issues and resolutions
+- Architecture Decision Records (ADRs)
+- Recommendations (short/medium/long-term)
+- Technical debt tracking
 
-### Google Sheets Integration
+## Quick Setup
 
-Each application connects to Google Sheets via Apps Script endpoints:
+### 1. GitHub Repo
+```bash
+# Copy files to your local repo
+cp CLAUDE.md /path/to/rogue-origin-apps/
+cp -r docs/ /path/to/rogue-origin-apps/
+cp frontend/ops-hub.html /path/to/rogue-origin-apps/
 
-- **Operations Hub**: Production metrics and trimmer data
-- **SOP Manager**: Procedures, steps, and requests
-- **Supply Kanban**: Inventory cards and supplier data
-- **Label Printer**: Cultivar/strain information
+# Push to GitHub
+cd /path/to/rogue-origin-apps
+git add .
+git commit -m "Add AI Agent and documentation"
+git push
+```
 
-## Brand Colors
+### 2. Apps Script
+1. Open Production Tracking spreadsheet
+2. Extensions → Apps Script
+3. Replace Code.gs with `apps-script/production-tracking/Code.gs`
+4. File → Project Settings → Script Properties
+5. Add: `ANTHROPIC_API_KEY` = your key
+6. Deploy → Manage deployments → New version
 
-| Color | Hex | Usage |
-|-------|-----|-------|
-| Gold | `#e4aa4f` | Primary accent |
-| Green | `#668971` | Secondary accent |
-| Sungrown | `#bf8e4e` | Cultivation method |
-| Greenhouse | `#8f9263` | Cultivation method |
-| Indoor | `#62758d` | Cultivation method |
+### 3. Claude Code
+1. Open Claude Code app
+2. Select your rogue-origin-apps folder
+3. Claude will automatically read CLAUDE.md
+4. Start asking questions!
 
-## License
+## Project Roadmap (from CLAUDE.md)
 
-Proprietary - Rogue Origin
+| Phase | Weeks | Status | Focus |
+|-------|-------|--------|-------|
+| **Phase 1** | 1-3 | 🔄 ~70% | AI Agent Foundation |
+| **Phase 2** | 3-5 | 📋 Next | Customer Order Dashboard |
+| **Phase 3** | 5-7 | 📋 Planned | Consignment System Rebuild |
+| **Phase 4** | 7-9 | 📋 Planned | Processing Floor Enhancement |
+| **Phase 5** | 9-12 | 📋 Planned | Value Stream Mapping |
+| **Phase 6** | Ongoing | 💭 Future | Product Packaging |
+
+### Phase 1 Status (~70% Complete)
+- ✅ AI chat interface in Ops Hub
+- ✅ Production data tools (get_production_today, get_crew_count)
+- ✅ Historical analysis & projections
+- ✅ Feedback & correction learning
+- 📋 Voice input/output (moved to Phase 4)
+- 📋 Order tools (Phase 2)
+- 📋 Consignment tools (Phase 3)
+
+## AI Agent Features
+
+The ops-hub.html includes a floating chat button (🌿) that can:
+- Answer status questions ("How are we doing today?")
+- Analyze history ("Compare this week to last week")
+- Calculate projections ("How long for 40kg with 5 trimmers?")
+- Learn from corrections ("Actually, we work half days Friday")
+
+See `docs/APP_CATALOG.md` for complete documentation.
