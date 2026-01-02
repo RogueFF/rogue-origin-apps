@@ -23,6 +23,28 @@
       --text-muted: #8a9a8e;
       --sidebar-bg: #1a1f16;
     }
+
+    /* Dark Mode */
+    body.dark-mode {
+      --bg: #1a1a1a;
+      --bg-card: #2d2d2d;
+      --border: #444444;
+      --text: #e0e0e0;
+      --text-muted: #888888;
+      --sidebar-bg: #0d0f0c;
+    }
+
+    body.dark-mode .logo {
+      filter: brightness(0.9);
+    }
+
+    body.dark-mode .kanban.green {
+      background: #4a6b54 !important;
+    }
+
+    body.dark-mode .kanban.red {
+      background: #8a3a1e !important;
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
     
@@ -193,11 +215,12 @@
         <div><h1>Kanban Card Manager</h1><p>Supply Closet Inventory System</p></div>
       </div>
       <div class="btns">
-        <button class="btn btn-outline" onclick="openHelp()"><i class="ph-duotone ph-question"></i> Help</button>
-        <button class="btn btn-indoor" onclick="refresh()"><i class="ph-duotone ph-arrows-clockwise"></i> Refresh</button>
-        <button class="btn btn-sungrown" onclick="openPrint()"><i class="ph-duotone ph-printer" style="margin-right:6px"></i> Print Cards</button>
-        <button class="btn btn-green" onclick="openAdd()"><i class="ph-duotone ph-plus" style="margin-right:6px"></i> Add Card</button>
-        <button id="langBtn" class="btn btn-outline" onclick="toggleLang()">🇪🇸 Español</button>
+        <button class="btn btn-outline" onclick="openHelp()" aria-label="Help"><i class="ph-duotone ph-question"></i> Help</button>
+        <button class="btn btn-indoor" onclick="refresh()" aria-label="Refresh"><i class="ph-duotone ph-arrows-clockwise"></i> Refresh</button>
+        <button class="btn btn-sungrown" onclick="openPrint()" aria-label="Print cards"><i class="ph-duotone ph-printer" style="margin-right:6px"></i> Print Cards</button>
+        <button class="btn btn-green" onclick="openAdd()" aria-label="Add card"><i class="ph-duotone ph-plus" style="margin-right:6px"></i> Add Card</button>
+        <button id="langBtn" class="btn btn-outline" onclick="toggleLang()" aria-label="Toggle language">🇪🇸 Español</button>
+        <button id="darkModeBtn" class="btn btn-outline" onclick="toggleDarkMode()" aria-label="Toggle dark mode">🌙</button>
       </div>
     </div>
   </header>
@@ -613,10 +636,26 @@ function toggleLang() {
   try { localStorage.setItem('kanbanLang', currentLang); } catch(e) {}
 }
 
+function toggleDarkMode() {
+  document.body.classList.toggle('dark-mode');
+  var isDark = document.body.classList.contains('dark-mode');
+  try { localStorage.setItem('kanbanDarkMode', isDark ? 'true' : 'false'); } catch(e) {}
+  var btn = document.getElementById('darkModeBtn');
+  if (btn) btn.textContent = isDark ? '☀️' : '🌙';
+}
+
+var filterDebounceTimer = null;
+
 function init() {
   try {
     var savedLang = localStorage.getItem('kanbanLang');
     if (savedLang) currentLang = savedLang;
+    var savedDark = localStorage.getItem('kanbanDarkMode');
+    if (savedDark === 'true') {
+      document.body.classList.add('dark-mode');
+      var btn = document.getElementById('darkModeBtn');
+      if (btn) btn.textContent = '☀️';
+    }
   } catch(e) {}
   loadCustomOptions();
   updateAllText();
@@ -687,14 +726,35 @@ function setupImageDrop() {
 function updateImagePreview(url) {
   var preview = document.getElementById('imagePreview');
   if (!preview) return;
-  
+
   if (url && url.trim()) {
-    preview.innerHTML = '<img src="' + url + '" onerror="this.style.display=\'none\'"><button type="button" onclick="clearImageUrl()">✕ Clear</button>';
-    preview.classList.add('has-image');
+    // Sanitize URL to prevent XSS - only allow http/https URLs
+    var sanitizedUrl = sanitizeImageUrl(url.trim());
+    if (sanitizedUrl) {
+      preview.innerHTML = '<img src="' + esc(sanitizedUrl) + '" onerror="this.style.display=\'none\'"><button type="button" onclick="clearImageUrl()">✕ Clear</button>';
+      preview.classList.add('has-image');
+    } else {
+      preview.innerHTML = '<span style="color:var(--text-muted);font-size:11px">Invalid URL</span>';
+      preview.classList.remove('has-image');
+    }
   } else {
     preview.innerHTML = '';
     preview.classList.remove('has-image');
   }
+}
+
+function sanitizeImageUrl(url) {
+  // Only allow http/https URLs to prevent javascript: and data: XSS attacks
+  if (!url) return '';
+  try {
+    var parsed = new URL(url);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return url;
+    }
+  } catch (e) {
+    // URL parsing failed
+  }
+  return '';
 }
 
 function clearImageUrl() {
@@ -773,6 +833,12 @@ function updateSuppliers() {
 }
 
 function filter() {
+  // Debounce filter to avoid excessive re-renders
+  if (filterDebounceTimer) clearTimeout(filterDebounceTimer);
+  filterDebounceTimer = setTimeout(performFilter, 200);
+}
+
+function performFilter() {
   var q = document.getElementById('search').value.toLowerCase();
   var sup = document.getElementById('supplierFilter').value;
   filtered = allCards.filter(function(c) {
@@ -810,16 +876,16 @@ function renderGrid() {
       '<div class="card-preview-field"><small>' + t('delivery') + '</small><span>' + esc(c.deliveryTime) + '</span></div>' +
       '</div>' +
       '<div class="card-preview-right">' +
-      '<div class="card-preview-img">' + (c.picture ? '<img src="' + esc(c.picture) + '" onerror="this.outerHTML=\'📷\'">' : '📷') + '</div>' +
+      '<div class="card-preview-img">' + (c.picture && sanitizeImageUrl(c.picture) ? '<img src="' + esc(sanitizeImageUrl(c.picture)) + '" onerror="this.outerHTML=\'📷\'">' : '📷') + '</div>' +
       '<div class="card-preview-price">' + esc(c.price || '$0') + '</div>' +
       '</div></div></div>' +
       '<img class="card-preview-logo" src="' + logoUrl + '">' +
       '</div>' +
       '<div class="card-actions">' +
-      '<button class="reorder" onclick="reorder(' + c.id + ')" title="Reorder"><i class="ph-duotone ph-shopping-cart"></i></button>' +
-      '<button class="preview-btn" onclick="preview(' + c.id + ')" title="Preview"><i class="ph-duotone ph-eye"></i></button>' +
-      '<button class="edit-btn" onclick="openEdit(' + c.id + ')" title="Edit"><i class="ph-duotone ph-pencil-simple"></i></button>' +
-      '<button class="del" onclick="del(' + c.id + ')" title="Delete"><i class="ph-duotone ph-trash"></i></button>' +
+      '<button class="reorder" onclick="reorder(' + c.id + ')" title="Reorder" aria-label="Reorder ' + esc(c.item) + '"><i class="ph-duotone ph-shopping-cart"></i></button>' +
+      '<button class="preview-btn" onclick="preview(' + c.id + ')" title="Preview" aria-label="Preview ' + esc(c.item) + '"><i class="ph-duotone ph-eye"></i></button>' +
+      '<button class="edit-btn" onclick="openEdit(' + c.id + ')" title="Edit" aria-label="Edit ' + esc(c.item) + '"><i class="ph-duotone ph-pencil-simple"></i></button>' +
+      '<button class="del" onclick="del(' + c.id + ')" title="Delete" aria-label="Delete ' + esc(c.item) + '"><i class="ph-duotone ph-trash"></i></button>' +
       '</div></div>';
   });
   html += '</div>';
@@ -1098,7 +1164,7 @@ function cardHtml(c, color, side, size) {
     return '<div class="kanban ' + color + '"><div class="kanban-border"></div><div class="kanban-inner"></div>' +
       '<div class="kanban-content"><div class="kanban-header"><h3>' + esc(c.item) + '</h3></div>' +
       '<div class="kanban-body" style="justify-content:center;align-items:center">' +
-      '<div class="kanban-right" style="justify-content:center;align-items:center"><div class="kanban-img">' + (c.picture ? '<img src="' + esc(c.picture) + '" onerror="this.outerHTML=\'📷\'">' : '📷') + '</div>' +
+      '<div class="kanban-right" style="justify-content:center;align-items:center"><div class="kanban-img">' + (c.picture && sanitizeImageUrl(c.picture) ? '<img src="' + esc(sanitizeImageUrl(c.picture)) + '" onerror="this.outerHTML=\'📷\'">' : '📷') + '</div>' +
       '<div class="kanban-price">' + esc(c.price || '$0') + '</div></div></div>' +
       '<div class="kanban-loc" style="position:absolute;bottom:20px;right:24px">' + esc(c.crumbtrail) + '</div></div>' +
       '<img class="kanban-logo" src="' + logoUrl + '"></div>';
@@ -1111,7 +1177,7 @@ function cardHtml(c, color, side, size) {
     '<div class="kanban-field"><small>' + t('supplier') + '</small><span>' + esc(c.supplier) + '</span></div>' +
     '<div class="kanban-field"><small>' + t('orderQty') + '</small><span>' + esc(c.orderQty) + '</span></div>' +
     '<div class="kanban-field"><small>' + t('delivery') + '</small><span>' + esc(c.deliveryTime) + '</span></div></div>' +
-    '<div class="kanban-right"><div class="kanban-img">' + (c.picture ? '<img src="' + esc(c.picture) + '" onerror="this.outerHTML=\'📷\'">' : '📷') + '</div>' +
+    '<div class="kanban-right"><div class="kanban-img">' + (c.picture && sanitizeImageUrl(c.picture) ? '<img src="' + esc(sanitizeImageUrl(c.picture)) + '" onerror="this.outerHTML=\'📷\'">' : '📷') + '</div>' +
     '<div class="kanban-price">' + esc(c.price || '$0') + '</div></div></div></div>' +
     '<img class="kanban-logo" src="' + logoUrl + '"></div>';
 }

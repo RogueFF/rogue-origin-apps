@@ -21,6 +21,23 @@
       --text: #2d3a2e;
       --text-muted: #8a9a8e;
     }
+
+    /* Dark Mode */
+    body.dark-mode {
+      --bg: #1a1a1a;
+      --bg-card: #2d2d2d;
+      --border: #444444;
+      --text: #e0e0e0;
+      --text-muted: #888888;
+    }
+
+    body.dark-mode .container {
+      box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    }
+
+    body.dark-mode .logo {
+      filter: brightness(0.9);
+    }
     
     * { margin: 0; padding: 0; box-sizing: border-box; }
     
@@ -401,55 +418,59 @@
     <!-- Header -->
     <div class="header">
       <img src="https://rogueorigin.com/cdn/shop/files/RO_HORIZONTALOGO_17c996f3-9354-4a52-aa57-39d393599904.png" alt="Rogue Origin" class="logo">
-      <div class="subtitle"><i class="ph-duotone ph-tag" style="margin-right:6px"></i> Label Printer</div>
+      <div class="subtitle"><i class="ph-duotone ph-tag" style="margin-right:6px"></i> <span data-i18n="labelPrinter">Label Printer</span></div>
+      <div style="display:flex;gap:8px;margin-top:10px;justify-content:center">
+        <button id="langBtn" class="outline" onclick="toggleLang()" aria-label="Toggle language" style="padding:8px 12px;font-size:12px">🇪🇸 Español</button>
+        <button id="darkModeBtn" class="outline" onclick="toggleDarkMode()" aria-label="Toggle dark mode" style="padding:8px 12px;font-size:12px">🌙</button>
+      </div>
     </div>
     
     <div id="message" class="message"></div>
     
     <!-- Cultivar Selector -->
     <div class="cultivar-selector">
-      <div class="cultivar-label"><i class="ph-duotone ph-plant" style="margin-right:6px"></i> Select Cultivar</div>
-      <select id="cultivarSelect" class="cultivar-dropdown" onchange="selectCultivar()">
-        <option value="">-- Choose Cultivar --</option>
+      <div class="cultivar-label"><i class="ph-duotone ph-plant" style="margin-right:6px"></i> <span data-i18n="selectCultivar">Select Cultivar</span></div>
+      <select id="cultivarSelect" class="cultivar-dropdown" onchange="selectCultivar()" aria-label="Select cultivar">
+        <option value="" data-i18n="chooseCultivar">-- Choose Cultivar --</option>
       </select>
     </div>
     
     <!-- Current Cultivar -->
     <div id="currentCultivar" class="current-cultivar">
       <h2 id="cultivarName">Lifter</h2>
-      <p>Click a size below to print</p>
+      <p data-i18n="clickSizeToPrint">Click a size below to print</p>
     </div>
     
     <!-- Last Printed -->
     <div id="lastPrinted" class="last-printed">
-      <span class="last-printed-label">✅ Last Printed:</span>
+      <span class="last-printed-label">✅ <span data-i18n="lastPrinted">Last Printed</span>:</span>
       <span id="lastPrintedValue" class="last-printed-value"></span>
       <br>
-      <button class="print-again-btn" onclick="printLastAgain()">🖨️ Print Again</button>
+      <button class="print-again-btn" onclick="printLastAgain()" aria-label="Print again">🖨️ <span data-i18n="printAgain">Print Again</span></button>
     </div>
     
     <!-- Product Sections -->
     <div id="productSections" class="product-sections" style="display: none;">
       <div class="product-section tops">
-        <div class="section-header tops"><i class="ph-duotone ph-package" style="margin-right:6px"></i> Tops</div>
+        <div class="section-header tops"><i class="ph-duotone ph-package" style="margin-right:6px"></i> <span data-i18n="tops">Tops</span></div>
         <div id="topsButtons" class="size-buttons"></div>
       </div>
       <div class="product-section smalls">
-        <div class="section-header smalls"><i class="ph-duotone ph-package" style="margin-right:6px"></i> Smalls</div>
+        <div class="section-header smalls"><i class="ph-duotone ph-package" style="margin-right:6px"></i> <span data-i18n="smalls">Smalls</span></div>
         <div id="smallsButtons" class="size-buttons"></div>
       </div>
     </div>
     
     <!-- No Cultivar -->
     <div id="noCultivar" class="no-cultivar">
-      <h3>👆 Select a Cultivar</h3>
-      <p>Choose which cultivar you're bagging to see available sizes</p>
+      <h3>👆 <span data-i18n="selectACultivar">Select a Cultivar</span></h3>
+      <p data-i18n="chooseCultivarHint">Choose which cultivar you're bagging to see available sizes</p>
     </div>
-    
+
     <!-- Search -->
     <div class="search-section">
-      <input type="text" id="searchBox" class="search-input" placeholder="🔍 Search for any product..." onkeyup="handleSearch()">
-      <div class="search-hint">Type product name, SKU, or barcode</div>
+      <input type="text" id="searchBox" class="search-input" placeholder="🔍 Search for any product..." onkeyup="handleSearch()" data-i18n-placeholder="searchPlaceholder" aria-label="Search products">
+      <div class="search-hint" data-i18n="searchHint">Type product name, SKU, or barcode</div>
     </div>
     
     <!-- Search Results -->
@@ -457,64 +478,64 @@
     
     <!-- Toolbar -->
     <div class="toolbar">
-      <button onclick="showAddModal()"><i class="ph-duotone ph-plus" style="margin-right:6px"></i> Add Product</button>
-      <button class="secondary" onclick="showImportModal()">📥 Import</button>
-      <button class="secondary" onclick="exportToCSV()">📤 Export</button>
-      <button class="gold" onclick="showPrintHelp()">❓ Print Setup</button>
-      <button class="outline" onclick="loadProducts()">🔄 Refresh</button>
+      <button onclick="showAddModal()" aria-label="Add product"><i class="ph-duotone ph-plus" style="margin-right:6px"></i> <span data-i18n="addProduct">Add Product</span></button>
+      <button class="secondary" onclick="showImportModal()" aria-label="Import">📥 <span data-i18n="import">Import</span></button>
+      <button class="secondary" onclick="exportToCSV()" aria-label="Export">📤 <span data-i18n="export">Export</span></button>
+      <button class="gold" onclick="showPrintHelp()" aria-label="Print setup">❓ <span data-i18n="printSetup">Print Setup</span></button>
+      <button class="outline" onclick="loadProducts()" aria-label="Refresh">🔄 <span data-i18n="refresh">Refresh</span></button>
     </div>
-    
-    <div id="loading" class="loading">Loading Products...</div>
+
+    <div id="loading" class="loading" data-i18n="loadingProducts">Loading Products...</div>
   </div>
   
   <!-- Modals -->
-  <div id="productModal" class="modal">
+  <div id="productModal" class="modal" role="dialog" aria-labelledby="modalTitle">
     <div class="modal-content">
-      <h2 id="modalTitle">Add Product</h2>
+      <h2 id="modalTitle" data-i18n="addProduct">Add Product</h2>
       <div class="form-group">
-        <label>Product Name:</label>
-        <input type="text" id="productHeader" placeholder="e.g., Lifter Tops 1 LB" maxlength="25">
+        <label data-i18n="productName">Product Name:</label>
+        <input type="text" id="productHeader" placeholder="e.g., Lifter Tops 1 LB" maxlength="25" aria-label="Product name">
       </div>
       <div class="form-group">
         <label>SKU:</label>
-        <input type="text" id="productSKU" placeholder="e.g., LIFT-TOPS-1LB">
+        <input type="text" id="productSKU" placeholder="e.g., LIFT-TOPS-1LB" aria-label="SKU">
       </div>
       <div class="form-group">
-        <label>Barcode:</label>
-        <input type="text" id="productBarcode" placeholder="e.g., 1234567890">
+        <label data-i18n="barcode">Barcode:</label>
+        <input type="text" id="productBarcode" placeholder="e.g., 1234567890" aria-label="Barcode">
       </div>
       <div class="modal-buttons">
-        <button class="outline" onclick="closeModal()">Cancel</button>
-        <button onclick="saveProduct()">Save</button>
+        <button class="outline" onclick="closeModal()" data-i18n="cancel">Cancel</button>
+        <button onclick="saveProduct()" data-i18n="save">Save</button>
       </div>
     </div>
   </div>
-  
-  <div id="importModal" class="modal">
+
+  <div id="importModal" class="modal" role="dialog" aria-labelledby="importModalTitle">
     <div class="modal-content">
-      <h2>Import CSV</h2>
+      <h2 id="importModalTitle" data-i18n="importCSV">Import CSV</h2>
       <div class="form-group">
-        <label>Paste CSV data (Header,SKU,Barcode):</label>
-        <textarea id="csvText" rows="10"></textarea>
+        <label data-i18n="pasteCSV">Paste CSV data (Header,SKU,Barcode):</label>
+        <textarea id="csvText" rows="10" aria-label="CSV data"></textarea>
       </div>
       <div class="modal-buttons">
-        <button class="outline" onclick="closeImportModal()">Cancel</button>
-        <button onclick="importCSV()">Import</button>
+        <button class="outline" onclick="closeImportModal()" data-i18n="cancel">Cancel</button>
+        <button onclick="importCSV()" data-i18n="import">Import</button>
       </div>
     </div>
   </div>
-  
-  <div id="printHelpModal" class="modal">
+
+  <div id="printHelpModal" class="modal" role="dialog" aria-labelledby="printHelpTitle">
     <div class="modal-content">
-      <h2>🖨️ Print Setup</h2>
-      <p style="margin-bottom: 15px; color: var(--text-muted);">Configure your Bixolon printer:</p>
+      <h2 id="printHelpTitle">🖨️ <span data-i18n="printSetup">Print Setup</span></h2>
+      <p style="margin-bottom: 15px; color: var(--text-muted);" data-i18n="configPrinter">Configure your Bixolon printer:</p>
       <ul style="margin: 0 0 15px 20px; color: var(--text);">
-        <li>Paper size: <strong style="color: var(--gold);">1.65" × 0.5"</strong></li>
-        <li>Margins: <strong style="color: var(--gold);">None</strong></li>
-        <li>Headers/Footers: <strong style="color: var(--gold);">Off</strong></li>
+        <li><span data-i18n="paperSize">Paper size</span>: <strong style="color: var(--gold);">1.65" × 0.5"</strong></li>
+        <li><span data-i18n="margins">Margins</span>: <strong style="color: var(--gold);"><span data-i18n="none">None</span></strong></li>
+        <li><span data-i18n="headersFooters">Headers/Footers</span>: <strong style="color: var(--gold);"><span data-i18n="off">Off</span></strong></li>
       </ul>
       <div class="modal-buttons">
-        <button onclick="document.getElementById('printHelpModal').style.display='none'">Got it!</button>
+        <button onclick="document.getElementById('printHelpModal').style.display='none'" data-i18n="gotIt">Got it!</button>
       </div>
     </div>
   </div>
@@ -524,14 +545,153 @@
     var selectedCultivar = '';
     var lastPrintedProduct = null;
     var sizeOrder = ['1 OZ', '1/4 LB', '1/2 LB', '1 LB', '10 LB', '5KG', '10KG'];
-    
+    var currentLang = 'en';
+    var searchDebounceTimer = null;
+
+    // Translations - English and Spanish
+    var translations = {
+      en: {
+        labelPrinter: 'Label Printer',
+        selectCultivar: 'Select Cultivar',
+        chooseCultivar: '-- Choose Cultivar --',
+        clickSizeToPrint: 'Click a size below to print',
+        lastPrinted: 'Last Printed',
+        printAgain: 'Print Again',
+        tops: 'Tops',
+        smalls: 'Smalls',
+        selectACultivar: 'Select a Cultivar',
+        chooseCultivarHint: 'Choose which cultivar you\'re bagging to see available sizes',
+        searchPlaceholder: '🔍 Search for any product...',
+        searchHint: 'Type product name, SKU, or barcode',
+        addProduct: 'Add Product',
+        import: 'Import',
+        export: 'Export',
+        printSetup: 'Print Setup',
+        refresh: 'Refresh',
+        loadingProducts: 'Loading Products...',
+        productName: 'Product Name:',
+        barcode: 'Barcode:',
+        cancel: 'Cancel',
+        save: 'Save',
+        importCSV: 'Import CSV',
+        pasteCSV: 'Paste CSV data (Header,SKU,Barcode):',
+        configPrinter: 'Configure your Bixolon printer:',
+        paperSize: 'Paper size',
+        margins: 'Margins',
+        headersFooters: 'Headers/Footers',
+        none: 'None',
+        off: 'Off',
+        gotIt: 'Got it!',
+        loaded: 'Loaded',
+        products: 'products',
+        printing: 'Printing',
+        error: 'Error',
+        fillAllFields: 'Please fill all fields',
+        pasteCSVData: 'Paste CSV data',
+        results: 'Results',
+        noResults: 'No results found'
+      },
+      es: {
+        labelPrinter: 'Impresora de Etiquetas',
+        selectCultivar: 'Seleccionar Cultivar',
+        chooseCultivar: '-- Elegir Cultivar --',
+        clickSizeToPrint: 'Haga clic en un tamaño para imprimir',
+        lastPrinted: 'Última Impresión',
+        printAgain: 'Imprimir de Nuevo',
+        tops: 'Cogollos',
+        smalls: 'Pequeños',
+        selectACultivar: 'Seleccionar un Cultivar',
+        chooseCultivarHint: 'Elija qué cultivar está empacando para ver los tamaños disponibles',
+        searchPlaceholder: '🔍 Buscar cualquier producto...',
+        searchHint: 'Escriba nombre del producto, SKU o código de barras',
+        addProduct: 'Agregar Producto',
+        import: 'Importar',
+        export: 'Exportar',
+        printSetup: 'Configuración de Impresión',
+        refresh: 'Actualizar',
+        loadingProducts: 'Cargando Productos...',
+        productName: 'Nombre del Producto:',
+        barcode: 'Código de Barras:',
+        cancel: 'Cancelar',
+        save: 'Guardar',
+        importCSV: 'Importar CSV',
+        pasteCSV: 'Pegue los datos CSV (Encabezado,SKU,Código):',
+        configPrinter: 'Configure su impresora Bixolon:',
+        paperSize: 'Tamaño de papel',
+        margins: 'Márgenes',
+        headersFooters: 'Encabezados/Pies',
+        none: 'Ninguno',
+        off: 'Apagado',
+        gotIt: '¡Entendido!',
+        loaded: 'Cargados',
+        products: 'productos',
+        printing: 'Imprimiendo',
+        error: 'Error',
+        fillAllFields: 'Por favor complete todos los campos',
+        pasteCSVData: 'Pegue los datos CSV',
+        results: 'Resultados',
+        noResults: 'No se encontraron resultados'
+      }
+    };
+
+    function t(key) {
+      return translations[currentLang][key] || translations['en'][key] || key;
+    }
+
+    function updateAllText() {
+      // Update all data-i18n elements
+      document.querySelectorAll('[data-i18n]').forEach(function(el) {
+        var key = el.getAttribute('data-i18n');
+        el.textContent = t(key);
+      });
+      // Update all data-i18n-placeholder elements
+      document.querySelectorAll('[data-i18n-placeholder]').forEach(function(el) {
+        var key = el.getAttribute('data-i18n-placeholder');
+        el.placeholder = t(key);
+      });
+      // Update language button
+      var langBtn = document.getElementById('langBtn');
+      if (langBtn) langBtn.textContent = currentLang === 'en' ? '🇪🇸 Español' : '🇺🇸 English';
+    }
+
+    function toggleLang() {
+      currentLang = currentLang === 'en' ? 'es' : 'en';
+      try { localStorage.setItem('barcodeLang', currentLang); } catch(e) {}
+      updateAllText();
+      // Rebuild cultivar dropdown with new language
+      populateCultivarDropdown();
+    }
+
+    function toggleDarkMode() {
+      document.body.classList.toggle('dark-mode');
+      var isDark = document.body.classList.contains('dark-mode');
+      try { localStorage.setItem('barcodeDarkMode', isDark ? 'true' : 'false'); } catch(e) {}
+      var btn = document.getElementById('darkModeBtn');
+      if (btn) btn.textContent = isDark ? '☀️' : '🌙';
+    }
+
+    function initSettings() {
+      // Load language preference
+      try {
+        var savedLang = localStorage.getItem('barcodeLang');
+        if (savedLang) currentLang = savedLang;
+        var savedDark = localStorage.getItem('barcodeDarkMode');
+        if (savedDark === 'true') {
+          document.body.classList.add('dark-mode');
+          var btn = document.getElementById('darkModeBtn');
+          if (btn) btn.textContent = '☀️';
+        }
+      } catch(e) {}
+      updateAllText();
+    }
+
     // API Configuration for GitHub Pages - will be updated after deployment
     var API_URL = 'https://script.google.com/macros/s/AKfycbw7E0oVCTPQfEi6tSDpL_FVk2XrgE6jsoM7I8Ei62VUO_L9tU1bKyH7OwkWOxSG5TGYmw/exec';
-    
+
     // Detect environment: Apps Script or GitHub Pages
     var isAppsScript = typeof google !== 'undefined' && google.script && google.script.run;
-    
-    window.onload = function() { loadProducts(); };
+
+    window.onload = function() { initSettings(); loadProducts(); };
     
     function loadProducts() {
       document.getElementById('loading').style.display = 'block';
@@ -702,39 +862,50 @@
     }
     
     function handleSearch() {
+      // Debounce search input - wait 300ms after user stops typing
+      if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = setTimeout(performSearch, 300);
+    }
+
+    function performSearch() {
       var search = document.getElementById('searchBox').value.toLowerCase().trim();
       var resultsDiv = document.getElementById('searchResults');
-      
+
       if (!search) {
         resultsDiv.classList.remove('show');
         return;
       }
-      
+
       var filtered = products.filter(function(p) {
         return (p.header && p.header.toLowerCase().indexOf(search) >= 0) ||
                (p.sku && p.sku.toLowerCase().indexOf(search) >= 0) ||
                (p.barcode && String(p.barcode).indexOf(search) >= 0);
       });
-      
+
       if (filtered.length === 0) {
-        resultsDiv.innerHTML = '<div class="quick-print-title">No results found</div>';
+        resultsDiv.innerHTML = '<div class="quick-print-title">' + t('noResults') + '</div>';
         resultsDiv.classList.add('show');
         return;
       }
-      
-      var html = '<div class="quick-print-title">🔍 Results (' + filtered.length + ')</div>';
+
+      var html = '<div class="quick-print-title">🔍 ' + t('results') + ' (' + filtered.length + ')</div>';
       html += '<div class="quick-print-grid">';
-      
+
       filtered.slice(0, 20).forEach(function(p) {
         html += '<div class="quick-print-card" onclick="printProduct(products.find(function(x){return x.barcode===\'' + p.barcode + '\'}))">';
-        html += '<div class="quick-print-name">' + p.header + '</div>';
-        html += '<div class="quick-print-barcode">' + p.barcode + '</div>';
+        html += '<div class="quick-print-name">' + escapeHtml(p.header) + '</div>';
+        html += '<div class="quick-print-barcode">' + escapeHtml(p.barcode) + '</div>';
         html += '</div>';
       });
-      
+
       html += '</div>';
       resultsDiv.innerHTML = html;
       resultsDiv.classList.add('show');
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
     
     function printBarcode(barcode, name) {
