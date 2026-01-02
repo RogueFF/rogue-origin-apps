@@ -9,6 +9,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <script src="https://js.puter.com/v2/"></script>
   <style>
     :root {
       --gold: #e4aa4f; --gold-light: #f0cb60; --gold-dim: rgba(228,170,79,0.15);
@@ -2233,13 +2234,13 @@
   .ai-chat-send:disabled { background: var(--text-light); cursor: not-allowed; }
   .ai-chat-send svg { width: 16px; height: 16px; fill: white; }
 
-  /* Voice Input Button */
+  /* Voice button styles */
   .ai-voice-btn {
     width: 38px;
     height: 38px;
     border-radius: 50%;
-    background: var(--bg-card);
-    border: 2px solid var(--border);
+    background: var(--bg);
+    border: 1px solid var(--border);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -2247,7 +2248,7 @@
     transition: all 0.2s;
     font-size: 16px;
   }
-  .ai-voice-btn:hover { border-color: var(--green); background: var(--bg-main); }
+  .ai-voice-btn:hover { border-color: var(--green); background: var(--bg-card); }
   .ai-voice-btn.listening {
     background: var(--danger);
     border-color: var(--danger);
@@ -2259,30 +2260,53 @@
     50% { transform: scale(1.1); }
   }
 
-  /* Speak Button on Messages */
+  /* Voice mode toggle in header */
+  .ai-chat-header-text { flex: 1; }
+  .ai-voice-mode-toggle {
+    background: rgba(255,255,255,0.2);
+    border: none;
+    border-radius: 20px;
+    padding: 6px 12px;
+    color: white;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+  }
+  .ai-voice-mode-toggle:hover { background: rgba(255,255,255,0.3); }
+  .ai-voice-mode-toggle.active {
+    background: rgba(255,255,255,0.9);
+    color: var(--green);
+  }
+  .ai-voice-mode-toggle .icon { font-size: 14px; }
+
+  /* Speak button on messages */
   .ai-speak-btn {
     background: none;
     border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 4px 8px;
+    border-radius: 12px;
+    padding: 4px 10px;
     font-size: 11px;
     cursor: pointer;
-    margin-right: 6px;
+    color: var(--text-muted);
     transition: all 0.2s;
   }
-  .ai-speak-btn:hover { background: var(--bg-main); border-color: var(--green); }
-  .ai-speak-btn.speaking { background: var(--gold); border-color: var(--gold); }
+  .ai-speak-btn:hover { background: var(--bg); border-color: var(--green); color: var(--green); }
+  .ai-speak-btn.speaking { background: var(--green); color: white; border-color: var(--green); }
 
-  /* Voice Status Indicator */
+  /* Voice status indicator */
   .ai-voice-status {
+    text-align: center;
     font-size: 11px;
     color: var(--text-muted);
-    text-align: center;
     padding: 4px;
     display: none;
   }
   .ai-voice-status.active { display: block; color: var(--danger); }
 
+  /* Mobile improvements */
   @media (max-width: 480px) {
     .ai-chat-panel {
       position: fixed;
@@ -2364,9 +2388,7 @@
   // Initialize toggle button state on load
   setTimeout(() => {
     const toggle = document.getElementById('aiVoiceModeToggle');
-    if (toggle) {
-      updateVoiceModeButton(toggle);
-    }
+    if (toggle) updateVoiceModeButton(toggle);
   }, 0);
 
   function updateVoiceModeButton(toggle) {
@@ -2386,15 +2408,12 @@
   window.aiToggleVoiceMode = function() {
     voiceModeEnabled = !voiceModeEnabled;
     localStorage.setItem('ro_voice_mode', voiceModeEnabled ? 'true' : 'false');
-
     const toggle = document.getElementById('aiVoiceModeToggle');
-    if (toggle) {
-      updateVoiceModeButton(toggle);
-    }
-
-    // Stop any current speech when turning off
-    if (!voiceModeEnabled && speechSynthesis.speaking) {
-      speechSynthesis.cancel();
+    if (toggle) updateVoiceModeButton(toggle);
+    // Stop any playing audio when switching to text mode
+    if (!voiceModeEnabled) {
+      if (typeof stopSpeaking === 'function') stopSpeaking();
+      if (speechSynthesis.speaking) speechSynthesis.cancel();
     }
   };
 
@@ -2405,7 +2424,6 @@
   let isListening = false;
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-  // Initialize voice recognition if supported
   if (SpeechRecognition) {
     recognition = new SpeechRecognition();
     recognition.continuous = false;
@@ -2442,22 +2460,11 @@
         }
       }
 
-      // Show interim results while speaking
-      if (interimTranscript) {
-        input.value = interimTranscript;
-        input.style.color = 'var(--text-muted)';
-      }
-
-      // When final, set the value and optionally auto-send
       if (finalTranscript) {
         input.value = finalTranscript;
-        input.style.color = '';
-        // Auto-send after voice input completes
-        setTimeout(() => {
-          if (input.value.trim()) {
-            window.aiSendMessage();
-          }
-        }, 500);
+        setTimeout(() => { if (input.value.trim()) aiSendMessage(); }, 300);
+      } else if (interimTranscript) {
+        input.value = interimTranscript;
       }
     };
 
@@ -2467,178 +2474,128 @@
       const btn = document.getElementById('aiVoiceBtn');
       const status = document.getElementById('aiVoiceStatus');
       if (btn) { btn.classList.remove('listening'); btn.textContent = '🎤'; }
-      if (status) {
-        status.classList.add('active');
-        status.textContent = event.error === 'not-allowed'
-          ? '❌ Microphone access denied'
-          : '❌ Voice error: ' + event.error;
-        setTimeout(() => status.classList.remove('active'), 3000);
-      }
+      if (status) { status.classList.remove('active'); }
     };
   } else {
-    // Mark voice button as not supported
     setTimeout(() => {
       const btn = document.getElementById('aiVoiceBtn');
-      if (btn) {
-        btn.classList.add('not-supported');
-        btn.title = 'Voice input not supported in this browser';
-      }
+      if (btn) { btn.classList.add('not-supported'); btn.title = 'Voice input not supported in this browser'; }
     }, 100);
   }
 
   window.aiToggleVoice = function() {
-    if (!recognition) {
-      alert('Voice input is not supported in your browser. Try Chrome or Edge.');
-      return;
-    }
-
-    // Update language based on current setting
-    recognition.lang = localStorage.getItem('ro_language') === 'es' ? 'es-ES' : 'en-US';
-
+    if (!recognition) return;
     if (isListening) {
       recognition.stop();
     } else {
+      recognition.lang = localStorage.getItem('ro_language') === 'es' ? 'es-ES' : 'en-US';
       recognition.start();
     }
   };
 
   // ============================================
-  // TEXT-TO-SPEECH (Speech Synthesis API)
+  // TEXT-TO-SPEECH (Puter.js with OpenAI TTS)
   // ============================================
-  let currentUtterance = null;
-  let preferredVoices = { en: null, es: null };
+  let currentAudio = null;
+  let isSpeaking = false;
 
-  // Find the best natural-sounding voice for each language
-  function loadPreferredVoices() {
-    const voices = speechSynthesis.getVoices();
-    if (!voices.length) return;
-
-    // Priority order for natural-sounding English voices
-    const enPriority = [
-      'Google US English',           // Chrome - very natural
-      'Google UK English Female',    // Chrome - natural British
-      'Google UK English Male',      // Chrome - natural British
-      'Samantha',                    // macOS - natural
-      'Karen',                       // macOS - natural Australian
-      'Daniel',                      // macOS - natural British
-      'Microsoft Zira',              // Windows - decent
-      'Microsoft David',             // Windows - decent
-    ];
-
-    // Priority order for natural-sounding Spanish voices
-    const esPriority = [
-      'Google español',              // Chrome - natural
-      'Google español de Estados Unidos', // Chrome - natural US Spanish
-      'Paulina',                     // macOS - natural Mexican
-      'Monica',                      // macOS - natural Castilian
-      'Microsoft Sabina',            // Windows
-    ];
-
-    // Find best English voice
-    for (const name of enPriority) {
-      const voice = voices.find(v => v.name.includes(name) || v.name === name);
-      if (voice) {
-        preferredVoices.en = voice;
-        console.log('Selected English voice:', voice.name);
-        break;
-      }
+  // Stop any currently playing audio
+  function stopSpeaking() {
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+      currentAudio = null;
     }
-    // Fallback to any English voice
-    if (!preferredVoices.en) {
-      preferredVoices.en = voices.find(v => v.lang.startsWith('en')) || null;
-    }
-
-    // Find best Spanish voice
-    for (const name of esPriority) {
-      const voice = voices.find(v => v.name.includes(name) || v.name === name);
-      if (voice) {
-        preferredVoices.es = voice;
-        console.log('Selected Spanish voice:', voice.name);
-        break;
-      }
-    }
-    // Fallback to any Spanish voice
-    if (!preferredVoices.es) {
-      preferredVoices.es = voices.find(v => v.lang.startsWith('es')) || null;
-    }
+    isSpeaking = false;
+    document.querySelectorAll('.ai-speak-btn.speaking').forEach(btn => {
+      btn.classList.remove('speaking');
+      btn.textContent = '🔊 Speak';
+    });
   }
 
-  // Load voices when available (they load async in some browsers)
-  if (speechSynthesis.onvoiceschanged !== undefined) {
-    speechSynthesis.onvoiceschanged = loadPreferredVoices;
-  }
-  // Also try loading immediately
-  loadPreferredVoices();
-
-  window.aiSpeak = function(contentId, buttonEl) {
+  window.aiSpeak = async function(contentId, buttonEl) {
     const content = document.getElementById(contentId);
     if (!content) return;
 
-    // If already speaking this message, stop it
-    if (speechSynthesis.speaking && buttonEl.classList.contains('speaking')) {
-      speechSynthesis.cancel();
-      buttonEl.classList.remove('speaking');
-      buttonEl.textContent = '🔊 Speak';
+    // If currently speaking this one, stop it
+    if (isSpeaking && buttonEl.classList.contains('speaking')) {
+      stopSpeaking();
       return;
     }
 
-    // Stop any current speech
-    if (speechSynthesis.speaking) {
-      speechSynthesis.cancel();
-      // Reset all speak buttons
-      document.querySelectorAll('.ai-speak-btn.speaking').forEach(btn => {
-        btn.classList.remove('speaking');
-        btn.textContent = '🔊 Speak';
-      });
-    }
+    // Stop any other audio playing
+    stopSpeaking();
 
-    // Get text content, stripping any HTML
     const text = content.textContent || content.innerText;
     if (!text.trim()) return;
 
-    // Create utterance with natural voice settings
-    currentUtterance = new SpeechSynthesisUtterance(text);
-
-    // Select the best voice for the current language
-    const isSpanish = localStorage.getItem('ro_language') === 'es';
-    const selectedVoice = isSpanish ? preferredVoices.es : preferredVoices.en;
-
-    if (selectedVoice) {
-      currentUtterance.voice = selectedVoice;
-    }
-    currentUtterance.lang = isSpanish ? 'es-ES' : 'en-US';
-
-    // Natural speech settings - smooth and conversational
-    currentUtterance.rate = 1.0;    // Natural pace
-    currentUtterance.pitch = 1.0;   // Natural pitch
-    currentUtterance.volume = 1.0;  // Full volume
-
-    // Update button state
+    // Show speaking state
     buttonEl.classList.add('speaking');
-    buttonEl.textContent = '⏹️ Stop';
+    buttonEl.textContent = '⏳ Loading...';
+    isSpeaking = true;
 
-    currentUtterance.onend = function() {
+    try {
+      const isSpanish = localStorage.getItem('ro_language') === 'es';
+
+      // Use OpenAI TTS via Puter.js for natural-sounding voice
+      // 'nova' is warm and natural, 'alloy' is neutral, 'shimmer' is expressive
+      const audio = await puter.ai.txt2speech(text, {
+        provider: 'openai',
+        model: 'gpt-4o-mini-tts',
+        voice: 'nova', // Natural, warm female voice
+        response_format: 'mp3',
+        instructions: isSpanish
+          ? 'Habla en español de manera clara y amigable, como un asistente profesional.'
+          : 'Speak clearly and warmly, like a friendly professional assistant. Be conversational but concise.'
+      });
+
+      currentAudio = audio;
+      buttonEl.textContent = '⏹️ Stop';
+
+      audio.onended = function() {
+        buttonEl.classList.remove('speaking');
+        buttonEl.textContent = '🔊 Speak';
+        isSpeaking = false;
+        currentAudio = null;
+      };
+
+      audio.onerror = function() {
+        console.error('Audio playback error');
+        buttonEl.classList.remove('speaking');
+        buttonEl.textContent = '🔊 Speak';
+        isSpeaking = false;
+        currentAudio = null;
+      };
+
+      audio.play();
+
+    } catch (error) {
+      console.error('TTS Error:', error);
       buttonEl.classList.remove('speaking');
       buttonEl.textContent = '🔊 Speak';
-    };
+      isSpeaking = false;
 
-    currentUtterance.onerror = function(event) {
-      console.error('Speech synthesis error:', event.error);
-      buttonEl.classList.remove('speaking');
-      buttonEl.textContent = '🔊 Speak';
-    };
-
-    speechSynthesis.speak(currentUtterance);
+      // Fallback to browser TTS if Puter.js fails
+      try {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = localStorage.getItem('ro_language') === 'es' ? 'es-ES' : 'en-US';
+        utterance.onend = () => {
+          buttonEl.classList.remove('speaking');
+          buttonEl.textContent = '🔊 Speak';
+        };
+        buttonEl.classList.add('speaking');
+        buttonEl.textContent = '⏹️ Stop';
+        speechSynthesis.speak(utterance);
+      } catch (fallbackError) {
+        console.error('Fallback TTS also failed:', fallbackError);
+      }
+    }
   };
 
   window.aiToggleChat = function() {
-    // Stop any ongoing voice activity when closing
-    if (speechSynthesis.speaking) {
-      speechSynthesis.cancel();
-    }
-    if (isListening && recognition) {
-      recognition.stop();
-    }
+    stopSpeaking(); // Stop Puter.js audio
+    if (speechSynthesis.speaking) speechSynthesis.cancel(); // Stop fallback TTS
+    if (isListening && recognition) recognition.stop();
 
     const panel = document.getElementById('aiChatPanel');
     const chatIcon = document.getElementById('aiChatIcon');
@@ -2720,12 +2677,9 @@
 
         // Auto-speak response if voice mode is enabled
         if (voiceModeEnabled) {
-          // Small delay to ensure DOM is ready
           setTimeout(() => {
             const speakBtn = document.getElementById('speak-' + responseId);
-            if (speakBtn) {
-              aiSpeak('content-' + responseId, speakBtn);
-            }
+            if (speakBtn) aiSpeak('content-' + responseId, speakBtn);
           }, 100);
         }
       } else {
