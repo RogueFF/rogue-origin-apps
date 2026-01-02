@@ -81,7 +81,9 @@ function doGet(e) {
       };
     }
   } catch (err) {
-    result = { error: err.message, stack: err.stack };
+    // Log full error for debugging, but only expose message to client
+    console.error('doGet error:', err.message, err.stack);
+    result = { error: err.message };
   }
   
   return ContentService.createTextOutput(JSON.stringify(result))
