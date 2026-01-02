@@ -775,7 +775,7 @@
   </button>
 
   <!-- Tutorial Overlay -->
-  <div class="tutorial-backdrop" id="tutorialBackdrop"></div>
+  <div class="tutorial-backdrop" id="tutorialBackdrop" style="display:none"></div>
   <div class="tutorial-overlay" id="tutorialOverlay" style="display:none">
     <div class="tutorial-spotlight" id="tutorialSpotlight"></div>
     <div class="tutorial-tooltip" id="tutorialTooltip">
@@ -1897,6 +1897,7 @@ function startTutorial() {
   // Wait for modal to open, then start
   setTimeout(function() {
     document.getElementById('tutorialOverlay').style.display = 'block';
+    document.getElementById('tutorialBackdrop').style.display = 'block';
     document.getElementById('tutorialBackdrop').classList.add('active');
     showTutorialStep();
   }, 300);
@@ -2024,6 +2025,7 @@ function endTutorial(completed) {
   tutorialActive = false;
 
   document.getElementById('tutorialOverlay').style.display = 'none';
+  document.getElementById('tutorialBackdrop').style.display = 'none';
   document.getElementById('tutorialBackdrop').classList.remove('active');
   document.getElementById('tutorialTooltip').classList.remove('active');
   document.getElementById('tutorialBtn').style.display = 'flex';
