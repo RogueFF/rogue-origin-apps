@@ -32,10 +32,25 @@
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
 
     /* Header */
-    .header { background: var(--bg-card); border-bottom: 1px solid var(--border); padding: 16px 24px; }
+    .header {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
     .header-inner { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
     .brand { display: flex; align-items: center; gap: 12px; }
     .logo { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; }
@@ -43,43 +58,161 @@
     .brand p { color: var(--green); font-size: 12px; }
     .header-actions { display: flex; gap: 10px; align-items: center; }
 
+    /* Unit Toggle */
+    .unit-toggle {
+      display: flex;
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: 20px;
+      padding: 3px;
+      position: relative;
+    }
+    .unit-toggle button {
+      padding: 6px 14px;
+      border: none;
+      background: transparent;
+      border-radius: 16px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      color: var(--text-muted);
+      position: relative;
+      z-index: 1;
+    }
+    .unit-toggle button.active {
+      background: var(--green);
+      color: white;
+      transform: scale(1.05);
+      box-shadow: 0 2px 8px rgba(102, 137, 113, 0.3);
+    }
+
     /* Buttons */
-    .btn { padding: 10px 18px; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; font-weight: 500; transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px; }
+    .btn {
+      padding: 10px 18px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      position: relative;
+      overflow: hidden;
+    }
+    .btn::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+      transform: translate(-50%, -50%);
+      transition: width 0.6s, height 0.6s;
+    }
+    .btn:active::before {
+      width: 300px;
+      height: 300px;
+    }
     .btn-primary { background: var(--green); color: #fff; }
-    .btn-primary:hover { background: var(--green-dark); }
+    .btn-primary:hover { background: var(--green-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(102, 137, 113, 0.3); }
+    .btn-primary:active { transform: translateY(0); }
     .btn-secondary { background: var(--bg); border: 1px solid var(--border); color: var(--text); }
-    .btn-secondary:hover { border-color: var(--green); }
+    .btn-secondary:hover { border-color: var(--green); transform: translateY(-1px); }
     .btn-gold { background: var(--gold); color: #fff; }
-    .btn-gold:hover { background: #d99a3f; }
+    .btn-gold:hover { background: #d99a3f; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(228, 170, 79, 0.3); }
     .btn-danger { background: var(--danger); color: #fff; }
     .btn-sm { padding: 6px 12px; font-size: 12px; }
 
     /* Main Layout */
-    .main { max-width: 1400px; margin: 0 auto; padding: 24px; }
+    .main {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px;
+      animation: fadeIn 0.4s ease-out;
+    }
 
     /* Stats Bar */
-    .stats-bar { display: flex; gap: 20px; margin-bottom: 24px; flex-wrap: wrap; }
-    .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px; min-width: 160px; }
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      animation: slideUp 0.4s ease-out backwards;
+    }
+    .stat-card:nth-child(1) { animation-delay: 0.05s; }
+    .stat-card:nth-child(2) { animation-delay: 0.1s; }
+    .stat-card:nth-child(3) { animation-delay: 0.15s; }
+    .stat-card:nth-child(4) { animation-delay: 0.2s; }
+    .stat-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+    }
     .stat-card .label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
-    .stat-card .value { font-size: 28px; font-weight: 700; color: var(--green); }
-    .stat-card .sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .stat-card .value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--green);
+      transition: all 0.3s ease;
+    }
+    .stat-card .value.updating {
+      animation: pulse 0.4s ease;
+    }
 
     /* Orders Table */
-    .orders-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .orders-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      animation: slideUp 0.4s ease-out 0.25s backwards;
+    }
     .section-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
     .section-header h2 { font-size: 16px; font-weight: 600; }
     .filters { display: flex; gap: 10px; flex-wrap: wrap; }
-    .filter-input { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: var(--bg); color: var(--text); }
-    .filter-input:focus { outline: none; border-color: var(--green); }
+    .filter-input {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 13px;
+      background: var(--bg);
+      color: var(--text);
+      transition: all 0.2s ease;
+    }
+    .filter-input:focus {
+      outline: none;
+      border-color: var(--green);
+      box-shadow: 0 0 0 3px var(--green-dim);
+    }
 
     table { width: 100%; border-collapse: collapse; }
     th, td { padding: 14px 16px; text-align: left; border-bottom: 1px solid var(--border); }
     th { background: var(--bg); font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    tr { transition: all 0.2s ease; }
     tr:hover { background: var(--green-dim); }
     tr:last-child td { border-bottom: none; }
 
     /* Status Badges */
-    .status { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+    .status {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      animation: fadeIn 0.3s ease;
+    }
     .status-pending { background: var(--gold-dim); color: var(--gold); }
     .status-processing { background: rgba(100, 149, 237, 0.15); color: #6495ED; }
     .status-ready { background: var(--green-dim); color: var(--green); }
@@ -88,66 +221,232 @@
 
     /* Progress Bar */
     .progress-bar { width: 100px; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
-    .progress-fill { height: 100%; background: var(--green); border-radius: 4px; transition: width 0.3s; }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--green), var(--gold));
+      border-radius: 4px;
+      transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    }
 
     /* Modal */
-    .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
-    .modal-overlay.open { display: flex; }
-    .modal { background: var(--bg-card); border-radius: 16px; width: 90%; max-width: 800px; max-height: 90vh; overflow-y: auto; }
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.3s ease;
+      backdrop-filter: blur(0px);
+    }
+    .modal-overlay.open {
+      display: flex;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(4px);
+      animation: fadeIn 0.3s ease;
+    }
+    .modal {
+      background: var(--bg-card);
+      border-radius: 16px;
+      width: 90%;
+      max-width: 800px;
+      max-height: 90vh;
+      overflow-y: auto;
+      transform: scale(0.9);
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .modal-overlay.open .modal {
+      transform: scale(1);
+      opacity: 1;
+      animation: modalSlideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
     .modal-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
     .modal-header h3 { font-size: 18px; font-weight: 600; }
-    .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); }
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: var(--text-muted);
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+    .modal-close:hover {
+      background: var(--border);
+      transform: rotate(90deg);
+    }
     .modal-body { padding: 24px; }
     .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
 
     /* Form */
-    .form-group { margin-bottom: 20px; }
+    .form-group {
+      margin-bottom: 20px;
+      animation: slideInLeft 0.3s ease-out backwards;
+    }
+    .form-group:nth-child(1) { animation-delay: 0.05s; }
+    .form-group:nth-child(2) { animation-delay: 0.1s; }
+    .form-group:nth-child(3) { animation-delay: 0.15s; }
     .form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text); }
-    .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; background: var(--bg); color: var(--text); }
-    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px var(--green-dim); }
+    .form-group input, .form-group select, .form-group textarea {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      background: var(--bg);
+      color: var(--text);
+      transition: all 0.2s ease;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+      outline: none;
+      border-color: var(--green);
+      box-shadow: 0 0 0 3px var(--green-dim);
+      transform: translateY(-1px);
+    }
     .form-group textarea { min-height: 80px; resize: vertical; }
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     .form-hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
 
-    /* Customer Select with Add New */
+    /* Customer Select */
     .customer-select-container { position: relative; }
-    .customer-select-container .form-row { margin-bottom: 0; }
-    .add-customer-link { font-size: 12px; color: var(--green); cursor: pointer; text-decoration: underline; margin-top: 6px; display: inline-block; }
-    .add-customer-link:hover { color: var(--green-dark); }
+    .add-customer-link {
+      font-size: 12px;
+      color: var(--green);
+      cursor: pointer;
+      text-decoration: underline;
+      margin-top: 6px;
+      display: inline-block;
+      transition: all 0.2s ease;
+    }
+    .add-customer-link:hover { color: var(--green-dark); transform: translateX(2px); }
 
     /* Pallets Section */
     .pallets-section { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); }
     .pallets-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
     .pallets-header h4 { font-size: 14px; font-weight: 600; }
-    .pallet-card { background: var(--bg); border: 2px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    .pallet-card {
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      animation: slideInRight 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: all 0.2s ease;
+    }
+    .pallet-card:hover {
+      border-color: var(--green);
+      box-shadow: 0 4px 12px rgba(102, 137, 113, 0.1);
+    }
+    .pallet-card.removing {
+      animation: slideOutRight 0.3s ease forwards;
+    }
     .pallet-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
     .pallet-card-header h5 { font-size: 13px; font-weight: 600; color: var(--green); }
-    .pallet-remove { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 18px; padding: 4px; }
-    .pallet-remove:hover { opacity: 0.7; }
+    .pallet-remove {
+      background: none;
+      border: none;
+      color: var(--danger);
+      cursor: pointer;
+      font-size: 18px;
+      padding: 4px;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+    }
+    .pallet-remove:hover { background: rgba(196, 92, 74, 0.1); transform: scale(1.1); }
 
-    /* Strain Row in Pallet */
-    .strain-row { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px; margin-bottom: 10px; align-items: start; }
-    .strain-row select, .strain-row input { padding: 8px 10px; font-size: 13px; }
-    .strain-remove { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 16px; padding: 8px; }
-    .strain-remove:hover { opacity: 0.7; }
+    /* Strain Row */
+    .strain-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr auto;
+      gap: 10px;
+      margin-bottom: 10px;
+      align-items: start;
+      animation: slideInDown 0.3s ease;
+    }
+    .strain-row.removing {
+      animation: slideOutUp 0.3s ease forwards;
+    }
+    .strain-row select, .strain-row input {
+      padding: 8px 10px;
+      font-size: 13px;
+      transition: all 0.2s ease;
+    }
+    .strain-row select:focus, .strain-row input:focus {
+      transform: scale(1.02);
+    }
+    .strain-remove {
+      background: none;
+      border: none;
+      color: var(--danger);
+      cursor: pointer;
+      font-size: 16px;
+      padding: 8px;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+    }
+    .strain-remove:hover { background: rgba(196, 92, 74, 0.1); transform: scale(1.1); }
     .add-strain-btn { margin-top: 8px; }
 
     /* Pallet Total */
-    .pallet-total { background: var(--green-dim); border-radius: 8px; padding: 10px 12px; margin-top: 12px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; }
+    .pallet-total {
+      background: var(--green-dim);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-top: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+    .pallet-total.updating {
+      animation: pulse 0.4s ease;
+    }
     .pallet-total-label { color: var(--text-muted); }
     .pallet-total-value { color: var(--green); font-size: 16px; }
 
-    /* Order Total Summary */
-    .order-totals { background: var(--gold-dim); border: 2px solid var(--gold); border-radius: 12px; padding: 16px; margin-top: 20px; }
+    /* Order Totals */
+    .order-totals {
+      background: var(--gold-dim);
+      border: 2px solid var(--gold);
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 20px;
+      animation: slideUp 0.4s ease-out 0.2s backwards;
+    }
     .order-totals h4 { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--gold); }
     .totals-grid { display: grid; gap: 8px; }
-    .totals-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+    .totals-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      transition: all 0.3s ease;
+    }
     .totals-row.final { border-top: 2px solid var(--gold); padding-top: 8px; margin-top: 8px; font-size: 16px; font-weight: 700; }
     .totals-label { color: var(--text-muted); }
-    .totals-value { font-weight: 600; color: var(--text); }
+    .totals-value {
+      font-weight: 600;
+      color: var(--text);
+      transition: all 0.3s ease;
+    }
+    .totals-value.updating {
+      animation: pulse 0.4s ease;
+    }
     .totals-value.currency { color: var(--gold); }
 
-    /* Order Detail View */
+    /* Order Detail */
     .order-detail { padding: 24px; }
     .order-detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
     .order-title { font-size: 24px; font-weight: 700; }
@@ -160,20 +459,39 @@
 
     /* Responsive */
     @media (max-width: 768px) {
-      .stat-card { min-width: 140px; }
       .form-row { grid-template-columns: 1fr; }
-      .strain-row { grid-template-columns: 1fr; }
+      .strain-row {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+      .strain-row select, .strain-row input {
+        width: 100%;
+      }
       th, td { padding: 10px 12px; font-size: 13px; }
       .hide-mobile { display: none; }
+      .modal { width: 95%; max-height: 95vh; }
+      .btn { min-height: 44px; } /* Better touch target */
+      .unit-toggle button { min-height: 36px; min-width: 48px; }
     }
 
     /* Loading */
     .loading { text-align: center; padding: 60px; color: var(--text-muted); }
-    .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--green); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--green);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
 
     /* Empty State */
-    .empty-state { text-align: center; padding: 60px 20px; }
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      animation: fadeIn 0.4s ease;
+    }
     .empty-state i { font-size: 64px; color: var(--text-muted); margin-bottom: 16px; }
     .empty-state h3 { font-size: 18px; margin-bottom: 8px; }
     .empty-state p { color: var(--text-muted); margin-bottom: 20px; }
@@ -181,18 +499,124 @@
     /* Customer Link */
     .customer-link { display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: var(--green-dim); border-radius: 8px; margin-top: 20px; }
     .customer-link input { flex: 1; padding: 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px; font-family: monospace; }
-    .customer-link button { padding: 8px 12px; }
 
-    /* Toast notifications */
+    /* Toast */
     .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 10000; display: flex; flex-direction: column; gap: 8px; }
-    .toast { padding: 12px 20px; border-radius: 8px; color: #fff; font-weight: 500; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); animation: toastSlideIn 0.3s ease; max-width: 360px; }
+    .toast {
+      padding: 12px 20px;
+      border-radius: 8px;
+      color: #fff;
+      font-weight: 500;
+      font-size: 14px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      animation: toastSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      max-width: 360px;
+    }
     .toast.error { background: var(--danger); }
     .toast.success { background: var(--success); }
     .toast.warning { background: var(--warning); color: #1a1a1a; }
     .toast.info { background: var(--green); }
-    .toast.hiding { animation: toastSlideOut 0.3s ease forwards; }
-    @keyframes toastSlideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-    @keyframes toastSlideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
+    .toast.hiding { animation: toastSlideOut 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+
+    /* Animations */
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    @keyframes slideInLeft {
+      from {
+        opacity: 0;
+        transform: translateX(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+    @keyframes slideInRight {
+      from {
+        opacity: 0;
+        transform: translateX(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+    @keyframes slideOutRight {
+      to {
+        opacity: 0;
+        transform: translateX(100px);
+        height: 0;
+        margin: 0;
+        padding: 0;
+      }
+    }
+    @keyframes slideInDown {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    @keyframes slideOutUp {
+      to {
+        opacity: 0;
+        transform: translateY(-20px);
+        height: 0;
+        margin: 0;
+      }
+    }
+    @keyframes modalSlideUp {
+      from {
+        transform: scale(0.9) translateY(20px);
+        opacity: 0;
+      }
+      to {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+      }
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    @keyframes toastSlideIn {
+      from {
+        transform: translateX(400px);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+    @keyframes toastSlideOut {
+      from {
+        transform: translateX(0);
+        opacity: 1;
+      }
+      to {
+        transform: translateX(400px);
+        opacity: 0;
+      }
+    }
   </style>
 </head>
 <body>
@@ -206,8 +630,13 @@
         </div>
       </div>
       <div class="header-actions">
+        <!-- Unit Toggle -->
+        <div class="unit-toggle">
+          <button id="unitKg" class="active" onclick="setUnit('kg')">kg</button>
+          <button id="unitLbs" onclick="setUnit('lbs')">lbs</button>
+        </div>
         <button class="btn btn-secondary" onclick="window.location.href='index.html'">
-          <i class="ph ph-arrow-left"></i> Back to Hub
+          <i class="ph ph-arrow-left"></i> Back
         </button>
         <button class="btn btn-secondary" onclick="toggleDarkMode()">
           <i class="ph ph-moon"></i>
@@ -227,15 +656,15 @@
         <div class="value" id="statActiveOrders">-</div>
       </div>
       <div class="stat-card">
-        <div class="label">Total Pending (kg)</div>
+        <div class="label">Total Pending</div>
         <div class="value" id="statPendingKg">-</div>
       </div>
       <div class="stat-card">
-        <div class="label">In Progress (kg)</div>
+        <div class="label">In Progress</div>
         <div class="value" id="statProgressKg">-</div>
       </div>
       <div class="stat-card">
-        <div class="label">Ready to Ship (kg)</div>
+        <div class="label">Ready to Ship</div>
         <div class="value" id="statReadyKg">-</div>
       </div>
     </div>
@@ -278,24 +707,14 @@
 
           <!-- Customer Selection -->
           <div class="customer-select-container">
-            <div class="form-row">
-              <div class="form-group">
-                <label>Customer *</label>
-                <select id="customerSelect" onchange="handleCustomerChange()">
-                  <option value="">Select a customer...</option>
-                </select>
-                <a class="add-customer-link" onclick="openNewCustomerModal()">
-                  <i class="ph ph-plus"></i> Add New Customer
-                </a>
-              </div>
-              <div class="form-group">
-                <label>Currency</label>
-                <select id="currency">
-                  <option value="USD">USD ($)</option>
-                  <option value="EUR">EUR (€)</option>
-                  <option value="GBP">GBP (£)</option>
-                </select>
-              </div>
+            <div class="form-group">
+              <label>Customer *</label>
+              <select id="customerSelect" onchange="handleCustomerChange()">
+                <option value="">Select a customer...</option>
+              </select>
+              <a class="add-customer-link" onclick="openNewCustomerModal()">
+                <i class="ph ph-plus"></i> Add New Customer
+              </a>
             </div>
           </div>
 
@@ -437,6 +856,7 @@
 (function() {
   // Configuration
   const API_URL = 'https://script.google.com/macros/s/AKfycbxDAHSFl9cedGS49L3Lf5ztqy-SSToYigyA30ZtsdpmWNAR9H61X_Mm48JOOTGqqr-Z/exec';
+  const LBS_PER_KG = 2.20462;
 
   // State
   let orders = [];
@@ -445,8 +865,42 @@
   let pricing = {};
   let palletCounter = 0;
   let strainCounter = 0;
+  let currentUnit = 'kg'; // kg or lbs
 
-  // Toast notification system
+  // Unit conversion
+  function convertWeight(kg, toUnit) {
+    if (toUnit === 'lbs') return kg * LBS_PER_KG;
+    return kg;
+  }
+
+  function getUnitLabel() {
+    return currentUnit;
+  }
+
+  function formatWeight(kg, decimals = 1) {
+    const value = convertWeight(kg, currentUnit);
+    return value.toFixed(decimals) + ' ' + getUnitLabel();
+  }
+
+  window.setUnit = function(unit) {
+    currentUnit = unit;
+    localStorage.setItem('ro_unit', unit);
+
+    // Update UI
+    document.getElementById('unitKg').classList.toggle('active', unit === 'kg');
+    document.getElementById('unitLbs').classList.toggle('active', unit === 'lbs');
+
+    // Refresh displays
+    renderOrders();
+    updateStats();
+
+    // Update form if open
+    if (document.getElementById('orderModal').classList.contains('open')) {
+      recalculateOrderTotals();
+    }
+  };
+
+  // Toast notification
   function showToast(message, type, duration) {
     type = type || 'info';
     duration = duration || 4000;
@@ -470,14 +924,19 @@
   // Initialize
   document.addEventListener('DOMContentLoaded', async function() {
     initDarkMode();
+    initUnit();
     await loadInitialData();
   });
 
-  // Dark mode
   function initDarkMode() {
     if (localStorage.getItem('ro_dark_mode') === 'true') {
       document.body.classList.add('dark-mode');
     }
+  }
+
+  function initUnit() {
+    const savedUnit = localStorage.getItem('ro_unit') || 'kg';
+    setUnit(savedUnit);
   }
 
   window.toggleDarkMode = function() {
@@ -485,10 +944,9 @@
     localStorage.setItem('ro_dark_mode', document.body.classList.contains('dark-mode'));
   };
 
-  // Load all initial data
+  // Load initial data
   async function loadInitialData() {
     try {
-      // Load in parallel
       await Promise.all([
         loadOrders(),
         loadCustomers(),
@@ -497,93 +955,65 @@
       ]);
     } catch (error) {
       console.error('Failed to load initial data:', error);
-      showToast('Failed to load data from server, using demo data', 'warning');
+      showToast('Using demo data', 'warning');
       loadDemoData();
     }
   }
 
-  // Load customers from API
   async function loadCustomers() {
     try {
       const response = await fetch(`${API_URL}?action=getCustomers`);
       const data = await response.json();
-      if (data.customers) {
-        customers = data.customers;
-      } else {
-        console.log('No customers API yet, using demo');
-        customers = getDemoCustomers();
-      }
+      customers = data.customers || getDemoCustomers();
       populateCustomerDropdown();
     } catch (error) {
-      console.log('Customer API not ready:', error);
       customers = getDemoCustomers();
       populateCustomerDropdown();
     }
   }
 
-  // Load cultivars from API
   async function loadCultivars() {
     try {
       const response = await fetch(`${API_URL}?action=getCultivars`);
       const data = await response.json();
-      if (data.cultivars) {
-        cultivars = data.cultivars;
-      } else {
-        console.log('No cultivars API yet, using demo');
-        cultivars = getDemoCultivars();
-      }
+      cultivars = data.cultivars || getDemoCultivars();
     } catch (error) {
-      console.log('Cultivar API not ready:', error);
       cultivars = getDemoCultivars();
     }
   }
 
-  // Load pricing from API
   async function loadPricing() {
     try {
       const response = await fetch(`${API_URL}?action=getPricing`);
       const data = await response.json();
       if (data.pricing) {
-        // Convert array to map for easy lookup
         pricing = {};
         data.pricing.forEach(p => {
           pricing[p.cultivar] = p.pricePerKg;
         });
       } else {
-        console.log('No pricing API yet, using demo');
         pricing = getDemoPricing();
       }
     } catch (error) {
-      console.log('Pricing API not ready:', error);
       pricing = getDemoPricing();
     }
   }
 
-  // Load orders from API
   async function loadOrders() {
     try {
       const response = await fetch(`${API_URL}?action=getOrders`);
       const data = await response.json();
-
-      if (data.orders) {
-        orders = data.orders;
-        renderOrders();
-        updateStats();
-      } else {
-        console.log('No orders yet');
-        orders = getDemoOrders();
-        renderOrders();
-        updateStats();
-      }
+      orders = data.orders || getDemoOrders();
+      renderOrders();
+      updateStats();
     } catch (error) {
-      console.error('Failed to load orders:', error);
       orders = getDemoOrders();
       renderOrders();
       updateStats();
     }
   }
 
-  // Demo data functions
+  // Demo data
   function getDemoCustomers() {
     return [
       {
@@ -591,13 +1021,7 @@
         companyName: 'Hamburg GmbH',
         contactName: 'Klaus Mueller',
         email: 'klaus@hamburg-hemp.de',
-        address: {
-          street: 'Hauptstrasse 123',
-          city: 'Hamburg',
-          state: 'HH',
-          zip: '20095',
-          country: 'Germany'
-        },
+        address: { street: 'Hauptstrasse 123', city: 'Hamburg', state: 'HH', zip: '20095', country: 'Germany' },
         phone: '+49 40 1234567'
       },
       {
@@ -605,40 +1029,18 @@
         companyName: 'Denver Distributors',
         contactName: 'Mike Johnson',
         email: 'mike@denverhemp.com',
-        address: {
-          street: '456 Broadway',
-          city: 'Denver',
-          state: 'CO',
-          zip: '80202',
-          country: 'USA'
-        },
+        address: { street: '456 Broadway', city: 'Denver', state: 'CO', zip: '80202', country: 'USA' },
         phone: '+1 303-555-0123'
       }
     ];
   }
 
   function getDemoCultivars() {
-    return [
-      'Sour Lifter',
-      'Lifter',
-      'Cherry Wine',
-      'Elektra',
-      'Hawaiian Haze',
-      'Special Sauce',
-      'Suver Haze'
-    ];
+    return ['Sour Lifter', 'Lifter', 'Cherry Wine', 'Elektra', 'Hawaiian Haze', 'Special Sauce', 'Suver Haze'];
   }
 
   function getDemoPricing() {
-    return {
-      'Sour Lifter': 150,
-      'Lifter': 140,
-      'Cherry Wine': 160,
-      'Elektra': 145,
-      'Hawaiian Haze': 135,
-      'Special Sauce': 130,
-      'Suver Haze': 140
-    };
+    return { 'Sour Lifter': 150, 'Lifter': 140, 'Cherry Wine': 160, 'Elektra': 145, 'Hawaiian Haze': 135, 'Special Sauce': 130, 'Suver Haze': 140 };
   }
 
   function getDemoOrders() {
@@ -647,13 +1049,7 @@
         id: 'ORD-001',
         customerId: 'CUST-001',
         customer: 'Hamburg GmbH',
-        address: {
-          street: 'Hauptstrasse 123',
-          city: 'Hamburg',
-          state: 'HH',
-          zip: '20095',
-          country: 'Germany'
-        },
+        address: { street: 'Hauptstrasse 123', city: 'Hamburg', state: 'HH', zip: '20095', country: 'Germany' },
         items: [
           { cultivar: 'Sour Lifter', quantityKg: 630, pricePerKg: 150, total: 94500 },
           { cultivar: 'Lifter', quantityKg: 300, pricePerKg: 140, total: 42000 },
@@ -663,53 +1059,14 @@
         totalKg: 1500,
         completedKg: 630,
         totalPrice: 221450,
-        currency: 'EUR',
+        currency: 'USD',
         status: 'processing',
         pallets: [
-          {
-            id: 'P001',
-            strains: [
-              { cultivar: 'Sour Lifter', weightKg: 250, pricePerKg: 150 },
-              { cultivar: 'Lifter', weightKg: 50, pricePerKg: 140 }
-            ],
-            totalKg: 300,
-            status: 'completed'
-          },
-          {
-            id: 'P002',
-            strains: [
-              { cultivar: 'Sour Lifter', weightKg: 280, pricePerKg: 150 }
-            ],
-            totalKg: 280,
-            status: 'completed'
-          },
-          {
-            id: 'P003',
-            strains: [
-              { cultivar: 'Cherry Wine', weightKg: 200, pricePerKg: 160 },
-              { cultivar: 'Lifter', weightKg: 120, pricePerKg: 140 }
-            ],
-            totalKg: 320,
-            status: 'processing'
-          },
-          {
-            id: 'P004',
-            strains: [
-              { cultivar: 'Hawaiian Haze', weightKg: 250, pricePerKg: 135 }
-            ],
-            totalKg: 250,
-            status: 'pending'
-          },
-          {
-            id: 'P005',
-            strains: [
-              { cultivar: 'Sour Lifter', weightKg: 100, pricePerKg: 150 },
-              { cultivar: 'Lifter', weightKg: 130, pricePerKg: 140 },
-              { cultivar: 'Cherry Wine', weightKg: 120, pricePerKg: 160 }
-            ],
-            totalKg: 350,
-            status: 'pending'
-          }
+          { id: 'P001', strains: [{ cultivar: 'Sour Lifter', weightKg: 250, pricePerKg: 150 }, { cultivar: 'Lifter', weightKg: 50, pricePerKg: 140 }], totalKg: 300, status: 'completed' },
+          { id: 'P002', strains: [{ cultivar: 'Sour Lifter', weightKg: 280, pricePerKg: 150 }], totalKg: 280, status: 'completed' },
+          { id: 'P003', strains: [{ cultivar: 'Cherry Wine', weightKg: 200, pricePerKg: 160 }, { cultivar: 'Lifter', weightKg: 120, pricePerKg: 140 }], totalKg: 320, status: 'processing' },
+          { id: 'P004', strains: [{ cultivar: 'Hawaiian Haze', weightKg: 250, pricePerKg: 135 }], totalKg: 250, status: 'pending' },
+          { id: 'P005', strains: [{ cultivar: 'Sour Lifter', weightKg: 100, pricePerKg: 150 }, { cultivar: 'Lifter', weightKg: 130, pricePerKg: 140 }, { cultivar: 'Cherry Wine', weightKg: 120, pricePerKg: 160 }], totalKg: 350, status: 'pending' }
         ],
         createdDate: '2025-12-15',
         dueDate: '2026-02-01',
@@ -719,13 +1076,7 @@
         id: 'ORD-002',
         customerId: 'CUST-002',
         customer: 'Denver Distributors',
-        address: {
-          street: '456 Broadway',
-          city: 'Denver',
-          state: 'CO',
-          zip: '80202',
-          country: 'USA'
-        },
+        address: { street: '456 Broadway', city: 'Denver', state: 'CO', zip: '80202', country: 'USA' },
         items: [
           { cultivar: 'Lifter', quantityKg: 100, pricePerKg: 140, total: 14000 },
           { cultivar: 'Suver Haze', quantityKg: 100, pricePerKg: 140, total: 14000 }
@@ -736,15 +1087,7 @@
         currency: 'USD',
         status: 'ready',
         pallets: [
-          {
-            id: 'P006',
-            strains: [
-              { cultivar: 'Lifter', weightKg: 100, pricePerKg: 140 },
-              { cultivar: 'Suver Haze', weightKg: 100, pricePerKg: 140 }
-            ],
-            totalKg: 200,
-            status: 'completed'
-          }
+          { id: 'P006', strains: [{ cultivar: 'Lifter', weightKg: 100, pricePerKg: 140 }, { cultivar: 'Suver Haze', weightKg: 100, pricePerKg: 140 }], totalKg: 200, status: 'completed' }
         ],
         createdDate: '2025-12-28',
         dueDate: '2026-01-10',
@@ -763,7 +1106,6 @@
     updateStats();
   }
 
-  // Populate customer dropdown
   function populateCustomerDropdown() {
     const select = document.getElementById('customerSelect');
     select.innerHTML = '<option value="">Select a customer...</option>';
@@ -775,13 +1117,9 @@
     });
   }
 
-  // Handle customer selection change
-  window.handleCustomerChange = function() {
-    const customerId = document.getElementById('customerSelect').value;
-    // Customer is selected, could auto-fill address if needed
-  };
+  window.handleCustomerChange = function() {};
 
-  // Customer Modal
+  // Customer modal
   window.openNewCustomerModal = function() {
     document.getElementById('customerForm').reset();
     document.getElementById('customerModal').classList.add('open');
@@ -816,14 +1154,12 @@
     };
 
     try {
-      // Try to save to API
       const response = await fetch(`${API_URL}?action=saveCustomer`, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(customer)
       });
       const result = await response.json();
-
       if (result.success || result.customer) {
         customers.push(customer);
         populateCustomerDropdown();
@@ -832,7 +1168,6 @@
         showToast('Customer added successfully', 'success');
       }
     } catch (error) {
-      console.log('Customer save API not ready, adding locally:', error);
       customers.push(customer);
       populateCustomerDropdown();
       document.getElementById('customerSelect').value = customer.id;
@@ -865,16 +1200,17 @@
       </div>
     `;
     container.appendChild(palletDiv);
-
-    // Add first strain row
     addStrain(palletCounter);
   };
 
   window.removePallet = function(palletId) {
     const el = document.getElementById(`pallet-${palletId}`);
     if (el) {
-      el.remove();
-      recalculateOrderTotals();
+      el.classList.add('removing');
+      setTimeout(() => {
+        el.remove();
+        recalculateOrderTotals();
+      }, 300);
     }
   };
 
@@ -889,8 +1225,8 @@
         <option value="">Select cultivar...</option>
         ${cultivars.map(c => `<option value="${c}">${c}</option>`).join('')}
       </select>
-      <input type="number" class="strain-weight" placeholder="Weight (kg)" step="0.1" min="0" onchange="recalculatePalletTotal(${palletId})">
-      <input type="number" class="strain-price" placeholder="Price/kg" step="0.01" min="0" onchange="recalculatePalletTotal(${palletId})">
+      <input type="number" class="strain-weight" placeholder="Weight (${currentUnit})" step="0.1" min="0" onchange="recalculatePalletTotal(${palletId})">
+      <input type="number" class="strain-price" placeholder="$/kg" step="0.01" min="0" onchange="recalculatePalletTotal(${palletId})">
       <button type="button" class="strain-remove" onclick="removeStrain(${strainCounter}, ${palletId})">
         <i class="ph ph-x"></i>
       </button>
@@ -901,8 +1237,11 @@
   window.removeStrain = function(strainId, palletId) {
     const el = document.getElementById(`strain-${strainId}`);
     if (el) {
-      el.remove();
-      recalculatePalletTotal(palletId);
+      el.classList.add('removing');
+      setTimeout(() => {
+        el.remove();
+        recalculatePalletTotal(palletId);
+      }, 300);
     }
   };
 
@@ -911,7 +1250,6 @@
     const cultivar = strainEl.querySelector('.strain-cultivar').value;
     const priceInput = strainEl.querySelector('.strain-price');
 
-    // Auto-fill price if available
     if (cultivar && pricing[cultivar]) {
       priceInput.value = pricing[cultivar];
     }
@@ -928,15 +1266,20 @@
     let totalPrice = 0;
 
     strainRows.forEach(row => {
-      const weight = parseFloat(row.querySelector('.strain-weight').value) || 0;
+      let weightInput = parseFloat(row.querySelector('.strain-weight').value) || 0;
+      // Convert to kg if currently in lbs
+      if (currentUnit === 'lbs') {
+        weightInput = weightInput / LBS_PER_KG;
+      }
       const price = parseFloat(row.querySelector('.strain-price').value) || 0;
-      totalKg += weight;
-      totalPrice += weight * price;
+      totalKg += weightInput;
+      totalPrice += weightInput * price;
     });
 
-    const currency = getCurrencySymbol();
-    document.getElementById(`pallet-${palletId}-total`).textContent =
-      `${totalKg.toFixed(1)} kg | ${currency}${totalPrice.toFixed(2)}`;
+    const totalEl = document.getElementById(`pallet-${palletId}-total`);
+    totalEl.classList.add('updating');
+    totalEl.textContent = `${formatWeight(totalKg)} | $${totalPrice.toFixed(2)}`;
+    setTimeout(() => totalEl.classList.remove('updating'), 400);
 
     recalculateOrderTotals();
   };
@@ -950,28 +1293,34 @@
     pallets.forEach(pallet => {
       const strainRows = pallet.querySelectorAll('.strain-row');
       strainRows.forEach(row => {
-        const weight = parseFloat(row.querySelector('.strain-weight').value) || 0;
+        let weight = parseFloat(row.querySelector('.strain-weight').value) || 0;
+        if (currentUnit === 'lbs') {
+          weight = weight / LBS_PER_KG;
+        }
         const price = parseFloat(row.querySelector('.strain-price').value) || 0;
         totalKg += weight;
         totalPrice += weight * price;
       });
     });
 
-    const currency = getCurrencySymbol();
-    document.getElementById('totalWeight').textContent = `${totalKg.toFixed(1)} kg`;
-    document.getElementById('totalPallets').textContent = totalPallets;
-    document.getElementById('totalPrice').textContent = `${currency}${totalPrice.toFixed(2)}`;
+    const weightEl = document.getElementById('totalWeight');
+    const palletsEl = document.getElementById('totalPallets');
+    const priceEl = document.getElementById('totalPrice');
+
+    [weightEl, palletsEl, priceEl].forEach(el => el.classList.add('updating'));
+
+    weightEl.textContent = formatWeight(totalKg);
+    palletsEl.textContent = totalPallets;
+    priceEl.textContent = `$${totalPrice.toFixed(2)}`;
+
+    setTimeout(() => {
+      [weightEl, palletsEl, priceEl].forEach(el => el.classList.remove('updating'));
+    }, 400);
   };
 
-  function getCurrencySymbol() {
-    const currency = document.getElementById('currency').value;
-    return currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : '$';
-  }
-
-  // Render orders table
+  // Render orders
   function renderOrders() {
     const container = document.getElementById('ordersTableContainer');
-
     if (orders.length === 0) {
       renderEmptyState();
       return;
@@ -997,7 +1346,7 @@
             <tr>
               <td><strong>${order.id}</strong></td>
               <td>${order.customer}</td>
-              <td>${order.totalKg} kg</td>
+              <td>${formatWeight(order.totalKg)}</td>
               <td>
                 <div class="progress-bar">
                   <div class="progress-fill" style="width: ${getProgress(order)}%"></div>
@@ -1013,7 +1362,7 @@
                 <button class="btn btn-sm btn-secondary" onclick="editOrder('${order.id}')" title="Edit">
                   <i class="ph ph-pencil"></i>
                 </button>
-                <button class="btn btn-sm btn-secondary" onclick="copyCustomerLink('${order.id}')" title="Copy Customer Link">
+                <button class="btn btn-sm btn-secondary" onclick="copyCustomerLink('${order.id}')" title="Copy Link">
                   <i class="ph ph-link"></i>
                 </button>
               </td>
@@ -1037,7 +1386,6 @@
     `;
   }
 
-  // Filter orders
   window.filterOrders = function() {
     renderOrders();
   };
@@ -1053,33 +1401,38 @@
     });
   }
 
-  // Update stats
   function updateStats() {
     const active = orders.filter(o => !['completed', 'shipped'].includes(o.status));
     const pending = orders.filter(o => o.status === 'pending');
     const processing = orders.filter(o => o.status === 'processing');
     const ready = orders.filter(o => o.status === 'ready');
 
+    const statEls = [
+      document.getElementById('statActiveOrders'),
+      document.getElementById('statPendingKg'),
+      document.getElementById('statProgressKg'),
+      document.getElementById('statReadyKg')
+    ];
+
+    statEls.forEach(el => el.classList.add('updating'));
+
     document.getElementById('statActiveOrders').textContent = active.length;
-    document.getElementById('statPendingKg').textContent = pending.reduce((sum, o) => sum + o.totalKg, 0);
-    document.getElementById('statProgressKg').textContent = processing.reduce((sum, o) => sum + (o.totalKg - (o.completedKg || 0)), 0);
-    document.getElementById('statReadyKg').textContent = ready.reduce((sum, o) => sum + o.totalKg, 0);
+    document.getElementById('statPendingKg').textContent = formatWeight(pending.reduce((sum, o) => sum + o.totalKg, 0), 0);
+    document.getElementById('statProgressKg').textContent = formatWeight(processing.reduce((sum, o) => sum + (o.totalKg - (o.completedKg || 0)), 0), 0);
+    document.getElementById('statReadyKg').textContent = formatWeight(ready.reduce((sum, o) => sum + o.totalKg, 0), 0);
+
+    setTimeout(() => {
+      statEls.forEach(el => el.classList.remove('updating'));
+    }, 400);
   }
 
-  // Helpers
   function getProgress(order) {
     if (!order.completedKg) return 0;
     return Math.round((order.completedKg / order.totalKg) * 100);
   }
 
   function formatStatus(status) {
-    const labels = {
-      pending: 'Pending',
-      processing: 'Processing',
-      ready: 'Ready to Ship',
-      shipped: 'Shipped',
-      completed: 'Completed'
-    };
+    const labels = { pending: 'Pending', processing: 'Processing', ready: 'Ready to Ship', shipped: 'Shipped', completed: 'Completed' };
     return labels[status] || status;
   }
 
@@ -1095,13 +1448,9 @@
     document.getElementById('orderForm').reset();
     document.getElementById('orderId').value = '';
     document.getElementById('palletsContainer').innerHTML = '';
-    document.getElementById('currency').value = 'USD';
     palletCounter = 0;
     strainCounter = 0;
-
-    // Add first pallet
     addPallet();
-
     document.getElementById('orderModal').classList.add('open');
   };
 
@@ -1112,12 +1461,10 @@
     document.getElementById('modalTitle').textContent = 'Edit Order';
     document.getElementById('orderId').value = order.id;
     document.getElementById('customerSelect').value = order.customerId || '';
-    document.getElementById('currency').value = order.currency || 'USD';
     document.getElementById('orderStatus').value = order.status;
     document.getElementById('dueDate').value = order.dueDate || '';
     document.getElementById('orderNotes').value = order.notes || '';
 
-    // Load pallets
     document.getElementById('palletsContainer').innerHTML = '';
     palletCounter = 0;
     strainCounter = 0;
@@ -1126,18 +1473,16 @@
       order.pallets.forEach((pallet, index) => {
         addPallet();
         const currentPalletId = palletCounter;
-
-        // Remove the auto-added first strain
         const strainsContainer = document.getElementById(`pallet-${currentPalletId}-strains`);
         strainsContainer.innerHTML = '';
 
-        // Add strains from order
         pallet.strains.forEach(strain => {
           addStrain(currentPalletId);
           const currentStrainId = strainCounter;
           const strainEl = document.getElementById(`strain-${currentStrainId}`);
           strainEl.querySelector('.strain-cultivar').value = strain.cultivar;
-          strainEl.querySelector('.strain-weight').value = strain.weightKg;
+          // Convert weight to current unit for display
+          strainEl.querySelector('.strain-weight').value = convertWeight(strain.weightKg, currentUnit).toFixed(1);
           strainEl.querySelector('.strain-price').value = strain.pricePerKg;
         });
 
@@ -1154,11 +1499,9 @@
     document.getElementById('orderModal').classList.remove('open');
   };
 
-  // Save order
   window.saveOrder = async function() {
     const orderId = document.getElementById('orderId').value;
     const customerId = document.getElementById('customerSelect').value;
-    const currency = document.getElementById('currency').value;
     const status = document.getElementById('orderStatus').value;
     const dueDate = document.getElementById('dueDate').value;
     const notes = document.getElementById('orderNotes').value.trim();
@@ -1174,9 +1517,8 @@
       return;
     }
 
-    // Collect pallets and calculate totals
     const pallets = [];
-    const itemsMap = {}; // Aggregate by cultivar
+    const itemsMap = {};
     let totalKg = 0;
     let totalPrice = 0;
     let completedKg = 0;
@@ -1187,14 +1529,19 @@
 
       palletEl.querySelectorAll('.strain-row').forEach(strainEl => {
         const cultivar = strainEl.querySelector('.strain-cultivar').value;
-        const weightKg = parseFloat(strainEl.querySelector('.strain-weight').value) || 0;
+        let weightKg = parseFloat(strainEl.querySelector('.strain-weight').value) || 0;
+
+        // Convert to kg if input was in lbs
+        if (currentUnit === 'lbs') {
+          weightKg = weightKg / LBS_PER_KG;
+        }
+
         const pricePerKg = parseFloat(strainEl.querySelector('.strain-price').value) || 0;
 
         if (cultivar && weightKg > 0) {
           strains.push({ cultivar, weightKg, pricePerKg });
           palletTotalKg += weightKg;
 
-          // Aggregate items by cultivar
           if (!itemsMap[cultivar]) {
             itemsMap[cultivar] = { cultivar, quantityKg: 0, pricePerKg, total: 0 };
           }
@@ -1240,7 +1587,7 @@
       totalKg,
       completedKg,
       totalPrice,
-      currency,
+      currency: 'USD',
       status,
       pallets,
       documents: orderId ? orders.find(o => o.id === orderId)?.documents || [] : [],
@@ -1250,7 +1597,6 @@
     };
 
     try {
-      // Try to save to API
       const response = await fetch(`${API_URL}?action=saveOrder`, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -1259,7 +1605,6 @@
       const result = await response.json();
 
       if (result.success || result.order) {
-        // Update local state
         if (orderId) {
           const index = orders.findIndex(o => o.id === orderId);
           if (index >= 0) orders[index] = order;
@@ -1269,15 +1614,13 @@
         showToast('Order saved successfully', 'success');
       }
     } catch (error) {
-      console.log('API save failed, updating locally:', error);
-      // Update local state anyway for demo
       if (orderId) {
         const index = orders.findIndex(o => o.id === orderId);
         if (index >= 0) orders[index] = order;
       } else {
         orders.push(order);
       }
-      showToast('Order saved locally (server unavailable)', 'warning');
+      showToast('Order saved locally', 'warning');
     }
 
     closeModal();
@@ -1285,14 +1628,12 @@
     updateStats();
   };
 
-  // View order detail
   window.viewOrder = function(orderId) {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
     const progress = getProgress(order);
     const customerLink = `${window.location.origin}/rogue-origin-apps/order.html?id=${btoa(order.id)}`;
-    const currencySymbol = order.currency === 'EUR' ? '€' : order.currency === 'GBP' ? '£' : '$';
 
     document.getElementById('orderDetailContent').innerHTML = `
       <div class="order-detail">
@@ -1311,13 +1652,13 @@
         <div class="order-progress">
           <div style="display: flex; justify-content: space-between; align-items: baseline;">
             <strong style="font-size: 24px;">${progress}% Complete</strong>
-            <span style="color: var(--text-muted);">${order.completedKg || 0} / ${order.totalKg} kg</span>
+            <span style="color: var(--text-muted);">${formatWeight(order.completedKg || 0)} / ${formatWeight(order.totalKg)}</span>
           </div>
           <div class="order-progress-bar">
             <div class="order-progress-fill" style="width: ${progress}%"></div>
           </div>
           <div class="order-progress-stats">
-            <span>Remaining: ${order.totalKg - (order.completedKg || 0)} kg</span>
+            <span>Remaining: ${formatWeight(order.totalKg - (order.completedKg || 0))}</span>
             <span>${order.pallets?.filter(p => p.status === 'completed').length || 0} / ${order.pallets?.length || 0} pallets done</span>
           </div>
         </div>
@@ -1338,15 +1679,15 @@
             ${(order.items || []).map(item => `
               <tr>
                 <td><strong>${item.cultivar}</strong></td>
-                <td>${item.quantityKg} kg</td>
-                <td>${currencySymbol}${item.pricePerKg}</td>
-                <td>${currencySymbol}${item.total.toFixed(2)}</td>
+                <td>${formatWeight(item.quantityKg)}</td>
+                <td>$${item.pricePerKg}/kg</td>
+                <td>$${item.total.toFixed(2)}</td>
               </tr>
             `).join('')}
             <tr style="background: var(--gold-dim); font-weight: 700;">
               <td colspan="2">Total</td>
-              <td>${order.totalKg} kg</td>
-              <td>${currencySymbol}${order.totalPrice.toFixed(2)}</td>
+              <td>${formatWeight(order.totalKg)}</td>
+              <td>$${order.totalPrice.toFixed(2)}</td>
             </tr>
           </tbody>
         </table>
@@ -1366,7 +1707,7 @@
               <tr>
                 <td><strong>${pallet.id}</strong></td>
                 <td>${pallet.strains.map(s => s.cultivar).join(', ')}</td>
-                <td>${pallet.totalKg} kg</td>
+                <td>${formatWeight(pallet.totalKg)}</td>
                 <td><span class="status status-${pallet.status}">${formatStatus(pallet.status)}</span></td>
               </tr>
             `).join('')}
@@ -1378,7 +1719,7 @@
           <input type="text" value="${customerLink}" readonly id="customerLinkInput">
           <button class="btn btn-sm btn-primary" onclick="copyLink()">Copy Link</button>
         </div>
-        <p style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">Share this link with the customer to let them track their order.</p>
+        <p style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">Share this link with the customer to track their order.</p>
       </div>
     `;
 
@@ -1393,13 +1734,13 @@
     const input = document.getElementById('customerLinkInput');
     input.select();
     document.execCommand('copy');
-    showToast('Link copied to clipboard!', 'success');
+    showToast('Link copied!', 'success');
   };
 
   window.copyCustomerLink = function(orderId) {
     const customerLink = `${window.location.origin}/rogue-origin-apps/order.html?id=${btoa(orderId)}`;
     navigator.clipboard.writeText(customerLink).then(() => {
-      showToast('Customer link copied to clipboard!', 'success');
+      showToast('Link copied!', 'success');
     });
   };
 
