@@ -730,9 +730,15 @@
               </select>
             </div>
             <div class="form-group">
-              <label>Due Date</label>
-              <input type="date" id="dueDate">
+              <label>Start Date/Time</label>
+              <input type="datetime-local" id="startDateTime">
             </div>
+          </div>
+
+          <div class="form-group">
+            <label>Estimated Lead Time</label>
+            <input type="text" id="estimatedLeadTime" readonly style="background: var(--bg); cursor: not-allowed;">
+            <p class="form-hint">Based on 10 trimmers at strain-specific rates</p>
           </div>
 
           <div class="form-group">
