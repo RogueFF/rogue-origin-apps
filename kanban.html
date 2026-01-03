@@ -637,6 +637,7 @@
               <option value="card">Card (6" × 4")</option>
               <option value="tag">Price Tag (4" × 2")</option>
               <option value="shop">Shop Label (6" × 3")</option>
+              <option value="shop-full">Shop Label (Full Page 11" × 8.5")</option>
               <option value="full">Full Sheet (8.5" × 11")</option>
             </select>
           </div>
@@ -709,6 +710,7 @@
             <option value="card">Card (6" × 4")</option>
             <option value="tag">Price Tag (4" × 2")</option>
             <option value="shop">Shop Label (6" × 3")</option>
+            <option value="shop-full">Shop Label (Full Page 11" × 8.5")</option>
             <option value="full">Full Sheet (8.5" × 11")</option>
           </select>
           <div id="previewSizeInfo" style="margin-top:6px;padding:8px 10px;background:var(--bg);border-radius:6px;color:var(--text-muted);font-size:11px;border:1px solid var(--border)">2 cards per page (front/back)</div>
@@ -1472,19 +1474,19 @@ function renderPreview() {
 }
 
 function cardHtml(c, color, side, size) {
-  var qrSize = size === 'full' ? '300x300' : '200x200';
+  var qrSize = (size === 'full' || size === 'shop-full') ? '400x400' : '200x200';
   var qr = c.url ? 'https://api.qrserver.com/v1/create-qr-code/?size=' + qrSize + '&data=' + encodeURIComponent(c.url) : '';
   var logoUrl = 'https://i.imgur.com/PvrTPb2.png';
-  
+
   if (side === 'back') {
     return '<div class="kanban ' + color + '"><div class="kanban-border"></div><div class="kanban-inner"></div>' +
       '<div class="kanban-back"><h3>' + t('scanToOrder') + '</h3>' +
       '<div class="kanban-qr">' + (qr ? '<img src="' + qr + '">' : 'No URL') + '</div>' +
       '</div><img class="kanban-logo" src="' + logoUrl + '"></div>';
   }
-  
+
   // Shop labels have simplified layout - header, picture, price, logo, crumbtrail
-  if (size === 'shop') {
+  if (size === 'shop' || size === 'shop-full') {
     return '<div class="kanban ' + color + '"><div class="kanban-border"></div><div class="kanban-inner"></div>' +
       '<div class="kanban-content"><div class="kanban-header"><h3>' + esc(c.item) + '</h3></div>' +
       '<div class="kanban-body" style="justify-content:center;align-items:center">' +
@@ -1574,16 +1576,17 @@ function updatePrintCount() {
   var color = document.getElementById('printColor').value;
   var sidesCount = side === 'both' ? 2 : 1;
   var colorsCount = color === 'both' ? 2 : 1;
-  var cardsPerPage = (size === 'full') ? 1 : 2;
+  var cardsPerPage = (size === 'full' || size === 'shop-full') ? 1 : 2;
   var pages = Math.ceil((selectedIds.length * sidesCount * colorsCount) / cardsPerPage);
-  
+
   document.getElementById('printCount').textContent = selectedIds.length;
   document.getElementById('printPages').textContent = pages;
-  
+
   var sizeInfo = {
     'card': '6"×4" cards, 2 per page',
     'tag': '4"×2" tags, compact layout',
     'shop': '6"×3" shop labels, simplified',
+    'shop-full': '11"×8.5" full page shop label, landscape',
     'full': '7.5"×5" full sheet, 1 per page'
   };
   document.getElementById('printSizeInfo').textContent = sizeInfo[size] || '';
@@ -1595,6 +1598,7 @@ function updatePreviewSizeInfo() {
     'card': '6"×4" cards, 2 per page (green + red)',
     'tag': '4"×2" compact tags, 2 per page',
     'shop': '6"×3" shop labels, simplified layout',
+    'shop-full': '11"×8.5" full page shop label, landscape',
     'full': '7.5"×5" full sheet, 1 card per page'
   };
   document.getElementById('previewSizeInfo').textContent = sizeInfo[size] || '';
@@ -1681,6 +1685,26 @@ function getPrintCSS(size) {
       '.kanban-logo{bottom:16px;left:16px;width:40px;height:40px}' +
       '.kanban-back h3{font-size:36px;margin-bottom:20px}' +
       '.kanban-qr{width:150px;height:150px}';
+  } else if (size === 'shop-full') {
+    // 11" x 8.5" full page shop label - landscape orientation, simplified layout
+    return base +
+      '@page{size:letter landscape;margin:0}' +
+      '.page{padding:0.5in;align-items:center;justify-content:center}' +
+      '.page-inner{display:flex;align-items:center;justify-content:center;width:100%;height:100%}' +
+      '.kanban{width:10in;height:7.5in;padding:24px}' +
+      '.kanban-inner{inset:26px}' +
+      '.kanban-content{padding:32px 40px;position:relative}' +
+      '.kanban-header{padding-bottom:12px;margin-bottom:0;border-width:4px}' +
+      '.kanban-header h3{font-size:64px}' +
+      '.kanban-loc{font-size:28px;margin-bottom:0;position:absolute;bottom:32px;right:40px}' +
+      '.kanban-body{flex:1;justify-content:center;align-items:center;margin-top:40px}' +
+      '.kanban-left{display:none}' +
+      '.kanban-right{padding-top:0;justify-content:center;align-items:center}' +
+      '.kanban-img{width:400px;height:300px;border-width:6px}' +
+      '.kanban-price{margin-top:24px;padding:16px 60px;font-size:48px;border-radius:40px}' +
+      '.kanban-logo{bottom:32px;left:32px;width:80px;height:80px}' +
+      '.kanban-back h3{font-size:72px;margin-bottom:50px}' +
+      '.kanban-qr{width:400px;height:400px;border-width:6px}';
   } else if (size === 'full') {
     // 8.5" x 11" full sheet - one card per page, maximum size
     return base +
