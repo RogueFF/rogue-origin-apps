@@ -93,7 +93,7 @@
     /* Modal */
     .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
     .modal-overlay.open { display: flex; }
-    .modal { background: var(--bg-card); border-radius: 16px; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto; }
+    .modal { background: var(--bg-card); border-radius: 16px; width: 90%; max-width: 800px; max-height: 90vh; overflow-y: auto; }
     .modal-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
     .modal-header h3 { font-size: 18px; font-weight: 600; }
     .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); }
@@ -109,15 +109,43 @@
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     .form-hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
 
+    /* Customer Select with Add New */
+    .customer-select-container { position: relative; }
+    .customer-select-container .form-row { margin-bottom: 0; }
+    .add-customer-link { font-size: 12px; color: var(--green); cursor: pointer; text-decoration: underline; margin-top: 6px; display: inline-block; }
+    .add-customer-link:hover { color: var(--green-dark); }
+
     /* Pallets Section */
     .pallets-section { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); }
     .pallets-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
     .pallets-header h4 { font-size: 14px; font-weight: 600; }
-    .pallet-item { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
-    .pallet-item .pallet-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-    .pallet-item input { flex: 1; min-width: 100px; padding: 8px 10px; font-size: 13px; }
-    .pallet-item select { padding: 8px 10px; font-size: 13px; }
-    .remove-pallet { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 18px; }
+    .pallet-card { background: var(--bg); border: 2px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    .pallet-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .pallet-card-header h5 { font-size: 13px; font-weight: 600; color: var(--green); }
+    .pallet-remove { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 18px; padding: 4px; }
+    .pallet-remove:hover { opacity: 0.7; }
+
+    /* Strain Row in Pallet */
+    .strain-row { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px; margin-bottom: 10px; align-items: start; }
+    .strain-row select, .strain-row input { padding: 8px 10px; font-size: 13px; }
+    .strain-remove { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 16px; padding: 8px; }
+    .strain-remove:hover { opacity: 0.7; }
+    .add-strain-btn { margin-top: 8px; }
+
+    /* Pallet Total */
+    .pallet-total { background: var(--green-dim); border-radius: 8px; padding: 10px 12px; margin-top: 12px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; }
+    .pallet-total-label { color: var(--text-muted); }
+    .pallet-total-value { color: var(--green); font-size: 16px; }
+
+    /* Order Total Summary */
+    .order-totals { background: var(--gold-dim); border: 2px solid var(--gold); border-radius: 12px; padding: 16px; margin-top: 20px; }
+    .order-totals h4 { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--gold); }
+    .totals-grid { display: grid; gap: 8px; }
+    .totals-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+    .totals-row.final { border-top: 2px solid var(--gold); padding-top: 8px; margin-top: 8px; font-size: 16px; font-weight: 700; }
+    .totals-label { color: var(--text-muted); }
+    .totals-value { font-weight: 600; color: var(--text); }
+    .totals-value.currency { color: var(--gold); }
 
     /* Order Detail View */
     .order-detail { padding: 24px; }
@@ -134,6 +162,7 @@
     @media (max-width: 768px) {
       .stat-card { min-width: 140px; }
       .form-row { grid-template-columns: 1fr; }
+      .strain-row { grid-template-columns: 1fr; }
       th, td { padding: 10px 12px; font-size: 13px; }
       .hide-mobile { display: none; }
     }
@@ -246,16 +275,30 @@
       <div class="modal-body">
         <form id="orderForm">
           <input type="hidden" id="orderId">
-          <div class="form-row">
-            <div class="form-group">
-              <label>Customer Name *</label>
-              <input type="text" id="customerName" required placeholder="e.g., Hamburg GmbH">
-            </div>
-            <div class="form-group">
-              <label>Order Total (kg) *</label>
-              <input type="number" id="totalKg" required placeholder="e.g., 1400" step="0.1">
+
+          <!-- Customer Selection -->
+          <div class="customer-select-container">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Customer *</label>
+                <select id="customerSelect" onchange="handleCustomerChange()">
+                  <option value="">Select a customer...</option>
+                </select>
+                <a class="add-customer-link" onclick="openNewCustomerModal()">
+                  <i class="ph ph-plus"></i> Add New Customer
+                </a>
+              </div>
+              <div class="form-group">
+                <label>Currency</label>
+                <select id="currency">
+                  <option value="USD">USD ($)</option>
+                  <option value="EUR">EUR (€)</option>
+                  <option value="GBP">GBP (£)</option>
+                </select>
+              </div>
             </div>
           </div>
+
           <div class="form-row">
             <div class="form-group">
               <label>Status</label>
@@ -272,21 +315,41 @@
               <input type="date" id="dueDate">
             </div>
           </div>
+
           <div class="form-group">
             <label>Notes</label>
-            <textarea id="orderNotes" placeholder="Special instructions, cultivar preferences, etc."></textarea>
+            <textarea id="orderNotes" placeholder="Special instructions, documentation requirements, etc."></textarea>
           </div>
 
           <!-- Pallets -->
           <div class="pallets-section">
             <div class="pallets-header">
-              <h4>Pallets</h4>
-              <button type="button" class="btn btn-sm btn-secondary" onclick="addPalletRow()">
+              <h4><i class="ph ph-package"></i> Pallets</h4>
+              <button type="button" class="btn btn-sm btn-secondary" onclick="addPallet()">
                 <i class="ph ph-plus"></i> Add Pallet
               </button>
             </div>
             <div id="palletsContainer"></div>
-            <p class="form-hint">Each pallet can contain multiple cultivars. Weight is in kg.</p>
+            <p class="form-hint">Each pallet can contain multiple cultivars with individual weights and pricing.</p>
+          </div>
+
+          <!-- Order Totals -->
+          <div class="order-totals">
+            <h4><i class="ph ph-calculator"></i> Order Summary</h4>
+            <div class="totals-grid">
+              <div class="totals-row">
+                <span class="totals-label">Total Weight:</span>
+                <span class="totals-value" id="totalWeight">0 kg</span>
+              </div>
+              <div class="totals-row">
+                <span class="totals-label">Total Pallets:</span>
+                <span class="totals-value" id="totalPallets">0</span>
+              </div>
+              <div class="totals-row final">
+                <span class="totals-label">Total Price:</span>
+                <span class="totals-value currency" id="totalPrice">$0.00</span>
+              </div>
+            </div>
           </div>
         </form>
       </div>
@@ -297,9 +360,69 @@
     </div>
   </div>
 
+  <!-- New Customer Modal -->
+  <div class="modal-overlay" id="customerModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>New Customer</h3>
+        <button class="modal-close" onclick="closeCustomerModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="customerForm">
+          <div class="form-group">
+            <label>Company Name *</label>
+            <input type="text" id="customerCompanyName" required placeholder="e.g., Hamburg GmbH">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Contact Name</label>
+              <input type="text" id="customerContactName" placeholder="e.g., John Smith">
+            </div>
+            <div class="form-group">
+              <label>Email</label>
+              <input type="email" id="customerEmail" placeholder="contact@company.com">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Street Address</label>
+            <input type="text" id="customerStreet" placeholder="123 Main St">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>City</label>
+              <input type="text" id="customerCity">
+            </div>
+            <div class="form-group">
+              <label>State/Province</label>
+              <input type="text" id="customerState">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Postal Code</label>
+              <input type="text" id="customerZip">
+            </div>
+            <div class="form-group">
+              <label>Country *</label>
+              <input type="text" id="customerCountry" required placeholder="e.g., Germany">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Phone</label>
+            <input type="tel" id="customerPhone">
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeCustomerModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveCustomer()">Save Customer</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Order Detail Modal -->
   <div class="modal-overlay" id="detailModal">
-    <div class="modal" style="max-width: 800px;">
+    <div class="modal" style="max-width: 900px;">
       <div class="modal-header">
         <h3>Order Details</h3>
         <button class="modal-close" onclick="closeDetailModal()">&times;</button>
@@ -317,7 +440,11 @@
 
   // State
   let orders = [];
-  let palletCount = 0;
+  let customers = [];
+  let cultivars = [];
+  let pricing = {};
+  let palletCounter = 0;
+  let strainCounter = 0;
 
   // Toast notification system
   function showToast(message, type, duration) {
@@ -341,9 +468,9 @@
   }
 
   // Initialize
-  document.addEventListener('DOMContentLoaded', function() {
-    loadOrders();
+  document.addEventListener('DOMContentLoaded', async function() {
     initDarkMode();
+    await loadInitialData();
   });
 
   // Dark mode
@@ -358,6 +485,80 @@
     localStorage.setItem('ro_dark_mode', document.body.classList.contains('dark-mode'));
   };
 
+  // Load all initial data
+  async function loadInitialData() {
+    try {
+      // Load in parallel
+      await Promise.all([
+        loadOrders(),
+        loadCustomers(),
+        loadCultivars(),
+        loadPricing()
+      ]);
+    } catch (error) {
+      console.error('Failed to load initial data:', error);
+      showToast('Failed to load data from server, using demo data', 'warning');
+      loadDemoData();
+    }
+  }
+
+  // Load customers from API
+  async function loadCustomers() {
+    try {
+      const response = await fetch(`${API_URL}?action=getCustomers`);
+      const data = await response.json();
+      if (data.customers) {
+        customers = data.customers;
+      } else {
+        console.log('No customers API yet, using demo');
+        customers = getDemoCustomers();
+      }
+      populateCustomerDropdown();
+    } catch (error) {
+      console.log('Customer API not ready:', error);
+      customers = getDemoCustomers();
+      populateCustomerDropdown();
+    }
+  }
+
+  // Load cultivars from API
+  async function loadCultivars() {
+    try {
+      const response = await fetch(`${API_URL}?action=getCultivars`);
+      const data = await response.json();
+      if (data.cultivars) {
+        cultivars = data.cultivars;
+      } else {
+        console.log('No cultivars API yet, using demo');
+        cultivars = getDemoCultivars();
+      }
+    } catch (error) {
+      console.log('Cultivar API not ready:', error);
+      cultivars = getDemoCultivars();
+    }
+  }
+
+  // Load pricing from API
+  async function loadPricing() {
+    try {
+      const response = await fetch(`${API_URL}?action=getPricing`);
+      const data = await response.json();
+      if (data.pricing) {
+        // Convert array to map for easy lookup
+        pricing = {};
+        data.pricing.forEach(p => {
+          pricing[p.cultivar] = p.pricePerKg;
+        });
+      } else {
+        console.log('No pricing API yet, using demo');
+        pricing = getDemoPricing();
+      }
+    } catch (error) {
+      console.log('Pricing API not ready:', error);
+      pricing = getDemoPricing();
+    }
+  }
+
   // Load orders from API
   async function loadOrders() {
     try {
@@ -368,54 +569,403 @@
         orders = data.orders;
         renderOrders();
         updateStats();
-      } else if (data.error) {
-        console.log('No orders yet or API not set up:', data.error);
-        renderEmptyState();
+      } else {
+        console.log('No orders yet');
+        orders = getDemoOrders();
+        renderOrders();
+        updateStats();
       }
     } catch (error) {
       console.error('Failed to load orders:', error);
-      showToast('Failed to load orders, showing demo data', 'warning');
-      // Show demo data for development
       orders = getDemoOrders();
       renderOrders();
       updateStats();
     }
   }
 
-  // Demo data for development
+  // Demo data functions
+  function getDemoCustomers() {
+    return [
+      {
+        id: 'CUST-001',
+        companyName: 'Hamburg GmbH',
+        contactName: 'Klaus Mueller',
+        email: 'klaus@hamburg-hemp.de',
+        address: {
+          street: 'Hauptstrasse 123',
+          city: 'Hamburg',
+          state: 'HH',
+          zip: '20095',
+          country: 'Germany'
+        },
+        phone: '+49 40 1234567'
+      },
+      {
+        id: 'CUST-002',
+        companyName: 'Denver Distributors',
+        contactName: 'Mike Johnson',
+        email: 'mike@denverhemp.com',
+        address: {
+          street: '456 Broadway',
+          city: 'Denver',
+          state: 'CO',
+          zip: '80202',
+          country: 'USA'
+        },
+        phone: '+1 303-555-0123'
+      }
+    ];
+  }
+
+  function getDemoCultivars() {
+    return [
+      'Sour Lifter',
+      'Lifter',
+      'Cherry Wine',
+      'Elektra',
+      'Hawaiian Haze',
+      'Special Sauce',
+      'Suver Haze'
+    ];
+  }
+
+  function getDemoPricing() {
+    return {
+      'Sour Lifter': 150,
+      'Lifter': 140,
+      'Cherry Wine': 160,
+      'Elektra': 145,
+      'Hawaiian Haze': 135,
+      'Special Sauce': 130,
+      'Suver Haze': 140
+    };
+  }
+
   function getDemoOrders() {
     return [
       {
         id: 'ORD-001',
+        customerId: 'CUST-001',
         customer: 'Hamburg GmbH',
-        totalKg: 1400,
-        completedKg: 580,
+        address: {
+          street: 'Hauptstrasse 123',
+          city: 'Hamburg',
+          state: 'HH',
+          zip: '20095',
+          country: 'Germany'
+        },
+        items: [
+          { cultivar: 'Sour Lifter', quantityKg: 630, pricePerKg: 150, total: 94500 },
+          { cultivar: 'Lifter', quantityKg: 300, pricePerKg: 140, total: 42000 },
+          { cultivar: 'Cherry Wine', quantityKg: 320, pricePerKg: 160, total: 51200 },
+          { cultivar: 'Hawaiian Haze', quantityKg: 250, pricePerKg: 135, total: 33750 }
+        ],
+        totalKg: 1500,
+        completedKg: 630,
+        totalPrice: 221450,
+        currency: 'EUR',
         status: 'processing',
+        pallets: [
+          {
+            id: 'P001',
+            strains: [
+              { cultivar: 'Sour Lifter', weightKg: 250, pricePerKg: 150 },
+              { cultivar: 'Lifter', weightKg: 50, pricePerKg: 140 }
+            ],
+            totalKg: 300,
+            status: 'completed'
+          },
+          {
+            id: 'P002',
+            strains: [
+              { cultivar: 'Sour Lifter', weightKg: 280, pricePerKg: 150 }
+            ],
+            totalKg: 280,
+            status: 'completed'
+          },
+          {
+            id: 'P003',
+            strains: [
+              { cultivar: 'Cherry Wine', weightKg: 200, pricePerKg: 160 },
+              { cultivar: 'Lifter', weightKg: 120, pricePerKg: 140 }
+            ],
+            totalKg: 320,
+            status: 'processing'
+          },
+          {
+            id: 'P004',
+            strains: [
+              { cultivar: 'Hawaiian Haze', weightKg: 250, pricePerKg: 135 }
+            ],
+            totalKg: 250,
+            status: 'pending'
+          },
+          {
+            id: 'P005',
+            strains: [
+              { cultivar: 'Sour Lifter', weightKg: 100, pricePerKg: 150 },
+              { cultivar: 'Lifter', weightKg: 130, pricePerKg: 140 },
+              { cultivar: 'Cherry Wine', weightKg: 120, pricePerKg: 160 }
+            ],
+            totalKg: 350,
+            status: 'pending'
+          }
+        ],
         createdDate: '2025-12-15',
         dueDate: '2026-02-01',
-        notes: 'International freight - EU documentation required',
-        pallets: [
-          { id: 'P001', cultivars: 'Sour Lifter, Lifter', weightKg: 300, status: 'completed' },
-          { id: 'P002', cultivars: 'Sour Lifter', weightKg: 280, status: 'completed' },
-          { id: 'P003', cultivars: 'Cherry Wine, Elektra', weightKg: 320, status: 'processing' },
-          { id: 'P004', cultivars: 'Hawaiian Haze', weightKg: 250, status: 'pending' },
-          { id: 'P005', cultivars: 'Special Sauce', weightKg: 250, status: 'pending' }
-        ]
+        notes: 'International freight - EU documentation required'
       },
       {
         id: 'ORD-002',
+        customerId: 'CUST-002',
         customer: 'Denver Distributors',
+        address: {
+          street: '456 Broadway',
+          city: 'Denver',
+          state: 'CO',
+          zip: '80202',
+          country: 'USA'
+        },
+        items: [
+          { cultivar: 'Lifter', quantityKg: 100, pricePerKg: 140, total: 14000 },
+          { cultivar: 'Suver Haze', quantityKg: 100, pricePerKg: 140, total: 14000 }
+        ],
         totalKg: 200,
         completedKg: 200,
+        totalPrice: 28000,
+        currency: 'USD',
         status: 'ready',
+        pallets: [
+          {
+            id: 'P006',
+            strains: [
+              { cultivar: 'Lifter', weightKg: 100, pricePerKg: 140 },
+              { cultivar: 'Suver Haze', weightKg: 100, pricePerKg: 140 }
+            ],
+            totalKg: 200,
+            status: 'completed'
+          }
+        ],
         createdDate: '2025-12-28',
         dueDate: '2026-01-10',
-        notes: 'Domestic shipping',
-        pallets: [
-          { id: 'P006', cultivars: 'Lifter, Suver Haze', weightKg: 200, status: 'completed' }
-        ]
+        notes: 'Domestic shipping'
       }
     ];
+  }
+
+  function loadDemoData() {
+    customers = getDemoCustomers();
+    cultivars = getDemoCultivars();
+    pricing = getDemoPricing();
+    orders = getDemoOrders();
+    populateCustomerDropdown();
+    renderOrders();
+    updateStats();
+  }
+
+  // Populate customer dropdown
+  function populateCustomerDropdown() {
+    const select = document.getElementById('customerSelect');
+    select.innerHTML = '<option value="">Select a customer...</option>';
+    customers.forEach(customer => {
+      const option = document.createElement('option');
+      option.value = customer.id;
+      option.textContent = customer.companyName;
+      select.appendChild(option);
+    });
+  }
+
+  // Handle customer selection change
+  window.handleCustomerChange = function() {
+    const customerId = document.getElementById('customerSelect').value;
+    // Customer is selected, could auto-fill address if needed
+  };
+
+  // Customer Modal
+  window.openNewCustomerModal = function() {
+    document.getElementById('customerForm').reset();
+    document.getElementById('customerModal').classList.add('open');
+  };
+
+  window.closeCustomerModal = function() {
+    document.getElementById('customerModal').classList.remove('open');
+  };
+
+  window.saveCustomer = async function() {
+    const companyName = document.getElementById('customerCompanyName').value.trim();
+    const country = document.getElementById('customerCountry').value.trim();
+
+    if (!companyName || !country) {
+      showToast('Company name and country are required', 'error');
+      return;
+    }
+
+    const customer = {
+      id: 'CUST-' + String(customers.length + 1).padStart(3, '0'),
+      companyName: companyName,
+      contactName: document.getElementById('customerContactName').value.trim(),
+      email: document.getElementById('customerEmail').value.trim(),
+      address: {
+        street: document.getElementById('customerStreet').value.trim(),
+        city: document.getElementById('customerCity').value.trim(),
+        state: document.getElementById('customerState').value.trim(),
+        zip: document.getElementById('customerZip').value.trim(),
+        country: country
+      },
+      phone: document.getElementById('customerPhone').value.trim()
+    };
+
+    try {
+      // Try to save to API
+      const response = await fetch(`${API_URL}?action=saveCustomer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(customer)
+      });
+      const result = await response.json();
+
+      if (result.success || result.customer) {
+        customers.push(customer);
+        populateCustomerDropdown();
+        document.getElementById('customerSelect').value = customer.id;
+        closeCustomerModal();
+        showToast('Customer added successfully', 'success');
+      }
+    } catch (error) {
+      console.log('Customer save API not ready, adding locally:', error);
+      customers.push(customer);
+      populateCustomerDropdown();
+      document.getElementById('customerSelect').value = customer.id;
+      closeCustomerModal();
+      showToast('Customer added locally', 'warning');
+    }
+  };
+
+  // Pallet management
+  window.addPallet = function() {
+    palletCounter++;
+    const container = document.getElementById('palletsContainer');
+    const palletDiv = document.createElement('div');
+    palletDiv.className = 'pallet-card';
+    palletDiv.id = `pallet-${palletCounter}`;
+    palletDiv.innerHTML = `
+      <div class="pallet-card-header">
+        <h5>Pallet ${palletCounter}</h5>
+        <button type="button" class="pallet-remove" onclick="removePallet(${palletCounter})">
+          <i class="ph ph-trash"></i>
+        </button>
+      </div>
+      <div id="pallet-${palletCounter}-strains"></div>
+      <button type="button" class="btn btn-sm btn-secondary add-strain-btn" onclick="addStrain(${palletCounter})">
+        <i class="ph ph-plus"></i> Add Cultivar
+      </button>
+      <div class="pallet-total">
+        <span class="pallet-total-label">Pallet Total:</span>
+        <span class="pallet-total-value" id="pallet-${palletCounter}-total">0 kg | $0.00</span>
+      </div>
+    `;
+    container.appendChild(palletDiv);
+
+    // Add first strain row
+    addStrain(palletCounter);
+  };
+
+  window.removePallet = function(palletId) {
+    const el = document.getElementById(`pallet-${palletId}`);
+    if (el) {
+      el.remove();
+      recalculateOrderTotals();
+    }
+  };
+
+  window.addStrain = function(palletId) {
+    strainCounter++;
+    const container = document.getElementById(`pallet-${palletId}-strains`);
+    const strainDiv = document.createElement('div');
+    strainDiv.className = 'strain-row';
+    strainDiv.id = `strain-${strainCounter}`;
+    strainDiv.innerHTML = `
+      <select class="strain-cultivar" onchange="handleStrainChange(${strainCounter}, ${palletId})">
+        <option value="">Select cultivar...</option>
+        ${cultivars.map(c => `<option value="${c}">${c}</option>`).join('')}
+      </select>
+      <input type="number" class="strain-weight" placeholder="Weight (kg)" step="0.1" min="0" onchange="recalculatePalletTotal(${palletId})">
+      <input type="number" class="strain-price" placeholder="Price/kg" step="0.01" min="0" onchange="recalculatePalletTotal(${palletId})">
+      <button type="button" class="strain-remove" onclick="removeStrain(${strainCounter}, ${palletId})">
+        <i class="ph ph-x"></i>
+      </button>
+    `;
+    container.appendChild(strainDiv);
+  };
+
+  window.removeStrain = function(strainId, palletId) {
+    const el = document.getElementById(`strain-${strainId}`);
+    if (el) {
+      el.remove();
+      recalculatePalletTotal(palletId);
+    }
+  };
+
+  window.handleStrainChange = function(strainId, palletId) {
+    const strainEl = document.getElementById(`strain-${strainId}`);
+    const cultivar = strainEl.querySelector('.strain-cultivar').value;
+    const priceInput = strainEl.querySelector('.strain-price');
+
+    // Auto-fill price if available
+    if (cultivar && pricing[cultivar]) {
+      priceInput.value = pricing[cultivar];
+    }
+
+    recalculatePalletTotal(palletId);
+  };
+
+  window.recalculatePalletTotal = function(palletId) {
+    const palletEl = document.getElementById(`pallet-${palletId}`);
+    if (!palletEl) return;
+
+    const strainRows = palletEl.querySelectorAll('.strain-row');
+    let totalKg = 0;
+    let totalPrice = 0;
+
+    strainRows.forEach(row => {
+      const weight = parseFloat(row.querySelector('.strain-weight').value) || 0;
+      const price = parseFloat(row.querySelector('.strain-price').value) || 0;
+      totalKg += weight;
+      totalPrice += weight * price;
+    });
+
+    const currency = getCurrencySymbol();
+    document.getElementById(`pallet-${palletId}-total`).textContent =
+      `${totalKg.toFixed(1)} kg | ${currency}${totalPrice.toFixed(2)}`;
+
+    recalculateOrderTotals();
+  };
+
+  window.recalculateOrderTotals = function() {
+    const pallets = document.querySelectorAll('.pallet-card');
+    let totalKg = 0;
+    let totalPrice = 0;
+    let totalPallets = pallets.length;
+
+    pallets.forEach(pallet => {
+      const strainRows = pallet.querySelectorAll('.strain-row');
+      strainRows.forEach(row => {
+        const weight = parseFloat(row.querySelector('.strain-weight').value) || 0;
+        const price = parseFloat(row.querySelector('.strain-price').value) || 0;
+        totalKg += weight;
+        totalPrice += weight * price;
+      });
+    });
+
+    const currency = getCurrencySymbol();
+    document.getElementById('totalWeight').textContent = `${totalKg.toFixed(1)} kg`;
+    document.getElementById('totalPallets').textContent = totalPallets;
+    document.getElementById('totalPrice').textContent = `${currency}${totalPrice.toFixed(2)}`;
+  };
+
+  function getCurrencySymbol() {
+    const currency = document.getElementById('currency').value;
+    return currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : '$';
   }
 
   // Render orders table
@@ -545,8 +1095,13 @@
     document.getElementById('orderForm').reset();
     document.getElementById('orderId').value = '';
     document.getElementById('palletsContainer').innerHTML = '';
-    palletCount = 0;
-    addPalletRow(); // Start with one pallet
+    document.getElementById('currency').value = 'USD';
+    palletCounter = 0;
+    strainCounter = 0;
+
+    // Add first pallet
+    addPallet();
+
     document.getElementById('orderModal').classList.add('open');
   };
 
@@ -556,21 +1111,40 @@
 
     document.getElementById('modalTitle').textContent = 'Edit Order';
     document.getElementById('orderId').value = order.id;
-    document.getElementById('customerName').value = order.customer;
-    document.getElementById('totalKg').value = order.totalKg;
+    document.getElementById('customerSelect').value = order.customerId || '';
+    document.getElementById('currency').value = order.currency || 'USD';
     document.getElementById('orderStatus').value = order.status;
     document.getElementById('dueDate').value = order.dueDate || '';
     document.getElementById('orderNotes').value = order.notes || '';
 
     // Load pallets
     document.getElementById('palletsContainer').innerHTML = '';
-    palletCount = 0;
+    palletCounter = 0;
+    strainCounter = 0;
+
     if (order.pallets && order.pallets.length > 0) {
-      order.pallets.forEach(pallet => {
-        addPalletRow(pallet);
+      order.pallets.forEach((pallet, index) => {
+        addPallet();
+        const currentPalletId = palletCounter;
+
+        // Remove the auto-added first strain
+        const strainsContainer = document.getElementById(`pallet-${currentPalletId}-strains`);
+        strainsContainer.innerHTML = '';
+
+        // Add strains from order
+        pallet.strains.forEach(strain => {
+          addStrain(currentPalletId);
+          const currentStrainId = strainCounter;
+          const strainEl = document.getElementById(`strain-${currentStrainId}`);
+          strainEl.querySelector('.strain-cultivar').value = strain.cultivar;
+          strainEl.querySelector('.strain-weight').value = strain.weightKg;
+          strainEl.querySelector('.strain-price').value = strain.pricePerKg;
+        });
+
+        recalculatePalletTotal(currentPalletId);
       });
     } else {
-      addPalletRow();
+      addPallet();
     }
 
     document.getElementById('orderModal').classList.add('open');
@@ -580,80 +1154,99 @@
     document.getElementById('orderModal').classList.remove('open');
   };
 
-  // Pallet management
-  window.addPalletRow = function(pallet = null) {
-    palletCount++;
-    const container = document.getElementById('palletsContainer');
-    const div = document.createElement('div');
-    div.className = 'pallet-item';
-    div.id = `pallet-${palletCount}`;
-    div.innerHTML = `
-      <div class="pallet-row">
-        <input type="text" placeholder="Cultivars (e.g., Sour Lifter, Lifter)" class="pallet-cultivars" value="${pallet?.cultivars || ''}">
-        <input type="number" placeholder="Weight (kg)" class="pallet-weight" style="max-width: 100px" value="${pallet?.weightKg || ''}" step="0.1">
-        <select class="pallet-status">
-          <option value="pending" ${pallet?.status === 'pending' ? 'selected' : ''}>Pending</option>
-          <option value="processing" ${pallet?.status === 'processing' ? 'selected' : ''}>Processing</option>
-          <option value="completed" ${pallet?.status === 'completed' ? 'selected' : ''}>Completed</option>
-        </select>
-        <button type="button" class="remove-pallet" onclick="removePallet(${palletCount})">
-          <i class="ph ph-x"></i>
-        </button>
-      </div>
-    `;
-    container.appendChild(div);
-  };
-
-  window.removePallet = function(id) {
-    const el = document.getElementById(`pallet-${id}`);
-    if (el) el.remove();
-  };
-
   // Save order
   window.saveOrder = async function() {
     const orderId = document.getElementById('orderId').value;
-    const customer = document.getElementById('customerName').value.trim();
-    const totalKg = parseFloat(document.getElementById('totalKg').value);
+    const customerId = document.getElementById('customerSelect').value;
+    const currency = document.getElementById('currency').value;
     const status = document.getElementById('orderStatus').value;
     const dueDate = document.getElementById('dueDate').value;
     const notes = document.getElementById('orderNotes').value.trim();
 
-    if (!customer || !totalKg) {
-      alert('Please fill in required fields');
+    if (!customerId) {
+      showToast('Please select a customer', 'error');
       return;
     }
 
-    // Collect pallets
+    const customer = customers.find(c => c.id === customerId);
+    if (!customer) {
+      showToast('Customer not found', 'error');
+      return;
+    }
+
+    // Collect pallets and calculate totals
     const pallets = [];
-    document.querySelectorAll('.pallet-item').forEach((item, index) => {
-      const cultivars = item.querySelector('.pallet-cultivars').value.trim();
-      const weight = parseFloat(item.querySelector('.pallet-weight').value) || 0;
-      const palletStatus = item.querySelector('.pallet-status').value;
-      if (cultivars || weight) {
+    const itemsMap = {}; // Aggregate by cultivar
+    let totalKg = 0;
+    let totalPrice = 0;
+    let completedKg = 0;
+
+    document.querySelectorAll('.pallet-card').forEach((palletEl, index) => {
+      const strains = [];
+      let palletTotalKg = 0;
+
+      palletEl.querySelectorAll('.strain-row').forEach(strainEl => {
+        const cultivar = strainEl.querySelector('.strain-cultivar').value;
+        const weightKg = parseFloat(strainEl.querySelector('.strain-weight').value) || 0;
+        const pricePerKg = parseFloat(strainEl.querySelector('.strain-price').value) || 0;
+
+        if (cultivar && weightKg > 0) {
+          strains.push({ cultivar, weightKg, pricePerKg });
+          palletTotalKg += weightKg;
+
+          // Aggregate items by cultivar
+          if (!itemsMap[cultivar]) {
+            itemsMap[cultivar] = { cultivar, quantityKg: 0, pricePerKg, total: 0 };
+          }
+          itemsMap[cultivar].quantityKg += weightKg;
+          itemsMap[cultivar].total += weightKg * pricePerKg;
+
+          totalKg += weightKg;
+          totalPrice += weightKg * pricePerKg;
+        }
+      });
+
+      if (strains.length > 0) {
+        const palletStatus = orderId ?
+          (orders.find(o => o.id === orderId)?.pallets?.[index]?.status || 'pending') :
+          'pending';
+
         pallets.push({
           id: `P${String(index + 1).padStart(3, '0')}`,
-          cultivars,
-          weightKg: weight,
+          strains,
+          totalKg: palletTotalKg,
           status: palletStatus
         });
+
+        if (palletStatus === 'completed') {
+          completedKg += palletTotalKg;
+        }
       }
     });
 
-    // Calculate completed kg from pallets
-    const completedKg = pallets
-      .filter(p => p.status === 'completed')
-      .reduce((sum, p) => sum + p.weightKg, 0);
+    if (pallets.length === 0) {
+      showToast('Please add at least one pallet with cultivars', 'error');
+      return;
+    }
+
+    const items = Object.values(itemsMap);
 
     const order = {
       id: orderId || `ORD-${String(orders.length + 1).padStart(3, '0')}`,
-      customer,
+      customerId: customer.id,
+      customer: customer.companyName,
+      address: customer.address,
+      items,
       totalKg,
       completedKg,
+      totalPrice,
+      currency,
       status,
+      pallets,
+      documents: orderId ? orders.find(o => o.id === orderId)?.documents || [] : [],
       createdDate: orderId ? orders.find(o => o.id === orderId)?.createdDate : new Date().toISOString().split('T')[0],
       dueDate,
-      notes,
-      pallets
+      notes
     };
 
     try {
@@ -665,7 +1258,7 @@
       });
       const result = await response.json();
 
-      if (result.success) {
+      if (result.success || result.order) {
         // Update local state
         if (orderId) {
           const index = orders.findIndex(o => o.id === orderId);
@@ -673,10 +1266,10 @@
         } else {
           orders.push(order);
         }
+        showToast('Order saved successfully', 'success');
       }
     } catch (error) {
       console.log('API save failed, updating locally:', error);
-      showToast('Could not save to server, updated locally', 'warning');
       // Update local state anyway for demo
       if (orderId) {
         const index = orders.findIndex(o => o.id === orderId);
@@ -684,6 +1277,7 @@
       } else {
         orders.push(order);
       }
+      showToast('Order saved locally (server unavailable)', 'warning');
     }
 
     closeModal();
@@ -698,6 +1292,7 @@
 
     const progress = getProgress(order);
     const customerLink = `${window.location.origin}/rogue-origin-apps/order.html?id=${btoa(order.id)}`;
+    const currencySymbol = order.currency === 'EUR' ? '€' : order.currency === 'GBP' ? '£' : '$';
 
     document.getElementById('orderDetailContent').innerHTML = `
       <div class="order-detail">
@@ -729,6 +1324,33 @@
 
         ${order.notes ? `<div style="margin-bottom: 20px; padding: 12px; background: var(--gold-dim); border-radius: 8px; font-size: 13px;"><strong>Notes:</strong> ${order.notes}</div>` : ''}
 
+        <h4 style="margin-bottom: 12px;">Order Items (by Cultivar)</h4>
+        <table style="margin-bottom: 24px;">
+          <thead>
+            <tr>
+              <th>Cultivar</th>
+              <th>Quantity</th>
+              <th>Price/kg</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${(order.items || []).map(item => `
+              <tr>
+                <td><strong>${item.cultivar}</strong></td>
+                <td>${item.quantityKg} kg</td>
+                <td>${currencySymbol}${item.pricePerKg}</td>
+                <td>${currencySymbol}${item.total.toFixed(2)}</td>
+              </tr>
+            `).join('')}
+            <tr style="background: var(--gold-dim); font-weight: 700;">
+              <td colspan="2">Total</td>
+              <td>${order.totalKg} kg</td>
+              <td>${currencySymbol}${order.totalPrice.toFixed(2)}</td>
+            </tr>
+          </tbody>
+        </table>
+
         <h4 style="margin-bottom: 12px;">Pallets</h4>
         <table>
           <thead>
@@ -743,8 +1365,8 @@
             ${(order.pallets || []).map(pallet => `
               <tr>
                 <td><strong>${pallet.id}</strong></td>
-                <td>${pallet.cultivars}</td>
-                <td>${pallet.weightKg} kg</td>
+                <td>${pallet.strains.map(s => s.cultivar).join(', ')}</td>
+                <td>${pallet.totalKg} kg</td>
                 <td><span class="status status-${pallet.status}">${formatStatus(pallet.status)}</span></td>
               </tr>
             `).join('')}
@@ -771,13 +1393,13 @@
     const input = document.getElementById('customerLinkInput');
     input.select();
     document.execCommand('copy');
-    alert('Link copied to clipboard!');
+    showToast('Link copied to clipboard!', 'success');
   };
 
   window.copyCustomerLink = function(orderId) {
     const customerLink = `${window.location.origin}/rogue-origin-apps/order.html?id=${btoa(orderId)}`;
     navigator.clipboard.writeText(customerLink).then(() => {
-      alert('Customer link copied to clipboard!');
+      showToast('Customer link copied to clipboard!', 'success');
     });
   };
 
