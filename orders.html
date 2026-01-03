@@ -877,9 +877,10 @@
     return currentUnit;
   }
 
-  function formatWeight(kg, decimals = 1) {
-    const value = convertWeight(kg, currentUnit);
-    return value.toFixed(decimals) + ' ' + getUnitLabel();
+  function formatWeight(kg, decimals = 1, preferredUnit = null) {
+    const unit = preferredUnit || currentUnit;
+    const value = convertWeight(kg, unit);
+    return value.toFixed(decimals) + ' ' + unit;
   }
 
   window.setUnit = function(unit) {
@@ -1060,6 +1061,7 @@
         completedKg: 630,
         totalPrice: 221450,
         currency: 'USD',
+        unit: 'kg',
         status: 'processing',
         pallets: [
           { id: 'P001', strains: [{ cultivar: 'Sour Lifter', weightKg: 250, pricePerKg: 150 }, { cultivar: 'Lifter', weightKg: 50, pricePerKg: 140 }], totalKg: 300, status: 'completed' },
@@ -1085,6 +1087,7 @@
         completedKg: 200,
         totalPrice: 28000,
         currency: 'USD',
+        unit: 'lbs',
         status: 'ready',
         pallets: [
           { id: 'P006', strains: [{ cultivar: 'Lifter', weightKg: 100, pricePerKg: 140 }, { cultivar: 'Suver Haze', weightKg: 100, pricePerKg: 140 }], totalKg: 200, status: 'completed' }
@@ -1344,9 +1347,9 @@
         <tbody>
           ${filteredOrders.map(order => `
             <tr>
-              <td><strong>${order.id}</strong></td>
+              <td><strong>${order.id}</strong> <span style="font-size: 10px; color: var(--text-muted);">${order.unit || 'kg'}</span></td>
               <td>${order.customer}</td>
-              <td>${formatWeight(order.totalKg)}</td>
+              <td>${formatWeight(order.totalKg, 1, order.unit)}</td>
               <td>
                 <div class="progress-bar">
                   <div class="progress-fill" style="width: ${getProgress(order)}%"></div>
@@ -1458,6 +1461,12 @@
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
+    // Set the form unit to match the order's native unit
+    const orderUnit = order.unit || 'kg';
+    if (currentUnit !== orderUnit) {
+      setUnit(orderUnit);
+    }
+
     document.getElementById('modalTitle').textContent = 'Edit Order';
     document.getElementById('orderId').value = order.id;
     document.getElementById('customerSelect').value = order.customerId || '';
@@ -1481,8 +1490,8 @@
           const currentStrainId = strainCounter;
           const strainEl = document.getElementById(`strain-${currentStrainId}`);
           strainEl.querySelector('.strain-cultivar').value = strain.cultivar;
-          // Convert weight to current unit for display
-          strainEl.querySelector('.strain-weight').value = convertWeight(strain.weightKg, currentUnit).toFixed(1);
+          // Convert weight to order's unit for display
+          strainEl.querySelector('.strain-weight').value = convertWeight(strain.weightKg, orderUnit).toFixed(1);
           strainEl.querySelector('.strain-price').value = strain.pricePerKg;
         });
 
@@ -1588,6 +1597,7 @@
       completedKg,
       totalPrice,
       currency: 'USD',
+      unit: currentUnit, // Save the unit this order was created/edited in
       status,
       pallets,
       documents: orderId ? orders.find(o => o.id === orderId)?.documents || [] : [],
@@ -1652,13 +1662,13 @@
         <div class="order-progress">
           <div style="display: flex; justify-content: space-between; align-items: baseline;">
             <strong style="font-size: 24px;">${progress}% Complete</strong>
-            <span style="color: var(--text-muted);">${formatWeight(order.completedKg || 0)} / ${formatWeight(order.totalKg)}</span>
+            <span style="color: var(--text-muted);">${formatWeight(order.completedKg || 0, 1, order.unit)} / ${formatWeight(order.totalKg, 1, order.unit)}</span>
           </div>
           <div class="order-progress-bar">
             <div class="order-progress-fill" style="width: ${progress}%"></div>
           </div>
           <div class="order-progress-stats">
-            <span>Remaining: ${formatWeight(order.totalKg - (order.completedKg || 0))}</span>
+            <span>Remaining: ${formatWeight(order.totalKg - (order.completedKg || 0), 1, order.unit)}</span>
             <span>${order.pallets?.filter(p => p.status === 'completed').length || 0} / ${order.pallets?.length || 0} pallets done</span>
           </div>
         </div>
@@ -1679,14 +1689,14 @@
             ${(order.items || []).map(item => `
               <tr>
                 <td><strong>${item.cultivar}</strong></td>
-                <td>${formatWeight(item.quantityKg)}</td>
+                <td>${formatWeight(item.quantityKg, 1, order.unit)}</td>
                 <td>$${item.pricePerKg}/kg</td>
                 <td>$${item.total.toFixed(2)}</td>
               </tr>
             `).join('')}
             <tr style="background: var(--gold-dim); font-weight: 700;">
               <td colspan="2">Total</td>
-              <td>${formatWeight(order.totalKg)}</td>
+              <td>${formatWeight(order.totalKg, 1, order.unit)}</td>
               <td>$${order.totalPrice.toFixed(2)}</td>
             </tr>
           </tbody>
@@ -1707,7 +1717,7 @@
               <tr>
                 <td><strong>${pallet.id}</strong></td>
                 <td>${pallet.strains.map(s => s.cultivar).join(', ')}</td>
-                <td>${formatWeight(pallet.totalKg)}</td>
+                <td>${formatWeight(pallet.totalKg, 1, order.unit)}</td>
                 <td><span class="status status-${pallet.status}">${formatStatus(pallet.status)}</span></td>
               </tr>
             `).join('')}
