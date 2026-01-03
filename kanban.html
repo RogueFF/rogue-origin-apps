@@ -1754,7 +1754,7 @@ function getPrintCSS(size) {
 
 function printOneCard(card, size) {
   var allHtml = [];
-  if (size === 'full') {
+  if (size === 'full' || size === 'shop-full') {
     // One card per page for full size
     allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(card, 'green', 'front', size) + '</div></div>');
     allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(card, 'red', 'front', size) + '</div></div>');
@@ -1796,7 +1796,7 @@ function printCards(cards) {
   var allHtml = [];
   cards.forEach(function(c) {
     sides.forEach(function(sd) {
-      if (size === 'full') {
+      if (size === 'full' || size === 'shop-full') {
         // One card per page for full size
         if (color === 'both') {
           allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(c, 'green', sd, size) + '</div></div>');
