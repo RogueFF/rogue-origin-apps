@@ -29,13 +29,13 @@
 
 | Metric | Value |
 |--------|-------|
-| **Total Frontend Files** | 6 HTML files |
+| **Total Frontend Files** | 8 HTML files |
 | **Total Backend Projects** | 4 Apps Script projects |
-| **Total Lines of Code** | ~8,000+ |
-| **Production Code.gs** | ~1,900 lines (with AI Agent) |
-| **Functions (Production)** | 50+ active functions |
+| **Total Lines of Code** | ~12,000+ |
+| **Production Code.gs** | ~2,000 lines (with AI Agent + Dashboard) |
+| **Functions (Production)** | 55+ active functions |
 | **Sheet Tabs (Production)** | 8 tabs |
-| **Documentation Files** | 3 (CLAUDE.md, APP_CATALOG.md, CODEBASE_INVENTORY.md) |
+| **Documentation Files** | 5 (CLAUDE.md, APP_CATALOG.md, CODEBASE_INVENTORY.md, PROJECT_STRUCTURE.md, AI_DATA_OPPORTUNITIES.md) |
 
 ### Code Health Dashboard
 
@@ -58,6 +58,10 @@
 | Created AI_Corrections | New sheet tab | — |
 | Removed Order Tracking | Cleanup | -900 lines |
 | Added documentation | Maintenance | +3,000 lines |
+| **Kanban Tutorial** | New feature | +150 lines |
+| **Orders System** | New feature | +1,500 lines |
+| **Dashboard API fix** | Bug fix | +60 lines |
+| **AI Chat hide on iframes** | UX fix | +15 lines |
 
 ---
 
@@ -69,16 +73,17 @@
 
 | File | Size | Lines | Last Updated | Status |
 |------|------|-------|--------------|--------|
-| `index.html` | ~5 KB | ~100 | 2024 | ✅ Active |
-| `ops-hub.html` | ~115 KB | ~2,300 | Jan 2026 | ✅ Active |
+| `index.html` | ~120 KB | ~2,500 | Jan 2026 | ✅ Active (Ops Hub) |
 | `scoreboard.html` | ~468 KB | ~10,000+ | Dec 2025 | ✅ Active |
 | `sop-manager.html` | ~50 KB | ~1,500 | Jan 2026 | ✅ Active |
-| `kanban.html` | ~25 KB | ~600 | 2024 | ✅ Active |
+| `kanban.html` | ~85 KB | ~2,100 | Jan 2026 | ✅ Active (with Tutorial) |
 | `barcode.html` | ~30 KB | ~700 | 2024 | ✅ Active |
+| `orders.html` | ~40 KB | ~900 | Jan 2026 | ✅ Active (Internal) |
+| `order.html` | ~25 KB | ~600 | Jan 2026 | ✅ Active (Customer Portal) |
 
-#### ops-hub.html - Detailed Analysis
+#### index.html (Ops Hub) - Detailed Analysis
 
-**Total Size**: ~115 KB, ~2,300 lines
+**Total Size**: ~120 KB, ~2,500 lines
 
 | Section | Line Range | Size | Purpose |
 |---------|------------|------|---------|
