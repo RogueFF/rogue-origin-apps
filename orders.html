@@ -153,6 +153,17 @@
     .customer-link { display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: var(--green-dim); border-radius: 8px; margin-top: 20px; }
     .customer-link input { flex: 1; padding: 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px; font-family: monospace; }
     .customer-link button { padding: 8px 12px; }
+
+    /* Toast notifications */
+    .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 10000; display: flex; flex-direction: column; gap: 8px; }
+    .toast { padding: 12px 20px; border-radius: 8px; color: #fff; font-weight: 500; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); animation: toastSlideIn 0.3s ease; max-width: 360px; }
+    .toast.error { background: var(--danger); }
+    .toast.success { background: var(--success); }
+    .toast.warning { background: var(--warning); color: #1a1a1a; }
+    .toast.info { background: var(--green); }
+    .toast.hiding { animation: toastSlideOut 0.3s ease forwards; }
+    @keyframes toastSlideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes toastSlideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
   </style>
 </head>
 <body>
@@ -308,6 +319,27 @@
   let orders = [];
   let palletCount = 0;
 
+  // Toast notification system
+  function showToast(message, type, duration) {
+    type = type || 'info';
+    duration = duration || 4000;
+    let container = document.getElementById('toastContainer');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toastContainer';
+      container.className = 'toast-container';
+      document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    toast.className = 'toast ' + type;
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(function() {
+      toast.classList.add('hiding');
+      setTimeout(function() { toast.remove(); }, 300);
+    }, duration);
+  }
+
   // Initialize
   document.addEventListener('DOMContentLoaded', function() {
     loadOrders();
@@ -342,6 +374,7 @@
       }
     } catch (error) {
       console.error('Failed to load orders:', error);
+      showToast('Failed to load orders, showing demo data', 'warning');
       // Show demo data for development
       orders = getDemoOrders();
       renderOrders();
@@ -643,6 +676,7 @@
       }
     } catch (error) {
       console.log('API save failed, updating locally:', error);
+      showToast('Could not save to server, updated locally', 'warning');
       // Update local state anyway for demo
       if (orderId) {
         const index = orders.findIndex(o => o.id === orderId);
