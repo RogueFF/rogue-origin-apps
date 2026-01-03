@@ -77,6 +77,16 @@ function doGet(e) {
       result = getOrders();
     } else if (action === 'getOrder') {
       result = getOrder(e.parameter.id);
+    } else if (action === 'getCultivars') {
+      result = { cultivars: getCultivarList() };
+    } else if (action === 'getCustomers') {
+      result = { customers: getCustomerList() };
+    } else if (action === 'estimateLeadTime') {
+      var items = e.parameter.items ? JSON.parse(e.parameter.items) : [];
+      var crew = parseInt(e.parameter.crew) || 6;
+      result = estimateLeadTime({ items: items, crew: crew, workHours: 7.5 });
+    } else if (action === 'getPricing') {
+      result = { pricing: getPricingList() };
     } else if (action === 'test') {
       result = { ok: true, message: 'API is working', timestamp: new Date().toISOString() };
     } else {
@@ -2957,4 +2967,216 @@ function testOrdersAPI() {
   // Test getOrdersSummary
   var summary = getOrdersSummary();
   Logger.log('getOrdersSummary: ' + JSON.stringify(summary, null, 2));
+}
+
+/**********************************************************
+ * CUSTOMER MANAGEMENT
+ * Customer address book for orders
+ **********************************************************/
+
+var CUSTOMERS_SHEET_NAME = 'Customers';
+
+/**
+ * Get all customers
+ */
+function getCustomerList() {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(CUSTOMERS_SHEET_NAME);
+
+    if (!sheet) {
+      sheet = createCustomersSheet_(ss);
+      return [];
+    }
+
+    var data = sheet.getDataRange().getValues();
+    if (data.length <= 1) return [];
+
+    var customers = [];
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      if (!row[0]) continue;
+
+      customers.push({
+        id: row[0],
+        name: row[1] || '',
+        email: row[2] || '',
+        phone: row[3] || '',
+        company: row[4] || '',
+        address: {
+          street: row[5] || '',
+          city: row[6] || '',
+          state: row[7] || '',
+          zip: row[8] || '',
+          country: row[9] || ''
+        },
+        notes: row[10] || '',
+        createdDate: formatDateForJSON_(row[11])
+      });
+    }
+
+    return customers;
+  } catch (error) {
+    Logger.log('Error getting customers: ' + error);
+    return [];
+  }
+}
+
+/**
+ * Get a single customer by ID
+ */
+function getCustomer(customerId) {
+  try {
+    var customers = getCustomerList();
+    for (var i = 0; i < customers.length; i++) {
+      if (customers[i].id === customerId) {
+        return { success: true, customer: customers[i] };
+      }
+    }
+    return { success: false, error: 'Customer not found' };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Save (create or update) a customer
+ */
+function saveCustomer(customerData) {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(CUSTOMERS_SHEET_NAME);
+
+    if (!sheet) {
+      sheet = createCustomersSheet_(ss);
+    }
+
+    var data = sheet.getDataRange().getValues();
+    var customerId = customerData.id;
+    var isUpdate = false;
+    var rowIndex = -1;
+
+    // Check if customer exists
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] === customerId) {
+        isUpdate = true;
+        rowIndex = i + 1;
+        break;
+      }
+    }
+
+    // Generate new ID if needed
+    if (!customerId) {
+      customerId = 'CUST-' + String(data.length).padStart(3, '0');
+    }
+
+    var address = customerData.address || {};
+    var rowData = [
+      customerId,
+      customerData.name || '',
+      customerData.email || '',
+      customerData.phone || '',
+      customerData.company || '',
+      address.street || '',
+      address.city || '',
+      address.state || '',
+      address.zip || '',
+      address.country || '',
+      customerData.notes || '',
+      isUpdate ? data[rowIndex - 1][11] : new Date()
+    ];
+
+    if (isUpdate) {
+      sheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
+    } else {
+      sheet.appendRow(rowData);
+    }
+
+    return { success: true, customerId: customerId };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Create the Customers sheet with headers
+ */
+function createCustomersSheet_(ss) {
+  var sheet = ss.insertSheet(CUSTOMERS_SHEET_NAME);
+  var headers = [
+    'CustomerID',
+    'Name',
+    'Email',
+    'Phone',
+    'Company',
+    'Street',
+    'City',
+    'State',
+    'Zip',
+    'Country',
+    'Notes',
+    'CreatedDate'
+  ];
+
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+  sheet.setFrozenRows(1);
+
+  return sheet;
+}
+
+/**********************************************************
+ * PRICING MANAGEMENT
+ * Price list for cultivars
+ **********************************************************/
+
+var PRICING_SHEET_NAME = 'Pricing';
+
+/**
+ * Get pricing for all cultivars
+ */
+function getPricingList() {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(PRICING_SHEET_NAME);
+
+    if (!sheet) {
+      return [];
+    }
+
+    var data = sheet.getDataRange().getValues();
+    if (data.length <= 1) return [];
+
+    var pricing = [];
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      if (!row[0]) continue;
+
+      pricing.push({
+        cultivar: row[0],
+        pricePerKg: parseFloat(row[1]) || 0,
+        pricePerLb: parseFloat(row[2]) || 0,
+        currency: row[3] || 'USD',
+        notes: row[4] || ''
+      });
+    }
+
+    return pricing;
+  } catch (error) {
+    Logger.log('Error getting pricing: ' + error);
+    return [];
+  }
+}
+
+/**
+ * Get price for a specific cultivar
+ */
+function getCultivarPrice(cultivarName) {
+  var pricing = getPricingList();
+  for (var i = 0; i < pricing.length; i++) {
+    if (pricing[i].cultivar.toLowerCase().indexOf(cultivarName.toLowerCase()) !== -1) {
+      return pricing[i];
+    }
+  }
+  return null;
 }
