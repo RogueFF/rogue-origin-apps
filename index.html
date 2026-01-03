@@ -529,6 +529,17 @@
       .widgets-container .widget-card.narrow { grid-column: span 2; }
       .widgets-container .widget-card.third { grid-column: span 2; }
     }
+
+    /* Toast notifications */
+    .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 10000; display: flex; flex-direction: column; gap: 8px; }
+    .toast { padding: 12px 20px; border-radius: 8px; color: #fff; font-weight: 500; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); animation: toastSlideIn 0.3s ease; max-width: 360px; display: flex; align-items: center; gap: 10px; }
+    .toast.error { background: var(--danger, #c45c4a); }
+    .toast.success { background: var(--success, #668971); }
+    .toast.warning { background: var(--warning, #e4aa4f); color: #1a1f16; }
+    .toast.info { background: var(--green, #668971); }
+    .toast.hiding { animation: toastSlideOut 0.3s ease forwards; }
+    @keyframes toastSlideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes toastSlideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
   </style>
 </head>
 <body>
@@ -1551,8 +1562,30 @@
       console.error(e);
       document.getElementById('loadingOverlay').classList.add('hidden');
       showSkeletons(false);
+      showToast('Error loading data: ' + (e.message || e), 'error');
     }
-    
+
+    // Toast notification system
+    function showToast(message, type, duration) {
+      type = type || 'info';
+      duration = duration || 4000;
+      var container = document.getElementById('toastContainer');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'toastContainer';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+      }
+      var toast = document.createElement('div');
+      toast.className = 'toast ' + type;
+      toast.textContent = message;
+      container.appendChild(toast);
+      setTimeout(function() {
+        toast.classList.add('hiding');
+        setTimeout(function() { toast.remove(); }, 300);
+      }, duration);
+    }
+
     function showSkeletons(show) {
       // KPI cards
       document.querySelectorAll('.kpi-card').forEach(function(card) {

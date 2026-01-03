@@ -381,6 +381,17 @@
       .header { background: white; color: var(--text); border-bottom: 2px solid var(--green); }
       .order-card { box-shadow: none; border: 1px solid var(--border); }
     }
+
+    /* Toast notifications */
+    .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 10000; display: flex; flex-direction: column; gap: 8px; }
+    .toast { padding: 12px 20px; border-radius: 8px; color: #fff; font-weight: 500; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); animation: toastSlideIn 0.3s ease; max-width: 360px; }
+    .toast.error { background: var(--danger); }
+    .toast.success { background: var(--success); }
+    .toast.warning { background: #d4a03c; color: #1a1a1a; }
+    .toast.info { background: var(--green); }
+    .toast.hiding { animation: toastSlideOut 0.3s ease forwards; }
+    @keyframes toastSlideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes toastSlideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
   </style>
 </head>
 <body>
@@ -407,6 +418,27 @@
 <script>
 (function() {
   const API_URL = 'https://script.google.com/macros/s/AKfycbxDAHSFl9cedGS49L3Lf5ztqy-SSToYigyA30ZtsdpmWNAR9H61X_Mm48JOOTGqqr-Z/exec';
+
+  // Toast notification system
+  function showToast(message, type, duration) {
+    type = type || 'info';
+    duration = duration || 4000;
+    let container = document.getElementById('toastContainer');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toastContainer';
+      container.className = 'toast-container';
+      document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    toast.className = 'toast ' + type;
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(function() {
+      toast.classList.add('hiding');
+      setTimeout(function() { toast.remove(); }, 300);
+    }, duration);
+  }
 
   // Get order ID from URL
   function getOrderId() {
@@ -448,6 +480,7 @@
       }
     } catch (error) {
       console.error('Failed to load order:', error);
+      showToast('Failed to connect to server', 'warning');
       // Fall back to demo data
       const demoOrder = getDemoOrder(orderId);
       if (demoOrder) {

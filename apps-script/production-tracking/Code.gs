@@ -1769,56 +1769,87 @@ function testScoreboardAPI() {
  **********************************************************/
 
 /**
- * Main chat request handler
+ * Main chat request handler (V2 - with feedback, corrections, and logging)
  */
 function handleChatRequest(data) {
   try {
     var userMessage = data.message || '';
     var history = data.history || [];
-    
+
+    // Handle feedback submission
+    if (data.feedback) {
+      return logChatFeedback(data.feedback);
+    }
+
     if (!userMessage) {
       return { success: false, error: 'No message provided' };
     }
-    
-    // Gather current production context
+
+    // Extract any corrections from conversation history
+    var sessionCorrections = extractCorrections(history);
+
+    // Get stored corrections from sheet
+    var storedCorrections = getRecentCorrections();
+
+    // Gather current production context (V2 - enhanced)
     var context = gatherProductionContext();
-    
-    // Build the AI prompt
-    var systemPrompt = buildSystemPrompt(context);
-    
+
+    // Build the AI prompt with corrections
+    var systemPrompt = buildSystemPrompt(context, sessionCorrections.concat(storedCorrections));
+
     // Call Anthropic API
     var aiResponse = callAnthropicForChat(systemPrompt, history, userMessage);
-    
-    return { 
-      success: true, 
+
+    // Log chat for training (async-safe)
+    logChatForTraining(userMessage, aiResponse, history.length);
+
+    // Check for new corrections in the user's message
+    var newCorrections = extractCorrections([{ role: 'user', content: userMessage }]);
+    if (newCorrections.length > 0) {
+      for (var i = 0; i < newCorrections.length; i++) {
+        saveCorrection(newCorrections[i].correction, 'user_correction');
+      }
+    }
+
+    return {
+      success: true,
       response: aiResponse,
       context: context
     };
   } catch (error) {
     Logger.log('Chat error: ' + error.message);
-    return { 
-      success: false, 
-      error: error.message 
+    return {
+      success: false,
+      error: error.message
     };
   }
 }
 
 /**
- * Gathers all relevant production data for AI context
+ * Gathers all relevant production data for AI context (V2 - enhanced)
  */
 function gatherProductionContext() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var timezone = ss.getSpreadsheetTimeZone();
+
   var context = {
     timestamp: new Date().toISOString(),
     production: {},
     bags: {},
     crew: {},
-    rates: {}
+    rates: {},
+    hourlyBreakdown: [],
+    crewChanges: [],
+    pauseHistory: [],
+    lineBreakdown: {},
+    qualityMetrics: {},
+    history: {}
   };
-  
+
   try {
     // Get scoreboard data (uses existing function)
     var scoreboardData = getScoreboardData();
-    
+
     if (scoreboardData) {
       context.production = {
         topsToday: scoreboardData.todayLbs || 0,
@@ -1826,14 +1857,16 @@ function gatherProductionContext() {
         lastHourLbs: scoreboardData.lastHourLbs || 0,
         lastTimeSlot: scoreboardData.lastTimeSlot || '',
         hoursLogged: scoreboardData.hoursLogged || 0,
-        todayPercentage: scoreboardData.todayPercentage || 0
+        todayPercentage: scoreboardData.todayPercentage || 0,
+        todayTarget: scoreboardData.todayTarget || 0,
+        projectedTotal: scoreboardData.projectedTotal || 0
       };
-      
+
       context.crew = {
         currentTrimmers: scoreboardData.currentHourTrimmers || 0,
         lastHourTrimmers: scoreboardData.lastHourTrimmers || 0
       };
-      
+
       context.rates = {
         targetRate: scoreboardData.targetRate || 1.0,
         strainTargetRate: scoreboardData.strainTargetRate || 0,
@@ -1842,21 +1875,40 @@ function gatherProductionContext() {
         vs7Day: scoreboardData.vs7Day
       };
     }
-    
+
     // Get bag timer data (uses existing function)
     var timerData = getBagTimerData();
-    
+
     if (timerData) {
       context.bags = {
         fiveKgToday: timerData.bags5kgToday || 0,
         tenLbToday: timerData.bags10lbToday || 0,
         totalToday: timerData.bagsToday || 0,
         avgCycleSeconds: timerData.avgSecondsToday || 0,
+        avgCycle7Day: timerData.avgSeconds7Day || 0,
         lastBagTime: timerData.lastBagTime || null,
         secondsSinceLastBag: timerData.secondsSinceLastBag || 0
       };
     }
-    
+
+    // V2: Get hourly breakdown
+    context.hourlyBreakdown = getTodayHourlyBreakdown_(ss, timezone);
+
+    // V2: Get crew changes
+    context.crewChanges = getRecentCrewChanges_(ss, timezone);
+
+    // V2: Get pause history
+    context.pauseHistory = getTodayPauseHistory_(ss, timezone);
+
+    // V2: Get line breakdown (Line 1 vs Line 2)
+    context.lineBreakdown = getTodayLineBreakdown_(ss, timezone);
+
+    // V2: Calculate quality metrics
+    context.qualityMetrics = calculateQualityMetrics_(context);
+
+    // V2: Get historical data
+    context.history = gatherHistoricalData(ss, timezone);
+
   } catch (error) {
     Logger.log('Error gathering context: ' + error.message);
   }
@@ -1875,57 +1927,170 @@ function gatherProductionContext() {
 }
 
 /**
- * Builds the system prompt with current production data
+ * Builds the system prompt with current production data (V2 - with corrections and enhanced data)
  */
-function buildSystemPrompt(context) {
+function buildSystemPrompt(context, corrections) {
   var now = new Date();
-  var currentTime = Utilities.formatDate(now, 'America/Los_Angeles', 'EEEE, h:mm a');
-  
+  var currentTime = Utilities.formatDate(now, 'America/Los_Angeles', 'EEEE, MMMM d, yyyy h:mm a');
+
   // Calculate derived metrics
   var totalBagsToday = context.bags.totalToday || 0;
   var crewTotal = context.crew.currentTrimmers || context.crew.lastHourTrimmers || 0;
   var avgCycleMinutes = context.bags.avgCycleSeconds ? Math.round(context.bags.avgCycleSeconds / 60) : 0;
   var minutesSinceLastBag = context.bags.secondsSinceLastBag ? Math.round(context.bags.secondsSinceLastBag / 60) : 0;
-  
-  return 'You are the Rogue Origin AI Assistant, helping manage a hemp processing facility in Southern Oregon.\n\n' +
-    'CURRENT TIME: ' + currentTime + '\n\n' +
-    
+
+  // Calculate hours remaining in workday
+  var currentHour = now.getHours() + now.getMinutes() / 60;
+  var workEndHour = 16.5; // 4:30 PM
+  var hoursRemaining = Math.max(0, workEndHour - currentHour);
+  var effectiveHoursRemaining = hoursRemaining * 0.88; // Account for breaks
+
+  // Calculate work days remaining this week
+  var dayOfWeek = now.getDay();
+  var daysRemaining = Math.max(0, 5 - dayOfWeek);
+
+  var prompt = 'You are the Rogue Origin AI Assistant, helping manage a hemp processing facility in Southern Oregon.\n\n' +
+    'CURRENT TIME: ' + currentTime + '\n' +
+    '- Hours remaining today: ' + effectiveHoursRemaining.toFixed(1) + ' effective hours\n' +
+    '- Work days remaining this week: ' + daysRemaining + ' (Mon-Fri)\n\n' +
+
     'TODAY\'S PRODUCTION:\n' +
-    '- Tops produced: ' + (context.production.topsToday || 0) + ' lbs\n' +
-    '- Last hour: ' + (context.production.lastHourLbs || 0) + ' lbs (' + (context.production.lastTimeSlot || 'N/A') + ')\n' +
-    '- Hours logged: ' + (context.production.hoursLogged || 0) + '\n' +
+    '- Tops produced: ' + (context.production.topsToday || 0).toFixed(1) + ' lbs\n' +
+    '- Target: ' + (context.production.todayTarget || 0).toFixed(1) + ' lbs\n' +
+    '- Performance: ' + Math.round(context.production.todayPercentage || 0) + '%\n' +
+    '- Projected end-of-day: ' + (context.production.projectedTotal || 0).toFixed(1) + ' lbs\n' +
     '- Current strain: ' + (context.production.strain || 'Unknown') + '\n' +
-    '- Performance vs target: ' + Math.round(context.production.todayPercentage || 0) + '%\n\n' +
-    
+    '- Last hour: ' + (context.production.lastHourLbs || 0) + ' lbs (' + (context.production.lastTimeSlot || 'N/A') + ')\n' +
+    '- Hours logged: ' + (context.production.hoursLogged || 0) + '\n\n' +
+
     'CREW STATUS:\n' +
-    '- Current trimmers: ' + crewTotal + '\n\n' +
-    
-    'BAG COMPLETIONS TODAY:\n' +
+    '- Current trimmers: ' + crewTotal + '\n';
+
+  // Add crew changes if any
+  if (context.crewChanges && context.crewChanges.length > 0) {
+    prompt += '- Recent crew changes:\n';
+    for (var i = 0; i < Math.min(3, context.crewChanges.length); i++) {
+      var change = context.crewChanges[i];
+      prompt += '  • ' + change.time + ': ' + change.before + ' → ' + change.after + ' trimmers\n';
+    }
+  }
+  prompt += '\n';
+
+  prompt += 'BAG COMPLETIONS TODAY:\n' +
     '- 5kg bags: ' + (context.bags.fiveKgToday || 0) + '\n' +
     '- 10lb tops bags: ' + (context.bags.tenLbToday || 0) + '\n' +
     '- Total bags: ' + totalBagsToday + '\n' +
     '- Avg cycle time: ' + (avgCycleMinutes || 'N/A') + ' minutes\n' +
-    '- Minutes since last bag: ' + (minutesSinceLastBag || 'N/A') + '\n\n' +
-    
-    'PRODUCTION RATE:\n' +
+    '- 7-day avg: ' + (context.bags.avgCycle7Day ? Math.round(context.bags.avgCycle7Day / 60) : 'N/A') + ' minutes\n' +
+    '- Minutes since last bag: ' + (minutesSinceLastBag || 'N/A') + '\n\n';
+
+  prompt += 'PRODUCTION RATE:\n' +
     '- Target rate: ' + (context.rates.targetRate || 1.0).toFixed(2) + ' lbs/person/hour\n' +
     '- vs Yesterday: ' + formatComparison(context.rates.vsYesterday) + '\n' +
-    '- vs 7-day avg: ' + formatComparison(context.rates.vs7Day) + '\n\n' +
+    '- vs 7-day avg: ' + formatComparison(context.rates.vs7Day) + '\n\n';
 
-    buildOrdersPromptSection(context.orders) + '\n\n' +
+  // Add hourly breakdown if available
+  if (context.hourlyBreakdown && context.hourlyBreakdown.length > 0) {
+    prompt += 'HOURLY BREAKDOWN TODAY:\n';
+    for (var j = 0; j < context.hourlyBreakdown.length; j++) {
+      var hour = context.hourlyBreakdown[j];
+      prompt += '  ' + hour.timeSlot + ': ' + hour.tops.toFixed(1) + ' lbs, ' + hour.trimmers + ' trimmers';
+      if (hour.buckers > 0) prompt += ', ' + hour.buckers + ' buckers';
+      prompt += '\n';
+    }
+    prompt += '\n';
+  }
 
-    'RESPONSE GUIDELINES:\n' +
+  // Add line breakdown if both lines have data
+  if (context.lineBreakdown && (context.lineBreakdown.line1Tops > 0 || context.lineBreakdown.line2Tops > 0)) {
+    prompt += 'LINE BREAKDOWN:\n' +
+      '- Line 1: ' + (context.lineBreakdown.line1Tops || 0).toFixed(1) + ' lbs tops, ' + (context.lineBreakdown.line1Smalls || 0).toFixed(1) + ' lbs smalls\n' +
+      '- Line 2: ' + (context.lineBreakdown.line2Tops || 0).toFixed(1) + ' lbs tops, ' + (context.lineBreakdown.line2Smalls || 0).toFixed(1) + ' lbs smalls\n\n';
+  }
+
+  // Add quality metrics
+  if (context.qualityMetrics && context.qualityMetrics.topsToSmallsRatio) {
+    prompt += 'QUALITY METRICS:\n' +
+      '- Tops:Smalls ratio: ' + context.qualityMetrics.topsToSmallsRatio + '\n' +
+      '- Tops %: ' + (context.qualityMetrics.topsPercentage || 0).toFixed(1) + '%\n\n';
+  }
+
+  // Add pause history if any
+  if (context.pauseHistory && context.pauseHistory.length > 0) {
+    prompt += 'BREAKS/PAUSES TODAY:\n';
+    for (var k = 0; k < context.pauseHistory.length; k++) {
+      var pause = context.pauseHistory[k];
+      prompt += '  • ' + pause.time + ': ' + pause.reason + ' (' + pause.duration + ' min)\n';
+    }
+    prompt += '\n';
+  }
+
+  // Add historical data
+  if (context.history) {
+    if (context.history.last30Days && context.history.last30Days.totalLbs > 0) {
+      prompt += 'LAST 30 DAYS:\n' +
+        '- Total: ' + context.history.last30Days.totalLbs.toFixed(1) + ' lbs over ' + context.history.last30Days.daysWorked + ' days\n' +
+        '- Daily average: ' + context.history.last30Days.avgDaily.toFixed(1) + ' lbs\n';
+      if (context.history.last30Days.bestDay) {
+        prompt += '- Best day: ' + context.history.last30Days.bestDay.date + ' (' + context.history.last30Days.bestDay.lbs.toFixed(1) + ' lbs)\n';
+      }
+      prompt += '\n';
+    }
+
+    if (context.history.weekOverWeek) {
+      prompt += 'WEEK OVER WEEK:\n' +
+        '- This week: ' + context.history.weekOverWeek.thisWeek.toFixed(1) + ' lbs\n' +
+        '- Last week: ' + context.history.weekOverWeek.lastWeek.toFixed(1) + ' lbs\n' +
+        '- Change: ' + formatComparison(context.history.weekOverWeek.change) + '\n\n';
+    }
+
+    if (context.history.dailyStrainBreakdown && context.history.dailyStrainBreakdown.length > 0) {
+      prompt += 'DETAILED DAILY STRAIN BREAKDOWN (Last 14 Days):\n';
+      for (var m = 0; m < context.history.dailyStrainBreakdown.length; m++) {
+        var day = context.history.dailyStrainBreakdown[m];
+        prompt += day.dayOfWeek + ' (' + day.date + '):\n';
+        for (var n = 0; n < day.strains.length; n++) {
+          var strain = day.strains[n];
+          prompt += '  • ' + strain.name + ': ' + strain.tops.toFixed(1) + ' lbs tops';
+          if (strain.smalls > 0) prompt += ', ' + strain.smalls.toFixed(1) + ' lbs smalls';
+          prompt += '\n';
+        }
+      }
+      prompt += '\n';
+    }
+  }
+
+  prompt += buildOrdersPromptSection(context.orders) + '\n\n';
+
+  // Add learned corrections
+  if (corrections && corrections.length > 0) {
+    prompt += 'LEARNED CORRECTIONS (remember these):\n';
+    for (var p = 0; p < corrections.length; p++) {
+      prompt += '• ' + corrections[p].correction + '\n';
+    }
+    prompt += '\n';
+  }
+
+  prompt += 'PROJECTION FORMULAS:\n' +
+    '- 1 kg = 2.205 lbs\n' +
+    '- 5kg bag = 11.02 lbs\n' +
+    '- Hours needed = lbs ÷ (trimmers × rate)\n' +
+    '- Effective hours/day = 7.5\n\n';
+
+  prompt += 'RESPONSE GUIDELINES:\n' +
     '1. Be concise and friendly - the boss reads this on his phone\n' +
     '2. Lead with the most important number or insight\n' +
     '3. Use simple comparisons ("ahead of yesterday", "on track")\n' +
     '4. If you don\'t have data for something, say so honestly\n' +
-    '5. Use emojis sparingly for visual scanning (📊 📦 👥 ⚡)\n\n' +
-    
+    '5. Use emojis sparingly for visual scanning (📊 📦 👥 ⚡ 📈 📉)\n\n' +
+
     'For data display, use this HTML format:\n' +
     '<div class="data-card">\n' +
     '  <h4>Title</h4>\n' +
     '  <div class="metric"><span class="metric-label">Label</span><span class="metric-value">Value</span></div>\n' +
     '</div>';
+
+  return prompt;
 }
 
 /**
@@ -1937,6 +2102,448 @@ function formatComparison(value) {
   if (isNaN(num)) return 'N/A';
   if (num > 0) return '+' + num.toFixed(1) + '%';
   return num.toFixed(1) + '%';
+}
+
+/**********************************************************
+ * AI AGENT V2 HELPER FUNCTIONS
+ **********************************************************/
+
+/**
+ * Get today's hourly breakdown with detailed data per hour
+ */
+function getTodayHourlyBreakdown_(ss, timezone) {
+  var result = [];
+  var sheet = getLatestMonthSheet_(ss);
+  if (!sheet) return result;
+
+  var todayLabel = Utilities.formatDate(new Date(), timezone, 'MMMM dd, yyyy');
+  var vals = sheet.getDataRange().getValues();
+  var dateRowIndex = findDateRow_(vals, todayLabel);
+
+  if (dateRowIndex === -1) return result;
+
+  var headerRowIndex = dateRowIndex + 1;
+  var headers = vals[headerRowIndex] || [];
+  var cols = getColumnIndices_(headers);
+
+  for (var r = headerRowIndex + 1; r < vals.length; r++) {
+    var row = vals[r];
+    if (isEndOfBlock_(row)) break;
+
+    var timeSlot = row[0] || '';
+    var tops1 = parseFloat(row[cols.tops1]) || 0;
+    var smalls1 = parseFloat(row[cols.smalls1]) || 0;
+    var trimmers1 = parseFloat(row[cols.trimmers1]) || 0;
+    var buckers1 = parseFloat(row[cols.buckers1]) || 0;
+
+    if (tops1 > 0 || trimmers1 > 0) {
+      result.push({
+        timeSlot: timeSlot,
+        tops: tops1,
+        smalls: smalls1,
+        trimmers: trimmers1,
+        buckers: buckers1,
+        rate: trimmers1 > 0 ? tops1 / trimmers1 : 0
+      });
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Get recent crew changes from the CrewChangeLog sheet
+ */
+function getRecentCrewChanges_(ss, timezone) {
+  var result = [];
+  var sheet = ss.getSheetByName('CrewChangeLog');
+  if (!sheet) return result;
+
+  var today = new Date();
+  var todayStr = Utilities.formatDate(today, timezone, 'yyyy-MM-dd');
+
+  var data = sheet.getDataRange().getValues();
+  for (var i = data.length - 1; i >= 1 && result.length < 5; i--) {
+    var row = data[i];
+    var timestamp = row[0];
+    if (timestamp instanceof Date) {
+      var dateStr = Utilities.formatDate(timestamp, timezone, 'yyyy-MM-dd');
+      if (dateStr === todayStr) {
+        var trimmersChange = row[6] || '';
+        var parts = trimmersChange.split(' → ');
+        if (parts.length === 2) {
+          result.push({
+            time: Utilities.formatDate(timestamp, timezone, 'h:mm a'),
+            before: parseInt(parts[0]) || 0,
+            after: parseInt(parts[1]) || 0,
+            timeSlot: row[4] || ''
+          });
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Get today's pause/break history from Timer Pause Log
+ */
+function getTodayPauseHistory_(ss, timezone) {
+  var result = [];
+  var sheet = ss.getSheetByName('Timer Pause Log');
+  if (!sheet) return result;
+
+  var today = new Date();
+  var todayStr = Utilities.formatDate(today, timezone, 'yyyy-MM-dd');
+
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var dateStr = row[1];
+    if (dateStr === todayStr) {
+      var duration = parseFloat(row[4]) || 0;
+      if (duration > 0) {
+        result.push({
+          time: row[2],
+          reason: row[5] || 'Break',
+          duration: Math.round(duration)
+        });
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Get today's line breakdown (Line 1 vs Line 2)
+ */
+function getTodayLineBreakdown_(ss, timezone) {
+  var result = {
+    line1Tops: 0,
+    line1Smalls: 0,
+    line1Trimmers: 0,
+    line2Tops: 0,
+    line2Smalls: 0,
+    line2Trimmers: 0
+  };
+
+  var sheet = getLatestMonthSheet_(ss);
+  if (!sheet) return result;
+
+  var todayLabel = Utilities.formatDate(new Date(), timezone, 'MMMM dd, yyyy');
+  var vals = sheet.getDataRange().getValues();
+  var dateRowIndex = findDateRow_(vals, todayLabel);
+
+  if (dateRowIndex === -1) return result;
+
+  var headerRowIndex = dateRowIndex + 1;
+  var headers = vals[headerRowIndex] || [];
+  var cols = getColumnIndices_(headers);
+
+  for (var r = headerRowIndex + 1; r < vals.length; r++) {
+    var row = vals[r];
+    if (isEndOfBlock_(row)) break;
+
+    result.line1Tops += parseFloat(row[cols.tops1]) || 0;
+    result.line1Smalls += parseFloat(row[cols.smalls1]) || 0;
+    result.line1Trimmers += parseFloat(row[cols.trimmers1]) || 0;
+    result.line2Tops += parseFloat(row[cols.tops2]) || 0;
+    result.line2Smalls += parseFloat(row[cols.smalls2]) || 0;
+    result.line2Trimmers += parseFloat(row[cols.trimmers2]) || 0;
+  }
+
+  return result;
+}
+
+/**
+ * Calculate quality metrics (tops vs smalls ratio)
+ */
+function calculateQualityMetrics_(context) {
+  var result = {
+    topsToSmallsRatio: 'N/A',
+    topsPercentage: 0
+  };
+
+  var line = context.lineBreakdown || {};
+  var totalTops = (line.line1Tops || 0) + (line.line2Tops || 0);
+  var totalSmalls = (line.line1Smalls || 0) + (line.line2Smalls || 0);
+
+  if (totalTops > 0 && totalSmalls > 0) {
+    var ratio = totalTops / totalSmalls;
+    result.topsToSmallsRatio = ratio.toFixed(1) + ':1';
+  } else if (totalTops > 0) {
+    result.topsToSmallsRatio = 'All tops (no smalls)';
+  }
+
+  var total = totalTops + totalSmalls;
+  if (total > 0) {
+    result.topsPercentage = (totalTops / total) * 100;
+  }
+
+  return result;
+}
+
+/**
+ * Extract corrections from conversation history
+ */
+function extractCorrections(history) {
+  var corrections = [];
+  if (!history || history.length < 1) return corrections;
+
+  var correctionPatterns = [
+    /^actually[,:]?\s+(.+)/i,
+    /^no[,:]?\s+(.+)/i,
+    /^that'?s (?:wrong|incorrect|not right)[,:]?\s*(.+)/i,
+    /^correction[,:]?\s+(.+)/i,
+    /^fyi[,:]?\s+(.+)/i,
+    /^remember[,:]?\s+(.+)/i,
+    /^note[,:]?\s+(.+)/i,
+    /^we (?:actually|usually|always|never)\s+(.+)/i,
+    /^it'?s actually\s+(.+)/i,
+    /^the correct.+is\s+(.+)/i
+  ];
+
+  for (var i = 0; i < history.length; i++) {
+    if (history[i].role === 'user') {
+      var msg = history[i].content;
+      for (var j = 0; j < correctionPatterns.length; j++) {
+        var match = msg.match(correctionPatterns[j]);
+        if (match) {
+          corrections.push({ original: msg, correction: match[1] || msg });
+          break;
+        }
+      }
+    }
+  }
+  return corrections;
+}
+
+/**
+ * Log chat for training purposes
+ */
+function logChatForTraining(userMessage, aiResponse, historyLength) {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName('AI_Chat_Log');
+
+    if (!sheet) {
+      sheet = ss.insertSheet('AI_Chat_Log');
+      sheet.appendRow(['Timestamp', 'Question', 'Response', 'Conversation Turn', 'Feedback', 'Notes']);
+      sheet.setFrozenRows(1);
+      sheet.getRange(1, 1, 1, 6).setFontWeight('bold').setBackground('#668971').setFontColor('#fff');
+    }
+
+    var truncatedResponse = aiResponse.length > 500 ? aiResponse.substring(0, 500) + '...' : aiResponse;
+    sheet.appendRow([new Date(), userMessage, truncatedResponse, historyLength + 1, '', '']);
+  } catch (error) {
+    Logger.log('Error logging chat: ' + error.message);
+  }
+}
+
+/**
+ * Log feedback for a chat response
+ */
+function logChatFeedback(feedback) {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName('AI_Chat_Log');
+    if (!sheet) return { success: false, error: 'No chat log found' };
+
+    var data = sheet.getDataRange().getValues();
+    for (var i = data.length - 1; i >= 1; i--) {
+      if (data[i][1] === feedback.question) {
+        sheet.getRange(i + 1, 5).setValue(feedback.rating);
+        if (feedback.note) sheet.getRange(i + 1, 6).setValue(feedback.note);
+        return { success: true, message: 'Feedback logged' };
+      }
+    }
+    return { success: true, message: 'Feedback logged' };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Get recent corrections from AI_Corrections sheet
+ */
+function getRecentCorrections() {
+  var corrections = [];
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName('AI_Corrections');
+    if (!sheet) return corrections;
+
+    var data = sheet.getDataRange().getValues();
+    for (var i = data.length - 1; i >= 1 && corrections.length < 20; i--) {
+      if (data[i][2] !== 'disabled') {
+        corrections.push({ correction: data[i][1], category: data[i][3] || 'general' });
+      }
+    }
+  } catch (error) {
+    Logger.log('Error getting corrections: ' + error.message);
+  }
+  return corrections;
+}
+
+/**
+ * Save a correction to AI_Corrections sheet
+ */
+function saveCorrection(correction, category) {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName('AI_Corrections');
+    if (!sheet) {
+      sheet = ss.insertSheet('AI_Corrections');
+      sheet.appendRow(['Timestamp', 'Correction', 'Status', 'Category']);
+      sheet.setFrozenRows(1);
+      sheet.getRange(1, 1, 1, 4).setFontWeight('bold').setBackground('#668971').setFontColor('#fff');
+    }
+    sheet.appendRow([new Date(), correction, 'active', category || 'general']);
+    return { success: true, message: 'Correction saved' };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Gather historical data for AI context
+ */
+function gatherHistoricalData(ss, timezone) {
+  var history = {
+    last7Days: [],
+    last30Days: { totalLbs: 0, avgDaily: 0, daysWorked: 0, bestDay: null, worstDay: null },
+    weekOverWeek: null,
+    strainSummary: [],
+    dailyStrainBreakdown: []
+  };
+
+  try {
+    var dailyData = getExtendedDailyDataLine1_(ss, timezone, 30);
+
+    if (dailyData && dailyData.length > 0) {
+      var last7 = dailyData.slice(-7);
+      history.last7Days = last7.map(function(d) {
+        var dateObj = new Date(d.date);
+        var dayOfWeek = Utilities.formatDate(dateObj, timezone, 'EEEE');
+        return {
+          date: Utilities.formatDate(dateObj, timezone, 'yyyy-MM-dd'),
+          dayOfWeek: dayOfWeek,
+          lbs: d.totalTops || 0,
+          avgRate: d.avgRate || 0
+        };
+      });
+
+      var totalLbs30 = 0, bestDay = null, worstDay = null;
+      dailyData.forEach(function(d) {
+        var lbs = d.totalTops || 0;
+        totalLbs30 += lbs;
+        if (lbs > 0) {
+          var dateStr = Utilities.formatDate(new Date(d.date), timezone, 'MMM d');
+          if (!bestDay || lbs > bestDay.lbs) bestDay = { date: dateStr, lbs: lbs };
+          if (!worstDay || lbs < worstDay.lbs) worstDay = { date: dateStr, lbs: lbs };
+        }
+      });
+
+      var daysWithData = dailyData.filter(function(d) { return (d.totalTops || 0) > 0; }).length;
+      history.last30Days = {
+        totalLbs: totalLbs30,
+        avgDaily: daysWithData > 0 ? totalLbs30 / daysWithData : 0,
+        daysWorked: daysWithData,
+        bestDay: bestDay,
+        worstDay: worstDay
+      };
+
+      if (dailyData.length >= 14) {
+        var thisWeek = dailyData.slice(-7);
+        var lastWeek = dailyData.slice(-14, -7);
+        var thisWeekLbs = thisWeek.reduce(function(sum, d) { return sum + (d.totalTops || 0); }, 0);
+        var lastWeekLbs = lastWeek.reduce(function(sum, d) { return sum + (d.totalTops || 0); }, 0);
+        history.weekOverWeek = {
+          thisWeek: thisWeekLbs,
+          lastWeek: lastWeekLbs,
+          change: lastWeekLbs > 0 ? ((thisWeekLbs - lastWeekLbs) / lastWeekLbs * 100) : 0
+        };
+      }
+    }
+
+    history.dailyStrainBreakdown = getDailyStrainBreakdown_(ss, timezone, 14);
+
+  } catch (error) {
+    Logger.log('Error gathering historical data: ' + error.message);
+  }
+
+  return history;
+}
+
+/**
+ * Get daily strain breakdown for the last N days
+ */
+function getDailyStrainBreakdown_(ss, timezone, days) {
+  var result = [];
+
+  var monthSheets = ss.getSheets().filter(function(sh) { return /^\d{4}-\d{2}$/.test(sh.getName()); })
+    .sort(function(a, b) { return b.getName().localeCompare(a.getName()); });
+
+  if (monthSheets.length === 0) return result;
+
+  var today = new Date();
+  var cutoff = new Date(today);
+  cutoff.setDate(cutoff.getDate() - days);
+
+  var dailyMap = {};
+
+  monthSheets.forEach(function(sheet) {
+    var vals = sheet.getDataRange().getValues();
+    var currentDate = null, cols = null;
+
+    for (var i = 0; i < vals.length; i++) {
+      var row = vals[i];
+      if (row[0] === 'Date:') {
+        var dateStr = row[1];
+        if (dateStr) {
+          var d = new Date(dateStr);
+          currentDate = !isNaN(d.getTime()) ? d : null;
+        }
+        var headerRow = vals[i + 1] || [];
+        cols = getColumnIndices_(headerRow);
+        continue;
+      }
+      if (!currentDate || !cols || currentDate < cutoff || currentDate >= today) continue;
+      if (isEndOfBlock_(row)) continue;
+
+      var dateKey = Utilities.formatDate(currentDate, timezone, 'yyyy-MM-dd');
+      if (!dailyMap[dateKey]) {
+        dailyMap[dateKey] = {
+          date: dateKey,
+          dayOfWeek: Utilities.formatDate(currentDate, timezone, 'EEEE'),
+          strains: {}
+        };
+      }
+
+      var cv1 = row[cols.cultivar1] || 'Unknown';
+      var tops1 = parseFloat(row[cols.tops1]) || 0;
+      var smalls1 = parseFloat(row[cols.smalls1]) || 0;
+
+      if (tops1 > 0 || smalls1 > 0) {
+        if (!dailyMap[dateKey].strains[cv1]) {
+          dailyMap[dateKey].strains[cv1] = { name: cv1, tops: 0, smalls: 0 };
+        }
+        dailyMap[dateKey].strains[cv1].tops += tops1;
+        dailyMap[dateKey].strains[cv1].smalls += smalls1;
+      }
+    }
+  });
+
+  var sortedDays = Object.keys(dailyMap).sort().reverse();
+  for (var j = 0; j < sortedDays.length; j++) {
+    var day = dailyMap[sortedDays[j]];
+    day.strains = Object.values(day.strains).sort(function(a, b) { return b.tops - a.tops; });
+    result.push(day);
+  }
+
+  return result;
 }
 
 /**
