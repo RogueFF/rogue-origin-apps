@@ -1,0 +1,1975 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rogue Origin - Operations Hub</title>
+
+  <!-- Fonts: DM Serif Display, JetBrains Mono, Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <style>
+    /* ========================================
+       RESET & BASE
+       ======================================== */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    /* ========================================
+       CSS VARIABLES - ORGANIC INDUSTRIAL THEME
+       ======================================== */
+    :root {
+      /* Brand Colors - BOLD Usage */
+      --ro-green: #668971;
+      --ro-green-dark: #3d5243;
+      --ro-green-glow: rgba(102, 137, 113, 0.4);
+      --gold: #e4aa4f;
+      --gold-glow: #f0cb60;
+      --gold-dim: rgba(228, 170, 79, 0.2);
+
+      /* Organic Earth Tones */
+      --soil: #2d2419;
+      --clay: #4a3f35;
+      --hemp-fiber: #b8a88a;
+      --leaf-green: #8ba896;
+      --sage: #9ca89a;
+      --mist: rgba(102, 137, 113, 0.08);
+
+      /* Backgrounds */
+      --bg-dark: #0f110e;
+      --bg-card: rgba(45, 58, 46, 0.3);
+      --glass: rgba(255, 255, 255, 0.05);
+      --glass-border: rgba(255, 255, 255, 0.1);
+
+      /* Text */
+      --text-primary: #f5f2ed;
+      --text-secondary: #b8a88a;
+      --text-muted: #7a7366;
+
+      /* DRAMATIC Shadows (4-layer stacking) */
+      --shadow-dramatic:
+        0 2px 4px rgba(0, 0, 0, 0.1),
+        0 8px 16px rgba(0, 0, 0, 0.15),
+        0 16px 32px rgba(0, 0, 0, 0.2),
+        0 32px 64px rgba(0, 0, 0, 0.25);
+
+      --shadow-dramatic-hover:
+        0 4px 8px rgba(0, 0, 0, 0.1),
+        0 16px 32px rgba(0, 0, 0, 0.2),
+        0 32px 64px rgba(0, 0, 0, 0.25),
+        0 48px 96px rgba(0, 0, 0, 0.3),
+        0 0 40px rgba(102, 137, 113, 0.3);
+
+      /* Typography */
+      --font-display: 'DM Serif Display', serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --font-ui: 'Outfit', sans-serif;
+
+      /* Spacing */
+      --space-xs: 8px;
+      --space-sm: 16px;
+      --space-md: 24px;
+      --space-lg: 40px;
+      --space-xl: 64px;
+
+      /* Border Radius */
+      --radius-sm: 8px;
+      --radius-md: 16px;
+      --radius-lg: 24px;
+      --radius-full: 9999px;
+
+      /* Transitions - SPRING EASING */
+      --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+      --transition-normal: 0.5s var(--spring);
+      --transition-slow: 0.6s var(--spring);
+    }
+
+    /* ========================================
+       BASE STYLES
+       ======================================== */
+    body {
+      font-family: var(--font-ui);
+      background: var(--bg-dark);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* Hemp Leaf Pattern Background - INCREASED VISIBILITY */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 5C25 10 20 15 20 25C20 30 25 35 30 40C35 35 40 30 40 25C40 15 35 10 30 5Z' fill='%23668971' opacity='0.06'/%3E%3C/svg%3E");
+      background-size: 120px;
+      pointer-events: none;
+      z-index: 0;
+      animation: driftPattern 60s linear infinite;
+    }
+
+    @keyframes driftPattern {
+      0% { background-position: 0 0; }
+      100% { background-position: 120px 120px; }
+    }
+
+    /* Grain Texture Overlay */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      opacity: 0.02;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* CUSTOM HEMP LEAF CURSOR */
+    .metric-card,
+    .timeline-dot,
+    .integration-card,
+    button {
+      cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M12 2 L10 6 L12 8 L14 6 Z M12 8 L8 10 L10 12 L12 8 Z M12 8 L16 10 L14 12 L12 8 Z M12 8 L12 16" fill="%23668971" stroke="%234a6b54" stroke-width="0.5"/></svg>') 12 12, pointer;
+    }
+
+    /* ========================================
+       CONTAINER & LAYOUT
+       ======================================== */
+    .container {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: var(--space-md);
+      position: relative;
+      z-index: 2;
+    }
+
+    /* ========================================
+       HEADER
+       ======================================== */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: var(--space-md) 0;
+      margin-bottom: var(--space-lg);
+      animation: fadeInDown 0.6s ease-out;
+    }
+
+    .logo-section {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+    }
+
+    .logo {
+      width: 48px;
+      height: 48px;
+      border-radius: var(--radius-md);
+      background: linear-gradient(135deg, var(--ro-green), var(--gold));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      box-shadow: var(--shadow-dramatic);
+    }
+
+    .brand {
+      font-family: var(--font-display);
+      font-size: 28px;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, var(--ro-green), var(--gold-glow));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header-controls {
+      display: flex;
+      gap: var(--space-sm);
+      align-items: center;
+    }
+
+    .header-btn {
+      padding: 10px 20px;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-full);
+      color: var(--text-primary);
+      font-family: var(--font-ui);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--transition-normal);
+      backdrop-filter: blur(10px);
+    }
+
+    .header-btn:hover {
+      background: var(--ro-green);
+      border-color: var(--ro-green);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(102, 137, 113, 0.4);
+    }
+
+    .refresh-btn {
+      background: linear-gradient(135deg, var(--ro-green), var(--leaf-green));
+      border: none;
+      color: white;
+      padding: 10px 24px;
+    }
+
+    /* ========================================
+       HERO SECTION - WITH GRADIENT MESHES
+       ======================================== */
+    .hero {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      gap: var(--space-lg);
+      margin-bottom: var(--space-xl);
+      position: relative;
+      animation: fadeInUp 0.6s ease-out;
+      animation-delay: 0ms;
+    }
+
+    /* ANIMATED GRADIENT MESHES */
+    .hero::before {
+      content: '';
+      position: absolute;
+      width: 700px;
+      height: 700px;
+      top: -200px;
+      left: -100px;
+      background: radial-gradient(circle,
+        rgba(102, 137, 113, 0.15) 0%,
+        rgba(228, 170, 79, 0.08) 50%,
+        transparent 100%);
+      border-radius: 50%;
+      animation: gradient-shift 6s ease-in-out infinite;
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    .hero::after {
+      content: '';
+      position: absolute;
+      width: 600px;
+      height: 600px;
+      bottom: -150px;
+      right: -120px;
+      background: radial-gradient(circle,
+        rgba(228, 170, 79, 0.12) 0%,
+        rgba(102, 137, 113, 0.06) 50%,
+        transparent 100%);
+      border-radius: 50%;
+      animation: gradient-shift 5s ease-in-out infinite reverse;
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    @keyframes gradient-shift {
+      0%, 100% { transform: translate(0, 0) scale(1); opacity: 1; }
+      50% { transform: translate(30px, -20px) scale(1.1); opacity: 0.8; }
+    }
+
+    .hero-main {
+      background: var(--bg-card);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-lg);
+      backdrop-filter: blur(20px);
+      box-shadow: var(--shadow-dramatic);
+      position: relative;
+      overflow: hidden;
+      transition: all var(--transition-normal);
+    }
+
+    .hero-main:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-dramatic-hover);
+    }
+
+    .hero-main::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--ro-green), var(--gold));
+    }
+
+    .hero-label {
+      font-family: var(--font-ui);
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-secondary);
+      margin-bottom: var(--space-sm);
+    }
+
+    .hero-value {
+      font-family: var(--font-mono);
+      font-size: 96px;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: var(--space-sm);
+      background: linear-gradient(135deg, var(--text-primary), var(--hemp-fiber));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-unit {
+      font-family: var(--font-ui);
+      font-size: 24px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .hero-subtitle {
+      font-family: var(--font-ui);
+      font-size: 16px;
+      color: var(--text-secondary);
+      margin-top: var(--space-md);
+    }
+
+    .hero-stats {
+      display: grid;
+      grid-template-columns: 1fr;
+      grid-template-rows: auto auto 1fr 1fr;
+      gap: var(--space-sm);
+    }
+
+    .hero-stat {
+      background: var(--bg-card);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-md);
+      padding: var(--space-md);
+      backdrop-filter: blur(20px);
+      box-shadow: var(--shadow-dramatic);
+      transition: all var(--transition-normal);
+    }
+
+    .hero-stat:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-dramatic-hover);
+      border-color: var(--ro-green);
+    }
+
+    .hero-stat-label {
+      font-family: var(--font-ui);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .hero-stat-value {
+      font-family: var(--font-mono);
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1;
+    }
+
+    .hero-stat-value.highlight {
+      background: linear-gradient(135deg, var(--gold), var(--gold-glow));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-stat-value.pulsing {
+      animation: pulse-value 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-value {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    .hero-stat-subtitle {
+      font-family: var(--font-ui);
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 6px;
+    }
+
+    /* Progress Ring with HEMP LEAF CENTER */
+    .progress-ring-container {
+      position: relative;
+      width: 100%;
+      height: 180px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .progress-ring {
+      transform: rotate(-90deg);
+    }
+
+    .progress-ring-bg {
+      fill: none;
+      stroke: var(--glass);
+      stroke-width: 10;
+    }
+
+    .progress-ring-fill {
+      fill: none;
+      stroke: url(#progressGradient);
+      stroke-width: 10;
+      stroke-linecap: round;
+      stroke-dasharray: 440;
+      stroke-dashoffset: 440;
+      transition: stroke-dashoffset 1.5s var(--spring);
+    }
+
+    .progress-center {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* HEMP LEAF ICON IN CENTER */
+    .hemp-leaf-icon {
+      width: 60px;
+      height: 60px;
+      margin-bottom: 8px;
+      opacity: 0.6;
+    }
+
+    .progress-percent {
+      font-family: var(--font-mono);
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .progress-label {
+      font-family: var(--font-ui);
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* ========================================
+       FLOWING SVG DIVIDER
+       ======================================== */
+    .section-divider {
+      width: 100%;
+      height: 80px;
+      margin: var(--space-lg) 0;
+      opacity: 0.15;
+    }
+
+    /* ========================================
+       PRODUCTION TIMELINE (SIGNATURE ELEMENT!)
+       ======================================== */
+    .production-timeline {
+      width: 100%;
+      padding: var(--space-lg) 0;
+      margin-bottom: var(--space-xl);
+      position: relative;
+    }
+
+    .timeline-title {
+      font-family: var(--font-display);
+      font-size: 24px;
+      color: var(--text-primary);
+      margin-bottom: var(--space-md);
+      text-align: center;
+    }
+
+    .timeline-svg {
+      width: 100%;
+      height: 200px;
+      overflow: visible;
+    }
+
+    .timeline-path {
+      stroke-dasharray: 1100;
+      stroke-dashoffset: 1100;
+      animation: draw-timeline 1.5s var(--spring) forwards;
+      animation-delay: 400ms;
+    }
+
+    @keyframes draw-timeline {
+      to { stroke-dashoffset: 0; }
+    }
+
+    .timeline-dot {
+      cursor: pointer;
+      transition: all 0.3s var(--spring);
+    }
+
+    .timeline-dot:hover {
+      transform: scale(1.3);
+    }
+
+    .timeline-dot.current {
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.2); opacity: 0.8; }
+    }
+
+    .timeline-tooltip {
+      position: absolute;
+      background: var(--bg-card);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      backdrop-filter: blur(20px);
+      box-shadow: var(--shadow-dramatic);
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.3s var(--spring);
+      z-index: 100;
+      white-space: nowrap;
+    }
+
+    .timeline-tooltip.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .timeline-tooltip-time {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--gold);
+      margin-bottom: 4px;
+    }
+
+    .timeline-tooltip-value {
+      font-family: var(--font-ui);
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    /* ========================================
+       METRICS GRID - ASYMMETRIC WITH ALL CARDS
+       ======================================== */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 0.8fr;
+      gap: var(--space-md);
+      margin-bottom: var(--space-xl);
+      animation: fadeInUp 0.6s ease-out;
+      animation-delay: 700ms;
+      animation-fill-mode: both;
+    }
+
+    .metric-card {
+      background: var(--bg-card);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-md);
+      backdrop-filter: blur(20px);
+      box-shadow: var(--shadow-dramatic);
+      transition: all var(--transition-normal);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .metric-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      background: var(--ro-green);
+    }
+
+    .metric-card.gold::before { background: var(--gold); }
+    .metric-card.green::before { background: var(--ro-green); }
+
+    .metric-card:hover {
+      transform: translateY(-8px);
+      box-shadow: var(--shadow-dramatic-hover);
+      border-color: var(--ro-green);
+    }
+
+    .metric-label {
+      font-family: var(--font-ui);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    .metric-value {
+      font-family: var(--font-mono);
+      font-size: 42px;
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1.1;
+    }
+
+    .metric-unit {
+      font-size: 18px;
+      color: var(--text-secondary);
+      margin-left: 4px;
+    }
+
+    .metric-subtitle {
+      font-family: var(--font-ui);
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 8px;
+    }
+
+    /* Total Output Split Visual */
+    .metric-split {
+      display: flex;
+      gap: var(--space-sm);
+      margin-top: var(--space-sm);
+    }
+
+    .metric-split-item {
+      flex: 1;
+      padding: 16px 12px;
+      background: var(--glass);
+      border-radius: var(--radius-sm);
+      text-align: center;
+      transition: all var(--transition-normal);
+    }
+
+    .metric-split-item:hover {
+      background: var(--mist);
+      transform: scale(1.05);
+    }
+
+    .metric-split-value {
+      font-family: var(--font-mono);
+      font-size: 28px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .metric-split-label {
+      font-family: var(--font-ui);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    /* BEST HOUR TROPHY CARD */
+    .best-hour-card {
+      background: linear-gradient(135deg,
+        rgba(228, 170, 79, 0.08) 0%,
+        rgba(228, 170, 79, 0.03) 100%);
+      border: 1px solid rgba(228, 170, 79, 0.2);
+      text-align: center;
+    }
+
+    .best-hour-card:hover {
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3),
+                  0 0 50px rgba(228, 170, 79, 0.4);
+    }
+
+    .trophy-icon {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 12px;
+      animation: trophy-shine 3s ease-in-out infinite;
+    }
+
+    @keyframes trophy-shine {
+      0%, 100% { filter: brightness(1); }
+      50% { filter: brightness(1.3); }
+    }
+
+    .best-hour-time {
+      font-family: var(--font-mono);
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--gold);
+      margin-bottom: 4px;
+    }
+
+    .best-hour-amount {
+      font-family: var(--font-ui);
+      font-size: 16px;
+      color: var(--text-secondary);
+    }
+
+    /* LABOR HOURS CLOCK CARD */
+    .labor-hours-card {
+      text-align: center;
+    }
+
+    .clock-icon {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 12px;
+    }
+
+    .hour-hand {
+      transform-origin: 20px 20px;
+      animation: rotate-hour-hand 60s linear infinite;
+    }
+
+    .minute-hand {
+      transform-origin: 20px 20px;
+      animation: rotate-minute-hand 5s linear infinite;
+    }
+
+    @keyframes rotate-hour-hand {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes rotate-minute-hand {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .labor-hours-value {
+      font-family: var(--font-mono);
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--ro-green);
+    }
+
+    /* QUALITY RATIO VISUAL CARD */
+    .quality-ratio-card h4 {
+      margin-bottom: 16px;
+    }
+
+    .ratio-bar {
+      display: flex;
+      height: 60px;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      margin: 16px 0;
+    }
+
+    .ratio-tops {
+      background: linear-gradient(135deg, #668971, #8ba896);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-family: var(--font-ui);
+      font-size: 14px;
+      font-weight: 600;
+      transition: all var(--transition-normal);
+    }
+
+    .ratio-smalls {
+      background: linear-gradient(135deg, #e4aa4f, #f0cb60);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #1a1a1a;
+      font-family: var(--font-ui);
+      font-size: 14px;
+      font-weight: 600;
+      transition: all var(--transition-normal);
+    }
+
+    .ratio-value {
+      font-family: var(--font-mono);
+      font-size: 28px;
+      font-weight: 700;
+      text-align: center;
+      color: var(--leaf-green);
+    }
+
+    /* Crew card with icons */
+    .crew-breakdown {
+      display: flex;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .crew-item {
+      flex: 1;
+      text-align: center;
+      padding: 12px;
+      background: var(--glass);
+      border-radius: var(--radius-sm);
+    }
+
+    .crew-icon {
+      font-size: 24px;
+      margin-bottom: 8px;
+    }
+
+    .crew-count {
+      font-family: var(--font-mono);
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .crew-label {
+      font-family: var(--font-ui);
+      font-size: 10px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* ========================================
+       CHARTS SECTION
+       ======================================== */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-md);
+      margin-bottom: var(--space-xl);
+      animation: fadeInUp 0.6s ease-out;
+      animation-delay: 1300ms;
+      animation-fill-mode: both;
+    }
+
+    .chart-card {
+      background: var(--bg-card);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-md);
+      backdrop-filter: blur(20px);
+      box-shadow: var(--shadow-dramatic);
+      transition: all var(--transition-normal);
+    }
+
+    .chart-card:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-dramatic-hover);
+    }
+
+    .chart-card.full {
+      grid-column: 1 / -1;
+    }
+
+    .chart-title {
+      font-family: var(--font-ui);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .chart-subtitle {
+      font-family: var(--font-ui);
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: var(--space-md);
+    }
+
+    .chart-container {
+      position: relative;
+      height: 250px;
+    }
+
+    .chart-container.tall {
+      height: 300px;
+    }
+
+    /* ========================================
+       STRAIN SECTION - WITH PLANT ILLUSTRATION
+       ======================================== */
+    .strain-section {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      gap: var(--space-md);
+      margin-bottom: var(--space-xl);
+      animation: fadeInUp 0.6s ease-out;
+      animation-delay: 1100ms;
+      animation-fill-mode: both;
+    }
+
+    .strain-current {
+      background: var(--bg-card);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-lg);
+      backdrop-filter: blur(20px);
+      box-shadow: var(--shadow-dramatic);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      gap: var(--space-lg);
+      transition: all var(--transition-normal);
+    }
+
+    .strain-current:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-dramatic-hover);
+    }
+
+    .strain-current::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--leaf-green), var(--ro-green));
+    }
+
+    /* BOTANICAL PLANT ILLUSTRATION */
+    .plant-illustration {
+      width: 100px;
+      height: 200px;
+      flex-shrink: 0;
+    }
+
+    .strain-info {
+      flex: 1;
+    }
+
+    .strain-name {
+      font-family: var(--font-display);
+      font-size: 36px;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+
+    .strain-type {
+      font-family: var(--font-ui);
+      font-size: 14px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .strain-list {
+      background: var(--bg-card);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-md);
+      backdrop-filter: blur(20px);
+      box-shadow: var(--shadow-dramatic);
+      transition: all var(--transition-normal);
+    }
+
+    .strain-list:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-dramatic-hover);
+    }
+
+    .strain-list-title {
+      font-family: var(--font-ui);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: var(--space-sm);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .strain-item {
+      padding: 12px;
+      background: var(--glass);
+      border-radius: var(--radius-sm);
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all var(--transition-normal);
+    }
+
+    .strain-item:hover {
+      background: var(--ro-green-glow);
+      transform: translateX(8px) scale(1.02);
+    }
+
+    .strain-item-name {
+      font-family: var(--font-ui);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .strain-item-value {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--gold);
+    }
+
+    /* ========================================
+       INTEGRATIONS
+       ======================================== */
+    .integrations {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--space-md);
+      margin-bottom: var(--space-xl);
+      animation: fadeInUp 0.6s ease-out;
+      animation-delay: 1400ms;
+      animation-fill-mode: both;
+    }
+
+    .integration-card {
+      background: var(--bg-card);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-md);
+      backdrop-filter: blur(20px);
+      box-shadow: var(--shadow-dramatic);
+      transition: all var(--transition-normal);
+      cursor: pointer;
+    }
+
+    .integration-card:hover {
+      transform: translateY(-8px) scale(1.02);
+      box-shadow: var(--shadow-dramatic-hover);
+      border-color: var(--ro-green);
+    }
+
+    .integration-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: var(--radius-md);
+      background: var(--gold-dim);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      margin-bottom: var(--space-sm);
+    }
+
+    .integration-title {
+      font-family: var(--font-ui);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .integration-subtitle {
+      font-family: var(--font-ui);
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .integration-value {
+      font-family: var(--font-mono);
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--gold);
+      margin-top: var(--space-sm);
+    }
+
+    /* ========================================
+       KEYFRAME ANIMATIONS
+       ======================================== */
+    @keyframes fadeInDown {
+      from {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* ========================================
+       RESPONSIVE DESIGN
+       ======================================== */
+    @media (max-width: 1200px) {
+      .hero {
+        grid-template-columns: 1fr;
+      }
+
+      .metrics-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .charts-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .strain-section {
+        grid-template-columns: 1fr;
+      }
+
+      .integrations {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .production-timeline {
+        overflow-x: auto;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        padding: var(--space-sm);
+      }
+
+      .header {
+        flex-direction: column;
+        gap: var(--space-sm);
+        align-items: stretch;
+      }
+
+      .hero-value {
+        font-size: 64px;
+      }
+
+      .metrics-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .integrations {
+        grid-template-columns: 1fr;
+      }
+
+      .strain-current {
+        flex-direction: column;
+        text-align: center;
+      }
+
+      /* Simplified timeline on mobile */
+      .production-timeline {
+        display: none; /* Hide complex timeline on mobile */
+      }
+
+      /* Disable custom cursor on mobile */
+      .metric-card,
+      .timeline-dot,
+      .integration-card,
+      button {
+        cursor: pointer;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo-section">
+        <div class="logo">🌿</div>
+        <h1 class="brand">Rogue Origin</h1>
+      </div>
+      <div class="header-controls">
+        <button class="header-btn refresh-btn" onclick="refreshData()">
+          <span>↻ Refresh</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- HERO SECTION -->
+    <section class="hero">
+      <div class="hero-main">
+        <div class="hero-label">Today's Production</div>
+        <div class="hero-value" id="heroValue">0.0</div>
+        <span class="hero-unit">lbs tops</span>
+        <div class="hero-subtitle" id="heroSubtitle">Loading...</div>
+      </div>
+
+      <div class="hero-stats">
+        <!-- Target Progress with HEMP LEAF -->
+        <div class="hero-stat">
+          <div class="hero-stat-label">Target Progress</div>
+          <div class="progress-ring-container">
+            <svg class="progress-ring" width="160" height="160">
+              <defs>
+                <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style="stop-color:#668971" />
+                  <stop offset="100%" style="stop-color:#e4aa4f" />
+                </linearGradient>
+                <linearGradient id="leafGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" style="stop-color:#8ba896" />
+                  <stop offset="100%" style="stop-color:#668971" />
+                </linearGradient>
+              </defs>
+              <circle class="progress-ring-bg" cx="80" cy="80" r="70"></circle>
+              <circle class="progress-ring-fill" id="progressRing" cx="80" cy="80" r="70"></circle>
+            </svg>
+            <div class="progress-center">
+              <!-- HEMP LEAF ICON -->
+              <svg class="hemp-leaf-icon" viewBox="0 0 60 60">
+                <g transform="translate(30, 30)">
+                  <!-- Center stem -->
+                  <path d="M0,-20 L0,20" stroke="#668971" stroke-width="2" fill="none"/>
+                  <!-- Leaf points (simplified 7-point) -->
+                  <path d="M0,-20 Q-8,-15 -5,-8 Q-8,-10 -12,-8 Q-8,-5 0,0"
+                        fill="url(#leafGradient)" stroke="#4a6b54" stroke-width="0.5"/>
+                  <path d="M0,-20 Q8,-15 5,-8 Q8,-10 12,-8 Q8,-5 0,0"
+                        fill="url(#leafGradient)" stroke="#4a6b54" stroke-width="0.5"/>
+                  <path d="M0,-10 Q-15,-5 -15,0 Q-12,2 0,0"
+                        fill="url(#leafGradient)" stroke="#4a6b54" stroke-width="0.5"/>
+                  <path d="M0,-10 Q15,-5 15,0 Q12,2 0,0"
+                        fill="url(#leafGradient)" stroke="#4a6b54" stroke-width="0.5"/>
+                  <path d="M0,0 Q-10,5 -8,12 Q-5,8 0,5"
+                        fill="url(#leafGradient)" stroke="#4a6b54" stroke-width="0.5"/>
+                  <path d="M0,0 Q10,5 8,12 Q5,8 0,5"
+                        fill="url(#leafGradient)" stroke="#4a6b54" stroke-width="0.5"/>
+                </g>
+              </svg>
+              <div class="progress-percent" id="progressPercent">0</div>
+              <div class="progress-label">% OF TARGET</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Current Rate (PULSING) -->
+        <div class="hero-stat">
+          <div class="hero-stat-label">Live Rate</div>
+          <div class="hero-stat-value highlight pulsing" id="currentRate">0.00</div>
+          <div class="hero-stat-subtitle">lbs/trimmer/hour</div>
+        </div>
+
+        <!-- Crew Size -->
+        <div class="hero-stat">
+          <div class="hero-stat-label">Crew Size</div>
+          <div class="hero-stat-value" id="crewSize">0</div>
+          <div class="hero-stat-subtitle" id="crewBreakdown">Loading...</div>
+        </div>
+
+        <!-- Current Strain -->
+        <div class="hero-stat">
+          <div class="hero-stat-label">Current Strain</div>
+          <div class="hero-stat-value" style="font-size: 18px;" id="currentStrain">—</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FLOWING DIVIDER -->
+    <svg class="section-divider" viewBox="0 0 1200 80" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="divider1" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#668971"/>
+          <stop offset="50%" stop-color="#8ba896"/>
+          <stop offset="100%" stop-color="#668971"/>
+        </linearGradient>
+      </defs>
+      <path d="M0,40 Q300,10 600,40 T1200,40 L1200,80 L0,80 Z" fill="url(#divider1)" opacity="0.15"/>
+    </svg>
+
+    <!-- PRODUCTION TIMELINE (SIGNATURE ELEMENT!) -->
+    <section class="production-timeline">
+      <h2 class="timeline-title">Today's Production Flow</h2>
+      <svg id="timelineSvg" class="timeline-svg" viewBox="0 0 1200 200" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <linearGradient id="timeline-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#668971"/>
+            <stop offset="100%" stop-color="#e4aa4f"/>
+          </linearGradient>
+        </defs>
+        <!-- Flowing path -->
+        <path d="M50,100 Q200,80 350,100 T650,100 T950,100 L1150,100"
+              stroke="url(#timeline-gradient)"
+              stroke-width="3"
+              fill="none"
+              class="timeline-path"/>
+        <!-- Dots rendered by JavaScript -->
+        <g id="timelineDots"></g>
+      </svg>
+      <div id="timelineTooltip" class="timeline-tooltip">
+        <div class="timeline-tooltip-time">8:00 AM</div>
+        <div class="timeline-tooltip-value">0.0 lbs</div>
+      </div>
+    </section>
+
+    <!-- FLOWING DIVIDER -->
+    <svg class="section-divider" viewBox="0 0 1200 80" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="divider2" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#668971"/>
+          <stop offset="50%" stop-color="#8ba896"/>
+          <stop offset="100%" stop-color="#668971"/>
+        </linearGradient>
+      </defs>
+      <path d="M0,40 Q400,60 800,40 T1200,40 L1200,80 L0,80 Z" fill="url(#divider2)" opacity="0.15"/>
+    </svg>
+
+    <!-- CORE METRICS GRID (7 CARDS) -->
+    <section class="metrics-grid">
+      <!-- Column 1: Large Cards -->
+      <div class="metric-card green">
+        <div class="metric-label">Total Output</div>
+        <div class="metric-split">
+          <div class="metric-split-item">
+            <div class="metric-split-value" id="totalTops">0.0</div>
+            <div class="metric-split-label">Tops</div>
+          </div>
+          <div class="metric-split-item">
+            <div class="metric-split-value" id="totalSmalls">0.0</div>
+            <div class="metric-split-label">Smalls</div>
+          </div>
+        </div>
+        <div class="metric-subtitle">Total: <span id="totalLbs">0.0</span> lbs</div>
+      </div>
+
+      <div class="metric-card gold" style="grid-row: span 2;">
+        <div class="metric-label">Efficiency</div>
+        <div class="metric-value" id="avgRate">0.00</div>
+        <div class="metric-subtitle">Average rate (lbs/trimmer/hour)</div>
+      </div>
+
+      <!-- Column 2: Medium Cards -->
+      <div class="metric-card">
+        <div class="metric-label">Crew Breakdown</div>
+        <div class="crew-breakdown">
+          <div class="crew-item">
+            <div class="crew-icon">✂️</div>
+            <div class="crew-count" id="trimmerCount">0</div>
+            <div class="crew-label">Trimmers</div>
+          </div>
+          <div class="crew-item">
+            <div class="crew-icon">🌿</div>
+            <div class="crew-count" id="buckerCount">0</div>
+            <div class="crew-label">Buckers</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-label">Operating Cost</div>
+        <div class="metric-value" id="costPerLb">$0.00</div>
+        <div class="metric-subtitle">Cost per pound produced</div>
+      </div>
+
+      <!-- Column 3: Tall Cards (stacked) -->
+      <div class="metric-card quality-ratio-card">
+        <h4 class="metric-label">Quality Ratio</h4>
+        <div class="ratio-bar">
+          <div class="ratio-tops" id="ratioTopsBar" style="width: 75%;">
+            <span>Tops</span>
+          </div>
+          <div class="ratio-smalls" id="ratioSmallsBar" style="width: 25%;">
+            <span>Smalls</span>
+          </div>
+        </div>
+        <div class="ratio-value" id="ratioValue">3.0 : 1</div>
+      </div>
+
+      <div class="metric-card best-hour-card gold">
+        <div class="metric-label">Best Hour</div>
+        <!-- Trophy Icon -->
+        <svg class="trophy-icon" viewBox="0 0 40 40">
+          <path d="M10,15 L10,20 Q10,28 20,30 Q30,28 30,20 L30,15"
+                fill="none" stroke="#e4aa4f" stroke-width="2"/>
+          <rect x="18" y="30" width="4" height="6" fill="#e4aa4f"/>
+          <rect x="14" y="36" width="12" height="2" fill="#e4aa4f"/>
+          <path d="M10,16 Q5,16 5,20 Q5,24 10,24"
+                fill="none" stroke="#e4aa4f" stroke-width="1.5"/>
+          <path d="M30,16 Q35,16 35,20 Q35,24 30,24"
+                fill="none" stroke="#e4aa4f" stroke-width="1.5"/>
+        </svg>
+        <div class="best-hour-time" id="bestHourTime">--</div>
+        <div class="best-hour-amount" id="bestHourAmount">-- lbs</div>
+      </div>
+
+      <div class="metric-card labor-hours-card">
+        <div class="metric-label">Labor Hours</div>
+        <!-- Clock Icon -->
+        <svg class="clock-icon" viewBox="0 0 40 40">
+          <circle cx="20" cy="20" r="18" fill="none" stroke="#668971" stroke-width="2"/>
+          <circle cx="20" cy="4" r="1" fill="#668971"/>
+          <circle cx="36" cy="20" r="1" fill="#668971"/>
+          <circle cx="20" cy="36" r="1" fill="#668971"/>
+          <circle cx="4" cy="20" r="1" fill="#668971"/>
+          <line x1="20" y1="20" x2="20" y2="10" stroke="#e4aa4f" stroke-width="2" class="hour-hand"/>
+          <line x1="20" y1="20" x2="28" y2="20" stroke="#668971" stroke-width="1.5" class="minute-hand"/>
+          <circle cx="20" cy="20" r="2" fill="#e4aa4f"/>
+        </svg>
+        <div class="labor-hours-value" id="laborHours">0 hrs</div>
+      </div>
+    </section>
+
+    <!-- FLOWING DIVIDER -->
+    <svg class="section-divider" viewBox="0 0 1200 80" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="divider3" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#668971"/>
+          <stop offset="50%" stop-color="#8ba896"/>
+          <stop offset="100%" stop-color="#668971"/>
+        </linearGradient>
+      </defs>
+      <path d="M0,40 Q200,20 600,40 T1200,40 L1200,80 L0,80 Z" fill="url(#divider3)" opacity="0.15"/>
+    </svg>
+
+    <!-- STRAIN PERFORMANCE (WITH PLANT ILLUSTRATION) -->
+    <section class="strain-section">
+      <div class="strain-current">
+        <!-- BOTANICAL PLANT ILLUSTRATION -->
+        <svg class="plant-illustration" viewBox="0 0 100 200">
+          <path d="M50,200 L50,20" stroke="#e4aa4f" stroke-width="2" opacity="0.3"/>
+          <path d="M50,50 Q30,40 25,35 M50,50 Q70,40 75,35" stroke="#e4aa4f" stroke-width="1.5" opacity="0.3"/>
+          <path d="M50,80 Q28,70 22,65 M50,80 Q72,70 78,65" stroke="#e4aa4f" stroke-width="1.5" opacity="0.3"/>
+          <path d="M50,110 Q26,100 20,95 M50,110 Q74,100 80,95" stroke="#e4aa4f" stroke-width="1.5" opacity="0.3"/>
+          <path d="M50,140 Q24,130 18,125 M50,140 Q76,130 82,125" stroke="#e4aa4f" stroke-width="1.5" opacity="0.3"/>
+          <ellipse cx="50" cy="15" rx="8" ry="12" stroke="#e4aa4f" fill="none" opacity="0.4"/>
+          <ellipse cx="45" cy="20" rx="6" ry="9" stroke="#e4aa4f" fill="none" opacity="0.4"/>
+          <ellipse cx="55" cy="20" rx="6" ry="9" stroke="#e4aa4f" fill="none" opacity="0.4"/>
+        </svg>
+
+        <div class="strain-info">
+          <div class="strain-name" id="strainName">Loading...</div>
+          <div class="strain-type" id="strainType">Current Production Strain</div>
+        </div>
+      </div>
+
+      <div class="strain-list">
+        <div class="strain-list-title">Recent Strains</div>
+        <div id="strainListContainer">
+          <div style="padding: 20px; text-align: center; color: var(--text-muted);">Loading...</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FLOWING DIVIDER -->
+    <svg class="section-divider" viewBox="0 0 1200 80" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="divider4" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#668971"/>
+          <stop offset="50%" stop-color="#8ba896"/>
+          <stop offset="100%" stop-color="#668971"/>
+        </linearGradient>
+      </defs>
+      <path d="M0,40 Q500,70 900,40 T1200,40 L1200,80 L0,80 Z" fill="url(#divider4)" opacity="0.15"/>
+    </svg>
+
+    <!-- CHARTS (WITH ANIMATIONS) -->
+    <section class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-title">Daily Trend</div>
+        <div class="chart-subtitle">Last 7 days</div>
+        <div class="chart-container">
+          <canvas id="dailyChart"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-title">Efficiency Curve</div>
+        <div class="chart-subtitle">Rate over time</div>
+        <div class="chart-container">
+          <canvas id="rateChart"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-title">Hourly Production</div>
+        <div class="chart-subtitle">Tops vs Smalls</div>
+        <div class="chart-container">
+          <canvas id="hourlyChart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- FLOWING DIVIDER -->
+    <svg class="section-divider" viewBox="0 0 1200 80" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="divider5" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#668971"/>
+          <stop offset="50%" stop-color="#8ba896"/>
+          <stop offset="100%" stop-color="#668971"/>
+        </linearGradient>
+      </defs>
+      <path d="M0,40 Q350,15 700,40 T1200,40 L1200,80 L0,80 Z" fill="url(#divider5)" opacity="0.15"/>
+    </svg>
+
+    <!-- INTEGRATION HUB -->
+    <section class="integrations">
+      <div class="integration-card" onclick="window.open('kanban.html', '_blank')">
+        <div class="integration-icon">📋</div>
+        <div class="integration-title">Supply Kanban</div>
+        <div class="integration-subtitle">Inventory tracking</div>
+        <div class="integration-value" id="kanbanTotal">—</div>
+      </div>
+
+      <div class="integration-card" onclick="window.open('scoreboard.html', '_blank')">
+        <div class="integration-icon">📊</div>
+        <div class="integration-title">Live Scoreboard</div>
+        <div class="integration-subtitle">Floor display</div>
+        <div class="integration-value">LIVE</div>
+      </div>
+
+      <div class="integration-card" onclick="window.open('barcode.html', '_blank')">
+        <div class="integration-icon">📦</div>
+        <div class="integration-title">Bag Timer</div>
+        <div class="integration-subtitle">Packaging tracker</div>
+        <div class="integration-value" id="bagsToday">0</div>
+      </div>
+
+      <div class="integration-card" onclick="window.open('sop-manager.html', '_blank')">
+        <div class="integration-icon">📚</div>
+        <div class="integration-title">SOP Manager</div>
+        <div class="integration-subtitle">Procedures</div>
+        <div class="integration-value">VIEW</div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    // ========================================
+    // CONFIGURATION
+    // ========================================
+    const API_URL = 'https://script.google.com/macros/s/AKfycbxDAHSFl9cedGS49L3Lf5ztqy-SSToYigyA30ZtsdpmWNAR9H61X_Mm48JOOTGqqr-Z/exec';
+    const isAppsScript = typeof google !== 'undefined' && google.script && google.script.run;
+
+    let data = null;
+    let hourlyChart, rateChart, dailyChart;
+
+    // ========================================
+    // UTILITY FUNCTIONS
+    // ========================================
+    function animateNumber(element, target, duration = 1000, decimals = 1) {
+      const start = parseFloat(element.textContent) || 0;
+      const increment = (target - start) / (duration / 16);
+      let current = start;
+
+      const timer = setInterval(() => {
+        current += increment;
+        if ((increment > 0 && current >= target) || (increment < 0 && current <= target)) {
+          element.textContent = target.toFixed(decimals);
+          clearInterval(timer);
+        } else {
+          element.textContent = current.toFixed(decimals);
+        }
+      }, 16);
+    }
+
+    function setProgress(percent) {
+      const ring = document.getElementById('progressRing');
+      const circumference = 440; // 2 * PI * 70
+      const offset = circumference - (percent / 100 * circumference);
+      ring.style.strokeDashoffset = offset;
+
+      const percentEl = document.getElementById('progressPercent');
+      animateNumber(percentEl, Math.round(percent), 1500, 0);
+    }
+
+    // ========================================
+    // PRODUCTION TIMELINE (SIGNATURE ELEMENT)
+    // ========================================
+    function initProductionTimeline() {
+      if (!data || !data.hourly || data.hourly.length === 0) return;
+
+      const svg = document.getElementById('timelineSvg');
+      const dotsContainer = document.getElementById('timelineDots');
+      const tooltip = document.getElementById('timelineTooltip');
+
+      // Clear existing dots
+      dotsContainer.innerHTML = '';
+
+      // Get current hour (7am = 0, 4:30pm = 9.5 hours)
+      const now = new Date();
+      const currentHour = now.getHours() + now.getMinutes() / 60;
+      const workdayStart = 7; // 7am
+      const workdayEnd = 16.5; // 4:30pm
+
+      // Path curve points (manually calculated along the cubic bezier path)
+      const pathPoints = [
+        {x: 50, y: 100},   // 7am
+        {x: 150, y: 88},   // 8am
+        {x: 250, y: 92},   // 9am
+        {x: 350, y: 100},  // 10am
+        {x: 450, y: 92},   // 11am
+        {x: 550, y: 96},   // 12pm
+        {x: 650, y: 100},  // 1pm
+        {x: 750, y: 92},   // 2pm
+        {x: 850, y: 96},   // 3pm
+        {x: 950, y: 100},  // 4pm
+        {x: 1050, y: 96},  // 4:30pm
+        {x: 1150, y: 100}  // 5pm (end)
+      ];
+
+      data.hourly.forEach((hour, index) => {
+        if (index >= pathPoints.length) return;
+
+        const point = pathPoints[index];
+        const total = (hour.tops || 0) + (hour.smalls || 0);
+
+        // Calculate dot size based on production (4-12px radius)
+        const radius = Math.max(4, Math.min(12, 4 + (total / 10)));
+
+        // Determine if this is current hour
+        const hourNum = 7 + index; // 7am, 8am, etc.
+        const isCurrent = currentHour >= hourNum && currentHour < (hourNum + 1);
+        const isPast = currentHour >= (hourNum + 1);
+
+        // Create dot
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('cx', point.x);
+        circle.setAttribute('cy', point.y);
+        circle.setAttribute('r', radius);
+        circle.setAttribute('class', `timeline-dot ${isCurrent ? 'current' : ''}`);
+
+        if (isPast) {
+          circle.setAttribute('fill', '#668971');
+          circle.setAttribute('opacity', '0.9');
+        } else if (isCurrent) {
+          circle.setAttribute('fill', '#e4aa4f');
+          circle.setAttribute('opacity', '1');
+        } else {
+          circle.setAttribute('fill', 'none');
+          circle.setAttribute('stroke', '#668971');
+          circle.setAttribute('stroke-width', '2');
+          circle.setAttribute('opacity', '0.5');
+        }
+
+        // Add hover tooltip
+        circle.addEventListener('mouseenter', (e) => {
+          tooltip.querySelector('.timeline-tooltip-time').textContent = hour.label || '';
+          tooltip.querySelector('.timeline-tooltip-value').textContent = `${total.toFixed(1)} lbs (${hour.tops?.toFixed(1) || 0} tops, ${hour.smalls?.toFixed(1) || 0} smalls)`;
+
+          const rect = svg.getBoundingClientRect();
+          const x = (point.x / 1200) * rect.width + rect.left;
+          const y = rect.top - 80;
+
+          tooltip.style.left = `${x}px`;
+          tooltip.style.top = `${y}px`;
+          tooltip.classList.add('show');
+        });
+
+        circle.addEventListener('mouseleave', () => {
+          tooltip.classList.remove('show');
+        });
+
+        dotsContainer.appendChild(circle);
+      });
+    }
+
+    // ========================================
+    // DATA LOADING
+    // ========================================
+    async function loadData() {
+      try {
+        let result;
+
+        if (isAppsScript) {
+          result = await new Promise((resolve, reject) => {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler(reject)
+              .getProductionDashboardData();
+          });
+        } else {
+          const response = await fetch(`${API_URL}?action=dashboard`);
+          result = await response.json();
+        }
+
+        if (result.success && result.data) {
+          data = result.data;
+          renderDashboard();
+        } else {
+          console.error('API Error:', result.error || 'Unknown error');
+        }
+      } catch (error) {
+        console.error('Load Error:', error);
+      }
+    }
+
+    function refreshData() {
+      const btn = event.target.closest('button');
+      btn.textContent = '↻ Loading...';
+      btn.disabled = true;
+
+      loadData().then(() => {
+        btn.textContent = '↻ Refresh';
+        btn.disabled = false;
+      });
+    }
+
+    // ========================================
+    // RENDERING
+    // ========================================
+    function renderDashboard() {
+      if (!data || !data.today) return;
+
+      const t = data.today;
+
+      // Hero section
+      animateNumber(document.getElementById('heroValue'), t.totalTops || 0, 1200, 1);
+      document.getElementById('heroSubtitle').textContent = `${t.totalLbs?.toFixed(1) || 0} lbs total (${t.hoursWorked || 0} hours)`;
+
+      // Progress
+      const percent = t.todayPercentage || 0;
+      setProgress(percent);
+
+      // Stats
+      animateNumber(document.getElementById('currentRate'), t.currentRate || 0, 1000, 2);
+      animateNumber(document.getElementById('crewSize'), (t.trimmers || 0) + (t.buckers || 0), 1000, 0);
+      document.getElementById('crewBreakdown').textContent = `${t.trimmers || 0} trimmers, ${t.buckers || 0} buckers`;
+
+      // Current strain
+      const strain = data.current?.strain || data.lastCompleted?.strain || 'Unknown';
+      document.getElementById('currentStrain').textContent = strain.split('/')[0].trim();
+      document.getElementById('strainName').textContent = strain.split('/')[0].trim();
+      document.getElementById('strainType').textContent = strain.split('/')[1]?.trim() || 'Sungrown';
+
+      // Metrics
+      animateNumber(document.getElementById('totalTops'), t.totalTops || 0, 1000, 1);
+      animateNumber(document.getElementById('totalSmalls'), t.totalSmalls || 0, 1000, 1);
+      animateNumber(document.getElementById('totalLbs'), t.totalLbs || 0, 1000, 1);
+      animateNumber(document.getElementById('avgRate'), t.avgRate || 0, 1000, 2);
+      document.getElementById('costPerLb').textContent = `$${(t.costPerLb || 0).toFixed(2)}`;
+
+      // NEW: Crew breakdown
+      animateNumber(document.getElementById('trimmerCount'), t.trimmers || 0, 1000, 0);
+      animateNumber(document.getElementById('buckerCount'), t.buckers || 0, 1000, 0);
+
+      // NEW: Quality Ratio
+      const ratio = t.totalTops / (t.totalSmalls || 1);
+      const topsPercent = (t.totalTops / (t.totalLbs || 1)) * 100;
+      const smallsPercent = (t.totalSmalls / (t.totalLbs || 1)) * 100;
+      document.getElementById('ratioTopsBar').style.width = `${topsPercent}%`;
+      document.getElementById('ratioSmallsBar').style.width = `${smallsPercent}%`;
+      document.getElementById('ratioValue').textContent = `${ratio.toFixed(1)} : 1`;
+
+      // NEW: Best Hour (find from hourly data)
+      if (data.hourly && data.hourly.length > 0) {
+        let bestHour = data.hourly[0];
+        data.hourly.forEach(h => {
+          const hTotal = (h.tops || 0) + (h.smalls || 0);
+          const bestTotal = (bestHour.tops || 0) + (bestHour.smalls || 0);
+          if (hTotal > bestTotal) bestHour = h;
+        });
+        document.getElementById('bestHourTime').textContent = bestHour.label || '--';
+        document.getElementById('bestHourAmount').textContent = `${((bestHour.tops || 0) + (bestHour.smalls || 0)).toFixed(1)} lbs`;
+      }
+
+      // NEW: Labor Hours
+      const totalHours = ((t.trimmers || 0) + (t.buckers || 0)) * (t.hoursWorked || 0);
+      document.getElementById('laborHours').textContent = `${totalHours.toFixed(1)} hrs`;
+
+      // Integration values
+      if (data.bagTimer) {
+        document.getElementById('bagsToday').textContent = data.bagTimer.bagsToday || 0;
+      }
+
+      // Strain list
+      renderStrainList();
+
+      // Timeline (SIGNATURE ELEMENT)
+      initProductionTimeline();
+
+      // Charts
+      renderCharts();
+    }
+
+    function renderStrainList() {
+      const container = document.getElementById('strainListContainer');
+
+      if (!data.strains || data.strains.length === 0) {
+        container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-muted);">No strain data available</div>';
+        return;
+      }
+
+      container.innerHTML = data.strains.slice(0, 5).map(s => `
+        <div class="strain-item">
+          <div class="strain-item-name">${s.name || 'Unknown'}</div>
+          <div class="strain-item-value">${(s.tops || 0).toFixed(1)} lbs</div>
+        </div>
+      `).join('');
+    }
+
+    function renderCharts() {
+      // Daily Summary Chart (ANIMATED BARS GROW FROM 0)
+      if (data.daily && data.daily.length > 0) {
+        const ctx = document.getElementById('dailyChart');
+        if (dailyChart) dailyChart.destroy();
+
+        dailyChart = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: data.daily.map(d => d.label || ''),
+            datasets: [{
+              label: 'Total Production',
+              data: data.daily.map(d => (d.totalTops || 0) + (d.totalSmalls || 0)),
+              backgroundColor: 'rgba(102, 137, 113, 0.8)',
+              borderColor: '#668971',
+              borderWidth: 0,
+              borderRadius: 8
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: {
+              duration: 1200,
+              easing: 'easeOutBounce' // SPRING-LIKE ANIMATION
+            },
+            plugins: {
+              legend: { display: false }
+            },
+            scales: {
+              x: {
+                grid: { display: false },
+                ticks: { color: 'var(--text-muted)', font: { family: 'Outfit', size: 11 } }
+              },
+              y: {
+                grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                ticks: { color: 'var(--text-muted)', font: { family: 'JetBrains Mono', size: 11 } }
+              }
+            }
+          }
+        });
+      }
+
+      // Rate Trend Chart (ANIMATED LINE DRAWS IN)
+      if (data.hourly && data.hourly.length > 0) {
+        const ctx = document.getElementById('rateChart');
+        if (rateChart) rateChart.destroy();
+
+        rateChart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: data.hourly.map(h => h.label || ''),
+            datasets: [{
+              label: 'Rate',
+              data: data.hourly.map(h => h.rate || 0),
+              borderColor: '#e4aa4f',
+              backgroundColor: 'rgba(228, 170, 79, 0.1)',
+              borderWidth: 3,
+              fill: true,
+              tension: 0.4, // SMOOTH ORGANIC CURVES
+              pointRadius: 4,
+              pointBackgroundColor: '#e4aa4f',
+              pointBorderColor: '#fff',
+              pointBorderWidth: 2
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: {
+              duration: 1500,
+              easing: 'easeInOutQuart' // LINE DRAW ANIMATION
+            },
+            plugins: {
+              legend: { display: false }
+            },
+            scales: {
+              x: {
+                grid: { display: false },
+                ticks: { color: 'var(--text-muted)', font: { family: 'Outfit', size: 10 } }
+              },
+              y: {
+                grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                ticks: { color: 'var(--text-muted)', font: { family: 'JetBrains Mono', size: 11 } }
+              }
+            }
+          }
+        });
+      }
+
+      // Hourly Production Chart (ANIMATED BARS)
+      if (data.hourly && data.hourly.length > 0) {
+        const ctx = document.getElementById('hourlyChart');
+        if (hourlyChart) hourlyChart.destroy();
+
+        hourlyChart = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: data.hourly.map(h => h.label || ''),
+            datasets: [
+              {
+                label: 'Tops',
+                data: data.hourly.map(h => h.tops || 0),
+                backgroundColor: 'rgba(102, 137, 113, 0.8)',
+                borderColor: '#668971',
+                borderWidth: 0,
+                borderRadius: 8
+              },
+              {
+                label: 'Smalls',
+                data: data.hourly.map(h => h.smalls || 0),
+                backgroundColor: 'rgba(228, 170, 79, 0.6)',
+                borderColor: '#e4aa4f',
+                borderWidth: 0,
+                borderRadius: 8
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: {
+              duration: 1200,
+              easing: 'easeOutBounce' // SPRING ANIMATION
+            },
+            plugins: {
+              legend: {
+                display: true,
+                position: 'top',
+                labels: { color: 'var(--text-primary)', font: { family: 'Outfit', size: 12 } }
+              }
+            },
+            scales: {
+              x: {
+                stacked: false,
+                grid: { display: false },
+                ticks: { color: 'var(--text-muted)', font: { family: 'Outfit', size: 11 } }
+              },
+              y: {
+                stacked: false,
+                grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                ticks: { color: 'var(--text-muted)', font: { family: 'JetBrains Mono', size: 11 } }
+              }
+            }
+          }
+        });
+      }
+    }
+
+    // ========================================
+    // INITIALIZATION
+    // ========================================
+    document.addEventListener('DOMContentLoaded', () => {
+      // Initial data load
+      loadData();
+
+      // Auto-refresh every 60 seconds
+      setInterval(loadData, 60000);
+    });
+  </script>
+</body>
+</html>

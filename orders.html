@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Order Management - Rogue Origin</title>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    :root {
+      --gold: #e4aa4f;
+      --gold-light: #f0cb60;
+      --gold-dim: rgba(228,170,79,0.15);
+      --green: #668971;
+      --green-dark: #4a6b54;
+      --green-dim: rgba(102,137,113,0.15);
+      --bg: #faf8f5;
+      --bg-card: #ffffff;
+      --border: #e8e4de;
+      --text: #2d3a2e;
+      --text-muted: #8a9a8e;
+      --danger: #c45c4a;
+      --success: #5a9a6e;
+      --warning: #d4a03c;
+    }
+
+    body.dark-mode {
+      --bg: #1a1a1a;
+      --bg-card: #2d2d2d;
+      --border: #444444;
+      --text: #e0e0e0;
+      --text-muted: #888888;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* Header */
+    .header { background: var(--bg-card); border-bottom: 1px solid var(--border); padding: 16px 24px; }
+    .header-inner { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .logo { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; }
+    .brand h1 { font-size: 20px; font-weight: 600; }
+    .brand p { color: var(--green); font-size: 12px; }
+    .header-actions { display: flex; gap: 10px; align-items: center; }
+
+    /* Buttons */
+    .btn { padding: 10px 18px; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; font-weight: 500; transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px; }
+    .btn-primary { background: var(--green); color: #fff; }
+    .btn-primary:hover { background: var(--green-dark); }
+    .btn-secondary { background: var(--bg); border: 1px solid var(--border); color: var(--text); }
+    .btn-secondary:hover { border-color: var(--green); }
+    .btn-gold { background: var(--gold); color: #fff; }
+    .btn-gold:hover { background: #d99a3f; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+    /* Main Layout */
+    .main { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+    /* Stats Bar */
+    .stats-bar { display: flex; gap: 20px; margin-bottom: 24px; flex-wrap: wrap; }
+    .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px; min-width: 160px; }
+    .stat-card .label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+    .stat-card .value { font-size: 28px; font-weight: 700; color: var(--green); }
+    .stat-card .sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+    /* Orders Table */
+    .orders-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .section-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+    .section-header h2 { font-size: 16px; font-weight: 600; }
+    .filters { display: flex; gap: 10px; flex-wrap: wrap; }
+    .filter-input { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: var(--bg); color: var(--text); }
+    .filter-input:focus { outline: none; border-color: var(--green); }
+
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 14px 16px; text-align: left; border-bottom: 1px solid var(--border); }
+    th { background: var(--bg); font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    tr:hover { background: var(--green-dim); }
+    tr:last-child td { border-bottom: none; }
+
+    /* Status Badges */
+    .status { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+    .status-pending { background: var(--gold-dim); color: var(--gold); }
+    .status-processing { background: rgba(100, 149, 237, 0.15); color: #6495ED; }
+    .status-ready { background: var(--green-dim); color: var(--green); }
+    .status-shipped { background: rgba(138, 154, 142, 0.15); color: var(--text-muted); }
+    .status-completed { background: rgba(90, 154, 110, 0.2); color: var(--success); }
+
+    /* Progress Bar */
+    .progress-bar { width: 100px; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+    .progress-fill { height: 100%; background: var(--green); border-radius: 4px; transition: width 0.3s; }
+
+    /* Modal */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: var(--bg-card); border-radius: 16px; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto; }
+    .modal-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .modal-header h3 { font-size: 18px; font-weight: 600; }
+    .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); }
+    .modal-body { padding: 24px; }
+    .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
+
+    /* Form */
+    .form-group { margin-bottom: 20px; }
+    .form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text); }
+    .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; background: var(--bg); color: var(--text); }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px var(--green-dim); }
+    .form-group textarea { min-height: 80px; resize: vertical; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .form-hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+    /* Pallets Section */
+    .pallets-section { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); }
+    .pallets-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .pallets-header h4 { font-size: 14px; font-weight: 600; }
+    .pallet-item { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+    .pallet-item .pallet-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .pallet-item input { flex: 1; min-width: 100px; padding: 8px 10px; font-size: 13px; }
+    .pallet-item select { padding: 8px 10px; font-size: 13px; }
+    .remove-pallet { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 18px; }
+
+    /* Order Detail View */
+    .order-detail { padding: 24px; }
+    .order-detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
+    .order-title { font-size: 24px; font-weight: 700; }
+    .order-meta { display: flex; gap: 20px; margin-top: 8px; flex-wrap: wrap; }
+    .order-meta span { font-size: 13px; color: var(--text-muted); }
+    .order-progress { margin: 24px 0; padding: 20px; background: var(--bg); border-radius: 12px; }
+    .order-progress-bar { height: 12px; background: var(--border); border-radius: 6px; overflow: hidden; margin: 12px 0; }
+    .order-progress-fill { height: 100%; background: linear-gradient(90deg, var(--green), var(--gold)); border-radius: 6px; }
+    .order-progress-stats { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-muted); }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .stat-card { min-width: 140px; }
+      .form-row { grid-template-columns: 1fr; }
+      th, td { padding: 10px 12px; font-size: 13px; }
+      .hide-mobile { display: none; }
+    }
+
+    /* Loading */
+    .loading { text-align: center; padding: 60px; color: var(--text-muted); }
+    .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--green); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Empty State */
+    .empty-state { text-align: center; padding: 60px 20px; }
+    .empty-state i { font-size: 64px; color: var(--text-muted); margin-bottom: 16px; }
+    .empty-state h3 { font-size: 18px; margin-bottom: 8px; }
+    .empty-state p { color: var(--text-muted); margin-bottom: 20px; }
+
+    /* Customer Link */
+    .customer-link { display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: var(--green-dim); border-radius: 8px; margin-top: 20px; }
+    .customer-link input { flex: 1; padding: 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px; font-family: monospace; }
+    .customer-link button { padding: 8px 12px; }
+
+    /* Toast notifications */
+    .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 10000; display: flex; flex-direction: column; gap: 8px; }
+    .toast { padding: 12px 20px; border-radius: 8px; color: #fff; font-weight: 500; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); animation: toastSlideIn 0.3s ease; max-width: 360px; }
+    .toast.error { background: var(--danger); }
+    .toast.success { background: var(--success); }
+    .toast.warning { background: var(--warning); color: #1a1a1a; }
+    .toast.info { background: var(--green); }
+    .toast.hiding { animation: toastSlideOut 0.3s ease forwards; }
+    @keyframes toastSlideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes toastSlideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <div class="brand">
+        <img src="https://rogueff.github.io/rogue-origin-apps/assets/ro-logo.png" alt="RO" class="logo" onerror="this.style.display='none'">
+        <div>
+          <h1>Order Management</h1>
+          <p>Wholesale Order Tracking</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-secondary" onclick="window.location.href='index.html'">
+          <i class="ph ph-arrow-left"></i> Back to Hub
+        </button>
+        <button class="btn btn-secondary" onclick="toggleDarkMode()">
+          <i class="ph ph-moon"></i>
+        </button>
+        <button class="btn btn-primary" onclick="openNewOrderModal()">
+          <i class="ph ph-plus"></i> New Order
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+    <!-- Stats -->
+    <div class="stats-bar">
+      <div class="stat-card">
+        <div class="label">Active Orders</div>
+        <div class="value" id="statActiveOrders">-</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Total Pending (kg)</div>
+        <div class="value" id="statPendingKg">-</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">In Progress (kg)</div>
+        <div class="value" id="statProgressKg">-</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Ready to Ship (kg)</div>
+        <div class="value" id="statReadyKg">-</div>
+      </div>
+    </div>
+
+    <!-- Orders List -->
+    <div class="orders-section" id="ordersSection">
+      <div class="section-header">
+        <h2>All Orders</h2>
+        <div class="filters">
+          <select class="filter-input" id="filterStatus" onchange="filterOrders()">
+            <option value="">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="processing">Processing</option>
+            <option value="ready">Ready to Ship</option>
+            <option value="shipped">Shipped</option>
+            <option value="completed">Completed</option>
+          </select>
+          <input type="text" class="filter-input" id="filterSearch" placeholder="Search customer..." onkeyup="filterOrders()">
+        </div>
+      </div>
+      <div id="ordersTableContainer">
+        <div class="loading">
+          <div class="spinner"></div>
+          Loading orders...
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- New/Edit Order Modal -->
+  <div class="modal-overlay" id="orderModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modalTitle">New Order</h3>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="orderForm">
+          <input type="hidden" id="orderId">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Customer Name *</label>
+              <input type="text" id="customerName" required placeholder="e.g., Hamburg GmbH">
+            </div>
+            <div class="form-group">
+              <label>Order Total (kg) *</label>
+              <input type="number" id="totalKg" required placeholder="e.g., 1400" step="0.1">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Status</label>
+              <select id="orderStatus">
+                <option value="pending">Pending</option>
+                <option value="processing">Processing</option>
+                <option value="ready">Ready to Ship</option>
+                <option value="shipped">Shipped</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Due Date</label>
+              <input type="date" id="dueDate">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Notes</label>
+            <textarea id="orderNotes" placeholder="Special instructions, cultivar preferences, etc."></textarea>
+          </div>
+
+          <!-- Pallets -->
+          <div class="pallets-section">
+            <div class="pallets-header">
+              <h4>Pallets</h4>
+              <button type="button" class="btn btn-sm btn-secondary" onclick="addPalletRow()">
+                <i class="ph ph-plus"></i> Add Pallet
+              </button>
+            </div>
+            <div id="palletsContainer"></div>
+            <p class="form-hint">Each pallet can contain multiple cultivars. Weight is in kg.</p>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveOrder()">Save Order</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Order Detail Modal -->
+  <div class="modal-overlay" id="detailModal">
+    <div class="modal" style="max-width: 800px;">
+      <div class="modal-header">
+        <h3>Order Details</h3>
+        <button class="modal-close" onclick="closeDetailModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="orderDetailContent">
+        <!-- Populated dynamically -->
+      </div>
+    </div>
+  </div>
+
+<script>
+(function() {
+  // Configuration
+  const API_URL = 'https://script.google.com/macros/s/AKfycbxDAHSFl9cedGS49L3Lf5ztqy-SSToYigyA30ZtsdpmWNAR9H61X_Mm48JOOTGqqr-Z/exec';
+
+  // State
+  let orders = [];
+  let palletCount = 0;
+
+  // Toast notification system
+  function showToast(message, type, duration) {
+    type = type || 'info';
+    duration = duration || 4000;
+    let container = document.getElementById('toastContainer');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toastContainer';
+      container.className = 'toast-container';
+      document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    toast.className = 'toast ' + type;
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(function() {
+      toast.classList.add('hiding');
+      setTimeout(function() { toast.remove(); }, 300);
+    }, duration);
+  }
+
+  // Initialize
+  document.addEventListener('DOMContentLoaded', function() {
+    loadOrders();
+    initDarkMode();
+  });
+
+  // Dark mode
+  function initDarkMode() {
+    if (localStorage.getItem('ro_dark_mode') === 'true') {
+      document.body.classList.add('dark-mode');
+    }
+  }
+
+  window.toggleDarkMode = function() {
+    document.body.classList.toggle('dark-mode');
+    localStorage.setItem('ro_dark_mode', document.body.classList.contains('dark-mode'));
+  };
+
+  // Load orders from API
+  async function loadOrders() {
+    try {
+      const response = await fetch(`${API_URL}?action=getOrders`);
+      const data = await response.json();
+
+      if (data.orders) {
+        orders = data.orders;
+        renderOrders();
+        updateStats();
+      } else if (data.error) {
+        console.log('No orders yet or API not set up:', data.error);
+        renderEmptyState();
+      }
+    } catch (error) {
+      console.error('Failed to load orders:', error);
+      showToast('Failed to load orders, showing demo data', 'warning');
+      // Show demo data for development
+      orders = getDemoOrders();
+      renderOrders();
+      updateStats();
+    }
+  }
+
+  // Demo data for development
+  function getDemoOrders() {
+    return [
+      {
+        id: 'ORD-001',
+        customer: 'Hamburg GmbH',
+        totalKg: 1400,
+        completedKg: 580,
+        status: 'processing',
+        createdDate: '2025-12-15',
+        dueDate: '2026-02-01',
+        notes: 'International freight - EU documentation required',
+        pallets: [
+          { id: 'P001', cultivars: 'Sour Lifter, Lifter', weightKg: 300, status: 'completed' },
+          { id: 'P002', cultivars: 'Sour Lifter', weightKg: 280, status: 'completed' },
+          { id: 'P003', cultivars: 'Cherry Wine, Elektra', weightKg: 320, status: 'processing' },
+          { id: 'P004', cultivars: 'Hawaiian Haze', weightKg: 250, status: 'pending' },
+          { id: 'P005', cultivars: 'Special Sauce', weightKg: 250, status: 'pending' }
+        ]
+      },
+      {
+        id: 'ORD-002',
+        customer: 'Denver Distributors',
+        totalKg: 200,
+        completedKg: 200,
+        status: 'ready',
+        createdDate: '2025-12-28',
+        dueDate: '2026-01-10',
+        notes: 'Domestic shipping',
+        pallets: [
+          { id: 'P006', cultivars: 'Lifter, Suver Haze', weightKg: 200, status: 'completed' }
+        ]
+      }
+    ];
+  }
+
+  // Render orders table
+  function renderOrders() {
+    const container = document.getElementById('ordersTableContainer');
+
+    if (orders.length === 0) {
+      renderEmptyState();
+      return;
+    }
+
+    const filteredOrders = getFilteredOrders();
+
+    container.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Order ID</th>
+            <th>Customer</th>
+            <th>Total</th>
+            <th>Progress</th>
+            <th>Status</th>
+            <th class="hide-mobile">Due Date</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filteredOrders.map(order => `
+            <tr>
+              <td><strong>${order.id}</strong></td>
+              <td>${order.customer}</td>
+              <td>${order.totalKg} kg</td>
+              <td>
+                <div class="progress-bar">
+                  <div class="progress-fill" style="width: ${getProgress(order)}%"></div>
+                </div>
+                <span style="font-size: 11px; color: var(--text-muted)">${getProgress(order)}%</span>
+              </td>
+              <td><span class="status status-${order.status}">${formatStatus(order.status)}</span></td>
+              <td class="hide-mobile">${formatDate(order.dueDate)}</td>
+              <td>
+                <button class="btn btn-sm btn-secondary" onclick="viewOrder('${order.id}')" title="View Details">
+                  <i class="ph ph-eye"></i>
+                </button>
+                <button class="btn btn-sm btn-secondary" onclick="editOrder('${order.id}')" title="Edit">
+                  <i class="ph ph-pencil"></i>
+                </button>
+                <button class="btn btn-sm btn-secondary" onclick="copyCustomerLink('${order.id}')" title="Copy Customer Link">
+                  <i class="ph ph-link"></i>
+                </button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
+  function renderEmptyState() {
+    document.getElementById('ordersTableContainer').innerHTML = `
+      <div class="empty-state">
+        <i class="ph ph-package"></i>
+        <h3>No Orders Yet</h3>
+        <p>Create your first wholesale order to get started.</p>
+        <button class="btn btn-primary" onclick="openNewOrderModal()">
+          <i class="ph ph-plus"></i> Create Order
+        </button>
+      </div>
+    `;
+  }
+
+  // Filter orders
+  window.filterOrders = function() {
+    renderOrders();
+  };
+
+  function getFilteredOrders() {
+    const statusFilter = document.getElementById('filterStatus').value;
+    const searchFilter = document.getElementById('filterSearch').value.toLowerCase();
+
+    return orders.filter(order => {
+      const matchesStatus = !statusFilter || order.status === statusFilter;
+      const matchesSearch = !searchFilter || order.customer.toLowerCase().includes(searchFilter);
+      return matchesStatus && matchesSearch;
+    });
+  }
+
+  // Update stats
+  function updateStats() {
+    const active = orders.filter(o => !['completed', 'shipped'].includes(o.status));
+    const pending = orders.filter(o => o.status === 'pending');
+    const processing = orders.filter(o => o.status === 'processing');
+    const ready = orders.filter(o => o.status === 'ready');
+
+    document.getElementById('statActiveOrders').textContent = active.length;
+    document.getElementById('statPendingKg').textContent = pending.reduce((sum, o) => sum + o.totalKg, 0);
+    document.getElementById('statProgressKg').textContent = processing.reduce((sum, o) => sum + (o.totalKg - (o.completedKg || 0)), 0);
+    document.getElementById('statReadyKg').textContent = ready.reduce((sum, o) => sum + o.totalKg, 0);
+  }
+
+  // Helpers
+  function getProgress(order) {
+    if (!order.completedKg) return 0;
+    return Math.round((order.completedKg / order.totalKg) * 100);
+  }
+
+  function formatStatus(status) {
+    const labels = {
+      pending: 'Pending',
+      processing: 'Processing',
+      ready: 'Ready to Ship',
+      shipped: 'Shipped',
+      completed: 'Completed'
+    };
+    return labels[status] || status;
+  }
+
+  function formatDate(dateStr) {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  // Modal functions
+  window.openNewOrderModal = function() {
+    document.getElementById('modalTitle').textContent = 'New Order';
+    document.getElementById('orderForm').reset();
+    document.getElementById('orderId').value = '';
+    document.getElementById('palletsContainer').innerHTML = '';
+    palletCount = 0;
+    addPalletRow(); // Start with one pallet
+    document.getElementById('orderModal').classList.add('open');
+  };
+
+  window.editOrder = function(orderId) {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    document.getElementById('modalTitle').textContent = 'Edit Order';
+    document.getElementById('orderId').value = order.id;
+    document.getElementById('customerName').value = order.customer;
+    document.getElementById('totalKg').value = order.totalKg;
+    document.getElementById('orderStatus').value = order.status;
+    document.getElementById('dueDate').value = order.dueDate || '';
+    document.getElementById('orderNotes').value = order.notes || '';
+
+    // Load pallets
+    document.getElementById('palletsContainer').innerHTML = '';
+    palletCount = 0;
+    if (order.pallets && order.pallets.length > 0) {
+      order.pallets.forEach(pallet => {
+        addPalletRow(pallet);
+      });
+    } else {
+      addPalletRow();
+    }
+
+    document.getElementById('orderModal').classList.add('open');
+  };
+
+  window.closeModal = function() {
+    document.getElementById('orderModal').classList.remove('open');
+  };
+
+  // Pallet management
+  window.addPalletRow = function(pallet = null) {
+    palletCount++;
+    const container = document.getElementById('palletsContainer');
+    const div = document.createElement('div');
+    div.className = 'pallet-item';
+    div.id = `pallet-${palletCount}`;
+    div.innerHTML = `
+      <div class="pallet-row">
+        <input type="text" placeholder="Cultivars (e.g., Sour Lifter, Lifter)" class="pallet-cultivars" value="${pallet?.cultivars || ''}">
+        <input type="number" placeholder="Weight (kg)" class="pallet-weight" style="max-width: 100px" value="${pallet?.weightKg || ''}" step="0.1">
+        <select class="pallet-status">
+          <option value="pending" ${pallet?.status === 'pending' ? 'selected' : ''}>Pending</option>
+          <option value="processing" ${pallet?.status === 'processing' ? 'selected' : ''}>Processing</option>
+          <option value="completed" ${pallet?.status === 'completed' ? 'selected' : ''}>Completed</option>
+        </select>
+        <button type="button" class="remove-pallet" onclick="removePallet(${palletCount})">
+          <i class="ph ph-x"></i>
+        </button>
+      </div>
+    `;
+    container.appendChild(div);
+  };
+
+  window.removePallet = function(id) {
+    const el = document.getElementById(`pallet-${id}`);
+    if (el) el.remove();
+  };
+
+  // Save order
+  window.saveOrder = async function() {
+    const orderId = document.getElementById('orderId').value;
+    const customer = document.getElementById('customerName').value.trim();
+    const totalKg = parseFloat(document.getElementById('totalKg').value);
+    const status = document.getElementById('orderStatus').value;
+    const dueDate = document.getElementById('dueDate').value;
+    const notes = document.getElementById('orderNotes').value.trim();
+
+    if (!customer || !totalKg) {
+      alert('Please fill in required fields');
+      return;
+    }
+
+    // Collect pallets
+    const pallets = [];
+    document.querySelectorAll('.pallet-item').forEach((item, index) => {
+      const cultivars = item.querySelector('.pallet-cultivars').value.trim();
+      const weight = parseFloat(item.querySelector('.pallet-weight').value) || 0;
+      const palletStatus = item.querySelector('.pallet-status').value;
+      if (cultivars || weight) {
+        pallets.push({
+          id: `P${String(index + 1).padStart(3, '0')}`,
+          cultivars,
+          weightKg: weight,
+          status: palletStatus
+        });
+      }
+    });
+
+    // Calculate completed kg from pallets
+    const completedKg = pallets
+      .filter(p => p.status === 'completed')
+      .reduce((sum, p) => sum + p.weightKg, 0);
+
+    const order = {
+      id: orderId || `ORD-${String(orders.length + 1).padStart(3, '0')}`,
+      customer,
+      totalKg,
+      completedKg,
+      status,
+      createdDate: orderId ? orders.find(o => o.id === orderId)?.createdDate : new Date().toISOString().split('T')[0],
+      dueDate,
+      notes,
+      pallets
+    };
+
+    try {
+      // Try to save to API
+      const response = await fetch(`${API_URL}?action=saveOrder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(order)
+      });
+      const result = await response.json();
+
+      if (result.success) {
+        // Update local state
+        if (orderId) {
+          const index = orders.findIndex(o => o.id === orderId);
+          if (index >= 0) orders[index] = order;
+        } else {
+          orders.push(order);
+        }
+      }
+    } catch (error) {
+      console.log('API save failed, updating locally:', error);
+      showToast('Could not save to server, updated locally', 'warning');
+      // Update local state anyway for demo
+      if (orderId) {
+        const index = orders.findIndex(o => o.id === orderId);
+        if (index >= 0) orders[index] = order;
+      } else {
+        orders.push(order);
+      }
+    }
+
+    closeModal();
+    renderOrders();
+    updateStats();
+  };
+
+  // View order detail
+  window.viewOrder = function(orderId) {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    const progress = getProgress(order);
+    const customerLink = `${window.location.origin}/rogue-origin-apps/order.html?id=${btoa(order.id)}`;
+
+    document.getElementById('orderDetailContent').innerHTML = `
+      <div class="order-detail">
+        <div class="order-detail-header">
+          <div>
+            <div class="order-title">${order.customer}</div>
+            <div class="order-meta">
+              <span><i class="ph ph-hash"></i> ${order.id}</span>
+              <span><i class="ph ph-calendar"></i> Created ${formatDate(order.createdDate)}</span>
+              <span><i class="ph ph-clock"></i> Due ${formatDate(order.dueDate)}</span>
+            </div>
+          </div>
+          <span class="status status-${order.status}">${formatStatus(order.status)}</span>
+        </div>
+
+        <div class="order-progress">
+          <div style="display: flex; justify-content: space-between; align-items: baseline;">
+            <strong style="font-size: 24px;">${progress}% Complete</strong>
+            <span style="color: var(--text-muted);">${order.completedKg || 0} / ${order.totalKg} kg</span>
+          </div>
+          <div class="order-progress-bar">
+            <div class="order-progress-fill" style="width: ${progress}%"></div>
+          </div>
+          <div class="order-progress-stats">
+            <span>Remaining: ${order.totalKg - (order.completedKg || 0)} kg</span>
+            <span>${order.pallets?.filter(p => p.status === 'completed').length || 0} / ${order.pallets?.length || 0} pallets done</span>
+          </div>
+        </div>
+
+        ${order.notes ? `<div style="margin-bottom: 20px; padding: 12px; background: var(--gold-dim); border-radius: 8px; font-size: 13px;"><strong>Notes:</strong> ${order.notes}</div>` : ''}
+
+        <h4 style="margin-bottom: 12px;">Pallets</h4>
+        <table>
+          <thead>
+            <tr>
+              <th>Pallet ID</th>
+              <th>Cultivars</th>
+              <th>Weight</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${(order.pallets || []).map(pallet => `
+              <tr>
+                <td><strong>${pallet.id}</strong></td>
+                <td>${pallet.cultivars}</td>
+                <td>${pallet.weightKg} kg</td>
+                <td><span class="status status-${pallet.status}">${formatStatus(pallet.status)}</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <div class="customer-link">
+          <span><i class="ph ph-link"></i></span>
+          <input type="text" value="${customerLink}" readonly id="customerLinkInput">
+          <button class="btn btn-sm btn-primary" onclick="copyLink()">Copy Link</button>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">Share this link with the customer to let them track their order.</p>
+      </div>
+    `;
+
+    document.getElementById('detailModal').classList.add('open');
+  };
+
+  window.closeDetailModal = function() {
+    document.getElementById('detailModal').classList.remove('open');
+  };
+
+  window.copyLink = function() {
+    const input = document.getElementById('customerLinkInput');
+    input.select();
+    document.execCommand('copy');
+    alert('Link copied to clipboard!');
+  };
+
+  window.copyCustomerLink = function(orderId) {
+    const customerLink = `${window.location.origin}/rogue-origin-apps/order.html?id=${btoa(orderId)}`;
+    navigator.clipboard.writeText(customerLink).then(() => {
+      alert('Customer link copied to clipboard!');
+    });
+  };
+
+})();
+</script>
+</body>
+</html>

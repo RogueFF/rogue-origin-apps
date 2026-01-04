@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test outputs
+test-report.json
+
+# Temporary files
+*.tmp
+*.temp
+
+# Environment variables (if any)
+.env
+.env.local
