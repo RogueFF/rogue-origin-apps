@@ -1803,12 +1803,19 @@
       .toolbar { flex-wrap: wrap; gap: 8px; }
       .toolbar-btn { padding: 10px 14px; min-height: 44px; }
 
-      /* Move KPI values to the right for better mobile layout */
-      .kpi-card { text-align: right; }
-      .kpi-header { justify-content: flex-end; flex-direction: row-reverse; }
-      .kpi-label { text-align: right; }
-      .kpi-values { justify-content: flex-end; }
-      .kpi-sub { text-align: right; }
+      /* Disable Muuri positioning on mobile - use fixed CSS grid instead */
+      .kpi-card {
+        position: static !important;
+        transform: none !important;
+        width: 100% !important;
+        margin: 0 !important;
+      }
+
+      /* Reduce text sizes slightly to fit better */
+      .kpi-value { font-size: 40px; }
+      .kpi-card.small .kpi-value { font-size: 24px; }
+      .kpi-label { font-size: 10px; }
+      .kpi-unit { font-size: 13px; }
     }
 
     @media (max-width: 400px) {
@@ -2716,18 +2723,21 @@
         }
       });
 
-      // Refresh Muuri layout on window resize (fixes mobile overlaps)
+      // Refresh Muuri layout on window resize (desktop only)
       var resizeTimeout;
       window.addEventListener('resize', function() {
         clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(function() {
-          if (muuriKPI) {
-            muuriKPI.refreshItems();
-            muuriKPI.layout(true);
-          }
-          if (muuriGrid) {
-            muuriGrid.refreshItems();
-            muuriGrid.layout(true);
+          // Only use Muuri on desktop (>= 600px)
+          if (window.innerWidth >= 600) {
+            if (muuriKPI) {
+              muuriKPI.refreshItems();
+              muuriKPI.layout(true);
+            }
+            if (muuriGrid) {
+              muuriGrid.refreshItems();
+              muuriGrid.layout(true);
+            }
           }
         }, 100);
       });
@@ -3353,6 +3363,12 @@
       var container = document.getElementById('kpiRow');
       if (!container || typeof Muuri === 'undefined') {
         console.warn('Muuri not available for KPI or container not found');
+        return;
+      }
+
+      // Skip Muuri on mobile - use static CSS grid instead (prevents overlaps)
+      if (window.innerWidth < 600) {
+        console.log('Mobile detected - using static CSS grid for KPI cards');
         return;
       }
 
