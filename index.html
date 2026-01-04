@@ -416,10 +416,11 @@
       animation: driftPattern 120s linear infinite;
     }
 
-    /* Light mode hemp fiber texture (15% opacity) */
+    /* Light mode hemp fiber texture (25% opacity with animation) */
     body::before {
-      background-image: url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='fiber' x='0' y='0' width='40' height='40' patternUnits='userSpaceOnUse'%3E%3Cg opacity='0.15'%3E%3C!-- Diagonal woven fibers --%3E%3Cline x1='0' y1='0' x2='40' y2='40' stroke='%23e4aa4f' stroke-width='0.8' stroke-linecap='round'/%3E%3Cline x1='0' y1='10' x2='40' y2='50' stroke='%23f0cb60' stroke-width='0.6' stroke-linecap='round'/%3E%3Cline x1='0' y1='20' x2='40' y2='60' stroke='%23e4aa4f' stroke-width='0.8' stroke-linecap='round'/%3E%3Cline x1='0' y1='30' x2='40' y2='70' stroke='%23f0cb60' stroke-width='0.6' stroke-linecap='round'/%3E%3Cline x1='0' y1='-10' x2='40' y2='30' stroke='%23f0cb60' stroke-width='0.6' stroke-linecap='round'/%3E%3C!-- Cross-hatching --%3E%3Cline x1='0' y1='40' x2='40' y2='0' stroke='%23f0cb60' stroke-width='0.5' stroke-linecap='round' opacity='0.6'/%3E%3Cline x1='0' y1='50' x2='40' y2='10' stroke='%23e4aa4f' stroke-width='0.5' stroke-linecap='round' opacity='0.6'/%3E%3C/g%3E%3C/pattern%3E%3C/defs%3E%3Crect width='80' height='80' fill='url(%23fiber)'/%3E%3C/svg%3E");
+      background-image: url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='fiber' x='0' y='0' width='40' height='40' patternUnits='userSpaceOnUse'%3E%3Cg opacity='0.25'%3E%3C!-- Diagonal woven fibers --%3E%3Cline x1='0' y1='0' x2='40' y2='40' stroke='%23e4aa4f' stroke-width='0.8' stroke-linecap='round'/%3E%3Cline x1='0' y1='10' x2='40' y2='50' stroke='%23f0cb60' stroke-width='0.6' stroke-linecap='round'/%3E%3Cline x1='0' y1='20' x2='40' y2='60' stroke='%23e4aa4f' stroke-width='0.8' stroke-linecap='round'/%3E%3Cline x1='0' y1='30' x2='40' y2='70' stroke='%23f0cb60' stroke-width='0.6' stroke-linecap='round'/%3E%3Cline x1='0' y1='-10' x2='40' y2='30' stroke='%23f0cb60' stroke-width='0.6' stroke-linecap='round'/%3E%3C!-- Cross-hatching --%3E%3Cline x1='0' y1='40' x2='40' y2='0' stroke='%23f0cb60' stroke-width='0.5' stroke-linecap='round' opacity='0.6'/%3E%3Cline x1='0' y1='50' x2='40' y2='10' stroke='%23e4aa4f' stroke-width='0.5' stroke-linecap='round' opacity='0.6'/%3E%3C/g%3E%3C/pattern%3E%3C/defs%3E%3Crect width='80' height='80' fill='url(%23fiber)'/%3E%3C/svg%3E");
       background-size: 100px;
+      animation: driftPattern 120s linear infinite;
     }
 
     @keyframes driftPattern {
@@ -1259,11 +1260,23 @@
       border: none;
       color: var(--text-muted);
       cursor: pointer;
-      padding: 4px;
+      padding: 6px;
       font-size: 14px;
       line-height: 1;
       transition: all 0.2s;
       border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .widget-resize svg,
+    .widget-collapse svg,
+    .widget-drag-handle svg,
+    .widget-hide svg {
+      width: 16px;
+      height: 16px;
+      stroke-width: 2;
     }
 
     .widget-resize:hover {
@@ -1448,7 +1461,22 @@
     .settings-panel.open { transform: translateX(0); }
     .settings-header { padding: 16px; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: var(--bg-card); }
     .settings-title { font-size: 14px; font-weight: 600; }
-    .settings-close { background: none; border: none; font-size: 20px; color: var(--text-muted); cursor: pointer; }
+    .settings-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      color: var(--text);
+      cursor: pointer;
+      padding: 8px;
+      border-radius: 6px;
+      transition: all 0.2s;
+      opacity: 0.8;
+    }
+    .settings-close:hover {
+      background: var(--border-light);
+      opacity: 1;
+      transform: scale(1.1);
+    }
     .settings-section { padding: 16px; border-bottom: 1px solid var(--border-light); }
     .settings-section-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-light); margin-bottom: 10px; font-weight: 600; }
     .widget-toggle { display: flex; align-items: center; justify-content: space-between; padding: 8px; background: var(--bg); border-radius: 6px; margin-bottom: 5px; }
@@ -1567,8 +1595,10 @@
     }
 
     .ai-chat-header-text span {
-      font-size: 12px;
-      color: var(--text-muted);
+      font-size: 13px;
+      color: var(--text);
+      opacity: 0.7;
+      font-weight: 500;
     }
 
     .ai-chat-messages {
@@ -2076,10 +2106,18 @@
                 <div class="integration-title widget-title">Supply Kanban</div>
               </div>
               <div class="widget-actions">
-                <button class="widget-resize" onclick="event.stopPropagation();cycleWidgetSize(this)" title="Resize">⤢</button>
-                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse">−</button>
-                <button class="widget-drag-handle" title="Drag to reorder">⋮⋮</button>
-                <button class="widget-hide" onclick="event.stopPropagation();hideWidget('widget-kanban')" title="Hide">×</button>
+                <button class="widget-resize" onclick="event.stopPropagation();cycleWidgetSize(this)" title="Resize">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-drag-handle" title="Drag to reorder">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                </button>
+                <button class="widget-hide" onclick="event.stopPropagation();hideWidget('widget-kanban')" title="Hide">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
               </div>
             </div>
             <div class="widget-content integration-stats">
@@ -2098,10 +2136,18 @@
                 <div class="integration-title widget-title">Live Scoreboard</div>
               </div>
               <div class="widget-actions">
-                <button class="widget-resize" onclick="event.stopPropagation();cycleWidgetSize(this)" title="Resize">⤢</button>
-                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse">−</button>
-                <button class="widget-drag-handle" title="Drag to reorder">⋮⋮</button>
-                <button class="widget-hide" onclick="event.stopPropagation();hideWidget('widget-scoreboard')" title="Hide">×</button>
+                <button class="widget-resize" onclick="event.stopPropagation();cycleWidgetSize(this)" title="Resize">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-drag-handle" title="Drag to reorder">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                </button>
+                <button class="widget-hide" onclick="event.stopPropagation();hideWidget('widget-scoreboard')" title="Hide">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
               </div>
             </div>
             <div class="widget-content integration-stats">
@@ -2120,10 +2166,18 @@
                 <div class="integration-title widget-title">5KG Bag Timer</div>
               </div>
               <div class="widget-actions">
-                <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize">⤢</button>
-                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">−</button>
-                <button class="widget-drag-handle" title="Drag to reorder">⋮⋮</button>
-                <button class="widget-hide" onclick="hideWidget('widget-bags')" title="Hide">×</button>
+                <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-drag-handle" title="Drag to reorder">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                </button>
+                <button class="widget-hide" onclick="hideWidget('widget-bags')" title="Hide">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
               </div>
             </div>
             <div class="widget-content integration-stats">
@@ -2142,10 +2196,18 @@
                 <div class="integration-title widget-title">SOP Manager</div>
               </div>
               <div class="widget-actions">
-                <button class="widget-resize" onclick="event.stopPropagation();cycleWidgetSize(this)" title="Resize">⤢</button>
-                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse">−</button>
-                <button class="widget-drag-handle" title="Drag to reorder">⋮⋮</button>
-                <button class="widget-hide" onclick="event.stopPropagation();hideWidget('widget-sop')" title="Hide">×</button>
+                <button class="widget-resize" onclick="event.stopPropagation();cycleWidgetSize(this)" title="Resize">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-drag-handle" title="Drag to reorder">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                </button>
+                <button class="widget-hide" onclick="event.stopPropagation();hideWidget('widget-sop')" title="Hide">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
               </div>
             </div>
             <div class="widget-content integration-stats">
@@ -2164,10 +2226,18 @@
               <div style="display:flex;align-items:center;gap:8px;">
                 <div class="status-badge idle" id="statusBadge">Last Hour</div>
                 <div class="widget-actions">
-                  <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize">⤢</button>
-                  <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">−</button>
-                  <button class="widget-drag-handle" title="Drag to reorder">⋮⋮</button>
-                  <button class="widget-hide" onclick="hideWidget('widget-current')" title="Hide">×</button>
+                  <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
+                  <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
+                  <button class="widget-drag-handle" title="Drag to reorder">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                  </button>
+                  <button class="widget-hide" onclick="hideWidget('widget-current')" title="Hide">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
                 </div>
               </div>
             </div>
@@ -2188,10 +2258,18 @@
             <div class="widget-header chart-header">
               <div><div class="chart-title widget-title">Hourly Production</div><div class="chart-subtitle">Tops vs Smalls</div></div>
               <div class="widget-actions">
-                <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize">⤢</button>
-                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">−</button>
-                <button class="widget-drag-handle" title="Drag to reorder">⋮⋮</button>
-                <button class="widget-hide" onclick="hideWidget('widget-hourlyChart')" title="Hide">×</button>
+                <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-drag-handle" title="Drag to reorder">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                </button>
+                <button class="widget-hide" onclick="hideWidget('widget-hourlyChart')" title="Hide">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
               </div>
             </div>
             <div class="widget-content chart-container"><canvas id="hourlyChart"></canvas></div>
@@ -2202,10 +2280,18 @@
             <div class="widget-header chart-header">
               <div><div class="chart-title widget-title">Efficiency Trend</div><div class="chart-subtitle">Lbs/Trimmer/Hr</div></div>
               <div class="widget-actions">
-                <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize">⤢</button>
-                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">−</button>
-                <button class="widget-drag-handle" title="Drag to reorder">⋮⋮</button>
-                <button class="widget-hide" onclick="hideWidget('widget-rateChart')" title="Hide">×</button>
+                <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-drag-handle" title="Drag to reorder">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                </button>
+                <button class="widget-hide" onclick="hideWidget('widget-rateChart')" title="Hide">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
               </div>
             </div>
             <div class="widget-content chart-container"><canvas id="rateChart"></canvas></div>
@@ -2216,10 +2302,18 @@
             <div class="widget-header chart-header">
               <div><div class="chart-title widget-title">Daily Production</div><div class="chart-subtitle">Multi-day view</div></div>
               <div class="widget-actions">
-                <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize">⤢</button>
-                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">−</button>
-                <button class="widget-drag-handle" title="Drag to reorder">⋮⋮</button>
-                <button class="widget-hide" onclick="hideWidget('widget-dailyChart')" title="Hide">×</button>
+                <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-drag-handle" title="Drag to reorder">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                </button>
+                <button class="widget-hide" onclick="hideWidget('widget-dailyChart')" title="Hide">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
               </div>
             </div>
             <div class="widget-content chart-container"><canvas id="dailyChart"></canvas></div>
@@ -2230,10 +2324,18 @@
             <div class="widget-header chart-header">
               <div><div class="chart-title widget-title" id="efficiencyChartTitle">Daily Efficiency</div><div class="chart-subtitle" id="efficiencyChartSubtitle">With 7-day MA</div></div>
               <div class="widget-actions">
-                <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize">⤢</button>
-                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">−</button>
-                <button class="widget-drag-handle" title="Drag to reorder">⋮⋮</button>
-                <button class="widget-hide" onclick="hideWidget('widget-dailyRateChart')" title="Hide">×</button>
+                <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-drag-handle" title="Drag to reorder">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                </button>
+                <button class="widget-hide" onclick="hideWidget('widget-dailyRateChart')" title="Hide">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
               </div>
             </div>
             <div class="widget-content chart-container"><canvas id="dailyRateChart"></canvas></div>
@@ -2246,10 +2348,18 @@
             <div class="widget-header chart-header">
               <div><div class="chart-title widget-title">Trimmers on Line</div><div class="chart-subtitle" id="trimmersChartSubtitle">By Hour</div></div>
               <div class="widget-actions">
-                <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize">⤢</button>
-                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">−</button>
-                <button class="widget-drag-handle" title="Drag to reorder">⋮⋮</button>
-                <button class="widget-hide" onclick="hideWidget('widget-trimmersChart')" title="Hide">×</button>
+                <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-drag-handle" title="Drag to reorder">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                </button>
+                <button class="widget-hide" onclick="hideWidget('widget-trimmersChart')" title="Hide">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
               </div>
             </div>
             <div class="widget-content chart-container"><canvas id="trimmersChart"></canvas></div>
@@ -2262,10 +2372,18 @@
             <div class="widget-header">
               <div><div class="widget-title">Trimmer Productivity</div></div>
               <div class="widget-actions">
-                <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize">⤢</button>
-                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">−</button>
-                <button class="widget-drag-handle" title="Drag to reorder">⋮⋮</button>
-                <button class="widget-hide" onclick="hideWidget('widget-productivity')" title="Hide">×</button>
+                <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-drag-handle" title="Drag to reorder">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                </button>
+                <button class="widget-hide" onclick="hideWidget('widget-productivity')" title="Hide">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
               </div>
             </div>
             <div class="widget-content">
@@ -2283,10 +2401,18 @@
             <div class="widget-header">
               <div><div class="widget-title">Strain Breakdown</div></div>
               <div class="widget-actions">
-                <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize">⤢</button>
-                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">−</button>
-                <button class="widget-drag-handle" title="Drag to reorder">⋮⋮</button>
-                <button class="widget-hide" onclick="hideWidget('widget-strains')" title="Hide">×</button>
+                <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-drag-handle" title="Drag to reorder">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                </button>
+                <button class="widget-hide" onclick="hideWidget('widget-strains')" title="Hide">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
               </div>
             </div>
             <div class="widget-content strain-list" id="strainList"><div style="color:#8a9a8e;text-align:center;padding:16px;">No data</div></div>
@@ -2297,10 +2423,18 @@
             <div class="widget-header">
               <div><div class="widget-title">Performance</div></div>
               <div class="widget-actions">
-                <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize">⤢</button>
-                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">−</button>
-                <button class="widget-drag-handle" title="Drag to reorder">⋮⋮</button>
-                <button class="widget-hide" onclick="hideWidget('widget-performance')" title="Hide">×</button>
+                <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-drag-handle" title="Drag to reorder">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                </button>
+                <button class="widget-hide" onclick="hideWidget('widget-performance')" title="Hide">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
               </div>
             </div>
             <div class="widget-content perf-table" id="perfTable"></div>
@@ -2311,10 +2445,18 @@
             <div class="widget-header">
               <div><div class="widget-title">Cost Analysis</div></div>
               <div class="widget-actions">
-                <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize">⤢</button>
-                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">−</button>
-                <button class="widget-drag-handle" title="Drag to reorder">⋮⋮</button>
-                <button class="widget-hide" onclick="hideWidget('widget-cost')" title="Hide">×</button>
+                <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-drag-handle" title="Drag to reorder">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                </button>
+                <button class="widget-hide" onclick="hideWidget('widget-cost')" title="Hide">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
               </div>
             </div>
             <div class="widget-content perf-table" id="costTable"></div>
@@ -2325,10 +2467,18 @@
             <div class="widget-header">
               <div><div class="widget-title">Period Summary</div><div class="widget-subtitle" id="periodLabel"></div></div>
               <div class="widget-actions">
-                <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize">⤢</button>
-                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">−</button>
-                <button class="widget-drag-handle" title="Drag to reorder">⋮⋮</button>
-                <button class="widget-hide" onclick="hideWidget('widget-period')" title="Hide">×</button>
+                <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-drag-handle" title="Drag to reorder">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                </button>
+                <button class="widget-hide" onclick="hideWidget('widget-period')" title="Hide">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
               </div>
             </div>
             <div class="widget-content perf-table" id="periodTable"></div>
@@ -2454,8 +2604,16 @@
       boxPadding: 6
     };
     Chart.defaults.animation = {
-      duration: 800,
-      easing: 'easeOutQuart'
+      duration: 1200,
+      easing: 'easeOutQuart',
+      delay: function(context) {
+        var delay = 0;
+        if (context.type === 'data' && context.mode === 'default') {
+          // Stagger each data point by 50ms
+          delay = context.dataIndex * 50;
+        }
+        return delay;
+      }
     };
 
     document.addEventListener('DOMContentLoaded', function() {
@@ -2486,6 +2644,46 @@
       
       loadData();
       setInterval(function() { if (currentRange === 'today' && !compareMode && currentView === 'dashboard') loadData(); }, 30000);
+
+      // Keyboard shortcuts
+      document.addEventListener('keydown', function(e) {
+        // Don't trigger shortcuts when typing in inputs
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+        // Ctrl/Cmd + R: Refresh data
+        if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+          e.preventDefault();
+          refreshData();
+          return;
+        }
+
+        // Ctrl/Cmd + /: Toggle AI chat
+        if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+          e.preventDefault();
+          toggleAIChat();
+          return;
+        }
+
+        // Escape: Close panels
+        if (e.key === 'Escape') {
+          var settingsPanel = document.getElementById('settingsPanel');
+          var aiChatPanel = document.getElementById('aiChatPanel');
+
+          if (settingsPanel && settingsPanel.classList.contains('open')) {
+            toggleSettings();
+          } else if (aiChatPanel && aiChatPanel.classList.contains('open')) {
+            toggleAIChat();
+          }
+          return;
+        }
+
+        // Ctrl/Cmd + K: Open settings
+        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+          e.preventDefault();
+          toggleSettings();
+          return;
+        }
+      });
     });
     
     function initTargetInput() {
@@ -2763,6 +2961,7 @@
 
     // ===== MUURI GRID SYSTEM =====
     var muuriGrid = null;
+    var muuriKPI = null;
 
     function initMuuriGrid() {
       var container = document.getElementById('widgetsContainer');
@@ -2865,7 +3064,13 @@
       if (!widget) return;
 
       var isCollapsed = widget.classList.toggle('collapsed');
-      btn.textContent = isCollapsed ? '+' : '−';
+
+      // Swap SVG icon between minus (collapse) and plus (expand)
+      if (isCollapsed) {
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      } else {
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      }
 
       // Refresh ALL items and reflow the entire grid
       if (muuriGrid) {
@@ -3047,10 +3252,10 @@
               if (widget && collapseBtn) {
                 if (w.collapsed) {
                   widget.classList.add('collapsed');
-                  collapseBtn.textContent = '+';
+                  collapseBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>';
                 } else {
                   widget.classList.remove('collapsed');
-                  collapseBtn.textContent = '−';
+                  collapseBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>';
                 }
               }
 
@@ -3091,11 +3296,86 @@
       location.reload();
     }
 
-    // Legacy Sortable compatibility (for KPI cards)
+    // Initialize Muuri for both KPI cards and widgets
     function initSortable() {
-      // KPI cards remain with simple drag-drop (optional upgrade later)
-      // For now, just initialize Muuri for widgets
       initMuuriGrid();
+      initMuuriKPI();
+    }
+
+    function initMuuriKPI() {
+      var container = document.getElementById('kpiRow');
+      if (!container || typeof Muuri === 'undefined') {
+        console.warn('Muuri not available for KPI or container not found');
+        return;
+      }
+
+      muuriKPI = new Muuri(container, {
+        dragEnabled: true,
+        dragSortPredicate: {
+          threshold: 40,
+          action: 'move'
+        },
+        layout: {
+          fillGaps: false,
+          horizontal: false,
+          alignRight: false,
+          alignBottom: false,
+          rounding: true
+        },
+        layoutDuration: 300,
+        layoutEasing: 'ease-out',
+        dragRelease: {
+          duration: 300,
+          easing: 'ease-out'
+        }
+      });
+
+      // Save order on drag end
+      muuriKPI.on('dragEnd', function() {
+        saveKPIOrder();
+      });
+
+      // Initial layout
+      setTimeout(function() {
+        muuriKPI.refreshItems();
+        muuriKPI.layout(true);
+        loadKPIOrder();
+      }, 200);
+    }
+
+    function saveKPIOrder() {
+      if (!muuriKPI) return;
+
+      var order = muuriKPI.getItems().map(function(item) {
+        return item.getElement().dataset.kpi;
+      });
+
+      localStorage.setItem('kpiOrder', JSON.stringify(order));
+    }
+
+    function loadKPIOrder() {
+      if (!muuriKPI) return;
+
+      try {
+        var saved = localStorage.getItem('kpiOrder');
+        if (!saved) return;
+
+        var order = JSON.parse(saved);
+        var sortedItems = [];
+
+        order.forEach(function(kpiId) {
+          var item = muuriKPI.getItems().find(function(i) {
+            return i.getElement().dataset.kpi === kpiId;
+          });
+          if (item) sortedItems.push(item);
+        });
+
+        if (sortedItems.length > 0) {
+          muuriKPI.sort(sortedItems, {layout: true});
+        }
+      } catch(e) {
+        console.error('Error loading KPI order:', e);
+      }
     }
 
     function restoreWidgetOrder() {
@@ -3107,8 +3387,8 @@
       document.getElementById('editModeBtn').classList.toggle('active', editMode);
       document.getElementById('kpiRow').classList.toggle('edit-mode', editMode);
       document.getElementById('widgetsContainer').classList.toggle('edit-mode', editMode);
-      kpiSortable.option('disabled', !editMode);
-      widgetSortable.option('disabled', !editMode);
+
+      // Muuri drag is always enabled, no need to toggle
     }
 
     // Date & Compare functions
@@ -3688,21 +3968,38 @@
     }
 
     function refreshData() {
-      // Just trigger load - no visual feedback until data changes
+      // Add subtle visual feedback
+      var heroNumber = document.getElementById('heroProductionNumber');
+      if (heroNumber) {
+        heroNumber.style.transition = 'transform 0.3s, text-shadow 0.3s';
+        heroNumber.style.transform = 'scale(1.05)';
+        heroNumber.style.textShadow = '0 0 60px rgba(228, 170, 79, 0.6), 0 0 100px rgba(228, 170, 79, 0.3)';
+
+        setTimeout(function() {
+          heroNumber.style.transform = 'scale(1)';
+          heroNumber.style.textShadow = '0 0 40px rgba(228, 170, 79, 0.4), 0 0 80px rgba(228, 170, 79, 0.2)';
+        }, 300);
+      }
+
       if (compareMode) loadCompareData(); else loadData();
     }
 
     function onDataLoaded(r) {
       document.getElementById('loadingOverlay').classList.add('hidden');
       showSkeletons(false);
-      
+
       // Only re-render if data actually changed
       var newDataStr = JSON.stringify(r);
       var oldDataStr = data ? JSON.stringify(data) : '';
-      
+
       if (newDataStr !== oldDataStr) {
         data = r;
         renderAll();
+
+        // Show subtle update notification (only on auto-refresh, not initial load)
+        if (oldDataStr) {
+          showToast('Data updated', 'success', 2000);
+        }
       }
     }
 
@@ -3819,13 +4116,42 @@
       }
     }
 
+    // Count-up animation utility
+    function animateCountUp(element, targetValue, decimals, duration) {
+      if (!element) return;
+      decimals = decimals || 0;
+      duration = duration || 1200;
+
+      var startValue = 0;
+      var startTime = null;
+
+      function step(timestamp) {
+        if (!startTime) startTime = timestamp;
+        var progress = Math.min((timestamp - startTime) / duration, 1);
+
+        // Ease-out cubic for smooth deceleration
+        var easeProgress = 1 - Math.pow(1 - progress, 3);
+        var currentValue = startValue + (targetValue - startValue) * easeProgress;
+
+        element.textContent = currentValue.toFixed(decimals);
+
+        if (progress < 1) {
+          requestAnimationFrame(step);
+        } else {
+          element.textContent = targetValue.toFixed(decimals);
+        }
+      }
+
+      requestAnimationFrame(step);
+    }
+
     function renderHero() {
       if (!data || !data.today) return;
       var t = data.today;
 
-      // Production number (the star)
+      // Production number (the star) - with count-up animation
       var totalProduction = t.totalLbs || 0;
-      document.getElementById('heroProductionNumber').textContent = totalProduction.toFixed(1);
+      animateCountUp(document.getElementById('heroProductionNumber'), totalProduction, 1, 1200);
 
       // Subtitle with breakdown
       var tops = t.totalTops || 0;
