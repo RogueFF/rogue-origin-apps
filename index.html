@@ -4558,6 +4558,7 @@
         <span class="icon">🔊</span>
         <span class="label">Voice</span>
       </button>
+      <button class="settings-close" onclick="toggleAIChat()">&times;</button>
     </div>
     <div class="ai-quick-actions">
       <button class="ai-quick-btn" onclick="aiAskQuestion('How are we doing today?')">📊 Status</button>
@@ -4979,34 +4980,6 @@
     <path d="M12.5 8C12.5 8 10.5 9.5 10.5 12C10.5 9.5 8.5 8 8.5 8M12.5 8C12.5 8 14.5 9.5 14.5 12C14.5 9.5 16.5 8 16.5 8M12.5 12V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>
 </button>
-
-<!-- AI Chat Panel -->
-<div class="ai-chat-panel" id="aiChatPanel">
-  <div class="ai-chat-header">
-    <div class="ai-chat-header-icon">🌿</div>
-    <div class="ai-chat-header-text">
-      <h3>Rogue Origin Assistant</h3>
-      <span>Ask me about production</span>
-    </div>
-  </div>
-  <div class="ai-chat-messages" id="aiMessages">
-    <div class="ai-message assistant">
-      Hi! I'm your Rogue Origin assistant. Ask me about today's production, crew performance, or any metrics you'd like to know.
-    </div>
-  </div>
-  <div class="ai-chat-input-area">
-    <input
-      type="text"
-      class="ai-chat-input"
-      id="aiInput"
-      placeholder="Ask about production..."
-      onkeypress="if(event.key==='Enter') sendAIMessage()"
-    >
-    <button class="ai-chat-send" onclick="sendAIMessage()" id="aiSendBtn">
-      <span>→</span>
-    </button>
-  </div>
-</div>
 
 </body>
 </html>
