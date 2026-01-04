@@ -9,6 +9,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > Hemp processing company in Southern Oregon. Data-driven operations, bilingual (EN/ES) workforce.
 > **Architecture**: Static HTML frontend (GitHub Pages) + Google Apps Script backend + Google Sheets database
 
+## Current Status
+
+- **Version**: 2.0 (Hybrid Dashboard with AI Agent)
+- **Git**: Initialized (January 4, 2026)
+- **Structure**: Organized and documented
+- **Production**: ✅ Live and operational
+- **Main Dashboard**: `index.html` (hybrid design with Muuri.js + dual themes + AI chat)
+
 ## Quick Reference
 
 ### URLs & IDs
@@ -39,25 +47,42 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```
 rogue-origin-apps-main/
-├── *.html                      Frontend apps (deployed to GitHub Pages)
-├── apps-script/                Local copies of Google Apps Script backends
-│   ├── production-tracking/    Main backend (~1,900 lines)
+├── index.html                      ⭐ HYBRID DASHBOARD (Muuri drag-drop, dual theme, AI chat)
+├── scoreboard.html                 Floor TV display (~468KB with embedded charts)
+├── sop-manager.html                Standard Operating Procedures
+├── kanban.html                     Task board
+├── barcode.html                    Label printing
+├── orders.html                     Internal order management
+├── order.html                      Customer portal
+├── ops-hub.html                    Alternative dashboard
+│
+├── apps-script/                    Local copies of Google Apps Script backends
+│   ├── production-tracking/        Main backend (~1,900 lines)
 │   ├── sop-manager/
 │   ├── kanban/
 │   └── barcode-manager/
-├── docs/                       Technical documentation
-│   ├── APP_CATALOG.md          Complete API reference
-│   ├── CODEBASE_INVENTORY.md   File-by-file inventory
-│   └── PROJECT_STRUCTURE.md
-└── ROADMAP.md                  Development phases and status
+│
+├── docs/                           Technical documentation
+│   ├── APP_CATALOG.md              Complete API reference
+│   ├── CODEBASE_INVENTORY.md       File-by-file inventory
+│   ├── PROJECT_STRUCTURE.md        Architecture docs
+│   └── sessions/                   Development session notes & test reports
+│
+├── archive/                        Backups & design explorations
+│   └── designs/                    Previous HTML versions
+│
+├── screenshots/                    Visual documentation
+├── Skills/                         Custom AI skills
+│
+├── CLAUDE.md                       This file
+├── ROADMAP.md                      Development phases and status
+└── README.md                       Main documentation
 ```
 
 **Key Files**:
-- `index.html` - **HYBRID DASHBOARD** (NEW: Muuri drag-drop, dual theme, AI chat, resizable widgets)
-- `index-NEW.html` - Organic industrial design reference
-- `index-backup-hybrid.html` - Backup before hybrid merge
-- `ops-hub.html` - Operations hub (may be deprecated in favor of index.html)
+- `index.html` - **HYBRID DASHBOARD** (Muuri drag-drop, dual theme, AI chat, resizable widgets)
 - `scoreboard.html` - Floor TV display (~468KB with embedded charts)
+- `ops-hub.html` - Alternative operations hub design
 - `apps-script/production-tracking/Code.gs` - Main backend logic
 
 ## Hybrid Dashboard Features (index.html)
