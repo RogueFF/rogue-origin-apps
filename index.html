@@ -755,19 +755,40 @@
 
     .hero-progress-bar {
       margin-top: 24px;
-      height: 8px;
+      height: 32px;
       background: var(--border);
-      border-radius: 4px;
-      overflow: hidden;
+      border-radius: 6px;
       position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: visible;
     }
 
     .hero-progress-fill {
-      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      bottom: 0;
       background: linear-gradient(90deg, var(--gold-400), var(--gold-300));
-      border-radius: 4px;
+      border-radius: 6px;
       transition: width 1s var(--ease-spring);
       box-shadow: 0 0 12px rgba(228, 170, 79, 0.5);
+    }
+
+    .hero-progress-text {
+      position: relative;
+      z-index: 1;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+
+    :root[data-theme="dark"] .hero-progress-text {
+      color: white;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     }
 
     .hero-right {
@@ -2064,6 +2085,7 @@
             <div class="hero-subtitle" id="heroSubtitle">Loading...</div>
             <div class="hero-progress-bar">
               <div class="hero-progress-fill" id="heroProgressFill" style="width: 0%"></div>
+              <div class="hero-progress-text" id="heroProgressText">0%</div>
             </div>
           </div>
         </div>
@@ -4173,9 +4195,21 @@
       var smalls = t.totalSmalls || 0;
       document.getElementById('heroSubtitle').textContent = tops.toFixed(1) + ' lbs tops + ' + smalls.toFixed(1) + ' lbs smalls';
 
-      // Progress bar (target = 200 lbs default)
-      var targetPercent = (totalProduction / dailyTarget * 100);
-      document.getElementById('heroProgressFill').style.width = Math.min(targetPercent, 100) + '%';
+      // Calculate predicted outcome for progress bar (same logic as Predicted mini KPI)
+      var trimmers = t.trimmers || 0;
+      var rate = t.avgRate || 0;
+      var predictedRate = rate > 0 ? rate : (t.cultivarRate || 1.5);
+      var workDayHours = 7.5;
+      var predictedLbs = trimmers * predictedRate * workDayHours;
+
+      // Progress bar based on predicted outcome
+      var progressPercent = 0;
+      if (predictedLbs > 0) {
+        progressPercent = (totalProduction / predictedLbs * 100);
+      }
+
+      document.getElementById('heroProgressFill').style.width = Math.min(progressPercent, 100) + '%';
+      document.getElementById('heroProgressText').textContent = progressPercent.toFixed(0) + '% of predicted';
 
       // Mini KPIs
       var crew = (t.trimmers || 0) + (t.buckers || 0) + (t.qc || 0) + (t.tzero || 0);
