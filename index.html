@@ -1031,8 +1031,10 @@
 
     /* KPI Row */
     .kpi-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
-    .kpi-card { background: var(--bg-card); border: 2px solid var(--border-light); border-radius: 12px; padding: 14px; position: relative; overflow: hidden; box-shadow: var(--shadow-sm); transition: all 0.3s var(--ease-spring); min-height: 120px; }
-    .kpi-card:hover { box-shadow: var(--shadow-md), 0 0 20px rgba(228, 170, 79, 0.1); transform: translateY(-4px) scale(1.02); border-color: rgba(228, 170, 79, 0.4); }
+    .kpi-card { background: var(--bg-card); border: 2px solid var(--border-light); border-radius: 12px; padding: 14px; position: relative; overflow: hidden; box-shadow: var(--shadow-sm); transition: box-shadow 0.3s var(--ease-spring), border-color 0.3s var(--ease-spring); min-height: 120px; }
+    .kpi-card:hover { box-shadow: var(--shadow-md), 0 0 20px rgba(228, 170, 79, 0.1); border-color: rgba(228, 170, 79, 0.4); }
+    .kpi-card.muuri-item-dragging { transition: none !important; }
+    .kpi-card.muuri-item-releasing { transition: none !important; }
     .kpi-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; }
     .kpi-card.gold::before { background: var(--gold); }
     .kpi-card.green::before { background: var(--green); }
@@ -3341,27 +3343,59 @@
       muuriKPI = new Muuri(container, {
         dragEnabled: true,
         dragSortPredicate: {
-          threshold: 40,
-          action: 'move'
+          threshold: 50,
+          action: 'move',
+          migrateAction: 'move'
+        },
+        dragSortHeuristics: {
+          sortInterval: 50,        // Sort every 50ms during drag
+          minDragDistance: 10,
+          minBounceBackAngle: 1
         },
         layout: {
-          fillGaps: false,
-          horizontal: false,
-          alignRight: false,
-          alignBottom: false,
-          rounding: true
+          fillGaps: true,          // Fill gaps in the grid
+          horizontal: false,       // Vertical flow (top to bottom)
+          alignRight: false,       // Align left
+          alignBottom: false,      // Align top
+          rounding: true          // Round positions to avoid subpixels
         },
         layoutDuration: 300,
         layoutEasing: 'ease-out',
+        dragStartPredicate: {
+          distance: 0,             // Start immediately (no distance threshold)
+          delay: 0                 // No delay - instant drag start
+        },
         dragRelease: {
           duration: 300,
           easing: 'ease-out'
+        },
+        dragPlaceholder: {
+          enabled: true,
+          duration: 300,
+          easing: 'ease-out',
+          createElement: null
         }
       });
 
-      // Save order on drag end
+      // Refresh layout during drag for smooth repositioning
+      muuriKPI.on('dragStart', function() {
+        muuriKPI.refreshItems();
+      });
+
+      muuriKPI.on('move', function() {
+        muuriKPI.refreshItems();
+      });
+
+      // Save order and ensure clean layout on drag end
       muuriKPI.on('dragEnd', function() {
+        muuriKPI.refreshItems();
+        muuriKPI.layout(true);
         saveKPIOrder();
+      });
+
+      // Additional layout refresh after drag release completes
+      muuriKPI.on('layoutEnd', function() {
+        muuriKPI.refreshItems();
       });
 
       // Initial layout - wait longer to ensure cards have rendered content
