@@ -1030,8 +1030,8 @@
     .tool-btn.active { background: var(--green); color: #fff; border-color: var(--green); }
 
     /* KPI Row */
-    .kpi-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
-    .kpi-card { background: var(--bg-card); border: 2px solid var(--border-light); border-radius: 12px; padding: 14px; position: relative; overflow: hidden; box-shadow: var(--shadow-sm); transition: box-shadow 0.3s var(--ease-spring), border-color 0.3s var(--ease-spring); min-height: 120px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 6px; margin-bottom: 20px; }
+    .kpi-card { background: var(--bg-card); border: 2px solid var(--border-light); border-radius: 12px; padding: 24px 18px; position: relative; overflow: hidden; box-shadow: var(--shadow-sm); transition: box-shadow 0.3s var(--ease-spring), border-color 0.3s var(--ease-spring); min-height: 140px; }
     .kpi-card:hover { box-shadow: var(--shadow-md), 0 0 20px rgba(228, 170, 79, 0.1); border-color: rgba(228, 170, 79, 0.4); }
     .kpi-card.muuri-item-dragging { transition: none !important; }
     .kpi-card.muuri-item-releasing { transition: none !important; }
@@ -1042,8 +1042,8 @@
     .kpi-card.greenhouse::before { background: var(--greenhouse); }
     .kpi-card.indoor::before { background: var(--indoor); }
     .kpi-card[data-hidden="true"] { display: none; }
-    .kpi-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
-    .kpi-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+    .kpi-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+    .kpi-icon { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 22px; }
     .kpi-card.gold .kpi-icon { background: var(--gold-dim); color: var(--gold); }
     .kpi-card.green .kpi-icon { background: var(--green-dim); color: var(--green); }
     .kpi-card.sungrown .kpi-icon { background: var(--sungrown-dim); color: var(--sungrown); }
@@ -1054,12 +1054,12 @@
     .kpi-delta.down { background: rgba(196,92,74,0.15); color: var(--danger); }
     .kpi-delta.neutral { background: var(--bg); color: var(--text-light); }
     .compare-mode .kpi-delta { display: inline-block; }
-    .kpi-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--text-light); margin-bottom: 3px; font-weight: 500; }
+    .kpi-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--text-light); margin-bottom: 6px; font-weight: 500; }
     .kpi-values { display: flex; align-items: baseline; gap: 6px; }
     /* KPI Values - Botanical Luxury with DM Serif Display */
     .kpi-value {
       font-family: var(--font-display);
-      font-size: 32px;
+      font-size: 48px;
       font-weight: 400;
       color: var(--text);
       line-height: var(--leading-tight);
@@ -1075,13 +1075,13 @@
     /* Smaller KPI values use mono font */
     .kpi-card.small .kpi-value {
       font-family: var(--font-mono);
-      font-size: 20px;
+      font-size: 28px;
       font-weight: 600;
     }
     .kpi-value-compare { font-size: 12px; font-weight: 500; color: var(--text-light); display: none; }
     .compare-mode .kpi-value-compare { display: inline; }
-    .kpi-unit { font-size: 11px; font-weight: 500; color: var(--text-muted); }
-    .kpi-sub { font-size: 9px; color: var(--text-light); margin-top: 3px; }
+    .kpi-unit { font-size: 14px; font-weight: 500; color: var(--text-muted); }
+    .kpi-sub { font-size: 11px; color: var(--text-light); margin-top: 6px; }
 
     /* ========================================
        MUURI WIDGET SYSTEM
@@ -2102,7 +2102,7 @@
           </div>
           <div class="hero-mini-kpi gold">
             <div class="hero-mini-kpi-value" id="heroTargetValue">--</div>
-            <div class="hero-mini-kpi-label">Predicted</div>
+            <div class="hero-mini-kpi-label">Predicted Tops</div>
           </div>
           <div class="hero-mini-kpi">
             <div class="hero-mini-kpi-value" id="heroBagsValue">--</div>
