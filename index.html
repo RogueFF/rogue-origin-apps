@@ -1802,6 +1802,13 @@
       .date-chip { padding: 8px 14px; min-height: 40px; }
       .toolbar { flex-wrap: wrap; gap: 8px; }
       .toolbar-btn { padding: 10px 14px; min-height: 44px; }
+
+      /* Move KPI values to the right for better mobile layout */
+      .kpi-card { text-align: right; }
+      .kpi-header { justify-content: flex-end; flex-direction: row-reverse; }
+      .kpi-label { text-align: right; }
+      .kpi-values { justify-content: flex-end; }
+      .kpi-sub { text-align: right; }
     }
 
     @media (max-width: 400px) {
@@ -2707,6 +2714,22 @@
           toggleSettings();
           return;
         }
+      });
+
+      // Refresh Muuri layout on window resize (fixes mobile overlaps)
+      var resizeTimeout;
+      window.addEventListener('resize', function() {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(function() {
+          if (muuriKPI) {
+            muuriKPI.refreshItems();
+            muuriKPI.layout(true);
+          }
+          if (muuriGrid) {
+            muuriGrid.refreshItems();
+            muuriGrid.layout(true);
+          }
+        }, 100);
       });
     });
     
