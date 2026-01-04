@@ -4970,14 +4970,17 @@
     .ai-chat-panel {
       position: fixed;
       top: 0;
-      left: 0;
-      right: 0;
+      left: auto;
+      right: -100%;
       bottom: 0;
       width: 100vw;
       height: 100vh;
       max-height: 100vh;
       border-radius: 0;
       border: none;
+    }
+    .ai-chat-panel.open {
+      right: 0;
     }
     .ai-chat-toggle { width: 54px; height: 54px; }
     .ai-chat-header { padding: 16px; }
