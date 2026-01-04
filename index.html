@@ -1010,7 +1010,7 @@
 
     /* KPI Row */
     .kpi-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
-    .kpi-card { background: var(--bg-card); border: 2px solid var(--border-light); border-radius: 12px; padding: 14px; position: relative; overflow: hidden; box-shadow: var(--shadow-sm); transition: all 0.3s var(--ease-spring); }
+    .kpi-card { background: var(--bg-card); border: 2px solid var(--border-light); border-radius: 12px; padding: 14px; position: relative; overflow: hidden; box-shadow: var(--shadow-sm); transition: all 0.3s var(--ease-spring); min-height: 120px; }
     .kpi-card:hover { box-shadow: var(--shadow-md), 0 0 20px rgba(228, 170, 79, 0.1); transform: translateY(-4px) scale(1.02); border-color: rgba(228, 170, 79, 0.4); }
     .kpi-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; }
     .kpi-card.gold::before { background: var(--gold); }
@@ -3309,6 +3309,13 @@
         return;
       }
 
+      // Don't reinitialize if already exists
+      if (muuriKPI) {
+        muuriKPI.refreshItems();
+        muuriKPI.layout(true);
+        return;
+      }
+
       muuriKPI = new Muuri(container, {
         dragEnabled: true,
         dragSortPredicate: {
@@ -3335,12 +3342,12 @@
         saveKPIOrder();
       });
 
-      // Initial layout
+      // Initial layout - wait longer to ensure cards have rendered content
       setTimeout(function() {
         muuriKPI.refreshItems();
         muuriKPI.layout(true);
         loadKPIOrder();
-      }, 200);
+      }, 500);
     }
 
     function saveKPIOrder() {
@@ -4037,6 +4044,14 @@
         if (show) card.classList.add('loading');
         else card.classList.remove('loading');
       });
+
+      // Refresh Muuri KPI layout after removing loading state
+      if (!show && muuriKPI) {
+        setTimeout(function() {
+          muuriKPI.refreshItems();
+          muuriKPI.layout(true);
+        }, 100);
+      }
       // Chart containers
       document.querySelectorAll('.chart-container').forEach(function(c) {
         if (show) {
@@ -4211,6 +4226,14 @@
       setKPI('maxRate', t.maxRate, p ? p.maxRate : null, 'rate');
       setKPI('trimmerHours', t.totalTrimmerHours, p ? p.totalTrimmerHours : null, 'hrs');
       setKPI('laborCost', t.totalLaborCost, p ? p.totalLaborCost : null, 'dollar', true);
+
+      // Refresh Muuri KPI layout after data is populated
+      if (muuriKPI) {
+        setTimeout(function() {
+          muuriKPI.refreshItems();
+          muuriKPI.layout(true);
+        }, 50);
+      }
     }
 
     function setKPI(id, val, prevVal, fmt, invertDelta) {
