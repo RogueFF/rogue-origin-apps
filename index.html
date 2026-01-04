@@ -2809,19 +2809,21 @@
         }
       });
 
-      // Initial layout to position all items
-      muuriGrid.refreshItems();
-      muuriGrid.layout(true);
-
       // Save layout on drag end
       muuriGrid.on('dragEnd', function() {
         saveLayout();
       });
 
-      // Load saved layout after a brief delay to ensure DOM is ready
+      // Initial layout after DOM is ready and content may be loading
       setTimeout(function() {
-        loadLayout();
-      }, 100);
+        muuriGrid.refreshItems();
+        muuriGrid.layout(true);
+
+        // Load saved layout after initial layout
+        setTimeout(function() {
+          loadLayout();
+        }, 50);
+      }, 150);
     }
 
     function cycleWidgetSize(btn) {
@@ -3789,6 +3791,20 @@
       renderStrainList();
       renderTables();
       renderIntegrationWidgets();
+
+      // Refresh Muuri layout after content is rendered
+      if (muuriGrid) {
+        // Wait for charts/images to render, then recalculate layout
+        setTimeout(function() {
+          muuriGrid.refreshItems();
+          muuriGrid.layout(true);  // Force synchronous layout
+
+          // Additional pass to ensure everything settled
+          setTimeout(function() {
+            muuriGrid.layout(true);
+          }, 100);
+        }, 200);
+      }
     }
 
     function renderDateDisplay() {
