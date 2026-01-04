@@ -4195,39 +4195,31 @@
       var smalls = t.totalSmalls || 0;
       document.getElementById('heroSubtitle').textContent = tops.toFixed(1) + ' lbs tops + ' + smalls.toFixed(1) + ' lbs smalls';
 
-      // Calculate predicted outcome for progress bar (same logic as Predicted mini KPI)
+      // Calculate predicted TOPS outcome for progress bar (rate is for tops production, smalls are byproduct)
       var trimmers = t.trimmers || 0;
       var rate = t.avgRate || 0;
       var predictedRate = rate > 0 ? rate : (t.cultivarRate || 1.5);
       var workDayHours = 7.5;
-      var predictedLbs = trimmers * predictedRate * workDayHours;
+      var predictedTops = trimmers * predictedRate * workDayHours;
 
-      // Progress bar based on predicted outcome
+      // Progress bar: compare current tops vs predicted tops (both measure same thing)
       var progressPercent = 0;
-      if (predictedLbs > 0) {
-        progressPercent = (totalProduction / predictedLbs * 100);
+      if (predictedTops > 0) {
+        progressPercent = (tops / predictedTops * 100);
       }
 
       document.getElementById('heroProgressFill').style.width = Math.min(progressPercent, 100) + '%';
-      document.getElementById('heroProgressText').textContent = progressPercent.toFixed(0) + '% of predicted';
+      document.getElementById('heroProgressText').textContent = progressPercent.toFixed(0) + '% of predicted tops';
 
       // Mini KPIs
       var crew = (t.trimmers || 0) + (t.buckers || 0) + (t.qc || 0) + (t.tzero || 0);
       document.getElementById('heroCrewValue').textContent = crew;
 
-      var rate = t.avgRate || 0;
       document.getElementById('heroRateValue').textContent = rate.toFixed(2);
 
-      // Calculate predicted outcome based on crew size and historical rate
-      // Use current avg rate if available, otherwise use cultivar-specific rate or default 1.5 lbs/hr
-      var trimmers = t.trimmers || 0;
-      var predictedRate = rate > 0 ? rate : (t.cultivarRate || 1.5);
-      var workDayHours = 7.5; // Standard work day
-      var predictedLbs = trimmers * predictedRate * workDayHours;
-
-      // Display predicted outcome
-      if (predictedLbs > 0) {
-        document.getElementById('heroTargetValue').textContent = predictedLbs.toFixed(0) + ' lbs';
+      // Display predicted tops outcome (using already calculated predictedTops from above)
+      if (predictedTops > 0) {
+        document.getElementById('heroTargetValue').textContent = predictedTops.toFixed(0) + ' lbs';
       } else {
         document.getElementById('heroTargetValue').textContent = '--';
       }
