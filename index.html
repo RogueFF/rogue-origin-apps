@@ -1031,7 +1031,7 @@
 
     /* KPI Row */
     .kpi-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 6px; margin-bottom: 20px; }
-    .kpi-card { background: var(--bg-card); border: 2px solid var(--border-light); border-radius: 12px; padding: 24px 18px; position: relative; overflow: hidden; box-shadow: var(--shadow-sm); transition: box-shadow 0.3s var(--ease-spring), border-color 0.3s var(--ease-spring); min-height: 140px; }
+    .kpi-card { background: var(--bg-card); border: 2px solid var(--border-light); border-radius: 12px; padding: 24px 18px; position: relative; overflow: hidden; box-shadow: var(--shadow-sm); transition: box-shadow 0.3s var(--ease-spring), border-color 0.3s var(--ease-spring); min-height: 140px; margin: 6px; }
     .kpi-card:hover { box-shadow: var(--shadow-md), 0 0 20px rgba(228, 170, 79, 0.1); border-color: rgba(228, 170, 79, 0.4); }
     .kpi-card.muuri-item-dragging { transition: none !important; }
     .kpi-card.muuri-item-releasing { transition: none !important; }
@@ -2738,6 +2738,26 @@
               muuriGrid.refreshItems();
               muuriGrid.layout(true);
             }
+          } else {
+            // Destroy Muuri on mobile to prevent positioning conflicts with CSS grid
+            if (muuriKPI) {
+              try {
+                muuriKPI.destroy();
+                muuriKPI = null;
+                console.log('KPI Muuri destroyed for mobile view');
+              } catch(e) {
+                console.warn('Error destroying KPI Muuri:', e);
+              }
+            }
+            if (muuriGrid) {
+              try {
+                muuriGrid.destroy();
+                muuriGrid = null;
+                console.log('Widget Muuri destroyed for mobile view');
+              } catch(e) {
+                console.warn('Error destroying widget Muuri:', e);
+              }
+            }
           }
         }, 100);
       });
@@ -2998,8 +3018,37 @@
     function toggleKPI(id, v) {
       var k = kpiDefinitions.find(function(x) { return x.id === id; });
       if (k) k.visible = v;
+
       var card = document.querySelector('.kpi-card[data-kpi="' + id + '"]');
-      if (card) card.dataset.hidden = !v;
+      if (!card) return;
+
+      // Update data attribute
+      card.dataset.hidden = !v;
+
+      // Use Muuri show/hide if available (desktop only)
+      if (muuriKPI) {
+        var items = muuriKPI.getItems();
+        var targetItem = items.find(function(item) {
+          return item.getElement() === card;
+        });
+
+        if (targetItem) {
+          if (v) {
+            // Show the card
+            muuriKPI.show([targetItem], {instant: false, onFinish: function() {
+              muuriKPI.refreshItems();
+              muuriKPI.layout(true);
+            }});
+          } else {
+            // Hide the card
+            muuriKPI.hide([targetItem], {instant: false, onFinish: function() {
+              muuriKPI.refreshItems();
+              muuriKPI.layout(true);
+            }});
+          }
+        }
+      }
+
       saveSettings();
     }
 
@@ -3396,10 +3445,11 @@
           horizontal: false,       // Vertical flow (top to bottom)
           alignRight: false,       // Align left
           alignBottom: false,      // Align top
-          rounding: true          // Round positions to avoid subpixels
+          rounding: true           // Round positions to avoid subpixels
         },
         layoutDuration: 300,
         layoutEasing: 'ease-out',
+        layoutOnResize: true,      // Re-layout on window resize
         dragStartPredicate: {
           distance: 0,             // Start immediately (no distance threshold)
           delay: 0                 // No delay - instant drag start
@@ -4397,31 +4447,9 @@
 
     function renderCharts() {
       if (!data) return;
-      
-      try {
-        // Update chart colors for dark mode
-        var chartTextColor = darkMode ? '#a8b5a9' : '#5a6b5f';
-        var chartGridColor = darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)';
-        
-        [hourlyChart, rateChart, dailyChart, dailyRateChart, trimmersChart].forEach(function(chart) {
-          if (chart && chart.options && chart.options.scales) {
-            if (chart.options.scales.x) {
-              chart.options.scales.x.ticks = chart.options.scales.x.ticks || {};
-              chart.options.scales.x.ticks.color = chartTextColor;
-            }
-            if (chart.options.scales.y) {
-              chart.options.scales.y.ticks = chart.options.scales.y.ticks || {};
-              chart.options.scales.y.ticks.color = chartTextColor;
-              chart.options.scales.y.grid = chart.options.scales.y.grid || {};
-              chart.options.scales.y.grid.color = chartGridColor;
-            }
-          }
-          if (chart && chart.options && chart.options.plugins && chart.options.plugins.legend) {
-            chart.options.plugins.legend.labels = chart.options.plugins.legend.labels || {};
-            chart.options.plugins.legend.labels.color = chartTextColor;
-          }
-        });
-      } catch(e) { console.error('Chart color update error:', e); }
+
+      // Chart colors are set via Chart.defaults in updateChartTheme()
+      // No need to manually update each chart's options here as it can cause stack overflow
       
       try {
         if (data.hourly && data.hourly.length > 0 && hourlyChart) {
