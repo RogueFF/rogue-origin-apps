@@ -1009,9 +1009,9 @@
 
     /* KPI Row */
     .kpi-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
-    .kpi-card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 12px; padding: 14px; position: relative; overflow: hidden; box-shadow: 0 2px 6px rgba(0,0,0,0.03); transition: all 0.2s; }
-    .kpi-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.06); transform: translateY(-1px); }
-    .kpi-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+    .kpi-card { background: var(--bg-card); border: 2px solid var(--border-light); border-radius: 12px; padding: 14px; position: relative; overflow: hidden; box-shadow: var(--shadow-sm); transition: all 0.3s var(--ease-spring); }
+    .kpi-card:hover { box-shadow: var(--shadow-md), 0 0 20px rgba(228, 170, 79, 0.1); transform: translateY(-4px) scale(1.02); border-color: rgba(228, 170, 79, 0.4); }
+    .kpi-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; }
     .kpi-card.gold::before { background: var(--gold); }
     .kpi-card.green::before { background: var(--green); }
     .kpi-card.sungrown::before { background: var(--sungrown); }
@@ -1158,13 +1158,13 @@
       }
     }
 
-    /* Widget Cards - Botanical Luxury */
+    /* Widget Cards - Botanical Luxury (BOLD) */
     .widget-card {
       background: var(--bg-card);
-      border: 1px solid var(--border-light);
+      border: 2px solid var(--border-light); /* BOLDER: was 1px */
       border-radius: var(--radius-organic-lg); /* Organic asymmetric: 16px 20px 18px 22px */
       padding: 20px;
-      box-shadow: var(--shadow-sm);
+      box-shadow: var(--shadow-md); /* STRONGER: was shadow-sm */
       margin-bottom: 0; /* Muuri handles spacing */
       height: 100%;
       position: relative;
@@ -1202,15 +1202,18 @@
     }
 
     .widget-card:hover {
-      transform: translateY(-4px) scale(1.005);
-      box-shadow: var(--shadow-lg);
-      border-color: rgba(228, 170, 79, 0.3);
+      transform: translateY(-8px) scale(1.01); /* STRONGER: was -4px */
+      box-shadow: var(--shadow-lg), 0 0 24px rgba(228, 170, 79, 0.15); /* DRAMATIC GLOW */
+      border-color: var(--gold-400); /* BOLD GOLD: was rgba */
+      border-width: 2px;
     }
 
     :root[data-theme="dark"] .widget-card:hover {
       box-shadow:
         var(--shadow-lg),
-        0 0 32px rgba(228, 170, 79, 0.08);
+        0 0 48px rgba(228, 170, 79, 0.25), /* MUCH STRONGER GLOW */
+        0 0 80px rgba(228, 170, 79, 0.12);
+      border-color: var(--gold-300); /* BRIGHT GOLD */
     }
 
     .widget-card.collapsed .widget-content {
