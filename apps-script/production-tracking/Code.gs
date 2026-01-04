@@ -664,6 +664,15 @@ function getProductionDashboardData(startDate, endDate) {
     if (d.avgRate > bestRate) bestRate = d.avgRate;
   });
 
+  // Calculate 7-day rolling averages for state-based emphasis
+  var validDays = dailyData.filter(function(d) { return d.totalTops > 0; });
+  var avgTops7Day = validDays.length > 0 ? weeklyTops / validDays.length : 0;
+  var avgSmalls7Day = validDays.length > 0 ? validDays.reduce(function(sum, d) { return sum + (d.totalSmalls || 0); }, 0) / validDays.length : 0;
+  var avgRate7Day = validDays.length > 0 ? validDays.reduce(function(sum, d) { return sum + (d.avgRate || 0); }, 0) / validDays.length : 0;
+  var avgLbs7Day = avgTops7Day + avgSmalls7Day;
+  var avgOperatorHours7Day = validDays.length > 0 ? validDays.reduce(function(sum, d) { return sum + (d.totalOperatorHours || 0); }, 0) / validDays.length : 0;
+  var avgCostPerLb7Day = avgLbs7Day > 0 ? (avgOperatorHours7Day * hourlyWage) / avgLbs7Day : 0;
+
   // Build last completed hour info with smalls and buckers
   var lastCompleted = null;
   if (hourlyBreakdown.length > 0) {
@@ -721,6 +730,19 @@ function getProductionDashboardData(startDate, endDate) {
         totalTops: weeklyTops,
         totalSmalls: weeklySmalls,
         bestRate: bestRate
+      },
+      rollingAverage: {
+        totalTops: avgTops7Day,
+        totalSmalls: avgSmalls7Day,
+        avgRate: avgRate7Day,
+        totalLbs: avgLbs7Day,
+        operatorHours: avgOperatorHours7Day,
+        costPerLb: avgCostPerLb7Day
+      },
+      targets: {
+        totalTops: scoreboard.todayTarget || 200,
+        avgRate: scoreboard.targetRate || 1.0,
+        costPerLb: 15.0
       },
       lastCompleted: lastCompleted,
       hourly: hourlyData,
@@ -3002,4 +3024,178 @@ function testOrdersAPI() {
   // Test getOrdersSummary
   var summary = getOrdersSummary();
   Logger.log('getOrdersSummary: ' + JSON.stringify(summary, null, 2));
+}
+
+/**********************************************************
+ * WHOLESALE ORDER MANAGEMENT SYSTEM
+ * Comprehensive order, customer, shipment, and payment tracking
+ **********************************************************/
+
+// ============================================================
+// CUSTOMERS MANAGEMENT
+// ============================================================
+
+var CUSTOMERS_SHEET_NAME = 'Customers';
+
+/**
+ * Get all customers
+ */
+function getCustomers() {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(CUSTOMERS_SHEET_NAME);
+
+    if (!sheet) {
+      sheet = createCustomersSheet_(ss);
+    }
+
+    var data = sheet.getDataRange().getValues();
+    if (data.length <= 1) {
+      return { success: true, customers: [] };
+    }
+
+    var customers = [];
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      if (!row[0]) continue;
+
+      customers.push({
+        id: row[0],
+        companyName: row[1],
+        contactName: row[2],
+        email: row[3],
+        phone: row[4],
+        shipToAddress: row[5],
+        billToAddress: row[6],
+        country: row[7],
+        notes: row[8],
+        createdDate: formatDateForJSON_(row[9]),
+        lastOrderDate: formatDateForJSON_(row[10])
+      });
+    }
+
+    return { success: true, customers: customers };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Save (create or update) a customer
+ */
+function saveCustomer(customerData) {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(CUSTOMERS_SHEET_NAME);
+
+    if (!sheet) {
+      sheet = createCustomersSheet_(ss);
+    }
+
+    var data = sheet.getDataRange().getValues();
+    var existingRow = -1;
+
+    // Check if customer exists
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] === customerData.id) {
+        existingRow = i + 1;
+        break;
+      }
+    }
+
+    // Generate ID if new customer
+    if (!customerData.id) {
+      customerData.id = 'CUST-' + String(data.length).padStart(3, '0');
+    }
+
+    var row = [
+      customerData.id,
+      customerData.companyName || '',
+      customerData.contactName || '',
+      customerData.email || '',
+      customerData.phone || '',
+      customerData.shipToAddress || '',
+      customerData.billToAddress || '',
+      customerData.country || '',
+      customerData.notes || '',
+      customerData.createdDate || new Date(),
+      customerData.lastOrderDate || ''
+    ];
+
+    if (existingRow > 0) {
+      sheet.getRange(existingRow, 1, 1, row.length).setValues([row]);
+    } else {
+      sheet.appendRow(row);
+    }
+
+    return { success: true, customer: customerData };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Delete a customer
+ */
+function deleteCustomer(customerId) {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(CUSTOMERS_SHEET_NAME);
+
+    if (!sheet) {
+      return { success: false, error: 'Customers sheet not found' };
+    }
+
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] === customerId) {
+        sheet.deleteRow(i + 1);
+        return { success: true };
+      }
+    }
+
+    return { success: false, error: 'Customer not found' };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Create Customers sheet
+ */
+function createCustomersSheet_(ss) {
+  var sheet = ss.insertSheet(CUSTOMERS_SHEET_NAME);
+
+  var headers = [
+    'CustomerID',
+    'CompanyName',
+    'ContactName',
+    'Email',
+    'Phone',
+    'ShipToAddress',
+    'BillToAddress',
+    'Country',
+    'Notes',
+    'CreatedDate',
+    'LastOrderDate'
+  ];
+
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+  sheet.setFrozenRows(1);
+
+  // Set column widths
+  sheet.setColumnWidth(1, 100);  // CustomerID
+  sheet.setColumnWidth(2, 200);  // CompanyName
+  sheet.setColumnWidth(3, 150);  // ContactName
+  sheet.setColumnWidth(4, 200);  // Email
+  sheet.setColumnWidth(5, 120);  // Phone
+  sheet.setColumnWidth(6, 300);  // ShipToAddress
+  sheet.setColumnWidth(7, 300);  // BillToAddress
+  sheet.setColumnWidth(8, 100);  // Country
+  sheet.setColumnWidth(9, 200);  // Notes
+  sheet.setColumnWidth(10, 100); // CreatedDate
+  sheet.setColumnWidth(11, 100); // LastOrderDate
+
+  return sheet;
 }
