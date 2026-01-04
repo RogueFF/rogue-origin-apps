@@ -2078,7 +2078,7 @@
           </div>
           <div class="hero-mini-kpi gold">
             <div class="hero-mini-kpi-value" id="heroTargetValue">--</div>
-            <div class="hero-mini-kpi-label">Target %</div>
+            <div class="hero-mini-kpi-label">Predicted</div>
           </div>
           <div class="hero-mini-kpi">
             <div class="hero-mini-kpi-value" id="heroBagsValue">--</div>
@@ -4163,13 +4163,25 @@
       document.getElementById('heroProgressFill').style.width = Math.min(targetPercent, 100) + '%';
 
       // Mini KPIs
-      var crew = (t.trimmers || 0) + (t.buckers || 0);
+      var crew = (t.trimmers || 0) + (t.buckers || 0) + (t.qc || 0) + (t.tzero || 0);
       document.getElementById('heroCrewValue').textContent = crew;
 
       var rate = t.avgRate || 0;
       document.getElementById('heroRateValue').textContent = rate.toFixed(2);
 
-      document.getElementById('heroTargetValue').textContent = targetPercent.toFixed(0) + '%';
+      // Calculate predicted outcome based on crew size and historical rate
+      // Use current avg rate if available, otherwise use cultivar-specific rate or default 1.5 lbs/hr
+      var trimmers = t.trimmers || 0;
+      var predictedRate = rate > 0 ? rate : (t.cultivarRate || 1.5);
+      var workDayHours = 7.5; // Standard work day
+      var predictedLbs = trimmers * predictedRate * workDayHours;
+
+      // Display predicted outcome
+      if (predictedLbs > 0) {
+        document.getElementById('heroTargetValue').textContent = predictedLbs.toFixed(0) + ' lbs';
+      } else {
+        document.getElementById('heroTargetValue').textContent = '--';
+      }
 
       // Bags done (if available from timer data)
       document.getElementById('heroBagsValue').textContent = t.bagsCompleted || '--';
@@ -4181,8 +4193,18 @@
       setKPI('totalTops', t.totalTops, p ? p.totalTops : null, 'lbs');
       setKPI('totalSmalls', t.totalSmalls, p ? p.totalSmalls : null, 'lbs');
       setKPI('avgRate', t.avgRate, p ? p.avgRate : null, 'rate');
-      setKPI('crew', (t.trimmers||0)+(t.buckers||0), p ? (p.trimmers||0)+(p.buckers||0) : null, 'num');
-      document.getElementById('kpiSub_crew').textContent = t.trimmers + ' Trim + ' + t.buckers + ' Buck';
+      // Calculate total crew including all roles
+      var totalCrew = (t.trimmers||0) + (t.buckers||0) + (t.qc||0) + (t.tzero||0);
+      var prevTotalCrew = p ? (p.trimmers||0) + (p.buckers||0) + (p.qc||0) + (p.tzero||0) : null;
+      setKPI('crew', totalCrew, prevTotalCrew, 'num');
+
+      // Build breakdown subtitle with all available roles
+      var breakdown = [];
+      if (t.trimmers > 0) breakdown.push(t.trimmers + ' Trim');
+      if (t.buckers > 0) breakdown.push(t.buckers + ' Buck');
+      if (t.qc > 0) breakdown.push(t.qc + ' QC');
+      if (t.tzero > 0) breakdown.push(t.tzero + ' T0');
+      document.getElementById('kpiSub_crew').textContent = breakdown.length > 0 ? breakdown.join(' + ') : 'No crew data';
       setKPI('operatorHours', t.totalOperatorHours, p ? p.totalOperatorHours : null, 'hrs');
       setKPI('costPerLb', t.costPerLb, p ? p.costPerLb : null, 'dollar', true);
       setKPI('totalLbs', t.totalLbs, p ? p.totalLbs : null, 'lbs');
