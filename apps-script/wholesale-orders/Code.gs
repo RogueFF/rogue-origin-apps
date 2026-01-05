@@ -71,6 +71,9 @@ function doPost(e) {
     } else if (action === 'saveMasterOrder') {
       var orderData = e.postData ? JSON.parse(e.postData.contents) : {};
       result = saveMasterOrder(orderData);
+    } else if (action === 'deleteMasterOrder') {
+      var deleteData = e.postData ? JSON.parse(e.postData.contents) : {};
+      result = deleteMasterOrder(deleteData.orderID);
     } else if (action === 'saveShipment') {
       var shipmentData = e.postData ? JSON.parse(e.postData.contents) : {};
       result = saveShipment(shipmentData);
@@ -296,6 +299,61 @@ function saveMasterOrder(orderData) {
       sheet.appendRow(row);
     }
     return { success: true, order: orderData };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function deleteMasterOrder(orderID) {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+
+    // Delete the master order
+    var ordersSheet = ss.getSheetByName(MASTER_ORDERS_SHEET_NAME);
+    if (!ordersSheet) {
+      return { success: false, error: 'Orders sheet not found' };
+    }
+
+    var data = ordersSheet.getDataRange().getValues();
+    var rowToDelete = -1;
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] === orderID) {
+        rowToDelete = i + 1; // +1 because sheet rows are 1-indexed
+        break;
+      }
+    }
+
+    if (rowToDelete === -1) {
+      return { success: false, error: 'Order not found' };
+    }
+
+    ordersSheet.deleteRow(rowToDelete);
+
+    // Also delete associated shipments
+    var shipmentsSheet = ss.getSheetByName(SHIPMENTS_SHEET_NAME);
+    if (shipmentsSheet) {
+      var shipmentData = shipmentsSheet.getDataRange().getValues();
+      // Delete from bottom to top to avoid row index shifting issues
+      for (var i = shipmentData.length - 1; i >= 1; i--) {
+        if (shipmentData[i][1] === orderID) { // Column B is OrderID in Shipments
+          shipmentsSheet.deleteRow(i + 1);
+        }
+      }
+    }
+
+    // Also delete associated payments
+    var paymentsSheet = ss.getSheetByName(PAYMENTS_SHEET_NAME);
+    if (paymentsSheet) {
+      var paymentData = paymentsSheet.getDataRange().getValues();
+      // Delete from bottom to top to avoid row index shifting issues
+      for (var i = paymentData.length - 1; i >= 1; i--) {
+        if (paymentData[i][1] === orderID) { // Column B is OrderID in Payments
+          paymentsSheet.deleteRow(i + 1);
+        }
+      }
+    }
+
+    return { success: true, message: 'Order and associated records deleted successfully' };
   } catch (error) {
     return { success: false, error: error.message };
   }
