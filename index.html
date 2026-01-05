@@ -4997,18 +4997,44 @@
       var min = Math.min.apply(null, history);
       var range = max - min || 1;
       var width = el.clientWidth || 160;
-      var height = 40;
+      var chartHeight = 40;
       var barWidth = width / history.length;
       var padding = 2;
 
+      // Caption at top
+      var caption = '<div style="text-align: center; font-size: 10px; color: var(--text-muted); margin-bottom: 4px; font-weight: 600; letter-spacing: 0.5px;">' +
+        (lang === 'en' ? 'LAST 7 DAYS' : 'ÚLTIMOS 7 DÍAS') +
+      '</div>';
+
+      // Create bars with tooltips
       var bars = history.map(function(val, i) {
-        var barHeight = ((val - min) / range) * (height - 4);
+        var barHeight = ((val - min) / range) * (chartHeight - 4);
         var x = i * barWidth + padding;
-        var y = height - barHeight - 2;
-        return '<div style="position: absolute; left: '+x+'px; bottom: 2px; width: '+(barWidth - padding * 2)+'px; height: '+barHeight+'px; background: var(--gold); border-radius: 2px; opacity: 0.7;"></div>';
+
+        // Calculate days ago for label
+        var daysAgo = history.length - 1 - i;
+        var dayLabel = daysAgo === 0 ? (lang === 'en' ? 'Today' : 'Hoy') : daysAgo + 'd';
+
+        // Format value for tooltip
+        var formattedVal = val.toFixed(1);
+
+        return '<div style="position: absolute; left: '+x+'px; bottom: 18px; width: '+(barWidth - padding * 2)+'px; height: '+barHeight+'px; background: var(--gold); border-radius: 2px; opacity: 0.8; cursor: pointer; transition: all 0.2s;" ' +
+          'title="'+dayLabel+': '+formattedVal+'" ' +
+          'onmouseover="this.style.opacity=\'1\'; this.style.transform=\'scaleY(1.1)\'; this.style.background=\'var(--gold)\';" ' +
+          'onmouseout="this.style.opacity=\'0.8\'; this.style.transform=\'scaleY(1)\'; this.style.background=\'var(--gold)\';">' +
+        '</div>';
       }).join('');
 
-      el.innerHTML = bars;
+      // Day labels at bottom
+      var labels = history.map(function(val, i) {
+        var daysAgo = history.length - 1 - i;
+        var dayLabel = daysAgo === 0 ? (lang === 'en' ? 'Today' : 'Hoy') : daysAgo + 'd';
+        var x = i * barWidth + padding;
+
+        return '<div style="position: absolute; left: '+x+'px; bottom: 0; width: '+(barWidth - padding * 2)+'px; text-align: center; font-size: 9px; color: var(--text-muted); font-family: var(--font-mono);">'+dayLabel+'</div>';
+      }).join('');
+
+      el.innerHTML = caption + '<div style="position: relative; width: 100%; height: '+(chartHeight + 18)+'px;">' + bars + labels + '</div>';
     }
 
     // ========================================

@@ -1583,7 +1583,9 @@
 
       const result = await apiCall('deleteMasterOrder', { orderID }, 'POST');
       if (result.success) {
-        await loadOrders();
+        // Remove from local array instead of reloading everything
+        orders = orders.filter(o => o.id !== orderID);
+        renderOrdersTable();
         updateStats();
         // Close detail panel if it's open for this order
         if (currentOrderID === orderID) {
@@ -1874,8 +1876,22 @@
       const result = await apiCall('saveMasterOrder', orderData, 'POST');
       if (result.success) {
         closeOrderModal();
-        await loadOrders();
+
+        // Update local array instead of reloading everything
+        if (editingOrderID) {
+          const index = orders.findIndex(o => o.id === editingOrderID);
+          if (index !== -1) {
+            orders[index] = { ...orders[index], ...orderData };
+          }
+        } else {
+          // Add new order to array
+          const newOrder = { ...orderData, id: result.order.id, status: 'pending', fulfilled: 0, paid: 0 };
+          orders.push(newOrder);
+        }
+
+        renderOrdersTable();
         updateStats();
+
         // Refresh detail panel if it's open for this order
         if (editingOrderID && currentOrderID === editingOrderID) {
           await openDetailPanel(editingOrderID);
@@ -1922,9 +1938,8 @@
       const result = await apiCall('saveShipment', shipmentData, 'POST');
       if (result.success) {
         closeShipmentModal();
-        await openDetailPanel(currentOrderID); // Refresh
-        await loadOrders(); // Update table
-        updateStats();
+        // Refresh detail panel (which will also update local orders array)
+        await openDetailPanel(currentOrderID);
         alert('Shipment saved successfully!');
         return true;
       } else {
