@@ -2425,13 +2425,13 @@
       }
 
       // Get the latest shipment data (just saved)
-      const shipments = await apiCall('getShipments', { orderID: currentOrderID });
-      if (!shipments || shipments.length === 0) {
+      const shipmentsResponse = await apiCall('getShipments', { orderID: currentOrderID });
+      if (!shipmentsResponse || !shipmentsResponse.success || !shipmentsResponse.shipments || shipmentsResponse.shipments.length === 0) {
         showToast('Could not load shipment data for PDF generation', 'error');
         return;
       }
 
-      const latestShipment = shipments[shipments.length - 1];
+      const latestShipment = shipmentsResponse.shipments[shipmentsResponse.shipments.length - 1];
 
       // Generate PDFs
       try {
