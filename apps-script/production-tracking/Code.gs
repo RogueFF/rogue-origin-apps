@@ -726,7 +726,7 @@ function getProductionDashboardData(startDate, endDate) {
   var lastCompleted = null;
   if (hourlyBreakdown.length > 0) {
     var lastHour = hourlyBreakdown[hourlyBreakdown.length - 1];
-    if (lastHour.tops > 0) {
+    if (lastHour.tops > 0 || lastHour.smalls > 0) {
       lastCompleted = {
         strain: scoreboard.strain || 'Unknown',
         timeSlot: lastHour.timeSlot || '',
