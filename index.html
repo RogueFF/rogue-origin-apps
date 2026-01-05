@@ -1189,7 +1189,7 @@
     /* ========================================
        TUTORIAL/ONBOARDING SYSTEM
        ======================================== */
-    /* Tutorial overlay */
+    /* Tutorial overlay - blocks interaction except on highlighted elements */
     body.tutorial-active::before {
       content: '';
       position: fixed;
@@ -1197,25 +1197,44 @@
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0, 0, 0, 0.7);
+      background: rgba(0, 0, 0, 0.88);
       z-index: 9998;
-      animation: tutorialFadeIn 0.3s ease;
+      animation: tutorialFadeIn 0.4s ease;
+      pointer-events: all; /* Block clicks on overlay */
     }
     @keyframes tutorialFadeIn {
       from { opacity: 0; }
       to { opacity: 1; }
     }
-    /* Highlighted element */
+    /* Highlighted element - spotlight effect with dramatic pulsing */
     .tutorial-highlight {
       position: relative;
       z-index: 9999 !important;
-      box-shadow: 0 0 0 4px var(--gold), 0 0 30px rgba(228, 170, 79, 0.6) !important;
-      animation: tutorialPulse 1.5s ease-in-out infinite;
+      box-shadow: 0 0 0 4px var(--gold),
+                  0 0 40px rgba(228, 170, 79, 0.8),
+                  0 0 80px rgba(228, 170, 79, 0.4) !important;
+      animation: tutorialPulse 1.2s ease-in-out infinite;
       border-radius: 12px;
+      pointer-events: all !important; /* Allow clicks on highlighted elements */
+      cursor: pointer !important;
+    }
+    /* Allow child elements of highlighted elements to be clickable */
+    .tutorial-highlight * {
+      pointer-events: all !important;
     }
     @keyframes tutorialPulse {
-      0%, 100% { box-shadow: 0 0 0 4px var(--gold), 0 0 30px rgba(228, 170, 79, 0.6); }
-      50% { box-shadow: 0 0 0 6px var(--gold), 0 0 40px rgba(228, 170, 79, 0.8); }
+      0%, 100% {
+        box-shadow: 0 0 0 4px var(--gold),
+                    0 0 40px rgba(228, 170, 79, 0.8),
+                    0 0 80px rgba(228, 170, 79, 0.4);
+        transform: scale(1);
+      }
+      50% {
+        box-shadow: 0 0 0 8px var(--gold),
+                    0 0 60px rgba(228, 170, 79, 1),
+                    0 0 120px rgba(228, 170, 79, 0.6);
+        transform: scale(1.02);
+      }
     }
     /* Tutorial tooltip */
     .tutorial-tooltip {
@@ -1265,6 +1284,18 @@
       font-size: 13px;
       color: var(--text-light);
       line-height: 1.5;
+      margin-bottom: 16px;
+    }
+    .tutorial-interactive-hint {
+      display: flex;
+      align-items: center;
+      padding: 8px 12px;
+      background: rgba(228, 170, 79, 0.15);
+      border-left: 3px solid var(--gold);
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--gold);
+      font-weight: 600;
       margin-bottom: 16px;
     }
     .tutorial-tooltip-actions {
@@ -4943,11 +4974,39 @@
       active: false,
       currentStep: 0,
       steps: [
-        { target: '.hero-section', title: { en: 'Daily Progress', es: 'Progreso Diario' }, content: { en: 'Track your daily production targets and crew status at a glance.', es: 'Rastrea tus objetivos de producción diaria y el estado del equipo de un vistazo.' }, icon: '📊' },
-        { target: '#kpiRow', title: { en: 'KPI Cards', es: 'Tarjetas KPI' }, content: { en: 'Click any KPI card to see detailed metrics, rolling averages, and trends.', es: 'Haz clic en cualquier tarjeta KPI para ver métricas detalladas, promedios móviles y tendencias.' }, icon: '📈' },
-        { target: '.widget-item:first-child', title: { en: 'Widgets', es: 'Widgets' }, content: { en: 'Drag widgets to rearrange, resize with corner handles, and collapse to save space.', es: 'Arrastra widgets para reorganizar, redimensiona con los controles de esquina y colapsa para ahorrar espacio.' }, icon: '🧩' },
-        { target: '#settingsFAB', title: { en: 'Settings', es: 'Configuración' }, content: { en: 'Customize your dashboard, toggle widgets, and save your layout.', es: 'Personaliza tu panel, activa/desactiva widgets y guarda tu diseño.' }, icon: '⚙️' },
-        { target: '#chatFAB', title: { en: 'AI Assistant', es: 'Asistente IA' }, content: { en: 'Ask questions about production, bags, crew, and get instant insights.', es: 'Haz preguntas sobre producción, bolsas, equipo y obtén información instantánea.' }, icon: '🌿' }
+        {
+          target: '.hero-section',
+          title: { en: 'Daily Progress', es: 'Progreso Diario' },
+          content: { en: 'This shows your real-time production status, crew count, efficiency rate, and progress toward daily targets.', es: 'Esto muestra tu estado de producción en tiempo real, cantidad de equipo, tasa de eficiencia y progreso hacia los objetivos diarios.' },
+          icon: '📊'
+        },
+        {
+          target: '#kpiRow',
+          title: { en: 'KPI Cards - Try It!', es: 'Tarjetas KPI - ¡Pruébalo!' },
+          content: { en: 'Click any KPI card now to see detailed metrics, 7-day rolling averages, and sparkline trends. Go ahead, try it!', es: 'Haz clic en cualquier tarjeta KPI ahora para ver métricas detalladas, promedios móviles de 7 días y tendencias. ¡Adelante, pruébalo!' },
+          icon: '📈',
+          interactive: true
+        },
+        {
+          target: '#widgetsContainer',
+          title: { en: 'Interactive Widgets', es: 'Widgets Interactivos' },
+          content: { en: 'Drag widgets to rearrange, click the resize button (⤢) to change size, collapse (−) to minimize, or hide (×) to remove from view.', es: 'Arrastra widgets para reorganizar, haz clic en el botón de redimensionar (⤢) para cambiar el tamaño, colapsar (−) para minimizar, u ocultar (×) para quitar de la vista.' },
+          icon: '🧩'
+        },
+        {
+          target: 'button[onclick="openSettings()"]',
+          title: { en: 'Settings - Try It!', es: 'Configuración - ¡Pruébalo!' },
+          content: { en: 'Click this button to customize your dashboard, toggle widgets on/off, and save your layout preferences. Try opening it!', es: '¡Haz clic en este botón para personalizar tu panel, activar/desactivar widgets y guardar tus preferencias de diseño. ¡Intenta abrirlo!' },
+          icon: '⚙️',
+          interactive: true
+        },
+        {
+          target: '.ai-chat-fab',
+          title: { en: 'AI Assistant - Try It!', es: 'Asistente IA - ¡Pruébalo!' },
+          content: { en: 'Ask your AI assistant about production status, bag counts, crew efficiency, and more. Click to start chatting!', es: 'Pregúntale a tu asistente de IA sobre el estado de producción, conteo de bolsas, eficiencia del equipo y más. ¡Haz clic para comenzar a chatear!' },
+          icon: '🌿',
+          interactive: true
+        }
       ]
     };
 
@@ -5046,6 +5105,16 @@
 
       var tooltip = document.createElement('div');
       tooltip.className = 'tutorial-tooltip';
+
+      // Add interactive hint if step is interactive
+      var interactiveHint = '';
+      if (step.interactive) {
+        interactiveHint = '<div class="tutorial-interactive-hint">' +
+          '<span style="display: inline-block; width: 8px; height: 8px; background: var(--gold); border-radius: 50%; margin-right: 6px; animation: pulse 1s infinite;"></span>' +
+          (lang === 'en' ? 'Click the highlighted element to try it!' : '¡Haz clic en el elemento resaltado para probarlo!') +
+        '</div>';
+      }
+
       tooltip.innerHTML =
         '<div class="tutorial-tooltip-header">' +
           '<div class="tutorial-tooltip-icon">' + step.icon + '</div>' +
@@ -5053,6 +5122,7 @@
           '<div class="tutorial-tooltip-step">' + (stepIndex + 1) + '/' + tutorialState.steps.length + '</div>' +
         '</div>' +
         '<div class="tutorial-tooltip-content">' + step.content[lang] + '</div>' +
+        interactiveHint +
         '<div class="tutorial-tooltip-actions">' +
           '<button class="tutorial-btn tutorial-btn-secondary" onclick="endTutorial()">Skip</button>' +
           '<div style="display: flex; gap: 8px;">' +
