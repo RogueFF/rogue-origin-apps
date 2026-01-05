@@ -723,19 +723,39 @@ function getProductionDashboardData(startDate, endDate) {
   var avgCostPerLb7Day = avgLbs7Day > 0 ? (avgOperatorHours7Day * hourlyWage) / avgLbs7Day : 0;
 
   // Build last completed hour info with smalls and buckers
+  // Skip the current in-progress hour and show the previous completed hour
   var lastCompleted = null;
   if (hourlyBreakdown.length > 0) {
-    var lastHour = hourlyBreakdown[hourlyBreakdown.length - 1];
-    if (lastHour.tops > 0 || lastHour.smalls > 0) {
-      lastCompleted = {
-        strain: scoreboard.strain || 'Unknown',
-        timeSlot: lastHour.timeSlot || '',
-        tops: lastHour.tops || 0,
-        smalls: lastHour.smalls || 0,
-        trimmers: lastHour.trimmers || 0,
-        buckers: lastHour.buckers || 0,
-        rate: lastHour.rate || 0
-      };
+    var now = new Date();
+    var currentHour = now.getHours();
+
+    // Find the last COMPLETED hour (not the current in-progress hour)
+    for (var i = hourlyBreakdown.length - 1; i >= 0; i--) {
+      var hour = hourlyBreakdown[i];
+      // Parse the end hour from timeSlot (e.g., "3:00 PM - 4:00 PM" -> 16)
+      var endMatch = hour.timeSlot.match(/[-–]\s*(\d+):.*?(AM|PM)/i);
+      if (endMatch) {
+        var endHour = parseInt(endMatch[1]);
+        var isPM = endMatch[2].toUpperCase() === 'PM';
+        if (isPM && endHour !== 12) endHour += 12;
+        if (!isPM && endHour === 12) endHour = 0;
+
+        // If current time is past the end hour, this hour is completed
+        if (currentHour >= endHour) {
+          if (hour.tops > 0 || hour.smalls > 0) {
+            lastCompleted = {
+              strain: scoreboard.strain || 'Unknown',
+              timeSlot: hour.timeSlot || '',
+              tops: hour.tops || 0,
+              smalls: hour.smalls || 0,
+              trimmers: hour.trimmers || 0,
+              buckers: hour.buckers || 0,
+              rate: hour.rate || 0
+            };
+          }
+          break;
+        }
+      }
     }
   }
 
