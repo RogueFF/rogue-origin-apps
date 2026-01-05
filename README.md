@@ -60,7 +60,6 @@ rogue-origin-apps-main/
 ├── archive/                      📦 Backups & design explorations
 │   └── designs/                  Previous HTML versions
 │
-├── screenshots/                  📸 Visual documentation
 ├── Skills/                       🤖 Custom AI skills
 │
 ├── CLAUDE.md                     🧠 AI context file (read this!)
