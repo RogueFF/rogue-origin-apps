@@ -2243,187 +2243,297 @@
       const doc = new jsPDF();
 
       // Colors
-      const gold = [228, 170, 79];
-      const darkGreen = [74, 107, 84];
       const black = [0, 0, 0];
-      const gray = [128, 128, 128];
+      const borderGray = [0, 0, 0];
 
-      // Header - Commercial Invoice title
-      doc.setFontSize(20);
+      // Header - "Commercial Invoice" title
+      doc.setFontSize(18);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(...black);
-      doc.text('COMMERCIAL INVOICE', 20, 20);
+      doc.text('Commercial Invoice', 15, 20);
 
-      // Rogue Origin logo placeholder (gold box)
-      doc.setFillColor(...gold);
-      doc.rect(160, 15, 35, 10, 'F');
+      // From Box (large box containing shipper info and metadata)
+      const fromBoxY = 30;
+      const fromBoxHeight = 35;
+      doc.setDrawColor(...borderGray);
+      doc.setLineWidth(0.5);
+      doc.rect(15, fromBoxY, 180, fromBoxHeight);
+
+      // Vertical divider in From box
+      doc.line(105, fromBoxY, 105, fromBoxY + fromBoxHeight);
+
+      // "From" label
       doc.setFontSize(10);
-      doc.setTextColor(255, 255, 255);
-      doc.text('ROGUE ORIGIN', 162, 21);
+      doc.setFont('helvetica', 'bold');
+      doc.text('From', 17, fromBoxY + 6);
 
-      // From Section
+      // Left side - shipper info with labels
       doc.setFontSize(9);
-      doc.setTextColor(...black);
+      let leftY = fromBoxY + 12;
       doc.setFont('helvetica', 'bold');
-      doc.text('FROM:', 20, 35);
+      doc.text('Contact name:', 17, leftY);
       doc.setFont('helvetica', 'normal');
-      doc.text('Jacob Fisher', 20, 40);
-      doc.text('Rogue Origin', 20, 45);
-      doc.text('13003 Hwy 62', 20, 50);
-      doc.text('Eagle Point, Oregon 97524', 20, 55);
-      doc.text('United States', 20, 60);
-      doc.text('Jacob@RogueOrigin.com', 20, 65);
+      doc.text('Jacob Fisher', 45, leftY);
 
-      // Metadata Section
-      const metaX = 120;
-      let metaY = 35;
+      leftY += 5;
       doc.setFont('helvetica', 'bold');
-      doc.text('Waybill #:', metaX, metaY);
+      doc.text('Company name:', 17, leftY);
       doc.setFont('helvetica', 'normal');
-      doc.text(String(shipment.trackingNumber || 'N/A'), metaX + 25, metaY);
-      metaY += 5;
-      doc.setFont('helvetica', 'bold');
-      doc.text('Date:', metaX, metaY);
-      doc.setFont('helvetica', 'normal');
-      doc.text(new Date(shipment.shipmentDate).toLocaleDateString('en-US'), metaX + 25, metaY);
-      metaY += 5;
-      doc.setFont('helvetica', 'bold');
-      doc.text('Invoice #:', metaX, metaY);
-      doc.setFont('helvetica', 'normal');
-      doc.text(String(shipment.invoiceNumber || 'N/A'), metaX + 25, metaY);
-      metaY += 5;
-      doc.setFont('helvetica', 'bold');
-      doc.text('PO #:', metaX, metaY);
-      doc.setFont('helvetica', 'normal');
-      doc.text(String(order.poNumber || 'N/A'), metaX + 25, metaY);
-      metaY += 5;
-      doc.setFont('helvetica', 'bold');
-      doc.text('Terms:', metaX, metaY);
-      doc.setFont('helvetica', 'normal');
-      doc.text(String(order.terms || 'DAP'), metaX + 25, metaY);
-      metaY += 5;
-      doc.setFont('helvetica', 'bold');
-      doc.text('Reason:', metaX, metaY);
-      doc.setFont('helvetica', 'normal');
-      doc.text('Sold', metaX + 25, metaY);
+      doc.text('Rogue Origin', 45, leftY);
 
-      // Ship To / Sold To boxes
-      const boxY = 75;
-      const boxHeight = 30;
+      leftY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Address:', 17, leftY);
+      doc.setFont('helvetica', 'normal');
+      doc.text('13003 Hwy 62', 45, leftY);
+      doc.text('Eagle Point Oregon United States', 45, leftY + 4);
+      doc.text('97524', 45, leftY + 8);
+
+      leftY += 13;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Email:', 17, leftY);
+      doc.setFont('helvetica', 'normal');
+      doc.text('jacob@rogueorigin.com', 45, leftY);
+
+      // Right side - metadata
+      let rightY = fromBoxY + 12;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Date:', 107, rightY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(new Date(shipment.shipmentDate).toLocaleDateString('en-US', {
+        year: 'numeric', month: 'short', day: 'numeric'
+      }), 145, rightY);
+
+      rightY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Invoice No:', 107, rightY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(shipment.invoiceNumber || 'N/A'), 145, rightY);
+
+      rightY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Terms of Sale (Incoterm):', 107, rightY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(order.terms || 'DAP'), 145, rightY);
+
+      rightY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Reason for Export:', 107, rightY);
+      doc.setFont('helvetica', 'normal');
+      doc.text('sold', 145, rightY);
+
+      // Ship To and Sold To boxes
+      const addressBoxY = fromBoxY + fromBoxHeight + 5;
+      const addressBoxHeight = 28;
 
       // Ship To box
-      doc.setDrawColor(200);
-      doc.rect(20, boxY, 85, boxHeight);
+      doc.rect(15, addressBoxY, 90, addressBoxHeight);
+      doc.line(105, addressBoxY, 105, addressBoxY + addressBoxHeight); // Vertical divider
+
       doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text('Ship To', 17, addressBoxY + 6);
+
       doc.setFontSize(9);
-      doc.text('SHIP TO:', 22, boxY + 5);
+      let shipY = addressBoxY + 12;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Address:', 17, shipY);
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.text(String(order.shipTo_Contact || ''), 22, boxY + 10);
-      doc.text(String(order.shipTo_Company || ''), 22, boxY + 14);
       const shipAddressLines = String(order.shipTo_Address || '').split('\n');
       shipAddressLines.forEach((line, i) => {
-        doc.text(String(line), 22, boxY + 18 + (i * 4));
+        doc.text(String(line), 17, shipY + 4 + (i * 4));
       });
+
+      shipY += 4 + (shipAddressLines.length * 4);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Email:', 17, shipY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(order.shipTo_Email || ''), 32, shipY);
 
       // Sold To box
-      doc.rect(110, boxY, 85, boxHeight);
+      doc.rect(105, addressBoxY, 90, addressBoxHeight);
       doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text('Sold To', 107, addressBoxY + 6);
+
       doc.setFontSize(9);
-      doc.text('SOLD TO:', 112, boxY + 5);
+      let soldY = addressBoxY + 12;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Contact name:', 107, soldY);
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.text(String(order.soldTo_Contact || ''), 112, boxY + 10);
-      doc.text(String(order.soldTo_Company || ''), 112, boxY + 14);
+      doc.text(String(order.soldTo_Contact || ''), 135, soldY);
+
+      soldY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Address:', 107, soldY);
+      doc.setFont('helvetica', 'normal');
       const soldAddressLines = String(order.soldTo_Address || '').split('\n');
       soldAddressLines.forEach((line, i) => {
-        doc.text(String(line), 112, boxY + 18 + (i * 4));
+        doc.text(String(line), 135, soldY + (i * 4));
       });
 
+      soldY += (soldAddressLines.length * 4);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Email:', 107, soldY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(order.soldTo_Email || ''), 135, soldY);
+
       // Line Items Table
-      const tableStartY = boxY + boxHeight + 10;
+      const tableStartY = addressBoxY + addressBoxHeight + 5;
       const lineItems = shipment.lineItems || [];
       const tableData = lineItems.map(item => {
         const qty = item.quantity || 0;
         const unitPrice = item.unitPrice || 0;
         const total = qty * unitPrice;
+        const lbWeight = (qty * 2.205).toFixed(0); // Convert kg to lb
         return [
           qty.toString(),
-          'kg',
-          `CBD Hemp Flower | ${item.strain}`,
+          'EA',
+          `CBD Hemp Flower ${item.type === 'tops' ? '' : item.type} | ${item.strain}`,
+          '', // Harm. Code (empty for now)
           'US',
-          qty.toFixed(2) + ' kg',
-          '$' + unitPrice.toFixed(2),
-          '$' + total.toFixed(2),
+          lbWeight + ' lb',
+          unitPrice.toFixed(2),
+          total.toFixed(2),
           order.currency || 'USD'
         ];
       });
 
       doc.autoTable({
         startY: tableStartY,
-        head: [['Units', 'U/M', 'Description', 'C/O', 'Unit Weight', 'Unit Value', 'Total Value', 'Currency']],
+        head: [['Units', 'U/M', 'Description of Goods / Part No.', 'Harm. Code', 'C/O', 'Unit Weight', 'Unit Value', 'Total Value', 'Currency']],
         body: tableData,
         theme: 'grid',
-        headStyles: { fillColor: darkGreen, fontSize: 8 },
-        bodyStyles: { fontSize: 8 },
+        headStyles: {
+          fillColor: [255, 255, 255],
+          textColor: [0, 0, 0],
+          fontStyle: 'bold',
+          fontSize: 8,
+          lineWidth: 0.5,
+          lineColor: [0, 0, 0]
+        },
+        bodyStyles: {
+          fontSize: 8,
+          lineWidth: 0.5,
+          lineColor: [0, 0, 0]
+        },
         columnStyles: {
           0: { cellWidth: 15 },
-          1: { cellWidth: 15 },
-          2: { cellWidth: 60 },
-          3: { cellWidth: 15 },
-          4: { cellWidth: 20 },
+          1: { cellWidth: 12 },
+          2: { cellWidth: 55 },
+          3: { cellWidth: 18 },
+          4: { cellWidth: 12 },
           5: { cellWidth: 20 },
-          6: { cellWidth: 20 },
-          7: { cellWidth: 15 }
+          6: { cellWidth: 18 },
+          7: { cellWidth: 18 },
+          8: { cellWidth: 12 }
         }
       });
 
-      // Financial Summary (right side)
-      let summaryY = doc.lastAutoTable.finalY + 10;
-      const summaryX = 140;
+      // Footer section - Declaration and Financial Summary side by side
+      const footerY = doc.lastAutoTable.finalY + 5;
+      const footerHeight = 50;
+
+      // Draw box around footer
+      doc.rect(15, footerY, 180, footerHeight);
+      doc.line(105, footerY, 105, footerY + footerHeight); // Vertical divider
+
+      // Left side - Declaration Statement
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
-      doc.text('Invoice Line Total:', summaryX, summaryY);
+      doc.text('Declaration Statement:', 17, footerY + 6);
       doc.setFont('helvetica', 'normal');
-      doc.text('$' + formatNumber(shipment.subTotal), 180, summaryY, { align: 'right' });
-      summaryY += 5;
-      doc.setFont('helvetica', 'bold');
-      doc.text('Discount:', summaryX, summaryY);
-      doc.setFont('helvetica', 'normal');
-      doc.text('$' + formatNumber(shipment.discount || 0), 180, summaryY, { align: 'right' });
-      summaryY += 5;
-      doc.setFont('helvetica', 'bold');
-      doc.text('Sub-Total:', summaryX, summaryY);
-      doc.setFont('helvetica', 'normal');
-      doc.text('$' + formatNumber(shipment.subTotal - (shipment.discount || 0)), 180, summaryY, { align: 'right' });
-      summaryY += 5;
-      doc.setFont('helvetica', 'bold');
-      doc.text('Freight:', summaryX, summaryY);
-      doc.setFont('helvetica', 'normal');
-      doc.text('$' + formatNumber(shipment.freightCost || 0), 180, summaryY, { align: 'right' });
-      summaryY += 5;
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.text('TOTAL INVOICE AMOUNT:', summaryX, summaryY);
-      doc.setFont('helvetica', 'bold');
-      doc.text('$' + formatNumber(shipment.totalAmount), 180, summaryY, { align: 'right' });
-      summaryY += 7;
+      doc.setFontSize(8);
+
+      const declText = 'I hereby certify that the information on this invoice is true and';
+      const declText2 = 'correct and the contents and value of this shipment are as';
+      const declText3 = 'stated.';
+      doc.text(declText, 17, footerY + 11);
+      doc.text(declText2, 17, footerY + 15);
+      doc.text(declText3, 17, footerY + 19);
+
       doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Date:', 17, footerY + 26);
       doc.setFont('helvetica', 'normal');
-      doc.text('Package Count: ' + lineItems.length, summaryX, summaryY);
+      doc.text(new Date().toLocaleDateString('en-US', {
+        year: 'numeric', month: 'short', day: 'numeric'
+      }), 30, footerY + 26);
+
+      doc.setFont('helvetica', 'bold');
+      doc.text('Shipper:', 17, footerY + 31);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Signature:', 17, footerY + 42);
+
+      // Right side - Financial Summary
+      doc.setFontSize(9);
+      let summaryY = footerY + 6;
+      const labelX = 135;
+      const valueX = 190;
+
+      doc.setFont('helvetica', 'bold');
+      doc.text('Invoice Line Total:', labelX, summaryY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(formatNumber(shipment.subTotal), valueX, summaryY, { align: 'right' });
+
+      summaryY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Invoice Sub-Total:', labelX, summaryY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(formatNumber(shipment.subTotal - (shipment.discount || 0)), valueX, summaryY, { align: 'right' });
+
+      summaryY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Freight:', labelX, summaryY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(formatNumber(shipment.freightCost || 0), valueX, summaryY, { align: 'right' });
+
+      summaryY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Total Tax:', labelX, summaryY);
+      doc.setFont('helvetica', 'normal');
+      doc.text('0.00', valueX, summaryY, { align: 'right' });
+
+      summaryY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Total Duties:', labelX, summaryY);
+      doc.setFont('helvetica', 'normal');
+      doc.text('0.00', valueX, summaryY, { align: 'right' });
+
+      summaryY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Total Invoice Amount:', labelX, summaryY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(formatNumber(shipment.totalAmount), valueX, summaryY, { align: 'right' });
+
+      summaryY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Total Number of Packages:', labelX, summaryY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(lineItems.length), valueX, summaryY, { align: 'right' });
+
+      summaryY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Currency:', labelX, summaryY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(order.currency || 'USD', valueX, summaryY, { align: 'right' });
+
       summaryY += 5;
       const totalWeight = lineItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
-      doc.text('Total Weight: ' + totalWeight.toFixed(2) + ' kg', summaryX, summaryY);
-
-      // Declaration (left side)
-      const declarationY = doc.lastAutoTable.finalY + 10;
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'italic');
-      doc.text('I declare that all information contained in this invoice is true and correct.', 20, declarationY);
+      const totalWeightLb = (totalWeight * 2.205).toFixed(0);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Total Weight:', labelX, summaryY);
       doc.setFont('helvetica', 'normal');
-      doc.text('Date: ' + new Date().toLocaleDateString('en-US'), 20, declarationY + 10);
-      doc.text('Shipper: Jacob Fisher', 20, declarationY + 15);
-      doc.text('Signature: ___________________', 20, declarationY + 20);
+      doc.text(totalWeightLb + ' lb', valueX, summaryY, { align: 'right' });
+
+      // Footer watermark
+      doc.setFontSize(8);
+      doc.setTextColor(150, 150, 150);
+      doc.text('Rogue Origin Operations Hub', 105, footerY + footerHeight + 6, { align: 'center' });
+      doc.text('https://rogueff.github.io/rogue-origin-apps/', 105, footerY + footerHeight + 10, { align: 'center' });
 
       // Save
       doc.save(`Commercial_Invoice_${shipment.invoiceNumber}.pdf`);
