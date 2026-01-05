@@ -77,6 +77,9 @@ function doPost(e) {
     } else if (action === 'saveShipment') {
       var shipmentData = e.postData ? JSON.parse(e.postData.contents) : {};
       result = saveShipment(shipmentData);
+    } else if (action === 'deleteShipment') {
+      var deleteData = e.postData ? JSON.parse(e.postData.contents) : {};
+      result = deleteShipment(deleteData.shipmentID);
     } else if (action === 'savePayment') {
       var paymentData = e.postData ? JSON.parse(e.postData.contents) : {};
       result = savePayment(paymentData);
@@ -480,6 +483,34 @@ function saveShipment(shipmentData) {
       }
     }
     return { success: true, shipment: shipmentData };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function deleteShipment(shipmentID) {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(SHIPMENTS_SHEET_NAME);
+    if (!sheet) {
+      return { success: false, error: 'Shipments sheet not found' };
+    }
+
+    var data = sheet.getDataRange().getValues();
+    var rowToDelete = -1;
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] === shipmentID) {
+        rowToDelete = i + 1; // +1 because sheet rows are 1-indexed
+        break;
+      }
+    }
+
+    if (rowToDelete === -1) {
+      return { success: false, error: 'Shipment not found' };
+    }
+
+    sheet.deleteRow(rowToDelete);
+    return { success: true, message: 'Shipment deleted successfully' };
   } catch (error) {
     return { success: false, error: error.message };
   }
