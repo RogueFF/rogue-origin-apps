@@ -1655,6 +1655,15 @@
       const financials = await apiCall('getOrderFinancials', { orderID });
       if (financials.success) {
         updateSummaryTab(financials);
+
+        // Update local orders array with latest financials
+        const orderIndex = orders.findIndex(o => o.id === orderID);
+        if (orderIndex !== -1) {
+          orders[orderIndex].fulfilled = financials.fulfilled;
+          orders[orderIndex].paid = financials.paid;
+        }
+        renderOrdersTable();
+        updateStats();
       }
 
       // Load shipments
@@ -1969,9 +1978,8 @@
       const result = await apiCall('savePayment', paymentData, 'POST');
       if (result.success) {
         closePaymentModal();
-        await openDetailPanel(currentOrderID); // Refresh
-        await loadOrders(); // Update table
-        updateStats();
+        // Refresh detail panel (which will also update local orders array)
+        await openDetailPanel(currentOrderID);
         alert('Payment recorded successfully!');
       } else {
         alert('Error recording payment: ' + result.error);
