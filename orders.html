@@ -2280,7 +2280,7 @@
       doc.setFont('helvetica', 'bold');
       doc.text('Waybill #:', metaX, metaY);
       doc.setFont('helvetica', 'normal');
-      doc.text(shipment.trackingNumber || 'N/A', metaX + 25, metaY);
+      doc.text(String(shipment.trackingNumber || 'N/A'), metaX + 25, metaY);
       metaY += 5;
       doc.setFont('helvetica', 'bold');
       doc.text('Date:', metaX, metaY);
@@ -2290,17 +2290,17 @@
       doc.setFont('helvetica', 'bold');
       doc.text('Invoice #:', metaX, metaY);
       doc.setFont('helvetica', 'normal');
-      doc.text(shipment.invoiceNumber || 'N/A', metaX + 25, metaY);
+      doc.text(String(shipment.invoiceNumber || 'N/A'), metaX + 25, metaY);
       metaY += 5;
       doc.setFont('helvetica', 'bold');
       doc.text('PO #:', metaX, metaY);
       doc.setFont('helvetica', 'normal');
-      doc.text(order.poNumber || 'N/A', metaX + 25, metaY);
+      doc.text(String(order.poNumber || 'N/A'), metaX + 25, metaY);
       metaY += 5;
       doc.setFont('helvetica', 'bold');
       doc.text('Terms:', metaX, metaY);
       doc.setFont('helvetica', 'normal');
-      doc.text(order.terms || 'DAP', metaX + 25, metaY);
+      doc.text(String(order.terms || 'DAP'), metaX + 25, metaY);
       metaY += 5;
       doc.setFont('helvetica', 'bold');
       doc.text('Reason:', metaX, metaY);
@@ -2319,11 +2319,11 @@
       doc.text('SHIP TO:', 22, boxY + 5);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
-      doc.text(order.shipTo_Contact || '', 22, boxY + 10);
-      doc.text(order.shipTo_Company || '', 22, boxY + 14);
-      const shipAddressLines = (order.shipTo_Address || '').split('\n');
+      doc.text(String(order.shipTo_Contact || ''), 22, boxY + 10);
+      doc.text(String(order.shipTo_Company || ''), 22, boxY + 14);
+      const shipAddressLines = String(order.shipTo_Address || '').split('\n');
       shipAddressLines.forEach((line, i) => {
-        doc.text(line, 22, boxY + 18 + (i * 4));
+        doc.text(String(line), 22, boxY + 18 + (i * 4));
       });
 
       // Sold To box
@@ -2333,11 +2333,11 @@
       doc.text('SOLD TO:', 112, boxY + 5);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
-      doc.text(order.soldTo_Contact || '', 112, boxY + 10);
-      doc.text(order.soldTo_Company || '', 112, boxY + 14);
-      const soldAddressLines = (order.soldTo_Address || '').split('\n');
+      doc.text(String(order.soldTo_Contact || ''), 112, boxY + 10);
+      doc.text(String(order.soldTo_Company || ''), 112, boxY + 14);
+      const soldAddressLines = String(order.soldTo_Address || '').split('\n');
       soldAddressLines.forEach((line, i) => {
-        doc.text(line, 112, boxY + 18 + (i * 4));
+        doc.text(String(line), 112, boxY + 18 + (i * 4));
       });
 
       // Line Items Table
@@ -2448,7 +2448,7 @@
       // BOL Number and Date
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
-      doc.text('BOL #: ' + (shipment.id || 'N/A'), 20, 30);
+      doc.text('BOL #: ' + String(shipment.id || 'N/A'), 20, 30);
       doc.text('Date: ' + new Date(shipment.shipmentDate).toLocaleDateString('en-US'), 20, 35);
 
       // Shipper
@@ -2464,19 +2464,19 @@
       doc.setFont('helvetica', 'bold');
       doc.text('CONSIGNEE:', 110, 45);
       doc.setFont('helvetica', 'normal');
-      doc.text(order.shipTo_Company || '', 110, 50);
-      doc.text(order.shipTo_Contact || '', 110, 55);
-      doc.text(order.shipTo_Address || '', 110, 60);
+      doc.text(String(order.shipTo_Company || ''), 110, 50);
+      doc.text(String(order.shipTo_Contact || ''), 110, 55);
+      doc.text(String(order.shipTo_Address || ''), 110, 60);
 
       // Carrier Info
       doc.setFont('helvetica', 'bold');
       doc.text('CARRIER:', 20, 80);
       doc.setFont('helvetica', 'normal');
-      doc.text(shipment.carrier || 'N/A', 20, 85);
+      doc.text(String(shipment.carrier || 'N/A'), 20, 85);
       doc.setFont('helvetica', 'bold');
       doc.text('TRACKING #:', 110, 80);
       doc.setFont('helvetica', 'normal');
-      doc.text(shipment.trackingNumber || 'N/A', 110, 85);
+      doc.text(String(shipment.trackingNumber || 'N/A'), 110, 85);
 
       // Commodity Description
       const lineItems = shipment.lineItems || [];
