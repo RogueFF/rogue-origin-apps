@@ -1577,7 +1577,8 @@ function updatePrintCount() {
   var sidesCount = side === 'both' ? 2 : 1;
   var colorsCount = color === 'both' ? 2 : 1;
   var cardsPerPage = (size === 'full' || size === 'shop-letter') ? 1 : 2;
-  var pages = Math.ceil((selectedIds.length * sidesCount * colorsCount) / cardsPerPage);
+  // Shop-letter always prints front only with neutral color (1 page per card)
+  var pages = size === 'shop-letter' ? selectedIds.length : Math.ceil((selectedIds.length * sidesCount * colorsCount) / cardsPerPage);
 
   document.getElementById('printCount').textContent = selectedIds.length;
   document.getElementById('printPages').textContent = pages;
@@ -1586,7 +1587,7 @@ function updatePrintCount() {
     'card': '6"×4" cards, 2 per page',
     'tag': '4"×2" tags, compact layout',
     'shop': '6"×3" shop labels, simplified',
-    'shop-letter': '10.5"×8" shop card, 1 per page (landscape)',
+    'shop-letter': '10.5"×8" neutral shop card, front only (landscape)',
     'full': '7.5"×5" full sheet, 1 per page'
   };
   document.getElementById('printSizeInfo').textContent = sizeInfo[size] || '';
@@ -1598,7 +1599,7 @@ function updatePreviewSizeInfo() {
     'card': '6"×4" cards, 2 per page (green + red)',
     'tag': '4"×2" compact tags, 2 per page',
     'shop': '6"×3" shop labels, simplified layout',
-    'shop-letter': '10.5"×8" shop card, 1 per page (landscape)',
+    'shop-letter': '10.5"×8" neutral shop card, front only (landscape)',
     'full': '7.5"×5" full sheet, 1 card per page'
   };
   document.getElementById('previewSizeInfo').textContent = sizeInfo[size] || '';
@@ -1693,10 +1694,9 @@ function getPrintCSS(size) {
       '.page:last-child{page-break-after:auto}' +
       '.page-inner{display:flex;flex-direction:column;align-items:center;width:100%;height:100%}' +
       '.kanban{width:10.5in;height:8in;padding:20px;border-radius:12px;position:relative;flex-shrink:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-      '.kanban.green{background:#668971 !important;color:#1a1f16 !important}' +
-      '.kanban.red{background:#bd4a28 !important;color:#f0cb60 !important}' +
-      '.kanban-border{position:absolute;inset:0;border:8px solid #e4aa4f;border-radius:12px}' +
-      '.kanban-inner{position:absolute;inset:26px;border:6px solid #e4aa4f;border-radius:10px}' +
+      '.kanban{background:#e8e4de !important;color:#2d3a2e !important}' +
+      '.kanban-border{position:absolute;inset:0;border:8px solid #8f9263;border-radius:12px}' +
+      '.kanban-inner{position:absolute;inset:26px;border:6px solid #8f9263;border-radius:10px}' +
       '.kanban-content{height:100%;display:flex;flex-direction:column;padding:40px 50px}' +
       '.kanban-header{border-bottom:5px solid currentColor;padding-bottom:16px;margin-bottom:12px}' +
       '.kanban-header h3{text-transform:uppercase;margin:0;font-weight:700;letter-spacing:2px;font-size:56px}' +
@@ -1707,9 +1707,9 @@ function getPrintCSS(size) {
       '.kanban-field small{text-transform:uppercase;opacity:0.8;display:block;font-weight:600;font-size:20px;margin-bottom:6px}' +
       '.kanban-field span{font-weight:700;font-size:44px}' +
       '.kanban-right{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:20px}' +
-      '.kanban-img{background:#fff;border-radius:12px;border:6px solid #e4aa4f;display:flex;align-items:center;justify-content:center;overflow:hidden;width:320px;height:240px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.kanban-img{background:#fff;border-radius:12px;border:6px solid #8f9263;display:flex;align-items:center;justify-content:center;overflow:hidden;width:320px;height:240px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
       '.kanban-img img{width:100%;height:100%;object-fit:contain}' +
-      '.kanban-price{background:#e4aa4f;border-radius:30px;font-weight:700;color:#1a1f16;padding:16px 60px;font-size:42px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.kanban-price{background:#8f9263;border-radius:30px;font-weight:700;color:#faf8f5;padding:16px 60px;font-size:42px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
       '.kanban-logo{position:absolute;border-radius:50%;bottom:40px;left:40px;width:80px;height:80px}' +
       '.kanban-back{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center}' +
       '.kanban-back h3{text-transform:uppercase;font-weight:700;letter-spacing:3px;font-size:72px;margin-bottom:50px}' +
@@ -1767,8 +1767,11 @@ function getPrintCSS(size) {
 
 function printOneCard(card, size) {
   var allHtml = [];
-  if (size === 'full' || size === 'shop-letter') {
-    // One card per page for full size and shop-letter
+  if (size === 'shop-letter') {
+    // Shop card: neutral color, front only, 1 per page
+    allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(card, 'neutral', 'front', size) + '</div></div>');
+  } else if (size === 'full') {
+    // One card per page for full size
     allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(card, 'green', 'front', size) + '</div></div>');
     allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(card, 'red', 'front', size) + '</div></div>');
     allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(card, 'green', 'back', size) + '</div></div>');
@@ -1808,23 +1811,28 @@ function printCards(cards) {
   
   var allHtml = [];
   cards.forEach(function(c) {
-    sides.forEach(function(sd) {
-      if (size === 'full' || size === 'shop-letter') {
-        // One card per page for full size and shop-letter
-        if (color === 'both') {
-          allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(c, 'green', sd, size) + '</div></div>');
-          allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(c, 'red', sd, size) + '</div></div>');
+    if (size === 'shop-letter') {
+      // Shop card: neutral color, front only, 1 per page
+      allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(c, 'neutral', 'front', size) + '</div></div>');
+    } else {
+      sides.forEach(function(sd) {
+        if (size === 'full') {
+          // One card per page for full size
+          if (color === 'both') {
+            allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(c, 'green', sd, size) + '</div></div>');
+            allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(c, 'red', sd, size) + '</div></div>');
+          } else {
+            allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(c, color, sd, size) + '</div></div>');
+          }
         } else {
-          allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(c, color, sd, size) + '</div></div>');
+          if (color === 'both') {
+            allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(c, 'green', sd, size) + cardHtml(c, 'red', sd, size) + '</div></div>');
+          } else {
+            allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(c, color, sd, size) + '</div></div>');
+          }
         }
-      } else {
-        if (color === 'both') {
-          allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(c, 'green', sd, size) + cardHtml(c, 'red', sd, size) + '</div></div>');
-        } else {
-          allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(c, color, sd, size) + '</div></div>');
-        }
-      }
-    });
+      });
+    }
   });
   
   var html = '<!DOCTYPE html><html><head><title>Kanban Cards</title><style>' +
