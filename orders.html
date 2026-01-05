@@ -752,6 +752,117 @@
     }
 
     /* ========================================
+       TOAST NOTIFICATIONS
+       ======================================== */
+    .toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      pointer-events: none;
+    }
+
+    .toast {
+      font-family: var(--font-ui);
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      padding: 16px 20px;
+      min-width: 300px;
+      max-width: 500px;
+      box-shadow: var(--shadow-lg);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      pointer-events: all;
+      animation: slideInRight 0.3s ease;
+      backdrop-filter: blur(10px);
+    }
+
+    .toast.success {
+      border-left: 4px solid var(--ro-green);
+    }
+
+    .toast.error {
+      border-left: 4px solid var(--danger);
+    }
+
+    .toast.warning {
+      border-left: 4px solid var(--ro-gold);
+    }
+
+    .toast-icon {
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .toast.success .toast-icon {
+      color: var(--ro-green);
+    }
+
+    .toast.error .toast-icon {
+      color: var(--danger);
+    }
+
+    .toast.warning .toast-icon {
+      color: var(--ro-gold);
+    }
+
+    .toast-message {
+      flex: 1;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--text);
+    }
+
+    .toast-close {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--radius-sm);
+      transition: all 0.2s ease;
+    }
+
+    .toast-close:hover {
+      background: var(--border-light);
+      color: var(--text);
+    }
+
+    @keyframes slideInRight {
+      from {
+        transform: translateX(400px);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    @keyframes slideOutRight {
+      from {
+        transform: translateX(0);
+        opacity: 1;
+      }
+      to {
+        transform: translateX(400px);
+        opacity: 0;
+      }
+    }
+
+    .toast.removing {
+      animation: slideOutRight 0.3s ease forwards;
+    }
+
+    /* ========================================
        RESPONSIVE
        ======================================== */
     @media (max-width: 768px) {
@@ -786,10 +897,23 @@
       .orders-table td {
         padding: 8px;
       }
+
+      .toast-container {
+        top: 10px;
+        right: 10px;
+        left: 10px;
+      }
+
+      .toast {
+        min-width: auto;
+        max-width: 100%;
+      }
     }
   </style>
 </head>
 <body>
+  <!-- Toast Notifications Container -->
+  <div class="toast-container" id="toast-container"></div>
 
   <div class="container">
     <!-- Header -->
@@ -1374,7 +1498,7 @@
         updateStats();
       } catch (error) {
         console.error('Error loading data:', error);
-        alert('Error loading data. Check console for details.');
+        showToast('Error loading data. Check console for details.', 'error');
       }
     }
 
@@ -1591,9 +1715,9 @@
         if (currentOrderID === orderID) {
           closeDetailPanel();
         }
-        alert('Order deleted successfully!');
+        showToast('Order deleted successfully!');
       } else {
-        alert('Error deleting order: ' + result.error);
+        showToast('Error deleting order: ' + result.error, 'error');
       }
     }
 
@@ -1826,7 +1950,7 @@
       };
 
       if (!customerData.companyName || !customerData.contactName) {
-        alert('Company Name and Contact Name are required');
+        showToast('Company Name and Contact Name are required', 'warning');
         return;
       }
 
@@ -1834,9 +1958,9 @@
       if (result.success) {
         closeCustomerModal();
         await loadCustomers();
-        alert('Customer saved successfully!');
+        showToast('Customer saved successfully!');
       } else {
-        alert('Error saving customer: ' + result.error);
+        showToast('Error saving customer: ' + result.error, 'error');
       }
     }
 
@@ -1845,7 +1969,7 @@
       const selectedCustomer = select.options[select.selectedIndex];
 
       if (!selectedCustomer || !selectedCustomer.dataset.customer) {
-        alert('Please select a customer');
+        showToast('Please select a customer', 'warning');
         return;
       }
 
@@ -1878,7 +2002,7 @@
       }
 
       if (orderData.commitmentAmount <= 0) {
-        alert('Commitment amount must be greater than 0');
+        showToast('Commitment amount must be greater than 0', 'warning');
         return;
       }
 
@@ -1905,16 +2029,16 @@
         if (editingOrderID && currentOrderID === editingOrderID) {
           await openDetailPanel(editingOrderID);
         }
-        alert(editingOrderID ? 'Order updated successfully!' : 'Order created successfully!');
+        showToast(editingOrderID ? 'Order updated successfully!' : 'Order created successfully!');
       } else {
-        alert('Error ' + (editingOrderID ? 'updating' : 'creating') + ' order: ' + result.error);
+        showToast('Error ' + (editingOrderID ? 'updating' : 'creating') + ' order: ' + result.error, 'error');
       }
     }
 
     async function saveShipment() {
       const lineItems = collectLineItems();
       if (lineItems.length === 0) {
-        alert('Please add at least one line item');
+        showToast('Please add at least one line item', 'warning');
         return false;
       }
 
@@ -1949,10 +2073,10 @@
         closeShipmentModal();
         // Refresh detail panel (which will also update local orders array)
         await openDetailPanel(currentOrderID);
-        alert('Shipment saved successfully!');
+        showToast('Shipment saved successfully!');
         return true;
       } else {
-        alert('Error saving shipment: ' + result.error);
+        showToast('Error saving shipment: ' + result.error, 'error');
         return false;
       }
     }
@@ -1960,7 +2084,7 @@
     async function savePayment() {
       const amount = parseFloat(document.getElementById('payment-amount').value);
       if (!amount || amount <= 0) {
-        alert('Please enter a valid payment amount');
+        showToast('Please enter a valid payment amount', 'warning');
         return;
       }
 
@@ -1980,9 +2104,9 @@
         closePaymentModal();
         // Refresh detail panel (which will also update local orders array)
         await openDetailPanel(currentOrderID);
-        alert('Payment recorded successfully!');
+        showToast('Payment recorded successfully!');
       } else {
-        alert('Error recording payment: ' + result.error);
+        showToast('Error recording payment: ' + result.error, 'error');
       }
     }
 
@@ -2296,14 +2420,14 @@
       // Get the current order
       const order = orders.find(o => o.id === currentOrderID);
       if (!order) {
-        alert('Order not found');
+        showToast('Order not found', 'error');
         return;
       }
 
       // Get the latest shipment data (just saved)
       const shipments = await apiCall('getShipments', { orderID: currentOrderID });
       if (!shipments || shipments.length === 0) {
-        alert('Could not load shipment data for PDF generation');
+        showToast('Could not load shipment data for PDF generation', 'error');
         return;
       }
 
@@ -2313,10 +2437,10 @@
       try {
         generateCommercialInvoice(latestShipment, order);
         generateBillOfLading(latestShipment, order);
-        alert('Shipment saved and documents generated successfully!');
+        showToast('Shipment saved and documents generated successfully!');
       } catch (error) {
         console.error('PDF generation error:', error);
-        alert('Shipment saved but PDF generation failed: ' + error.message);
+        showToast('Shipment saved but PDF generation failed: ' + error.message, 'error');
       }
     }
 
@@ -2351,6 +2475,38 @@
     // ========================================
     // UTILITIES
     // ========================================
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+
+      // Icon based on type
+      let icon = '';
+      if (type === 'success') {
+        icon = '<i class="ph ph-check-circle toast-icon"></i>';
+      } else if (type === 'error') {
+        icon = '<i class="ph ph-x-circle toast-icon"></i>';
+      } else if (type === 'warning') {
+        icon = '<i class="ph ph-warning-circle toast-icon"></i>';
+      }
+
+      toast.innerHTML = `
+        ${icon}
+        <div class="toast-message">${message}</div>
+        <button class="toast-close" onclick="this.parentElement.remove()">
+          <i class="ph ph-x"></i>
+        </button>
+      `;
+
+      container.appendChild(toast);
+
+      // Auto remove after 4 seconds
+      setTimeout(() => {
+        toast.classList.add('removing');
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
     function formatNumber(num) {
       return parseFloat(num || 0).toLocaleString('en-US', {
         minimumFractionDigits: 2,
