@@ -2559,6 +2559,9 @@
                 <div class="integration-title widget-title">Supply Kanban</div>
               </div>
               <div class="widget-actions">
+                                <button class="widget-help" onclick="showWidgetHelp('kanban')" title="Help">
+                  <i class="ph ph-lightbulb"></i>
+                </button>
                 <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
@@ -2584,6 +2587,9 @@
                 <div class="integration-title widget-title">Live Scoreboard</div>
               </div>
               <div class="widget-actions">
+                                <button class="widget-help" onclick="showWidgetHelp('scoreboard')" title="Help">
+                  <i class="ph ph-lightbulb"></i>
+                </button>
                 <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
@@ -2608,6 +2614,9 @@
                 <div class="integration-title widget-title">5KG Bag Timer</div>
               </div>
               <div class="widget-actions">
+                                <button class="widget-help" onclick="showWidgetHelp('bags')" title="Help">
+                  <i class="ph ph-lightbulb"></i>
+                </button>
                 <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
@@ -2632,6 +2641,9 @@
                 <div class="integration-title widget-title">SOP Manager</div>
               </div>
               <div class="widget-actions">
+                                <button class="widget-help" onclick="showWidgetHelp('sop')" title="Help">
+                  <i class="ph ph-lightbulb"></i>
+                </button>
                 <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
@@ -2658,6 +2670,9 @@
                 <div class="widget-actions">
                   <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
+                  <button class="widget-help" onclick="showWidgetHelp('current')" title="Help">
+                    <i class="ph ph-lightbulb"></i>
                   </button>
                   <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -2688,6 +2703,9 @@
             <div class="widget-header chart-header">
               <div><div class="chart-title widget-title">Hourly Production</div><div class="chart-subtitle">Tops vs Smalls</div></div>
               <div class="widget-actions">
+                <button class="widget-help" onclick="showWidgetHelp('hourlyChart')" title="Help">
+                  <i class="ph ph-lightbulb"></i>
+                </button>
                 <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
@@ -2704,6 +2722,9 @@
             <div class="widget-header chart-header">
               <div><div class="chart-title widget-title">Efficiency Trend</div><div class="chart-subtitle">Lbs/Trimmer/Hr</div></div>
               <div class="widget-actions">
+                <button class="widget-help" onclick="showWidgetHelp('rateChart')" title="Help">
+                  <i class="ph ph-lightbulb"></i>
+                </button>
                 <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
@@ -2720,6 +2741,9 @@
             <div class="widget-header chart-header">
               <div><div class="chart-title widget-title">Daily Production</div><div class="chart-subtitle">Multi-day view</div></div>
               <div class="widget-actions">
+                <button class="widget-help" onclick="showWidgetHelp('dailyChart')" title="Help">
+                  <i class="ph ph-lightbulb"></i>
+                </button>
                 <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
@@ -2736,6 +2760,9 @@
             <div class="widget-header chart-header">
               <div><div class="chart-title widget-title" id="efficiencyChartTitle">Daily Efficiency</div><div class="chart-subtitle" id="efficiencyChartSubtitle">With 7-day MA</div></div>
               <div class="widget-actions">
+                                <button class="widget-help" onclick="showWidgetHelp('dailyRateChart')" title="Help">
+                  <i class="ph ph-lightbulb"></i>
+                </button>
                 <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
@@ -2754,6 +2781,9 @@
             <div class="widget-header chart-header">
               <div><div class="chart-title widget-title">Trimmers on Line</div><div class="chart-subtitle" id="trimmersChartSubtitle">By Hour</div></div>
               <div class="widget-actions">
+                                <button class="widget-help" onclick="showWidgetHelp('trimmersChart')" title="Help">
+                  <i class="ph ph-lightbulb"></i>
+                </button>
                 <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
@@ -2772,6 +2802,9 @@
             <div class="widget-header">
               <div><div class="widget-title">Trimmer Productivity</div></div>
               <div class="widget-actions">
+                                <button class="widget-help" onclick="showWidgetHelp('productivity')" title="Help">
+                  <i class="ph ph-lightbulb"></i>
+                </button>
                 <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
@@ -2795,6 +2828,9 @@
             <div class="widget-header">
               <div><div class="widget-title">Strain Breakdown</div></div>
               <div class="widget-actions">
+                                <button class="widget-help" onclick="showWidgetHelp('strains')" title="Help">
+                  <i class="ph ph-lightbulb"></i>
+                </button>
                 <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
@@ -2811,6 +2847,9 @@
             <div class="widget-header">
               <div><div class="widget-title">Performance</div></div>
               <div class="widget-actions">
+                                <button class="widget-help" onclick="showWidgetHelp('performance')" title="Help">
+                  <i class="ph ph-lightbulb"></i>
+                </button>
                 <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
@@ -2827,6 +2866,9 @@
             <div class="widget-header">
               <div><div class="widget-title">Cost Analysis</div></div>
               <div class="widget-actions">
+                                <button class="widget-help" onclick="showWidgetHelp('cost')" title="Help">
+                  <i class="ph ph-lightbulb"></i>
+                </button>
                 <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
@@ -2843,6 +2885,9 @@
             <div class="widget-header">
               <div><div class="widget-title">Period Summary</div><div class="widget-subtitle" id="periodLabel"></div></div>
               <div class="widget-actions">
+                                <button class="widget-help" onclick="showWidgetHelp('period')" title="Help">
+                  <i class="ph ph-lightbulb"></i>
+                </button>
                 <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
@@ -3435,8 +3480,8 @@
         layoutDuration: 300,
         layoutEasing: 'ease-out',
         dragStartPredicate: {
-          distance: 0,             // Start immediately (no distance threshold)
-          delay: 0                 // No delay - instant drag start
+          distance: 10,            // Require 10px movement before drag starts (allows clicks)
+          delay: 100               // 100ms delay allows clicks to register
         },
         dragRelease: {
           duration: 300,
@@ -3883,8 +3928,8 @@
         layoutEasing: 'ease-out',
         layoutOnResize: true,      // Re-layout on window resize
         dragStartPredicate: {
-          distance: 0,             // Start immediately (no distance threshold)
-          delay: 0                 // No delay - instant drag start
+          distance: 10,            // Require 10px movement before drag starts (allows clicks)
+          delay: 100               // 100ms delay allows clicks to register
         },
         dragRelease: {
           duration: 300,
