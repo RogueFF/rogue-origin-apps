@@ -648,8 +648,16 @@ function getProductionDashboardData(startDate, endDate) {
     };
   });
 
-  // Estimate costs (using default wage rates)
-  var hourlyWage = 15.00;
+  // Get hourly wage from Data sheet (column O4)
+  var dataSheet = ss.getSheetByName('Data');
+  var hourlyWage = 15.00; // Fallback
+  if (dataSheet) {
+    var wageCell = dataSheet.getRange('O4').getValue();
+    if (wageCell && !isNaN(parseFloat(wageCell))) {
+      hourlyWage = parseFloat(wageCell);
+    }
+  }
+
   var totalLaborCost = totalOperatorHours * hourlyWage;
   var costPerLb = totalLbs > 0 ? totalLaborCost / totalLbs : 0;
   var avgCostPerTop = totalTops > 0 ? totalLaborCost / totalTops : 0;
@@ -751,7 +759,14 @@ function getProductionDashboardData(startDate, endDate) {
           label: Utilities.formatDate(d.date, timezone, 'MMM d'),
           totalTops: d.totalTops || 0,
           totalSmalls: d.totalSmalls || 0,
-          avgRate: d.avgRate || 0
+          avgRate: d.avgRate || 0,
+          crew: d.crew || 0,
+          operatorHours: d.operatorHours || 0,
+          costPerLb: d.costPerLb || 0,
+          totalLbs: d.totalLbs || 0,
+          maxRate: d.maxRate || 0,
+          trimmerHours: d.trimmerHours || 0,
+          laborCost: d.laborCost || 0
         };
       }),
       current: {
@@ -972,27 +987,59 @@ function getExtendedDailyDataLine1_(ss, timezone, days) {
   var monthSheets = ss.getSheets().filter(function(sh) { return /^\d{4}-\d{2}$/.test(sh.getName()); })
     .sort(function(a, b) { return b.getName().localeCompare(a.getName()); });
   if (monthSheets.length === 0) return [];
-  
+
+  // Get hourly wage from Data sheet (column O4)
+  var dataSheet = ss.getSheetByName('Data');
+  var hourlyWage = 15.00; // Fallback
+  if (dataSheet) {
+    var wageCell = dataSheet.getRange('O4').getValue();
+    if (wageCell && !isNaN(parseFloat(wageCell))) {
+      hourlyWage = parseFloat(wageCell);
+    }
+  }
+
   var dailyMap = {};
   var today = new Date();
   var cutoff = new Date(today); cutoff.setDate(cutoff.getDate() - days);
-  
+
   monthSheets.forEach(function(sheet) {
     var vals = sheet.getDataRange().getValues();
     var currentDate = null, cols = null;
-    var dayData = { totalLbs: 0, totalTrimmerHours: 0, hoursWorked: 0 };
-    
+    var dayData = {
+      totalTops: 0,
+      totalSmalls: 0,
+      totalTrimmerHours: 0,
+      totalBuckerHours: 0,
+      totalQCHours: 0,
+      totalTZeroHours: 0,
+      hoursWorked: 0,
+      maxRate: 0,
+      hourlyRates: []
+    };
+
     for (var i = 0; i < vals.length; i++) {
       var row = vals[i];
       if (row[0] === 'Date:') {
-        if (currentDate && dayData.totalLbs > 0 && currentDate >= cutoff) {
+        if (currentDate && (dayData.totalTops > 0 || dayData.totalSmalls > 0) && currentDate >= cutoff) {
           var dateKey = Utilities.formatDate(currentDate, timezone, 'yyyy-MM-dd');
           if (!dailyMap[dateKey]) {
+            var totalOperatorHours = dayData.totalTrimmerHours + dayData.totalBuckerHours + dayData.totalQCHours + dayData.totalTZeroHours;
+            var totalLbs = dayData.totalTops + dayData.totalSmalls;
+            var avgCrewPerHour = dayData.hoursWorked > 0 ? totalOperatorHours / dayData.hoursWorked : 0;
+            var laborCost = totalOperatorHours * hourlyWage;
+
             dailyMap[dateKey] = {
               date: new Date(currentDate),
-              totalTops: dayData.totalLbs,
-              totalSmalls: 0,
-              avgRate: dayData.totalTrimmerHours > 0 ? dayData.totalLbs / dayData.totalTrimmerHours : 0
+              totalTops: dayData.totalTops,
+              totalSmalls: dayData.totalSmalls,
+              avgRate: dayData.totalTrimmerHours > 0 ? dayData.totalTops / dayData.totalTrimmerHours : 0,
+              crew: Math.round(avgCrewPerHour),
+              operatorHours: totalOperatorHours,
+              costPerLb: totalLbs > 0 ? laborCost / totalLbs : 0,
+              totalLbs: totalLbs,
+              maxRate: dayData.maxRate,
+              trimmerHours: dayData.totalTrimmerHours,
+              laborCost: laborCost
             };
           }
         }
@@ -1001,7 +1048,17 @@ function getExtendedDailyDataLine1_(ss, timezone, days) {
           var d = new Date(dateStr);
           if (!isNaN(d.getTime())) {
             currentDate = d;
-            dayData = { totalLbs: 0, totalTrimmerHours: 0, hoursWorked: 0 };
+            dayData = {
+              totalTops: 0,
+              totalSmalls: 0,
+              totalTrimmerHours: 0,
+              totalBuckerHours: 0,
+              totalQCHours: 0,
+              totalTZeroHours: 0,
+              hoursWorked: 0,
+              maxRate: 0,
+              hourlyRates: []
+            };
           }
         }
         var headerRow = vals[i + 1] || [];
@@ -1010,30 +1067,74 @@ function getExtendedDailyDataLine1_(ss, timezone, days) {
       }
       if (!currentDate || !cols || currentDate < cutoff) continue;
       if (isEndOfBlock_(row)) continue;
-      
+
+      // Line 1 data
       var tops1 = parseFloat(row[cols.tops1]) || 0;
+      var smalls1 = parseFloat(row[cols.smalls1]) || 0;
       var tr1 = parseFloat(row[cols.trimmers1]) || 0;
-      
-      if (tops1 > 0 && tr1 > 0) {
-        dayData.totalLbs += tops1;
-        dayData.totalTrimmerHours += tr1;
+      var buck1 = parseFloat(row[cols.buckers1]) || 0;
+      var tz1 = parseFloat(row[cols.tzero1]) || 0;
+
+      // Line 2 data
+      var tops2 = parseFloat(row[cols.tops2]) || 0;
+      var smalls2 = parseFloat(row[cols.smalls2]) || 0;
+      var tr2 = parseFloat(row[cols.trimmers2]) || 0;
+      var buck2 = parseFloat(row[cols.buckers2]) || 0;
+      var tz2 = parseFloat(row[cols.tzero2]) || 0;
+
+      // QC (shared)
+      var qc = parseFloat(row[cols.qc]) || 0;
+
+      // Aggregate totals
+      var totalTopsHour = tops1 + tops2;
+      var totalSmallsHour = smalls1 + smalls2;
+      var totalTrimmersHour = tr1 + tr2;
+
+      if (totalTopsHour > 0 || totalSmallsHour > 0 || totalTrimmersHour > 0) {
+        dayData.totalTops += totalTopsHour;
+        dayData.totalSmalls += totalSmallsHour;
+        dayData.totalTrimmerHours += totalTrimmersHour;
+        dayData.totalBuckerHours += buck1 + buck2;
+        dayData.totalQCHours += qc;
+        dayData.totalTZeroHours += tz1 + tz2;
         dayData.hoursWorked++;
+
+        // Track max rate (lbs/trimmer)
+        if (totalTrimmersHour > 0 && totalTopsHour > 0) {
+          var hourRate = totalTopsHour / totalTrimmersHour;
+          if (hourRate > dayData.maxRate) {
+            dayData.maxRate = hourRate;
+          }
+        }
       }
     }
-    
-    if (currentDate && dayData.totalLbs > 0 && currentDate >= cutoff) {
+
+    // Process last date in sheet
+    if (currentDate && (dayData.totalTops > 0 || dayData.totalSmalls > 0) && currentDate >= cutoff) {
       var dateKey2 = Utilities.formatDate(currentDate, timezone, 'yyyy-MM-dd');
       if (!dailyMap[dateKey2]) {
+        var totalOperatorHours2 = dayData.totalTrimmerHours + dayData.totalBuckerHours + dayData.totalQCHours + dayData.totalTZeroHours;
+        var totalLbs2 = dayData.totalTops + dayData.totalSmalls;
+        var avgCrewPerHour2 = dayData.hoursWorked > 0 ? totalOperatorHours2 / dayData.hoursWorked : 0;
+        var laborCost2 = totalOperatorHours2 * hourlyWage;
+
         dailyMap[dateKey2] = {
           date: new Date(currentDate),
-          totalTops: dayData.totalLbs,
-          totalSmalls: 0,
-          avgRate: dayData.totalTrimmerHours > 0 ? dayData.totalLbs / dayData.totalTrimmerHours : 0
+          totalTops: dayData.totalTops,
+          totalSmalls: dayData.totalSmalls,
+          avgRate: dayData.totalTrimmerHours > 0 ? dayData.totalTops / dayData.totalTrimmerHours : 0,
+          crew: Math.round(avgCrewPerHour2),
+          operatorHours: totalOperatorHours2,
+          costPerLb: totalLbs2 > 0 ? laborCost2 / totalLbs2 : 0,
+          totalLbs: totalLbs2,
+          maxRate: dayData.maxRate,
+          trimmerHours: dayData.totalTrimmerHours,
+          laborCost: laborCost2
         };
       }
     }
   });
-  
+
   return Object.keys(dailyMap).map(function(k) { return dailyMap[k]; }).sort(function(a, b) { return a.date - b.date; });
 }
 
