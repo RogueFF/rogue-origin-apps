@@ -68,11 +68,34 @@ function doGet(e) {
   var result = {};
   try {
     if (action === 'scoreboard') {
-      result = getScoreboardWithTimerData();
+      // Performance: Cache scoreboard data for 2 minutes
+      var cache = CacheService.getScriptCache();
+      var cacheKey = 'scoreboard_data';
+      var cached = cache.get(cacheKey);
+
+      if (cached) {
+        result = JSON.parse(cached);
+        result.cached = true;
+      } else {
+        result = getScoreboardWithTimerData();
+        cache.put(cacheKey, JSON.stringify(result), 120); // 2 min cache
+      }
     } else if (action === 'dashboard') {
       var start = e.parameter.start || '';
       var end = e.parameter.end || '';
-      result = getProductionDashboardData(start, end);
+
+      // Performance: Cache dashboard data for 5 minutes
+      var cache = CacheService.getScriptCache();
+      var cacheKey = 'dashboard_' + start + '_' + end;
+      var cached = cache.get(cacheKey);
+
+      if (cached) {
+        result = JSON.parse(cached);
+        result.cached = true;
+      } else {
+        result = getProductionDashboardData(start, end);
+        cache.put(cacheKey, JSON.stringify(result), 300); // 5 min cache
+      }
     } else if (action === 'getOrders') {
       result = getOrders();
     } else if (action === 'getOrder') {
@@ -101,21 +124,25 @@ function doGet(e) {
 function doPost(e) {
   var action = (e && e.parameter && e.parameter.action) || '';
   var result = {};
-  
+
   try {
     if (action === 'logBag') {
       var size = (e && e.parameter && e.parameter.size) || '5 kg.';
       result = logManualBagCompletion(size);
+      // Clear cache after data modification
+      clearProductionCache_();
     } else if (action === 'logPause') {
       var postData = e.postData ? JSON.parse(e.postData.contents) : {};
       var reason = postData.reason || (e.parameter && e.parameter.reason) || 'No reason provided';
       var duration = postData.duration || (e.parameter && e.parameter.duration) || 0;
       result = logTimerPause(reason, duration);
+      clearProductionCache_();
     } else if (action === 'logResume') {
       var postData2 = e.postData ? JSON.parse(e.postData.contents) : {};
       var pauseId = postData2.pauseId || (e.parameter && e.parameter.pauseId) || '';
       var actualDuration = postData2.duration || (e.parameter && e.parameter.duration) || 0;
       result = logTimerResume(pauseId, actualDuration);
+      clearProductionCache_();
     } else if (action === 'chat') {
       // AI Agent Chat Handler
       var chatData = e.postData ? JSON.parse(e.postData.contents) : {};
@@ -133,9 +160,23 @@ function doPost(e) {
   } catch (err) {
     result = { error: err.message };
   }
-  
+
   return ContentService.createTextOutput(JSON.stringify(result))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**********************************************************
+ * Performance: Clear production data cache
+ **********************************************************/
+function clearProductionCache_() {
+  try {
+    var cache = CacheService.getScriptCache();
+    cache.remove('scoreboard_data');
+    // Clear all dashboard caches (they use dynamic keys)
+    cache.removeAll(['scoreboard_data']);
+  } catch (err) {
+    console.error('Error clearing cache:', err);
+  }
 }
 
 /**********************************************************
