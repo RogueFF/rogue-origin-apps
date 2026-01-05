@@ -2136,6 +2136,10 @@
     }
 
     function generateCommercialInvoice(shipment, order) {
+      if (!shipment || !order) {
+        throw new Error('Missing shipment or order data');
+      }
+
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
 
@@ -2327,6 +2331,10 @@
     }
 
     function generateBillOfLading(shipment, order) {
+      if (!shipment || !order) {
+        throw new Error('Missing shipment or order data');
+      }
+
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
 
@@ -2433,6 +2441,15 @@
 
       const latestShipment = shipmentsResponse.shipments[shipmentsResponse.shipments.length - 1];
 
+      // Validate shipment data
+      if (!latestShipment) {
+        console.error('No shipment found in response:', shipmentsResponse);
+        showToast('Shipment saved but could not retrieve for PDF generation', 'error');
+        return;
+      }
+
+      console.log('Generating PDFs for shipment:', latestShipment);
+
       // Generate PDFs
       try {
         generateCommercialInvoice(latestShipment, order);
@@ -2440,6 +2457,8 @@
         showToast('Shipment saved and documents generated successfully!');
       } catch (error) {
         console.error('PDF generation error:', error);
+        console.error('Shipment data:', latestShipment);
+        console.error('Order data:', order);
         showToast('Shipment saved but PDF generation failed: ' + error.message, 'error');
       }
     }
