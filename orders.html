@@ -2547,84 +2547,296 @@
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
 
-      const gold = [228, 170, 79];
-      const darkGreen = [74, 107, 84];
+      const black = [0, 0, 0];
+      const lineItems = shipment.lineItems || [];
+      const dims = shipment.dimensions || {};
 
       // Header
-      doc.setFontSize(18);
+      doc.setFontSize(20);
       doc.setFont('helvetica', 'bold');
-      doc.text('BILL OF LADING', 20, 20);
+      doc.setTextColor(...black);
+      doc.text('Bill of Lading', 15, 15);
 
-      // BOL Number and Date
+      // Date and BOL# (top right)
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Date:', 130, 15);
+      doc.setFont('helvetica', 'normal');
+      doc.text(new Date(shipment.shipmentDate).toLocaleDateString('en-US', {
+        day: 'numeric', month: 'long', year: 'numeric'
+      }), 145, 15);
+
+      // Ship From box
+      doc.setLineWidth(0.5);
+      doc.rect(15, 20, 85, 30);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Ship From:', 17, 25);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text('Rogue Origin', 17, 30);
+      doc.text('13003 Hwy 62', 17, 34);
+      doc.text('Eagle Point, Oregon 97524', 17, 38);
+      doc.text('United States', 17, 42);
+      doc.text('jacob@rogueorigin.com', 17, 46);
+
+      // Right side metadata
+      doc.rect(105, 20, 90, 45);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Bill of Lading No:', 107, 25);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(shipment.id || 'N/A'), 140, 25);
+
+      // BARCODE SPACE placeholder
       doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.text('BOL #: ' + String(shipment.id || 'N/A'), 20, 30);
-      doc.text('Date: ' + new Date(shipment.shipmentDate).toLocaleDateString('en-US'), 20, 35);
+      doc.setTextColor(180, 180, 180);
+      doc.text('BARCODE SPACE', 130, 35);
+      doc.setTextColor(...black);
 
-      // Shipper
+      doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
-      doc.text('SHIPPER:', 20, 45);
+      doc.text('Carrier Name:', 107, 42);
       doc.setFont('helvetica', 'normal');
-      doc.text('Rogue Origin', 20, 50);
-      doc.text('13003 Hwy 62', 20, 55);
-      doc.text('Eagle Point, Oregon 97524', 20, 60);
-      doc.text('Jacob@RogueOrigin.com', 20, 65);
+      doc.text(String(shipment.carrier || ''), 135, 42);
 
-      // Consignee
       doc.setFont('helvetica', 'bold');
-      doc.text('CONSIGNEE:', 110, 45);
+      doc.text('Trailer No:', 107, 47);
       doc.setFont('helvetica', 'normal');
-      doc.text(String(order.shipTo_Company || ''), 110, 50);
-      doc.text(String(order.shipTo_Contact || ''), 110, 55);
-      doc.text(String(order.shipTo_Address || ''), 110, 60);
+      doc.text('', 130, 47);
 
-      // Carrier Info
       doc.setFont('helvetica', 'bold');
-      doc.text('CARRIER:', 20, 80);
+      doc.text('Seal Number(s):', 107, 52);
       doc.setFont('helvetica', 'normal');
-      doc.text(String(shipment.carrier || 'N/A'), 20, 85);
+      doc.text('', 140, 52);
+
       doc.setFont('helvetica', 'bold');
-      doc.text('TRACKING #:', 110, 80);
+      doc.text('SCAC:', 107, 57);
+      doc.text('Pro No:', 150, 57);
+
+      doc.setFontSize(10);
+      doc.setTextColor(180, 180, 180);
+      doc.text('BARCODE SPACE', 130, 62);
+      doc.setTextColor(...black);
+
+      // SID# and Ship To section
+      doc.rect(15, 52, 85, 13);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('SID#:', 17, 57);
       doc.setFont('helvetica', 'normal');
-      doc.text(String(shipment.trackingNumber || 'N/A'), 110, 85);
+      doc.text('☐ FOB', 85, 57);
 
-      // Commodity Description
-      const lineItems = shipment.lineItems || [];
-      const commodityY = 100;
       doc.setFont('helvetica', 'bold');
-      doc.text('COMMODITY DESCRIPTION:', 20, commodityY);
+      doc.text('Ship To:', 17, 62);
+      doc.setFont('helvetica', 'normal');
+      const shipToAddr = String(order.shipTo_Address || '').split('\n')[0];
+      doc.text(shipToAddr.substring(0, 30), 32, 62);
 
-      let itemY = commodityY + 7;
-      lineItems.forEach(item => {
-        doc.setFont('helvetica', 'normal');
-        doc.text(`${item.quantity} kg CBD Hemp Flower - ${item.strain} (${item.type})`, 20, itemY);
-        itemY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Location No:', 60, 62);
+
+      // CID# and Third Party
+      doc.rect(15, 67, 85, 13);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('CID#:', 17, 72);
+      doc.setFont('helvetica', 'normal');
+      doc.text('☐ FOB', 85, 72);
+
+      doc.setFont('helvetica', 'bold');
+      doc.text('Third Party Freight Charges - Bill To:', 17, 77);
+
+      // Freight Charge Terms box
+      doc.rect(105, 67, 90, 13);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Freight Charge Terms (prepaid unless marked otherwise)', 107, 71);
+      doc.setFont('helvetica', 'normal');
+      doc.text('☐ Prepaid     ☐ Collect     ☐ 3rd Party', 107, 76);
+      doc.text('☐ Master BOL: w/attached underlying BOLs', 107, 79);
+
+      // Special Instructions
+      doc.rect(15, 82, 180, 12);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Special Instructions:', 17, 87);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text('CBD Hemp Flower - Non-Hazardous Material', 17, 91);
+
+      // Customer Order Information Table
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.setFillColor(230, 230, 230);
+      doc.rect(15, 95, 180, 5, 'F');
+      doc.text('Customer Order Information', 80, 98.5);
+
+      doc.autoTable({
+        startY: 100,
+        head: [['Customer Order No.', '# Pkgs.', 'Weight', 'Pallet/Slip (Y/N)', 'Additional Shipper Info']],
+        body: [[String(order.poNumber || ''), String(lineItems.length), String((dims.weight || 0) + ' kg'), 'Y', '']],
+        theme: 'grid',
+        headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 8 },
+        bodyStyles: { fontSize: 8 },
+        columnStyles: {
+          0: { cellWidth: 40 },
+          1: { cellWidth: 20 },
+          2: { cellWidth: 25 },
+          3: { cellWidth: 30 },
+          4: { cellWidth: 65 }
+        }
       });
 
-      // Package Details
-      const dims = shipment.dimensions || {};
-      const packageY = itemY + 10;
+      // Carrier Information Table
+      const tableY = doc.lastAutoTable.finalY + 2;
+      doc.setFillColor(230, 230, 230);
+      doc.rect(15, tableY, 180, 5, 'F');
       doc.setFont('helvetica', 'bold');
-      doc.text('PACKAGE DETAILS:', 20, packageY);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Dimensions: ${dims.length || 0}" L x ${dims.width || 0}" W x ${dims.height || 0}" H`, 20, packageY + 7);
-      doc.text(`Gross Weight: ${dims.weight || 0} kg`, 20, packageY + 14);
-      doc.text(`Package Count: ${lineItems.length}`, 20, packageY + 21);
+      doc.setFontSize(7);
+      doc.text('Carrier Information', 85, tableY + 3.5);
 
-      // Shipper signature block
-      const sigY = packageY + 40;
-      doc.setFont('helvetica', 'bold');
-      doc.text('SHIPPER SIGNATURE:', 20, sigY);
-      doc.setFont('helvetica', 'normal');
-      doc.text('_____________________________', 20, sigY + 10);
-      doc.text('Date: _____________________', 20, sigY + 20);
+      const carrierTableData = lineItems.map(item => {
+        const qty = item.quantity || 0;
+        const lbWeight = (qty * 2.205).toFixed(0);
+        return [
+          String(lineItems.length),
+          'Pallet',
+          String(qty),
+          'EA',
+          lbWeight + ' lb',
+          '',
+          `CBD Hemp Flower ${item.type === 'tops' ? '' : item.type} - ${item.strain}`,
+          '',
+          ''
+        ];
+      });
 
-      // Carrier signature block
-      doc.setFont('helvetica', 'bold');
-      doc.text('CARRIER SIGNATURE:', 110, sigY);
+      doc.autoTable({
+        startY: tableY + 5,
+        head: [['Handling Unit', '', 'Package', '', 'Weight', 'H.M. (X)', 'Commodity Description', 'NMFC No.', 'Class']],
+        body: carrierTableData,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [255, 255, 255],
+          textColor: [0, 0, 0],
+          fontStyle: 'bold',
+          fontSize: 7
+        },
+        bodyStyles: { fontSize: 7 },
+        columnStyles: {
+          0: { cellWidth: 15 },
+          1: { cellWidth: 20 },
+          2: { cellWidth: 15 },
+          3: { cellWidth: 15 },
+          4: { cellWidth: 20 },
+          5: { cellWidth: 15 },
+          6: { cellWidth: 55 },
+          7: { cellWidth: 15 },
+          8: { cellWidth: 10 }
+        }
+      });
+
+      // Bottom section - Value declaration and certifications
+      const bottomY = doc.lastAutoTable.finalY + 3;
+
+      // Value declaration box
+      doc.setFontSize(7);
       doc.setFont('helvetica', 'normal');
-      doc.text('_____________________________', 110, sigY + 10);
-      doc.text('Date: _____________________', 110, sigY + 20);
+      const declText1 = 'Where the rate is dependent on value, shippers are required to state specifically in writing';
+      const declText2 = 'the agreed or declared value of the property as follows:';
+      const declText3 = '"The agreed or declared value of the property is specifically stated by the shipper to be not exceeding';
+      const declText4 = '_____________ FOB ______________."';
+      doc.text(declText1, 17, bottomY);
+      doc.text(declText2, 17, bottomY + 3);
+      doc.text(declText3, 17, bottomY + 6);
+      doc.text(declText4, 17, bottomY + 9);
+
+      // COD and Fee Terms
+      const codY = bottomY + 13;
+      doc.setFont('helvetica', 'bold');
+      doc.text('COD Amt. $', 130, codY);
+      doc.setFont('helvetica', 'normal');
+      doc.text('_____________', 150, codY);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Fee Terms:', 130, codY + 3);
+      doc.setFont('helvetica', 'normal');
+      doc.text('☐ Collect  ☐ Prepaid', 150, codY + 3);
+      doc.text('☐ Customer Check Acceptable', 130, codY + 6);
+
+      // RECEIVED text
+      const recY = bottomY + 14;
+      doc.setFontSize(6);
+      doc.setFont('helvetica', 'bold');
+      doc.text('RECEIVED,', 17, recY);
+      doc.setFont('helvetica', 'normal');
+      const recText = 'subject to individually determined rates or contracts that have been agreed upon in writing between the carrier and shipper, if applicable,';
+      const recText2 = 'otherwise to the rates, classifications and rules that have been established by the carrier and are available to the shipper, on request, and to all';
+      const recText3 = 'applicable state and federal regulations.';
+      doc.text(recText, 32, recY);
+      doc.text(recText2, 17, recY + 3);
+      doc.text(recText3, 17, recY + 6);
+
+      const noteY = recY + 10;
+      doc.text('The carrier shall not make delivery of this shipment without payment of freight and all other lawful charges.', 17, noteY);
+
+      // Certification text box
+      const certY = noteY + 5;
+      doc.rect(15, certY, 85, 15);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      doc.text('This is to certify that the above named materials are', 17, certY + 3);
+      doc.text('properly classified, packaged, marked and labeled, and are', 17, certY + 6);
+      doc.text('in proper condition for transportation according to the', 17, certY + 9);
+      doc.text('applicable regulations of the DOT.', 17, certY + 12);
+
+      // Trailer Loaded / Freight Counted
+      doc.setFont('helvetica', 'bold');
+      doc.text('Trailer Loaded', 107, certY + 3);
+      doc.text('Freight Counted', 150, certY + 3);
+      doc.setFont('helvetica', 'normal');
+      doc.text('☐ By Shipper', 107, certY + 6);
+      doc.text('☐ By Shipper', 150, certY + 6);
+      doc.text('☐ By Driver', 107, certY + 9);
+      doc.text('☐ By Driver/pallets said to contain', 150, certY + 9);
+      doc.text('☐ By Driver/Pieces', 150, certY + 12);
+
+      // Signature lines
+      const sigY = certY + 17;
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Shipper Signature', 17, sigY);
+      doc.text('Date', 60, sigY);
+      doc.text('Carrier Signature', 107, sigY);
+      doc.text('Pickup Date', 160, sigY);
+
+      doc.setFont('helvetica', 'normal');
+      doc.line(17, sigY + 2, 55, sigY + 2);
+      doc.line(60, sigY + 2, 95, sigY + 2);
+      doc.line(107, sigY + 2, 155, sigY + 2);
+      doc.line(160, sigY + 2, 190, sigY + 2);
+
+      // Carrier acknowledgment text
+      const ackY = sigY + 5;
+      doc.setFontSize(6);
+      doc.text('Carrier acknowledges receipt of packages and required placards.', 107, ackY);
+      doc.text('Carrier certifies emergency response information was made available', 107, ackY + 2.5);
+      doc.text('and/or carrier has the DOT emergency response guidebook or', 107, ackY + 5);
+      doc.text('equivalent documentation in the vehicle. Property described above is', 107, ackY + 7.5);
+      doc.text('received in good order, except as noted.', 107, ackY + 10);
+
+      // Liability note at bottom
+      const noteBottomY = sigY + 17;
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.text('NOTE:', 17, noteBottomY);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Liability Limitation for loss or damage in this shipment may be applicable. See 49 U.S.C. - 14706(c)(1)(A) and (B).', 30, noteBottomY);
+
+      // Footer
+      doc.setFontSize(7);
+      doc.setTextColor(150, 150, 150);
+      doc.text('Rogue Origin Operations Hub - https://rogueff.github.io/rogue-origin-apps/', 105, noteBottomY + 5, { align: 'center' });
 
       // Save
       doc.save(`BOL_${shipment.id || 'shipment'}.pdf`);
