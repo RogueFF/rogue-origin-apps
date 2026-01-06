@@ -1451,6 +1451,7 @@
     let orders = [];
     let currentOrderID = null;
     let editingOrderID = null;
+    let cachedShipments = []; // Cache shipments to avoid redundant API calls
 
     // ========================================
     // INITIALIZATION
@@ -1757,15 +1758,9 @@
       delete document.getElementById('shipment-modal').dataset.editingShipmentId;
     }
 
-    async function editShipment(shipmentId) {
-      // Get shipment data
-      const shipmentsResponse = await apiCall('getShipments', { orderID: currentOrderID });
-      if (!shipmentsResponse || !shipmentsResponse.success) {
-        showToast('Could not load shipment data', 'error');
-        return;
-      }
-
-      const shipment = shipmentsResponse.shipments.find(s => s.id === shipmentId);
+    function editShipment(shipmentId) {
+      // Use cached shipments instead of making another API call
+      const shipment = cachedShipments.find(s => s.id === shipmentId);
       if (!shipment) {
         showToast('Shipment not found', 'error');
         return;
@@ -1855,45 +1850,74 @@
       const order = orders.find(o => o.id === orderID);
       if (!order) return;
 
-      // Update header
+      // Show panel immediately with loading state
+      const panel = document.getElementById('detail-panel');
+      panel.classList.add('active');
       document.getElementById('detail-order-id').textContent = order.id;
       document.getElementById('detail-customer-name').textContent = order.customerName;
 
-      // Load financials
-      const financials = await apiCall('getOrderFinancials', { orderID });
+      // Show loading indicators
+      document.getElementById('shipments-list').innerHTML = '<div class="empty-state">Loading shipments...</div>';
+      document.getElementById('payments-list').innerHTML = '<div class="empty-state">Loading payments...</div>';
+      switchTab('summary');
+
+      // Load all data in parallel for much faster response
+      const [financials, shipmentsResult, paymentsResult] = await Promise.all([
+        apiCall('getOrderFinancials', { orderID }),
+        apiCall('getShipments', { orderID }),
+        apiCall('getPayments', { orderID })
+      ]);
+
+      // Process financials
       if (financials.success) {
         updateSummaryTab(financials);
-
-        // Update local orders array with latest financials
+        // Update just this order in the array (avoid full re-render)
         const orderIndex = orders.findIndex(o => o.id === orderID);
         if (orderIndex !== -1) {
           orders[orderIndex].fulfilled = financials.fulfilled;
           orders[orderIndex].paid = financials.paid;
+          updateOrderRow(orderID, orders[orderIndex]);
         }
-        renderOrdersTable();
         updateStats();
       }
 
-      // Load shipments
-      const shipments = await apiCall('getShipments', { orderID });
-      if (shipments.success) {
-        renderShipments(shipments.shipments || []);
+      // Process shipments - cache them for editShipment
+      if (shipmentsResult.success) {
+        cachedShipments = shipmentsResult.shipments || [];
+        renderShipments(cachedShipments);
       }
 
-      // Load payments
-      const payments = await apiCall('getPayments', { orderID });
-      if (payments.success) {
-        renderPayments(payments.payments || []);
+      // Process payments
+      if (paymentsResult.success) {
+        renderPayments(paymentsResult.payments || []);
       }
+    }
 
-      // Show panel
-      document.getElementById('detail-panel').classList.add('active');
-      switchTab('summary');
+    // Update a single order row instead of re-rendering entire table
+    function updateOrderRow(orderID, order) {
+      const row = document.querySelector(`tr[onclick*="${orderID}"]`);
+      if (!row) return;
+
+      const fulfillPct = order.commitmentAmount > 0
+        ? Math.round((order.fulfilled || 0) / order.commitmentAmount * 100)
+        : 0;
+
+      // Update fulfilled column (index 3)
+      row.cells[3].innerHTML = `$${formatNumber(order.fulfilled || 0)}`;
+
+      // Update progress column (index 4)
+      row.cells[4].innerHTML = `
+        ${fulfillPct}%
+        <div class="progress-mini">
+          <div class="progress-mini-fill" style="width: ${fulfillPct}%"></div>
+        </div>
+      `;
     }
 
     function closeDetailPanel() {
       document.getElementById('detail-panel').classList.remove('active');
       currentOrderID = null;
+      cachedShipments = []; // Clear cache when panel closes
     }
 
     function switchTab(tabName) {
