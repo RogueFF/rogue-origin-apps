@@ -2295,10 +2295,12 @@ function renderHero() {
   if (elHeroSubtitle) elHeroSubtitle.textContent = 'Total: ' + totalProduction.toFixed(1) + ' lbs (incl. ' + smalls.toFixed(1) + ' lbs smalls)';
 
   // Time-aware production prediction
-  // Uses current trimmer count and rate to calculate expected production
+  // Uses current trimmer count and historical target rate for prediction
   var trimmers = t.trimmers || 0;
-  var rate = t.avgRate || 0;
-  var predictedRate = rate > 0 ? rate : (t.cultivarRate || 1.5);
+  var todayRate = t.avgRate || 0;
+  // Use historical target rate for prediction (more reliable than today's partial data)
+  var targetRate = (data.targets && data.targets.avgRate) || 1.0;
+  var predictedRate = targetRate;
 
   // Calculate time-aware expectations
   var productiveHoursElapsed = getProductiveHoursElapsed();
