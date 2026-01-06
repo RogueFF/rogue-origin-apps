@@ -783,8 +783,22 @@ body.sidebar-collapsed .main { margin-left: var(--sidebar-collapsed); }
   bottom: 0;
   background: linear-gradient(90deg, var(--gold-400), var(--gold-300));
   border-radius: 6px;
-  transition: width 1s var(--ease-spring);
+  transition: width 1s var(--ease-spring), background 0.3s ease;
   box-shadow: 0 0 12px rgba(228, 170, 79, 0.5);
+}
+
+.hero-progress-fill.ahead {
+  background: linear-gradient(90deg, var(--green-400), var(--green-300));
+  box-shadow: 0 0 12px rgba(102, 137, 113, 0.5);
+}
+
+.hero-progress-fill.on-track {
+  background: linear-gradient(90deg, var(--gold-400), var(--gold-300));
+}
+
+.hero-progress-fill.behind {
+  background: linear-gradient(90deg, #c75146, #d4726a);
+  box-shadow: 0 0 12px rgba(199, 81, 70, 0.5);
 }
 
 .hero-progress-text {

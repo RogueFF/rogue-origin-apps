@@ -137,6 +137,70 @@ function safeGetChartContext(canvasId) {
 }
 
 
+// Work schedule configuration
+// Day: 7:00 AM - 4:30 PM (9.5 hours)
+// Breaks: 9:00 AM (10min), 12:00 PM (30min lunch), 2:30 PM (10min), 4:20 PM (10min cleanup)
+// Total break time: 60 min = 1 hour
+// Total productive time: 8.5 hours
+var workSchedule = {
+  startHour: 7, startMin: 0,   // 7:00 AM
+  endHour: 16, endMin: 30,     // 4:30 PM
+  breaks: [
+    { hour: 9, min: 0, duration: 10 },    // 9:00 AM - 10 min
+    { hour: 12, min: 0, duration: 30 },   // 12:00 PM - 30 min lunch
+    { hour: 14, min: 30, duration: 10 },  // 2:30 PM - 10 min
+    { hour: 16, min: 20, duration: 10 }   // 4:20 PM - 10 min cleanup
+  ],
+  totalProductiveMinutes: 8.5 * 60  // 510 minutes
+};
+
+// Calculate productive minutes elapsed based on current time and break schedule
+function getProductiveMinutesElapsed() {
+  var now = new Date();
+  var currentHour = now.getHours();
+  var currentMin = now.getMinutes();
+
+  // Convert current time to minutes since midnight
+  var currentTimeInMin = currentHour * 60 + currentMin;
+  var startTimeInMin = workSchedule.startHour * 60 + workSchedule.startMin;
+  var endTimeInMin = workSchedule.endHour * 60 + workSchedule.endMin;
+
+  // Before work starts
+  if (currentTimeInMin < startTimeInMin) return 0;
+
+  // After work ends
+  if (currentTimeInMin >= endTimeInMin) return workSchedule.totalProductiveMinutes;
+
+  // Calculate raw minutes elapsed since start
+  var rawMinutesElapsed = currentTimeInMin - startTimeInMin;
+
+  // Subtract break time that has passed
+  var breakMinutesPassed = 0;
+  workSchedule.breaks.forEach(function(b) {
+    var breakStartInMin = b.hour * 60 + b.min;
+    var breakEndInMin = breakStartInMin + b.duration;
+
+    if (currentTimeInMin >= breakEndInMin) {
+      // Break is fully over
+      breakMinutesPassed += b.duration;
+    } else if (currentTimeInMin > breakStartInMin) {
+      // Currently in break
+      breakMinutesPassed += (currentTimeInMin - breakStartInMin);
+    }
+  });
+
+  return Math.max(0, rawMinutesElapsed - breakMinutesPassed);
+}
+
+function getProductiveHoursElapsed() {
+  return getProductiveMinutesElapsed() / 60;
+}
+
+function getTotalProductiveHours() {
+  return workSchedule.totalProductiveMinutes / 60; // 8.5 hours
+}
+
+
 // Detect environment: Apps Script or GitHub Pages
 var isAppsScript = typeof google !== 'undefined' && google.script && google.script.run;
 
@@ -2230,21 +2294,47 @@ function renderHero() {
   // Subtitle with total and smalls breakdown
   if (elHeroSubtitle) elHeroSubtitle.textContent = 'Total: ' + totalProduction.toFixed(1) + ' lbs (incl. ' + smalls.toFixed(1) + ' lbs smalls)';
 
-  // Calculate predicted TOPS outcome for progress bar (rate is for tops production, smalls are byproduct)
+  // Time-aware production prediction
+  // Uses current trimmer count and rate to calculate expected production
   var trimmers = t.trimmers || 0;
   var rate = t.avgRate || 0;
   var predictedRate = rate > 0 ? rate : (t.cultivarRate || 1.5);
-  var workDayHours = 7.5;
-  var predictedTops = trimmers * predictedRate * workDayHours;
 
-  // Progress bar: compare current tops vs predicted tops (both measure same thing)
+  // Calculate time-aware expectations
+  var productiveHoursElapsed = getProductiveHoursElapsed();
+  var totalProductiveHours = getTotalProductiveHours(); // 8.5 hours
+
+  // Expected production so far (based on current time and trimmer count)
+  var expectedSoFar = trimmers * predictedRate * productiveHoursElapsed;
+
+  // Predicted end-of-day total (based on current trimmer count)
+  var predictedTops = trimmers * predictedRate * totalProductiveHours;
+
+  // Progress bar: compare actual vs expected for current time (time-aware)
   var progressPercent = 0;
-  if (predictedTops > 0) {
-    progressPercent = (tops / predictedTops * 100);
+  var progressStatus = '';
+  if (expectedSoFar > 0) {
+    progressPercent = (tops / expectedSoFar * 100);
+    if (progressPercent >= 100) {
+      progressStatus = 'ahead';
+    } else if (progressPercent >= 90) {
+      progressStatus = 'on-track';
+    } else {
+      progressStatus = 'behind';
+    }
   }
 
-  if (elHeroProgressFill) elHeroProgressFill.style.width = Math.min(progressPercent, 100) + '%';
-  if (elHeroProgressText) elHeroProgressText.textContent = progressPercent.toFixed(0) + '% of predicted tops';
+  if (elHeroProgressFill) {
+    elHeroProgressFill.style.width = Math.min(progressPercent, 100) + '%';
+    elHeroProgressFill.className = 'hero-progress-fill ' + progressStatus;
+  }
+  if (elHeroProgressText) {
+    if (productiveHoursElapsed > 0 && expectedSoFar > 0) {
+      elHeroProgressText.textContent = progressPercent.toFixed(0) + '% of expected (' + expectedSoFar.toFixed(0) + ' lbs)';
+    } else {
+      elHeroProgressText.textContent = 'Shift not started';
+    }
+  }
 
   // Mini KPIs
   var crew = (t.trimmers || 0) + (t.buckers || 0) + (t.qc || 0) + (t.tzero || 0);
