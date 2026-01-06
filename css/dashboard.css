@@ -726,6 +726,15 @@ body.sidebar-collapsed .main { margin-left: var(--sidebar-collapsed); }
   margin-bottom: 16px;
   font-weight: 500;
 }
+.hero-strain {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--green-400);
+  margin-bottom: 8px;
+  letter-spacing: 0.02em;
+  opacity: 0.9;
+}
 
 .hero-production-number {
   font-family: var(--font-display);

@@ -2214,12 +2214,18 @@ function renderHero() {
   var elHeroRateValue = document.getElementById('heroRateValue');
   var elHeroTargetValue = document.getElementById('heroTargetValue');
   var elHeroBagsValue = document.getElementById('heroBagsValue');
+  var elHeroStrain = document.getElementById('heroStrain');
 
   // Production number (the star) - TOPS production (primary focus)
   var tops = t.totalTops || 0;
   var smalls = t.totalSmalls || 0;
   var totalProduction = t.totalLbs || 0;
   if (elHeroProduction) animateCountUp(elHeroProduction, tops, 1, 1200);
+
+  // Current strain (from data.current which has the last hour's data)
+  var strain = (data.current && data.current.strain) || '';
+  if (elHeroStrain) elHeroStrain.textContent = strain;
+
 
   // Subtitle with total and smalls breakdown
   if (elHeroSubtitle) elHeroSubtitle.textContent = 'Total: ' + totalProduction.toFixed(1) + ' lbs (incl. ' + smalls.toFixed(1) + ' lbs smalls)';
