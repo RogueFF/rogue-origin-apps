@@ -1798,11 +1798,11 @@
       loginBtn.textContent = 'Validating...';
 
       try {
-        // Call Apps Script to validate password
-        const response = await fetch(AUTH_API_URL + '?action=validatePassword', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: enteredPassword })
+        // Call Apps Script to validate password (using GET to avoid CORS preflight)
+        // Password is in URL parameter but connection is HTTPS encrypted
+        const url = AUTH_API_URL + '?action=validatePassword&password=' + encodeURIComponent(enteredPassword);
+        const response = await fetch(url, {
+          method: 'GET'
         });
 
         const result = await response.json();

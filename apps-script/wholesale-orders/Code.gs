@@ -22,7 +22,10 @@ function doGet(e) {
   var result = {};
 
   try {
-    if (action === 'getCustomers') {
+    if (action === 'validatePassword') {
+      // Handle authentication via GET to avoid CORS preflight issues
+      result = validatePassword(e.parameter.password || '');
+    } else if (action === 'getCustomers') {
       result = getCustomers();
     } else if (action === 'getMasterOrders') {
       result = getMasterOrders();
@@ -44,7 +47,7 @@ function doGet(e) {
       result = {
         ok: true,
         message: 'Rogue Origin Wholesale Orders API',
-        endpoints: ['getCustomers', 'getMasterOrders', 'getShipments', 'getPayments', 'test'],
+        endpoints: ['getCustomers', 'getMasterOrders', 'getShipments', 'getPayments', 'validatePassword', 'test'],
         timestamp: new Date().toISOString()
       };
     }
@@ -62,10 +65,7 @@ function doPost(e) {
   var result = {};
 
   try {
-    if (action === 'validatePassword') {
-      var authData = e.postData ? JSON.parse(e.postData.contents) : {};
-      result = validatePassword(authData.password);
-    } else if (action === 'saveCustomer') {
+    if (action === 'saveCustomer') {
       var customerData = e.postData ? JSON.parse(e.postData.contents) : {};
       result = saveCustomer(customerData);
     } else if (action === 'deleteCustomer') {
