@@ -48,6 +48,7 @@ var compareMode = null;
 var editMode = false, kpiSortable, widgetSortable;
 var currentView = 'dashboard';
 var sidebarCollapsed = false;
+var skeletonsShowing = false; // Track skeleton state to prevent restoring stale values on error
 var darkMode = false;
 var dailyTarget = 200; // Daily production target in lbs
 
@@ -2140,6 +2141,17 @@ function showToast(message, type, duration) {
 
 
 function showSkeletons(show) {
+  // Track state to prevent restoring stale values on error
+  if (show) {
+    skeletonsShowing = true;
+  } else if (!skeletonsShowing) {
+    // Skeletons were not shown, just update non-value elements and return
+    document.querySelectorAll('.kpi-card').forEach(function(card) { card.classList.remove('loading'); });
+    document.querySelectorAll('.chart-container').forEach(function(c) { c.style.opacity = '1'; });
+    debouncedKPILayout(100);
+    return;
+  }
+  skeletonsShowing = false;
   // KPI cards
   document.querySelectorAll('.kpi-card').forEach(function(card) {
     if (show) card.classList.add('loading');
