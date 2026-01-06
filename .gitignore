@@ -31,3 +31,7 @@ test-report.json
 # Environment variables (if any)
 .env
 .env.local
+
+# Private authentication config (DO NOT COMMIT)
+auth-config.js
+orders-auth.js

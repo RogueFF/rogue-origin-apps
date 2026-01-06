@@ -11,9 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
 
-  <!-- jsPDF for document generation -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.1/jspdf.plugin.autotable.min.js"></script>
+  <!-- jsPDF libraries are lazy-loaded only when needed for better performance -->
 
   <style>
     /* ========================================
@@ -641,6 +639,24 @@
       color: var(--ro-green);
     }
 
+    .shopify-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      margin-left: 8px;
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      font-weight: 500;
+      background: rgba(149, 117, 205, 0.15);
+      color: #9575cd;
+      font-family: var(--font-ui);
+    }
+
+    .shopify-badge i {
+      font-size: 14px;
+    }
+
     .list-item-meta {
       font-size: 12px;
       color: var(--text-muted);
@@ -827,6 +843,10 @@
       border-left: 4px solid var(--ro-gold);
     }
 
+    .toast.info {
+      border-left: 4px solid var(--info);
+    }
+
     .toast-icon {
       font-size: 20px;
       flex-shrink: 0;
@@ -842,6 +862,10 @@
 
     .toast.warning .toast-icon {
       color: var(--ro-gold);
+    }
+
+    .toast.info .toast-icon {
+      color: var(--info);
     }
 
     .toast-message {
@@ -943,8 +967,156 @@
       }
     }
   </style>
+
+  <!-- Load authentication config (not committed to git) -->
+  <script src="auth-config.js"></script>
+
+  <style>
+    /* Login Screen Styles */
+    #auth-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.3s ease;
+    }
+
+    #auth-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .login-container {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: var(--space-lg);
+      width: 100%;
+      max-width: 400px;
+      box-shadow: var(--shadow-elevated);
+      text-align: center;
+    }
+
+    .login-container h2 {
+      font-family: var(--font-display);
+      font-size: 28px;
+      margin-bottom: var(--space-sm);
+      color: var(--text);
+    }
+
+    .login-container p {
+      color: var(--text-muted);
+      margin-bottom: var(--space-lg);
+      font-size: 14px;
+    }
+
+    .login-input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      font-family: var(--font-ui);
+      font-size: 16px;
+      background: var(--bg);
+      color: var(--text);
+      margin-bottom: var(--space-sm);
+      transition: all 0.2s ease;
+    }
+
+    .login-input:focus {
+      outline: none;
+      border-color: var(--ro-green);
+      box-shadow: 0 0 0 3px rgba(102, 137, 113, 0.1);
+    }
+
+    .login-btn {
+      width: 100%;
+      padding: 12px;
+      background: var(--ro-green);
+      color: white;
+      border: none;
+      border-radius: var(--radius-md);
+      font-family: var(--font-ui);
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .login-btn:hover {
+      background: #4a6b54;
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .login-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .login-error {
+      color: var(--danger);
+      font-size: 13px;
+      margin-top: var(--space-sm);
+      display: none;
+    }
+
+    .login-error.visible {
+      display: block;
+    }
+
+    .logout-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 13px;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: var(--radius-sm);
+      transition: all 0.2s ease;
+    }
+
+    .logout-btn:hover {
+      background: var(--border-light);
+      color: var(--text);
+    }
+
+    /* Hide page content until authenticated */
+    body.auth-required .container {
+      opacity: 0;
+      pointer-events: none;
+    }
+  </style>
 </head>
-<body>
+<body class="auth-required">
+  <!-- Authentication Overlay -->
+  <div id="auth-overlay">
+    <div class="login-container">
+      <h2>🔒 Wholesale Orders</h2>
+      <p>This page requires authentication</p>
+      <form id="login-form" onsubmit="handleLogin(event)">
+        <input
+          type="password"
+          id="password-input"
+          class="login-input"
+          placeholder="Enter password"
+          autocomplete="current-password"
+          required
+        >
+        <button type="submit" class="login-btn" id="login-btn">
+          Unlock
+        </button>
+        <div class="login-error" id="login-error">
+          ❌ Incorrect password
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Toast Notifications Container -->
   <div class="toast-container" id="toast-container"></div>
 
@@ -958,6 +1130,12 @@
         </button>
         <button class="btn btn-secondary" onclick="openNewCustomerModal()">
           <i class="ph ph-user-plus"></i> New Customer
+        </button>
+        <button class="btn btn-secondary" onclick="openShopifyImportModal()" title="Import fulfilled orders from Shopify">
+          <i class="ph ph-shopping-cart"></i> Import Shopify
+        </button>
+        <button class="logout-btn" onclick="handleLogout()" title="Logout">
+          <i class="ph ph-sign-out"></i> Logout
         </button>
         <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
           <i class="ph ph-moon" id="theme-icon"></i>
@@ -1506,6 +1684,45 @@
     </div>
   </div>
 
+  <!-- Shopify Import Modal -->
+  <div class="modal-overlay" id="shopify-import-modal">
+    <div class="modal modal-large">
+      <div class="modal-header">
+        <div class="modal-title">Import Shopify Orders</div>
+        <button class="icon-btn btn-secondary" onclick="closeShopifyImportModal()">
+          <i class="ph ph-x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div style="margin-bottom: 24px; padding: 16px; background: rgba(149, 117, 205, 0.1); border-left: 4px solid #9575cd; border-radius: var(--radius-md);">
+          <p style="margin: 0; font-size: 14px; color: var(--text);">
+            <strong>How to export from Shopify:</strong><br>
+            Shopify Admin → Orders → Export → Select "Fulfilled orders" → Download CSV
+          </p>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Upload Shopify Orders CSV</label>
+          <input type="file" id="shopify-csv-file" accept=".csv" class="form-input" onchange="handleShopifyFileUpload(event)">
+          <div style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">
+            Supports Shopify order export CSV format
+          </div>
+        </div>
+
+        <div id="import-preview" style="display: none; margin-top: 24px;">
+          <h4 style="font-family: var(--font-display); margin-bottom: 16px;">Preview & Match</h4>
+          <div id="import-preview-content"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeShopifyImportModal()">Cancel</button>
+        <button class="btn btn-primary" id="import-confirm-btn" onclick="confirmShopifyImport()" style="display: none;">
+          <i class="ph ph-check"></i> Import <span id="import-count"></span> Shipments
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Strains Datalist (dynamically populated) -->
   <datalist id="strains-list">
     <option value="Lifter">
@@ -1520,6 +1737,101 @@
 
   <script>
     // ========================================
+    // AUTHENTICATION
+    // ========================================
+    const AUTH_STORAGE_KEY = 'orders_auth_session';
+    const AUTH_ENABLED = typeof AUTH_CONFIG !== 'undefined';
+
+    // Check authentication on page load
+    (function checkAuth() {
+      if (!AUTH_ENABLED) {
+        // No auth config found - show error message
+        console.warn('⚠️ auth-config.js not found. Page is unprotected!');
+        console.warn('Create auth-config.js from auth-config.template.js to enable authentication.');
+        unlockPage();
+        return;
+      }
+
+      const session = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (session) {
+        try {
+          const { password, timestamp } = JSON.parse(session);
+          const sessionAge = Date.now() - timestamp;
+          const maxAge = (AUTH_CONFIG.sessionDuration || 30) * 24 * 60 * 60 * 1000; // days to ms
+
+          if (sessionAge < maxAge && password === AUTH_CONFIG.password) {
+            unlockPage();
+            return;
+          }
+        } catch (e) {
+          console.error('Session parse error:', e);
+        }
+      }
+
+      // Show login screen
+      showLoginScreen();
+    })();
+
+    function showLoginScreen() {
+      document.getElementById('auth-overlay').classList.remove('hidden');
+      document.getElementById('password-input').focus();
+    }
+
+    function unlockPage() {
+      document.body.classList.remove('auth-required');
+      document.getElementById('auth-overlay').classList.add('hidden');
+    }
+
+    function handleLogin(event) {
+      event.preventDefault();
+
+      const passwordInput = document.getElementById('password-input');
+      const enteredPassword = passwordInput.value;
+      const errorEl = document.getElementById('login-error');
+      const loginBtn = document.getElementById('login-btn');
+
+      errorEl.classList.remove('visible');
+
+      if (!AUTH_ENABLED) {
+        console.error('No auth config found');
+        errorEl.textContent = '❌ Authentication not configured';
+        errorEl.classList.add('visible');
+        return;
+      }
+
+      if (enteredPassword === AUTH_CONFIG.password) {
+        // Correct password - save session
+        const session = {
+          password: enteredPassword,
+          timestamp: Date.now()
+        };
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+
+        unlockPage();
+        passwordInput.value = '';
+      } else {
+        // Wrong password
+        errorEl.classList.add('visible');
+        passwordInput.value = '';
+        passwordInput.focus();
+
+        // Shake animation
+        loginBtn.style.animation = 'none';
+        setTimeout(() => {
+          loginBtn.style.animation = 'shake 0.5s';
+        }, 10);
+      }
+    }
+
+    function handleLogout() {
+      if (confirm('Are you sure you want to logout?')) {
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+        document.body.classList.add('auth-required');
+        showLoginScreen();
+      }
+    }
+
+    // ========================================
     // CONFIGURATION
     // ========================================
     const API_URL = 'https://script.google.com/macros/s/AKfycbxU5dBd5GU1RZeJ-UyNFf1Z8n3jCdIZ0VM6nXVj6_A7Pu2VbbxYWXMiDhkkgB3_8L9MyQ/exec';
@@ -1532,6 +1844,42 @@
     let editingOrderID = null;
     let cachedShipments = []; // Cache shipments to avoid redundant API calls
     let cachedPayments = []; // Cache payments to avoid redundant API calls
+    let pdfLibrariesLoaded = false; // Track if PDF libraries have been loaded
+
+    // ========================================
+    // LAZY-LOAD PDF LIBRARIES
+    // ========================================
+    async function ensurePDFLibrariesLoaded() {
+      if (pdfLibrariesLoaded) return true;
+
+      try {
+        // Load jsPDF core library
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+          script.onload = resolve;
+          script.onerror = () => reject(new Error('Failed to load jsPDF'));
+          document.head.appendChild(script);
+        });
+
+        // Load jsPDF-autotable plugin
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.1/jspdf.plugin.autotable.min.js';
+          script.onload = resolve;
+          script.onerror = () => reject(new Error('Failed to load jsPDF-autotable'));
+          document.head.appendChild(script);
+        });
+
+        pdfLibrariesLoaded = true;
+        console.log('✅ PDF libraries loaded successfully');
+        return true;
+      } catch (error) {
+        console.error('❌ Failed to load PDF libraries:', error);
+        showToast('Failed to load PDF generation libraries. Please refresh and try again.', 'error');
+        return false;
+      }
+    }
 
     // ========================================
     // INITIALIZATION
@@ -1790,7 +2138,7 @@
       if (result.success) {
         // Remove from local array instead of reloading everything
         orders = orders.filter(o => o.id !== orderID);
-        renderOrdersTable();
+        removeOrderRow(orderID); // ⚡ Fast row removal instead of full re-render
         updateStats();
         // Close detail panel if it's open for this order
         if (currentOrderID === orderID) {
@@ -2000,6 +2348,258 @@
     }
 
     // ========================================
+    // SHOPIFY IMPORT
+    // ========================================
+    let parsedShopifyData = [];
+
+    function openShopifyImportModal() {
+      document.getElementById('shopify-csv-file').value = '';
+      document.getElementById('import-preview').style.display = 'none';
+      document.getElementById('import-confirm-btn').style.display = 'none';
+      parsedShopifyData = [];
+      document.getElementById('shopify-import-modal').classList.add('active');
+    }
+
+    function closeShopifyImportModal() {
+      document.getElementById('shopify-import-modal').classList.remove('active');
+    }
+
+    function handleShopifyFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const csvText = e.target.result;
+        parseShopifyCSV(csvText);
+      };
+      reader.readAsText(file);
+    }
+
+    function parseShopifyCSV(csvText) {
+      try {
+        // Parse CSV
+        const lines = csvText.split('\n');
+        const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+
+        // Find required column indices
+        const orderNumIdx = headers.indexOf('Name');
+        const emailIdx = headers.indexOf('Email');
+        const financialStatusIdx = headers.indexOf('Financial Status');
+        const fulfillmentStatusIdx = headers.indexOf('Fulfillment Status');
+        const totalIdx = headers.indexOf('Total');
+        const lineItemTitleIdx = headers.indexOf('Lineitem name');
+        const lineItemQtyIdx = headers.indexOf('Lineitem quantity');
+        const lineItemPriceIdx = headers.indexOf('Lineitem price');
+        const shippingIdx = headers.indexOf('Shipping');
+        const billingNameIdx = headers.indexOf('Billing Name');
+        const billingCompanyIdx = headers.indexOf('Billing Company');
+
+        // Group orders by order number
+        const ordersMap = {};
+
+        for (let i = 1; i < lines.length; i++) {
+          if (!lines[i].trim()) continue;
+
+          // Simple CSV parsing (handles basic cases)
+          const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+
+          const orderNum = cols[orderNumIdx];
+          const fulfillmentStatus = cols[fulfillmentStatusIdx];
+
+          // Only import fulfilled orders
+          if (fulfillmentStatus !== 'fulfilled') continue;
+
+          if (!ordersMap[orderNum]) {
+            ordersMap[orderNum] = {
+              orderNumber: orderNum,
+              email: cols[emailIdx],
+              customerName: cols[billingCompanyIdx] || cols[billingNameIdx],
+              total: parseFloat(cols[totalIdx]) || 0,
+              shipping: parseFloat(cols[shippingIdx]) || 0,
+              lineItems: []
+            };
+          }
+
+          // Add line item
+          if (cols[lineItemTitleIdx]) {
+            ordersMap[orderNum].lineItems.push({
+              title: cols[lineItemTitleIdx],
+              quantity: parseFloat(cols[lineItemQtyIdx]) || 0,
+              price: parseFloat(cols[lineItemPriceIdx]) || 0
+            });
+          }
+        }
+
+        // Convert to array
+        const parsedOrders = Object.values(ordersMap);
+
+        if (parsedOrders.length === 0) {
+          showToast('No fulfilled orders found in CSV', 'warning');
+          return;
+        }
+
+        // Match to master orders
+        matchShopifyOrders(parsedOrders);
+
+      } catch (error) {
+        console.error('CSV parsing error:', error);
+        showToast('Error parsing CSV: ' + error.message, 'error');
+      }
+    }
+
+    function matchShopifyOrders(shopifyOrders) {
+      const matched = [];
+      const unmatched = [];
+
+      shopifyOrders.forEach(shopifyOrder => {
+        // Find matching master order
+        const masterOrder = orders.find(mo => {
+          const nameLower = mo.customerName.toLowerCase();
+          const shopifyNameLower = (shopifyOrder.customerName || '').toLowerCase();
+          const emailMatch = mo.shipTo_Email && shopifyOrder.email &&
+            mo.shipTo_Email.toLowerCase() === shopifyOrder.email.toLowerCase();
+          const nameMatch = shopifyNameLower && nameLower.includes(shopifyNameLower);
+          return emailMatch || nameMatch;
+        });
+
+        if (masterOrder) {
+          matched.push({ shopifyOrder, masterOrder });
+        } else {
+          unmatched.push(shopifyOrder);
+        }
+      });
+
+      parsedShopifyData = matched;
+      displayImportPreview(matched, unmatched);
+    }
+
+    function displayImportPreview(matched, unmatched) {
+      const container = document.getElementById('import-preview-content');
+      let html = '';
+
+      if (matched.length > 0) {
+        html += `<div style="margin-bottom: 24px;">`;
+        html += `<h5 style="color: var(--success); margin-bottom: 12px;">✅ ${matched.length} order(s) matched</h5>`;
+        matched.forEach(({ shopifyOrder, masterOrder }) => {
+          html += `
+            <div class="list-item" style="margin-bottom: 12px;">
+              <div class="list-item-header">
+                <span class="list-item-title">Shopify #${shopifyOrder.orderNumber}</span>
+                <span class="shopify-badge">→ ${masterOrder.id}</span>
+              </div>
+              <div class="list-item-body">
+                ${shopifyOrder.customerName} • $${formatNumber(shopifyOrder.total)} • ${shopifyOrder.lineItems.length} items
+              </div>
+            </div>
+          `;
+        });
+        html += `</div>`;
+      }
+
+      if (unmatched.length > 0) {
+        html += `<div>`;
+        html += `<h5 style="color: var(--warning); margin-bottom: 12px;">⚠️ ${unmatched.length} order(s) not matched</h5>`;
+        html += `<div style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">These customers don't exist in your Master Orders. Add them first to import their shipments.</div>`;
+        unmatched.forEach(order => {
+          html += `
+            <div class="list-item" style="margin-bottom: 12px; opacity: 0.6;">
+              <div class="list-item-header">
+                <span class="list-item-title">Shopify #${order.orderNumber}</span>
+              </div>
+              <div class="list-item-body">
+                ${order.customerName || order.email} • $${formatNumber(order.total)}
+              </div>
+            </div>
+          `;
+        });
+        html += `</div>`;
+      }
+
+      container.innerHTML = html;
+      document.getElementById('import-preview').style.display = 'block';
+
+      if (matched.length > 0) {
+        document.getElementById('import-confirm-btn').style.display = 'inline-flex';
+        document.getElementById('import-count').textContent = matched.length;
+      }
+    }
+
+    async function confirmShopifyImport() {
+      if (parsedShopifyData.length === 0) {
+        showToast('No orders to import', 'warning');
+        return;
+      }
+
+      document.getElementById('import-confirm-btn').disabled = true;
+      document.getElementById('import-confirm-btn').innerHTML = '<i class="ph ph-spinner"></i> Importing...';
+
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const { shopifyOrder, masterOrder } of parsedShopifyData) {
+        try {
+          // Convert to shipment format
+          const shipment = {
+            orderID: masterOrder.id,
+            shipmentDate: new Date().toISOString(),
+            status: 'shipped',
+            lineItems: shopifyOrder.lineItems.map(item => {
+              const type = item.title.toLowerCase().includes('small') ? 'smalls' : 'tops';
+              return {
+                strain: item.title,
+                type: type,
+                quantity: item.quantity,
+                unitPrice: item.price,
+                total: item.quantity * item.price
+              };
+            }),
+            subTotal: shopifyOrder.total - shopifyOrder.shipping,
+            discount: 0,
+            freightCost: shopifyOrder.shipping,
+            totalAmount: shopifyOrder.total,
+            carrier: '',
+            trackingNumber: '',
+            notes: `Auto-imported from Shopify Order #${shopifyOrder.orderNumber}`,
+            dimensions: {
+              source: 'shopify',
+              shopifyOrderNumber: shopifyOrder.orderNumber
+            }
+          };
+
+          const result = await apiCall('saveShipment', shipment, 'POST');
+
+          if (result.success) {
+            successCount++;
+          } else {
+            errorCount++;
+            console.error('Failed to save shipment:', result.error);
+          }
+        } catch (error) {
+          errorCount++;
+          console.error('Import error:', error);
+        }
+      }
+
+      closeShopifyImportModal();
+
+      if (successCount > 0) {
+        showToast(`✅ Imported ${successCount} shipment(s) from Shopify!`, 'success');
+        // Refresh the current order panel if open
+        if (currentOrderID) {
+          await openDetailPanel(currentOrderID);
+        }
+      }
+
+      if (errorCount > 0) {
+        showToast(`⚠️ ${errorCount} shipment(s) failed to import`, 'warning');
+      }
+
+      document.getElementById('import-confirm-btn').disabled = false;
+      document.getElementById('import-confirm-btn').innerHTML = '<i class="ph ph-check"></i> Import <span id="import-count"></span> Shipments';
+    }
+
+    // ========================================
     // DETAIL PANEL
     // ========================================
     async function openDetailPanel(orderID) {
@@ -2060,16 +2660,78 @@
         ? Math.round((order.fulfilled || 0) / order.commitmentAmount * 100)
         : 0;
 
-      // Update fulfilled column (index 3)
-      row.cells[3].innerHTML = `$${formatNumber(order.fulfilled || 0)}`;
-
-      // Update progress column (index 4)
+      // Update all columns for full edit support
+      row.cells[0].innerHTML = `<span class="order-id">${order.id}</span>`;
+      row.cells[1].textContent = order.customerName || 'Unknown';
+      row.cells[2].innerHTML = `<span class="order-amount">$${formatNumber(order.commitmentAmount)}</span>`;
+      row.cells[3].innerHTML = `<span class="order-amount">$${formatNumber(order.fulfilled || 0)}</span>`;
       row.cells[4].innerHTML = `
         ${fulfillPct}%
         <div class="progress-mini">
           <div class="progress-mini-fill" style="width: ${fulfillPct}%"></div>
         </div>
       `;
+      row.cells[5].innerHTML = `<span class="order-status ${order.status}">${order.status}</span>`;
+      // Note: Action buttons (column 6) remain unchanged
+    }
+
+    // Add a new order row to the table (faster than full re-render)
+    function addOrderRow(order) {
+      const tbody = document.getElementById('orders-table-body');
+
+      // Remove "no orders" message if present
+      if (tbody.querySelector('td[colspan]')) {
+        tbody.innerHTML = '';
+      }
+
+      const fulfillPct = order.commitmentAmount > 0
+        ? Math.round((order.fulfilled || 0) / order.commitmentAmount * 100)
+        : 0;
+
+      const row = document.createElement('tr');
+      row.onclick = () => openDetailPanel(order.id);
+      row.innerHTML = `
+        <td class="order-id">${order.id}</td>
+        <td>${order.customerName || 'Unknown'}</td>
+        <td class="order-amount">$${formatNumber(order.commitmentAmount)}</td>
+        <td class="order-amount">$${formatNumber(order.fulfilled || 0)}</td>
+        <td class="progress-cell">
+          ${fulfillPct}%
+          <div class="progress-mini">
+            <div class="progress-mini-fill" style="width: ${fulfillPct}%"></div>
+          </div>
+        </td>
+        <td><span class="order-status ${order.status}">${order.status}</span></td>
+        <td onclick="event.stopPropagation()" style="white-space: nowrap;">
+          <button class="btn-icon" onclick="editOrder('${order.id}')" title="Edit Order">
+            <i class="ph ph-pencil-simple"></i>
+          </button>
+          <button class="btn-icon" onclick="deleteOrder('${order.id}')" title="Delete Order" style="color: var(--danger);">
+            <i class="ph ph-trash"></i>
+          </button>
+        </td>
+      `;
+      tbody.appendChild(row);
+    }
+
+    // Remove an order row from the table (faster than full re-render)
+    function removeOrderRow(orderID) {
+      const row = document.querySelector(`tr[onclick*="${orderID}"]`);
+      if (row) {
+        row.remove();
+
+        // Show "no orders" message if table is now empty
+        const tbody = document.getElementById('orders-table-body');
+        if (tbody.children.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="7" style="text-align: center; padding: 40px; color: var(--text-muted);">
+                No orders yet. Create your first order above.
+              </td>
+            </tr>
+          `;
+        }
+      }
     }
 
     function closeDetailPanel() {
@@ -2110,27 +2772,41 @@
         return;
       }
 
-      container.innerHTML = shipments.map(shipment => `
-        <div class="list-item">
-          <div class="list-item-header">
-            <span class="list-item-title">${shipment.invoiceNumber}</span>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span class="list-item-meta">${formatDate(shipment.shipmentDate)}</span>
-              <button class="btn-icon" onclick="editShipment('${shipment.id}')" title="Edit Shipment">
-                <i class="ph ph-pencil-simple"></i>
-              </button>
-              <button class="btn-icon" onclick="deleteShipment('${shipment.id}')" title="Delete Shipment" style="color: var(--danger);">
-                <i class="ph ph-trash"></i>
-              </button>
+      container.innerHTML = shipments.map(shipment => {
+        // Check if this is a Shopify import
+        const isShopify = shipment.dimensions && shipment.dimensions.source === 'shopify';
+        const shopifyBadge = isShopify
+          ? `<span class="shopify-badge" title="Imported from Shopify Order #${shipment.dimensions.shopifyOrderNumber || 'N/A'}">
+               <i class="ph ph-shopping-cart"></i> Shopify
+             </span>`
+          : '';
+
+        return `
+          <div class="list-item">
+            <div class="list-item-header">
+              <span class="list-item-title">
+                ${shipment.invoiceNumber}
+                ${shopifyBadge}
+              </span>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="list-item-meta">${formatDate(shipment.shipmentDate)}</span>
+                <button class="btn-icon" onclick="editShipment('${shipment.id}')" title="Edit Shipment">
+                  <i class="ph ph-pencil-simple"></i>
+                </button>
+                <button class="btn-icon" onclick="deleteShipment('${shipment.id}')" title="Delete Shipment" style="color: var(--danger);">
+                  <i class="ph ph-trash"></i>
+                </button>
+              </div>
+            </div>
+            <div class="list-item-body">
+              <strong>$${formatNumber(shipment.totalAmount)}</strong> •
+              ${shipment.lineItems ? shipment.lineItems.length : 0} items •
+              ${shipment.carrier || 'No carrier'}
+              ${isShopify && shipment.trackingNumber ? '<br><span style="font-size: 12px; color: var(--text-muted);">Tracking: ' + shipment.trackingNumber + '</span>' : ''}
             </div>
           </div>
-          <div class="list-item-body">
-            <strong>$${formatNumber(shipment.totalAmount)}</strong> •
-            ${shipment.lineItems ? shipment.lineItems.length : 0} items •
-            ${shipment.carrier || 'No carrier'}
-          </div>
-        </div>
-      `).join('');
+        `;
+      }).join('');
     }
 
     function renderPayments(payments) {
@@ -2299,14 +2975,15 @@
           const index = orders.findIndex(o => o.id === editingOrderID);
           if (index !== -1) {
             orders[index] = { ...orders[index], ...orderData };
+            updateOrderRow(editingOrderID, orders[index]); // ⚡ Fast row update instead of full re-render
           }
         } else {
           // Add new order to array
           const newOrder = { ...orderData, id: result.order.id, status: 'pending', fulfilled: 0, paid: 0 };
           orders.push(newOrder);
+          addOrderRow(newOrder); // ⚡ Fast row addition instead of full re-render
         }
 
-        renderOrdersTable();
         updateStats();
 
         // Refresh detail panel if it's open for this order
@@ -3045,6 +3722,11 @@
       const shipmentResult = await saveShipment();
       if (!shipmentResult) return; // Save failed
 
+      // ⚡ Lazy-load PDF libraries only when needed
+      showToast('Loading PDF libraries...', 'info');
+      const librariesLoaded = await ensurePDFLibrariesLoaded();
+      if (!librariesLoaded) return; // Failed to load libraries
+
       // Get the current order
       const order = orders.find(o => o.id === currentOrderID);
       if (!order) {
@@ -3127,6 +3809,8 @@
         icon = '<i class="ph ph-x-circle toast-icon"></i>';
       } else if (type === 'warning') {
         icon = '<i class="ph ph-warning-circle toast-icon"></i>';
+      } else if (type === 'info') {
+        icon = '<i class="ph ph-info toast-icon"></i>';
       }
 
       toast.innerHTML = `
