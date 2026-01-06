@@ -2739,7 +2739,7 @@ function renderCurrentProduction() {
       var h = data.hourly[i];
       if (h.tops > 0 || h.smalls > 0) {
         d = {
-          strain: h.strain || (data.today && data.today.strain) || (data.strains && data.strains.length > 0 && data.strains[0].name) || 'Unknown',
+          strain: h.strain || (data.current && data.current.strain) || (data.today && data.today.strain) || (data.strains && data.strains.length > 0 && data.strains[0].name) || 'Unknown',
           timeSlot: h.label || '',
           tops: h.tops || 0,
           smalls: h.smalls || 0,
