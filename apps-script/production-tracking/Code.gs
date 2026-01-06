@@ -664,7 +664,17 @@ function getProductionDashboardData(startDate, endDate) {
   var avgBuckers = hoursWorked > 0 ? totalBuckerHours / hoursWorked : 0;
   var buckers = Math.round(avgBuckers);
 
-  var totalOperatorHours = totalTrimmerHours + totalBuckerHours;
+  // T-Zero workers from both lines
+  var totalTZeroHours = (lineBreakdown.line1TZero || 0) + (lineBreakdown.line2TZero || 0);
+  var avgTZero = hoursWorked > 0 ? totalTZeroHours / hoursWorked : 0;
+  var tzero = Math.round(avgTZero);
+
+  // QC workers (single column)
+  var totalQCHours = lineBreakdown.totalQC || 0;
+  var avgQC = hoursWorked > 0 ? totalQCHours / hoursWorked : 0;
+  var qc = Math.round(avgQC);
+
+  var totalOperatorHours = totalTrimmerHours + totalBuckerHours + totalTZeroHours + totalQCHours;
 
   // Calculate rates from actual data
   var currentRate = scoreboard.lastHourTrimmers > 0 ? (scoreboard.lastHourLbs / scoreboard.lastHourTrimmers) : 0;
@@ -785,9 +795,13 @@ function getProductionDashboardData(startDate, endDate) {
         lbsPerHour: lbsPerHour,
         trimmers: trimmers,
         buckers: buckers,
+        qc: qc,
+        tzero: tzero,
         hoursWorked: hoursWorked,
         totalTrimmerHours: totalTrimmerHours,
         totalBuckerHours: totalBuckerHours,
+        totalTZeroHours: totalTZeroHours,
+        totalQCHours: totalQCHours,
         totalOperatorHours: totalOperatorHours,
         totalLaborCost: totalLaborCost,
         costPerLb: costPerLb,
@@ -2450,10 +2464,13 @@ function getTodayLineBreakdown_(ss, timezone) {
     line1Smalls: 0,
     line1Trimmers: 0,
     line1Buckers: 0,
+    line1TZero: 0,
     line2Tops: 0,
     line2Smalls: 0,
     line2Trimmers: 0,
-    line2Buckers: 0
+    line2Buckers: 0,
+    line2TZero: 0,
+    totalQC: 0
   };
 
   var sheet = getLatestMonthSheet_(ss);
@@ -2477,10 +2494,13 @@ function getTodayLineBreakdown_(ss, timezone) {
     result.line1Smalls += parseFloat(row[cols.smalls1]) || 0;
     result.line1Trimmers += parseFloat(row[cols.trimmers1]) || 0;
     result.line1Buckers += parseFloat(row[cols.buckers1]) || 0;
+    result.line1TZero += parseFloat(row[cols.tzero1]) || 0;
     result.line2Tops += parseFloat(row[cols.tops2]) || 0;
     result.line2Smalls += parseFloat(row[cols.smalls2]) || 0;
     result.line2Trimmers += parseFloat(row[cols.trimmers2]) || 0;
     result.line2Buckers += parseFloat(row[cols.buckers2]) || 0;
+    result.line2TZero += parseFloat(row[cols.tzero2]) || 0;
+    result.totalQC += parseFloat(row[cols.qc]) || 0;
   }
 
   return result;
