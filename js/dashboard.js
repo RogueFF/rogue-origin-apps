@@ -2342,7 +2342,7 @@ function renderHero() {
   var crew = (t.trimmers || 0) + (t.buckers || 0) + (t.qc || 0) + (t.tzero || 0);
   if (elHeroCrewValue) elHeroCrewValue.textContent = crew;
 
-  if (elHeroRateValue) elHeroRateValue.textContent = rate.toFixed(2);
+  if (elHeroRateValue) elHeroRateValue.textContent = todayRate.toFixed(2);
 
   // Display predicted tops outcome (using already calculated predictedTops from above)
   if (elHeroTargetValue) {
