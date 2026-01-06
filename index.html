@@ -32,9 +32,7 @@
     <span class="logo-loader-bar"></span>
   </div>
 
-  <div class="settings-overlay" id="settingsOverlay" onclick="closeSettings()"></div>
-  <div class="settings-panel" id="settingsPanel">
-    <div class="settings-header"><span class="settings-title">Customize Dashboard</span><button class="settings-close" onclick="closeSettings()">&times;</button></div>
+  <div class="settings-overlay" id="settingsOverlay" onclick="closeSettings()" role="presentation"></div><div class="settings-panel" id="settingsPanel" role="dialog" aria-modal="true" aria-labelledby="settingsPanelTitle"><div class="settings-header"><span class="settings-title" id="settingsPanelTitle">Customize Dashboard</span><button class="settings-close" onclick="closeSettings()" aria-label="Close settings panel">&times;</button></div>
     <div class="settings-section">
       <div class="settings-section-title">Production Target</div>
       <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Daily target shown as line on charts</p>
@@ -71,7 +69,7 @@
   </div>
 
   <aside class="sidebar" id="sidebar">
-    <div class="sidebar-toggle" onclick="toggleSidebar()">
+    <div class="sidebar-toggle" onclick="toggleSidebar()" role="button" tabindex="0" aria-label="Collapse sidebar" onkeydown="if(event.key==='Enter'||event.key===' ')toggleSidebar()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 19l-7-7 7-7M18 19l-7-7 7-7"/></svg>
       <span class="sidebar-toggle-label">Collapse</span>
     </div>
@@ -79,12 +77,12 @@
       <img src="https://i.imgur.com/PvrTPb2.png" alt="Rogue Origin" class="logo">
       <h1>Rogue Origin</h1>
     </div>
-    <div class="nav-item active" data-view="dashboard" onclick="switchView('dashboard')"><span class="icon"><i class="ph-duotone ph-chart-pie-slice"></i></span><span>Dashboard</span></div>
-    <div class="nav-item" data-view="kanban" onclick="switchView('kanban')"><span class="icon"><i class="ph-duotone ph-package"></i></span><span>Supply Kanban</span></div>
-    <div class="nav-item" data-view="scoreboard" onclick="switchView('scoreboard')"><span class="icon"><i class="ph-duotone ph-gauge"></i></span><span>Scoreboard</span></div>
-    <div class="nav-item" data-view="barcode" onclick="switchView('barcode')"><span class="icon"><i class="ph-duotone ph-barcode"></i></span><span>Barcode Printer</span></div>
-    <div class="nav-item" data-view="sop" onclick="switchView('sop')"><span class="icon"><i class="ph-duotone ph-book-open-text"></i></span><span>SOP Manager</span></div>
-    <div class="nav-item" data-view="orders" onclick="switchView('orders')"><span class="icon"><i class="ph-duotone ph-clipboard-text"></i></span><span>Orders</span></div>
+    <div class="nav-item active" data-view="dashboard" onclick="switchView('dashboard')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('dashboard')"><span class="icon"><i class="ph-duotone ph-chart-pie-slice"></i></span><span>Dashboard</span></div>
+    <div class="nav-item" data-view="kanban" onclick="switchView('kanban')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('kanban')"><span class="icon"><i class="ph-duotone ph-package"></i></span><span>Supply Kanban</span></div>
+    <div class="nav-item" data-view="scoreboard" onclick="switchView('scoreboard')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('scoreboard')"><span class="icon"><i class="ph-duotone ph-gauge"></i></span><span>Scoreboard</span></div>
+    <div class="nav-item" data-view="barcode" onclick="switchView('barcode')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('barcode')"><span class="icon"><i class="ph-duotone ph-barcode"></i></span><span>Barcode Printer</span></div>
+    <div class="nav-item" data-view="sop" onclick="switchView('sop')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('sop')"><span class="icon"><i class="ph-duotone ph-book-open-text"></i></span><span>SOP Manager</span></div>
+    <div class="nav-item" data-view="orders" onclick="switchView('orders')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('orders')"><span class="icon"><i class="ph-duotone ph-clipboard-text"></i></span><span>Orders</span></div>
     <div class="nav-section">Coming Soon</div>
     <div class="nav-item disabled"><span class="icon"><i class="ph-duotone ph-users-three"></i></span><span>Staff</span></div>
     <div class="nav-item disabled"><span class="icon"><i class="ph-duotone ph-chart-line-up"></i></span><span>Reports</span></div>
@@ -100,15 +98,13 @@
   <main class="main">
     <header class="header">
       <div class="header-left">
-        <button class="mobile-menu-btn" onclick="toggleMobileSidebar()">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        <button class="mobile-menu-btn" onclick="toggleMobileSidebar()" aria-label="Open navigation menu" aria-expanded="false"><svg width="20" aria-hidden="true" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
         <img src="https://i.imgur.com/UYEbNiI.png" alt="Rogue Origin" class="header-logo">
       </div>
       <div class="header-right" id="dashboardControls">
         <div class="date-picker-wrapper">
-          <button class="date-picker-trigger" onclick="toggleDatePicker()">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <button class="date-picker-trigger" onclick="toggleDatePicker()" aria-label="Select date range" aria-haspopup="true" aria-expanded="false" id="datePickerTrigger"><svg width="12" aria-hidden="true" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             <span id="datePickerLabel">Today</span>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
@@ -122,32 +118,30 @@
             <div class="date-custom">
               <div class="date-custom-label">Custom Range</div>
               <div class="date-inputs">
-                <input type="date" class="date-input" id="startDate">
+                <input type="date" class="date-input" id="startDate" aria-label="Start date">
                 <span style="color: var(--text-light);">→</span>
-                <input type="date" class="date-input" id="endDate">
+                <input type="date" class="date-input" id="endDate" aria-label="End date">
               </div>
               <button class="date-apply-btn" onclick="applyCustomRange()">Apply</button>
             </div>
           </div>
         </div>
         <div class="compare-selector">
-          <button class="header-btn" id="compareBtn" onclick="toggleCompareDropdown()">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+          <button class="header-btn" id="compareBtn" onclick="toggleCompareDropdown()" aria-label="Compare periods" aria-haspopup="true" aria-expanded="false"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
             Compare
           </button>
           <div class="compare-dropdown" id="compareDropdown">
-            <div class="compare-option" onclick="setCompare('yesterday')">Today vs Yesterday</div>
-            <div class="compare-option" onclick="setCompare('lastWeek')">This Week vs Last</div>
-            <div class="compare-option" onclick="setCompare('lastMonth')">This Month vs Last</div>
+            <div class="compare-option" onclick="setCompare('yesterday')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' ')setCompare('yesterday')">Today vs Yesterday</div>
+            <div class="compare-option" onclick="setCompare('lastWeek')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' ')setCompare('lastWeek')">This Week vs Last</div>
+            <div class="compare-option" onclick="setCompare('lastMonth')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' ')setCompare('lastMonth')">This Month vs Last</div>
           </div>
         </div>
         <div class="header-time"><div class="time" id="clock">--:--</div><div class="date" id="dateDisplay">Loading...</div></div>
-        <button class="theme-toggle header-btn" onclick="toggleTheme()" title="Toggle theme">
-          <span id="themeIcon">🌙</span>
+        <button class="theme-toggle header-btn" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle dark mode theme"><span id="themeIcon" aria-hidden="true">🌙</span>
           <span id="themeLabel">Dark</span>
         </button>
-        <button class="header-btn" onclick="openSettings()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
-        <button class="header-btn primary" id="refreshBtn" onclick="refreshData()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Refresh</button>
+        <button class="header-btn" onclick="openSettings()" aria-label="Open dashboard settings"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+        <button class="header-btn primary" id="refreshBtn" onclick="refreshData()" aria-label="Refresh dashboard data"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Refresh</button>
       </div>
     </header>
 
@@ -162,7 +156,7 @@
             <div style="display:flex;align-items:center;gap:4px;"><div class="compare-dot previous"></div><span id="comparePrevious">Yesterday</span></div>
           </div>
         </div>
-        <button class="compare-close" onclick="clearCompare()">&times;</button>
+        <button class="compare-close" onclick="clearCompare()" aria-label="Clear comparison">&times;</button>
       </div>
 
       <!-- Welcome Section -->
@@ -225,13 +219,13 @@
                 <div class="integration-title widget-title">Supply Kanban</div>
               </div>
               <div class="widget-actions">
-                                <button class="widget-help" onclick="showWidgetHelp('kanban')" title="Help">
+                                <button class="widget-help" onclick="event.stopPropagation();showWidgetHelp('kanban')" title="Help" aria-label="Show widget help">
                   <i class="ph ph-lightbulb"></i>
                 </button>
-                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse">
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
-                <button class="widget-hide" onclick="event.stopPropagation();hideWidget('widget-kanban')" title="Hide">
+                <button class="widget-hide" onclick="event.stopPropagation();hideWidget('widget-kanban')" title="Hide" aria-label="Hide widget">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
               </div>
@@ -253,13 +247,13 @@
                 <div class="integration-title widget-title">Live Scoreboard</div>
               </div>
               <div class="widget-actions">
-                                <button class="widget-help" onclick="showWidgetHelp('scoreboard')" title="Help">
+                                <button class="widget-help" onclick="event.stopPropagation();showWidgetHelp('scoreboard')" title="Help" aria-label="Show widget help">
                   <i class="ph ph-lightbulb"></i>
                 </button>
-                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse">
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
-                <button class="widget-hide" onclick="event.stopPropagation();hideWidget('widget-scoreboard')" title="Hide">
+                <button class="widget-hide" onclick="event.stopPropagation();hideWidget('widget-scoreboard')" title="Hide" aria-label="Hide widget">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
               </div>
@@ -280,13 +274,13 @@
                 <div class="integration-title widget-title">5KG Bag Timer</div>
               </div>
               <div class="widget-actions">
-                                <button class="widget-help" onclick="showWidgetHelp('bags')" title="Help">
+                                <button class="widget-help" onclick="event.stopPropagation();showWidgetHelp('bags')" title="Help" aria-label="Show widget help">
                   <i class="ph ph-lightbulb"></i>
                 </button>
-                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
-                <button class="widget-hide" onclick="hideWidget('widget-bags')" title="Hide">
+                <button class="widget-hide" onclick="event.stopPropagation();hideWidget('widget-bags')" title="Hide" aria-label="Hide widget">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
               </div>
@@ -307,13 +301,13 @@
                 <div class="integration-title widget-title">SOP Manager</div>
               </div>
               <div class="widget-actions">
-                                <button class="widget-help" onclick="showWidgetHelp('sop')" title="Help">
+                                <button class="widget-help" onclick="event.stopPropagation();showWidgetHelp('sop')" title="Help" aria-label="Show widget help">
                   <i class="ph ph-lightbulb"></i>
                 </button>
-                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse">
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
-                <button class="widget-hide" onclick="event.stopPropagation();hideWidget('widget-sop')" title="Hide">
+                <button class="widget-hide" onclick="event.stopPropagation();hideWidget('widget-sop')" title="Hide" aria-label="Hide widget">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
               </div>
@@ -334,19 +328,19 @@
               <div style="display:flex;align-items:center;gap:8px;">
                 <div class="status-badge idle" id="statusBadge">Last Hour</div>
                 <div class="widget-actions">
-                  <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize">
+                  <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize" aria-label="Resize widget">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
                   </button>
-                  <button class="widget-help" onclick="showWidgetHelp('current')" title="Help">
+                  <button class="widget-help" onclick="showWidgetHelp('current')" title="Help" aria-label="Show widget help">
                     <i class="ph ph-lightbulb"></i>
                   </button>
-                  <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
+                  <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                   </button>
-                  <button class="widget-drag-handle" title="Drag to reorder">
+                  <button class="widget-drag-handle" title="Drag to reorder" aria-label="Drag to reorder widget">
                     <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
                   </button>
-                  <button class="widget-hide" onclick="hideWidget('widget-current')" title="Hide">
+                  <button class="widget-hide" onclick="hideWidget('widget-current')" title="Hide" aria-label="Hide widget">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
                   </button>
                 </div>
@@ -369,13 +363,13 @@
             <div class="widget-header chart-header">
               <div><div class="chart-title widget-title">Hourly Production</div><div class="chart-subtitle">Tops vs Smalls</div></div>
               <div class="widget-actions">
-                <button class="widget-help" onclick="showWidgetHelp('hourlyChart')" title="Help">
+                <button class="widget-help" onclick="showWidgetHelp('hourlyChart')" title="Help" aria-label="Show widget help">
                   <i class="ph ph-lightbulb"></i>
                 </button>
-                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
-                <button class="widget-hide" onclick="hideWidget('widget-hourlyChart')" title="Hide">
+                <button class="widget-hide" onclick="hideWidget('widget-hourlyChart')" title="Hide" aria-label="Hide widget">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
               </div>
@@ -388,13 +382,13 @@
             <div class="widget-header chart-header">
               <div><div class="chart-title widget-title">Efficiency Trend</div><div class="chart-subtitle">Lbs/Trimmer/Hr</div></div>
               <div class="widget-actions">
-                <button class="widget-help" onclick="showWidgetHelp('rateChart')" title="Help">
+                <button class="widget-help" onclick="showWidgetHelp('rateChart')" title="Help" aria-label="Show widget help">
                   <i class="ph ph-lightbulb"></i>
                 </button>
-                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
-                <button class="widget-hide" onclick="hideWidget('widget-rateChart')" title="Hide">
+                <button class="widget-hide" onclick="hideWidget('widget-rateChart')" title="Hide" aria-label="Hide widget">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
               </div>
@@ -407,13 +401,13 @@
             <div class="widget-header chart-header">
               <div><div class="chart-title widget-title">Daily Production</div><div class="chart-subtitle">Multi-day view</div></div>
               <div class="widget-actions">
-                <button class="widget-help" onclick="showWidgetHelp('dailyChart')" title="Help">
+                <button class="widget-help" onclick="showWidgetHelp('dailyChart')" title="Help" aria-label="Show widget help">
                   <i class="ph ph-lightbulb"></i>
                 </button>
-                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
-                <button class="widget-hide" onclick="hideWidget('widget-dailyChart')" title="Hide">
+                <button class="widget-hide" onclick="hideWidget('widget-dailyChart')" title="Hide" aria-label="Hide widget">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
               </div>
@@ -426,13 +420,13 @@
             <div class="widget-header chart-header">
               <div><div class="chart-title widget-title" id="efficiencyChartTitle">Daily Efficiency</div><div class="chart-subtitle" id="efficiencyChartSubtitle">With 7-day MA</div></div>
               <div class="widget-actions">
-                                <button class="widget-help" onclick="showWidgetHelp('dailyRateChart')" title="Help">
+                                <button class="widget-help" onclick="showWidgetHelp('dailyRateChart')" title="Help" aria-label="Show widget help">
                   <i class="ph ph-lightbulb"></i>
                 </button>
-                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
-                <button class="widget-hide" onclick="hideWidget('widget-dailyRateChart')" title="Hide">
+                <button class="widget-hide" onclick="hideWidget('widget-dailyRateChart')" title="Hide" aria-label="Hide widget">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
               </div>
@@ -447,13 +441,13 @@
             <div class="widget-header chart-header">
               <div><div class="chart-title widget-title">Trimmers on Line</div><div class="chart-subtitle" id="trimmersChartSubtitle">By Hour</div></div>
               <div class="widget-actions">
-                                <button class="widget-help" onclick="showWidgetHelp('trimmersChart')" title="Help">
+                                <button class="widget-help" onclick="showWidgetHelp('trimmersChart')" title="Help" aria-label="Show widget help">
                   <i class="ph ph-lightbulb"></i>
                 </button>
-                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
-                <button class="widget-hide" onclick="hideWidget('widget-trimmersChart')" title="Hide">
+                <button class="widget-hide" onclick="hideWidget('widget-trimmersChart')" title="Hide" aria-label="Hide widget">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
               </div>
@@ -468,13 +462,13 @@
             <div class="widget-header">
               <div><div class="widget-title">Trimmer Productivity</div></div>
               <div class="widget-actions">
-                                <button class="widget-help" onclick="showWidgetHelp('productivity')" title="Help">
+                                <button class="widget-help" onclick="showWidgetHelp('productivity')" title="Help" aria-label="Show widget help">
                   <i class="ph ph-lightbulb"></i>
                 </button>
-                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
-                <button class="widget-hide" onclick="hideWidget('widget-productivity')" title="Hide">
+                <button class="widget-hide" onclick="hideWidget('widget-productivity')" title="Hide" aria-label="Hide widget">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
               </div>
@@ -494,13 +488,13 @@
             <div class="widget-header">
               <div><div class="widget-title">Strain Breakdown</div></div>
               <div class="widget-actions">
-                                <button class="widget-help" onclick="showWidgetHelp('strains')" title="Help">
+                                <button class="widget-help" onclick="showWidgetHelp('strains')" title="Help" aria-label="Show widget help">
                   <i class="ph ph-lightbulb"></i>
                 </button>
-                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
-                <button class="widget-hide" onclick="hideWidget('widget-strains')" title="Hide">
+                <button class="widget-hide" onclick="hideWidget('widget-strains')" title="Hide" aria-label="Hide widget">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
               </div>
@@ -513,13 +507,13 @@
             <div class="widget-header">
               <div><div class="widget-title">Performance</div></div>
               <div class="widget-actions">
-                                <button class="widget-help" onclick="showWidgetHelp('performance')" title="Help">
+                                <button class="widget-help" onclick="showWidgetHelp('performance')" title="Help" aria-label="Show widget help">
                   <i class="ph ph-lightbulb"></i>
                 </button>
-                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
-                <button class="widget-hide" onclick="hideWidget('widget-performance')" title="Hide">
+                <button class="widget-hide" onclick="hideWidget('widget-performance')" title="Hide" aria-label="Hide widget">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
               </div>
@@ -532,13 +526,13 @@
             <div class="widget-header">
               <div><div class="widget-title">Cost Analysis</div></div>
               <div class="widget-actions">
-                                <button class="widget-help" onclick="showWidgetHelp('cost')" title="Help">
+                                <button class="widget-help" onclick="showWidgetHelp('cost')" title="Help" aria-label="Show widget help">
                   <i class="ph ph-lightbulb"></i>
                 </button>
-                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
-                <button class="widget-hide" onclick="hideWidget('widget-cost')" title="Hide">
+                <button class="widget-hide" onclick="hideWidget('widget-cost')" title="Hide" aria-label="Hide widget">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
               </div>
@@ -551,13 +545,13 @@
             <div class="widget-header">
               <div><div class="widget-title">Period Summary</div><div class="widget-subtitle" id="periodLabel"></div></div>
               <div class="widget-actions">
-                                <button class="widget-help" onclick="showWidgetHelp('period')" title="Help">
+                                <button class="widget-help" onclick="showWidgetHelp('period')" title="Help" aria-label="Show widget help">
                   <i class="ph ph-lightbulb"></i>
                 </button>
-                <button class="widget-collapse" onclick="toggleWidgetCollapse(this)" title="Collapse">
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
-                <button class="widget-hide" onclick="hideWidget('widget-period')" title="Hide">
+                <button class="widget-hide" onclick="hideWidget('widget-period')" title="Hide" aria-label="Hide widget">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
               </div>
@@ -571,35 +565,35 @@
     <!-- App Views (iframes) -->
     <div class="app-view" id="kanbanView">
       <div class="app-iframe-container">
-        <button class="app-expand-btn" onclick="openAppNewTab('kanban')" title="Open in new tab"><i class="ph ph-arrow-square-out"></i></button>
+        <button class="app-expand-btn" onclick="openAppNewTab('kanban')" title="Open in new tab" aria-label="Open kanban in new tab"><i class="ph ph-arrow-square-out"></i></button>
         <iframe class="app-iframe" id="kanbanFrame" data-src="https://rogueff.github.io/rogue-origin-apps/kanban.html"></iframe>
       </div>
     </div>
 
     <div class="app-view" id="scoreboardView">
       <div class="app-iframe-container">
-        <button class="app-expand-btn" onclick="openAppNewTab('scoreboard')" title="Open in new tab"><i class="ph ph-arrow-square-out"></i></button>
+        <button class="app-expand-btn" onclick="openAppNewTab('scoreboard')" title="Open in new tab" aria-label="Open scoreboard in new tab"><i class="ph ph-arrow-square-out"></i></button>
         <iframe class="app-iframe" id="scoreboardFrame" data-src="https://rogueff.github.io/rogue-origin-apps/scoreboard.html"></iframe>
       </div>
     </div>
 
     <div class="app-view" id="barcodeView">
       <div class="app-iframe-container">
-        <button class="app-expand-btn" onclick="openAppNewTab('barcode')" title="Open in new tab"><i class="ph ph-arrow-square-out"></i></button>
+        <button class="app-expand-btn" onclick="openAppNewTab('barcode')" title="Open in new tab" aria-label="Open barcode printer in new tab"><i class="ph ph-arrow-square-out"></i></button>
         <iframe class="app-iframe" id="barcodeFrame" data-src="https://rogueff.github.io/rogue-origin-apps/barcode.html"></iframe>
       </div>
     </div>
 
     <div class="app-view" id="ordersView">
       <div class="app-iframe-container">
-        <button class="app-expand-btn" onclick="openAppNewTab('orders')" title="Open in new tab"><i class="ph ph-arrow-square-out"></i></button>
+        <button class="app-expand-btn" onclick="openAppNewTab('orders')" title="Open in new tab" aria-label="Open orders in new tab"><i class="ph ph-arrow-square-out"></i></button>
         <iframe class="app-iframe" id="ordersFrame" data-src="https://rogueff.github.io/rogue-origin-apps/orders.html"></iframe>
       </div>
     </div>
 
     <div class="app-view" id="sopView">
       <div class="app-iframe-container">
-        <button class="app-expand-btn" onclick="openAppNewTab('sop')" title="Open in new tab"><i class="ph ph-arrow-square-out"></i></button>
+        <button class="app-expand-btn" onclick="openAppNewTab('sop')" title="Open in new tab" aria-label="Open SOP manager in new tab"><i class="ph ph-arrow-square-out"></i></button>
         <iframe class="app-iframe" id="sopFrame" data-src="https://rogueff.github.io/rogue-origin-apps/sop-manager.html"></iframe>
       </div>
     </div>
@@ -965,11 +959,11 @@
         <h3>Rogue Origin Assistant</h3>
         <span>Ask about production, bags, crew</span>
       </div>
-      <button class="ai-voice-mode-toggle active" id="aiVoiceModeToggle" onclick="aiToggleVoiceMode()" title="Toggle voice responses">
+      <button class="ai-voice-mode-toggle active" id="aiVoiceModeToggle" onclick="aiToggleVoiceMode()" title="Toggle voice responses" aria-label="Toggle voice responses" aria-pressed="true">
         <span class="icon">🔊</span>
         <span class="label">Voice</span>
       </button>
-      <button class="settings-close" onclick="toggleAIChat()">&times;</button>
+      <button class="settings-close" onclick="toggleAIChat()" aria-label="Close AI chat">&times;</button>
     </div>
     <div class="ai-quick-actions">
       <button class="ai-quick-btn" onclick="aiAskQuestion('How are we doing today?')">📊 Status</button>
@@ -998,7 +992,7 @@
 <script defer src="js/dashboard.js"></script>
 
 <!-- Floating Action Button -->
-<button class="ai-chat-fab" onclick="toggleAIChat()" title="AI Assistant">
+<button class="ai-chat-fab" onclick="toggleAIChat()" title="AI Assistant" aria-label="Open AI Assistant chat">
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M21 11.5C21 12.8 20.7 14.1 20.1 15.3C19.4 16.7 18.3 17.9 17 18.7C15.6 19.6 14.1 20 12.5 20C11.2 20 9.9 19.7 8.7 19.1L3 21L4.9 15.3C4.3 14.1 4 12.8 4 11.5C4 9.9 4.4 8.4 5.3 7C6.1 5.7 7.3 4.6 8.7 3.9C9.9 3.3 11.2 3 12.5 3H13C15.1 3.1 17.1 4 18.5 5.5C20 6.9 20.9 8.9 21 11V11.5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     <path d="M12.5 8C12.5 8 10.5 9.5 10.5 12C10.5 9.5 8.5 8 8.5 8M12.5 8C12.5 8 14.5 9.5 14.5 12C14.5 9.5 16.5 8 16.5 8M12.5 12V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1006,16 +1000,15 @@
 </button>
 
 <!-- Welcome Modal -->
-<div class="welcome-modal-overlay" id="welcomeModal">
-  <div class="welcome-modal">
+<div class="welcome-modal-overlay" id="welcomeModal" role="dialog" aria-modal="true" aria-labelledby="welcomeModalTitle"><div class="welcome-modal">
     <div class="welcome-modal-icon">🌿</div>
-    <div class="welcome-modal-title">Welcome to Rogue Origin!</div>
+    <div class="welcome-modal-title" id="welcomeModalTitle">Welcome to Rogue Origin!</div>
     <div class="welcome-modal-content">
       Your production dashboard is ready. Would you like a quick tour to learn about the features and get started?
     </div>
     <div class="welcome-modal-actions">
-      <button class="welcome-modal-btn welcome-modal-btn-secondary" onclick="dismissWelcome()">No Thanks</button>
-      <button class="welcome-modal-btn welcome-modal-btn-primary" onclick="startTutorialFromWelcome()">Start Tour</button>
+      <button class="welcome-modal-btn welcome-modal-btn-secondary" onclick="dismissWelcome()" aria-label="Dismiss welcome and skip tour">No Thanks</button>
+      <button class="welcome-modal-btn welcome-modal-btn-primary" onclick="startTutorialFromWelcome()" aria-label="Start the dashboard tour">Start Tour</button>
     </div>
   </div>
 </div>

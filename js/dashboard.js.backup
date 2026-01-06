@@ -51,41 +51,8 @@ var sidebarCollapsed = false;
 var darkMode = false;
 var dailyTarget = 200; // Daily production target in lbs
 
-// AbortController for cancelling in-flight fetch requests when user changes date range quickly
-// This prevents stale data from overwriting current data (race condition fix)
-var currentFetchController = null;
-
-// Debounce timer for Muuri layout operations to prevent excessive reflows
-var muuriLayoutDebounceTimer = null;
-
-// Debounce timer for widget collapse animation to prevent layout thrashing
-var collapseLayoutDebounceTimer = null;
-
 // API Configuration for GitHub Pages
 var API_URL = 'https://script.google.com/macros/s/AKfycbxDAHSFl9cedGS49L3Lf5ztqy-SSToYigyA30ZtsdpmWNAR9H61X_Mm48JOOTGqqr-Z/exec';
-
-// Safe DOM element getter with warning for debugging
-function safeGetEl(id) {
-  var el = document.getElementById(id);
-  if (!el) console.warn('Element not found: ' + id);
-  return el;
-}
-
-// Safe chart context getter with warning for debugging
-function safeGetChartContext(canvasId) {
-  var canvas = document.getElementById(canvasId);
-  if (!canvas) {
-    console.warn('Canvas element not found: ' + canvasId);
-    return null;
-  }
-  var ctx = canvas.getContext('2d');
-  if (!ctx) {
-    console.warn('Could not get 2d context for: ' + canvasId);
-    return null;
-  }
-  return ctx;
-}
-
 
 // Detect environment: Apps Script or GitHub Pages
 var isAppsScript = typeof google !== 'undefined' && google.script && google.script.run;
@@ -192,37 +159,38 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   // Refresh Muuri layout on window resize (desktop only)
-  // Uses debounced layout to prevent layout thrashing during rapid resize
   var resizeTimeout;
   window.addEventListener('resize', function() {
     clearTimeout(resizeTimeout);
     resizeTimeout = setTimeout(function() {
       // Only use Muuri on desktop (>= 600px)
       if (window.innerWidth >= 600) {
-        // Use debounced layout for both grids to prevent thrashing
-        debouncedMuuriLayout(muuriKPI, 150);
-        debouncedMuuriLayout(muuriGrid, 150);
+        if (muuriKPI) {
+          muuriKPI.refreshItems();
+          muuriKPI.layout(true);
+        }
+        if (muuriGrid) {
+          muuriGrid.refreshItems();
+          muuriGrid.layout(true);
+        }
       } else {
         // Destroy Muuri on mobile to prevent positioning conflicts with CSS grid
-        // Guard against already-destroyed grids (race condition fix)
-        if (muuriKPI && !muuriKPI._isDestroyed) {
+        if (muuriKPI) {
           try {
             muuriKPI.destroy();
             muuriKPI = null;
             console.log('KPI Muuri destroyed for mobile view');
           } catch(e) {
             console.warn('Error destroying KPI Muuri:', e);
-            muuriKPI = null;
           }
         }
-        if (muuriGrid && !muuriGrid._isDestroyed) {
+        if (muuriGrid) {
           try {
             muuriGrid.destroy();
             muuriGrid = null;
             console.log('Widget Muuri destroyed for mobile view');
           } catch(e) {
             console.warn('Error destroying widget Muuri:', e);
-            muuriGrid = null;
           }
         }
       }
@@ -241,7 +209,6 @@ function initTargetInput() {
   });
 }
 
-
 // Sidebar toggle
 function toggleSidebar() {
   sidebarCollapsed = !sidebarCollapsed;
@@ -250,11 +217,9 @@ function toggleSidebar() {
   saveSettings();
 }
 
-
 function toggleMobileSidebar() {
   document.getElementById('sidebar').classList.toggle('mobile-open');
 }
-
 
 // ===== THEME TOGGLE SYSTEM =====
 function toggleTheme() {
@@ -279,7 +244,6 @@ function toggleTheme() {
   if (data) renderTrimmersChart();
 }
 
-
 function updateThemeUI(theme) {
   const icon = document.getElementById('themeIcon');
   const label = document.getElementById('themeLabel');
@@ -292,7 +256,6 @@ function updateThemeUI(theme) {
     label.textContent = 'Dark';
   }
 }
-
 
 function updateChartTheme(theme) {
   // Update chart.js default colors based on theme
@@ -309,7 +272,6 @@ function updateChartTheme(theme) {
   }
 }
 
-
 function initTheme() {
   // Load theme from localStorage or default to light
   const savedTheme = localStorage.getItem('theme') || 'light';
@@ -318,12 +280,10 @@ function initTheme() {
   updateChartTheme(savedTheme);
 }
 
-
 // Legacy support: keep toggleDarkMode for backwards compatibility
 function toggleDarkMode() {
   toggleTheme();
 }
-
 
 // View switching
 function switchView(view) {
@@ -374,11 +334,9 @@ function switchView(view) {
   document.getElementById('sidebar').classList.remove('mobile-open');
 }
 
-
 function openAppNewTab(app) {
   window.open(appUrls[app], '_blank');
 }
-
 
 // Settings
 function loadSettings() {
@@ -414,12 +372,10 @@ function loadSettings() {
   applyWidgetVisibility();
 }
 
-
 function applyDarkMode() {
   document.body.classList.toggle('dark-mode', darkMode);
   updateDarkModeUI();
 }
-
 
 function saveSettings() {
   var s = { kpiVisibility: {}, kpiOrder: [], widgetVisibility: {}, sidebarCollapsed: sidebarCollapsed, darkMode: darkMode, dailyTarget: dailyTarget };
@@ -433,7 +389,6 @@ function saveSettings() {
   localStorage.setItem('roHubSettingsV2', JSON.stringify(s));
 }
 
-
 // resetLayout() moved to line 3435 - consolidated version
 
 function applyWidgetVisibility() {
@@ -442,7 +397,6 @@ function applyWidgetVisibility() {
     if (el) el.dataset.hidden = !w.visible;
   });
 }
-
 
 function renderKPICards() {
   var c = document.getElementById('kpiRow');
@@ -469,7 +423,6 @@ function renderKPICards() {
   });
 }
 
-
 function renderKPIToggles() {
   var c = document.getElementById('kpiToggles');
   c.innerHTML = '';
@@ -480,7 +433,6 @@ function renderKPIToggles() {
     c.appendChild(t);
   });
 }
-
 
 function renderWidgetToggles() {
   var c = document.getElementById('widgetToggles');
@@ -501,7 +453,6 @@ function renderWidgetToggles() {
     c.appendChild(t);
   });
 }
-
 
 function toggleKPI(id, v) {
   var k = kpiDefinitions.find(function(x) { return x.id === id; });
@@ -540,7 +491,6 @@ function toggleKPI(id, v) {
   saveSettings();
 }
 
-
 function toggleWidget(id, v) {
   var w = widgetDefinitions.find(function(x) { return x.id === id; });
   if (w) w.visible = v;
@@ -554,44 +504,9 @@ function toggleWidget(id, v) {
   }
 }
 
-
 // ===== MUURI GRID SYSTEM =====
 var muuriGrid = null;
 var muuriKPI = null;
-
-// Debounced Muuri layout function to prevent excessive reflows
-// Consolidates multiple setTimeout calls (150ms -> 50ms -> 100ms) into single layout pass
-function debouncedMuuriLayout(grid, delay) {
-  if (!grid) return;
-  delay = delay || 200;
-  
-  clearTimeout(muuriLayoutDebounceTimer);
-  muuriLayoutDebounceTimer = setTimeout(function() {
-    // Guard against destroyed grid (can happen during rapid mobile resize)
-    if (!grid || grid._isDestroyed) {
-      console.log('Muuri grid was destroyed, skipping layout');
-      return;
-    }
-    grid.refreshItems();
-    grid.layout(true);
-  }, delay);
-}
-
-// Safe Muuri operation wrapper - guards against race conditions when grid is destroyed
-function safeMuuriOperation(grid, operation) {
-  if (!grid || grid._isDestroyed) {
-    console.log('Muuri grid unavailable or destroyed, skipping operation');
-    return false;
-  }
-  try {
-    operation(grid);
-    return true;
-  } catch (e) {
-    console.warn('Muuri operation failed:', e);
-    return false;
-  }
-}
-
 
 function initMuuriGrid() {
   var container = document.getElementById('widgetsContainer');
@@ -654,15 +569,16 @@ function initMuuriGrid() {
   });
 
   // Initial layout after DOM is ready and content may be loading
-  // Consolidated into single debounced call to prevent layout thrashing
-  debouncedMuuriLayout(muuriGrid, 150);
-
-  // Load saved layout after initial layout has time to complete
   setTimeout(function() {
-    loadLayout();
-  }, 200);
-}
+    muuriGrid.refreshItems();
+    muuriGrid.layout(true);
 
+    // Load saved layout after initial layout
+    setTimeout(function() {
+      loadLayout();
+    }, 50);
+  }, 150);
+}
 
 function cycleWidgetSize(btn) {
   var item = btn.closest('.widget-item');
@@ -697,7 +613,6 @@ function cycleWidgetSize(btn) {
     });
   }
 }
-
 
 // Initialize resize handles
 function initWidgetResizeHandles() {
@@ -784,7 +699,6 @@ function initWidgetResizeHandles() {
   });
 }
 
-
 function toggleWidgetCollapse(btn) {
   var widget = btn.closest('.widget-card');
   if (!widget) return;
@@ -798,23 +712,17 @@ function toggleWidgetCollapse(btn) {
     btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   }
 
-  // Debounce layout to wait for CSS animation to complete before calculating new sizes
-  // This prevents layout thrashing when rapidly toggling collapse state
-  // Animation typically takes 300ms, so wait 350ms before recalculating layout
-  clearTimeout(collapseLayoutDebounceTimer);
-  collapseLayoutDebounceTimer = setTimeout(function() {
-    debouncedMuuriLayout(muuriGrid, 50);
-    saveLayout();
-  }, 350);
+  // Refresh ALL items and reflow the entire grid
+  if (muuriGrid) {
+    muuriGrid.refreshItems(); // Refresh all items, not just this one
+    muuriGrid.layout(true);   // Force synchronous layout
+  }
+
+  saveLayout();
 }
 
-
 function hideWidget(widgetId) {
-  // Guard against race condition: muuriGrid may be destroyed on mobile resize
-  if (!muuriGrid || muuriGrid._isDestroyed) {
-    console.log('hideWidget: Muuri grid unavailable or destroyed');
-    return;
-  }
+  if (!muuriGrid) return;
 
   var element = document.querySelector('[data-widget-id="' + widgetId + '"]');
   if (!element) {
@@ -835,22 +743,22 @@ function hideWidget(widgetId) {
 
   // Hide the widget with animation
   muuriGrid.hide([targetItem], {instant: false, onFinish: function() {
-    // Use debounced layout to prevent thrashing with multiple hide/show operations
-    // Also guards against destroyed grid in callback
-    debouncedMuuriLayout(muuriGrid, 100);
+    // Refresh all items and trigger layout after hiding
+    muuriGrid.refreshItems();
+    muuriGrid.layout(true); // Force synchronous layout
+
+    // Additional layout pass to ensure everything settles
+    setTimeout(function() {
+      muuriGrid.layout(true);
+    }, 50);
 
     // Save layout after hide animation completes
     saveLayout();
   }});
 }
 
-
 function showWidget(widgetId) {
-  // Guard against race condition: muuriGrid may be destroyed on mobile resize
-  if (!muuriGrid || muuriGrid._isDestroyed) {
-    console.log('showWidget: Muuri grid unavailable or destroyed');
-    return;
-  }
+  if (!muuriGrid) return;
 
   var element = document.querySelector('[data-widget-id="' + widgetId + '"]');
   if (!element) {
@@ -871,15 +779,19 @@ function showWidget(widgetId) {
 
   // Show the widget with animation
   muuriGrid.show([targetItem], {instant: false, onFinish: function() {
-    // Use debounced layout to prevent thrashing with multiple hide/show operations
-    // Also guards against destroyed grid in callback
-    debouncedMuuriLayout(muuriGrid, 100);
+    // Refresh all items and trigger layout after showing
+    muuriGrid.refreshItems();
+    muuriGrid.layout(true); // Force synchronous layout
+
+    // Additional layout pass to ensure everything settles
+    setTimeout(function() {
+      muuriGrid.layout(true);
+    }, 50);
 
     // Save layout after show animation completes
     saveLayout();
   }});
 }
-
 
 function saveLayout() {
   if (!muuriGrid) return;
@@ -908,7 +820,6 @@ function saveLayout() {
   localStorage.setItem('dashboardLayout', JSON.stringify(layout));
 }
 
-
 function setDefaultWidgetVisibility() {
   // Default visible widgets (only the essentials)
   var defaultVisible = [
@@ -935,7 +846,6 @@ function setDefaultWidgetVisibility() {
   muuriGrid.refreshItems();
   muuriGrid.layout(true); // Force synchronous layout
 }
-
 
 function loadLayout() {
   if (!muuriGrid) return;
@@ -1021,7 +931,6 @@ function loadLayout() {
   }
 }
 
-
 function resetLayout() {
   // Clear all layout-related localStorage keys
   localStorage.removeItem('dashboardLayout');
@@ -1032,12 +941,10 @@ function resetLayout() {
   setTimeout(function() { location.reload(); }, 800);
 }
 
-
 function explicitSaveLayout() {
   saveLayout();
   showToast('Layout saved successfully', 'success');
 }
-
 
 // Initialize Muuri for both KPI cards and widgets
 function initSortable() {
@@ -1045,7 +952,6 @@ function initSortable() {
   initMuuriKPI();
   initWidgetResizeHandles(); // Initialize corner resize handles
 }
-
 
 function initMuuriKPI() {
   var container = document.getElementById('kpiRow');
@@ -1134,7 +1040,6 @@ function initMuuriKPI() {
   }, 500);
 }
 
-
 function saveKPIOrder() {
   if (!muuriKPI) return;
 
@@ -1144,7 +1049,6 @@ function saveKPIOrder() {
 
   localStorage.setItem('kpiOrder', JSON.stringify(order));
 }
-
 
 function loadKPIOrder() {
   if (!muuriKPI) return;
@@ -1171,11 +1075,9 @@ function loadKPIOrder() {
   }
 }
 
-
 function restoreWidgetOrder() {
   // Handled by loadLayout() in Muuri system
 }
-
 
 function toggleEditMode() {
   editMode = !editMode;
@@ -1186,24 +1088,9 @@ function toggleEditMode() {
   // Muuri drag is always enabled, no need to toggle
 }
 
-
 // Date & Compare functions
-function toggleDatePicker() {
-  var dropdown = document.getElementById('datePickerDropdown');
-  var trigger = document.getElementById('datePickerTrigger');
-  dropdown.classList.toggle('open');
-  var isOpen = dropdown.classList.contains('open');
-  if (trigger) trigger.setAttribute('aria-expanded', isOpen);
-}
-
-function toggleCompareDropdown() {
-  var dropdown = document.getElementById('compareDropdown');
-  var trigger = document.getElementById('compareBtn');
-  dropdown.classList.toggle('open');
-  var isOpen = dropdown.classList.contains('open');
-  if (trigger) trigger.setAttribute('aria-expanded', isOpen);
-}
-
+function toggleDatePicker() { document.getElementById('datePickerDropdown').classList.toggle('open'); }
+function toggleCompareDropdown() { document.getElementById('compareDropdown').classList.toggle('open'); }
 
 function setDateRange(range) {
   currentRange = range;
@@ -1222,7 +1109,6 @@ function setDateRange(range) {
   if (compareMode) loadCompareData(); else loadData();
 }
 
-
 function applyCustomRange() {
   currentRange = 'custom';
   document.querySelectorAll('.date-chip').forEach(function(c) { c.classList.remove('active'); });
@@ -1234,7 +1120,6 @@ function applyCustomRange() {
   data = null; // Reset data to show skeletons for new date range
   if (compareMode) loadCompareData(); else loadData();
 }
-
 
 function setCompare(mode) {
   compareMode = mode;
@@ -1253,7 +1138,6 @@ function setCompare(mode) {
   loadCompareData();
 }
 
-
 function clearCompare() {
   compareMode = null; compareData = null;
   document.getElementById('compareBtn').classList.remove('active');
@@ -1262,7 +1146,6 @@ function clearCompare() {
   document.getElementById('datePickerLabel').textContent = currentRange === 'today' ? 'Today' : formatDateShort(customStartDate) + ' - ' + formatDateShort(customEndDate);
   loadData(); renderCharts();
 }
-
 
 function loadCompareData() {
   // Only show skeletons on initial load (no existing data)
@@ -1313,19 +1196,11 @@ function loadCompareData() {
   }
 }
 
-
+// Helper for GitHub Pages compare mode
 function loadCompareDataFetch(cs, ce, ps, pe) {
-  // Cancel any in-flight fetch requests to prevent stale data from overwriting current data
-  // This fixes race conditions when user rapidly changes compare mode
-  if (currentFetchController) {
-    currentFetchController.abort();
-  }
-  currentFetchController = new AbortController();
-  var signal = currentFetchController.signal;
-
   Promise.all([
-    fetch(API_URL + '?action=dashboard&start=' + encodeURIComponent(cs) + '&end=' + encodeURIComponent(ce), { signal: signal }).then(function(r) { return r.json(); }),
-    fetch(API_URL + '?action=dashboard&start=' + encodeURIComponent(ps) + '&end=' + encodeURIComponent(pe), { signal: signal }).then(function(r) { return r.json(); })
+    fetch(API_URL + '?action=dashboard&start=' + encodeURIComponent(cs) + '&end=' + encodeURIComponent(ce)).then(function(r) { return r.json(); }),
+    fetch(API_URL + '?action=dashboard&start=' + encodeURIComponent(ps) + '&end=' + encodeURIComponent(pe)).then(function(r) { return r.json(); })
   ]).then(function(results) {
     document.getElementById('loadingOverlay').classList.add('hidden');
     showSkeletons(false);
@@ -1341,14 +1216,7 @@ function loadCompareDataFetch(cs, ce, ps, pe) {
       compareData = prevResult;
       renderAll();
     }
-  }).catch(function(error) {
-    // Ignore AbortError - this is expected when request is cancelled
-    if (error.name === 'AbortError') {
-      console.log('Compare fetch aborted - newer request in progress');
-      return;
-    }
-    onError(error);
-  });
+  }).catch(function(error) { onError(error); });
 }
 
 // Utility functions
@@ -1358,19 +1226,16 @@ function formatDateInput(d) {
   var day = String(d.getDate()).padStart(2, '0');
   return year + '-' + month + '-' + day;
 }
-
 function formatDateShort(s) { 
   var parts = s.split('-');
   var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); 
 }
-
 function updateClock() {
   var n = new Date();
   document.getElementById('clock').textContent = (n.getHours()%12||12) + ':' + n.getMinutes().toString().padStart(2,'0') + ' ' + (n.getHours()>=12?'PM':'AM');
   document.getElementById('dateDisplay').textContent = n.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
-
 
 // Welcome greeting based on time of day
 function updateWelcome() {
@@ -1380,7 +1245,6 @@ function updateWelcome() {
   var opts = { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' };
   document.getElementById('welcomeDate').textContent = new Date().toLocaleDateString('en-US', opts);
 }
-
 
 // Animate number values
 function animateValue(id, start, end, duration) {
@@ -1398,7 +1262,6 @@ function animateValue(id, start, end, duration) {
   }
   requestAnimationFrame(step);
 }
-
 
 // ===== SETTINGS PANEL =====
 function toggleSettings() {
@@ -1420,7 +1283,6 @@ function toggleSettings() {
   }
 }
 
-
 function openSettings() {
   // Refresh widget toggles to reflect current visibility
   renderWidgetToggles();
@@ -1430,12 +1292,10 @@ function openSettings() {
   if (panel) panel.classList.add('open');
 }
 
-
 function closeSettings() {
   var panel = document.getElementById('settingsPanel');
   if (panel) panel.classList.remove('open');
 }
-
 
 // ===== AI CHAT PANEL =====
 function toggleAIChat() {
@@ -1458,7 +1318,6 @@ function toggleAIChat() {
     }
   }
 }
-
 
 function sendAIMessage() {
   var input = document.getElementById('aiInput');
@@ -1541,7 +1400,6 @@ function sendAIMessage() {
   }
 }
 
-
 // Charts
 function initCharts() {
   // Register datalabels plugin
@@ -1606,9 +1464,7 @@ function initCharts() {
     datalabels: { display: false }
   };
   
-  var hourlyCtx = safeGetChartContext('hourlyChart');
-  if (hourlyCtx) {
-    hourlyChart = new Chart(hourlyCtx, {
+  hourlyChart = new Chart(document.getElementById('hourlyChart').getContext('2d'), {
     type: 'bar',
     data: { labels: [], datasets: [
       { label: 'Tops', data: [], backgroundColor: brandColors.green, borderRadius: 4, borderWidth: 0 },
@@ -1624,9 +1480,8 @@ function initCharts() {
       }
     }
   });
-
-  var rateCtx = safeGetChartContext('rateChart');
-  if (rateCtx) rateChart = new Chart(rateCtx, {
+  
+  rateChart = new Chart(document.getElementById('rateChart').getContext('2d'), {
     type: 'line',
     data: { labels: [], datasets: [
       {
@@ -1666,8 +1521,7 @@ function initCharts() {
     }
   });
   
-  var dailyCtx = safeGetChartContext('dailyChart');
-  if (dailyCtx) dailyChart = new Chart(dailyCtx, {
+  dailyChart = new Chart(document.getElementById('dailyChart').getContext('2d'), {
     type: 'bar',
     data: { labels: [], datasets: [
       { label: 'Tops', data: [], backgroundColor: brandColors.green, borderRadius: 4, borderWidth: 0 },
@@ -1697,8 +1551,7 @@ function initCharts() {
     }
   });
   
-  var dailyRateCtx = safeGetChartContext('dailyRateChart');
-  if (dailyRateCtx) dailyRateChart = new Chart(dailyRateCtx, {
+  dailyRateChart = new Chart(document.getElementById('dailyRateChart').getContext('2d'), {
     type: 'line',
     data: { labels: [], datasets: [
       {
@@ -1742,8 +1595,7 @@ function initCharts() {
   });
   
   // Trimmers on Line chart
-  var trimmersCtx = safeGetChartContext('trimmersChart');
-  if (trimmersCtx) trimmersChart = new Chart(trimmersCtx, {
+  trimmersChart = new Chart(document.getElementById('trimmersChart').getContext('2d'), {
     type: 'bar',
     data: { labels: [], datasets: [
       { label: 'Trimmers', data: [], backgroundColor: brandColors.green, borderRadius: 4, borderWidth: 0, order: 2 },
@@ -1782,10 +1634,8 @@ function initCharts() {
         x: { grid: { display: false }, ticks: botanicalScale.ticks }
       }
     }
-    });
-  }
+  });
 }
-
 
 // Data loading
 function loadData() {
@@ -1795,21 +1645,13 @@ function loadData() {
   if (!data) {
     showSkeletons(true);
   }
-
-  // Cancel any in-flight fetch requests to prevent stale data from overwriting current data
-  // This fixes race conditions when user rapidly changes date range
-  if (currentFetchController) {
-    currentFetchController.abort();
-  }
-  currentFetchController = new AbortController();
-  var signal = currentFetchController.signal;
-
+  
   if (isAppsScript) {
-    // Apps Script mode - no AbortController support, but requests are less likely to overlap
+    // Apps Script mode
     google.script.run.withSuccessHandler(onDataLoaded).withFailureHandler(onError).getProductionDashboardData(s, e);
   } else {
-    // GitHub Pages mode - use API with AbortController signal
-    fetch(API_URL + '?action=dashboard&start=' + encodeURIComponent(s) + '&end=' + encodeURIComponent(e), { signal: signal })
+    // GitHub Pages mode - use API
+    fetch(API_URL + '?action=dashboard&start=' + encodeURIComponent(s) + '&end=' + encodeURIComponent(e))
       .then(function(response) { return response.json(); })
       .then(function(result) {
         if (result.success && result.data) {
@@ -1818,17 +1660,9 @@ function loadData() {
           onError(result.error || 'Unknown error');
         }
       })
-      .catch(function(error) {
-        // Ignore AbortError - this is expected when request is cancelled
-        if (error.name === 'AbortError') {
-          console.log('Fetch aborted - newer request in progress');
-          return;
-        }
-        onError(error);
-      });
+      .catch(function(error) { onError(error); });
   }
 }
-
 
 function refreshData() {
   // Add subtle visual feedback
@@ -1846,7 +1680,6 @@ function refreshData() {
 
   if (compareMode) loadCompareData(); else loadData();
 }
-
 
 function onDataLoaded(r) {
   document.getElementById('loadingOverlay').classList.add('hidden');
@@ -1878,14 +1711,12 @@ function onDataLoaded(r) {
   }
 }
 
-
 function onError(e) {
   console.error(e);
   document.getElementById('loadingOverlay').classList.add('hidden');
   showSkeletons(false);
   showToast('Error loading data: ' + (e.message || e), 'error');
 }
-
 
 // Toast notification system
 function showToast(message, type, duration) {
@@ -1907,7 +1738,6 @@ function showToast(message, type, duration) {
     setTimeout(function() { toast.remove(); }, 300);
   }, duration);
 }
-
 
 function showSkeletons(show) {
   // KPI cards
@@ -1963,7 +1793,6 @@ function showSkeletons(show) {
   });
 }
 
-
 function renderAll() {
   renderDateDisplay();
   renderHero();
@@ -1977,11 +1806,19 @@ function renderAll() {
   renderIntegrationWidgets();
 
   // Refresh Muuri layout after content is rendered
-  // Use debounced layout to consolidate multiple setTimeout calls into single pass
-  // This prevents layout thrashing when multiple render functions trigger layouts
-  debouncedMuuriLayout(muuriGrid, 250);
-}
+  if (muuriGrid) {
+    // Wait for charts/images to render, then recalculate layout
+    setTimeout(function() {
+      muuriGrid.refreshItems();
+      muuriGrid.layout(true);  // Force synchronous layout
 
+      // Additional pass to ensure everything settled
+      setTimeout(function() {
+        muuriGrid.layout(true);
+      }, 100);
+    }, 200);
+  }
+}
 
 function renderDateDisplay() {
   if (!data || !data.dateRange) return;
@@ -1994,7 +1831,6 @@ function renderDateDisplay() {
     d.innerHTML = 'Showing <strong>' + formatDateShort(s) + '</strong> to <strong>' + formatDateShort(e) + '</strong>';
   }
 }
-
 
 // Count-up animation utility
 function animateCountUp(element, targetValue, decimals, duration) {
@@ -2025,29 +1861,18 @@ function animateCountUp(element, targetValue, decimals, duration) {
   requestAnimationFrame(step);
 }
 
-
 function renderHero() {
   if (!data || !data.today) return;
   var t = data.today;
-
-  // Get DOM elements with null checks
-  var elHeroProduction = document.getElementById('heroProductionNumber');
-  var elHeroSubtitle = document.getElementById('heroSubtitle');
-  var elHeroProgressFill = document.getElementById('heroProgressFill');
-  var elHeroProgressText = document.getElementById('heroProgressText');
-  var elHeroCrewValue = document.getElementById('heroCrewValue');
-  var elHeroRateValue = document.getElementById('heroRateValue');
-  var elHeroTargetValue = document.getElementById('heroTargetValue');
-  var elHeroBagsValue = document.getElementById('heroBagsValue');
 
   // Production number (the star) - TOPS production (primary focus)
   var tops = t.totalTops || 0;
   var smalls = t.totalSmalls || 0;
   var totalProduction = t.totalLbs || 0;
-  if (elHeroProduction) animateCountUp(elHeroProduction, tops, 1, 1200);
+  animateCountUp(document.getElementById('heroProductionNumber'), tops, 1, 1200);
 
   // Subtitle with total and smalls breakdown
-  if (elHeroSubtitle) elHeroSubtitle.textContent = 'Total: ' + totalProduction.toFixed(1) + ' lbs (incl. ' + smalls.toFixed(1) + ' lbs smalls)';
+  document.getElementById('heroSubtitle').textContent = 'Total: ' + totalProduction.toFixed(1) + ' lbs (incl. ' + smalls.toFixed(1) + ' lbs smalls)';
 
   // Calculate predicted TOPS outcome for progress bar (rate is for tops production, smalls are byproduct)
   var trimmers = t.trimmers || 0;
@@ -2062,28 +1887,25 @@ function renderHero() {
     progressPercent = (tops / predictedTops * 100);
   }
 
-  if (elHeroProgressFill) elHeroProgressFill.style.width = Math.min(progressPercent, 100) + '%';
-  if (elHeroProgressText) elHeroProgressText.textContent = progressPercent.toFixed(0) + '% of predicted tops';
+  document.getElementById('heroProgressFill').style.width = Math.min(progressPercent, 100) + '%';
+  document.getElementById('heroProgressText').textContent = progressPercent.toFixed(0) + '% of predicted tops';
 
   // Mini KPIs
   var crew = (t.trimmers || 0) + (t.buckers || 0) + (t.qc || 0) + (t.tzero || 0);
-  if (elHeroCrewValue) elHeroCrewValue.textContent = crew;
+  document.getElementById('heroCrewValue').textContent = crew;
 
-  if (elHeroRateValue) elHeroRateValue.textContent = rate.toFixed(2);
+  document.getElementById('heroRateValue').textContent = rate.toFixed(2);
 
   // Display predicted tops outcome (using already calculated predictedTops from above)
-  if (elHeroTargetValue) {
-    if (predictedTops > 0) {
-      elHeroTargetValue.textContent = predictedTops.toFixed(0) + ' lbs';
-    } else {
-      elHeroTargetValue.textContent = '--';
-    }
+  if (predictedTops > 0) {
+    document.getElementById('heroTargetValue').textContent = predictedTops.toFixed(0) + ' lbs';
+  } else {
+    document.getElementById('heroTargetValue').textContent = '--';
   }
 
   // Bags done (if available from timer data)
-  if (elHeroBagsValue) elHeroBagsValue.textContent = t.bagsCompleted || '--';
+  document.getElementById('heroBagsValue').textContent = t.bagsCompleted || '--';
 }
-
 
 function renderKPIs() {
   if (!data || !data.today) return;
@@ -2122,7 +1944,6 @@ function renderKPIs() {
   }
 }
 
-
 function setKPI(id, val, prevVal, fmt, invertDelta, target, rollingAvg) {
   var el = document.getElementById('kpi_'+id), cmpEl = document.getElementById('kpiCmp_'+id), deltaEl = document.getElementById('delta_'+id);
   if (!el) return;
@@ -2139,7 +1960,6 @@ function setKPI(id, val, prevVal, fmt, invertDelta, target, rollingAvg) {
   // Apply state-based visual emphasis
   applyKPIState(id, val, target, rollingAvg);
 }
-
 
 function applyKPIState(id, val, target, rollingAvg) {
   var card = document.querySelector('.kpi-card[data-kpi="'+id+'"]');
@@ -2160,7 +1980,6 @@ function applyKPIState(id, val, target, rollingAvg) {
     card.classList.add('state-behind');
   }
 }
-
 
 // KPI Click-to-Expand Functions
 var expandedKPI = null;
@@ -2193,7 +2012,6 @@ function toggleKPIExpand(kpiId) {
     }, 50);
   }
 }
-
 
 function populateKPIExpandedContent(kpiId) {
   if (!data) return;
@@ -2236,7 +2054,6 @@ function populateKPIExpandedContent(kpiId) {
     notesEl.textContent = anomalies[kpiId] || '';
   }
 }
-
 
 function renderKPISparkline(el, history) {
   if (!history || history.length === 0) {
@@ -2287,7 +2104,6 @@ function renderKPISparkline(el, history) {
 
   el.innerHTML = caption + '<div style="position: relative; width: 100%; height: '+(chartHeight + 18)+'px;">' + bars + labels + '</div>';
 }
-
 
 // ========================================
 // TUTORIAL/ONBOARDING SYSTEM
@@ -2380,7 +2196,6 @@ function startTutorial() {
   showTutorialStep(0);
 }
 
-
 function endTutorial() {
   tutorialState.active = false;
   document.body.classList.remove('tutorial-active');
@@ -2390,7 +2205,6 @@ function endTutorial() {
   if (tooltip) tooltip.remove();
   localStorage.setItem('tutorialCompleted', 'true');
 }
-
 
 function nextTutorialStep() {
   if (tutorialState.currentStep < tutorialState.steps.length - 1) {
@@ -2402,14 +2216,12 @@ function nextTutorialStep() {
   }
 }
 
-
 function prevTutorialStep() {
   if (tutorialState.currentStep > 0) {
     tutorialState.currentStep--;
     showTutorialStep(tutorialState.currentStep);
   }
 }
-
 
 function showTutorialStep(stepIndex) {
   var step = tutorialState.steps[stepIndex];
@@ -2477,7 +2289,6 @@ function showTutorialStep(stepIndex) {
   }
 }
 
-
 // Widget Help System
 function showWidgetHelp(widgetId) {
   var helpContent = widgetHelpContent[lang][widgetId];
@@ -2509,7 +2320,6 @@ function showWidgetHelp(widgetId) {
   }, 100);
 }
 
-
 // Welcome Modal Functions
 function showWelcomeModal() {
   var modal = document.getElementById('welcomeModal');
@@ -2518,7 +2328,6 @@ function showWelcomeModal() {
   }
 }
 
-
 function dismissWelcome() {
   var modal = document.getElementById('welcomeModal');
   if (modal) {
@@ -2526,7 +2335,6 @@ function dismissWelcome() {
   }
   localStorage.setItem('tutorialCompleted', 'true');
 }
-
 
 function startTutorialFromWelcome() {
   var modal = document.getElementById('welcomeModal');
@@ -2538,7 +2346,6 @@ function startTutorialFromWelcome() {
   }, 300);
 }
 
-
 function formatValue(v, fmt) {
   if (fmt==='lbs') return (v||0).toFixed(1)+' <span class="kpi-unit">lbs</span>';
   if (fmt==='rate') return (v||0).toFixed(2);
@@ -2547,7 +2354,6 @@ function formatValue(v, fmt) {
   if (fmt==='num') return (v||0).toString();
   return v;
 }
-
 
 function formatValuePlain(v, fmt) {
   if (fmt==='lbs') return (v||0).toFixed(1);
@@ -2558,51 +2364,33 @@ function formatValuePlain(v, fmt) {
   return v;
 }
 
-
 function renderCurrentProduction() {
   // Prioritize lastCompleted (previous hour) since data is entered at end of each hour
   var d = data ? data.lastCompleted : null;
-
-  // Get all DOM elements with null checks
-  var elStrain = document.getElementById('currentStrain');
-  var elTime = document.getElementById('currentTime');
-  var elStatusBadge = document.getElementById('statusBadge');
-  var elTops = document.getElementById('currentTops');
-  var elSmalls = document.getElementById('currentSmalls');
-  var elTrimmers = document.getElementById('currentTrimmers');
-  var elBuckers = document.getElementById('currentBuckers');
-  var elRate = document.getElementById('currentRate');
-  var elTotal = document.getElementById('currentTotal');
-
   if (!d) {
-    if (elStrain) elStrain.textContent = 'No Data';
-    if (elTime) elTime.textContent = '—';
-    if (elStatusBadge) {
-      elStatusBadge.className = 'status-badge idle';
-      elStatusBadge.textContent = 'No Data';
-    }
-    if (elTops) elTops.textContent = '0';
-    if (elSmalls) elSmalls.textContent = '0';
-    if (elTrimmers) elTrimmers.textContent = '0';
-    if (elBuckers) elBuckers.textContent = '0';
-    if (elRate) elRate.textContent = '0.00';
-    if (elTotal) elTotal.textContent = '0';
+    document.getElementById('currentStrain').textContent = 'No Data';
+    document.getElementById('currentTime').textContent = '—';
+    document.getElementById('statusBadge').className = 'status-badge idle';
+    document.getElementById('statusBadge').textContent = 'No Data';
+    document.getElementById('currentTops').textContent = '0';
+    document.getElementById('currentSmalls').textContent = '0';
+    document.getElementById('currentTrimmers').textContent = '0';
+    document.getElementById('currentBuckers').textContent = '0';
+    document.getElementById('currentRate').textContent = '0.00';
+    document.getElementById('currentTotal').textContent = '0';
     return;
   }
-  if (elStrain) elStrain.textContent = d.strain || 'Unknown';
-  if (elTime) elTime.textContent = d.timeSlot || '';
-  if (elTops) elTops.textContent = (d.tops||0).toFixed(1);
-  if (elSmalls) elSmalls.textContent = (d.smalls||0).toFixed(1);
-  if (elTrimmers) elTrimmers.textContent = d.trimmers||0;
-  if (elBuckers) elBuckers.textContent = d.buckers||0;
-  if (elRate) elRate.textContent = (d.rate||0).toFixed(2);
-  if (elTotal) elTotal.textContent = ((d.tops||0) + (d.smalls||0)).toFixed(1);
-  if (elStatusBadge) {
-    elStatusBadge.className = 'status-badge completed';
-    elStatusBadge.textContent = 'Last Hour';
-  }
+  document.getElementById('currentStrain').textContent = d.strain || 'Unknown';
+  document.getElementById('currentTime').textContent = d.timeSlot || '';
+  document.getElementById('currentTops').textContent = (d.tops||0).toFixed(1);
+  document.getElementById('currentSmalls').textContent = (d.smalls||0).toFixed(1);
+  document.getElementById('currentTrimmers').textContent = d.trimmers||0;
+  document.getElementById('currentBuckers').textContent = d.buckers||0;
+  document.getElementById('currentRate').textContent = (d.rate||0).toFixed(2);
+  document.getElementById('currentTotal').textContent = ((d.tops||0) + (d.smalls||0)).toFixed(1);
+  document.getElementById('statusBadge').className = 'status-badge completed';
+  document.getElementById('statusBadge').textContent = 'Last Hour';
 }
-
 
 function renderCharts() {
   if (!data) return;
@@ -2620,7 +2408,7 @@ function renderCharts() {
   } catch(e) { console.error('Hourly chart error:', e); }
   
   try {
-    if (data.hourly && data.hourly.length > 0 && rateChart) {
+    if (data.hourly && data.hourly.length > 0) {
       rateChart.data.labels = data.hourly.map(function(h){return h.label;});
       rateChart.data.datasets[0].data = data.hourly.map(function(h){return h.rate;});
       if (compareMode && compareData && compareData.hourly) {
@@ -2634,7 +2422,7 @@ function renderCharts() {
   } catch(e) { console.error('Rate chart error:', e); }
   
   try {
-    if (data.daily && data.daily.length > 0 && dailyChart) {
+    if (data.daily && data.daily.length > 0) {
       dailyChart.data.labels = data.daily.map(function(d){return d.label;});
       dailyChart.data.datasets[0].data = data.daily.map(function(d){return d.totalTops;});
       dailyChart.data.datasets[1].data = data.daily.map(function(d){return d.totalSmalls;});
@@ -2652,10 +2440,9 @@ function renderCharts() {
   } catch(e) { console.error('Efficiency chart error:', e); }
 }
 
-
 // Adaptive Efficiency Chart - switches between hourly/daily based on date range
 function renderEfficiencyChart() {
-  if (!data || !dailyRateChart) return;
+  if (!data) return;
   
   var numDays = data.daily ? data.daily.length : 0;
   var titleEl = document.getElementById('efficiencyChartTitle');
@@ -2725,7 +2512,6 @@ function renderEfficiencyChart() {
   }
 }
 
-
 function calcMA(arr, p) {
   var r = [];
   for (var i=0; i<arr.length; i++) {
@@ -2734,7 +2520,6 @@ function calcMA(arr, p) {
   }
   return r;
 }
-
 
 function renderTrimmersChart() {
   if (!data) return;
@@ -2771,7 +2556,6 @@ function renderTrimmersChart() {
   trimmersChart.update('none');
 }
 
-
 function renderSparkline() {
   if (!data || !data.today) return;
   document.getElementById('sparkCurrent').textContent = data.today.currentRate > 0 ? data.today.currentRate.toFixed(2) : '—';
@@ -2797,7 +2581,6 @@ function renderSparkline() {
   });
 }
 
-
 function renderStrainList() {
   var c = document.getElementById('strainList');
   if (!data || !data.strains || data.strains.length===0) {
@@ -2809,7 +2592,6 @@ function renderStrainList() {
   }).join('');
 }
 
-
 function renderTables() {
   var t = data && data.today ? data.today : {}, p = compareData && compareData.today ? compareData.today : null, w = data && data.weekly ? data.weekly : {};
   document.getElementById('perfTable').innerHTML = perfRow('Hours Logged', t.hoursWorked, p?p.hoursWorked:null, 'hrs') + perfRow('Trimmer Hrs', t.totalTrimmerHours, p?p.totalTrimmerHours:null, 'num') + perfRow('Lbs/Hour', t.lbsPerHour, p?p.lbsPerHour:null, 'rate');
@@ -2817,7 +2599,6 @@ function renderTables() {
   document.getElementById('periodLabel').textContent = (w.totalDays||0)+' day summary';
   document.getElementById('periodTable').innerHTML = perfRow('Total Tops', w.totalTops, null, 'lbs') + perfRow('Total Smalls', w.totalSmalls, null, 'lbs') + perfRow('Best Rate', w.bestRate, null, 'rate');
 }
-
 
 function perfRow(label, val, prev, fmt) {
   var v = val||0;
@@ -2836,7 +2617,6 @@ function perfRow(label, val, prev, fmt) {
   }
   return '<div class="perf-row"><span class="perf-label">'+label+'</span><div class="perf-compare"><span class="perf-value">'+display+'</span>'+prevHtml+'</div></div>';
 }
-
 
 function renderIntegrationWidgets() {
   // Scoreboard data from production
@@ -2876,83 +2656,3 @@ function renderIntegrationWidgets() {
     document.getElementById('bagsVsTarget').textContent = '—';
   }
 }
-
-
-// ===== ACCESSIBILITY ENHANCEMENTS =====
-// Focus trap for modal dialogs
-function initFocusTrap(modalId) {
-  var modal = document.getElementById(modalId);
-  if (!modal) return;
-
-  var focusableElements = modal.querySelectorAll(
-    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-  );
-
-  if (focusableElements.length === 0) return;
-
-  var firstFocusable = focusableElements[0];
-  var lastFocusable = focusableElements[focusableElements.length - 1];
-
-  modal.addEventListener('keydown', function(e) {
-    if (e.key !== 'Tab') return;
-
-    if (e.shiftKey) {
-      if (document.activeElement === firstFocusable) {
-        lastFocusable.focus();
-        e.preventDefault();
-      }
-    } else {
-      if (document.activeElement === lastFocusable) {
-        firstFocusable.focus();
-        e.preventDefault();
-      }
-    }
-  });
-}
-
-
-// Initialize focus traps for modals
-function initAccessibility() {
-  initFocusTrap('settingsPanel');
-  initFocusTrap('welcomeModal');
-  initFocusTrap('aiChatPanel');
-
-  // Add keyboard support for clickable widget cards
-  document.querySelectorAll('.widget-card[onclick]').forEach(function(card) {
-    if (!card.hasAttribute('tabindex')) {
-      card.setAttribute('tabindex', '0');
-      card.setAttribute('role', 'button');
-    }
-    card.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        card.click();
-      }
-    });
-  });
-
-  // Ensure mobile sidebar updates aria-expanded
-  var mobileSidebar = document.getElementById('sidebar');
-  if (mobileSidebar) {
-    var observer = new MutationObserver(function(mutations) {
-      mutations.forEach(function(mutation) {
-        if (mutation.attributeName === 'class') {
-          var btn = document.querySelector('.mobile-menu-btn');
-          if (btn) {
-            btn.setAttribute('aria-expanded', mobileSidebar.classList.contains('mobile-open'));
-          }
-        }
-      });
-    });
-    observer.observe(mobileSidebar, { attributes: true });
-  }
-}
-
-
-// Call accessibility init after DOM is ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initAccessibility);
-} else {
-  initAccessibility();
-}
-
