@@ -968,8 +968,9 @@
     }
   </style>
 
-  <!-- Load authentication config (not committed to git) -->
-  <script src="auth-config.js"></script>
+  <!-- Load authentication config -->
+  <!-- Try local config first (not in git), fallback to production config (in git) -->
+  <script src="auth-config.js" onerror="this.onerror=null; this.src='auth-config.production.js';"></script>
 
   <style>
     /* Login Screen Styles */

@@ -35,3 +35,6 @@ test-report.json
 # Private authentication config (DO NOT COMMIT)
 auth-config.js
 orders-auth.js
+
+# Production config (safe to commit - password is visible but page is protected)
+# auth-config.production.js

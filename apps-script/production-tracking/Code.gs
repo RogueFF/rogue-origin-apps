@@ -691,13 +691,16 @@ function getProductionDashboardData(startDate, endDate) {
 
   var lbsPerHour = hoursWorked > 0 ? totalLbs / hoursWorked : 0;
 
-  // Build hourly data with tops and smalls
+  // Build hourly data with tops, smalls, trimmers, buckers, and strain
   var hourlyData = hourlyBreakdown.map(function(hr) {
     return {
       label: hr.timeSlot || '',
       tops: hr.tops || 0,
       smalls: hr.smalls || 0,
-      rate: hr.rate || 0
+      rate: hr.rate || 0,
+      trimmers: hr.trimmers || 0,
+      buckers: hr.buckers || 0,
+      strain: hr.strain || ''
     };
   });
 
