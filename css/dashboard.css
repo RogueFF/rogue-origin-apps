@@ -1824,6 +1824,7 @@ body.tutorial-active::before {
 .status-badge.in-progress { background: rgba(240,203,96,0.3); color: var(--gold-light); border: 1px solid rgba(240,203,96,0.5); }
 .status-badge.completed { background: rgba(255,255,255,0.2); color: #fff; border: 1px solid rgba(255,255,255,0.3); }
 .status-badge.idle { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.2); }
+.status-badge.historical { background: rgba(98,117,141,0.3); color: #a8b8c8; border: 1px solid rgba(98,117,141,0.5); }
 .current-stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; position: relative; }
 .current-stat { text-align: center; }
 .current-stat-value { font-size: 20px; font-weight: 700; color: #fff; }

@@ -2729,7 +2729,29 @@ function formatValuePlain(v, fmt) {
 
 function renderCurrentProduction() {
   // Prioritize lastCompleted (previous hour) since data is entered at end of each hour
+  // Fallback to last hourly entry if lastCompleted is not available (historical data or no completed hours yet)
   var d = data ? data.lastCompleted : null;
+  var isHistorical = false;
+
+  if (!d && data && data.hourly && data.hourly.length > 0) {
+    // Find the last hourly entry with production data
+    for (var i = data.hourly.length - 1; i >= 0; i--) {
+      var h = data.hourly[i];
+      if (h.tops > 0 || h.smalls > 0) {
+        d = {
+          strain: data.today && data.today.strain ? data.today.strain : 'Unknown',
+          timeSlot: h.label || '',
+          tops: h.tops || 0,
+          smalls: h.smalls || 0,
+          trimmers: h.trimmers || 0,
+          buckers: h.buckers || 0,
+          rate: h.rate || 0
+        };
+        isHistorical = true;
+        break;
+      }
+    }
+  }
 
   // Get all DOM elements with null checks
   var elStrain = document.getElementById('currentStrain');
@@ -2766,8 +2788,8 @@ function renderCurrentProduction() {
   if (elRate) elRate.textContent = (d.rate||0).toFixed(2);
   if (elTotal) elTotal.textContent = ((d.tops||0) + (d.smalls||0)).toFixed(1);
   if (elStatusBadge) {
-    elStatusBadge.className = 'status-badge completed';
-    elStatusBadge.textContent = 'Last Hour';
+    elStatusBadge.className = 'status-badge ' + (isHistorical ? 'historical' : 'completed');
+    elStatusBadge.textContent = isHistorical ? 'Last Entry' : 'Last Hour';
   }
 }
 
@@ -2912,10 +2934,11 @@ function renderTrimmersChart() {
   var labels = [];
   var trimmerData = [];
   var isMultiDay = data.daily && data.daily.length > 1;
+  var subtitleEl = document.getElementById('trimmersChartSubtitle');
   
   if (isMultiDay && data.daily && data.daily.length > 0) {
     // Multi-day view: show average trimmers per day
-    document.getElementById('trimmersChartSubtitle').textContent = 'By Day (Avg)';
+    if (subtitleEl) subtitleEl.textContent = 'By Day (Avg)';
     labels = data.daily.map(function(d) { return d.label; });
     trimmerData = data.daily.map(function(d) { 
       // Use avgTrimmers if available, otherwise calculate
@@ -3014,10 +3037,10 @@ function perfRow(label, val, prev, fmt) {
 
 function renderIntegrationWidgets() {
   // Scoreboard data from production
+  var scoreboardStatusEl = document.getElementById('scoreboardStatus');
+  var scoreboardLbsEl = document.getElementById('scoreboardLbs');
+  var scoreboardTargetEl = document.getElementById('scoreboardTarget');
   if (data && data.today) {
-    var scoreboardStatusEl = document.getElementById('scoreboardStatus');
-    var scoreboardLbsEl = document.getElementById('scoreboardLbs');
-    var scoreboardTargetEl = document.getElementById('scoreboardTarget');
     if (scoreboardStatusEl) {
       scoreboardStatusEl.textContent = data.current ? 'Active' : 'Idle';
       scoreboardStatusEl.className = 'integration-stat-value ' + (data.current ? 'good' : '');
@@ -3029,8 +3052,12 @@ function renderIntegrationWidgets() {
       scoreboardTargetEl.textContent = pct;
       scoreboardTargetEl.className = 'integration-stat-value ' + (data.today.totalTops >= target ? 'good' : '');
     }
+  } else {
+    if (scoreboardStatusEl) scoreboardStatusEl.textContent = '—';
+    if (scoreboardLbsEl) scoreboardLbsEl.textContent = '—';
+    if (scoreboardTargetEl) scoreboardTargetEl.textContent = '—';
   }
-  
+
   // Kanban data from backend
   var kanbanTotalEl = document.getElementById('kanbanTotal');
   var kanbanReorderEl = document.getElementById('kanbanReorder');
