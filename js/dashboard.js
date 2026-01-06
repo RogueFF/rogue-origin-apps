@@ -2352,7 +2352,7 @@ function renderHero() {
   }
 
   // Bags done (if available from timer data)
-  if (elHeroBagsValue) elHeroBagsValue.textContent = t.bagsCompleted || '--';
+  if (elHeroBagsValue) elHeroBagsValue.textContent = (data.bagTimer && data.bagTimer.bagsToday) || '--';
 }
 
 
