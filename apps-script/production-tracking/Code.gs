@@ -659,11 +659,6 @@ function getProductionDashboardData(startDate, endDate) {
   var avgTrimmers = hoursWorked > 0 ? totalTrimmerHours / hoursWorked : 0;
   var trimmers = scoreboard.lastHourTrimmers || scoreboard.currentHourTrimmers || Math.round(avgTrimmers);
 
-  // Buckers come from both Line 1 and Line 2
-  var totalBuckerHours = (lineBreakdown.line1Buckers || 0) + (lineBreakdown.line2Buckers || 0);
-  var avgBuckers = hoursWorked > 0 ? totalBuckerHours / hoursWorked : 0;
-  var buckers = Math.round(avgBuckers);
-
   // T-Zero workers from both lines
   var totalTZeroHours = (lineBreakdown.line1TZero || 0) + (lineBreakdown.line2TZero || 0);
   var avgTZero = hoursWorked > 0 ? totalTZeroHours / hoursWorked : 0;
@@ -673,6 +668,13 @@ function getProductionDashboardData(startDate, endDate) {
   var totalQCHours = lineBreakdown.totalQC || 0;
   var avgQC = hoursWorked > 0 ? totalQCHours / hoursWorked : 0;
   var qc = Math.round(avgQC);
+
+  // Buckers come from both Line 1 and Line 2
+  // Note: The 'Buckers' column in spreadsheet includes T-Zero and QC, so we subtract them
+  var rawBuckerHours = (lineBreakdown.line1Buckers || 0) + (lineBreakdown.line2Buckers || 0);
+  var totalBuckerHours = Math.max(0, rawBuckerHours - totalTZeroHours - totalQCHours);
+  var avgBuckers = hoursWorked > 0 ? totalBuckerHours / hoursWorked : 0;
+  var buckers = Math.round(avgBuckers);
 
   var totalOperatorHours = totalTrimmerHours + totalBuckerHours + totalTZeroHours + totalQCHours;
 
