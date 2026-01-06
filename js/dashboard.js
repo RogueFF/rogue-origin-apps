@@ -61,6 +61,36 @@ var muuriLayoutDebounceTimer = null;
 // Debounce timer for widget collapse animation to prevent layout thrashing
 var collapseLayoutDebounceTimer = null;
 
+// Event listener cleanup registry for preventing memory leaks
+var eventCleanupRegistry = [];
+
+// Register an event listener for cleanup
+function registerEventListener(element, event, handler, options) {
+  if (!element) return null;
+  element.addEventListener(event, handler, options);
+  eventCleanupRegistry.push({ element: element, event: event, handler: handler, options: options });
+  return handler;
+}
+
+// Cleanup all registered event listeners (call on page unload or view switch)
+function cleanupEventListeners() {
+  eventCleanupRegistry.forEach(function(entry) {
+    if (entry.element) {
+      entry.element.removeEventListener(entry.event, entry.handler, entry.options);
+    }
+  });
+  eventCleanupRegistry = [];
+}
+
+// Debounce timer for KPI Muuri layout operations (separate from widget grid)
+var muuriKPILayoutDebounceTimer = null;
+
+// Flags to track initialization state and prevent race conditions
+var chartsInitialized = false;
+var dataLoaded = false;
+var muuriKPIReady = false;
+var muuriGridReady = false;
+
 // API Configuration for GitHub Pages
 var API_URL = 'https://script.google.com/macros/s/AKfycbxDAHSFl9cedGS49L3Lf5ztqy-SSToYigyA30ZtsdpmWNAR9H61X_Mm48JOOTGqqr-Z/exec';
 
@@ -69,6 +99,26 @@ function safeGetEl(id) {
   var el = document.getElementById(id);
   if (!el) console.warn('Element not found: ' + id);
   return el;
+}
+
+// Safe property accessor - safely access nested object properties
+function safeGet(obj, path, defaultValue) {
+  if (!obj || typeof path !== 'string') return defaultValue;
+  var keys = path.split('.');
+  var result = obj;
+  for (var i = 0; i < keys.length; i++) {
+    if (result == null || typeof result !== 'object') return defaultValue;
+    result = result[keys[i]];
+  }
+  return result !== undefined ? result : defaultValue;
+}
+
+// Safe number formatter - ensures number is valid before formatting
+function safeNumber(value, decimals, defaultValue) {
+  if (typeof value !== 'number' || isNaN(value) || !isFinite(value)) {
+    return defaultValue !== undefined ? defaultValue : '—';
+  }
+  return decimals !== undefined ? value.toFixed(decimals) : value;
 }
 
 // Safe chart context getter with warning for debugging
@@ -122,6 +172,16 @@ Chart.defaults.animation = {
   }
 };
 
+// Cleanup event listeners and intervals on page unload to prevent memory leaks
+window.addEventListener('beforeunload', function() {
+  cleanupEventListeners();
+  // Clear any pending timers
+  if (muuriLayoutDebounceTimer) clearTimeout(muuriLayoutDebounceTimer);
+  if (collapseLayoutDebounceTimer) clearTimeout(collapseLayoutDebounceTimer);
+  // Cancel any in-flight fetch requests
+  if (currentFetchController) currentFetchController.abort();
+});
+
 document.addEventListener('DOMContentLoaded', function() {
   loadSettings();
   initTheme(); // Initialize theme system
@@ -136,16 +196,20 @@ document.addEventListener('DOMContentLoaded', function() {
   updateWelcome();
   
   var today = new Date();
-  document.getElementById('endDate').value = formatDateInput(today);
-  document.getElementById('startDate').value = formatDateInput(today);
+  var endDateEl = document.getElementById('endDate');
+  var startDateEl = document.getElementById('startDate');
+  if (endDateEl) endDateEl.value = formatDateInput(today);
+  if (startDateEl) startDateEl.value = formatDateInput(today);
   
   document.querySelectorAll('.date-chip').forEach(function(c) {
     c.addEventListener('click', function() { setDateRange(this.dataset.range); });
   });
   
   document.addEventListener('click', function(e) {
-    if (!e.target.closest('.date-picker-wrapper')) document.getElementById('datePickerDropdown').classList.remove('open');
-    if (!e.target.closest('.compare-selector')) document.getElementById('compareDropdown').classList.remove('open');
+    var datePickerDropdown = document.getElementById('datePickerDropdown');
+    var compareDropdown = document.getElementById('compareDropdown');
+    if (!e.target.closest('.date-picker-wrapper') && datePickerDropdown) datePickerDropdown.classList.remove('open');
+    if (!e.target.closest('.compare-selector') && compareDropdown) compareDropdown.classList.remove('open');
   });
 
   loadData();
@@ -245,14 +309,16 @@ function initTargetInput() {
 // Sidebar toggle
 function toggleSidebar() {
   sidebarCollapsed = !sidebarCollapsed;
-  document.getElementById('sidebar').classList.toggle('collapsed', sidebarCollapsed);
+  var sidebar = document.getElementById('sidebar');
+  if (sidebar) sidebar.classList.toggle('collapsed', sidebarCollapsed);
   document.body.classList.toggle('sidebar-collapsed', sidebarCollapsed);
   saveSettings();
 }
 
 
 function toggleMobileSidebar() {
-  document.getElementById('sidebar').classList.toggle('mobile-open');
+  var sidebar = document.getElementById('sidebar');
+  if (sidebar) sidebar.classList.toggle('mobile-open');
 }
 
 
@@ -281,15 +347,15 @@ function toggleTheme() {
 
 
 function updateThemeUI(theme) {
-  const icon = document.getElementById('themeIcon');
-  const label = document.getElementById('themeLabel');
+  var icon = document.getElementById('themeIcon');
+  var label = document.getElementById('themeLabel');
 
   if (theme === 'dark') {
-    icon.textContent = '☀️';
-    label.textContent = 'Light';
+    if (icon) icon.textContent = '☀️';
+    if (label) label.textContent = 'Light';
   } else {
-    icon.textContent = '🌙';
-    label.textContent = 'Dark';
+    if (icon) icon.textContent = '🌙';
+    if (label) label.textContent = 'Dark';
   }
 }
 
@@ -334,16 +400,24 @@ function switchView(view) {
     item.classList.toggle('active', item.dataset.view === view);
   });
 
-  // Show/hide views
-  document.getElementById('dashboardView').classList.toggle('active', view === 'dashboard');
-  document.getElementById('kanbanView').classList.toggle('active', view === 'kanban');
-  document.getElementById('scoreboardView').classList.toggle('active', view === 'scoreboard');
-  document.getElementById('barcodeView').classList.toggle('active', view === 'barcode');
-  document.getElementById('sopView').classList.toggle('active', view === 'sop');
-  document.getElementById('ordersView').classList.toggle('active', view === 'orders');
+  // Show/hide views (with null checks)
+  var dashboardView = document.getElementById('dashboardView');
+  var kanbanView = document.getElementById('kanbanView');
+  var scoreboardView = document.getElementById('scoreboardView');
+  var barcodeView = document.getElementById('barcodeView');
+  var sopView = document.getElementById('sopView');
+  var ordersView = document.getElementById('ordersView');
+  var dashboardControls = document.getElementById('dashboardControls');
+
+  if (dashboardView) dashboardView.classList.toggle('active', view === 'dashboard');
+  if (kanbanView) kanbanView.classList.toggle('active', view === 'kanban');
+  if (scoreboardView) scoreboardView.classList.toggle('active', view === 'scoreboard');
+  if (barcodeView) barcodeView.classList.toggle('active', view === 'barcode');
+  if (sopView) sopView.classList.toggle('active', view === 'sop');
+  if (ordersView) ordersView.classList.toggle('active', view === 'orders');
 
   // Show/hide dashboard controls
-  document.getElementById('dashboardControls').style.display = view === 'dashboard' ? 'flex' : 'none';
+  if (dashboardControls) dashboardControls.style.display = view === 'dashboard' ? 'flex' : 'none';
 
   // Hide AI chat when viewing iframe apps (they have their own UI elements)
   var aiWidget = document.querySelector('.ai-chat-widget');
@@ -398,7 +472,8 @@ function loadSettings() {
     });
     if (s.sidebarCollapsed) {
       sidebarCollapsed = true;
-      document.getElementById('sidebar').classList.add('collapsed');
+      var sidebarEl = document.getElementById('sidebar');
+      if (sidebarEl) sidebarEl.classList.add('collapsed');
       document.body.classList.add('sidebar-collapsed');
     }
     if (s.darkMode !== undefined) {
@@ -446,6 +521,10 @@ function applyWidgetVisibility() {
 
 function renderKPICards() {
   var c = document.getElementById('kpiRow');
+  if (!c) {
+    console.warn('KPI row container not found');
+    return;
+  }
   c.innerHTML = '';
   kpiDefinitions.forEach(function(k) {
     var card = document.createElement('div');
@@ -472,6 +551,7 @@ function renderKPICards() {
 
 function renderKPIToggles() {
   var c = document.getElementById('kpiToggles');
+  if (!c) return;
   c.innerHTML = '';
   kpiDefinitions.forEach(function(k) {
     var t = document.createElement('div');
@@ -484,6 +564,7 @@ function renderKPIToggles() {
 
 function renderWidgetToggles() {
   var c = document.getElementById('widgetToggles');
+  if (!c) return;
   c.innerHTML = '';
   widgetDefinitions.forEach(function(w) {
     // Check actual widget visibility in DOM
@@ -514,7 +595,7 @@ function toggleKPI(id, v) {
   card.dataset.hidden = !v;
 
   // Use Muuri show/hide if available (desktop only)
-  if (muuriKPI) {
+  if (muuriKPI) { // MARKER1
     var items = muuriKPI.getItems();
     var targetItem = items.find(function(item) {
       return item.getElement() === card;
@@ -574,6 +655,24 @@ function debouncedMuuriLayout(grid, delay) {
     }
     grid.refreshItems();
     grid.layout(true);
+  }, delay);
+}
+
+// Debounced KPI Muuri layout function - uses separate timer to avoid conflicts with widget grid
+// This fixes race conditions where KPI and widget grids compete for the same debounce timer
+function debouncedKPILayout(delay) {
+  if (!muuriKPI) return;
+  delay = delay || 100;
+
+  clearTimeout(muuriKPILayoutDebounceTimer);
+  muuriKPILayoutDebounceTimer = setTimeout(function() {
+    // Guard against destroyed grid (can happen during rapid mobile resize)
+    if (!muuriKPI || muuriKPI._isDestroyed) {
+      console.log('KPI Muuri grid was destroyed, skipping layout');
+      return;
+    }
+    muuriKPI.refreshItems();
+    muuriKPI.layout(true);
   }, delay);
 }
 
@@ -654,13 +753,18 @@ function initMuuriGrid() {
   });
 
   // Initial layout after DOM is ready and content may be loading
-  // Consolidated into single debounced call to prevent layout thrashing
-  debouncedMuuriLayout(muuriGrid, 150);
-
-  // Load saved layout after initial layout has time to complete
-  setTimeout(function() {
-    loadLayout();
-  }, 200);
+  // Use requestAnimationFrame to wait for browser paint instead of arbitrary timeout
+  muuriGridReady = true;
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      // Double RAF ensures DOM has been painted before calculating layout
+      if (muuriGrid && !muuriGrid._isDestroyed) {
+        muuriGrid.refreshItems();
+        muuriGrid.layout(true);
+        loadLayout();
+      }
+    });
+  });
 }
 
 
@@ -1028,6 +1132,17 @@ function resetLayout() {
   localStorage.removeItem('roHubSettingsV2');
   localStorage.removeItem('roHubWidgetOrder');
   localStorage.removeItem('kpiOrder');
+  
+  // Clean up Muuri instances before reload to prevent memory leaks
+  if (muuriGrid && !muuriGrid._isDestroyed) {
+    try { muuriGrid.destroy(); } catch(e) { console.warn('Error destroying muuriGrid:', e); }
+    muuriGrid = null;
+  }
+  if (muuriKPI && !muuriKPI._isDestroyed) {
+    try { muuriKPI.destroy(); } catch(e) { console.warn('Error destroying muuriKPI:', e); }
+    muuriKPI = null;
+  }
+  
   showToast('Layout reset to default', 'success');
   setTimeout(function() { location.reload(); }, 800);
 }
@@ -1061,7 +1176,7 @@ function initMuuriKPI() {
   }
 
   // Don't reinitialize if already exists
-  if (muuriKPI) {
+  if (muuriKPI) { // MARKER1
     muuriKPI.refreshItems();
     muuriKPI.layout(true);
     return;
@@ -1126,12 +1241,19 @@ function initMuuriKPI() {
     muuriKPI.refreshItems();
   });
 
-  // Initial layout - wait longer to ensure cards have rendered content
-  setTimeout(function() {
-    muuriKPI.refreshItems();
-    muuriKPI.layout(true);
-    loadKPIOrder();
-  }, 500);
+  // Initial layout - use requestAnimationFrame to wait for browser paint
+  // This replaces arbitrary 500ms timeout with condition-based waiting
+  muuriKPIReady = true;
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      // Double RAF ensures DOM has been painted
+      if (muuriKPI && !muuriKPI._isDestroyed) {
+        muuriKPI.refreshItems();
+        muuriKPI.layout(true);
+        loadKPIOrder();
+      }
+    });
+  });
 }
 
 
@@ -1179,9 +1301,12 @@ function restoreWidgetOrder() {
 
 function toggleEditMode() {
   editMode = !editMode;
-  document.getElementById('editModeBtn').classList.toggle('active', editMode);
-  document.getElementById('kpiRow').classList.toggle('edit-mode', editMode);
-  document.getElementById('widgetsContainer').classList.toggle('edit-mode', editMode);
+  var editModeBtn = document.getElementById('editModeBtn');
+  var kpiRow = document.getElementById('kpiRow');
+  var widgetsContainer = document.getElementById('widgetsContainer');
+  if (editModeBtn) editModeBtn.classList.toggle('active', editMode);
+  if (kpiRow) kpiRow.classList.toggle('edit-mode', editMode);
+  if (widgetsContainer) widgetsContainer.classList.toggle('edit-mode', editMode);
 
   // Muuri drag is always enabled, no need to toggle
 }
@@ -1191,6 +1316,7 @@ function toggleEditMode() {
 function toggleDatePicker() {
   var dropdown = document.getElementById('datePickerDropdown');
   var trigger = document.getElementById('datePickerTrigger');
+  if (!dropdown) return;
   dropdown.classList.toggle('open');
   var isOpen = dropdown.classList.contains('open');
   if (trigger) trigger.setAttribute('aria-expanded', isOpen);
@@ -1199,6 +1325,7 @@ function toggleDatePicker() {
 function toggleCompareDropdown() {
   var dropdown = document.getElementById('compareDropdown');
   var trigger = document.getElementById('compareBtn');
+  if (!dropdown) return;
   dropdown.classList.toggle('open');
   var isOpen = dropdown.classList.contains('open');
   if (trigger) trigger.setAttribute('aria-expanded', isOpen);
@@ -1213,11 +1340,15 @@ function setDateRange(range) {
   else if (range === 'yesterday') { var y = new Date(today); y.setDate(y.getDate()-1); start = end = formatDateInput(y); label = 'Yesterday'; }
   else if (range === 'week') { var w = new Date(today); w.setDate(w.getDate()-6); start = formatDateInput(w); end = formatDateInput(today); label = 'Last 7 Days'; }
   else if (range === 'month') { var m = new Date(today); m.setDate(m.getDate()-29); start = formatDateInput(m); end = formatDateInput(today); label = 'Last 30 Days'; }
-  document.getElementById('startDate').value = start;
-  document.getElementById('endDate').value = end;
-  document.getElementById('datePickerLabel').textContent = label;
+  var startDateEl = document.getElementById('startDate');
+  var endDateEl = document.getElementById('endDate');
+  var datePickerLabel = document.getElementById('datePickerLabel');
+  if (startDateEl) startDateEl.value = start;
+  if (endDateEl) endDateEl.value = end;
+  if (datePickerLabel) datePickerLabel.textContent = label;
   customStartDate = start; customEndDate = end;
-  document.getElementById('datePickerDropdown').classList.remove('open');
+  var datePickerDropdownEl = document.getElementById('datePickerDropdown');
+  if (datePickerDropdownEl) datePickerDropdownEl.classList.remove('open');
   data = null; // Reset data to show skeletons for new date range
   if (compareMode) loadCompareData(); else loadData();
 }
@@ -1229,8 +1360,10 @@ function applyCustomRange() {
   customStartDate = document.getElementById('startDate').value;
   customEndDate = document.getElementById('endDate').value;
   if (!customStartDate || !customEndDate) { alert('Select both dates'); return; }
-  document.getElementById('datePickerLabel').textContent = formatDateShort(customStartDate) + ' - ' + formatDateShort(customEndDate);
-  document.getElementById('datePickerDropdown').classList.remove('open');
+  var datePickerLabelEl = document.getElementById('datePickerLabel');
+  var datePickerDropdownEl = document.getElementById('datePickerDropdown');
+  if (datePickerLabelEl) datePickerLabelEl.textContent = formatDateShort(customStartDate) + ' - ' + formatDateShort(customEndDate);
+  if (datePickerDropdownEl) datePickerDropdownEl.classList.remove('open');
   data = null; // Reset data to show skeletons for new date range
   if (compareMode) loadCompareData(); else loadData();
 }
@@ -1238,17 +1371,23 @@ function applyCustomRange() {
 
 function setCompare(mode) {
   compareMode = mode;
-  document.getElementById('compareDropdown').classList.remove('open');
-  document.getElementById('compareBtn').classList.add('active');
+  var compareDropdownEl = document.getElementById('compareDropdown');
+  var compareBtnEl = document.getElementById('compareBtn');
+  if (compareDropdownEl) compareDropdownEl.classList.remove('open');
+  if (compareBtnEl) compareBtnEl.classList.add('active');
   document.body.classList.add('compare-mode');
   var today = new Date(), currentLabel, prevLabel;
   if (mode === 'yesterday') { currentLabel = 'Today'; prevLabel = 'Yesterday'; customStartDate = customEndDate = formatDateInput(today); }
   else if (mode === 'lastWeek') { var ws = new Date(today); ws.setDate(today.getDate()-today.getDay()); currentLabel = 'This Week'; prevLabel = 'Last Week'; customStartDate = formatDateInput(ws); customEndDate = formatDateInput(today); }
   else if (mode === 'lastMonth') { var ms = new Date(today.getFullYear(), today.getMonth(), 1); currentLabel = 'This Month'; prevLabel = 'Last Month'; customStartDate = formatDateInput(ms); customEndDate = formatDateInput(today); }
-  document.getElementById('compareCurrent').textContent = currentLabel;
-  document.getElementById('comparePrevious').textContent = prevLabel;
-  document.getElementById('compareBanner').classList.add('active');
-  document.getElementById('datePickerLabel').textContent = currentLabel + ' vs ' + prevLabel;
+  var compareCurrentEl = document.getElementById('compareCurrent');
+  var comparePreviousEl = document.getElementById('comparePrevious');
+  var compareBannerEl = document.getElementById('compareBanner');
+  var datePickerLabelEl2 = document.getElementById('datePickerLabel');
+  if (compareCurrentEl) compareCurrentEl.textContent = currentLabel;
+  if (comparePreviousEl) comparePreviousEl.textContent = prevLabel;
+  if (compareBannerEl) compareBannerEl.classList.add('active');
+  if (datePickerLabelEl2) datePickerLabelEl2.textContent = currentLabel + ' vs ' + prevLabel;
   data = null; // Reset data to show skeletons for compare mode
   loadCompareData();
 }
@@ -1256,10 +1395,13 @@ function setCompare(mode) {
 
 function clearCompare() {
   compareMode = null; compareData = null;
-  document.getElementById('compareBtn').classList.remove('active');
+  var compareBtnEl = document.getElementById('compareBtn');
+  var compareBannerEl = document.getElementById('compareBanner');
+  var datePickerLabelEl = document.getElementById('datePickerLabel');
+  if (compareBtnEl) compareBtnEl.classList.remove('active');
   document.body.classList.remove('compare-mode');
-  document.getElementById('compareBanner').classList.remove('active');
-  document.getElementById('datePickerLabel').textContent = currentRange === 'today' ? 'Today' : formatDateShort(customStartDate) + ' - ' + formatDateShort(customEndDate);
+  if (compareBannerEl) compareBannerEl.classList.remove('active');
+  if (datePickerLabelEl) datePickerLabelEl.textContent = currentRange === 'today' ? 'Today' : formatDateShort(customStartDate) + ' - ' + formatDateShort(customEndDate);
   loadData(); renderCharts();
 }
 
@@ -1367,8 +1509,10 @@ function formatDateShort(s) {
 
 function updateClock() {
   var n = new Date();
-  document.getElementById('clock').textContent = (n.getHours()%12||12) + ':' + n.getMinutes().toString().padStart(2,'0') + ' ' + (n.getHours()>=12?'PM':'AM');
-  document.getElementById('dateDisplay').textContent = n.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  var clockEl = document.getElementById('clock');
+  var dateDisplayEl = document.getElementById('dateDisplay');
+  if (clockEl) clockEl.textContent = (n.getHours()%12||12) + ':' + n.getMinutes().toString().padStart(2,'0') + ' ' + (n.getHours()>=12?'PM':'AM');
+  if (dateDisplayEl) dateDisplayEl.textContent = n.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
 
@@ -1376,9 +1520,11 @@ function updateClock() {
 function updateWelcome() {
   var h = new Date().getHours();
   var greeting = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
-  document.getElementById('welcomeGreeting').textContent = greeting;
+  var welcomeGreetingEl = document.getElementById('welcomeGreeting');
+  var welcomeDateEl = document.getElementById('welcomeDate');
+  if (welcomeGreetingEl) welcomeGreetingEl.textContent = greeting;
   var opts = { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' };
-  document.getElementById('welcomeDate').textContent = new Date().toLocaleDateString('en-US', opts);
+  if (welcomeDateEl) welcomeDateEl.textContent = new Date().toLocaleDateString('en-US', opts);
 }
 
 
@@ -1543,7 +1689,22 @@ function sendAIMessage() {
 
 
 // Charts
+// Cleanup existing chart instances to prevent memory leaks
+function destroyChartIfExists(chartInstance) {
+  if (chartInstance && typeof chartInstance.destroy === 'function') {
+    chartInstance.destroy();
+  }
+  return null;
+}
+
 function initCharts() {
+  // Destroy any existing charts first to prevent memory leaks
+  hourlyChart = destroyChartIfExists(hourlyChart);
+  rateChart = destroyChartIfExists(rateChart);
+  dailyChart = destroyChartIfExists(dailyChart);
+  dailyRateChart = destroyChartIfExists(dailyRateChart);
+  trimmersChart = destroyChartIfExists(trimmersChart);
+
   // Register datalabels plugin
   Chart.register(ChartDataLabels);
 
@@ -1784,6 +1945,9 @@ function initCharts() {
     }
     });
   }
+
+  // Mark charts as initialized - prevents race conditions with data loading
+  chartsInitialized = true;
 }
 
 
@@ -1849,7 +2013,8 @@ function refreshData() {
 
 
 function onDataLoaded(r) {
-  document.getElementById('loadingOverlay').classList.add('hidden');
+  var loadingOverlay = document.getElementById('loadingOverlay');
+  if (loadingOverlay) loadingOverlay.classList.add('hidden');
   showSkeletons(false);
 
   // Only re-render if data actually changed
@@ -1881,7 +2046,8 @@ function onDataLoaded(r) {
 
 function onError(e) {
   console.error(e);
-  document.getElementById('loadingOverlay').classList.add('hidden');
+  var loadingOverlay = document.getElementById('loadingOverlay');
+  if (loadingOverlay) loadingOverlay.classList.add('hidden');
   showSkeletons(false);
   showToast('Error loading data: ' + (e.message || e), 'error');
 }
@@ -1917,11 +2083,9 @@ function showSkeletons(show) {
   });
 
   // Refresh Muuri KPI layout after removing loading state
-  if (!show && muuriKPI) {
-    setTimeout(function() {
-      muuriKPI.refreshItems();
-      muuriKPI.layout(true);
-    }, 100);
+  // Use debounced layout to prevent race conditions with data rendering
+  if (!show) {
+    debouncedKPILayout(100);
   }
   // Chart containers
   document.querySelectorAll('.chart-container').forEach(function(c) {
@@ -1965,16 +2129,27 @@ function showSkeletons(show) {
 
 
 function renderAll() {
-  renderDateDisplay();
-  renderHero();
-  renderKPIs();
-  renderCurrentProduction();
-  renderCharts();
-  renderTrimmersChart();
-  renderSparkline();
-  renderStrainList();
-  renderTables();
-  renderIntegrationWidgets();
+  // Wrap each render call in try-catch to prevent cascading failures
+  var renderFunctions = [
+    { name: 'renderDateDisplay', fn: renderDateDisplay },
+    { name: 'renderHero', fn: renderHero },
+    { name: 'renderKPIs', fn: renderKPIs },
+    { name: 'renderCurrentProduction', fn: renderCurrentProduction },
+    { name: 'renderCharts', fn: renderCharts },
+    { name: 'renderTrimmersChart', fn: renderTrimmersChart },
+    { name: 'renderSparkline', fn: renderSparkline },
+    { name: 'renderStrainList', fn: renderStrainList },
+    { name: 'renderTables', fn: renderTables },
+    { name: 'renderIntegrationWidgets', fn: renderIntegrationWidgets }
+  ];
+
+  renderFunctions.forEach(function(item) {
+    try {
+      item.fn();
+    } catch (e) {
+      console.error('Error in ' + item.name + ':', e);
+    }
+  });
 
   // Refresh Muuri layout after content is rendered
   // Use debounced layout to consolidate multiple setTimeout calls into single pass
@@ -2105,7 +2280,8 @@ function renderKPIs() {
   if (t.buckers > 0) breakdown.push(t.buckers + ' Buck');
   if (t.qc > 0) breakdown.push(t.qc + ' QC');
   if (t.tzero > 0) breakdown.push(t.tzero + ' T0');
-  document.getElementById('kpiSub_crew').textContent = breakdown.length > 0 ? breakdown.join(' + ') : 'No crew data';
+  var kpiSubCrew = document.getElementById('kpiSub_crew');
+  if (kpiSubCrew) kpiSubCrew.textContent = breakdown.length > 0 ? breakdown.join(' + ') : 'No crew data';
   setKPI('operatorHours', t.totalOperatorHours, p ? p.totalOperatorHours : null, 'hrs', false, null, rolling.operatorHours);
   setKPI('costPerLb', t.costPerLb, p ? p.costPerLb : null, 'dollar', true, targets.costPerLb, rolling.costPerLb);
   setKPI('totalLbs', t.totalLbs, p ? p.totalLbs : null, 'lbs', false, null, rolling.totalLbs);
@@ -2114,12 +2290,8 @@ function renderKPIs() {
   setKPI('laborCost', t.totalLaborCost, p ? p.totalLaborCost : null, 'dollar', true);
 
   // Refresh Muuri KPI layout after data is populated
-  if (muuriKPI) {
-    setTimeout(function() {
-      muuriKPI.refreshItems();
-      muuriKPI.layout(true);
-    }, 50);
-  }
+  // Use debounced layout to prevent thrashing when multiple KPIs are set rapidly
+  debouncedKPILayout(50);
 }
 
 
@@ -2185,13 +2357,8 @@ function toggleKPIExpand(kpiId) {
     populateKPIExpandedContent(kpiId);
   }
 
-  // Refresh Muuri layout
-  if (muuriKPI) {
-    setTimeout(function() {
-      muuriKPI.refreshItems();
-      muuriKPI.layout(true);
-    }, 50);
-  }
+  // Refresh Muuri layout - use debounced call to prevent thrashing during rapid expand/collapse
+  debouncedKPILayout(50);
 }
 
 
@@ -2500,12 +2667,13 @@ function showWidgetHelp(widgetId) {
 
   // Close on click outside
   setTimeout(function() {
-    document.addEventListener('click', function closePopup(e) {
+    function closePopup(e) {
       if (!popup.contains(e.target) && !e.target.classList.contains('widget-help')) {
         popup.remove();
         document.removeEventListener('click', closePopup);
       }
-    });
+    }
+    document.addEventListener('click', closePopup);
   }, 100);
 }
 
@@ -2605,7 +2773,8 @@ function renderCurrentProduction() {
 
 
 function renderCharts() {
-  if (!data) return;
+  // Guard against race condition: data may arrive before charts are initialized
+  if (!data || !chartsInitialized) return;
 
   // Chart colors are set via Chart.defaults in updateChartTheme()
   // No need to manually update each chart's options here as it can cause stack overflow
@@ -2737,7 +2906,8 @@ function calcMA(arr, p) {
 
 
 function renderTrimmersChart() {
-  if (!data) return;
+  // Guard against race condition: data may arrive before charts are initialized
+  if (!data || !trimmersChart) return;
   
   var labels = [];
   var trimmerData = [];
@@ -2753,7 +2923,7 @@ function renderTrimmersChart() {
     });
   } else if (data.hourly && data.hourly.length > 0) {
     // Single day view: show trimmers by hour
-    document.getElementById('trimmersChartSubtitle').textContent = 'By Hour';
+    if (subtitleEl) subtitleEl.textContent = 'By Hour';
     labels = data.hourly.map(function(h) { return h.label; });
     trimmerData = data.hourly.map(function(h) { return h.trimmers || 0; });
   } else {
@@ -2812,10 +2982,14 @@ function renderStrainList() {
 
 function renderTables() {
   var t = data && data.today ? data.today : {}, p = compareData && compareData.today ? compareData.today : null, w = data && data.weekly ? data.weekly : {};
-  document.getElementById('perfTable').innerHTML = perfRow('Hours Logged', t.hoursWorked, p?p.hoursWorked:null, 'hrs') + perfRow('Trimmer Hrs', t.totalTrimmerHours, p?p.totalTrimmerHours:null, 'num') + perfRow('Lbs/Hour', t.lbsPerHour, p?p.lbsPerHour:null, 'rate');
-  document.getElementById('costTable').innerHTML = perfRow('Cost/Top', t.avgCostPerTop, p?p.avgCostPerTop:null, '$') + perfRow('Cost/Small', t.avgCostPerSmall, p?p.avgCostPerSmall:null, '$') + perfRow('Cost/Lb', t.costPerLb, p?p.costPerLb:null, '$');
-  document.getElementById('periodLabel').textContent = (w.totalDays||0)+' day summary';
-  document.getElementById('periodTable').innerHTML = perfRow('Total Tops', w.totalTops, null, 'lbs') + perfRow('Total Smalls', w.totalSmalls, null, 'lbs') + perfRow('Best Rate', w.bestRate, null, 'rate');
+  var perfTableEl = document.getElementById('perfTable');
+  var costTableEl = document.getElementById('costTable');
+  var periodLabelEl = document.getElementById('periodLabel');
+  var periodTableEl = document.getElementById('periodTable');
+  if (perfTableEl) perfTableEl.innerHTML = perfRow('Hours Logged', t.hoursWorked, p?p.hoursWorked:null, 'hrs') + perfRow('Trimmer Hrs', t.totalTrimmerHours, p?p.totalTrimmerHours:null, 'num') + perfRow('Lbs/Hour', t.lbsPerHour, p?p.lbsPerHour:null, 'rate');
+  if (costTableEl) costTableEl.innerHTML = perfRow('Cost/Top', t.avgCostPerTop, p?p.avgCostPerTop:null, '$') + perfRow('Cost/Small', t.avgCostPerSmall, p?p.avgCostPerSmall:null, '$') + perfRow('Cost/Lb', t.costPerLb, p?p.costPerLb:null, '$');
+  if (periodLabelEl) periodLabelEl.textContent = (w.totalDays||0)+' day summary';
+  if (periodTableEl) periodTableEl.innerHTML = perfRow('Total Tops', w.totalTops, null, 'lbs') + perfRow('Total Smalls', w.totalSmalls, null, 'lbs') + perfRow('Best Rate', w.bestRate, null, 'rate');
 }
 
 
@@ -2841,39 +3015,58 @@ function perfRow(label, val, prev, fmt) {
 function renderIntegrationWidgets() {
   // Scoreboard data from production
   if (data && data.today) {
-    document.getElementById('scoreboardStatus').textContent = data.current ? 'Active' : 'Idle';
-    document.getElementById('scoreboardStatus').className = 'integration-stat-value ' + (data.current ? 'good' : '');
-    document.getElementById('scoreboardLbs').textContent = data.today.totalLbs.toFixed(1);
+    var scoreboardStatusEl = document.getElementById('scoreboardStatus');
+    var scoreboardLbsEl = document.getElementById('scoreboardLbs');
+    var scoreboardTargetEl = document.getElementById('scoreboardTarget');
+    if (scoreboardStatusEl) {
+      scoreboardStatusEl.textContent = data.current ? 'Active' : 'Idle';
+      scoreboardStatusEl.className = 'integration-stat-value ' + (data.current ? 'good' : '');
+    }
+    if (scoreboardLbsEl) scoreboardLbsEl.textContent = data.today.totalLbs.toFixed(1);
     var target = data.today.trimmers * 1.5 * data.today.hoursWorked;
     var pct = target > 0 ? ((data.today.totalTops / target) * 100).toFixed(0) + '%' : '—';
-    document.getElementById('scoreboardTarget').textContent = pct;
-    document.getElementById('scoreboardTarget').className = 'integration-stat-value ' + (data.today.totalTops >= target ? 'good' : '');
+    if (scoreboardTargetEl) {
+      scoreboardTargetEl.textContent = pct;
+      scoreboardTargetEl.className = 'integration-stat-value ' + (data.today.totalTops >= target ? 'good' : '');
+    }
   }
   
   // Kanban data from backend
+  var kanbanTotalEl = document.getElementById('kanbanTotal');
+  var kanbanReorderEl = document.getElementById('kanbanReorder');
+  var kanbanInStockEl = document.getElementById('kanbanInStock');
   if (data && data.kanban) {
-    document.getElementById('kanbanTotal').textContent = data.kanban.total;
-    document.getElementById('kanbanReorder').textContent = data.kanban.needReorder;
-    document.getElementById('kanbanReorder').className = 'integration-stat-value ' + (data.kanban.needReorder > 0 ? 'alert' : 'good');
-    document.getElementById('kanbanInStock').textContent = data.kanban.inStock;
-    document.getElementById('kanbanInStock').className = 'integration-stat-value good';
+    if (kanbanTotalEl) kanbanTotalEl.textContent = data.kanban.total;
+    if (kanbanReorderEl) {
+      kanbanReorderEl.textContent = data.kanban.needReorder;
+      kanbanReorderEl.className = 'integration-stat-value ' + (data.kanban.needReorder > 0 ? 'alert' : 'good');
+    }
+    if (kanbanInStockEl) {
+      kanbanInStockEl.textContent = data.kanban.inStock;
+      kanbanInStockEl.className = 'integration-stat-value good';
+    }
   } else {
-    document.getElementById('kanbanTotal').textContent = '—';
-    document.getElementById('kanbanReorder').textContent = '—';
-    document.getElementById('kanbanInStock').textContent = '—';
+    if (kanbanTotalEl) kanbanTotalEl.textContent = '—';
+    if (kanbanReorderEl) kanbanReorderEl.textContent = '—';
+    if (kanbanInStockEl) kanbanInStockEl.textContent = '—';
   }
   
   // Bag Timer data from backend
+  var bagsTodayEl = document.getElementById('bagsToday');
+  var bagsAvgTimeEl = document.getElementById('bagsAvgTime');
+  var bagsVsTargetEl = document.getElementById('bagsVsTarget');
   if (data && data.bagTimer) {
-    document.getElementById('bagsToday').textContent = data.bagTimer.bagsToday;
-    document.getElementById('bagsAvgTime').textContent = data.bagTimer.avgTime;
-    document.getElementById('bagsVsTarget').textContent = data.bagTimer.vsTarget;
-    var avgMin = data.bagTimer.avgMinutes || 0;
-    document.getElementById('bagsVsTarget').className = 'integration-stat-value ' + (avgMin > 0 && avgMin <= 45 ? 'good' : (avgMin > 45 ? 'alert' : ''));
+    if (bagsTodayEl) bagsTodayEl.textContent = data.bagTimer.bagsToday;
+    if (bagsAvgTimeEl) bagsAvgTimeEl.textContent = data.bagTimer.avgTime;
+    if (bagsVsTargetEl) {
+      bagsVsTargetEl.textContent = data.bagTimer.vsTarget;
+      var avgMin = data.bagTimer.avgMinutes || 0;
+      bagsVsTargetEl.className = 'integration-stat-value ' + (avgMin > 0 && avgMin <= 45 ? 'good' : (avgMin > 45 ? 'alert' : ''));
+    }
   } else {
-    document.getElementById('bagsToday').textContent = '—';
-    document.getElementById('bagsAvgTime').textContent = '—';
-    document.getElementById('bagsVsTarget').textContent = '—';
+    if (bagsTodayEl) bagsTodayEl.textContent = '—';
+    if (bagsAvgTimeEl) bagsAvgTimeEl.textContent = '—';
+    if (bagsVsTargetEl) bagsVsTargetEl.textContent = '—';
   }
 }
 
