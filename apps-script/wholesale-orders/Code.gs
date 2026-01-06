@@ -62,7 +62,10 @@ function doPost(e) {
   var result = {};
 
   try {
-    if (action === 'saveCustomer') {
+    if (action === 'validatePassword') {
+      var authData = e.postData ? JSON.parse(e.postData.contents) : {};
+      result = validatePassword(authData.password);
+    } else if (action === 'saveCustomer') {
       var customerData = e.postData ? JSON.parse(e.postData.contents) : {};
       result = saveCustomer(customerData);
     } else if (action === 'deleteCustomer') {
@@ -92,6 +95,72 @@ function doPost(e) {
 
   return ContentService.createTextOutput(JSON.stringify(result))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ===== AUTHENTICATION =====
+/**
+ * Validates password against Script Properties
+ * Password is stored securely in Script Properties (not in code or Git)
+ *
+ * Setup: File > Project properties > Script properties > Add property:
+ * - Property name: ORDERS_PASSWORD
+ * - Value: your-secure-password
+ */
+function validatePassword(enteredPassword) {
+  try {
+    // Get password from Script Properties (similar to Claude API key storage)
+    var scriptProperties = PropertiesService.getScriptProperties();
+    var storedPassword = scriptProperties.getProperty('ORDERS_PASSWORD');
+
+    if (!storedPassword) {
+      return {
+        success: false,
+        error: 'Password not configured in Script Properties. Set ORDERS_PASSWORD property.'
+      };
+    }
+
+    if (enteredPassword === storedPassword) {
+      // Generate session token (valid for 30 days by default)
+      var sessionToken = generateSessionToken_();
+      return {
+        success: true,
+        sessionToken: sessionToken,
+        expiresIn: 30 * 24 * 60 * 60 * 1000 // 30 days in milliseconds
+      };
+    } else {
+      return {
+        success: false,
+        error: 'Invalid password'
+      };
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Generates a secure session token
+ * Format: timestamp + random string, hashed
+ */
+function generateSessionToken_() {
+  var timestamp = new Date().getTime();
+  var random = Math.random().toString(36).substring(2, 15);
+  var scriptProperties = PropertiesService.getScriptProperties();
+  var storedPassword = scriptProperties.getProperty('ORDERS_PASSWORD');
+
+  // Create token from timestamp + random + password hash
+  var tokenString = timestamp + '-' + random + '-' + storedPassword;
+
+  // Simple hash (for demonstration - in production use better hashing)
+  var hash = Utilities.base64Encode(Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    tokenString
+  ));
+
+  return hash.substring(0, 32); // Return first 32 chars
 }
 
 // ===== CUSTOMERS MANAGEMENT =====

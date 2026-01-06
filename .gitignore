@@ -32,9 +32,9 @@ test-report.json
 .env
 .env.local
 
-# Private authentication config (DO NOT COMMIT)
+# Authentication is now server-side via Apps Script (password in Script Properties)
+# These files are no longer used and can be safely deleted
 auth-config.js
+auth-config.production.js
+auth-config.template.js
 orders-auth.js
-
-# Production config (safe to commit - password is visible but page is protected)
-# auth-config.production.js

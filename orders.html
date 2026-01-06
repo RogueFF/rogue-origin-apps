@@ -968,9 +968,8 @@
     }
   </style>
 
-  <!-- Load authentication config -->
-  <!-- Try local config first (not in git), fallback to production config (in git) -->
-  <script src="auth-config.js" onerror="this.onerror=null; this.src='auth-config.production.js';"></script>
+  <!-- Authentication is now handled server-side via Apps Script -->
+  <!-- Password stored securely in Script Properties (not in code or Git) -->
 
   <style>
     /* Login Screen Styles */
@@ -1738,29 +1737,23 @@
 
   <script>
     // ========================================
-    // AUTHENTICATION
+    // AUTHENTICATION (SERVER-SIDE)
     // ========================================
+    // Password is stored in Apps Script Script Properties (not in code or Git)
+    // Similar to how Claude API key is stored
     const AUTH_STORAGE_KEY = 'orders_auth_session';
-    const AUTH_ENABLED = typeof AUTH_CONFIG !== 'undefined';
+    const AUTH_API_URL = 'https://script.google.com/macros/s/AKfycbxU5dBd5GU1RZeJ-UyNFf1Z8n3jCdIZ0VM6nXVj6_A7Pu2VbbxYWXMiDhkkgB3_8L9MyQ/exec';
 
     // Check authentication on page load
     (function checkAuth() {
-      if (!AUTH_ENABLED) {
-        // No auth config found - show error message
-        console.warn('⚠️ auth-config.js not found. Page is unprotected!');
-        console.warn('Create auth-config.js from auth-config.template.js to enable authentication.');
-        unlockPage();
-        return;
-      }
-
       const session = localStorage.getItem(AUTH_STORAGE_KEY);
       if (session) {
         try {
-          const { password, timestamp } = JSON.parse(session);
+          const { sessionToken, timestamp, expiresIn } = JSON.parse(session);
           const sessionAge = Date.now() - timestamp;
-          const maxAge = (AUTH_CONFIG.sessionDuration || 30) * 24 * 60 * 60 * 1000; // days to ms
 
-          if (sessionAge < maxAge && password === AUTH_CONFIG.password) {
+          // Check if session is still valid
+          if (sessionAge < expiresIn && sessionToken) {
             unlockPage();
             return;
           }
@@ -1783,7 +1776,7 @@
       document.getElementById('auth-overlay').classList.add('hidden');
     }
 
-    function handleLogin(event) {
+    async function handleLogin(event) {
       event.preventDefault();
 
       const passwordInput = document.getElementById('password-input');
@@ -1793,34 +1786,60 @@
 
       errorEl.classList.remove('visible');
 
-      if (!AUTH_ENABLED) {
-        console.error('No auth config found');
-        errorEl.textContent = '❌ Authentication not configured';
+      if (!enteredPassword) {
+        errorEl.textContent = '❌ Please enter a password';
         errorEl.classList.add('visible');
         return;
       }
 
-      if (enteredPassword === AUTH_CONFIG.password) {
-        // Correct password - save session
-        const session = {
-          password: enteredPassword,
-          timestamp: Date.now()
-        };
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+      // Disable button and show loading state
+      loginBtn.disabled = true;
+      const originalText = loginBtn.textContent;
+      loginBtn.textContent = 'Validating...';
 
-        unlockPage();
-        passwordInput.value = '';
-      } else {
-        // Wrong password
+      try {
+        // Call Apps Script to validate password
+        const response = await fetch(AUTH_API_URL + '?action=validatePassword', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: enteredPassword })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          // Correct password - save session token
+          const session = {
+            sessionToken: result.sessionToken,
+            timestamp: Date.now(),
+            expiresIn: result.expiresIn
+          };
+          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+
+          unlockPage();
+          passwordInput.value = '';
+        } else {
+          // Wrong password or error
+          errorEl.textContent = '❌ ' + (result.error || 'Invalid password');
+          errorEl.classList.add('visible');
+          passwordInput.value = '';
+          passwordInput.focus();
+
+          // Shake animation
+          loginBtn.style.animation = 'none';
+          setTimeout(() => {
+            loginBtn.style.animation = 'shake 0.5s';
+          }, 10);
+        }
+      } catch (error) {
+        console.error('Authentication error:', error);
+        errorEl.textContent = '❌ Connection error. Please try again.';
         errorEl.classList.add('visible');
-        passwordInput.value = '';
         passwordInput.focus();
-
-        // Shake animation
-        loginBtn.style.animation = 'none';
-        setTimeout(() => {
-          loginBtn.style.animation = 'shake 0.5s';
-        }, 10);
+      } finally {
+        // Re-enable button
+        loginBtn.disabled = false;
+        loginBtn.textContent = originalText;
       }
     }
 

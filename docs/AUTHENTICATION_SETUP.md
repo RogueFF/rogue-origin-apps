@@ -1,61 +1,87 @@
-# Orders Page Authentication Setup
+# Orders Page Authentication Setup (Server-Side)
 
 ## Overview
 
-The `orders.html` page is now protected with password authentication. The password is stored in a **local file that never gets committed to Git**, keeping it private even when you push code to GitHub.
+The `orders.html` page is protected with **server-side authentication**. The password is stored securely in Google Apps Script **Script Properties** (not in code or Git), similar to how your Claude API key is stored.
+
+This approach ensures:
+- ✅ **Password is never visible in source code**
+- ✅ **No password files committed to Git**
+- ✅ **Only you have access** (password stored in your Apps Script project)
+- ✅ **Works on both local and GitHub Pages** automatically
 
 ---
 
-## Setup Instructions (First Time)
+## Setup Instructions (One-Time)
 
-### Step 1: Create Your Auth Config File
+### Step 1: Set Password in Apps Script
 
-1. Navigate to your project root directory
-2. Copy the template file:
-   ```bash
-   cp auth-config.template.js auth-config.js
-   ```
+1. Open your **Wholesale Orders** Apps Script project:
+   - Go to [script.google.com](https://script.google.com)
+   - Open your wholesale-orders project
 
-   **Windows (Command Prompt):**
-   ```cmd
-   copy auth-config.template.js auth-config.js
-   ```
+2. Navigate to **Project Settings** (gear icon ⚙️ in left sidebar)
 
-3. Open `auth-config.js` in your text editor
+3. Scroll down to **Script Properties**
 
-4. Set your password:
+4. Click **"Add script property"**
+
+5. Enter the following:
+   - **Property**: `ORDERS_PASSWORD`
+   - **Value**: Your chosen password (e.g., `MySecurePassword123!`)
+
+6. Click **"Save script properties"**
+
+**That's it!** Your password is now securely stored server-side.
+
+---
+
+### Step 2: Deploy/Update Apps Script
+
+If you haven't deployed your Apps Script web app yet:
+
+1. In Apps Script, click **Deploy** → **New deployment**
+2. Select type: **Web app**
+3. Set **Execute as**: "Me"
+4. Set **Who has access**: "Anyone"
+5. Click **Deploy**
+6. Copy the web app URL (it starts with `https://script.google.com/macros/s/...`)
+
+If you already deployed, you need to **create a new deployment** to include the authentication code:
+
+1. Click **Deploy** → **New deployment**
+2. Same settings as above
+3. Click **Deploy**
+4. **Copy the new URL** - it will be different!
+
+---
+
+### Step 3: Update orders.html with Apps Script URL
+
+1. Open `orders.html` in your editor
+
+2. Find line ~1745 (search for `AUTH_API_URL`):
    ```javascript
-   const AUTH_CONFIG = {
-     password: 'YOUR_PASSWORD_HERE',  // ⬅️ Change this
-     sessionDuration: 30,
-     protectedPages: ['orders.html']
-   };
+   const AUTH_API_URL = 'https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec';
    ```
 
-5. Save the file
+3. Replace `YOUR_DEPLOYMENT_ID` with your actual deployment URL from Step 2
 
-### Step 2: Verify .gitignore
+4. Save the file
 
-Check that `auth-config.js` is in your `.gitignore` file:
+---
 
-```bash
-cat .gitignore | grep auth-config
-```
+### Step 4: Test Authentication
 
-You should see:
-```
-auth-config.js
-```
+1. Open `orders.html` in your browser (locally or on GitHub Pages)
 
-✅ This ensures your password file **never gets committed to Git**.
+2. You should see the login screen: 🔒 **Wholesale Orders**
 
-### Step 3: Test the Authentication
+3. Enter your password (the one you set in Script Properties)
 
-1. Open `orders.html` in your browser
-2. You should see a login screen: 🔒 **Wholesale Orders**
-3. Enter your password
 4. Click **Unlock**
-5. The page should load normally
+
+5. If successful, the page loads and you're logged in for 30 days
 
 ---
 
@@ -64,273 +90,238 @@ auth-config.js
 ### Security Model
 
 ```
-orders.html (public on GitHub)
-    ↓ loads
-auth-config.js (private, not on GitHub)
-    ↓ contains
-YOUR_PASSWORD (only on your local machine)
+┌─────────────────────────────────────────┐
+│ orders.html                             │
+│ (public on GitHub Pages)                │
+│                                         │
+│ [User enters password] ──┐              │
+└──────────────────────────┼──────────────┘
+                           │
+                           │ POST /validatePassword
+                           ▼
+┌─────────────────────────────────────────┐
+│ Apps Script Backend                     │
+│ (your Google account)                   │
+│                                         │
+│ Script Properties:                      │
+│   ORDERS_PASSWORD: "your-secure-pass"   │
+│                                         │
+│ Validates password ──┐                  │
+└──────────────────────┼──────────────────┘
+                       │
+                       │ Returns session token
+                       ▼
+┌─────────────────────────────────────────┐
+│ User's Browser                          │
+│                                         │
+│ localStorage:                           │
+│   sessionToken: "abc123..."             │
+│   timestamp: 1704567890                 │
+│   expiresIn: 2592000000 (30 days)      │
+└─────────────────────────────────────────┘
 ```
 
-**What gets committed to Git:**
-- ✅ `orders.html` - With authentication code (safe)
-- ✅ `auth-config.template.js` - Empty template (safe)
-- ❌ `auth-config.js` - Your actual password (blocked by .gitignore)
+**What's Public (on GitHub):**
+- ✅ orders.html with login screen
+- ✅ Apps Script deployment URL
+- ❌ **Password is NOT public** (stored in Script Properties)
 
-**What happens when others clone your repo:**
-- They get `orders.html` with the login screen
-- They DON'T get your password
-- Page shows warning: "auth-config.js not found"
-- They need to create their own `auth-config.js` to access
-
-### Session Persistence
-
-After logging in:
-- Session saved to browser `localStorage`
-- Stays logged in for 30 days (configurable)
-- No need to re-enter password on every visit
-- Click "Logout" to clear session
+**What's Private:**
+- 🔒 Password in Apps Script Script Properties
+- 🔒 Only accessible from your Google account
+- 🔒 Never visible in source code or Git history
 
 ---
 
-## Configuration Options
+## Changing Your Password
 
-Edit `auth-config.js` to customize:
+1. Open your Apps Script project
+2. Go to **Project Settings** → **Script Properties**
+3. Find `ORDERS_PASSWORD`
+4. Click the edit icon (pencil)
+5. Enter new password
+6. Click **Save**
+7. **Done!** All users will need to log in again with the new password
 
-### Session Duration
-
-How long to stay logged in:
-
-```javascript
-sessionDuration: 7,  // Stay logged in for 7 days
-sessionDuration: 1,  // Stay logged in for 1 day
-sessionDuration: 90, // Stay logged in for 90 days
-```
-
-### Protected Pages
-
-Which pages require authentication:
-
-```javascript
-protectedPages: ['orders.html']                    // Just orders
-protectedPages: ['orders.html', 'customers.html']  // Multiple pages
-```
+No code changes needed. No Git commits needed.
 
 ---
 
-## Common Tasks
+## Sharing Access with Others
 
-### Changing Your Password
+**Option 1: Share Your Password (Simple)**
+- Give them your password via secure channel (password manager, Signal, etc.)
+- They enter it on the login screen
+- Both of you use the same password
 
-1. Open `auth-config.js`
-2. Change the `password` value
-3. Save the file
-4. Refresh `orders.html`
-5. **Important:** You'll need to log in again (old session is invalidated)
-
-### Sharing Access with Team Members
-
-**Option 1: Share Password (Simple)**
-- Give them your password via secure channel (Slack DM, password manager)
-- They create their own `auth-config.js` with the same password
-
-**Option 2: Separate Passwords (Secure)**
-- Each person creates their own `auth-config.js` with a unique password
-- Each person has their own local authentication
-- No shared credentials
-
-### Deploying to GitHub Pages
-
-The authentication works **client-side** (in the browser), so:
-
-1. Commit and push your code:
-   ```bash
-   git add .
-   git commit -m "Add authentication to orders page"
-   git push origin main
-   ```
-
-2. GitHub Pages will deploy `orders.html` **with** the login screen
-3. Your password remains on your local machine (not deployed)
-4. Anyone visiting the page sees the login screen
-5. Only people with the password can access
-
-**Security Note:** Client-side authentication can be bypassed by someone who views the page source. For truly sensitive data, consider server-side authentication.
+**Option 2: Create Separate Apps Script Project (Advanced)**
+- They fork/copy your repo
+- They deploy their own Apps Script project
+- They set their own password in Script Properties
+- Each person has independent authentication
 
 ---
 
 ## Troubleshooting
 
-### "Page is unprotected" Warning
+### "Connection error. Please try again."
 
-**Problem:** Browser console shows:
-```
-⚠️ auth-config.js not found. Page is unprotected!
-```
+**Problem:** Browser can't reach Apps Script
 
 **Fix:**
-1. Create `auth-config.js` from template (see Step 1 above)
-2. Refresh the page
+1. Check that `AUTH_API_URL` in orders.html matches your deployment URL
+2. Verify Apps Script deployment is set to "Anyone" access
+3. Try opening the Apps Script URL directly in browser - should show JSON
 
 ---
 
-### Can't Access Page (Forgot Password)
+### "Password not configured in Script Properties"
 
-**Problem:** You forgot your password and can't log in
+**Problem:** Script Property `ORDERS_PASSWORD` not set
 
 **Fix:**
-1. Open `auth-config.js` on your computer
-2. Look at the `password` field
-3. That's your password!
+1. Open Apps Script → Project Settings → Script Properties
+2. Add property: `ORDERS_PASSWORD` = your password
+3. Deploy a **new deployment** (not just saving code)
+4. Update `AUTH_API_URL` in orders.html with new deployment URL
 
 ---
 
-### Session Expired
+### "Invalid password" (but you know it's correct)
 
-**Problem:** Page shows login screen even though you logged in recently
-
-**Cause:** Session duration expired
+**Problem:** Possible caching or deployment issue
 
 **Fix:**
-1. Log in again
-2. Or increase `sessionDuration` in `auth-config.js`
+1. In Apps Script, create a **new deployment** (Deploy → New deployment)
+2. Update `AUTH_API_URL` in orders.html with the new URL
+3. Clear browser localStorage: Open DevTools → Application → Local Storage → Delete `orders_auth_session`
+4. Try logging in again
 
 ---
 
-### Password Showing in Git History
+### Session Expired Message
 
-**Problem:** You accidentally committed `auth-config.js` to Git
+**Problem:** More than 30 days have passed since login
 
 **Fix:**
-1. Remove from Git history:
-   ```bash
-   git rm --cached auth-config.js
-   git commit -m "Remove auth config from Git"
-   git push origin main
-   ```
+1. Just log in again
+2. Session will be renewed for another 30 days
 
-2. Change your password in `auth-config.js`
-
-3. Verify it's in `.gitignore`:
-   ```bash
-   cat .gitignore | grep auth-config
-   ```
-
----
-
-## Advanced: Multiple Environments
-
-If you have different passwords for development vs production:
-
-**Development:**
-```javascript
-// auth-config.js (local)
-const AUTH_CONFIG = {
-  password: 'dev-password-123',
-  sessionDuration: 90  // Long session for dev
-};
-```
-
-**Production:**
-```javascript
-// auth-config.production.js (on production server)
-const AUTH_CONFIG = {
-  password: 'strong-prod-password-456',
-  sessionDuration: 7  // Shorter session for security
-};
-```
-
-Update `orders.html`:
-```html
-<!-- Load appropriate config based on environment -->
-<script src="auth-config.js"></script>
-<!-- or -->
-<script src="auth-config.production.js"></script>
-```
+To change session duration:
+1. Open Apps Script `Code.gs`
+2. Find `expiresIn: 30 * 24 * 60 * 60 * 1000` (line ~128)
+3. Change `30` to desired days (e.g., `90` for 90 days)
+4. Deploy new deployment
+5. Update orders.html with new deployment URL
 
 ---
 
 ## Security Considerations
 
-### Client-Side Limitations
+### What This Protects Against
 
-⚠️ **Important:** This authentication happens in the browser (client-side):
+✅ **Source code inspection** - Password never in code
+✅ **Git history leaks** - Password never committed
+✅ **Casual access** - Login screen blocks visitors
+✅ **Search engines** - Login screen prevents indexing
 
-**What it protects against:**
-- ✅ Casual visitors browsing your site
-- ✅ Accidental access by non-technical users
-- ✅ Search engine indexing (login screen blocks crawlers)
+### What This Does NOT Protect Against
 
-**What it does NOT protect against:**
-- ❌ Someone viewing page source and bypassing the login
-- ❌ Intercepting data in transit (use HTTPS)
-- ❌ Determined attackers with browser dev tools
-
-**For truly sensitive data:**
-- Use server-side authentication (Apps Script, OAuth, etc.)
-- Don't store sensitive data client-side
-- Consider the Shopify webhook approach (server validates requests)
+❌ **Someone with your Google account access** - They can see Script Properties
+❌ **Apps Script platform compromise** - Trust in Google's security
+❌ **Network interception without HTTPS** - Always use HTTPS (GitHub Pages does this automatically)
 
 ### Best Practices
 
-1. **Use HTTPS:** Always access via `https://` (GitHub Pages does this automatically)
-2. **Strong Password:** Use a long, random password
-3. **Regular Changes:** Change password every 3-6 months
-4. **Secure Sharing:** Share passwords via password manager, not email
-5. **Monitor Access:** Check browser localStorage if you suspect unauthorized access
+1. **Use HTTPS:** GitHub Pages automatically uses HTTPS ✅
+2. **Strong Password:** Use long, random password with mix of characters
+3. **Secure Sharing:** Share password via password manager or encrypted channel
+4. **Regular Changes:** Change password every 6-12 months
+5. **Monitor Sessions:** Check who has access by monitoring Apps Script execution logs
 
 ---
 
-## File Checklist
+## Comparison with Previous Setup
 
-After setup, you should have:
+| Feature | Old (auth-config.js) | New (Server-Side) |
+|---------|---------------------|-------------------|
+| Password visibility | Visible in source code (production) | **Never visible** ✅ |
+| Git commits | Template committed | **Nothing committed** ✅ |
+| Setup complexity | Copy file, edit password | Set Script Property |
+| Security level | Client-side (weak) | **Server-side (strong)** ✅ |
+| Password changes | Edit file, commit, push | **Change property only** ✅ |
+| Works on GitHub Pages | Yes (but password visible) | **Yes (password hidden)** ✅ |
 
-- ✅ `auth-config.template.js` - Template file (committed to Git)
-- ✅ `auth-config.js` - Your password file (NOT in Git)
-- ✅ `.gitignore` - Contains `auth-config.js`
-- ✅ `orders.html` - Has login screen (committed to Git)
+---
 
-Verify:
-```bash
-# Should show auth-config.js
-ls auth-config.js
+## Advanced: Multiple Environments
 
-# Should NOT show auth-config.js in Git
-git status | grep auth-config
-```
+If you want different passwords for dev/staging/production:
+
+**Option 1: Different Script Properties Projects**
+- Create separate Apps Script projects for each environment
+- Each has its own `ORDERS_PASSWORD` property
+- Point orders.html to appropriate deployment URL
+
+**Option 2: Environment-Based Properties**
+- Use properties: `ORDERS_PASSWORD_DEV`, `ORDERS_PASSWORD_PROD`
+- Modify Apps Script to check environment parameter
+- Pass environment in login request
+
+---
+
+## Files Involved
+
+After server-side setup:
+
+- ✅ `orders.html` - Login screen, calls Apps Script
+- ✅ `apps-script/wholesale-orders/Code.gs` - Authentication endpoint
+- ✅ `.gitignore` - Lists removed auth-config files
+- ❌ `auth-config.js` - **Deleted** (no longer used)
+- ❌ `auth-config.production.js` - **Deleted** (no longer used)
+- ❌ `auth-config.template.js` - **Deleted** (no longer used)
 
 ---
 
 ## FAQ
 
-**Q: Can I disable authentication?**
-A: Yes, just delete or rename `auth-config.js`. The page will load without authentication (and show a console warning).
+**Q: Can someone see my password by viewing source code?**
+A: No! Password is stored in Apps Script Script Properties, never in code.
 
-**Q: What happens if I lose auth-config.js?**
-A: Just create a new one from the template with a new password.
+**Q: What if I forget my password?**
+A: Open Apps Script → Project Settings → Script Properties → View `ORDERS_PASSWORD`
 
-**Q: Can I use the same password across multiple pages?**
-A: Yes, all pages can load the same `auth-config.js` file.
+**Q: Can I disable authentication temporarily?**
+A: Yes, comment out the login check in orders.html (not recommended for production)
 
-**Q: Is my password encrypted?**
-A: No, it's stored in plain text in `auth-config.js`. This file should never be shared or committed to Git.
+**Q: Is my password encrypted in Script Properties?**
+A: Google encrypts Script Properties at rest. You access them through your Google account authentication.
+
+**Q: What happens if someone guesses my Apps Script deployment URL?**
+A: They can call the endpoint, but still need the correct password to authenticate. Failed attempts don't reveal the password.
 
 **Q: Can I see who logged in?**
-A: No, this system doesn't track login history. For audit trails, use server-side authentication.
+A: Check Apps Script execution logs (Extensions → Apps Script → Executions) to see when `validatePassword` was called. No individual user tracking by default.
 
-**Q: What if someone views the page source?**
-A: They'll see the authentication code but NOT your password (it's in a separate file). However, a technical person could potentially bypass the login. For high-security needs, use server-side auth.
+**Q: Why is the session token stored in localStorage?**
+A: So you don't have to log in on every page load. Session expires after 30 days or when you logout.
+
+**Q: Can I use this for multiple pages?**
+A: Yes! The same authentication session works across all pages in the same domain that check for the session token.
 
 ---
 
 ## Next Steps
 
-1. ✅ Create `auth-config.js` from template
-2. ✅ Set a strong password
-3. ✅ Test the login screen
-4. 📝 Save password in your password manager
-5. 🔒 Commit and push to GitHub (password stays local)
+1. ✅ Set `ORDERS_PASSWORD` in Script Properties
+2. ✅ Deploy Apps Script web app (or create new deployment)
+3. ✅ Update `AUTH_API_URL` in orders.html
+4. ✅ Test login on local/GitHub Pages
+5. 📝 Save password in your password manager
+6. 🔒 Enjoy secure, Git-safe authentication!
 
 ---
 
 **Last Updated:** January 6, 2026
-**Version:** 1.0
+**Version:** 2.0 (Server-Side Authentication)
+**Migration:** This replaces the previous client-side auth-config.js system
