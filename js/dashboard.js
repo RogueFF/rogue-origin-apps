@@ -2831,6 +2831,14 @@ function renderCurrentProduction() {
   var d = data ? data.lastCompleted : null;
   var isHistorical = false;
 
+  // Debug logging to diagnose zero-out issue
+  console.log('[DEBUG renderCurrentProduction] data.lastCompleted:', JSON.stringify(data ? data.lastCompleted : null));
+  console.log('[DEBUG renderCurrentProduction] data.hourly length:', data && data.hourly ? data.hourly.length : 0);
+  if (data && data.hourly && data.hourly.length > 0) {
+    var lastHr = data.hourly[data.hourly.length - 1];
+    console.log('[DEBUG renderCurrentProduction] last hourly entry:', JSON.stringify(lastHr));
+  }
+
   if (!d && data && data.hourly && data.hourly.length > 0) {
     // Find the last hourly entry with production data
     for (var i = data.hourly.length - 1; i >= 0; i--) {
