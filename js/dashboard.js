@@ -1349,7 +1349,7 @@ function setDateRange(range) {
   customStartDate = start; customEndDate = end;
   var datePickerDropdownEl = document.getElementById('datePickerDropdown');
   if (datePickerDropdownEl) datePickerDropdownEl.classList.remove('open');
-  data = null; // Reset data to show skeletons for new date range
+  // Keep old data visible until new data arrives - removed data = null reset
   if (compareMode) loadCompareData(); else loadData();
 }
 
@@ -1364,7 +1364,7 @@ function applyCustomRange() {
   var datePickerDropdownEl = document.getElementById('datePickerDropdown');
   if (datePickerLabelEl) datePickerLabelEl.textContent = formatDateShort(customStartDate) + ' - ' + formatDateShort(customEndDate);
   if (datePickerDropdownEl) datePickerDropdownEl.classList.remove('open');
-  data = null; // Reset data to show skeletons for new date range
+  // Keep old data visible until new data arrives - removed data = null reset
   if (compareMode) loadCompareData(); else loadData();
 }
 
@@ -1388,7 +1388,7 @@ function setCompare(mode) {
   if (comparePreviousEl) comparePreviousEl.textContent = prevLabel;
   if (compareBannerEl) compareBannerEl.classList.add('active');
   if (datePickerLabelEl2) datePickerLabelEl2.textContent = currentLabel + ' vs ' + prevLabel;
-  data = null; // Reset data to show skeletons for compare mode
+  // Keep old data visible until new data arrives - removed data = null reset
   loadCompareData();
 }
 
