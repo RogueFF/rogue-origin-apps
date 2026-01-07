@@ -870,6 +870,14 @@ body.sidebar-collapsed .main { margin-left: var(--sidebar-collapsed); }
   margin-top: 8px;
 }
 
+.hero-mini-kpi-sub {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--gold-400);
+  margin-top: 4px;
+  opacity: 0.9;
+}
+
 .hero-mini-kpi.gold .hero-mini-kpi-value {
   color: var(--gold-400);
 }

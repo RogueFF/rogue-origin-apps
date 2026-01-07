@@ -2321,6 +2321,7 @@ function renderHero() {
   var elHeroRateValue = document.getElementById('heroRateValue');
   var elHeroTargetValue = document.getElementById('heroTargetValue');
   var elHeroBagsValue = document.getElementById('heroBagsValue');
+  var elHeroAvgCycleTime = document.getElementById('heroAvgCycleTime');
   var elHeroStrain = document.getElementById('heroStrain');
 
   // Production number (the star) - TOPS production (primary focus)
@@ -2400,6 +2401,7 @@ function renderHero() {
 
   // Bags done (if available from timer data)
   if (elHeroBagsValue) elHeroBagsValue.textContent = (data.bagTimer && data.bagTimer.bagsToday) || '--';
+  if (elHeroAvgCycleTime) elHeroAvgCycleTime.textContent = (data.bagTimer && data.bagTimer.avgTime) ? 'Avg: ' + data.bagTimer.avgTime : 'Avg: --';
 }
 
 
