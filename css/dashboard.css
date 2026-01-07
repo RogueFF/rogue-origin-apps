@@ -2245,7 +2245,7 @@ body.tutorial-active::before {
 @media (max-width: 600px) {
   .kpi-row { grid-template-columns: 1fr 1fr; }
   .header { flex-wrap: wrap; gap: 8px; }
-  .settings-panel { width: 100%; left: 0; right: 0; }
+  .settings-panel { width: 100%; }
   .header-btn { padding: 10px 14px; font-size: 12px; min-height: 44px; }
   .header-btn svg { width: 16px; height: 16px; }
   .nav-item { padding: 14px 16px; min-height: 48px; }
