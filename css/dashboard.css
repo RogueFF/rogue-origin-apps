@@ -1032,7 +1032,13 @@ body.sidebar-collapsed .main { margin-left: var(--sidebar-collapsed); }
 .compare-option:hover { background: var(--bg); }
 
 /* Dashboard Content */
-.dashboard { padding: 16px 20px; flex: 1; display: none; }
+.dashboard {
+  padding: 16px 20px;
+  flex: 1;
+  display: none;
+  max-width: 100%; /* Prevent horizontal expansion */
+  overflow-x: hidden; /* Clip horizontal overflow */
+}
 .dashboard.active { display: block; }
 
 /* Compare Banner */
@@ -1873,6 +1879,8 @@ body.tutorial-active::before {
 .widgets-container {
   position: relative;
   width: 100%; /* Constrain to viewport width */
+  max-width: 100%; /* Prevent expansion beyond parent */
+  overflow: hidden; /* Clip overflow content */
   margin-top: 16px;
   min-height: 400px;
   padding: 4px;

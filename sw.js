@@ -1,7 +1,7 @@
 // Service Worker for Rogue Origin Operations Hub
 // Version 3.0 - Comprehensive offline-first caching with multiple strategies
 
-const CACHE_VERSION = 'ro-ops-v3.1';
+const CACHE_VERSION = 'ro-ops-v3.2';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
