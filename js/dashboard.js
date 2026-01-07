@@ -2348,8 +2348,10 @@ function renderHero() {
   var totalProductiveHours = getTotalProductiveHours(); // 8.5 hours
   var remainingHours = Math.max(0, totalProductiveHours - productiveHoursElapsed);
 
-  // Expected production so far (based on current time and target rate)
-  var expectedSoFar = trimmers * targetRate * productiveHoursElapsed;
+  // Expected production so far - USE BACKEND'S ACCURATE CALCULATION
+  // Backend sums actual (trimmers × rate × multiplier) per hour, accounting for crew changes
+  // This is more accurate than assuming current trimmer count was constant all day
+  var expectedSoFar = (data.current && data.current.todayTarget) || (data.targets && data.targets.totalTops) || 0;
 
   // Predicted end-of-day total: actual production + remaining hours at current rate
   // This matches scoreboard's realistic projection method
