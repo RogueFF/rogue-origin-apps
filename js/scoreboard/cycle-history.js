@@ -164,9 +164,10 @@
       }
 
       // Convert API cycles to internal format
+      // API returns cycleTime (not cycleTimeSec or time)
       var converted = apiCycles.map(function(c) {
-        var cycleTime = c.cycleTimeSec || c.time || 0;
-        var target = c.targetSec || c.target || defaultTarget;
+        var cycleTime = c.cycleTime || c.cycleTimeSec || c.time || 0;
+        var target = c.target || c.targetSec || defaultTarget;
         return {
           time: cycleTime,
           target: target,

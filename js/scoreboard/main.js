@@ -65,8 +65,9 @@
             State.timerData = response.timer;
 
             // Check for new bag completion
-            if (response.timer.lastBagTimestamp) {
-              var newTimestamp = new Date(response.timer.lastBagTimestamp);
+            // API returns lastBagTime (not lastBagTimestamp)
+            if (response.timer.lastBagTime) {
+              var newTimestamp = new Date(response.timer.lastBagTime);
               if (!State.lastBagTimestamp ||
                   newTimestamp.getTime() !== State.lastBagTimestamp.getTime()) {
                 State.lastBagTimestamp = newTimestamp;
