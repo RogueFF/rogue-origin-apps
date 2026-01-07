@@ -1,0 +1,2802 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wholesale Orders - Rogue Origin</title>
+
+  <!-- Performance: Resource Hints -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="dns-prefetch" href="https://script.google.com">
+
+  <!-- Fonts: DM Serif Display, JetBrains Mono, Outfit -->
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=optional" rel="stylesheet">
+
+  <!-- Scripts: Deferred for faster initial render -->
+  <script defer src="https://unpkg.com/@phosphor-icons/web"></script>
+
+  <!-- jsPDF libraries are lazy-loaded only when needed for better performance -->
+
+  <!-- Performance: CSS Preloading -->
+  <link rel="preload" href="css/orders.css" as="style">
+  <link rel="stylesheet" href="css/orders.css">
+
+  <!-- Authentication is now handled server-side via Apps Script -->
+  <!-- Password stored securely in Script Properties (not in code or Git) -->
+
+</head>
+<body class="auth-required">
+  <!-- Authentication Overlay -->
+  <div id="auth-overlay">
+    <div class="login-container">
+      <h2><i class="ph ph-lock"></i> Wholesale Orders</h2>
+      <p>This page requires authentication</p>
+      <form id="login-form" onsubmit="handleLogin(event)">
+        <input
+          type="password"
+          id="password-input"
+          class="login-input"
+          placeholder="Enter password"
+          autocomplete="current-password"
+          required
+        >
+        <button type="submit" class="login-btn" id="login-btn">
+          Unlock
+        </button>
+        <div class="login-error" id="login-error">
+          ❌ Incorrect password
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notifications Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1>Wholesale Orders</h1>
+      <div class="header-actions">
+        <button class="btn btn-primary" onclick="openNewOrderModal()">
+          <i class="ph ph-plus"></i> New Order
+        </button>
+        <button class="btn btn-secondary" onclick="openNewCustomerModal()">
+          <i class="ph ph-user-plus"></i> New Customer
+        </button>
+        <button class="btn btn-secondary" onclick="openShopifyImportModal()" title="Import fulfilled orders from Shopify">
+          <i class="ph ph-shopping-cart"></i> Import Shopify
+        </button>
+        <button class="logout-btn" onclick="handleLogout()" title="Logout">
+          <i class="ph ph-sign-out"></i> Logout
+        </button>
+        <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+          <i class="ph ph-moon" id="theme-icon"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Stats Bar -->
+    <div class="stats-bar">
+      <div class="stat-card">
+        <div class="stat-label">Total Commitment</div>
+        <div class="stat-value" id="stat-commitment">$0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Fulfilled</div>
+        <div class="stat-value success" id="stat-fulfilled">$0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Paid</div>
+        <div class="stat-value success" id="stat-paid">$0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Outstanding</div>
+        <div class="stat-value warning" id="stat-outstanding">$0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Balance Due</div>
+        <div class="stat-value danger" id="stat-balance">$0</div>
+      </div>
+    </div>
+
+    <!-- Orders Table -->
+    <div class="orders-table-container">
+      <table class="orders-table">
+        <thead>
+          <tr>
+            <th>Order ID</th>
+            <th>Customer</th>
+            <th>Commitment</th>
+            <th>Fulfilled</th>
+            <th>Progress</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="orders-table-body">
+          <tr>
+            <td colspan="7" style="text-align: center; padding: 40px; color: var(--text-muted);">
+              No orders yet. Create your first order above.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- New Customer Modal -->
+  <div class="modal-overlay" id="customer-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">New Customer</div>
+        <button class="icon-btn btn-secondary" onclick="closeCustomerModal()">
+          <i class="ph ph-x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="customer-form">
+          <div class="form-group">
+            <label class="form-label">Company Name *</label>
+            <input type="text" class="form-input" id="customer-company" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Contact Name *</label>
+            <input type="text" class="form-input" id="customer-contact" required>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Email</label>
+              <input type="email" class="form-input" id="customer-email">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Phone</label>
+              <input type="tel" class="form-input" id="customer-phone">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Ship To Address</label>
+            <textarea class="form-textarea" id="customer-ship-address" rows="3"></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Bill To Address (leave blank if same as Ship To)</label>
+            <textarea class="form-textarea" id="customer-bill-address" rows="3"></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Country</label>
+            <input type="text" class="form-input" id="customer-country" value="USA" list="countries-list" autocomplete="off">
+            <datalist id="countries-list">
+              <option value="USA">United States</option>
+              <option value="Canada">Canada</option>
+              <option value="Mexico">Mexico</option>
+              <option value="United Kingdom">United Kingdom</option>
+              <option value="Germany">Germany</option>
+              <option value="France">France</option>
+              <option value="Italy">Italy</option>
+              <option value="Spain">Spain</option>
+              <option value="Netherlands">Netherlands</option>
+              <option value="Belgium">Belgium</option>
+              <option value="Switzerland">Switzerland</option>
+              <option value="Austria">Austria</option>
+              <option value="Japan">Japan</option>
+              <option value="South Korea">South Korea</option>
+              <option value="Australia">Australia</option>
+              <option value="New Zealand">New Zealand</option>
+            </datalist>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeCustomerModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveCustomer()">Save Customer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- New Master Order Modal -->
+  <div class="modal-overlay" id="order-modal">
+    <div class="modal modal-large">
+      <div class="modal-header">
+        <div class="modal-title">New Master Order</div>
+        <button class="icon-btn btn-secondary" onclick="closeOrderModal()">
+          <i class="ph ph-x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="order-form">
+          <div class="form-group">
+            <label class="form-label">Customer *</label>
+            <select class="form-select" id="order-customer" required onchange="populateCustomerInfo()">
+              <option value="">Select a customer...</option>
+            </select>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Commitment Amount * ($)</label>
+              <input type="number" class="form-input" id="order-commitment" step="0.01" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Currency</label>
+              <select class="form-select" id="order-currency">
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+                <option value="GBP">GBP</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">PO Number</label>
+              <input type="text" class="form-input" id="order-po">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Terms</label>
+              <select class="form-select" id="order-terms">
+                <option value="DAP">DAP (Delivered at Place)</option>
+                <option value="FOB">FOB (Free on Board)</option>
+                <option value="EXW">EXW (Ex Works)</option>
+              </select>
+            </div>
+          </div>
+
+          <h4 style="margin: 24px 0 12px; font-family: var(--font-display);">Ship To</h4>
+          <div class="form-group">
+            <label class="form-label">Contact Name</label>
+            <input type="text" class="form-input" id="order-ship-contact">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Company</label>
+            <input type="text" class="form-input" id="order-ship-company">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Address</label>
+            <textarea class="form-textarea" id="order-ship-address" rows="3"></textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Phone</label>
+              <input type="tel" class="form-input" id="order-ship-phone">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email</label>
+              <input type="email" class="form-input" id="order-ship-email">
+            </div>
+          </div>
+
+          <h4 style="margin: 24px 0 12px; font-family: var(--font-display);">Sold To</h4>
+          <div style="margin-bottom: 12px;">
+            <label style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer;">
+              <input type="checkbox" id="order-sold-same" onchange="copySoldToFromShipTo()">
+              <span>Same as Ship To</span>
+            </label>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Contact Name</label>
+            <input type="text" class="form-input" id="order-sold-contact">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Company</label>
+            <input type="text" class="form-input" id="order-sold-company">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Address</label>
+            <textarea class="form-textarea" id="order-sold-address" rows="3"></textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Phone</label>
+              <input type="tel" class="form-input" id="order-sold-phone">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email</label>
+              <input type="email" class="form-input" id="order-sold-email">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Notes</label>
+            <textarea class="form-textarea" id="order-notes" rows="2"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeOrderModal()">Cancel</button>
+        <button class="btn btn-primary" id="order-submit-btn" onclick="saveMasterOrder()">Create Order</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Order Detail Panel -->
+  <div class="detail-panel" id="detail-panel">
+    <div class="detail-panel-header">
+      <div>
+        <div class="detail-panel-title" id="detail-order-id">MO-2026-001</div>
+        <div style="font-size: 14px; color: var(--text-muted);" id="detail-customer-name">Company A</div>
+      </div>
+      <button class="icon-btn btn-secondary" onclick="closeDetailPanel()">
+        <i class="ph ph-x"></i>
+      </button>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('summary')">Summary</button>
+      <button class="tab" onclick="switchTab('shipments')">Shipments</button>
+      <button class="tab" onclick="switchTab('payments')">Payments</button>
+      <button class="tab" onclick="switchTab('documents')">Documents</button>
+    </div>
+
+    <div class="detail-panel-body">
+      <!-- Summary Tab -->
+      <div class="tab-content active" id="tab-summary">
+        <div class="progress-row">
+          <div class="progress-label">
+            <span class="progress-label-text">Commitment</span>
+            <span class="progress-label-value" id="summary-commitment">$56,000</span>
+          </div>
+        </div>
+
+        <div class="progress-row">
+          <div class="progress-label">
+            <span class="progress-label-text">Fulfilled</span>
+            <span class="progress-label-value" id="summary-fulfilled">$0 (0%)</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-bar-fill" id="summary-fulfilled-bar" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <div class="progress-row">
+          <div class="progress-label">
+            <span class="progress-label-text">Paid</span>
+            <span class="progress-label-value" id="summary-paid">$0 (0%)</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-bar-fill" id="summary-paid-bar" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <div class="financial-summary">
+          <div class="summary-row">
+            <span class="summary-label">Outstanding (Commitment - Fulfilled)</span>
+            <span class="summary-value" id="summary-outstanding">$56,000</span>
+          </div>
+          <div class="summary-row total">
+            <span class="summary-label">Balance Due (Fulfilled - Paid)</span>
+            <span class="summary-value" id="summary-balance">$0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Shipments Tab -->
+      <div class="tab-content" id="tab-shipments">
+        <button class="btn btn-primary btn-sm" style="margin-bottom: 16px;" onclick="openNewShipmentModal()">
+          <i class="ph ph-plus"></i> Add Shipment
+        </button>
+        <div id="shipments-list">
+          <div class="empty-state">No shipments yet</div>
+        </div>
+      </div>
+
+      <!-- Payments Tab -->
+      <div class="tab-content" id="tab-payments">
+        <button class="btn btn-primary btn-sm" style="margin-bottom: 16px;" onclick="openNewPaymentModal()">
+          <i class="ph ph-plus"></i> Add Payment
+        </button>
+        <div id="payments-list">
+          <div class="empty-state">No payments yet</div>
+        </div>
+      </div>
+
+      <!-- Documents Tab -->
+      <div class="tab-content" id="tab-documents">
+        <div class="empty-state">Documents will appear here after shipments are created</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shipment Modal -->
+  <div class="modal-overlay" id="shipment-modal">
+    <div class="modal modal-large">
+      <div class="modal-header">
+        <div class="modal-title">New Shipment</div>
+        <button class="icon-btn btn-secondary" onclick="closeShipmentModal()">
+          <i class="ph ph-x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="shipment-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Shipment Date</label>
+              <input type="date" class="form-input" id="shipment-date" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Carrier</label>
+              <input type="text" class="form-input" id="shipment-carrier">
+            </div>
+          </div>
+
+          <h4 style="margin: 20px 0 12px; font-family: var(--font-display);">Dimensions</h4>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Length (in)</label>
+              <input type="number" class="form-input" id="shipment-length" step="0.1">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Width (in)</label>
+              <input type="number" class="form-input" id="shipment-width" step="0.1">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Height (in)</label>
+              <input type="number" class="form-input" id="shipment-height" step="0.1">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Weight (kg)</label>
+              <input type="number" class="form-input" id="shipment-weight" step="0.1">
+            </div>
+          </div>
+
+          <h4 style="margin: 20px 0 12px; font-family: var(--font-display);">Line Items</h4>
+          <table class="line-items-table" id="line-items-table">
+            <thead>
+              <tr>
+                <th>Strain</th>
+                <th>Type</th>
+                <th>Qty (kg)</th>
+                <th>$/Unit</th>
+                <th>Total</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="line-items-body">
+              <tr>
+                <td>
+                  <input type="text" class="form-input" placeholder="Type or select strain" list="strains-list">
+                </td>
+                <td>
+                  <select class="form-select">
+                    <option value="tops">Tops</option>
+                    <option value="smalls">Smalls</option>
+                  </select>
+                </td>
+                <td>
+                  <input type="number" class="form-input" step="0.01" placeholder="5">
+                </td>
+                <td>
+                  <input type="number" class="form-input" step="0.01" placeholder="350">
+                </td>
+                <td>
+                  <span class="line-item-total">$0.00</span>
+                </td>
+                <td>
+                  <button type="button" class="line-item-remove" onclick="removeLineItem(this)">
+                    <i class="ph ph-trash"></i>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="addLineItem()">
+            <i class="ph ph-plus"></i> Add Line Item
+          </button>
+
+          <div class="financial-summary">
+            <div class="summary-row">
+              <span class="summary-label">Subtotal</span>
+              <span class="summary-value" id="shipment-subtotal">$0.00</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-label">Discount</span>
+              <input type="number" class="form-input" id="shipment-discount" step="0.01" value="0" style="width: 120px; text-align: right;" oninput="calculateShipmentTotal()">
+            </div>
+            <div class="summary-row">
+              <span class="summary-label">Freight</span>
+              <input type="number" class="form-input" id="shipment-freight" step="0.01" value="0" style="width: 120px; text-align: right;" oninput="calculateShipmentTotal()">
+            </div>
+            <div class="summary-row total">
+              <span class="summary-label">Total</span>
+              <span class="summary-value" id="shipment-total">$0.00</span>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top: 16px;">
+            <label class="form-label">Tracking Number</label>
+            <input type="text" class="form-input" id="shipment-tracking">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Notes</label>
+            <textarea class="form-textarea" id="shipment-notes" rows="2"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeShipmentModal()">Cancel</button>
+        <button class="btn btn-gold" onclick="saveShipmentAndGenerateDocs()">
+          <i class="ph ph-file-pdf"></i> Save & Generate Docs
+        </button>
+        <button class="btn btn-primary" onclick="saveShipment()">Save Shipment</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Payment Modal -->
+  <div class="modal-overlay" id="payment-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title" id="payment-modal-title">Record Payment</div>
+        <button class="icon-btn btn-secondary" onclick="closePaymentModal()">
+          <i class="ph ph-x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="payment-form">
+          <div class="form-group">
+            <label class="form-label">Amount * ($)</label>
+            <input type="number" class="form-input" id="payment-amount" step="0.01" required>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Date *</label>
+              <input type="date" class="form-input" id="payment-date" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Method</label>
+              <select class="form-select" id="payment-method">
+                <option value="Wire">Wire Transfer</option>
+                <option value="Check">Check</option>
+                <option value="ACH">ACH</option>
+                <option value="Card">Credit Card</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Reference / Check Number</label>
+            <input type="text" class="form-input" id="payment-reference">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Notes</label>
+            <textarea class="form-textarea" id="payment-notes" rows="3"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closePaymentModal()">Cancel</button>
+        <button class="btn btn-primary" id="payment-submit-btn" onclick="savePayment()">Record Payment</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Payment Detail Modal -->
+  <div class="modal-overlay" id="payment-detail-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Payment Details</div>
+        <button class="icon-btn btn-secondary" onclick="closePaymentDetailModal()">
+          <i class="ph ph-x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="detail-grid">
+          <div class="detail-row">
+            <span class="detail-label">Amount</span>
+            <span class="detail-value" id="detail-payment-amount" style="font-family: var(--font-mono); font-size: 24px; color: var(--success);"></span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Date</span>
+            <span class="detail-value" id="detail-payment-date"></span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Method</span>
+            <span class="detail-value" id="detail-payment-method"></span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Reference</span>
+            <span class="detail-value" id="detail-payment-reference"></span>
+          </div>
+          <div class="detail-row" style="flex-direction: column; align-items: flex-start;">
+            <span class="detail-label">Notes</span>
+            <span class="detail-value" id="detail-payment-notes" style="margin-top: 8px; white-space: pre-wrap;"></span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Recorded</span>
+            <span class="detail-value" id="detail-payment-recorded" style="font-size: 12px; color: var(--text-muted);"></span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closePaymentDetailModal()">Close</button>
+        <button class="btn btn-primary" id="detail-edit-btn" onclick="editPaymentFromDetail()">
+          <i class="ph ph-pencil-simple"></i> Edit
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shopify Import Modal -->
+  <div class="modal-overlay" id="shopify-import-modal">
+    <div class="modal modal-large">
+      <div class="modal-header">
+        <div class="modal-title">Import Shopify Orders</div>
+        <button class="icon-btn btn-secondary" onclick="closeShopifyImportModal()">
+          <i class="ph ph-x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div style="margin-bottom: 24px; padding: 16px; background: rgba(149, 117, 205, 0.1); border-left: 4px solid #9575cd; border-radius: var(--radius-md);">
+          <p style="margin: 0; font-size: 14px; color: var(--text);">
+            <strong>How to export from Shopify:</strong><br>
+            Shopify Admin → Orders → Export → Select "Fulfilled orders" → Download CSV
+          </p>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Upload Shopify Orders CSV</label>
+          <input type="file" id="shopify-csv-file" accept=".csv" class="form-input" onchange="handleShopifyFileUpload(event)">
+          <div style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">
+            Supports Shopify order export CSV format
+          </div>
+        </div>
+
+        <div id="import-preview" style="display: none; margin-top: 24px;">
+          <h4 style="font-family: var(--font-display); margin-bottom: 16px;">Preview & Match</h4>
+          <div id="import-preview-content"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeShopifyImportModal()">Cancel</button>
+        <button class="btn btn-primary" id="import-confirm-btn" onclick="confirmShopifyImport()" style="display: none;">
+          <i class="ph ph-check"></i> Import <span id="import-count"></span> Shipments
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Strains Datalist (dynamically populated) -->
+  <datalist id="strains-list">
+    <option value="Lifter">
+    <option value="Cherry Wine">
+    <option value="Bubba Kush">
+    <option value="Hawaiian Haze">
+    <option value="Elektra">
+    <option value="Suver Haze">
+    <option value="Sour Space Candy">
+    <option value="Special Sauce">
+  </datalist>
+
+  <script>
+    // ========================================
+    // AUTHENTICATION (SERVER-SIDE)
+    // ========================================
+    // Password is stored in Apps Script Script Properties (not in code or Git)
+    // Similar to how Claude API key is stored
+    const AUTH_STORAGE_KEY = 'orders_auth_session';
+    const AUTH_API_URL = 'https://script.google.com/macros/s/AKfycbxU5dBd5GU1RZeJ-UyNFf1Z8n3jCdIZ0VM6nXVj6_A7Pu2VbbxYWXMiDhkkgB3_8L9MyQ/exec';
+
+    // Check authentication on page load
+    (function checkAuth() {
+      const session = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (session) {
+        try {
+          const { sessionToken, timestamp, expiresIn } = JSON.parse(session);
+          const sessionAge = Date.now() - timestamp;
+
+          // Check if session is still valid
+          if (sessionAge < expiresIn && sessionToken) {
+            unlockPage();
+            return;
+          }
+        } catch (e) {
+          console.error('Session parse error:', e);
+        }
+      }
+
+      // Show login screen
+      showLoginScreen();
+    })();
+
+    function showLoginScreen() {
+      document.getElementById('auth-overlay').classList.remove('hidden');
+      document.getElementById('password-input').focus();
+    }
+
+    function unlockPage() {
+      document.body.classList.remove('auth-required');
+      document.getElementById('auth-overlay').classList.add('hidden');
+    }
+
+    async function handleLogin(event) {
+      event.preventDefault();
+
+      const passwordInput = document.getElementById('password-input');
+      const enteredPassword = passwordInput.value;
+      const errorEl = document.getElementById('login-error');
+      const loginBtn = document.getElementById('login-btn');
+
+      errorEl.classList.remove('visible');
+
+      if (!enteredPassword) {
+        errorEl.textContent = '❌ Please enter a password';
+        errorEl.classList.add('visible');
+        return;
+      }
+
+      // Disable button and show loading state
+      loginBtn.disabled = true;
+      const originalText = loginBtn.textContent;
+      loginBtn.textContent = 'Validating...';
+
+      try {
+        // Call Apps Script to validate password (using GET to avoid CORS preflight)
+        // Password is in URL parameter but connection is HTTPS encrypted
+        const url = AUTH_API_URL + '?action=validatePassword&password=' + encodeURIComponent(enteredPassword);
+        const response = await fetch(url, {
+          method: 'GET'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          // Correct password - save session token
+          const session = {
+            sessionToken: result.sessionToken,
+            timestamp: Date.now(),
+            expiresIn: result.expiresIn
+          };
+          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+
+          unlockPage();
+          passwordInput.value = '';
+        } else {
+          // Wrong password or error
+          errorEl.textContent = '❌ ' + (result.error || 'Invalid password');
+          errorEl.classList.add('visible');
+          passwordInput.value = '';
+          passwordInput.focus();
+
+          // Shake animation
+          loginBtn.style.animation = 'none';
+          setTimeout(() => {
+            loginBtn.style.animation = 'shake 0.5s';
+          }, 10);
+        }
+      } catch (error) {
+        console.error('Authentication error:', error);
+        errorEl.textContent = '❌ Connection error. Please try again.';
+        errorEl.classList.add('visible');
+        passwordInput.focus();
+      } finally {
+        // Re-enable button
+        loginBtn.disabled = false;
+        loginBtn.textContent = originalText;
+      }
+    }
+
+    function handleLogout() {
+      if (confirm('Are you sure you want to logout?')) {
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+        document.body.classList.add('auth-required');
+        showLoginScreen();
+      }
+    }
+
+    // ========================================
+    // CONFIGURATION
+    // ========================================
+    const API_URL = 'https://script.google.com/macros/s/AKfycbxU5dBd5GU1RZeJ-UyNFf1Z8n3jCdIZ0VM6nXVj6_A7Pu2VbbxYWXMiDhkkgB3_8L9MyQ/exec';
+    const isAppsScript = typeof google !== 'undefined' && google.script;
+
+    // State
+    let customers = [];
+    let orders = [];
+    let currentOrderID = null;
+    let editingOrderID = null;
+    let cachedShipments = []; // Cache shipments to avoid redundant API calls
+    let cachedPayments = []; // Cache payments to avoid redundant API calls
+    let pdfLibrariesLoaded = false; // Track if PDF libraries have been loaded
+
+    // ========================================
+    // LAZY-LOAD PDF LIBRARIES
+    // ========================================
+    async function ensurePDFLibrariesLoaded() {
+      if (pdfLibrariesLoaded) return true;
+
+      try {
+        // Load jsPDF core library
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+          script.onload = resolve;
+          script.onerror = () => reject(new Error('Failed to load jsPDF'));
+          document.head.appendChild(script);
+        });
+
+        // Load jsPDF-autotable plugin
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.1/jspdf.plugin.autotable.min.js';
+          script.onload = resolve;
+          script.onerror = () => reject(new Error('Failed to load jsPDF-autotable'));
+          document.head.appendChild(script);
+        });
+
+        pdfLibrariesLoaded = true;
+        console.log('✅ PDF libraries loaded successfully');
+        return true;
+      } catch (error) {
+        console.error('❌ Failed to load PDF libraries:', error);
+        showToast('Failed to load PDF generation libraries. Please refresh and try again.', 'error');
+        return false;
+      }
+    }
+
+    // ========================================
+    // INITIALIZATION
+    // ========================================
+    document.addEventListener('DOMContentLoaded', async () => {
+      initTheme();
+      setTodayDates();
+      await loadInitialData();
+    });
+
+    function setTodayDates() {
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('shipment-date').value = today;
+      document.getElementById('payment-date').value = today;
+    }
+
+    function initTheme() {
+      const savedTheme = localStorage.getItem('theme') || 'light';
+      document.documentElement.setAttribute('data-theme', savedTheme);
+      updateThemeIcon(savedTheme);
+    }
+
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme');
+      const newTheme = current === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', newTheme);
+      localStorage.setItem('theme', newTheme);
+      updateThemeIcon(newTheme);
+    }
+
+    function updateThemeIcon(theme) {
+      const icon = document.getElementById('theme-icon');
+      icon.className = theme === 'light' ? 'ph ph-moon' : 'ph ph-sun';
+    }
+
+    // ========================================
+    // DATA LOADING
+    // ========================================
+    async function loadInitialData() {
+      try {
+        await Promise.all([
+          loadCustomers(),
+          loadOrders()
+        ]);
+        updateStats();
+      } catch (error) {
+        console.error('Error loading data:', error);
+        showToast('Error loading data. Check console for details.', 'error');
+      }
+    }
+
+    async function loadCustomers() {
+      const result = await apiCall('getCustomers');
+      if (result.success) {
+        customers = result.customers || [];
+        populateCustomerDropdown();
+      }
+    }
+
+    async function loadOrders() {
+      const result = await apiCall('getMasterOrders');
+      if (result.success) {
+        orders = result.orders || [];
+        renderOrdersTable();
+      }
+    }
+
+    function populateCustomerDropdown() {
+      const select = document.getElementById('order-customer');
+      select.innerHTML = '<option value="">Select a customer...</option>';
+      customers.forEach(customer => {
+        const option = document.createElement('option');
+        option.value = customer.id;
+        option.textContent = customer.companyName;
+        option.dataset.customer = JSON.stringify(customer);
+        select.appendChild(option);
+      });
+    }
+
+    function populateCustomerInfo() {
+      const select = document.getElementById('order-customer');
+      const selected = select.options[select.selectedIndex];
+      if (!selected || !selected.dataset.customer) return;
+
+      const customer = JSON.parse(selected.dataset.customer);
+
+      // Ship To
+      document.getElementById('order-ship-contact').value = customer.contactName || '';
+      document.getElementById('order-ship-company').value = customer.companyName || '';
+      document.getElementById('order-ship-address').value = customer.shipToAddress || '';
+      document.getElementById('order-ship-phone').value = customer.phone || '';
+      document.getElementById('order-ship-email').value = customer.email || '';
+
+      // Sold To (same as ship to initially)
+      copySoldToFromShipTo();
+    }
+
+    function copySoldToFromShipTo() {
+      if (document.getElementById('order-sold-same').checked) {
+        document.getElementById('order-sold-contact').value = document.getElementById('order-ship-contact').value;
+        document.getElementById('order-sold-company').value = document.getElementById('order-ship-company').value;
+        document.getElementById('order-sold-address').value = document.getElementById('order-ship-address').value;
+        document.getElementById('order-sold-phone').value = document.getElementById('order-ship-phone').value;
+        document.getElementById('order-sold-email').value = document.getElementById('order-ship-email').value;
+      }
+    }
+
+    // ========================================
+    // ORDERS TABLE
+    // ========================================
+    function renderOrdersTable() {
+      const tbody = document.getElementById('orders-table-body');
+
+      if (orders.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" style="text-align: center; padding: 40px; color: var(--text-muted);">
+              No orders yet. Create your first order above.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = orders.map(order => {
+        const fulfillPct = order.commitmentAmount > 0
+          ? Math.round((order.fulfilled || 0) / order.commitmentAmount * 100)
+          : 0;
+
+        return `
+          <tr onclick="openDetailPanel('${order.id}')">
+            <td class="order-id">${order.id}</td>
+            <td>${order.customerName || 'Unknown'}</td>
+            <td class="order-amount">$${formatNumber(order.commitmentAmount)}</td>
+            <td class="order-amount">$${formatNumber(order.fulfilled || 0)}</td>
+            <td class="progress-cell">
+              ${fulfillPct}%
+              <div class="progress-mini">
+                <div class="progress-mini-fill" style="width: ${fulfillPct}%"></div>
+              </div>
+            </td>
+            <td><span class="order-status ${order.status}">${order.status}</span></td>
+            <td onclick="event.stopPropagation()" style="white-space: nowrap;">
+              <button class="btn-icon" onclick="editOrder('${order.id}')" title="Edit Order">
+                <i class="ph ph-pencil-simple"></i>
+              </button>
+              <button class="btn-icon" onclick="deleteOrder('${order.id}')" title="Delete Order" style="color: var(--danger);">
+                <i class="ph ph-trash"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // ========================================
+    // STATS
+    // ========================================
+    function updateStats() {
+      let totalCommitment = 0;
+      let totalFulfilled = 0;
+      let totalPaid = 0;
+
+      orders.forEach(order => {
+        totalCommitment += order.commitmentAmount || 0;
+        totalFulfilled += order.fulfilled || 0;
+        totalPaid += order.paid || 0;
+      });
+
+      const outstanding = totalCommitment - totalFulfilled;
+      const balance = totalFulfilled - totalPaid;
+
+      document.getElementById('stat-commitment').textContent = '$' + formatNumber(totalCommitment);
+      document.getElementById('stat-fulfilled').textContent = '$' + formatNumber(totalFulfilled);
+      document.getElementById('stat-paid').textContent = '$' + formatNumber(totalPaid);
+      document.getElementById('stat-outstanding').textContent = '$' + formatNumber(outstanding);
+      document.getElementById('stat-balance').textContent = '$' + formatNumber(balance);
+    }
+
+    // ========================================
+    // MODALS
+    // ========================================
+    function openNewCustomerModal() {
+      document.getElementById('customer-form').reset();
+      document.getElementById('customer-modal').classList.add('active');
+    }
+
+    function closeCustomerModal() {
+      document.getElementById('customer-modal').classList.remove('active');
+    }
+
+    function openNewOrderModal() {
+      editingOrderID = null;
+      document.getElementById('order-form').reset();
+      document.getElementById('order-currency').value = 'USD';
+      document.getElementById('order-terms').value = 'DAP';
+      document.getElementById('order-submit-btn').textContent = 'Create Order';
+      document.getElementById('order-modal').classList.add('active');
+    }
+
+    function closeOrderModal() {
+      document.getElementById('order-modal').classList.remove('active');
+      editingOrderID = null;
+    }
+
+    function editOrder(orderID) {
+      const order = orders.find(o => o.id === orderID);
+      if (!order) return;
+
+      editingOrderID = orderID;
+
+      // Populate customer dropdown
+      const customerSelect = document.getElementById('order-customer');
+      for (let i = 0; i < customerSelect.options.length; i++) {
+        const opt = customerSelect.options[i];
+        if (opt.dataset.customer) {
+          const cust = JSON.parse(opt.dataset.customer);
+          if (cust.id === order.customerID) {
+            customerSelect.selectedIndex = i;
+            break;
+          }
+        }
+      }
+
+      // Populate form fields
+      document.getElementById('order-commitment').value = order.commitmentAmount || '';
+      document.getElementById('order-currency').value = order.currency || 'USD';
+      document.getElementById('order-po').value = order.poNumber || '';
+      document.getElementById('order-terms').value = order.terms || 'DAP';
+
+      document.getElementById('order-ship-contact').value = order.shipTo_Contact || '';
+      document.getElementById('order-ship-company').value = order.shipTo_Company || '';
+      document.getElementById('order-ship-address').value = order.shipTo_Address || '';
+      document.getElementById('order-ship-phone').value = order.shipTo_Phone || '';
+      document.getElementById('order-ship-email').value = order.shipTo_Email || '';
+
+      document.getElementById('order-sold-contact').value = order.soldTo_Contact || '';
+      document.getElementById('order-sold-company').value = order.soldTo_Company || '';
+      document.getElementById('order-sold-address').value = order.soldTo_Address || '';
+      document.getElementById('order-sold-phone').value = order.soldTo_Phone || '';
+      document.getElementById('order-sold-email').value = order.soldTo_Email || '';
+
+      document.getElementById('order-notes').value = order.notes || '';
+
+      // Update button text and open modal
+      document.getElementById('order-submit-btn').textContent = 'Update Order';
+      document.getElementById('order-modal').classList.add('active');
+    }
+
+    async function deleteOrder(orderID) {
+      if (!confirm('Are you sure you want to delete this order? This action cannot be undone.')) {
+        return;
+      }
+
+      const result = await apiCall('deleteMasterOrder', { orderID }, 'POST');
+      if (result.success) {
+        // Remove from local array instead of reloading everything
+        orders = orders.filter(o => o.id !== orderID);
+        removeOrderRow(orderID); // ⚡ Fast row removal instead of full re-render
+        updateStats();
+        // Close detail panel if it's open for this order
+        if (currentOrderID === orderID) {
+          closeDetailPanel();
+        }
+        showToast('Order deleted successfully!');
+      } else {
+        showToast('Error deleting order: ' + result.error, 'error');
+      }
+    }
+
+    function openNewShipmentModal() {
+      document.getElementById('shipment-form').reset();
+      setTodayDates();
+      // Clear editing state
+      delete document.getElementById('shipment-modal').dataset.editingShipmentId;
+      // Reset line items
+      const tbody = document.getElementById('line-items-body');
+      tbody.innerHTML = `
+        <tr>
+          <td><input type="text" class="form-input" placeholder="Lifter" list="strains-list"></td>
+          <td>
+            <select class="form-select">
+              <option value="tops">Tops</option>
+              <option value="smalls">Smalls</option>
+            </select>
+          </td>
+          <td><input type="number" class="form-input" step="0.01" placeholder="5" oninput="calculateLineTotal(this)"></td>
+          <td><input type="number" class="form-input" step="0.01" placeholder="350" oninput="calculateLineTotal(this)"></td>
+          <td><span class="line-item-total">$0.00</span></td>
+          <td>
+            <button type="button" class="line-item-remove" onclick="removeLineItem(this)">
+              <i class="ph ph-trash"></i>
+            </button>
+          </td>
+        </tr>
+      `;
+      calculateShipmentTotal();
+      document.getElementById('shipment-modal').classList.add('active');
+    }
+
+    function closeShipmentModal() {
+      document.getElementById('shipment-modal').classList.remove('active');
+      // Clear editing state
+      delete document.getElementById('shipment-modal').dataset.editingShipmentId;
+    }
+
+    function editShipment(shipmentId) {
+      // Use cached shipments instead of making another API call
+      const shipment = cachedShipments.find(s => s.id === shipmentId);
+      if (!shipment) {
+        showToast('Shipment not found', 'error');
+        return;
+      }
+
+      // Populate form
+      document.getElementById('shipment-date').value = shipment.shipmentDate ? shipment.shipmentDate.split('T')[0] : '';
+      document.getElementById('shipment-carrier').value = shipment.carrier || '';
+      document.getElementById('shipment-tracking').value = shipment.trackingNumber || '';
+      document.getElementById('shipment-notes').value = shipment.notes || '';
+
+      // Populate dimensions
+      const dims = shipment.dimensions || {};
+      document.getElementById('shipment-length').value = dims.length || '';
+      document.getElementById('shipment-width').value = dims.width || '';
+      document.getElementById('shipment-height').value = dims.height || '';
+      document.getElementById('shipment-weight').value = dims.weight || '';
+
+      // Populate line items
+      const tbody = document.getElementById('line-items-body');
+      const lineItems = shipment.lineItems || [];
+
+      if (lineItems.length > 0) {
+        tbody.innerHTML = lineItems.map(item => `
+          <tr>
+            <td><input type="text" class="form-input" value="${item.strain || ''}" placeholder="Strain name" list="strains-list"></td>
+            <td>
+              <select class="form-select">
+                <option value="tops" ${item.type === 'tops' ? 'selected' : ''}>Tops</option>
+                <option value="smalls" ${item.type === 'smalls' ? 'selected' : ''}>Smalls</option>
+              </select>
+            </td>
+            <td><input type="number" class="form-input" step="0.01" value="${item.quantity || 0}" oninput="calculateLineTotal(this)"></td>
+            <td><input type="number" class="form-input" step="0.01" value="${item.unitPrice || 0}" oninput="calculateLineTotal(this)"></td>
+            <td><span class="line-item-total">$${formatNumber(item.quantity * item.unitPrice)}</span></td>
+            <td>
+              <button type="button" class="line-item-remove" onclick="removeLineItem(this)">
+                <i class="ph ph-trash"></i>
+              </button>
+            </td>
+          </tr>
+        `).join('');
+      }
+
+      // Populate totals
+      document.getElementById('shipment-discount').value = shipment.discount || 0;
+      document.getElementById('shipment-freight').value = shipment.freightCost || 0;
+      calculateShipmentTotal();
+
+      // Store shipment ID for update
+      document.getElementById('shipment-modal').dataset.editingShipmentId = shipmentId;
+
+      // Open modal
+      document.getElementById('shipment-modal').classList.add('active');
+    }
+
+    async function deleteShipment(shipmentId) {
+      if (!confirm('Are you sure you want to delete this shipment? This action cannot be undone.')) {
+        return;
+      }
+
+      const result = await apiCall('deleteShipment', { shipmentID: shipmentId }, 'POST');
+      if (result.success) {
+        // Refresh detail panel
+        await openDetailPanel(currentOrderID);
+        showToast('Shipment deleted successfully!');
+      } else {
+        showToast('Error deleting shipment: ' + result.error, 'error');
+      }
+    }
+
+    function openNewPaymentModal() {
+      document.getElementById('payment-form').reset();
+      setTodayDates();
+      // Reset to create mode
+      delete document.getElementById('payment-modal').dataset.editingPaymentId;
+      document.getElementById('payment-modal-title').textContent = 'Record Payment';
+      document.getElementById('payment-submit-btn').textContent = 'Record Payment';
+      document.getElementById('payment-modal').classList.add('active');
+    }
+
+    function closePaymentModal() {
+      document.getElementById('payment-modal').classList.remove('active');
+      delete document.getElementById('payment-modal').dataset.editingPaymentId;
+    }
+
+    function editPayment(paymentId) {
+      // Use cached payments instead of making another API call
+      const payment = cachedPayments.find(p => p.id === paymentId);
+      if (!payment) {
+        showToast('Payment not found', 'error');
+        return;
+      }
+
+      // Populate form
+      document.getElementById('payment-amount').value = payment.amount || '';
+      document.getElementById('payment-date').value = payment.paymentDate ? payment.paymentDate.split('T')[0] : '';
+      document.getElementById('payment-method').value = payment.method || 'Wire';
+      document.getElementById('payment-reference').value = payment.reference || '';
+      document.getElementById('payment-notes').value = payment.notes || '';
+
+      // Set to edit mode
+      document.getElementById('payment-modal').dataset.editingPaymentId = paymentId;
+      document.getElementById('payment-modal-title').textContent = 'Edit Payment';
+      document.getElementById('payment-submit-btn').textContent = 'Update Payment';
+      document.getElementById('payment-modal').classList.add('active');
+    }
+
+    async function deletePayment(paymentId) {
+      if (!confirm('Are you sure you want to delete this payment? This action cannot be undone.')) {
+        return;
+      }
+
+      const result = await apiCall('deletePayment', { paymentID: paymentId }, 'POST');
+      if (result.success) {
+        // Refresh detail panel
+        await openDetailPanel(currentOrderID);
+        showToast('Payment deleted successfully!');
+      } else {
+        showToast('Error deleting payment: ' + result.error, 'error');
+      }
+    }
+
+    let currentViewingPaymentId = null;
+
+    function viewPaymentDetails(paymentId) {
+      const payment = cachedPayments.find(p => p.id === paymentId);
+      if (!payment) {
+        showToast('Payment not found', 'error');
+        return;
+      }
+
+      currentViewingPaymentId = paymentId;
+
+      // Populate detail modal
+      document.getElementById('detail-payment-amount').textContent = '$' + formatNumber(payment.amount);
+      document.getElementById('detail-payment-date').textContent = formatDate(payment.paymentDate);
+      document.getElementById('detail-payment-method').textContent = payment.method || '-';
+      document.getElementById('detail-payment-reference').textContent = payment.reference || '-';
+      document.getElementById('detail-payment-notes').textContent = payment.notes || 'No notes';
+      document.getElementById('detail-payment-recorded').textContent =
+        payment.recordedBy ? `${payment.recordedBy} on ${formatDate(payment.recordedDate)}` : '-';
+
+      document.getElementById('payment-detail-modal').classList.add('active');
+    }
+
+    function closePaymentDetailModal() {
+      document.getElementById('payment-detail-modal').classList.remove('active');
+      currentViewingPaymentId = null;
+    }
+
+    function editPaymentFromDetail() {
+      closePaymentDetailModal();
+      if (currentViewingPaymentId) {
+        editPayment(currentViewingPaymentId);
+      }
+    }
+
+    // ========================================
+    // SHOPIFY IMPORT
+    // ========================================
+    let parsedShopifyData = [];
+
+    function openShopifyImportModal() {
+      document.getElementById('shopify-csv-file').value = '';
+      document.getElementById('import-preview').style.display = 'none';
+      document.getElementById('import-confirm-btn').style.display = 'none';
+      parsedShopifyData = [];
+      document.getElementById('shopify-import-modal').classList.add('active');
+    }
+
+    function closeShopifyImportModal() {
+      document.getElementById('shopify-import-modal').classList.remove('active');
+    }
+
+    function handleShopifyFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const csvText = e.target.result;
+        parseShopifyCSV(csvText);
+      };
+      reader.readAsText(file);
+    }
+
+    function parseShopifyCSV(csvText) {
+      try {
+        // Parse CSV
+        const lines = csvText.split('\n');
+        const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+
+        // Find required column indices
+        const orderNumIdx = headers.indexOf('Name');
+        const emailIdx = headers.indexOf('Email');
+        const financialStatusIdx = headers.indexOf('Financial Status');
+        const fulfillmentStatusIdx = headers.indexOf('Fulfillment Status');
+        const totalIdx = headers.indexOf('Total');
+        const lineItemTitleIdx = headers.indexOf('Lineitem name');
+        const lineItemQtyIdx = headers.indexOf('Lineitem quantity');
+        const lineItemPriceIdx = headers.indexOf('Lineitem price');
+        const shippingIdx = headers.indexOf('Shipping');
+        const billingNameIdx = headers.indexOf('Billing Name');
+        const billingCompanyIdx = headers.indexOf('Billing Company');
+
+        // Group orders by order number
+        const ordersMap = {};
+
+        for (let i = 1; i < lines.length; i++) {
+          if (!lines[i].trim()) continue;
+
+          // Simple CSV parsing (handles basic cases)
+          const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+
+          const orderNum = cols[orderNumIdx];
+          const fulfillmentStatus = cols[fulfillmentStatusIdx];
+
+          // Only import fulfilled orders
+          if (fulfillmentStatus !== 'fulfilled') continue;
+
+          if (!ordersMap[orderNum]) {
+            ordersMap[orderNum] = {
+              orderNumber: orderNum,
+              email: cols[emailIdx],
+              customerName: cols[billingCompanyIdx] || cols[billingNameIdx],
+              total: parseFloat(cols[totalIdx]) || 0,
+              shipping: parseFloat(cols[shippingIdx]) || 0,
+              lineItems: []
+            };
+          }
+
+          // Add line item
+          if (cols[lineItemTitleIdx]) {
+            ordersMap[orderNum].lineItems.push({
+              title: cols[lineItemTitleIdx],
+              quantity: parseFloat(cols[lineItemQtyIdx]) || 0,
+              price: parseFloat(cols[lineItemPriceIdx]) || 0
+            });
+          }
+        }
+
+        // Convert to array
+        const parsedOrders = Object.values(ordersMap);
+
+        if (parsedOrders.length === 0) {
+          showToast('No fulfilled orders found in CSV', 'warning');
+          return;
+        }
+
+        // Match to master orders
+        matchShopifyOrders(parsedOrders);
+
+      } catch (error) {
+        console.error('CSV parsing error:', error);
+        showToast('Error parsing CSV: ' + error.message, 'error');
+      }
+    }
+
+    function matchShopifyOrders(shopifyOrders) {
+      const matched = [];
+      const unmatched = [];
+
+      shopifyOrders.forEach(shopifyOrder => {
+        // Find matching master order
+        const masterOrder = orders.find(mo => {
+          const nameLower = mo.customerName.toLowerCase();
+          const shopifyNameLower = (shopifyOrder.customerName || '').toLowerCase();
+          const emailMatch = mo.shipTo_Email && shopifyOrder.email &&
+            mo.shipTo_Email.toLowerCase() === shopifyOrder.email.toLowerCase();
+          const nameMatch = shopifyNameLower && nameLower.includes(shopifyNameLower);
+          return emailMatch || nameMatch;
+        });
+
+        if (masterOrder) {
+          matched.push({ shopifyOrder, masterOrder });
+        } else {
+          unmatched.push(shopifyOrder);
+        }
+      });
+
+      parsedShopifyData = matched;
+      displayImportPreview(matched, unmatched);
+    }
+
+    function displayImportPreview(matched, unmatched) {
+      const container = document.getElementById('import-preview-content');
+      let html = '';
+
+      if (matched.length > 0) {
+        html += `<div style="margin-bottom: 24px;">`;
+        html += `<h5 style="color: var(--success); margin-bottom: 12px;">✅ ${matched.length} order(s) matched</h5>`;
+        matched.forEach(({ shopifyOrder, masterOrder }) => {
+          html += `
+            <div class="list-item" style="margin-bottom: 12px;">
+              <div class="list-item-header">
+                <span class="list-item-title">Shopify #${shopifyOrder.orderNumber}</span>
+                <span class="shopify-badge">→ ${masterOrder.id}</span>
+              </div>
+              <div class="list-item-body">
+                ${shopifyOrder.customerName} • $${formatNumber(shopifyOrder.total)} • ${shopifyOrder.lineItems.length} items
+              </div>
+            </div>
+          `;
+        });
+        html += `</div>`;
+      }
+
+      if (unmatched.length > 0) {
+        html += `<div>`;
+        html += `<h5 style="color: var(--warning); margin-bottom: 12px;">⚠️ ${unmatched.length} order(s) not matched</h5>`;
+        html += `<div style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">These customers don't exist in your Master Orders. Add them first to import their shipments.</div>`;
+        unmatched.forEach(order => {
+          html += `
+            <div class="list-item" style="margin-bottom: 12px; opacity: 0.6;">
+              <div class="list-item-header">
+                <span class="list-item-title">Shopify #${order.orderNumber}</span>
+              </div>
+              <div class="list-item-body">
+                ${order.customerName || order.email} • $${formatNumber(order.total)}
+              </div>
+            </div>
+          `;
+        });
+        html += `</div>`;
+      }
+
+      container.innerHTML = html;
+      document.getElementById('import-preview').style.display = 'block';
+
+      if (matched.length > 0) {
+        document.getElementById('import-confirm-btn').style.display = 'inline-flex';
+        document.getElementById('import-count').textContent = matched.length;
+      }
+    }
+
+    async function confirmShopifyImport() {
+      if (parsedShopifyData.length === 0) {
+        showToast('No orders to import', 'warning');
+        return;
+      }
+
+      document.getElementById('import-confirm-btn').disabled = true;
+      document.getElementById('import-confirm-btn').innerHTML = '<i class="ph ph-spinner"></i> Importing...';
+
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const { shopifyOrder, masterOrder } of parsedShopifyData) {
+        try {
+          // Convert to shipment format
+          const shipment = {
+            orderID: masterOrder.id,
+            shipmentDate: new Date().toISOString(),
+            status: 'shipped',
+            lineItems: shopifyOrder.lineItems.map(item => {
+              const type = item.title.toLowerCase().includes('small') ? 'smalls' : 'tops';
+              return {
+                strain: item.title,
+                type: type,
+                quantity: item.quantity,
+                unitPrice: item.price,
+                total: item.quantity * item.price
+              };
+            }),
+            subTotal: shopifyOrder.total - shopifyOrder.shipping,
+            discount: 0,
+            freightCost: shopifyOrder.shipping,
+            totalAmount: shopifyOrder.total,
+            carrier: '',
+            trackingNumber: '',
+            notes: `Auto-imported from Shopify Order #${shopifyOrder.orderNumber}`,
+            dimensions: {
+              source: 'shopify',
+              shopifyOrderNumber: shopifyOrder.orderNumber
+            }
+          };
+
+          const result = await apiCall('saveShipment', shipment, 'POST');
+
+          if (result.success) {
+            successCount++;
+          } else {
+            errorCount++;
+            console.error('Failed to save shipment:', result.error);
+          }
+        } catch (error) {
+          errorCount++;
+          console.error('Import error:', error);
+        }
+      }
+
+      closeShopifyImportModal();
+
+      if (successCount > 0) {
+        showToast(`✅ Imported ${successCount} shipment(s) from Shopify!`, 'success');
+        // Refresh the current order panel if open
+        if (currentOrderID) {
+          await openDetailPanel(currentOrderID);
+        }
+      }
+
+      if (errorCount > 0) {
+        showToast(`⚠️ ${errorCount} shipment(s) failed to import`, 'warning');
+      }
+
+      document.getElementById('import-confirm-btn').disabled = false;
+      document.getElementById('import-confirm-btn').innerHTML = '<i class="ph ph-check"></i> Import <span id="import-count"></span> Shipments';
+    }
+
+    // ========================================
+    // DETAIL PANEL
+    // ========================================
+    async function openDetailPanel(orderID) {
+      currentOrderID = orderID;
+      const order = orders.find(o => o.id === orderID);
+      if (!order) return;
+
+      // Show panel immediately with loading state
+      const panel = document.getElementById('detail-panel');
+      panel.classList.add('active');
+      document.getElementById('detail-order-id').textContent = order.id;
+      document.getElementById('detail-customer-name').textContent = order.customerName;
+
+      // Show loading indicators
+      document.getElementById('shipments-list').innerHTML = '<div class="empty-state">Loading shipments...</div>';
+      document.getElementById('payments-list').innerHTML = '<div class="empty-state">Loading payments...</div>';
+      switchTab('summary');
+
+      // Load all data in parallel for much faster response
+      const [financials, shipmentsResult, paymentsResult] = await Promise.all([
+        apiCall('getOrderFinancials', { orderID }),
+        apiCall('getShipments', { orderID }),
+        apiCall('getPayments', { orderID })
+      ]);
+
+      // Process financials
+      if (financials.success) {
+        updateSummaryTab(financials);
+        // Update just this order in the array (avoid full re-render)
+        const orderIndex = orders.findIndex(o => o.id === orderID);
+        if (orderIndex !== -1) {
+          orders[orderIndex].fulfilled = financials.fulfilled;
+          orders[orderIndex].paid = financials.paid;
+          updateOrderRow(orderID, orders[orderIndex]);
+        }
+        updateStats();
+      }
+
+      // Process shipments - cache them for editShipment
+      if (shipmentsResult.success) {
+        cachedShipments = shipmentsResult.shipments || [];
+        renderShipments(cachedShipments);
+      }
+
+      // Process payments - cache them for editPayment
+      if (paymentsResult.success) {
+        cachedPayments = paymentsResult.payments || [];
+        renderPayments(cachedPayments);
+      }
+    }
+
+    // Update a single order row instead of re-rendering entire table
+    function updateOrderRow(orderID, order) {
+      const row = document.querySelector(`tr[onclick*="${orderID}"]`);
+      if (!row) return;
+
+      const fulfillPct = order.commitmentAmount > 0
+        ? Math.round((order.fulfilled || 0) / order.commitmentAmount * 100)
+        : 0;
+
+      // Update all columns for full edit support
+      row.cells[0].innerHTML = `<span class="order-id">${order.id}</span>`;
+      row.cells[1].textContent = order.customerName || 'Unknown';
+      row.cells[2].innerHTML = `<span class="order-amount">$${formatNumber(order.commitmentAmount)}</span>`;
+      row.cells[3].innerHTML = `<span class="order-amount">$${formatNumber(order.fulfilled || 0)}</span>`;
+      row.cells[4].innerHTML = `
+        ${fulfillPct}%
+        <div class="progress-mini">
+          <div class="progress-mini-fill" style="width: ${fulfillPct}%"></div>
+        </div>
+      `;
+      row.cells[5].innerHTML = `<span class="order-status ${order.status}">${order.status}</span>`;
+      // Note: Action buttons (column 6) remain unchanged
+    }
+
+    // Add a new order row to the table (faster than full re-render)
+    function addOrderRow(order) {
+      const tbody = document.getElementById('orders-table-body');
+
+      // Remove "no orders" message if present
+      if (tbody.querySelector('td[colspan]')) {
+        tbody.innerHTML = '';
+      }
+
+      const fulfillPct = order.commitmentAmount > 0
+        ? Math.round((order.fulfilled || 0) / order.commitmentAmount * 100)
+        : 0;
+
+      const row = document.createElement('tr');
+      row.onclick = () => openDetailPanel(order.id);
+      row.innerHTML = `
+        <td class="order-id">${order.id}</td>
+        <td>${order.customerName || 'Unknown'}</td>
+        <td class="order-amount">$${formatNumber(order.commitmentAmount)}</td>
+        <td class="order-amount">$${formatNumber(order.fulfilled || 0)}</td>
+        <td class="progress-cell">
+          ${fulfillPct}%
+          <div class="progress-mini">
+            <div class="progress-mini-fill" style="width: ${fulfillPct}%"></div>
+          </div>
+        </td>
+        <td><span class="order-status ${order.status}">${order.status}</span></td>
+        <td onclick="event.stopPropagation()" style="white-space: nowrap;">
+          <button class="btn-icon" onclick="editOrder('${order.id}')" title="Edit Order">
+            <i class="ph ph-pencil-simple"></i>
+          </button>
+          <button class="btn-icon" onclick="deleteOrder('${order.id}')" title="Delete Order" style="color: var(--danger);">
+            <i class="ph ph-trash"></i>
+          </button>
+        </td>
+      `;
+      tbody.appendChild(row);
+    }
+
+    // Remove an order row from the table (faster than full re-render)
+    function removeOrderRow(orderID) {
+      const row = document.querySelector(`tr[onclick*="${orderID}"]`);
+      if (row) {
+        row.remove();
+
+        // Show "no orders" message if table is now empty
+        const tbody = document.getElementById('orders-table-body');
+        if (tbody.children.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="7" style="text-align: center; padding: 40px; color: var(--text-muted);">
+                No orders yet. Create your first order above.
+              </td>
+            </tr>
+          `;
+        }
+      }
+    }
+
+    function closeDetailPanel() {
+      document.getElementById('detail-panel').classList.remove('active');
+      currentOrderID = null;
+      cachedShipments = []; // Clear cache when panel closes
+      cachedPayments = [];
+    }
+
+    function switchTab(tabName) {
+      // Update tabs
+      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+      document.querySelector(`.tab[onclick*="${tabName}"]`).classList.add('active');
+
+      // Update content
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+      document.getElementById(`tab-${tabName}`).classList.add('active');
+    }
+
+    function updateSummaryTab(financials) {
+      const { commitment, fulfilled, paid, outstanding, balance } = financials;
+      const fulfillPct = commitment > 0 ? Math.round((fulfilled / commitment) * 100) : 0;
+      const paidPct = fulfilled > 0 ? Math.round((paid / fulfilled) * 100) : 0;
+
+      document.getElementById('summary-commitment').textContent = '$' + formatNumber(commitment);
+      document.getElementById('summary-fulfilled').textContent = `$${formatNumber(fulfilled)} (${fulfillPct}%)`;
+      document.getElementById('summary-fulfilled-bar').style.width = fulfillPct + '%';
+      document.getElementById('summary-paid').textContent = `$${formatNumber(paid)} (${paidPct}%)`;
+      document.getElementById('summary-paid-bar').style.width = paidPct + '%';
+      document.getElementById('summary-outstanding').textContent = '$' + formatNumber(outstanding);
+      document.getElementById('summary-balance').textContent = '$' + formatNumber(balance);
+    }
+
+    function renderShipments(shipments) {
+      const container = document.getElementById('shipments-list');
+      if (shipments.length === 0) {
+        container.innerHTML = '<div class="empty-state">No shipments yet</div>';
+        return;
+      }
+
+      container.innerHTML = shipments.map(shipment => {
+        // Check if this is a Shopify import
+        const isShopify = shipment.dimensions && shipment.dimensions.source === 'shopify';
+        const shopifyBadge = isShopify
+          ? `<span class="shopify-badge" title="Imported from Shopify Order #${shipment.dimensions.shopifyOrderNumber || 'N/A'}">
+               <i class="ph ph-shopping-cart"></i> Shopify
+             </span>`
+          : '';
+
+        return `
+          <div class="list-item">
+            <div class="list-item-header">
+              <span class="list-item-title">
+                ${shipment.invoiceNumber}
+                ${shopifyBadge}
+              </span>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="list-item-meta">${formatDate(shipment.shipmentDate)}</span>
+                <button class="btn-icon" onclick="editShipment('${shipment.id}')" title="Edit Shipment">
+                  <i class="ph ph-pencil-simple"></i>
+                </button>
+                <button class="btn-icon" onclick="deleteShipment('${shipment.id}')" title="Delete Shipment" style="color: var(--danger);">
+                  <i class="ph ph-trash"></i>
+                </button>
+              </div>
+            </div>
+            <div class="list-item-body">
+              <strong>$${formatNumber(shipment.totalAmount)}</strong> •
+              ${shipment.lineItems ? shipment.lineItems.length : 0} items •
+              ${shipment.carrier || 'No carrier'}
+              ${isShopify && shipment.trackingNumber ? '<br><span style="font-size: 12px; color: var(--text-muted);">Tracking: ' + shipment.trackingNumber + '</span>' : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderPayments(payments) {
+      const container = document.getElementById('payments-list');
+      if (payments.length === 0) {
+        container.innerHTML = '<div class="empty-state">No payments yet</div>';
+        return;
+      }
+
+      container.innerHTML = payments.map(payment => `
+        <div class="list-item" onclick="viewPaymentDetails('${payment.id}')" style="cursor: pointer;">
+          <div class="list-item-header">
+            <span class="list-item-title">$${formatNumber(payment.amount)}</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="list-item-meta">${formatDate(payment.paymentDate)}</span>
+              <button class="btn-icon" onclick="event.stopPropagation(); editPayment('${payment.id}')" title="Edit Payment">
+                <i class="ph ph-pencil-simple"></i>
+              </button>
+              <button class="btn-icon" onclick="event.stopPropagation(); deletePayment('${payment.id}')" title="Delete Payment" style="color: var(--danger);">
+                <i class="ph ph-trash"></i>
+              </button>
+            </div>
+          </div>
+          <div class="list-item-body">
+            ${payment.method} • ${payment.reference || 'No reference'}
+            ${payment.notes ? `<br><span style="color: var(--text-muted); font-size: 12px;">${payment.notes.substring(0, 50)}${payment.notes.length > 50 ? '...' : ''}</span>` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // ========================================
+    // LINE ITEMS
+    // ========================================
+    function addLineItem() {
+      const tbody = document.getElementById('line-items-body');
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td><input type="text" class="form-input" placeholder="Strain name"></td>
+        <td>
+          <select class="form-select">
+            <option value="tops">Tops</option>
+            <option value="smalls">Smalls</option>
+          </select>
+        </td>
+        <td><input type="number" class="form-input" step="0.01" placeholder="0" oninput="calculateLineTotal(this)"></td>
+        <td><input type="number" class="form-input" step="0.01" placeholder="0" oninput="calculateLineTotal(this)"></td>
+        <td><span class="line-item-total">$0.00</span></td>
+        <td>
+          <button type="button" class="line-item-remove" onclick="removeLineItem(this)">
+            <i class="ph ph-trash"></i>
+          </button>
+        </td>
+      `;
+      tbody.appendChild(row);
+    }
+
+    function removeLineItem(btn) {
+      const tbody = btn.closest('tbody');
+      if (tbody.children.length > 1) {
+        btn.closest('tr').remove();
+        calculateShipmentTotal();
+      }
+    }
+
+    function calculateLineTotal(input) {
+      const row = input.closest('tr');
+      const qty = parseFloat(row.children[2].querySelector('input').value) || 0;
+      const price = parseFloat(row.children[3].querySelector('input').value) || 0;
+      const total = qty * price;
+      row.children[4].querySelector('.line-item-total').textContent = '$' + formatNumber(total);
+      calculateShipmentTotal();
+    }
+
+    function calculateShipmentTotal() {
+      let subtotal = 0;
+      document.querySelectorAll('.line-item-total').forEach(el => {
+        subtotal += parseFloat(el.textContent.replace(/[$,]/g, '')) || 0;
+      });
+
+      const discount = parseFloat(document.getElementById('shipment-discount').value) || 0;
+      const freight = parseFloat(document.getElementById('shipment-freight').value) || 0;
+      const total = subtotal - discount + freight;
+
+      document.getElementById('shipment-subtotal').textContent = '$' + formatNumber(subtotal);
+      document.getElementById('shipment-total').textContent = '$' + formatNumber(total);
+    }
+
+    // ========================================
+    // SAVE FUNCTIONS
+    // ========================================
+    async function saveCustomer() {
+      const customerData = {
+        companyName: document.getElementById('customer-company').value,
+        contactName: document.getElementById('customer-contact').value,
+        email: document.getElementById('customer-email').value,
+        phone: document.getElementById('customer-phone').value,
+        shipToAddress: document.getElementById('customer-ship-address').value,
+        billToAddress: document.getElementById('customer-bill-address').value || document.getElementById('customer-ship-address').value,
+        country: document.getElementById('customer-country').value
+      };
+
+      if (!customerData.companyName || !customerData.contactName) {
+        showToast('Company Name and Contact Name are required', 'warning');
+        return;
+      }
+
+      const result = await apiCall('saveCustomer', customerData, 'POST');
+      if (result.success) {
+        closeCustomerModal();
+        await loadCustomers();
+        showToast('Customer saved successfully!');
+      } else {
+        showToast('Error saving customer: ' + result.error, 'error');
+      }
+    }
+
+    async function saveMasterOrder() {
+      const select = document.getElementById('order-customer');
+      const selectedCustomer = select.options[select.selectedIndex];
+
+      if (!selectedCustomer || !selectedCustomer.dataset.customer) {
+        showToast('Please select a customer', 'warning');
+        return;
+      }
+
+      const customer = JSON.parse(selectedCustomer.dataset.customer);
+      const orderData = {
+        customerID: customer.id,
+        customerName: customer.companyName,
+        commitmentAmount: parseFloat(document.getElementById('order-commitment').value) || 0,
+        currency: document.getElementById('order-currency').value,
+        poNumber: document.getElementById('order-po').value,
+        terms: document.getElementById('order-terms').value,
+        shipTo_Contact: document.getElementById('order-ship-contact').value,
+        shipTo_Company: document.getElementById('order-ship-company').value,
+        shipTo_Address: document.getElementById('order-ship-address').value,
+        shipTo_Phone: document.getElementById('order-ship-phone').value,
+        shipTo_Email: document.getElementById('order-ship-email').value,
+        soldTo_Contact: document.getElementById('order-sold-contact').value,
+        soldTo_Company: document.getElementById('order-sold-company').value,
+        soldTo_Address: document.getElementById('order-sold-address').value,
+        soldTo_Phone: document.getElementById('order-sold-phone').value,
+        soldTo_Email: document.getElementById('order-sold-email').value,
+        notes: document.getElementById('order-notes').value
+      };
+
+      // If editing, add the order ID
+      if (editingOrderID) {
+        orderData.id = editingOrderID;
+      } else {
+        orderData.createdDate = new Date().toISOString();
+      }
+
+      if (orderData.commitmentAmount <= 0) {
+        showToast('Commitment amount must be greater than 0', 'warning');
+        return;
+      }
+
+      const result = await apiCall('saveMasterOrder', orderData, 'POST');
+      if (result.success) {
+        closeOrderModal();
+
+        // Update local array instead of reloading everything
+        if (editingOrderID) {
+          const index = orders.findIndex(o => o.id === editingOrderID);
+          if (index !== -1) {
+            orders[index] = { ...orders[index], ...orderData };
+            updateOrderRow(editingOrderID, orders[index]); // ⚡ Fast row update instead of full re-render
+          }
+        } else {
+          // Add new order to array
+          const newOrder = { ...orderData, id: result.order.id, status: 'pending', fulfilled: 0, paid: 0 };
+          orders.push(newOrder);
+          addOrderRow(newOrder); // ⚡ Fast row addition instead of full re-render
+        }
+
+        updateStats();
+
+        // Refresh detail panel if it's open for this order
+        if (editingOrderID && currentOrderID === editingOrderID) {
+          await openDetailPanel(editingOrderID);
+        }
+        showToast(editingOrderID ? 'Order updated successfully!' : 'Order created successfully!');
+      } else {
+        showToast('Error ' + (editingOrderID ? 'updating' : 'creating') + ' order: ' + result.error, 'error');
+      }
+    }
+
+    async function saveShipment() {
+      const lineItems = collectLineItems();
+      if (lineItems.length === 0) {
+        showToast('Please add at least one line item', 'warning');
+        return false;
+      }
+
+      const dimensions = {
+        length: parseFloat(document.getElementById('shipment-length').value) || 0,
+        width: parseFloat(document.getElementById('shipment-width').value) || 0,
+        height: parseFloat(document.getElementById('shipment-height').value) || 0,
+        weight: parseFloat(document.getElementById('shipment-weight').value) || 0
+      };
+
+      const subtotal = parseFloat(document.getElementById('shipment-subtotal').textContent.replace(/[$,]/g, '')) || 0;
+      const discount = parseFloat(document.getElementById('shipment-discount').value) || 0;
+      const freight = parseFloat(document.getElementById('shipment-freight').value) || 0;
+      const total = parseFloat(document.getElementById('shipment-total').textContent.replace(/[$,]/g, '')) || 0;
+
+      const editingShipmentId = document.getElementById('shipment-modal').dataset.editingShipmentId;
+
+      const shipmentData = {
+        orderID: currentOrderID,
+        shipmentDate: document.getElementById('shipment-date').value,
+        carrier: document.getElementById('shipment-carrier').value,
+        dimensions,
+        lineItems,
+        subTotal: subtotal,
+        discount,
+        freightCost: freight,
+        totalAmount: total,
+        trackingNumber: document.getElementById('shipment-tracking').value,
+        notes: document.getElementById('shipment-notes').value
+      };
+
+      // If editing, include the shipment ID
+      if (editingShipmentId) {
+        shipmentData.id = editingShipmentId;
+      }
+
+      const result = await apiCall('saveShipment', shipmentData, 'POST');
+      if (result.success) {
+        closeShipmentModal();
+        // Refresh detail panel (which will also update local orders array)
+        await openDetailPanel(currentOrderID);
+        showToast(editingShipmentId ? 'Shipment updated successfully!' : 'Shipment saved successfully!');
+        return true;
+      } else {
+        showToast('Error saving shipment: ' + result.error, 'error');
+        return false;
+      }
+    }
+
+    async function savePayment() {
+      const amount = parseFloat(document.getElementById('payment-amount').value);
+      if (!amount || amount <= 0) {
+        showToast('Please enter a valid payment amount', 'warning');
+        return;
+      }
+
+      const editingPaymentId = document.getElementById('payment-modal').dataset.editingPaymentId;
+
+      const paymentData = {
+        orderID: currentOrderID,
+        amount,
+        paymentDate: document.getElementById('payment-date').value,
+        method: document.getElementById('payment-method').value,
+        reference: document.getElementById('payment-reference').value,
+        notes: document.getElementById('payment-notes').value,
+        recordedBy: 'User',
+        recordedDate: new Date().toISOString()
+      };
+
+      // If editing, include the payment ID
+      if (editingPaymentId) {
+        paymentData.id = editingPaymentId;
+      }
+
+      const result = await apiCall('savePayment', paymentData, 'POST');
+      if (result.success) {
+        closePaymentModal();
+        // Refresh detail panel (which will also update local orders array)
+        await openDetailPanel(currentOrderID);
+        showToast(editingPaymentId ? 'Payment updated successfully!' : 'Payment recorded successfully!');
+      } else {
+        showToast('Error saving payment: ' + result.error, 'error');
+      }
+    }
+
+    function collectLineItems() {
+      const rows = document.querySelectorAll('#line-items-body tr');
+      const items = [];
+
+      rows.forEach(row => {
+        const strain = row.children[0].querySelector('input').value.trim();
+        const type = row.children[1].querySelector('select').value;
+        const qty = parseFloat(row.children[2].querySelector('input').value) || 0;
+        const price = parseFloat(row.children[3].querySelector('input').value) || 0;
+
+        if (strain && qty > 0 && price > 0) {
+          items.push({
+            strain,
+            type,
+            quantity: qty,
+            unitPrice: price,
+            totalValue: qty * price,
+            countryOfOrigin: 'USA'
+          });
+        }
+      });
+
+      return items;
+    }
+
+    function generateCommercialInvoice(shipment, order) {
+      if (!shipment || !order) {
+        throw new Error('Missing shipment or order data');
+      }
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      // Colors
+      const black = [0, 0, 0];
+      const borderGray = [0, 0, 0];
+
+      // Header - "Commercial Invoice" title
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...black);
+      doc.text('Commercial Invoice', 15, 20);
+
+      // From Box (large box containing shipper info and metadata)
+      const fromBoxY = 30;
+      const fromBoxHeight = 35;
+      doc.setDrawColor(...borderGray);
+      doc.setLineWidth(0.5);
+      doc.rect(15, fromBoxY, 180, fromBoxHeight);
+
+      // Vertical divider in From box
+      doc.line(105, fromBoxY, 105, fromBoxY + fromBoxHeight);
+
+      // "From" label
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('From', 17, fromBoxY + 6);
+
+      // Left side - shipper info with labels
+      doc.setFontSize(9);
+      let leftY = fromBoxY + 12;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Contact name:', 17, leftY);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Jacob Fisher', 45, leftY);
+
+      leftY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Company name:', 17, leftY);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Rogue Origin', 45, leftY);
+
+      leftY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Address:', 17, leftY);
+      doc.setFont('helvetica', 'normal');
+      doc.text('13003 Hwy 62', 45, leftY);
+      doc.text('Eagle Point Oregon United States', 45, leftY + 4);
+      doc.text('97524', 45, leftY + 8);
+
+      leftY += 13;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Email:', 17, leftY);
+      doc.setFont('helvetica', 'normal');
+      doc.text('jacob@rogueorigin.com', 45, leftY);
+
+      // Right side - metadata
+      let rightY = fromBoxY + 12;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Date:', 107, rightY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(new Date(shipment.shipmentDate).toLocaleDateString('en-US', {
+        year: 'numeric', month: 'short', day: 'numeric'
+      }), 145, rightY);
+
+      rightY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Invoice No:', 107, rightY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(shipment.invoiceNumber || 'N/A'), 145, rightY);
+
+      rightY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Terms of Sale (Incoterm):', 107, rightY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(order.terms || 'DAP'), 145, rightY);
+
+      rightY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Reason for Export:', 107, rightY);
+      doc.setFont('helvetica', 'normal');
+      doc.text('sold', 145, rightY);
+
+      // Ship To and Sold To boxes
+      const addressBoxY = fromBoxY + fromBoxHeight + 5;
+      const addressBoxHeight = 28;
+
+      // Ship To box
+      doc.rect(15, addressBoxY, 90, addressBoxHeight);
+      doc.line(105, addressBoxY, 105, addressBoxY + addressBoxHeight); // Vertical divider
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text('Ship To', 17, addressBoxY + 6);
+
+      doc.setFontSize(9);
+      let shipY = addressBoxY + 12;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Address:', 17, shipY);
+      doc.setFont('helvetica', 'normal');
+      const shipAddressLines = String(order.shipTo_Address || '').split('\n');
+      shipAddressLines.forEach((line, i) => {
+        doc.text(String(line), 17, shipY + 4 + (i * 4));
+      });
+
+      shipY += 4 + (shipAddressLines.length * 4);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Email:', 17, shipY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(order.shipTo_Email || ''), 32, shipY);
+
+      // Sold To box
+      doc.rect(105, addressBoxY, 90, addressBoxHeight);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text('Sold To', 107, addressBoxY + 6);
+
+      doc.setFontSize(9);
+      let soldY = addressBoxY + 12;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Contact name:', 107, soldY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(order.soldTo_Contact || ''), 135, soldY);
+
+      soldY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Address:', 107, soldY);
+      doc.setFont('helvetica', 'normal');
+      const soldAddressLines = String(order.soldTo_Address || '').split('\n');
+      soldAddressLines.forEach((line, i) => {
+        doc.text(String(line), 135, soldY + (i * 4));
+      });
+
+      soldY += (soldAddressLines.length * 4);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Email:', 107, soldY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(order.soldTo_Email || ''), 135, soldY);
+
+      // Line Items Table
+      const tableStartY = addressBoxY + addressBoxHeight + 5;
+      const lineItems = shipment.lineItems || [];
+      const tableData = lineItems.map(item => {
+        const qty = item.quantity || 0;
+        const unitPrice = item.unitPrice || 0;
+        const total = qty * unitPrice;
+        const lbWeight = (qty * 2.205).toFixed(0); // Convert kg to lb
+        return [
+          qty.toString(),
+          'EA',
+          `CBD Hemp Flower ${item.type === 'tops' ? '' : item.type} | ${item.strain}`,
+          '', // Harm. Code (empty for now)
+          'US',
+          lbWeight + ' lb',
+          unitPrice.toFixed(2),
+          total.toFixed(2),
+          order.currency || 'USD'
+        ];
+      });
+
+      doc.autoTable({
+        startY: tableStartY,
+        head: [['Units', 'U/M', 'Description of Goods / Part No.', 'Harm. Code', 'C/O', 'Unit Weight', 'Unit Value', 'Total Value', 'Currency']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [255, 255, 255],
+          textColor: [0, 0, 0],
+          fontStyle: 'bold',
+          fontSize: 8,
+          lineWidth: 0.5,
+          lineColor: [0, 0, 0]
+        },
+        bodyStyles: {
+          fontSize: 8,
+          lineWidth: 0.5,
+          lineColor: [0, 0, 0]
+        },
+        columnStyles: {
+          0: { cellWidth: 15 },
+          1: { cellWidth: 12 },
+          2: { cellWidth: 55 },
+          3: { cellWidth: 18 },
+          4: { cellWidth: 12 },
+          5: { cellWidth: 20 },
+          6: { cellWidth: 18 },
+          7: { cellWidth: 18 },
+          8: { cellWidth: 12 }
+        }
+      });
+
+      // Footer section - Declaration and Financial Summary side by side
+      const footerY = doc.lastAutoTable.finalY + 5;
+      const footerHeight = 50;
+
+      // Draw box around footer
+      doc.rect(15, footerY, 180, footerHeight);
+      doc.line(105, footerY, 105, footerY + footerHeight); // Vertical divider
+
+      // Left side - Declaration Statement
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Declaration Statement:', 17, footerY + 6);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+
+      const declText = 'I hereby certify that the information on this invoice is true and';
+      const declText2 = 'correct and the contents and value of this shipment are as';
+      const declText3 = 'stated.';
+      doc.text(declText, 17, footerY + 11);
+      doc.text(declText2, 17, footerY + 15);
+      doc.text(declText3, 17, footerY + 19);
+
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Date:', 17, footerY + 26);
+      doc.setFont('helvetica', 'normal');
+      doc.text(new Date().toLocaleDateString('en-US', {
+        year: 'numeric', month: 'short', day: 'numeric'
+      }), 30, footerY + 26);
+
+      doc.setFont('helvetica', 'bold');
+      doc.text('Shipper:', 17, footerY + 31);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Signature:', 17, footerY + 42);
+
+      // Right side - Financial Summary
+      doc.setFontSize(9);
+      let summaryY = footerY + 6;
+      const labelX = 135;
+      const valueX = 190;
+
+      doc.setFont('helvetica', 'bold');
+      doc.text('Invoice Line Total:', labelX, summaryY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(formatNumber(shipment.subTotal), valueX, summaryY, { align: 'right' });
+
+      summaryY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Invoice Sub-Total:', labelX, summaryY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(formatNumber(shipment.subTotal - (shipment.discount || 0)), valueX, summaryY, { align: 'right' });
+
+      summaryY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Freight:', labelX, summaryY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(formatNumber(shipment.freightCost || 0), valueX, summaryY, { align: 'right' });
+
+      summaryY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Total Tax:', labelX, summaryY);
+      doc.setFont('helvetica', 'normal');
+      doc.text('0.00', valueX, summaryY, { align: 'right' });
+
+      summaryY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Total Duties:', labelX, summaryY);
+      doc.setFont('helvetica', 'normal');
+      doc.text('0.00', valueX, summaryY, { align: 'right' });
+
+      summaryY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Total Invoice Amount:', labelX, summaryY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(formatNumber(shipment.totalAmount), valueX, summaryY, { align: 'right' });
+
+      summaryY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Total Number of Packages:', labelX, summaryY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(lineItems.length), valueX, summaryY, { align: 'right' });
+
+      summaryY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Currency:', labelX, summaryY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(order.currency || 'USD', valueX, summaryY, { align: 'right' });
+
+      summaryY += 5;
+      const totalWeight = lineItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
+      const totalWeightLb = (totalWeight * 2.205).toFixed(0);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Total Weight:', labelX, summaryY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(totalWeightLb + ' lb', valueX, summaryY, { align: 'right' });
+
+      // Footer watermark
+      doc.setFontSize(8);
+      doc.setTextColor(150, 150, 150);
+      doc.text('Rogue Origin Operations Hub', 105, footerY + footerHeight + 6, { align: 'center' });
+      doc.text('https://rogueff.github.io/rogue-origin-apps/', 105, footerY + footerHeight + 10, { align: 'center' });
+
+      // Save
+      doc.save(`Commercial_Invoice_${shipment.invoiceNumber}.pdf`);
+    }
+
+    function generateBillOfLading(shipment, order) {
+      if (!shipment || !order) {
+        throw new Error('Missing shipment or order data');
+      }
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      const black = [0, 0, 0];
+      const lineItems = shipment.lineItems || [];
+      const dims = shipment.dimensions || {};
+
+      // Header
+      doc.setFontSize(20);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...black);
+      doc.text('Bill of Lading', 15, 15);
+
+      // Date and BOL# (top right)
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Date:', 130, 15);
+      doc.setFont('helvetica', 'normal');
+      doc.text(new Date(shipment.shipmentDate).toLocaleDateString('en-US', {
+        day: 'numeric', month: 'long', year: 'numeric'
+      }), 145, 15);
+
+      // Ship From box
+      doc.setLineWidth(0.5);
+      doc.rect(15, 20, 85, 30);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Ship From:', 17, 25);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text('Rogue Origin', 17, 30);
+      doc.text('13003 Hwy 62', 17, 34);
+      doc.text('Eagle Point, Oregon 97524', 17, 38);
+      doc.text('United States', 17, 42);
+      doc.text('jacob@rogueorigin.com', 17, 46);
+
+      // Right side metadata
+      doc.rect(105, 20, 90, 45);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Bill of Lading No:', 107, 25);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(shipment.id || 'N/A'), 140, 25);
+
+      // BARCODE SPACE placeholder
+      doc.setFontSize(10);
+      doc.setTextColor(180, 180, 180);
+      doc.text('BARCODE SPACE', 130, 35);
+      doc.setTextColor(...black);
+
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Carrier Name:', 107, 42);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(shipment.carrier || ''), 135, 42);
+
+      doc.setFont('helvetica', 'bold');
+      doc.text('Trailer No:', 107, 47);
+      doc.setFont('helvetica', 'normal');
+      doc.text('', 130, 47);
+
+      doc.setFont('helvetica', 'bold');
+      doc.text('Seal Number(s):', 107, 52);
+      doc.setFont('helvetica', 'normal');
+      doc.text('', 140, 52);
+
+      doc.setFont('helvetica', 'bold');
+      doc.text('SCAC:', 107, 57);
+      doc.text('Pro No:', 150, 57);
+
+      doc.setFontSize(10);
+      doc.setTextColor(180, 180, 180);
+      doc.text('BARCODE SPACE', 130, 62);
+      doc.setTextColor(...black);
+
+      // SID# and Ship To section
+      doc.rect(15, 52, 85, 13);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('SID#:', 17, 57);
+      doc.setFont('helvetica', 'normal');
+      doc.text('☐ FOB', 85, 57);
+
+      doc.setFont('helvetica', 'bold');
+      doc.text('Ship To:', 17, 62);
+      doc.setFont('helvetica', 'normal');
+      const shipToAddr = String(order.shipTo_Address || '').split('\n')[0];
+      doc.text(shipToAddr.substring(0, 30), 32, 62);
+
+      doc.setFont('helvetica', 'bold');
+      doc.text('Location No:', 60, 62);
+
+      // CID# and Third Party
+      doc.rect(15, 67, 85, 13);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('CID#:', 17, 72);
+      doc.setFont('helvetica', 'normal');
+      doc.text('☐ FOB', 85, 72);
+
+      doc.setFont('helvetica', 'bold');
+      doc.text('Third Party Freight Charges - Bill To:', 17, 77);
+
+      // Freight Charge Terms box
+      doc.rect(105, 67, 90, 13);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Freight Charge Terms (prepaid unless marked otherwise)', 107, 71);
+      doc.setFont('helvetica', 'normal');
+      doc.text('☐ Prepaid     ☐ Collect     ☐ 3rd Party', 107, 76);
+      doc.text('☐ Master BOL: w/attached underlying BOLs', 107, 79);
+
+      // Special Instructions
+      doc.rect(15, 82, 180, 12);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Special Instructions:', 17, 87);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text('CBD Hemp Flower - Non-Hazardous Material', 17, 91);
+
+      // Customer Order Information Table
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.setFillColor(230, 230, 230);
+      doc.rect(15, 95, 180, 5, 'F');
+      doc.text('Customer Order Information', 80, 98.5);
+
+      doc.autoTable({
+        startY: 100,
+        head: [['Customer Order No.', '# Pkgs.', 'Weight', 'Pallet/Slip (Y/N)', 'Additional Shipper Info']],
+        body: [[String(order.poNumber || ''), String(lineItems.length), String((dims.weight || 0) + ' kg'), 'Y', '']],
+        theme: 'grid',
+        headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 8 },
+        bodyStyles: { fontSize: 8 },
+        columnStyles: {
+          0: { cellWidth: 40 },
+          1: { cellWidth: 20 },
+          2: { cellWidth: 25 },
+          3: { cellWidth: 30 },
+          4: { cellWidth: 65 }
+        }
+      });
+
+      // Carrier Information Table
+      const tableY = doc.lastAutoTable.finalY + 2;
+      doc.setFillColor(230, 230, 230);
+      doc.rect(15, tableY, 180, 5, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.text('Carrier Information', 85, tableY + 3.5);
+
+      const carrierTableData = lineItems.map(item => {
+        const qty = item.quantity || 0;
+        const lbWeight = (qty * 2.205).toFixed(0);
+        return [
+          String(lineItems.length),
+          'Pallet',
+          String(qty),
+          'EA',
+          lbWeight + ' lb',
+          '',
+          `CBD Hemp Flower ${item.type === 'tops' ? '' : item.type} - ${item.strain}`,
+          '',
+          ''
+        ];
+      });
+
+      doc.autoTable({
+        startY: tableY + 5,
+        head: [['Handling Unit', '', 'Package', '', 'Weight', 'H.M. (X)', 'Commodity Description', 'NMFC No.', 'Class']],
+        body: carrierTableData,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [255, 255, 255],
+          textColor: [0, 0, 0],
+          fontStyle: 'bold',
+          fontSize: 7
+        },
+        bodyStyles: { fontSize: 7 },
+        columnStyles: {
+          0: { cellWidth: 15 },
+          1: { cellWidth: 20 },
+          2: { cellWidth: 15 },
+          3: { cellWidth: 15 },
+          4: { cellWidth: 20 },
+          5: { cellWidth: 15 },
+          6: { cellWidth: 55 },
+          7: { cellWidth: 15 },
+          8: { cellWidth: 10 }
+        }
+      });
+
+      // Bottom section - Value declaration and certifications
+      const bottomY = doc.lastAutoTable.finalY + 3;
+
+      // Value declaration box
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      const declText1 = 'Where the rate is dependent on value, shippers are required to state specifically in writing';
+      const declText2 = 'the agreed or declared value of the property as follows:';
+      const declText3 = '"The agreed or declared value of the property is specifically stated by the shipper to be not exceeding';
+      const declText4 = '_____________ FOB ______________."';
+      doc.text(declText1, 17, bottomY);
+      doc.text(declText2, 17, bottomY + 3);
+      doc.text(declText3, 17, bottomY + 6);
+      doc.text(declText4, 17, bottomY + 9);
+
+      // COD and Fee Terms
+      const codY = bottomY + 13;
+      doc.setFont('helvetica', 'bold');
+      doc.text('COD Amt. $', 130, codY);
+      doc.setFont('helvetica', 'normal');
+      doc.text('_____________', 150, codY);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Fee Terms:', 130, codY + 3);
+      doc.setFont('helvetica', 'normal');
+      doc.text('☐ Collect  ☐ Prepaid', 150, codY + 3);
+      doc.text('☐ Customer Check Acceptable', 130, codY + 6);
+
+      // RECEIVED text
+      const recY = bottomY + 14;
+      doc.setFontSize(6);
+      doc.setFont('helvetica', 'bold');
+      doc.text('RECEIVED,', 17, recY);
+      doc.setFont('helvetica', 'normal');
+      const recText = 'subject to individually determined rates or contracts that have been agreed upon in writing between the carrier and shipper, if applicable,';
+      const recText2 = 'otherwise to the rates, classifications and rules that have been established by the carrier and are available to the shipper, on request, and to all';
+      const recText3 = 'applicable state and federal regulations.';
+      doc.text(recText, 32, recY);
+      doc.text(recText2, 17, recY + 3);
+      doc.text(recText3, 17, recY + 6);
+
+      const noteY = recY + 10;
+      doc.text('The carrier shall not make delivery of this shipment without payment of freight and all other lawful charges.', 17, noteY);
+
+      // Certification text box
+      const certY = noteY + 5;
+      doc.rect(15, certY, 85, 15);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      doc.text('This is to certify that the above named materials are', 17, certY + 3);
+      doc.text('properly classified, packaged, marked and labeled, and are', 17, certY + 6);
+      doc.text('in proper condition for transportation according to the', 17, certY + 9);
+      doc.text('applicable regulations of the DOT.', 17, certY + 12);
+
+      // Trailer Loaded / Freight Counted
+      doc.setFont('helvetica', 'bold');
+      doc.text('Trailer Loaded', 107, certY + 3);
+      doc.text('Freight Counted', 150, certY + 3);
+      doc.setFont('helvetica', 'normal');
+      doc.text('☐ By Shipper', 107, certY + 6);
+      doc.text('☐ By Shipper', 150, certY + 6);
+      doc.text('☐ By Driver', 107, certY + 9);
+      doc.text('☐ By Driver/pallets said to contain', 150, certY + 9);
+      doc.text('☐ By Driver/Pieces', 150, certY + 12);
+
+      // Signature lines
+      const sigY = certY + 17;
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Shipper Signature', 17, sigY);
+      doc.text('Date', 60, sigY);
+      doc.text('Carrier Signature', 107, sigY);
+      doc.text('Pickup Date', 160, sigY);
+
+      doc.setFont('helvetica', 'normal');
+      doc.line(17, sigY + 2, 55, sigY + 2);
+      doc.line(60, sigY + 2, 95, sigY + 2);
+      doc.line(107, sigY + 2, 155, sigY + 2);
+      doc.line(160, sigY + 2, 190, sigY + 2);
+
+      // Carrier acknowledgment text
+      const ackY = sigY + 5;
+      doc.setFontSize(6);
+      doc.text('Carrier acknowledges receipt of packages and required placards.', 107, ackY);
+      doc.text('Carrier certifies emergency response information was made available', 107, ackY + 2.5);
+      doc.text('and/or carrier has the DOT emergency response guidebook or', 107, ackY + 5);
+      doc.text('equivalent documentation in the vehicle. Property described above is', 107, ackY + 7.5);
+      doc.text('received in good order, except as noted.', 107, ackY + 10);
+
+      // Liability note at bottom
+      const noteBottomY = sigY + 17;
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.text('NOTE:', 17, noteBottomY);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Liability Limitation for loss or damage in this shipment may be applicable. See 49 U.S.C. - 14706(c)(1)(A) and (B).', 30, noteBottomY);
+
+      // Footer
+      doc.setFontSize(7);
+      doc.setTextColor(150, 150, 150);
+      doc.text('Rogue Origin Operations Hub - https://rogueff.github.io/rogue-origin-apps/', 105, noteBottomY + 5, { align: 'center' });
+
+      // Save
+      doc.save(`BOL_${shipment.id || 'shipment'}.pdf`);
+    }
+
+    async function saveShipmentAndGenerateDocs() {
+      const shipmentResult = await saveShipment();
+      if (!shipmentResult) return; // Save failed
+
+      // ⚡ Lazy-load PDF libraries only when needed
+      showToast('Loading PDF libraries...', 'info');
+      const librariesLoaded = await ensurePDFLibrariesLoaded();
+      if (!librariesLoaded) return; // Failed to load libraries
+
+      // Get the current order
+      const order = orders.find(o => o.id === currentOrderID);
+      if (!order) {
+        showToast('Order not found', 'error');
+        return;
+      }
+
+      // Get the latest shipment data (just saved)
+      const shipmentsResponse = await apiCall('getShipments', { orderID: currentOrderID });
+      if (!shipmentsResponse || !shipmentsResponse.success || !shipmentsResponse.shipments || shipmentsResponse.shipments.length === 0) {
+        showToast('Could not load shipment data for PDF generation', 'error');
+        return;
+      }
+
+      const latestShipment = shipmentsResponse.shipments[shipmentsResponse.shipments.length - 1];
+
+      // Validate shipment data
+      if (!latestShipment) {
+        console.error('No shipment found in response:', shipmentsResponse);
+        showToast('Shipment saved but could not retrieve for PDF generation', 'error');
+        return;
+      }
+
+      console.log('Generating PDFs for shipment:', latestShipment);
+
+      // Generate PDFs
+      try {
+        generateCommercialInvoice(latestShipment, order);
+        generateBillOfLading(latestShipment, order);
+        showToast('Shipment saved and documents generated successfully!');
+      } catch (error) {
+        console.error('PDF generation error:', error);
+        console.error('Shipment data:', latestShipment);
+        console.error('Order data:', order);
+        showToast('Shipment saved but PDF generation failed: ' + error.message, 'error');
+      }
+    }
+
+    // ========================================
+    // API CALLS
+    // ========================================
+    async function apiCall(action, params = {}, method = 'GET') {
+      if (isAppsScript) {
+        // Apps Script mode
+        return new Promise((resolve, reject) => {
+          google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler(reject)[action](params);
+        });
+      } else {
+        // GitHub Pages mode
+        if (method === 'GET') {
+          const queryString = new URLSearchParams({ action, ...params }).toString();
+          const response = await fetch(`${API_URL}?${queryString}`);
+          return await response.json();
+        } else {
+          const response = await fetch(`${API_URL}?action=${action}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(params)
+          });
+          return await response.json();
+        }
+      }
+    }
+
+    // ========================================
+    // UTILITIES
+    // ========================================
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+
+      // Icon based on type
+      let icon = '';
+      if (type === 'success') {
+        icon = '<i class="ph ph-check-circle toast-icon"></i>';
+      } else if (type === 'error') {
+        icon = '<i class="ph ph-x-circle toast-icon"></i>';
+      } else if (type === 'warning') {
+        icon = '<i class="ph ph-warning-circle toast-icon"></i>';
+      } else if (type === 'info') {
+        icon = '<i class="ph ph-info toast-icon"></i>';
+      }
+
+      toast.innerHTML = `
+        ${icon}
+        <div class="toast-message">${message}</div>
+        <button class="toast-close" onclick="this.parentElement.remove()">
+          <i class="ph ph-x"></i>
+        </button>
+      `;
+
+      container.appendChild(toast);
+
+      // Auto remove after 4 seconds
+      setTimeout(() => {
+        toast.classList.add('removing');
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    function formatNumber(num) {
+      return parseFloat(num || 0).toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '-';
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+  </script>
+</body>
+</html>
