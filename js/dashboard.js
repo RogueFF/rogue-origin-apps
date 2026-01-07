@@ -774,9 +774,43 @@ function initMuuriGrid() {
     }
   });
 
+  /**
+   * Validate widget container has proper constraints before Muuri initialization
+   * Prevents layout calculation errors from unconstrained containers
+   */
+  function validateWidgetContainer() {
+    var container = document.querySelector('.widgets-container');
+    if (!container) return false;
+
+    // Ensure container has explicit width
+    var computedWidth = window.getComputedStyle(container).width;
+    if (!computedWidth || computedWidth === 'auto') {
+      console.warn('[Muuri] widgets-container has no explicit width, forcing 100%');
+      container.style.width = '100%';
+    }
+
+    // Verify parent flex containers can shrink
+    var dashboard = container.closest('.dashboard');
+    if (dashboard) {
+      var minWidth = window.getComputedStyle(dashboard).minWidth;
+      if (minWidth !== '0px') {
+        console.warn('[Muuri] dashboard missing min-width: 0, flex shrinking may fail');
+      }
+    }
+
+    return true;
+  }
+
+  // Validate container before initializing Muuri
+  if (!validateWidgetContainer()) {
+    console.error('[Muuri] Widget container validation failed');
+  }
+
   muuriGrid = new Muuri(container, {
     dragEnabled: true,
     dragHandle: '.widget-header',
+    dragContainer: container,    // Constrain drag boundaries to container
+    layoutOnResize: 150,          // Recalculate layout 150ms after window resize
     dragSortPredicate: {
       threshold: 50,
       action: 'move',
@@ -831,6 +865,25 @@ function initMuuriGrid() {
     });
   });
 }
+
+/**
+ * Force Muuri layout recalculation on window resize
+ * Ensures widgets stay within container bounds at all viewport sizes
+ */
+var resizeTimeout;
+window.addEventListener('resize', function() {
+  clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(function() {
+    if (muuriGrid && !muuriGrid._isDestroyed) {
+      muuriGrid.refreshItems();  // Update item dimensions
+      muuriGrid.layout();         // Recalculate positions
+    }
+    if (muuriKPI && !muuriKPI._isDestroyed) {
+      muuriKPI.refreshItems();
+      muuriKPI.layout();
+    }
+  }, 150);  // Match layoutOnResize debounce
+});
 
 
 function cycleWidgetSize(btn) {
