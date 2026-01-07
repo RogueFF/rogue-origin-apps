@@ -1872,6 +1872,7 @@ body.tutorial-active::before {
 /* Muuri Grid Container - Structured Grid Layout */
 .widgets-container {
   position: relative;
+  width: 100%; /* Constrain to viewport width */
   margin-top: 16px;
   min-height: 400px;
   padding: 4px;
