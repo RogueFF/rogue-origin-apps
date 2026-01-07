@@ -2874,8 +2874,6 @@ function renderCurrentProduction() {
   var d = data ? data.lastCompleted : null;
   var isHistorical = false;
 
-  }
-
   if (!d && data && data.hourly && data.hourly.length > 0) {
     // Find the last hourly entry with production data
     for (var i = data.hourly.length - 1; i >= 0; i--) {
