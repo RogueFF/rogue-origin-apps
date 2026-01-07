@@ -776,7 +776,7 @@ function getProductionDashboardData(startDate, endDate) {
 
   // Format bag timer data for dashboard
   var bagTimerFormatted = {
-    bagsToday: (bagTimer.fiveKgToday || 0) + (bagTimer.tenLbToday || 0),
+    bagsToday: (bagTimer.bags5kgToday || 0) + (bagTimer.bags10lbToday || 0),
     avgTime: bagTimer.avgCycleSeconds > 0 ? Math.round(bagTimer.avgCycleSeconds / 60) + ' min' : '—',
     avgMinutes: bagTimer.avgCycleSeconds > 0 ? bagTimer.avgCycleSeconds / 60 : 0,
     vsTarget: bagTimer.avgCycle7Day > 0 ? Math.round((bagTimer.avgCycleSeconds - bagTimer.avgCycle7Day) / 60) + ' min' : '—'
