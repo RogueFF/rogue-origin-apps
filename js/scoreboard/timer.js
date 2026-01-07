@@ -239,6 +239,54 @@
     var showOvertime = State.debugState === 'red' ||
       (isOvertime && !breakStatus.onBreak && !isManuallyPaused);
     td.classList.toggle('overtime', showOvertime);
+
+    // Update bag timer stats (was missing from modular refactor)
+    var timerTargetTime = DOM ? DOM.get('timerTargetTime') : document.getElementById('timerTargetTime');
+    var timerTrimmers = DOM ? DOM.get('timerTrimmers') : document.getElementById('timerTrimmers');
+    var bagsTodayEl = DOM ? DOM.get('bagsToday') : document.getElementById('bagsToday');
+    var avgTodayEl = DOM ? DOM.get('avgToday') : document.getElementById('avgToday');
+    var vsTargetEl = DOM ? DOM.get('vsTarget') : document.getElementById('vsTarget');
+
+    if (timerTargetTime) {
+      timerTargetTime.textContent = effectiveTarget > 0 ? formatTime(effectiveTarget) : '--:--';
+    }
+    if (timerTrimmers) {
+      timerTrimmers.textContent = trimmers || '—';
+    }
+    if (bagsTodayEl) {
+      bagsTodayEl.textContent = bagsToday;
+    }
+    if (avgTodayEl) {
+      avgTodayEl.textContent = avgSecToday > 0 ? formatTime(avgSecToday) : '--:--';
+    }
+    if (vsTargetEl) {
+      if (avgSecToday > 0 && effectiveTarget > 0) {
+        var diff = effectiveTarget - avgSecToday;
+        var dm = Math.round(diff / 60);
+        if (dm > 0) {
+          vsTargetEl.textContent = '+' + dm + ' min';
+          vsTargetEl.className = 'timer-stat-value positive';
+        } else if (dm < 0) {
+          vsTargetEl.textContent = dm + ' min';
+          vsTargetEl.className = 'timer-stat-value negative';
+        } else {
+          vsTargetEl.textContent = 'On pace';
+          vsTargetEl.className = 'timer-stat-value';
+        }
+      } else {
+        vsTargetEl.textContent = '—';
+        vsTargetEl.className = 'timer-stat-value';
+      }
+    }
+
+    // Update button color to match timer state
+    var btn = DOM ? DOM.get('manualBtn') : document.getElementById('manualBtn');
+    if (btn) {
+      btn.classList.remove('btn-green', 'btn-yellow', 'btn-red', 'btn-neutral');
+      if (!btn.classList.contains('success')) {
+        btn.classList.add('btn-' + colorClass);
+      }
+    }
   }
 
   /**
