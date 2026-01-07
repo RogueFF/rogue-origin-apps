@@ -29,8 +29,8 @@
         <button class="btn btn-indoor" onclick="refresh()" aria-label="Refresh"><i class="ph-duotone ph-arrows-clockwise"></i> Refresh</button>
         <button class="btn btn-sungrown" onclick="openPrint()" aria-label="Print cards"><i class="ph-duotone ph-printer" style="margin-right:6px"></i> Print Cards</button>
         <button class="btn btn-green" onclick="openAdd()" aria-label="Add card"><i class="ph-duotone ph-plus" style="margin-right:6px"></i> Add Card</button>
-        <button id="langBtn" class="btn btn-outline" onclick="toggleLang()" aria-label="Toggle language">🇪🇸 Español</button>
-        <button id="darkModeBtn" class="btn btn-outline" onclick="toggleDarkMode()" aria-label="Toggle dark mode">🌙</button>
+        <button id="langBtn" class="btn btn-outline" onclick="toggleLang()" aria-label="Toggle language"><i class="ph-duotone ph-translate"></i> Español</button>
+        <button id="darkModeBtn" class="btn btn-outline" onclick="toggleDarkMode()" aria-label="Toggle dark mode"><i class="ph-duotone ph-moon"></i></button>
       </div>
     </div>
   </header>
@@ -38,7 +38,7 @@
   <div class="toolbar">
     <div class="toolbar-inner">
       <div class="filters">
-        <input type="text" id="search" placeholder="🔍 Search..." oninput="filter()" style="width:200px">
+        <input type="text" id="search" placeholder="Search..." oninput="filter()" style="width:200px">
         <select id="supplierFilter" onchange="filter()"><option value="">All Suppliers</option></select>
       </div>
       <div class="toggle">
@@ -57,7 +57,7 @@
   </div>
   
   <main class="main">
-    <div id="loading" class="loading"><div class="loading-icon">⏳</div><p>Loading from Google Sheet...</p></div>
+    <div id="loading" class="loading"><div class="loading-icon"><i class="ph-duotone ph-spinner"></i></div><p>Loading from Google Sheet...</p></div>
     <div id="empty" class="empty" style="display:none"><div style="font-size:48px;opacity:0.5"><i class="ph-duotone ph-package"></i></div><h3>No cards found</h3><p>Add your first kanban card to get started.</p><button class="btn btn-green" onclick="openAdd()"><i class="ph-duotone ph-plus" style="margin-right:6px"></i> Add First Card</button></div>
     <div id="gridView" class="grid" style="display:none"></div>
     <div id="listView" class="table" style="display:none"></div>
@@ -120,7 +120,7 @@
           <label class="form-label">Order URL</label>
           <div style="display:flex;gap:8px">
             <input type="text" id="editUrl" style="flex:1" placeholder="https://amazon.com/...">
-            <button type="button" id="autofillBtn" class="btn btn-gold" onclick="autoFillFromUrl()">🔍 Auto-fill</button>
+            <button type="button" id="autofillBtn" class="btn btn-gold" onclick="autoFillFromUrl()"><i class="ph-duotone ph-sparkle"></i> Auto-fill</button>
           </div>
           <p style="font-size:10px;color:var(--text-muted);margin-top:4px">Paste a product URL and click Auto-fill to fetch title, price & image</p>
         </div>
@@ -130,7 +130,7 @@
             <input type="text" id="editPic" style="width:100%" placeholder="https://...image.jpg or drag image here">
             <div class="drop-zone-preview" id="imagePreview"></div>
           </div>
-          <div style="font-size:10px;color:var(--text-muted);margin-top:4px">💡 Drag an image from any website and drop it here</div>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:4px"><i class="ph-duotone ph-lightbulb"></i> Drag an image from any website and drop it here</div>
         </div>
         <div class="modal-foot">
           <button class="btn btn-outline" onclick="closeEdit()">Cancel</button>
@@ -277,10 +277,10 @@
           <h4 style="color:var(--green);margin:0 0 8px 0" id="helpH6"><i class="ph-duotone ph-arrows-clockwise" style="margin-right:6px"></i> Reordering Cards</h4>
           <p style="margin:0 0 16px 0;color:var(--text-muted)" id="helpP6">Click <strong>"Reorder"</strong> button above the grid to drag and rearrange cards. Click <strong>"Done"</strong> when finished.</p>
           
-          <h4 style="color:var(--green);margin:0 0 8px 0" id="helpH7">🔍 Filtering & Search</h4>
+          <h4 style="color:var(--green);margin:0 0 8px 0" id="helpH7">Filtering & Search</h4>
           <p style="margin:0 0 16px 0;color:var(--text-muted)" id="helpP7">Use the search box to find items by name. Filter by supplier or location using the dropdown menus.</p>
           
-          <h4 style="color:var(--green);margin:0 0 8px 0" id="helpH8">🇪🇸 Language</h4>
+          <h4 style="color:var(--green);margin:0 0 8px 0" id="helpH8">Language</h4>
           <p style="margin:0 0 0 0;color:var(--text-muted)" id="helpP8">Click <strong>"Español"</strong> to switch card labels to Spanish for bilingual workplaces.</p>
         </div>
       </div>
@@ -482,7 +482,7 @@ function toggleDarkMode() {
   var isDark = document.body.classList.contains('dark-mode');
   try { localStorage.setItem('kanbanDarkMode', isDark ? 'true' : 'false'); } catch(e) {}
   var btn = document.getElementById('darkModeBtn');
-  if (btn) btn.textContent = isDark ? '☀️' : '🌙';
+  if (btn) btn.textContent = isDark ? '<i class="ph-duotone ph-sun"></i>' : '<i class="ph-duotone ph-moon"></i>';
 }
 
 var filterDebounceTimer = null;
@@ -495,7 +495,7 @@ function init() {
     if (savedDark === 'true') {
       document.body.classList.add('dark-mode');
       var btn = document.getElementById('darkModeBtn');
-      if (btn) btn.textContent = '☀️';
+      if (btn) btn.textContent = '<i class="ph-duotone ph-sun"></i>';
     }
   } catch(e) {}
   loadCustomOptions();
@@ -608,7 +608,7 @@ function updateAllText() {
     document.querySelector('.brand h1').textContent = t('title');
     document.querySelector('.brand p').textContent = t('subtitle');
     var langBtn = document.getElementById('langBtn');
-    if (langBtn) langBtn.textContent = currentLang === 'en' ? '🇪🇸 Español' : '🇺🇸 English';
+    if (langBtn) langBtn.textContent = currentLang === 'en' ? '<i class="ph-duotone ph-translate"></i> Español' : '<i class="ph-duotone ph-translate"></i> English';
     var loadingP = document.querySelector('#loading p');
     if (loadingP) loadingP.textContent = t('loading');
     var emptyH3 = document.querySelector('#empty h3');
@@ -1422,7 +1422,7 @@ var tutorialSteps = [
     target: '.search-bar',
     title: '<i class="ph-duotone ph-magnifying-glass"></i> Search & Filter',
     text: 'Type here to search for items by name. Use the dropdown to filter by supplier (Amazon, Walmart, etc.).',
-    tip: '🔍 Try searching for "trash" or "soap" to find items quickly'
+    tip: '<i class="ph-duotone ph-magnifying-glass"></i> Try searching for "trash" or "soap" to find items quickly'
   },
   {
     target: '.card:first-child',
@@ -1434,7 +1434,7 @@ var tutorialSteps = [
     target: '.card:first-child .card-actions',
     title: '<i class="ph-duotone ph-cursor-click"></i> Card Action Buttons',
     text: 'Every card has these 4 buttons: 🛒 Mark for reorder, 👁️ Preview the printable card, ✏️ Edit the card, 🗑️ Delete the card.',
-    tip: '💡 Hover over any button to see what it does'
+    tip: '<i class="ph-duotone ph-lightbulb"></i> Hover over any button to see what it does'
   },
   // PART 2: Let's Create a Card
   {

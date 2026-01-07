@@ -8,8 +8,13 @@
 
   <!-- Performance: Resource Hints -->
   <link rel="preconnect" href="https://unpkg.com">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://script.google.com">
   <link rel="dns-prefetch" href="https://barcode.tec-it.com">
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
 
   <!-- Scripts: Deferred for faster initial render -->
   <script defer src="https://unpkg.com/@phosphor-icons/web"></script>
@@ -24,8 +29,8 @@
       <img src="https://rogueorigin.com/cdn/shop/files/RO_HORIZONTALOGO_17c996f3-9354-4a52-aa57-39d393599904.png" alt="Rogue Origin" class="logo">
       <div class="subtitle"><i class="ph-duotone ph-tag" style="margin-right:6px"></i> <span data-i18n="labelPrinter">Label Printer</span></div>
       <div style="display:flex;gap:8px;margin-top:10px;justify-content:center">
-        <button id="langBtn" class="outline" onclick="toggleLang()" aria-label="Toggle language" style="padding:8px 12px;font-size:12px">🇪🇸 Español</button>
-        <button id="darkModeBtn" class="outline" onclick="toggleDarkMode()" aria-label="Toggle dark mode" style="padding:8px 12px;font-size:12px">🌙</button>
+        <button id="langBtn" class="outline" onclick="toggleLang()" aria-label="Toggle language" style="padding:8px 12px;font-size:12px"><i class="ph ph-translate"></i> <span id="langText">Español</span></button>
+        <button id="darkModeBtn" class="outline" onclick="toggleDarkMode()" aria-label="Toggle dark mode" style="padding:8px 12px;font-size:12px"><i class="ph ph-moon"></i></button>
       </div>
     </div>
     
@@ -47,10 +52,10 @@
     
     <!-- Last Printed -->
     <div id="lastPrinted" class="last-printed">
-      <span class="last-printed-label">✅ <span data-i18n="lastPrinted">Last Printed</span>:</span>
+      <span class="last-printed-label"><i class="ph ph-check-circle"></i> <span data-i18n="lastPrinted">Last Printed</span>:</span>
       <span id="lastPrintedValue" class="last-printed-value"></span>
       <br>
-      <button class="print-again-btn" onclick="printLastAgain()" aria-label="Print again">🖨️ <span data-i18n="printAgain">Print Again</span></button>
+      <button class="print-again-btn" onclick="printLastAgain()" aria-label="Print again"><i class="ph ph-printer" style="margin-right:6px"></i> <span data-i18n="printAgain">Print Again</span></button>
     </div>
     
     <!-- Product Sections -->
@@ -67,13 +72,13 @@
     
     <!-- No Cultivar -->
     <div id="noCultivar" class="no-cultivar">
-      <h3>👆 <span data-i18n="selectACultivar">Select a Cultivar</span></h3>
+      <h3><i class="ph ph-hand-pointing" style="margin-right:8px"></i> <span data-i18n="selectACultivar">Select a Cultivar</span></h3>
       <p data-i18n="chooseCultivarHint">Choose which cultivar you're bagging to see available sizes</p>
     </div>
 
     <!-- Search -->
     <div class="search-section">
-      <input type="text" id="searchBox" class="search-input" placeholder="🔍 Search for any product..." onkeyup="handleSearch()" data-i18n-placeholder="searchPlaceholder" aria-label="Search products">
+      <input type="text" id="searchBox" class="search-input" placeholder="Search for any product..." onkeyup="handleSearch()" data-i18n-placeholder="searchPlaceholder" aria-label="Search products">
       <div class="search-hint" data-i18n="searchHint">Type product name, SKU, or barcode</div>
     </div>
     
@@ -83,10 +88,10 @@
     <!-- Toolbar -->
     <div class="toolbar">
       <button onclick="showAddModal()" aria-label="Add product"><i class="ph-duotone ph-plus" style="margin-right:6px"></i> <span data-i18n="addProduct">Add Product</span></button>
-      <button class="secondary" onclick="showImportModal()" aria-label="Import">📥 <span data-i18n="import">Import</span></button>
-      <button class="secondary" onclick="exportToCSV()" aria-label="Export">📤 <span data-i18n="export">Export</span></button>
-      <button class="gold" onclick="showPrintHelp()" aria-label="Print setup">❓ <span data-i18n="printSetup">Print Setup</span></button>
-      <button class="outline" onclick="loadProducts()" aria-label="Refresh">🔄 <span data-i18n="refresh">Refresh</span></button>
+      <button class="secondary" onclick="showImportModal()" aria-label="Import"><i class="ph ph-download-simple" style="margin-right:6px"></i> <span data-i18n="import">Import</span></button>
+      <button class="secondary" onclick="exportToCSV()" aria-label="Export"><i class="ph ph-upload-simple" style="margin-right:6px"></i> <span data-i18n="export">Export</span></button>
+      <button class="gold" onclick="showPrintHelp()" aria-label="Print setup"><i class="ph ph-question" style="margin-right:6px"></i> <span data-i18n="printSetup">Print Setup</span></button>
+      <button class="outline" onclick="loadProducts()" aria-label="Refresh"><i class="ph ph-arrow-clockwise" style="margin-right:6px"></i> <span data-i18n="refresh">Refresh</span></button>
     </div>
 
     <div id="loading" class="loading" data-i18n="loadingProducts">Loading Products...</div>
@@ -131,12 +136,12 @@
 
   <div id="printHelpModal" class="modal" role="dialog" aria-labelledby="printHelpTitle">
     <div class="modal-content">
-      <h2 id="printHelpTitle">🖨️ <span data-i18n="printSetup">Print Setup</span></h2>
+      <h2 id="printHelpTitle"><i class="ph ph-printer" style="margin-right:8px"></i> <span data-i18n="printSetup">Print Setup</span></h2>
       <p style="margin-bottom: 15px; color: var(--text-muted);" data-i18n="configPrinter">Configure your Bixolon printer:</p>
       <ul style="margin: 0 0 15px 20px; color: var(--text);">
-        <li><span data-i18n="paperSize">Paper size</span>: <strong style="color: var(--gold);">1.65" × 0.5"</strong></li>
-        <li><span data-i18n="margins">Margins</span>: <strong style="color: var(--gold);"><span data-i18n="none">None</span></strong></li>
-        <li><span data-i18n="headersFooters">Headers/Footers</span>: <strong style="color: var(--gold);"><span data-i18n="off">Off</span></strong></li>
+        <li><span data-i18n="paperSize">Paper size</span>: <strong style="color: var(--ro-gold);">1.65" × 0.5"</strong></li>
+        <li><span data-i18n="margins">Margins</span>: <strong style="color: var(--ro-gold);"><span data-i18n="none">None</span></strong></li>
+        <li><span data-i18n="headersFooters">Headers/Footers</span>: <strong style="color: var(--ro-gold);"><span data-i18n="off">Off</span></strong></li>
       </ul>
       <div class="modal-buttons">
         <button onclick="document.getElementById('printHelpModal').style.display='none'" data-i18n="gotIt">Got it!</button>
@@ -165,7 +170,7 @@
         smalls: 'Smalls',
         selectACultivar: 'Select a Cultivar',
         chooseCultivarHint: 'Choose which cultivar you\'re bagging to see available sizes',
-        searchPlaceholder: '🔍 Search for any product...',
+        searchPlaceholder: 'Search for any product...',
         searchHint: 'Type product name, SKU, or barcode',
         addProduct: 'Add Product',
         import: 'Import',
@@ -255,7 +260,8 @@
       });
       // Update language button
       var langBtn = document.getElementById('langBtn');
-      if (langBtn) langBtn.textContent = currentLang === 'en' ? '🇪🇸 Español' : '🇺🇸 English';
+      var langText = document.getElementById('langText');
+      if (langText) langText.textContent = currentLang === 'en' ? 'Español' : 'English';
     }
 
     function toggleLang() {
@@ -270,8 +276,8 @@
       document.body.classList.toggle('dark-mode');
       var isDark = document.body.classList.contains('dark-mode');
       try { localStorage.setItem('barcodeDarkMode', isDark ? 'true' : 'false'); } catch(e) {}
-      var btn = document.getElementById('darkModeBtn');
-      if (btn) btn.textContent = isDark ? '☀️' : '🌙';
+      
+      if (btn) btn.textContent = isDark ? '☀️' : '<i class="ph ph-moon"></i>';
     }
 
     function initSettings() {
@@ -282,8 +288,12 @@
         var savedDark = localStorage.getItem('barcodeDarkMode');
         if (savedDark === 'true') {
           document.body.classList.add('dark-mode');
-          var btn = document.getElementById('darkModeBtn');
-          if (btn) btn.textContent = '☀️';
+          
+          
+          if (btn) {
+            var icon = btn.querySelector('i');
+            if (icon) icon.className = 'ph ph-sun';
+          }
         }
       } catch(e) {}
       updateAllText();
@@ -492,7 +502,7 @@
         return;
       }
 
-      var html = '<div class="quick-print-title">🔍 ' + t('results') + ' (' + filtered.length + ')</div>';
+      var html = '<div class="quick-print-title"><i class="ph ph-magnifying-glass" style="margin-right:6px"></i> ' + t('results') + ' (' + filtered.length + ')</div>';
       html += '<div class="quick-print-grid">';
 
       filtered.slice(0, 20).forEach(function(p) {

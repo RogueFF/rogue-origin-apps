@@ -17,7 +17,7 @@
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      font-family: 'Outfit', system-ui, -apple-system, sans-serif;
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
@@ -43,6 +43,7 @@
       border: 3px solid rgba(255,255,255,0.3);
     }
     .header h1 {
+      font-family: 'DM Serif Display', serif;
       font-size: 24px;
       font-weight: 600;
       margin-bottom: 4px;
@@ -80,6 +81,7 @@
       margin-bottom: 4px;
     }
     .order-customer {
+      font-family: 'DM Serif Display', serif;
       font-size: 28px;
       font-weight: 700;
       color: var(--text);
