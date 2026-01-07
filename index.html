@@ -14,7 +14,7 @@
   <link rel="dns-prefetch" href="https://js.puter.com">
 
   <!-- Fonts: Inter (existing) + DM Serif Display, JetBrains Mono, Outfit -->
-  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=optional" rel="stylesheet">
 
   <!-- Scripts: Deferred for faster initial render -->
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
@@ -24,7 +24,37 @@
   <script defer src="https://unpkg.com/@phosphor-icons/web"></script>
   <script defer src="https://js.puter.com/v2/"></script>
 
+  
+  <!-- Critical CSS: Inline for fastest render -->
+  <style>
+/* Critical CSS for above-the-fold content */
+.logo-loader{position:fixed;inset:0;background:var(--bg,#faf8f5);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1100;transition:opacity .3s,visibility .3s}
+.logo-loader img{width:120px;height:auto;margin-bottom:24px;animation:logoFadeIn .6s ease-out}
+.logo-loader-bar{width:120px;height:3px;background:var(--border-light,rgba(102,137,113,0.1));border-radius:2px;overflow:hidden;position:relative}
+.logo-loader-bar::after{content:"";position:absolute;top:0;left:0;height:100%;width:50%;background:var(--green,#668971);animation:loaderSlide 1.5s ease-in-out infinite}
+@keyframes logoFadeIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+@keyframes loaderSlide{0%,100%{transform:translateX(-100%)}50%{transform:translateX(200%)}}
+.sidebar{position:fixed;top:0;left:0;width:var(--sidebar-width,240px);height:100vh;background:var(--sidebar-bg,#1a1f16);display:flex;flex-direction:column;z-index:50;transition:width .3s ease}
+.brand{padding:24px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(255,255,255,.1)}
+.brand img{width:32px;height:32px;border-radius:8px}
+.brand h1{font-size:18px;font-weight:600;color:white;margin:0;font-family:var(--font-ui,"Inter",sans-serif)}
+.nav-item{padding:10px 16px;margin:4px 12px;color:rgba(255,255,255,.7);cursor:pointer;display:flex;align-items:center;gap:12px;border-radius:8px;transition:all .2s;font-size:14px}
+.nav-item:hover{background:rgba(255,255,255,.1);color:white}
+.nav-item.active{background:var(--green,#668971);color:white}
+.nav-item .icon{font-size:20px;display:flex;align-items:center}
+.main{margin-left:var(--sidebar-width,240px);min-height:100vh;background:var(--bg,#faf8f5);transition:margin-left .3s ease}
+.header{position:sticky;top:0;background:var(--bg-card,#ffffff);border-bottom:1px solid var(--border-light,rgba(102,137,113,0.1));padding:12px 24px;display:flex;align-items:center;justify-content:space-between;z-index:60;box-shadow:var(--shadow-sm,0 2px 4px rgba(0,0,0,0.06))}
+.header-left{display:flex;align-items:center;gap:16px}
+.header-logo{height:32px;width:auto}
+.mobile-menu-btn{display:none;background:none;border:none;cursor:pointer;color:var(--text,#2d3a32)}
+@media(max-width:768px){.mobile-menu-btn{display:block}.sidebar{transform:translateX(-100%)}}
+  </style>
+
+  <!-- Performance: CSS Preloading -->
+  <link rel="preload" href="css/dashboard.css" as="style">
+  <link rel="preload" href="css/ai-chat.css" as="style">
   <link rel="stylesheet" href="css/dashboard.css">
+  <link rel="stylesheet" href="css/ai-chat.css">
 </head>
 <body>
   <a href="#dashboardView" class="skip-link">Skip to main content</a>
@@ -602,407 +632,6 @@
   </main>
 
 <!-- ========================================== -->
-<!-- AI CHAT WIDGET - Rogue Origin Assistant   -->
-<!-- ========================================== -->
-<style>
-  .ai-chat-widget {
-    position: static; /* Remove fixed positioning to let panel position itself */
-    z-index: 9999;
-    font-family: 'Inter', system-ui, sans-serif;
-  }
-  .ai-chat-toggle {
-    width: 60px;
-    height: 60px;
-    border-radius: 50%;
-    background: var(--green);
-    border: none;
-    cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform 0.2s, background 0.2s;
-  }
-  .ai-chat-toggle:hover {
-    transform: scale(1.05);
-    background: var(--green-dark);
-  }
-  .ai-chat-toggle svg {
-    width: 28px;
-    height: 28px;
-    fill: white;
-  }
-  /* AI chat panel styles moved to main CSS section (line 929) */
-  .ai-chat-header {
-    background: var(--green);
-    color: white;
-    padding: 14px 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  .ai-chat-header-icon {
-    width: 32px;
-    height: 32px;
-    background: rgba(255,255,255,0.2);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-  }
-  .ai-chat-header-text {
-    flex: 1;
-  }
-  .ai-chat-header-text h3 {
-    font-size: 15px;
-    font-weight: 600;
-    margin: 0;
-  }
-  .ai-chat-header-text span {
-    font-size: 11px;
-    opacity: 0.8;
-  }
-  .ai-voice-mode-toggle {
-    background: rgba(255,255,255,0.2);
-    border: none;
-    border-radius: 20px;
-    padding: 6px 12px;
-    color: white;
-    font-size: 12px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    transition: all 0.2s ease;
-  }
-  .ai-voice-mode-toggle:hover {
-    background: rgba(255,255,255,0.3);
-  }
-  .ai-voice-mode-toggle.active {
-    background: rgba(255,255,255,0.9);
-    color: var(--green);
-  }
-  .ai-voice-mode-toggle .icon {
-    font-size: 14px;
-  }
-  .ai-chat-messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    background: var(--bg);
-  }
-  .ai-message {
-    max-width: 85%;
-    padding: 10px 14px;
-    border-radius: 16px;
-    font-size: 14px;
-    line-height: 1.5;
-  }
-  .ai-message.user {
-    background: var(--green);
-    color: white;
-    align-self: flex-end;
-    border-bottom-right-radius: 4px;
-  }
-  .ai-message.assistant {
-    background: var(--bg-card);
-    color: var(--text);
-    align-self: flex-start;
-    border-bottom-left-radius: 4px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    border: 1px solid var(--border-light);
-  }
-  .ai-message.assistant .ai-feedback {
-    display: flex;
-    gap: 8px;
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px solid var(--border-light);
-  }
-  .ai-feedback-btn {
-    background: transparent;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 3px 8px;
-    font-size: 11px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    color: var(--text-muted);
-    transition: all 0.2s;
-  }
-  .ai-feedback-btn:hover {
-    border-color: var(--green);
-    color: var(--green);
-  }
-  .ai-feedback-btn.selected {
-    background: var(--green);
-    border-color: var(--green);
-    color: white;
-  }
-  .ai-feedback-btn.selected-bad {
-    background: var(--danger, #c45c4a);
-    border-color: var(--danger, #c45c4a);
-    color: white;
-  }
-  .ai-message .data-card {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px;
-    margin-top: 8px;
-  }
-  .ai-message .data-card h4 {
-    font-size: 12px;
-    color: var(--green);
-    margin: 0 0 8px 0;
-    font-weight: 600;
-  }
-  .ai-message .data-card .metric {
-    display: flex;
-    justify-content: space-between;
-    padding: 4px 0;
-    font-size: 13px;
-    border-bottom: 1px solid var(--border-light);
-  }
-  .ai-message .data-card .metric:last-child { border-bottom: none; }
-  .ai-message .data-card .metric-label { color: var(--text-muted); }
-  .ai-message .data-card .metric-value { font-weight: 600; color: var(--text); }
-  .ai-typing {
-    display: flex;
-    gap: 4px;
-    padding: 12px 14px;
-  }
-  .ai-typing span {
-    width: 8px;
-    height: 8px;
-    background: var(--text-light);
-    border-radius: 50%;
-    animation: aiBounce 1.4s infinite ease-in-out;
-  }
-  .ai-typing span:nth-child(1) { animation-delay: -0.32s; }
-  .ai-typing span:nth-child(2) { animation-delay: -0.16s; }
-  @keyframes aiBounce {
-    0%, 80%, 100% { transform: scale(0); }
-    40% { transform: scale(1); }
-  }
-  .ai-quick-actions {
-    padding: 8px 12px;
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    background: var(--bg-card);
-    border-bottom: 1px solid var(--border-light);
-  }
-  .ai-quick-btn {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 5px 10px;
-    font-size: 11px;
-    cursor: pointer;
-    transition: all 0.2s;
-    color: var(--text-muted);
-  }
-  .ai-quick-btn:hover {
-    background: var(--green);
-    color: white;
-    border-color: var(--green);
-  }
-  .ai-chat-input-area {
-    padding: 12px;
-    background: var(--bg-card);
-    border-top: 1px solid var(--border-light);
-    display: flex;
-    gap: 8px;
-  }
-  .ai-chat-input {
-    flex: 1;
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    padding: 10px 14px;
-    font-size: 14px;
-    outline: none;
-    transition: border-color 0.2s;
-    background: var(--bg);
-    color: var(--text);
-  }
-  .ai-chat-input:focus { border-color: var(--green); }
-  .ai-chat-input::placeholder { color: var(--text-light); }
-  .ai-chat-send {
-    width: 38px;
-    height: 38px;
-    border-radius: 50%;
-    background: var(--green);
-    border: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.2s;
-  }
-  .ai-chat-send:hover { background: var(--green-dark); }
-  .ai-chat-send:disabled { background: var(--text-light); cursor: not-allowed; }
-  .ai-chat-send svg { width: 16px; height: 16px; fill: white; }
-
-  /* Voice button styles */
-  .ai-voice-btn {
-    width: 38px;
-    height: 38px;
-    border-radius: 50%;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s;
-    font-size: 16px;
-  }
-  .ai-voice-btn:hover { border-color: var(--green); background: var(--bg-card); }
-  .ai-voice-btn.listening {
-    background: var(--danger);
-    border-color: var(--danger);
-    animation: pulse-voice 1.5s infinite;
-  }
-  .ai-voice-btn.not-supported { opacity: 0.4; cursor: not-allowed; }
-  @keyframes pulse-voice {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.1); }
-  }
-
-  /* Voice mode toggle in header */
-  .ai-chat-header-text { flex: 1; }
-  .ai-voice-mode-toggle {
-    background: rgba(255,255,255,0.2);
-    border: none;
-    border-radius: 20px;
-    padding: 6px 12px;
-    color: white;
-    font-size: 12px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    transition: all 0.2s ease;
-  }
-  .ai-voice-mode-toggle:hover { background: rgba(255,255,255,0.3); }
-  .ai-voice-mode-toggle.active {
-    background: rgba(255,255,255,0.9);
-    color: var(--green);
-  }
-  .ai-voice-mode-toggle .icon { font-size: 14px; }
-
-  /* Speak button on messages */
-  .ai-speak-btn {
-    background: none;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 4px 10px;
-    font-size: 11px;
-    cursor: pointer;
-    color: var(--text-muted);
-    transition: all 0.2s;
-  }
-  .ai-speak-btn:hover { background: var(--bg); border-color: var(--green); color: var(--green); }
-  .ai-speak-btn.speaking { background: var(--green); color: white; border-color: var(--green); }
-
-  /* Voice status indicator */
-  .ai-voice-status {
-    text-align: center;
-    font-size: 11px;
-    color: var(--text-muted);
-    padding: 4px;
-    display: none;
-  }
-  .ai-voice-status.active { display: block; color: var(--danger); }
-
-  /* Mobile improvements */
-  @media (max-width: 480px) {
-    .ai-chat-panel {
-      position: fixed;
-      top: 0;
-      left: auto;
-      right: -100%;
-      bottom: 0;
-      width: 100vw;
-      height: 100vh;
-      max-height: 100vh;
-      border-radius: 0;
-      border: none;
-    }
-    .ai-chat-panel.open {
-      right: 0;
-    }
-    .ai-chat-toggle { width: 54px; height: 54px; }
-    .ai-chat-header { padding: 16px; }
-    .ai-chat-header-text h3 { font-size: 16px; }
-    .ai-voice-mode-toggle { padding: 8px 14px; }
-    .ai-quick-actions { padding: 12px; gap: 8px; }
-    .ai-quick-btn { padding: 10px 14px; font-size: 13px; min-height: 44px; }
-    .ai-chat-messages { padding: 12px; }
-    .ai-chat-input-area { padding: 12px; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
-    .ai-chat-input { padding: 14px 16px; font-size: 16px; } /* Prevents iOS zoom */
-    .ai-voice-btn { width: 44px; height: 44px; }
-    .ai-chat-send { width: 44px; height: 44px; }
-  }
-
-  /* Accessibility: Focus indicators for keyboard navigation */
-  .nav-item:focus,
-  .tool-btn:focus,
-  .ai-quick-btn:focus,
-  .date-chip:focus,
-  .compare-option:focus,
-  .header-btn:focus,
-  .widget-help:focus,
-  .widget-collapse:focus,
-  .widget-hide:focus,
-  .widget-resize:focus,
-  .widget-drag-handle:focus,
-  .ai-chat-send:focus,
-  .ai-voice-btn:focus,
-  .settings-close:focus,
-  .ai-voice-mode-toggle:focus,
-  .sidebar-toggle:focus,
-  .date-picker-trigger:focus,
-  .date-apply-btn:focus,
-  .welcome-modal-btn:focus,
-  .ai-chat-fab:focus,
-  .app-expand-btn:focus {
-    outline: 2px solid var(--green, #4a7c59);
-    outline-offset: 2px;
-  }
-
-  /* Ensure focus is visible on all interactive elements */
-  button:focus-visible,
-  [role="button"]:focus-visible,
-  [role="menuitem"]:focus-visible,
-  input:focus-visible,
-  a:focus-visible {
-    outline: 2px solid var(--green, #4a7c59);
-    outline-offset: 2px;
-  }
-
-  /* Skip link for keyboard users (visually hidden until focused) */
-  .skip-link {
-    position: absolute;
-    top: -40px;
-    left: 0;
-    background: var(--green, #4a7c59);
-    color: white;
-    padding: 8px;
-    z-index: 10000;
-    text-decoration: none;
-  }
-  .skip-link:focus {
-    top: 0;
-  }
-</style>
 
 <div class="ai-chat-widget">
   <div class="ai-chat-panel" id="aiChatPanel">
@@ -1041,7 +670,8 @@
   <!-- Old ai-chat-toggle button removed - using ai-chat-fab instead -->
 </div>
 
-
+<!-- API Cache Layer - Load before dashboard.js -->
+<script defer src="js/api-cache.js"></script>
 <script defer src="js/dashboard.js?v=12"></script>
 
 <!-- Floating Action Button -->

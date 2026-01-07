@@ -1530,19 +1530,25 @@ function loadCompareDataFetch(cs, ce, ps, pe) {
   currentFetchController = new AbortController();
   var signal = currentFetchController.signal;
 
-  Promise.all([
-    fetch(API_URL + '?action=dashboard&start=' + encodeURIComponent(cs) + '&end=' + encodeURIComponent(ce), { signal: signal }).then(function(r) { return r.json(); }),
-    fetch(API_URL + '?action=dashboard&start=' + encodeURIComponent(ps) + '&end=' + encodeURIComponent(pe), { signal: signal }).then(function(r) { return r.json(); })
-  ]).then(function(results) {
+  // Use caching for both current and previous period
+  var currentPromise = new Promise(function(resolve, reject) {
+    fetchDashboardData(cs, ce, function(d) { resolve(d); }, reject, { apiUrl: API_URL, signal: signal });
+  });
+
+  var prevPromise = new Promise(function(resolve, reject) {
+    fetchDashboardData(ps, pe, function(d) { resolve(d); }, reject, { apiUrl: API_URL, signal: signal });
+  });
+
+  Promise.all([currentPromise, prevPromise]).then(function(results) {
     document.getElementById('loadingOverlay').classList.add('hidden');
     showSkeletons(false);
-    
-    var currentResult = results[0].success ? results[0].data : null;
-    var prevResult = results[1].success ? results[1].data : null;
-    
+
+    var currentResult = results[0];
+    var prevResult = results[1];
+
     var newDataStr = JSON.stringify(currentResult) + JSON.stringify(prevResult);
     var oldDataStr = (data ? JSON.stringify(data) : '') + (compareData ? JSON.stringify(compareData) : '');
-    
+
     if (newDataStr !== oldDataStr) {
       data = currentResult;
       compareData = prevResult;
@@ -2020,10 +2026,6 @@ function initCharts() {
 function loadData() {
   var s = customStartDate || document.getElementById('startDate').value;
   var e = customEndDate || document.getElementById('endDate').value;
-  // Only show skeletons on initial load (no existing data)
-  if (!data) {
-    showSkeletons(true);
-  }
 
   // Cancel any in-flight fetch requests to prevent stale data from overwriting current data
   // This fixes race conditions when user rapidly changes date range
@@ -2034,27 +2036,56 @@ function loadData() {
   var signal = currentFetchController.signal;
 
   if (isAppsScript) {
-    // Apps Script mode - no AbortController support, but requests are less likely to overlap
+    // Apps Script mode - no caching, direct API call
+    // Only show skeletons on initial load (no existing data)
+    if (!data) {
+      showSkeletons(true);
+    }
     google.script.run.withSuccessHandler(onDataLoaded).withFailureHandler(onError).getProductionDashboardData(s, e);
   } else {
-    // GitHub Pages mode - use API with AbortController signal
-    fetch(API_URL + '?action=dashboard&start=' + encodeURIComponent(s) + '&end=' + encodeURIComponent(e), { signal: signal })
-      .then(function(response) { return response.json(); })
-      .then(function(result) {
-        if (result.success && result.data) {
-          onDataLoaded(result.data);
-        } else {
-          onError(result.error || 'Unknown error');
+    // GitHub Pages mode - use caching layer with optimistic UI
+    // Optimistic UI: show cached data immediately, then update with fresh data
+    var isFirstCallForThisRequest = true;
+
+    fetchDashboardData(
+      s,
+      e,
+      function(fetchedData, meta) {
+        // meta.fromCache = true if this is cached data
+        // meta.isFresh = true if cache is < 5 min old
+
+        if (meta.fromCache && isFirstCallForThisRequest) {
+          // First call with cached data - instant UI update
+          // Hide skeletons since we have data to show
+          showSkeletons(false);
+          onDataLoaded(fetchedData);
+          isFirstCallForThisRequest = false;
+        } else if (!meta.fromCache) {
+          // Fresh data from server - update UI
+          onDataLoaded(fetchedData);
         }
-      })
-      .catch(function(error) {
-        // Ignore AbortError - this is expected when request is cancelled
-        if (error.name === 'AbortError') {
-          console.log('Fetch aborted - newer request in progress');
-          return;
-        }
-        onError(error);
-      });
+      },
+      onError,
+      { apiUrl: API_URL, signal: signal }
+    ).catch(function(error) {
+      // Ignore AbortError - this is expected when request is cancelled
+      if (error.name === 'AbortError') {
+        console.log('Fetch aborted - newer request in progress');
+        return;
+      }
+      // Error already handled by onError callback in fetchDashboardData
+    });
+
+    // Only show skeletons on initial load (no existing data and no cache)
+    if (!data) {
+      // Check if we have cached data
+      var cacheKey = APICache.generateKey('dashboard', { start: s, end: e });
+      var cached = APICache.get(cacheKey);
+      if (!cached || !cached.data) {
+        // No cached data - show skeletons while loading
+        showSkeletons(true);
+      }
+    }
   }
 }
 
