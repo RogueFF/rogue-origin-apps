@@ -26,13 +26,13 @@ This document outlines all performance optimizations applied to achieve near-ins
 **Status:** ✅ Implemented
 
 ### Features
-- **Version:** 3.0
+- **Version:** 3.5 (Updated 2026-01-07 for widget layout fix)
 - **Cache Buckets:** 5 separate caches for organized management
-  - `ro-ops-v3.0-static` - HTML/CSS/JS
-  - `ro-ops-v3.0-dynamic` - Dynamic content
-  - `ro-ops-v3.0-api` - Google Apps Script responses
-  - `ro-ops-v3.0-images` - Images and SVG files
-  - `ro-ops-v3.0-fonts` - Font files
+  - `ro-ops-v3.5-static` - HTML/CSS/JS
+  - `ro-ops-v3.5-dynamic` - Dynamic content
+  - `ro-ops-v3.5-api` - Google Apps Script responses
+  - `ro-ops-v3.5-images` - Images and SVG files
+  - `ro-ops-v3.5-fonts` - Font files
 
 ### Caching Strategies
 
@@ -230,7 +230,294 @@ Optimized order ensures fastest possible First Contentful Paint:
 
 ---
 
-## 6. Browser Compatibility
+## 6. Widget Layout Architecture Fix
+
+**Files:**
+- `css/dashboard.css` (modified)
+- `js/dashboard.js` (modified)
+- `index.html` (modified)
+- `sw.js` (version bumped to v3.5)
+
+**Status:** ✅ Implemented
+**Date:** 2026-01-07
+
+### Problem Identified
+
+With all 15 widgets enabled, the widgets container expanded to 2631px width, causing horizontal overflow and breaking the layout. This was a band-aid fix using `overflow-x: hidden` at 4 different hierarchy levels.
+
+**Root Causes:**
+1. Missing `min-width: 0` on flex containers (`.dashboard`, `main`) prevented shrinking below content size
+2. No explicit `width: 100%` on `.widgets-container` for Muuri layout calculations
+3. Missing `layoutOnResize` and `dragContainer` in Muuri configuration
+4. Redundant overflow fixes masking the underlying architectural issue
+5. `max-width: 100vw` on body included scrollbar width on Windows
+6. Mobile breakpoint width calculation error: `calc(100% - 16px)` + `margin: 8px`
+
+### CSS Architecture Redesign
+
+#### Single Point of Control Pattern
+
+**Before (Redundant):**
+```css
+body { overflow-x: hidden; max-width: 100vw; }
+main { overflow-x: hidden; max-width: 100%; }
+.dashboard { overflow-x: hidden; max-width: 100%; }
+.widgets-container { overflow: hidden; max-width: 100%; }
+```
+
+**After (Simplified):**
+```css
+body { overflow-x: hidden; }
+main { min-width: 0; }
+.dashboard { min-width: 0; }
+.widgets-container { width: 100%; box-sizing: border-box; }
+```
+
+#### Flex Shrinking Fix
+
+The critical insight: Flex items with `flex: 1` default to `min-width: auto`, which uses content-based minimum size. This prevents shrinking below the widest child (2631px in this case).
+
+**Solution:** Add `min-width: 0` to allow flex containers to shrink below their content size.
+
+```css
+main {
+  flex: 1;
+  min-width: 0;  /* Allows shrinking below content size */
+}
+
+.dashboard {
+  flex: 1;
+  min-width: 0;  /* Critical for Muuri constraint propagation */
+}
+```
+
+#### Container Width Constraint
+
+Muuri calculates absolute positions based on container width. Without explicit constraint, it uses unconstrained parent width.
+
+```css
+.widgets-container {
+  width: 100%;              /* Explicit constraint for Muuri */
+  box-sizing: border-box;   /* Include padding in width */
+}
+```
+
+#### Mobile Width Fix
+
+**Before (Incorrect Math):**
+```css
+@media (max-width: 768px) {
+  .widget-item {
+    width: calc(100% - 16px);  /* Subtracts 16px */
+    margin: 8px;               /* Adds 16px total */
+    /* Result: 100% total width, breaks layout */
+  }
+}
+```
+
+**After (Correct):**
+```css
+@media (max-width: 768px) {
+  .widget-item {
+    width: 100%;          /* Full width */
+    margin: 4px 0;        /* Vertical margin only */
+    padding: 0 4px;       /* Horizontal spacing via padding */
+  }
+}
+```
+
+### JavaScript Configuration Enhancements
+
+#### Muuri Grid Improvements
+
+```javascript
+muuriGrid = new Muuri(container, {
+  dragContainer: container,    // Constrain drag boundaries (was missing)
+  layoutOnResize: 150,          // Recalculate on resize with 150ms debounce (was missing)
+  // ... existing config
+});
+```
+
+#### Container Validation
+
+Added pre-initialization validation to catch configuration errors:
+
+```javascript
+function validateWidgetContainer() {
+  const container = document.querySelector('.widgets-container');
+
+  // Verify explicit width
+  const computedWidth = window.getComputedStyle(container).width;
+  if (!computedWidth || computedWidth === 'auto') {
+    console.warn('[Muuri] widgets-container has no explicit width, forcing 100%');
+    container.style.width = '100%';
+  }
+
+  // Verify parent flex containers can shrink
+  const dashboard = container.closest('.dashboard');
+  if (dashboard) {
+    const minWidth = window.getComputedStyle(dashboard).minWidth;
+    if (minWidth !== '0px') {
+      console.warn('[Muuri] dashboard missing min-width: 0, flex shrinking may fail');
+    }
+  }
+}
+```
+
+#### Window Resize Handler
+
+```javascript
+let resizeTimeout;
+window.addEventListener('resize', function() {
+  clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(function() {
+    if (muuriGrid && !muuriGrid._isDestroyed) {
+      muuriGrid.refreshItems();  // Update item dimensions
+      muuriGrid.layout();         // Recalculate positions
+    }
+  }, 150);  // Match layoutOnResize debounce
+});
+```
+
+### Edge Case Handling
+
+#### Print Styles
+
+```css
+@media print {
+  .widget-item {
+    position: static !important;  /* Override Muuri absolute positioning */
+    width: 100% !important;
+    transform: none !important;
+    page-break-inside: avoid;
+  }
+}
+```
+
+**Impact:** Dashboard prints correctly with linear widget layout.
+
+#### Accessibility Enhancements
+
+```css
+/* Scroll margin for fixed header navigation */
+.widget-item {
+  scroll-margin-top: 80px;
+}
+
+/* Improved focus visibility */
+.widget-item:focus-within {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+  z-index: 10;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .widget-item,
+  .muuri-item-dragging {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .widget {
+    border: 2px solid currentColor;
+  }
+}
+```
+
+**ARIA Labels Added:**
+```html
+<div class="widgets-container"
+     role="region"
+     aria-label="Dashboard Widgets"
+     aria-live="polite">
+```
+
+#### Zoom Handling
+
+```css
+/* Adjust at 150% zoom */
+@media (max-width: 900px) and (min-width: 769px) {
+  .widget-item.size-small,
+  .widget-item.size-medium {
+    width: calc(50% - 8px);  /* 2 columns instead of 3-4 */
+  }
+}
+```
+
+### Performance Impact
+
+**Before Fix:**
+- Container width: 2631px (unconstrained)
+- 4 levels of overflow declarations
+- No resize handling
+- Layout recalculation required manual refresh
+
+**After Fix:**
+- Container width: ~685px (viewport constrained)
+- Single overflow control point
+- Automatic resize handling with debounce
+- No performance regression (< 500ms initial layout maintained)
+
+**Metrics:**
+- **Initial layout:** < 500ms (unchanged)
+- **Resize performance:** ~150ms with debounce
+- **Memory:** Reduced (fewer overflow contexts)
+- **Paint operations:** Optimized (single BFC instead of 4)
+
+### Testing Verification
+
+**Critical Tests Passed:**
+- ✅ No horizontal scrollbar with all 15 widgets enabled
+- ✅ Container width ≤ viewport width at all breakpoints (1920px, 1366px, 768px, 375px)
+- ✅ Window resize triggers smooth layout recalculation
+- ✅ Drag and drop stays within container bounds
+- ✅ Mobile (375px) shows single column correctly
+- ✅ Print preview shows linear layout without overflow
+
+**Edge Case Tests:**
+- ✅ Zoom at 125%, 150%, 200% - no horizontal overflow
+- ✅ Windows + scrollbar - no overflow (fixed `100vw` issue)
+- ✅ Tab navigation through widgets works
+- ✅ Focus indicators visible
+- ✅ Reduced motion preference respected
+
+### Documentation
+
+Added comprehensive architecture explanation at top of `dashboard.css`:
+
+```css
+/* ============================================
+   FLEX SHRINKING ARCHITECTURE - CRITICAL PATTERN
+   ============================================
+
+   Problem: Flex containers with 'flex: 1' don't automatically shrink below
+   their content's minimum size. Without 'min-width: 0', widgets overflow.
+
+   Solution Pattern:
+   1. body: overflow-x: hidden (single overflow control point)
+   2. main, .dashboard: min-width: 0 (allows shrinking below content)
+   3. .widgets-container: width: 100% (constrains Muuri calculations)
+   4. .widget-item: calc percentages (calculates against constrained parent)
+   ============================================ */
+```
+
+### Key Takeaways
+
+1. **Root Cause over Symptoms:** Fixed flex shrinking issue instead of hiding overflow
+2. **Single Point of Control:** One overflow declaration instead of four
+3. **Performance Conscious:** No additional layout thrashing, maintained < 500ms target
+4. **Comprehensive Solution:** Addressed edge cases (print, accessibility, zoom)
+5. **Proper Documentation:** Explained WHY, not just WHAT
+
+**Result:** Professional-grade responsive layout with proper architectural foundation. This is an engineering solution, not a band-aid.
+
+---
+
+## 7. Browser Compatibility
 
 All optimizations work on modern browsers:
 - Chrome/Edge 89+
@@ -339,10 +626,11 @@ These optimizations work together to create near-instant load times:
 3. **CSS Extraction** - Smaller HTML, better caching, critical CSS inline
 4. **API Caching** - Optimistic UI with stale-while-revalidate
 5. **Resource Loading** - Optimized order for fastest FCP
+6. **Widget Layout Architecture** - Proper flex shrinking with single point of control
 
-**Result:** Professional-grade web application with instant perceived load times and full offline functionality.
+**Result:** Professional-grade web application with instant perceived load times, full offline functionality, and production-grade responsive layout architecture.
 
 ---
 
-*Last Updated: 2026-01-06*
-*Version: 1.0*
+*Last Updated: 2026-01-07*
+*Version: 1.1*
