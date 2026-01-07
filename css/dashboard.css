@@ -1035,6 +1035,7 @@ body.sidebar-collapsed .main { margin-left: var(--sidebar-collapsed); }
 .dashboard {
   padding: 16px 20px;
   flex: 1;
+  min-width: 0; /* Allow flex item to shrink below content size */
   display: none;
   max-width: 100%; /* Prevent horizontal expansion */
   overflow-x: hidden; /* Clip horizontal overflow */
