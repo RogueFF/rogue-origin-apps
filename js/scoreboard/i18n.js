@@ -51,6 +51,7 @@
       waiting: 'WAITING FOR DATA',
       onBreak: 'ON BREAK',
       paused: 'PAUSED',
+      shiftEnded: 'SHIFT ENDED',
 
       // Bag Timer
       bagTimer: '5KG BAG TIMER',
@@ -118,6 +119,7 @@
       waiting: 'ESPERANDO DATOS',
       onBreak: 'EN DESCANSO',
       paused: 'PAUSADO',
+      shiftEnded: 'TURNO TERMINADO',
 
       // Bag Timer
       bagTimer: 'TEMPORIZADOR 5KG',
