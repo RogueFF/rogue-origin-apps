@@ -131,16 +131,21 @@
 
     // Calculate working time (excludes breaks)
     var elapsedSec = 0;
-    if (State.lastBagTimestamp && !isManuallyPaused) {
+
+    // Check if lastBagTimestamp is from today
+    var lastBagIsToday = State.lastBagTimestamp &&
+      State.lastBagTimestamp.toDateString() === new Date().toDateString();
+
+    if (lastBagIsToday && !isManuallyPaused) {
       elapsedSec = getWorkingSecondsSince(State.lastBagTimestamp);
-    } else if (State.lastBagTimestamp && isManuallyPaused && State.pauseStartTime) {
+    } else if (lastBagIsToday && isManuallyPaused && State.pauseStartTime) {
       // Show elapsed time up until pause started
       elapsedSec = getWorkingSecondsSince(State.lastBagTimestamp) -
         Math.floor((new Date() - State.pauseStartTime) / 1000);
       if (elapsedSec < 0) elapsedSec = 0;
-    } else if (!State.lastBagTimestamp && !breakStatus.onBreak && !breakStatus.afterHours && bagsToday === 0) {
-      // No bags scanned yet today - use shift start time as reference
-      // This makes the timer count up from 7 AM until the first bag is scanned
+    } else if (!breakStatus.onBreak && !breakStatus.afterHours) {
+      // No bags scanned TODAY - use shift start time as reference
+      // This handles: no lastBagTimestamp, or lastBagTimestamp from previous day
       elapsedSec = getWorkingSecondsSince(getShiftStartTime());
     }
 
