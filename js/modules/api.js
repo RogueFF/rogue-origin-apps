@@ -207,7 +207,7 @@ export function loadData() {
         showSkeletons(true);
       }
 
-      var url = API_URL + '?action=getData&startDate=' + encodeURIComponent(s) + '&endDate=' + encodeURIComponent(e);
+      var url = API_URL + '?action=dashboard&start=' + encodeURIComponent(s) + '&end=' + encodeURIComponent(e);
 
       fetch(url, {
         method: 'GET',
@@ -375,8 +375,8 @@ export function loadCompareDataFetch(cs, ce, ps, pe) {
     });
   } else {
     // Fallback: Direct fetch without caching
-    var currentUrl = API_URL + '?action=getData&startDate=' + encodeURIComponent(cs) + '&endDate=' + encodeURIComponent(ce);
-    var prevUrl = API_URL + '?action=getData&startDate=' + encodeURIComponent(ps) + '&endDate=' + encodeURIComponent(pe);
+    var currentUrl = API_URL + '?action=dashboard&start=' + encodeURIComponent(cs) + '&end=' + encodeURIComponent(ce);
+    var prevUrl = API_URL + '?action=dashboard&start=' + encodeURIComponent(ps) + '&end=' + encodeURIComponent(pe);
 
     var fetchOptions = {
       method: 'GET',
