@@ -95,33 +95,45 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Structure
 
 ```
-rogue-origin-apps-main/
-├── index.html                      ⭐ HYBRID DASHBOARD (Muuri drag-drop, dual theme, AI chat)
-├── scoreboard.html                 Floor TV display (~468KB with embedded charts)
-├── sop-manager.html                Standard Operating Procedures
-├── kanban.html                     Task board
-├── barcode.html                    Label printing
-├── orders.html                     Internal order management
-├── order.html                      Customer portal
-├── ops-hub.html                    Alternative dashboard
-│
-├── js/
-│   ├── modules/                    ⭐ ES6 MODULAR CODEBASE (11 modules)
-│   │   ├── index.js                Main entry point
-│   │   ├── config.js               KPI/widget definitions, API URL
-│   │   ├── state.js                Centralized state manager
-│   │   ├── utils.js                Helper functions
-│   │   ├── theme.js                Dark/light mode
-│   │   ├── navigation.js           View switching
-│   │   ├── settings.js             localStorage persistence
-│   │   ├── api.js                  Data fetching
-│   │   ├── grid.js                 Muuri drag-drop
-│   │   ├── charts.js               Chart.js
-│   │   ├── panels.js               Settings/AI panels
-│   │   ├── widgets.js              KPI/widget rendering
-│   │   └── date.js                 Date range selection
-│   ├── dashboard.js                Legacy monolith (deprecated)
-│   └── api-cache.js                Caching layer
+rogue-origin-apps/
+├── src/                            📦 Source code
+│   ├── pages/                      📄 HTML applications
+│   │   ├── index.html              ⭐ HYBRID DASHBOARD (Muuri, dual theme, AI chat)
+│   │   ├── scoreboard.html         Floor TV display (~468KB embedded charts)
+│   │   ├── barcode.html            Label printing
+│   │   ├── kanban.html             Task board
+│   │   ├── orders.html             Internal order management
+│   │   ├── order.html              Customer portal
+│   │   ├── sop-manager.html        Standard Operating Procedures
+│   │   └── ops-hub.html            Alternative dashboard
+│   │
+│   ├── js/                         💻 JavaScript
+│   │   ├── modules/                ⭐ ES6 MODULAR CODEBASE (11 modules)
+│   │   │   ├── index.js            Main entry point
+│   │   │   ├── config.js           KPI/widget definitions, API URL
+│   │   │   ├── state.js            Centralized state manager
+│   │   │   ├── utils.js            Helper functions
+│   │   │   ├── theme.js            Dark/light mode
+│   │   │   ├── navigation.js       View switching
+│   │   │   ├── settings.js         localStorage persistence
+│   │   │   ├── api.js              Data fetching
+│   │   │   ├── grid.js             Muuri drag-drop
+│   │   │   ├── charts.js           Chart.js
+│   │   │   ├── panels.js           Settings/AI panels
+│   │   │   ├── widgets.js          KPI/widget rendering
+│   │   │   └── date.js             Date range selection
+│   │   ├── scoreboard/             Scoreboard modules (10 files)
+│   │   ├── shared/                 Shared utilities
+│   │   │   └── api-cache.js        Caching layer
+│   │   └── legacy/                 Deprecated code
+│   │       └── dashboard.js        Legacy monolith
+│   │
+│   ├── css/                        🎨 Stylesheets
+│   │   └── *.css                   Per-page stylesheets
+│   │
+│   └── assets/                     🖼️  Static assets
+│       ├── icons/                  SVG icons (hemp leaf, patterns)
+│       └── images/                 (future use)
 │
 ├── apps-script/                    Local copies of Google Apps Script backends
 │   ├── production-tracking/        Main backend (~1,900 lines)
@@ -130,27 +142,34 @@ rogue-origin-apps-main/
 │   ├── wholesale-orders/
 │   └── barcode-manager/
 │
-├── docs/                           Technical documentation
-│   ├── APP_CATALOG.md              Complete API reference
-│   ├── CODEBASE_INVENTORY.md       File-by-file inventory
-│   ├── PROJECT_STRUCTURE.md        Architecture docs
-│   └── sessions/                   Development session notes & test reports
+├── docs/                           Documentation
+│   ├── README.md                   Documentation index
+│   ├── technical/                  Technical documentation
+│   │   ├── APP_CATALOG.md          Complete API reference
+│   │   ├── CODEBASE_INVENTORY.md   File-by-file inventory
+│   │   └── PROJECT_STRUCTURE.md    Architecture docs
+│   ├── design/                     Design system specs
+│   ├── plans/                      Implementation plans
+│   ├── guides/                     Setup & user guides
+│   └── sessions/                   Development session notes
 │
+├── tests/                          Test suite
 ├── archive/                        Backups & design explorations
-│   └── designs/                    Previous HTML versions
-│
 ├── Skills/                         Custom AI skills
 │
+├── index.html                      🔀 Root redirect to src/pages/
+├── sw.js                           Service worker
 ├── CLAUDE.md                       This file
 ├── ROADMAP.md                      Development phases and status
 └── README.md                       Main documentation
 ```
 
 **Key Files**:
-- `index.html` - **HYBRID DASHBOARD** (Muuri drag-drop, dual theme, AI chat, resizable widgets)
-- `scoreboard.html` - Floor TV display (~468KB with embedded charts)
-- `ops-hub.html` - Alternative operations hub design
+- `src/pages/index.html` - **HYBRID DASHBOARD** (Muuri drag-drop, dual theme, AI chat)
+- `src/pages/scoreboard.html` - Floor TV display (~468KB with embedded charts)
+- `src/pages/ops-hub.html` - Alternative operations hub design
 - `apps-script/production-tracking/Code.gs` - Main backend logic
+- `src/js/modules/` - ES6 modular dashboard architecture
 
 ## Hybrid Dashboard Features (index.html)
 

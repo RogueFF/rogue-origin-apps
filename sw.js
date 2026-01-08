@@ -12,34 +12,35 @@ const FONT_CACHE = CACHE_VERSION + '-fonts';
 const STATIC_ASSETS = [
   // HTML pages
   '/rogue-origin-apps/',
-  '/rogue-origin-apps/index.html',
-  '/rogue-origin-apps/scoreboard.html',
-  '/rogue-origin-apps/sop-manager.html',
-  '/rogue-origin-apps/kanban.html',
-  '/rogue-origin-apps/barcode.html',
-  '/rogue-origin-apps/orders.html',
-  '/rogue-origin-apps/order.html',
-  '/rogue-origin-apps/ops-hub.html',
+  '/rogue-origin-apps/src/pages/index.html',
+  '/rogue-origin-apps/src/pages/scoreboard.html',
+  '/rogue-origin-apps/src/pages/sop-manager.html',
+  '/rogue-origin-apps/src/pages/kanban.html',
+  '/rogue-origin-apps/src/pages/barcode.html',
+  '/rogue-origin-apps/src/pages/orders.html',
+  '/rogue-origin-apps/src/pages/order.html',
+  '/rogue-origin-apps/src/pages/ops-hub.html',
 
   // CSS files
-  '/rogue-origin-apps/css/dashboard.css',
-  '/rogue-origin-apps/css/ai-chat.css',
-  '/rogue-origin-apps/css/barcode.css',
-  '/rogue-origin-apps/css/kanban.css',
-  '/rogue-origin-apps/css/ops-hub.css',
-  '/rogue-origin-apps/css/order.css',
-  '/rogue-origin-apps/css/orders.css',
-  '/rogue-origin-apps/css/scoreboard.css',
-  '/rogue-origin-apps/css/sop-manager.css',
+  '/rogue-origin-apps/src/css/dashboard.css',
+  '/rogue-origin-apps/src/css/ai-chat.css',
+  '/rogue-origin-apps/src/css/barcode.css',
+  '/rogue-origin-apps/src/css/kanban.css',
+  '/rogue-origin-apps/src/css/ops-hub.css',
+  '/rogue-origin-apps/src/css/order.css',
+  '/rogue-origin-apps/src/css/orders.css',
+  '/rogue-origin-apps/src/css/scoreboard.css',
+  '/rogue-origin-apps/src/css/sop-manager.css',
 
   // JavaScript files
-  '/rogue-origin-apps/js/dashboard.js',
-  '/rogue-origin-apps/js/api-cache.js',
+  '/rogue-origin-apps/src/js/modules/index.js',
+  '/rogue-origin-apps/src/js/shared/api-cache.js',
+  '/rogue-origin-apps/src/js/legacy/dashboard.js',
 
   // SVG assets
-  '/rogue-origin-apps/hemp-fiber-texture-preview.svg',
-  '/rogue-origin-apps/hemp-leaf-pattern.svg',
-  '/rogue-origin-apps/ro-pattern-preview.svg'
+  '/rogue-origin-apps/src/assets/icons/hemp-fiber-texture-preview.svg',
+  '/rogue-origin-apps/src/assets/icons/hemp-leaf-pattern.svg',
+  '/rogue-origin-apps/src/assets/icons/ro-pattern-preview.svg'
 ];
 
 // External CDN assets to cache
