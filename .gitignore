@@ -1,8 +1,10 @@
 # Dependencies
 node_modules/
 tests/node_modules/
+package-lock.json
 
 # Claude Code
+.claude/
 .claude/settings.local.json
 
 # IDE
@@ -11,31 +13,50 @@ tests/node_modules/
 *.swp
 *.swo
 *~
+.editorconfig
 
 # OS
 .DS_Store
 Thumbs.db
 desktop.ini
+*.bak
 
 # Logs
 *.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Test outputs
 test-report.json
+coverage/
+.nyc_output/
 
 # Temporary files
 *.tmp
 *.temp
+.cache/
 
-# Environment variables (if any)
+# Build outputs (if any in future)
+dist/
+build/
+
+# Environment variables
 .env
 .env.local
+.env.production.local
+.env.development.local
 
-# Authentication is now server-side via Apps Script (password in Script Properties)
-# These files are no longer used and can be safely deleted
+# Legacy auth files (deprecated)
 auth-config.js
 auth-config.production.js
 auth-config.template.js
 orders-auth.js
+
+# Playwright
 .playwright-mcp/
+playwright-report/
+test-results/
+
+# Git worktrees
+.worktrees/
