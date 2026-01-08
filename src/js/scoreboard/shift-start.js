@@ -36,6 +36,28 @@
       showStartDayButton();
     }
 
+    // Sync with API
+    if (window.ScoreboardAPI) {
+      window.ScoreboardAPI.getShiftStart(
+        function(response) {
+          if (response.success && response.shiftAdjustment) {
+            var apiStartTime = new Date(response.shiftAdjustment.manualStartTime);
+
+            // Use API time if different from localStorage
+            if (!savedStart || apiStartTime.getTime() !== new Date(savedStart).getTime()) {
+              State.manualShiftStart = apiStartTime;
+              State.shiftAdjustment = response.shiftAdjustment;
+              localStorage.setItem('manualShiftStart', apiStartTime.toISOString());
+              showStartedBadge(apiStartTime, State.shiftStartLocked);
+            }
+          }
+        },
+        function(error) {
+          console.error('Failed to load shift start from API:', error);
+        }
+      );
+    }
+
     // Set up time input to current time by default
     var now = new Date();
     var hours = String(now.getHours()).padStart(2, '0');
@@ -214,12 +236,20 @@
     showStartedBadge(startTime, false);
     cancelStartTime();
 
-    // TODO: Send to API (Task 9)
-    console.log('Shift start set to:', startTime);
-
-    // Trigger data refresh to recalculate targets
-    if (window.ScoreboardAPI && window.ScoreboardAPI.loadData) {
-      // Will be implemented in Task 9
+    // Save to API
+    if (window.ScoreboardAPI) {
+      window.ScoreboardAPI.setShiftStart(
+        startTime,
+        function(response) {
+          if (response.success && response.shiftAdjustment) {
+            State.shiftAdjustment = response.shiftAdjustment;
+            console.log('Shift start saved to API:', response.shiftAdjustment);
+          }
+        },
+        function(error) {
+          console.error('Failed to save shift start:', error);
+        }
+      );
     }
   }
 
