@@ -126,6 +126,44 @@
   }
 
   /**
+   * Calculate available productive hours from a given start time to shift end
+   * Excludes scheduled breaks that fall within the window
+   * @param {Date} shiftStart - The shift start time
+   * @returns {number} Available hours (decimal)
+   */
+  function getAvailableProductiveHours(shiftStart) {
+    var shiftEnd = new Date();
+    shiftEnd.setHours(16, 30, 0, 0);  // 4:30 PM fixed
+
+    var totalMinutes = (shiftEnd - shiftStart) / 60000;
+
+    // Subtract scheduled breaks that fall within shift window
+    var breaks = (Config && Config.workday && Config.workday.breaks) || [
+      [9, 0, 9, 10],      // 9:00-9:10 AM
+      [12, 0, 12, 30],    // 12:00-12:30 PM
+      [14, 30, 14, 40],   // 2:30-2:40 PM
+      [16, 20, 16, 30]    // 4:20-4:30 PM cleanup
+    ];
+
+    var breakMinutes = 0;
+    breaks.forEach(function(brk) {
+      var breakStart = new Date();
+      breakStart.setHours(brk[0], brk[1], 0, 0);
+      var breakEnd = new Date();
+      breakEnd.setHours(brk[2], brk[3], 0, 0);
+
+      // Only count breaks that overlap with actual working time
+      if (shiftStart < breakEnd && breakStart < shiftEnd) {
+        var overlapStart = Math.max(shiftStart.getTime(), breakStart.getTime());
+        var overlapEnd = Math.min(shiftEnd.getTime(), breakEnd.getTime());
+        breakMinutes += (overlapEnd - overlapStart) / 60000;
+      }
+    });
+
+    return (totalMinutes - breakMinutes) / 60;  // Convert to hours
+  }
+
+  /**
    * Calculate working seconds from a previous day's timestamp, carrying over to today
    * Used when a bag was not finished before shift ended yesterday
    * @param {Date} startTime - The timestamp from a previous day
