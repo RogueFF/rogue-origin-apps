@@ -219,6 +219,59 @@
             if (onError) onError(error);
           });
       }
+    },
+
+    /**
+     * Set shift start time
+     */
+    setShiftStart: function(startTime, onSuccess, onError) {
+      if (this.isAppsScript()) {
+        google.script.run
+          .withSuccessHandler(onSuccess)
+          .withFailureHandler(onError)
+          .handleSetShiftStart({ time: startTime.toISOString() });
+      } else {
+        var apiUrl = this.getApiUrl();
+        var url = apiUrl + '?action=setShiftStart&time=' + encodeURIComponent(startTime.toISOString());
+
+        fetch(url)
+          .then(function(response) {
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            return response.json();
+          })
+          .then(onSuccess)
+          .catch(function(error) {
+            console.error('setShiftStart error:', error);
+            if (onError) onError(error);
+          });
+      }
+    },
+
+    /**
+     * Get today's shift start adjustment
+     */
+    getShiftStart: function(onSuccess, onError) {
+      if (this.isAppsScript()) {
+        google.script.run
+          .withSuccessHandler(onSuccess)
+          .withFailureHandler(onError)
+          .handleGetShiftStart({});
+      } else {
+        var apiUrl = this.getApiUrl();
+        var today = new Date().toISOString().split('T')[0];
+        var url = apiUrl + '?action=getShiftStart&date=' + today;
+
+        fetch(url)
+          .then(function(response) {
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            return response.json();
+          })
+          .then(onSuccess)
+          .catch(function(error) {
+            console.error('getShiftStart error:', error);
+            if (onError) onError(error);
+          });
+      }
     }
   };
 
