@@ -312,6 +312,10 @@ function doGet(e) {
       } else {
         result = getOrder(orderIdValidation.value);
       }
+    } else if (action === 'setShiftStart') {
+      result = handleSetShiftStart(e.parameter);
+    } else if (action === 'getShiftStart') {
+      result = handleGetShiftStart(e.parameter);
     } else if (action === 'test') {
       result = { ok: true, message: 'API is working', timestamp: new Date().toISOString() };
     } else {
@@ -331,6 +335,159 @@ function doGet(e) {
 
   return ContentService.createTextOutput(JSON.stringify(result))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * Handle shift start time setting
+ */
+function handleSetShiftStart(params) {
+  try {
+    var timestamp = new Date(params.time);
+    var today = new Date();
+
+    // Validation
+    if (!isSameDay(timestamp, today)) {
+      return { success: false, error: 'Can only set start time for today' };
+    }
+
+    if (timestamp > today) {
+      return { success: false, error: 'Cannot set future start time' };
+    }
+
+    // Calculate adjustments
+    var availableHours = calculateAvailableHours(timestamp);
+    var normalHours = 8.5;
+    var scaleFactor = availableHours / normalHours;
+
+    // Get baseline goals from config or calculate
+    var baselineDailyGoal = 200;  // TODO: Make configurable
+    var adjustedGoal = Math.round(baselineDailyGoal * scaleFactor);
+
+    // Log to Shift Adjustments sheet
+    logShiftAdjustment({
+      date: Utilities.formatDate(today, Session.getScriptTimeZone(), 'yyyy-MM-dd'),
+      shiftStart: Utilities.formatDate(timestamp, Session.getScriptTimeZone(), 'HH:mm:ss'),
+      setAt: Utilities.formatDate(today, Session.getScriptTimeZone(), 'HH:mm:ss'),
+      availableHours: availableHours.toFixed(2),
+      scaleFactor: scaleFactor.toFixed(3)
+    });
+
+    return {
+      success: true,
+      shiftAdjustment: {
+        manualStartTime: timestamp.toISOString(),
+        availableHours: availableHours,
+        scaleFactor: scaleFactor,
+        adjustedDailyGoal: adjustedGoal
+      }
+    };
+
+  } catch (error) {
+    return { success: false, error: error.toString() };
+  }
+}
+
+/**
+ * Calculate available working hours from start to 4:30 PM
+ */
+function calculateAvailableHours(startTime) {
+  var shiftEnd = new Date(startTime);
+  shiftEnd.setHours(16, 30, 0, 0);
+
+  var totalMinutes = (shiftEnd - startTime) / 60000;
+
+  // Scheduled breaks [startHour, startMin, endHour, endMin]
+  var breaks = [
+    [9, 0, 9, 10],
+    [12, 0, 12, 30],
+    [14, 30, 14, 40],
+    [16, 20, 16, 30]
+  ];
+
+  var breakMinutes = 0;
+  breaks.forEach(function(brk) {
+    var breakStart = new Date(startTime);
+    breakStart.setHours(brk[0], brk[1], 0, 0);
+    var breakEnd = new Date(startTime);
+    breakEnd.setHours(brk[2], brk[3], 0, 0);
+
+    if (startTime < breakEnd && breakStart < shiftEnd) {
+      var overlapStart = Math.max(startTime.getTime(), breakStart.getTime());
+      var overlapEnd = Math.min(shiftEnd.getTime(), breakEnd.getTime());
+      breakMinutes += (overlapEnd - overlapStart) / 60000;
+    }
+  });
+
+  return (totalMinutes - breakMinutes) / 60;
+}
+
+/**
+ * Log shift adjustment to Google Sheets
+ */
+function logShiftAdjustment(data) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Shift Adjustments');
+
+  // Create sheet if doesn't exist
+  if (!sheet) {
+    sheet = ss.insertSheet('Shift Adjustments');
+    sheet.appendRow(['Date', 'Shift Start', 'Set At', 'Available Hours', 'Scale Factor', 'Notes']);
+  }
+
+  sheet.appendRow([
+    data.date,
+    data.shiftStart,
+    data.setAt,
+    data.availableHours,
+    data.scaleFactor,
+    ''
+  ]);
+}
+
+/**
+ * Get today's shift start adjustment
+ */
+function handleGetShiftStart(params) {
+  try {
+    var date = params.date || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Shift Adjustments');
+
+    if (!sheet) {
+      return { success: true, shiftAdjustment: null };
+    }
+
+    var data = sheet.getDataRange().getValues();
+
+    // Find today's entry (most recent)
+    for (var i = data.length - 1; i >= 1; i--) {
+      if (data[i][0] === date) {
+        return {
+          success: true,
+          shiftAdjustment: {
+            manualStartTime: date + 'T' + data[i][1],
+            availableHours: parseFloat(data[i][3]),
+            scaleFactor: parseFloat(data[i][4])
+          }
+        };
+      }
+    }
+
+    return { success: true, shiftAdjustment: null };
+
+  } catch (error) {
+    return { success: false, error: error.toString() };
+  }
+}
+
+/**
+ * Helper: Check if two dates are same day
+ */
+function isSameDay(date1, date2) {
+  return date1.getFullYear() === date2.getFullYear() &&
+         date1.getMonth() === date2.getMonth() &&
+         date1.getDate() === date2.getDate();
 }
 
 function doPost(e) {
