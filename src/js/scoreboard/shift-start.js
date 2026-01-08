@@ -258,7 +258,7 @@
    */
   function editStartTime() {
     if (State.shiftStartLocked) {
-      // Show tooltip or alert
+      showTooltip('Cannot edit after first bag');
       return;
     }
 
@@ -271,6 +271,23 @@
     }
 
     openStartDayModal();
+  }
+
+  /**
+   * Show tooltip message
+   */
+  function showTooltip(message) {
+    var badge = document.getElementById('startedBadge');
+    if (!badge) return;
+
+    var tooltip = document.createElement('div');
+    tooltip.className = 'lock-tooltip';
+    tooltip.textContent = message;
+    badge.appendChild(tooltip);
+
+    setTimeout(function() {
+      tooltip.remove();
+    }, 2000);
   }
 
   /**
