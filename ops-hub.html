@@ -1,0 +1,1983 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rogue Origin - Operations Hub</title>
+
+  <!-- Performance: Resource Hints -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="dns-prefetch" href="https://script.google.com">
+
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=optional" rel="stylesheet">
+
+  <!-- Scripts: Deferred for faster initial render -->
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+  <script defer src="https://unpkg.com/@phosphor-icons/web"></script>
+  <!-- Performance: CSS Preloading -->
+  <link rel="preload" href="css/ops-hub.css" as="style">
+  <link rel="stylesheet" href="css/ops-hub.css">
+  <link rel="stylesheet" href="css/ai-chat.css">
+</head>
+<body>
+  <div class="logo-loader" id="loadingOverlay">
+    <img src="https://i.imgur.com/UYEbNiI.png" alt="Rogue Origin">
+    <span class="logo-loader-bar"></span>
+  </div>
+
+  <div class="settings-overlay" id="settingsOverlay" onclick="closeSettings()"></div>
+  <div class="settings-panel" id="settingsPanel">
+    <div class="settings-header"><span class="settings-title">Customize Dashboard</span><button class="settings-close" onclick="closeSettings()">&times;</button></div>
+    <div class="settings-section">
+      <div class="settings-section-title">Production Target</div>
+      <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Daily target shown as line on charts</p>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <input type="number" id="targetInput" value="200" min="50" max="500" step="10" style="flex: 1; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: var(--bg); color: var(--text);">
+        <span style="color: var(--text-muted); font-size: 12px;">lbs/day</span>
+      </div>
+    </div>
+    <div class="settings-section">
+      <div class="settings-section-title">KPI Cards</div>
+      <div id="kpiToggles"></div>
+    </div>
+    <div class="settings-section">
+      <div class="settings-section-title">Widgets</div>
+      <div id="widgetToggles"></div>
+    </div>
+    <div class="settings-section">
+      <div class="settings-section-title">Layout</div>
+      <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">Drag KPI cards to reorder. Settings save automatically.</p>
+      <button class="tool-btn" onclick="resetLayout()" style="width: 100%; justify-content: center;">Reset to Default</button>
+    </div>
+  </div>
+
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-toggle" onclick="toggleSidebar()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 19l-7-7 7-7M18 19l-7-7 7-7"/></svg>
+      <span class="sidebar-toggle-label">Collapse</span>
+    </div>
+    <div class="brand">
+      <img src="https://i.imgur.com/PvrTPb2.png" alt="Rogue Origin" class="logo">
+      <h1>Rogue Origin</h1>
+    </div>
+    <div class="nav-item active" data-view="dashboard" onclick="switchView('dashboard')"><span class="icon"><i class="ph-duotone ph-chart-pie-slice"></i></span><span>Dashboard</span></div>
+    <div class="nav-item" data-view="kanban" onclick="switchView('kanban')"><span class="icon"><i class="ph-duotone ph-package"></i></span><span>Supply Kanban</span></div>
+    <div class="nav-item" data-view="scoreboard" onclick="switchView('scoreboard')"><span class="icon"><i class="ph-duotone ph-gauge"></i></span><span>Scoreboard</span></div>
+    <div class="nav-item" data-view="barcode" onclick="switchView('barcode')"><span class="icon"><i class="ph-duotone ph-barcode"></i></span><span>Barcode Printer</span></div>
+    <div class="nav-item" data-view="sop" onclick="switchView('sop')"><span class="icon"><i class="ph-duotone ph-book-open-text"></i></span><span>SOP Manager</span></div>
+    <div class="nav-section">Coming Soon</div>
+    <div class="nav-item disabled"><span class="icon"><i class="ph-duotone ph-clipboard-text"></i></span><span>Orders</span></div>
+    <div class="nav-item disabled"><span class="icon"><i class="ph-duotone ph-users-three"></i></span><span>Staff</span></div>
+    <div class="nav-item disabled"><span class="icon"><i class="ph-duotone ph-chart-line-up"></i></span><span>Reports</span></div>
+    <div class="nav-item disabled"><span class="icon"><i class="ph-duotone ph-gear"></i></span><span>Settings</span></div>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar">RO</div>
+        <div class="user-details"><h4>Rogue Origin</h4><p>Administrator</p></div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="header">
+      <div class="header-left">
+        <button class="mobile-menu-btn" onclick="toggleMobileSidebar()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <img src="https://i.imgur.com/UYEbNiI.png" alt="Rogue Origin" class="header-logo">
+      </div>
+      <div class="header-right" id="dashboardControls">
+        <div class="date-picker-wrapper">
+          <button class="date-picker-trigger" onclick="toggleDatePicker()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <span id="datePickerLabel">Today</span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="date-picker-dropdown" id="datePickerDropdown">
+            <div class="date-presets">
+              <button class="date-chip active" data-range="today">Today</button>
+              <button class="date-chip" data-range="yesterday">Yesterday</button>
+              <button class="date-chip" data-range="week">Last 7 Days</button>
+              <button class="date-chip" data-range="month">Last 30 Days</button>
+            </div>
+            <div class="date-custom">
+              <div class="date-custom-label">Custom Range</div>
+              <div class="date-inputs">
+                <input type="date" class="date-input" id="startDate">
+                <span style="color: var(--text-light);">→</span>
+                <input type="date" class="date-input" id="endDate">
+              </div>
+              <button class="date-apply-btn" onclick="applyCustomRange()">Apply</button>
+            </div>
+          </div>
+        </div>
+        <div class="compare-selector">
+          <button class="header-btn" id="compareBtn" onclick="toggleCompareDropdown()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+            Compare
+          </button>
+          <div class="compare-dropdown" id="compareDropdown">
+            <div class="compare-option" onclick="setCompare('yesterday')">Today vs Yesterday</div>
+            <div class="compare-option" onclick="setCompare('lastWeek')">This Week vs Last</div>
+            <div class="compare-option" onclick="setCompare('lastMonth')">This Month vs Last</div>
+          </div>
+        </div>
+        <div class="header-time"><div class="time" id="clock">--:--</div><div class="date" id="dateDisplay">Loading...</div></div>
+        <button class="dark-mode-toggle" onclick="toggleDarkMode()" title="Toggle dark mode"><i class="ph-duotone ph-moon" id="darkModeIcon"></i><span id="darkModeLabel">Dark</span></button>
+        <button class="header-btn" onclick="openSettings()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+        <button class="header-btn primary" id="refreshBtn" onclick="refreshData()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Refresh</button>
+      </div>
+    </header>
+
+    <!-- Dashboard View -->
+    <div class="dashboard active" id="dashboardView">
+      <div class="compare-banner" id="compareBanner">
+        <div class="compare-banner-left">
+          <span class="compare-badge">Comparing</span>
+          <div class="compare-periods">
+            <div style="display:flex;align-items:center;gap:4px;"><div class="compare-dot current"></div><span id="compareCurrent">Today</span></div>
+            <span style="opacity: 0.5;">vs</span>
+            <div style="display:flex;align-items:center;gap:4px;"><div class="compare-dot previous"></div><span id="comparePrevious">Yesterday</span></div>
+          </div>
+        </div>
+        <button class="compare-close" onclick="clearCompare()">&times;</button>
+      </div>
+
+      <!-- Welcome Section -->
+      <div class="welcome-section">
+        <div class="welcome-greeting" id="welcomeGreeting">Good morning</div>
+        <div class="welcome-date" id="welcomeDate">Loading...</div>
+      </div>
+
+      <div class="toolbar">
+        <div class="toolbar-left"><div class="date-display" id="dateRangeDisplay">Showing data for <strong>Today</strong></div></div>
+        <div class="toolbar-right"><button class="tool-btn" id="editModeBtn" onclick="toggleEditMode()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Rearrange</button></div>
+      </div>
+
+      <div class="kpi-row" id="kpiRow"></div>
+
+      <!-- All Widgets Container (sortable) -->
+      <div class="widgets-container" id="widgetsContainer">
+        <!-- Integration Widgets -->
+        <div class="integration-card draggable-widget" id="widget-kanban" data-widget-id="widget-kanban" data-widget="kanban">
+          <div class="integration-header">
+            <div class="integration-icon kanban"><i class="ph-duotone ph-package"></i></div>
+            <div class="integration-title">Supply Kanban</div>
+          </div>
+          <div class="integration-stats">
+            <div class="integration-stat"><span class="integration-stat-label">Total Items</span><span class="integration-stat-value" id="kanbanTotal">—</span></div>
+            <div class="integration-stat"><span class="integration-stat-label">Need Reorder</span><span class="integration-stat-value alert" id="kanbanReorder">—</span></div>
+            <div class="integration-stat"><span class="integration-stat-label">In Stock</span><span class="integration-stat-value good" id="kanbanInStock">—</span></div>
+          </div>
+        </div>
+        <div class="integration-card draggable-widget" id="widget-scoreboard" data-widget-id="widget-scoreboard" data-widget="scoreboard">
+          <div class="integration-header">
+            <div class="integration-icon scoreboard"><i class="ph-duotone ph-gauge"></i></div>
+            <div class="integration-title">Live Scoreboard</div>
+          </div>
+          <div class="integration-stats">
+            <div class="integration-stat"><span class="integration-stat-label">Current Status</span><span class="integration-stat-value" id="scoreboardStatus">—</span></div>
+            <div class="integration-stat"><span class="integration-stat-label">Today's Lbs</span><span class="integration-stat-value" id="scoreboardLbs">—</span></div>
+            <div class="integration-stat"><span class="integration-stat-label">vs Target</span><span class="integration-stat-value" id="scoreboardTarget">—</span></div>
+          </div>
+        </div>
+        <div class="integration-card draggable-widget" id="widget-bags" data-widget-id="widget-bags" data-widget="bags">
+          <div class="integration-header">
+            <div class="integration-icon bags"><i class="ph-duotone ph-timer"></i></div>
+            <div class="integration-title">5KG Bag Timer</div>
+          </div>
+          <div class="integration-stats">
+            <div class="integration-stat"><span class="integration-stat-label">Bags Today</span><span class="integration-stat-value" id="bagsToday">—</span></div>
+            <div class="integration-stat"><span class="integration-stat-label">Avg Time</span><span class="integration-stat-value" id="bagsAvgTime">—</span></div>
+            <div class="integration-stat"><span class="integration-stat-label">vs Target</span><span class="integration-stat-value" id="bagsVsTarget">—</span></div>
+          </div>
+        </div>
+        <div class="integration-card draggable-widget" id="widget-sop" data-widget-id="widget-sop" data-widget="sop" onclick="switchView('sop')" style="cursor:pointer;">
+          <div class="integration-header">
+            <div class="integration-icon sop"><i class="ph-duotone ph-book-open-text"></i></div>
+            <div class="integration-title">SOP Manager</div>
+          </div>
+          <div class="integration-stats">
+            <div class="integration-stat"><span class="integration-stat-label">Status</span><span class="integration-stat-value good">Active</span></div>
+            <div class="integration-stat"><span class="integration-stat-label">Feature</span><span class="integration-stat-value">EN/ES</span></div>
+            <div class="integration-stat"><span class="integration-stat-label">Export</span><span class="integration-stat-value">PDF</span></div>
+          </div>
+        </div>
+
+        <!-- Last Hour Production -->
+        <div class="current-card draggable-widget" id="widget-current" data-widget-id="widget-current" data-widget="current">
+          <div class="current-header">
+            <div><div class="current-strain" id="currentStrain">No Data</div><div class="current-time" id="currentTime">—</div></div>
+            <div class="status-badge idle" id="statusBadge">Last Hour</div>
+          </div>
+          <div class="current-stats">
+            <div class="current-stat"><div class="current-stat-value highlight" id="currentTops">0</div><div class="current-stat-label">Tops (lbs)</div></div>
+            <div class="current-stat"><div class="current-stat-value" id="currentSmalls">0</div><div class="current-stat-label">Smalls (lbs)</div></div>
+            <div class="current-stat"><div class="current-stat-value" id="currentTrimmers">0</div><div class="current-stat-label">Trimmers</div></div>
+            <div class="current-stat"><div class="current-stat-value" id="currentBuckers">0</div><div class="current-stat-label">Buckers</div></div>
+            <div class="current-stat"><div class="current-stat-value highlight" id="currentRate">0.00</div><div class="current-stat-label">Lbs/Trimmer</div></div>
+            <div class="current-stat"><div class="current-stat-value" id="currentTotal">0</div><div class="current-stat-label">Total Lbs</div></div>
+          </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="chart-card draggable-widget" id="widget-hourlyChart" data-widget-id="widget-hourlyChart" data-widget="hourlyChart">
+          <div class="chart-header">
+            <div><div class="chart-title">Hourly Production</div><div class="chart-subtitle">Tops vs Smalls</div></div>
+          </div>
+          <div class="chart-container"><canvas id="hourlyChart"></canvas></div>
+        </div>
+        <div class="chart-card draggable-widget" id="widget-rateChart" data-widget-id="widget-rateChart" data-widget="rateChart">
+          <div class="chart-header"><div><div class="chart-title">Efficiency Trend</div><div class="chart-subtitle">Lbs/Trimmer/Hr</div></div></div>
+          <div class="chart-container"><canvas id="rateChart"></canvas></div>
+        </div>
+        <div class="chart-card draggable-widget" id="widget-dailyChart" data-widget-id="widget-dailyChart" data-widget="dailyChart">
+          <div class="chart-header">
+            <div><div class="chart-title">Daily Production</div><div class="chart-subtitle">Multi-day view</div></div>
+          </div>
+          <div class="chart-container"><canvas id="dailyChart"></canvas></div>
+        </div>
+        <div class="chart-card draggable-widget" id="widget-dailyRateChart" data-widget-id="widget-dailyRateChart" data-widget="dailyRateChart">
+          <div class="chart-header">
+            <div><div class="chart-title" id="efficiencyChartTitle">Daily Efficiency</div><div class="chart-subtitle" id="efficiencyChartSubtitle">With 7-day MA</div></div>
+          </div>
+          <div class="chart-container"><canvas id="dailyRateChart"></canvas></div>
+        </div>
+        
+        <!-- Trimmers Chart -->
+        <div class="chart-card draggable-widget" id="widget-trimmersChart" data-widget-id="widget-trimmersChart" data-widget="trimmersChart">
+          <div class="chart-header">
+            <div><div class="chart-title">Trimmers on Line</div><div class="chart-subtitle" id="trimmersChartSubtitle">By Hour</div></div>
+          </div>
+          <div class="chart-container"><canvas id="trimmersChart"></canvas></div>
+        </div>
+
+        <!-- Bottom Widgets -->
+        <div class="widget-card wide draggable-widget" id="widget-productivity" data-widget-id="widget-productivity" data-widget="productivity">
+          <div class="widget-header"><div><div class="widget-title">Trimmer Productivity</div></div></div>
+          <div class="sparkline-metrics">
+            <div class="sparkline-metric"><div class="sparkline-metric-value current" id="sparkCurrent">—</div><div class="sparkline-metric-label">Last Hour</div></div>
+            <div class="sparkline-metric"><div class="sparkline-metric-value best" id="sparkBest">—</div><div class="sparkline-metric-label">Best Hour</div></div>
+            <div class="sparkline-metric"><div class="sparkline-metric-value avg" id="sparkAvg">—</div><div class="sparkline-metric-label">Avg Rate</div></div>
+          </div>
+          <div class="sparkline-bars" id="sparklineBars"></div>
+        </div>
+        <div class="widget-card narrow draggable-widget" id="widget-strains" data-widget-id="widget-strains" data-widget="strains">
+          <div class="widget-header"><div><div class="widget-title">Strain Breakdown</div></div></div>
+          <div class="strain-list" id="strainList"><div style="color:#8a9a8e;text-align:center;padding:16px;">No data</div></div>
+        </div>
+        <div class="widget-card third draggable-widget" id="widget-performance" data-widget-id="widget-performance" data-widget="performance">
+          <div class="widget-header"><div><div class="widget-title">Performance</div></div></div>
+          <div class="perf-table" id="perfTable"></div>
+        </div>
+        <div class="widget-card third draggable-widget" id="widget-cost" data-widget-id="widget-cost" data-widget="cost">
+          <div class="widget-header"><div><div class="widget-title">Cost Analysis</div></div></div>
+          <div class="perf-table" id="costTable"></div>
+        </div>
+        <div class="widget-card third draggable-widget" id="widget-period" data-widget-id="widget-period" data-widget="period">
+          <div class="widget-header"><div><div class="widget-title">Period Summary</div><div class="widget-subtitle" id="periodLabel"></div></div></div>
+          <div class="perf-table" id="periodTable"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- App Views (iframes) -->
+    <div class="app-view" id="kanbanView">
+      <div class="app-iframe-container">
+        <button class="app-expand-btn" onclick="openAppNewTab('kanban')" title="Open in new tab"><i class="ph ph-arrow-square-out"></i></button>
+        <iframe class="app-iframe" id="kanbanFrame" data-src="https://rogueff.github.io/rogue-origin-apps/kanban.html"></iframe>
+      </div>
+    </div>
+
+    <div class="app-view" id="scoreboardView">
+      <div class="app-iframe-container">
+        <button class="app-expand-btn" onclick="openAppNewTab('scoreboard')" title="Open in new tab"><i class="ph ph-arrow-square-out"></i></button>
+        <iframe class="app-iframe" id="scoreboardFrame" data-src="https://rogueff.github.io/rogue-origin-apps/scoreboard.html"></iframe>
+      </div>
+    </div>
+
+    <div class="app-view" id="barcodeView">
+      <div class="app-iframe-container">
+        <button class="app-expand-btn" onclick="openAppNewTab('barcode')" title="Open in new tab"><i class="ph ph-arrow-square-out"></i></button>
+        <iframe class="app-iframe" id="barcodeFrame" data-src="https://rogueff.github.io/rogue-origin-apps/barcode.html"></iframe>
+      </div>
+    </div>
+
+    <div class="app-view" id="sopView">
+      <div class="app-iframe-container">
+        <button class="app-expand-btn" onclick="openAppNewTab('sop')" title="Open in new tab"><i class="ph ph-arrow-square-out"></i></button>
+        <iframe class="app-iframe" id="sopFrame" data-src="https://rogueff.github.io/rogue-origin-apps/sop-manager.html"></iframe>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // KPI Definitions with Phosphor duotone icons
+    var kpiDefinitions = [
+      { id: 'totalTops', label: 'Total Tops', icon: 'ph-duotone ph-plant', color: 'gold', default: true, format: 'lbs' },
+      { id: 'totalSmalls', label: 'Total Smalls', icon: 'ph-duotone ph-tree', color: 'sungrown', default: true, format: 'lbs' },
+      { id: 'avgRate', label: 'Lbs/Trimmer/Hr', icon: 'ph-duotone ph-lightning', color: 'green', default: true, format: 'rate' },
+      { id: 'crew', label: 'Current Crew', icon: 'ph-duotone ph-users-three', color: 'greenhouse', default: true, format: 'num' },
+      { id: 'operatorHours', label: 'Operator Hours', icon: 'ph-duotone ph-clock', color: 'indoor', default: true, format: 'hrs' },
+      { id: 'costPerLb', label: 'Cost/Lb', icon: 'ph-duotone ph-currency-dollar', color: 'gold', default: true, format: 'dollar' },
+      { id: 'totalLbs', label: 'Total Lbs', icon: 'ph-duotone ph-scales', color: 'green', default: false, format: 'lbs' },
+      { id: 'maxRate', label: 'Best Rate', icon: 'ph-duotone ph-trophy', color: 'gold', default: false, format: 'rate' },
+      { id: 'trimmerHours', label: 'Trimmer Hours', icon: 'ph-duotone ph-scissors', color: 'greenhouse', default: false, format: 'hrs' },
+      { id: 'laborCost', label: 'Total Labor', icon: 'ph-duotone ph-wallet', color: 'sungrown', default: false, format: 'dollar' }
+    ];
+
+    // Widget Definitions
+    // Widget Definitions with Phosphor duotone icons
+    var widgetDefinitions = [
+      { id: 'kanban', label: 'Supply Kanban', icon: 'ph-duotone ph-package', color: 'green', default: true },
+      { id: 'scoreboard', label: 'Live Scoreboard', icon: 'ph-duotone ph-gauge', color: 'gold', default: true },
+      { id: 'bags', label: '5KG Bag Timer', icon: 'ph-duotone ph-timer', color: 'sungrown', default: true },
+      { id: 'sop', label: 'SOP Manager', icon: 'ph-duotone ph-book-open-text', color: 'indoor', default: true },
+      { id: 'current', label: 'Current Production', icon: 'ph-duotone ph-pulse', color: 'green', default: true },
+      { id: 'hourlyChart', label: 'Hourly Chart', icon: 'ph-duotone ph-chart-bar', color: 'indoor', default: true },
+      { id: 'rateChart', label: 'Rate Chart', icon: 'ph-duotone ph-trend-up', color: 'indoor', default: true },
+      { id: 'dailyChart', label: 'Daily Chart', icon: 'ph-duotone ph-chart-bar-horizontal', color: 'indoor', default: true },
+      { id: 'dailyRateChart', label: 'Daily Rate Chart', icon: 'ph-duotone ph-chart-line-up', color: 'indoor', default: true },
+      { id: 'trimmersChart', label: 'Trimmers on Line', icon: 'ph-duotone ph-users', color: 'greenhouse', default: true },
+      { id: 'productivity', label: 'Productivity Sparkline', icon: 'ph-duotone ph-lightning', color: 'green', default: true },
+      { id: 'strains', label: 'Strain Breakdown', icon: 'ph-duotone ph-leaf', color: 'greenhouse', default: true },
+      { id: 'performance', label: 'Performance Table', icon: 'ph-duotone ph-list-checks', color: 'indoor', default: true },
+      { id: 'cost', label: 'Cost Analysis', icon: 'ph-duotone ph-currency-dollar', color: 'gold', default: true },
+      { id: 'period', label: 'Period Summary', icon: 'ph-duotone ph-calendar', color: 'sungrown', default: true }
+    ];
+
+    var appUrls = {
+      kanban: 'https://rogueff.github.io/rogue-origin-apps/kanban.html',
+      scoreboard: 'https://rogueff.github.io/rogue-origin-apps/scoreboard.html',
+      barcode: 'https://rogueff.github.io/rogue-origin-apps/barcode.html',
+      sop: 'https://rogueff.github.io/rogue-origin-apps/sop-manager.html'
+    };
+
+    var brandColors = { green: '#668971', greenLight: 'rgba(102,137,113,0.2)', gold: '#e4aa4f', sungrown: '#bf8e4e', indoor: '#62758d', indoorLight: 'rgba(98,117,141,0.3)' };
+    var hourlyChart, rateChart, dailyChart, dailyRateChart, trimmersChart;
+    var data = null, compareData = null;
+    var currentRange = 'today', customStartDate = null, customEndDate = null;
+    var compareMode = null;
+    var editMode = false, kpiSortable, widgetSortable;
+    var currentView = 'dashboard';
+    var sidebarCollapsed = false;
+    var darkMode = false;
+    var dailyTarget = 200; // Daily production target in lbs
+    
+    // API Configuration for GitHub Pages
+    var API_URL = 'https://script.google.com/macros/s/AKfycbyjW_MjwakdqItdUhtIZbipPDA04NUfmZjZ34XH-sw0BHMmlPrfB75S1_mZDp6tzppy/exec';
+    
+    // Detect environment: Apps Script or GitHub Pages
+    var isAppsScript = typeof google !== 'undefined' && google.script && google.script.run;
+    
+    Chart.defaults.font.family = 'Inter, system-ui, sans-serif';
+
+    document.addEventListener('DOMContentLoaded', function() {
+      loadSettings();
+      applyDarkMode();
+      initTargetInput();
+      renderKPICards();
+      renderKPIToggles();
+      renderWidgetToggles();
+      initCharts();
+      initSortable();
+      updateClock();
+      setInterval(updateClock, 1000);
+      updateWelcome();
+      
+      var today = new Date();
+      document.getElementById('endDate').value = formatDateInput(today);
+      document.getElementById('startDate').value = formatDateInput(today);
+      
+      document.querySelectorAll('.date-chip').forEach(function(c) {
+        c.addEventListener('click', function() { setDateRange(this.dataset.range); });
+      });
+      
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('.date-picker-wrapper')) document.getElementById('datePickerDropdown').classList.remove('open');
+        if (!e.target.closest('.compare-selector')) document.getElementById('compareDropdown').classList.remove('open');
+      });
+      
+      loadData();
+      setInterval(function() { if (currentRange === 'today' && !compareMode && currentView === 'dashboard') loadData(); }, 30000);
+    });
+    
+    function initTargetInput() {
+      var input = document.getElementById('targetInput');
+      if (!input) return;
+      input.value = dailyTarget;
+      input.addEventListener('change', function() {
+        dailyTarget = parseInt(this.value) || 200;
+        saveSettings();
+        if (data) renderCharts();
+      });
+    }
+
+    // Sidebar toggle
+    function toggleSidebar() {
+      sidebarCollapsed = !sidebarCollapsed;
+      document.getElementById('sidebar').classList.toggle('collapsed', sidebarCollapsed);
+      document.body.classList.toggle('sidebar-collapsed', sidebarCollapsed);
+      saveSettings();
+    }
+
+    function toggleMobileSidebar() {
+      document.getElementById('sidebar').classList.toggle('mobile-open');
+    }
+    
+    function toggleDarkMode() {
+      darkMode = !darkMode;
+      document.body.classList.toggle('dark-mode', darkMode);
+      updateDarkModeUI();
+      saveSettings();
+      // Re-render charts with new colors
+      if (data) renderCharts();
+      if (data) renderTrimmersChart();
+    }
+    
+    function updateDarkModeUI() {
+      var icon = document.getElementById('darkModeIcon');
+      var label = document.getElementById('darkModeLabel');
+      if (darkMode) {
+        icon.className = 'ph-duotone ph-sun';
+        label.textContent = 'Light';
+      } else {
+        icon.className = 'ph-duotone ph-moon';
+        label.textContent = 'Dark';
+      }
+    }
+
+    // View switching
+    function switchView(view) {
+      currentView = view;
+      
+      // Update nav items
+      document.querySelectorAll('.nav-item[data-view]').forEach(function(item) {
+        item.classList.toggle('active', item.dataset.view === view);
+      });
+      
+      // Show/hide views
+      document.getElementById('dashboardView').classList.toggle('active', view === 'dashboard');
+      document.getElementById('kanbanView').classList.toggle('active', view === 'kanban');
+      document.getElementById('scoreboardView').classList.toggle('active', view === 'scoreboard');
+      document.getElementById('barcodeView').classList.toggle('active', view === 'barcode');
+      document.getElementById('sopView').classList.toggle('active', view === 'sop');
+      
+      // Show/hide dashboard controls
+      document.getElementById('dashboardControls').style.display = view === 'dashboard' ? 'flex' : 'none';
+      
+      // Update page title
+      var titles = { dashboard: 'Operations Dashboard', kanban: 'Supply Kanban', scoreboard: 'Scoreboard / Bag Timer', barcode: 'Barcode Printer', sop: 'SOP Manager' };
+      // pageTitle removed - using header logo instead
+      document.title = 'Rogue Origin - ' + (titles[view] || 'Operations Hub');
+      
+      // Lazy load iframes
+      if (view !== 'dashboard') {
+        var frameId = view + 'Frame';
+        var frame = document.getElementById(frameId);
+        if (frame && !frame.src && frame.dataset.src) {
+          frame.src = frame.dataset.src;
+        }
+      }
+      
+      // Close mobile sidebar
+      document.getElementById('sidebar').classList.remove('mobile-open');
+    }
+
+    function openAppNewTab(app) {
+      window.open(appUrls[app], '_blank');
+    }
+
+    // Settings
+    function loadSettings() {
+      try {
+        var s = JSON.parse(localStorage.getItem('roHubSettingsV2') || '{}');
+        kpiDefinitions.forEach(function(k) {
+          k.visible = s.kpiVisibility && s.kpiVisibility[k.id] !== undefined ? s.kpiVisibility[k.id] : k.default;
+        });
+        if (s.kpiOrder) {
+          kpiDefinitions.sort(function(a,b) {
+            var ai = s.kpiOrder.indexOf(a.id), bi = s.kpiOrder.indexOf(b.id);
+            return (ai===-1?999:ai)-(bi===-1?999:bi);
+          });
+        }
+        widgetDefinitions.forEach(function(w) {
+          w.visible = s.widgetVisibility && s.widgetVisibility[w.id] !== undefined ? s.widgetVisibility[w.id] : w.default;
+        });
+        if (s.sidebarCollapsed) {
+          sidebarCollapsed = true;
+          document.getElementById('sidebar').classList.add('collapsed');
+          document.body.classList.add('sidebar-collapsed');
+        }
+        if (s.darkMode !== undefined) {
+          darkMode = s.darkMode;
+        }
+        if (s.dailyTarget !== undefined) {
+          dailyTarget = s.dailyTarget;
+        }
+      } catch(e) {
+        kpiDefinitions.forEach(function(k) { k.visible = k.default; });
+        widgetDefinitions.forEach(function(w) { w.visible = w.default; });
+      }
+      applyWidgetVisibility();
+    }
+    
+    function applyDarkMode() {
+      document.body.classList.toggle('dark-mode', darkMode);
+      updateDarkModeUI();
+    }
+
+    function saveSettings() {
+      var s = { kpiVisibility: {}, kpiOrder: [], widgetVisibility: {}, sidebarCollapsed: sidebarCollapsed, darkMode: darkMode, dailyTarget: dailyTarget };
+      kpiDefinitions.forEach(function(k) {
+        s.kpiVisibility[k.id] = k.visible;
+        s.kpiOrder.push(k.id);
+      });
+      widgetDefinitions.forEach(function(w) {
+        s.widgetVisibility[w.id] = w.visible;
+      });
+      localStorage.setItem('roHubSettingsV2', JSON.stringify(s));
+    }
+
+    function resetLayout() {
+      localStorage.removeItem('roHubSettingsV2');
+      localStorage.removeItem('roHubWidgetOrder');
+      location.reload();
+    }
+
+    function applyWidgetVisibility() {
+      widgetDefinitions.forEach(function(w) {
+        var el = document.getElementById('widget-' + w.id);
+        if (el) el.dataset.hidden = !w.visible;
+      });
+    }
+
+    function renderKPICards() {
+      var c = document.getElementById('kpiRow');
+      c.innerHTML = '';
+      kpiDefinitions.forEach(function(k) {
+        var card = document.createElement('div');
+        card.className = 'kpi-card ' + k.color + ' loading';
+        card.dataset.kpi = k.id;
+        card.dataset.hidden = !k.visible;
+        card.innerHTML = '<div class="kpi-header"><div class="kpi-icon"><i class="' + k.icon + '"></i></div><span class="kpi-delta" id="delta_' + k.id + '"></span></div>' +
+          '<div class="kpi-label">' + k.label + '</div>' +
+          '<div class="kpi-values"><span class="kpi-value" id="kpi_' + k.id + '">—</span><span class="kpi-value-compare" id="kpiCmp_' + k.id + '"></span></div>' +
+          '<div class="kpi-sub" id="kpiSub_' + k.id + '"></div>' +
+          '<div class="skeleton-content"><div class="skeleton skeleton-value"></div><div class="skeleton skeleton-bar"></div></div>';
+        c.appendChild(card);
+      });
+    }
+
+    function renderKPIToggles() {
+      var c = document.getElementById('kpiToggles');
+      c.innerHTML = '';
+      kpiDefinitions.forEach(function(k) {
+        var t = document.createElement('div');
+        t.className = 'widget-toggle';
+        t.innerHTML = '<div class="widget-toggle-info"><div class="widget-toggle-icon ' + k.color + '"><i class="' + k.icon + '"></i></div><span class="widget-toggle-name">' + k.label + '</span></div><label class="toggle-switch"><input type="checkbox" ' + (k.visible ? 'checked' : '') + ' onchange="toggleKPI(\'' + k.id + '\', this.checked)"><span class="toggle-slider"></span></label>';
+        c.appendChild(t);
+      });
+    }
+
+    function renderWidgetToggles() {
+      var c = document.getElementById('widgetToggles');
+      c.innerHTML = '';
+      widgetDefinitions.forEach(function(w) {
+        var t = document.createElement('div');
+        t.className = 'widget-toggle';
+        t.innerHTML = '<div class="widget-toggle-info"><div class="widget-toggle-icon ' + w.color + '"><i class="' + w.icon + '"></i></div><span class="widget-toggle-name">' + w.label + '</span></div><label class="toggle-switch"><input type="checkbox" ' + (w.visible ? 'checked' : '') + ' onchange="toggleWidget(\'' + w.id + '\', this.checked)"><span class="toggle-slider"></span></label>';
+        c.appendChild(t);
+      });
+    }
+
+    function toggleKPI(id, v) {
+      var k = kpiDefinitions.find(function(x) { return x.id === id; });
+      if (k) k.visible = v;
+      var card = document.querySelector('.kpi-card[data-kpi="' + id + '"]');
+      if (card) card.dataset.hidden = !v;
+      saveSettings();
+    }
+
+    function toggleWidget(id, v) {
+      var w = widgetDefinitions.find(function(x) { return x.id === id; });
+      if (w) w.visible = v;
+      var el = document.getElementById('widget-' + id);
+      if (el) el.dataset.hidden = !v;
+      saveSettings();
+    }
+
+    function initSortable() {
+      // KPI cards sortable
+      kpiSortable = new Sortable(document.getElementById('kpiRow'), {
+        animation: 150,
+        ghostClass: 'sortable-ghost',
+        chosenClass: 'sortable-chosen',
+        dragClass: 'sortable-drag',
+        disabled: true,
+        filter: '[data-hidden="true"]',
+        onEnd: function() {
+          var order = [];
+          document.querySelectorAll('#kpiRow .kpi-card').forEach(function(c) { order.push(c.dataset.kpi); });
+          kpiDefinitions.sort(function(a,b) { return order.indexOf(a.id)-order.indexOf(b.id); });
+          saveSettings();
+        }
+      });
+      
+      // All widgets sortable
+      widgetSortable = new Sortable(document.getElementById('widgetsContainer'), {
+        animation: 150,
+        ghostClass: 'sortable-ghost',
+        chosenClass: 'sortable-chosen',
+        dragClass: 'sortable-drag',
+        disabled: true,
+        filter: '[data-hidden="true"]',
+        onEnd: function() {
+          var order = [];
+          document.querySelectorAll('#widgetsContainer .draggable-widget').forEach(function(w) { 
+            order.push(w.dataset.widgetId); 
+          });
+          localStorage.setItem('roHubWidgetOrder', JSON.stringify(order));
+        }
+      });
+      
+      // Restore widget order
+      restoreWidgetOrder();
+    }
+    
+    function restoreWidgetOrder() {
+      try {
+        var order = JSON.parse(localStorage.getItem('roHubWidgetOrder') || '[]');
+        if (order.length === 0) return;
+        
+        var container = document.getElementById('widgetsContainer');
+        order.forEach(function(id) {
+          var widget = document.querySelector('[data-widget-id="' + id + '"]');
+          if (widget) container.appendChild(widget);
+        });
+      } catch(e) {}
+    }
+
+    function toggleEditMode() {
+      editMode = !editMode;
+      document.getElementById('editModeBtn').classList.toggle('active', editMode);
+      document.getElementById('kpiRow').classList.toggle('edit-mode', editMode);
+      document.getElementById('widgetsContainer').classList.toggle('edit-mode', editMode);
+      kpiSortable.option('disabled', !editMode);
+      widgetSortable.option('disabled', !editMode);
+    }
+
+    // Date & Compare functions
+    function toggleDatePicker() { document.getElementById('datePickerDropdown').classList.toggle('open'); }
+    function toggleCompareDropdown() { document.getElementById('compareDropdown').classList.toggle('open'); }
+
+    function setDateRange(range) {
+      currentRange = range;
+      document.querySelectorAll('.date-chip').forEach(function(c) { c.classList.toggle('active', c.dataset.range === range); });
+      var today = new Date(), start, end, label;
+      if (range === 'today') { start = end = formatDateInput(today); label = 'Today'; }
+      else if (range === 'yesterday') { var y = new Date(today); y.setDate(y.getDate()-1); start = end = formatDateInput(y); label = 'Yesterday'; }
+      else if (range === 'week') { var w = new Date(today); w.setDate(w.getDate()-6); start = formatDateInput(w); end = formatDateInput(today); label = 'Last 7 Days'; }
+      else if (range === 'month') { var m = new Date(today); m.setDate(m.getDate()-29); start = formatDateInput(m); end = formatDateInput(today); label = 'Last 30 Days'; }
+      document.getElementById('startDate').value = start;
+      document.getElementById('endDate').value = end;
+      document.getElementById('datePickerLabel').textContent = label;
+      customStartDate = start; customEndDate = end;
+      document.getElementById('datePickerDropdown').classList.remove('open');
+      data = null; // Reset data to show skeletons for new date range
+      if (compareMode) loadCompareData(); else loadData();
+    }
+
+    function applyCustomRange() {
+      currentRange = 'custom';
+      document.querySelectorAll('.date-chip').forEach(function(c) { c.classList.remove('active'); });
+      customStartDate = document.getElementById('startDate').value;
+      customEndDate = document.getElementById('endDate').value;
+      if (!customStartDate || !customEndDate) { alert('Select both dates'); return; }
+      document.getElementById('datePickerLabel').textContent = formatDateShort(customStartDate) + ' - ' + formatDateShort(customEndDate);
+      document.getElementById('datePickerDropdown').classList.remove('open');
+      data = null; // Reset data to show skeletons for new date range
+      if (compareMode) loadCompareData(); else loadData();
+    }
+
+    function setCompare(mode) {
+      compareMode = mode;
+      document.getElementById('compareDropdown').classList.remove('open');
+      document.getElementById('compareBtn').classList.add('active');
+      document.body.classList.add('compare-mode');
+      var today = new Date(), currentLabel, prevLabel;
+      if (mode === 'yesterday') { currentLabel = 'Today'; prevLabel = 'Yesterday'; customStartDate = customEndDate = formatDateInput(today); }
+      else if (mode === 'lastWeek') { var ws = new Date(today); ws.setDate(today.getDate()-today.getDay()); currentLabel = 'This Week'; prevLabel = 'Last Week'; customStartDate = formatDateInput(ws); customEndDate = formatDateInput(today); }
+      else if (mode === 'lastMonth') { var ms = new Date(today.getFullYear(), today.getMonth(), 1); currentLabel = 'This Month'; prevLabel = 'Last Month'; customStartDate = formatDateInput(ms); customEndDate = formatDateInput(today); }
+      document.getElementById('compareCurrent').textContent = currentLabel;
+      document.getElementById('comparePrevious').textContent = prevLabel;
+      document.getElementById('compareBanner').classList.add('active');
+      document.getElementById('datePickerLabel').textContent = currentLabel + ' vs ' + prevLabel;
+      data = null; // Reset data to show skeletons for compare mode
+      loadCompareData();
+    }
+
+    function clearCompare() {
+      compareMode = null; compareData = null;
+      document.getElementById('compareBtn').classList.remove('active');
+      document.body.classList.remove('compare-mode');
+      document.getElementById('compareBanner').classList.remove('active');
+      document.getElementById('datePickerLabel').textContent = currentRange === 'today' ? 'Today' : formatDateShort(customStartDate) + ' - ' + formatDateShort(customEndDate);
+      loadData(); renderCharts();
+    }
+
+    function loadCompareData() {
+      // Only show skeletons on initial load (no existing data)
+      if (!data) {
+        showSkeletons(true);
+      }
+      var today = new Date();
+      var cs, ce, ps, pe;
+      if (compareMode === 'yesterday') {
+        cs = ce = formatDateInput(today);
+        var y = new Date(today); y.setDate(y.getDate()-1);
+        ps = pe = formatDateInput(y);
+      } else if (compareMode === 'lastWeek') {
+        var ws = new Date(today); ws.setDate(today.getDate()-today.getDay());
+        cs = formatDateInput(ws); ce = formatDateInput(today);
+        var pws = new Date(ws); pws.setDate(pws.getDate()-7);
+        var pwe = new Date(pws); pwe.setDate(pwe.getDate()+6);
+        ps = formatDateInput(pws); pe = formatDateInput(pwe);
+      } else if (compareMode === 'lastMonth') {
+        var ms = new Date(today.getFullYear(), today.getMonth(), 1);
+        cs = formatDateInput(ms); ce = formatDateInput(today);
+        var pms = new Date(today.getFullYear(), today.getMonth()-1, 1);
+        var pme = new Date(today.getFullYear(), today.getMonth(), 0);
+        ps = formatDateInput(pms); pe = formatDateInput(pme);
+      }
+      
+      if (isAppsScript) {
+        // Apps Script mode
+        google.script.run.withSuccessHandler(function(r) {
+        google.script.run.withSuccessHandler(function(pr) {
+          document.getElementById('loadingOverlay').classList.add('hidden');
+          showSkeletons(false);
+          
+          // Only re-render if data actually changed
+          var newDataStr = JSON.stringify(r) + JSON.stringify(pr);
+          var oldDataStr = (data ? JSON.stringify(data) : '') + (compareData ? JSON.stringify(compareData) : '');
+          
+          if (newDataStr !== oldDataStr) {
+            data = r;
+            compareData = pr;
+            renderAll();
+          }
+        }).withFailureHandler(onError).getProductionDashboardData(ps, pe);
+      }).withFailureHandler(onError).getProductionDashboardData(cs, ce);
+      } else {
+        // GitHub Pages mode - use fetch helper
+        loadCompareDataFetch(cs, ce, ps, pe);
+      }
+    }
+    
+    // Helper for GitHub Pages compare mode
+    function loadCompareDataFetch(cs, ce, ps, pe) {
+      Promise.all([
+        fetch(API_URL + '?action=dashboard&start=' + encodeURIComponent(cs) + '&end=' + encodeURIComponent(ce)).then(function(r) { return r.json(); }),
+        fetch(API_URL + '?action=dashboard&start=' + encodeURIComponent(ps) + '&end=' + encodeURIComponent(pe)).then(function(r) { return r.json(); })
+      ]).then(function(results) {
+        document.getElementById('loadingOverlay').classList.add('hidden');
+        showSkeletons(false);
+        
+        var currentResult = results[0].success ? results[0].data : null;
+        var prevResult = results[1].success ? results[1].data : null;
+        
+        var newDataStr = JSON.stringify(currentResult) + JSON.stringify(prevResult);
+        var oldDataStr = (data ? JSON.stringify(data) : '') + (compareData ? JSON.stringify(compareData) : '');
+        
+        if (newDataStr !== oldDataStr) {
+          data = currentResult;
+          compareData = prevResult;
+          renderAll();
+        }
+      }).catch(function(error) { onError(error); });
+    }
+
+    // Utility functions
+    function formatDateInput(d) { 
+      var year = d.getFullYear();
+      var month = String(d.getMonth() + 1).padStart(2, '0');
+      var day = String(d.getDate()).padStart(2, '0');
+      return year + '-' + month + '-' + day;
+    }
+    function formatDateShort(s) { 
+      var parts = s.split('-');
+      var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); 
+    }
+    function updateClock() {
+      var n = new Date();
+      document.getElementById('clock').textContent = (n.getHours()%12||12) + ':' + n.getMinutes().toString().padStart(2,'0') + ' ' + (n.getHours()>=12?'PM':'AM');
+      document.getElementById('dateDisplay').textContent = n.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    }
+    
+    // Welcome greeting based on time of day
+    function updateWelcome() {
+      var h = new Date().getHours();
+      var greeting = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+      document.getElementById('welcomeGreeting').textContent = greeting;
+      var opts = { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' };
+      document.getElementById('welcomeDate').textContent = new Date().toLocaleDateString('en-US', opts);
+    }
+    
+    // Animate number values
+    function animateValue(id, start, end, duration) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.classList.add('animate-value');
+      var startTime = null;
+      var isDecimal = String(end).includes('.') || end % 1 !== 0;
+      function step(timestamp) {
+        if (!startTime) startTime = timestamp;
+        var progress = Math.min((timestamp - startTime) / duration, 1);
+        var current = start + (end - start) * progress;
+        el.textContent = isDecimal ? current.toFixed(2) : Math.floor(current);
+        if (progress < 1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    }
+    
+    function openSettings() { document.getElementById('settingsOverlay').classList.add('open'); document.getElementById('settingsPanel').classList.add('open'); }
+    function closeSettings() { document.getElementById('settingsOverlay').classList.remove('open'); document.getElementById('settingsPanel').classList.remove('open'); }
+
+    // Charts
+    function initCharts() {
+      // Register datalabels plugin
+      Chart.register(ChartDataLabels);
+      
+      // Get chart colors based on dark mode
+      function getChartColors() {
+        return {
+          grid: darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)',
+          text: darkMode ? '#a8b5a9' : '#5a6b5f',
+          labelBg: darkMode ? '#252b22' : '#fff'
+        };
+      }
+      
+      // Common datalabels config for bar charts
+      var barDataLabels = {
+        display: function(ctx) { return ctx.dataset.data[ctx.dataIndex] > 0; },
+        color: '#fff',
+        font: { weight: 'bold', size: 11 },
+        anchor: 'center',
+        align: 'center',
+        formatter: function(value) { return value > 0 ? value.toFixed(1) : ''; }
+      };
+      
+      // Common legend config
+      var legendConfig = { display: true, position: 'top', align: 'end', labels: { boxWidth: 12, boxHeight: 12, padding: 12, font: { size: 12, weight: '500' }, usePointStyle: true, pointStyle: 'circle' } };
+      
+      // Target line dataset (for daily production)
+      var targetLineDataset = {
+        label: 'Target',
+        data: [],
+        borderColor: '#c45c4a',
+        borderDash: [8, 4],
+        borderWidth: 2,
+        type: 'line',
+        fill: false,
+        pointRadius: 0,
+        order: 0,
+        datalabels: { display: false }
+      };
+      
+      hourlyChart = new Chart(document.getElementById('hourlyChart').getContext('2d'), { 
+        type: 'bar', 
+        data: { labels: [], datasets: [
+          { label: 'Tops', data: [], backgroundColor: brandColors.green, borderRadius: 3 }, 
+          { label: 'Smalls', data: [], backgroundColor: brandColors.sungrown, borderRadius: 3 }
+        ] }, 
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false, 
+          plugins: { legend: legendConfig, datalabels: barDataLabels }, 
+          scales: { x: { grid: { display: false } }, y: { beginAtZero: true } } 
+        } 
+      });
+      
+      rateChart = new Chart(document.getElementById('rateChart').getContext('2d'), { 
+        type: 'line', 
+        data: { labels: [], datasets: [
+          { label: 'Rate', data: [], borderColor: brandColors.green, backgroundColor: brandColors.greenLight, fill: true, tension: 0.4 }, 
+          { label: 'Prev', data: [], borderColor: brandColors.indoor, borderDash: [5,5], backgroundColor: 'transparent', tension: 0.4, hidden: true }
+        ] }, 
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false, 
+          plugins: { legend: { display: false }, datalabels: { display: false } }, 
+          scales: { y: { beginAtZero: true }, x: { grid: { display: false } } } 
+        } 
+      });
+      
+      dailyChart = new Chart(document.getElementById('dailyChart').getContext('2d'), { 
+        type: 'bar', 
+        data: { labels: [], datasets: [
+          { label: 'Tops', data: [], backgroundColor: brandColors.green, borderRadius: 3 }, 
+          { label: 'Smalls', data: [], backgroundColor: brandColors.sungrown, borderRadius: 3 },
+          { label: 'Target (' + dailyTarget + ' lbs)', data: [], borderColor: '#c45c4a', borderDash: [8, 4], borderWidth: 2, type: 'line', fill: false, pointRadius: 0, order: 0, datalabels: { display: false } }
+        ] }, 
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false, 
+          plugins: { legend: legendConfig, datalabels: barDataLabels }, 
+          scales: { x: { grid: { display: false } }, y: { beginAtZero: true } } 
+        } 
+      });
+      
+      dailyRateChart = new Chart(document.getElementById('dailyRateChart').getContext('2d'), { 
+        type: 'line', 
+        data: { labels: [], datasets: [
+          { label: 'Rate', data: [], borderColor: brandColors.green, backgroundColor: brandColors.greenLight, fill: true, tension: 0.4 }, 
+          { label: '7d MA', data: [], borderColor: brandColors.gold, borderDash: [5,5], fill: false, tension: 0.4 }
+        ] }, 
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false, 
+          plugins: { legend: legendConfig, datalabels: { display: false } }, 
+          scales: { y: { beginAtZero: true }, x: { grid: { display: false } } } 
+        } 
+      });
+      
+      // Trimmers on Line chart
+      trimmersChart = new Chart(document.getElementById('trimmersChart').getContext('2d'), { 
+        type: 'bar', 
+        data: { labels: [], datasets: [
+          { label: 'Trimmers', data: [], backgroundColor: brandColors.green, borderRadius: 3, order: 2 },
+          { label: 'Average', data: [], borderColor: brandColors.gold, borderDash: [6, 4], borderWidth: 2, type: 'line', fill: false, pointRadius: 0, order: 1 }
+        ] }, 
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false, 
+          plugins: { 
+            legend: legendConfig, 
+            datalabels: { 
+              display: function(ctx) { return ctx.datasetIndex === 0 && ctx.dataset.data[ctx.dataIndex] > 0; },
+              color: '#fff',
+              font: { weight: 'bold', size: 11 },
+              anchor: 'center',
+              align: 'center',
+              formatter: function(value) { return value > 0 ? Math.round(value) : ''; }
+            } 
+          }, 
+          scales: { y: { beginAtZero: true, title: { display: true, text: 'Trimmers', font: { size: 10 } } }, x: { grid: { display: false } } } 
+        } 
+      });
+    }
+
+    // Data loading
+    function loadData() {
+      var s = customStartDate || document.getElementById('startDate').value;
+      var e = customEndDate || document.getElementById('endDate').value;
+      // Only show skeletons on initial load (no existing data)
+      if (!data) {
+        showSkeletons(true);
+      }
+      
+      if (isAppsScript) {
+        // Apps Script mode
+        google.script.run.withSuccessHandler(onDataLoaded).withFailureHandler(onError).getProductionDashboardData(s, e);
+      } else {
+        // GitHub Pages mode - use API
+        fetch(API_URL + '?action=dashboard&start=' + encodeURIComponent(s) + '&end=' + encodeURIComponent(e))
+          .then(function(response) { return response.json(); })
+          .then(function(result) {
+            if (result.success && result.data) {
+              onDataLoaded(result.data);
+            } else {
+              onError(result.error || 'Unknown error');
+            }
+          })
+          .catch(function(error) { onError(error); });
+      }
+    }
+
+    function refreshData() {
+      // Just trigger load - no visual feedback until data changes
+      if (compareMode) loadCompareData(); else loadData();
+    }
+
+    function onDataLoaded(r) {
+      document.getElementById('loadingOverlay').classList.add('hidden');
+      showSkeletons(false);
+      
+      // Only re-render if data actually changed
+      var newDataStr = JSON.stringify(r);
+      var oldDataStr = data ? JSON.stringify(data) : '';
+      
+      if (newDataStr !== oldDataStr) {
+        data = r;
+        renderAll();
+      }
+    }
+
+    function onError(e) {
+      console.error(e);
+      document.getElementById('loadingOverlay').classList.add('hidden');
+      showSkeletons(false);
+      showToast('Error loading data: ' + (e.message || e), 'error');
+    }
+
+    // Toast notification system
+    function showToast(message, type, duration) {
+      type = type || 'info';
+      duration = duration || 4000;
+      var container = document.getElementById('toastContainer');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'toastContainer';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+      }
+      var toast = document.createElement('div');
+      toast.className = 'toast ' + type;
+      toast.textContent = message;
+      container.appendChild(toast);
+      setTimeout(function() {
+        toast.classList.add('hiding');
+        setTimeout(function() { toast.remove(); }, 300);
+      }, duration);
+    }
+    
+    function showSkeletons(show) {
+      // KPI cards
+      document.querySelectorAll('.kpi-card').forEach(function(card) {
+        if (show) card.classList.add('loading');
+        else card.classList.remove('loading');
+      });
+      // Chart containers
+      document.querySelectorAll('.chart-container').forEach(function(c) {
+        if (show) {
+          c.style.opacity = '0.4';
+        } else {
+          c.style.opacity = '1';
+        }
+      });
+      // Current production stats
+      document.querySelectorAll('.current-stat-value').forEach(function(v) {
+        if (show) {
+          v.dataset.originalText = v.textContent;
+          v.innerHTML = '<span class="skeleton" style="display:inline-block;width:50px;height:24px;border-radius:4px"></span>';
+        } else if (v.dataset.originalText) {
+          v.textContent = v.dataset.originalText;
+        }
+      });
+      // Integration stat values
+      document.querySelectorAll('.integration-stat-value').forEach(function(v) {
+        if (show) {
+          v.dataset.originalText = v.textContent;
+          v.innerHTML = '<span class="skeleton" style="display:inline-block;width:30px;height:14px;border-radius:3px"></span>';
+        } else if (v.dataset.originalText) {
+          v.textContent = v.dataset.originalText;
+        }
+      });
+      // Strain list
+      var strainList = document.getElementById('strainList');
+      if (strainList && show) {
+        strainList.innerHTML = '<div class="skeleton" style="height:24px;margin-bottom:6px"></div><div class="skeleton" style="height:24px;margin-bottom:6px"></div><div class="skeleton" style="height:24px;margin-bottom:6px"></div><div class="skeleton" style="height:24px"></div>';
+      }
+      // Tables
+      ['perfTable', 'costTable', 'periodTable'].forEach(function(id) {
+        var tbl = document.getElementById(id);
+        if (tbl && show) {
+          tbl.innerHTML = '<div class="skeleton" style="height:20px;margin-bottom:8px"></div><div class="skeleton" style="height:20px;margin-bottom:8px"></div><div class="skeleton" style="height:20px"></div>';
+        }
+      });
+    }
+
+    function renderAll() {
+      renderDateDisplay();
+      renderKPIs();
+      renderCurrentProduction();
+      renderCharts();
+      renderTrimmersChart();
+      renderSparkline();
+      renderStrainList();
+      renderTables();
+      renderIntegrationWidgets();
+    }
+
+    function renderDateDisplay() {
+      if (!data || !data.dateRange) return;
+      var d = document.getElementById('dateRangeDisplay'), s = data.dateRange.start, e = data.dateRange.end;
+      if (compareMode) {
+        d.innerHTML = 'Comparing <strong>' + document.getElementById('compareCurrent').textContent + '</strong> vs <strong>' + document.getElementById('comparePrevious').textContent + '</strong>';
+      } else if (s === e) {
+        d.innerHTML = 'Showing data for <strong>' + formatDateShort(s) + '</strong>';
+      } else {
+        d.innerHTML = 'Showing <strong>' + formatDateShort(s) + '</strong> to <strong>' + formatDateShort(e) + '</strong>';
+      }
+    }
+
+    function renderKPIs() {
+      if (!data || !data.today) return;
+      var t = data.today, p = compareData && compareData.today ? compareData.today : null;
+      setKPI('totalTops', t.totalTops, p ? p.totalTops : null, 'lbs');
+      setKPI('totalSmalls', t.totalSmalls, p ? p.totalSmalls : null, 'lbs');
+      setKPI('avgRate', t.avgRate, p ? p.avgRate : null, 'rate');
+      setKPI('crew', (t.trimmers||0)+(t.buckers||0), p ? (p.trimmers||0)+(p.buckers||0) : null, 'num');
+      document.getElementById('kpiSub_crew').textContent = t.trimmers + ' Trim + ' + t.buckers + ' Buck';
+      setKPI('operatorHours', t.totalOperatorHours, p ? p.totalOperatorHours : null, 'hrs');
+      setKPI('costPerLb', t.costPerLb, p ? p.costPerLb : null, 'dollar', true);
+      setKPI('totalLbs', t.totalLbs, p ? p.totalLbs : null, 'lbs');
+      setKPI('maxRate', t.maxRate, p ? p.maxRate : null, 'rate');
+      setKPI('trimmerHours', t.totalTrimmerHours, p ? p.totalTrimmerHours : null, 'hrs');
+      setKPI('laborCost', t.totalLaborCost, p ? p.totalLaborCost : null, 'dollar', true);
+    }
+
+    function setKPI(id, val, prevVal, fmt, invertDelta) {
+      var el = document.getElementById('kpi_'+id), cmpEl = document.getElementById('kpiCmp_'+id), deltaEl = document.getElementById('delta_'+id);
+      if (!el) return;
+      el.innerHTML = formatValue(val, fmt);
+      if (prevVal !== null && compareMode) {
+        cmpEl.textContent = 'vs ' + formatValuePlain(prevVal, fmt);
+        var pct = prevVal !== 0 ? ((val-prevVal)/prevVal*100) : 0;
+        var isUp = invertDelta ? pct < 0 : pct > 0;
+        if (Math.abs(pct) < 1) { deltaEl.className = 'kpi-delta neutral'; deltaEl.textContent = '~0%'; }
+        else if (isUp) { deltaEl.className = 'kpi-delta up'; deltaEl.textContent = '↑'+Math.abs(pct).toFixed(0)+'%'; }
+        else { deltaEl.className = 'kpi-delta down'; deltaEl.textContent = '↓'+Math.abs(pct).toFixed(0)+'%'; }
+      }
+    }
+
+    function formatValue(v, fmt) {
+      if (fmt==='lbs') return (v||0).toFixed(1)+' <span class="kpi-unit">lbs</span>';
+      if (fmt==='rate') return (v||0).toFixed(2);
+      if (fmt==='hrs') return (v||0).toFixed(1)+' <span class="kpi-unit">hrs</span>';
+      if (fmt==='dollar') return '$'+(v||0).toFixed(2);
+      if (fmt==='num') return (v||0).toString();
+      return v;
+    }
+
+    function formatValuePlain(v, fmt) {
+      if (fmt==='lbs') return (v||0).toFixed(1);
+      if (fmt==='rate') return (v||0).toFixed(2);
+      if (fmt==='hrs') return (v||0).toFixed(1);
+      if (fmt==='dollar') return '$'+(v||0).toFixed(2);
+      if (fmt==='num') return (v||0).toString();
+      return v;
+    }
+
+    function renderCurrentProduction() {
+      // Prioritize lastCompleted (previous hour) since data is entered at end of each hour
+      var d = data ? data.lastCompleted : null;
+      if (!d) {
+        document.getElementById('currentStrain').textContent = 'No Data';
+        document.getElementById('currentTime').textContent = '—';
+        document.getElementById('statusBadge').className = 'status-badge idle';
+        document.getElementById('statusBadge').textContent = 'No Data';
+        document.getElementById('currentTops').textContent = '0';
+        document.getElementById('currentSmalls').textContent = '0';
+        document.getElementById('currentTrimmers').textContent = '0';
+        document.getElementById('currentBuckers').textContent = '0';
+        document.getElementById('currentRate').textContent = '0.00';
+        document.getElementById('currentTotal').textContent = '0';
+        return;
+      }
+      document.getElementById('currentStrain').textContent = d.strain || 'Unknown';
+      document.getElementById('currentTime').textContent = d.timeSlot || '';
+      document.getElementById('currentTops').textContent = (d.tops||0).toFixed(1);
+      document.getElementById('currentSmalls').textContent = (d.smalls||0).toFixed(1);
+      document.getElementById('currentTrimmers').textContent = d.trimmers||0;
+      document.getElementById('currentBuckers').textContent = d.buckers||0;
+      document.getElementById('currentRate').textContent = (d.rate||0).toFixed(2);
+      document.getElementById('currentTotal').textContent = ((d.tops||0) + (d.smalls||0)).toFixed(1);
+      document.getElementById('statusBadge').className = 'status-badge completed';
+      document.getElementById('statusBadge').textContent = 'Last Hour';
+    }
+
+    function renderCharts() {
+      if (!data) return;
+      
+      try {
+        // Update chart colors for dark mode
+        var chartTextColor = darkMode ? '#a8b5a9' : '#5a6b5f';
+        var chartGridColor = darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)';
+        
+        [hourlyChart, rateChart, dailyChart, dailyRateChart, trimmersChart].forEach(function(chart) {
+          if (chart && chart.options && chart.options.scales) {
+            if (chart.options.scales.x) {
+              chart.options.scales.x.ticks = chart.options.scales.x.ticks || {};
+              chart.options.scales.x.ticks.color = chartTextColor;
+            }
+            if (chart.options.scales.y) {
+              chart.options.scales.y.ticks = chart.options.scales.y.ticks || {};
+              chart.options.scales.y.ticks.color = chartTextColor;
+              chart.options.scales.y.grid = chart.options.scales.y.grid || {};
+              chart.options.scales.y.grid.color = chartGridColor;
+            }
+          }
+          if (chart && chart.options && chart.options.plugins && chart.options.plugins.legend) {
+            chart.options.plugins.legend.labels = chart.options.plugins.legend.labels || {};
+            chart.options.plugins.legend.labels.color = chartTextColor;
+          }
+        });
+      } catch(e) { console.error('Chart color update error:', e); }
+      
+      try {
+        if (data.hourly && data.hourly.length > 0 && hourlyChart) {
+          hourlyChart.data.labels = data.hourly.map(function(h){return h.label;});
+          hourlyChart.data.datasets[0].data = data.hourly.map(function(h){return h.tops;});
+          hourlyChart.data.datasets[1].data = data.hourly.map(function(h){return h.smalls;});
+          hourlyChart.update();
+        }
+      } catch(e) { console.error('Hourly chart error:', e); }
+      
+      try {
+        if (data.hourly && data.hourly.length > 0) {
+          rateChart.data.labels = data.hourly.map(function(h){return h.label;});
+          rateChart.data.datasets[0].data = data.hourly.map(function(h){return h.rate;});
+          if (compareMode && compareData && compareData.hourly) {
+            rateChart.data.datasets[1].data = compareData.hourly.map(function(h){return h.rate;});
+            rateChart.data.datasets[1].hidden = false;
+          } else {
+            rateChart.data.datasets[1].hidden = true;
+          }
+          rateChart.update('none');
+        }
+      } catch(e) { console.error('Rate chart error:', e); }
+      
+      try {
+        if (data.daily && data.daily.length > 0) {
+          dailyChart.data.labels = data.daily.map(function(d){return d.label;});
+          dailyChart.data.datasets[0].data = data.daily.map(function(d){return d.totalTops;});
+          dailyChart.data.datasets[1].data = data.daily.map(function(d){return d.totalSmalls;});
+          // Daily target line
+          if (dailyChart.data.datasets[2]) {
+            dailyChart.data.datasets[2].data = data.daily.map(function(){return dailyTarget;});
+            dailyChart.data.datasets[2].label = 'Target (' + dailyTarget + ' lbs)';
+          }
+          dailyChart.update('none');
+        }
+      } catch(e) { console.error('Daily chart error:', e); }
+      
+      try {
+        renderEfficiencyChart();
+      } catch(e) { console.error('Efficiency chart error:', e); }
+    }
+    
+    // Adaptive Efficiency Chart - switches between hourly/daily based on date range
+    function renderEfficiencyChart() {
+      if (!data) return;
+      
+      var numDays = data.daily ? data.daily.length : 0;
+      var titleEl = document.getElementById('efficiencyChartTitle');
+      var subtitleEl = document.getElementById('efficiencyChartSubtitle');
+      
+      // Determine chart mode based on date range
+      if (numDays <= 1) {
+        // SINGLE DAY: Show hourly efficiency (lbs/trimmer per hour)
+        titleEl.textContent = 'Hourly Efficiency';
+        subtitleEl.textContent = 'lbs/trimmer by hour';
+        
+        if (!data.hourly || data.hourly.length === 0) {
+          dailyRateChart.data.labels = [];
+          dailyRateChart.data.datasets[0].data = [];
+          dailyRateChart.data.datasets[1].data = [];
+          dailyRateChart.update('none');
+          return;
+        }
+        
+        var labels = data.hourly.map(function(h) { return h.label; });
+        var rates = data.hourly.map(function(h) { return h.rate || 0; });
+        
+        // Calculate average for reference line
+        var validRates = rates.filter(function(r) { return r > 0; });
+        var avgRate = validRates.length > 0 ? validRates.reduce(function(a, b) { return a + b; }, 0) / validRates.length : 0;
+        var avgLine = rates.map(function() { return avgRate; });
+        
+        dailyRateChart.data.labels = labels;
+        dailyRateChart.data.datasets[0].data = rates;
+        dailyRateChart.data.datasets[0].label = 'Rate';
+        dailyRateChart.data.datasets[1].data = avgLine;
+        dailyRateChart.data.datasets[1].label = 'Avg (' + avgRate.toFixed(2) + ')';
+        dailyRateChart.update('none');
+        
+      } else if (numDays < 7) {
+        // 2-6 DAYS: Show daily efficiency without MA (not enough data for meaningful MA)
+        titleEl.textContent = 'Daily Efficiency';
+        subtitleEl.textContent = 'lbs/trimmer by day';
+        
+        var rates = data.daily.map(function(d) { return d.avgRate; });
+        
+        // Calculate average for reference line
+        var validRates = rates.filter(function(r) { return r > 0; });
+        var avgRate = validRates.length > 0 ? validRates.reduce(function(a, b) { return a + b; }, 0) / validRates.length : 0;
+        var avgLine = rates.map(function() { return avgRate; });
+        
+        dailyRateChart.data.labels = data.daily.map(function(d) { return d.label; });
+        dailyRateChart.data.datasets[0].data = rates;
+        dailyRateChart.data.datasets[0].label = 'Rate';
+        dailyRateChart.data.datasets[1].data = avgLine;
+        dailyRateChart.data.datasets[1].label = 'Avg (' + avgRate.toFixed(2) + ')';
+        dailyRateChart.update('none');
+        
+      } else {
+        // 7+ DAYS: Show daily efficiency with 7-day moving average
+        titleEl.textContent = 'Daily Efficiency';
+        subtitleEl.textContent = 'With 7-day MA';
+        
+        var rates = data.daily.map(function(d) { return d.avgRate; });
+        
+        dailyRateChart.data.labels = data.daily.map(function(d) { return d.label; });
+        dailyRateChart.data.datasets[0].data = rates;
+        dailyRateChart.data.datasets[0].label = 'Rate';
+        dailyRateChart.data.datasets[1].data = calcMA(rates, 7);
+        dailyRateChart.data.datasets[1].label = '7d MA';
+        dailyRateChart.update('none');
+      }
+    }
+
+    function calcMA(arr, p) {
+      var r = [];
+      for (var i=0; i<arr.length; i++) {
+        if (i<p-1) r.push(null);
+        else { var s=0; for (var j=i-p+1; j<=i; j++) s+=arr[j]; r.push(s/p); }
+      }
+      return r;
+    }
+
+    function renderTrimmersChart() {
+      if (!data) return;
+      
+      var labels = [];
+      var trimmerData = [];
+      var isMultiDay = data.daily && data.daily.length > 1;
+      
+      if (isMultiDay && data.daily && data.daily.length > 0) {
+        // Multi-day view: show average trimmers per day
+        document.getElementById('trimmersChartSubtitle').textContent = 'By Day (Avg)';
+        labels = data.daily.map(function(d) { return d.label; });
+        trimmerData = data.daily.map(function(d) { 
+          // Use avgTrimmers if available, otherwise calculate
+          return d.avgTrimmers || (d.hoursWorked > 0 ? d.trimmerHours / d.hoursWorked : 0); 
+        });
+      } else if (data.hourly && data.hourly.length > 0) {
+        // Single day view: show trimmers by hour
+        document.getElementById('trimmersChartSubtitle').textContent = 'By Hour';
+        labels = data.hourly.map(function(h) { return h.label; });
+        trimmerData = data.hourly.map(function(h) { return h.trimmers || 0; });
+      } else {
+        return;
+      }
+      
+      // Calculate average for dotted line
+      var validData = trimmerData.filter(function(t) { return t > 0; });
+      var avg = validData.length > 0 ? validData.reduce(function(a, b) { return a + b; }, 0) / validData.length : 0;
+      var avgLine = trimmerData.map(function() { return avg; });
+      
+      trimmersChart.data.labels = labels;
+      trimmersChart.data.datasets[0].data = trimmerData;
+      trimmersChart.data.datasets[1].data = avgLine;
+      trimmersChart.update('none');
+    }
+
+    function renderSparkline() {
+      if (!data || !data.today) return;
+      document.getElementById('sparkCurrent').textContent = data.today.currentRate > 0 ? data.today.currentRate.toFixed(2) : '—';
+      document.getElementById('sparkBest').textContent = data.today.maxRate > 0 ? data.today.maxRate.toFixed(2) : '—';
+      document.getElementById('sparkAvg').textContent = data.today.avgRate > 0 ? data.today.avgRate.toFixed(2) : '—';
+      var c = document.getElementById('sparklineBars');
+      c.innerHTML = '';
+      if (!data.hourly) return;
+      var rates = data.hourly.filter(function(h){return h.rate>0;}).map(function(h){return h.rate;});
+      if (rates.length===0) return;
+      var max = Math.max.apply(null, rates), min = Math.min.apply(null, rates), avg = data.today.avgRate, rng = max-min||1;
+      data.hourly.forEach(function(h) {
+        if (!h.rate || h.rate<=0) return;
+        var b = document.createElement('div');
+        b.className = 'spark-bar';
+        b.style.height = (20+((h.rate-min)/rng)*50)+'%';
+        if (h.rate===max) b.classList.add('best');
+        else if (h.rate>=avg*1.05) b.classList.add('good');
+        else if (h.rate<avg*0.85) b.classList.add('below');
+        else b.classList.add('avg');
+        b.title = h.label+': '+h.rate.toFixed(2);
+        c.appendChild(b);
+      });
+    }
+
+    function renderStrainList() {
+      var c = document.getElementById('strainList');
+      if (!data || !data.strains || data.strains.length===0) {
+        c.innerHTML = '<div style="color:#8a9a8e;text-align:center;padding:16px;">No strains</div>';
+        return;
+      }
+      c.innerHTML = data.strains.map(function(s) {
+        return '<div class="strain-item"><span class="strain-name">'+s.name+'</span><div class="strain-stats"><span class="strain-tops">'+s.tops.toFixed(1)+'</span><span class="strain-smalls">'+s.smalls.toFixed(1)+'</span></div></div>';
+      }).join('');
+    }
+
+    function renderTables() {
+      var t = data && data.today ? data.today : {}, p = compareData && compareData.today ? compareData.today : null, w = data && data.weekly ? data.weekly : {};
+      document.getElementById('perfTable').innerHTML = perfRow('Hours Logged', t.hoursWorked, p?p.hoursWorked:null, 'hrs') + perfRow('Trimmer Hrs', t.totalTrimmerHours, p?p.totalTrimmerHours:null, 'num') + perfRow('Lbs/Hour', t.lbsPerHour, p?p.lbsPerHour:null, 'rate');
+      document.getElementById('costTable').innerHTML = perfRow('Cost/Top', t.avgCostPerTop, p?p.avgCostPerTop:null, '$') + perfRow('Cost/Small', t.avgCostPerSmall, p?p.avgCostPerSmall:null, '$') + perfRow('Cost/Lb', t.costPerLb, p?p.costPerLb:null, '$');
+      document.getElementById('periodLabel').textContent = (w.totalDays||0)+' day summary';
+      document.getElementById('periodTable').innerHTML = perfRow('Total Tops', w.totalTops, null, 'lbs') + perfRow('Total Smalls', w.totalSmalls, null, 'lbs') + perfRow('Best Rate', w.bestRate, null, 'rate');
+    }
+
+    function perfRow(label, val, prev, fmt) {
+      var v = val||0;
+      var display;
+      if (fmt==='hrs') display = v+' hrs';
+      else if (fmt==='rate') display = v.toFixed(2);
+      else if (fmt==='num') display = v.toFixed(1);
+      else if (fmt==='$') display = '$'+v.toFixed(2);
+      else if (fmt==='lbs') display = v.toFixed(1)+' lbs';
+      else display = v;
+      var prevHtml = '';
+      if (prev !== null && compareMode) {
+        var pv = prev||0;
+        var pDisplay = fmt==='$' ? '$'+pv.toFixed(2) : pv.toFixed(fmt==='rate'?2:1);
+        prevHtml = '<span class="perf-prev">('+pDisplay+')</span>';
+      }
+      return '<div class="perf-row"><span class="perf-label">'+label+'</span><div class="perf-compare"><span class="perf-value">'+display+'</span>'+prevHtml+'</div></div>';
+    }
+
+    function renderIntegrationWidgets() {
+      // Scoreboard data from production
+      if (data && data.today) {
+        document.getElementById('scoreboardStatus').textContent = data.current ? 'Active' : 'Idle';
+        document.getElementById('scoreboardStatus').className = 'integration-stat-value ' + (data.current ? 'good' : '');
+        document.getElementById('scoreboardLbs').textContent = data.today.totalLbs.toFixed(1);
+        var target = data.today.trimmers * 1.5 * data.today.hoursWorked;
+        var pct = target > 0 ? ((data.today.totalTops / target) * 100).toFixed(0) + '%' : '—';
+        document.getElementById('scoreboardTarget').textContent = pct;
+        document.getElementById('scoreboardTarget').className = 'integration-stat-value ' + (data.today.totalTops >= target ? 'good' : '');
+      }
+      
+      // Kanban data from backend
+      if (data && data.kanban) {
+        document.getElementById('kanbanTotal').textContent = data.kanban.total;
+        document.getElementById('kanbanReorder').textContent = data.kanban.needReorder;
+        document.getElementById('kanbanReorder').className = 'integration-stat-value ' + (data.kanban.needReorder > 0 ? 'alert' : 'good');
+        document.getElementById('kanbanInStock').textContent = data.kanban.inStock;
+        document.getElementById('kanbanInStock').className = 'integration-stat-value good';
+      } else {
+        document.getElementById('kanbanTotal').textContent = '—';
+        document.getElementById('kanbanReorder').textContent = '—';
+        document.getElementById('kanbanInStock').textContent = '—';
+      }
+      
+      // Bag Timer data from backend
+      if (data && data.bagTimer) {
+        document.getElementById('bagsToday').textContent = data.bagTimer.bagsToday;
+        document.getElementById('bagsAvgTime').textContent = data.bagTimer.avgTime;
+        document.getElementById('bagsVsTarget').textContent = data.bagTimer.vsTarget;
+        var avgMin = data.bagTimer.avgMinutes || 0;
+        document.getElementById('bagsVsTarget').className = 'integration-stat-value ' + (avgMin > 0 && avgMin <= 45 ? 'good' : (avgMin > 45 ? 'alert' : ''));
+      } else {
+        document.getElementById('bagsToday').textContent = '—';
+        document.getElementById('bagsAvgTime').textContent = '—';
+        document.getElementById('bagsVsTarget').textContent = '—';
+      }
+    }
+  </script>
+
+<!-- ========================================== -->
+<!-- AI CHAT WIDGET - Rogue Origin Assistant   -->
+<!-- ========================================== -->
+
+<div class="ai-chat-widget">
+  <div class="ai-chat-panel" id="aiChatPanel">
+    <div class="ai-chat-header">
+      <div class="ai-chat-header-icon">🌿</div>
+      <div class="ai-chat-header-text">
+        <h3>Rogue Origin Assistant</h3>
+        <span>Ask about production, bags, crew</span>
+      </div>
+      <button class="ai-voice-mode-toggle active" id="aiVoiceModeToggle" onclick="aiToggleVoiceMode()" title="Toggle voice responses">
+        <span class="icon">🔊</span>
+        <span class="label">Voice</span>
+      </button>
+    </div>
+    <div class="ai-quick-actions">
+      <button class="ai-quick-btn" onclick="aiAskQuestion('How are we doing today?')">📊 Status</button>
+      <button class="ai-quick-btn" onclick="aiAskQuestion('How many bags completed?')">📦 Bags</button>
+      <button class="ai-quick-btn" onclick="aiAskQuestion('What is our current rate?')">⚡ Rate</button>
+      <button class="ai-quick-btn" onclick="aiAskQuestion('How many people working?')">👥 Crew</button>
+    </div>
+    <div class="ai-chat-messages" id="aiMessages">
+      <div class="ai-message assistant">
+        Hi! I can help with production status, bag counts, crew info, and more. What would you like to know?
+      </div>
+    </div>
+    <div class="ai-voice-status" id="aiVoiceStatus">🎤 Listening...</div>
+    <div class="ai-chat-input-area">
+      <input type="text" class="ai-chat-input" id="aiInput" placeholder="Ask a question..." onkeypress="if(event.key==='Enter')aiSendMessage()" aria-label="Chat input">
+      <button class="ai-voice-btn" id="aiVoiceBtn" onclick="aiToggleVoice()" title="Voice input" aria-label="Voice input">🎤</button>
+      <button class="ai-chat-send" onclick="aiSendMessage()" aria-label="Send message">
+        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
+    </div>
+  </div>
+  <button class="ai-chat-toggle" onclick="aiToggleChat()">
+    <svg viewBox="0 0 24 24" id="aiChatIcon"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>
+    <svg viewBox="0 0 24 24" id="aiCloseIcon" style="display:none;"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+  </button>
+</div>
+
+<script>
+(function() {
+  const AI_API_URL = 'https://script.google.com/macros/s/AKfycbxDAHSFl9cedGS49L3Lf5ztqy-SSToYigyA30ZtsdpmWNAR9H61X_Mm48JOOTGqqr-Z/exec';
+  let aiHistory = [];
+  let lastQuestion = '';  // Track for feedback
+
+  // ============================================
+  // VOICE MODE (Auto-speak responses)
+  // ============================================
+  // Default to ON - user can toggle off for text-only
+  let voiceModeEnabled = localStorage.getItem('ro_voice_mode') !== 'false';
+
+  // Initialize toggle button state on load
+  setTimeout(() => {
+    const toggle = document.getElementById('aiVoiceModeToggle');
+    if (toggle) {
+      updateVoiceModeButton(toggle);
+    }
+  }, 0);
+
+  function updateVoiceModeButton(toggle) {
+    if (voiceModeEnabled) {
+      toggle.classList.add('active');
+      toggle.querySelector('.icon').textContent = '🔊';
+      toggle.querySelector('.label').textContent = 'Voice';
+      toggle.title = 'Voice mode ON - click to switch to text only';
+    } else {
+      toggle.classList.remove('active');
+      toggle.querySelector('.icon').textContent = '💬';
+      toggle.querySelector('.label').textContent = 'Text';
+      toggle.title = 'Text mode - click to enable voice responses';
+    }
+  }
+
+  window.aiToggleVoiceMode = function() {
+    voiceModeEnabled = !voiceModeEnabled;
+    localStorage.setItem('ro_voice_mode', voiceModeEnabled ? 'true' : 'false');
+
+    const toggle = document.getElementById('aiVoiceModeToggle');
+    if (toggle) {
+      updateVoiceModeButton(toggle);
+    }
+
+    // Stop any current speech when turning off
+    if (!voiceModeEnabled && speechSynthesis.speaking) {
+      speechSynthesis.cancel();
+    }
+  };
+
+  // ============================================
+  // VOICE INPUT (Web Speech API)
+  // ============================================
+  let recognition = null;
+  let isListening = false;
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  // Initialize voice recognition if supported
+  if (SpeechRecognition) {
+    recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = localStorage.getItem('ro_language') === 'es' ? 'es-ES' : 'en-US';
+
+    recognition.onstart = function() {
+      isListening = true;
+      const btn = document.getElementById('aiVoiceBtn');
+      const status = document.getElementById('aiVoiceStatus');
+      if (btn) { btn.classList.add('listening'); btn.textContent = '⏹️'; }
+      if (status) { status.classList.add('active'); status.textContent = '🎤 Listening... (tap to stop)'; }
+    };
+
+    recognition.onend = function() {
+      isListening = false;
+      const btn = document.getElementById('aiVoiceBtn');
+      const status = document.getElementById('aiVoiceStatus');
+      if (btn) { btn.classList.remove('listening'); btn.textContent = '🎤'; }
+      if (status) status.classList.remove('active');
+    };
+
+    recognition.onresult = function(event) {
+      const input = document.getElementById('aiInput');
+      let finalTranscript = '';
+      let interimTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      // Show interim results while speaking
+      if (interimTranscript) {
+        input.value = interimTranscript;
+        input.style.color = 'var(--text-muted)';
+      }
+
+      // When final, set the value and optionally auto-send
+      if (finalTranscript) {
+        input.value = finalTranscript;
+        input.style.color = '';
+        // Auto-send after voice input completes
+        setTimeout(() => {
+          if (input.value.trim()) {
+            window.aiSendMessage();
+          }
+        }, 500);
+      }
+    };
+
+    recognition.onerror = function(event) {
+      console.error('Speech recognition error:', event.error);
+      isListening = false;
+      const btn = document.getElementById('aiVoiceBtn');
+      const status = document.getElementById('aiVoiceStatus');
+      if (btn) { btn.classList.remove('listening'); btn.textContent = '🎤'; }
+      if (status) {
+        status.classList.add('active');
+        status.textContent = event.error === 'not-allowed'
+          ? '❌ Microphone access denied'
+          : '❌ Voice error: ' + event.error;
+        setTimeout(() => status.classList.remove('active'), 3000);
+      }
+    };
+  } else {
+    // Mark voice button as not supported
+    setTimeout(() => {
+      const btn = document.getElementById('aiVoiceBtn');
+      if (btn) {
+        btn.classList.add('not-supported');
+        btn.title = 'Voice input not supported in this browser';
+      }
+    }, 100);
+  }
+
+  window.aiToggleVoice = function() {
+    if (!recognition) {
+      alert('Voice input is not supported in your browser. Try Chrome or Edge.');
+      return;
+    }
+
+    // Update language based on current setting
+    recognition.lang = localStorage.getItem('ro_language') === 'es' ? 'es-ES' : 'en-US';
+
+    if (isListening) {
+      recognition.stop();
+    } else {
+      recognition.start();
+    }
+  };
+
+  // ============================================
+  // TEXT-TO-SPEECH (Speech Synthesis API)
+  // ============================================
+  let currentUtterance = null;
+  let preferredVoices = { en: null, es: null };
+
+  // Find the best natural-sounding voice for each language
+  function loadPreferredVoices() {
+    const voices = speechSynthesis.getVoices();
+    if (!voices.length) return;
+
+    // Priority order for natural-sounding English voices
+    const enPriority = [
+      'Google US English',           // Chrome - very natural
+      'Google UK English Female',    // Chrome - natural British
+      'Google UK English Male',      // Chrome - natural British
+      'Samantha',                    // macOS - natural
+      'Karen',                       // macOS - natural Australian
+      'Daniel',                      // macOS - natural British
+      'Microsoft Zira',              // Windows - decent
+      'Microsoft David',             // Windows - decent
+    ];
+
+    // Priority order for natural-sounding Spanish voices
+    const esPriority = [
+      'Google español',              // Chrome - natural
+      'Google español de Estados Unidos', // Chrome - natural US Spanish
+      'Paulina',                     // macOS - natural Mexican
+      'Monica',                      // macOS - natural Castilian
+      'Microsoft Sabina',            // Windows
+    ];
+
+    // Find best English voice
+    for (const name of enPriority) {
+      const voice = voices.find(v => v.name.includes(name) || v.name === name);
+      if (voice) {
+        preferredVoices.en = voice;
+        console.log('Selected English voice:', voice.name);
+        break;
+      }
+    }
+    // Fallback to any English voice
+    if (!preferredVoices.en) {
+      preferredVoices.en = voices.find(v => v.lang.startsWith('en')) || null;
+    }
+
+    // Find best Spanish voice
+    for (const name of esPriority) {
+      const voice = voices.find(v => v.name.includes(name) || v.name === name);
+      if (voice) {
+        preferredVoices.es = voice;
+        console.log('Selected Spanish voice:', voice.name);
+        break;
+      }
+    }
+    // Fallback to any Spanish voice
+    if (!preferredVoices.es) {
+      preferredVoices.es = voices.find(v => v.lang.startsWith('es')) || null;
+    }
+  }
+
+  // Load voices when available (they load async in some browsers)
+  if (speechSynthesis.onvoiceschanged !== undefined) {
+    speechSynthesis.onvoiceschanged = loadPreferredVoices;
+  }
+  // Also try loading immediately
+  loadPreferredVoices();
+
+  window.aiSpeak = function(contentId, buttonEl) {
+    const content = document.getElementById(contentId);
+    if (!content) return;
+
+    // If already speaking this message, stop it
+    if (speechSynthesis.speaking && buttonEl.classList.contains('speaking')) {
+      speechSynthesis.cancel();
+      buttonEl.classList.remove('speaking');
+      buttonEl.textContent = '🔊 Speak';
+      return;
+    }
+
+    // Stop any current speech
+    if (speechSynthesis.speaking) {
+      speechSynthesis.cancel();
+      // Reset all speak buttons
+      document.querySelectorAll('.ai-speak-btn.speaking').forEach(btn => {
+        btn.classList.remove('speaking');
+        btn.textContent = '🔊 Speak';
+      });
+    }
+
+    // Get text content, stripping any HTML
+    const text = content.textContent || content.innerText;
+    if (!text.trim()) return;
+
+    // Create utterance with natural voice settings
+    currentUtterance = new SpeechSynthesisUtterance(text);
+
+    // Select the best voice for the current language
+    const isSpanish = localStorage.getItem('ro_language') === 'es';
+    const selectedVoice = isSpanish ? preferredVoices.es : preferredVoices.en;
+
+    if (selectedVoice) {
+      currentUtterance.voice = selectedVoice;
+    }
+    currentUtterance.lang = isSpanish ? 'es-ES' : 'en-US';
+
+    // Natural speech settings - smooth and conversational
+    currentUtterance.rate = 1.0;    // Natural pace
+    currentUtterance.pitch = 1.0;   // Natural pitch
+    currentUtterance.volume = 1.0;  // Full volume
+
+    // Update button state
+    buttonEl.classList.add('speaking');
+    buttonEl.textContent = '⏹️ Stop';
+
+    currentUtterance.onend = function() {
+      buttonEl.classList.remove('speaking');
+      buttonEl.textContent = '🔊 Speak';
+    };
+
+    currentUtterance.onerror = function(event) {
+      console.error('Speech synthesis error:', event.error);
+      buttonEl.classList.remove('speaking');
+      buttonEl.textContent = '🔊 Speak';
+    };
+
+    speechSynthesis.speak(currentUtterance);
+  };
+
+  window.aiToggleChat = function() {
+    // Stop any ongoing voice activity when closing
+    if (speechSynthesis.speaking) {
+      speechSynthesis.cancel();
+    }
+    if (isListening && recognition) {
+      recognition.stop();
+    }
+
+    const panel = document.getElementById('aiChatPanel');
+    const chatIcon = document.getElementById('aiChatIcon');
+    const closeIcon = document.getElementById('aiCloseIcon');
+    panel.classList.toggle('open');
+    if (panel.classList.contains('open')) {
+      chatIcon.style.display = 'none';
+      closeIcon.style.display = 'block';
+      document.getElementById('aiInput').focus();
+    } else {
+      chatIcon.style.display = 'block';
+      closeIcon.style.display = 'none';
+    }
+  };
+
+  window.aiAskQuestion = function(q) {
+    document.getElementById('aiInput').value = q;
+    aiSendMessage();
+  };
+
+  window.aiSendMessage = async function() {
+    const input = document.getElementById('aiInput');
+    const messages = document.getElementById('aiMessages');
+    const msg = input.value.trim();
+    if (!msg) return;
+
+    lastQuestion = msg;  // Track for feedback
+
+    // Add user message
+    const userEl = document.createElement('div');
+    userEl.className = 'ai-message user';
+    userEl.textContent = msg;
+    messages.appendChild(userEl);
+    input.value = '';
+    messages.scrollTop = messages.scrollHeight;
+
+    // Typing indicator
+    const typingEl = document.createElement('div');
+    typingEl.className = 'ai-message assistant';
+    typingEl.innerHTML = '<div class="ai-typing"><span></span><span></span><span></span></div>';
+    messages.appendChild(typingEl);
+    messages.scrollTop = messages.scrollHeight;
+
+    try {
+      aiHistory.push({ role: 'user', content: msg });
+      
+      const payload = JSON.stringify({
+        action: 'chat',
+        message: msg,
+        history: aiHistory.slice(-10)
+      });
+      
+      const response = await fetch(AI_API_URL + '?action=chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: payload,
+        redirect: 'follow'
+      });
+      
+      const data = await response.json();
+      typingEl.remove();
+      
+      if (data.success && data.response) {
+        aiHistory.push({ role: 'assistant', content: data.response });
+        const assistEl = document.createElement('div');
+        assistEl.className = 'ai-message assistant';
+
+        // Add response content + speak button + feedback buttons
+        const responseId = 'resp-' + Date.now();
+        assistEl.innerHTML = `
+          <div class="ai-response-content" id="content-${responseId}">${data.response}</div>
+          <div class="ai-feedback" id="${responseId}">
+            <button class="ai-speak-btn" id="speak-${responseId}" onclick="aiSpeak('content-${responseId}', this)" title="Read aloud">🔊 Speak</button>
+            <button class="ai-feedback-btn" onclick="aiFeedback('${responseId}', 'good', '${encodeURIComponent(lastQuestion)}')">👍 Helpful</button>
+            <button class="ai-feedback-btn" onclick="aiFeedback('${responseId}', 'bad', '${encodeURIComponent(lastQuestion)}')">👎 Not quite</button>
+          </div>
+        `;
+        messages.appendChild(assistEl);
+
+        // Auto-speak response if voice mode is enabled
+        if (voiceModeEnabled) {
+          // Small delay to ensure DOM is ready
+          setTimeout(() => {
+            const speakBtn = document.getElementById('speak-' + responseId);
+            if (speakBtn) {
+              aiSpeak('content-' + responseId, speakBtn);
+            }
+          }, 100);
+        }
+      } else {
+        throw new Error(data.error || 'Unknown error');
+      }
+    } catch (err) {
+      typingEl.remove();
+      const errEl = document.createElement('div');
+      errEl.className = 'ai-message assistant';
+      errEl.textContent = 'Sorry, something went wrong. ' + (err.message || '');
+      messages.appendChild(errEl);
+      console.error('AI Error:', err);
+    }
+    messages.scrollTop = messages.scrollHeight;
+  };
+
+  // Feedback handler
+  window.aiFeedback = async function(responseId, rating, encodedQuestion) {
+    const feedbackDiv = document.getElementById(responseId);
+    if (!feedbackDiv) return;
+    
+    const question = decodeURIComponent(encodedQuestion);
+    
+    // Update UI
+    const buttons = feedbackDiv.querySelectorAll('.ai-feedback-btn');
+    buttons.forEach(btn => {
+      btn.disabled = true;
+      btn.style.opacity = '0.5';
+    });
+    
+    const selectedBtn = rating === 'good' ? buttons[0] : buttons[1];
+    selectedBtn.classList.add(rating === 'good' ? 'selected' : 'selected-bad');
+    selectedBtn.style.opacity = '1';
+    
+    // If negative feedback, prompt for correction
+    if (rating === 'bad') {
+      setTimeout(() => {
+        feedbackDiv.innerHTML = `
+          <span style="font-size:11px;color:var(--text-muted);">👎 Logged. Want to correct me?</span>
+          <button class="ai-feedback-btn" onclick="aiPromptCorrection()">Add correction</button>
+        `;
+      }, 500);
+    } else {
+      setTimeout(() => {
+        feedbackDiv.innerHTML = '<span style="font-size:11px;color:var(--green);">👍 Thanks!</span>';
+      }, 500);
+    }
+    
+    // Log feedback to server
+    try {
+      await fetch(AI_API_URL + '?action=chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          feedback: {
+            question: question,
+            rating: rating,
+            timestamp: new Date().toISOString()
+          }
+        }),
+        redirect: 'follow'
+      });
+    } catch (e) {
+      console.log('Feedback logging error:', e);
+    }
+  };
+  
+  // Prompt user to add a correction
+  window.aiPromptCorrection = function() {
+    const input = document.getElementById('aiInput');
+    input.value = 'Actually, ';
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  };
+})();
+</script>
+</body>
+</html>
