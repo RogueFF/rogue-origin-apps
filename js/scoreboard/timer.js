@@ -97,6 +97,21 @@
   }
 
   /**
+   * Get today's shift start time as a Date object
+   * Used as fallback reference when no bags have been scanned yet
+   * @returns {Date} Today at shift start time (default 7:00 AM)
+   */
+  function getShiftStartTime() {
+    var now = new Date();
+    var startHour = (Config && Config.workday && Config.workday.startHour) || 7;
+    var startMin = (Config && Config.workday && Config.workday.startMin) || 0;
+
+    var shiftStart = new Date(now);
+    shiftStart.setHours(startHour, startMin, 0, 0);
+    return shiftStart;
+  }
+
+  /**
    * Main timer render function - updates timer display, ring, and colors
    */
   function renderTimer() {
@@ -123,6 +138,10 @@
       elapsedSec = getWorkingSecondsSince(State.lastBagTimestamp) -
         Math.floor((new Date() - State.pauseStartTime) / 1000);
       if (elapsedSec < 0) elapsedSec = 0;
+    } else if (!State.lastBagTimestamp && !breakStatus.onBreak && !breakStatus.afterHours && bagsToday === 0) {
+      // No bags scanned yet today - use shift start time as reference
+      // This makes the timer count up from 7 AM until the first bag is scanned
+      elapsedSec = getWorkingSecondsSince(getShiftStartTime());
     }
 
     // Debug mode: simulate elapsed time as percentage of target
