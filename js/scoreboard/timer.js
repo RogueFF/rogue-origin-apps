@@ -112,6 +112,69 @@
   }
 
   /**
+   * Get shift end time for a given date
+   * @param {Date} date - The date to get shift end for
+   * @returns {Date} Shift end time (default 4:30 PM)
+   */
+  function getShiftEndTime(date) {
+    var endHour = (Config && Config.workday && Config.workday.endHour) || 16;
+    var endMin = (Config && Config.workday && Config.workday.endMin) || 30;
+
+    var shiftEnd = new Date(date);
+    shiftEnd.setHours(endHour, endMin, 0, 0);
+    return shiftEnd;
+  }
+
+  /**
+   * Calculate working seconds from a previous day's timestamp, carrying over to today
+   * Used when a bag was not finished before shift ended yesterday
+   * @param {Date} startTime - The timestamp from a previous day
+   * @returns {number} Total working seconds (yesterday's remainder + today's elapsed)
+   */
+  function getWorkingSecondsCarryOver(startTime) {
+    if (!startTime) return 0;
+
+    var now = new Date();
+    var startDate = new Date(startTime);
+
+    // Get yesterday's shift end
+    var yesterdayShiftEnd = getShiftEndTime(startDate);
+
+    // Calculate working seconds from lastBag to end of that day's shift
+    // (only if lastBag was before shift end)
+    var yesterdayRemaining = 0;
+    if (startTime < yesterdayShiftEnd) {
+      // Time from lastBag to shift end, excluding any breaks in between
+      var startMins = startDate.getHours() * 60 + startDate.getMinutes();
+      var endMins = (Config && Config.workday && Config.workday.endMinutes) ||
+        (16 * 60 + 30);
+
+      yesterdayRemaining = (endMins - startMins) * 60;
+
+      // Subtract breaks that occurred between lastBag and shift end
+      var breaks = (Config && Config.workday && Config.workday.breaks) || [];
+      for (var i = 0; i < breaks.length; i++) {
+        var brk = breaks[i];
+        var bStart = brk[0] * 60 + brk[1];
+        var bEnd = brk[2] * 60 + brk[3];
+
+        if (startMins < bEnd && endMins > bStart) {
+          var overlapStart = Math.max(startMins, bStart);
+          var overlapEnd = Math.min(endMins, bEnd);
+          if (overlapEnd > overlapStart) {
+            yesterdayRemaining -= (overlapEnd - overlapStart) * 60;
+          }
+        }
+      }
+    }
+
+    // Add today's working seconds from shift start to now
+    var todayElapsed = getWorkingSecondsSince(getShiftStartTime());
+
+    return Math.max(0, yesterdayRemaining + todayElapsed);
+  }
+
+  /**
    * Main timer render function - updates timer display, ring, and colors
    */
   function renderTimer() {
@@ -136,6 +199,10 @@
     var lastBagIsToday = State.lastBagTimestamp &&
       State.lastBagTimestamp.toDateString() === new Date().toDateString();
 
+    // Check if lastBagTimestamp is from a previous day (unfinished bag)
+    var lastBagIsPreviousDay = State.lastBagTimestamp &&
+      State.lastBagTimestamp.toDateString() !== new Date().toDateString();
+
     if (lastBagIsToday && !isManuallyPaused) {
       elapsedSec = getWorkingSecondsSince(State.lastBagTimestamp);
     } else if (lastBagIsToday && isManuallyPaused && State.pauseStartTime) {
@@ -143,9 +210,12 @@
       elapsedSec = getWorkingSecondsSince(State.lastBagTimestamp) -
         Math.floor((new Date() - State.pauseStartTime) / 1000);
       if (elapsedSec < 0) elapsedSec = 0;
+    } else if (lastBagIsPreviousDay && !breakStatus.onBreak && !breakStatus.afterHours) {
+      // Unfinished bag from previous day - carry over the remaining time
+      // Calculates: (yesterday's lastBag → yesterday's shift end) + (today's 7AM → now)
+      elapsedSec = getWorkingSecondsCarryOver(State.lastBagTimestamp);
     } else if (!breakStatus.onBreak && !breakStatus.afterHours) {
-      // No bags scanned TODAY - use shift start time as reference
-      // This handles: no lastBagTimestamp, or lastBagTimestamp from previous day
+      // No lastBagTimestamp at all - use shift start time as reference
       elapsedSec = getWorkingSecondsSince(getShiftStartTime());
     }
 
