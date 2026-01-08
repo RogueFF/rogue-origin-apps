@@ -94,6 +94,11 @@
         if (Render && Render.renderScoreboard) {
           Render.renderScoreboard();
         }
+
+        // Check if shift start should be locked
+        if (window.ScoreboardShiftStart) {
+          window.ScoreboardShiftStart.checkLockStatus();
+        }
       },
       function(error) {
         console.error('Failed to load data:', error);
