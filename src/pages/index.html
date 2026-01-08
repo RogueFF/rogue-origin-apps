@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rogue Origin - Operations Hub</title>
+
+  <!-- Performance: Resource Hints -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="dns-prefetch" href="https://script.google.com">
+  <link rel="dns-prefetch" href="https://js.puter.com">
+
+  <!-- Fonts: Inter (existing) + DM Serif Display, JetBrains Mono, Outfit -->
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=optional" rel="stylesheet">
+
+  <!-- Scripts: Deferred for faster initial render -->
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/muuri@0.9.5/dist/muuri.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/web-animations-js@2.3.2/web-animations.min.js"></script>
+  <script defer src="https://unpkg.com/@phosphor-icons/web"></script>
+  <script defer src="https://js.puter.com/v2/"></script>
+
+  
+  <!-- Critical CSS: Inline for fastest render -->
+  <style>
+/* Critical CSS for above-the-fold content */
+.logo-loader{position:fixed;inset:0;background:var(--bg,#faf8f5);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1100;transition:opacity .3s,visibility .3s}
+.logo-loader img{width:120px;height:auto;margin-bottom:24px;animation:logoFadeIn .6s ease-out}
+.logo-loader-bar{width:120px;height:3px;background:var(--border-light,rgba(102,137,113,0.1));border-radius:2px;overflow:hidden;position:relative}
+.logo-loader-bar::after{content:"";position:absolute;top:0;left:0;height:100%;width:50%;background:var(--green,#668971);animation:loaderSlide 1.5s ease-in-out infinite}
+@keyframes logoFadeIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+@keyframes loaderSlide{0%,100%{transform:translateX(-100%)}50%{transform:translateX(200%)}}
+.sidebar{position:fixed;top:0;left:0;width:var(--sidebar-width,240px);height:100vh;background:var(--sidebar-bg,#1a1f16);display:flex;flex-direction:column;z-index:50;transition:width .3s ease}
+.brand{padding:24px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(255,255,255,.1)}
+.brand img{width:32px;height:32px;border-radius:8px}
+.brand h1{font-size:18px;font-weight:600;color:white;margin:0;font-family:var(--font-ui,"Inter",sans-serif)}
+.nav-item{padding:10px 16px;margin:4px 12px;color:rgba(255,255,255,.7);cursor:pointer;display:flex;align-items:center;gap:12px;border-radius:8px;transition:all .2s;font-size:14px}
+.nav-item:hover{background:rgba(255,255,255,.1);color:white}
+.nav-item.active{background:var(--green,#668971);color:white}
+.nav-item .icon{font-size:20px;display:flex;align-items:center}
+.main{margin-left:var(--sidebar-width,240px);min-height:100vh;background:var(--bg,#faf8f5);transition:margin-left .3s ease}
+.header{position:sticky;top:0;background:var(--bg-card,#ffffff);border-bottom:1px solid var(--border-light,rgba(102,137,113,0.1));padding:12px 24px;display:flex;align-items:center;justify-content:space-between;z-index:60;box-shadow:var(--shadow-sm,0 2px 4px rgba(0,0,0,0.06))}
+.header-left{display:flex;align-items:center;gap:16px}
+.header-logo{height:32px;width:auto}
+.mobile-menu-btn{display:none;background:none;border:none;cursor:pointer;color:var(--text,#2d3a32)}
+@media(max-width:768px){.mobile-menu-btn{display:block}.sidebar{transform:translateX(-100%)}}
+  </style>
+
+  <!-- Performance: CSS Preloading -->
+  <link rel="preload" href="../css/dashboard.css" as="style">
+  <link rel="preload" href="../css/ai-chat.css" as="style">
+  <link rel="stylesheet" href="../css/dashboard.css">
+  <link rel="stylesheet" href="../css/ai-chat.css">
+</head>
+<body>
+  <a href="#dashboardView" class="skip-link">Skip to main content</a>
+  <div class="logo-loader" id="loadingOverlay" role="progressbar" aria-label="Loading dashboard">
+    <img src="https://i.imgur.com/UYEbNiI.png" alt="Rogue Origin">
+    <span class="logo-loader-bar" aria-hidden="true"></span>
+  </div>
+
+  <div class="settings-overlay" id="settingsOverlay" onclick="closeSettings()" role="presentation"></div><div class="settings-panel" id="settingsPanel" role="dialog" aria-modal="true" aria-labelledby="settingsPanelTitle"><div class="settings-header"><span class="settings-title" id="settingsPanelTitle">Customize Dashboard</span><button class="settings-close" onclick="closeSettings()" aria-label="Close settings panel">&times;</button></div>
+    <div class="settings-section">
+      <div class="settings-section-title" id="targetInputLabel">Production Target</div>
+      <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;" id="targetInputDesc">Daily target shown as line on charts</p>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <input type="number" id="targetInput" value="200" min="50" max="500" step="10" style="flex: 1; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: var(--bg); color: var(--text);" aria-labelledby="targetInputLabel" aria-describedby="targetInputDesc">
+        <span style="color: var(--text-muted); font-size: 12px;" aria-hidden="true">lbs/day</span>
+      </div>
+    </div>
+    <div class="settings-section">
+      <div class="settings-section-title" id="kpiTogglesLabel">KPI Cards</div>
+      <div id="kpiToggles" role="group" aria-labelledby="kpiTogglesLabel"></div>
+    </div>
+    <div class="settings-section">
+      <div class="settings-section-title" id="widgetTogglesLabel">Widgets</div>
+      <div id="widgetToggles" role="group" aria-labelledby="widgetTogglesLabel"></div>
+    </div>
+    <div class="settings-section">
+      <div class="settings-section-title">Layout</div>
+      <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">Drag widgets and KPI cards to customize your dashboard.</p>
+      <button class="tool-btn" onclick="explicitSaveLayout()" style="width: 100%; justify-content: center; margin-bottom: 8px; background: var(--ro-green); color: white;" aria-label="Save current dashboard layout">
+        <i class="ph ph-floppy-disk" style="margin-right: 6px;" aria-hidden="true"></i> Save Layout
+      </button>
+      <button class="tool-btn" onclick="resetLayout()" style="width: 100%; justify-content: center;" aria-label="Reset dashboard to default layout">
+        <i class="ph ph-arrow-counter-clockwise" style="margin-right: 6px;" aria-hidden="true"></i> Reset to Default
+      </button>
+    </div>
+    <div class="settings-section">
+      <div class="settings-section-title">Help</div>
+      <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">Learn how to use the dashboard features.</p>
+      <button class="tool-btn" onclick="closeSettings(); startTutorial();" style="width: 100%; justify-content: center; background: var(--gold); color: #1a1f16;" aria-label="Start interactive dashboard tour">
+        <i class="ph ph-lightbulb" style="margin-right: 6px;" aria-hidden="true"></i> Start Tour
+      </button>
+    </div>
+  </div>
+
+  <aside class="sidebar" id="sidebar" role="navigation" aria-label="Main navigation">
+    <div class="sidebar-toggle" onclick="toggleSidebar()" role="button" tabindex="0" aria-label="Collapse sidebar" onkeydown="if(event.key==='Enter'||event.key===' ')toggleSidebar()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 19l-7-7 7-7M18 19l-7-7 7-7"/></svg>
+      <span class="sidebar-toggle-label">Collapse</span>
+    </div>
+    <div class="brand">
+      <img src="https://i.imgur.com/PvrTPb2.png" alt="Rogue Origin" class="logo">
+      <h1>Rogue Origin</h1>
+    </div>
+    <div class="nav-item active" data-view="dashboard" onclick="switchView('dashboard')" role="button" tabindex="0" aria-label="Navigate to Dashboard" aria-current="page" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('dashboard')"><span class="icon" aria-hidden="true"><i class="ph-duotone ph-chart-pie-slice"></i></span><span>Dashboard</span></div>
+    <div class="nav-item" data-view="kanban" onclick="switchView('kanban')" role="button" tabindex="0" aria-label="Navigate to Supply Kanban" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('kanban')"><span class="icon" aria-hidden="true"><i class="ph-duotone ph-package"></i></span><span>Supply Kanban</span></div>
+    <div class="nav-item" data-view="scoreboard" onclick="switchView('scoreboard')" role="button" tabindex="0" aria-label="Navigate to Scoreboard" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('scoreboard')"><span class="icon" aria-hidden="true"><i class="ph-duotone ph-gauge"></i></span><span>Scoreboard</span></div>
+    <div class="nav-item" data-view="barcode" onclick="switchView('barcode')" role="button" tabindex="0" aria-label="Navigate to Barcode Printer" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('barcode')"><span class="icon" aria-hidden="true"><i class="ph-duotone ph-barcode"></i></span><span>Barcode Printer</span></div>
+    <div class="nav-item" data-view="sop" onclick="switchView('sop')" role="button" tabindex="0" aria-label="Navigate to SOP Manager" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('sop')"><span class="icon" aria-hidden="true"><i class="ph-duotone ph-book-open-text"></i></span><span>SOP Manager</span></div>
+    <div class="nav-item" data-view="orders" onclick="switchView('orders')" role="button" tabindex="0" aria-label="Navigate to Orders" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('orders')"><span class="icon" aria-hidden="true"><i class="ph-duotone ph-clipboard-text"></i></span><span>Orders</span></div>
+    <div class="nav-section" role="heading" aria-level="2">Coming Soon</div>
+    <div class="nav-item disabled" aria-disabled="true"><span class="icon" aria-hidden="true"><i class="ph-duotone ph-users-three"></i></span><span>Staff</span></div>
+    <div class="nav-item disabled" aria-disabled="true"><span class="icon" aria-hidden="true"><i class="ph-duotone ph-chart-line-up"></i></span><span>Reports</span></div>
+    <div class="nav-item disabled" aria-disabled="true"><span class="icon" aria-hidden="true"><i class="ph-duotone ph-gear"></i></span><span>Settings</span></div>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar">RO</div>
+        <div class="user-details"><h4>Rogue Origin</h4><p>Administrator</p></div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main" role="main" aria-label="Dashboard content">
+    <header class="header" role="banner">
+      <div class="header-left">
+        <button class="mobile-menu-btn" onclick="toggleMobileSidebar()" aria-label="Open navigation menu" aria-expanded="false"><svg width="20" aria-hidden="true" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <img src="https://i.imgur.com/UYEbNiI.png" alt="Rogue Origin" class="header-logo">
+      </div>
+      <div class="header-right" id="dashboardControls">
+        <div class="date-picker-wrapper">
+          <button class="date-picker-trigger" onclick="toggleDatePicker()" aria-label="Select date range" aria-haspopup="true" aria-expanded="false" id="datePickerTrigger"><svg width="12" aria-hidden="true" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <span id="datePickerLabel">Today</span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="date-picker-dropdown" id="datePickerDropdown" role="menu" aria-label="Date range options">
+            <div class="date-presets" role="group" aria-label="Preset date ranges">
+              <button class="date-chip active" data-range="today" aria-label="Select today as date range" aria-pressed="true">Today</button>
+              <button class="date-chip" data-range="yesterday" aria-label="Select yesterday as date range" aria-pressed="false">Yesterday</button>
+              <button class="date-chip" data-range="week" aria-label="Select last 7 days as date range" aria-pressed="false">Last 7 Days</button>
+              <button class="date-chip" data-range="month" aria-label="Select last 30 days as date range" aria-pressed="false">Last 30 Days</button>
+            </div>
+            <div class="date-custom" role="group" aria-label="Custom date range selection">
+              <div class="date-custom-label" id="customRangeLabel">Custom Range</div>
+              <div class="date-inputs">
+                <input type="date" class="date-input" id="startDate" aria-label="Start date">
+                <span style="color: var(--text-light);" aria-hidden="true">→</span>
+                <input type="date" class="date-input" id="endDate" aria-label="End date">
+              </div>
+              <button class="date-apply-btn" onclick="applyCustomRange()" aria-label="Apply custom date range">Apply</button>
+            </div>
+          </div>
+        </div>
+        <div class="compare-selector">
+          <button class="header-btn" id="compareBtn" onclick="toggleCompareDropdown()" aria-label="Compare periods" aria-haspopup="true" aria-expanded="false"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+            Compare
+          </button>
+          <div class="compare-dropdown" id="compareDropdown" role="menu" aria-label="Comparison period options">
+            <div class="compare-option" onclick="setCompare('yesterday')" role="menuitem" tabindex="0" aria-label="Compare today versus yesterday" onkeydown="if(event.key==='Enter'||event.key===' ')setCompare('yesterday')">Today vs Yesterday</div>
+            <div class="compare-option" onclick="setCompare('lastWeek')" role="menuitem" tabindex="0" aria-label="Compare this week versus last week" onkeydown="if(event.key==='Enter'||event.key===' ')setCompare('lastWeek')">This Week vs Last</div>
+            <div class="compare-option" onclick="setCompare('lastMonth')" role="menuitem" tabindex="0" aria-label="Compare this month versus last month" onkeydown="if(event.key==='Enter'||event.key===' ')setCompare('lastMonth')">This Month vs Last</div>
+          </div>
+        </div>
+        <div class="header-time"><div class="time" id="clock">--:--</div><div class="date" id="dateDisplay">Loading...</div></div>
+        <button class="theme-toggle header-btn" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle dark mode theme"><span id="themeIcon" aria-hidden="true">🌙</span>
+          <span id="themeLabel">Dark</span>
+        </button>
+        <button class="header-btn" onclick="openSettings()" aria-label="Open dashboard settings"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+        <button class="header-btn primary" id="refreshBtn" onclick="refreshData()" aria-label="Refresh dashboard data"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Refresh</button>
+      </div>
+    </header>
+
+    <!-- Dashboard View -->
+    <div class="dashboard active" id="dashboardView">
+      <div class="compare-banner" id="compareBanner">
+        <div class="compare-banner-left">
+          <span class="compare-badge">Comparing</span>
+          <div class="compare-periods">
+            <div style="display:flex;align-items:center;gap:4px;"><div class="compare-dot current"></div><span id="compareCurrent">Today</span></div>
+            <span style="opacity: 0.5;">vs</span>
+            <div style="display:flex;align-items:center;gap:4px;"><div class="compare-dot previous"></div><span id="comparePrevious">Yesterday</span></div>
+          </div>
+        </div>
+        <button class="compare-close" onclick="clearCompare()" aria-label="Clear comparison">&times;</button>
+      </div>
+
+      <!-- Welcome Section -->
+      <div class="welcome-section">
+        <div class="welcome-greeting" id="welcomeGreeting">Good morning</div>
+        <div class="welcome-date" id="welcomeDate">Loading...</div>
+      </div>
+
+      <!-- Hero Section - The Unforgettable Thing -->
+      <div class="hero-section" id="heroSection" role="region" aria-label="Production summary">
+        <div class="hero-left">
+          <div class="hero-botanical-frame">
+            <div class="hero-label" id="productionLabel">Today's Production</div>
+            <div class="hero-strain" id="heroStrain" aria-live="polite"></div>
+            <div aria-labelledby="productionLabel">
+              <span class="hero-production-number" id="heroProductionNumber" aria-live="polite">0.0</span>
+              <span class="hero-production-unit" aria-hidden="true">lbs</span>
+            </div>
+            <div class="hero-subtitle" id="heroSubtitle" aria-live="polite">Loading...</div>
+            <div class="hero-progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Production progress">
+              <div class="hero-progress-fill" id="heroProgressFill" style="width: 0%"></div>
+              <div class="hero-progress-text" id="heroProgressText">0%</div>
+            </div>
+          </div>
+        </div>
+        <div class="hero-right" role="group" aria-label="Key performance indicators">
+          <div class="hero-mini-kpi">
+            <div class="hero-mini-kpi-value" id="heroCrewValue" aria-live="polite">--</div>
+            <div class="hero-mini-kpi-label" id="crewLabel">Crew Count</div>
+          </div>
+          <div class="hero-mini-kpi gold">
+            <div class="hero-mini-kpi-value" id="heroRateValue" aria-live="polite">--</div>
+            <div class="hero-mini-kpi-label" id="rateLabel">Avg Rate</div>
+          </div>
+          <div class="hero-mini-kpi gold">
+            <div class="hero-mini-kpi-value" id="heroTargetValue" aria-live="polite">--</div>
+            <div class="hero-mini-kpi-label" id="targetLabel">Predicted Tops</div>
+          </div>
+          <div class="hero-mini-kpi">
+            <div class="hero-mini-kpi-value" id="heroBagsValue" aria-live="polite">--</div>
+            <div class="hero-mini-kpi-label" id="bagsLabel">Bags Done</div>
+            <div class="hero-mini-kpi-sub" id="heroAvgCycleTime">Avg: --</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="toolbar" role="toolbar" aria-label="Dashboard controls">
+        <div class="toolbar-left"><div class="date-display" id="dateRangeDisplay" aria-live="polite">Showing data for <strong>Today</strong></div></div>
+      </div>
+
+      <div class="kpi-row" id="kpiRow" role="region" aria-label="Key performance indicator cards"></div>
+
+      <!-- All Widgets Container (Muuri Grid) -->
+      <div class="widgets-container" id="widgetsContainer" role="region" aria-label="Dashboard widgets">
+
+        <!-- Integration Widgets (Medium Size) -->
+        <div class="widget-item" data-widget-id="widget-kanban" data-size="medium">
+          <div class="widget-card integration-card" onclick="switchView('kanban')" style="cursor:pointer;" role="button" tabindex="0" aria-label="Open Supply Kanban view" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('kanban')">
+            <div class="widget-header integration-header">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div class="integration-icon kanban" aria-hidden="true"><i class="ph-duotone ph-package"></i></div>
+                <div class="integration-title widget-title">Supply Kanban</div>
+              </div>
+              <div class="widget-actions">
+                                <button class="widget-help" onclick="event.stopPropagation();showWidgetHelp('kanban')" title="Help" aria-label="Show Supply Kanban widget help">
+                  <i class="ph ph-lightbulb" aria-hidden="true"></i>
+                </button>
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse Supply Kanban widget" aria-expanded="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-hide" onclick="event.stopPropagation();hideWidget('widget-kanban')" title="Hide" aria-label="Hide Supply Kanban widget">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="widget-content integration-stats">
+              <div class="integration-stat"><span class="integration-stat-label">Total Items</span><span class="integration-stat-value" id="kanbanTotal">—</span></div>
+              <div class="integration-stat"><span class="integration-stat-label">Need Reorder</span><span class="integration-stat-value alert" id="kanbanReorder">—</span></div>
+              <div class="integration-stat"><span class="integration-stat-label">In Stock</span><span class="integration-stat-value good" id="kanbanInStock">—</span></div>
+            </div>
+            <div class="widget-resize-handle" aria-hidden="true"></div>
+          </div>
+        </div>
+
+        <div class="widget-item" data-widget-id="widget-scoreboard" data-size="medium">
+          <div class="widget-card integration-card" onclick="switchView('scoreboard')" style="cursor:pointer;" role="button" tabindex="0" aria-label="Open Live Scoreboard view" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('scoreboard')">
+            <div class="widget-header integration-header">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div class="integration-icon scoreboard"><i class="ph-duotone ph-gauge"></i></div>
+                <div class="integration-title widget-title">Live Scoreboard</div>
+              </div>
+              <div class="widget-actions">
+                                <button class="widget-help" onclick="event.stopPropagation();showWidgetHelp('scoreboard')" title="Help" aria-label="Show widget help">
+                  <i class="ph ph-lightbulb"></i>
+                </button>
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-hide" onclick="event.stopPropagation();hideWidget('widget-scoreboard')" title="Hide" aria-label="Hide widget">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="widget-content integration-stats">
+              <div class="integration-stat"><span class="integration-stat-label">Current Status</span><span class="integration-stat-value" id="scoreboardStatus">—</span></div>
+              <div class="integration-stat"><span class="integration-stat-label">Today's Lbs</span><span class="integration-stat-value" id="scoreboardLbs">—</span></div>
+              <div class="integration-stat"><span class="integration-stat-label">vs Target</span><span class="integration-stat-value" id="scoreboardTarget">—</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="widget-item" data-widget-id="widget-bags" data-size="medium">
+          <div class="widget-card integration-card">
+            <div class="widget-header integration-header">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div class="integration-icon bags"><i class="ph-duotone ph-timer"></i></div>
+                <div class="integration-title widget-title">5KG Bag Timer</div>
+              </div>
+              <div class="widget-actions">
+                                <button class="widget-help" onclick="event.stopPropagation();showWidgetHelp('bags')" title="Help" aria-label="Show widget help">
+                  <i class="ph ph-lightbulb"></i>
+                </button>
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-hide" onclick="event.stopPropagation();hideWidget('widget-bags')" title="Hide" aria-label="Hide widget">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="widget-content integration-stats">
+              <div class="integration-stat"><span class="integration-stat-label">Bags Today</span><span class="integration-stat-value" id="bagsToday">—</span></div>
+              <div class="integration-stat"><span class="integration-stat-label">Avg Time</span><span class="integration-stat-value" id="bagsAvgTime">—</span></div>
+              <div class="integration-stat"><span class="integration-stat-label">vs Target</span><span class="integration-stat-value" id="bagsVsTarget">—</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="widget-item" data-widget-id="widget-sop" data-size="medium">
+          <div class="widget-card integration-card" onclick="switchView('sop')" style="cursor:pointer;" role="button" tabindex="0" aria-label="Open SOP Manager view" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('sop')">
+            <div class="widget-header integration-header">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div class="integration-icon sop" aria-hidden="true"><i class="ph-duotone ph-book-open-text"></i></div>
+                <div class="integration-title widget-title">SOP Manager</div>
+              </div>
+              <div class="widget-actions">
+                                <button class="widget-help" onclick="event.stopPropagation();showWidgetHelp('sop')" title="Help" aria-label="Show SOP Manager widget help">
+                  <i class="ph ph-lightbulb" aria-hidden="true"></i>
+                </button>
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse SOP Manager widget" aria-expanded="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-hide" onclick="event.stopPropagation();hideWidget('widget-sop')" title="Hide" aria-label="Hide SOP Manager widget">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="widget-content integration-stats">
+              <div class="integration-stat"><span class="integration-stat-label">Status</span><span class="integration-stat-value good">Active</span></div>
+              <div class="integration-stat"><span class="integration-stat-label">Feature</span><span class="integration-stat-value">EN/ES</span></div>
+              <div class="integration-stat"><span class="integration-stat-label">Export</span><span class="integration-stat-value">PDF</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Last Hour Production -->
+        <div class="widget-item" data-widget-id="widget-current" data-size="large">
+          <div class="widget-card current-card">
+            <div class="widget-header current-header">
+              <div><div class="current-strain" id="currentStrain">No Data</div><div class="current-time" id="currentTime">—</div></div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div class="status-badge idle" id="statusBadge">Last Hour</div>
+                <div class="widget-actions">
+                  <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize" aria-label="Resize widget">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
+                  <button class="widget-help" onclick="showWidgetHelp('current')" title="Help" aria-label="Show widget help">
+                    <i class="ph ph-lightbulb"></i>
+                  </button>
+                  <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
+                  <button class="widget-drag-handle" title="Drag to reorder" aria-label="Drag to reorder widget">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                  </button>
+                  <button class="widget-hide" onclick="hideWidget('widget-current')" title="Hide" aria-label="Hide widget">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="widget-content current-stats">
+              <div class="current-stat"><div class="current-stat-value highlight" id="currentTops">0</div><div class="current-stat-label">Tops (lbs)</div></div>
+              <div class="current-stat"><div class="current-stat-value" id="currentSmalls">0</div><div class="current-stat-label">Smalls (lbs)</div></div>
+              <div class="current-stat"><div class="current-stat-value" id="currentTrimmers">0</div><div class="current-stat-label">Trimmers</div></div>
+              <div class="current-stat"><div class="current-stat-value" id="currentBuckers">0</div><div class="current-stat-label">Buckers</div></div>
+              <div class="current-stat"><div class="current-stat-value highlight" id="currentRate">0.00</div><div class="current-stat-label">Lbs/Trimmer</div></div>
+              <div class="current-stat"><div class="current-stat-value" id="currentTotal">0</div><div class="current-stat-label">Total Lbs</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="widget-item" data-widget-id="widget-hourlyChart" data-size="large">
+          <div class="widget-card chart-card">
+            <div class="widget-header chart-header">
+              <div><div class="chart-title widget-title">Hourly Production</div><div class="chart-subtitle">Tops vs Smalls</div></div>
+              <div class="widget-actions">
+                <button class="widget-help" onclick="showWidgetHelp('hourlyChart')" title="Help" aria-label="Show widget help">
+                  <i class="ph ph-lightbulb"></i>
+                </button>
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-hide" onclick="hideWidget('widget-hourlyChart')" title="Hide" aria-label="Hide widget">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="widget-content chart-container"><canvas id="hourlyChart"></canvas></div>
+          </div>
+        </div>
+        <div class="widget-item" data-widget-id="widget-rateChart" data-size="large">
+          <div class="widget-card chart-card">
+            <div class="widget-header chart-header">
+              <div><div class="chart-title widget-title">Efficiency Trend</div><div class="chart-subtitle">Lbs/Trimmer/Hr</div></div>
+              <div class="widget-actions">
+                <button class="widget-help" onclick="showWidgetHelp('rateChart')" title="Help" aria-label="Show widget help">
+                  <i class="ph ph-lightbulb"></i>
+                </button>
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-hide" onclick="hideWidget('widget-rateChart')" title="Hide" aria-label="Hide widget">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="widget-content chart-container"><canvas id="rateChart"></canvas></div>
+          </div>
+        </div>
+        <div class="widget-item" data-widget-id="widget-dailyChart" data-size="large">
+          <div class="widget-card chart-card">
+            <div class="widget-header chart-header">
+              <div><div class="chart-title widget-title">Daily Production</div><div class="chart-subtitle">Multi-day view</div></div>
+              <div class="widget-actions">
+                <button class="widget-help" onclick="showWidgetHelp('dailyChart')" title="Help" aria-label="Show widget help">
+                  <i class="ph ph-lightbulb"></i>
+                </button>
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-hide" onclick="hideWidget('widget-dailyChart')" title="Hide" aria-label="Hide widget">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="widget-content chart-container"><canvas id="dailyChart"></canvas></div>
+          </div>
+        </div>
+        <div class="widget-item" data-widget-id="widget-dailyRateChart" data-size="large">
+          <div class="widget-card chart-card">
+            <div class="widget-header chart-header">
+              <div><div class="chart-title widget-title" id="efficiencyChartTitle">Daily Efficiency</div><div class="chart-subtitle" id="efficiencyChartSubtitle">With 7-day MA</div></div>
+              <div class="widget-actions">
+                                <button class="widget-help" onclick="showWidgetHelp('dailyRateChart')" title="Help" aria-label="Show widget help">
+                  <i class="ph ph-lightbulb"></i>
+                </button>
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-hide" onclick="hideWidget('widget-dailyRateChart')" title="Hide" aria-label="Hide widget">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="widget-content chart-container"><canvas id="dailyRateChart"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Trimmers Chart -->
+        <div class="widget-item" data-widget-id="widget-trimmersChart" data-size="large">
+          <div class="widget-card chart-card">
+            <div class="widget-header chart-header">
+              <div><div class="chart-title widget-title">Trimmers on Line</div><div class="chart-subtitle" id="trimmersChartSubtitle">By Hour</div></div>
+              <div class="widget-actions">
+                                <button class="widget-help" onclick="showWidgetHelp('trimmersChart')" title="Help" aria-label="Show widget help">
+                  <i class="ph ph-lightbulb"></i>
+                </button>
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-hide" onclick="hideWidget('widget-trimmersChart')" title="Hide" aria-label="Hide widget">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="widget-content chart-container"><canvas id="trimmersChart"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Bottom Widgets -->
+        <div class="widget-item" data-widget-id="widget-productivity" data-size="xl">
+          <div class="widget-card wide">
+            <div class="widget-header">
+              <div><div class="widget-title">Trimmer Productivity</div></div>
+              <div class="widget-actions">
+                                <button class="widget-help" onclick="showWidgetHelp('productivity')" title="Help" aria-label="Show widget help">
+                  <i class="ph ph-lightbulb"></i>
+                </button>
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-hide" onclick="hideWidget('widget-productivity')" title="Hide" aria-label="Hide widget">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="widget-content">
+              <div class="sparkline-metrics">
+                <div class="sparkline-metric"><div class="sparkline-metric-value current" id="sparkCurrent">—</div><div class="sparkline-metric-label">Last Hour</div></div>
+                <div class="sparkline-metric"><div class="sparkline-metric-value best" id="sparkBest">—</div><div class="sparkline-metric-label">Best Hour</div></div>
+                <div class="sparkline-metric"><div class="sparkline-metric-value avg" id="sparkAvg">—</div><div class="sparkline-metric-label">Avg Rate</div></div>
+              </div>
+              <div class="sparkline-bars" id="sparklineBars"></div>
+            </div>
+          </div>
+        </div>
+        <div class="widget-item" data-widget-id="widget-strains" data-size="medium">
+          <div class="widget-card narrow">
+            <div class="widget-header">
+              <div><div class="widget-title">Strain Breakdown</div></div>
+              <div class="widget-actions">
+                                <button class="widget-help" onclick="showWidgetHelp('strains')" title="Help" aria-label="Show widget help">
+                  <i class="ph ph-lightbulb"></i>
+                </button>
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-hide" onclick="hideWidget('widget-strains')" title="Hide" aria-label="Hide widget">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="widget-content strain-list" id="strainList"><div style="color:#8a9a8e;text-align:center;padding:16px;">No data</div></div>
+          </div>
+        </div>
+        <div class="widget-item" data-widget-id="widget-performance" data-size="medium">
+          <div class="widget-card third">
+            <div class="widget-header">
+              <div><div class="widget-title">Performance</div></div>
+              <div class="widget-actions">
+                                <button class="widget-help" onclick="showWidgetHelp('performance')" title="Help" aria-label="Show widget help">
+                  <i class="ph ph-lightbulb"></i>
+                </button>
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-hide" onclick="hideWidget('widget-performance')" title="Hide" aria-label="Hide widget">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="widget-content perf-table" id="perfTable"></div>
+          </div>
+        </div>
+        <div class="widget-item" data-widget-id="widget-cost" data-size="medium">
+          <div class="widget-card third">
+            <div class="widget-header">
+              <div><div class="widget-title">Cost Analysis</div></div>
+              <div class="widget-actions">
+                                <button class="widget-help" onclick="showWidgetHelp('cost')" title="Help" aria-label="Show widget help">
+                  <i class="ph ph-lightbulb"></i>
+                </button>
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-hide" onclick="hideWidget('widget-cost')" title="Hide" aria-label="Hide widget">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="widget-content perf-table" id="costTable"></div>
+          </div>
+        </div>
+        <div class="widget-item" data-widget-id="widget-period" data-size="medium">
+          <div class="widget-card third">
+            <div class="widget-header">
+              <div><div class="widget-title">Period Summary</div><div class="widget-subtitle" id="periodLabel"></div></div>
+              <div class="widget-actions">
+                                <button class="widget-help" onclick="showWidgetHelp('period')" title="Help" aria-label="Show widget help">
+                  <i class="ph ph-lightbulb"></i>
+                </button>
+                <button class="widget-collapse" onclick="event.stopPropagation();toggleWidgetCollapse(this)" title="Collapse" aria-label="Collapse widget" aria-expanded="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="widget-hide" onclick="hideWidget('widget-period')" title="Hide" aria-label="Hide widget">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="widget-content perf-table" id="periodTable"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- App Views (iframes) -->
+    <div class="app-view" id="kanbanView" role="region" aria-label="Supply Kanban application">
+      <div class="app-iframe-container">
+        <button class="app-expand-btn" onclick="openAppNewTab('kanban')" title="Open in new tab" aria-label="Open Supply Kanban in new tab"><i class="ph ph-arrow-square-out" aria-hidden="true"></i></button>
+        <iframe class="app-iframe" id="kanbanFrame" data-src="https://rogueff.github.io/rogue-origin-apps/kanban.html" title="Supply Kanban application"></iframe>
+      </div>
+    </div>
+
+    <div class="app-view" id="scoreboardView" role="region" aria-label="Live Scoreboard application">
+      <div class="app-iframe-container">
+        <button class="app-expand-btn" onclick="openAppNewTab('scoreboard')" title="Open in new tab" aria-label="Open Live Scoreboard in new tab"><i class="ph ph-arrow-square-out" aria-hidden="true"></i></button>
+        <iframe class="app-iframe" id="scoreboardFrame" data-src="https://rogueff.github.io/rogue-origin-apps/scoreboard.html" title="Live Scoreboard application"></iframe>
+      </div>
+    </div>
+
+    <div class="app-view" id="barcodeView" role="region" aria-label="Barcode Printer application">
+      <div class="app-iframe-container">
+        <button class="app-expand-btn" onclick="openAppNewTab('barcode')" title="Open in new tab" aria-label="Open Barcode Printer in new tab"><i class="ph ph-arrow-square-out" aria-hidden="true"></i></button>
+        <iframe class="app-iframe" id="barcodeFrame" data-src="https://rogueff.github.io/rogue-origin-apps/barcode.html" title="Barcode Printer application"></iframe>
+      </div>
+    </div>
+
+    <div class="app-view" id="ordersView" role="region" aria-label="Orders application">
+      <div class="app-iframe-container">
+        <button class="app-expand-btn" onclick="openAppNewTab('orders')" title="Open in new tab" aria-label="Open Orders in new tab"><i class="ph ph-arrow-square-out" aria-hidden="true"></i></button>
+        <iframe class="app-iframe" id="ordersFrame" data-src="https://rogueff.github.io/rogue-origin-apps/orders.html" title="Orders application"></iframe>
+      </div>
+    </div>
+
+    <div class="app-view" id="sopView" role="region" aria-label="SOP Manager application">
+      <div class="app-iframe-container">
+        <button class="app-expand-btn" onclick="openAppNewTab('sop')" title="Open in new tab" aria-label="Open SOP Manager in new tab"><i class="ph ph-arrow-square-out" aria-hidden="true"></i></button>
+        <iframe class="app-iframe" id="sopFrame" data-src="https://rogueff.github.io/rogue-origin-apps/sop-manager.html" title="SOP Manager application"></iframe>
+      </div>
+    </div>
+  </main>
+
+<!-- ========================================== -->
+
+<div class="ai-chat-widget">
+  <div class="ai-chat-panel" id="aiChatPanel">
+    <div class="ai-chat-header">
+      <div class="ai-chat-header-icon">🌿</div>
+      <div class="ai-chat-header-text">
+        <h3>Rogue Origin Assistant</h3>
+        <span>Ask about production, bags, crew</span>
+      </div>
+      <button class="ai-voice-mode-toggle active" id="aiVoiceModeToggle" onclick="aiToggleVoiceMode()" title="Toggle voice responses" aria-label="Toggle voice responses" aria-pressed="true">
+        <span class="icon">🔊</span>
+        <span class="label">Voice</span>
+      </button>
+      <button class="settings-close" onclick="toggleAIChat()" aria-label="Close AI chat">&times;</button>
+    </div>
+    <div class="ai-quick-actions" role="group" aria-label="Quick questions">
+      <button class="ai-quick-btn" onclick="aiAskQuestion('How are we doing today?')" aria-label="Ask about production status"><span aria-hidden="true">📊</span> Status</button>
+      <button class="ai-quick-btn" onclick="aiAskQuestion('How many bags completed?')" aria-label="Ask about bags completed"><span aria-hidden="true">📦</span> Bags</button>
+      <button class="ai-quick-btn" onclick="aiAskQuestion('What is our current rate?')" aria-label="Ask about current rate"><span aria-hidden="true">⚡</span> Rate</button>
+      <button class="ai-quick-btn" onclick="aiAskQuestion('How many people working?')" aria-label="Ask about crew count"><span aria-hidden="true">👥</span> Crew</button>
+    </div>
+    <div class="ai-chat-messages" id="aiMessages" role="log" aria-live="polite" aria-label="Chat messages">
+      <div class="ai-message assistant" role="status">
+        Hi! I can help with production status, bag counts, crew info, and more. What would you like to know?
+      </div>
+    </div>
+    <div class="ai-voice-status" id="aiVoiceStatus">🎤 Listening...</div>
+    <div class="ai-chat-input-area">
+      <input type="text" class="ai-chat-input" id="aiInput" placeholder="Ask a question..." onkeypress="if(event.key==='Enter')aiSendMessage()" aria-label="Chat input">
+      <button class="ai-voice-btn" id="aiVoiceBtn" onclick="aiToggleVoice()" title="Voice input" aria-label="Voice input">🎤</button>
+      <button class="ai-chat-send" onclick="aiSendMessage()" aria-label="Send message">
+        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
+    </div>
+  </div>
+  <!-- Old ai-chat-toggle button removed - using ai-chat-fab instead -->
+</div>
+
+<!-- API Cache Layer - Load before modules -->
+<script defer src="../js/shared/api-cache.js"></script>
+<!-- ES6 Modular Dashboard (replaces monolithic dashboard.js) -->
+<script type="module" src="../js/modules/index.js?v=3"></script>
+
+<!-- Floating Action Button -->
+<button class="ai-chat-fab" onclick="toggleAIChat()" title="AI Assistant" aria-label="Open AI Assistant chat">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M21 11.5C21 12.8 20.7 14.1 20.1 15.3C19.4 16.7 18.3 17.9 17 18.7C15.6 19.6 14.1 20 12.5 20C11.2 20 9.9 19.7 8.7 19.1L3 21L4.9 15.3C4.3 14.1 4 12.8 4 11.5C4 9.9 4.4 8.4 5.3 7C6.1 5.7 7.3 4.6 8.7 3.9C9.9 3.3 11.2 3 12.5 3H13C15.1 3.1 17.1 4 18.5 5.5C20 6.9 20.9 8.9 21 11V11.5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M12.5 8C12.5 8 10.5 9.5 10.5 12C10.5 9.5 8.5 8 8.5 8M12.5 8C12.5 8 14.5 9.5 14.5 12C14.5 9.5 16.5 8 16.5 8M12.5 12V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+</button>
+
+<!-- Welcome Modal -->
+<div class="welcome-modal-overlay" id="welcomeModal" role="dialog" aria-modal="true" aria-labelledby="welcomeModalTitle"><div class="welcome-modal">
+    <div class="welcome-modal-icon">🌿</div>
+    <div class="welcome-modal-title" id="welcomeModalTitle">Welcome to Rogue Origin!</div>
+    <div class="welcome-modal-content">
+      Your production dashboard is ready. Would you like a quick tour to learn about the features and get started?
+    </div>
+    <div class="welcome-modal-actions">
+      <button class="welcome-modal-btn welcome-modal-btn-secondary" onclick="dismissWelcome()" aria-label="Dismiss welcome and skip tour">No Thanks</button>
+      <button class="welcome-modal-btn welcome-modal-btn-primary" onclick="startTutorialFromWelcome()" aria-label="Start the dashboard tour">Start Tour</button>
+    </div>
+  </div>
+</div>
+
+<!-- Service Worker Registration -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then((registration) => {
+        console.log('[SW] Service worker registered:', registration.scope);
+      })
+      .catch((error) => {
+        console.log('[SW] Service worker registration failed:', error);
+      });
+  });
+}
+</script>
+
+</body>
+</html>

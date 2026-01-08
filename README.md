@@ -11,7 +11,7 @@
 ## Quick Start
 
 ### View the Dashboard
-1. Open `index.html` in a browser
+1. Open `src/pages/index.html` in a browser
 2. Or visit: https://rogueff.github.io/rogue-origin-apps/
 
 ### For Developers
@@ -20,7 +20,9 @@
 git clone <repo-url>
 cd rogue-origin-apps-main
 
-# Make changes to HTML files
+# Edit HTML files in src/pages/
+# Edit styles in src/css/
+# Edit JavaScript in src/js/
 # No build process needed - pure HTML/CSS/JS
 
 # Deploy to GitHub Pages
@@ -35,33 +37,50 @@ git push origin main
 ## Project Structure
 
 ```
-rogue-origin-apps-main/
-├── index.html                    ⭐ Main Operations Dashboard (hybrid design)
-├── scoreboard.html               📺 Floor TV display
-├── sop-manager.html              📋 Standard Operating Procedures
-├── kanban.html                   📊 Task board
-├── barcode.html                  🏷️  Label printing
-├── orders.html                   📦 Internal order management
-├── order.html                    👤 Customer portal
-├── ops-hub.html                  🔧 Alternative dashboard
+rogue-origin-apps/
+├── src/                          📦 Source code
+│   ├── pages/                    📄 HTML applications
+│   │   ├── index.html           ⭐ Main Operations Dashboard
+│   │   ├── scoreboard.html      📺 Floor TV display
+│   │   ├── barcode.html         🏷️  Label printing
+│   │   ├── kanban.html          📊 Task board
+│   │   ├── orders.html          📦 Internal order management
+│   │   ├── order.html           👤 Customer portal
+│   │   ├── sop-manager.html     📋 Standard Operating Procedures
+│   │   └── ops-hub.html         🔧 Alternative dashboard
+│   │
+│   ├── js/                       💻 JavaScript
+│   │   ├── modules/             ES6 dashboard modules (11 files)
+│   │   ├── scoreboard/          Scoreboard modules (10 files)
+│   │   ├── shared/              Shared utilities (api-cache.js)
+│   │   └── legacy/              Deprecated code (dashboard.js)
+│   │
+│   ├── css/                      🎨 Stylesheets
+│   │   └── *.css                Per-page stylesheets
+│   │
+│   └── assets/                   🖼️  Static assets
+│       ├── icons/               SVG icons (hemp leaf, patterns)
+│       └── images/              (future use)
 │
 ├── apps-script/                  🔌 Backend code
 │   ├── production-tracking/      Main backend (~1,900 lines)
 │   ├── barcode-manager/          Barcode backend
 │   ├── kanban/                   Kanban backend
-│   └── sop-manager/              SOP backend
+│   └── wholesale-orders/         Order backend
 │
 ├── docs/                         📚 Documentation
-│   ├── APP_CATALOG.md            Complete API reference
-│   ├── CODEBASE_INVENTORY.md     File & function inventory
-│   ├── PROJECT_STRUCTURE.md      Architecture docs
-│   └── sessions/                 Development session notes
+│   ├── technical/               Architecture & API docs
+│   ├── design/                  Design system specs
+│   ├── plans/                   Implementation plans
+│   ├── guides/                  Setup & user guides
+│   └── sessions/                Development session notes
 │
+├── tests/                        🧪 Test suite
 ├── archive/                      📦 Backups & design explorations
-│   └── designs/                  Previous HTML versions
-│
 ├── Skills/                       🤖 Custom AI skills
 │
+├── index.html                    🔀 Root redirect to src/pages/
+├── sw.js                         ⚙️  Service worker
 ├── CLAUDE.md                     🧠 AI context file (read this!)
 ├── ROADMAP.md                    🗺️  Development phases
 └── README.md                     📖 This file
@@ -73,14 +92,14 @@ rogue-origin-apps-main/
 
 | App | File | Backend | Status | Purpose |
 |-----|------|---------|--------|---------|
-| **Operations Dashboard** | `index.html` | Production Code.gs | ✅ Live | Main hub with AI chat, Muuri drag-drop widgets |
-| **Scoreboard** | `scoreboard.html` | Production Code.gs | ✅ Live | Floor TV display (468KB with embedded charts) |
-| **SOP Manager** | `sop-manager.html` | SOP Code.gs | ✅ Live | Procedures management |
-| **Kanban** | `kanban.html` | Kanban Code.gs | ✅ Live | Task tracking board |
-| **Barcode Manager** | `barcode.html` | Barcode Code.gs | ✅ Live | Label printing system |
-| **Orders (Internal)** | `orders.html` | *(pending)* | 🚧 80% | Internal order management |
-| **Customer Portal** | `order.html` | *(pending)* | 🚧 80% | Customer order view |
-| **Ops Hub (Alt)** | `ops-hub.html` | Production Code.gs | ✅ Live | Alternative dashboard design |
+| **Operations Dashboard** | `src/pages/index.html` | Production Code.gs | ✅ Live | Main hub with AI chat, Muuri drag-drop widgets |
+| **Scoreboard** | `src/pages/scoreboard.html` | Production Code.gs | ✅ Live | Floor TV display (468KB with embedded charts) |
+| **SOP Manager** | `src/pages/sop-manager.html` | SOP Code.gs | ✅ Live | Procedures management |
+| **Kanban** | `src/pages/kanban.html` | Kanban Code.gs | ✅ Live | Task tracking board |
+| **Barcode Manager** | `src/pages/barcode.html` | Barcode Code.gs | ✅ Live | Label printing system |
+| **Orders (Internal)** | `src/pages/orders.html` | *(pending)* | 🚧 80% | Internal order management |
+| **Customer Portal** | `src/pages/order.html` | *(pending)* | 🚧 80% | Customer order view |
+| **Ops Hub (Alt)** | `src/pages/ops-hub.html` | Production Code.gs | ✅ Live | Alternative dashboard design |
 
 ---
 
@@ -251,9 +270,10 @@ See [ROADMAP.md](ROADMAP.md) for complete details.
 - Development guidelines
 
 ### For Developers
-- **[docs/APP_CATALOG.md](docs/APP_CATALOG.md)** - Complete API reference for all apps
-- **[docs/CODEBASE_INVENTORY.md](docs/CODEBASE_INVENTORY.md)** - File/function inventory
-- **[docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md)** - Architecture deep-dive
+- **[docs/README.md](docs/README.md)** - Documentation index
+- **[docs/technical/APP_CATALOG.md](docs/technical/APP_CATALOG.md)** - Complete API reference
+- **[docs/technical/CODEBASE_INVENTORY.md](docs/technical/CODEBASE_INVENTORY.md)** - File/function inventory
+- **[docs/technical/PROJECT_STRUCTURE.md](docs/technical/PROJECT_STRUCTURE.md)** - Architecture deep-dive
 - **[docs/sessions/](docs/sessions/)** - Development session notes
 
 ---
