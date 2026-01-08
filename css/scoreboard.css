@@ -1078,4 +1078,151 @@
       font-size: 16px;
       opacity: 0.8;
     }
+
+    /* Start Day Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      backdrop-filter: blur(4px);
+    }
+
+    .start-day-modal {
+      background: #1a1d29;
+      border: 2px solid #2a2f42;
+      border-radius: 12px;
+      padding: 24px;
+      width: 90%;
+      max-width: 400px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+    }
+
+    .modal-title {
+      font-size: 20px;
+      font-weight: 700;
+      margin: 0 0 8px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #e2e8f0;
+    }
+
+    .modal-subtitle {
+      font-size: 14px;
+      color: #94a3b8;
+      margin: 0 0 24px 0;
+    }
+
+    .time-input-wrapper {
+      margin-bottom: 20px;
+    }
+
+    .time-input-wrapper label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #e2e8f0;
+    }
+
+    .time-input {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #2a2f42;
+      border-radius: 8px;
+      background: #0f1117;
+      color: #e2e8f0;
+      font-size: 18px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+    }
+
+    .time-input:focus {
+      outline: none;
+      border-color: #22c55e;
+    }
+
+    .impact-preview {
+      background: rgba(228, 170, 79, 0.1);
+      border: 1px solid rgba(228, 170, 79, 0.3);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .impact-preview i {
+      font-size: 20px;
+      color: #e4aa4f;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .impact-text {
+      font-size: 14px;
+      color: #e2e8f0;
+      line-height: 1.5;
+    }
+
+    .impact-details {
+      font-size: 16px;
+      font-weight: 700;
+      margin-top: 6px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    #goalReduction {
+      color: #e4aa4f;
+      font-weight: 700;
+    }
+
+    #adjustedGoalPreview {
+      color: #22c55e;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+
+    .btn-secondary,
+    .btn-primary {
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: none;
+    }
+
+    .btn-secondary {
+      background: transparent;
+      border: 2px solid #2a2f42;
+      color: #94a3b8;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .btn-primary {
+      background: #22c55e;
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: #16a34a;
+      transform: translateY(-1px);
+    }
   </style>
