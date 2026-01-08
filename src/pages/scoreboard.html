@@ -50,7 +50,20 @@
     <button class="lang-btn" id="btnEs" onclick="setLanguage('es')">ES</button>
   </div>
   <button class="help-btn" onclick="toggleHelp()">?</button>
-  
+
+  <!-- Start Day Button (appears until shift start is set) -->
+  <button id="startDayBtn" class="start-day-btn pulse-green" onclick="openStartDayModal()" style="display:none;">
+    <i class="ph-duotone ph-play-circle"></i>
+    Start Day
+  </button>
+
+  <!-- Started Badge (appears after shift start is set) -->
+  <div id="startedBadge" class="started-badge" onclick="editStartTime()" style="display:none;">
+    <i class="ph-duotone ph-clock"></i>
+    Started: <span id="startTimeDisplay">—</span>
+    <i id="badgeIcon" class="ph-duotone ph-pencil-simple"></i>
+  </div>
+
   <div class="help-modal" id="helpModal" onclick="if(event.target===this)toggleHelp()">
     <div class="help-content">
       <div class="help-header">
@@ -1745,5 +1758,36 @@
       });
     })();
   </script>
+
+  <!-- Start Day Modal -->
+  <div id="startDayModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content start-day-modal">
+      <h3 class="modal-title">
+        <i class="ph-duotone ph-play-circle"></i>
+        Set Shift Start Time
+      </h3>
+      <p class="modal-subtitle">What time did production begin today?</p>
+
+      <div class="time-input-wrapper">
+        <label for="startTimeInput">Start Time:</label>
+        <input type="time" id="startTimeInput" class="time-input" />
+      </div>
+
+      <div class="impact-preview" id="impactPreview">
+        <i class="ph-duotone ph-info"></i>
+        <div class="impact-text">
+          This will adjust daily goal by <span id="goalReduction">—</span>
+          <div class="impact-details">
+            <span id="originalGoal">200</span> lbs → <span id="adjustedGoalPreview">—</span> lbs
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button onclick="cancelStartTime()" class="btn-secondary">Cancel</button>
+        <button onclick="confirmStartTime()" class="btn-primary">Confirm</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
