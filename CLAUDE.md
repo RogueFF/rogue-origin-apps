@@ -11,11 +11,60 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Status
 
-- **Version**: 2.0 (Hybrid Dashboard with AI Agent)
+- **Version**: 2.1 (ES6 Modular Architecture)
 - **Git**: Initialized (January 4, 2026)
 - **Structure**: Organized and documented
 - **Production**: ✅ Live and operational
-- **Main Dashboard**: `index.html` (hybrid design with Muuri.js + dual themes + AI chat)
+- **Main Dashboard**: `index.html` (ES6 modules + Muuri.js + dual themes + AI chat)
+
+---
+
+## Code Quality Overhaul (January 2026)
+
+### ✅ Completed Phases
+
+**Phase 2.1 & 2.2: Architecture Cleanup**
+- Split 3323-line `dashboard.js` into 11 ES6 modules in `js/modules/`:
+  - `config.js` - KPI/widget definitions, API URL, work schedule
+  - `state.js` - Centralized state (replaces 30+ globals)
+  - `utils.js` - Safe helpers, formatters, date utilities
+  - `theme.js` - Dark/light mode, Chart.js theme
+  - `navigation.js` - View switching, sidebar
+  - `settings.js` - localStorage persistence
+  - `api.js` - Data fetching with AbortController
+  - `grid.js` - Muuri drag-drop grids
+  - `charts.js` - Chart.js initialization
+  - `panels.js` - Settings/AI chat panels
+  - `widgets.js` - KPI/widget rendering
+  - `date.js` - Date range selection
+  - `index.js` - Main entry point
+- HTML updated: `<script type="module" src="js/modules/index.js">`
+
+**Phase 1.1: Memory Leak Fixes**
+- Added interval registry to state.js (`setInterval_`, `clearInterval_`, `clearAllIntervals`)
+- All event listeners tracked via `registerEventListener()` for cleanup
+- `cleanup()` clears intervals, timers, charts, grids, listeners on unload
+
+**Phase 1.2: Security Hardening**
+- API URL centralized in `config.js` only
+- `api-cache.js` requires explicit `apiUrl` parameter
+- Input validation added to all Apps Script backends:
+  - `production-tracking/Code.gs` - date/string/numeric validation
+  - `barcode-manager/Code.gs` - barcode format validation
+  - `wholesale-orders/Code.gs` - full schema validation
+- Formula injection prevention (blocks `=IMPORTDATA`, `=HYPERLINK`, etc.)
+
+### 📋 Remaining Phases
+
+| Phase | Description | Priority |
+|-------|-------------|----------|
+| 3.1 | Error handling & loading states | High |
+| 4.1 | Reduce scoreboard.html (414KB → <100KB) | Medium |
+| 5.1 | Accessibility fixes (WCAG AA) | High |
+| 4.2-4.3 | Lazy loading optimizations | Medium |
+| 6.1-6.2 | Documentation & CSS cleanup | Low |
+
+**To continue**: Start with Phase 3.1 (error handling) or Phase 5.1 (accessibility)
 
 ## Quick Reference
 
@@ -56,10 +105,29 @@ rogue-origin-apps-main/
 ├── order.html                      Customer portal
 ├── ops-hub.html                    Alternative dashboard
 │
+├── js/
+│   ├── modules/                    ⭐ ES6 MODULAR CODEBASE (11 modules)
+│   │   ├── index.js                Main entry point
+│   │   ├── config.js               KPI/widget definitions, API URL
+│   │   ├── state.js                Centralized state manager
+│   │   ├── utils.js                Helper functions
+│   │   ├── theme.js                Dark/light mode
+│   │   ├── navigation.js           View switching
+│   │   ├── settings.js             localStorage persistence
+│   │   ├── api.js                  Data fetching
+│   │   ├── grid.js                 Muuri drag-drop
+│   │   ├── charts.js               Chart.js
+│   │   ├── panels.js               Settings/AI panels
+│   │   ├── widgets.js              KPI/widget rendering
+│   │   └── date.js                 Date range selection
+│   ├── dashboard.js                Legacy monolith (deprecated)
+│   └── api-cache.js                Caching layer
+│
 ├── apps-script/                    Local copies of Google Apps Script backends
 │   ├── production-tracking/        Main backend (~1,900 lines)
 │   ├── sop-manager/
 │   ├── kanban/
+│   ├── wholesale-orders/
 │   └── barcode-manager/
 │
 ├── docs/                           Technical documentation
