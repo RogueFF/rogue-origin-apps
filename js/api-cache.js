@@ -232,23 +232,31 @@
    * Fetch Dashboard Data with Caching
    * Wraps the existing dashboard data fetch with caching layer
    *
+   * SECURITY: API URL must be provided via options.apiUrl parameter.
+   * Import API_URL from config.js and pass it in options.
+   *
    * @param {string} startDate - Start date
    * @param {string} endDate - End date
    * @param {function} onData - Callback when data is available
    * @param {function} onError - Error callback
-   * @param {object} options - Additional options (apiUrl, signal, etc.)
+   * @param {object} options - Additional options (apiUrl required, signal, etc.)
    * @returns {Promise} Promise that resolves when fetch completes
    */
   function fetchDashboardData(startDate, endDate, onData, onError, options) {
     options = options || {};
+
+    // SECURITY: Require API URL to be passed explicitly - no hardcoded defaults
+    if (!options.apiUrl) {
+      throw new Error('API URL is required. Import API_URL from config.js and pass it via options.apiUrl');
+    }
+
     var cacheKey = APICache.generateKey('dashboard', {
       start: startDate,
       end: endDate
     });
 
     var fetchFn = function() {
-      // Use provided API URL or default
-      var apiUrl = options.apiUrl || 'https://script.google.com/macros/s/AKfycbxDAHSFl9cedGS49L3Lf5ztqy-SSToYigyA30ZtsdpmWNAR9H61X_Mm48JOOTGqqr-Z/exec';
+      var apiUrl = options.apiUrl;
       var url = apiUrl + '?action=dashboard&start=' + encodeURIComponent(startDate) + '&end=' + encodeURIComponent(endDate);
 
       var fetchOptions = {};
@@ -278,19 +286,28 @@
   /**
    * Prefetch data for common date ranges
    * Call this during idle time to warm the cache
+   *
+   * @param {string} apiUrl - Required API URL from config.js
    */
-  function prefetchCommonRanges() {
+  function prefetchCommonRanges(apiUrl) {
+    if (!apiUrl) {
+      console.warn('prefetchCommonRanges: API URL is required');
+      return;
+    }
+
     if ('requestIdleCallback' in window) {
       window.requestIdleCallback(function() {
+        var options = { apiUrl: apiUrl };
+
         // Prefetch today's data
         var today = new Date().toISOString().split('T')[0];
-        fetchDashboardData(today, today, function() {}, function() {});
+        fetchDashboardData(today, today, function() {}, function() {}, options);
 
         // Prefetch this week
         var weekAgo = new Date();
         weekAgo.setDate(weekAgo.getDate() - 7);
         var weekAgoStr = weekAgo.toISOString().split('T')[0];
-        fetchDashboardData(weekAgoStr, today, function() {}, function() {});
+        fetchDashboardData(weekAgoStr, today, function() {}, function() {}, options);
       });
     }
   }

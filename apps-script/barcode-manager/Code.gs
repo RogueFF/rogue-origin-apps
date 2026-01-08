@@ -1,7 +1,7 @@
 /**
  * ROGUE ORIGIN - Barcode/Label Manager
  * Handles both Apps Script Web App AND API requests for GitHub Pages
- * 
+ *
  * API Endpoints:
  * - GET  ?action=products     - Get all products
  * - GET  ?action=test         - Test API
@@ -12,6 +12,118 @@
  */
 
 const SHEET_ID = '1JQRU1-kW5hLcAdNhRvOvvj91fhezBE_-StN5X1Ni6zE';
+
+/**********************************************************
+ * SECURITY: Input Validation Functions
+ * Prevents formula injection and validates user inputs
+ **********************************************************/
+
+/**
+ * Sanitizes a string input to prevent injection attacks
+ * Removes or escapes dangerous characters
+ *
+ * @param {string} input - The string to sanitize
+ * @param {number} maxLength - Maximum allowed length (default: 500)
+ * @returns {string} Sanitized string
+ */
+function sanitizeString(input, maxLength) {
+  if (input === null || input === undefined) {
+    return '';
+  }
+
+  maxLength = maxLength || 500;
+  var str = String(input);
+
+  // Truncate if too long
+  if (str.length > maxLength) {
+    str = str.substring(0, maxLength);
+  }
+
+  // SECURITY: Escape formula injection by prefixing with single quote
+  // This tells Google Sheets to treat the cell as text
+  if (/^[=+\-@]/.test(str)) {
+    str = "'" + str;
+  }
+
+  // Remove null bytes and other control characters (except newlines and tabs)
+  str = str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+
+  return str.trim();
+}
+
+/**
+ * Validates and sanitizes a numeric row number
+ *
+ * @param {any} input - The row number to validate
+ * @returns {object} { valid: boolean, value: number|null, error: string|null }
+ */
+function validateRowNumber(input) {
+  if (input === null || input === undefined || input === '') {
+    return { valid: false, value: null, error: 'Row number is required' };
+  }
+
+  // Check for formula injection in string inputs
+  if (typeof input === 'string') {
+    var str = input.trim();
+    if (/^[=+@]/.test(str) || /IMPORT|HYPERLINK|SCRIPT/i.test(str)) {
+      return {
+        valid: false,
+        value: null,
+        error: 'Invalid input: potential formula injection detected'
+      };
+    }
+  }
+
+  var num = parseInt(input, 10);
+
+  if (isNaN(num) || num < 2) { // Row 1 is headers
+    return { valid: false, value: null, error: 'Invalid row number. Must be >= 2.' };
+  }
+
+  if (num > 100000) { // Reasonable limit
+    return { valid: false, value: null, error: 'Row number out of range' };
+  }
+
+  return { valid: true, value: num, error: null };
+}
+
+/**
+ * Validates a barcode string
+ *
+ * @param {string} input - The barcode to validate
+ * @returns {object} { valid: boolean, value: string|null, error: string|null }
+ */
+function validateBarcode(input) {
+  if (input === null || input === undefined || input === '') {
+    return { valid: true, value: '', error: null }; // Barcode can be empty
+  }
+
+  var str = String(input).trim();
+
+  // Check for formula injection
+  if (/^[=+\-@]/.test(str) || /IMPORT|HYPERLINK|SCRIPT/i.test(str)) {
+    return {
+      valid: false,
+      value: null,
+      error: 'Invalid barcode: potential formula injection detected'
+    };
+  }
+
+  // Only allow alphanumeric and common barcode characters
+  if (!/^[A-Za-z0-9\-_. ]+$/.test(str)) {
+    return {
+      valid: false,
+      value: null,
+      error: 'Invalid barcode format. Only letters, numbers, dashes, underscores, dots, and spaces allowed.'
+    };
+  }
+
+  if (str.length > 100) {
+    return { valid: false, value: null, error: 'Barcode too long (max 100 characters)' };
+  }
+
+  return { valid: true, value: str, error: null };
+}
 
 function doGet(e) {
   var action = (e && e.parameter && e.parameter.action) || '';
@@ -34,28 +146,65 @@ function doGet(e) {
 function doPost(e) {
   var action = (e && e.parameter && e.parameter.action) || '';
   var result = {};
-  
+
   try {
     var postData = {};
     if (e && e.postData && e.postData.contents) {
       postData = JSON.parse(e.postData.contents);
     }
-    
+
     if (action === 'add') {
-      result = addProduct(postData.header, postData.sku, postData.barcode);
+      // SECURITY: Validate and sanitize inputs
+      var header = sanitizeString(postData.header, 200);
+      var sku = sanitizeString(postData.sku, 100);
+      var barcodeValidation = validateBarcode(postData.barcode);
+
+      if (!barcodeValidation.valid) {
+        result = { success: false, error: barcodeValidation.error };
+      } else {
+        result = addProduct(header, sku, barcodeValidation.value);
+      }
     } else if (action === 'update') {
-      result = updateProduct(postData.row, postData.header, postData.sku, postData.barcode);
+      // SECURITY: Validate row number and sanitize inputs
+      var rowValidation = validateRowNumber(postData.row);
+      if (!rowValidation.valid) {
+        result = { success: false, error: rowValidation.error };
+      } else {
+        var header = sanitizeString(postData.header, 200);
+        var sku = sanitizeString(postData.sku, 100);
+        var barcodeValidation = validateBarcode(postData.barcode);
+
+        if (!barcodeValidation.valid) {
+          result = { success: false, error: barcodeValidation.error };
+        } else {
+          result = updateProduct(rowValidation.value, header, sku, barcodeValidation.value);
+        }
+      }
     } else if (action === 'delete') {
-      result = deleteProduct(postData.row);
+      // SECURITY: Validate row number
+      var rowValidation = validateRowNumber(postData.row);
+      if (!rowValidation.valid) {
+        result = { success: false, error: rowValidation.error };
+      } else {
+        result = deleteProduct(rowValidation.value);
+      }
     } else if (action === 'import') {
-      result = importCSV(postData.csv);
+      // SECURITY: CSV is validated line-by-line in importCSV function
+      // Just check for basic sanity
+      if (!postData.csv || typeof postData.csv !== 'string') {
+        result = { success: false, error: 'CSV data is required' };
+      } else if (postData.csv.length > 1000000) { // 1MB limit
+        result = { success: false, error: 'CSV data too large (max 1MB)' };
+      } else {
+        result = importCSV(postData.csv);
+      }
     } else {
       result = { success: false, error: 'Unknown action: ' + action };
     }
   } catch (err) {
     result = { success: false, error: err.message };
   }
-  
+
   return jsonResponse(result);
 }
 
@@ -202,10 +351,11 @@ function importCSV(csvText) {
   try {
     var sheet = getSheet();
     var lines = csvText.split('\n');
-    
+
     var imported = 0;
     var skipped = 0;
-    
+    var rejected = 0;
+
     // Get existing SKUs to avoid duplicates
     var existingData = sheet.getDataRange().getValues();
     var existingSKUs = {};
@@ -214,20 +364,32 @@ function importCSV(csvText) {
         existingSKUs[existingData[i][1].toString()] = true;
       }
     }
-    
+
     // Process CSV (skip header line)
     for (var i = 1; i < lines.length; i++) {
       var line = lines[i].trim();
       if (!line) continue;
-      
+
       // Handle both comma and tab delimiters
       var parts = line.indexOf('\t') >= 0 ? line.split('\t') : line.split(',');
-      
+
       if (parts.length >= 3) {
-        var header = parts[0].trim().replace(/^["']|["']$/g, '');
-        var sku = parts[1].trim().replace(/^["']|["']$/g, '');
-        var barcode = parts[2].trim().replace(/^["']|["']$/g, '');
-        
+        var headerRaw = parts[0].trim().replace(/^["']|["']$/g, '');
+        var skuRaw = parts[1].trim().replace(/^["']|["']$/g, '');
+        var barcodeRaw = parts[2].trim().replace(/^["']|["']$/g, '');
+
+        // SECURITY: Sanitize all inputs to prevent formula injection
+        var header = sanitizeString(headerRaw, 200);
+        var sku = sanitizeString(skuRaw, 100);
+        var barcodeValidation = validateBarcode(barcodeRaw);
+
+        // Skip invalid barcodes
+        if (!barcodeValidation.valid) {
+          rejected++;
+          continue;
+        }
+        var barcode = barcodeValidation.value;
+
         if (header && sku && barcode && !existingSKUs[sku]) {
           sheet.appendRow([header, sku, barcode]);
           existingSKUs[sku] = true;
@@ -237,12 +399,17 @@ function importCSV(csvText) {
         }
       }
     }
-    
-    return { 
-      success: true, 
-      message: 'Imported ' + imported + ' products. Skipped ' + skipped + ' items.' 
+
+    var message = 'Imported ' + imported + ' products. Skipped ' + skipped + ' items.';
+    if (rejected > 0) {
+      message += ' Rejected ' + rejected + ' items due to invalid data.';
+    }
+
+    return {
+      success: true,
+      message: message
     };
-    
+
   } catch (error) {
     Logger.log('Error in importCSV: ' + error.toString());
     return { success: false, message: 'Error importing CSV: ' + error.toString() };

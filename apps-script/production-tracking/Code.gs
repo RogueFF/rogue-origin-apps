@@ -23,6 +23,199 @@ var SHEET_ID = '1dARXrKU2u4KJY08ylA3GUKrT0zwmxCmtVh7IJxnn7is';
 var AI_MODEL = 'claude-sonnet-4-20250514';
 
 /**********************************************************
+ * SECURITY: Input Validation Functions
+ * Prevents formula injection and validates user inputs
+ **********************************************************/
+
+/**
+ * Validates a date string input
+ * Prevents formula injection attacks (e.g., =IMPORTDATA(), =HYPERLINK())
+ *
+ * @param {string} dateStr - The date string to validate
+ * @returns {object} { valid: boolean, value: string|null, error: string|null }
+ */
+function validateDateInput(dateStr) {
+  // Handle null/undefined
+  if (dateStr === null || dateStr === undefined || dateStr === '') {
+    return { valid: true, value: null, error: null };
+  }
+
+  // Convert to string
+  var str = String(dateStr).trim();
+
+  // SECURITY: Block formula injection attempts
+  // Formulas in Google Sheets start with = + - @ or contain dangerous patterns
+  var formulaPatterns = [
+    /^[=+\-@]/,                           // Starts with formula characters
+    /^[\t\r\n]*[=+\-@]/,                  // Starts with whitespace then formula chars
+    /IMPORTDATA/i,                         // Data import function
+    /IMPORTXML/i,                          // XML import function
+    /IMPORTHTML/i,                         // HTML import function
+    /IMPORTRANGE/i,                        // Range import function
+    /IMPORTFEED/i,                         // RSS feed import
+    /IMAGE\s*\(/i,                         // Image function
+    /HYPERLINK\s*\(/i,                     // Hyperlink function
+    /WEBSERVICE\s*\(/i,                    // Web service calls
+    /QUERY\s*\(/i,                         // Query function
+    /SCRIPT/i,                             // Script injection
+    /<[^>]+>/                              // HTML tags
+  ];
+
+  for (var i = 0; i < formulaPatterns.length; i++) {
+    if (formulaPatterns[i].test(str)) {
+      return {
+        valid: false,
+        value: null,
+        error: 'Invalid input: potential formula injection detected'
+      };
+    }
+  }
+
+  // Validate date format: YYYY-MM-DD or MM/DD/YYYY or similar
+  var datePatterns = [
+    /^\d{4}-\d{2}-\d{2}$/,                // YYYY-MM-DD (ISO format)
+    /^\d{2}\/\d{2}\/\d{4}$/,              // MM/DD/YYYY
+    /^\d{1,2}\/\d{1,2}\/\d{4}$/,          // M/D/YYYY
+    /^[A-Za-z]+ \d{1,2}, \d{4}$/          // Month DD, YYYY
+  ];
+
+  var isValidDate = false;
+  for (var j = 0; j < datePatterns.length; j++) {
+    if (datePatterns[j].test(str)) {
+      isValidDate = true;
+      break;
+    }
+  }
+
+  if (!isValidDate) {
+    // Try to parse as a date anyway
+    var parsed = new Date(str);
+    if (isNaN(parsed.getTime())) {
+      return {
+        valid: false,
+        value: null,
+        error: 'Invalid date format. Use YYYY-MM-DD format.'
+      };
+    }
+  }
+
+  return { valid: true, value: str, error: null };
+}
+
+/**
+ * Sanitizes a string input to prevent injection attacks
+ * Removes or escapes dangerous characters
+ *
+ * @param {string} input - The string to sanitize
+ * @param {number} maxLength - Maximum allowed length (default: 1000)
+ * @returns {string} Sanitized string
+ */
+function sanitizeString(input, maxLength) {
+  if (input === null || input === undefined) {
+    return '';
+  }
+
+  maxLength = maxLength || 1000;
+  var str = String(input);
+
+  // Truncate if too long
+  if (str.length > maxLength) {
+    str = str.substring(0, maxLength);
+  }
+
+  // SECURITY: Escape formula injection by prefixing with single quote
+  // This tells Google Sheets to treat the cell as text
+  if (/^[=+\-@]/.test(str)) {
+    str = "'" + str;
+  }
+
+  // Remove null bytes and other control characters (except newlines and tabs)
+  str = str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+
+  return str;
+}
+
+/**
+ * Validates and sanitizes a numeric input
+ *
+ * @param {any} input - The input to validate
+ * @param {object} options - { min, max, allowNegative, allowFloat }
+ * @returns {object} { valid: boolean, value: number|null, error: string|null }
+ */
+function validateNumericInput(input, options) {
+  options = options || {};
+  var min = options.min !== undefined ? options.min : -Infinity;
+  var max = options.max !== undefined ? options.max : Infinity;
+  var allowNegative = options.allowNegative !== false;
+  var allowFloat = options.allowFloat !== false;
+
+  if (input === null || input === undefined || input === '') {
+    return { valid: true, value: null, error: null };
+  }
+
+  // Check for formula injection in string inputs
+  if (typeof input === 'string') {
+    var str = input.trim();
+    if (/^[=+@]/.test(str) || /IMPORT|HYPERLINK|SCRIPT/i.test(str)) {
+      return {
+        valid: false,
+        value: null,
+        error: 'Invalid input: potential formula injection detected'
+      };
+    }
+  }
+
+  var num = parseFloat(input);
+
+  if (isNaN(num)) {
+    return { valid: false, value: null, error: 'Invalid number format' };
+  }
+
+  if (!allowNegative && num < 0) {
+    return { valid: false, value: null, error: 'Negative numbers not allowed' };
+  }
+
+  if (!allowFloat && num !== Math.floor(num)) {
+    num = Math.floor(num);
+  }
+
+  if (num < min || num > max) {
+    return { valid: false, value: null, error: 'Number out of range (' + min + ' to ' + max + ')' };
+  }
+
+  return { valid: true, value: num, error: null };
+}
+
+/**
+ * Validates an ID/reference string (alphanumeric with limited special chars)
+ *
+ * @param {string} input - The ID to validate
+ * @returns {object} { valid: boolean, value: string|null, error: string|null }
+ */
+function validateId(input) {
+  if (input === null || input === undefined || input === '') {
+    return { valid: true, value: null, error: null };
+  }
+
+  var str = String(input).trim();
+
+  // Only allow alphanumeric, dashes, underscores
+  if (!/^[A-Za-z0-9_-]+$/.test(str)) {
+    return {
+      valid: false,
+      value: null,
+      error: 'Invalid ID format. Only letters, numbers, dashes, and underscores allowed.'
+    };
+  }
+
+  if (str.length > 100) {
+    return { valid: false, value: null, error: 'ID too long (max 100 characters)' };
+  }
+
+  return { valid: true, value: str, error: null };
+}
+
+/**********************************************************
  * Time Slot Multipliers - Accounts for breaks & partial hours
  * 
  * Schedule:
@@ -81,25 +274,44 @@ function doGet(e) {
         cache.put(cacheKey, JSON.stringify(result), 120); // 2 min cache
       }
     } else if (action === 'dashboard') {
-      var start = e.parameter.start || '';
-      var end = e.parameter.end || '';
+      var startRaw = e.parameter.start || '';
+      var endRaw = e.parameter.end || '';
 
-      // Performance: Cache dashboard data for 5 minutes
-      var cache = CacheService.getScriptCache();
-      var cacheKey = 'dashboard_' + start + '_' + end;
-      var cached = cache.get(cacheKey);
+      // SECURITY: Validate date inputs to prevent formula injection
+      var startValidation = validateDateInput(startRaw);
+      var endValidation = validateDateInput(endRaw);
 
-      if (cached) {
-        result = JSON.parse(cached);
-        result.cached = true;
+      if (!startValidation.valid) {
+        result = { success: false, error: 'Invalid start date: ' + startValidation.error };
+      } else if (!endValidation.valid) {
+        result = { success: false, error: 'Invalid end date: ' + endValidation.error };
       } else {
-        result = getProductionDashboardData(start, end);
-        cache.put(cacheKey, JSON.stringify(result), 300); // 5 min cache
+        var start = startValidation.value || '';
+        var end = endValidation.value || '';
+
+        // Performance: Cache dashboard data for 5 minutes
+        var cache = CacheService.getScriptCache();
+        var cacheKey = 'dashboard_' + start + '_' + end;
+        var cached = cache.get(cacheKey);
+
+        if (cached) {
+          result = JSON.parse(cached);
+          result.cached = true;
+        } else {
+          result = getProductionDashboardData(start, end);
+          cache.put(cacheKey, JSON.stringify(result), 300); // 5 min cache
+        }
       }
     } else if (action === 'getOrders') {
       result = getOrders();
     } else if (action === 'getOrder') {
-      result = getOrder(e.parameter.id);
+      // SECURITY: Validate order ID
+      var orderIdValidation = validateId(e.parameter.id);
+      if (!orderIdValidation.valid) {
+        result = { success: false, error: 'Invalid order ID: ' + orderIdValidation.error };
+      } else {
+        result = getOrder(orderIdValidation.value);
+      }
     } else if (action === 'test') {
       result = { ok: true, message: 'API is working', timestamp: new Date().toISOString() };
     } else {

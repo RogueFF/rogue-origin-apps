@@ -671,9 +671,10 @@
   <!-- Old ai-chat-toggle button removed - using ai-chat-fab instead -->
 </div>
 
-<!-- API Cache Layer - Load before dashboard.js -->
+<!-- API Cache Layer - Load before modules -->
 <script defer src="js/api-cache.js"></script>
-<script defer src="js/dashboard.js?v=13"></script>
+<!-- ES6 Modular Dashboard (replaces monolithic dashboard.js) -->
+<script type="module" src="js/modules/index.js"></script>
 
 <!-- Floating Action Button -->
 <button class="ai-chat-fab" onclick="toggleAIChat()" title="AI Assistant" aria-label="Open AI Assistant chat">

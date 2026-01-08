@@ -16,6 +16,257 @@
 var SHEET_ID = 'YOUR_SHEET_ID_HERE';
 var COA_FOLDER_ID = '1efudtjpm8fsSA6PZUirhtsmCO5-oS2Me';
 
+/**********************************************************
+ * SECURITY: Input Validation Functions
+ * Prevents formula injection and validates user inputs
+ **********************************************************/
+
+/**
+ * Sanitizes a string input to prevent injection attacks
+ * Removes or escapes dangerous characters
+ *
+ * @param {string} input - The string to sanitize
+ * @param {number} maxLength - Maximum allowed length (default: 1000)
+ * @returns {string} Sanitized string
+ */
+function sanitizeString(input, maxLength) {
+  if (input === null || input === undefined) {
+    return '';
+  }
+
+  maxLength = maxLength || 1000;
+  var str = String(input);
+
+  // Truncate if too long
+  if (str.length > maxLength) {
+    str = str.substring(0, maxLength);
+  }
+
+  // SECURITY: Escape formula injection by prefixing with single quote
+  // This tells Google Sheets to treat the cell as text
+  if (/^[=+\-@]/.test(str)) {
+    str = "'" + str;
+  }
+
+  // Remove null bytes and other control characters (except newlines and tabs)
+  str = str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+
+  return str.trim();
+}
+
+/**
+ * Validates a date string input
+ * Prevents formula injection attacks
+ *
+ * @param {string} dateStr - The date string to validate
+ * @returns {object} { valid: boolean, value: string|Date|null, error: string|null }
+ */
+function validateDateInput(dateStr) {
+  if (dateStr === null || dateStr === undefined || dateStr === '') {
+    return { valid: true, value: null, error: null };
+  }
+
+  // If already a Date object, return it
+  if (dateStr instanceof Date) {
+    return { valid: true, value: dateStr, error: null };
+  }
+
+  var str = String(dateStr).trim();
+
+  // SECURITY: Block formula injection attempts
+  var formulaPatterns = [
+    /^[=+\-@]/,
+    /IMPORTDATA|IMPORTXML|IMPORTHTML|IMPORTRANGE|HYPERLINK|WEBSERVICE|SCRIPT/i,
+    /<[^>]+>/
+  ];
+
+  for (var i = 0; i < formulaPatterns.length; i++) {
+    if (formulaPatterns[i].test(str)) {
+      return {
+        valid: false,
+        value: null,
+        error: 'Invalid input: potential formula injection detected'
+      };
+    }
+  }
+
+  // Try to parse as a date
+  var parsed = new Date(str);
+  if (isNaN(parsed.getTime())) {
+    return {
+      valid: false,
+      value: null,
+      error: 'Invalid date format'
+    };
+  }
+
+  return { valid: true, value: str, error: null };
+}
+
+/**
+ * Validates an ID/reference string (alphanumeric with limited special chars)
+ *
+ * @param {string} input - The ID to validate
+ * @returns {object} { valid: boolean, value: string|null, error: string|null }
+ */
+function validateId(input) {
+  if (input === null || input === undefined || input === '') {
+    return { valid: true, value: null, error: null };
+  }
+
+  var str = String(input).trim();
+
+  // Check for formula injection
+  if (/^[=+\-@]/.test(str) || /IMPORT|HYPERLINK|SCRIPT/i.test(str)) {
+    return {
+      valid: false,
+      value: null,
+      error: 'Invalid ID: potential injection detected'
+    };
+  }
+
+  // Only allow alphanumeric, dashes, underscores
+  if (!/^[A-Za-z0-9_\-]+$/.test(str)) {
+    return {
+      valid: false,
+      value: null,
+      error: 'Invalid ID format. Only letters, numbers, dashes, and underscores allowed.'
+    };
+  }
+
+  if (str.length > 100) {
+    return { valid: false, value: null, error: 'ID too long (max 100 characters)' };
+  }
+
+  return { valid: true, value: str, error: null };
+}
+
+/**
+ * Validates a numeric input
+ *
+ * @param {any} input - The input to validate
+ * @param {object} options - { min, max, allowNegative }
+ * @returns {object} { valid: boolean, value: number|null, error: string|null }
+ */
+function validateNumericInput(input, options) {
+  options = options || {};
+  var min = options.min !== undefined ? options.min : 0;
+  var max = options.max !== undefined ? options.max : Number.MAX_SAFE_INTEGER;
+
+  if (input === null || input === undefined || input === '') {
+    return { valid: true, value: null, error: null };
+  }
+
+  // Check for formula injection in string inputs
+  if (typeof input === 'string') {
+    var str = input.trim();
+    if (/^[=+@]/.test(str) || /IMPORT|HYPERLINK|SCRIPT/i.test(str)) {
+      return {
+        valid: false,
+        value: null,
+        error: 'Invalid input: potential formula injection detected'
+      };
+    }
+  }
+
+  var num = parseFloat(input);
+
+  if (isNaN(num)) {
+    return { valid: false, value: null, error: 'Invalid number format' };
+  }
+
+  if (num < min || num > max) {
+    return { valid: false, value: null, error: 'Number out of range (' + min + ' to ' + max + ')' };
+  }
+
+  return { valid: true, value: num, error: null };
+}
+
+/**
+ * Validates an email address
+ *
+ * @param {string} input - The email to validate
+ * @returns {object} { valid: boolean, value: string|null, error: string|null }
+ */
+function validateEmail(input) {
+  if (input === null || input === undefined || input === '') {
+    return { valid: true, value: '', error: null };
+  }
+
+  var str = String(input).trim();
+
+  // Check for injection attempts
+  if (/^[=+\-@]/.test(str) && str.length < 3) {
+    return { valid: false, value: null, error: 'Invalid email format' };
+  }
+
+  // Basic email pattern
+  if (str && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str)) {
+    return { valid: false, value: null, error: 'Invalid email format' };
+  }
+
+  return { valid: true, value: str, error: null };
+}
+
+/**
+ * Sanitizes customer/order data object
+ *
+ * @param {object} data - The data object to sanitize
+ * @param {object} schema - Field definitions { fieldName: { type, maxLength, required } }
+ * @returns {object} { valid: boolean, data: object, errors: array }
+ */
+function sanitizeDataObject(data, schema) {
+  var sanitized = {};
+  var errors = [];
+
+  for (var field in schema) {
+    var def = schema[field];
+    var value = data[field];
+
+    if (def.type === 'string') {
+      sanitized[field] = sanitizeString(value, def.maxLength || 500);
+    } else if (def.type === 'number') {
+      var numResult = validateNumericInput(value, { min: def.min, max: def.max });
+      if (!numResult.valid && value !== null && value !== undefined && value !== '') {
+        errors.push(field + ': ' + numResult.error);
+      }
+      sanitized[field] = numResult.value;
+    } else if (def.type === 'date') {
+      var dateResult = validateDateInput(value);
+      if (!dateResult.valid) {
+        errors.push(field + ': ' + dateResult.error);
+      }
+      sanitized[field] = dateResult.value;
+    } else if (def.type === 'email') {
+      var emailResult = validateEmail(value);
+      if (!emailResult.valid) {
+        errors.push(field + ': ' + emailResult.error);
+      }
+      sanitized[field] = emailResult.value;
+    } else if (def.type === 'id') {
+      var idResult = validateId(value);
+      if (!idResult.valid && def.required) {
+        errors.push(field + ': ' + idResult.error);
+      }
+      sanitized[field] = idResult.value;
+    } else {
+      // Default: sanitize as string
+      sanitized[field] = sanitizeString(value, 500);
+    }
+
+    // Check required fields
+    if (def.required && (sanitized[field] === null || sanitized[field] === undefined || sanitized[field] === '')) {
+      errors.push(field + ' is required');
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    data: sanitized,
+    errors: errors
+  };
+}
+
 // ===== WEB APP ROUTING =====
 function doGet(e) {
   var action = (e && e.parameter && e.parameter.action) || '';
@@ -24,15 +275,29 @@ function doGet(e) {
   try {
     if (action === 'validatePassword') {
       // Handle authentication via GET to avoid CORS preflight issues
-      result = validatePassword(e.parameter.password || '');
+      // Password validation - sanitize but don't restrict characters
+      var password = e.parameter.password || '';
+      result = validatePassword(password);
     } else if (action === 'getCustomers') {
       result = getCustomers();
     } else if (action === 'getMasterOrders') {
       result = getMasterOrders();
     } else if (action === 'getShipments') {
-      result = getShipments(e.parameter.orderID || null);
+      // SECURITY: Validate orderID parameter
+      var orderIdValidation = validateId(e.parameter.orderID);
+      if (e.parameter.orderID && !orderIdValidation.valid) {
+        result = { success: false, error: 'Invalid order ID: ' + orderIdValidation.error };
+      } else {
+        result = getShipments(orderIdValidation.value);
+      }
     } else if (action === 'getPayments') {
-      result = getPayments(e.parameter.orderID || null);
+      // SECURITY: Validate orderID parameter
+      var orderIdValidation = validateId(e.parameter.orderID);
+      if (e.parameter.orderID && !orderIdValidation.valid) {
+        result = { success: false, error: 'Invalid order ID: ' + orderIdValidation.error };
+      } else {
+        result = getPayments(orderIdValidation.value);
+      }
     } else if (action === 'getPriceHistory') {
       result = getPriceHistory();
     } else if (action === 'getCOAIndex') {
@@ -40,7 +305,13 @@ function doGet(e) {
     } else if (action === 'syncCOAIndex') {
       result = syncCOAIndex();
     } else if (action === 'getOrderFinancials') {
-      result = getOrderFinancials(e.parameter.orderID);
+      // SECURITY: Validate orderID parameter
+      var orderIdValidation = validateId(e.parameter.orderID);
+      if (!orderIdValidation.valid) {
+        result = { success: false, error: 'Invalid order ID: ' + orderIdValidation.error };
+      } else {
+        result = getOrderFinancials(orderIdValidation.value);
+      }
     } else if (action === 'test') {
       result = { ok: true, message: 'Wholesale Orders API working', timestamp: new Date().toISOString() };
     } else {
@@ -60,6 +331,57 @@ function doGet(e) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+// Schema definitions for data validation
+var CUSTOMER_SCHEMA = {
+  id: { type: 'id' },
+  companyName: { type: 'string', maxLength: 200, required: true },
+  contactName: { type: 'string', maxLength: 200 },
+  email: { type: 'email' },
+  phone: { type: 'string', maxLength: 50 },
+  shipToAddress: { type: 'string', maxLength: 500 },
+  billToAddress: { type: 'string', maxLength: 500 },
+  country: { type: 'string', maxLength: 100 },
+  notes: { type: 'string', maxLength: 2000 },
+  createdDate: { type: 'date' },
+  lastOrderDate: { type: 'date' }
+};
+
+var ORDER_SCHEMA = {
+  id: { type: 'id' },
+  customerID: { type: 'id' },
+  customerName: { type: 'string', maxLength: 200 },
+  commitmentAmount: { type: 'number', min: 0 },
+  currency: { type: 'string', maxLength: 10 },
+  status: { type: 'string', maxLength: 50 },
+  poNumber: { type: 'string', maxLength: 100 },
+  terms: { type: 'string', maxLength: 50 },
+  createdDate: { type: 'date' },
+  dueDate: { type: 'date' },
+  shipTo_Contact: { type: 'string', maxLength: 200 },
+  shipTo_Company: { type: 'string', maxLength: 200 },
+  shipTo_Address: { type: 'string', maxLength: 500 },
+  shipTo_Phone: { type: 'string', maxLength: 50 },
+  shipTo_Email: { type: 'email' },
+  soldTo_Contact: { type: 'string', maxLength: 200 },
+  soldTo_Company: { type: 'string', maxLength: 200 },
+  soldTo_Address: { type: 'string', maxLength: 500 },
+  soldTo_Phone: { type: 'string', maxLength: 50 },
+  soldTo_Email: { type: 'email' },
+  notes: { type: 'string', maxLength: 2000 }
+};
+
+var PAYMENT_SCHEMA = {
+  id: { type: 'id' },
+  orderID: { type: 'id', required: true },
+  paymentDate: { type: 'date' },
+  amount: { type: 'number', min: 0 },
+  method: { type: 'string', maxLength: 100 },
+  reference: { type: 'string', maxLength: 200 },
+  notes: { type: 'string', maxLength: 1000 },
+  recordedBy: { type: 'string', maxLength: 200 },
+  recordedDate: { type: 'date' }
+};
+
 function doPost(e) {
   var action = (e && e.parameter && e.parameter.action) || '';
   var result = {};
@@ -67,25 +389,76 @@ function doPost(e) {
   try {
     if (action === 'saveCustomer') {
       var customerData = e.postData ? JSON.parse(e.postData.contents) : {};
-      result = saveCustomer(customerData);
+      // SECURITY: Validate and sanitize customer data
+      var validation = sanitizeDataObject(customerData, CUSTOMER_SCHEMA);
+      if (!validation.valid) {
+        result = { success: false, error: 'Validation errors: ' + validation.errors.join(', ') };
+      } else {
+        result = saveCustomer(validation.data);
+      }
     } else if (action === 'deleteCustomer') {
       var deleteData = e.postData ? JSON.parse(e.postData.contents) : {};
-      result = deleteCustomer(deleteData.id);
+      // SECURITY: Validate customer ID
+      var idValidation = validateId(deleteData.id);
+      if (!idValidation.valid) {
+        result = { success: false, error: 'Invalid customer ID: ' + idValidation.error };
+      } else {
+        result = deleteCustomer(idValidation.value);
+      }
     } else if (action === 'saveMasterOrder') {
       var orderData = e.postData ? JSON.parse(e.postData.contents) : {};
-      result = saveMasterOrder(orderData);
+      // SECURITY: Validate and sanitize order data
+      var validation = sanitizeDataObject(orderData, ORDER_SCHEMA);
+      if (!validation.valid) {
+        result = { success: false, error: 'Validation errors: ' + validation.errors.join(', ') };
+      } else {
+        result = saveMasterOrder(validation.data);
+      }
     } else if (action === 'deleteMasterOrder') {
       var deleteData = e.postData ? JSON.parse(e.postData.contents) : {};
-      result = deleteMasterOrder(deleteData.orderID);
+      // SECURITY: Validate order ID
+      var idValidation = validateId(deleteData.orderID);
+      if (!idValidation.valid) {
+        result = { success: false, error: 'Invalid order ID: ' + idValidation.error };
+      } else {
+        result = deleteMasterOrder(idValidation.value);
+      }
     } else if (action === 'saveShipment') {
       var shipmentData = e.postData ? JSON.parse(e.postData.contents) : {};
-      result = saveShipment(shipmentData);
+      // SECURITY: Sanitize string fields in shipment data
+      // Note: Shipments have complex nested data (lineItems, dimensions) that need custom handling
+      if (shipmentData.orderID) {
+        var orderIdValidation = validateId(shipmentData.orderID);
+        if (!orderIdValidation.valid) {
+          result = { success: false, error: 'Invalid order ID: ' + orderIdValidation.error };
+        } else {
+          shipmentData.orderID = orderIdValidation.value;
+          shipmentData.notes = sanitizeString(shipmentData.notes, 2000);
+          shipmentData.trackingNumber = sanitizeString(shipmentData.trackingNumber, 200);
+          shipmentData.carrier = sanitizeString(shipmentData.carrier, 100);
+          result = saveShipment(shipmentData);
+        }
+      } else {
+        result = { success: false, error: 'Order ID is required' };
+      }
     } else if (action === 'deleteShipment') {
       var deleteData = e.postData ? JSON.parse(e.postData.contents) : {};
-      result = deleteShipment(deleteData.shipmentID);
+      // SECURITY: Validate shipment ID
+      var idValidation = validateId(deleteData.shipmentID);
+      if (!idValidation.valid) {
+        result = { success: false, error: 'Invalid shipment ID: ' + idValidation.error };
+      } else {
+        result = deleteShipment(idValidation.value);
+      }
     } else if (action === 'savePayment') {
       var paymentData = e.postData ? JSON.parse(e.postData.contents) : {};
-      result = savePayment(paymentData);
+      // SECURITY: Validate and sanitize payment data
+      var validation = sanitizeDataObject(paymentData, PAYMENT_SCHEMA);
+      if (!validation.valid) {
+        result = { success: false, error: 'Validation errors: ' + validation.errors.join(', ') };
+      } else {
+        result = savePayment(validation.data);
+      }
     } else {
       result = { error: 'Unknown action: ' + action };
     }
