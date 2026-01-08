@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+tests/node_modules/
+
+# Claude Code
+.claude/settings.local.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test outputs
+test-report.json
+
+# Temporary files
+*.tmp
+*.temp
+
+# Environment variables (if any)
+.env
+.env.local
+
+# Authentication is now server-side via Apps Script (password in Script Properties)
+# These files are no longer used and can be safely deleted
+auth-config.js
+auth-config.production.js
+auth-config.template.js
+orders-auth.js
+.playwright-mcp/

@@ -1,0 +1,8 @@
+<svg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'>
+  <!-- Leaf shape -->
+  <path d='M30 5C25 10 20 15 20 25C20 30 25 35 30 40C35 35 40 30 40 25C40 15 35 10 30 5Z'
+        fill='#668971' opacity='0.5'/>
+  <!-- Stem -->
+  <path d='M30 40V55'
+        stroke='#668971' stroke-width='2' stroke-linecap='round' opacity='0.5'/>
+</svg>
