@@ -98,17 +98,25 @@
 
   /**
    * Get today's shift start time as a Date object
-   * Used as fallback reference when no bags have been scanned yet
-   * @returns {Date} Today at shift start time (default 7:00 AM)
+   * Checks for manual override first, falls back to default 7:00 AM
+   * @returns {Date} Today at shift start time
    */
   function getShiftStartTime() {
-    var now = new Date();
+    // Check for manual start time override
+    if (State.manualShiftStart) {
+      var today = new Date().toDateString();
+      var manualDate = State.manualShiftStart.toDateString();
+      if (manualDate === today) {
+        return new Date(State.manualShiftStart);
+      }
+    }
+
+    // Default: 7:00 AM today
+    var defaultStart = new Date();
     var startHour = (Config && Config.workday && Config.workday.startHour) || 7;
     var startMin = (Config && Config.workday && Config.workday.startMin) || 0;
-
-    var shiftStart = new Date(now);
-    shiftStart.setHours(startHour, startMin, 0, 0);
-    return shiftStart;
+    defaultStart.setHours(startHour, startMin, 0, 0);
+    return defaultStart;
   }
 
   /**
