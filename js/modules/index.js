@@ -664,9 +664,10 @@ function init() {
  */
 function hideLoadingOverlay() {
   const loadingOverlay = document.getElementById('loadingOverlay');
-  if (loadingOverlay && loadingOverlay.style.display !== 'none') {
+  if (loadingOverlay && !loadingOverlay.classList.contains('hidden')) {
     loadingOverlay.style.opacity = '0';
     loadingOverlay.style.visibility = 'hidden';
+    loadingOverlay.classList.add('hidden');
     // Remove from DOM after transition
     setTimeout(function() {
       loadingOverlay.style.display = 'none';
