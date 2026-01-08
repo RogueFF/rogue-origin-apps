@@ -29,7 +29,7 @@ const STORAGE_KEYS = {
  * @returns {Muuri|null} The grid instance or null if initialization fails
  */
 export function initMuuriGrid() {
-  const container = document.querySelector('.widget-grid');
+  const container = document.querySelector('.widgets-container');
   if (!container) {
     console.warn('Widget grid container not found');
     return null;
@@ -52,7 +52,7 @@ export function initMuuriGrid() {
   }
 
   try {
-    const grid = new Muuri('.widget-grid', {
+    const grid = new Muuri('.widgets-container', {
       dragEnabled: true,
       dragHandle: '.widget-header',
       fillGaps: true,
@@ -105,7 +105,7 @@ export function initMuuriGrid() {
  * @returns {Muuri|null} The grid instance or null if initialization fails
  */
 export function initMuuriKPI() {
-  const container = document.querySelector('.kpi-grid');
+  const container = document.querySelector('.kpi-row');
   if (!container) {
     console.warn('KPI grid container not found');
     return null;
@@ -128,7 +128,7 @@ export function initMuuriKPI() {
   }
 
   try {
-    const grid = new Muuri('.kpi-grid', {
+    const grid = new Muuri('.kpi-row', {
       dragEnabled: true,
       dragHandle: '.kpi-card',
       fillGaps: true,
