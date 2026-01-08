@@ -1363,6 +1363,7 @@
 /* Fullscreen Timer Mode */
 body.timer-fullscreen .start-day-btn,
 body.timer-fullscreen .started-badge {
+  top: 100px;
   right: 20px;
   z-index: 101;
 }
