@@ -48,6 +48,20 @@
     <button class="lang-btn active" id="btnEn" onclick="setLanguage('en')">EN</button>
     <button class="lang-btn" id="btnEs" onclick="setLanguage('es')">ES</button>
   </div>
+
+  <!-- Start Day Button (appears until shift start is set) -->
+  <button id="startDayBtn" class="start-day-btn pulse-green" onclick="openStartDayModal()" style="display:none;">
+    <i class="ph-duotone ph-play-circle"></i>
+    Start Day
+  </button>
+
+  <!-- Started Badge (appears after shift start is set) -->
+  <div id="startedBadge" class="started-badge" onclick="editStartTime()" style="display:none;">
+    <i class="ph-duotone ph-clock"></i>
+    Started: <span id="startTimeDisplay">—</span>
+    <i id="badgeIcon" class="ph-duotone ph-pencil-simple"></i>
+  </div>
+
   <button class="help-btn" onclick="toggleHelp()">?</button>
   
   <div class="help-modal" id="helpModal" onclick="if(event.target===this)toggleHelp()">
