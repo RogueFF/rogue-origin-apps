@@ -18,6 +18,17 @@
       const currentLang = (window.ScoreboardState && window.ScoreboardState.currentLang) || 'en';
       const t = window.ScoreboardI18n ? window.ScoreboardI18n.t : function(key) { return key; };
 
+      // Apply shift adjustment if exists
+      if (window.ScoreboardState && window.ScoreboardState.shiftAdjustment) {
+        var adjustment = window.ScoreboardState.shiftAdjustment;
+        data.dailyGoal = adjustment.adjustedDailyGoal || data.dailyGoal;
+        data.effectiveHours = adjustment.availableHours || data.effectiveHours || 8.5;
+
+        // Recalculate todayTarget proportionally
+        var scaleFactor = adjustment.scaleFactor || 1;
+        data.todayTarget = (data.todayTarget || 0) * scaleFactor;
+      }
+
       // Extract data values
       const lastHourLbs = data.lastHourLbs || 0;
       const lastHourTarget = data.lastHourTarget || 0;
