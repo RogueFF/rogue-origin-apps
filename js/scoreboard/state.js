@@ -53,6 +53,28 @@
      */
     hourlyChart: null,
 
+    // ========================================
+    // SHIFT START ADJUSTMENT STATE
+    // ========================================
+
+    /**
+     * Manual shift start time (null = use default 7 AM)
+     * @type {Date|null}
+     */
+    manualShiftStart: null,
+
+    /**
+     * Whether shift start time is locked (after first bag)
+     * @type {boolean}
+     */
+    shiftStartLocked: false,
+
+    /**
+     * Shift adjustment data from API
+     * @type {Object|null}
+     */
+    shiftAdjustment: null,
+
 
     // ========================================
     // PAUSE STATE
@@ -221,6 +243,11 @@
         this.hourlyChart.destroy();
         this.hourlyChart = null;
       }
+
+      // Shift start adjustment
+      this.manualShiftStart = null;
+      this.shiftStartLocked = false;
+      this.shiftAdjustment = null;
 
       // Clear all registered intervals
       this.clearAllIntervals();
