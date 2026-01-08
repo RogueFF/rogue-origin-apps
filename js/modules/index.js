@@ -651,8 +651,17 @@ function init() {
   initWidgetResizeHandles();
 
   // 22. Hide loading overlay
+  hideLoadingOverlay();
+
+  console.log('Dashboard initialization complete');
+}
+
+/**
+ * Hide the loading overlay with animation
+ */
+function hideLoadingOverlay() {
   const loadingOverlay = document.getElementById('loadingOverlay');
-  if (loadingOverlay) {
+  if (loadingOverlay && loadingOverlay.style.display !== 'none') {
     loadingOverlay.style.opacity = '0';
     loadingOverlay.style.visibility = 'hidden';
     // Remove from DOM after transition
@@ -660,12 +669,24 @@ function init() {
       loadingOverlay.style.display = 'none';
     }, 300);
   }
-
-  console.log('Dashboard initialization complete');
 }
 
 // ===== DOM CONTENT LOADED LISTENER =====
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', function() {
+  try {
+    init();
+  } catch (e) {
+    console.error('Dashboard initialization error:', e);
+    // Still hide loading overlay on error
+    hideLoadingOverlay();
+  }
+});
+
+// ===== FALLBACK: Hide loading overlay after 5 seconds no matter what =====
+// This handles cases where JS errors or caching issues prevent normal init
+setTimeout(function() {
+  hideLoadingOverlay();
+}, 5000);
 
 // Note: beforeunload listener is registered inside init() for proper tracking
 
