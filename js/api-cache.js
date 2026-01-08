@@ -13,7 +13,7 @@
 (function(window) {
   'use strict';
 
-  var CACHE_VERSION = '1.0';
+  var CACHE_VERSION = '1.1';
   var CACHE_PREFIX = 'ro-api-cache-v' + CACHE_VERSION + '-';
   var DEFAULT_TTL = 5 * 60 * 1000; // 5 minutes default
   var STALE_TTL = 60 * 60 * 1000; // 1 hour - serve stale data if fresh fetch fails
@@ -272,10 +272,17 @@
           return response.json();
         })
         .then(function(result) {
+          // Handle various API response formats
           if (result.success && result.data) {
             return result.data;
+          } else if (result.data) {
+            // API returned data without success flag
+            return result.data;
+          } else if (result.error) {
+            throw new Error(result.error);
           } else {
-            throw new Error(result.error || 'Unknown error');
+            // Assume result itself is the data
+            return result;
           }
         });
     };
