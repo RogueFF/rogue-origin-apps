@@ -267,12 +267,12 @@ function renderAll() {
   const compareMode = getCompareMode();
   const compareData = getCompareData();
 
-  if (data.totals) {
+  if (data.today) {
     updateKPIValues(
-      data.totals,
-      compareMode && compareData ? compareData.totals : null,
+      data.today,
+      compareMode && compareData ? compareData.today : null,
       data.targets || null,
-      data.rolling || null,
+      data.rollingAverage || null,
       !!compareMode
     );
   }
