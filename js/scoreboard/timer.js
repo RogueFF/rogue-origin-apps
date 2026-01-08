@@ -189,7 +189,7 @@
       tv.textContent = breakStatus.afterHours ? '--:--' : formatTime(displaySec);
       tv.className = 'timer-value yellow';
       tl.textContent = breakStatus.afterHours ?
-        (t[currentLang] && t[currentLang].paused) :
+        (t[currentLang] && t[currentLang].shiftEnded) :
         (t[currentLang] && t[currentLang].onBreak);
     } else {
       var showTime = State.debugMode || effectiveTarget > 0 || elapsedSec > 0;
