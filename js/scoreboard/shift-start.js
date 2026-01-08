@@ -243,6 +243,29 @@
     openStartDayModal();
   }
 
+  /**
+   * Check if shift start should be locked (after first bag)
+   * Called on every data refresh
+   */
+  function checkLockStatus() {
+    if (State.shiftStartLocked) return;  // Already locked
+
+    var bagsToday = (State.timerData && State.timerData.bagsToday) || 0;
+
+    if (bagsToday > 0 && State.manualShiftStart) {
+      State.shiftStartLocked = true;
+      localStorage.setItem('shiftStartLocked', 'true');
+      showStartedBadge(State.manualShiftStart, true);
+      console.log('Shift start locked after first bag');
+    }
+  }
+
+  // Expose for external calls
+  window.ScoreboardShiftStart = {
+    checkLockStatus: checkLockStatus,
+    initShiftStartUI: initShiftStartUI
+  };
+
   // Expose global functions
   window.openStartDayModal = openStartDayModal;
   window.cancelStartTime = cancelStartTime;
