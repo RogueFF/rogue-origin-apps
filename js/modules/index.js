@@ -277,6 +277,31 @@ function renderAll() {
     );
   }
 
+  // Update hero section
+  renderHeroSection(data);
+
+  // Update bag timer widget
+  const bagsTodayEl = document.getElementById('bagsToday');
+  const bagsAvgTimeEl = document.getElementById('bagsAvgTime');
+  const bagsVsTargetEl = document.getElementById('bagsVsTarget');
+  if (data.bagTimer) {
+    if (bagsTodayEl) bagsTodayEl.textContent = data.bagTimer.bagsToday;
+    if (bagsAvgTimeEl) bagsAvgTimeEl.textContent = data.bagTimer.avgTime;
+    if (bagsVsTargetEl) {
+      bagsVsTargetEl.textContent = data.bagTimer.vsTarget;
+      // Color code: green if faster than target, red if slower
+      const avgMin = data.bagTimer.avgMinutes || 0;
+      const targetMin = data.rolling && data.rolling.avgCycleMinutes7Day ? data.rolling.avgCycleMinutes7Day : 0;
+      if (avgMin > 0 && targetMin > 0) {
+        bagsVsTargetEl.style.color = avgMin <= targetMin ? 'var(--ro-green)' : 'var(--danger)';
+      }
+    }
+  } else {
+    if (bagsTodayEl) bagsTodayEl.textContent = '—';
+    if (bagsAvgTimeEl) bagsAvgTimeEl.textContent = '—';
+    if (bagsVsTargetEl) bagsVsTargetEl.textContent = '—';
+  }
+
   // Refresh grid layouts
   const widgetGrid = getGrid('widgets');
   const kpiGrid = getGrid('kpi');
@@ -286,6 +311,100 @@ function renderAll() {
   }
   if (kpiGrid && !kpiGrid._isDestroyed) {
     debouncedKPILayout(100);
+  }
+}
+
+// ===== HERO SECTION RENDERING =====
+function renderHeroSection(data) {
+  const t = data.totals || data.today || {};
+
+  // Production number (the star) - TOPS production
+  const tops = t.totalTops || 0;
+  const smalls = t.totalSmalls || 0;
+  const totalProduction = t.totalLbs || 0;
+
+  const elHeroProduction = document.getElementById('heroProductionNumber');
+  if (elHeroProduction) {
+    animateValue('heroProductionNumber', parseFloat(elHeroProduction.textContent) || 0, tops, 800);
+  }
+
+  // Current strain
+  const strain = (data.current && data.current.strain) || '';
+  const elHeroStrain = document.getElementById('heroStrain');
+  if (elHeroStrain) elHeroStrain.textContent = strain;
+
+  // Subtitle with totals
+  const elHeroSubtitle = document.getElementById('heroSubtitle');
+  if (elHeroSubtitle) {
+    elHeroSubtitle.textContent = 'Total: ' + totalProduction.toFixed(1) + ' lbs (incl. ' + smalls.toFixed(1) + ' lbs smalls)';
+  }
+
+  // Time-aware production calculation
+  const trimmers = t.trimmers || 0;
+  const todayRate = t.avgRate || 0;
+  const productiveHoursElapsed = getProductiveHoursElapsed();
+  const totalProductiveHours = getTotalProductiveHours();
+  const remainingHours = Math.max(0, totalProductiveHours - productiveHoursElapsed);
+
+  // Expected production from backend
+  const expectedSoFar = (data.current && data.current.todayTarget) || (data.targets && data.targets.totalTops) || 0;
+
+  // Predicted end-of-day total
+  const predictedTops = tops + (trimmers * todayRate * remainingHours);
+
+  // Progress bar
+  let progressPercent = 0;
+  let progressStatus = '';
+  if (expectedSoFar > 0) {
+    progressPercent = (tops / expectedSoFar * 100);
+    if (progressPercent >= 100) {
+      progressStatus = 'ahead';
+    } else if (progressPercent >= 90) {
+      progressStatus = 'on-track';
+    } else {
+      progressStatus = 'behind';
+    }
+  }
+
+  const elHeroProgressFill = document.getElementById('heroProgressFill');
+  const elHeroProgressText = document.getElementById('heroProgressText');
+  if (elHeroProgressFill) {
+    elHeroProgressFill.style.width = Math.min(progressPercent, 100) + '%';
+    elHeroProgressFill.className = 'hero-progress-fill ' + progressStatus;
+  }
+  if (elHeroProgressText) {
+    if (productiveHoursElapsed > 0 && expectedSoFar > 0) {
+      elHeroProgressText.textContent = progressPercent.toFixed(0) + '% of expected (' + expectedSoFar.toFixed(0) + ' lbs)';
+    } else {
+      elHeroProgressText.textContent = 'Shift not started';
+    }
+  }
+
+  // Mini KPIs
+  const crew = (t.trimmers || 0) + (t.buckers || 0) + (t.qc || 0) + (t.tzero || 0);
+  const elHeroCrewValue = document.getElementById('heroCrewValue');
+  if (elHeroCrewValue) elHeroCrewValue.textContent = crew;
+
+  const elHeroRateValue = document.getElementById('heroRateValue');
+  if (elHeroRateValue) elHeroRateValue.textContent = todayRate.toFixed(2);
+
+  const elHeroTargetValue = document.getElementById('heroTargetValue');
+  if (elHeroTargetValue) {
+    if (predictedTops > 0) {
+      elHeroTargetValue.textContent = predictedTops.toFixed(0) + ' lbs';
+    } else {
+      elHeroTargetValue.textContent = '--';
+    }
+  }
+
+  // Bags done
+  const elHeroBagsValue = document.getElementById('heroBagsValue');
+  const elHeroAvgCycleTime = document.getElementById('heroAvgCycleTime');
+  if (elHeroBagsValue) {
+    elHeroBagsValue.textContent = (data.bagTimer && data.bagTimer.bagsToday) || '--';
+  }
+  if (elHeroAvgCycleTime) {
+    elHeroAvgCycleTime.textContent = (data.bagTimer && data.bagTimer.avgTime) ? 'Avg: ' + data.bagTimer.avgTime : 'Avg: --';
   }
 }
 
