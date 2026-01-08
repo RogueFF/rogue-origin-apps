@@ -1,0 +1,19 @@
+<svg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'>
+  <rect width="80" height="80" fill="#1a1f16"/>
+  <defs>
+    <pattern id='fiber' x='0' y='0' width='40' height='40' patternUnits='userSpaceOnUse'>
+      <g opacity='0.5'>
+        <!-- Diagonal woven fibers -->
+        <line x1='0' y1='0' x2='40' y2='40' stroke='#e4aa4f' stroke-width='0.5' stroke-linecap='round'/>
+        <line x1='0' y1='10' x2='40' y2='50' stroke='#f0cb60' stroke-width='0.3' stroke-linecap='round'/>
+        <line x1='0' y1='20' x2='40' y2='60' stroke='#e4aa4f' stroke-width='0.5' stroke-linecap='round'/>
+        <line x1='0' y1='30' x2='40' y2='70' stroke='#f0cb60' stroke-width='0.3' stroke-linecap='round'/>
+        <line x1='0' y1='-10' x2='40' y2='30' stroke='#f0cb60' stroke-width='0.3' stroke-linecap='round'/>
+        <!-- Cross-hatching -->
+        <line x1='0' y1='40' x2='40' y2='0' stroke='#f0cb60' stroke-width='0.25' stroke-linecap='round' opacity='0.5'/>
+        <line x1='0' y1='50' x2='40' y2='10' stroke='#e4aa4f' stroke-width='0.25' stroke-linecap='round' opacity='0.5'/>
+      </g>
+    </pattern>
+  </defs>
+  <rect width='80' height='80' fill='url(#fiber)'/>
+</svg>
