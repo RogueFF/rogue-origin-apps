@@ -113,10 +113,10 @@
     debugElapsedPercent: 0,
 
     /**
-     * Debug break state flag
-     * @type {boolean}
+     * Debug break state override (null = use real detection)
+     * @type {boolean|null}
      */
-    debugOnBreak: false,
+    debugOnBreak: null,
 
 
     // ========================================
@@ -206,7 +206,7 @@
       this.debugMode = false;
       this.debugState = 'idle';
       this.debugElapsedPercent = 0;
-      this.debugOnBreak = false;
+      this.debugOnBreak = null;
 
       // Cycle history
       this.cycleHistory = [];
