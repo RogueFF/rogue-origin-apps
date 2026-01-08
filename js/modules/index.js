@@ -259,6 +259,9 @@ function renderAll() {
   const data = getData();
   if (!data) return;
 
+  // Hide loading overlay now that we have data
+  hideLoadingOverlay();
+
   // Render charts
   renderCharts();
   renderTrimmersChart();
@@ -650,8 +653,8 @@ function init() {
   // 21. Initialize widget resize handles
   initWidgetResizeHandles();
 
-  // 22. Hide loading overlay
-  hideLoadingOverlay();
+  // Note: Loading overlay is hidden by renderAll() when data arrives
+  // or by the 8-second fallback timeout
 
   console.log('Dashboard initialization complete');
 }
@@ -682,11 +685,11 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 
-// ===== FALLBACK: Hide loading overlay after 5 seconds no matter what =====
+// ===== FALLBACK: Hide loading overlay after 8 seconds no matter what =====
 // This handles cases where JS errors or caching issues prevent normal init
 setTimeout(function() {
   hideLoadingOverlay();
-}, 5000);
+}, 8000);
 
 // Note: beforeunload listener is registered inside init() for proper tracking
 
