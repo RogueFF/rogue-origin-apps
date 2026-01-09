@@ -3479,7 +3479,8 @@ function createOrdersSheet_(ss) {
     'CreatedDate',
     'DueDate',
     'Notes',
-    'Pallets'
+    'Pallets',
+    'Priority'
   ];
 
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -3496,6 +3497,7 @@ function createOrdersSheet_(ss) {
   sheet.setColumnWidth(7, 100);  // DueDate
   sheet.setColumnWidth(8, 200);  // Notes
   sheet.setColumnWidth(9, 400);  // Pallets (JSON)
+  sheet.setColumnWidth(10, 80);  // Priority
 
   return sheet;
 }
