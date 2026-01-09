@@ -3689,6 +3689,59 @@ function getScoreboardOrderQueue() {
 }
 
 /**
+ * Calculate order progress based on production tracking data
+ *
+ * @param {string} orderId - Order ID to track
+ * @param {number} targetKg - Total kg for this order
+ * @param {number} completedKg - Already completed kg from sheet
+ * @returns {object} { completedKg, percentComplete, estimatedHoursRemaining }
+ */
+function calculateOrderProgress(orderId, targetKg, completedKg) {
+  try {
+    // For now, use the completedKg from the Orders sheet
+    // TODO Phase 4: Connect to hour-by-hour production data to calculate real-time progress
+
+    var percentComplete = targetKg > 0 ? Math.round((completedKg / targetKg) * 100) : 0;
+
+    // Estimate hours remaining based on current crew rate
+    var remainingKg = targetKg - completedKg;
+    var estimatedHours = 0;
+
+    if (remainingKg > 0) {
+      // Get current production rate from scoreboard data
+      var scoreboardData = getScoreboardData();
+      if (scoreboardData && scoreboardData.success && scoreboardData.data) {
+        var currentRate = scoreboardData.data.targetRate || 1.0; // lbs per trimmer per hour
+        var currentTrimmers = scoreboardData.data.currentHourTrimmers || 5;
+
+        // Convert kg to lbs (1 kg = 2.205 lbs)
+        var remainingLbs = remainingKg * 2.205;
+
+        // Calculate hours: lbs / (rate * trimmers)
+        var crewRate = currentRate * currentTrimmers;
+        if (crewRate > 0) {
+          estimatedHours = Math.round((remainingLbs / crewRate) * 10) / 10;
+        }
+      }
+    }
+
+    return {
+      completedKg: completedKg,
+      percentComplete: percentComplete,
+      estimatedHoursRemaining: estimatedHours
+    };
+
+  } catch (error) {
+    Logger.log('calculateOrderProgress error: ' + error.message);
+    return {
+      completedKg: completedKg || 0,
+      percentComplete: 0,
+      estimatedHoursRemaining: 0
+    };
+  }
+}
+
+/**
  * Test orders API
  */
 function testOrdersAPI() {
