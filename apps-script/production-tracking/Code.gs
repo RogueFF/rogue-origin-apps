@@ -425,7 +425,7 @@ function calculateAvailableHours(startTime) {
  * Log shift adjustment to Google Sheets
  */
 function logShiftAdjustment(data) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = SpreadsheetApp.openById(SHEET_ID);
   var sheet = ss.getSheetByName('Shift Adjustments');
 
   // Create sheet if doesn't exist
@@ -451,7 +451,7 @@ function handleGetShiftStart(params) {
   try {
     var date = params.date || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
 
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = SpreadsheetApp.openById(SHEET_ID);
     var sheet = ss.getSheetByName('Shift Adjustments');
 
     if (!sheet) {
