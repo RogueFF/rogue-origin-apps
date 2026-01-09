@@ -108,7 +108,40 @@
   }
 
   /**
-   * Open time picker modal
+   * Start day now - uses current time immediately
+   */
+  function startDayNow() {
+    var startTime = new Date();
+
+    // Save to state and localStorage
+    State.manualShiftStart = startTime;
+    State.shiftStartLocked = false;
+    localStorage.setItem('manualShiftStart', startTime.toISOString());
+    localStorage.setItem('shiftStartLocked', 'false');
+    localStorage.setItem('shiftStartDate', new Date().toDateString());
+
+    // Update UI
+    showStartedBadge(startTime, false);
+
+    // Save to API
+    if (window.ScoreboardAPI) {
+      window.ScoreboardAPI.setShiftStart(
+        startTime,
+        function(response) {
+          if (response.success && response.shiftAdjustment) {
+            State.shiftAdjustment = response.shiftAdjustment;
+            console.log('Shift start saved to API:', response.shiftAdjustment);
+          }
+        },
+        function(error) {
+          console.error('Failed to save shift start:', error);
+        }
+      );
+    }
+  }
+
+  /**
+   * Open time picker modal (for editing)
    */
   function openStartDayModal() {
     var modal = document.getElementById('startDayModal');
@@ -314,6 +347,7 @@
   };
 
   // Expose global functions
+  window.startDayNow = startDayNow;
   window.openStartDayModal = openStartDayModal;
   window.cancelStartTime = cancelStartTime;
   window.confirmStartTime = confirmStartTime;
