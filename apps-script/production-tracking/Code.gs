@@ -455,14 +455,18 @@ function handleGetShiftStart(params) {
     var sheet = ss.getSheetByName('Shift Adjustments');
 
     if (!sheet) {
-      return { success: true, shiftAdjustment: null };
+      return { success: true, shiftAdjustment: null, debug: 'Sheet not found' };
     }
 
     var data = sheet.getDataRange().getValues();
+    var debugInfo = { searchingFor: date, rowsChecked: 0, foundDates: [] };
 
     // Find today's entry (most recent)
     for (var i = data.length - 1; i >= 1; i--) {
+      debugInfo.rowsChecked++;
       var cellDate = Utilities.formatDate(new Date(data[i][0]), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      debugInfo.foundDates.push(cellDate);
+
       if (cellDate === date) {
         return {
           success: true,
@@ -475,7 +479,7 @@ function handleGetShiftStart(params) {
       }
     }
 
-    return { success: true, shiftAdjustment: null };
+    return { success: true, shiftAdjustment: null, debug: debugInfo };
 
   } catch (error) {
     return { success: false, error: error.toString() };
