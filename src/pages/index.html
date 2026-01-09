@@ -657,6 +657,10 @@
     <div class="ai-chat-messages" id="aiMessages" role="log" aria-live="polite" aria-label="Chat messages">
       <div class="ai-message assistant" role="status">
         Hi! I can help with production status, bag counts, crew info, and more. What would you like to know?
+        <div class="ai-feedback-buttons" style="display: none;">
+          <button class="ai-feedback-btn thumbs-up" onclick="submitAIFeedback(this, 'up')" title="Helpful response" aria-label="Mark as helpful">👍</button>
+          <button class="ai-feedback-btn thumbs-down" onclick="submitAIFeedback(this, 'down')" title="Not helpful" aria-label="Mark as not helpful">👎</button>
+        </div>
       </div>
     </div>
     <div class="ai-voice-status" id="aiVoiceStatus">🎤 Listening...</div>

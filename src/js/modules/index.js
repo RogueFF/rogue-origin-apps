@@ -14,6 +14,12 @@ import {
   DEFAULT_DAILY_TARGET
 } from './config.js';
 
+// ===== MEMORY IMPORTS =====
+import { clearHistory } from './memory.js';
+
+// ===== VOICE IMPORTS =====
+import { toggleVoice, isVoiceActive } from './voice.js';
+
 // ===== STATE IMPORTS =====
 import {
   getState,
@@ -164,7 +170,8 @@ import {
   closeSettings,
   toggleAIChat,
   sendAIMessage,
-  setToggleCallbacks
+  setToggleCallbacks,
+  submitAIFeedback
 } from './panels.js';
 
 // ===== WIDGET IMPORTS =====
@@ -713,6 +720,10 @@ window.saveSettings = saveSettings;
 window.openSettings = openSettings;
 window.closeSettings = closeSettings;
 window.sendAIMessage = sendAIMessage;
+window.submitAIFeedback = submitAIFeedback;
+window.clearAIHistory = clearHistory;
+window.toggleVoice = toggleVoice;
+window.isVoiceActive = isVoiceActive;
 window.toggleDatePicker = toggleDatePicker;
 window.toggleCompareDropdown = toggleCompareDropdown;
 window.applyCustomRange = applyCustomRange;

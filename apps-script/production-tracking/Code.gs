@@ -22,6 +22,67 @@
 var SHEET_ID = '1dARXrKU2u4KJY08ylA3GUKrT0zwmxCmtVh7IJxnn7is';
 var AI_MODEL = 'claude-sonnet-4-20250514';
 
+/**
+ * Task Registry - Defines all executable tasks
+ * LangChain-inspired tool schema
+ */
+var TASK_REGISTRY = {
+  'update_crew_count': {
+    description: 'Update trimmer or bucker count for current hour',
+    parameters: {
+      line: { type: 'number', required: true, options: [1, 2] },
+      role: { type: 'string', required: true, options: ['trimmers', 'buckers'] },
+      count: { type: 'number', required: true, min: 0, max: 20 }
+    },
+    function: 'executeUpdateCrewCount_'
+  },
+
+  'log_bag_completion': {
+    description: 'Log a completed 5kg or 10lb bag',
+    parameters: {
+      bagType: { type: 'string', required: true, options: ['5kg', '10lb'] },
+      weight: { type: 'number', required: false, min: 0, max: 15 },
+      notes: { type: 'string', required: false, maxLength: 200 }
+    },
+    function: 'executeLogBag_'
+  },
+
+  'schedule_order': {
+    description: 'Create or update a wholesale order',
+    parameters: {
+      customer: { type: 'string', required: true, maxLength: 100 },
+      totalKg: { type: 'number', required: true, min: 1, max: 5000 },
+      dueDate: { type: 'string', required: true },  // YYYY-MM-DD
+      cultivars: { type: 'string', required: false, maxLength: 200 },
+      notes: { type: 'string', required: false, maxLength: 500 }
+    },
+    function: 'executeScheduleOrder_'
+  },
+
+  'pause_timer': {
+    description: 'Pause the bag timer for breaks or equipment issues',
+    parameters: {
+      reason: { type: 'string', required: true, options: ['lunch', 'break', 'equipment', 'meeting', 'other'] },
+      notes: { type: 'string', required: false, maxLength: 200 }
+    },
+    function: 'executePauseTimer_'
+  },
+
+  'resume_timer': {
+    description: 'Resume the bag timer after a pause',
+    parameters: {},
+    function: 'executeResumeTimer_'
+  },
+
+  'get_order_status': {
+    description: 'Get detailed status of a specific order',
+    parameters: {
+      orderId: { type: 'string', required: true }
+    },
+    function: 'executeGetOrderStatus_'
+  }
+};
+
 /**********************************************************
  * SECURITY: Input Validation Functions
  * Prevents formula injection and validates user inputs
@@ -519,6 +580,10 @@ function doPost(e) {
       // AI Agent Chat Handler
       var chatData = e.postData ? JSON.parse(e.postData.contents) : {};
       result = handleChatRequest(chatData);
+    } else if (action === 'feedback') {
+      // AI Feedback Handler
+      var feedbackData = e.postData ? JSON.parse(e.postData.contents) : {};
+      result = logChatFeedback(feedbackData);
     } else if (action === 'saveOrder') {
       // Orders Management
       var orderData = e.postData ? JSON.parse(e.postData.contents) : {};
@@ -2405,14 +2470,43 @@ function handleChatRequest(data) {
     // Gather current production context (V2 - enhanced)
     var context = gatherProductionContext();
 
-    // Build the AI prompt with corrections
-    var systemPrompt = buildSystemPrompt(context, sessionCorrections.concat(storedCorrections));
+    // Search conversation memory for relevant context
+    var memoryResults = searchMemory_(userMessage, true);
+
+    // Build the AI prompt with corrections and memory
+    var systemPrompt = buildSystemPrompt(context, sessionCorrections.concat(storedCorrections), memoryResults);
 
     // Call Anthropic API
     var aiResponse = callAnthropicForChat(systemPrompt, history, userMessage);
 
     // Log chat for training (async-safe)
     logChatForTraining(userMessage, aiResponse, history.length);
+
+    // Save to persistent memory (new)
+    var sessionId = data.sessionId || 'legacy_' + new Date().getTime();
+    var contextHash = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_1, JSON.stringify(context)).toString();
+
+    // Save user message
+    saveToMemory_(sessionId, 'user', userMessage, '', contextHash);
+
+    // Save assistant response
+    saveToMemory_(sessionId, 'assistant', aiResponse, '', contextHash);
+
+    // Extract and execute tasks (NEW)
+    var tasks = extractTasks_(aiResponse);
+    var taskResults = [];
+
+    if (tasks.length > 0) {
+      for (var j = 0; j < tasks.length; j++) {
+        var task = tasks[j];
+        var result = executeTask_(task.task, task.params);
+        logTaskExecution_(sessionId, task.task, task.params, result);
+        taskResults.push(result);
+      }
+    }
+
+    // Remove task blocks from response for clean display
+    var cleanResponse = removeTaskBlocks_(aiResponse);
 
     // Check for new corrections in the user's message
     var newCorrections = extractCorrections([{ role: 'user', content: userMessage }]);
@@ -2424,8 +2518,9 @@ function handleChatRequest(data) {
 
     return {
       success: true,
-      response: aiResponse,
-      context: context
+      response: cleanResponse,
+      context: context,
+      tasksExecuted: taskResults
     };
   } catch (error) {
     Logger.log('Chat error: ' + error.message);
@@ -2540,7 +2635,7 @@ function gatherProductionContext() {
 /**
  * Builds the system prompt with current production data (V2 - with corrections and enhanced data)
  */
-function buildSystemPrompt(context, corrections) {
+function buildSystemPrompt(context, corrections, memoryResults) {
   var now = new Date();
   var currentTime = Utilities.formatDate(now, 'America/Los_Angeles', 'EEEE, MMMM d, yyyy h:mm a');
 
@@ -2687,6 +2782,16 @@ function buildSystemPrompt(context, corrections) {
     prompt += '\n';
   }
 
+  // Add relevant memory if found
+  if (memoryResults && memoryResults.found) {
+    prompt += 'RELEVANT PAST CONVERSATIONS:\n';
+    for (var i = 0; i < memoryResults.topMatches.length; i++) {
+      var match = memoryResults.topMatches[i];
+      prompt += '- ' + match.summary + ' (' + match.timestamp + ')\n';
+    }
+    prompt += '\n';
+  }
+
   prompt += 'PROJECTION FORMULAS:\n' +
     '- 1 kg = 2.205 lbs\n' +
     '- 5kg bag = 11.02 lbs\n' +
@@ -2704,7 +2809,32 @@ function buildSystemPrompt(context, corrections) {
     '<div class="data-card">\n' +
     '  <h4>Title</h4>\n' +
     '  <div class="metric"><span class="metric-label">Label</span><span class="metric-value">Value</span></div>\n' +
-    '</div>';
+    '</div>\n\n';
+
+  // TASK EXECUTION CAPABILITIES
+  prompt += 'TASK EXECUTION:\n' +
+    'You can execute tasks on behalf of the user. When appropriate, include a task in your response.\n\n' +
+    'Available tasks:\n';
+
+  for (var taskName in TASK_REGISTRY) {
+    var task = TASK_REGISTRY[taskName];
+    prompt += '- ' + taskName + ': ' + task.description + '\n';
+    prompt += '  Parameters: ' + JSON.stringify(task.parameters) + '\n';
+  }
+
+  prompt += '\nTo execute a task, include this JSON block in your response:\n' +
+    '```task\n' +
+    '{\n' +
+    '  "task": "task_name",\n' +
+    '  "params": { "param1": "value1" }\n' +
+    '}\n' +
+    '```\n\n' +
+    'Examples:\n' +
+    'User: "Set trimmers to 5 on Line 1"\n' +
+    'Assistant: "I\'ll update the crew count for you.\n```task\n{"task":"update_crew_count","params":{"line":1,"role":"trimmers","count":5}}\n```\nDone! Line 1 now has 5 trimmers."\n\n' +
+    'User: "Log a 5kg bag"\n' +
+    'Assistant: "Logging the bag completion now.\n```task\n{"task":"log_bag_completion","params":{"bagType":"5kg"}}\n```\nBag logged successfully!"\n\n' +
+    'Only suggest tasks when the user clearly wants an action performed, not just information.\n\n';
 
   return prompt;
 }
@@ -2947,6 +3077,37 @@ function extractCorrections(history) {
 }
 
 /**
+ * Extract task blocks from AI response
+ * Returns array of {task, params} objects
+ */
+function extractTasks_(responseText) {
+  var tasks = [];
+  var taskPattern = /```task\s*\n([\s\S]*?)\n```/g;
+  var match;
+
+  while ((match = taskPattern.exec(responseText)) !== null) {
+    try {
+      var taskJson = JSON.parse(match[1]);
+      if (taskJson.task && taskJson.params) {
+        tasks.push(taskJson);
+      }
+    } catch (error) {
+      Logger.log('Failed to parse task JSON: ' + error.message);
+    }
+  }
+
+  return tasks;
+}
+
+/**
+ * Remove task blocks from response text
+ * Returns clean text for display to user
+ */
+function removeTaskBlocks_(responseText) {
+  return responseText.replace(/```task\s*\n[\s\S]*?\n```/g, '').trim();
+}
+
+/**
  * Log chat for training purposes
  */
 function logChatForTraining(userMessage, aiResponse, historyLength) {
@@ -3031,6 +3192,637 @@ function saveCorrection(correction, category) {
   } catch (error) {
     return { success: false, error: error.message };
   }
+}
+
+/**
+ * Initialize or get AI_Memory sheet with Mem0-inspired schema
+ * 3-tier memory: short (session), mid (7 days), long (all history)
+ */
+function getOrCreateMemorySheet_() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sheet = ss.getSheetByName('AI_Memory');
+
+  if (!sheet) {
+    sheet = ss.insertSheet('AI_Memory');
+
+    // Header row
+    var headers = [
+      'Session ID',      // UUID for conversation grouping
+      'Timestamp',       // When message was sent
+      'User ID',         // Who sent it (future: multi-user)
+      'Message Type',    // user/assistant/system
+      'Message',         // Full message text
+      'Summary',         // AI-generated summary (for search)
+      'Keywords',        // Comma-separated keywords for search
+      'Entities',        // JSON: {strains:[], crew:[], dates:[]}
+      'Context Hash',    // SHA1 of production context (detect changes)
+      'Tier',            // short/mid/long (for memory lifecycle)
+      'Embedding Score', // Future: semantic similarity score
+      'Related IDs'      // Comma-separated related session IDs
+    ];
+
+    sheet.appendRow(headers);
+    sheet.setFrozenRows(1);
+    sheet.getRange(1, 1, 1, headers.length)
+      .setFontWeight('bold')
+      .setBackground('#668971')
+      .setFontColor('#ffffff');
+
+    // Set column widths for readability
+    sheet.setColumnWidth(1, 120);  // Session ID
+    sheet.setColumnWidth(2, 150);  // Timestamp
+    sheet.setColumnWidth(5, 300);  // Message
+    sheet.setColumnWidth(6, 200);  // Summary
+    sheet.setColumnWidth(7, 200);  // Keywords
+  }
+
+  return sheet;
+}
+
+/**
+ * Update memory tiers based on age (Mem0 pattern)
+ * short: last 24 hours (in-memory context)
+ * mid: 2-7 days (quick lookup)
+ * long: 7+ days (keyword search only)
+ */
+function updateMemoryTiers_() {
+  try {
+    var sheet = getOrCreateMemorySheet_();
+    var data = sheet.getDataRange().getValues();
+    var now = new Date();
+    var oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    var sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    for (var i = 1; i < data.length; i++) {
+      var timestamp = new Date(data[i][1]);
+      var currentTier = data[i][9];
+      var newTier;
+
+      if (timestamp > oneDayAgo) {
+        newTier = 'short';
+      } else if (timestamp > sevenDaysAgo) {
+        newTier = 'mid';
+      } else {
+        newTier = 'long';
+      }
+
+      if (currentTier !== newTier) {
+        sheet.getRange(i + 1, 10).setValue(newTier);
+      }
+    }
+  } catch (error) {
+    Logger.log('Error updating memory tiers: ' + error.message);
+  }
+}
+
+/**
+ * Save message to AI_Memory sheet
+ * Extracts keywords and entities for search
+ */
+function saveToMemory_(sessionId, messageType, message, summary, contextHash) {
+  try {
+    var sheet = getOrCreateMemorySheet_();
+    var timestamp = new Date();
+
+    // Extract keywords (simple approach: significant words)
+    var keywords = extractKeywords_(message);
+
+    // Extract entities (strains, crew mentions, dates)
+    var entities = extractEntities_(message);
+
+    // Determine tier (new messages start as 'short')
+    var tier = 'short';
+
+    // Append row
+    sheet.appendRow([
+      sessionId,
+      timestamp,
+      'default_user',  // Future: multi-user support
+      messageType,
+      message,
+      summary || message.substring(0, 100),
+      keywords.join(', '),
+      JSON.stringify(entities),
+      contextHash || '',
+      tier,
+      0,  // Embedding score (future)
+      ''  // Related IDs (future)
+    ]);
+
+    return { success: true };
+  } catch (error) {
+    Logger.log('Error saving to memory: ' + error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Extract keywords from message (simple word frequency)
+ */
+function extractKeywords_(text) {
+  // Remove common stop words
+  var stopWords = ['the', 'is', 'at', 'which', 'on', 'a', 'an', 'as', 'are', 'was', 'were', 'been', 'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'to', 'of', 'in', 'for', 'with', 'by', 'from', 'up', 'about', 'into', 'through', 'during'];
+
+  var words = text.toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .split(/\s+/)
+    .filter(function(w) { return w.length > 3 && stopWords.indexOf(w) === -1; });
+
+  // Get unique words
+  var uniqueWords = [];
+  for (var i = 0; i < words.length; i++) {
+    if (uniqueWords.indexOf(words[i]) === -1) {
+      uniqueWords.push(words[i]);
+    }
+  }
+
+  return uniqueWords.slice(0, 10);  // Top 10 keywords
+}
+
+/**
+ * Extract entities from message (strains, numbers, dates)
+ */
+function extractEntities_(text) {
+  var entities = {
+    strains: [],
+    numbers: [],
+    dates: []
+  };
+
+  // Common strain names
+  var strains = ['lifter', 'sour lifter', 'cherry', 'abacus', 'bubba kush'];
+  for (var i = 0; i < strains.length; i++) {
+    if (text.toLowerCase().indexOf(strains[i]) !== -1) {
+      entities.strains.push(strains[i]);
+    }
+  }
+
+  // Extract numbers (lbs, counts, etc.)
+  var numberMatches = text.match(/\d+\.?\d*/g);
+  if (numberMatches) {
+    entities.numbers = numberMatches.slice(0, 5);
+  }
+
+  // Extract date mentions (today, yesterday, Monday, etc.)
+  var dateMentions = ['today', 'yesterday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+  for (var j = 0; j < dateMentions.length; j++) {
+    if (text.toLowerCase().indexOf(dateMentions[j]) !== -1) {
+      entities.dates.push(dateMentions[j]);
+    }
+  }
+
+  return entities;
+}
+
+/**
+ * Layer 1: Fast keyword search (returns IDs only)
+ * Mem0-inspired: search across keywords column
+ */
+function searchMemoryKeywords_(query, limit) {
+  limit = limit || 10;
+  var sheet = getOrCreateMemorySheet_();
+  var data = sheet.getDataRange().getValues();
+  var results = [];
+
+  // Extract query keywords
+  var queryKeywords = extractKeywords_(query);
+
+  // Search through memory entries
+  for (var i = 1; i < data.length; i++) {
+    var rowKeywords = data[i][6].toLowerCase().split(', ');
+    var score = 0;
+
+    // Calculate match score
+    for (var j = 0; j < queryKeywords.length; j++) {
+      if (rowKeywords.indexOf(queryKeywords[j]) !== -1) {
+        score++;
+      }
+    }
+
+    if (score > 0) {
+      results.push({
+        row: i + 1,
+        sessionId: data[i][0],
+        timestamp: data[i][1],
+        score: score,
+        messageType: data[i][3],
+        summary: data[i][5]
+      });
+    }
+  }
+
+  // Sort by score descending
+  results.sort(function(a, b) { return b.score - a.score; });
+
+  return results.slice(0, limit);
+}
+
+/**
+ * Layer 2: Get timeline context around a memory entry
+ * Returns messages before/after for conversation flow
+ */
+function getMemoryTimeline_(sessionId, anchorRow, beforeCount, afterCount) {
+  beforeCount = beforeCount || 2;
+  afterCount = afterCount || 2;
+
+  var sheet = getOrCreateMemorySheet_();
+  var data = sheet.getDataRange().getValues();
+  var timeline = [];
+
+  // Find all messages in this session
+  var sessionMessages = [];
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] === sessionId) {
+      sessionMessages.push({
+        row: i + 1,
+        timestamp: data[i][1],
+        messageType: data[i][3],
+        summary: data[i][5]
+      });
+    }
+  }
+
+  // Sort by timestamp
+  sessionMessages.sort(function(a, b) {
+    return new Date(a.timestamp) - new Date(b.timestamp);
+  });
+
+  // Find anchor position
+  var anchorIndex = -1;
+  for (var j = 0; j < sessionMessages.length; j++) {
+    if (sessionMessages[j].row === anchorRow) {
+      anchorIndex = j;
+      break;
+    }
+  }
+
+  if (anchorIndex === -1) return [];
+
+  // Get surrounding messages
+  var startIndex = Math.max(0, anchorIndex - beforeCount);
+  var endIndex = Math.min(sessionMessages.length - 1, anchorIndex + afterCount);
+
+  return sessionMessages.slice(startIndex, endIndex + 1);
+}
+
+/**
+ * Layer 3: Get full message details for specific rows
+ * Only called after filtering in Layer 1 & 2
+ */
+function getMemoryDetails_(rows) {
+  var sheet = getOrCreateMemorySheet_();
+  var results = [];
+
+  for (var i = 0; i < rows.length; i++) {
+    var rowData = sheet.getRange(rows[i], 1, 1, 12).getValues()[0];
+    results.push({
+      sessionId: rowData[0],
+      timestamp: rowData[1],
+      userId: rowData[2],
+      messageType: rowData[3],
+      message: rowData[4],
+      summary: rowData[5],
+      keywords: rowData[6],
+      entities: rowData[7],
+      tier: rowData[9]
+    });
+  }
+
+  return results;
+}
+
+/**
+ * Search memory with 3-layer pattern (token-efficient)
+ * 1. Keyword search → get relevant IDs
+ * 2. Timeline context → understand conversation flow
+ * 3. Full details → only for filtered results
+ */
+function searchMemory_(query, includeTimeline) {
+  includeTimeline = includeTimeline !== false;
+
+  // Layer 1: Keyword search
+  var matches = searchMemoryKeywords_(query, 5);
+
+  if (matches.length === 0) {
+    return { found: false, matches: [] };
+  }
+
+  // Layer 2: Get timeline for top match
+  var timeline = [];
+  if (includeTimeline && matches.length > 0) {
+    timeline = getMemoryTimeline_(matches[0].sessionId, matches[0].row, 2, 2);
+  }
+
+  // Layer 3: Get full details for top 3 matches
+  var detailRows = matches.slice(0, 3).map(function(m) { return m.row; });
+  var details = getMemoryDetails_(detailRows);
+
+  return {
+    found: true,
+    query: query,
+    matchCount: matches.length,
+    topMatches: details,
+    timeline: timeline
+  };
+}
+
+/**
+ * Validate task parameters against schema
+ */
+function validateTaskParams_(taskName, params) {
+  var task = TASK_REGISTRY[taskName];
+  if (!task) {
+    return { valid: false, error: 'Unknown task: ' + taskName };
+  }
+
+  var schema = task.parameters;
+  var errors = [];
+
+  // Check required parameters
+  for (var key in schema) {
+    var paramSchema = schema[key];
+    var value = params[key];
+
+    // Required check
+    if (paramSchema.required && (value === undefined || value === null || value === '')) {
+      errors.push('Missing required parameter: ' + key);
+      continue;
+    }
+
+    if (value === undefined || value === null) continue;
+
+    // Type check
+    if (paramSchema.type === 'number' && typeof value !== 'number') {
+      errors.push('Parameter ' + key + ' must be a number');
+    }
+    if (paramSchema.type === 'string' && typeof value !== 'string') {
+      errors.push('Parameter ' + key + ' must be a string');
+    }
+
+    // Range check for numbers
+    if (paramSchema.type === 'number') {
+      if (paramSchema.min !== undefined && value < paramSchema.min) {
+        errors.push('Parameter ' + key + ' must be >= ' + paramSchema.min);
+      }
+      if (paramSchema.max !== undefined && value > paramSchema.max) {
+        errors.push('Parameter ' + key + ' must be <= ' + paramSchema.max);
+      }
+    }
+
+    // Length check for strings
+    if (paramSchema.type === 'string' && paramSchema.maxLength) {
+      if (value.length > paramSchema.maxLength) {
+        errors.push('Parameter ' + key + ' exceeds max length of ' + paramSchema.maxLength);
+      }
+    }
+
+    // Options check (enum)
+    if (paramSchema.options) {
+      if (paramSchema.options.indexOf(value) === -1) {
+        errors.push('Parameter ' + key + ' must be one of: ' + paramSchema.options.join(', '));
+      }
+    }
+  }
+
+  if (errors.length > 0) {
+    return { valid: false, errors: errors };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Execute a validated task
+ */
+function executeTask_(taskName, params) {
+  // Validate
+  var validation = validateTaskParams_(taskName, params);
+  if (!validation.valid) {
+    return {
+      success: false,
+      error: 'Validation failed',
+      details: validation.errors || validation.error
+    };
+  }
+
+  // Get task function
+  var task = TASK_REGISTRY[taskName];
+  var functionName = task.function;
+
+  // Execute
+  try {
+    var result = this[functionName](params);
+    return {
+      success: true,
+      task: taskName,
+      result: result
+    };
+  } catch (error) {
+    Logger.log('Task execution error: ' + error.message);
+    return {
+      success: false,
+      error: error.message,
+      task: taskName
+    };
+  }
+}
+
+/**
+ * Create or get AI_Tasks sheet for logging
+ */
+function getOrCreateTasksSheet_() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sheet = ss.getSheetByName('AI_Tasks');
+
+  if (!sheet) {
+    sheet = ss.insertSheet('AI_Tasks');
+    var headers = ['Timestamp', 'Session ID', 'Task Name', 'Parameters', 'Status', 'Result', 'Error'];
+    sheet.appendRow(headers);
+    sheet.setFrozenRows(1);
+    sheet.getRange(1, 1, 1, 7)
+      .setFontWeight('bold')
+      .setBackground('#668971')
+      .setFontColor('#ffffff');
+  }
+
+  return sheet;
+}
+
+/**
+ * Log task execution
+ */
+function logTaskExecution_(sessionId, taskName, params, result) {
+  try {
+    var sheet = getOrCreateTasksSheet_();
+    sheet.appendRow([
+      new Date(),
+      sessionId,
+      taskName,
+      JSON.stringify(params),
+      result.success ? 'success' : 'failed',
+      result.success ? JSON.stringify(result.result) : '',
+      result.error || ''
+    ]);
+  } catch (error) {
+    Logger.log('Error logging task: ' + error.message);
+  }
+}
+
+/**
+ * Execute: Update crew count
+ */
+function executeUpdateCrewCount_(params) {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var timezone = ss.getSpreadsheetTimeZone();
+  var sheet = getLatestMonthSheet_(ss);
+
+  if (!sheet) {
+    throw new Error('Could not find current month sheet');
+  }
+
+  // Get today's date label
+  var today = Utilities.formatDate(new Date(), timezone, 'EEEE, MMMM d, yyyy');
+  var vals = sheet.getDataRange().getValues();
+  var dateRow = findDateRow_(vals, today);
+
+  if (!dateRow) {
+    throw new Error('Could not find today\'s date in sheet');
+  }
+
+  // Get column indices
+  var headers = vals[dateRow];
+  var colIndices = getColumnIndices_(headers);
+
+  // Determine which column to update
+  var columnKey = params.role + params.line;  // e.g., "trimmers1"
+  var colIndex = colIndices[columnKey];
+
+  if (!colIndex) {
+    throw new Error('Could not find column for ' + params.role + ' Line ' + params.line);
+  }
+
+  // Get current hour
+  var currentHour = new Date().getHours();
+  var targetRow = dateRow + 2 + currentHour - 7;  // Assuming work starts at 7am
+
+  // Update cell
+  var oldValue = sheet.getRange(targetRow, colIndex).getValue();
+  sheet.getRange(targetRow, colIndex).setValue(params.count);
+
+  // Log change to CrewChangeLog
+  var changeLog = getCrewChangeLog_(ss, timezone);
+  changeLog.appendRow([
+    new Date(),
+    'AI Assistant',
+    sheet.getName(),
+    targetRow,
+    Utilities.formatDate(new Date(), timezone, 'h:00 a - h:59 a'),
+    params.role === 'buckers' ? (oldValue + ' → ' + params.count) : '',
+    params.role === 'trimmers' ? (oldValue + ' → ' + params.count) : ''
+  ]);
+
+  return {
+    line: params.line,
+    role: params.role,
+    oldCount: oldValue,
+    newCount: params.count,
+    timeSlot: Utilities.formatDate(new Date(), timezone, 'h:00 a')
+  };
+}
+
+/**
+ * Execute: Log bag completion
+ */
+function executeLogBag_(params) {
+  // Call existing logBagCompletion function
+  var result = logBagCompletion({
+    bagType: params.bagType,
+    weight: params.weight,
+    notes: params.notes || 'Logged via AI Assistant'
+  });
+
+  return {
+    bagType: params.bagType,
+    weight: params.weight || (params.bagType === '5kg' ? 11.02 : 10.0),
+    timestamp: new Date().toISOString(),
+    bagId: result.bagId || 'unknown'
+  };
+}
+
+/**
+ * Execute: Schedule order
+ */
+function executeScheduleOrder_(params) {
+  // Generate order ID
+  var orderId = 'ORD-' + Date.now().toString().slice(-6);
+
+  // In production, this would:
+  // 1. Create entry in Orders sheet
+  // 2. Calculate ETA based on current production rate
+  // 3. Notify relevant parties
+
+  // For now, return structured data
+  return {
+    orderId: orderId,
+    customer: params.customer,
+    totalKg: params.totalKg,
+    dueDate: params.dueDate,
+    cultivars: params.cultivars || 'Not specified',
+    notes: params.notes || '',
+    status: 'pending',
+    message: 'Order ' + orderId + ' created for ' + params.customer
+  };
+}
+
+/**
+ * Execute: Pause timer
+ */
+function executePauseTimer_(params) {
+  var result = logTimerPause({
+    reason: params.reason,
+    notes: params.notes || ''
+  });
+
+  return {
+    pauseId: result.pauseId || 'pause_' + Date.now(),
+    reason: params.reason,
+    timestamp: new Date().toISOString(),
+    message: 'Timer paused: ' + params.reason
+  };
+}
+
+/**
+ * Execute: Resume timer
+ */
+function executeResumeTimer_(params) {
+  var result = logTimerResume();
+
+  return {
+    resumedAt: new Date().toISOString(),
+    duration: result.duration || 0,
+    message: 'Timer resumed after ' + (result.duration || 0) + ' seconds'
+  };
+}
+
+/**
+ * Execute: Get order status
+ */
+function executeGetOrderStatus_(params) {
+  // This would query Orders sheet in production
+  // For now, return mock data structure
+
+  return {
+    orderId: params.orderId,
+    customer: 'Sample Customer',
+    totalKg: 1400,
+    completedKg: 580,
+    remainingKg: 820,
+    status: 'in_progress',
+    percentComplete: 41,
+    estimatedCompletion: '2026-02-01',
+    cultivars: 'Lifter, Cherry',
+    message: 'Order ' + params.orderId + ' is 41% complete'
+  };
 }
 
 /**
