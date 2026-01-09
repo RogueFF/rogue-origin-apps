@@ -476,6 +476,9 @@ ops-hub.html
 |----------|----------|----------|
 | `?action=scoreboard` | `getScoreboardWithTimerData()` | Full dashboard data |
 | `?action=timer` | `getBagTimerData()` | Bag timer only |
+| `?action=getScoreboardOrderQueue` | `getScoreboardOrderQueue()` | Order progress data |
+| `?action=getOrders` | `getOrders()` | All orders |
+| `?action=getOrder&id=X` | `getOrder(id)` | Single order |
 | `?action=test` | — | `{ ok: true, timestamp }` |
 | `?action=dashboard` | `buildDashboardData()` | Complete dashboard |
 | (default) | — | API info |
@@ -489,6 +492,9 @@ ops-hub.html
 | `?action=logPause` | `logTimerPause()` | `{ reason, estimatedDuration }` | Pause ID |
 | `?action=logResume` | `logTimerResume()` | `{ pauseId, actualDuration }` | Confirmation |
 | `?action=setCrewCounts` | `setCrewCounts()` | `{ b1, b2, t1, t2 }` | Confirmation |
+| `?action=updateOrderPriority` | `updateOrderPriority()` | `{ orderId, priority }` | Order with new priority |
+| `?action=saveOrder` | `saveOrder()` | Order object | Saved order |
+| `?action=deleteOrder` | `deleteOrder()` | `{ id }` | `{ success: true }` |
 
 ### Data Structures
 
