@@ -462,7 +462,8 @@ function handleGetShiftStart(params) {
 
     // Find today's entry (most recent)
     for (var i = data.length - 1; i >= 1; i--) {
-      if (data[i][0] === date) {
+      var cellDate = Utilities.formatDate(new Date(data[i][0]), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      if (cellDate === date) {
         return {
           success: true,
           shiftAdjustment: {
