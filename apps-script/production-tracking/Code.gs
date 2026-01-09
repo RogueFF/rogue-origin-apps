@@ -528,6 +528,10 @@ function doPost(e) {
     } else if (action === 'deleteOrder') {
       var deleteData = e.postData ? JSON.parse(e.postData.contents) : {};
       result = deleteOrder(deleteData.id);
+    } else if (action === 'updateOrderPriority') {
+      var priorityData = e.postData ? JSON.parse(e.postData.contents) : {};
+      result = updateOrderPriority(priorityData);
+      clearProductionCache_();
     } else {
       result = { error: 'Unknown action: ' + action };
     }
