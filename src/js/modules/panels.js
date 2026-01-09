@@ -6,6 +6,7 @@
 import { API_URL } from './config.js';
 import { getData, isAppsScript } from './state.js';
 import { safeGetEl } from './utils.js';
+import { getSessionId, addMessage, exportForBackend } from './memory.js';
 
 // Callback references for toggle rendering
 // These must be set by the main app before using toggleSettings
@@ -141,11 +142,14 @@ export function sendAIMessage() {
   const message = input.value.trim();
   if (!message) return;
 
-  // Add user message
+  // Add user message to DOM
   const userMsg = document.createElement('div');
   userMsg.className = 'ai-message user';
   userMsg.textContent = message;
   messagesContainer.appendChild(userMsg);
+
+  // Add to memory
+  addMessage('user', message);
 
   // Clear input
   input.value = '';
@@ -159,10 +163,12 @@ export function sendAIMessage() {
   // Scroll to bottom
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
-  // Prepare request data
+  // Prepare request data with history
   const data = getData();
   const requestData = {
     message: message,
+    sessionId: getSessionId(),
+    history: exportForBackend(),
     context: {
       date: new Date().toISOString(),
       data: data || {}
@@ -172,10 +178,55 @@ export function sendAIMessage() {
   // Handle response helper
   function handleSuccess(response) {
     typingDiv.remove();
+
+    const responseText = response.response || response.message || response;
+
+    // Create unique message ID based on timestamp
+    const messageId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
+    // Add assistant message to DOM with feedback buttons
     const assistantMsg = document.createElement('div');
     assistantMsg.className = 'ai-message assistant';
-    assistantMsg.textContent = response.message || response;
+    assistantMsg.setAttribute('data-message-id', messageId);
+
+    const messageText = document.createElement('div');
+    messageText.className = 'ai-message-text';
+    messageText.textContent = responseText;
+    assistantMsg.appendChild(messageText);
+
+    // Create feedback buttons container
+    const feedbackContainer = document.createElement('div');
+    feedbackContainer.className = 'ai-feedback-buttons';
+
+    const thumbsUpBtn = document.createElement('button');
+    thumbsUpBtn.className = 'ai-feedback-btn thumbs-up';
+    thumbsUpBtn.innerHTML = '👍';
+    thumbsUpBtn.title = 'Helpful response';
+    thumbsUpBtn.setAttribute('aria-label', 'Mark as helpful');
+    thumbsUpBtn.onclick = function(e) {
+      e.preventDefault();
+      submitAIFeedback(this, 'up', messageId);
+    };
+
+    const thumbsDownBtn = document.createElement('button');
+    thumbsDownBtn.className = 'ai-feedback-btn thumbs-down';
+    thumbsDownBtn.innerHTML = '👎';
+    thumbsDownBtn.title = 'Not helpful';
+    thumbsDownBtn.setAttribute('aria-label', 'Mark as not helpful');
+    thumbsDownBtn.onclick = function(e) {
+      e.preventDefault();
+      submitAIFeedback(this, 'down', messageId);
+    };
+
+    feedbackContainer.appendChild(thumbsUpBtn);
+    feedbackContainer.appendChild(thumbsDownBtn);
+    assistantMsg.appendChild(feedbackContainer);
+
     messagesContainer.appendChild(assistantMsg);
+
+    // Add to memory
+    addMessage('assistant', responseText);
+
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
   }
 
@@ -208,6 +259,81 @@ export function sendAIMessage() {
     .catch(function(error) {
       console.error('AI chat error:', error);
       handleError();
+    });
+  }
+}
+
+/**
+ * Submit feedback for an AI response
+ * @param {HTMLElement} button - The feedback button that was clicked
+ * @param {string} rating - 'up' for thumbs up, 'down' for thumbs down
+ * @param {string} messageId - Unique ID of the message being rated
+ */
+export function submitAIFeedback(button, rating, messageId) {
+  // Disable the button and show visual feedback
+  button.style.opacity = '0.5';
+  button.style.cursor = 'not-allowed';
+  button.disabled = true;
+
+  // Find the message element
+  const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+  if (!messageElement) {
+    console.error('Message element not found for ID:', messageId);
+    return;
+  }
+
+  // Get message text for reference
+  const messageText = messageElement.querySelector('.ai-message-text');
+  const messageContent = messageText ? messageText.textContent : '';
+
+  // Prepare feedback data
+  const feedbackData = {
+    messageId: messageId,
+    rating: rating === 'up' ? 'helpful' : 'not helpful',
+    question: messageContent,
+    timestamp: new Date().toISOString()
+  };
+
+  // Send to backend
+  if (isAppsScript()) {
+    google.script.run
+      .withSuccessHandler(function(response) {
+        console.log('Feedback logged:', response);
+        // Show brief confirmation
+        button.innerHTML = rating === 'up' ? '✓👍' : '✓👎';
+        setTimeout(function() {
+          button.innerHTML = rating === 'up' ? '👍' : '👎';
+        }, 1500);
+      })
+      .withFailureHandler(function(error) {
+        console.error('Error logging feedback:', error);
+        // Reset button on error
+        button.style.opacity = '1';
+        button.disabled = false;
+        button.style.cursor = 'pointer';
+      })
+      .logChatFeedback(feedbackData);
+  } else {
+    fetch(API_URL + '?action=feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(feedbackData)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(response) {
+      console.log('Feedback logged:', response);
+      // Show brief confirmation
+      button.innerHTML = rating === 'up' ? '✓👍' : '✓👎';
+      setTimeout(function() {
+        button.innerHTML = rating === 'up' ? '👍' : '👎';
+      }, 1500);
+    })
+    .catch(function(error) {
+      console.error('Error logging feedback:', error);
+      // Reset button on error
+      button.style.opacity = '1';
+      button.disabled = false;
+      button.style.cursor = 'pointer';
     });
   }
 }
