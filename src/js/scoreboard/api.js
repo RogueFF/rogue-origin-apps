@@ -272,6 +272,52 @@
             if (onError) onError(error);
           });
       }
+    },
+
+    /**
+     * Load order queue for scoreboard display
+     * @param {Function} onSuccess - Callback with response data {current: ..., next: ..., queue: ...}
+     * @param {Function} onError - Error callback
+     */
+    loadOrderQueue: function(onSuccess, onError) {
+      if (this.isAppsScript()) {
+        // Running inside Google Apps Script web app
+        google.script.run
+          .withSuccessHandler(function(response) {
+            // Store in state if available
+            if (window.ScoreboardState) {
+              window.ScoreboardState.orderQueue = response;
+            }
+            if (onSuccess) onSuccess(response);
+          })
+          .withFailureHandler(function(error) {
+            console.error('Apps Script loadOrderQueue error:', error);
+            if (onError) onError(error);
+          })
+          .getScoreboardOrderQueue();
+      } else {
+        // Running on GitHub Pages - use fetch API
+        var apiUrl = this.getApiUrl();
+
+        fetch(apiUrl + '?action=getScoreboardOrderQueue')
+          .then(function(response) {
+            if (!response.ok) {
+              throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+            }
+            return response.json();
+          })
+          .then(function(response) {
+            // Store in state if available
+            if (window.ScoreboardState) {
+              window.ScoreboardState.orderQueue = response;
+            }
+            if (onSuccess) onSuccess(response);
+          })
+          .catch(function(error) {
+            console.error('Fetch loadOrderQueue error:', error);
+            if (onError) onError(error);
+          });
+      }
     }
   };
 

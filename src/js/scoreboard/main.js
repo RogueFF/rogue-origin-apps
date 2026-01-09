@@ -107,6 +107,28 @@
   }
 
   /**
+   * Load order queue data from API
+   */
+  function loadOrderQueue() {
+    if (!API || !API.loadOrderQueue) {
+      return;
+    }
+
+    API.loadOrderQueue(
+      function(response) {
+        // State is updated automatically by API.loadOrderQueue
+        // Now render the order queue UI
+        if (Render && Render.renderOrderQueue) {
+          Render.renderOrderQueue();
+        }
+      },
+      function(error) {
+        console.error('Failed to load order queue:', error);
+      }
+    );
+  }
+
+  /**
    * Set the display language
    * @param {string} lang - Language code ('en' or 'es')
    */
@@ -188,6 +210,16 @@
 
     // Initial data load
     loadData();
+
+    // Initial order queue load
+    loadOrderQueue();
+
+    // Register order queue loading interval
+    if (State && State.registerInterval) {
+      State.registerInterval(loadOrderQueue, dataInterval);
+    } else {
+      setInterval(loadOrderQueue, dataInterval);
+    }
 
     // Initial cycle history render
     if (Cycle && Cycle.renderCycleHistory) {
