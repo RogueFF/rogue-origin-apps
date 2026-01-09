@@ -312,6 +312,8 @@ function doGet(e) {
       } else {
         result = getOrder(orderIdValidation.value);
       }
+    } else if (action === 'getScoreboardOrderQueue') {
+      result = getScoreboardOrderQueue();
     } else if (action === 'setShiftStart') {
       result = handleSetShiftStart(e.parameter);
     } else if (action === 'getShiftStart') {
@@ -323,7 +325,7 @@ function doGet(e) {
       result = {
         ok: true,
         message: 'Rogue Origin Production API',
-        endpoints: ['scoreboard', 'dashboard', 'test'],
+        endpoints: ['scoreboard', 'dashboard', 'getOrders', 'getOrder', 'getScoreboardOrderQueue', 'test'],
         timestamp: new Date().toISOString()
       };
     }
