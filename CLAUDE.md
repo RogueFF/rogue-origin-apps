@@ -66,6 +66,39 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **To continue**: Start with Phase 3.1 (error handling) or Phase 5.1 (accessibility)
 
+## Recent Features (January 2026)
+
+### Order Progress on Scoreboard (2026-01-09)
+
+**Feature**: Displays current and next order in queue on production scoreboard
+
+**Backend Changes**:
+- Added 3 new functions to `production-tracking/Code.gs`:
+  - `getScoreboardOrderQueue()` - Returns current/next orders with progress
+  - `calculateOrderProgress()` - Calculates completion % and estimated hours using crew rate
+  - `updateOrderPriority()` - Manual priority override for drag-and-drop reordering
+- Added Priority column to Orders sheet (column 10)
+- New API endpoints:
+  - GET `?action=getScoreboardOrderQueue` - Order queue data
+  - POST `?action=updateOrderPriority` - Update order priority
+
+**Frontend Changes** (already completed in previous session):
+- Order pills display between Daily Progress and Comparisons sections
+- Compact collapsed view (~80px), expandable on click
+- Progress bar on current order
+- Bilingual support (EN/ES)
+- 15-second refresh cycle
+- Mobile responsive
+
+**Priority Logic**:
+- Default: FIFO (First In, First Out) by creation date
+- Manual override: Priority field (1, 2, 3...) via drag-and-drop
+- Lower priority number = higher precedence
+
+**Status**: ✅ Backend complete, ready for deployment to Google Apps Script
+
+---
+
 ## Quick Reference
 
 ### URLs & IDs
