@@ -71,7 +71,17 @@
       helpTitle: 'Understanding the Scoreboard',
       helpGreen: 'Green = Ahead (105%+)',
       helpYellow: 'Yellow = On Target (90-105%)',
-      helpRed: 'Red = Behind (<90%)'
+      helpRed: 'Red = Behind (<90%)',
+
+      // Order Queue
+      workingOn: 'WORKING ON',
+      upNext: 'UP NEXT',
+      order: 'Order',
+      shipment: 'Shipment',
+      customer: 'Customer',
+      dueDate: 'Due Date',
+      estCompletion: 'Est. Completion',
+      fullOrder: 'Full Order Context'
     },
 
     es: {
@@ -139,7 +149,17 @@
       helpTitle: 'Entendiendo el Marcador',
       helpGreen: 'Verde = Adelante (105%+)',
       helpYellow: 'Amarillo = En Meta (90-105%)',
-      helpRed: 'Rojo = Atrás (<90%)'
+      helpRed: 'Rojo = Atrás (<90%)',
+
+      // Order Queue
+      workingOn: 'TRABAJANDO EN',
+      upNext: 'SIGUIENTE',
+      order: 'Pedido',
+      shipment: 'Envío',
+      customer: 'Cliente',
+      dueDate: 'Fecha de Vencimiento',
+      estCompletion: 'Tiempo Estimado',
+      fullOrder: 'Contexto Completo del Pedido'
     }
   };
 
