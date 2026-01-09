@@ -3742,6 +3742,65 @@ function calculateOrderProgress(orderId, targetKg, completedKg) {
 }
 
 /**
+ * Update order priority for manual reordering
+ * Used by drag-and-drop in orders.html
+ *
+ * @param {object} data - { orderId: string, priority: number }
+ * @returns {object} { success, order }
+ */
+function updateOrderPriority(data) {
+  try {
+    // Validate input
+    if (!data || !data.orderId) {
+      return { success: false, error: 'Missing orderId' };
+    }
+
+    var orderId = String(data.orderId);
+    var priority = data.priority != null ? parseInt(data.priority) : null;
+
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(ORDERS_SHEET_NAME);
+
+    if (!sheet) {
+      return { success: false, error: 'Orders sheet not found' };
+    }
+
+    var sheetData = sheet.getDataRange().getValues();
+    var rowIndex = -1;
+
+    // Find the order row
+    for (var i = 1; i < sheetData.length; i++) {
+      if (sheetData[i][0] === orderId) {
+        rowIndex = i + 1; // 1-indexed for Sheets API
+        break;
+      }
+    }
+
+    if (rowIndex === -1) {
+      return { success: false, error: 'Order not found: ' + orderId };
+    }
+
+    // Update priority column (column 10)
+    sheet.getRange(rowIndex, 10).setValue(priority);
+
+    // Clear cache so scoreboard picks up changes
+    clearProductionCache_();
+
+    return {
+      success: true,
+      order: {
+        id: orderId,
+        priority: priority
+      }
+    };
+
+  } catch (error) {
+    Logger.log('updateOrderPriority error: ' + error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Test orders API
  */
 function testOrdersAPI() {
