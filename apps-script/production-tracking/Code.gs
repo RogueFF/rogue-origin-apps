@@ -312,8 +312,6 @@ function doGet(e) {
       } else {
         result = getOrder(orderIdValidation.value);
       }
-    } else if (action === 'getScoreboardOrderQueue') {
-      result = getScoreboardOrderQueue();
     } else if (action === 'setShiftStart') {
       result = handleSetShiftStart(e.parameter);
     } else if (action === 'getShiftStart') {
@@ -325,7 +323,7 @@ function doGet(e) {
       result = {
         ok: true,
         message: 'Rogue Origin Production API',
-        endpoints: ['scoreboard', 'dashboard', 'getOrders', 'getOrder', 'getScoreboardOrderQueue', 'test'],
+        endpoints: ['scoreboard', 'dashboard', 'getOrders', 'getOrder', 'test'],
         timestamp: new Date().toISOString()
       };
     }
@@ -528,10 +526,6 @@ function doPost(e) {
     } else if (action === 'deleteOrder') {
       var deleteData = e.postData ? JSON.parse(e.postData.contents) : {};
       result = deleteOrder(deleteData.id);
-    } else if (action === 'updateOrderPriority') {
-      var priorityData = e.postData ? JSON.parse(e.postData.contents) : {};
-      result = updateOrderPriority(priorityData);
-      clearProductionCache_();
     } else {
       result = { error: 'Unknown action: ' + action };
     }
@@ -3485,8 +3479,7 @@ function createOrdersSheet_(ss) {
     'CreatedDate',
     'DueDate',
     'Notes',
-    'Pallets',
-    'Priority'
+    'Pallets'
   ];
 
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -3503,7 +3496,6 @@ function createOrdersSheet_(ss) {
   sheet.setColumnWidth(7, 100);  // DueDate
   sheet.setColumnWidth(8, 200);  // Notes
   sheet.setColumnWidth(9, 400);  // Pallets (JSON)
-  sheet.setColumnWidth(10, 80);  // Priority
 
   return sheet;
 }
@@ -3575,234 +3567,6 @@ function getOrdersSummary() {
   } catch (error) {
     Logger.log('Error getting orders summary: ' + error);
     return null;
-  }
-}
-
-/**
- * Get order queue for scoreboard display
- * Returns current active order + next in queue
- * Filters for orders with non-zero TotalKg
- *
- * @returns {object} { success, current: {...}, next: {...}, queue: {...} }
- */
-function getScoreboardOrderQueue() {
-  try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
-    var sheet = ss.getSheetByName(ORDERS_SHEET_NAME);
-
-    if (!sheet) {
-      return { success: true, current: null, next: null, queue: { totalOrders: 0, totalKg: 0 } };
-    }
-
-    var data = sheet.getDataRange().getValues();
-    var activeOrders = [];
-
-    // Parse orders (skip header row)
-    for (var i = 1; i < data.length; i++) {
-      var row = data[i];
-      if (!row[0]) continue; // Skip empty rows
-
-      // Skip completed or shipped orders
-      var status = (row[4] || '').toString().toLowerCase();
-      if (status === 'completed' || status === 'shipped') continue;
-
-      var order = {
-        id: row[0],
-        customer: row[1],
-        totalKg: parseFloat(row[2]) || 0,
-        completedKg: parseFloat(row[3]) || 0,
-        status: row[4] || 'pending',
-        createdDate: row[5],
-        dueDate: row[6],
-        notes: row[7] || '',
-        pallets: row[8] || '',
-        priority: row[9] ? parseInt(row[9]) : null
-      };
-
-      if (order.totalKg > 0) {
-        activeOrders.push(order);
-      }
-    }
-
-    // Sort by priority (manual override) or creation date (FIFO)
-    activeOrders.sort(function(a, b) {
-      // If both have priority set, sort by priority ascending
-      if (a.priority != null && b.priority != null) {
-        return a.priority - b.priority;
-      }
-      // If only one has priority, prioritize it
-      if (a.priority != null) return -1;
-      if (b.priority != null) return 1;
-      // Otherwise, FIFO by creation date
-      var dateA = new Date(a.createdDate || 0);
-      var dateB = new Date(b.createdDate || 0);
-      return dateA - dateB;
-    });
-
-    // Get current and next
-    var current = null;
-    var next = null;
-
-    if (activeOrders.length > 0) {
-      var currentOrder = activeOrders[0];
-
-      // Calculate progress
-      var progress = calculateOrderProgress(currentOrder.id, currentOrder.totalKg, currentOrder.completedKg);
-
-      current = {
-        orderId: currentOrder.id,
-        customer: currentOrder.customer,
-        totalKg: currentOrder.totalKg,
-        completedKg: progress.completedKg,
-        percentComplete: progress.percentComplete,
-        dueDate: formatDateForJSON_(currentOrder.dueDate),
-        estimatedHoursRemaining: progress.estimatedHoursRemaining,
-        status: currentOrder.status
-      };
-    }
-
-    if (activeOrders.length > 1) {
-      var nextOrder = activeOrders[1];
-      next = {
-        orderId: nextOrder.id,
-        customer: nextOrder.customer,
-        totalKg: nextOrder.totalKg,
-        dueDate: formatDateForJSON_(nextOrder.dueDate),
-        status: nextOrder.status
-      };
-    }
-
-    // Queue summary
-    var totalKg = 0;
-    for (var i = 0; i < activeOrders.length; i++) {
-      totalKg += (activeOrders[i].totalKg - activeOrders[i].completedKg);
-    }
-
-    return {
-      success: true,
-      current: current,
-      next: next,
-      queue: {
-        totalOrders: activeOrders.length,
-        totalKg: Math.round(totalKg * 10) / 10
-      }
-    };
-
-  } catch (error) {
-    Logger.log('getScoreboardOrderQueue error: ' + error.message);
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * Calculate order progress based on production tracking data
- *
- * @param {string} orderId - Order ID to track
- * @param {number} targetKg - Total kg for this order
- * @param {number} completedKg - Already completed kg from sheet
- * @returns {object} { completedKg, percentComplete, estimatedHoursRemaining }
- */
-function calculateOrderProgress(orderId, targetKg, completedKg) {
-  try {
-    // For now, use the completedKg from the Orders sheet
-    // TODO Phase 4: Connect to hour-by-hour production data to calculate real-time progress
-
-    var percentComplete = targetKg > 0 ? Math.round((completedKg / targetKg) * 100) : 0;
-
-    // Estimate hours remaining based on current crew rate
-    var remainingKg = targetKg - completedKg;
-    var estimatedHours = 0;
-
-    if (remainingKg > 0) {
-      // Get current production rate from scoreboard data
-      var scoreboardData = getScoreboardData();
-      if (scoreboardData && scoreboardData.success && scoreboardData.data) {
-        var currentRate = scoreboardData.data.targetRate || 1.0; // lbs per trimmer per hour
-        var currentTrimmers = scoreboardData.data.currentHourTrimmers || 5;
-
-        // Convert kg to lbs (1 kg = 2.205 lbs)
-        var remainingLbs = remainingKg * 2.205;
-
-        // Calculate hours: lbs / (rate * trimmers)
-        var crewRate = currentRate * currentTrimmers;
-        if (crewRate > 0) {
-          estimatedHours = Math.round((remainingLbs / crewRate) * 10) / 10;
-        }
-      }
-    }
-
-    return {
-      completedKg: completedKg,
-      percentComplete: percentComplete,
-      estimatedHoursRemaining: estimatedHours
-    };
-
-  } catch (error) {
-    Logger.log('calculateOrderProgress error: ' + error.message);
-    return {
-      completedKg: completedKg || 0,
-      percentComplete: 0,
-      estimatedHoursRemaining: 0
-    };
-  }
-}
-
-/**
- * Update order priority for manual reordering
- * Used by drag-and-drop in orders.html
- *
- * @param {object} data - { orderId: string, priority: number }
- * @returns {object} { success, order }
- */
-function updateOrderPriority(data) {
-  try {
-    // Validate input
-    if (!data || !data.orderId) {
-      return { success: false, error: 'Missing orderId' };
-    }
-
-    var orderId = String(data.orderId);
-    var priority = data.priority != null ? parseInt(data.priority) : null;
-
-    var ss = SpreadsheetApp.openById(SHEET_ID);
-    var sheet = ss.getSheetByName(ORDERS_SHEET_NAME);
-
-    if (!sheet) {
-      return { success: false, error: 'Orders sheet not found' };
-    }
-
-    var sheetData = sheet.getDataRange().getValues();
-    var rowIndex = -1;
-
-    // Find the order row
-    for (var i = 1; i < sheetData.length; i++) {
-      if (sheetData[i][0] === orderId) {
-        rowIndex = i + 1; // 1-indexed for Sheets API
-        break;
-      }
-    }
-
-    if (rowIndex === -1) {
-      return { success: false, error: 'Order not found: ' + orderId };
-    }
-
-    // Update priority column (column 10)
-    sheet.getRange(rowIndex, 10).setValue(priority);
-
-    // Clear cache so scoreboard picks up changes
-    clearProductionCache_();
-
-    return {
-      success: true,
-      order: {
-        id: orderId,
-        priority: priority
-      }
-    };
-
-  } catch (error) {
-    Logger.log('updateOrderPriority error: ' + error.message);
-    return { success: false, error: error.message };
   }
 }
 
