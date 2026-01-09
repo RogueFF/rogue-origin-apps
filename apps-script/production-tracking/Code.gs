@@ -3573,6 +3573,122 @@ function getOrdersSummary() {
 }
 
 /**
+ * Get order queue for scoreboard display
+ * Returns current active order + next in queue
+ * Filters for orders with non-zero TotalKg
+ *
+ * @returns {object} { success, current: {...}, next: {...}, queue: {...} }
+ */
+function getScoreboardOrderQueue() {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(ORDERS_SHEET_NAME);
+
+    if (!sheet) {
+      return { success: true, current: null, next: null, queue: { totalOrders: 0, totalKg: 0 } };
+    }
+
+    var data = sheet.getDataRange().getValues();
+    var activeOrders = [];
+
+    // Parse orders (skip header row)
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      if (!row[0]) continue; // Skip empty rows
+
+      // Skip completed or shipped orders
+      var status = (row[4] || '').toString().toLowerCase();
+      if (status === 'completed' || status === 'shipped') continue;
+
+      var order = {
+        id: row[0],
+        customer: row[1],
+        totalKg: parseFloat(row[2]) || 0,
+        completedKg: parseFloat(row[3]) || 0,
+        status: row[4] || 'pending',
+        createdDate: row[5],
+        dueDate: row[6],
+        notes: row[7] || '',
+        pallets: row[8] || '',
+        priority: row[9] ? parseInt(row[9]) : null
+      };
+
+      if (order.totalKg > 0) {
+        activeOrders.push(order);
+      }
+    }
+
+    // Sort by priority (manual override) or creation date (FIFO)
+    activeOrders.sort(function(a, b) {
+      // If both have priority set, sort by priority ascending
+      if (a.priority != null && b.priority != null) {
+        return a.priority - b.priority;
+      }
+      // If only one has priority, prioritize it
+      if (a.priority != null) return -1;
+      if (b.priority != null) return 1;
+      // Otherwise, FIFO by creation date
+      var dateA = new Date(a.createdDate || 0);
+      var dateB = new Date(b.createdDate || 0);
+      return dateA - dateB;
+    });
+
+    // Get current and next
+    var current = null;
+    var next = null;
+
+    if (activeOrders.length > 0) {
+      var currentOrder = activeOrders[0];
+
+      // Calculate progress
+      var progress = calculateOrderProgress(currentOrder.id, currentOrder.totalKg, currentOrder.completedKg);
+
+      current = {
+        orderId: currentOrder.id,
+        customer: currentOrder.customer,
+        totalKg: currentOrder.totalKg,
+        completedKg: progress.completedKg,
+        percentComplete: progress.percentComplete,
+        dueDate: formatDateForJSON_(currentOrder.dueDate),
+        estimatedHoursRemaining: progress.estimatedHoursRemaining,
+        status: currentOrder.status
+      };
+    }
+
+    if (activeOrders.length > 1) {
+      var nextOrder = activeOrders[1];
+      next = {
+        orderId: nextOrder.id,
+        customer: nextOrder.customer,
+        totalKg: nextOrder.totalKg,
+        dueDate: formatDateForJSON_(nextOrder.dueDate),
+        status: nextOrder.status
+      };
+    }
+
+    // Queue summary
+    var totalKg = 0;
+    for (var i = 0; i < activeOrders.length; i++) {
+      totalKg += (activeOrders[i].totalKg - activeOrders[i].completedKg);
+    }
+
+    return {
+      success: true,
+      current: current,
+      next: next,
+      queue: {
+        totalOrders: activeOrders.length,
+        totalKg: Math.round(totalKg * 10) / 10
+      }
+    };
+
+  } catch (error) {
+    Logger.log('getScoreboardOrderQueue error: ' + error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Test orders API
  */
 function testOrdersAPI() {
