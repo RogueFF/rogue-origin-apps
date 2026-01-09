@@ -459,19 +459,17 @@ function handleGetShiftStart(params) {
     }
 
     var data = sheet.getDataRange().getValues();
-    var debugInfo = { searchingFor: date, rowsChecked: 0, foundDates: [] };
 
     // Find today's entry (most recent)
     for (var i = data.length - 1; i >= 1; i--) {
-      debugInfo.rowsChecked++;
       var cellDate = Utilities.formatDate(new Date(data[i][0]), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-      debugInfo.foundDates.push(cellDate);
 
       if (cellDate === date) {
+        var timeStr = Utilities.formatDate(new Date(data[i][1]), Session.getScriptTimeZone(), 'HH:mm:ss');
         return {
           success: true,
           shiftAdjustment: {
-            manualStartTime: date + 'T' + data[i][1],
+            manualStartTime: date + 'T' + timeStr,
             availableHours: parseFloat(data[i][3]),
             scaleFactor: parseFloat(data[i][4])
           }
@@ -479,7 +477,7 @@ function handleGetShiftStart(params) {
       }
     }
 
-    return { success: true, shiftAdjustment: null, debug: debugInfo };
+    return { success: true, shiftAdjustment: null };
 
   } catch (error) {
     return { success: false, error: error.toString() };
