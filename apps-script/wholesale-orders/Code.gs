@@ -312,13 +312,15 @@ function doGet(e) {
       } else {
         result = getOrderFinancials(orderIdValidation.value);
       }
+    } else if (action === 'getScoreboardOrderQueue') {
+      result = getScoreboardOrderQueue();
     } else if (action === 'test') {
       result = { ok: true, message: 'Wholesale Orders API working', timestamp: new Date().toISOString() };
     } else {
       result = {
         ok: true,
         message: 'Rogue Origin Wholesale Orders API',
-        endpoints: ['getCustomers', 'getMasterOrders', 'getShipments', 'getPayments', 'validatePassword', 'test'],
+        endpoints: ['getCustomers', 'getMasterOrders', 'getShipments', 'getPayments', 'getScoreboardOrderQueue', 'validatePassword', 'test'],
         timestamp: new Date().toISOString()
       };
     }
@@ -458,6 +460,19 @@ function doPost(e) {
         result = { success: false, error: 'Validation errors: ' + validation.errors.join(', ') };
       } else {
         result = savePayment(validation.data);
+      }
+    } else if (action === 'updateOrderPriority') {
+      var priorityData = e.postData ? JSON.parse(e.postData.contents) : {};
+      // SECURITY: Validate order ID and priority
+      var idValidation = validateId(priorityData.orderID);
+      var priorityValidation = validateNumericInput(priorityData.newPriority, { min: 0, max: 9999, allowNull: true });
+
+      if (!idValidation.valid) {
+        result = { success: false, error: 'Invalid order ID: ' + idValidation.error };
+      } else if (!priorityValidation.valid) {
+        result = { success: false, error: 'Invalid priority value: ' + priorityValidation.error };
+      } else {
+        result = updateOrderPriority(idValidation.value, priorityValidation.value);
       }
     } else {
       result = { error: 'Unknown action: ' + action };
@@ -685,7 +700,8 @@ function getMasterOrders() {
         soldTo_Address: row[17],
         soldTo_Phone: row[18],
         soldTo_Email: row[19],
-        notes: row[20]
+        notes: row[20],
+        priority: parseInt(row[21]) || null
       });
     }
     return { success: true, orders: orders };
@@ -735,7 +751,8 @@ function saveMasterOrder(orderData) {
       orderData.soldTo_Address || '',
       orderData.soldTo_Phone || '',
       orderData.soldTo_Email || '',
-      orderData.notes || ''
+      orderData.notes || '',
+      orderData.priority || ''
     ];
 
     if (existingRow > 0) {
@@ -811,7 +828,7 @@ function createMasterOrdersSheet_(ss) {
     'Status', 'PONumber', 'Terms', 'CreatedDate', 'DueDate',
     'ShipTo_Contact', 'ShipTo_Company', 'ShipTo_Address', 'ShipTo_Phone', 'ShipTo_Email',
     'SoldTo_Contact', 'SoldTo_Company', 'SoldTo_Address', 'SoldTo_Phone', 'SoldTo_Email',
-    'Notes'
+    'Notes', 'Priority'
   ];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
@@ -1271,6 +1288,199 @@ function getOrderFinancials(orderID) {
       outstanding: order.commitmentAmount - totalFulfilled,
       balance: totalFulfilled - totalPaid
     };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// ===== SCOREBOARD ORDER QUEUE =====
+/**
+ * Gets the current active order and next order in queue for the scoreboard display
+ * Filters for TOPS-only line items and calculates production progress
+ *
+ * @returns {object} { success, current: {...}, next: {...}, queue: {...} }
+ */
+function getScoreboardOrderQueue() {
+  try {
+    // Get all master orders and shipments
+    var ordersResult = getMasterOrders();
+    if (!ordersResult.success) return ordersResult;
+
+    var shipmentsResult = getShipments(null); // Get all shipments
+    if (!shipmentsResult.success) return shipmentsResult;
+
+    // Build a list of shipment line items with tops only
+    var topsLineItems = [];
+
+    for (var i = 0; i < shipmentsResult.shipments.length; i++) {
+      var shipment = shipmentsResult.shipments[i];
+
+      // Find the parent order
+      var parentOrder = null;
+      for (var j = 0; j < ordersResult.orders.length; j++) {
+        if (ordersResult.orders[j].id === shipment.orderID) {
+          parentOrder = ordersResult.orders[j];
+          break;
+        }
+      }
+
+      if (!parentOrder) continue;
+
+      // Skip completed or cancelled orders
+      if (parentOrder.status === 'completed' || parentOrder.status === 'cancelled') continue;
+
+      // Parse line items and filter for tops only
+      var lineItems = [];
+      try {
+        lineItems = JSON.parse(shipment.lineItemsJSON || '[]');
+      } catch (e) {
+        lineItems = [];
+      }
+
+      for (var k = 0; k < lineItems.length; k++) {
+        var item = lineItems[k];
+
+        // Only include tops (skip smalls)
+        if (item.type && item.type.toLowerCase() === 'tops') {
+          topsLineItems.push({
+            masterOrderId: parentOrder.id,
+            shipmentId: shipment.id,
+            customer: parentOrder.customerName,
+            strain: item.strain,
+            type: item.type,
+            quantityKg: parseFloat(item.quantity) || 0,
+            dueDate: parentOrder.dueDate,
+            orderPriority: parentOrder.priority,
+            createdDate: parentOrder.createdDate,
+            invoiceNumber: shipment.invoiceNumber,
+            orderStatus: parentOrder.status,
+            shipmentStatus: shipment.status
+          });
+        }
+      }
+    }
+
+    // Sort by priority (manual override) or creation date (FIFO)
+    topsLineItems.sort(function(a, b) {
+      // If both have priority set, sort by priority ascending
+      if (a.orderPriority != null && b.orderPriority != null) {
+        return a.orderPriority - b.orderPriority;
+      }
+      // If only one has priority, prioritize it
+      if (a.orderPriority != null) return -1;
+      if (b.orderPriority != null) return 1;
+      // Otherwise, FIFO by creation date
+      var dateA = new Date(a.createdDate);
+      var dateB = new Date(b.createdDate);
+      return dateA - dateB;
+    });
+
+    // Get current and next
+    var current = null;
+    var next = null;
+
+    if (topsLineItems.length > 0) {
+      var currentItem = topsLineItems[0];
+
+      // Calculate progress for current order
+      var progress = calculateOrderProgress(currentItem.shipmentId, currentItem.quantityKg);
+
+      current = {
+        masterOrderId: currentItem.masterOrderId,
+        shipmentId: currentItem.shipmentId,
+        customer: currentItem.customer,
+        strain: currentItem.strain,
+        type: currentItem.type,
+        quantityKg: currentItem.quantityKg,
+        completedKg: progress.completedKg,
+        percentComplete: progress.percentComplete,
+        dueDate: currentItem.dueDate,
+        estimatedHoursRemaining: progress.estimatedHoursRemaining,
+        invoiceNumber: currentItem.invoiceNumber
+      };
+    }
+
+    if (topsLineItems.length > 1) {
+      var nextItem = topsLineItems[1];
+      next = {
+        masterOrderId: nextItem.masterOrderId,
+        shipmentId: nextItem.shipmentId,
+        customer: nextItem.customer,
+        strain: nextItem.strain,
+        type: nextItem.type,
+        quantityKg: nextItem.quantityKg,
+        dueDate: nextItem.dueDate,
+        invoiceNumber: nextItem.invoiceNumber
+      };
+    }
+
+    return {
+      success: true,
+      current: current,
+      next: next,
+      queue: {
+        totalShipments: topsLineItems.length,
+        totalKg: topsLineItems.reduce(function(sum, item) { return sum + item.quantityKg; }, 0)
+      }
+    };
+
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Calculates order progress by matching production data to shipment line items
+ *
+ * @param {string} shipmentId - The shipment ID to calculate progress for
+ * @param {number} targetKg - The target quantity in kg
+ * @returns {object} { completedKg, percentComplete, estimatedHoursRemaining }
+ */
+function calculateOrderProgress(shipmentId, targetKg) {
+  // TODO: This needs to query the production tracking spreadsheet
+  // For now, return mock data
+  // In Phase 4, we'll connect to the actual production tracking hour-by-hour data
+
+  return {
+    completedKg: 0,
+    percentComplete: 0,
+    estimatedHoursRemaining: 0
+  };
+}
+
+/**
+ * Updates the priority of an order (for drag-and-drop reordering)
+ *
+ * @param {string} orderID - The order ID to update
+ * @param {number} newPriority - The new priority value
+ * @returns {object} { success, message }
+ */
+function updateOrderPriority(orderID, newPriority) {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(MASTER_ORDERS_SHEET_NAME);
+    if (!sheet) {
+      return { success: false, error: 'Orders sheet not found' };
+    }
+
+    var data = sheet.getDataRange().getValues();
+    var rowToUpdate = -1;
+
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] === orderID) {
+        rowToUpdate = i + 1; // +1 because sheet rows are 1-indexed
+        break;
+      }
+    }
+
+    if (rowToUpdate === -1) {
+      return { success: false, error: 'Order not found' };
+    }
+
+    // Update priority column (column 22 = index 21)
+    sheet.getRange(rowToUpdate, 22).setValue(newPriority);
+
+    return { success: true, message: 'Priority updated successfully' };
   } catch (error) {
     return { success: false, error: error.message };
   }
