@@ -12,8 +12,8 @@
  **********************************************************/
 
 // ===== CONFIGURATION =====
-// TODO: Replace with your Sheet ID after creating the spreadsheet
-var SHEET_ID = 'YOUR_SHEET_ID_HERE';
+// Sheet ID for wholesale orders database
+var SHEET_ID = 'REDACTED-ORDERS-SHEET-ID';
 var COA_FOLDER_ID = '1efudtjpm8fsSA6PZUirhtsmCO5-oS2Me';
 
 /**********************************************************
