@@ -727,7 +727,18 @@ function saveMasterOrder(orderData) {
 
     if (!orderData.id) {
       var year = new Date().getFullYear();
-      orderData.id = 'MO-' + year + '-' + String(data.length).padStart(3, '0');
+      // Find the highest existing order number for this year
+      var maxOrderNum = 0;
+      for (var i = 1; i < data.length; i++) {
+        var existingId = data[i][0];
+        if (existingId && existingId.toString().startsWith('MO-' + year + '-')) {
+          var numStr = existingId.toString().split('-')[2];
+          var num = parseInt(numStr, 10);
+          if (num > maxOrderNum) maxOrderNum = num;
+        }
+      }
+      var nextOrderNum = maxOrderNum + 1;
+      orderData.id = 'MO-' + year + '-' + String(nextOrderNum).padStart(3, '0');
     }
 
     var row = [
