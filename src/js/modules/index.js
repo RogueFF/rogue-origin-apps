@@ -18,7 +18,14 @@ import {
 import { clearHistory } from './memory.js';
 
 // ===== VOICE IMPORTS =====
-import { toggleVoice, isVoiceActive } from './voice.js';
+import {
+  toggleVoice,
+  isVoiceActive,
+  startListening,
+  stopListening,
+  stopSpeaking,
+  initVoiceRecognition
+} from './voice.js';
 
 // ===== STATE IMPORTS =====
 import {
@@ -766,15 +773,53 @@ window.showWidgetHelp = function(widgetId) {
   showToast('Help coming soon', 'info', 2000);
 };
 
-// AI Voice features (stubs - to be migrated from original dashboard.js)
+// AI Voice features
 window.aiToggleVoiceMode = function() {
   const btn = document.getElementById('aiVoiceModeToggle');
-  if (btn) btn.classList.toggle('active');
+  const enabled = toggleVoice();  // From voice.js
+
+  if (btn) {
+    if (enabled) {
+      btn.classList.add('active');
+      showToast('Voice mode enabled', 'success', 2000);
+    } else {
+      btn.classList.remove('active');
+      stopSpeaking();  // Stop any current speech
+      showToast('Voice mode disabled', 'info', 2000);
+    }
+  }
 };
 
-window.aiToggleVoice = function() {
-  console.log('Voice input not yet implemented');
-  showToast('Voice input coming soon', 'info', 2000);
+window.aiToggleVoice = async function() {
+  const btn = document.getElementById('aiVoiceBtn');
+  const statusDiv = document.getElementById('aiVoiceStatus');
+  const input = document.getElementById('aiInput');
+
+  try {
+    // Show listening indicator
+    if (btn) btn.classList.add('listening');
+    if (statusDiv) {
+      statusDiv.textContent = '🎤 Listening...';
+      statusDiv.style.display = 'flex';
+    }
+
+    // Start listening
+    const transcript = await startListening();  // From voice.js
+
+    if (transcript) {
+      if (input) input.value = transcript;
+      sendAIMessage();  // Auto-send
+    }
+
+  } catch (error) {
+    console.error('Voice input error:', error);
+    showToast(error.message || 'Voice input failed', 'error', 3000);
+
+  } finally {
+    // Hide listening indicator
+    if (btn) btn.classList.remove('listening');
+    if (statusDiv) statusDiv.style.display = 'none';
+  }
 };
 
 window.aiSendMessage = sendAIMessage;
