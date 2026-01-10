@@ -184,7 +184,34 @@ export function sendAIMessage() {
     console.log('[AI Chat] Backend response:', response);
     console.log('[AI Chat] Response keys:', Object.keys(response || {}));
 
-    const responseText = response.response || response.message || response;
+    // Handle error responses from backend
+    if (response && response.success === false && response.error) {
+      handleError();
+      console.error('[AI Chat] Backend error:', response.error);
+      return;
+    }
+
+    // Extract response text with proper fallbacks
+    let responseText;
+    if (typeof response === 'string') {
+      responseText = response;
+    } else if (response && response.response) {
+      responseText = response.response;
+    } else if (response && response.message) {
+      responseText = response.message;
+    } else if (response && typeof response === 'object') {
+      // Handle unexpected object format
+      console.error('[AI Chat] Unexpected response format:', response);
+      responseText = 'Sorry, I received an unexpected response format. Please try again.';
+    } else {
+      responseText = 'Sorry, I didn\'t get a valid response. Please try again.';
+    }
+
+    // Ensure responseText is a string
+    if (typeof responseText !== 'string') {
+      console.error('[AI Chat] Response is not a string:', responseText);
+      responseText = String(responseText);
+    }
 
     // Create unique message ID based on timestamp
     const messageId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
@@ -244,11 +271,18 @@ export function sendAIMessage() {
   }
 
   // Handle error helper
-  function handleError() {
+  function handleError(errorDetail) {
     typingDiv.remove();
     const errorMsg = document.createElement('div');
     errorMsg.className = 'ai-message assistant';
+
+    // Show generic error to user, but log details
     errorMsg.textContent = 'Sorry, I\'m having trouble connecting right now. Please try again.';
+
+    if (errorDetail) {
+      console.error('[AI Chat] Error details:', errorDetail);
+    }
+
     messagesContainer.appendChild(errorMsg);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
   }
@@ -266,13 +300,23 @@ export function sendAIMessage() {
       body: JSON.stringify(requestData),
       cache: 'no-store'
     })
-    .then(function(r) { return r.json(); })
+    .then(function(r) {
+      if (!r.ok) {
+        throw new Error('HTTP ' + r.status + ': ' + r.statusText);
+      }
+      return r.json();
+    })
     .then(function(response) {
+      // Ensure response is valid
+      if (!response || typeof response !== 'object') {
+        console.error('[AI Chat] Invalid response type:', typeof response);
+        throw new Error('Invalid response format');
+      }
       handleSuccess(response);
     })
     .catch(function(error) {
       console.error('AI chat error:', error);
-      handleError();
+      handleError(error);
     });
   }
 }
