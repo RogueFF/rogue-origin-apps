@@ -179,6 +179,10 @@ export function sendAIMessage() {
   function handleSuccess(response) {
     typingDiv.remove();
 
+    // Debug: log the actual response structure
+    console.log('[AI Chat] Backend response:', response);
+    console.log('[AI Chat] Response keys:', Object.keys(response || {}));
+
     const responseText = response.response || response.message || response;
 
     // Create unique message ID based on timestamp
