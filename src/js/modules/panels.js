@@ -195,7 +195,7 @@ export function sendAIMessage() {
 
     const messageText = document.createElement('div');
     messageText.className = 'ai-message-text';
-    messageText.textContent = responseText;
+    messageText.innerHTML = responseText;
     assistantMsg.appendChild(messageText);
 
     // Create feedback buttons container
