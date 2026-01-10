@@ -14,10 +14,11 @@
 4. [App 3: SOP Manager](#app-3-sop-manager)
 5. [App 4: Kanban Board](#app-4-kanban-board)
 6. [App 5: Barcode Manager](#app-5-barcode-manager)
-7. [Data Schemas](#data-schemas)
-8. [API Reference](#api-reference)
-9. [Shared Utilities](#shared-utilities)
-10. [Integration Points](#integration-points)
+7. [App 6: Wholesale Orders System](#app-6-wholesale-orders-system)
+8. [Data Schemas](#data-schemas)
+9. [API Reference](#api-reference)
+10. [Shared Utilities](#shared-utilities)
+11. [Integration Points](#integration-points)
 
 ---
 
@@ -847,6 +848,134 @@ const barcodeUrl = `https://barcode.tec-it.com/barcode.ashx?` +
   active: true                     // Is active product
 }
 ```
+
+---
+
+## App 6: Wholesale Orders System
+
+### Overview
+
+| Property | Value |
+|----------|-------|
+| **Purpose** | Full CRUD management for wholesale customer orders, shipments, and payments |
+| **Frontend** | `src/pages/orders.html` (~1,800 lines) |
+| **Backend** | `apps-script/wholesale-orders/Code.gs` (~1,900 lines) |
+| **Sheet ID** | `1QLQaR4RMniUmwbJFrtMVaydyVMyCCxqHXWDCVs5dejw` |
+| **API URL** | `https://script.google.com/macros/s/AKfycbxU5dBd5GU1RZeJ-UyNFf1Z8n3jCdIZ0VM6nXVj6_A7Pu2VbbxYWXMiDhkkgB3_8L9MyQ/exec` |
+| **Status** | ✅ Active (January 2026) |
+| **Primary Users** | Koa (management), Sales team |
+
+### Authentication
+
+- Password-protected (server-side validation)
+- Password stored in Script Properties: `ORDERS_PASSWORD`
+- Session tokens valid for 30 days
+- Login required for all operations
+
+### Features
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| Customer Management | Create, edit, delete customers | ✅ |
+| Order Creation | Master orders with commitment tracking | ✅ |
+| Shipment Tracking | Line items with strain, type, quantity, pricing | ✅ |
+| Payment Recording | Track payments against orders | ✅ |
+| Financial Calculations | Commitment, fulfilled, paid, balance due | ✅ |
+| Shopify Import | Import orders from Shopify | ✅ |
+| Order Priority | Manual drag-and-drop reordering | ✅ |
+
+### API Endpoints
+
+#### GET Endpoints
+
+| Endpoint | Function | Response |
+|----------|----------|----------|
+| `?action=getCustomers` | Fetch all customers | Array of customer objects |
+| `?action=getMasterOrders` | Fetch all master orders | Array of order objects |
+| `?action=getShipments&orderID=X` | Fetch shipments for order | Array of shipment objects |
+| `?action=getPayments&orderID=X` | Fetch payments for order | Array of payment objects |
+| `?action=getPriceHistory` | Fetch price history | Price history data |
+| `?action=validatePassword` | Authentication validation | Session token |
+| `?action=test` | Health check | `{ ok: true }` |
+
+#### POST Endpoints
+
+| Endpoint | Function | Body | Response |
+|----------|----------|------|----------|
+| `?action=saveCustomer` | Create/update customer | Customer object | Saved customer |
+| `?action=deleteCustomer` | Delete customer | `{ customerID }` | `{ success: true }` |
+| `?action=saveMasterOrder` | Create/update order | Order object | Saved order |
+| `?action=deleteMasterOrder` | Delete order | `{ orderID }` | `{ success: true }` |
+| `?action=saveShipment` | Create/update shipment | Shipment object | Saved shipment |
+| `?action=deleteShipment` | Delete shipment | `{ shipmentID }` | `{ success: true }` |
+| `?action=savePayment` | Record payment | Payment object | Saved payment |
+| `?action=updateOrderPriority` | Update order priority | `{ orderID, priority }` | Updated order |
+
+### Data Model
+
+**Customers:**
+- CustomerID, Company, Contact, Email, Phone
+- Ship To Address, Bill To Address
+- Country
+
+**MasterOrders:**
+- OrderID (format: MO-YYYY-NNN, e.g., MO-2026-003)
+- CustomerID, CustomerName
+- CommitmentAmount, Currency, Status
+- PO Number, Terms (DAP/FOB/EXW)
+- Created Date, Due Date
+- Ship To/Sold To details (Contact, Company, Address, Phone, Email)
+- Notes, Priority
+
+**Shipments:**
+- ShipmentID (format: INV-YYYY-NNNN)
+- OrderID, Invoice Number
+- Shipment Date, Status
+- Carrier, Tracking Number
+- LineItems (JSON array):
+  - Strain, Type (Tops/Smalls), Quantity (kg), Price per Unit, Total
+- Dimensions (Length, Width, Height, Weight)
+- Financials (Subtotal, Discount, Freight, Total)
+
+**Payments:**
+- PaymentID, OrderID
+- Payment Date, Amount
+- Method (Wire/Check/ACH/etc.)
+- Reference Number, Notes
+
+### Security Features
+
+- **Input Validation**: Defined schemas for all data types
+- **Formula Injection Prevention**: Blocks `=IMPORTDATA`, `=HYPERLINK`, etc.
+- **String Sanitization**: Length limits and special character handling
+- **Password Security**: Never stored in code or Git (Script Properties only)
+- **Session Management**: 30-day token expiration
+
+### Order ID Generation
+
+Order IDs follow the format `MO-YYYY-NNN`:
+- `MO`: Master Order prefix
+- `YYYY`: Current year (e.g., 2026)
+- `NNN`: Sequential number padded to 3 digits (001, 002, 003...)
+
+**Bug Fix (January 2026):**
+- Fixed duplicate Order ID generation issue
+- Changed from using `data.length` to finding max existing order number
+- Now properly increments: MO-2026-001, MO-2026-002, MO-2026-003
+
+### Google Sheets Structure
+
+**Tab: Customers**
+- Columns: CustomerID | Company | Contact | Email | Phone | ShipToAddress | BillToAddress | Country
+
+**Tab: MasterOrders**
+- Columns: OrderID | CustomerID | CustomerName | CommitmentAmount | Currency | Status | PONumber | Terms | CreatedDate | DueDate | ShipTo_Contact | ShipTo_Company | ShipTo_Address | ShipTo_Phone | ShipTo_Email | SoldTo_Contact | SoldTo_Company | SoldTo_Address | SoldTo_Phone | SoldTo_Email | Notes | Priority
+
+**Tab: Shipments**
+- Columns: ShipmentID | OrderID | InvoiceNumber | ShipmentDate | Status | Carrier | TrackingNumber | LineItems | Dimensions | Subtotal | Discount | Freight | Total | Notes
+
+**Tab: Payments**
+- Columns: PaymentID | OrderID | PaymentDate | Amount | Method | Reference | Notes
 
 ---
 

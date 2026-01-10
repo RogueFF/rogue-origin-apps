@@ -68,34 +68,46 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Recent Features (January 2026)
 
-### Order Progress on Scoreboard (2026-01-09)
+### Wholesale Orders System Deployment (2026-01-09)
 
-**Feature**: Displays current and next order in queue on production scoreboard
+**Feature**: Full order management system for wholesale customers
 
-**Backend Changes**:
-- Added 3 new functions to `production-tracking/Code.gs`:
-  - `getScoreboardOrderQueue()` - Returns current/next orders with progress
-  - `calculateOrderProgress()` - Calculates completion % and estimated hours using crew rate
-  - `updateOrderPriority()` - Manual priority override for drag-and-drop reordering
-- Added Priority column to Orders sheet (column 10)
-- New API endpoints:
-  - GET `?action=getScoreboardOrderQueue` - Order queue data
-  - POST `?action=updateOrderPriority` - Update order priority
+**Deployment**:
+- Configured sheet ID: `1QLQaR4RMniUmwbJFrtMVaydyVMyCCxqHXWDCVs5dejw`
+- Deployed wholesale-orders backend to Google Apps Script
+- API URL: `https://script.google.com/macros/s/AKfycbxU5dBd5GU1RZeJ-UyNFf1Z8n3jCdIZ0VM6nXVj6_A7Pu2VbbxYWXMiDhkkgB3_8L9MyQ/exec`
+- Configured password authentication in Script Properties
 
-**Frontend Changes** (already completed in previous session):
-- Order pills display between Daily Progress and Comparisons sections
-- Compact collapsed view (~80px), expandable on click
-- Progress bar on current order
-- Bilingual support (EN/ES)
-- 15-second refresh cycle
-- Mobile responsive
+**Capabilities**:
+- Customer management (create, edit, delete)
+- Order creation with commitment tracking
+- Shipment management with line items (strain, type, quantity, pricing)
+- Payment recording
+- Financial calculations (commitment, fulfilled, paid, balance due)
+- Password-protected access
+- Shopify order import
 
-**Priority Logic**:
-- Default: FIFO (First In, First Out) by creation date
-- Manual override: Priority field (1, 2, 3...) via drag-and-drop
-- Lower priority number = higher precedence
+**Bug Fix**:
+- Fixed duplicate Order ID generation bug
+- Order IDs now increment properly: MO-2026-001, MO-2026-002, MO-2026-003
+- Changed from using `data.length` to finding max existing order number
+- Updated in `apps-script/wholesale-orders/Code.gs` (lines 728-742)
 
-**Status**: ✅ Backend complete, ready for deployment to Google Apps Script
+**Code Cleanup**:
+- Removed redundant order queue functions from `production-tracking/Code.gs`
+- Removed ~236 lines: `getScoreboardOrderQueue()`, `calculateOrderProgress()`, `updateOrderPriority()`
+- Separated concerns: production tracking vs wholesale orders management
+
+**Testing Results**:
+- ✅ End-to-end Playwright testing completed
+- ✅ Login authentication works
+- ✅ Customer creation confirmed
+- ✅ Order creation with unique IDs verified (MO-2026-003)
+- ✅ Shipment creation tested (INV-2026-0014, $3,000)
+- ✅ Financial calculations accurate
+- ✅ Data persistence confirmed in Google Sheets
+
+**Status**: ✅ Deployed and operational
 
 ---
 
