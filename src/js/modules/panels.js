@@ -250,7 +250,8 @@ export function sendAIMessage() {
     fetch(API_URL + '?action=chat', {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(requestData)
+      body: JSON.stringify(requestData),
+      cache: 'no-store'
     })
     .then(function(r) { return r.json(); })
     .then(function(response) {
@@ -317,7 +318,8 @@ export function submitAIFeedback(button, rating, messageId) {
     fetch(API_URL + '?action=feedback', {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(feedbackData)
+      body: JSON.stringify(feedbackData),
+      cache: 'no-store'
     })
     .then(function(r) { return r.json(); })
     .then(function(response) {
