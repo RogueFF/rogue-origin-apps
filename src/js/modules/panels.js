@@ -7,6 +7,7 @@ import { API_URL } from './config.js';
 import { getData, isAppsScript } from './state.js';
 import { safeGetEl } from './utils.js';
 import { getSessionId, addMessage, exportForBackend } from './memory.js';
+import { isVoiceActive, speak } from './voice.js';
 
 // Callback references for toggle rendering
 // These must be set by the main app before using toggleSettings
@@ -232,6 +233,14 @@ export function sendAIMessage() {
     addMessage('assistant', responseText);
 
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    // Trigger TTS if voice mode enabled
+    if (isVoiceActive()) {
+      speak(responseText).catch(function(error) {
+        console.error('[AI Chat] TTS error:', error);
+        // Don't show error to user, just log it
+      });
+    }
   }
 
   // Handle error helper

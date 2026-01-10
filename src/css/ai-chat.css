@@ -327,13 +327,24 @@
 
   /* Voice status indicator */
   .ai-voice-status {
-    text-align: center;
-    font-size: 11px;
-    color: var(--text-muted);
-    padding: 4px;
+    position: absolute;
+    bottom: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(239, 68, 68, 0.95);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1000;
     display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
   }
-  .ai-voice-status.active { display: block; color: var(--danger); }
+  .ai-voice-status.active { display: flex; }
 
   /* Mobile improvements */
   @media (max-width: 480px) {
