@@ -1444,19 +1444,139 @@ function getScoreboardOrderQueue() {
  * Calculates order progress by matching production data to shipment line items
  *
  * @param {string} shipmentId - The shipment ID to calculate progress for
+ * @param {string} strain - The cultivar/strain name (e.g., "Cherry Wine")
+ * @param {string} type - The product type ("Tops" or "Smalls")
  * @param {number} targetKg - The target quantity in kg
  * @returns {object} { completedKg, percentComplete, estimatedHoursRemaining }
  */
-function calculateOrderProgress(shipmentId, targetKg) {
-  // TODO: This needs to query the production tracking spreadsheet
-  // For now, return mock data
-  // In Phase 4, we'll connect to the actual production tracking hour-by-hour data
+function calculateOrderProgress(shipmentId, strain, type, targetKg) {
+  try {
+    // 1. Open production tracking spreadsheet
+    var PRODUCTION_SHEET_ID = '1dARXrKU2u4KJY08ylA3GUKrT0zwmxCmtVh7IJxnn7is';
+    var ss = SpreadsheetApp.openById(PRODUCTION_SHEET_ID);
+    var timezone = ss.getSpreadsheetTimeZone();
 
-  return {
-    completedKg: 0,
-    percentComplete: 0,
-    estimatedHoursRemaining: 0
-  };
+    // 2. Get current month sheet (e.g., "2026-01")
+    var today = new Date();
+    var monthSheetName = Utilities.formatDate(today, timezone, 'yyyy-MM');
+    var monthSheet = ss.getSheetByName(monthSheetName);
+
+    if (!monthSheet) {
+      // No production data for current month yet
+      return { completedKg: 0, percentComplete: 0, estimatedHoursRemaining: 0 };
+    }
+
+    // 3. Get all data from sheet
+    var vals = monthSheet.getDataRange().getValues();
+    var todayStr = Utilities.formatDate(today, timezone, 'yyyy-MM-dd');
+    var totalLbs = 0;
+    var currentDate = null;
+    var cols = null;
+
+    // 4. Iterate through sheet to find today's production for this strain
+    for (var i = 0; i < vals.length; i++) {
+      var row = vals[i];
+
+      // Check for date block start
+      if (row[0] === 'Date:') {
+        var dateStr = row[1];
+        if (dateStr) {
+          var d = new Date(dateStr);
+          currentDate = !isNaN(d.getTime()) ? d : null;
+        }
+        // Next row contains headers
+        var headerRow = vals[i + 1] || [];
+        cols = {
+          cultivar1: headerRow.indexOf('Cultivar 1'),
+          tops1: headerRow.indexOf('Tops 1'),
+          smalls1: headerRow.indexOf('Smalls 1'),
+          trimmers1: headerRow.indexOf('Trimmers 1'),
+          cultivar2: headerRow.indexOf('Cultivar 2'),
+          tops2: headerRow.indexOf('Tops 2'),
+          smalls2: headerRow.indexOf('Smalls 2'),
+          trimmers2: headerRow.indexOf('Trimmers 2')
+        };
+        continue;
+      }
+
+      // Skip if not in a date block or not today
+      if (!currentDate || !cols) continue;
+      var rowDateStr = Utilities.formatDate(currentDate, timezone, 'yyyy-MM-dd');
+      if (rowDateStr !== todayStr) continue;
+
+      // Check if this is an end-of-block marker
+      if (!row[0] || row[0] === 'Date:') continue;
+      var str = String(row[0]);
+      if (str.indexOf('Performance Averages') !== -1 || str.indexOf('Avg Tops:Smalls') !== -1) continue;
+
+      // Check Line 1 for matching cultivar
+      var cv1 = row[cols.cultivar1] || '';
+      if (cv1 && String(cv1).trim() === strain) {
+        if (type === 'Tops' && cols.tops1 >= 0) {
+          totalLbs += parseFloat(row[cols.tops1]) || 0;
+        } else if (type === 'Smalls' && cols.smalls1 >= 0) {
+          totalLbs += parseFloat(row[cols.smalls1]) || 0;
+        }
+      }
+
+      // Check Line 2 for matching cultivar
+      var cv2 = row[cols.cultivar2] || '';
+      if (cv2 && String(cv2).trim() === strain) {
+        if (type === 'Tops' && cols.tops2 >= 0) {
+          totalLbs += parseFloat(row[cols.tops2]) || 0;
+        } else if (type === 'Smalls' && cols.smalls2 >= 0) {
+          totalLbs += parseFloat(row[cols.smalls2]) || 0;
+        }
+      }
+    }
+
+    // 5. Convert lbs to kg (1 kg = 2.205 lbs)
+    var completedKg = totalLbs / 2.205;
+    completedKg = Math.round(completedKg * 10) / 10; // Round to 1 decimal
+
+    // 6. Calculate percentage
+    var percentComplete = targetKg > 0 ? Math.round((completedKg / targetKg) * 100) : 0;
+    if (percentComplete > 100) percentComplete = 100; // Cap at 100%
+
+    // 7. Estimate hours remaining based on current crew rate
+    var estimatedHoursRemaining = 0;
+    var remainingKg = targetKg - completedKg;
+    if (remainingKg > 0) {
+      // Default fallback rate: 5 trimmers × 1.0 lbs/hr = 5 lbs/hr total
+      var crewRate = 5.0;
+
+      // Try to get actual current crew rate from production tracking API
+      try {
+        var PRODUCTION_API_URL = 'https://script.google.com/macros/s/AKfycbxDAHSFl9cedGS49L3Lf5ztqy-SSToYigyA30ZtsdpmWNAR9H61X_Mm48JOOTGqqr-Z/exec';
+        var scoreboardResponse = UrlFetchApp.fetch(PRODUCTION_API_URL + '?action=scoreboard');
+        var scoreboardData = JSON.parse(scoreboardResponse.getContentText());
+        if (scoreboardData && scoreboardData.success && scoreboardData.data) {
+          var currentTrimmers = scoreboardData.data.currentHourTrimmers || 5;
+          var targetRate = scoreboardData.data.targetRate || 1.0;
+          crewRate = currentTrimmers * targetRate;
+        }
+      } catch (apiError) {
+        Logger.log('Could not fetch crew rate, using default: ' + apiError.message);
+      }
+
+      var remainingLbs = remainingKg * 2.205;
+      estimatedHoursRemaining = crewRate > 0 ? Math.round((remainingLbs / crewRate) * 10) / 10 : 0;
+    }
+
+    return {
+      completedKg: completedKg,
+      percentComplete: percentComplete,
+      estimatedHoursRemaining: estimatedHoursRemaining
+    };
+
+  } catch (error) {
+    Logger.log('calculateOrderProgress error: ' + error.message);
+    return {
+      completedKg: 0,
+      percentComplete: 0,
+      estimatedHoursRemaining: 0
+    };
+  }
 }
 
 /**
