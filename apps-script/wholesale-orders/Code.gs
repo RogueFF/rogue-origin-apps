@@ -1394,7 +1394,12 @@ function getScoreboardOrderQueue() {
       var currentItem = topsLineItems[0];
 
       // Calculate progress for current order
-      var progress = calculateOrderProgress(currentItem.shipmentId, currentItem.quantityKg);
+      var progress = calculateOrderProgress(
+        currentItem.shipmentId,
+        currentItem.strain,
+        currentItem.type,
+        currentItem.quantityKg
+      );
 
       current = {
         masterOrderId: currentItem.masterOrderId,
