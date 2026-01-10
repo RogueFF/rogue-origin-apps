@@ -159,6 +159,42 @@
           <span class="projection-delta" id="projectionDelta">—</span>
         </div>
       </div>
+
+      <!-- Order Queue Section -->
+      <div class="order-queue-section" id="orderQueueSection" style="display:none;">
+        <!-- Current Order Pill -->
+        <div class="order-pill" id="currentOrderPill" onclick="window.ScoreboardRender && window.ScoreboardRender.toggleOrderExpand('current')">
+          <div class="order-pill-header">
+            <span class="order-icon">🎯</span>
+            <span class="order-label" id="currentOrderLabel">WORKING ON</span>
+            <span class="order-summary" id="currentOrderSummary">—</span>
+            <span class="expand-icon">▼</span>
+          </div>
+          <div class="order-progress-bar-container" id="currentProgressBarContainer" style="display:none;">
+            <div class="order-progress-bar">
+              <div class="order-progress-fill" id="currentProgressFill" style="width:0%"></div>
+            </div>
+            <span class="order-progress-text" id="currentProgressText">0 / 0 kg</span>
+          </div>
+
+          <!-- Expanded Content (hidden by default) -->
+          <div class="order-detail" id="currentOrderDetail"></div>
+        </div>
+
+        <!-- Next Order Pill -->
+        <div class="order-pill next" id="nextOrderPill" onclick="window.ScoreboardRender && window.ScoreboardRender.toggleOrderExpand('next')">
+          <div class="order-pill-header">
+            <span class="order-icon">⏭</span>
+            <span class="order-label" id="nextOrderLabel">UP NEXT</span>
+            <span class="order-summary" id="nextOrderSummary">—</span>
+            <span class="expand-icon">▼</span>
+          </div>
+
+          <!-- Expanded Content (hidden by default) -->
+          <div class="order-detail" id="nextOrderDetail"></div>
+        </div>
+      </div>
+
       <div class="comparisons">
         <div class="comparison-pill" id="vsYesterdayPill" style="display:none"><span class="comparison-label" id="vsYesterdayLabel">vs Yesterday</span><span class="comparison-value" id="vsYesterdayValue">—</span></div>
         <div class="comparison-pill" id="vs7DayPill" style="display:none"><span class="comparison-label" id="vs7DayLabel">vs 7-Day Avg</span><span class="comparison-value" id="vs7DayValue">—</span></div>

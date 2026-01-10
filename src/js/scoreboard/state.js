@@ -48,6 +48,19 @@
     lastBagTimestamp: null,
 
     /**
+     * Order queue data for scoreboard display
+     * Format: { current: {...}, next: {...}, queue: {...} }
+     * @type {Object|null}
+     */
+    orderQueue: null,
+
+    /**
+     * Which order pill is currently expanded ('current', 'next', or null)
+     * @type {string|null}
+     */
+    expandedOrder: null,
+
+    /**
      * Chart.js instance for hourly production chart
      * @type {Object|null}
      */
@@ -213,6 +226,8 @@
       this.data = null;
       this.timerData = null;
       this.lastBagTimestamp = null;
+      this.orderQueue = null;
+      this.expandedOrder = null;
 
       // Pause state
       this.isPaused = false;
