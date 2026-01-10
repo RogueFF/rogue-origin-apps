@@ -373,6 +373,8 @@ function doGet(e) {
       } else {
         result = getOrder(orderIdValidation.value);
       }
+    } else if (action === 'getScoreboardOrderQueue') {
+      result = getScoreboardOrderQueue();
     } else if (action === 'setShiftStart') {
       result = handleSetShiftStart(e.parameter);
     } else if (action === 'getShiftStart') {
@@ -384,7 +386,7 @@ function doGet(e) {
       result = {
         ok: true,
         message: 'Rogue Origin Production API',
-        endpoints: ['scoreboard', 'dashboard', 'test'],
+        endpoints: ['scoreboard', 'dashboard', 'getScoreboardOrderQueue', 'test'],
         timestamp: new Date().toISOString()
       };
     }
@@ -1655,6 +1657,34 @@ function getExtendedDailyDataLine1_(ss, timezone, days) {
   return Object.keys(dailyMap).map(function(k) { return dailyMap[k]; }).sort(function(a, b) { return a.date - b.date; });
 }
 
+/**
+ * Get order queue for scoreboard display
+ * Delegates to wholesale-orders API
+ *
+ * @returns {object} { success, current, next, queue }
+ */
+function getScoreboardOrderQueue() {
+  try {
+    var WHOLESALE_ORDERS_API_URL = 'https://script.google.com/macros/s/AKfycbxU5dBd5GU1RZeJ-UyNFf1Z8n3jCdIZ0VM6nXVj6_A7Pu2VbbxYWXMiDhkkgB3_8L9MyQ/exec';
+
+    // Call wholesale-orders API to get order queue
+    var response = UrlFetchApp.fetch(WHOLESALE_ORDERS_API_URL + '?action=getScoreboardOrderQueue');
+    var data = JSON.parse(response.getContentText());
+
+    return data;
+
+  } catch (error) {
+    Logger.log('getScoreboardOrderQueue error: ' + error.message);
+    return {
+      success: false,
+      error: error.message,
+      current: null,
+      next: null,
+      queue: { totalShipments: 0, totalKg: 0 }
+    };
+  }
+}
+
 function calculateDailyProjection_(todayRows, lastCompletedHourIndex, currentHourIndex, targetRate, totalLbsSoFar) {
   var allTimeSlots = [
     '7:00 AM – 8:00 AM', '8:00 AM – 9:00 AM', '9:00 AM – 10:00 AM',
@@ -2449,7 +2479,8 @@ function testScoreboardAPI() {
  */
 function handleChatRequest(data) {
   try {
-    var userMessage = data.message || '';
+    Logger.log('DEBUG: Received data = ' + JSON.stringify(data));
+    var userMessage = data.userMessage || '';
     var history = data.history || [];
 
     // Handle feedback submission
@@ -2647,21 +2678,41 @@ function buildSystemPrompt(context, corrections, memoryResults) {
 
   // Calculate hours remaining in workday
   var currentHour = now.getHours() + now.getMinutes() / 60;
+  var workStartHour = 6; // 6:00 AM
   var workEndHour = 16.5; // 4:30 PM
   var hoursRemaining = Math.max(0, workEndHour - currentHour);
   var effectiveHoursRemaining = hoursRemaining * 0.88; // Account for breaks
+
+  // Detect if we're outside working hours (after midnight, before work starts)
+  var isAfterMidnightBeforeWork = currentHour < workStartHour;
+  var hasNoProductionData = (context.production.topsToday || 0) === 0 && (context.production.hoursLogged || 0) === 0;
 
   // Calculate work days remaining this week
   var dayOfWeek = now.getDay();
   var daysRemaining = Math.max(0, 5 - dayOfWeek);
 
   var prompt = 'You are the Rogue Origin AI Assistant, helping manage a hemp processing facility in Southern Oregon.\n\n' +
-    'CURRENT TIME: ' + currentTime + '\n' +
-    '- Hours remaining today: ' + effectiveHoursRemaining.toFixed(1) + ' effective hours\n' +
-    '- Work days remaining this week: ' + daysRemaining + ' (Mon-Fri)\n\n' +
+    'CURRENT TIME: ' + currentTime + '\n';
 
-    'TODAY\'S PRODUCTION:\n' +
-    '- Tops produced: ' + (context.production.topsToday || 0).toFixed(1) + ' lbs\n' +
+  // Add context about work schedule
+  if (isAfterMidnightBeforeWork && hasNoProductionData) {
+    prompt += '⚠️ NOTE: It\'s currently after midnight but before work starts (work hours: 6 AM - 4:30 PM).\n' +
+              'Today\'s production hasn\'t begun yet. When discussing production data, refer to the most recent work day.\n\n';
+    prompt += '- Work starts at: 6:00 AM (approximately ' + (workStartHour - currentHour).toFixed(1) + ' hours from now)\n';
+  } else {
+    prompt += '- Hours remaining today: ' + effectiveHoursRemaining.toFixed(1) + ' effective hours\n';
+  }
+
+  prompt += '- Work days remaining this week: ' + daysRemaining + ' (Mon-Fri)\n\n';
+
+  if (isAfterMidnightBeforeWork && hasNoProductionData) {
+    prompt += 'MOST RECENT WORK DAY PRODUCTION:\n' +
+      '(Note: This data is from the previous work day, not today)\n';
+  } else {
+    prompt += 'TODAY\'S PRODUCTION:\n';
+  }
+
+  prompt += '- Tops produced: ' + (context.production.topsToday || 0).toFixed(1) + ' lbs\n' +
     '- Target: ' + (context.production.todayTarget || 0).toFixed(1) + ' lbs\n' +
     '- Performance: ' + Math.round(context.production.todayPercentage || 0) + '%\n' +
     '- Projected end-of-day: ' + (context.production.projectedTotal || 0).toFixed(1) + ' lbs\n' +
