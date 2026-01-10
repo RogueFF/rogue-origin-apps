@@ -238,7 +238,160 @@
     .streak-pill { background: rgba(228, 170, 79, 0.2); border: 2px solid rgba(228, 170, 79, 0.4); }
     .streak-icon { font-size: 18px; }
     .streak-value { color: var(--gold); font-weight: 700; }
-    
+
+    /* Order Queue Section */
+    .order-queue-section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    .order-pill {
+      background: rgba(0,0,0,0.4);
+      border: 2px solid rgba(228,170,79,0.3);
+      border-radius: 20px;
+      padding: 14px 24px;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      overflow: hidden;
+    }
+
+    .order-pill:hover {
+      background: rgba(0,0,0,0.5);
+      border-color: var(--gold);
+    }
+
+    .order-pill.expanded {
+      border-color: var(--gold);
+      box-shadow: 0 4px 30px rgba(228,170,79,0.4);
+      max-width: 800px;
+    }
+
+    .order-pill-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'Outfit';
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .order-icon {
+      font-size: 20px;
+    }
+
+    .order-label {
+      color: var(--gold);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-size: 12px;
+    }
+
+    .order-summary {
+      flex: 1;
+      color: #fff;
+      font-family: 'JetBrains Mono';
+      font-size: 14px;
+    }
+
+    .expand-icon {
+      color: rgba(228,170,79,0.6);
+      font-size: 12px;
+      transition: transform 0.3s ease;
+    }
+
+    .order-pill.expanded .expand-icon {
+      transform: rotate(180deg);
+    }
+
+    /* Progress Bar */
+    .order-progress-bar-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .order-progress-bar {
+      flex: 1;
+      height: 8px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .order-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--gold), var(--gold-light));
+      transition: width 0.5s ease;
+    }
+
+    .order-progress-text {
+      font-family: 'JetBrains Mono';
+      font-size: 12px;
+      color: rgba(255,255,255,0.7);
+      white-space: nowrap;
+    }
+
+    /* Expanded Detail Content */
+    .order-detail {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(228,170,79,0.2);
+      display: none;
+      animation: slideDown 0.3s ease;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .order-pill.expanded .order-detail {
+      display: block;
+    }
+
+    .order-detail-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      color: rgba(255,255,255,0.8);
+    }
+
+    .order-detail-icon {
+      font-size: 16px;
+      color: var(--gold);
+    }
+
+    .order-detail-label {
+      color: rgba(255,255,255,0.6);
+      font-size: 12px;
+    }
+
+    .order-detail-value {
+      font-family: 'JetBrains Mono';
+      color: #fff;
+    }
+
+    .order-detail-section {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .order-detail-divider {
+      width: 100%;
+      height: 1px;
+      background: rgba(228,170,79,0.2);
+      margin: 8px 0;
+    }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
     /* Info Bar - brand styling */
     .info-bar { display: inline-flex; align-items: center; background: rgba(0,0,0,0.4); border-radius: 30px; padding: 8px 14px; gap: 6px; flex-wrap: wrap; justify-content: center; border: 1px solid rgba(228,170,79,0.15); }
     .info-section { display: flex; align-items: center; gap: 6px; padding: 6px 12px; color: rgba(255,255,255,0.8); font-size: 18px; font-weight: 600; }
@@ -619,6 +772,18 @@
       .projection-delta { font-size: 14px; }
       .comparisons { gap: 8px; }
       .comparison-pill { padding: 6px 10px; font-size: 13px; }
+      .order-queue-section { max-width: 100%; gap: 8px; }
+      .order-pill { padding: 12px 16px; }
+      .order-pill-header { font-size: 14px; }
+      .order-icon { font-size: 18px; }
+      .order-label { font-size: 11px; }
+      .order-summary { font-size: 14px; }
+      .order-progress-bar-container { gap: 8px; }
+      .order-progress-bar { height: 6px; }
+      .order-progress-text { font-size: 11px; }
+      .order-detail-row { font-size: 13px; gap: 6px; }
+      .order-detail-label { font-size: 11px; }
+      .order-detail-value { font-size: 13px; }
       .info-bar { padding: 6px 10px; gap: 4px; }
       .info-section { font-size: 14px; padding: 4px 8px; gap: 4px; }
       .info-icon { font-size: 18px; }
@@ -666,6 +831,20 @@
       .projection-label { font-size: 11px; }
       .projection-value { font-size: 20px; }
       .comparisons { flex-direction: column; align-items: center; }
+      .order-queue-section { max-width: 100%; gap: 6px; }
+      .order-pill { padding: 10px 14px; }
+      .order-pill-header { font-size: 13px; gap: 6px; }
+      .order-icon { font-size: 16px; }
+      .order-label { font-size: 10px; }
+      .order-summary { font-size: 13px; }
+      .expand-icon { font-size: 10px; }
+      .order-progress-bar-container { gap: 6px; margin-top: 8px; }
+      .order-progress-bar { height: 5px; }
+      .order-progress-text { font-size: 10px; }
+      .order-detail { margin-top: 12px; padding-top: 12px; }
+      .order-detail-row { font-size: 12px; gap: 4px; }
+      .order-detail-label { font-size: 10px; }
+      .order-detail-value { font-size: 12px; }
       .info-bar { flex-direction: column; gap: 6px; padding: 8px; }
       .info-divider { width: 80%; height: 1px; }
       .info-section { width: 100%; justify-content: center; }
