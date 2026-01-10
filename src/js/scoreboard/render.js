@@ -243,6 +243,135 @@
       ve.textContent = `${r >= 0 ? '+' : ''}${r}%`;
       ve.classList.remove('positive', 'negative', 'neutral');
       ve.classList.add(r > 2 ? 'positive' : r < -2 ? 'negative' : 'neutral');
+    },
+
+    /**
+     * Render order queue section
+     * Shows current order being worked on and next order in queue
+     */
+    renderOrderQueue: function() {
+      const orderQueue = window.ScoreboardState ? window.ScoreboardState.orderQueue : null;
+      const section = document.getElementById('orderQueueSection');
+
+      if (!section) return;
+
+      // Hide section if no order data
+      if (!orderQueue || (!orderQueue.current && !orderQueue.next)) {
+        section.style.display = 'none';
+        return;
+      }
+
+      section.style.display = 'flex';
+
+      // Render current order pill
+      if (orderQueue.current) {
+        this.renderOrderPill('current', orderQueue.current);
+      } else {
+        document.getElementById('currentOrderPill').style.display = 'none';
+      }
+
+      // Render next order pill
+      if (orderQueue.next) {
+        this.renderOrderPill('next', orderQueue.next);
+      } else {
+        document.getElementById('nextOrderPill').style.display = 'none';
+      }
+    },
+
+    /**
+     * Render individual order pill
+     * @param {string} type - 'current' or 'next'
+     * @param {Object} orderData - Order data object
+     */
+    renderOrderPill: function(type, orderData) {
+      const pill = document.getElementById(type + 'OrderPill');
+      const summary = document.getElementById(type + 'OrderSummary');
+      const detail = document.getElementById(type + 'OrderDetail');
+      const t = window.ScoreboardI18n ? window.ScoreboardI18n.t : function(key) { return key; };
+
+      if (!pill || !summary) return;
+
+      pill.style.display = 'flex';
+
+      // Build summary text: "Cherry Wine Tops (30kg) • Acme Corp"
+      const summaryText = `${orderData.strain} ${orderData.type} (${orderData.quantityKg}kg) • ${orderData.customer}`;
+      summary.textContent = summaryText;
+
+      // Render progress bar for current order only
+      if (type === 'current' && orderData.completedKg !== undefined) {
+        const progressContainer = document.getElementById('currentProgressBarContainer');
+        const progressFill = document.getElementById('currentProgressFill');
+        const progressText = document.getElementById('currentProgressText');
+
+        if (progressContainer && progressFill && progressText) {
+          progressContainer.style.display = 'flex';
+          const percent = orderData.percentComplete || 0;
+          progressFill.style.width = percent + '%';
+          progressText.textContent = `${orderData.completedKg || 0} / ${orderData.quantityKg} kg (${Math.round(percent)}%)`;
+        }
+      }
+
+      // Build expanded detail content
+      if (detail) {
+        let detailHTML = '';
+
+        detailHTML += '<div class="order-detail-section">';
+        detailHTML += `<div class="order-detail-row"><span class="order-detail-label">${t('order')}:</span> <span class="order-detail-value">${orderData.masterOrderId}</span></div>`;
+        detailHTML += `<div class="order-detail-row"><span class="order-detail-label">${t('shipment')}:</span> <span class="order-detail-value">${orderData.shipmentId}</span></div>`;
+        detailHTML += `<div class="order-detail-row"><span class="order-detail-label">${t('customer')}:</span> <span class="order-detail-value">${orderData.customer}</span></div>`;
+        detailHTML += `<div class="order-detail-row"><span class="order-detail-label">${t('dueDate')}:</span> <span class="order-detail-value">${orderData.dueDate || '—'}</span></div>`;
+
+        if (type === 'current' && orderData.estimatedHoursRemaining !== undefined) {
+          detailHTML += `<div class="order-detail-row"><span class="order-detail-label">${t('estCompletion')}:</span> <span class="order-detail-value">~${orderData.estimatedHoursRemaining} hours</span></div>`;
+        }
+
+        if (orderData.fullOrderContext) {
+          detailHTML += '<div class="order-detail-divider"></div>';
+          detailHTML += `<div class="order-detail-row"><span class="order-detail-label">${t('fullOrder')}:</span></div>`;
+          detailHTML += `<div class="order-detail-row"><span class="order-detail-value">• Total: ${orderData.fullOrderContext.totalKg}kg (${orderData.fullOrderContext.totalShipments} shipments)</span></div>`;
+          detailHTML += `<div class="order-detail-row"><span class="order-detail-value">• Completed: ${orderData.fullOrderContext.totalCompletedKg}kg</span></div>`;
+        }
+
+        detailHTML += '</div>';
+
+        detail.innerHTML = detailHTML;
+      }
+    },
+
+    /**
+     * Toggle order pill expand/collapse
+     * @param {string} type - 'current' or 'next'
+     */
+    toggleOrderExpand: function(type) {
+      const state = window.ScoreboardState;
+      if (!state) return;
+
+      const pill = document.getElementById(type + 'OrderPill');
+      const detail = document.getElementById(type + 'OrderDetail');
+
+      if (!pill || !detail) return;
+
+      if (state.expandedOrder === type) {
+        // Collapse
+        pill.classList.remove('expanded');
+        detail.style.display = 'none';
+        state.expandedOrder = null;
+      } else {
+        // Collapse any other expanded pills
+        const allPills = document.querySelectorAll('.order-pill');
+        allPills.forEach(function(p) {
+          p.classList.remove('expanded');
+        });
+        const allDetails = document.querySelectorAll('.order-detail');
+        allDetails.forEach(function(d) {
+          d.style.display = 'none';
+        });
+
+        // Expand this pill
+        pill.classList.add('expanded');
+        detail.style.display = 'block';
+        state.expandedOrder = type;
+      }
     }
   };
 
