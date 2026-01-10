@@ -166,7 +166,7 @@ export function sendAIMessage() {
   // Prepare request data with history
   const data = getData();
   const requestData = {
-    message: message,
+    userMessage: message,
     sessionId: getSessionId(),
     history: exportForBackend(),
     context: {
