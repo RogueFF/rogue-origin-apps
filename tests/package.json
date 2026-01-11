@@ -7,7 +7,12 @@
     "doc": "docs"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest",
+    "test:baseline": "jest baseline.test.js",
+    "test:navigation": "jest iframe-navigation.test.js",
+    "test:pages": "jest page-loading.test.js",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "keywords": [],
   "author": "",
@@ -15,5 +20,16 @@
   "type": "commonjs",
   "dependencies": {
     "puppeteer": "^24.34.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/*.test.js"
+    ],
+    "testTimeout": 30000,
+    "verbose": true
   }
 }
