@@ -40,11 +40,11 @@ export const widgetDefinitions = [
 
 // App URLs for embedded iframes
 export const appUrls = {
-  kanban: 'https://rogueff.github.io/rogue-origin-apps/kanban.html',
-  scoreboard: 'https://rogueff.github.io/rogue-origin-apps/scoreboard.html',
-  barcode: 'https://rogueff.github.io/rogue-origin-apps/barcode.html',
-  sop: 'https://rogueff.github.io/rogue-origin-apps/sop-manager.html',
-  orders: 'https://rogueff.github.io/rogue-origin-apps/orders.html'
+  kanban: 'https://rogueff.github.io/rogue-origin-apps/src/pages/kanban.html',
+  scoreboard: 'https://rogueff.github.io/rogue-origin-apps/src/pages/scoreboard.html',
+  barcode: 'https://rogueff.github.io/rogue-origin-apps/src/pages/barcode.html',
+  sop: 'https://rogueff.github.io/rogue-origin-apps/src/pages/sop-manager.html',
+  orders: 'https://rogueff.github.io/rogue-origin-apps/src/pages/orders.html'
 };
 
 // Brand colors for charts and UI
