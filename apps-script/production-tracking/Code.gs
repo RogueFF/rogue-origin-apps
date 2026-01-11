@@ -21,6 +21,7 @@
 
 var SHEET_ID = '1dARXrKU2u4KJY08ylA3GUKrT0zwmxCmtVh7IJxnn7is';
 var AI_MODEL = 'claude-sonnet-4-20250514';
+var WHOLESALE_ORDERS_API_URL = 'https://script.google.com/macros/s/AKfycbxU5dBd5GU1RZeJ-UyNFf1Z8n3jCdIZ0VM6nXVj6_A7Pu2VbbxYWXMiDhkkgB3_8L9MyQ/exec';
 
 /**
  * Task Registry - Defines all executable tasks
@@ -80,6 +81,44 @@ var TASK_REGISTRY = {
       orderId: { type: 'string', required: true }
     },
     function: 'executeGetOrderStatus_'
+  },
+
+  'create_order': {
+    description: 'Create a new wholesale order',
+    parameters: {
+      customerName: {
+        type: 'string',
+        required: true,
+        description: 'Customer company name (fuzzy match supported)'
+      },
+      totalKg: {
+        type: 'number',
+        required: true,
+        min: 1,
+        description: 'Total kilograms for the order'
+      },
+      dueDate: {
+        type: 'string',
+        required: false,
+        description: 'Due date in YYYY-MM-DD format'
+      },
+      poNumber: {
+        type: 'string',
+        required: false,
+        description: 'Purchase order number'
+      },
+      strains: {
+        type: 'string',
+        required: false,
+        description: 'Comma-separated strain names'
+      },
+      notes: {
+        type: 'string',
+        required: false,
+        description: 'Additional order notes'
+      }
+    },
+    function: 'executeCreateOrder_'
   }
 };
 
@@ -2642,6 +2681,209 @@ function handleTTSRequest(data) {
 }
 
 /**
+ * Calculate Levenshtein distance between two strings
+ * Used for fuzzy customer name matching
+ */
+function levenshteinDistance_(a, b) {
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+
+  var matrix = [];
+
+  // Initialize matrix
+  for (var i = 0; i <= b.length; i++) {
+    matrix[i] = [i];
+  }
+  for (var j = 0; j <= a.length; j++) {
+    matrix[0][j] = j;
+  }
+
+  // Fill matrix
+  for (var i = 1; i <= b.length; i++) {
+    for (var j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // substitution
+          matrix[i][j - 1] + 1,     // insertion
+          matrix[i - 1][j] + 1      // deletion
+        );
+      }
+    }
+  }
+
+  return matrix[b.length][a.length];
+}
+
+/**
+ * Find customer by name using fuzzy matching
+ * Returns best match if similarity > 70%, otherwise null
+ */
+function findCustomerByName_(customerName) {
+  try {
+    // Fetch customers from wholesale orders API
+    var response = UrlFetchApp.fetch(WHOLESALE_ORDERS_API_URL + '?action=getCustomers', {
+      method: 'get',
+      muteHttpExceptions: true
+    });
+
+    if (response.getResponseCode() !== 200) {
+      Logger.log('[findCustomerByName] API error: ' + response.getContentText());
+      return null;
+    }
+
+    var result = JSON.parse(response.getContentText());
+    if (!result.success || !result.customers) {
+      Logger.log('[findCustomerByName] Invalid response format');
+      return null;
+    }
+
+    var customers = result.customers;
+    var searchName = customerName.toLowerCase().trim();
+
+    // Find best match
+    var bestMatch = null;
+    var bestScore = 0;
+
+    customers.forEach(function(customer) {
+      var companyName = (customer.companyName || '').toLowerCase().trim();
+
+      // Calculate similarity (inverse of distance, normalized)
+      var distance = levenshteinDistance_(searchName, companyName);
+      var maxLength = Math.max(searchName.length, companyName.length);
+      var similarity = maxLength > 0 ? (1 - distance / maxLength) * 100 : 0;
+
+      Logger.log('[findCustomerByName] Match: ' + customer.companyName + ' = ' + similarity + '%');
+
+      if (similarity > bestScore) {
+        bestScore = similarity;
+        bestMatch = customer;
+      }
+    });
+
+    // Only return if similarity > 70%
+    if (bestScore > 70) {
+      Logger.log('[findCustomerByName] Found match: ' + bestMatch.companyName + ' (' + bestScore.toFixed(1) + '%)');
+      return bestMatch;
+    }
+
+    Logger.log('[findCustomerByName] No match found (best: ' + bestScore.toFixed(1) + '%)');
+    return null;
+
+  } catch (error) {
+    Logger.log('[findCustomerByName] Error: ' + error.toString());
+    return null;
+  }
+}
+
+/**
+ * Execute create_order task
+ * Creates new wholesale order with customer lookup and validation
+ */
+function executeCreateOrder_(params) {
+  try {
+    Logger.log('[executeCreateOrder] Starting with params: ' + JSON.stringify(params));
+
+    // Find customer by name
+    var customer = findCustomerByName_(params.customerName);
+    if (!customer) {
+      return {
+        success: false,
+        error: 'Customer not found. Please check the name and try again. Available customers can be viewed in the orders system.',
+        searchedFor: params.customerName
+      };
+    }
+
+    Logger.log('[executeCreateOrder] Found customer: ' + customer.companyName + ' (ID: ' + customer.customerID + ')');
+
+    // Build order data
+    var orderData = {
+      customerID: customer.customerID,
+      customerName: customer.companyName,
+      commitmentAmount: params.totalKg,
+      currency: 'kg',
+      status: 'pending',
+      poNumber: params.poNumber || '',
+      terms: customer.paymentTerms || 'Net 30',
+      dueDate: params.dueDate || '',
+      notes: params.notes || '',
+      strains: params.strains || '',
+      // Ship-to address (from customer)
+      shipTo_company: customer.companyName || '',
+      shipTo_address: customer.address || '',
+      shipTo_city: customer.city || '',
+      shipTo_state: customer.state || '',
+      shipTo_zip: customer.zip || '',
+      shipTo_country: customer.country || 'USA',
+      // Sold-to address (same as ship-to by default)
+      soldTo_company: customer.companyName || '',
+      soldTo_address: customer.address || '',
+      soldTo_city: customer.city || '',
+      soldTo_state: customer.state || '',
+      soldTo_zip: customer.zip || '',
+      soldTo_country: customer.country || 'USA'
+    };
+
+    Logger.log('[executeCreateOrder] Order data prepared: ' + JSON.stringify(orderData));
+
+    // Call wholesale orders API to save
+    var response = UrlFetchApp.fetch(WHOLESALE_ORDERS_API_URL, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify({
+        action: 'saveOrder',
+        order: orderData
+      }),
+      muteHttpExceptions: true
+    });
+
+    if (response.getResponseCode() !== 200) {
+      Logger.log('[executeCreateOrder] API error: ' + response.getContentText());
+      return {
+        success: false,
+        error: 'Failed to create order. Please try again or create manually in the orders system.'
+      };
+    }
+
+    var result = JSON.parse(response.getContentText());
+
+    if (!result.success) {
+      Logger.log('[executeCreateOrder] Save failed: ' + result.error);
+      return {
+        success: false,
+        error: result.error || 'Failed to create order'
+      };
+    }
+
+    Logger.log('[executeCreateOrder] Order created: ' + result.orderId);
+
+    // Return formatted confirmation
+    return {
+      success: true,
+      message: 'Order created successfully!',
+      orderId: result.orderId,
+      summary: {
+        'Order ID': result.orderId,
+        'Customer': customer.companyName,
+        'Amount': params.totalKg + ' kg',
+        'Status': 'Pending',
+        'PO Number': orderData.poNumber || 'Not specified',
+        'Due Date': orderData.dueDate || 'Not specified',
+        'Payment Terms': orderData.terms
+      }
+    };
+
+  } catch (error) {
+    Logger.log('[executeCreateOrder] Exception: ' + error.toString());
+    return {
+      success: false,
+      error: 'An error occurred while creating the order: ' + error.toString()
+    };
+  }
+}
+
+/**
  * Gathers all relevant production data for AI context (V2 - enhanced)
  */
 function gatherProductionContext() {
@@ -2952,6 +3194,13 @@ function buildSystemPrompt(context, corrections, memoryResults) {
     prompt += '  Parameters: ' + JSON.stringify(task.parameters) + '\n';
   }
 
+  prompt += '\n**Order Management:**\n' +
+    '- Create wholesale orders with customer lookup and validation\n' +
+    '- Minimal required: customer name + kg amount\n' +
+    '- Optional: due date, PO number, strains, notes\n' +
+    '- Auto-matches customer names with fuzzy matching\n' +
+    '- Returns order ID and formatted summary\n';
+
   prompt += '\nTo execute a task, include this JSON block in your response:\n' +
     '```task\n' +
     '{\n' +
@@ -2964,6 +3213,10 @@ function buildSystemPrompt(context, corrections, memoryResults) {
     'Assistant: "I\'ll update the crew count for you.\n```task\n{"task":"update_crew_count","params":{"line":1,"role":"trimmers","count":5}}\n```\nDone! Line 1 now has 5 trimmers."\n\n' +
     'User: "Log a 5kg bag"\n' +
     'Assistant: "Logging the bag completion now.\n```task\n{"task":"log_bag_completion","params":{"bagType":"5kg"}}\n```\nBag logged successfully!"\n\n' +
+    'User: "Create an order for Green Valley Farm, 500 kg"\n' +
+    'Assistant: "I\'ll create that order for you.\n```task\n{"task": "create_order", "params": {"customerName": "Green Valley Farm", "totalKg": 500}}\n```"\n\n' +
+    'User: "New order: Mountain Organics, 250kg, PO# 12345, due Feb 15"\n' +
+    'Assistant: "Creating order with those details.\n```task\n{"task": "create_order", "params": {"customerName": "Mountain Organics", "totalKg": 250, "poNumber": "12345", "dueDate": "2026-02-15"}}\n```"\n\n' +
     'Only suggest tasks when the user clearly wants an action performed, not just information.\n\n';
 
   return prompt;
