@@ -176,6 +176,121 @@ export function sendAIMessage() {
     }
   };
 
+  /**
+   * Format task execution results for display
+   * @param {Object} taskResult - Task execution result from backend
+   * @returns {HTMLElement|null} - Formatted result card or null
+   */
+  function formatTaskResult(taskResult) {
+    const result = taskResult.result;
+
+    // Handle get_shipments results
+    if (taskResult.task === 'get_shipments' && result.shipments) {
+      const card = document.createElement('div');
+      card.className = 'data-card';
+
+      const title = document.createElement('h4');
+      title.textContent = result.message || 'Shipments';
+      card.appendChild(title);
+
+      if (result.shipments.length === 0) {
+        const emptyMsg = document.createElement('div');
+        emptyMsg.textContent = 'No shipments found';
+        emptyMsg.style.color = 'var(--text-muted)';
+        emptyMsg.style.padding = '8px 0';
+        card.appendChild(emptyMsg);
+      } else {
+        result.shipments.forEach(function(shipment) {
+          const shipmentDiv = document.createElement('div');
+          shipmentDiv.style.marginBottom = '12px';
+          shipmentDiv.style.paddingBottom = '12px';
+          shipmentDiv.style.borderBottom = '1px solid var(--border-light)';
+
+          Object.keys(shipment).forEach(function(key) {
+            const metric = document.createElement('div');
+            metric.className = 'metric';
+
+            const label = document.createElement('span');
+            label.className = 'metric-label';
+            label.textContent = key + ':';
+
+            const value = document.createElement('span');
+            value.className = 'metric-value';
+            value.textContent = shipment[key];
+
+            metric.appendChild(label);
+            metric.appendChild(value);
+            shipmentDiv.appendChild(metric);
+          });
+
+          card.appendChild(shipmentDiv);
+        });
+      }
+
+      return card;
+    }
+
+    // Handle create_shipment results
+    if (taskResult.task === 'create_shipment' && result.summary) {
+      const card = document.createElement('div');
+      card.className = 'data-card';
+
+      const title = document.createElement('h4');
+      title.textContent = result.message || 'Shipment Created';
+      card.appendChild(title);
+
+      Object.keys(result.summary).forEach(function(key) {
+        const metric = document.createElement('div');
+        metric.className = 'metric';
+
+        const label = document.createElement('span');
+        label.className = 'metric-label';
+        label.textContent = key + ':';
+
+        const value = document.createElement('span');
+        value.className = 'metric-value';
+        value.textContent = result.summary[key];
+
+        metric.appendChild(label);
+        metric.appendChild(value);
+        card.appendChild(metric);
+      });
+
+      return card;
+    }
+
+    // Generic handler for other tasks with summary
+    if (result.summary) {
+      const card = document.createElement('div');
+      card.className = 'data-card';
+
+      const title = document.createElement('h4');
+      title.textContent = result.message || 'Result';
+      card.appendChild(title);
+
+      Object.keys(result.summary).forEach(function(key) {
+        const metric = document.createElement('div');
+        metric.className = 'metric';
+
+        const label = document.createElement('span');
+        label.className = 'metric-label';
+        label.textContent = key + ':';
+
+        const value = document.createElement('span');
+        value.className = 'metric-value';
+        value.textContent = result.summary[key];
+
+        metric.appendChild(label);
+        metric.appendChild(value);
+        card.appendChild(metric);
+      });
+
+      return card;
+    }
+
+    return null;
+  }
+
   // Handle response helper
   function handleSuccess(response) {
     typingDiv.remove();
@@ -225,6 +340,18 @@ export function sendAIMessage() {
     messageText.className = 'ai-message-text';
     messageText.innerHTML = responseText;
     assistantMsg.appendChild(messageText);
+
+    // Display task results if available
+    if (response && response.tasksExecuted && response.tasksExecuted.length > 0) {
+      response.tasksExecuted.forEach(function(taskResult) {
+        if (taskResult.success && taskResult.result) {
+          const resultCard = formatTaskResult(taskResult);
+          if (resultCard) {
+            assistantMsg.appendChild(resultCard);
+          }
+        }
+      });
+    }
 
     // Create feedback buttons container
     const feedbackContainer = document.createElement('div');
