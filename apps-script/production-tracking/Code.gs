@@ -83,42 +83,43 @@ var TASK_REGISTRY = {
     function: 'executeGetOrderStatus_'
   },
 
-  'create_order': {
-    description: 'Create a new wholesale order',
+  'create_shipment': {
+    description: 'Create a new shipment for an existing master order',
     parameters: {
       customerName: {
         type: 'string',
         required: true,
         description: 'Customer company name (fuzzy match supported)'
       },
-      totalKg: {
+      strain: {
+        type: 'string',
+        required: true,
+        description: 'Strain name (e.g., "Lifter", "Blue Dream")'
+      },
+      type: {
+        type: 'string',
+        required: true,
+        options: ['Tops', 'Smalls'],
+        description: 'Product type: Tops or Smalls'
+      },
+      quantity: {
         type: 'number',
         required: true,
         min: 1,
-        description: 'Total kilograms for the order'
+        description: 'Quantity in kilograms'
       },
-      dueDate: {
+      shipmentDate: {
         type: 'string',
         required: false,
-        description: 'Due date in YYYY-MM-DD format'
-      },
-      poNumber: {
-        type: 'string',
-        required: false,
-        description: 'Purchase order number'
-      },
-      strains: {
-        type: 'string',
-        required: false,
-        description: 'Comma-separated strain names'
+        description: 'Shipment date in YYYY-MM-DD format (default: today)'
       },
       notes: {
         type: 'string',
         required: false,
-        description: 'Additional order notes'
+        description: 'Additional shipment notes'
       }
     },
-    function: 'executeCreateOrder_'
+    function: 'executeCreateShipment_'
   }
 };
 
@@ -2778,107 +2779,149 @@ function findCustomerByName_(customerName) {
 }
 
 /**
- * Execute create_order task
- * Creates new wholesale order with customer lookup and validation
+ * Execute create_shipment task
+ * Creates new shipment with line items linked to customer's active master order
  */
-function executeCreateOrder_(params) {
+function executeCreateShipment_(params) {
   try {
-    Logger.log('[executeCreateOrder] Starting with params: ' + JSON.stringify(params));
+    Logger.log('[executeCreateShipment] Starting with params: ' + JSON.stringify(params));
 
     // Find customer by name
     var customer = findCustomerByName_(params.customerName);
     if (!customer) {
       return {
         success: false,
-        error: 'Customer not found. Please check the name and try again. Available customers can be viewed in the orders system.',
+        error: 'Customer not found. Please check the name and try again.',
         searchedFor: params.customerName
       };
     }
 
-    Logger.log('[executeCreateOrder] Found customer: ' + customer.companyName + ' (ID: ' + customer.customerID + ')');
+    Logger.log('[executeCreateShipment] Found customer: ' + customer.companyName + ' (ID: ' + customer.customerID + ')');
 
-    // Build order data
-    var orderData = {
-      customerID: customer.customerID,
-      customerName: customer.companyName,
-      commitmentAmount: params.totalKg,
-      currency: 'kg',
+    // Get customer's active master order
+    var masterOrderResponse = UrlFetchApp.fetch(WHOLESALE_ORDERS_API_URL + '?action=getActiveMasterOrder&customerID=' + encodeURIComponent(customer.customerID), {
+      method: 'get',
+      muteHttpExceptions: true
+    });
+
+    if (masterOrderResponse.getResponseCode() !== 200) {
+      Logger.log('[executeCreateShipment] Failed to get master order: ' + masterOrderResponse.getContentText());
+      return {
+        success: false,
+        error: 'Failed to find active master order for ' + customer.companyName + '. Please create a master order first.'
+      };
+    }
+
+    var masterOrderResult = JSON.parse(masterOrderResponse.getContentText());
+    if (!masterOrderResult.success || !masterOrderResult.masterOrder) {
+      return {
+        success: false,
+        error: 'No active master order found for ' + customer.companyName + '. Please create a master order first.'
+      };
+    }
+
+    var masterOrder = masterOrderResult.masterOrder;
+    Logger.log('[executeCreateShipment] Found master order: ' + masterOrder.id);
+
+    // Get price for strain+type from price history
+    var priceResponse = UrlFetchApp.fetch(WHOLESALE_ORDERS_API_URL + '?action=getPriceForStrain&strain=' + encodeURIComponent(params.strain) + '&type=' + encodeURIComponent(params.type) + '&customerID=' + encodeURIComponent(customer.customerID), {
+      method: 'get',
+      muteHttpExceptions: true
+    });
+
+    if (priceResponse.getResponseCode() !== 200) {
+      Logger.log('[executeCreateShipment] Failed to get price: ' + priceResponse.getContentText());
+      return {
+        success: false,
+        error: 'Failed to get price for ' + params.strain + ' ' + params.type
+      };
+    }
+
+    var priceResult = JSON.parse(priceResponse.getContentText());
+    var unitPrice = priceResult.success && priceResult.price ? priceResult.price : 0;
+
+    if (unitPrice === 0) {
+      Logger.log('[executeCreateShipment] No price found for ' + params.strain + ' ' + params.type);
+    }
+
+    // Build line items
+    var lineItems = [{
+      strain: params.strain,
+      type: params.type,
+      quantity: params.quantity,
+      unitPrice: unitPrice,
+      total: params.quantity * unitPrice
+    }];
+
+    var subTotal = params.quantity * unitPrice;
+
+    // Build shipment data
+    var shipmentData = {
+      orderID: masterOrder.id,
+      shipmentDate: params.shipmentDate || new Date().toISOString().split('T')[0],
       status: 'pending',
-      poNumber: params.poNumber || '',
-      terms: customer.paymentTerms || 'Net 30',
-      dueDate: params.dueDate || '',
-      notes: params.notes || '',
-      strains: params.strains || '',
-      // Ship-to address (from customer)
-      shipTo_company: customer.companyName || '',
-      shipTo_address: customer.address || '',
-      shipTo_city: customer.city || '',
-      shipTo_state: customer.state || '',
-      shipTo_zip: customer.zip || '',
-      shipTo_country: customer.country || 'USA',
-      // Sold-to address (same as ship-to by default)
-      soldTo_company: customer.companyName || '',
-      soldTo_address: customer.address || '',
-      soldTo_city: customer.city || '',
-      soldTo_state: customer.state || '',
-      soldTo_zip: customer.zip || '',
-      soldTo_country: customer.country || 'USA'
+      lineItems: lineItems,
+      subTotal: subTotal,
+      discount: 0,
+      freightCost: 0,
+      totalAmount: subTotal,
+      notes: params.notes || ''
     };
 
-    Logger.log('[executeCreateOrder] Order data prepared: ' + JSON.stringify(orderData));
+    Logger.log('[executeCreateShipment] Shipment data prepared: ' + JSON.stringify(shipmentData));
 
-    // Call wholesale orders API to save
+    // Call wholesale orders API to save shipment
     var response = UrlFetchApp.fetch(WHOLESALE_ORDERS_API_URL, {
       method: 'post',
       contentType: 'application/json',
       payload: JSON.stringify({
-        action: 'saveOrder',
-        order: orderData
+        action: 'saveShipment',
+        shipment: shipmentData
       }),
       muteHttpExceptions: true
     });
 
     if (response.getResponseCode() !== 200) {
-      Logger.log('[executeCreateOrder] API error: ' + response.getContentText());
+      Logger.log('[executeCreateShipment] API error: ' + response.getContentText());
       return {
         success: false,
-        error: 'Failed to create order. Please try again or create manually in the orders system.'
+        error: 'Failed to create shipment. Please try again.'
       };
     }
 
     var result = JSON.parse(response.getContentText());
 
     if (!result.success) {
-      Logger.log('[executeCreateOrder] Save failed: ' + result.error);
+      Logger.log('[executeCreateShipment] Save failed: ' + result.error);
       return {
         success: false,
-        error: result.error || 'Failed to create order'
+        error: result.error || 'Failed to create shipment'
       };
     }
 
-    Logger.log('[executeCreateOrder] Order created: ' + result.orderId);
+    Logger.log('[executeCreateShipment] Shipment created: ' + result.shipmentId);
 
     // Return formatted confirmation
     return {
       success: true,
-      message: 'Order created successfully!',
-      orderId: result.orderId,
+      message: 'Shipment created successfully!',
+      shipmentId: result.shipmentId,
       summary: {
-        'Order ID': result.orderId,
+        'Shipment ID': result.shipmentId,
+        'Master Order': masterOrder.id,
         'Customer': customer.companyName,
-        'Amount': params.totalKg + ' kg',
+        'Line Items': params.quantity + ' kg ' + params.strain + ' ' + params.type + (unitPrice > 0 ? ' @ $' + unitPrice.toFixed(2) + '/kg' : ''),
+        'Total': unitPrice > 0 ? '$' + subTotal.toFixed(2) : 'Price TBD',
         'Status': 'Pending',
-        'PO Number': orderData.poNumber || 'Not specified',
-        'Due Date': orderData.dueDate || 'Not specified',
-        'Payment Terms': orderData.terms
+        'Shipment Date': shipmentData.shipmentDate
       }
     };
 
   } catch (error) {
-    Logger.log('[executeCreateOrder] Exception: ' + error.toString());
+    Logger.log('[executeCreateShipment] Exception: ' + error.toString());
     return {
       success: false,
-      error: 'An error occurred while creating the order: ' + error.toString()
+      error: 'An error occurred while creating the shipment: ' + error.toString()
     };
   }
 }
@@ -3194,12 +3237,16 @@ function buildSystemPrompt(context, corrections, memoryResults) {
     prompt += '  Parameters: ' + JSON.stringify(task.parameters) + '\n';
   }
 
-  prompt += '\n**Order Management:**\n' +
-    '- Create wholesale orders with customer lookup and validation\n' +
-    '- Minimal required: customer name + kg amount\n' +
-    '- Optional: due date, PO number, strains, notes\n' +
+  prompt += '\n**Shipment Management:**\n' +
+    '- Create shipments for existing master orders\n' +
+    '- Required: customer name, strain, type (Tops/Smalls), quantity (kg)\n' +
+    '- Optional: shipment date, notes\n' +
     '- Auto-matches customer names with fuzzy matching\n' +
-    '- Returns order ID and formatted summary\n';
+    '- Looks up prices from customer price history\n' +
+    '- Links to customer\'s active master order automatically\n' +
+    '- Returns shipment ID and formatted summary\n' +
+    '- IMPORTANT: If any required information is missing (strain name, type, or quantity), ask the user before proceeding\n' +
+    '- Example: If user says "ship to Green Valley", ask "What strain, type (Tops/Smalls), and quantity should I ship?"\n';
 
   prompt += '\nTo execute a task, include this JSON block in your response:\n' +
     '```task\n' +
@@ -3213,10 +3260,10 @@ function buildSystemPrompt(context, corrections, memoryResults) {
     'Assistant: "I\'ll update the crew count for you.\n```task\n{"task":"update_crew_count","params":{"line":1,"role":"trimmers","count":5}}\n```\nDone! Line 1 now has 5 trimmers."\n\n' +
     'User: "Log a 5kg bag"\n' +
     'Assistant: "Logging the bag completion now.\n```task\n{"task":"log_bag_completion","params":{"bagType":"5kg"}}\n```\nBag logged successfully!"\n\n' +
-    'User: "Create an order for Green Valley Farm, 500 kg"\n' +
-    'Assistant: "I\'ll create that order for you.\n```task\n{"task": "create_order", "params": {"customerName": "Green Valley Farm", "totalKg": 500}}\n```"\n\n' +
-    'User: "New order: Mountain Organics, 250kg, PO# 12345, due Feb 15"\n' +
-    'Assistant: "Creating order with those details.\n```task\n{"task": "create_order", "params": {"customerName": "Mountain Organics", "totalKg": 250, "poNumber": "12345", "dueDate": "2026-02-15"}}\n```"\n\n' +
+    'User: "Create a shipment for Green Valley Farm, 100kg Lifter Tops"\n' +
+    'Assistant: "I\'ll create that shipment for you.\n```task\n{"task": "create_shipment", "params": {"customerName": "Green Valley Farm", "strain": "Lifter", "type": "Tops", "quantity": 100}}\n```"\n\n' +
+    'User: "New shipment: Mountain Organics, 50kg Blue Dream Smalls, shipping Feb 15"\n' +
+    'Assistant: "Creating shipment with those details.\n```task\n{"task": "create_shipment", "params": {"customerName": "Mountain Organics", "strain": "Blue Dream", "type": "Smalls", "quantity": 50, "shipmentDate": "2026-02-15"}}\n```"\n\n' +
     'Only suggest tasks when the user clearly wants an action performed, not just information.\n\n';
 
   return prompt;
