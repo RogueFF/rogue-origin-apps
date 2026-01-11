@@ -1,0 +1,200 @@
+/**
+ * Shared Base Styles
+ * Common CSS patterns used across all Rogue Origin apps
+ * Consolidates: CSS variables, resets, typography, dark mode, animations
+ */
+
+/* ========================================
+   CSS VARIABLES - THEME SYSTEM
+   ======================================== */
+:root {
+  /* Rogue Origin Brand Colors */
+  --ro-green: #668971;
+  --ro-gold: #e4aa4f;
+
+  /* Legacy aliases for backwards compatibility */
+  --gold: var(--ro-gold);
+  --green: var(--ro-green);
+
+  /* Extended Brand Colors */
+  --gold-light: #f0cb60;
+  --gold-dim: rgba(228, 170, 79, 0.12);
+  --green-light: #7a9d86;
+  --green-dim: rgba(102, 137, 113, 0.12);
+  --green-dark: #4a6b54;
+  --sungrown: #bf8e4e;
+  --sungrown-dim: rgba(191, 142, 78, 0.12);
+  --greenhouse: #8f9263;
+  --greenhouse-dim: rgba(143, 146, 99, 0.12);
+  --indoor: #62758d;
+  --indoor-dim: rgba(98, 117, 141, 0.12);
+
+  /* Semantic Colors */
+  --success: #668971;
+  --warning: #e4aa4f;
+  --danger: #c45c4a;
+  --danger-dim: rgba(196, 92, 74, 0.12);
+  --info: #62758d;
+
+  /* Typography */
+  --font-display: 'DM Serif Display', serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-ui: 'Outfit', 'Inter', system-ui, sans-serif;
+
+  /* Light Theme (default) */
+  --bg: #faf8f5;
+  --bg-warm: #f3efe7;
+  --bg-card: #ffffff;
+  --bg-dark: #2d3a2e;
+  --glass: rgba(255, 255, 255, 0.6);
+  --glass-border: rgba(102, 137, 113, 0.15);
+  --border: rgba(102, 137, 113, 0.2);
+  --border-strong: rgba(102, 137, 113, 0.2);
+  --border-light: rgba(102, 137, 113, 0.1);
+  --text: #2d3a32;
+  --text-secondary: #5a6b5f;
+  --text-muted: #8a9a8e;
+  --text-light: #94a397;
+
+  /* Spacing System */
+  --space-xs: 8px;
+  --space-sm: 16px;
+  --space-md: 24px;
+  --space-lg: 40px;
+  --space-xl: 64px;
+
+  /* Border Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  /* Shadows */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.1);
+  --shadow-elevated:
+    0 2px 4px rgba(0, 0, 0, 0.04),
+    0 8px 16px rgba(0, 0, 0, 0.08);
+
+  /* Header specific */
+  --header-bg: #2d3a2e;
+  --header-text: #faf8f4;
+}
+
+/* ========================================
+   DARK MODE
+   ======================================== */
+body.dark-mode,
+[data-theme="dark"] {
+  --bg: #1a1a1a;
+  --bg-warm: #22291e;
+  --bg-card: #2d2d2d;
+  --bg-dark: #12160f;
+  --glass: rgba(45, 45, 45, 0.6);
+  --glass-border: rgba(102, 137, 113, 0.25);
+  --border: rgba(255, 255, 255, 0.2);
+  --border-strong: rgba(255, 255, 255, 0.2);
+  --border-light: rgba(255, 255, 255, 0.1);
+  --text: #e0e0e0;
+  --text-secondary: #b8b8b8;
+  --text-muted: #888888;
+  --text-light: #6b7a6f;
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.5);
+  --gold-dim: rgba(228, 170, 79, 0.18);
+  --green-dim: rgba(102, 137, 113, 0.18);
+  --sungrown-dim: rgba(191, 142, 78, 0.18);
+  --greenhouse-dim: rgba(143, 146, 99, 0.18);
+  --indoor-dim: rgba(98, 117, 141, 0.18);
+  --header-bg: #12160f;
+}
+
+/* ========================================
+   RESET & BASE STYLES
+   ======================================== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-ui);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  min-height: 100vh;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ========================================
+   ANIMATIONS
+   ======================================== */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* ========================================
+   UTILITY CLASSES
+   ======================================== */
+
+/* Spacing utilities */
+.mt-sm { margin-top: var(--space-sm); }
+.mt-md { margin-top: var(--space-md); }
+.mt-lg { margin-top: var(--space-lg); }
+.mb-sm { margin-bottom: var(--space-sm); }
+.mb-md { margin-bottom: var(--space-md); }
+.mb-lg { margin-bottom: var(--space-lg); }
+.p-sm { padding: var(--space-sm); }
+.p-md { padding: var(--space-md); }
+.p-lg { padding: var(--space-lg); }
+
+/* Text utilities */
+.text-center { text-align: center; }
+.text-muted { color: var(--text-muted); }
+.text-secondary { color: var(--text-secondary); }
+
+/* Display utilities */
+.hidden { display: none !important; }
+.flex { display: flex; }
+.flex-center { display: flex; align-items: center; justify-content: center; }
+.flex-column { flex-direction: column; }
+.gap-sm { gap: var(--space-sm); }
+.gap-md { gap: var(--space-md); }
+
+/* Common transitions */
+.transition-all { transition: all 0.3s ease; }
+.transition-colors { transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease; }
