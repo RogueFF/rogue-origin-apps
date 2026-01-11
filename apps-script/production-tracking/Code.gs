@@ -586,6 +586,10 @@ function doPost(e) {
       // AI Feedback Handler
       var feedbackData = e.postData ? JSON.parse(e.postData.contents) : {};
       result = logChatFeedback(feedbackData);
+    } else if (action === 'tts') {
+      // Text-to-Speech Handler
+      var ttsData = e.postData ? JSON.parse(e.postData.contents) : {};
+      result = handleTTSRequest(ttsData);
     } else if (action === 'saveOrder') {
       // Orders Management
       var orderData = e.postData ? JSON.parse(e.postData.contents) : {};
@@ -2559,6 +2563,81 @@ function handleChatRequest(data) {
       success: false,
       error: error.message
     };
+  }
+}
+
+/**
+ * Handle Text-to-Speech request via Google Cloud TTS
+ * @param {Object} data - { text: "string to speak" }
+ * @returns {Object} { success: boolean, audioBase64: string } or { success: false, error: string }
+ */
+function handleTTSRequest(data) {
+  try {
+    // Get Google Cloud TTS API key from script properties
+    var apiKey = PropertiesService.getScriptProperties().getProperty('GOOGLE_TTS_API_KEY');
+
+    if (!apiKey) {
+      Logger.log('TTS: API key not configured');
+      return { success: false, error: 'TTS not configured' };
+    }
+
+    if (!data || !data.text) {
+      return { success: false, error: 'No text provided' };
+    }
+
+    // Truncate extremely long text (safety limit)
+    var text = data.text;
+    if (text.length > 5000) {
+      text = text.substring(0, 5000) + '...';
+    }
+
+    // Call Google Cloud TTS API
+    var url = 'https://texttospeech.googleapis.com/v1/text:synthesize?key=' + apiKey;
+
+    var payload = {
+      input: { text: text },
+      voice: {
+        languageCode: 'en-US',
+        name: 'en-US-Neural2-A',  // Deep professional male voice
+        ssmlGender: 'MALE'
+      },
+      audioConfig: {
+        audioEncoding: 'MP3',
+        pitch: 0.0,
+        speakingRate: 1.1  // 10% faster for efficiency
+      }
+    };
+
+    var options = {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    };
+
+    var response = UrlFetchApp.fetch(url, options);
+    var responseCode = response.getResponseCode();
+
+    if (responseCode !== 200) {
+      Logger.log('TTS API error: ' + responseCode + ' - ' + response.getContentText());
+      return { success: false, error: 'TTS API error: ' + responseCode };
+    }
+
+    var result = JSON.parse(response.getContentText());
+
+    if (result.audioContent) {
+      return {
+        success: true,
+        audioBase64: result.audioContent  // Base64 encoded MP3
+      };
+    } else {
+      Logger.log('TTS: No audio content in response');
+      return { success: false, error: 'No audio content received' };
+    }
+
+  } catch (error) {
+    Logger.log('TTS Error: ' + error.message);
+    return { success: false, error: error.message };
   }
 }
 
