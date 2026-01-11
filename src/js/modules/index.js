@@ -22,9 +22,9 @@ import {
   toggleVoice,
   isVoiceActive,
   startListening,
-  stopListening,
+  stopListening as _stopListening,
   stopSpeaking,
-  initVoiceRecognition
+  initVoiceRecognition as _initVoiceRecognition
 } from './voice.js';
 
 // ===== STATE IMPORTS =====
@@ -765,7 +765,7 @@ window.dismissWelcome = function() {
   if (modal) modal.style.display = 'none';
   try {
     localStorage.setItem('rogueOrigin_welcomeDismissed', '1');
-  } catch (e) {}
+  } catch (_e) {}
 };
 
 window.showWidgetHelp = function(widgetId) {
