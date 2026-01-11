@@ -2808,10 +2808,10 @@ function executeCreateShipment_(params) {
       };
     }
 
-    Logger.log('[executeCreateShipment] Found customer: ' + customer.companyName + ' (ID: ' + customer.customerID + ')');
+    Logger.log('[executeCreateShipment] Found customer: ' + customer.companyName + ' (ID: ' + customer.id + ')');
 
     // Get customer's active master order
-    var masterOrderResponse = UrlFetchApp.fetch(WHOLESALE_ORDERS_API_URL + '?action=getActiveMasterOrder&customerID=' + encodeURIComponent(customer.customerID), {
+    var masterOrderResponse = UrlFetchApp.fetch(WHOLESALE_ORDERS_API_URL + '?action=getActiveMasterOrder&customerID=' + encodeURIComponent(customer.id), {
       method: 'get',
       muteHttpExceptions: true
     });
@@ -2836,7 +2836,7 @@ function executeCreateShipment_(params) {
     Logger.log('[executeCreateShipment] Found master order: ' + masterOrder.id);
 
     // Get price for strain+type from price history
-    var priceResponse = UrlFetchApp.fetch(WHOLESALE_ORDERS_API_URL + '?action=getPriceForStrain&strain=' + encodeURIComponent(params.strain) + '&type=' + encodeURIComponent(params.type) + '&customerID=' + encodeURIComponent(customer.customerID), {
+    var priceResponse = UrlFetchApp.fetch(WHOLESALE_ORDERS_API_URL + '?action=getPriceForStrain&strain=' + encodeURIComponent(params.strain) + '&type=' + encodeURIComponent(params.type) + '&customerID=' + encodeURIComponent(customer.id), {
       method: 'get',
       muteHttpExceptions: true
     });
@@ -2956,10 +2956,10 @@ function executeGetShipments_(params) {
       };
     }
 
-    Logger.log('[executeGetShipments] Found customer: ' + customer.companyName + ' (ID: ' + customer.customerID + ')');
+    Logger.log('[executeGetShipments] Found customer: ' + customer.companyName + ' (ID: ' + customer.id + ')');
 
     // Get customer's active master order
-    var masterOrderResponse = UrlFetchApp.fetch(WHOLESALE_ORDERS_API_URL + '?action=getActiveMasterOrder&customerID=' + encodeURIComponent(customer.customerID), {
+    var masterOrderResponse = UrlFetchApp.fetch(WHOLESALE_ORDERS_API_URL + '?action=getActiveMasterOrder&customerID=' + encodeURIComponent(customer.id), {
       method: 'get',
       muteHttpExceptions: true
     });
@@ -5111,4 +5111,17 @@ function createCustomersSheet_(ss) {
   sheet.setColumnWidth(11, 100); // LastOrderDate
 
   return sheet;
+}
+
+/**
+ * Test function to manually verify executeGetShipments_ works
+ * Run this from Apps Script editor to test shipment querying
+ */
+function testGetShipments() {
+  var result = executeGetShipments_({
+    customerName: "Cannaflora"
+  });
+
+  Logger.log('Result: ' + JSON.stringify(result, null, 2));
+  return result;
 }
