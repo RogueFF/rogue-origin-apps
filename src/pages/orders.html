@@ -2,7 +2,13 @@
 <html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#668971">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="RO Ops">
+  <link rel="apple-touch-icon" href="/assets/icon-apple-touch.png">
   <title>Wholesale Orders - Rogue Origin</title>
 
   <!-- Performance: Resource Hints -->
@@ -1617,17 +1623,24 @@
         : 0;
 
       // Update all columns for full edit support
+      row.cells[0].setAttribute('data-label', 'Order ID');
       row.cells[0].innerHTML = `<span class="order-id">${order.id}</span>`;
+      row.cells[1].setAttribute('data-label', 'Customer');
       row.cells[1].textContent = order.customerName || 'Unknown';
+      row.cells[2].setAttribute('data-label', 'Commitment');
       row.cells[2].innerHTML = `<span class="order-amount">$${formatNumber(order.commitmentAmount)}</span>`;
+      row.cells[3].setAttribute('data-label', 'Fulfilled');
       row.cells[3].innerHTML = `<span class="order-amount">$${formatNumber(order.fulfilled || 0)}</span>`;
+      row.cells[4].setAttribute('data-label', 'Progress');
       row.cells[4].innerHTML = `
         ${fulfillPct}%
         <div class="progress-mini">
           <div class="progress-mini-fill" style="width: ${fulfillPct}%"></div>
         </div>
       `;
+      row.cells[5].setAttribute('data-label', 'Status');
       row.cells[5].innerHTML = `<span class="order-status ${order.status}">${order.status}</span>`;
+      row.cells[6].setAttribute('data-label', 'Actions');
       // Note: Action buttons (column 6) remain unchanged
     }
 
@@ -1647,18 +1660,18 @@
       const row = document.createElement('tr');
       row.onclick = () => openDetailPanel(order.id);
       row.innerHTML = `
-        <td class="order-id">${order.id}</td>
-        <td>${order.customerName || 'Unknown'}</td>
-        <td class="order-amount">$${formatNumber(order.commitmentAmount)}</td>
-        <td class="order-amount">$${formatNumber(order.fulfilled || 0)}</td>
-        <td class="progress-cell">
+        <td data-label="Order ID" class="order-id">${order.id}</td>
+        <td data-label="Customer">${order.customerName || 'Unknown'}</td>
+        <td data-label="Commitment" class="order-amount">$${formatNumber(order.commitmentAmount)}</td>
+        <td data-label="Fulfilled" class="order-amount">$${formatNumber(order.fulfilled || 0)}</td>
+        <td data-label="Progress" class="progress-cell">
           ${fulfillPct}%
           <div class="progress-mini">
             <div class="progress-mini-fill" style="width: ${fulfillPct}%"></div>
           </div>
         </td>
-        <td><span class="order-status ${order.status}">${order.status}</span></td>
-        <td onclick="event.stopPropagation()" style="white-space: nowrap;">
+        <td data-label="Status"><span class="order-status ${order.status}">${order.status}</span></td>
+        <td data-label="Actions" onclick="event.stopPropagation()" style="white-space: nowrap;">
           <button class="btn-icon" onclick="editOrder('${order.id}')" title="Edit Order">
             <i class="ph ph-pencil-simple"></i>
           </button>

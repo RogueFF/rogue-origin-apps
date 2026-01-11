@@ -269,7 +269,7 @@ body.dark-mode .logo {
       color: var(--text-muted);
     }
     
-    .search-hint { font-size: 11px; color: var(--text-muted); margin-top: 8px; }
+    .search-hint { font-size: 12px; color: var(--text-muted); margin-top: 8px; } /* WCAG minimum */
     
     /* Search Results */
     .quick-print-section { margin-bottom: 24px; display: none; }
@@ -424,6 +424,18 @@ input[type="text"]:focus, textarea:focus {
       .modal-content { padding: 20px;
   animation: fadeInUp 0.3s ease-out;
 }
+
+      /* Overflow handling for wide components */
+      .quick-print-grid {
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 8px;
+      }
+
+      .quick-print-card {
+        flex-shrink: 0;
+      }
     }
   </style>
       doc.write('<!DOCTYPE html><html><head><style>');

@@ -207,3 +207,30 @@ export function initSidebarState() {
 export function getViewName() {
   return getCurrentView();
 }
+
+/**
+ * Update CSS custom property for viewport height (iOS Safari fix)
+ * This handles the dynamic address bar that changes available viewport height
+ */
+function updateViewportHeight() {
+  const vh = window.innerHeight;
+  document.documentElement.style.setProperty('--app-height', `${vh}px`);
+}
+
+/**
+ * Initialize viewport height tracking
+ * Call this on page load
+ */
+export function initViewportTracking() {
+  // Set initial value
+  updateViewportHeight();
+
+  // Update on resize (when iOS address bar hides/shows)
+  window.addEventListener('resize', updateViewportHeight);
+
+  // Update on orientation change
+  window.addEventListener('orientationchange', () => {
+    // Delay to ensure dimensions are updated
+    setTimeout(updateViewportHeight, 100);
+  });
+}

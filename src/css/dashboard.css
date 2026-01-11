@@ -2206,9 +2206,27 @@ body.tutorial-active::before {
 }
 
 /* Iframe App View */
-.app-view { display: none; flex-direction: column; height: calc(100vh - 52px); }
+.app-view {
+  display: none;
+  flex-direction: column;
+  height: var(--app-height);
+  max-height: 100dvh; /* Dynamic viewport height (modern browsers) */
+}
+
 .app-view.active { display: flex; }
-.app-iframe-container { flex: 1; position: relative; }
+
+.app-iframe-container {
+  flex: 1;
+  position: relative;
+  height: calc(var(--app-height) - var(--header-height));
+  max-height: calc(100dvh - var(--header-height));
+}
+
+/* Fallback for browsers without dvh support */
+@supports not (height: 100dvh) {
+  .app-view { height: 100vh; }
+  .app-iframe-container { height: calc(100vh - 52px); }
+}
 .app-iframe { width: 100%; height: 100%; border: none; }
 .app-expand-btn { position: absolute; top: 6px; right: 6px; background: rgba(45,58,46,0.7); color: #fff; border: none; width: 28px; height: 28px; border-radius: 6px; font-size: 14px; cursor: pointer; opacity: 0; transition: opacity 0.2s, background 0.2s; z-index: 10; display: flex; align-items: center; justify-content: center; }
 .app-expand-btn:hover { background: var(--gold); }
@@ -2456,9 +2474,34 @@ body.tutorial-active::before {
 
 /* 480px breakpoint - small mobile additions */
 @media (max-width: 480px) {
-  /* Responsive strain list - more space on mobile */
-  .strain-list {
-    max-height: 240px;
+  /* Sidebar adjustments */
+  .sidebar {
+    width: 100%;
+  }
+
+  /* Hero section - compact for small phones */
+  .hero-section {
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .hero-botanical-frame {
+    padding: 16px 20px;
+  }
+
+  .hero-production-number {
+    font-size: 48px;
+  }
+
+  .hero-production-unit {
+    font-size: 14px;
+  }
+
+  /* KPI cards - ensure single column */
+  .kpi-card {
+    position: static !important;
+    width: 100% !important;
+    margin-bottom: 12px !important;
   }
 
   /* KPI cards responsive width on very small screens */
@@ -2467,11 +2510,81 @@ body.tutorial-active::before {
     min-width: unset !important;
   }
 
+  /* Current production stats - single column on tiny screens */
+  .current-stats {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  /* FAB positioning for small screens */
+  .fab {
+    bottom: 16px;
+    right: 16px;
+    width: 56px;
+    height: 56px;
+  }
+
+  /* Header controls - stack vertically */
+  .header-controls {
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .header-controls > * {
+    width: 100%;
+  }
+
+  /* Responsive strain list - more space on mobile */
+  .strain-list {
+    max-height: 240px;
+  }
+
   /* Dropdown positioning fixes for small screens */
   .date-picker-dropdown,
   .compare-dropdown {
     right: auto;
     left: 50%;
     transform: translateX(-50%);
+  }
+
+  /* Progress hero - even more compact */
+  .progress-ring-container {
+    width: 80px;
+    height: 80px;
+  }
+
+  .progress-value {
+    font-size: 24px;
+  }
+}
+
+/* ========================================
+   LANDSCAPE ORIENTATION OPTIMIZATIONS
+   ======================================== */
+@media (max-height: 600px) and (orientation: landscape) {
+  /* Sidebar collapses in landscape on small heights */
+  .sidebar {
+    transform: translateX(-100%);
+  }
+
+  .main {
+    margin-left: 0;
+  }
+
+  /* KPI cards use horizontal layout */
+  .kpi-row {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+
+  /* Compact hero section */
+  .hero-section {
+    padding: 12px 20px;
+  }
+
+  /* Smaller progress ring */
+  .progress-ring-container {
+    width: 100px;
+    height: 100px;
   }
 }
