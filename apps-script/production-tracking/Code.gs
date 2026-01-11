@@ -120,6 +120,18 @@ var TASK_REGISTRY = {
       }
     },
     function: 'executeCreateShipment_'
+  },
+
+  'get_shipments': {
+    description: 'Get shipments for a customer',
+    parameters: {
+      customerName: {
+        type: 'string',
+        required: true,
+        description: 'Customer company name (fuzzy match supported)'
+      }
+    },
+    function: 'executeGetShipments_'
   }
 };
 
@@ -2927,6 +2939,120 @@ function executeCreateShipment_(params) {
 }
 
 /**
+ * Execute get_shipments task
+ * Gets all shipments for a customer's active master order
+ */
+function executeGetShipments_(params) {
+  try {
+    Logger.log('[executeGetShipments] Starting with params: ' + JSON.stringify(params));
+
+    // Find customer by name
+    var customer = findCustomerByName_(params.customerName);
+    if (!customer) {
+      return {
+        success: false,
+        error: 'Customer not found. Please check the name and try again.',
+        searchedFor: params.customerName
+      };
+    }
+
+    Logger.log('[executeGetShipments] Found customer: ' + customer.companyName + ' (ID: ' + customer.customerID + ')');
+
+    // Get customer's active master order
+    var masterOrderResponse = UrlFetchApp.fetch(WHOLESALE_ORDERS_API_URL + '?action=getActiveMasterOrder&customerID=' + encodeURIComponent(customer.customerID), {
+      method: 'get',
+      muteHttpExceptions: true
+    });
+
+    if (masterOrderResponse.getResponseCode() !== 200) {
+      Logger.log('[executeGetShipments] Failed to get master order: ' + masterOrderResponse.getContentText());
+      return {
+        success: false,
+        error: 'Failed to find active master order for ' + customer.companyName
+      };
+    }
+
+    var masterOrderResult = JSON.parse(masterOrderResponse.getContentText());
+    if (!masterOrderResult.success || !masterOrderResult.masterOrder) {
+      return {
+        success: false,
+        error: 'No active master order found for ' + customer.companyName
+      };
+    }
+
+    var masterOrder = masterOrderResult.masterOrder;
+    Logger.log('[executeGetShipments] Found master order: ' + masterOrder.id);
+
+    // Get shipments for this master order
+    var shipmentsResponse = UrlFetchApp.fetch(WHOLESALE_ORDERS_API_URL + '?action=getShipments&orderID=' + encodeURIComponent(masterOrder.id), {
+      method: 'get',
+      muteHttpExceptions: true
+    });
+
+    if (shipmentsResponse.getResponseCode() !== 200) {
+      Logger.log('[executeGetShipments] Failed to get shipments: ' + shipmentsResponse.getContentText());
+      return {
+        success: false,
+        error: 'Failed to retrieve shipments for ' + customer.companyName
+      };
+    }
+
+    var shipmentsResult = JSON.parse(shipmentsResponse.getContentText());
+    if (!shipmentsResult.success) {
+      return {
+        success: false,
+        error: shipmentsResult.error || 'Failed to retrieve shipments'
+      };
+    }
+
+    var shipments = shipmentsResult.shipments || [];
+    Logger.log('[executeGetShipments] Found ' + shipments.length + ' shipment(s)');
+
+    // Format shipments for display
+    if (shipments.length === 0) {
+      return {
+        success: true,
+        message: 'No shipments found for ' + customer.companyName,
+        customer: customer.companyName,
+        masterOrder: masterOrder.id,
+        shipmentCount: 0
+      };
+    }
+
+    // Build summary
+    var shipmentSummaries = shipments.map(function(s) {
+      var lineItemsText = (s.lineItems || []).map(function(item) {
+        return item.quantity + 'kg ' + item.strain + ' ' + item.type;
+      }).join(', ');
+
+      return {
+        'Shipment ID': s.id || s.invoiceNumber || 'N/A',
+        'Date': s.shipmentDate || 'N/A',
+        'Status': s.status || 'pending',
+        'Items': lineItemsText || 'No items',
+        'Total': s.totalAmount ? '$' + s.totalAmount.toFixed(2) : 'N/A'
+      };
+    });
+
+    return {
+      success: true,
+      message: 'Found ' + shipments.length + ' shipment(s) for ' + customer.companyName,
+      customer: customer.companyName,
+      masterOrder: masterOrder.id,
+      shipmentCount: shipments.length,
+      shipments: shipmentSummaries
+    };
+
+  } catch (error) {
+    Logger.log('[executeGetShipments] Exception: ' + error.toString());
+    return {
+      success: false,
+      error: 'An error occurred while retrieving shipments: ' + error.toString()
+    };
+  }
+}
+
+/**
  * Gathers all relevant production data for AI context (V2 - enhanced)
  */
 function gatherProductionContext() {
@@ -3239,7 +3365,9 @@ function buildSystemPrompt(context, corrections, memoryResults) {
 
   prompt += '\n**Shipment Management:**\n' +
     '- Create shipments for existing master orders\n' +
-    '- Required: customer name, strain, type (Tops/Smalls), quantity (kg)\n' +
+    '- View/query shipments for a customer\n' +
+    '- Required for creation: customer name, strain, type (Tops/Smalls), quantity (kg)\n' +
+    '- Required for querying: customer name\n' +
     '- Optional: shipment date, notes\n' +
     '- Auto-matches customer names with fuzzy matching\n' +
     '- Looks up prices from customer price history\n' +
