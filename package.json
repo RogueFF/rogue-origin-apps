@@ -1,0 +1,28 @@
+{
+  "name": "rogue-origin-apps-master",
+  "version": "1.0.0",
+  "description": "> Hemp processing operations management system for Rogue Origin in Southern Oregon",
+  "main": "sw.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rogueff/rogue-origin-apps.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/rogueff/rogue-origin-apps/issues"
+  },
+  "homepage": "https://github.com/rogueff/rogue-origin-apps#readme",
+  "devDependencies": {
+    "eslint": "^9.39.2"
+  }
+}
