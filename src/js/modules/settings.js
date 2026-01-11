@@ -136,7 +136,7 @@ export function applyWidgetVisibility() {
  */
 export function resetLayout() {
   // Reset KPI definitions to defaults
-  kpiDefinitions.forEach((kpi, index) => {
+  kpiDefinitions.forEach((kpi, _index) => {
     kpi.visible = kpi.default;
   });
 

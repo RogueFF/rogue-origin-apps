@@ -13,8 +13,8 @@ import {
   isAppsScript,
   getData,
   getCompareData,
-  isSkeletonsShowing,
-  setSkeletonsShowing
+  isSkeletonsShowing as _isSkeletonsShowing,
+  setSkeletonsShowing as _setSkeletonsShowing
 } from './state.js';
 import { formatDateInput } from './utils.js';
 

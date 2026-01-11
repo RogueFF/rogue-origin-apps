@@ -6,7 +6,7 @@
 import {
   getGrid,
   setGrid,
-  getTimer,
+  getTimer as _getTimer,
   setTimer,
   clearTimer,
   setFlag
@@ -287,7 +287,7 @@ export function toggleWidgetCollapse(btn) {
   const widget = btn.closest('.widget-item');
   if (!widget) return;
 
-  const content = widget.querySelector('.widget-content');
+  const _content = widget.querySelector('.widget-content');
   const icon = btn.querySelector('i');
 
   widget.classList.toggle('collapsed');
