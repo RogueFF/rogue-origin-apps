@@ -389,7 +389,25 @@ function doPost(e) {
   var result = {};
 
   try {
-    if (action === 'saveCustomer') {
+    // Handle JSON payload actions
+    var jsonData = null;
+    if (e.postData && e.postData.contents) {
+      try {
+        jsonData = JSON.parse(e.postData.contents);
+        if (jsonData.action) {
+          action = jsonData.action;
+        }
+      } catch (parseError) {
+        // Not JSON, continue with query parameter action
+      }
+    }
+
+    if (action === 'saveOrder') {
+      var orderData = jsonData && jsonData.order ? jsonData.order : {};
+      return ContentService.createTextOutput(
+        JSON.stringify(handleSaveOrder_(orderData))
+      ).setMimeType(ContentService.MimeType.JSON);
+    } else if (action === 'saveCustomer') {
       var customerData = e.postData ? JSON.parse(e.postData.contents) : {};
       // SECURITY: Validate and sanitize customer data
       var validation = sanitizeDataObject(customerData, CUSTOMER_SCHEMA);
@@ -1632,4 +1650,100 @@ function formatDateForJSON_(dateVal) {
     return new Date(dateVal).toISOString();
   }
   return null;
+}
+
+/**
+ * Handle saveOrder API request
+ * Wraps existing saveMasterOrder function
+ */
+function handleSaveOrder_(orderData) {
+  try {
+    Logger.log('[handleSaveOrder] Received order: ' + JSON.stringify(orderData));
+
+    // Call existing saveMasterOrder function
+    var result = saveMasterOrder(orderData);
+
+    if (result.success) {
+      return {
+        success: true,
+        orderId: result.order.id,
+        message: 'Order created successfully'
+      };
+    } else {
+      return {
+        success: false,
+        error: result.error || 'Failed to save order'
+      };
+    }
+
+  } catch (error) {
+    Logger.log('[handleSaveOrder] Error: ' + error.toString());
+    return {
+      success: false,
+      error: error.toString()
+    };
+  }
+}
+
+/**
+ * Handle getCustomers API request
+ * Returns list of all customers from Customers sheet
+ */
+function handleGetCustomers_() {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var customersSheet = ss.getSheetByName('Customers');
+
+    if (!customersSheet) {
+      return {
+        success: false,
+        error: 'Customers sheet not found'
+      };
+    }
+
+    var data = customersSheet.getDataRange().getValues();
+    var headers = data[0];
+    var customers = [];
+
+    // Find column indices
+    var idCol = headers.indexOf('CustomerID');
+    var nameCol = headers.indexOf('CompanyName');
+    var addressCol = headers.indexOf('ShipToAddress');
+    var cityCol = -1; // Not in current schema
+    var stateCol = -1; // Not in current schema
+    var zipCol = -1; // Not in current schema
+    var countryCol = headers.indexOf('Country');
+    var termsCol = -1; // Not in current schema
+
+    // Build customer objects
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      if (row[idCol]) { // Only include rows with customer ID
+        customers.push({
+          customerID: row[idCol],
+          companyName: row[nameCol] || '',
+          address: addressCol >= 0 ? row[addressCol] || '' : '',
+          city: cityCol >= 0 ? row[cityCol] || '' : '',
+          state: stateCol >= 0 ? row[stateCol] || '' : '',
+          zip: zipCol >= 0 ? row[zipCol] || '' : '',
+          country: countryCol >= 0 ? row[countryCol] || '' : '',
+          paymentTerms: termsCol >= 0 ? row[termsCol] || '' : ''
+        });
+      }
+    }
+
+    Logger.log('[handleGetCustomers] Found ' + customers.length + ' customers');
+
+    return {
+      success: true,
+      customers: customers
+    };
+
+  } catch (error) {
+    Logger.log('[handleGetCustomers] Error: ' + error.toString());
+    return {
+      success: false,
+      error: error.toString()
+    };
+  }
 }
