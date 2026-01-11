@@ -80,6 +80,10 @@
   /* Header specific */
   --header-bg: #2d3a2e;
   --header-text: #faf8f4;
+
+  /* Mobile Viewport Height (iOS Safari fix) */
+  --app-height: 100vh;
+  --header-height: 52px;
 }
 
 /* ========================================
@@ -198,3 +202,172 @@ body {
 /* Common transitions */
 .transition-all { transition: all 0.3s ease; }
 .transition-colors { transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease; }
+
+/* ========================================
+   MOBILE TYPOGRAPHY (WCAG Compliance)
+   ======================================== */
+@media (max-width: 768px) {
+  /* Enforce 12px minimum for accessibility */
+  body {
+    font-size: 14px;
+  }
+
+  small,
+  .small,
+  .text-sm,
+  .text-xs {
+    font-size: 12px !important;
+  }
+
+  .label,
+  .badge,
+  .hint {
+    font-size: 12px !important;
+  }
+}
+
+/* ========================================
+   SAFE AREA INSETS (iPhone X+ Notch Support)
+   ======================================== */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  .header {
+    padding-top: max(12px, env(safe-area-inset-top));
+  }
+
+  .fab {
+    bottom: max(24px, calc(24px + env(safe-area-inset-bottom)));
+    right: max(24px, calc(24px + env(safe-area-inset-right)));
+  }
+
+  .sidebar {
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
+  }
+
+  /* Modals */
+  .modal-content,
+  .modal,
+  .modal-overlay {
+    margin-bottom: max(20px, env(safe-area-inset-bottom));
+  }
+
+  /* Settings panel */
+  .settings-panel {
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
+  }
+
+  /* Detail panels (orders page) */
+  .detail-panel {
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
+  }
+}
+
+/* ========================================
+   TOUCH FEEDBACK & HOVER STATES
+   ======================================== */
+
+/* Suppress hover effects on touch devices */
+@media (hover: hover) and (pointer: fine) {
+  /* Only apply hover effects on devices with mouse */
+  button:hover,
+  .btn:hover,
+  .nav-item:hover,
+  a:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+}
+
+/* Touch-specific feedback */
+@media (hover: none) and (pointer: coarse) {
+  /* Active state for touch */
+  button:active,
+  .btn:active,
+  .nav-item:active,
+  a:active {
+    transform: scale(0.98);
+    opacity: 0.9;
+  }
+
+  /* Ensure touch targets meet WCAG minimum */
+  button,
+  .btn,
+  .nav-item,
+  a,
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Remove hover state persistence on touch devices */
+  button:hover,
+  .btn:hover,
+  .nav-item:hover,
+  a:hover {
+    transform: none;
+    box-shadow: none;
+  }
+}
+
+/* Ripple effect for touch interactions */
+@media (hover: none) {
+  button,
+  .btn {
+    position: relative;
+    overflow: hidden;
+  }
+
+  button::after,
+  .btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%);
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0);
+    transition: transform 0.6s, opacity 0.6s;
+  }
+
+  button:active::after,
+  .btn:active::after {
+    transform: scale(2);
+    opacity: 1;
+    transition: transform 0s, opacity 0s;
+  }
+}
+
+/* ========================================
+   LANDSCAPE ORIENTATION OPTIMIZATIONS
+   ======================================== */
+@media (max-height: 500px) and (orientation: landscape) {
+  /* Reduce vertical padding in landscape */
+  body {
+    padding-top: 8px;
+  }
+
+  .header {
+    padding: 8px 16px;
+    min-height: 48px;
+  }
+
+  /* Modals should be scrollable in landscape */
+  .modal-content {
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  /* FAB smaller in landscape */
+  .fab {
+    width: 48px;
+    height: 48px;
+    bottom: 12px;
+    right: 12px;
+  }
+}
