@@ -97,7 +97,7 @@ rogue-origin-apps/
 | **SOP Manager** | `src/pages/sop-manager.html` | SOP Code.gs | ✅ Live | Procedures management |
 | **Kanban** | `src/pages/kanban.html` | Kanban Code.gs | ✅ Live | Task tracking board |
 | **Barcode Manager** | `src/pages/barcode.html` | Barcode Code.gs | ✅ Live | Label printing system |
-| **Orders (Internal)** | `src/pages/orders.html` | *(pending)* | 🚧 80% | Internal order management |
+| **Orders (Internal)** | `src/pages/orders.html` | Wholesale Orders Code.gs | ✅ Live | Wholesale order & shipment management |
 | **Customer Portal** | `src/pages/order.html` | *(pending)* | 🚧 80% | Customer order view |
 | **Ops Hub (Alt)** | `src/pages/ops-hub.html` | Production Code.gs | ✅ Live | Alternative dashboard design |
 
@@ -115,12 +115,16 @@ rogue-origin-apps/
 - **Typography**: DM Serif Display + JetBrains Mono + Outfit
 - **Animations**: Spring physics, staggered reveals, smooth transitions
 
-### 🤖 AI Agent (~70% Complete)
+### 🤖 AI Agent ✅ Complete
 - Answers production questions ("How are we doing today?")
 - Historical analysis ("Compare this week to last week")
 - Projections ("How long for 40kg with 5 trimmers?")
+- **Shipment management** ("Create a shipment for Cannaflora, 500kg Lifter Tops")
+- **Voice mode** - Speech-to-text + Text-to-speech
 - Learns from corrections ("Actually..." detection)
-- Data sources: Real-time production, crew counts, 30-day history
+- Persistent memory across sessions
+- Task execution with visual feedback
+- Data sources: Real-time production, crew counts, 30-day history, wholesale orders
 
 ### 📊 Production Tracking
 - Hour-by-hour production logging
