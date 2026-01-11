@@ -1,101 +1,23 @@
-    /* ========================================
-       CSS VARIABLES - THEME SYSTEM
-       ======================================== */
-    :root {
-      /* Typography */
-      --font-display: 'DM Serif Display', serif;
-      --font-mono: 'JetBrains Mono', monospace;
-      --font-ui: 'Outfit', sans-serif;
+/*
+ * Orders Page Styles
+ * Base styles loaded from shared-base.css
+ */
 
-      /* Brand Colors */
-      --ro-green: #668971;
-      --ro-gold: #e4aa4f;
-      --success: #668971;
-      --warning: #e4aa4f;
-      --danger: #c45c4a;
-      --info: #62758d;
+/* Hemp fiber pattern background - Page specific */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23668971' fill-opacity='0.12' fill-rule='evenodd'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/svg%3E");
+  opacity: 0.6;
+  pointer-events: none;
+  z-index: 0;
+}
 
-      /* Light Theme (default) */
-      --bg: #faf8f5;
-      --bg-card: #ffffff;
-      --glass: rgba(255, 255, 255, 0.6);
-      --glass-border: rgba(102,137,113,0.15);
-      --border: rgba(102,137,113,0.2);
-      --border-light: rgba(102,137,113,0.1);
-      --text: #2d3a32;
-      --text-secondary: #5a6b5f;
-      --text-muted: #8a9a8e;
-
-      /* Spacing */
-      --space-xs: 8px;
-      --space-sm: 16px;
-      --space-md: 24px;
-      --space-lg: 40px;
-
-      /* Radius */
-      --radius-sm: 8px;
-      --radius-md: 12px;
-      --radius-lg: 16px;
-      --radius-xl: 20px;
-
-      /* Shadows */
-      --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.06);
-      --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.08);
-      --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.1);
-      --shadow-elevated:
-        0 2px 4px rgba(0, 0, 0, 0.04),
-        0 8px 16px rgba(0, 0, 0, 0.08);
-    }
-
-    /* Dark Theme */
-    [data-theme="dark"] {
-      --bg: #1a1a1a;
-      --bg-card: #2d2d2d;
-      --glass: rgba(45, 45, 45, 0.6);
-      --glass-border: rgba(102,137,113,0.25);
-      --border: rgba(102,137,113,0.3);
-      --border-light: rgba(102,137,113,0.15);
-      --text: #f0f0f0;
-      --text-secondary: #b8b8b8;
-      --text-muted: #888888;
-      --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
-      --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.4);
-      --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.5);
-    }
-
-    /* ========================================
-       RESET & BASE STYLES
-       ======================================== */
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: var(--font-ui);
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.5;
-      position: relative;
-      min-height: 100vh;
-    }
-
-    /* Hemp fiber pattern background */
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23668971' fill-opacity='0.12' fill-rule='evenodd'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/svg%3E");
-      opacity: 0.6;
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    [data-theme="dark"] body::before {
-      background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23668971' fill-opacity='0.08' fill-rule='evenodd'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/svg%3E");
-      opacity: 0.35;
-    }
+[data-theme="dark"] body::before {
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23668971' fill-opacity='0.08' fill-rule='evenodd'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/svg%3E");
+  opacity: 0.35;
+}
 
     /* ========================================
        LAYOUT
