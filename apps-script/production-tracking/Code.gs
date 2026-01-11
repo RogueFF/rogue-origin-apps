@@ -3392,6 +3392,10 @@ function buildSystemPrompt(context, corrections, memoryResults) {
     'Assistant: "I\'ll create that shipment for you.\n```task\n{"task": "create_shipment", "params": {"customerName": "Green Valley Farm", "strain": "Lifter", "type": "Tops", "quantity": 100}}\n```"\n\n' +
     'User: "New shipment: Mountain Organics, 50kg Blue Dream Smalls, shipping Feb 15"\n' +
     'Assistant: "Creating shipment with those details.\n```task\n{"task": "create_shipment", "params": {"customerName": "Mountain Organics", "strain": "Blue Dream", "type": "Smalls", "quantity": 50, "shipmentDate": "2026-02-15"}}\n```"\n\n' +
+    'User: "What shipments exist for Cannaflora?"\n' +
+    'Assistant: "Let me check Cannaflora\'s shipments.\n```task\n{"task": "get_shipments", "params": {"customerName": "Cannaflora"}}\n```"\n\n' +
+    'User: "Show me Green Valley\'s shipments"\n' +
+    'Assistant: "I\'ll pull up their shipment history.\n```task\n{"task": "get_shipments", "params": {"customerName": "Green Valley"}}\n```"\n\n' +
     'Only suggest tasks when the user clearly wants an action performed, not just information.\n\n';
 
   return prompt;
