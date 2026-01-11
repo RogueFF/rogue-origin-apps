@@ -126,6 +126,7 @@ import {
   closeMobileSidebar,
   openAppNewTab,
   initSidebarState,
+  initViewportTracking,
   getViewName
 } from './navigation.js';
 
@@ -609,6 +610,9 @@ function init() {
 
   // 5. Initialize sidebar state
   initSidebarState();
+
+  // 5.5. Initialize viewport height tracking (iOS Safari fix)
+  initViewportTracking();
 
   // 6. Initialize target input
   initTargetInput();
