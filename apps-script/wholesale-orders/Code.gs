@@ -314,13 +314,25 @@ function doGet(e) {
       }
     } else if (action === 'getScoreboardOrderQueue') {
       result = getScoreboardOrderQueue();
+    } else if (action === 'getActiveMasterOrder') {
+      var customerID = e.parameter.customerID;
+      return ContentService.createTextOutput(
+        JSON.stringify(handleGetActiveMasterOrder_(customerID))
+      ).setMimeType(ContentService.MimeType.JSON);
+    } else if (action === 'getPriceForStrain') {
+      var strain = e.parameter.strain;
+      var type = e.parameter.type;
+      var customerID = e.parameter.customerID || '';
+      return ContentService.createTextOutput(
+        JSON.stringify(handleGetPriceForStrain_(strain, type, customerID))
+      ).setMimeType(ContentService.MimeType.JSON);
     } else if (action === 'test') {
       result = { ok: true, message: 'Wholesale Orders API working', timestamp: new Date().toISOString() };
     } else {
       result = {
         ok: true,
         message: 'Rogue Origin Wholesale Orders API',
-        endpoints: ['getCustomers', 'getMasterOrders', 'getShipments', 'getPayments', 'getScoreboardOrderQueue', 'validatePassword', 'test'],
+        endpoints: ['getCustomers', 'getMasterOrders', 'getShipments', 'getPayments', 'getScoreboardOrderQueue', 'getActiveMasterOrder', 'getPriceForStrain', 'validatePassword', 'test'],
         timestamp: new Date().toISOString()
       };
     }
@@ -492,6 +504,11 @@ function doPost(e) {
       } else {
         result = updateOrderPriority(idValidation.value, priorityValidation.value);
       }
+    } else if (action === 'saveShipment') {
+      var shipmentData = jsonData && jsonData.shipment ? jsonData.shipment : {};
+      return ContentService.createTextOutput(
+        JSON.stringify(handleSaveShipment_(shipmentData))
+      ).setMimeType(ContentService.MimeType.JSON);
     } else {
       result = { error: 'Unknown action: ' + action };
     }
@@ -1741,6 +1758,164 @@ function handleGetCustomers_() {
 
   } catch (error) {
     Logger.log('[handleGetCustomers] Error: ' + error.toString());
+    return {
+      success: false,
+      error: error.toString()
+    };
+  }
+}
+
+/**
+ * Handle getActiveMasterOrder API request
+ * Finds active or pending master order for a customer
+ */
+function handleGetActiveMasterOrder_(customerID) {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName('MasterOrders');
+
+    if (!sheet) {
+      return {
+        success: false,
+        error: 'MasterOrders sheet not found'
+      };
+    }
+
+    var data = sheet.getDataRange().getValues();
+    var headers = data[0];
+
+    // Find column indices
+    var idCol = headers.indexOf('OrderID');
+    var customerIDCol = headers.indexOf('CustomerID');
+    var customerNameCol = headers.indexOf('CustomerName');
+    var statusCol = headers.indexOf('Status');
+    var commitmentCol = headers.indexOf('CommitmentAmount');
+    var currencyCol = headers.indexOf('Currency');
+
+    // Find first active or pending order for this customer
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      if (row[customerIDCol] === customerID) {
+        var status = (row[statusCol] || '').toLowerCase();
+        if (status === 'active' || status === 'pending') {
+          return {
+            success: true,
+            masterOrder: {
+              id: row[idCol],
+              customerID: row[customerIDCol],
+              customerName: row[customerNameCol],
+              commitmentAmount: row[commitmentCol],
+              currency: row[currencyCol],
+              status: row[statusCol]
+            }
+          };
+        }
+      }
+    }
+
+    return {
+      success: false,
+      error: 'No active master order found for customer'
+    };
+
+  } catch (error) {
+    Logger.log('[handleGetActiveMasterOrder] Error: ' + error.toString());
+    return {
+      success: false,
+      error: error.toString()
+    };
+  }
+}
+
+/**
+ * Handle getPriceForStrain API request
+ * Looks up price from price history for strain+type combination
+ */
+function handleGetPriceForStrain_(strain, type, customerID) {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName('PriceHistory');
+
+    if (!sheet) {
+      return {
+        success: false,
+        error: 'PriceHistory sheet not found'
+      };
+    }
+
+    var data = sheet.getDataRange().getValues();
+
+    // Find matching price (prioritize customer-specific, then general)
+    var matchedPrice = 0;
+    var hasCustomerMatch = false;
+
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      var rowStrain = row[0];
+      var rowType = row[1];
+      var rowPrice = parseFloat(row[2]) || 0;
+      var rowCustomerID = row[4] || '';
+
+      if (rowStrain === strain && rowType === type) {
+        if (rowCustomerID === customerID) {
+          // Exact customer match - use this and stop
+          matchedPrice = rowPrice;
+          hasCustomerMatch = true;
+          break;
+        } else if (!rowCustomerID && !hasCustomerMatch) {
+          // General price (no customer) - use as fallback
+          matchedPrice = rowPrice;
+        }
+      }
+    }
+
+    if (matchedPrice > 0) {
+      return {
+        success: true,
+        price: matchedPrice
+      };
+    } else {
+      return {
+        success: false,
+        error: 'No price found for ' + strain + ' ' + type
+      };
+    }
+
+  } catch (error) {
+    Logger.log('[handleGetPriceForStrain] Error: ' + error.toString());
+    return {
+      success: false,
+      error: error.toString()
+    };
+  }
+}
+
+/**
+ * Handle saveShipment API request
+ * Wraps existing saveShipment function
+ */
+function handleSaveShipment_(shipmentData) {
+  try {
+    Logger.log('[handleSaveShipment] Received shipment: ' + JSON.stringify(shipmentData));
+
+    // Call existing saveShipment function
+    var result = saveShipment(shipmentData);
+
+    if (result.success) {
+      return {
+        success: true,
+        shipmentId: result.shipment.id,
+        message: 'Shipment created successfully'
+      };
+    } else {
+      return {
+        success: false,
+        error: result.error || 'Failed to save shipment'
+      };
+    }
+
+  } catch (error) {
+    Logger.log('[handleSaveShipment] Error: ' + error.toString());
     return {
       success: false,
       error: error.toString()
