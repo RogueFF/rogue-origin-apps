@@ -39,7 +39,7 @@ This implementation adds a **Mem0-inspired AI Manager** to the Rogue Origin hemp
   pause_timer: {reason, notes},
   resume_timer: {},
   get_order_status: {orderId},
-  create_shipment: {customerName, strain, type, quantity, shipmentDate?, notes?},
+  create_shipment: {customerName, items: [{strain, type, quantity}, ...], shipmentDate?, notes?},
   get_shipments: {customerName}
 }
 ```
@@ -78,21 +78,26 @@ Done! Line 1 now has 5 trimmers.
 
 ### 6. **Shipment Management** ✅ NEW
 - Create wholesale shipments through natural language
+- **Multi-item shipments** - combine multiple strains/types in one shipment
 - Query shipments for any customer
 - Fuzzy customer name matching (>70% similarity)
-- Auto-pricing from PriceHistory sheet
+- Auto-pricing from PriceHistory sheet (per line item)
 - Scoreboard integration for production queue
 - See `docs/SHIPMENT_CREATION_SETUP.md` for full guide
 
 **Example Commands:**
 ```
 "Create a shipment for Cannaflora, 500kg Lifter Tops"
+"Create a shipment for Cannaflora: 20kg Lifter Tops and 20kg Sour Lifter Tops"
+"Ship to Green Valley: 100kg Blue Dream Tops, 50kg Lifter Tops, 30kg Sour Lifter Smalls"
 "What shipments exist for Green Valley?"
 "New shipment: Mountain Organics, 100kg Blue Dream Smalls, shipping Feb 15"
 ```
 
 **Features:**
+- **Multi-item support** - one shipment with multiple line items
 - Links to existing master orders automatically
+- Each item priced individually from PriceHistory
 - Supports Tops and Smalls product types
 - Optional shipment date and notes
 - Results display as formatted data cards

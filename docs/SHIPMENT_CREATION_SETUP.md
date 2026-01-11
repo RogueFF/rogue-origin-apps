@@ -28,7 +28,7 @@ The AI chat can now manage wholesale shipments through natural language commands
 
 ## How to Create Shipments
 
-### Simple Shipment Creation
+### Single-Item Shipment
 
 **Ask the AI:**
 ```
@@ -48,17 +48,48 @@ Shipment created successfully!
 Shipment ID: SH-001-02
 Master Order: MO-2026-001
 Customer: Cannaflora AG
-Line Items: 500 kg Lifter Tops @ $X.XX/kg
+Line Items: 500kg Lifter Tops @ $X.XX/kg
 Total: $X,XXX.XX
 Status: Pending
 Shipment Date: 2026-01-11
 ```
 
+### Multi-Item Shipment (Multiple Strains in One Shipment)
+
+**Ask the AI:**
+```
+Create a shipment for Cannaflora: 20kg Lifter Tops and 20kg Sour Lifter Tops
+```
+
+**or:**
+```
+Ship to Green Valley: 100kg Blue Dream Tops, 50kg Lifter Tops, 30kg Sour Lifter Smalls
+```
+
+**AI Response:**
+```
+Shipment created successfully!
+
+Shipment ID: SH-001-09
+Master Order: MO-2026-001
+Customer: Cannaflora AG
+Line Items: 20kg Lifter Tops @ $8.50/kg, 20kg Sour Lifter Tops @ $9.00/kg
+Total: $350.00
+Status: Pending
+Shipment Date: 2026-01-11
+```
+
+**Benefits:**
+- One shipment with multiple line items
+- Each item priced individually from PriceHistory
+- Combined total across all items
+- Cleaner than creating separate shipments
+
 ### With Optional Details
 
 **Ask the AI:**
 ```
-New shipment: Mountain Organics, 50kg Blue Dream Smalls, shipping Feb 15, notes: Priority shipment
+New shipment: Mountain Organics, 50kg Blue Dream Smalls and 30kg Lifter Smalls, shipping Feb 15, notes: Priority shipment
 ```
 
 **Optional Fields:**
@@ -124,14 +155,15 @@ Total: $X,XXX.XX
 
 **Shipment** (AI-created or manual):
 - Individual delivery against master order
-- Contains line items (strain, type, quantity, price)
+- Contains one or more line items (each with: strain, type, quantity, price)
 - Example: SH-001-02 linked to MO-2026-001
 - Auto-generated invoice number
+- Can combine multiple strains/types in a single shipment
 
-### Shipment Structure
+### Shipment Structure (Multi-Item Example)
 ```javascript
 {
-  id: "SH-001-02",
+  id: "SH-001-09",
   orderID: "MO-2026-001",
   shipmentDate: "2026-01-11",
   status: "pending",
@@ -139,15 +171,22 @@ Total: $X,XXX.XX
     {
       strain: "Lifter",
       type: "Tops",
-      quantity: 500,
+      quantity: 20,
       unitPrice: 8.50,
-      total: 4250.00
+      total: 170.00
+    },
+    {
+      strain: "Sour Lifter",
+      type: "Tops",
+      quantity: 20,
+      unitPrice: 9.00,
+      total: 180.00
     }
   ],
-  subTotal: 4250.00,
+  subTotal: 350.00,
   discount: 0,
   freightCost: 0,
-  totalAmount: 4250.00,
+  totalAmount: 350.00,
   notes: ""
 }
 ```
@@ -246,28 +285,34 @@ The scoreboard shows shipments in priority order:
 
 ## Examples
 
-### Create Simple Shipment
+### Create Single-Item Shipment
 ```
 User: "Create a shipment for Cannaflora, 500kg Lifter Tops"
 AI: [Creates shipment with auto-generated ID and invoice number]
 ```
 
+### Create Multi-Item Shipment
+```
+User: "Create a shipment for Cannaflora: 20kg Lifter Tops and 20kg Sour Lifter Tops"
+AI: [Creates ONE shipment with TWO line items, each priced individually]
+```
+
 ### Create with Date
 ```
-User: "New shipment: Mountain Organics, 100kg Blue Dream Smalls, shipping Feb 15"
-AI: [Creates shipment scheduled for Feb 15]
+User: "Ship to Mountain Organics: 50kg Blue Dream Smalls, 30kg Lifter Smalls, shipping Feb 15"
+AI: [Creates multi-item shipment scheduled for Feb 15]
+```
+
+### Complex Multi-Item
+```
+User: "New shipment for Green Valley: 100kg Blue Dream Tops, 50kg Lifter Tops, 30kg Sour Lifter Smalls"
+AI: [Creates shipment with 3 different line items, combined total]
 ```
 
 ### Query Shipments
 ```
 User: "What shipments exist for Green Valley?"
 AI: [Shows all shipments for Green Valley Farm]
-```
-
-### Check Queue
-```
-User: "What's in the production queue?"
-AI: [Can implement this as a future enhancement]
 ```
 
 ---
