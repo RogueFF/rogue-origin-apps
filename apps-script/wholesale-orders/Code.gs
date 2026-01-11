@@ -455,24 +455,6 @@ function doPost(e) {
       } else {
         result = deleteMasterOrder(idValidation.value);
       }
-    } else if (action === 'saveShipment') {
-      var shipmentData = e.postData ? JSON.parse(e.postData.contents) : {};
-      // SECURITY: Sanitize string fields in shipment data
-      // Note: Shipments have complex nested data (lineItems, dimensions) that need custom handling
-      if (shipmentData.orderID) {
-        var orderIdValidation = validateId(shipmentData.orderID);
-        if (!orderIdValidation.valid) {
-          result = { success: false, error: 'Invalid order ID: ' + orderIdValidation.error };
-        } else {
-          shipmentData.orderID = orderIdValidation.value;
-          shipmentData.notes = sanitizeString(shipmentData.notes, 2000);
-          shipmentData.trackingNumber = sanitizeString(shipmentData.trackingNumber, 200);
-          shipmentData.carrier = sanitizeString(shipmentData.carrier, 100);
-          result = saveShipment(shipmentData);
-        }
-      } else {
-        result = { success: false, error: 'Order ID is required' };
-      }
     } else if (action === 'deleteShipment') {
       var deleteData = e.postData ? JSON.parse(e.postData.contents) : {};
       // SECURITY: Validate shipment ID
