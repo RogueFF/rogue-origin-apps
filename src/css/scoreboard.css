@@ -788,8 +788,32 @@
       .info-section { font-size: 14px; padding: 4px 8px; gap: 4px; }
       .info-icon { font-size: 18px; }
       .info-divider { height: 20px; }
-      .stat-group .label { font-size: 9px; }
+      .stat-group .label { font-size: 12px; } /* WCAG minimum */
       .stat-group .value { font-size: 16px; }
+
+      /* Overflow handling for wide components */
+      .hour-cards {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scroll-snap-type: x mandatory;
+        padding-bottom: 8px;
+      }
+
+      .hour-card {
+        scroll-snap-align: start;
+        flex-shrink: 0;
+      }
+
+      .order-queue-section {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 8px;
+      }
+
+      .order-pill {
+        flex-shrink: 0;
+      }
+
       .timer-panel { padding: 15px; gap: 15px; }
       .timer-display { width: 140px; height: 140px; }
       .timer-value { font-size: 32px; }
@@ -1771,6 +1795,28 @@ body.timer-fullscreen .started-badge {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* ========================================
+   LANDSCAPE ORIENTATION OPTIMIZATIONS
+   ======================================== */
+@media (max-height: 500px) and (orientation: landscape) {
+  .stat-group {
+    padding: 8px 12px;
+  }
+
+  .cycle-history {
+    max-height: 300px;
+    overflow-y: auto;
+  }
+
+  .timer-panel {
+    padding: 12px;
+  }
+
+  .scoreboard {
+    gap: 8px;
   }
 }
 
