@@ -148,7 +148,7 @@ function getSpeakableText(responseText) {
     // Remove HTML tags but keep the content
     return responseText.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
   } else {
-    return "I have a detailed answer for you. Check the screen for the full details.";
+    return 'I have a detailed answer for you. Check the screen for the full details.';
   }
 }
 
