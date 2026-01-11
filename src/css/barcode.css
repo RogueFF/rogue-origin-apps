@@ -1,75 +1,22 @@
-    :root {
-  /* Rogue Origin Brand Colors - Light Theme */
-  --ro-green: #668971;
-  --ro-gold: #e4aa4f;
-  --gold-light: #f0cb60;
-  --sungrown: #bf8e4e;
-  --greenhouse: #8f9263;
-  --indoor: #62758d;
-  --bg: #faf8f5;
-  --bg-card: #ffffff;
-  --border: rgba(102,137,113,0.1);
-  --border-strong: rgba(102,137,113,0.2);
-  --text: #2d3a32;
-  --text-muted: #5a6b5f;
+/*
+ * Barcode Printer Styles
+ * Base styles loaded from shared-base.css
+ */
 
-  /* Legacy aliases for compatibility */
-  --gold: var(--ro-gold);
-  --green: var(--ro-green);
-
-  /* Font families */
-  --font-display: 'DM Serif Display', serif;
-  --font-mono: 'JetBrains Mono', monospace;
-  --font-ui: 'Outfit', 'Inter', sans-serif;
+/* Page-specific overrides */
+body {
+  padding: 20px;
 }
 
-    /* Dark Mode */
-body.dark-mode {
-  --bg: #1a1a1a;
-  --bg-card: #2d2d2d;
-  --border: rgba(255,255,255,0.1);
-  --border-strong: rgba(255,255,255,0.2);
-  --text: #e0e0e0;
-  --text-muted: #888888;
+/* Dark mode page-specific overrides */
+body.dark-mode .container {
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3);
 }
 
-    body.dark-mode .container {
-      box-shadow: 0 2px 12px rgba(0,0,0,0.3);
-    }
-
-    body.dark-mode .logo {
-      filter: brightness(0.9);
+body.dark-mode .logo {
+  filter: brightness(0.9);
   transition: filter 0.3s ease;
 }
-    
-    
-/* Animations */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-* { margin: 0; padding: 0; box-sizing: border-box; }
-    
-    body { 
-      font-family: var(--font-ui); 
-      background: var(--bg); 
-      color: var(--text);
-      padding: 20px; 
-      min-height: 100vh;
-  transition: background-color 0.3s ease, color 0.3s ease;
-    }
     
     .container { 
       max-width: 1200px; 
