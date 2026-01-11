@@ -84,29 +84,17 @@ var TASK_REGISTRY = {
   },
 
   'create_shipment': {
-    description: 'Create a new shipment for an existing master order',
+    description: 'Create a new shipment for an existing master order with one or more line items',
     parameters: {
       customerName: {
         type: 'string',
         required: true,
         description: 'Customer company name (fuzzy match supported)'
       },
-      strain: {
-        type: 'string',
+      items: {
+        type: 'array',
         required: true,
-        description: 'Strain name (e.g., "Lifter", "Blue Dream")'
-      },
-      type: {
-        type: 'string',
-        required: true,
-        options: ['Tops', 'Smalls'],
-        description: 'Product type: Tops or Smalls'
-      },
-      quantity: {
-        type: 'number',
-        required: true,
-        min: 1,
-        description: 'Quantity in kilograms'
+        description: 'Array of line items. Each item must have: strain (string), type ("Tops" or "Smalls"), quantity (number in kg). Example: [{"strain":"Lifter","type":"Tops","quantity":20},{"strain":"Sour Lifter","type":"Tops","quantity":20}]'
       },
       shipmentDate: {
         type: 'string',
@@ -2835,37 +2823,72 @@ function executeCreateShipment_(params) {
     var masterOrder = masterOrderResult.masterOrder;
     Logger.log('[executeCreateShipment] Found master order: ' + masterOrder.id);
 
-    // Get price for strain+type from price history
-    var priceResponse = UrlFetchApp.fetch(WHOLESALE_ORDERS_API_URL + '?action=getPriceForStrain&strain=' + encodeURIComponent(params.strain) + '&type=' + encodeURIComponent(params.type) + '&customerID=' + encodeURIComponent(customer.id), {
-      method: 'get',
-      muteHttpExceptions: true
-    });
-
-    if (priceResponse.getResponseCode() !== 200) {
-      Logger.log('[executeCreateShipment] Failed to get price: ' + priceResponse.getContentText());
+    // Validate items array
+    if (!params.items || !Array.isArray(params.items) || params.items.length === 0) {
       return {
         success: false,
-        error: 'Failed to get price for ' + params.strain + ' ' + params.type
+        error: 'Items array is required and must contain at least one line item'
       };
     }
 
-    var priceResult = JSON.parse(priceResponse.getContentText());
-    var unitPrice = priceResult.success && priceResult.price ? priceResult.price : 0;
+    // Build line items with price lookup for each
+    var lineItems = [];
+    var subTotal = 0;
 
-    if (unitPrice === 0) {
-      Logger.log('[executeCreateShipment] No price found for ' + params.strain + ' ' + params.type);
+    for (var i = 0; i < params.items.length; i++) {
+      var item = params.items[i];
+
+      // Validate each item
+      if (!item.strain || !item.type || !item.quantity) {
+        return {
+          success: false,
+          error: 'Each item must have strain, type, and quantity. Item ' + (i + 1) + ' is missing required fields.'
+        };
+      }
+
+      if (item.type !== 'Tops' && item.type !== 'Smalls') {
+        return {
+          success: false,
+          error: 'Item ' + (i + 1) + ': type must be "Tops" or "Smalls", got "' + item.type + '"'
+        };
+      }
+
+      if (typeof item.quantity !== 'number' || item.quantity <= 0) {
+        return {
+          success: false,
+          error: 'Item ' + (i + 1) + ': quantity must be a positive number'
+        };
+      }
+
+      // Get price for this strain+type
+      var priceResponse = UrlFetchApp.fetch(WHOLESALE_ORDERS_API_URL + '?action=getPriceForStrain&strain=' + encodeURIComponent(item.strain) + '&type=' + encodeURIComponent(item.type) + '&customerID=' + encodeURIComponent(customer.id), {
+        method: 'get',
+        muteHttpExceptions: true
+      });
+
+      var unitPrice = 0;
+      if (priceResponse.getResponseCode() === 200) {
+        var priceResult = JSON.parse(priceResponse.getContentText());
+        unitPrice = priceResult.success && priceResult.price ? priceResult.price : 0;
+      }
+
+      if (unitPrice === 0) {
+        Logger.log('[executeCreateShipment] No price found for ' + item.strain + ' ' + item.type);
+      }
+
+      var lineTotal = item.quantity * unitPrice;
+      lineItems.push({
+        strain: item.strain,
+        type: item.type,
+        quantity: item.quantity,
+        unitPrice: unitPrice,
+        total: lineTotal
+      });
+
+      subTotal += lineTotal;
     }
 
-    // Build line items
-    var lineItems = [{
-      strain: params.strain,
-      type: params.type,
-      quantity: params.quantity,
-      unitPrice: unitPrice,
-      total: params.quantity * unitPrice
-    }];
-
-    var subTotal = params.quantity * unitPrice;
+    Logger.log('[executeCreateShipment] Built ' + lineItems.length + ' line items, subTotal: $' + subTotal.toFixed(2));
 
     // Build shipment data
     var shipmentData = {
@@ -2913,6 +2936,12 @@ function executeCreateShipment_(params) {
 
     Logger.log('[executeCreateShipment] Shipment created: ' + result.shipmentId);
 
+    // Format line items for display
+    var lineItemsText = lineItems.map(function(item) {
+      var priceText = item.unitPrice > 0 ? ' @ $' + item.unitPrice.toFixed(2) + '/kg' : '';
+      return item.quantity + 'kg ' + item.strain + ' ' + item.type + priceText;
+    }).join(', ');
+
     // Return formatted confirmation
     return {
       success: true,
@@ -2922,8 +2951,8 @@ function executeCreateShipment_(params) {
         'Shipment ID': result.shipmentId,
         'Master Order': masterOrder.id,
         'Customer': customer.companyName,
-        'Line Items': params.quantity + ' kg ' + params.strain + ' ' + params.type + (unitPrice > 0 ? ' @ $' + unitPrice.toFixed(2) + '/kg' : ''),
-        'Total': unitPrice > 0 ? '$' + subTotal.toFixed(2) : 'Price TBD',
+        'Line Items': lineItemsText,
+        'Total': subTotal > 0 ? '$' + subTotal.toFixed(2) : 'Price TBD',
         'Status': 'Pending',
         'Shipment Date': shipmentData.shipmentDate
       }
@@ -3389,9 +3418,11 @@ function buildSystemPrompt(context, corrections, memoryResults) {
     'User: "Log a 5kg bag"\n' +
     'Assistant: "Logging the bag completion now.\n```task\n{"task":"log_bag_completion","params":{"bagType":"5kg"}}\n```\nBag logged successfully!"\n\n' +
     'User: "Create a shipment for Green Valley Farm, 100kg Lifter Tops"\n' +
-    'Assistant: "I\'ll create that shipment for you.\n```task\n{"task": "create_shipment", "params": {"customerName": "Green Valley Farm", "strain": "Lifter", "type": "Tops", "quantity": 100}}\n```"\n\n' +
-    'User: "New shipment: Mountain Organics, 50kg Blue Dream Smalls, shipping Feb 15"\n' +
-    'Assistant: "Creating shipment with those details.\n```task\n{"task": "create_shipment", "params": {"customerName": "Mountain Organics", "strain": "Blue Dream", "type": "Smalls", "quantity": 50, "shipmentDate": "2026-02-15"}}\n```"\n\n' +
+    'Assistant: "I\'ll create that shipment for you.\n```task\n{"task": "create_shipment", "params": {"customerName": "Green Valley Farm", "items": [{"strain": "Lifter", "type": "Tops", "quantity": 100}]}}\n```"\n\n' +
+    'User: "New shipment for Cannaflora: 20kg Lifter Tops and 20kg Sour Lifter Tops"\n' +
+    'Assistant: "Creating shipment with multiple items.\n```task\n{"task": "create_shipment", "params": {"customerName": "Cannaflora", "items": [{"strain": "Lifter", "type": "Tops", "quantity": 20}, {"strain": "Sour Lifter", "type": "Tops", "quantity": 20}]}}\n```"\n\n' +
+    'User: "Ship to Mountain Organics: 50kg Blue Dream Smalls, 30kg Lifter Smalls, shipping Feb 15"\n' +
+    'Assistant: "Creating multi-item shipment.\n```task\n{"task": "create_shipment", "params": {"customerName": "Mountain Organics", "items": [{"strain": "Blue Dream", "type": "Smalls", "quantity": 50}, {"strain": "Lifter", "type": "Smalls", "quantity": 30}], "shipmentDate": "2026-02-15"}}\n```"\n\n' +
     'User: "What shipments exist for Cannaflora?"\n' +
     'Assistant: "Let me check Cannaflora\'s shipments.\n```task\n{"task": "get_shipments", "params": {"customerName": "Cannaflora"}}\n```"\n\n' +
     'User: "Show me Green Valley\'s shipments"\n' +
