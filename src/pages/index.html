@@ -16,10 +16,14 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link rel="preconnect" href="https://unpkg.com">
+  <link rel="preconnect" href="https://i.imgur.com">
   <link rel="dns-prefetch" href="https://script.google.com">
 
   <!-- Fonts: Inter (existing) + DM Serif Display, JetBrains Mono, Outfit -->
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=optional" rel="stylesheet">
+
+  <!-- Performance: Preload critical images -->
+  <link rel="preload" href="https://i.imgur.com/UYEbNiI.png" as="image">
 
   <!-- Scripts: Deferred for faster initial render -->
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
@@ -63,7 +67,7 @@
 <body>
   <a href="#dashboardView" class="skip-link">Skip to main content</a>
   <div class="logo-loader" id="loadingOverlay" role="progressbar" aria-label="Loading dashboard">
-    <img src="https://i.imgur.com/UYEbNiI.png" alt="Rogue Origin">
+    <img src="https://i.imgur.com/UYEbNiI.png" alt="Rogue Origin" width="120" height="120" fetchpriority="high">
     <span class="logo-loader-bar" aria-hidden="true"></span>
   </div>
 
@@ -109,7 +113,7 @@
       <span class="sidebar-toggle-label">Collapse</span>
     </div>
     <div class="brand">
-      <img src="https://i.imgur.com/PvrTPb2.png" alt="Rogue Origin" class="logo">
+      <img src="https://i.imgur.com/PvrTPb2.png" alt="Rogue Origin" class="logo" loading="lazy" decoding="async" width="32" height="32">
       <h1>Rogue Origin</h1>
     </div>
     <div class="nav-item active" data-view="dashboard" onclick="switchView('dashboard')" role="button" tabindex="0" aria-label="Navigate to Dashboard" aria-current="page" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('dashboard')"><span class="icon" aria-hidden="true"><i class="ph-duotone ph-chart-pie-slice"></i></span><span>Dashboard</span></div>
@@ -135,7 +139,7 @@
       <div class="header-left">
         <button class="mobile-menu-btn" onclick="toggleMobileSidebar()" aria-label="Open navigation menu" aria-expanded="false"><svg width="20" aria-hidden="true" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
-        <img src="https://i.imgur.com/UYEbNiI.png" alt="Rogue Origin" class="header-logo">
+        <img src="https://i.imgur.com/UYEbNiI.png" alt="Rogue Origin" class="header-logo" width="32" height="32" fetchpriority="high">
       </div>
       <div class="header-right" id="dashboardControls">
         <div class="date-picker-wrapper">
@@ -603,35 +607,35 @@
     <div class="app-view" id="kanbanView" role="region" aria-label="Supply Kanban application">
       <div class="app-iframe-container">
         <button class="app-expand-btn" onclick="openAppNewTab('kanban')" title="Open in new tab" aria-label="Open Supply Kanban in new tab"><i class="ph ph-arrow-square-out" aria-hidden="true"></i></button>
-        <iframe class="app-iframe" id="kanbanFrame" data-src="https://rogueff.github.io/rogue-origin-apps/src/pages/kanban.html" title="Supply Kanban application"></iframe>
+        <iframe loading="lazy" class="app-iframe" id="kanbanFrame" data-src="https://rogueff.github.io/rogue-origin-apps/src/pages/kanban.html" title="Supply Kanban application"></iframe>
       </div>
     </div>
 
     <div class="app-view" id="scoreboardView" role="region" aria-label="Live Scoreboard application">
       <div class="app-iframe-container">
         <button class="app-expand-btn" onclick="openAppNewTab('scoreboard')" title="Open in new tab" aria-label="Open Live Scoreboard in new tab"><i class="ph ph-arrow-square-out" aria-hidden="true"></i></button>
-        <iframe class="app-iframe" id="scoreboardFrame" data-src="https://rogueff.github.io/rogue-origin-apps/src/pages/scoreboard.html" title="Live Scoreboard application"></iframe>
+        <iframe loading="lazy" class="app-iframe" id="scoreboardFrame" data-src="https://rogueff.github.io/rogue-origin-apps/src/pages/scoreboard.html" title="Live Scoreboard application"></iframe>
       </div>
     </div>
 
     <div class="app-view" id="barcodeView" role="region" aria-label="Barcode Printer application">
       <div class="app-iframe-container">
         <button class="app-expand-btn" onclick="openAppNewTab('barcode')" title="Open in new tab" aria-label="Open Barcode Printer in new tab"><i class="ph ph-arrow-square-out" aria-hidden="true"></i></button>
-        <iframe class="app-iframe" id="barcodeFrame" data-src="https://rogueff.github.io/rogue-origin-apps/src/pages/barcode.html" title="Barcode Printer application"></iframe>
+        <iframe loading="lazy" class="app-iframe" id="barcodeFrame" data-src="https://rogueff.github.io/rogue-origin-apps/src/pages/barcode.html" title="Barcode Printer application"></iframe>
       </div>
     </div>
 
     <div class="app-view" id="ordersView" role="region" aria-label="Orders application">
       <div class="app-iframe-container">
         <button class="app-expand-btn" onclick="openAppNewTab('orders')" title="Open in new tab" aria-label="Open Orders in new tab"><i class="ph ph-arrow-square-out" aria-hidden="true"></i></button>
-        <iframe class="app-iframe" id="ordersFrame" data-src="https://rogueff.github.io/rogue-origin-apps/src/pages/orders.html" title="Orders application"></iframe>
+        <iframe loading="lazy" class="app-iframe" id="ordersFrame" data-src="https://rogueff.github.io/rogue-origin-apps/src/pages/orders.html" title="Orders application"></iframe>
       </div>
     </div>
 
     <div class="app-view" id="sopView" role="region" aria-label="SOP Manager application">
       <div class="app-iframe-container">
         <button class="app-expand-btn" onclick="openAppNewTab('sop')" title="Open in new tab" aria-label="Open SOP Manager in new tab"><i class="ph ph-arrow-square-out" aria-hidden="true"></i></button>
-        <iframe class="app-iframe" id="sopFrame" data-src="https://rogueff.github.io/rogue-origin-apps/src/pages/sop-manager.html" title="SOP Manager application"></iframe>
+        <iframe loading="lazy" class="app-iframe" id="sopFrame" data-src="https://rogueff.github.io/rogue-origin-apps/src/pages/sop-manager.html" title="SOP Manager application"></iframe>
       </div>
     </div>
   </main>
@@ -707,25 +711,12 @@
 </div>
 
 <!-- Service Worker Registration -->
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js')
-      .then((registration) => {
-        console.log('[SW] Service worker registered:', registration.scope);
-      })
-      .catch((error) => {
-        console.log('[SW] Service worker registration failed:', error);
-      });
-  });
-}
-</script>
-
   <!-- PWA Install Prompt -->
   <button id="install-btn" class="install-prompt" style="display: none;">
     📲 Install App
   </button>
 
+  <!-- Service Worker Registration -->
   <script src="../js/sw-register.js" async></script>
 </body>
 </html>
