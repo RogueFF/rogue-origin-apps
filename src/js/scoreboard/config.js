@@ -68,16 +68,7 @@
       dragThreshold: 100             // Pixels to drag before toggling fullscreen
     },
 
-    // Audio settings
-    audio: {
-      defaultVolume: 0.25,
-      mariachiVolume: 0.7,
-      // Mariachi URLs (primary and fallback)
-      mariachiUrls: [
-        'https://cdn.freesound.org/previews/458/458493_5765286-lq.mp3',
-        'https://cdn.freesound.org/previews/270/270156_5765286-lq.mp3'
-      ]
-    },
+    // Audio disabled - no sound effects
 
     // Timer calculation
     timer: {
@@ -98,7 +89,6 @@
     Object.freeze(ScoreboardConfig.thresholds);
     Object.freeze(ScoreboardConfig.storage);
     Object.freeze(ScoreboardConfig.ui);
-    Object.freeze(ScoreboardConfig.audio);
     Object.freeze(ScoreboardConfig.timer);
   }
 
