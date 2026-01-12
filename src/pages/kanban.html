@@ -15,7 +15,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://unpkg.com">
-  <link rel="preconnect" href="https://i.imgur.com">
   <link rel="dns-prefetch" href="https://script.google.com">
 
   <!-- Scripts: Deferred for faster initial render -->
@@ -29,7 +28,7 @@
   <header class="header">
     <div class="header-inner">
       <div class="brand">
-        <img class="logo" src="https://i.imgur.com/PvrTPb2.png" alt="Logo">
+        <img class="logo" src="../assets/ro-logo-horizontal.png" alt="Logo">
         <div><h1>Kanban Card Manager</h1><p>Supply Closet Inventory System</p></div>
       </div>
       <div class="btns">
@@ -709,7 +708,7 @@ function render() {
 
 function renderGrid() {
   var html = '<div class="grid-inner">';
-  var logoUrl = 'https://i.imgur.com/PvrTPb2.png';
+  var logoUrl = '../assets/ro-logo-horizontal.png';
   filtered.forEach(function(c) {
     html += '<div class="card">' +
       '<div class="card-preview" onclick="preview(' + c.id + ')">' +
@@ -1002,7 +1001,7 @@ function renderPreview() {
 function cardHtml(c, color, side, size) {
   var qrSize = (size === 'full' || size === 'shop-letter') ? '400x400' : '200x200';
   var qr = c.url ? 'https://api.qrserver.com/v1/create-qr-code/?size=' + qrSize + '&data=' + encodeURIComponent(c.url) : '';
-  var logoUrl = 'https://i.imgur.com/PvrTPb2.png';
+  var logoUrl = '../assets/ro-logo-horizontal.png';
   
   if (side === 'back') {
     return '<div class="kanban ' + color + '"><div class="kanban-border"></div><div class="kanban-inner"></div>' +
