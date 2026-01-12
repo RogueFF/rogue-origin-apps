@@ -2588,3 +2588,186 @@ body.tutorial-active::before {
     height: 100px;
   }
 }
+
+/* ========================================
+   PWA INSTALL PROMPT
+   ======================================== */
+.install-prompt {
+  position: fixed;
+  bottom: calc(80px + env(safe-area-inset-bottom));
+  right: 24px;
+  background: var(--ro-gold);
+  color: white;
+  border: none;
+  padding: 14px 24px;
+  border-radius: 24px;
+  font-weight: 600;
+  font-size: 14px;
+  box-shadow: 0 4px 12px rgba(228, 170, 79, 0.3);
+  cursor: pointer;
+  z-index: 999;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: all 0.3s ease;
+  animation: slideInRight 0.5s ease-out;
+}
+
+.install-prompt.show {
+  display: flex;
+}
+
+.install-prompt:hover {
+  background: var(--gold-light);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(228, 170, 79, 0.4);
+}
+
+.install-prompt:active {
+  transform: translateY(0);
+}
+
+.install-prompt.ios {
+  flex-direction: row-reverse;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Install modal (iOS instructions) */
+.install-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.install-modal-content {
+  background: var(--bg-card);
+  border-radius: var(--radius-xl);
+  padding: var(--space-lg);
+  max-width: 400px;
+  width: 100%;
+  box-shadow: var(--shadow-elevated);
+  animation: fadeInUp 0.3s ease-out;
+}
+
+.install-modal-content h2 {
+  font-family: var(--font-display);
+  font-size: 28px;
+  color: var(--text);
+  margin-bottom: var(--space-sm);
+}
+
+.install-modal-content p {
+  color: var(--text-secondary);
+  margin-bottom: var(--space-md);
+  font-size: 15px;
+}
+
+.install-modal-content ol {
+  margin-left: 20px;
+  margin-bottom: var(--space-lg);
+  color: var(--text);
+}
+
+.install-modal-content li {
+  margin-bottom: 12px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.install-modal-content button {
+  width: 100%;
+  padding: 14px;
+  background: var(--ro-green);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: all 0.2s ease;
+}
+
+.install-modal-content button:hover {
+  background: var(--green-dark);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Install success message */
+.install-success {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--bg-card);
+  border-radius: var(--radius-xl);
+  padding: var(--space-lg);
+  box-shadow: var(--shadow-elevated);
+  z-index: 10001;
+  text-align: center;
+  animation: fadeInUp 0.3s ease-out;
+}
+
+.install-success.fade-out {
+  animation: fadeOut 0.3s ease-out forwards;
+}
+
+.install-success-content h3 {
+  font-family: var(--font-display);
+  font-size: 24px;
+  color: var(--text);
+  margin: 12px 0 8px;
+}
+
+.install-success-content p {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+@keyframes fadeOut {
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .install-prompt {
+    bottom: calc(20px + env(safe-area-inset-bottom));
+    right: 20px;
+    font-size: 13px;
+    padding: 12px 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .install-prompt {
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    right: 16px;
+    left: 16px;
+    justify-content: center;
+  }
+}
