@@ -1,7 +1,7 @@
 // Service Worker for Rogue Origin Operations Hub
-// Version 3.0 - Comprehensive offline-first caching with multiple strategies
+// Version 3.1 - Mobile-optimized PWA with comprehensive offline support
 
-const CACHE_VERSION = 'ro-ops-v3.7';
+const CACHE_VERSION = 'ro-ops-v3.8';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
@@ -22,6 +22,7 @@ const STATIC_ASSETS = [
   '/rogue-origin-apps/src/pages/ops-hub.html',
 
   // CSS files
+  '/rogue-origin-apps/src/css/shared-base.css',
   '/rogue-origin-apps/src/css/dashboard.css',
   '/rogue-origin-apps/src/css/ai-chat.css',
   '/rogue-origin-apps/src/css/barcode.css',
@@ -34,8 +35,15 @@ const STATIC_ASSETS = [
 
   // JavaScript files
   '/rogue-origin-apps/src/js/modules/index.js',
+  '/rogue-origin-apps/src/js/modules/navigation.js',
   '/rogue-origin-apps/src/js/shared/api-cache.js',
   '/rogue-origin-apps/src/js/legacy/dashboard.js',
+
+  // PWA manifest
+  '/rogue-origin-apps/manifest.json',
+
+  // Offline fallback
+  '/rogue-origin-apps/offline.html',
 
   // SVG assets
   '/rogue-origin-apps/src/assets/icons/hemp-fiber-texture-preview.svg',
@@ -61,7 +69,7 @@ const EXTERNAL_IMAGES = [
 
 // Install event - cache static assets with resilient error handling
 self.addEventListener('install', (event) => {
-  console.log('[SW v3.0] Installing service worker...');
+  console.log('[SW v3.1] Installing service worker (mobile-optimized PWA)...');
 
   event.waitUntil(
     Promise.allSettled([
@@ -105,7 +113,7 @@ self.addEventListener('install', (event) => {
 
 // Activate event - cleanup old caches
 self.addEventListener('activate', (event) => {
-  console.log('[SW v3.0] Activating service worker...');
+  console.log('[SW v3.1] Activating service worker...');
 
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -199,6 +207,16 @@ async function networkFirstWithTimeout(request, cacheName, timeout) {
       console.log('[SW] Serving from cache (network failed):', request.url);
       return cachedResponse;
     }
+
+    // If this is a navigation request and no cache, show offline page
+    if (request.mode === 'navigate') {
+      const offlinePage = await caches.match('/rogue-origin-apps/offline.html');
+      if (offlinePage) {
+        console.log('[SW] Serving offline fallback page');
+        return offlinePage;
+      }
+    }
+
     throw error;
   }
 }
@@ -323,4 +341,4 @@ self.addEventListener('unhandledrejection', (event) => {
   console.error('[SW] Unhandled rejection:', event.reason);
 });
 
-console.log('[SW v3.0] Service Worker loaded');
+console.log('[SW v3.1] Service Worker loaded - Mobile-optimized PWA ready');
