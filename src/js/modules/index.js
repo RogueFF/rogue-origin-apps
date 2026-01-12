@@ -636,9 +636,17 @@ function init() {
   initCharts();
 
   // 11. Initialize Muuri grids (desktop only)
+  // Delay initialization to ensure DOM layout is complete and charts are rendered
   if (window.innerWidth >= 600) {
-    initMuuriKPI();
-    initMuuriGrid();
+    setTimeout(function() {
+      console.log('Initializing Muuri grids...');
+      const kpiGrid = initMuuriKPI();
+      const widgetGrid = initMuuriGrid();
+      console.log('Muuri initialization complete:', {
+        kpiGrid: !!kpiGrid,
+        widgetGrid: !!widgetGrid
+      });
+    }, 200);
   }
 
   // 12. Update clock and set interval (registered for cleanup)
