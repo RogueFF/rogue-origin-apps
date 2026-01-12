@@ -1,7 +1,7 @@
 // Service Worker for Rogue Origin Operations Hub
-// Version 3.3 - Fixed AI chat timeout (increased to 30s for chat endpoint)
+// Version 3.4 - Fixed API timeouts for save operations and improved error handling
 
-const CACHE_VERSION = 'ro-ops-v3.3';
+const CACHE_VERSION = 'ro-ops-v3.4';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
@@ -143,8 +143,18 @@ self.addEventListener('fetch', (event) => {
 
   // Strategy 1: Network-First for Google Apps Script API
   if (url.hostname === 'script.google.com') {
-    // Use 30-second timeout for AI chat endpoint (needs time for Anthropic API call)
-    const timeout = url.searchParams.get('action') === 'chat' ? 30000 : 5000;
+    // Use longer timeouts for operations that need processing time
+    const action = url.searchParams.get('action');
+    let timeout = 5000; // Default 5 seconds
+
+    if (action === 'chat') {
+      timeout = 30000; // 30 seconds for AI chat (Anthropic API call)
+    } else if (action === 'saveShipment' || action === 'savePayment' || action === 'saveMasterOrder') {
+      timeout = 15000; // 15 seconds for save operations (database writes)
+    } else if (action === 'getShipments' || action === 'getPayments' || action === 'getOrderFinancials') {
+      timeout = 10000; // 10 seconds for complex data fetching
+    }
+
     event.respondWith(networkFirstWithTimeout(request, API_CACHE, timeout));
     return;
   }
@@ -204,6 +214,21 @@ async function networkFirstWithTimeout(request, cacheName, timeout) {
     if (cachedResponse) {
       console.log('[SW] Serving from cache (network failed):', request.url);
       return cachedResponse;
+    }
+
+    // For POST requests that fail, return a helpful error response
+    if (request.method === 'POST') {
+      console.error('[SW] POST request failed (no cache available):', request.url, error.message);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Network timeout or connection failed. Please check your internet connection and try again.'
+        }),
+        {
+          status: 408, // Request Timeout
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
     }
 
     // If this is a navigation request and no cache, show offline page
