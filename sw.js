@@ -1,7 +1,7 @@
 // Service Worker for Rogue Origin Operations Hub
-// Version 3.2 - Mobile-optimized PWA with comprehensive offline support
+// Version 3.3 - Fixed AI chat timeout (increased to 30s for chat endpoint)
 
-const CACHE_VERSION = 'ro-ops-v3.2';
+const CACHE_VERSION = 'ro-ops-v3.3';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
@@ -143,7 +143,9 @@ self.addEventListener('fetch', (event) => {
 
   // Strategy 1: Network-First for Google Apps Script API
   if (url.hostname === 'script.google.com') {
-    event.respondWith(networkFirstWithTimeout(request, API_CACHE, 5000));
+    // Use 30-second timeout for AI chat endpoint (needs time for Anthropic API call)
+    const timeout = url.searchParams.get('action') === 'chat' ? 30000 : 5000;
+    event.respondWith(networkFirstWithTimeout(request, API_CACHE, timeout));
     return;
   }
 
