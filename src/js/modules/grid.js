@@ -51,8 +51,20 @@ export function initMuuriGrid() {
     return null;
   }
 
+  // Clean up any orphaned Muuri items before initializing
+  const widgetItems = container.querySelectorAll('.widget-item');
+  widgetItems.forEach(function(item) {
+    if (item._muuri) {
+      delete item._muuri;
+    }
+    if (item._muuriItem) {
+      delete item._muuriItem;
+    }
+  });
+
   try {
     const grid = new Muuri('.widgets-container', {
+      items: '.widget-item',
       dragEnabled: true,
       dragHandle: '.widget-header',
       fillGaps: true,
@@ -78,8 +90,12 @@ export function initMuuriGrid() {
           el.style.opacity = '0.3';
           return el;
         }
-      }
+      },
+      layoutOnInit: true,
+      layoutOnResize: 150
     });
+
+    console.log('Muuri grid initialized with', grid.getItems().length, 'items');
 
     // Save layout on drag end
     grid.on('dragEnd', function() {
@@ -90,12 +106,15 @@ export function initMuuriGrid() {
     setGrid('widgets', grid);
     setFlag('muuriGridReady', true);
 
-    // Load saved layout
-    loadLayout();
+    // Load saved layout after a short delay to ensure grid is ready
+    setTimeout(function() {
+      loadLayout();
+    }, 100);
 
     return grid;
   } catch (e) {
     console.error('Error initializing Muuri widget grid:', e);
+    console.error('Error details:', e.message, e.stack);
     return null;
   }
 }
@@ -127,8 +146,20 @@ export function initMuuriKPI() {
     return null;
   }
 
+  // Clean up any orphaned Muuri items before initializing
+  const kpiItems = container.querySelectorAll('.kpi-grid-item');
+  kpiItems.forEach(function(item) {
+    if (item._muuri) {
+      delete item._muuri;
+    }
+    if (item._muuriItem) {
+      delete item._muuriItem;
+    }
+  });
+
   try {
     const grid = new Muuri('.kpi-row', {
+      items: '.kpi-grid-item',
       dragEnabled: true,
       dragHandle: '.kpi-card',
       fillGaps: true,
@@ -141,8 +172,12 @@ export function initMuuriKPI() {
       dragRelease: {
         duration: 200,
         easing: 'ease-out'
-      }
+      },
+      layoutOnInit: true,
+      layoutOnResize: 150
     });
+
+    console.log('Muuri KPI grid initialized with', grid.getItems().length, 'items');
 
     // Save order on drag end
     grid.on('dragEnd', function() {
@@ -153,12 +188,15 @@ export function initMuuriKPI() {
     setGrid('kpi', grid);
     setFlag('muuriKPIReady', true);
 
-    // Load saved order
-    loadKPIOrder();
+    // Load saved order after a short delay
+    setTimeout(function() {
+      loadKPIOrder();
+    }, 100);
 
     return grid;
   } catch (e) {
     console.error('Error initializing Muuri KPI grid:', e);
+    console.error('Error details:', e.message, e.stack);
     return null;
   }
 }
