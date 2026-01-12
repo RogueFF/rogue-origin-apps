@@ -1,7 +1,7 @@
 // Service Worker for Rogue Origin Operations Hub
 // Version 3.1 - Mobile-optimized PWA with comprehensive offline support
 
-const CACHE_VERSION = 'ro-ops-v3.8';
+const CACHE_VERSION = 'ro-ops-v3.9';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
@@ -48,7 +48,11 @@ const STATIC_ASSETS = [
   // SVG assets
   '/rogue-origin-apps/src/assets/icons/hemp-fiber-texture-preview.svg',
   '/rogue-origin-apps/src/assets/icons/hemp-leaf-pattern.svg',
-  '/rogue-origin-apps/src/assets/icons/ro-pattern-preview.svg'
+  '/rogue-origin-apps/src/assets/icons/ro-pattern-preview.svg',
+
+  // Logo images (now local)
+  '/rogue-origin-apps/src/assets/ro-logo-square.png',
+  '/rogue-origin-apps/src/assets/ro-logo-horizontal.png'
 ];
 
 // External CDN assets to cache
@@ -59,12 +63,6 @@ const CDN_ASSETS = [
   'https://cdn.jsdelivr.net/npm/web-animations-js@2.3.2/web-animations.min.js',
   'https://unpkg.com/@phosphor-icons/web',
   'https://js.puter.com/v2/'
-];
-
-// Images from external sources
-const EXTERNAL_IMAGES = [
-  'https://i.imgur.com/UYEbNiI.png',
-  'https://i.imgur.com/PvrTPb2.png'
 ];
 
 // Install event - cache static assets with resilient error handling
@@ -89,16 +87,6 @@ self.addEventListener('install', (event) => {
         return Promise.allSettled(
           CDN_ASSETS.map(url =>
             cache.add(url).catch(err => console.warn('[SW] Failed to cache CDN:', url, err))
-          )
-        );
-      }),
-
-      // Cache external images
-      caches.open(IMAGE_CACHE).then((cache) => {
-        console.log('[SW] Caching external images');
-        return Promise.allSettled(
-          EXTERNAL_IMAGES.map(url =>
-            cache.add(url).catch(err => console.warn('[SW] Failed to cache image:', url, err))
           )
         );
       })
@@ -288,8 +276,8 @@ self.addEventListener('push', (event) => {
   const data = event.data ? event.data.json() : {};
   const options = {
     body: data.body || 'New update available',
-    icon: 'https://i.imgur.com/UYEbNiI.png',
-    badge: 'https://i.imgur.com/UYEbNiI.png',
+    icon: '/rogue-origin-apps/src/assets/ro-logo-square.png',
+    badge: '/rogue-origin-apps/src/assets/ro-logo-square.png',
     vibrate: [200, 100, 200],
     actions: [
       { action: 'view', title: 'View' },
