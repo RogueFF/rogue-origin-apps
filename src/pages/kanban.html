@@ -164,6 +164,7 @@
               <option value="card">Card (6" × 4")</option>
               <option value="tag">Price Tag (4" × 2")</option>
               <option value="shop">Shop Label (6" × 3")</option>
+              <option value="shop-portrait">Shop Card (6" × 4") - Portrait</option>
               <option value="shop-letter">Shop Card (11" × 8.5") - Landscape</option>
               <option value="full">Full Sheet (8.5" × 11")</option>
             </select>
@@ -237,6 +238,7 @@
             <option value="card">Card (6" × 4")</option>
             <option value="tag">Price Tag (4" × 2")</option>
             <option value="shop">Shop Label (6" × 3")</option>
+            <option value="shop-portrait">Shop Card (6" × 4") - Portrait</option>
             <option value="shop-letter">Shop Card (11" × 8.5") - Landscape</option>
             <option value="full">Full Sheet (8.5" × 11")</option>
           </select>
@@ -1001,7 +1003,7 @@ function renderPreview() {
 }
 
 function cardHtml(c, color, side, size) {
-  var qrSize = (size === 'full' || size === 'shop-letter') ? '400x400' : '200x200';
+  var qrSize = (size === 'full' || size === 'shop-letter' || size === 'shop-portrait') ? '400x400' : '200x200';
   var qr = c.url ? 'https://api.qrserver.com/v1/create-qr-code/?size=' + qrSize + '&data=' + encodeURIComponent(c.url) : '';
   var logoUrl = '../assets/ro-logo-horizontal.png';
   
@@ -1103,9 +1105,9 @@ function updatePrintCount() {
   var color = document.getElementById('printColor').value;
   var sidesCount = side === 'both' ? 2 : 1;
   var colorsCount = color === 'both' ? 2 : 1;
-  var cardsPerPage = (size === 'full' || size === 'shop-letter') ? 1 : 2;
-  // Shop-letter always prints front only with neutral color (1 page per card)
-  var pages = size === 'shop-letter' ? selectedIds.length : Math.ceil((selectedIds.length * sidesCount * colorsCount) / cardsPerPage);
+  var cardsPerPage = (size === 'full' || size === 'shop-letter' || size === 'shop-portrait') ? 1 : 2;
+  // Shop-letter and shop-portrait always print front only with neutral color (1 page per card)
+  var pages = (size === 'shop-letter' || size === 'shop-portrait') ? selectedIds.length : Math.ceil((selectedIds.length * sidesCount * colorsCount) / cardsPerPage);
 
   document.getElementById('printCount').textContent = selectedIds.length;
   document.getElementById('printPages').textContent = pages;
@@ -1114,7 +1116,8 @@ function updatePrintCount() {
     'card': '6"×4" cards, 2 per page',
     'tag': '4"×2" tags, compact layout',
     'shop': '6"×3" shop labels, simplified',
-    'shop-letter': '10.5"×8" neutral shop card, front only (landscape)',
+    'shop-portrait': '6"×4" neutral shop card, front only (portrait)',
+    'shop-letter': '10"×7.5" neutral shop card, front only (landscape)',
     'full': '7.5"×5" full sheet, 1 per page'
   };
   document.getElementById('printSizeInfo').textContent = sizeInfo[size] || '';
@@ -1126,7 +1129,8 @@ function updatePreviewSizeInfo() {
     'card': '6"×4" cards, 2 per page (green + red)',
     'tag': '4"×2" compact tags, 2 per page',
     'shop': '6"×3" shop labels, simplified layout',
-    'shop-letter': '10.5"×8" neutral shop card, front only (landscape)',
+    'shop-portrait': '6"×4" neutral shop card, front only (portrait)',
+    'shop-letter': '10"×7.5" neutral shop card, front only (landscape)',
     'full': '7.5"×5" full sheet, 1 card per page'
   };
   document.getElementById('previewSizeInfo').textContent = sizeInfo[size] || '';
@@ -1215,12 +1219,12 @@ function getPrintCSS(size) {
       '.kanban-qr{width:150px;height:150px}';
   } else if (size === 'shop-letter') {
     // 11" x 8.5" landscape shop card - maximum visibility for shop floor
-    return '@page{size:letter landscape;margin:0}*{box-sizing:border-box;margin:0;padding:0}' +
+    return '@page{size:letter landscape;margin:0.25in}*{box-sizing:border-box;margin:0;padding:0}' +
       'body{font-family:system-ui,sans-serif;background:#faf8f5;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-      '.page{page-break-after:always;width:11in;height:8.5in;margin:0;display:flex;justify-content:center;align-items:center;box-sizing:border-box}' +
+      '.page{page-break-after:always;width:10.5in;height:8in;margin:0;display:flex;justify-content:center;align-items:center;box-sizing:border-box}' +
       '.page:last-child{page-break-after:auto}' +
-      '.page-inner{display:flex;flex-direction:column;align-items:center;width:100%;height:100%}' +
-      '.kanban{width:10.5in;height:8in;padding:20px;border-radius:12px;position:relative;flex-shrink:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.page-inner{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%}' +
+      '.kanban{width:10in;height:7.5in;padding:20px;border-radius:12px;position:relative;flex-shrink:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
       '.kanban{background:#e8e4de !important;color:#2d3a2e !important}' +
       '.kanban-border{position:absolute;inset:0;border:8px solid #8f9263;border-radius:12px}' +
       '.kanban-inner{position:absolute;inset:26px;border:6px solid #8f9263;border-radius:10px}' +
@@ -1241,6 +1245,38 @@ function getPrintCSS(size) {
       '.kanban-back{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center}' +
       '.kanban-back h3{text-transform:uppercase;font-weight:700;letter-spacing:3px;font-size:72px;margin-bottom:50px}' +
       '.kanban-qr{background:#fff;border-radius:14px;border:6px solid #e4aa4f;display:flex;align-items:center;justify-content:center;width:380px;height:380px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.kanban-qr img{width:92%;height:92%}' +
+      '.no-print{padding:12px;background:#1a1f16;color:#fff;position:fixed;top:0;left:0;right:0;z-index:100}' +
+      '.no-print button{padding:10px 20px;border:none;border-radius:6px;cursor:pointer;margin-right:8px}' +
+      '@media print{.no-print{display:none}.print-wrapper{padding-top:0 !important}body{background:#fff}}';
+  } else if (size === 'shop-portrait') {
+    // 6" x 4" portrait shop card - neutral colors, maximum visibility
+    return '@page{size:letter portrait;margin:0.5in}*{box-sizing:border-box;margin:0;padding:0}' +
+      'body{font-family:system-ui,sans-serif;background:#faf8f5;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.page{page-break-after:always;width:8.5in;height:11in;margin:0;display:flex;justify-content:center;align-items:center;box-sizing:border-box}' +
+      '.page:last-child{page-break-after:auto}' +
+      '.page-inner{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%}' +
+      '.kanban{width:6in;height:4in;padding:12px;border-radius:10px;position:relative;flex-shrink:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.kanban{background:#e8e4de !important;color:#2d3a2e !important}' +
+      '.kanban-border{position:absolute;inset:0;border:5px solid #8f9263;border-radius:10px}' +
+      '.kanban-inner{position:absolute;inset:14px;border:4px solid #8f9263;border-radius:8px}' +
+      '.kanban-content{height:100%;display:flex;flex-direction:column;padding:20px 24px}' +
+      '.kanban-header{border-bottom:3px solid currentColor;padding-bottom:8px;margin-bottom:6px}' +
+      '.kanban-header h3{text-transform:uppercase;margin:0;font-weight:700;letter-spacing:1px;font-size:26px}' +
+      '.kanban-loc{text-align:right;font-weight:700;font-size:18px;margin-bottom:4px}' +
+      '.kanban-body{flex:1;display:flex;gap:20px;align-items:center}' +
+      '.kanban-left{flex:1;display:flex;flex-direction:column;justify-content:center;gap:8px}' +
+      '.kanban-field{margin-bottom:0}' +
+      '.kanban-field small{text-transform:uppercase;opacity:0.8;display:block;font-weight:600;font-size:12px;margin-bottom:2px}' +
+      '.kanban-field span{font-weight:700;font-size:22px}' +
+      '.kanban-right{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:12px}' +
+      '.kanban-img{background:#fff;border-radius:8px;border:4px solid #8f9263;display:flex;align-items:center;justify-content:center;overflow:hidden;width:180px;height:130px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.kanban-img img{width:100%;height:100%;object-fit:contain}' +
+      '.kanban-price{background:#8f9263;border-radius:25px;font-weight:700;color:#faf8f5;padding:8px 32px;font-size:22px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.kanban-logo{position:absolute;border-radius:50%;bottom:22px;left:22px;width:50px;height:50px}' +
+      '.kanban-back{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center}' +
+      '.kanban-back h3{text-transform:uppercase;font-weight:700;letter-spacing:2px;font-size:42px;margin-bottom:28px}' +
+      '.kanban-qr{background:#fff;border-radius:10px;border:4px solid #e4aa4f;display:flex;align-items:center;justify-content:center;width:200px;height:200px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
       '.kanban-qr img{width:92%;height:92%}' +
       '.no-print{padding:12px;background:#1a1f16;color:#fff;position:fixed;top:0;left:0;right:0;z-index:100}' +
       '.no-print button{padding:10px 20px;border:none;border-radius:6px;cursor:pointer;margin-right:8px}' +
@@ -1294,7 +1330,7 @@ function getPrintCSS(size) {
 
 function printOneCard(card, size) {
   var allHtml = [];
-  if (size === 'shop-letter') {
+  if (size === 'shop-letter' || size === 'shop-portrait') {
     // Shop card: neutral color, front only, 1 per page
     allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(card, 'neutral', 'front', size) + '</div></div>');
   } else if (size === 'full') {
@@ -1338,7 +1374,7 @@ function printCards(cards) {
   
   var allHtml = [];
   cards.forEach(function(c) {
-    if (size === 'shop-letter') {
+    if (size === 'shop-letter' || size === 'shop-portrait') {
       // Shop card: neutral color, front only, 1 per page
       allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(c, 'neutral', 'front', size) + '</div></div>');
     } else {
