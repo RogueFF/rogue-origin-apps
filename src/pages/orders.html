@@ -530,7 +530,7 @@
         <button class="btn btn-gold" onclick="saveShipmentAndGenerateDocs()">
           <i class="ph ph-file-pdf"></i> Save & Generate Docs
         </button>
-        <button class="btn btn-primary" onclick="saveShipment()">Save Shipment</button>
+        <button class="btn btn-primary" onclick="saveShipment().catch(err => console.error('Save shipment error:', err))">Save Shipment</button>
       </div>
     </div>
   </div>
@@ -1968,54 +1968,78 @@
     }
 
     async function saveShipment() {
-      const lineItems = collectLineItems();
-      if (lineItems.length === 0) {
-        showToast('Please add at least one line item', 'warning');
-        return false;
-      }
+      try {
+        console.log('Starting saveShipment...');
 
-      const dimensions = {
-        length: parseFloat(document.getElementById('shipment-length').value) || 0,
-        width: parseFloat(document.getElementById('shipment-width').value) || 0,
-        height: parseFloat(document.getElementById('shipment-height').value) || 0,
-        weight: parseFloat(document.getElementById('shipment-weight').value) || 0
-      };
+        // Validate currentOrderID first
+        if (!currentOrderID) {
+          console.error('No order selected (currentOrderID is null)');
+          showToast('Please select an order first', 'error');
+          return false;
+        }
+        console.log('Current Order ID:', currentOrderID);
 
-      const subtotal = parseFloat(document.getElementById('shipment-subtotal').textContent.replace(/[$,]/g, '')) || 0;
-      const discount = parseFloat(document.getElementById('shipment-discount').value) || 0;
-      const freight = parseFloat(document.getElementById('shipment-freight').value) || 0;
-      const total = parseFloat(document.getElementById('shipment-total').textContent.replace(/[$,]/g, '')) || 0;
+        const lineItems = collectLineItems();
+        console.log('Collected line items:', lineItems);
 
-      const editingShipmentId = document.getElementById('shipment-modal').dataset.editingShipmentId;
+        if (lineItems.length === 0) {
+          showToast('Please add at least one line item', 'warning');
+          return false;
+        }
 
-      const shipmentData = {
-        orderID: currentOrderID,
-        shipmentDate: document.getElementById('shipment-date').value,
-        carrier: document.getElementById('shipment-carrier').value,
-        dimensions,
-        lineItems,
-        subTotal: subtotal,
-        discount,
-        freightCost: freight,
-        totalAmount: total,
-        trackingNumber: document.getElementById('shipment-tracking').value,
-        notes: document.getElementById('shipment-notes').value
-      };
+        const dimensions = {
+          length: parseFloat(document.getElementById('shipment-length').value) || 0,
+          width: parseFloat(document.getElementById('shipment-width').value) || 0,
+          height: parseFloat(document.getElementById('shipment-height').value) || 0,
+          weight: parseFloat(document.getElementById('shipment-weight').value) || 0
+        };
 
-      // If editing, include the shipment ID
-      if (editingShipmentId) {
-        shipmentData.id = editingShipmentId;
-      }
+        const subtotal = parseFloat(document.getElementById('shipment-subtotal').textContent.replace(/[$,]/g, '')) || 0;
+        const discount = parseFloat(document.getElementById('shipment-discount').value) || 0;
+        const freight = parseFloat(document.getElementById('shipment-freight').value) || 0;
+        const total = parseFloat(document.getElementById('shipment-total').textContent.replace(/[$,]/g, '')) || 0;
 
-      const result = await apiCall('saveShipment', shipmentData, 'POST');
-      if (result.success) {
-        closeShipmentModal();
-        // Refresh detail panel (which will also update local orders array)
-        await openDetailPanel(currentOrderID);
-        showToast(editingShipmentId ? 'Shipment updated successfully!' : 'Shipment saved successfully!');
-        return true;
-      } else {
-        showToast('Error saving shipment: ' + result.error, 'error');
+        const editingShipmentId = document.getElementById('shipment-modal').dataset.editingShipmentId;
+
+        const shipmentData = {
+          orderID: currentOrderID,
+          shipmentDate: document.getElementById('shipment-date').value,
+          carrier: document.getElementById('shipment-carrier').value,
+          dimensions,
+          lineItems,
+          subTotal: subtotal,
+          discount,
+          freightCost: freight,
+          totalAmount: total,
+          trackingNumber: document.getElementById('shipment-tracking').value,
+          notes: document.getElementById('shipment-notes').value
+        };
+
+        // If editing, include the shipment ID
+        if (editingShipmentId) {
+          shipmentData.id = editingShipmentId;
+        }
+
+        console.log('Shipment data to save:', shipmentData);
+        console.log('Calling API...');
+
+        const result = await apiCall('saveShipment', shipmentData, 'POST');
+        console.log('API result:', result);
+
+        if (result.success) {
+          closeShipmentModal();
+          // Refresh detail panel (which will also update local orders array)
+          await openDetailPanel(currentOrderID);
+          showToast(editingShipmentId ? 'Shipment updated successfully!' : 'Shipment saved successfully!');
+          return true;
+        } else {
+          console.error('API returned error:', result.error);
+          showToast('Error saving shipment: ' + (result.error || 'Unknown error'), 'error');
+          return false;
+        }
+      } catch (error) {
+        console.error('Exception in saveShipment:', error);
+        showToast('Error saving shipment: ' + error.message, 'error');
         return false;
       }
     }
