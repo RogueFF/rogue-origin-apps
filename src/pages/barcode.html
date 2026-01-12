@@ -554,7 +554,8 @@
       doc.write('<div class="label">');
       doc.write('<div class="name">' + name.substring(0, 25) + '</div>');
       doc.write('<img class="barcode" src="' + barcodeUrl + '">');
-      doc.write('</div></body></html>');
+      doc.write('</div>  <script src="../js/sw-register.js" async></script>
+</body></html>');
       doc.close();
       
       var img = doc.querySelector('img');
@@ -660,5 +661,6 @@
       if (e.target.className && e.target.className.indexOf('modal') >= 0) e.target.style.display = 'none';
     };
   </script>
+  <script src="../js/sw-register.js" async></script>
 </body>
 </html>

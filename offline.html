@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Offline - Rogue Origin</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Outfit', 'Inter', system-ui, sans-serif;
+      background: linear-gradient(135deg, #668971 0%, #5a7a63 100%);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      text-align: center;
+      padding: 20px;
+      padding-top: max(20px, env(safe-area-inset-top));
+      padding-bottom: max(20px, env(safe-area-inset-bottom));
+    }
+
+    .offline-container {
+      max-width: 500px;
+      animation: fadeInUp 0.5s ease-out;
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .icon {
+      font-size: 96px;
+      margin-bottom: 24px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+      50% {
+        opacity: 0.8;
+        transform: scale(1.05);
+      }
+    }
+
+    h1 {
+      font-family: 'DM Serif Display', serif;
+      font-size: 48px;
+      margin-bottom: 16px;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+    }
+
+    h2 {
+      font-size: 24px;
+      margin-bottom: 16px;
+      font-weight: 600;
+      color: #f0cb60;
+    }
+
+    p {
+      font-size: 18px;
+      line-height: 1.6;
+      opacity: 0.95;
+      margin-bottom: 32px;
+    }
+
+    .status {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 16px 24px;
+      margin-bottom: 32px;
+      display: inline-block;
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .status.online {
+      background: rgba(102, 197, 113, 0.2);
+      border: 2px solid rgba(102, 197, 113, 0.5);
+    }
+
+    .status.offline {
+      background: rgba(228, 170, 79, 0.2);
+      border: 2px solid rgba(228, 170, 79, 0.5);
+    }
+
+    button {
+      background: #e4aa4f;
+      color: white;
+      border: none;
+      padding: 16px 32px;
+      font-size: 16px;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: all 0.2s ease;
+      font-family: 'Outfit', system-ui, sans-serif;
+      min-width: 200px;
+      min-height: 48px;
+    }
+
+    button:hover {
+      background: #f0cb60;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    .features {
+      margin-top: 40px;
+      padding-top: 40px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .features h3 {
+      font-size: 16px;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      opacity: 0.9;
+    }
+
+    .features ul {
+      list-style: none;
+      font-size: 14px;
+      opacity: 0.85;
+      line-height: 2;
+    }
+
+    .features li::before {
+      content: "✓ ";
+      color: #f0cb60;
+      font-weight: bold;
+      margin-right: 8px;
+    }
+
+    @media (max-width: 480px) {
+      h1 {
+        font-size: 36px;
+      }
+
+      h2 {
+        font-size: 20px;
+      }
+
+      p {
+        font-size: 16px;
+      }
+
+      .icon {
+        font-size: 72px;
+      }
+
+      button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="offline-container">
+    <div class="icon">📡</div>
+    <h1>You're Offline</h1>
+    <h2>Connection Lost</h2>
+
+    <div class="status offline" id="status">
+      <span id="status-text">No Internet Connection</span>
+    </div>
+
+    <p>
+      Don't worry! Your app is still available. Some features may be limited until you're back online.
+    </p>
+
+    <button onclick="window.location.reload()">Try Again</button>
+
+    <div class="features">
+      <h3>Available Offline:</h3>
+      <ul>
+        <li>View cached production data</li>
+        <li>Access previously loaded pages</li>
+        <li>Review scoreboard history</li>
+        <li>Browse order records</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    // Monitor online/offline status
+    function updateStatus() {
+      const statusEl = document.getElementById('status');
+      const statusText = document.getElementById('status-text');
+
+      if (navigator.onLine) {
+        statusEl.className = 'status online';
+        statusText.textContent = 'Back Online!';
+
+        // Auto-reload after 2 seconds when back online
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+      } else {
+        statusEl.className = 'status offline';
+        statusText.textContent = 'No Internet Connection';
+      }
+    }
+
+    // Check status on load
+    updateStatus();
+
+    // Listen for online/offline events
+    window.addEventListener('online', updateStatus);
+    window.addEventListener('offline', updateStatus);
+
+    // Periodically check connection
+    setInterval(() => {
+      if (navigator.onLine) {
+        // Try to fetch a small resource to verify connectivity
+        fetch('/rogue-origin-apps/manifest.json', { method: 'HEAD' })
+          .then(() => {
+            if (!document.querySelector('.status.online')) {
+              updateStatus();
+            }
+          })
+          .catch(() => {
+            // Still offline despite navigator.onLine
+          });
+      }
+    }, 5000);
+  </script>
+</body>
+</html>
