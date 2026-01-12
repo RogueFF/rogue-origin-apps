@@ -130,6 +130,9 @@ import {
   getViewName
 } from './navigation.js';
 
+// ===== PWA INSTALL IMPORTS =====
+import { initInstallPrompt } from './install-prompt.js';
+
 // ===== API IMPORTS =====
 import {
   loadData,
@@ -613,6 +616,9 @@ function init() {
 
   // 5.5. Initialize viewport height tracking (iOS Safari fix)
   initViewportTracking();
+
+  // 5.6. Initialize PWA install prompt
+  initInstallPrompt();
 
   // 6. Initialize target input
   initTargetInput();
