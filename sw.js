@@ -1,7 +1,7 @@
 // Service Worker for Rogue Origin Operations Hub
 // Version 3.1 - Mobile-optimized PWA with comprehensive offline support
 
-const CACHE_VERSION = 'ro-ops-v3.10';
+const CACHE_VERSION = 'ro-ops-v3.11';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
@@ -53,6 +53,11 @@ const STATIC_ASSETS = [
   // Logo images (now local)
   '/rogue-origin-apps/src/assets/ro-logo-square.png',
   '/rogue-origin-apps/src/assets/ro-logo-horizontal.png',
+
+  // PWA Icons
+  '/rogue-origin-apps/assets/icon-192.png',
+  '/rogue-origin-apps/assets/icon-512.png',
+  '/rogue-origin-apps/assets/icon-apple-touch.png',
 
   // Favicon
   '/rogue-origin-apps/favicon.png'
