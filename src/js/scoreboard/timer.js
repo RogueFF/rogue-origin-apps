@@ -39,20 +39,28 @@
 
     var nowMins = now.getHours() * 60 + now.getMinutes();
 
-    // Check if we're currently ON a break
-    var breaks = (Config && Config.workday && Config.workday.breaks) || [];
+    // Check if we're currently ON a break (can be overridden by debug)
     var currentlyOnBreak = false;
     var currentBreakStart = 0;
 
-    for (var i = 0; i < breaks.length; i++) {
-      var brk = breaks[i];
-      var bStart = brk[0] * 60 + brk[1];
-      var bEnd = brk[2] * 60 + brk[3];
+    // Check debug override first
+    if (State && State.debugOnBreak === true) {
+      currentlyOnBreak = true;
+      currentBreakStart = nowMins; // Treat current time as break start for freezing
+    } else {
+      // Check actual scheduled breaks
+      var breaks = (Config && Config.workday && Config.workday.breaks) || [];
 
-      if (nowMins >= bStart && nowMins < bEnd) {
-        currentlyOnBreak = true;
-        currentBreakStart = bStart;
-        break;
+      for (var i = 0; i < breaks.length; i++) {
+        var brk = breaks[i];
+        var bStart = brk[0] * 60 + brk[1];
+        var bEnd = brk[2] * 60 + brk[3];
+
+        if (nowMins >= bStart && nowMins < bEnd) {
+          currentlyOnBreak = true;
+          currentBreakStart = bStart;
+          break;
+        }
       }
     }
 
@@ -67,22 +75,26 @@
     var endMins = endTime.getHours() * 60 + endTime.getMinutes();
 
     // Subtract time spent on COMPLETED breaks (not current break)
-    for (var j = 0; j < breaks.length; j++) {
-      var brk2 = breaks[j];
-      var bStart2 = brk2[0] * 60 + brk2[1];
-      var bEnd2 = brk2[2] * 60 + brk2[3];
+    // Skip entirely if using debug mode
+    if (!State || State.debugOnBreak !== true) {
+      var breaks = (Config && Config.workday && Config.workday.breaks) || [];
+      for (var j = 0; j < breaks.length; j++) {
+        var brk2 = breaks[j];
+        var bStart2 = brk2[0] * 60 + brk2[1];
+        var bEnd2 = brk2[2] * 60 + brk2[3];
 
-      // Skip the current break (already handled above)
-      if (currentlyOnBreak && bStart2 === currentBreakStart) {
-        continue;
-      }
+        // Skip the current break (already handled above)
+        if (currentlyOnBreak && bStart2 === currentBreakStart) {
+          continue;
+        }
 
-      // If timer span includes this break, subtract it
-      if (startMins < bEnd2 && endMins > bStart2) {
-        var overlapStart = Math.max(startMins, bStart2);
-        var overlapEnd = Math.min(endMins, bEnd2);
-        if (overlapEnd > overlapStart) {
-          totalSecs -= (overlapEnd - overlapStart) * 60;
+        // If timer span includes this break, subtract it
+        if (startMins < bEnd2 && endMins > bStart2) {
+          var overlapStart = Math.max(startMins, bStart2);
+          var overlapEnd = Math.min(endMins, bEnd2);
+          if (overlapEnd > overlapStart) {
+            totalSecs -= (overlapEnd - overlapStart) * 60;
+          }
         }
       }
     }
