@@ -662,14 +662,24 @@ function onLoad(r, preserveFilters) {
   if (!r.success) { toast(r.error, 'err'); return; }
   allCards = r.cards;
   updateSuppliers();
-  
+
   if (preserveFilters) {
     document.getElementById('search').value = savedSearchQuery;
     document.getElementById('supplierFilter').value = savedSupplierFilter;
   }
-  
+
   filter();
   setTimeout(function() { window.scrollTo(0, savedScrollPos); }, 50);
+
+  // BUG-02 & BUG-07 FIX: Resume tutorial if waiting for save
+  if (tutorialWaitingForSave && tutorialActive) {
+    tutorialWaitingForSave = false;
+    setTimeout(function() {
+      tutorialStep++; // Advance to next step
+      showTutorialStep();
+      toast('✅ Card saved! Tutorial continuing...', 'ok');
+    }, 500); // Delay for UX
+  }
 }
 
 function onErr(e) {
@@ -873,7 +883,17 @@ function saveCard() {
   
   saveCustomOption('supplier', supplierVal);
   saveCustomOption('delivery', deliveryVal);
-  
+
+  // BUG-02 & BUG-07 FIX: Check if tutorial is waiting for save
+  if (tutorialActive && tutorialSteps[tutorialStep] && tutorialSteps[tutorialStep].action === 'waitForSave') {
+    tutorialWaitingForSave = true;
+    // Remove pulse hint from save button
+    var saveBtn = document.getElementById('editSave');
+    if (saveBtn) {
+      saveBtn.classList.remove('tutorial-pulse-hint');
+    }
+  }
+
   closeEdit();
   show('loading');
   
@@ -1497,6 +1517,7 @@ function toast(msg, type) {
 
 var tutorialStep = 0;
 var tutorialActive = false;
+var tutorialWaitingForSave = false; // BUG-02 & BUG-07 FIX: Track save state
 
 var tutorialSteps = [
   // PART 1: Page Overview
@@ -1532,7 +1553,7 @@ var tutorialSteps = [
     tip: '✨ We\'ll click this soon to create your first card'
   },
   {
-    target: '.search-bar',
+    target: '.toolbar .filters',  // ENH-03 FIX: Correct selector (was .search-bar)
     title: '<i class="ph-duotone ph-magnifying-glass"></i> Search & Filter',
     text: 'Type here to search for items by name. Use the dropdown to filter by supplier (Amazon, Walmart, etc.).',
     tip: '<i class="ph-duotone ph-magnifying-glass"></i> Try searching for "trash" or "soap" to find items quickly'
@@ -1541,13 +1562,15 @@ var tutorialSteps = [
     target: '.card:first-child',
     title: '<i class="ph-duotone ph-cards"></i> This is a Supply Card',
     text: 'Each card shows: the item name (top), supplier, quantity to order, price, and delivery time. The green header means it\'s in stock.',
-    tip: '🟢 Green = In Stock | 🟡 Gold = Low/Reorder | 🟠 Orange = Critical'
+    tip: '🟢 Green = In Stock | 🟡 Gold = Low/Reorder | 🟠 Orange = Critical',
+    skipIfEmpty: true  // BUG-01 FIX: Skip if no cards exist
   },
   {
     target: '.card:first-child .card-actions',
     title: '<i class="ph-duotone ph-cursor-click"></i> Card Action Buttons',
     text: 'Every card has these 4 buttons: 🛒 Mark for reorder, 👁️ Preview the printable card, ✏️ Edit the card, 🗑️ Delete the card.',
-    tip: '<i class="ph-duotone ph-lightbulb"></i> Hover over any button to see what it does'
+    tip: '<i class="ph-duotone ph-lightbulb"></i> Hover over any button to see what it does',
+    skipIfEmpty: true  // BUG-01 FIX: Skip if no cards exist
   },
   // PART 2: Let's Create a Card
   {
@@ -1651,12 +1674,39 @@ var tutorialSteps = [
   }
 ];
 
-var tutorialCreatedCard = false;
+// BUG-03 FIX: Removed unused tutorialCreatedCard variable
+
+// BUG-01 & ENH-02 FIX: Check preconditions before starting tutorial
+function checkTutorialPreconditions() {
+  // Check if cards exist
+  if (!allCards || allCards.length === 0) {
+    var shouldCreate = confirm(
+      '⚠️ No cards found in database.\n\n' +
+      'The tutorial works best with sample cards to demonstrate all features. ' +
+      'Would you like to create a card first?\n\n' +
+      'Click OK to create a card now, or Cancel to exit the tutorial.'
+    );
+
+    if (shouldCreate) {
+      openAdd(); // Open modal to create card
+      toast('Create a card, then click the tutorial button to restart!', 'info');
+      return false;
+    } else {
+      toast('Tutorial requires at least one card to demonstrate all features', 'warn');
+      return false;
+    }
+  }
+  return true;
+}
 
 function startTutorial() {
+  // BUG-01 & ENH-02 FIX: Check preconditions
+  if (!checkTutorialPreconditions()) {
+    return; // Exit early
+  }
   tutorialStep = 0;
   tutorialActive = true;
-  tutorialCreatedCard = false;
+  // BUG-03 FIX: Removed tutorialCreatedCard = false (variable removed)
 
   // Hide the start button
   document.getElementById('tutorialBtn').style.display = 'none';
@@ -1674,24 +1724,86 @@ function startTutorial() {
   }, 300);
 }
 
+// BUG-05 FIX: Scroll target element into view if off-screen
+function scrollTargetIntoView(targetElement) {
+  if (!targetElement) return;
+
+  var rect = targetElement.getBoundingClientRect();
+  var isVisible = (
+    rect.top >= 0 &&
+    rect.left >= 0 &&
+    rect.bottom <= window.innerHeight &&
+    rect.right <= window.innerWidth
+  );
+
+  if (!isVisible) {
+    targetElement.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+      inline: 'center'
+    });
+  }
+}
+
 function showTutorialStep() {
   var step = tutorialSteps[tutorialStep];
   var spotlight = document.getElementById('tutorialSpotlight');
   var tooltip = document.getElementById('tutorialTooltip');
   var backdrop = document.getElementById('tutorialBackdrop');
 
+  // BUG-09 FIX: Null checks for core elements
+  if (!spotlight || !tooltip || !backdrop) {
+    console.error('Tutorial elements missing from DOM');
+    endTutorial(false);
+    return;
+  }
+
+  // BUG-01 FIX: Check for skipIfEmpty flag
+  if (step.skipIfEmpty && step.target) {
+    var target = document.querySelector(step.target);
+    if (!target) {
+      // Skip this step and move to next
+      console.log('Skipping step ' + (tutorialStep + 1) + ' (target not found)');
+      if (tutorialStep < tutorialSteps.length - 1) {
+        tutorialStep++;
+        showTutorialStep(); // Recursive call
+        return;
+      } else {
+        // Last step, end tutorial
+        endTutorial(true);
+        return;
+      }
+    }
+  }
+
   // Update badge
-  document.getElementById('tutorialBadge').textContent = 'Step ' + (tutorialStep + 1) + ' of ' + tutorialSteps.length;
+  var badge = document.getElementById('tutorialBadge');
+  if (badge) {
+    badge.textContent = 'Step ' + (tutorialStep + 1) + ' of ' + tutorialSteps.length;
+  }
 
   // Update content with animation
   tooltip.classList.remove('active');
 
   setTimeout(function() {
-    document.getElementById('tutorialTitle').innerHTML = step.title;
-    document.getElementById('tutorialText').textContent = step.text;
+    // BUG-09 FIX: Null checks for content elements
+    var titleEl = document.getElementById('tutorialTitle');
+    var textEl = document.getElementById('tutorialText');
+    var tipEl = document.getElementById('tutorialTip');
+    var progressEl = document.getElementById('tutorialProgress');
+    var backBtn = document.getElementById('tutorialBack');
+    var nextBtn = document.getElementById('tutorialNext');
+
+    if (!titleEl || !textEl || !tipEl || !progressEl || !backBtn || !nextBtn) {
+      console.error('Tutorial UI elements missing');
+      endTutorial(false);
+      return;
+    }
+
+    titleEl.innerHTML = step.title;
+    textEl.textContent = step.text;
 
     // Show/hide tip
-    var tipEl = document.getElementById('tutorialTip');
     if (step.tip) {
       tipEl.textContent = step.tip;
       tipEl.style.display = 'block';
@@ -1707,11 +1819,10 @@ function showTutorialStep() {
       else if (i === tutorialStep) cls += ' active';
       dotsHtml += '<div class="' + cls + '"></div>';
     }
-    document.getElementById('tutorialProgress').innerHTML = dotsHtml;
+    progressEl.innerHTML = dotsHtml;
 
     // Update buttons
-    document.getElementById('tutorialBack').style.display = tutorialStep > 0 ? 'flex' : 'none';
-    var nextBtn = document.getElementById('tutorialNext');
+    backBtn.style.display = tutorialStep > 0 ? 'flex' : 'none';
     if (step.isLast) {
       nextBtn.innerHTML = '<i class="ph ph-confetti"></i> Finish!';
       nextBtn.className = 'tutorial-btn tutorial-btn-finish';
@@ -1724,10 +1835,15 @@ function showTutorialStep() {
     if (step.target && step.position !== 'center') {
       var target = document.querySelector(step.target);
       if (target) {
-        var rect = target.getBoundingClientRect();
-        var padding = 8;
+        // BUG-05 FIX: Scroll target into view before positioning
+        scrollTargetIntoView(target);
 
-        spotlight.style.left = (rect.left - padding) + 'px';
+        // Wait for scroll to complete, then position spotlight
+        setTimeout(function() {
+          var rect = target.getBoundingClientRect();
+          var padding = 8;
+
+          spotlight.style.left = (rect.left - padding) + 'px';
         spotlight.style.top = (rect.top - padding) + 'px';
         spotlight.style.width = (rect.width + padding * 2) + 'px';
         spotlight.style.height = (rect.height + padding * 2) + 'px';
@@ -1752,8 +1868,9 @@ function showTutorialStep() {
           tooltip.className = 'tutorial-tooltip arrow-top';
         }
 
-        tooltip.style.left = tooltipLeft + 'px';
-        tooltip.style.top = tooltipTop + 'px';
+          tooltip.style.left = tooltipLeft + 'px';
+          tooltip.style.top = tooltipTop + 'px';
+        }, 300); // BUG-05 FIX: Wait for smooth scroll to complete
       }
     } else {
       // Center position (welcome/finish screens)
@@ -1781,6 +1898,18 @@ function nextTutorialStep() {
     var currentStep = tutorialSteps[tutorialStep];
 
     // Handle special actions before advancing
+    // BUG-02 FIX: Handle waitForSave action
+    if (currentStep.action === 'waitForSave') {
+      // Don't advance - wait for user to click Save button
+      // Show visual indicator on Save button
+      var saveBtn = document.getElementById('editSave');
+      if (saveBtn && !saveBtn.classList.contains('tutorial-pulse-hint')) {
+        saveBtn.classList.add('tutorial-pulse-hint');
+      }
+      toast('Click the Save button to continue', 'info');
+      return; // Block progression
+    }
+
     if (currentStep.action === 'openModal') {
       // Open the Add Card modal before showing next step
       openEdit();
@@ -1813,11 +1942,26 @@ function nextTutorialStep() {
 
 function prevTutorialStep() {
   if (tutorialStep > 0) {
+    var currentStep = tutorialSteps[tutorialStep];
     var prevStep = tutorialSteps[tutorialStep - 1];
+
+    // BUG-04 FIX: Close current modals when going back
+    // If currently in edit modal, close it
+    if (currentStep.target && currentStep.target.startsWith('#edit')) {
+      closeEdit();
+    }
+    // If currently in print modal, close it
+    if (currentStep.target && currentStep.target.startsWith('#print')) {
+      closePrint();
+    }
 
     // If going back from modal steps to page overview, close modal
     if (prevStep.action === 'openModal') {
       closeEdit();
+    }
+    // BUG-04 FIX: Also handle going back from print modal action
+    if (prevStep.action === 'showPrintModal') {
+      closePrint();
     }
 
     tutorialStep--;
