@@ -1040,6 +1040,40 @@ function createShipmentsSheet_(ss) {
   return sheet;
 }
 
+/**
+ * Migration function: Adds StartDateTime column to existing Shipments sheet if it doesn't exist
+ * Run this once after deploying the startDateTime feature
+ */
+function migrateShipmentsAddStartDateTime() {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(SHIPMENTS_SHEET_NAME);
+    if (!sheet) {
+      Logger.log('Shipments sheet does not exist yet');
+      return { success: true, message: 'Sheet does not exist yet, will be created with correct headers' };
+    }
+
+    var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    var startDateTimeIndex = headers.indexOf('StartDateTime');
+
+    if (startDateTimeIndex !== -1) {
+      Logger.log('StartDateTime column already exists at index: ' + startDateTimeIndex);
+      return { success: true, message: 'StartDateTime column already exists' };
+    }
+
+    // Insert StartDateTime column after ShipmentDate (column E, index 5)
+    sheet.insertColumnAfter(4); // Insert after column D (ShipmentDate)
+    sheet.getRange(1, 5).setValue('StartDateTime');
+    sheet.getRange(1, 5).setFontWeight('bold');
+
+    Logger.log('Successfully added StartDateTime column');
+    return { success: true, message: 'StartDateTime column added successfully' };
+  } catch (error) {
+    Logger.log('Migration error: ' + error.message);
+    return { success: false, error: error.message };
+  }
+}
+
 // ===== PAYMENTS MANAGEMENT =====
 var PAYMENTS_SHEET_NAME = 'Payments';
 
