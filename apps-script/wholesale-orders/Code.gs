@@ -1535,21 +1535,28 @@ function count5kgBagsForStrain(strain, startDateTime) {
     var bagHeaders = bagData[0];
     var timestampCol = bagHeaders.indexOf('Timestamp');
     var sizeCol = bagHeaders.indexOf('Size');
+    var skuCol = bagHeaders.indexOf('SKU'); // SKU contains cultivar name like "SLIFT-INTL-HT-5-KG-2025"
 
     if (timestampCol === -1 || sizeCol === -1) return 0;
+    if (skuCol === -1) {
+      Logger.log('[count5kgBagsForStrain] SKU column not found in tracking sheet');
+      return 0;
+    }
 
-    // Get all 5kg bags with timestamps
+    // Get all 5kg bags with timestamps and SKUs
     var fiveKgBags = [];
     for (var i = 1; i < bagData.length; i++) {
       var size = String(bagData[i][sizeCol] || '').toLowerCase().trim();
       var timestamp = bagData[i][timestampCol];
+      var sku = String(bagData[i][skuCol] || '').toUpperCase().trim();
 
       if (timestamp instanceof Date && !isNaN(timestamp.getTime())) {
         // Check if it's a 5kg bag
         if (size.indexOf('5') !== -1 && size.indexOf('kg') !== -1) {
           fiveKgBags.push({
             timestamp: timestamp,
-            size: size
+            size: size,
+            sku: sku
           });
         }
       }
@@ -1585,20 +1592,56 @@ function count5kgBagsForStrain(strain, startDateTime) {
 
     if (fiveKgBags.length === 0) return 0;
 
-    // Now match each bag to production data to see what cultivar was being worked on
+    // Match bags by SKU - much more reliable than timestamp matching!
+    // SKU format: "SLIFT-INTL-HT-5-KG-2025" where SLIFT = Sour Lifter
     var matchingBags = 0;
 
     Logger.log('[count5kgBagsForStrain] Checking ' + fiveKgBags.length + ' bags for strain: ' + strain);
 
+    // Generate search terms from strain name
+    // For "Sour Lifter", we want to match "SLIFT", "SOUR", "LIFTER"
+    var strainUpper = strain.toUpperCase();
+    var strainWords = strainUpper.split(/[\s\-_]+/); // Split on spaces, hyphens, underscores
+
     for (var b = 0; b < fiveKgBags.length; b++) {
       var bag = fiveKgBags[b];
-      var cultivarAtTime = getCultivarAtTime_(ss, timezone, bag.timestamp);
+      var matched = false;
 
-      Logger.log('[count5kgBagsForStrain] Bag #' + (b + 1) + ' at ' + bag.timestamp + ' -> Cultivar: "' + cultivarAtTime + '"');
+      Logger.log('[count5kgBagsForStrain] Bag #' + (b + 1) + ' at ' + bag.timestamp + ' -> SKU: "' + bag.sku + '"');
 
-      // Case-insensitive partial match - production cultivar contains order strain name
-      // e.g., "2025 - Sour Lifter / Sungrown" contains "Sour Lifter"
-      if (cultivarAtTime && cultivarAtTime.toLowerCase().indexOf(strain.toLowerCase()) !== -1) {
+      // Check if SKU contains the full strain name or any significant words from it
+      if (bag.sku.indexOf(strainUpper) !== -1) {
+        matched = true;
+      } else {
+        // Check if SKU contains any significant word from the strain (3+ letters)
+        // Also check 4-character substrings (e.g., "LIFT" from "LIFTER" matches "SLIFT")
+        for (var w = 0; w < strainWords.length; w++) {
+          var word = strainWords[w];
+
+          // Check if the full word appears in SKU
+          if (word.length >= 3 && bag.sku.indexOf(word) !== -1) {
+            matched = true;
+            break;
+          }
+
+          // Check if any 4+ character substring of the word appears in SKU
+          // This catches "LIFT" from "LIFTER" matching "SLIFT"
+          if (word.length >= 4) {
+            for (var j = 0; j <= word.length - 4; j++) {
+              var substring = word.substring(j, j + 4);
+              if (bag.sku.indexOf(substring) !== -1) {
+                matched = true;
+                Logger.log('[count5kgBagsForStrain] Matched on substring: "' + substring + '"');
+                break;
+              }
+            }
+          }
+
+          if (matched) break;
+        }
+      }
+
+      if (matched) {
         matchingBags++;
         Logger.log('[count5kgBagsForStrain] ✓ MATCH - Bag counted');
       } else {
