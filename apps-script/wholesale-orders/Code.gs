@@ -1521,13 +1521,20 @@ function getScoreboardOrderQueue() {
  */
 function count5kgBagsForStrain(strain, startDateTime) {
   try {
+    Logger.log('[count5kgBagsForStrain] === START ===');
+    Logger.log('[count5kgBagsForStrain] Strain: ' + strain);
+    Logger.log('[count5kgBagsForStrain] StartDateTime: ' + startDateTime + ' (type: ' + typeof startDateTime + ')');
+
     var PRODUCTION_SHEET_ID = '1dARXrKU2u4KJY08ylA3GUKrT0zwmxCmtVh7IJxnn7is';
     var ss = SpreadsheetApp.openById(PRODUCTION_SHEET_ID);
     var timezone = ss.getSpreadsheetTimeZone();
 
     // Get bag tracking data
     var trackingSheet = ss.getSheetByName('Rogue Origin Production Tracking');
-    if (!trackingSheet) return 0;
+    if (!trackingSheet) {
+      Logger.log('[count5kgBagsForStrain] Tracking sheet not found');
+      return 0;
+    }
 
     var bagData = trackingSheet.getDataRange().getValues();
     if (bagData.length < 2) return 0;
@@ -1563,10 +1570,15 @@ function count5kgBagsForStrain(strain, startDateTime) {
     }
 
     // Filter bags by start date/time if provided
+    Logger.log('[count5kgBagsForStrain] Total bags before filtering: ' + fiveKgBags.length);
+
     if (startDateTime) {
+      Logger.log('[count5kgBagsForStrain] Applying startDateTime filter...');
       // Parse datetime-local format 'YYYY-MM-DDTHH:MM' in the production sheet's timezone
       // Split into date and time parts
       var parts = String(startDateTime).split('T');
+      Logger.log('[count5kgBagsForStrain] Parts after split: ' + JSON.stringify(parts));
+
       if (parts.length === 2) {
         var dateParts = parts[0].split('-'); // [YYYY, MM, DD]
         var timeParts = parts[1].split(':'); // [HH, MM]
@@ -1580,14 +1592,25 @@ function count5kgBagsForStrain(strain, startDateTime) {
           var minute = parseInt(timeParts[1], 10);
 
           var startDate = new Date(year, month, day, hour, minute, 0, 0);
+          Logger.log('[count5kgBagsForStrain] Parsed startDate: ' + startDate);
 
           if (!isNaN(startDate.getTime())) {
+            var beforeFilterCount = fiveKgBags.length;
             fiveKgBags = fiveKgBags.filter(function(bag) {
               return bag.timestamp >= startDate;
             });
+            Logger.log('[count5kgBagsForStrain] Filtered from ' + beforeFilterCount + ' to ' + fiveKgBags.length + ' bags');
+          } else {
+            Logger.log('[count5kgBagsForStrain] Invalid startDate (NaN)');
           }
+        } else {
+          Logger.log('[count5kgBagsForStrain] Date/time parts invalid');
         }
+      } else {
+        Logger.log('[count5kgBagsForStrain] Split failed - parts.length: ' + parts.length);
       }
+    } else {
+      Logger.log('[count5kgBagsForStrain] No startDateTime provided - counting ALL bags');
     }
 
     if (fiveKgBags.length === 0) return 0;
