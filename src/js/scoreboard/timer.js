@@ -37,21 +37,50 @@
       return 0;
     }
 
-    var totalSecs = Math.floor((now - startTime) / 1000);
-    var startMins = startTime.getHours() * 60 + startTime.getMinutes();
     var nowMins = now.getHours() * 60 + now.getMinutes();
 
-    // Subtract time spent on breaks
+    // Check if we're currently ON a break
     var breaks = (Config && Config.workday && Config.workday.breaks) || [];
+    var currentlyOnBreak = false;
+    var currentBreakStart = 0;
+
     for (var i = 0; i < breaks.length; i++) {
       var brk = breaks[i];
       var bStart = brk[0] * 60 + brk[1];
       var bEnd = brk[2] * 60 + brk[3];
 
-      // If timer started before break and now is after break end
-      if (startMins < bEnd && nowMins > bStart) {
-        var overlapStart = Math.max(startMins, bStart);
-        var overlapEnd = Math.min(nowMins, bEnd);
+      if (nowMins >= bStart && nowMins < bEnd) {
+        currentlyOnBreak = true;
+        currentBreakStart = bStart;
+        break;
+      }
+    }
+
+    // If currently on break, calculate elapsed time up to break start
+    var endTime = currentlyOnBreak ?
+      new Date(now.getFullYear(), now.getMonth(), now.getDate(),
+               Math.floor(currentBreakStart / 60), currentBreakStart % 60, 0) :
+      now;
+
+    var totalSecs = Math.floor((endTime - startTime) / 1000);
+    var startMins = startTime.getHours() * 60 + startTime.getMinutes();
+    var endMins = endTime.getHours() * 60 + endTime.getMinutes();
+
+    // Subtract time spent on COMPLETED breaks (not current break)
+    for (var j = 0; j < breaks.length; j++) {
+      var brk2 = breaks[j];
+      var bStart2 = brk2[0] * 60 + brk2[1];
+      var bEnd2 = brk2[2] * 60 + brk2[3];
+
+      // Skip the current break (already handled above)
+      if (currentlyOnBreak && bStart2 === currentBreakStart) {
+        continue;
+      }
+
+      // If timer span includes this break, subtract it
+      if (startMins < bEnd2 && endMins > bStart2) {
+        var overlapStart = Math.max(startMins, bStart2);
+        var overlapEnd = Math.min(endMins, bEnd2);
         if (overlapEnd > overlapStart) {
           totalSecs -= (overlapEnd - overlapStart) * 60;
         }
