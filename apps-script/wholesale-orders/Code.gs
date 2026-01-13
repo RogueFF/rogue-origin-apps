@@ -887,7 +887,7 @@ function getShipments(orderID) {
         orderID: row[1],
         invoiceNumber: row[2],
         shipmentDate: formatDateForJSON_(row[3]),
-        startDateTime: formatDateForJSON_(row[4]),
+        startDateTime: row[4] ? String(row[4]) : null, // Keep as string, no timezone conversion
         status: row[5] || 'pending',
         dimensionsJSON: row[6] || '{}',
         lineItemsJSON: row[7] || '[]',
@@ -943,7 +943,7 @@ function saveShipment(shipmentData) {
       shipmentData.orderID || '',
       shipmentData.invoiceNumber,
       shipmentData.shipmentDate || new Date(),
-      shipmentData.startDateTime || '',
+      shipmentData.startDateTime ? String(shipmentData.startDateTime) : '', // Store as string to preserve timezone
       shipmentData.status || 'pending',
       JSON.stringify(shipmentData.dimensions || {}),
       JSON.stringify(shipmentData.lineItems || []),
@@ -1548,11 +1548,29 @@ function count5kgBagsForStrain(strain, startDateTime) {
 
     // Filter bags by start date/time if provided
     if (startDateTime) {
-      var startDate = new Date(startDateTime);
-      if (!isNaN(startDate.getTime())) {
-        fiveKgBags = fiveKgBags.filter(function(bag) {
-          return bag.timestamp >= startDate;
-        });
+      // Parse datetime-local format 'YYYY-MM-DDTHH:MM' in the production sheet's timezone
+      // Split into date and time parts
+      var parts = String(startDateTime).split('T');
+      if (parts.length === 2) {
+        var dateParts = parts[0].split('-'); // [YYYY, MM, DD]
+        var timeParts = parts[1].split(':'); // [HH, MM]
+
+        if (dateParts.length === 3 && timeParts.length >= 2) {
+          // Create date in production sheet's timezone
+          var year = parseInt(dateParts[0], 10);
+          var month = parseInt(dateParts[1], 10) - 1; // JS months are 0-indexed
+          var day = parseInt(dateParts[2], 10);
+          var hour = parseInt(timeParts[0], 10);
+          var minute = parseInt(timeParts[1], 10);
+
+          var startDate = new Date(year, month, day, hour, minute, 0, 0);
+
+          if (!isNaN(startDate.getTime())) {
+            fiveKgBags = fiveKgBags.filter(function(bag) {
+              return bag.timestamp >= startDate;
+            });
+          }
+        }
       }
     }
 
