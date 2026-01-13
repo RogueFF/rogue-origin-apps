@@ -353,6 +353,14 @@
 
   window.ScoreboardState = ScoreboardState;
 
+  // TEST HELPER: Simulate break mode for testing
+  window.testBreakMode = function(enable) {
+    if (enable === undefined) enable = true;
+    ScoreboardState.debugOnBreak = enable ? true : null;
+    console.log('[TEST] Break mode:', enable ? 'ENABLED' : 'DISABLED');
+    console.log('[TEST] Timer should now be:', enable ? 'FROZEN (yellow)' : 'RUNNING (green/red)');
+  };
+
 
   // ========================================
   // CLEANUP ON PAGE UNLOAD
