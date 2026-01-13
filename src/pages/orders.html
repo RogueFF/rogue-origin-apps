@@ -458,6 +458,7 @@
                 <th>Strain</th>
                 <th>Type</th>
                 <th>Qty (kg)</th>
+                <th>Done (kg)</th>
                 <th>$/Unit</th>
                 <th>Total</th>
                 <th></th>
@@ -476,6 +477,9 @@
                 </td>
                 <td>
                   <input type="number" class="form-input" step="0.01" placeholder="5">
+                </td>
+                <td>
+                  <input type="number" class="form-input" step="0.01" placeholder="0" title="Already completed (kg)">
                 </td>
                 <td>
                   <input type="number" class="form-input" step="0.01" placeholder="350">
@@ -1186,6 +1190,7 @@
               </select>
             </td>
             <td><input type="number" class="form-input" step="0.01" value="${item.quantity || 0}" oninput="calculateLineTotal(this)"></td>
+            <td><input type="number" class="form-input" step="0.01" value="${item.completedKg || 0}" title="Already completed (kg)"></td>
             <td><input type="number" class="form-input" step="0.01" value="${item.unitPrice || 0}" oninput="calculateLineTotal(this)"></td>
             <td><span class="line-item-total">$${formatNumber(item.quantity * item.unitPrice)}</span></td>
             <td>
@@ -1752,6 +1757,24 @@
              </span>`
           : '';
 
+        // Calculate progress from line items
+        let progressHtml = '';
+        if (shipment.lineItems && shipment.lineItems.length > 0) {
+          const progressItems = shipment.lineItems.map(item => {
+            const completed = item.completedKg || 0;
+            const total = item.quantity || 0;
+            const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+            if (completed > 0) {
+              return `${item.strain}: ${completed}/${total}kg (${percent}%)`;
+            }
+            return null;
+          }).filter(Boolean);
+
+          if (progressItems.length > 0) {
+            progressHtml = '<br><span style="font-size: 12px; color: var(--ro-green); font-weight: 500;">📊 ' + progressItems.join(' • ') + '</span>';
+          }
+        }
+
         return `
           <div class="list-item">
             <div class="list-item-header">
@@ -1774,6 +1797,7 @@
               ${shipment.lineItems ? shipment.lineItems.length : 0} items •
               ${shipment.carrier || 'No carrier'}
               ${isShopify && shipment.trackingNumber ? '<br><span style="font-size: 12px; color: var(--text-muted);">Tracking: ' + shipment.trackingNumber + '</span>' : ''}
+              ${progressHtml}
             </div>
           </div>
         `;
@@ -1824,6 +1848,7 @@
           </select>
         </td>
         <td><input type="number" class="form-input" step="0.01" placeholder="0" oninput="calculateLineTotal(this)"></td>
+        <td><input type="number" class="form-input" step="0.01" placeholder="0" title="Already completed (kg)"></td>
         <td><input type="number" class="form-input" step="0.01" placeholder="0" oninput="calculateLineTotal(this)"></td>
         <td><span class="line-item-total">$0.00</span></td>
         <td>
@@ -1846,9 +1871,9 @@
     function calculateLineTotal(input) {
       const row = input.closest('tr');
       const qty = parseFloat(row.children[2].querySelector('input').value) || 0;
-      const price = parseFloat(row.children[3].querySelector('input').value) || 0;
+      const price = parseFloat(row.children[4].querySelector('input').value) || 0;
       const total = qty * price;
-      row.children[4].querySelector('.line-item-total').textContent = '$' + formatNumber(total);
+      row.children[5].querySelector('.line-item-total').textContent = '$' + formatNumber(total);
       calculateShipmentTotal();
     }
 
@@ -1967,14 +1992,25 @@
       }
     }
 
+    // Prevent double-submission
+    let isSavingShipment = false;
+
     async function saveShipment() {
       try {
+        // Prevent double-submit
+        if (isSavingShipment) {
+          console.log('Already saving shipment, ignoring duplicate call');
+          return false;
+        }
+        isSavingShipment = true;
+
         console.log('Starting saveShipment...');
 
         // Validate currentOrderID first
         if (!currentOrderID) {
           console.error('No order selected (currentOrderID is null)');
           showToast('Please select an order first', 'error');
+          isSavingShipment = false;
           return false;
         }
         console.log('Current Order ID:', currentOrderID);
@@ -2088,13 +2124,15 @@
         const strain = row.children[0].querySelector('input').value.trim();
         const type = row.children[1].querySelector('select').value;
         const qty = parseFloat(row.children[2].querySelector('input').value) || 0;
-        const price = parseFloat(row.children[3].querySelector('input').value) || 0;
+        const completedKg = parseFloat(row.children[3].querySelector('input').value) || 0;
+        const price = parseFloat(row.children[4].querySelector('input').value) || 0;
 
         if (strain && qty > 0 && price > 0) {
           items.push({
             strain,
             type,
             quantity: qty,
+            completedKg: completedKg,
             unitPrice: price,
             totalValue: qty * price,
             countryOfOrigin: 'USA'
