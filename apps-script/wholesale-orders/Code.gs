@@ -958,8 +958,17 @@ function saveShipment(shipmentData) {
 
     if (existingRow > 0) {
       sheet.getRange(existingRow, 1, 1, row.length).setValues([row]);
+      // Set startDateTime cell (column 5) to plain text format to prevent auto-conversion
+      if (shipmentData.startDateTime) {
+        sheet.getRange(existingRow, 5).setNumberFormat('@STRING@');
+      }
     } else {
       sheet.appendRow(row);
+      var newRow = sheet.getLastRow();
+      // Set startDateTime cell (column 5) to plain text format to prevent auto-conversion
+      if (shipmentData.startDateTime) {
+        sheet.getRange(newRow, 5).setNumberFormat('@STRING@');
+      }
     }
 
     // Update price history
