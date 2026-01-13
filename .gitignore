@@ -20,6 +20,8 @@ package-lock.json
 Thumbs.db
 desktop.ini
 *.bak
+NUL
+nul
 
 # Logs
 *.log
