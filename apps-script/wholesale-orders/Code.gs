@@ -1521,10 +1521,6 @@ function getScoreboardOrderQueue() {
  */
 function count5kgBagsForStrain(strain, startDateTime) {
   try {
-    Logger.log('[count5kgBagsForStrain] === START ===');
-    Logger.log('[count5kgBagsForStrain] Strain: ' + strain);
-    Logger.log('[count5kgBagsForStrain] StartDateTime: ' + startDateTime + ' (type: ' + typeof startDateTime + ')');
-
     var PRODUCTION_SHEET_ID = '1dARXrKU2u4KJY08ylA3GUKrT0zwmxCmtVh7IJxnn7is';
     var ss = SpreadsheetApp.openById(PRODUCTION_SHEET_ID);
     var timezone = ss.getSpreadsheetTimeZone();
@@ -1536,7 +1532,18 @@ function count5kgBagsForStrain(strain, startDateTime) {
       return 0;
     }
 
-    var bagData = trackingSheet.getDataRange().getValues();
+    // PERFORMANCE: Only read recent data (last 500 rows max)
+    // Bags older than that are unlikely to be relevant to current orders
+    var lastRow = trackingSheet.getLastRow();
+    var startRow = Math.max(2, lastRow - 499); // Keep header row (1) + last 500 data rows
+    var numRows = lastRow - startRow + 1;
+
+    if (numRows < 1) return 0;
+
+    var headers = trackingSheet.getRange(1, 1, 1, trackingSheet.getLastColumn()).getValues()[0];
+    var recentData = trackingSheet.getRange(startRow, 1, numRows, trackingSheet.getLastColumn()).getValues();
+
+    var bagData = [headers].concat(recentData); // Combine headers with data
     if (bagData.length < 2) return 0;
 
     var bagHeaders = bagData[0];
