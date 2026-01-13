@@ -1574,9 +1574,11 @@ function count5kgBagsForStrain(strain, startDateTime) {
 
     if (startDateTime) {
       Logger.log('[count5kgBagsForStrain] Applying startDateTime filter...');
-      // Parse datetime-local format 'YYYY-MM-DDTHH:MM' in the production sheet's timezone
-      // Split into date and time parts
-      var parts = String(startDateTime).split('T');
+      // Parse datetime format - handle both 'YYYY-MM-DDTHH:MM' and 'YYYY-MM-DD HH:MM'
+      // Google Sheets may convert 'T' to space, so normalize it first
+      var normalizedDateTime = String(startDateTime).replace(' ', 'T');
+      var parts = normalizedDateTime.split('T');
+      Logger.log('[count5kgBagsForStrain] Original: "' + startDateTime + '" -> Normalized: "' + normalizedDateTime + '"');
       Logger.log('[count5kgBagsForStrain] Parts after split: ' + JSON.stringify(parts));
 
       if (parts.length === 2) {
