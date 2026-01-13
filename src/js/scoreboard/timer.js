@@ -44,9 +44,11 @@
     var currentBreakStart = 0;
 
     // Check debug override first
-    if (State && State.debugOnBreak === true) {
+    if (State && State.debugOnBreak === true && State.debugBreakStartTime) {
       currentlyOnBreak = true;
-      currentBreakStart = nowMins; // Treat current time as break start for freezing
+      // Use the CACHED break start time, not current time
+      var breakStart = State.debugBreakStartTime;
+      currentBreakStart = breakStart.getHours() * 60 + breakStart.getMinutes();
     } else {
       // Check actual scheduled breaks
       var breaks = (Config && Config.workday && Config.workday.breaks) || [];
