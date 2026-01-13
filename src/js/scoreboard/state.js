@@ -159,6 +159,12 @@
      */
     debugBreakStartTime: null,
 
+    /**
+     * Cached elapsed seconds when break started (to return same value during break)
+     * @type {number|null}
+     */
+    debugBreakFrozenSeconds: null,
+
 
     // ========================================
     // CYCLE HISTORY STATE
