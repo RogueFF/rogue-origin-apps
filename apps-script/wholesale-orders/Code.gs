@@ -1588,17 +1588,25 @@ function count5kgBagsForStrain(strain, startDateTime) {
     // Now match each bag to production data to see what cultivar was being worked on
     var matchingBags = 0;
 
+    Logger.log('[count5kgBagsForStrain] Checking ' + fiveKgBags.length + ' bags for strain: ' + strain);
+
     for (var b = 0; b < fiveKgBags.length; b++) {
       var bag = fiveKgBags[b];
       var cultivarAtTime = getCultivarAtTime_(ss, timezone, bag.timestamp);
+
+      Logger.log('[count5kgBagsForStrain] Bag #' + (b + 1) + ' at ' + bag.timestamp + ' -> Cultivar: "' + cultivarAtTime + '"');
 
       // Case-insensitive partial match - production cultivar contains order strain name
       // e.g., "2025 - Sour Lifter / Sungrown" contains "Sour Lifter"
       if (cultivarAtTime && cultivarAtTime.toLowerCase().indexOf(strain.toLowerCase()) !== -1) {
         matchingBags++;
+        Logger.log('[count5kgBagsForStrain] ✓ MATCH - Bag counted');
+      } else {
+        Logger.log('[count5kgBagsForStrain] ✗ NO MATCH - Bag not counted');
       }
     }
 
+    Logger.log('[count5kgBagsForStrain] Total matching bags: ' + matchingBags + ' = ' + (matchingBags * 5) + 'kg');
     return matchingBags;
 
   } catch (error) {
@@ -1622,7 +1630,12 @@ function getCultivarAtTime_(ss, timezone, timestamp) {
     var monthSheetName = Utilities.formatDate(timestamp, timezone, 'yyyy-MM');
     var monthSheet = ss.getSheetByName(monthSheetName);
 
-    if (!monthSheet) return null;
+    Logger.log('[getCultivarAtTime_] Looking up timestamp: ' + timestamp + ' in sheet: ' + monthSheetName);
+
+    if (!monthSheet) {
+      Logger.log('[getCultivarAtTime_] Month sheet not found: ' + monthSheetName);
+      return null;
+    }
 
     var vals = monthSheet.getDataRange().getValues();
     var targetDateStr = Utilities.formatDate(timestamp, timezone, 'yyyy-MM-dd');
@@ -1677,11 +1690,22 @@ function getCultivarAtTime_(ss, timezone, timestamp) {
         var cv1 = row[cols.cultivar1] || '';
         var cv2 = row[cols.cultivar2] || '';
 
-        if (cv1 && String(cv1).trim()) return String(cv1).trim();
-        if (cv2 && String(cv2).trim()) return String(cv2).trim();
+        Logger.log('[getCultivarAtTime_] Found matching time slot ' + timeSlot + ' for hour ' + targetHour + ' - Cultivar1: "' + cv1 + '", Cultivar2: "' + cv2 + '"');
+
+        if (cv1 && String(cv1).trim()) {
+          var result = String(cv1).trim();
+          Logger.log('[getCultivarAtTime_] Returning cultivar: "' + result + '"');
+          return result;
+        }
+        if (cv2 && String(cv2).trim()) {
+          var result = String(cv2).trim();
+          Logger.log('[getCultivarAtTime_] Returning cultivar: "' + result + '"');
+          return result;
+        }
       }
     }
 
+    Logger.log('[getCultivarAtTime_] No cultivar found for date ' + targetDateStr + ' hour ' + targetHour);
     return null;
 
   } catch (error) {
