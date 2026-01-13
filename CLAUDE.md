@@ -109,6 +109,46 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Status**: ✅ Deployed and operational
 
+### Scoreboard & Order Queue Fixes (2026-01-13)
+
+**Bug Fixes**: Three critical issues resolved for production floor scoreboard
+
+**1. Bag Counting Issue**
+- **Problem**: Order progress showing 0/120kg instead of actual completion (35kg)
+- **Root Cause**: Bag scanning webhook adds new entries to TOP of tracking sheet, but code was reading from BOTTOM (oldest data)
+- **Fix**: Changed `count5kgBagsForStrain()` to read rows 2-2001 (newest 2000 bags from top)
+- **File**: `apps-script/wholesale-orders/Code.gs:1535-1546`
+- **Result**: Progress now shows correctly (35/120kg = 7 bags × 5kg)
+
+**2. Timer Freeze During Breaks**
+- **Problem**: Bag timer counting backwards/incrementing during lunch breaks instead of freezing
+- **Root Cause**: When `debugOnBreak=true`, code was skipping ALL scheduled break subtractions, causing elapsed time to include break time
+- **Fix**: Removed condition that skipped break subtraction in debug mode - always subtract scheduled breaks
+- **File**: `src/js/scoreboard/timer.js:79-100`
+- **Testing**: Added `testBreakMode(true/false)` function for instant break testing in console
+- **Result**: Timer now freezes correctly during breaks (both scheduled and debug mode)
+
+**3. API Timeout on Cold Starts**
+- **Problem**: Service worker timeout errors on first page load (Apps Script cold starts take 10-15 seconds)
+- **Root Cause**: Service worker timeout was 8 seconds, insufficient for Apps Script cold starts
+- **Fix**: Increased timeout to 20 seconds in service worker
+- **File**: `sw.js:191-192` (version bumped to v3.5)
+- **Result**: Page loads without network errors, then retries work smoothly
+
+**Performance Optimization**:
+- Limited bag counting to read only 2000 most recent rows instead of entire sheet
+- Reduces API response time from 15+ seconds to ~4 seconds
+- Covers 1-2 weeks of production data (sufficient for active orders)
+
+**Testing Commands**:
+```javascript
+// Test break freeze in browser console
+testBreakMode(true);  // Enable break mode (freezes timer, turns yellow)
+testBreakMode(false); // Disable break mode (timer resumes)
+```
+
+**Status**: ✅ All fixes deployed and verified
+
 ---
 
 ## Quick Reference
