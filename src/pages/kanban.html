@@ -165,6 +165,7 @@
               <option value="tag">Price Tag (4" × 2")</option>
               <option value="shop">Shop Label (6" × 3")</option>
               <option value="shop-portrait">Shop Card (6" × 4") - Portrait</option>
+              <option value="shop-small">Shop Card Small (5" × 3") - Portrait</option>
               <option value="shop-letter">Shop Card (11" × 8.5") - Landscape</option>
               <option value="full">Full Sheet (8.5" × 11")</option>
             </select>
@@ -239,6 +240,7 @@
             <option value="tag">Price Tag (4" × 2")</option>
             <option value="shop">Shop Label (6" × 3")</option>
             <option value="shop-portrait">Shop Card (6" × 4") - Portrait</option>
+            <option value="shop-small">Shop Card Small (5" × 3") - Portrait</option>
             <option value="shop-letter">Shop Card (11" × 8.5") - Landscape</option>
             <option value="full">Full Sheet (8.5" × 11")</option>
           </select>
@@ -1105,12 +1107,14 @@ function updatePrintCount() {
   var color = document.getElementById('printColor').value;
   var sidesCount = side === 'both' ? 2 : 1;
   var colorsCount = color === 'both' ? 2 : 1;
-  var cardsPerPage = (size === 'full' || size === 'shop-letter') ? 1 : (size === 'shop-portrait' ? 2 : 2);
-  // Shop-letter: 1 per page, shop-portrait: 2 per page grid
+  var cardsPerPage = (size === 'full' || size === 'shop-letter') ? 1 : (size === 'shop-portrait' ? 2 : (size === 'shop-small' ? 3 : 2));
+  // Shop-letter: 1 per page, shop-portrait: 2 per page grid, shop-small: 3 per page grid
   if (size === 'shop-letter') {
     var pages = selectedIds.length; // 1 card per page
   } else if (size === 'shop-portrait') {
     var pages = Math.ceil(selectedIds.length / 2); // 2 cards per page
+  } else if (size === 'shop-small') {
+    var pages = Math.ceil(selectedIds.length / 3); // 3 cards per page
   } else {
     var pages = Math.ceil((selectedIds.length * sidesCount * colorsCount) / cardsPerPage);
   }
@@ -1123,6 +1127,7 @@ function updatePrintCount() {
     'tag': '4"×2" tags, compact layout',
     'shop': '6"×3" shop labels, simplified',
     'shop-portrait': '6"×4" neutral shop cards, 2 per page in grid',
+    'shop-small': '5"×3" compact neutral shop cards, 3 per page in grid',
     'shop-letter': '10"×7.5" neutral shop card, 1 per page (landscape)',
     'full': '7.5"×5" full sheet, 1 per page'
   };
@@ -1136,6 +1141,7 @@ function updatePreviewSizeInfo() {
     'tag': '4"×2" compact tags, 2 per page',
     'shop': '6"×3" shop labels, simplified layout',
     'shop-portrait': '6"×4" neutral shop cards, 2 per page in grid',
+    'shop-small': '5"×3" compact neutral shop cards, 3 per page in grid',
     'shop-letter': '10"×7.5" neutral shop card, 1 per page (landscape)',
     'full': '7.5"×5" full sheet, 1 card per page'
   };
@@ -1287,6 +1293,36 @@ function getPrintCSS(size) {
       '.no-print{padding:12px;background:#1a1f16;color:#fff;position:fixed;top:0;left:0;right:0;z-index:100}' +
       '.no-print button{padding:10px 20px;border:none;border-radius:6px;cursor:pointer;margin-right:8px}' +
       '@media print{.no-print{display:none}.print-wrapper{padding-top:0 !important}body{background:#fff}}';
+  } else if (size === 'shop-small') {
+    // 5" x 3" portrait shop card - compact size, neutral colors, 3 cards per page
+    // Simplified layout: Header, Picture, Price, QR Code only (no supplier/delivery details)
+    return '@page{size:letter portrait;margin:0.25in}*{box-sizing:border-box;margin:0;padding:0}' +
+      'body{font-family:system-ui,sans-serif;background:#faf8f5;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.page{page-break-after:always;width:8.5in;height:11in;margin:0;display:flex;justify-content:center;align-items:center;box-sizing:border-box;padding:0.25in}' +
+      '.page:last-child{page-break-after:auto}' +
+      '.page-inner{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.25in;width:100%;height:100%}' +
+      '.kanban{width:5in;height:3in;padding:10px;border-radius:8px;position:relative;flex-shrink:0;page-break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.kanban{background:#e8e4de !important;color:#2d3a2e !important}' +
+      '.kanban-border{position:absolute;inset:0;border:4px solid #8f9263;border-radius:8px}' +
+      '.kanban-inner{position:absolute;inset:12px;border:3px solid #8f9263;border-radius:6px}' +
+      '.kanban-content{height:100%;display:flex;flex-direction:column;padding:12px 16px}' +
+      '.kanban-header{border-bottom:2px solid currentColor;padding-bottom:6px;margin-bottom:4px}' +
+      '.kanban-header h3{text-transform:uppercase;margin:0;font-weight:700;letter-spacing:0.5px;font-size:20px}' +
+      '.kanban-loc{text-align:right;font-weight:700;font-size:12px;margin-bottom:2px}' +
+      '.kanban-body{flex:1;display:flex;justify-content:center;align-items:center}' +
+      '.kanban-left{display:none}' +
+      '.kanban-right{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}' +
+      '.kanban-img{background:#fff;border-radius:6px;border:3px solid #8f9263;display:flex;align-items:center;justify-content:center;overflow:hidden;width:140px;height:100px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.kanban-img img{width:100%;height:100%;object-fit:contain}' +
+      '.kanban-price{background:#8f9263;border-radius:20px;font-weight:700;color:#faf8f5;padding:6px 24px;font-size:18px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.kanban-logo{position:absolute;border-radius:50%;bottom:14px;left:14px;width:35px;height:35px}' +
+      '.kanban-back{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center}' +
+      '.kanban-back h3{text-transform:uppercase;font-weight:700;letter-spacing:1.5px;font-size:28px;margin-bottom:16px}' +
+      '.kanban-qr{background:#fff;border-radius:8px;border:3px solid #e4aa4f;display:flex;align-items:center;justify-content:center;width:160px;height:160px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.kanban-qr img{width:92%;height:92%}' +
+      '.no-print{padding:12px;background:#1a1f16;color:#fff;position:fixed;top:0;left:0;right:0;z-index:100}' +
+      '.no-print button{padding:10px 20px;border:none;border-radius:6px;cursor:pointer;margin-right:8px}' +
+      '@media print{.no-print{display:none}.print-wrapper{padding-top:0 !important}body{background:#fff}}';
   } else if (size === 'full') {
     // 8.5" x 11" full sheet - one card per page, maximum size
     return base +
@@ -1336,7 +1372,7 @@ function getPrintCSS(size) {
 
 function printOneCard(card, size) {
   var allHtml = [];
-  if (size === 'shop-letter' || size === 'shop-portrait') {
+  if (size === 'shop-letter' || size === 'shop-portrait' || size === 'shop-small') {
     // Shop card: neutral color, front only, 1 per page
     allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(card, 'neutral', 'front', size) + '</div></div>');
   } else if (size === 'full') {
@@ -1392,6 +1428,19 @@ function printCards(cards) {
       pageCards += cardHtml(cards[i], 'neutral', 'front', size);
       if (i + 1 < cards.length) {
         pageCards += cardHtml(cards[i + 1], 'neutral', 'front', size);
+      }
+      allHtml.push('<div class="page"><div class="page-inner">' + pageCards + '</div></div>');
+    }
+  } else if (size === 'shop-small') {
+    // Shop small: 3 cards per page in grid
+    for (var i = 0; i < cards.length; i += 3) {
+      var pageCards = '';
+      pageCards += cardHtml(cards[i], 'neutral', 'front', size);
+      if (i + 1 < cards.length) {
+        pageCards += cardHtml(cards[i + 1], 'neutral', 'front', size);
+      }
+      if (i + 2 < cards.length) {
+        pageCards += cardHtml(cards[i + 2], 'neutral', 'front', size);
       }
       allHtml.push('<div class="page"><div class="page-inner">' + pageCards + '</div></div>');
     }
