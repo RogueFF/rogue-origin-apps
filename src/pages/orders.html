@@ -429,6 +429,12 @@
             </div>
           </div>
 
+          <div class="form-group">
+            <label class="form-label">Start Date/Time (for bag tracking)</label>
+            <input type="datetime-local" class="form-input" id="shipment-start-datetime" title="Only count bags scanned after this date/time">
+            <small style="color: var(--text-muted); font-size: 12px;">Optional: Only count scanned bags after this date/time. Leave blank to count all bags for this strain.</small>
+          </div>
+
           <h4 style="margin: 20px 0 12px; font-family: var(--font-display);">Dimensions</h4>
           <div class="form-row">
             <div class="form-group">
@@ -1165,6 +1171,7 @@
       // Populate form
       document.getElementById('shipment-date').value = shipment.shipmentDate ? shipment.shipmentDate.split('T')[0] : '';
       document.getElementById('shipment-carrier').value = shipment.carrier || '';
+      document.getElementById('shipment-start-datetime').value = shipment.startDateTime ? shipment.startDateTime.slice(0, 16) : '';
       document.getElementById('shipment-tracking').value = shipment.trackingNumber || '';
       document.getElementById('shipment-notes').value = shipment.notes || '';
 
@@ -2040,6 +2047,7 @@
         const shipmentData = {
           orderID: currentOrderID,
           shipmentDate: document.getElementById('shipment-date').value,
+          startDateTime: document.getElementById('shipment-start-datetime').value || null,
           carrier: document.getElementById('shipment-carrier').value,
           dimensions,
           lineItems,
