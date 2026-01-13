@@ -1682,6 +1682,58 @@ function count5kgBagsForStrain(strain, startDateTime) {
 }
 
 /**
+ * TEST FUNCTION - Run this manually to debug bag counting
+ * Results will be written to a new sheet called "BagCountingTest"
+ */
+function testBagCounting() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+
+  // Get the Sour Lifter shipment
+  var shipmentsResult = getShipments('MO-2026-002');
+  if (!shipmentsResult.success || shipmentsResult.shipments.length === 0) {
+    Browser.msgBox('No shipments found for MO-2026-002');
+    return;
+  }
+
+  var shipment = shipmentsResult.shipments[0];
+  var startDateTime = shipment.startDateTime;
+
+  // Count bags
+  var bagCount = count5kgBagsForStrain('Sour Lifter', startDateTime);
+
+  // Create or clear test sheet
+  var testSheet = ss.getSheetByName('BagCountingTest');
+  if (!testSheet) {
+    testSheet = ss.insertSheet('BagCountingTest');
+  } else {
+    testSheet.clear();
+  }
+
+  // Write results
+  var results = [
+    ['Bag Counting Test Results', ''],
+    ['', ''],
+    ['Shipment ID:', shipment.id],
+    ['Order ID:', shipment.orderID],
+    ['Start Date/Time:', startDateTime || 'NOT SET'],
+    ['Start Date/Time Type:', typeof startDateTime],
+    ['', ''],
+    ['Strain:', 'Sour Lifter'],
+    ['Bags Counted:', bagCount],
+    ['Kilograms:', bagCount * 5],
+    ['', ''],
+    ['Expected:', '6 bags = 30kg'],
+    ['Status:', bagCount === 6 ? '✅ CORRECT' : '❌ INCORRECT']
+  ];
+
+  testSheet.getRange(1, 1, results.length, 2).setValues(results);
+  testSheet.getRange(1, 1, 1, 2).setFontWeight('bold').setFontSize(14);
+  testSheet.autoResizeColumns(1, 2);
+
+  Browser.msgBox('Test complete! Check the "BagCountingTest" sheet for results.');
+}
+
+/**
  * Gets the cultivar that was being worked on at a specific timestamp
  * Looks at production data to find what was being trimmed
  *
