@@ -188,7 +188,8 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Strategy 6: Network-First with cache fallback (default)
-  event.respondWith(networkFirstWithTimeout(request, DYNAMIC_CACHE, 3000));
+  // Increased timeout to 8000ms for slow API calls (order queue calculation)
+  event.respondWith(networkFirstWithTimeout(request, DYNAMIC_CACHE, 8000));
 });
 
 // Cache Strategy: Network-First with Timeout
