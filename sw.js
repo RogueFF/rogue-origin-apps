@@ -1,7 +1,7 @@
 // Service Worker for Rogue Origin Operations Hub
-// Version 3.4 - Fixed API timeouts for save operations and improved error handling
+// Version 3.5 - Increased timeout to 20s for Apps Script cold starts
 
-const CACHE_VERSION = 'ro-ops-v3.4';
+const CACHE_VERSION = 'ro-ops-v3.5';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
@@ -188,8 +188,8 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Strategy 6: Network-First with cache fallback (default)
-  // Increased timeout to 8000ms for slow API calls (order queue calculation)
-  event.respondWith(networkFirstWithTimeout(request, DYNAMIC_CACHE, 8000));
+  // Increased timeout to 20000ms (20s) for slow API calls (Apps Script cold starts + order queue calculation)
+  event.respondWith(networkFirstWithTimeout(request, DYNAMIC_CACHE, 20000));
 });
 
 // Cache Strategy: Network-First with Timeout
