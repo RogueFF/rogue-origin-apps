@@ -153,6 +153,12 @@
      */
     debugOnBreak: null,
 
+    /**
+     * When debug break started (to freeze timer at that moment)
+     * @type {Date|null}
+     */
+    debugBreakStartTime: null,
+
 
     // ========================================
     // CYCLE HISTORY STATE
@@ -356,7 +362,13 @@
   // TEST HELPER: Simulate break mode for testing
   window.testBreakMode = function(enable) {
     if (enable === undefined) enable = true;
-    ScoreboardState.debugOnBreak = enable ? true : null;
+    if (enable) {
+      ScoreboardState.debugOnBreak = true;
+      ScoreboardState.debugBreakStartTime = new Date(); // Cache when break started
+    } else {
+      ScoreboardState.debugOnBreak = null;
+      ScoreboardState.debugBreakStartTime = null;
+    }
     console.log('[TEST] Break mode:', enable ? 'ENABLED' : 'DISABLED');
     console.log('[TEST] Timer should now be:', enable ? 'FROZEN (yellow)' : 'RUNNING (green/red)');
   };
