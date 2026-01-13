@@ -415,7 +415,7 @@ function doPost(e) {
     }
 
     if (action === 'saveOrder') {
-      var orderData = jsonData && jsonData.order ? jsonData.order : {};
+      var orderData = e.postData ? JSON.parse(e.postData.contents) : {};
       return ContentService.createTextOutput(
         JSON.stringify(handleSaveOrder_(orderData))
       ).setMimeType(ContentService.MimeType.JSON);
@@ -487,7 +487,7 @@ function doPost(e) {
         result = updateOrderPriority(idValidation.value, priorityValidation.value);
       }
     } else if (action === 'saveShipment') {
-      var shipmentData = jsonData && jsonData.shipment ? jsonData.shipment : {};
+      var shipmentData = e.postData ? JSON.parse(e.postData.contents) : {};
       return ContentService.createTextOutput(
         JSON.stringify(handleSaveShipment_(shipmentData))
       ).setMimeType(ContentService.MimeType.JSON);
@@ -1377,6 +1377,7 @@ function getScoreboardOrderQueue() {
             strain: item.strain,
             type: item.type,
             quantityKg: parseFloat(item.quantity) || 0,
+            completedKg: parseFloat(item.completedKg) || null,
             dueDate: parentOrder.dueDate,
             orderPriority: parentOrder.priority,
             createdDate: parentOrder.createdDate,
@@ -1410,12 +1411,13 @@ function getScoreboardOrderQueue() {
     if (topsLineItems.length > 0) {
       var currentItem = topsLineItems[0];
 
-      // Calculate progress for current order
+      // Calculate progress for current order (pass manual completedKg if set)
       var progress = calculateOrderProgress(
         currentItem.shipmentId,
         currentItem.strain,
         currentItem.type,
-        currentItem.quantityKg
+        currentItem.quantityKg,
+        currentItem.completedKg
       );
 
       current = {
@@ -1464,15 +1466,47 @@ function getScoreboardOrderQueue() {
 
 /**
  * Calculates order progress by matching production data to shipment line items
+ * If completedKg is manually set on the line item, uses that instead
  *
  * @param {string} shipmentId - The shipment ID to calculate progress for
  * @param {string} strain - The cultivar/strain name (e.g., "Cherry Wine")
  * @param {string} type - The product type ("Tops" or "Smalls")
  * @param {number} targetKg - The target quantity in kg
+ * @param {number} manualCompletedKg - Optional manual completion override
  * @returns {object} { completedKg, percentComplete, estimatedHoursRemaining }
  */
-function calculateOrderProgress(shipmentId, strain, type, targetKg) {
+function calculateOrderProgress(shipmentId, strain, type, targetKg, manualCompletedKg) {
   try {
+    // If manual completion is set, use that instead of production data
+    if (manualCompletedKg != null && manualCompletedKg >= 0) {
+      var completedKg = parseFloat(manualCompletedKg) || 0;
+      var percentComplete = targetKg > 0 ? Math.round((completedKg / targetKg) * 100) : 0;
+      if (percentComplete > 100) percentComplete = 100;
+
+      var estimatedHoursRemaining = 0;
+      var remainingKg = targetKg - completedKg;
+      if (remainingKg > 0) {
+        var crewRate = 5.0; // Default fallback
+        try {
+          var PRODUCTION_API_URL = 'https://script.google.com/macros/s/AKfycbxDAHSFl9cedGS49L3Lf5ztqy-SSToYigyA30ZtsdpmWNAR9H61X_Mm48JOOTGqqr-Z/exec';
+          var scoreboardResponse = UrlFetchApp.fetch(PRODUCTION_API_URL + '?action=scoreboard');
+          var scoreboardData = JSON.parse(scoreboardResponse.getContentText());
+          if (scoreboardData && scoreboardData.success && scoreboardData.data) {
+            var currentTrimmers = scoreboardData.data.currentHourTrimmers || 5;
+            var targetRate = scoreboardData.data.targetRate || 1.0;
+            crewRate = currentTrimmers * targetRate;
+          }
+        } catch (apiError) {
+          Logger.log('Could not fetch crew rate, using default: ' + apiError.message);
+        }
+        var remainingLbs = remainingKg * 2.205;
+        estimatedHoursRemaining = crewRate > 0 ? Math.ceil(remainingLbs / crewRate) : 0;
+      }
+
+      return { completedKg: completedKg, percentComplete: percentComplete, estimatedHoursRemaining: estimatedHoursRemaining };
+    }
+
+    // Otherwise, calculate from production data
     // 1. Open production tracking spreadsheet
     var PRODUCTION_SHEET_ID = '1dARXrKU2u4KJY08ylA3GUKrT0zwmxCmtVh7IJxnn7is';
     var ss = SpreadsheetApp.openById(PRODUCTION_SHEET_ID);
