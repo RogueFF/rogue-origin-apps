@@ -144,13 +144,14 @@ test.describe('Kanban Tutorial System', () => {
       await page.goto(KANBAN_URL);
       await page.waitForLoadState('networkidle');
 
-      // Mark tutorial as seen
+      // Reload page and set tutorial as seen AFTER reload
+      // (this prevents setupMocks from clearing it)
+      await page.reload();
       await page.evaluate(() => {
         localStorage.setItem('kanbanTutorialSeen', 'true');
       });
 
-      // Reload page
-      await page.reload();
+      // Wait for checkFirstVisit() to run (it runs after 1000ms)
       await page.waitForTimeout(1500);
 
       const tutorialBtn = page.locator('#tutorialBtn');
