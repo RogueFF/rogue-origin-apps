@@ -1532,11 +1532,11 @@ function count5kgBagsForStrain(strain, startDateTime) {
       return 0;
     }
 
-    // PERFORMANCE: Only read recent data (last 500 rows max)
-    // Bags older than that are unlikely to be relevant to current orders
+    // PERFORMANCE: Only read recent data (first 2000 rows after header)
+    // New bags are added at the TOP of the sheet, so read from row 2 downward
     var lastRow = trackingSheet.getLastRow();
-    var startRow = Math.max(2, lastRow - 499); // Keep header row (1) + last 500 data rows
-    var numRows = lastRow - startRow + 1;
+    var startRow = 2; // First data row (row 1 is headers)
+    var numRows = Math.min(2000, lastRow - 1); // Max 2000 rows, or all available data rows
 
     if (numRows < 1) return 0;
 
