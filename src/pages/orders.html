@@ -1171,7 +1171,31 @@
       // Populate form
       document.getElementById('shipment-date').value = shipment.shipmentDate ? shipment.shipmentDate.split('T')[0] : '';
       document.getElementById('shipment-carrier').value = shipment.carrier || '';
-      document.getElementById('shipment-start-datetime').value = shipment.startDateTime ? shipment.startDateTime.slice(0, 16) : '';
+
+      // Handle startDateTime - convert to datetime-local format if needed
+      if (shipment.startDateTime) {
+        let dateTimeValue = shipment.startDateTime;
+        // If it's already in the right format (YYYY-MM-DDTHH:MM), use it
+        if (dateTimeValue.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/)) {
+          document.getElementById('shipment-start-datetime').value = dateTimeValue.slice(0, 16);
+        } else {
+          // Otherwise, try to parse as a date and format it
+          const dt = new Date(dateTimeValue);
+          if (!isNaN(dt.getTime())) {
+            const year = dt.getFullYear();
+            const month = String(dt.getMonth() + 1).padStart(2, '0');
+            const day = String(dt.getDate()).padStart(2, '0');
+            const hours = String(dt.getHours()).padStart(2, '0');
+            const minutes = String(dt.getMinutes()).padStart(2, '0');
+            document.getElementById('shipment-start-datetime').value = `${year}-${month}-${day}T${hours}:${minutes}`;
+          } else {
+            document.getElementById('shipment-start-datetime').value = '';
+          }
+        }
+      } else {
+        document.getElementById('shipment-start-datetime').value = '';
+      }
+
       document.getElementById('shipment-tracking').value = shipment.trackingNumber || '';
       document.getElementById('shipment-notes').value = shipment.notes || '';
 
