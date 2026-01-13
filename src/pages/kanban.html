@@ -303,7 +303,7 @@
   <div id="toasts"></div>
 
   <!-- Tutorial Button -->
-  <button class="tutorial-start-btn pulse" id="tutorialBtn" onclick="startTutorial()" title="Start Tutorial">
+  <button class="tutorial-start-btn" id="tutorialBtn" onclick="startTutorial()" title="Start Tutorial">
     <i class="ph-fill ph-graduation-cap"></i>
   </button>
 
@@ -1715,6 +1715,9 @@ function startTutorial() {
   closeEdit();
   closePrint();
 
+  // Add keyboard event listeners for accessibility
+  document.addEventListener('keydown', handleTutorialKeyboard);
+
   // Start with page overview (no modal)
   setTimeout(function() {
     document.getElementById('tutorialOverlay').style.display = 'block';
@@ -1722,6 +1725,35 @@ function startTutorial() {
     document.getElementById('tutorialBackdrop').classList.add('active');
     showTutorialStep();
   }, 300);
+}
+
+// Keyboard accessibility for tutorial
+function handleTutorialKeyboard(e) {
+  if (!tutorialActive) return;
+
+  // Escape key - Exit tutorial
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    endTutorial(false);
+    return;
+  }
+
+  // Enter key - Advance tutorial (same as Next button)
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    nextTutorialStep();
+    return;
+  }
+
+  // Tab key - Focus Next button
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    var nextBtn = document.getElementById('tutorialNext');
+    if (nextBtn && nextBtn.offsetParent !== null) { // Check if visible
+      nextBtn.focus();
+    }
+    return;
+  }
 }
 
 // BUG-05 FIX: Scroll target element into view if off-screen
@@ -1971,6 +2003,9 @@ function prevTutorialStep() {
 
 function endTutorial(completed) {
   tutorialActive = false;
+
+  // Remove keyboard event listeners
+  document.removeEventListener('keydown', handleTutorialKeyboard);
 
   document.getElementById('tutorialOverlay').style.display = 'none';
   document.getElementById('tutorialBackdrop').style.display = 'none';
