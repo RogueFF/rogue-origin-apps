@@ -887,16 +887,17 @@ function getShipments(orderID) {
         orderID: row[1],
         invoiceNumber: row[2],
         shipmentDate: formatDateForJSON_(row[3]),
-        status: row[4] || 'pending',
-        dimensionsJSON: row[5] || '{}',
-        lineItemsJSON: row[6] || '[]',
-        subTotal: parseFloat(row[7]) || 0,
-        discount: parseFloat(row[8]) || 0,
-        freightCost: parseFloat(row[9]) || 0,
-        totalAmount: parseFloat(row[10]) || 0,
-        trackingNumber: row[11] || '',
-        carrier: row[12] || '',
-        notes: row[13] || ''
+        startDateTime: formatDateForJSON_(row[4]),
+        status: row[5] || 'pending',
+        dimensionsJSON: row[6] || '{}',
+        lineItemsJSON: row[7] || '[]',
+        subTotal: parseFloat(row[8]) || 0,
+        discount: parseFloat(row[9]) || 0,
+        freightCost: parseFloat(row[10]) || 0,
+        totalAmount: parseFloat(row[11]) || 0,
+        trackingNumber: row[12] || '',
+        carrier: row[13] || '',
+        notes: row[14] || ''
       };
 
       try {
@@ -942,6 +943,7 @@ function saveShipment(shipmentData) {
       shipmentData.orderID || '',
       shipmentData.invoiceNumber,
       shipmentData.shipmentDate || new Date(),
+      shipmentData.startDateTime || '',
       shipmentData.status || 'pending',
       JSON.stringify(shipmentData.dimensions || {}),
       JSON.stringify(shipmentData.lineItems || []),
@@ -1028,7 +1030,7 @@ function getNextInvoiceNumber() {
 function createShipmentsSheet_(ss) {
   var sheet = ss.insertSheet(SHIPMENTS_SHEET_NAME);
   var headers = [
-    'ShipmentID', 'OrderID', 'InvoiceNumber', 'ShipmentDate', 'Status',
+    'ShipmentID', 'OrderID', 'InvoiceNumber', 'ShipmentDate', 'StartDateTime', 'Status',
     'DimensionsJSON', 'LineItemsJSON', 'SubTotal', 'Discount', 'FreightCost',
     'TotalAmount', 'TrackingNumber', 'Carrier', 'Notes'
   ];
@@ -1378,6 +1380,7 @@ function getScoreboardOrderQueue() {
             type: item.type,
             quantityKg: parseFloat(item.quantity) || 0,
             completedKg: parseFloat(item.completedKg) || null,
+            startDateTime: shipment.startDateTime || null,
             dueDate: parentOrder.dueDate,
             orderPriority: parentOrder.priority,
             createdDate: parentOrder.createdDate,
@@ -1411,13 +1414,14 @@ function getScoreboardOrderQueue() {
     if (topsLineItems.length > 0) {
       var currentItem = topsLineItems[0];
 
-      // Calculate progress for current order (pass manual completedKg if set)
+      // Calculate progress for current order (pass manual completedKg and startDateTime if set)
       var progress = calculateOrderProgress(
         currentItem.shipmentId,
         currentItem.strain,
         currentItem.type,
         currentItem.quantityKg,
-        currentItem.completedKg
+        currentItem.completedKg,
+        currentItem.startDateTime
       );
 
       current = {
@@ -1469,9 +1473,10 @@ function getScoreboardOrderQueue() {
  * Matches bags to strains by checking what cultivar was being worked on at scan time
  *
  * @param {string} strain - The strain name to match (e.g., "Sour Lifter")
+ * @param {string|null} startDateTime - Optional start date/time (ISO format). Only count bags after this.
  * @returns {number} Number of matching 5kg bags scanned
  */
-function count5kgBagsForStrain(strain) {
+function count5kgBagsForStrain(strain, startDateTime) {
   try {
     var PRODUCTION_SHEET_ID = '1dARXrKU2u4KJY08ylA3GUKrT0zwmxCmtVh7IJxnn7is';
     var ss = SpreadsheetApp.openById(PRODUCTION_SHEET_ID);
@@ -1504,6 +1509,16 @@ function count5kgBagsForStrain(strain) {
             size: size
           });
         }
+      }
+    }
+
+    // Filter bags by start date/time if provided
+    if (startDateTime) {
+      var startDate = new Date(startDateTime);
+      if (!isNaN(startDate.getTime())) {
+        fiveKgBags = fiveKgBags.filter(function(bag) {
+          return bag.timestamp >= startDate;
+        });
       }
     }
 
@@ -1622,9 +1637,10 @@ function getCultivarAtTime_(ss, timezone, timestamp) {
  * @param {string} type - The product type ("Tops" or "Smalls")
  * @param {number} targetKg - The target quantity in kg
  * @param {number} manualCompletedKg - Optional manual completion override
+ * @param {string} startDateTime - Optional start date/time to filter bag counts
  * @returns {object} { completedKg, percentComplete, estimatedHoursRemaining }
  */
-function calculateOrderProgress(shipmentId, strain, type, targetKg, manualCompletedKg) {
+function calculateOrderProgress(shipmentId, strain, type, targetKg, manualCompletedKg, startDateTime) {
   try {
     // Priority 1: If manual completion is set, use that
     if (manualCompletedKg != null && manualCompletedKg >= 0) {
@@ -1657,7 +1673,8 @@ function calculateOrderProgress(shipmentId, strain, type, targetKg, manualComple
 
     // Priority 2: Count scanned bags for this strain (automatic tracking)
     // Each bag = 5kg, match bags to strain by production timing
-    var bagCount = count5kgBagsForStrain(strain);
+    // Filter by startDateTime if provided (excludes bags scanned before shipment started)
+    var bagCount = count5kgBagsForStrain(strain, startDateTime);
     if (bagCount > 0) {
       var completedKg = bagCount * 5; // Each bag is 5kg
       var percentComplete = targetKg > 0 ? Math.round((completedKg / targetKg) * 100) : 0;
