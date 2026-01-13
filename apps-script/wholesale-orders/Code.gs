@@ -1465,8 +1465,157 @@ function getScoreboardOrderQueue() {
 }
 
 /**
+ * Counts scanned 5kg bags that match a specific strain
+ * Matches bags to strains by checking what cultivar was being worked on at scan time
+ *
+ * @param {string} strain - The strain name to match (e.g., "Sour Lifter")
+ * @returns {number} Number of matching 5kg bags scanned
+ */
+function count5kgBagsForStrain(strain) {
+  try {
+    var PRODUCTION_SHEET_ID = '1dARXrKU2u4KJY08ylA3GUKrT0zwmxCmtVh7IJxnn7is';
+    var ss = SpreadsheetApp.openById(PRODUCTION_SHEET_ID);
+    var timezone = ss.getSpreadsheetTimeZone();
+
+    // Get bag tracking data
+    var trackingSheet = ss.getSheetByName('Rogue Origin Production Tracking');
+    if (!trackingSheet) return 0;
+
+    var bagData = trackingSheet.getDataRange().getValues();
+    if (bagData.length < 2) return 0;
+
+    var bagHeaders = bagData[0];
+    var timestampCol = bagHeaders.indexOf('Timestamp');
+    var sizeCol = bagHeaders.indexOf('Size');
+
+    if (timestampCol === -1 || sizeCol === -1) return 0;
+
+    // Get all 5kg bags with timestamps
+    var fiveKgBags = [];
+    for (var i = 1; i < bagData.length; i++) {
+      var size = String(bagData[i][sizeCol] || '').toLowerCase().trim();
+      var timestamp = bagData[i][timestampCol];
+
+      if (timestamp instanceof Date && !isNaN(timestamp.getTime())) {
+        // Check if it's a 5kg bag
+        if (size.indexOf('5') !== -1 && size.indexOf('kg') !== -1) {
+          fiveKgBags.push({
+            timestamp: timestamp,
+            size: size
+          });
+        }
+      }
+    }
+
+    if (fiveKgBags.length === 0) return 0;
+
+    // Now match each bag to production data to see what cultivar was being worked on
+    var matchingBags = 0;
+
+    for (var b = 0; b < fiveKgBags.length; b++) {
+      var bag = fiveKgBags[b];
+      var cultivarAtTime = getCultivarAtTime_(ss, timezone, bag.timestamp);
+
+      // Case-insensitive match
+      if (cultivarAtTime && cultivarAtTime.toLowerCase().trim() === strain.toLowerCase().trim()) {
+        matchingBags++;
+      }
+    }
+
+    return matchingBags;
+
+  } catch (error) {
+    Logger.log('count5kgBagsForStrain error: ' + error.message);
+    return 0;
+  }
+}
+
+/**
+ * Gets the cultivar that was being worked on at a specific timestamp
+ * Looks at production data to find what was being trimmed
+ *
+ * @param {Spreadsheet} ss - The spreadsheet object
+ * @param {string} timezone - The timezone
+ * @param {Date} timestamp - The timestamp to check
+ * @returns {string|null} The cultivar name, or null if not found
+ */
+function getCultivarAtTime_(ss, timezone, timestamp) {
+  try {
+    // Get the month sheet for this timestamp
+    var monthSheetName = Utilities.formatDate(timestamp, timezone, 'yyyy-MM');
+    var monthSheet = ss.getSheetByName(monthSheetName);
+
+    if (!monthSheet) return null;
+
+    var vals = monthSheet.getDataRange().getValues();
+    var targetDateStr = Utilities.formatDate(timestamp, timezone, 'yyyy-MM-dd');
+    var targetHour = timestamp.getHours();
+
+    var currentDate = null;
+    var cols = null;
+
+    for (var i = 0; i < vals.length; i++) {
+      var row = vals[i];
+
+      // Check for date block start
+      if (row[0] === 'Date:') {
+        var dateStr = row[1];
+        if (dateStr) {
+          var d = new Date(dateStr);
+          currentDate = !isNaN(d.getTime()) ? d : null;
+        }
+        // Next row contains headers
+        var headerRow = vals[i + 1] || [];
+        cols = {
+          timeSlot: 0,
+          cultivar1: headerRow.indexOf('Cultivar 1'),
+          cultivar2: headerRow.indexOf('Cultivar 2')
+        };
+        continue;
+      }
+
+      // Skip if not in the target date
+      if (!currentDate || !cols) continue;
+      var rowDateStr = Utilities.formatDate(currentDate, timezone, 'yyyy-MM-dd');
+      if (rowDateStr !== targetDateStr) continue;
+
+      // Check time slot
+      var timeSlot = String(row[0] || '');
+      if (!timeSlot || timeSlot === 'Date:') continue;
+
+      // Parse hour from time slot (e.g., "7:00 AM – 8:00 AM")
+      var hourMatch = timeSlot.match(/(\d+):00\s*(AM|PM)/);
+      if (!hourMatch) continue;
+
+      var slotHour = parseInt(hourMatch[1]);
+      var period = hourMatch[2];
+
+      // Convert to 24-hour format
+      if (period === 'PM' && slotHour !== 12) slotHour += 12;
+      if (period === 'AM' && slotHour === 12) slotHour = 0;
+
+      // Check if this time slot matches the bag timestamp hour
+      if (slotHour === targetHour) {
+        // Return the first non-empty cultivar
+        var cv1 = row[cols.cultivar1] || '';
+        var cv2 = row[cols.cultivar2] || '';
+
+        if (cv1 && String(cv1).trim()) return String(cv1).trim();
+        if (cv2 && String(cv2).trim()) return String(cv2).trim();
+      }
+    }
+
+    return null;
+
+  } catch (error) {
+    Logger.log('getCultivarAtTime_ error: ' + error.message);
+    return null;
+  }
+}
+
+/**
  * Calculates order progress by matching production data to shipment line items
- * If completedKg is manually set on the line item, uses that instead
+ * Priority: 1) Manual completedKg, 2) Scanned bag count, 3) Today's production data
  *
  * @param {string} shipmentId - The shipment ID to calculate progress for
  * @param {string} strain - The cultivar/strain name (e.g., "Cherry Wine")
@@ -1477,7 +1626,7 @@ function getScoreboardOrderQueue() {
  */
 function calculateOrderProgress(shipmentId, strain, type, targetKg, manualCompletedKg) {
   try {
-    // If manual completion is set, use that instead of production data
+    // Priority 1: If manual completion is set, use that
     if (manualCompletedKg != null && manualCompletedKg >= 0) {
       var completedKg = parseFloat(manualCompletedKg) || 0;
       var percentComplete = targetKg > 0 ? Math.round((completedKg / targetKg) * 100) : 0;
@@ -1506,7 +1655,39 @@ function calculateOrderProgress(shipmentId, strain, type, targetKg, manualComple
       return { completedKg: completedKg, percentComplete: percentComplete, estimatedHoursRemaining: estimatedHoursRemaining };
     }
 
-    // Otherwise, calculate from production data
+    // Priority 2: Count scanned bags for this strain (automatic tracking)
+    // Each bag = 5kg, match bags to strain by production timing
+    var bagCount = count5kgBagsForStrain(strain);
+    if (bagCount > 0) {
+      var completedKg = bagCount * 5; // Each bag is 5kg
+      var percentComplete = targetKg > 0 ? Math.round((completedKg / targetKg) * 100) : 0;
+      if (percentComplete > 100) percentComplete = 100;
+
+      var estimatedHoursRemaining = 0;
+      var remainingKg = targetKg - completedKg;
+      if (remainingKg > 0) {
+        var crewRate = 5.0; // Default fallback
+        try {
+          var PRODUCTION_API_URL = 'https://script.google.com/macros/s/AKfycbxDAHSFl9cedGS49L3Lf5ztqy-SSToYigyA30ZtsdpmWNAR9H61X_Mm48JOOTGqqr-Z/exec';
+          var scoreboardResponse = UrlFetchApp.fetch(PRODUCTION_API_URL + '?action=scoreboard');
+          var scoreboardData = JSON.parse(scoreboardResponse.getContentText());
+          if (scoreboardData && scoreboardData.success && scoreboardData.data) {
+            var currentTrimmers = scoreboardData.data.currentHourTrimmers || 5;
+            var targetRate = scoreboardData.data.targetRate || 1.0;
+            crewRate = currentTrimmers * targetRate;
+          }
+        } catch (apiError) {
+          Logger.log('Could not fetch crew rate, using default: ' + apiError.message);
+        }
+        var remainingLbs = remainingKg * 2.205;
+        estimatedHoursRemaining = crewRate > 0 ? Math.ceil(remainingLbs / crewRate) : 0;
+      }
+
+      Logger.log('[calculateOrderProgress] Using bag count: ' + bagCount + ' bags × 5kg = ' + completedKg + 'kg for ' + strain);
+      return { completedKg: completedKg, percentComplete: percentComplete, estimatedHoursRemaining: estimatedHoursRemaining };
+    }
+
+    // Priority 3: Fall back to today's production data (old method)
     // 1. Open production tracking spreadsheet
     var PRODUCTION_SHEET_ID = '1dARXrKU2u4KJY08ylA3GUKrT0zwmxCmtVh7IJxnn7is';
     var ss = SpreadsheetApp.openById(PRODUCTION_SHEET_ID);
