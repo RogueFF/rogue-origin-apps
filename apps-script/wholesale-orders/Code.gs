@@ -1592,8 +1592,9 @@ function count5kgBagsForStrain(strain, startDateTime) {
       var bag = fiveKgBags[b];
       var cultivarAtTime = getCultivarAtTime_(ss, timezone, bag.timestamp);
 
-      // Case-insensitive match
-      if (cultivarAtTime && cultivarAtTime.toLowerCase().trim() === strain.toLowerCase().trim()) {
+      // Case-insensitive partial match - production cultivar contains order strain name
+      // e.g., "2025 - Sour Lifter / Sungrown" contains "Sour Lifter"
+      if (cultivarAtTime && cultivarAtTime.toLowerCase().indexOf(strain.toLowerCase()) !== -1) {
         matchingBags++;
       }
     }
