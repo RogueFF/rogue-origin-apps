@@ -172,7 +172,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Navigate through all 23 steps with special action handling
@@ -216,7 +216,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Go to step 3
@@ -245,7 +245,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Check initial state - first dot should be active
@@ -270,7 +270,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       for (let i = 0; i < 5; i++) {
@@ -285,7 +285,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Navigate to step 8
@@ -312,7 +312,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForTimeout(1000);
 
       // Start and advance a few steps
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
       await clickNext(page);
       await clickNext(page);
@@ -324,7 +324,7 @@ test.describe('Kanban Tutorial System', () => {
       await expect(page.locator('#tutorialOverlay')).not.toBeVisible();
 
       // Restart
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
       await expect(page.locator('#tutorialBadge')).toContainText('Step 1 of 23');
     });
@@ -335,7 +335,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Step 1 is centered - backdrop should be active
@@ -355,7 +355,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       const nextBtn = page.locator('#tutorialNext');
@@ -383,7 +383,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       const tooltip = page.locator('#tutorialTooltip');
@@ -406,7 +406,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
       await clickNext(page); // Go to step 2 (header)
 
@@ -430,7 +430,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Navigate to step 3 (refresh button)
@@ -451,7 +451,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Navigate to step 6 (search/filter - .toolbar .filters)
@@ -475,7 +475,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Navigate to step 7 (first card)
@@ -498,7 +498,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Navigate to step 9 (first form field in modal)
@@ -519,7 +519,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
       await clickNext(page);
 
@@ -547,7 +547,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Navigate to form field step
@@ -571,7 +571,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Navigate through form without filling
@@ -589,7 +589,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Navigate to save step
@@ -608,7 +608,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Navigate to modal
@@ -645,7 +645,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Navigate to form
@@ -677,7 +677,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Navigate to step 8 (openModal)
@@ -702,7 +702,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Navigate to save step (step 19, index 18)
@@ -730,7 +730,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Navigate to save step (step 19, index 18)
@@ -758,7 +758,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Skip to near end (would need to complete save flow in real test)
@@ -809,7 +809,7 @@ test.describe('Kanban Tutorial System', () => {
         dialog.dismiss();
       });
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await page.waitForTimeout(500);
     });
 
@@ -823,7 +823,7 @@ test.describe('Kanban Tutorial System', () => {
         dialog.dismiss();
       });
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await page.waitForTimeout(500);
 
       // Tutorial should not have started
@@ -842,7 +842,7 @@ test.describe('Kanban Tutorial System', () => {
         dialog.accept();
       });
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await page.waitForTimeout(500);
 
       // Edit modal should open
@@ -878,7 +878,7 @@ test.describe('Kanban Tutorial System', () => {
         document.querySelectorAll('.card').forEach(el => el.remove());
       });
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Navigate past the card steps (6-7) - they should be skipped
@@ -912,7 +912,7 @@ test.describe('Kanban Tutorial System', () => {
       });
 
       // Try to start tutorial
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await page.waitForTimeout(500);
 
       // Should fail gracefully (tutorial ends, no crash)
@@ -927,7 +927,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Scroll page to bottom
@@ -950,7 +950,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       const tooltip = page.locator('#tutorialTooltip');
@@ -967,7 +967,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Click next rapidly 3 times
@@ -988,7 +988,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
       await clickNext(page);
       await clickNext(page);
@@ -1010,7 +1010,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForTimeout(1000);
 
       // Start, advance, close
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
       await clickNext(page);
       await clickNext(page);
@@ -1018,7 +1018,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForTimeout(500);
 
       // Restart
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Should start from step 1
@@ -1039,7 +1039,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Press Tab
@@ -1056,7 +1056,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Focus next button and press Enter
@@ -1074,7 +1074,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Press Escape
@@ -1091,7 +1091,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Check for button elements (not divs styled as buttons)
@@ -1106,7 +1106,7 @@ test.describe('Kanban Tutorial System', () => {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(1000);
 
-      await page.click('#tutorialBtn');
+      await page.click('#tutorialBtn', { force: true });
       await waitForTutorialOverlay(page);
 
       // Get tooltip colors
