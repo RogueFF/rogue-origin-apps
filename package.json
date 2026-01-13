@@ -8,7 +8,16 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "playwright test",
+    "test:tutorial": "playwright test kanban-tutorial.spec.js",
+    "test:tutorial:ui": "playwright test kanban-tutorial.spec.js --ui",
+    "test:tutorial:debug": "playwright test kanban-tutorial.spec.js --debug",
+    "test:headed": "playwright test kanban-tutorial.spec.js --headed",
+    "test:chromium": "playwright test kanban-tutorial.spec.js --project=chromium",
+    "test:firefox": "playwright test kanban-tutorial.spec.js --project=firefox",
+    "test:webkit": "playwright test kanban-tutorial.spec.js --project=webkit",
+    "test:mobile": "playwright test kanban-tutorial.spec.js --project=mobile-chrome --project=mobile-safari",
+    "playwright:install": "playwright install"
   },
   "repository": {
     "type": "git",
@@ -23,6 +32,7 @@
   },
   "homepage": "https://github.com/rogueff/rogue-origin-apps#readme",
   "devDependencies": {
+    "@playwright/test": "^1.49.0",
     "eslint": "^9.39.2"
   }
 }
