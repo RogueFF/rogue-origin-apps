@@ -1273,7 +1273,8 @@ function syncCOAIndex() {
     while (files.hasNext()) {
       var file = files.next();
       var fileName = file.getName();
-      if (fileName.toLowerCase().indexOf('coa') !== -1 && fileName.toLowerCase().indexOf('.pdf') !== -1) {
+      // Include all PDFs in the COA folder (not just ones with "COA" in filename)
+      if (fileName.toLowerCase().endsWith('.pdf')) {
         // Extract strain name: remove .pdf, remove COA (with any prefix), normalize spaces
         var strain = fileName
           .replace(/\.pdf$/i, '')           // Remove .pdf extension
