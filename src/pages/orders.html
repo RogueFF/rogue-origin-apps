@@ -845,6 +845,15 @@
           document.head.appendChild(script);
         });
 
+        // Load pdf-lib for merging PDFs
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js';
+          script.onload = resolve;
+          script.onerror = () => reject(new Error('Failed to load pdf-lib'));
+          document.head.appendChild(script);
+        });
+
         pdfLibrariesLoaded = true;
         console.log('✅ PDF libraries loaded successfully');
         return true;
@@ -1815,6 +1824,9 @@
               </span>
               <div style="display: flex; align-items: center; gap: 8px;">
                 <span class="list-item-meta">${formatDate(shipment.shipmentDate)}</span>
+                <button class="btn-icon" onclick="generateDocsForShipment('${shipment.id}')" title="Generate Documents (Invoice + BOL + Packing Slip + COAs)" style="color: var(--primary);">
+                  <i class="ph ph-file-pdf"></i>
+                </button>
                 <button class="btn-icon" onclick="editShipment('${shipment.id}')" title="Edit Shipment">
                   <i class="ph ph-pencil-simple"></i>
                 </button>
@@ -2781,6 +2793,679 @@
 
       // Save
       doc.save(`BOL_${shipment.id || 'shipment'}.pdf`);
+    }
+
+    function generatePackingSlip(shipment, order) {
+      if (!shipment || !order) {
+        throw new Error('Missing shipment or order data');
+      }
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      const black = [0, 0, 0];
+      const lineItems = shipment.lineItems || [];
+
+      // Get customer info
+      const customer = customers.find(c => c.id === order.customerID) || {};
+
+      // Header - ROGUE ORIGIN title
+      doc.setFontSize(24);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...black);
+      doc.text('ROGUE ORIGIN', 15, 20);
+
+      // Order # and date (top right)
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Order #${order.id || 'N/A'}`, 195, 15, { align: 'right' });
+      doc.text(new Date(shipment.shipmentDate).toLocaleDateString('en-US', {
+        month: 'long', day: 'numeric', year: 'numeric'
+      }), 195, 21, { align: 'right' });
+
+      // Ship To / Bill To section
+      const addrY = 35;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('SHIP TO', 15, addrY);
+      doc.text('BILL TO', 110, addrY);
+
+      // Ship To address
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      let shipY = addrY + 6;
+      const shipToLines = String(order.shipTo_Address || customer.shippingAddress || '').split('\n');
+      if (order.soldTo_Contact || customer.contactName) {
+        doc.text(String(order.soldTo_Contact || customer.contactName), 15, shipY);
+        shipY += 5;
+      }
+      if (customer.companyName) {
+        doc.text(String(customer.companyName), 15, shipY);
+        shipY += 5;
+      }
+      shipToLines.forEach((line, i) => {
+        if (line.trim()) {
+          doc.text(String(line.trim()), 15, shipY);
+          shipY += 5;
+        }
+      });
+
+      // Bill To address
+      let billY = addrY + 6;
+      const billToLines = String(order.soldTo_Address || customer.billingAddress || '').split('\n');
+      if (customer.companyName) {
+        doc.text(String(customer.companyName), 110, billY);
+        billY += 5;
+      }
+      billToLines.forEach((line, i) => {
+        if (line.trim()) {
+          doc.text(String(line.trim()), 110, billY);
+          billY += 5;
+        }
+      });
+
+      // Horizontal line separator
+      const sepY = Math.max(shipY, billY) + 5;
+      doc.setLineWidth(0.3);
+      doc.line(15, sepY, 195, sepY);
+
+      // Items header
+      const itemsY = sepY + 10;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('ITEMS', 15, itemsY);
+      doc.text('QUANTITY', 195, itemsY, { align: 'right' });
+
+      // Items list
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      let itemY = itemsY + 10;
+      lineItems.forEach((item, i) => {
+        const strainName = item.strain || 'Unknown';
+        const qty = item.quantity || 0;
+        const qtyText = `${qty} of ${qty}`;
+
+        doc.text(strainName, 30, itemY);
+        doc.text(qtyText, 195, itemY, { align: 'right' });
+        itemY += 12;
+      });
+
+      // Separator after items
+      doc.setLineWidth(0.3);
+      doc.line(15, itemY + 2, 195, itemY + 2);
+
+      // Notes section (if any)
+      if (shipment.notes || order.notes) {
+        const notesY = itemY + 12;
+        doc.setFont('helvetica', 'bold');
+        doc.text('NOTES', 15, notesY);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        const notesText = String(shipment.notes || order.notes || '');
+        const notesLines = doc.splitTextToSize(notesText, 170);
+        doc.text(notesLines, 15, notesY + 6);
+      }
+
+      // Footer
+      const footerY = 260;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...black);
+      doc.text('Thank you for shopping with us!', 105, footerY, { align: 'center' });
+
+      doc.setFontSize(9);
+      doc.text('Rogue Origin', 105, footerY + 8, { align: 'center' });
+      doc.text('13003 Hwy 62, Eagle Point OR 97524, United States', 105, footerY + 13, { align: 'center' });
+      doc.text('social@rogueorigin.com', 105, footerY + 18, { align: 'center' });
+      doc.text('rogueorigin.com', 105, footerY + 23, { align: 'center' });
+
+      // Save
+      doc.save(`Packing_Slip_${shipment.invoiceNumber || shipment.id || 'shipment'}.pdf`);
+    }
+
+    // ========================================
+    // DOCUMENT BUNDLE GENERATOR
+    // ========================================
+
+    /**
+     * Generate a complete shipment document bundle
+     * Merges: Commercial Invoice + BOL + Packing Slip + matched COAs
+     */
+    async function generateDocumentBundle(shipment, order) {
+      if (!shipment || !order) {
+        showToast('Missing shipment or order data', 'error');
+        return;
+      }
+
+      // Load PDF libraries
+      showToast('Loading PDF libraries...', 'info');
+      const librariesLoaded = await ensurePDFLibrariesLoaded();
+      if (!librariesLoaded) return;
+
+      showToast('Generating documents...', 'info');
+
+      try {
+        const { jsPDF } = window.jspdf;
+        const { PDFDocument } = window.PDFLib;
+        const lineItems = shipment.lineItems || [];
+
+        // Create merged PDF document
+        const mergedPdf = await PDFDocument.create();
+
+        // 1. Generate Commercial Invoice
+        const invoiceDoc = createCommercialInvoicePdf(shipment, order);
+        const invoiceBytes = invoiceDoc.output('arraybuffer');
+        const invoicePdf = await PDFDocument.load(invoiceBytes);
+        const invoicePages = await mergedPdf.copyPages(invoicePdf, invoicePdf.getPageIndices());
+        invoicePages.forEach(page => mergedPdf.addPage(page));
+
+        // 2. Generate BOL
+        const bolDoc = createBOLPdf(shipment, order);
+        const bolBytes = bolDoc.output('arraybuffer');
+        const bolPdf = await PDFDocument.load(bolBytes);
+        const bolPages = await mergedPdf.copyPages(bolPdf, bolPdf.getPageIndices());
+        bolPages.forEach(page => mergedPdf.addPage(page));
+
+        // 3. Generate Packing Slip
+        const packingDoc = createPackingSlipPdf(shipment, order);
+        const packingBytes = packingDoc.output('arraybuffer');
+        const packingPdf = await PDFDocument.load(packingBytes);
+        const packingPages = await mergedPdf.copyPages(packingPdf, packingPdf.getPageIndices());
+        packingPages.forEach(page => mergedPdf.addPage(page));
+
+        // 4. Fetch and merge COAs
+        showToast('Matching COAs...', 'info');
+        const strains = lineItems.map(item => item.strain).filter(s => s);
+
+        if (strains.length > 0) {
+          const coaResult = await fetchCOAsForStrains(strains);
+
+          if (coaResult.success && coaResult.coas) {
+            let matchedCount = 0;
+            const unmatchedStrains = [];
+
+            for (const coa of coaResult.coas) {
+              if (coa.matched && coa.base64) {
+                try {
+                  const coaBytes = Uint8Array.from(atob(coa.base64), c => c.charCodeAt(0));
+                  const coaPdf = await PDFDocument.load(coaBytes);
+                  const coaPages = await mergedPdf.copyPages(coaPdf, coaPdf.getPageIndices());
+                  coaPages.forEach(page => mergedPdf.addPage(page));
+                  matchedCount++;
+                  console.log(`✅ Added COA for: ${coa.strain} → ${coa.matchedStrain}`);
+                } catch (e) {
+                  console.error(`Failed to merge COA for ${coa.strain}:`, e);
+                }
+              } else {
+                unmatchedStrains.push(coa.strain);
+              }
+            }
+
+            if (unmatchedStrains.length > 0) {
+              showToast(`No COA found for: ${unmatchedStrains.join(', ')}`, 'warning');
+            }
+
+            console.log(`📄 Merged ${matchedCount} COAs`);
+          }
+        }
+
+        // Save merged PDF
+        const mergedBytes = await mergedPdf.save();
+        const blob = new Blob([mergedBytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Shipment_${shipment.invoiceNumber || shipment.id}_Documents.pdf`;
+        link.click();
+        URL.revokeObjectURL(url);
+
+        showToast('Documents generated successfully!', 'success');
+      } catch (error) {
+        console.error('Document bundle generation failed:', error);
+        showToast('Failed to generate documents: ' + error.message, 'error');
+      }
+    }
+
+    /**
+     * Generate documents for a specific shipment (triggered by button click)
+     */
+    async function generateDocsForShipment(shipmentId) {
+      // Find the shipment in loaded shipments
+      const shipmentsResult = await apiCall('getShipments', { orderID: currentOrderID });
+      if (!shipmentsResult.success) {
+        showToast('Failed to load shipment data', 'error');
+        return;
+      }
+
+      const shipment = shipmentsResult.shipments.find(s => s.id === shipmentId);
+      if (!shipment) {
+        showToast('Shipment not found', 'error');
+        return;
+      }
+
+      // Parse line items if needed
+      if (typeof shipment.lineItems === 'string') {
+        try {
+          shipment.lineItems = JSON.parse(shipment.lineItems);
+        } catch (e) {
+          shipment.lineItems = [];
+        }
+      }
+
+      // Find the order
+      const order = orders.find(o => o.id === currentOrderID);
+      if (!order) {
+        showToast('Order not found', 'error');
+        return;
+      }
+
+      // Generate the document bundle
+      await generateDocumentBundle(shipment, order);
+    }
+
+    /**
+     * Fetch COAs from backend for a list of strains
+     */
+    async function fetchCOAsForStrains(strains) {
+      try {
+        const strainsParam = strains.join(',');
+        const response = await fetch(`${API_URL}?action=getCOAsForStrains&strains=${encodeURIComponent(strainsParam)}`);
+        return await response.json();
+      } catch (error) {
+        console.error('Failed to fetch COAs:', error);
+        return { success: false, error: error.message };
+      }
+    }
+
+    /**
+     * Create Commercial Invoice PDF (returns jsPDF doc, doesn't save)
+     */
+    function createCommercialInvoicePdf(shipment, order) {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      const black = [0, 0, 0];
+      const borderGray = [0, 0, 0];
+
+      // Header
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...black);
+      doc.text('Commercial Invoice', 15, 20);
+
+      // From Box
+      const fromBoxY = 30;
+      const fromBoxHeight = 35;
+      doc.setDrawColor(...borderGray);
+      doc.setLineWidth(0.5);
+      doc.rect(15, fromBoxY, 180, fromBoxHeight);
+      doc.line(105, fromBoxY, 105, fromBoxY + fromBoxHeight);
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('From', 17, fromBoxY + 6);
+
+      doc.setFontSize(9);
+      let leftY = fromBoxY + 12;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Contact name:', 17, leftY);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Jacob Fisher', 45, leftY);
+
+      leftY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Company name:', 17, leftY);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Rogue Origin', 45, leftY);
+
+      leftY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Address:', 17, leftY);
+      doc.setFont('helvetica', 'normal');
+      doc.text('13003 Hwy 62', 45, leftY);
+      doc.text('Eagle Point Oregon United States', 45, leftY + 4);
+      doc.text('97524', 45, leftY + 8);
+
+      leftY += 13;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Email:', 17, leftY);
+      doc.setFont('helvetica', 'normal');
+      doc.text('jacob@rogueorigin.com', 45, leftY);
+
+      // Right side metadata
+      let rightY = fromBoxY + 12;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Date:', 107, rightY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(new Date(shipment.shipmentDate).toLocaleDateString('en-US', {
+        year: 'numeric', month: 'short', day: 'numeric'
+      }), 145, rightY);
+
+      rightY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Invoice No:', 107, rightY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(shipment.invoiceNumber || 'N/A'), 145, rightY);
+
+      rightY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Terms of Sale (Incoterm):', 107, rightY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(order.terms || 'DAP'), 145, rightY);
+
+      rightY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Reason for Export:', 107, rightY);
+      doc.setFont('helvetica', 'normal');
+      doc.text('sold', 145, rightY);
+
+      // Ship To and Sold To boxes
+      const addressBoxY = fromBoxY + fromBoxHeight + 5;
+      const addressBoxHeight = 28;
+
+      doc.rect(15, addressBoxY, 90, addressBoxHeight);
+      doc.line(105, addressBoxY, 105, addressBoxY + addressBoxHeight);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text('Ship To', 17, addressBoxY + 6);
+
+      doc.setFontSize(9);
+      let shipY = addressBoxY + 12;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Address:', 17, shipY);
+      doc.setFont('helvetica', 'normal');
+      const shipAddressLines = String(order.shipTo_Address || '').split('\n');
+      shipAddressLines.forEach((line, i) => {
+        doc.text(String(line), 17, shipY + 4 + (i * 4));
+      });
+
+      doc.rect(105, addressBoxY, 90, addressBoxHeight);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text('Sold To', 107, addressBoxY + 6);
+
+      doc.setFontSize(9);
+      let soldY = addressBoxY + 12;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Contact name:', 107, soldY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(order.soldTo_Contact || ''), 135, soldY);
+
+      soldY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Address:', 107, soldY);
+      doc.setFont('helvetica', 'normal');
+      const soldAddressLines = String(order.soldTo_Address || '').split('\n');
+      soldAddressLines.forEach((line, i) => {
+        doc.text(String(line), 135, soldY + (i * 4));
+      });
+
+      // Line Items Table
+      const tableStartY = addressBoxY + addressBoxHeight + 5;
+      const lineItems = shipment.lineItems || [];
+      const tableData = lineItems.map(item => {
+        const qty = item.quantity || 0;
+        const unitPrice = item.unitPrice || 0;
+        return [
+          String(item.strain || ''),
+          String(item.type || ''),
+          String(qty) + ' kg',
+          '$' + unitPrice.toFixed(2),
+          '$' + (qty * unitPrice).toFixed(2),
+          'US',
+          '1211.90.8000'
+        ];
+      });
+
+      doc.autoTable({
+        startY: tableStartY,
+        head: [['Description', 'Type', 'Quantity', 'Unit Price', 'Total', 'Country', 'HS Code']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: { fillColor: [102, 137, 113], fontSize: 8 },
+        bodyStyles: { fontSize: 8 },
+        columnStyles: {
+          0: { cellWidth: 40 },
+          1: { cellWidth: 20 },
+          2: { cellWidth: 25 },
+          3: { cellWidth: 25 },
+          4: { cellWidth: 25 },
+          5: { cellWidth: 20 },
+          6: { cellWidth: 30 }
+        }
+      });
+
+      // Totals
+      const totalY = doc.lastAutoTable.finalY + 10;
+      const totalAmount = lineItems.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0);
+      const totalKg = lineItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Total:', 150, totalY);
+      doc.text('$' + totalAmount.toFixed(2), 195, totalY, { align: 'right' });
+
+      doc.text('Total Weight:', 150, totalY + 6);
+      doc.setFont('helvetica', 'normal');
+      doc.text(totalKg + ' kg', 195, totalY + 6, { align: 'right' });
+
+      // Declaration
+      const declY = totalY + 20;
+      doc.setFontSize(8);
+      doc.text('I hereby certify that the information on this invoice is true and', 15, declY);
+      doc.text('correct and that the contents of this shipment are as stated above.', 15, declY + 4);
+
+      doc.text('Signature: _________________________', 15, declY + 15);
+      doc.text('Date: _________________________', 120, declY + 15);
+
+      // Footer
+      doc.setFontSize(7);
+      doc.setTextColor(150, 150, 150);
+      doc.text('Rogue Origin Operations Hub', 105, 285, { align: 'center' });
+
+      return doc;
+    }
+
+    /**
+     * Create BOL PDF (returns jsPDF doc, doesn't save)
+     */
+    function createBOLPdf(shipment, order) {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      const black = [0, 0, 0];
+      const lineItems = shipment.lineItems || [];
+
+      // Header
+      doc.setFontSize(20);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...black);
+      doc.text('Bill of Lading', 15, 15);
+
+      // Date
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Date:', 130, 15);
+      doc.setFont('helvetica', 'normal');
+      doc.text(new Date(shipment.shipmentDate).toLocaleDateString('en-US', {
+        day: 'numeric', month: 'long', year: 'numeric'
+      }), 145, 15);
+
+      // Ship From box
+      doc.setLineWidth(0.5);
+      doc.rect(15, 20, 85, 30);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Ship From:', 17, 25);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text('Rogue Origin', 17, 30);
+      doc.text('13003 Hwy 62', 17, 34);
+      doc.text('Eagle Point, Oregon 97524', 17, 38);
+      doc.text('United States', 17, 42);
+
+      // Ship To box
+      doc.rect(105, 20, 85, 30);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Ship To:', 107, 25);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      const shipToLines = String(order.shipTo_Address || '').split('\n');
+      shipToLines.forEach((line, i) => {
+        if (i < 4) doc.text(String(line.trim()), 107, 30 + (i * 4));
+      });
+
+      // BOL Number
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('BOL #:', 15, 58);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(shipment.id || shipment.invoiceNumber || 'N/A'), 35, 58);
+
+      // Description of goods
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Description of Goods', 15, 70);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.text('Industrial Hemp Flower (CBD)', 15, 78);
+
+      let itemY = 86;
+      let totalKg = 0;
+      let totalPkgs = 0;
+
+      lineItems.forEach(item => {
+        const qty = item.quantity || 0;
+        const pkgs = Math.ceil(qty / 5); // Assume 5kg per package
+        totalKg += qty;
+        totalPkgs += pkgs;
+        doc.text(`• ${item.strain || 'Unknown'}: ${qty} kg (${pkgs} packages)`, 20, itemY);
+        itemY += 6;
+      });
+
+      // Totals
+      doc.setFont('helvetica', 'bold');
+      doc.text(`TOTAL: ${totalKg} kg | ${totalPkgs} packages`, 15, itemY + 5);
+
+      // Signature lines
+      const sigY = 200;
+      doc.setFontSize(9);
+      doc.text('Shipper Signature:', 15, sigY);
+      doc.line(50, sigY, 100, sigY);
+      doc.text('Date:', 105, sigY);
+      doc.line(115, sigY, 150, sigY);
+
+      doc.text('Carrier Signature:', 15, sigY + 15);
+      doc.line(50, sigY + 15, 100, sigY + 15);
+      doc.text('Date:', 105, sigY + 15);
+      doc.line(115, sigY + 15, 150, sigY + 15);
+
+      // Footer
+      doc.setFontSize(7);
+      doc.setTextColor(150, 150, 150);
+      doc.text('Rogue Origin Operations Hub', 105, 285, { align: 'center' });
+
+      return doc;
+    }
+
+    /**
+     * Create Packing Slip PDF (returns jsPDF doc, doesn't save)
+     */
+    function createPackingSlipPdf(shipment, order) {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      const black = [0, 0, 0];
+      const lineItems = shipment.lineItems || [];
+      const customer = customers.find(c => c.id === order.customerID) || {};
+
+      // Header
+      doc.setFontSize(24);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...black);
+      doc.text('ROGUE ORIGIN', 15, 20);
+
+      // Order # and date
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Order #${order.id || 'N/A'}`, 195, 15, { align: 'right' });
+      doc.text(new Date(shipment.shipmentDate).toLocaleDateString('en-US', {
+        month: 'long', day: 'numeric', year: 'numeric'
+      }), 195, 21, { align: 'right' });
+
+      // Ship To / Bill To
+      const addrY = 35;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('SHIP TO', 15, addrY);
+      doc.text('BILL TO', 110, addrY);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      let shipY = addrY + 6;
+      if (customer.companyName) {
+        doc.text(String(customer.companyName), 15, shipY);
+        shipY += 5;
+      }
+      const shipToLines = String(order.shipTo_Address || '').split('\n');
+      shipToLines.forEach(line => {
+        if (line.trim()) {
+          doc.text(String(line.trim()), 15, shipY);
+          shipY += 5;
+        }
+      });
+
+      let billY = addrY + 6;
+      if (customer.companyName) {
+        doc.text(String(customer.companyName), 110, billY);
+        billY += 5;
+      }
+      const billToLines = String(order.soldTo_Address || '').split('\n');
+      billToLines.forEach(line => {
+        if (line.trim()) {
+          doc.text(String(line.trim()), 110, billY);
+          billY += 5;
+        }
+      });
+
+      // Separator
+      const sepY = Math.max(shipY, billY) + 5;
+      doc.setLineWidth(0.3);
+      doc.line(15, sepY, 195, sepY);
+
+      // Items
+      const itemsY = sepY + 10;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('ITEMS', 15, itemsY);
+      doc.text('QUANTITY', 195, itemsY, { align: 'right' });
+
+      doc.setFont('helvetica', 'normal');
+      let itemY = itemsY + 10;
+      lineItems.forEach(item => {
+        const qty = item.quantity || 0;
+        doc.text(item.strain || 'Unknown', 30, itemY);
+        doc.text(`${qty} of ${qty}`, 195, itemY, { align: 'right' });
+        itemY += 12;
+      });
+
+      // Separator
+      doc.line(15, itemY + 2, 195, itemY + 2);
+
+      // Footer
+      const footerY = 260;
+      doc.setFontSize(10);
+      doc.text('Thank you for shopping with us!', 105, footerY, { align: 'center' });
+      doc.setFontSize(9);
+      doc.text('Rogue Origin', 105, footerY + 8, { align: 'center' });
+      doc.text('13003 Hwy 62, Eagle Point OR 97524, United States', 105, footerY + 13, { align: 'center' });
+      doc.text('social@rogueorigin.com', 105, footerY + 18, { align: 'center' });
+      doc.text('rogueorigin.com', 105, footerY + 23, { align: 'center' });
+
+      return doc;
     }
 
     async function saveShipmentAndGenerateDocs() {
