@@ -314,6 +314,14 @@ function doGet(e) {
       }
     } else if (action === 'getScoreboardOrderQueue') {
       result = getScoreboardOrderQueue();
+    } else if (action === 'getOrderForPortal') {
+      // PUBLIC: Customer portal order view (no password required)
+      var orderIdValidation = validateId(e.parameter.orderID);
+      if (!orderIdValidation.valid) {
+        result = { success: false, error: 'Invalid order ID' };
+      } else {
+        result = getOrderForPortal(orderIdValidation.value);
+      }
     } else if (action === 'getActiveMasterOrder') {
       var customerID = e.parameter.customerID;
       return ContentService.createTextOutput(
@@ -1362,6 +1370,123 @@ function getOrderFinancials(orderID) {
       balance: totalFulfilled - totalPaid
     };
   } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// ===== CUSTOMER PORTAL =====
+/**
+ * Gets order details for the customer-facing portal
+ * Returns order info in a format suitable for public display
+ * Includes shipments as "pallets" and calculates completion from bag timer
+ *
+ * @param {string} orderID - The order ID to fetch
+ * @returns {object} { success, order: {...} }
+ */
+function getOrderForPortal(orderID) {
+  try {
+    // Get order
+    var ordersResult = getMasterOrders();
+    if (!ordersResult.success) return ordersResult;
+
+    var order = null;
+    for (var i = 0; i < ordersResult.orders.length; i++) {
+      if (ordersResult.orders[i].id === orderID) {
+        order = ordersResult.orders[i];
+        break;
+      }
+    }
+    if (!order) return { success: false, error: 'Order not found' };
+
+    // Get customer name
+    var customersResult = getCustomers();
+    var customerName = 'Customer';
+    if (customersResult.success) {
+      for (var j = 0; j < customersResult.customers.length; j++) {
+        if (customersResult.customers[j].id === order.customerID) {
+          customerName = customersResult.customers[j].companyName;
+          break;
+        }
+      }
+    }
+
+    // Get shipments for this order (displayed as "pallets" in portal)
+    var shipmentsResult = getShipments(orderID);
+    var shipments = shipmentsResult.success ? shipmentsResult.shipments : [];
+
+    // Calculate total kg ordered from shipment line items
+    var totalKg = 0;
+    var pallets = [];
+
+    for (var k = 0; k < shipments.length; k++) {
+      var shipment = shipments[k];
+      var lineItems = [];
+      try {
+        lineItems = JSON.parse(shipment.lineItems || '[]');
+      } catch (e) {
+        lineItems = [];
+      }
+
+      var palletKg = 0;
+      var cultivars = [];
+      for (var l = 0; l < lineItems.length; l++) {
+        var item = lineItems[l];
+        palletKg += (item.quantity || 0);
+        if (item.strain) cultivars.push(item.strain);
+      }
+      totalKg += palletKg;
+
+      pallets.push({
+        id: shipment.invoiceNumber || shipment.id,
+        cultivars: cultivars.join(', '),
+        weightKg: palletKg,
+        status: shipment.status || 'pending'
+      });
+    }
+
+    // Calculate completed kg from bag timer data
+    // Sum up all cultivars mentioned in the line items
+    var completedKg = 0;
+    var countedStrains = {};
+
+    for (var m = 0; m < shipments.length; m++) {
+      var shipmentItems = [];
+      try {
+        shipmentItems = JSON.parse(shipments[m].lineItems || '[]');
+      } catch (e) {
+        shipmentItems = [];
+      }
+
+      for (var n = 0; n < shipmentItems.length; n++) {
+        var strain = shipmentItems[n].strain;
+        if (strain && !countedStrains[strain]) {
+          countedStrains[strain] = true;
+          var bagsForStrain = count5kgBagsForStrain(strain);
+          completedKg += (bagsForStrain * 5);
+        }
+      }
+    }
+
+    // Cap completedKg at totalKg (can't be more than ordered)
+    if (completedKg > totalKg) completedKg = totalKg;
+
+    // Build response in format customer portal expects
+    return {
+      success: true,
+      order: {
+        id: order.id,
+        customer: customerName,
+        totalKg: totalKg,
+        completedKg: completedKg,
+        status: order.status || 'pending',
+        createdDate: order.createdDate,
+        dueDate: order.dueDate,
+        notes: order.notes || '',
+        pallets: pallets
+      }
+    };
+  } catch (error) {
+    Logger.log('[getOrderForPortal] Error: ' + error.message);
     return { success: false, error: error.message };
   }
 }

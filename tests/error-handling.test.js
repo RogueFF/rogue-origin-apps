@@ -13,6 +13,15 @@ async function testErrorHandling() {
   const page = await context.newPage();
 
   try {
+    // Monitor console messages
+    page.on('console', msg => {
+      const type = msg.type();
+      const text = msg.text();
+      if (type === 'error' || text.includes('API') || text.includes('Error') || text.includes('error')) {
+        console.log(`   [${type}] ${text}`);
+      }
+    });
+
     // Test 1: Normal Load - Status Bar Appears and Hides
     console.log('📍 Test 1: Normal load with status bar');
     const filePath = 'file://' + process.cwd().replace(/\\/g, '/') + '/src/pages/index.html';
@@ -84,21 +93,33 @@ async function testErrorHandling() {
     // Test 3: Simulate Network Error
     console.log('📍 Test 3: Simulate network error');
 
-    // Intercept API requests and return errors
-    await page.route('**/exec*', route => {
-      console.log('   ℹ️  Intercepted API call - returning error');
-      route.abort('failed');
+    // Intercept ALL network requests and abort them to simulate connection failure
+    await page.route('**/*', route => {
+      const url = route.request().url();
+      // Only intercept Google Apps Script API calls
+      if (url.includes('script.google.com') || url.includes('exec')) {
+        console.log('   ℹ️  Intercepted API call:', url);
+        route.abort('failed');
+      } else {
+        // Allow other resources (CSS, JS, fonts, etc.)
+        route.continue();
+      }
     });
 
     // Click refresh to trigger error
     await page.click('#refreshBtn');
-    await page.waitForTimeout(1000);
+
+    // Wait for error state to appear (give it 2 seconds)
+    await page.waitForTimeout(2000);
 
     // Check status bar state
     const statusBarClasses = await statusBar.getAttribute('class');
     const statusText = await page.locator('#connectionStatusText').textContent();
     console.log(`   ✓ Status bar classes: ${statusBarClasses}`);
     console.log(`   ✓ Status text: "${statusText}"`);
+
+    const hasErrorClass = statusBarClasses.includes('error');
+    console.log(`   ${hasErrorClass ? '✓' : '✗'} Error state active: ${hasErrorClass}`);
 
     // Check if retry button is visible
     const retryBtn = await page.locator('#connectionRetryBtn');
