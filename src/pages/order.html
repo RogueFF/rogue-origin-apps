@@ -48,7 +48,7 @@
 
 <script>
 (function() {
-  const API_URL = 'https://script.google.com/macros/s/REDACTED-PRODUCTION-API-ID/exec';
+  const API_URL = 'https://script.google.com/macros/s/REDACTED-WHOLESALE-API-ID/exec';
 
   // Toast notification system
   function showToast(message, type, duration) {
@@ -95,7 +95,7 @@
     }
 
     try {
-      const response = await fetch(`${API_URL}?action=getOrder&id=${encodeURIComponent(orderId)}`);
+      const response = await fetch(`${API_URL}?action=getOrderForPortal&orderID=${encodeURIComponent(orderId)}`);
       const data = await response.json();
 
       if (data.order) {
