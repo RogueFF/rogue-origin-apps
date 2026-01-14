@@ -822,8 +822,9 @@ function getScoreboardData() {
       if (pct >= 90) { currentStreak++; streak = currentStreak; }
       else { currentStreak = 0; }
       
-      var rate = row.tops / row.trimmers;
-      hourlyRates.push({ timeSlot: row.timeSlot, rate: rate, target: targetRate * row.multiplier });
+      // Normalize rate to full-hour equivalent (e.g., 0.5 lbs in 30 min = 1.0 lbs/hr)
+      var rate = (row.tops / row.trimmers) / row.multiplier;
+      hourlyRates.push({ timeSlot: row.timeSlot, rate: rate, target: targetRate });
     }
   }
   
