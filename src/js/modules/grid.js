@@ -106,6 +106,9 @@ export function initMuuriGrid() {
     setGrid('widgets', grid);
     setFlag('muuriGridReady', true);
 
+    // Add muuri-active class to body for CSS fallback detection
+    document.body.classList.add('muuri-active');
+
     // Load saved layout after a short delay to ensure grid is ready
     setTimeout(function() {
       loadLayout();

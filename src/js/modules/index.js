@@ -212,6 +212,16 @@ import {
   setDataCallbacks
 } from './date.js';
 
+// ===== STATUS IMPORTS =====
+import {
+  initStatusBar,
+  showConnecting,
+  showConnected,
+  showError,
+  showRetrying,
+  hideStatus
+} from './status.js';
+
 // ===== SKELETON LOADING UI =====
 function showSkeletons(show) {
   setSkeletonsShowing(show);
@@ -546,10 +556,12 @@ function setupResizeHandler() {
           try {
             widgetGrid.destroy();
             setGrid('widgets', null);
+            document.body.classList.remove('muuri-active');
             console.log('Widget Muuri destroyed for mobile view');
           } catch (e) {
             console.warn('Error destroying widget Muuri:', e);
             setGrid('widgets', null);
+            document.body.classList.remove('muuri-active');
           }
         }
       }
@@ -620,10 +632,13 @@ function init() {
   // 5.6. Initialize PWA install prompt
   initInstallPrompt();
 
-  // 6. Initialize target input
+  // 6. Initialize status bar
+  initStatusBar(refreshData);
+
+  // 7. Initialize target input
   initTargetInput();
 
-  // 7. Render KPI cards
+  // 8. Render KPI cards
   renderKPICards();
 
   // 8. Render KPI toggles in settings

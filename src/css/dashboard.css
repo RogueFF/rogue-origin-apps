@@ -691,6 +691,88 @@ body.sidebar-collapsed .main { margin-left: var(--sidebar-collapsed); }
 /* Header Logo */
 .header-logo { height: 28px; width: auto; }
 
+/* Connection Status Bar */
+.connection-status {
+  position: sticky;
+  top: 60px; /* Below header */
+  z-index: 55;
+  background: var(--warning-light);
+  border-bottom: 1px solid var(--border-light);
+  padding: 8px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  transition: all 0.3s ease;
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.connection-status.visible {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.connection-status.connecting {
+  background: rgba(228, 170, 79, 0.1);
+  border-bottom-color: rgba(228, 170, 79, 0.3);
+  color: var(--gold-700);
+}
+
+.connection-status.connected {
+  background: rgba(102, 137, 113, 0.1);
+  border-bottom-color: rgba(102, 137, 113, 0.3);
+  color: var(--green-700);
+}
+
+.connection-status.error {
+  background: rgba(196, 92, 74, 0.1);
+  border-bottom-color: rgba(196, 92, 74, 0.3);
+  color: var(--danger);
+}
+
+.connection-status-icon {
+  display: flex;
+  align-items: center;
+  font-size: 16px;
+}
+
+.connection-status-icon .ph-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.connection-status-text {
+  flex: 1;
+  font-weight: 500;
+}
+
+.connection-retry-btn {
+  background: none;
+  border: 1px solid currentColor;
+  color: inherit;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.connection-retry-btn:hover {
+  background: currentColor;
+  color: var(--bg-card);
+}
+
 /* Welcome Greeting */
 .welcome-section { margin-bottom: 20px; }
 .welcome-greeting { font-size: 22px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
@@ -1643,6 +1725,34 @@ body.tutorial-active::before {
     border-color 200ms ease;
 }
 
+/* Widget Error State - Bottom Accent Strip */
+.widget-item.error-state .widget-card::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--warning);
+  animation: errorPulse 2s ease-in-out infinite;
+  cursor: pointer;
+}
+
+@keyframes errorPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.widget-item.error-state .widget-card {
+  cursor: pointer;
+}
+
+.widget-item.error-state .widget-card:hover::after {
+  height: 4px;
+  animation: none;
+  opacity: 1;
+}
+
 /* Hemp Fiber Texture Overlay */
 .widget-card::before {
   content: '';
@@ -1902,6 +2012,39 @@ body.tutorial-active::before {
   margin-top: 16px;
   min-height: 400px;
   padding: 4px;
+}
+
+/* Fallback: Flexbox layout when Muuri is not active */
+/* Body gets .muuri-active class when Muuri initializes successfully */
+body:not(.muuri-active) .widgets-container {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+body:not(.muuri-active) .widget-item {
+  position: relative; /* Override absolute positioning */
+  flex: 0 0 calc(33.333% - 8px);
+  max-width: calc(33.333% - 8px);
+}
+
+body:not(.muuri-active) .widget-item.size-small { flex-basis: calc(25% - 8px); max-width: calc(25% - 8px); }
+body:not(.muuri-active) .widget-item.size-medium { flex-basis: calc(33.333% - 8px); max-width: calc(33.333% - 8px); }
+body:not(.muuri-active) .widget-item.size-large { flex-basis: calc(50% - 8px); max-width: calc(50% - 8px); }
+body:not(.muuri-active) .widget-item.size-xl { flex-basis: calc(66.666% - 8px); max-width: calc(66.666% - 8px); }
+body:not(.muuri-active) .widget-item.size-full { flex-basis: calc(100% - 8px); max-width: calc(100% - 8px); }
+
+@media (max-width: 768px) {
+  body:not(.muuri-active) .widget-item,
+  body:not(.muuri-active) .widget-item.size-small,
+  body:not(.muuri-active) .widget-item.size-medium,
+  body:not(.muuri-active) .widget-item.size-large,
+  body:not(.muuri-active) .widget-item.size-xl,
+  body:not(.muuri-active) .widget-item.size-full {
+    flex-basis: 100%;
+    max-width: 100%;
+  }
 }
 
 /* Widget Cards */
