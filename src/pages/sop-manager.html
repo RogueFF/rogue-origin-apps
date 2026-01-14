@@ -53,8 +53,8 @@
     </header>
     <div class="toolbar">
       <div class="toolbar-left">
-        <div class="search-box"><i class="ph-duotone ph-magnifying-glass"></i><input type="text" id="searchInput" placeholder="Search SOPs..." oninput="filterSOPs()"></div>
-        <select class="filter-select" id="statusFilter" onchange="filterSOPs()"><option value="">All SOPs</option><option value="published">Published</option><option value="draft">Drafts</option></select>
+        <div class="search-box"><i class="ph-duotone ph-magnifying-glass"></i><input type="text" id="searchInput" placeholder="Search SOPs..." data-i18n-placeholder="searchPlaceholder" oninput="filterSOPs()"></div>
+        <select class="filter-select" id="statusFilter" onchange="filterSOPs()"><option value="" data-i18n="allSOPs">All SOPs</option><option value="published" data-i18n="published">Published</option><option value="draft" data-i18n="drafts">Drafts</option></select>
         <select class="filter-select" id="deptFilter" onchange="filterSOPs()"></select>
         <select class="filter-select" id="tagFilter" onchange="filterSOPs()"></select>
       </div>
@@ -67,16 +67,16 @@
     </div>
     <div class="content">
       <div class="stats-bar">
-        <div class="stat-card"><div class="stat-card-label">Total</div><div class="stat-card-value gold" id="statTotal">0</div></div>
-        <div class="stat-card"><div class="stat-card-label">Published</div><div class="stat-card-value green" id="statPublished">0</div></div>
-        <div class="stat-card"><div class="stat-card-label">Drafts</div><div class="stat-card-value sungrown" id="statDrafts">0</div></div>
-        <div class="stat-card" style="cursor:pointer;" onclick="openRequestsModal()"><div class="stat-card-label">Requests</div><div class="stat-card-value danger" id="statRequests">0</div></div>
-        <div class="stat-card"><div class="stat-card-label">This Month</div><div class="stat-card-value indoor" id="statMonth">0</div></div>
+        <div class="stat-card"><div class="stat-card-label" data-i18n="total">Total</div><div class="stat-card-value gold" id="statTotal">0</div></div>
+        <div class="stat-card"><div class="stat-card-label" data-i18n="published">Published</div><div class="stat-card-value green" id="statPublished">0</div></div>
+        <div class="stat-card"><div class="stat-card-label" data-i18n="drafts">Drafts</div><div class="stat-card-value sungrown" id="statDrafts">0</div></div>
+        <div class="stat-card" style="cursor:pointer;" onclick="openRequestsModal()"><div class="stat-card-label" data-i18n="requests">Requests</div><div class="stat-card-value danger" id="statRequests">0</div></div>
+        <div class="stat-card"><div class="stat-card-label" data-i18n="thisMonth">This Month</div><div class="stat-card-value indoor" id="statMonth">0</div></div>
       </div>
-      <div id="loadingState" class="loading-state"><div class="spinner"></div><p>Loading SOPs from Google Sheets...</p></div>
+      <div id="loadingState" class="loading-state"><div class="spinner"></div><p data-i18n="loading">Loading SOPs from Google Sheets...</p></div>
       <div class="sop-grid" id="sopGrid" style="display:none;"></div>
-      <div class="sop-list" id="sopList"><div class="sop-table"><table><thead><tr><th>Title</th><th>Department</th><th>Steps</th><th>Status</th><th>Updated</th><th>Actions</th></tr></thead><tbody id="sopTableBody"></tbody></table></div></div>
-      <div class="empty-state" id="emptyState" style="display:none;"><i class="ph-duotone ph-files"></i><h3>No SOPs Found</h3><p>Create your first SOP to get started.</p><button class="header-btn primary" onclick="openCreateModal()"><i class="ph-duotone ph-plus"></i> Create SOP</button></div>
+      <div class="sop-list" id="sopList"><div class="sop-table"><table><thead><tr><th data-i18n="sopTitle">Title</th><th data-i18n="department">Department</th><th data-i18n="steps">Steps</th><th data-i18n="status">Status</th><th data-i18n="updated">Updated</th><th data-i18n="actions">Actions</th></tr></thead><tbody id="sopTableBody"></tbody></table></div></div>
+      <div class="empty-state" id="emptyState" style="display:none;"><i class="ph-duotone ph-files"></i><h3 data-i18n="noSOPs">No SOPs Found</h3><p data-i18n="createFirst">Create your first SOP to get started.</p><button class="header-btn primary" onclick="openCreateModal()"><i class="ph-duotone ph-plus"></i> <span data-i18n="createSOP">Create SOP</span></button></div>
     </div>
   </main>
 
@@ -358,6 +358,61 @@
     </div>
   </div>
 
+  <!-- Media Upload Modal -->
+  <div class="modal" id="mediaModal">
+    <div class="modal-box small">
+      <div class="modal-header">
+        <h2><i class="ph-duotone ph-image"></i> <span data-i18n="addMedia">Add Media</span></h2>
+        <button class="modal-close" onclick="closeModal('mediaModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="media-options">
+          <button class="media-option" onclick="captureFromCamera('image')">
+            <i class="ph-duotone ph-camera"></i>
+            <span data-i18n="takePhoto">Take Photo</span>
+          </button>
+          <button class="media-option" onclick="selectFromLibrary('image')">
+            <i class="ph-duotone ph-images"></i>
+            <span data-i18n="photoLibrary">Photo Library</span>
+          </button>
+          <button class="media-option" onclick="captureFromCamera('video')">
+            <i class="ph-duotone ph-video-camera"></i>
+            <span data-i18n="recordVideo">Record Video</span>
+          </button>
+          <button class="media-option" onclick="selectFromLibrary('video')">
+            <i class="ph-duotone ph-film-strip"></i>
+            <span data-i18n="videoLibrary">Video Library</span>
+          </button>
+          <button class="media-option url-option" onclick="enterMediaUrl()">
+            <i class="ph-duotone ph-link"></i>
+            <span data-i18n="pasteUrl">Paste URL</span>
+          </button>
+        </div>
+        <div class="media-url-input" id="mediaUrlInput" style="display:none;">
+          <input type="text" class="form-input" id="mediaUrlField" placeholder="https://youtube.com/... or image URL">
+          <div style="display:flex;gap:8px;margin-top:10px;">
+            <button class="header-btn" onclick="cancelMediaUrl()"><span data-i18n="cancel">Cancel</span></button>
+            <button class="header-btn primary" onclick="confirmMediaUrl()"><i class="ph-duotone ph-check"></i> <span data-i18n="confirm">Confirm</span></button>
+          </div>
+        </div>
+        <div class="media-preview" id="mediaPreview" style="display:none;">
+          <div id="mediaPreviewContent"></div>
+          <div class="media-preview-actions">
+            <button class="header-btn" onclick="cancelMediaPreview()"><span data-i18n="cancel">Cancel</span></button>
+            <button class="header-btn primary" onclick="confirmMediaUpload()"><i class="ph-duotone ph-check"></i> <span data-i18n="useThis">Use This</span></button>
+          </div>
+        </div>
+        <p class="media-note" id="mediaSizeNote" style="display:none;"><i class="ph-duotone ph-info"></i> <span data-i18n="videoNote">Videos must be uploaded to YouTube or Google Drive. Paste the sharing link.</span></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden file inputs for media capture -->
+  <input type="file" id="cameraImageInput" accept="image/*" capture="environment" style="display:none;" onchange="handleMediaCapture(this, 'image')">
+  <input type="file" id="libraryImageInput" accept="image/*" style="display:none;" onchange="handleMediaCapture(this, 'image')">
+  <input type="file" id="cameraVideoInput" accept="video/*" capture="environment" style="display:none;" onchange="handleMediaCapture(this, 'video')">
+  <input type="file" id="libraryVideoInput" accept="video/*" style="display:none;" onchange="handleMediaCapture(this, 'video')">
+
   <div class="toast" id="toast"><i class="ph-duotone ph-check-circle"></i><span id="toastMsg"></span></div>
 
   <script>
@@ -393,7 +448,351 @@
         {name:'critical',color:'gold'}
       ]
     };
-    
+
+    // Media upload state
+    let currentMediaStepIndex = null;
+    let pendingMediaData = null;
+    let pendingMediaType = null;
+
+    // Translation strings
+    const translations = {
+      en: {
+        addMedia: 'Add Media',
+        takePhoto: 'Take Photo',
+        photoLibrary: 'Photo Library',
+        recordVideo: 'Record Video',
+        videoLibrary: 'Video Library',
+        pasteUrl: 'Paste URL',
+        cancel: 'Cancel',
+        confirm: 'Confirm',
+        useThis: 'Use This',
+        videoNote: 'Large videos should be uploaded to YouTube or Google Drive. Paste the sharing link.',
+        searchPlaceholder: 'Search SOPs...',
+        allSOPs: 'All SOPs',
+        published: 'Published',
+        drafts: 'Drafts',
+        allDepts: 'All Departments',
+        allTags: 'All Tags',
+        total: 'Total',
+        requests: 'Requests',
+        thisMonth: 'This Month',
+        noSOPs: 'No SOPs Found',
+        createFirst: 'Create your first SOP to get started.',
+        createSOP: 'Create New SOP',
+        editSOP: 'Edit SOP',
+        viewSOP: 'View SOP',
+        sopTitle: 'SOP Title',
+        department: 'Department',
+        steps: 'Steps',
+        status: 'Status',
+        updated: 'Updated',
+        actions: 'Actions',
+        save: 'Save',
+        saveDraft: 'Save Draft',
+        publish: 'Publish',
+        delete: 'Delete',
+        close: 'Close',
+        edit: 'Edit',
+        loading: 'Loading SOPs from Google Sheets...',
+        refreshing: 'Refreshing...',
+        saved: 'Saved!',
+        deleted: 'Deleted',
+        error: 'Error',
+        addStep: 'Add Step',
+        stepTitle: 'Step title...',
+        stepDesc: 'Description...',
+        addImage: 'Add image',
+        addVideo: 'Add video',
+        compressing: 'Compressing...',
+        processing: 'Processing...'
+      },
+      es: {
+        addMedia: 'Agregar Media',
+        takePhoto: 'Tomar Foto',
+        photoLibrary: 'Galería de Fotos',
+        recordVideo: 'Grabar Video',
+        videoLibrary: 'Galería de Videos',
+        pasteUrl: 'Pegar URL',
+        cancel: 'Cancelar',
+        confirm: 'Confirmar',
+        useThis: 'Usar Este',
+        videoNote: 'Los videos grandes deben subirse a YouTube o Google Drive. Pegue el enlace compartido.',
+        searchPlaceholder: 'Buscar SOPs...',
+        allSOPs: 'Todos los SOPs',
+        published: 'Publicados',
+        drafts: 'Borradores',
+        allDepts: 'Todos los Departamentos',
+        allTags: 'Todas las Etiquetas',
+        total: 'Total',
+        requests: 'Solicitudes',
+        thisMonth: 'Este Mes',
+        noSOPs: 'No se Encontraron SOPs',
+        createFirst: 'Cree su primer SOP para comenzar.',
+        createSOP: 'Crear Nuevo SOP',
+        editSOP: 'Editar SOP',
+        viewSOP: 'Ver SOP',
+        sopTitle: 'Título del SOP',
+        department: 'Departamento',
+        steps: 'Pasos',
+        status: 'Estado',
+        updated: 'Actualizado',
+        actions: 'Acciones',
+        save: 'Guardar',
+        saveDraft: 'Guardar Borrador',
+        publish: 'Publicar',
+        delete: 'Eliminar',
+        close: 'Cerrar',
+        edit: 'Editar',
+        loading: 'Cargando SOPs desde Google Sheets...',
+        refreshing: 'Actualizando...',
+        saved: '¡Guardado!',
+        deleted: 'Eliminado',
+        error: 'Error',
+        addStep: 'Agregar Paso',
+        stepTitle: 'Título del paso...',
+        stepDesc: 'Descripción...',
+        addImage: 'Agregar imagen',
+        addVideo: 'Agregar video',
+        compressing: 'Comprimiendo...',
+        processing: 'Procesando...'
+      }
+    };
+
+    function t(key) {
+      return translations[appLang]?.[key] || translations.en[key] || key;
+    }
+
+    function applyTranslations() {
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (translations[appLang]?.[key]) {
+          el.textContent = translations[appLang][key];
+        }
+      });
+      document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        if (translations[appLang]?.[key]) {
+          el.placeholder = translations[appLang][key];
+        }
+      });
+    }
+
+    // =====================================================
+    // Media Upload Functions
+    // =====================================================
+
+    function openMediaModal(stepIndex) {
+      currentMediaStepIndex = stepIndex;
+      pendingMediaData = null;
+      pendingMediaType = null;
+      document.getElementById('mediaUrlInput').style.display = 'none';
+      document.getElementById('mediaPreview').style.display = 'none';
+      document.getElementById('mediaSizeNote').style.display = 'none';
+      document.querySelector('.media-options').style.display = 'grid';
+      openModal('mediaModal');
+    }
+
+    function captureFromCamera(type) {
+      if (type === 'image') {
+        document.getElementById('cameraImageInput').click();
+      } else {
+        document.getElementById('cameraVideoInput').click();
+        document.getElementById('mediaSizeNote').style.display = 'flex';
+      }
+    }
+
+    function selectFromLibrary(type) {
+      if (type === 'image') {
+        document.getElementById('libraryImageInput').click();
+      } else {
+        document.getElementById('libraryVideoInput').click();
+        document.getElementById('mediaSizeNote').style.display = 'flex';
+      }
+    }
+
+    function enterMediaUrl() {
+      document.querySelector('.media-options').style.display = 'none';
+      document.getElementById('mediaUrlInput').style.display = 'block';
+      document.getElementById('mediaUrlField').value = '';
+      document.getElementById('mediaUrlField').focus();
+    }
+
+    function cancelMediaUrl() {
+      document.getElementById('mediaUrlInput').style.display = 'none';
+      document.querySelector('.media-options').style.display = 'grid';
+    }
+
+    function confirmMediaUrl() {
+      const url = document.getElementById('mediaUrlField').value.trim();
+      if (!url) {
+        showToast(t('error') + ': Enter URL', 'error');
+        return;
+      }
+
+      const mediaType = detectMediaType(url);
+      editingSteps[currentMediaStepIndex].media = url;
+      editingSteps[currentMediaStepIndex].mediaType = mediaType;
+      // Keep backwards compatibility with image field
+      if (mediaType === 'image') {
+        editingSteps[currentMediaStepIndex].image = url;
+      }
+
+      renderSteps();
+      closeModal('mediaModal');
+      showToast('Media added!', 'success');
+    }
+
+    function detectMediaType(url) {
+      if (!url) return null;
+      const lower = url.toLowerCase();
+      if (lower.includes('youtube.com') || lower.includes('youtu.be')) return 'youtube';
+      if (lower.includes('drive.google.com')) return 'gdrive';
+      if (lower.includes('vimeo.com')) return 'vimeo';
+      if (lower.match(/\.(mp4|webm|mov|avi|mkv)(\?|$)/i)) return 'video';
+      if (lower.startsWith('data:video/')) return 'video';
+      if (lower.startsWith('data:image/')) return 'image';
+      return 'image'; // default to image
+    }
+
+    async function handleMediaCapture(input, type) {
+      const file = input.files?.[0];
+      if (!file) return;
+
+      try {
+        if (type === 'image') {
+          showToast(t('compressing'), 'success');
+          const compressed = await compressImage(file, 400, 0.6);
+          showMediaPreview(compressed, 'image');
+        } else {
+          // For video, check size
+          if (file.size > 5 * 1024 * 1024) { // 5MB limit for embedded video
+            showToast('Video too large. Upload to YouTube/Drive and paste URL.', 'error');
+            document.getElementById('mediaSizeNote').style.display = 'flex';
+            return;
+          }
+          showToast(t('processing'), 'success');
+          const dataUrl = await fileToDataUrl(file);
+          showMediaPreview(dataUrl, 'video');
+        }
+      } catch (e) {
+        console.error('Media processing error:', e);
+        showToast(t('error') + ': ' + e.message, 'error');
+      }
+
+      // Reset input
+      input.value = '';
+    }
+
+    function showMediaPreview(dataUrl, type) {
+      pendingMediaData = dataUrl;
+      pendingMediaType = type;
+
+      document.querySelector('.media-options').style.display = 'none';
+      document.getElementById('mediaUrlInput').style.display = 'none';
+
+      const previewContent = document.getElementById('mediaPreviewContent');
+      if (type === 'image') {
+        previewContent.innerHTML = '<img src="' + dataUrl + '" alt="Preview">';
+      } else {
+        previewContent.innerHTML = '<video src="' + dataUrl + '" controls playsinline style="max-height:200px;"></video>';
+      }
+
+      document.getElementById('mediaPreview').style.display = 'block';
+    }
+
+    function cancelMediaPreview() {
+      pendingMediaData = null;
+      pendingMediaType = null;
+      document.getElementById('mediaPreview').style.display = 'none';
+      document.querySelector('.media-options').style.display = 'grid';
+    }
+
+    function confirmMediaUpload() {
+      if (!pendingMediaData || currentMediaStepIndex === null) return;
+
+      editingSteps[currentMediaStepIndex].media = pendingMediaData;
+      editingSteps[currentMediaStepIndex].mediaType = pendingMediaType;
+      // Backwards compatibility
+      if (pendingMediaType === 'image') {
+        editingSteps[currentMediaStepIndex].image = pendingMediaData;
+      }
+
+      renderSteps();
+      closeModal('mediaModal');
+      showToast('Media added!', 'success');
+
+      pendingMediaData = null;
+      pendingMediaType = null;
+    }
+
+    // Image compression using canvas
+    async function compressImage(file, maxSize, quality) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+
+            // Calculate new dimensions
+            if (width > height) {
+              if (width > maxSize) {
+                height = Math.round((height * maxSize) / width);
+                width = maxSize;
+              }
+            } else {
+              if (height > maxSize) {
+                width = Math.round((width * maxSize) / height);
+                height = maxSize;
+              }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // Convert to JPEG with compression
+            const dataUrl = canvas.toDataURL('image/jpeg', quality);
+
+            // Check size - if still too large, compress more
+            if (dataUrl.length > 45000) { // ~33KB actual after base64
+              const lowerQuality = canvas.toDataURL('image/jpeg', 0.4);
+              resolve(lowerQuality);
+            } else {
+              resolve(dataUrl);
+            }
+          };
+          img.onerror = () => reject(new Error('Failed to load image'));
+          img.src = e.target.result;
+        };
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function fileToDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // Get YouTube embed URL
+    function getYouTubeEmbedUrl(url) {
+      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+      const match = url.match(regExp);
+      if (match && match[2].length === 11) {
+        return 'https://www.youtube.com/embed/' + match[2];
+      }
+      return null;
+    }
+
     // =====================================================
     // Data Loading & Saving (API-based)
     // =====================================================
@@ -467,6 +866,8 @@
           description: s.description || '',
           desc_es: s.desc_es || '',
           image: s.image || '',
+          media: s.media || s.image || '',
+          mediaType: s.mediaType || detectMediaType(s.media || s.image || ''),
           safety: s.safety || false,
           quality: s.quality || false
         }))
@@ -880,14 +1281,42 @@
       const title = s['title_' + lang] || s.title;
       const desc = s['desc_' + lang] || s.description;
       const u = window.location.origin + window.location.pathname + '?view=' + s.id;
-      
+
       const stepsHtml = (s.steps || []).map((st, i) => {
         const stepTitle = st['title_' + lang] || st.title;
         const stepDesc = st['desc_' + lang] || st.description;
-        return '<div class="view-step"><div class="view-step-number">' + (i + 1) + '</div><div class="view-step-content"><div class="view-step-title">' + esc(stepTitle) + (st.safety ? ' <i class="ph-duotone ph-warning icon safety"></i>' : '') + (st.quality ? ' <i class="ph-duotone ph-seal-check icon quality"></i>' : '') + '</div><div class="view-step-desc">' + esc(stepDesc) + '</div></div>' + (st.image ? '<div class="view-step-image"><img src="' + st.image + '"></div>' : '') + '</div>';
+        const mediaUrl = st.media || st.image || '';
+        const mediaType = st.mediaType || detectMediaType(mediaUrl);
+        const isVideo = mediaType === 'video' || mediaType === 'youtube' || mediaType === 'gdrive' || mediaType === 'vimeo';
+
+        let mediaHtml = '';
+        if (mediaUrl) {
+          if (isVideo) {
+            if (mediaType === 'youtube') {
+              const embedUrl = getYouTubeEmbedUrl(mediaUrl);
+              mediaHtml = '<div class="view-step-video"><iframe src="' + embedUrl + '?rel=0" allowfullscreen></iframe></div>';
+            } else {
+              mediaHtml = '<div class="view-step-video"><video src="' + mediaUrl + '" controls playsinline></video></div>';
+            }
+          } else {
+            mediaHtml = '<div class="view-step-image"><img src="' + mediaUrl + '"></div>';
+          }
+        }
+
+        return '<div class="view-step">' +
+          '<div class="view-step-number">' + (i + 1) + '</div>' +
+          '<div class="view-step-content">' +
+            '<div class="view-step-title">' + esc(stepTitle) +
+              (st.safety ? ' <i class="ph-duotone ph-warning icon safety"></i>' : '') +
+              (st.quality ? ' <i class="ph-duotone ph-seal-check icon quality"></i>' : '') +
+            '</div>' +
+            '<div class="view-step-desc">' + esc(stepDesc) + '</div>' +
+          '</div>' +
+          mediaHtml +
+        '</div>';
       }).join('');
-      
-      document.getElementById('viewModalBody').innerHTML = 
+
+      document.getElementById('viewModalBody').innerHTML =
         '<div class="view-sop-header"><div><div class="view-sop-title">' + esc(title) + '</div>' +
         '<div class="view-sop-meta">' +
           '<div class="view-sop-meta-item"><i class="ph-duotone ph-folder"></i> ' + s.dept + '</div>' +
@@ -956,20 +1385,51 @@
     
     function renderSteps() {
       const list = document.getElementById('stepsList');
-      list.innerHTML = editingSteps.map((s, i) => 
-        '<div class="step-item" data-index="' + i + '">' +
+      list.innerHTML = editingSteps.map((s, i) => {
+        // Determine media source (prefer new media field, fallback to image)
+        const mediaUrl = s.media || s.image || '';
+        const mediaType = s.mediaType || detectMediaType(mediaUrl);
+        const hasMedia = !!mediaUrl;
+        const isVideo = mediaType === 'video' || mediaType === 'youtube' || mediaType === 'gdrive' || mediaType === 'vimeo';
+
+        let mediaPreviewHtml = '';
+        if (hasMedia) {
+          if (isVideo) {
+            if (mediaType === 'youtube') {
+              const embedUrl = getYouTubeEmbedUrl(mediaUrl);
+              mediaPreviewHtml = '<div class="step-media-preview" style="position:relative;width:100%;height:100%;">' +
+                '<img src="https://img.youtube.com/vi/' + (mediaUrl.match(/(?:youtu\.be\/|v=)([^&]+)/)?.[1] || '') + '/mqdefault.jpg" style="width:100%;height:100%;object-fit:cover;">' +
+                '<div class="video-play-overlay"><i class="ph-duotone ph-youtube-logo"></i></div>' +
+                '<span class="media-type-badge"><i class="ph-duotone ph-youtube-logo"></i></span>' +
+              '</div>';
+            } else {
+              mediaPreviewHtml = '<div class="step-media-preview" style="position:relative;width:100%;height:100%;">' +
+                '<video src="' + mediaUrl + '" style="width:100%;height:100%;object-fit:cover;" muted></video>' +
+                '<div class="video-play-overlay"><i class="ph-duotone ph-play"></i></div>' +
+                '<span class="media-type-badge"><i class="ph-duotone ph-video-camera"></i></span>' +
+              '</div>';
+            }
+          } else {
+            mediaPreviewHtml = '<img src="' + mediaUrl + '">';
+          }
+        } else {
+          mediaPreviewHtml = '<div class="placeholder"><i class="ph-duotone ph-image"></i>' + t('addImage') + '/' + t('addVideo').split(' ')[1] + '</div>';
+        }
+
+        return '<div class="step-item" data-index="' + i + '">' +
           '<div class="step-number">' + (i + 1) + '</div>' +
           '<div class="step-content">' +
-            '<input type="text" class="step-title-input" placeholder="Step title..." value="' + esc(s.title) + '" onchange="updateStep(' + i + ',\'title\',this.value)">' +
-            '<textarea class="step-desc-input" placeholder="Description..." onchange="updateStep(' + i + ',\'description\',this.value)">' + esc(s.description) + '</textarea>' +
+            '<input type="text" class="step-title-input" placeholder="' + t('stepTitle') + '" value="' + esc(s.title) + '" onchange="updateStep(' + i + ',\'title\',this.value)">' +
+            '<textarea class="step-desc-input" placeholder="' + t('stepDesc') + '" onchange="updateStep(' + i + ',\'description\',this.value)">' + esc(s.description) + '</textarea>' +
             '<div class="step-icons">' +
               '<button type="button" class="step-icon-btn safety ' + (s.safety ? 'active' : '') + '" onclick="toggleStepFlag(' + i + ',\'safety\')" title="Safety Warning"><i class="ph-duotone ph-warning"></i></button>' +
               '<button type="button" class="step-icon-btn quality ' + (s.quality ? 'active' : '') + '" onclick="toggleStepFlag(' + i + ',\'quality\')" title="Quality Checkpoint"><i class="ph-duotone ph-seal-check"></i></button>' +
+              (hasMedia ? '<button type="button" class="step-icon-btn" onclick="clearStepMedia(' + i + ')" title="Remove media"><i class="ph-duotone ph-trash"></i></button>' : '') +
             '</div>' +
           '</div>' +
           '<div class="step-image">' +
-            '<div class="step-image-preview ' + (s.image ? 'has-image' : '') + '" onclick="promptStepImage(' + i + ')">' +
-              (s.image ? '<img src="' + s.image + '">' : '<div class="placeholder"><i class="ph-duotone ph-image"></i>Add image</div>') +
+            '<div class="step-image-preview ' + (hasMedia ? 'has-image' : '') + '" onclick="openMediaModal(' + i + ')">' +
+              mediaPreviewHtml +
             '</div>' +
           '</div>' +
           '<div class="step-actions">' +
@@ -978,8 +1438,15 @@
             '<button type="button" class="step-action-btn" onclick="moveStep(' + i + ',1)" title="Move Down"><i class="ph-duotone ph-caret-down"></i></button>' +
             '<button type="button" class="step-action-btn delete" onclick="removeStep(' + i + ')" title="Delete"><i class="ph-duotone ph-trash"></i></button>' +
           '</div>' +
-        '</div>'
-      ).join('');
+        '</div>';
+      }).join('');
+    }
+
+    function clearStepMedia(i) {
+      editingSteps[i].media = '';
+      editingSteps[i].mediaType = null;
+      editingSteps[i].image = '';
+      renderSteps();
     }
     
     function addStep() {
@@ -1013,11 +1480,8 @@
     }
     
     function promptStepImage(i) {
-      const url = prompt('Enter image URL:', editingSteps[i].image || '');
-      if (url !== null) {
-        editingSteps[i].image = url;
-        renderSteps();
-      }
+      // Legacy function - now opens the media modal
+      openMediaModal(i);
     }
     
     // =====================================================
@@ -1194,62 +1658,82 @@
       }
     }
     
+    // Detect if text is likely Spanish based on common words
+    function detectLanguage(text) {
+      if (!text) return 'en';
+      const spanishWords = /\b(el|la|los|las|de|del|en|con|para|por|que|una?|es|son|está|están|como|más|pero|este|esta|hacer|tiene|debe|usar|verificar|asegurar|colocar|realizar|procedimiento|equipo|seguridad|calidad|paso|pasos|máquina|producto|material|revisar|limpiar|preparar|ajustar)\b/gi;
+      const matches = text.match(spanishWords) || [];
+      return matches.length >= 2 ? 'es' : 'en';
+    }
+
+    function getLanguageInstruction(text) {
+      const lang = detectLanguage(text);
+      if (lang === 'es') {
+        return 'IMPORTANT: The input text is in Spanish. You MUST respond in Spanish. ';
+      }
+      return '';
+    }
+
     async function aiImproveTitle() {
       const input = document.getElementById('sopTitle');
       const current = input.value.trim();
       if (!current) { showToast('Enter text first', 'error'); return; }
-      
+
       const btn = document.querySelector('[onclick="aiImproveTitle()"]');
       btn.disabled = true;
       btn.classList.add('loading');
-      
-      const improved = await callAI('Improve this SOP title to be clearer, more professional, and action-oriented. Keep it concise (under 10 words). Only return the improved title, nothing else:\n\n' + current);
-      
+
+      const langInstruction = getLanguageInstruction(current);
+      const improved = await callAI(langInstruction + 'Improve this SOP title to be clearer, more professional, and action-oriented. Keep it concise (under 10 words). Only return the improved title, nothing else:\n\n' + current);
+
       if (improved) {
         input.value = improved;
         showToast('Title improved!', 'success');
       } else {
         showToast('AI unavailable', 'error');
       }
-      
+
       btn.disabled = false;
       btn.classList.remove('loading');
     }
-    
+
     async function aiImproveDescription() {
       const input = document.getElementById('sopDesc');
       const current = input.value.trim();
       if (!current) { showToast('Enter text first', 'error'); return; }
-      
+
       const btn = document.querySelector('[onclick="aiImproveDescription()"]');
       btn.disabled = true;
       btn.classList.add('loading');
-      
-      const improved = await callAI('Improve this SOP description to be clearer and more professional. Keep it brief (2-3 sentences max). Only return the improved description:\n\n' + current);
-      
+
+      const langInstruction = getLanguageInstruction(current);
+      const improved = await callAI(langInstruction + 'Improve this SOP description to be clearer and more professional. Keep it brief (2-3 sentences max). Only return the improved description:\n\n' + current);
+
       if (improved) {
         input.value = improved;
         showToast('Description improved!', 'success');
       } else {
         showToast('AI unavailable', 'error');
       }
-      
+
       btn.disabled = false;
       btn.classList.remove('loading');
     }
-    
+
     async function aiImproveStep(i) {
       const step = editingSteps[i];
       if (!step.title && !step.description) {
         showToast('Enter text first', 'error');
         return;
       }
-      
+
       const btn = document.querySelectorAll('.step-ai-btn')[i];
       btn.disabled = true;
-      
-      const improved = await callAI('Improve this SOP step. Make the title action-oriented and clear. Make the description specific with measurable details where possible. Return as JSON: {"title": "...", "description": "..."}\n\nCurrent title: ' + (step.title || 'None') + '\nCurrent description: ' + (step.description || 'None'));
-      
+
+      const combinedText = (step.title || '') + ' ' + (step.description || '');
+      const langInstruction = getLanguageInstruction(combinedText);
+      const improved = await callAI(langInstruction + 'Improve this SOP step. Make the title action-oriented and clear. Make the description specific with measurable details where possible. Return as JSON: {"title": "...", "description": "..."}\n\nCurrent title: ' + (step.title || 'None') + '\nCurrent description: ' + (step.description || 'None'));
+
       if (improved) {
         try {
           const parsed = JSON.parse(improved);
@@ -1263,7 +1747,7 @@
       } else {
         showToast('AI unavailable', 'error');
       }
-      
+
       btn.disabled = false;
     }
     
@@ -1404,65 +1888,172 @@
     // =====================================================
     // PDF Generation
     // =====================================================
-    
-    function generatePDF() {
+
+    async function fetchQRAsBase64(data, size = 80) {
+      const url = 'https://api.qrserver.com/v1/create-qr-code/?size=' + size + 'x' + size + '&data=' + encodeURIComponent(data);
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(blob);
+        });
+      } catch (e) {
+        console.error('Failed to fetch QR:', e);
+        return null;
+      }
+    }
+
+    async function generatePDF() {
       const s = sops.find(x => x.id === currentSopId);
       if (!s) return;
-      
+
+      const btn = document.getElementById('generatePdfBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="ph-duotone ph-spinner" style="animation:spin 1s linear infinite"></i> Generating...';
+
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
-      
+
       const lang = document.querySelector('input[name="pdfLang"]:checked').value;
+      const includeQR = document.getElementById('pdfIncludeQR').checked;
       const title = s['title_' + lang] || s.title;
       const desc = s['desc_' + lang] || s.description;
-      
-      doc.setFontSize(20);
-      doc.setTextColor(45, 58, 46);
-      doc.text(title, 20, 25);
-      
-      doc.setFontSize(10);
-      doc.setTextColor(90, 107, 95);
-      doc.text('Department: ' + s.dept + '  |  Doc #: ' + (s.docNum || 'N/A') + '  |  Rev: ' + (s.revision || '1.0'), 20, 35);
-      
-      if (desc) {
-        doc.setFontSize(11);
-        doc.text(doc.splitTextToSize(desc, 170), 20, 45);
+      const sopViewUrl = window.location.origin + window.location.pathname + '?view=' + s.id;
+
+      // Fetch main QR code
+      let mainQRBase64 = null;
+      if (includeQR) {
+        mainQRBase64 = await fetchQRAsBase64(sopViewUrl, 60);
       }
-      
-      let y = desc ? 60 : 45;
-      
-      (s.steps || []).forEach((step, i) => {
+
+      // Header with title and QR
+      doc.setFontSize(18);
+      doc.setTextColor(45, 58, 46);
+      const titleLines = doc.splitTextToSize(title, includeQR && mainQRBase64 ? 140 : 170);
+      doc.text(titleLines, 20, 22);
+
+      // Add main QR code in top right
+      if (mainQRBase64) {
+        try {
+          doc.addImage(mainQRBase64, 'PNG', 160, 10, 30, 30);
+          doc.setFontSize(6);
+          doc.setTextColor(120, 120, 120);
+          doc.text('Scan to view', 167, 43);
+        } catch (e) {
+          console.error('Failed to add QR to PDF:', e);
+        }
+      }
+
+      const titleHeight = titleLines.length * 7;
+      doc.setFontSize(9);
+      doc.setTextColor(90, 107, 95);
+      doc.text('Department: ' + s.dept + '  |  Doc #: ' + (s.docNum || 'N/A') + '  |  Rev: ' + (s.revision || '1.0'), 20, 22 + titleHeight + 2);
+
+      let y = 22 + titleHeight + 8;
+
+      if (desc) {
+        doc.setFontSize(10);
+        doc.setTextColor(70, 70, 70);
+        const descLines = doc.splitTextToSize(desc, 170);
+        doc.text(descLines, 20, y);
+        y += descLines.length * 5 + 8;
+      }
+
+      // Draw a separator line
+      doc.setDrawColor(200, 200, 200);
+      doc.line(20, y, 190, y);
+      y += 8;
+
+      // Steps
+      for (let i = 0; i < (s.steps || []).length; i++) {
+        const step = s.steps[i];
         if (y > 250) {
           doc.addPage();
           y = 20;
         }
-        
+
         const stepTitle = step['title_' + lang] || step.title;
         const stepDesc = step['desc_' + lang] || step.description;
-        
+        const mediaUrl = step.media || step.image || '';
+        const mediaType = step.mediaType || detectMediaType(mediaUrl);
+        const isVideo = mediaType === 'video' || mediaType === 'youtube' || mediaType === 'gdrive' || mediaType === 'vimeo';
+        const hasVideoQR = isVideo && mediaUrl && includeQR;
+
+        // Step number circle (simulated with filled circle)
+        doc.setFillColor(102, 137, 113);
+        doc.circle(25, y - 2, 4, 'F');
+        doc.setFontSize(10);
+        doc.setTextColor(255, 255, 255);
+        doc.text(String(i + 1), 23.5, y);
+
+        // Step title
         doc.setFontSize(12);
-        doc.setTextColor(102, 137, 113);
-        doc.text((i + 1) + '. ' + stepTitle, 20, y);
-        
+        doc.setTextColor(45, 58, 46);
+        doc.setFont(undefined, 'bold');
+        const stepTitleMaxWidth = hasVideoQR ? 130 : 155;
+        const stepTitleLines = doc.splitTextToSize(stepTitle, stepTitleMaxWidth);
+        doc.text(stepTitleLines, 33, y);
+        doc.setFont(undefined, 'normal');
+
+        // Safety/Quality indicators
+        let iconX = 33 + doc.getTextWidth(stepTitleLines[0]) + 3;
+        if (step.safety) {
+          doc.setTextColor(196, 92, 74);
+          doc.setFontSize(8);
+          doc.text('⚠ SAFETY', iconX, y);
+          iconX += 25;
+        }
+        if (step.quality) {
+          doc.setTextColor(102, 137, 113);
+          doc.setFontSize(8);
+          doc.text('✓ QC', iconX, y);
+        }
+
+        y += stepTitleLines.length * 5 + 2;
+
+        // Step description
         if (stepDesc) {
           doc.setFontSize(10);
-          doc.setTextColor(90, 107, 95);
-          const lines = doc.splitTextToSize(stepDesc, 170);
-          doc.text(lines, 25, y + 7);
-          y += 7 + (lines.length * 5);
+          doc.setTextColor(80, 80, 80);
+          const descMaxWidth = hasVideoQR ? 125 : 155;
+          const lines = doc.splitTextToSize(stepDesc, descMaxWidth);
+          doc.text(lines, 33, y);
+          y += lines.length * 5;
         }
-        
-        y += 10;
-      });
-      
-      if (document.getElementById('pdfIncludeQR').checked) {
-        const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=60x60&data=' + encodeURIComponent(window.location.origin + window.location.pathname + '?view=' + s.id);
-        // Note: Would need to convert QR to base64 for proper embedding
+
+        // Video QR code (placed on the right side of the step)
+        if (hasVideoQR) {
+          const videoQR = await fetchQRAsBase64(mediaUrl, 50);
+          if (videoQR) {
+            try {
+              const qrY = y - (stepTitleLines.length * 5 + (stepDesc ? 10 : 0));
+              doc.addImage(videoQR, 'PNG', 165, qrY - 5, 25, 25);
+              doc.setFontSize(6);
+              doc.setTextColor(150, 150, 150);
+              doc.text('Watch video', 168, qrY + 22);
+            } catch (e) {
+              console.error('Failed to add video QR:', e);
+            }
+          }
+        }
+
+        y += 12;
       }
-      
+
+      // Footer
+      doc.setFontSize(8);
+      doc.setTextColor(150, 150, 150);
+      doc.text('Generated: ' + new Date().toLocaleDateString() + ' | Rogue Origin SOP Manager', 20, 285);
+
       doc.save('SOP-' + (s.docNum || s.id) + '.pdf');
       closeModal('pdfModal');
       showToast('PDF generated!', 'success');
+
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ph-duotone ph-file-pdf"></i> Generate PDF';
     }
     
     // =====================================================
@@ -1485,6 +2076,8 @@
       appLang = appLang === 'en' ? 'es' : 'en';
       document.getElementById('appLangLabel').textContent = appLang.toUpperCase();
       localStorage.setItem('sopAppLang', appLang);
+      applyTranslations();
+      renderSteps(); // Re-render steps with new language placeholders
     }
     
     function refresh() {
@@ -1528,10 +2121,13 @@
         appLang = localStorage.getItem('sopAppLang');
         document.getElementById('appLangLabel').textContent = appLang.toUpperCase();
       }
-      
+
+      // Apply translations based on saved language preference
+      applyTranslations();
+
       // Load data from API
       loadData();
-      
+
       // Check for view parameter
       const urlParams = new URLSearchParams(window.location.search);
       const viewId = urlParams.get('view');
