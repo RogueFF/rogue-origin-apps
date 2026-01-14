@@ -438,7 +438,10 @@
     .toast.error { background: var(--danger); }
     @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
-    @media (max-width: 768px) {
+    /* =====================================================
+       MOBILE STYLES (phones only)
+       ===================================================== */
+    @media (max-width: 600px) {
       .sop-grid { grid-template-columns: 1fr; }
       .form-row, .form-row-3 { grid-template-columns: 1fr; }
       .step-item { flex-direction: column; }
@@ -447,23 +450,172 @@
       .search-box { width: 100%; }
       .header-right { flex-wrap: wrap; }
     }
-    
-    @media (min-width: 768px) and (max-width: 1024px) {
-      .sop-grid { grid-template-columns: repeat(2, 1fr); gap: 16px; }
-      .form-input, .filter-select { font-size: 16px !important; padding: 14px 16px; }
-      .step-title-input, .step-desc-input { font-size: 16px !important; padding: 14px; }
-      .step-action-btn, .step-ai-btn { width: 44px; height: 44px; }
-      .step-icon-btn { width: 44px; height: 44px; }
-      .header-btn { padding: 12px 18px; font-size: 14px; }
-      .inline-add-btn { width: 44px; height: 44px; }
-    }
-    
+
+    /* =====================================================
+       TOUCH DEVICE STYLES (iPad, tablets, touch laptops)
+       Prevents iOS auto-zoom and ensures 44px touch targets
+       ===================================================== */
     @media (pointer: coarse) {
-      .header-btn, .inline-add-btn, .step-action-btn, .step-ai-btn, .step-icon-btn,
-      .sop-card-actions button, .settings-add-btn, .request-item-actions button {
+      /* Tap highlight for brand consistency */
+      button, a, [onclick], .sop-card, .step-image-preview, .media-option,
+      input[type="checkbox"], input[type="radio"], label {
+        -webkit-tap-highlight-color: rgba(102, 137, 113, 0.2);
+      }
+
+      /* CRITICAL: 16px minimum font size prevents iOS auto-zoom on focus */
+      .form-input, .filter-select, .search-box input,
+      .step-title-input, .step-desc-input,
+      .settings-add-form input, .add-request-form .form-input,
+      input, textarea, select {
+        font-size: 16px !important;
+      }
+
+      /* Increase padding for touch-friendly inputs */
+      .form-input, .filter-select { padding: 14px 16px; }
+      .search-box input { padding: 14px 14px 14px 44px; }
+      .step-title-input, .step-desc-input { padding: 14px; }
+
+      /* 44px minimum touch targets for ALL interactive elements */
+      .header-btn, .dark-mode-toggle, .lang-switch {
+        min-height: 44px;
+        padding: 12px 16px;
+        font-size: 14px;
+      }
+
+      .view-toggle button {
         min-height: 44px;
         min-width: 44px;
+        padding: 10px 14px;
       }
+
+      .inline-add-btn, .step-action-btn, .step-ai-btn, .step-icon-btn {
+        min-width: 44px;
+        min-height: 44px;
+        width: 44px;
+        height: 44px;
+      }
+
+      .sop-card-actions button {
+        min-height: 48px;
+        padding: 14px;
+      }
+
+      .settings-add-btn, .request-item-actions button {
+        min-height: 44px;
+        padding: 12px 16px;
+      }
+
+      .modal-close {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 10px 14px;
+        font-size: 22px;
+      }
+
+      .tag-color-option, .tag-color-picker-mini .color-dot {
+        min-width: 44px;
+        min-height: 44px;
+        width: 44px;
+        height: 44px;
+      }
+
+      .ai-improve-btn {
+        min-height: 36px;
+        padding: 8px 14px;
+        font-size: 12px;
+      }
+
+      .lang-toggle button, .requests-tab {
+        min-height: 44px;
+        padding: 12px 16px;
+      }
+
+      .translate-btn {
+        min-height: 44px;
+        padding: 12px 16px;
+      }
+
+      .sop-table .actions-cell button {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 10px 14px;
+      }
+
+      /* Checkbox/radio larger touch area */
+      input[type="checkbox"], input[type="radio"] {
+        width: 22px;
+        height: 22px;
+        margin-right: 8px;
+      }
+
+      /* Active states for touch feedback (replaces hover) */
+      .header-btn:active, .dark-mode-toggle:active {
+        background: rgba(255,255,255,0.25);
+        transform: scale(0.97);
+      }
+      .header-btn.primary:active {
+        background: var(--gold-dark);
+        transform: scale(0.97);
+      }
+      .sop-card:active {
+        transform: scale(0.98);
+        border-color: var(--green);
+      }
+      .step-image-preview:active {
+        background: var(--gold-dim);
+        border-color: var(--gold);
+        transform: scale(0.98);
+      }
+      .media-option:active {
+        transform: scale(0.95);
+        background: var(--green-dim);
+        border-color: var(--green);
+      }
+      .inline-add-btn:active, .step-action-btn:active,
+      .step-ai-btn:active, .step-icon-btn:active {
+        transform: scale(0.92);
+      }
+      .modal-footer .header-btn:active {
+        transform: scale(0.97);
+      }
+      .modal-footer .header-btn.primary:active {
+        background: var(--green-dark);
+      }
+
+      /* Modal sizing for iPad */
+      .modal-box {
+        max-width: 95vw;
+        max-height: 88vh;
+      }
+      .modal-box.wide {
+        max-width: 95vw;
+      }
+      .modal-box.small {
+        max-width: 90vw;
+      }
+
+      /* Better spacing for touch */
+      .step-item { padding: 18px; gap: 14px; }
+      .step-icons { gap: 8px; }
+      .step-actions { gap: 6px; }
+      .sop-card-actions { min-height: 48px; }
+    }
+
+    /* =====================================================
+       TABLET PORTRAIT (iPad 768-1024px)
+       ===================================================== */
+    @media (min-width: 601px) and (max-width: 1024px) {
+      .sop-grid { grid-template-columns: repeat(2, 1fr); gap: 16px; }
+      .toolbar-left { flex-wrap: wrap; }
+    }
+
+    /* =====================================================
+       FOCUS VISIBLE (keyboard navigation)
+       ===================================================== */
+    button:focus-visible, a:focus-visible, input:focus-visible,
+    select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+      outline: 3px solid var(--gold);
+      outline-offset: 2px;
     }
 
     /* Media Upload Modal */
