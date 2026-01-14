@@ -14,9 +14,19 @@ import {
   getData,
   getCompareData,
   isSkeletonsShowing as _isSkeletonsShowing,
-  setSkeletonsShowing as _setSkeletonsShowing
+  setSkeletonsShowing as _setSkeletonsShowing,
+  getRetryCount,
+  incrementRetryCount,
+  resetRetryCount
 } from './state.js';
 import { formatDateInput } from './utils.js';
+import {
+  showConnecting,
+  showConnected,
+  showError,
+  showRetrying,
+  shouldAutoRetry
+} from './status.js';
 
 // Forward declarations for functions that will be set by the main module
 let renderAllFn = null;
@@ -82,8 +92,9 @@ function showToast(message, type, duration) {
 /**
  * Error handler for API requests
  * @param {Error} error - The error object
+ * @param {boolean} skipAutoRetry - Skip auto-retry logic (default: false)
  */
-export function onError(error) {
+export function onError(error, skipAutoRetry = false) {
   console.error('API Error:', error);
 
   // Hide loading overlay if present
@@ -93,7 +104,25 @@ export function onError(error) {
   }
 
   showSkeletons(false);
-  showToast('Error loading data: ' + (error.message || error), 'error');
+
+  // Show error in status bar
+  var errorMessage = error.message || String(error);
+  showError(errorMessage);
+
+  // Show toast only if not auto-retrying
+  if (!shouldAutoRetry() || skipAutoRetry) {
+    showToast('Error loading data: ' + errorMessage, 'error');
+  }
+
+  // Auto-retry once after 5 seconds
+  if (shouldAutoRetry() && !skipAutoRetry) {
+    setTimeout(function() {
+      console.log('Auto-retry after error...');
+      showRetrying();
+      incrementRetryCount();
+      loadData();
+    }, 5000);
+  }
 }
 
 /**
@@ -103,11 +132,17 @@ export function onError(error) {
 function onDataLoaded(result) {
   showSkeletons(false);
 
+  // Show connected state
+  var isFirstLoad = !getData();
+  showConnected(!isFirstLoad); // Auto-hide on subsequent loads
+
+  // Reset retry count on success
+  resetRetryCount();
+
   // Only re-render if data actually changed
   var newDataStr = JSON.stringify(result);
   var oldData = getData();
   var oldDataStr = oldData ? JSON.stringify(oldData) : '';
-  var isFirstLoad = !oldDataStr;
 
   if (newDataStr !== oldDataStr) {
     setData(result);
@@ -131,6 +166,9 @@ export function loadData() {
   var endEl = document.getElementById('endDate');
   var s = startEl ? startEl.value : formatDateInput(new Date());
   var e = endEl ? endEl.value : formatDateInput(new Date());
+
+  // Show connecting state
+  showConnecting();
 
   // Cancel any in-flight fetch requests to prevent stale data from overwriting current data
   // This fixes race conditions when user rapidly changes date range
@@ -259,6 +297,9 @@ export function loadCompareData() {
     return;
   }
 
+  // Show connecting state
+  showConnecting();
+
   // Only show skeletons on initial load (no existing data)
   if (!getData()) {
     showSkeletons(true);
@@ -300,6 +341,8 @@ export function loadCompareData() {
     google.script.run.withSuccessHandler(function(r) {
       google.script.run.withSuccessHandler(function(pr) {
         showSkeletons(false);
+        showConnected(true); // Auto-hide
+        resetRetryCount();
 
         // Only re-render if data actually changed
         var newDataStr = JSON.stringify(r) + JSON.stringify(pr);
@@ -351,6 +394,8 @@ export function loadCompareDataFetch(cs, ce, ps, pe) {
 
     Promise.all([currentPromise, prevPromise]).then(function(results) {
       showSkeletons(false);
+      showConnected(true); // Auto-hide
+      resetRetryCount();
 
       var currentResult = results[0];
       var prevResult = results[1];
@@ -389,6 +434,8 @@ export function loadCompareDataFetch(cs, ce, ps, pe) {
       fetch(prevUrl, fetchOptions).then(function(r) { return r.json(); })
     ]).then(function(results) {
       showSkeletons(false);
+      showConnected(true); // Auto-hide
+      resetRetryCount();
 
       var currentResult = results[0].data || results[0];
       var prevResult = results[1].data || results[1];
