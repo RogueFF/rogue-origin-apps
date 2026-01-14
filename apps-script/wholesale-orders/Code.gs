@@ -304,6 +304,15 @@ function doGet(e) {
       result = getCOAIndex();
     } else if (action === 'syncCOAIndex') {
       result = syncCOAIndex();
+    } else if (action === 'getCOAsForStrains') {
+      // Get COA PDFs for a list of strains (base64 encoded)
+      var strainsParam = e.parameter.strains;
+      if (!strainsParam) {
+        result = { success: false, error: 'Missing strains parameter' };
+      } else {
+        var strainList = strainsParam.split(',').map(function(s) { return s.trim(); });
+        result = getCOAsForStrains(strainList);
+      }
     } else if (action === 'getOrderFinancials') {
       // SECURITY: Validate orderID parameter
       var orderIdValidation = validateId(e.parameter.orderID);
@@ -1328,6 +1337,131 @@ function createCOAIndexSheet_(ss) {
   sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
   sheet.setFrozenRows(1);
   return sheet;
+}
+
+/**
+ * Get COA PDFs for a list of strains
+ * Uses fuzzy matching to find COAs and returns them as base64
+ *
+ * @param {string[]} strainList - Array of strain names to match
+ * @returns {object} { success, coas: [{ strain, matched, matchedStrain, fileName, base64 }] }
+ */
+function getCOAsForStrains(strainList) {
+  try {
+    // Get COA index
+    var indexResult = getCOAIndex();
+    if (!indexResult.success) return indexResult;
+
+    var coaIndex = indexResult.coas;
+    var results = [];
+
+    for (var i = 0; i < strainList.length; i++) {
+      var requestedStrain = strainList[i];
+      var normalized = normalizeStrainName_(requestedStrain);
+
+      // Find best match in COA index
+      var bestMatch = null;
+      var bestScore = 0;
+
+      for (var j = 0; j < coaIndex.length; j++) {
+        var coaStrain = coaIndex[j].strain;
+        var coaNormalized = normalizeStrainName_(coaStrain);
+
+        var score = calculateMatchScore_(normalized, coaNormalized);
+        if (score > bestScore && score >= 0.7) { // 70% threshold
+          bestScore = score;
+          bestMatch = coaIndex[j];
+        }
+      }
+
+      if (bestMatch) {
+        // Fetch the file and convert to base64
+        try {
+          var file = DriveApp.getFileById(bestMatch.fileID);
+          var blob = file.getBlob();
+          var base64 = Utilities.base64Encode(blob.getBytes());
+
+          results.push({
+            strain: requestedStrain,
+            matched: true,
+            matchedStrain: bestMatch.strain,
+            fileName: bestMatch.fileName,
+            base64: base64
+          });
+        } catch (fileError) {
+          Logger.log('[getCOAsForStrains] Failed to fetch file for ' + bestMatch.strain + ': ' + fileError.message);
+          results.push({
+            strain: requestedStrain,
+            matched: false,
+            error: 'Failed to fetch COA file'
+          });
+        }
+      } else {
+        results.push({
+          strain: requestedStrain,
+          matched: false,
+          error: 'No matching COA found'
+        });
+      }
+    }
+
+    return { success: true, coas: results };
+  } catch (error) {
+    Logger.log('[getCOAsForStrains] Error: ' + error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Normalize strain name for matching
+ * Strips year prefixes, lowercases, removes extra spaces/underscores
+ */
+function normalizeStrainName_(name) {
+  if (!name) return '';
+
+  var normalized = String(name).toLowerCase().trim();
+
+  // Remove year prefixes like "2025 ", "2024 "
+  normalized = normalized.replace(/^20\d{2}\s+/, '');
+
+  // Replace underscores with spaces
+  normalized = normalized.replace(/_/g, ' ');
+
+  // Remove extra spaces
+  normalized = normalized.replace(/\s+/g, ' ').trim();
+
+  return normalized;
+}
+
+/**
+ * Calculate match score between two normalized strain names
+ * Returns 0-1 score (1 = exact match)
+ */
+function calculateMatchScore_(name1, name2) {
+  if (name1 === name2) return 1.0;
+  if (!name1 || !name2) return 0;
+
+  // Check if one contains the other
+  if (name1.indexOf(name2) !== -1 || name2.indexOf(name1) !== -1) {
+    return 0.9;
+  }
+
+  // Simple word overlap scoring
+  var words1 = name1.split(' ');
+  var words2 = name2.split(' ');
+  var matchedWords = 0;
+
+  for (var i = 0; i < words1.length; i++) {
+    for (var j = 0; j < words2.length; j++) {
+      if (words1[i] === words2[j] && words1[i].length > 2) {
+        matchedWords++;
+        break;
+      }
+    }
+  }
+
+  var maxWords = Math.max(words1.length, words2.length);
+  return matchedWords / maxWords;
 }
 
 // ===== ORDER FINANCIALS HELPER =====
