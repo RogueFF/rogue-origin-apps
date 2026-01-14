@@ -50,6 +50,14 @@ const state = {
   // Request management
   currentFetchController: null,
 
+  // Connection status tracking
+  connection: {
+    lastSuccessfulFetch: null,  // Date timestamp of last successful data load
+    isConnecting: false,        // Currently fetching data
+    error: null,                // Error message if connection failed
+    retryCount: 0               // Number of auto-retry attempts
+  },
+
   // Debounce timers
   timers: {
     muuriLayout: null,
@@ -143,6 +151,22 @@ export function getFetchController() {
 
 export function getFlags() {
   return state.flags;
+}
+
+export function getConnection() {
+  return state.connection;
+}
+
+export function isConnecting() {
+  return state.connection.isConnecting;
+}
+
+export function getConnectionError() {
+  return state.connection.error;
+}
+
+export function getLastSuccessfulFetch() {
+  return state.connection.lastSuccessfulFetch;
 }
 
 // State setters
@@ -241,6 +265,32 @@ export function setFetchController(controller) {
 
 export function setFlag(name, value) {
   state.flags[name] = value;
+}
+
+// Connection state setters
+export function setConnecting(isConnecting) {
+  state.connection.isConnecting = isConnecting;
+}
+
+export function setConnectionError(error) {
+  state.connection.error = error;
+}
+
+export function setLastSuccessfulFetch(timestamp) {
+  state.connection.lastSuccessfulFetch = timestamp;
+}
+
+export function incrementRetryCount() {
+  state.connection.retryCount++;
+  return state.connection.retryCount;
+}
+
+export function resetRetryCount() {
+  state.connection.retryCount = 0;
+}
+
+export function getRetryCount() {
+  return state.connection.retryCount;
 }
 
 // Event listener registry management
