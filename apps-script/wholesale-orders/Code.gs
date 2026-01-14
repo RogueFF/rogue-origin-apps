@@ -1274,7 +1274,12 @@ function syncCOAIndex() {
       var file = files.next();
       var fileName = file.getName();
       if (fileName.toLowerCase().indexOf('coa') !== -1 && fileName.toLowerCase().indexOf('.pdf') !== -1) {
-        var strain = fileName.replace(/_COA\.pdf$/i, '').replace(/_/g, ' ').trim();
+        // Extract strain name: remove .pdf, remove COA (with any prefix), normalize spaces
+        var strain = fileName
+          .replace(/\.pdf$/i, '')           // Remove .pdf extension
+          .replace(/[\s_-]*COA[\s_-]*/gi, '') // Remove COA with any surrounding separators
+          .replace(/_/g, ' ')               // Replace underscores with spaces
+          .trim();
         coaData.push([
           strain,
           fileName,
