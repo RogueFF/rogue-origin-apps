@@ -13,6 +13,46 @@ Transform Rogue Origin's operations into a data-driven, AI-assisted system that:
 
 ---
 
+## Code Quality Overhaul (January 2026)
+
+**Objective**: Modernize codebase architecture, fix technical debt, improve reliability and maintainability.
+
+### Completed Phases
+
+| Phase | Description | Status | Completed |
+|-------|-------------|--------|-----------|
+| 2.1-2.2 | Architecture Cleanup - ES6 Modules | ✅ Done | Jan 2026 |
+| 1.1 | Memory Leak Fixes | ✅ Done | Jan 2026 |
+| 1.2 | Security Hardening | ✅ Done | Jan 2026 |
+| **3.1** | **Error Handling & Loading States** | ✅ Done | **Jan 13, 2026** |
+
+**Phase 3.1 Deliverables**:
+- ✅ Connection status bar with 3 states (connecting, connected, error)
+- ✅ Auto-retry logic (single retry after 5 seconds)
+- ✅ Manual retry button
+- ✅ Connection state tracking (lastSuccessfulFetch, retryCount)
+- ✅ Muuri grid fallback with flexbox layout
+- ✅ Widget layout fixes (no stacking)
+- ✅ Status module (`status.js`) with state management
+- ✅ Live deployment and testing
+
+**Documentation**:
+- `docs/sessions/2026-01-13-error-handling-implementation.md`
+- `docs/plans/2026-01-13-error-handling-design.md`
+
+### Remaining Phases
+
+| Phase | Description | Priority |
+|-------|-------------|----------|
+| 4.1 | Reduce scoreboard.html (414KB → <100KB) | Medium |
+| 5.1 | Accessibility fixes (WCAG AA) | High |
+| 4.2-4.3 | Lazy loading optimizations | Medium |
+| 6.1-6.2 | Documentation & CSS cleanup | Low |
+
+**Next Up**: Phase 5.1 (Accessibility) or Phase 4.1 (Scoreboard optimization)
+
+---
+
 ## Phase 1: AI Agent Foundation — ~70% Complete
 
 **Objective**: Create an AI assistant that can answer the boss's top 5 questions.
