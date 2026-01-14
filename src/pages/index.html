@@ -185,6 +185,15 @@
       </div>
     </header>
 
+    <!-- Connection Status Bar -->
+    <div class="connection-status" id="connectionStatus" role="status" aria-live="polite">
+      <span class="connection-status-icon" id="connectionStatusIcon">
+        <i class="ph-duotone ph-circle-notch"></i>
+      </span>
+      <span class="connection-status-text" id="connectionStatusText">Connecting...</span>
+      <button class="connection-retry-btn" id="connectionRetryBtn" style="display:none;">Retry</button>
+    </div>
+
     <!-- Dashboard View -->
     <div class="dashboard active" id="dashboardView">
       <div class="compare-banner" id="compareBanner">
