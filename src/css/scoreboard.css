@@ -1826,23 +1826,23 @@ body.timer-fullscreen .started-badge {
    When scoreboard is embedded in dashboard iframe
    ======================================== */
 body.iframe-embed {
-  overflow: hidden;
+  overflow: auto;
+  min-height: 100vh;
 }
 
-body.iframe-embed,
 body.iframe-embed html {
   height: 100%;
 }
 
 body.iframe-embed .main-panel {
-  height: 100%;
+  flex: 1;
   padding: 15px 20px;
 }
 
 body.iframe-embed .timer-panel {
-  height: 100%;
   width: 320px;
-  min-width: 320px;
+  max-width: 380px;
+  min-width: 280px;
   padding: 20px;
 }
 
