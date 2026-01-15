@@ -480,10 +480,13 @@
         var delta = cycle.time - cycle.target;
         var deltaStr = (delta >= 0 ? '+' : '-') + ScoreboardTimer.formatTime(Math.abs(delta));
 
-        // Format timestamp
+        // Format timestamp in 12-hour AM/PM format
         var date = new Date(cycle.timestamp);
-        var timeStr = date.getHours().toString().padStart(2, '0') + ':' +
-                     date.getMinutes().toString().padStart(2, '0');
+        var hours = date.getHours();
+        var minutes = date.getMinutes().toString().padStart(2, '0');
+        var ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12 || 12;
+        var timeStr = hours + ':' + minutes + ' ' + ampm;
 
         card.innerHTML =
           '<div class="cycle-card-num">#' + (total - index) + '</div>' +
@@ -521,10 +524,19 @@
         var deltaStr = (delta >= 0 ? '+' : '-') + ScoreboardTimer.formatTime(Math.abs(delta));
         var deltaClass = cycle.isEarly ? 'early' : 'overtime';
 
+        // Format timestamp in 12-hour AM/PM format
+        var date = new Date(cycle.timestamp);
+        var hours = date.getHours();
+        var minutes = date.getMinutes().toString().padStart(2, '0');
+        var ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12 || 12;
+        var timeStr = hours + ':' + minutes + ' ' + ampm;
+
         item.innerHTML =
           '<span class="cycle-item-num">#' + (total - index) + '</span>' +
           '<span class="cycle-item-time">' + ScoreboardTimer.formatTime(cycle.time) + '</span>' +
-          '<span class="cycle-item-delta ' + deltaClass + '">' + deltaStr + '</span>';
+          '<span class="cycle-item-delta ' + deltaClass + '">' + deltaStr + '</span>' +
+          '<span class="cycle-item-completed">' + timeStr + '</span>';
 
         list.appendChild(item);
       });
