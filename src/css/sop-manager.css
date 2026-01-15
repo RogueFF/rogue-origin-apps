@@ -906,7 +906,7 @@
        ============================================ */
 
     .tutorial-banner {
-      background: rgba(0, 0, 0, 0.92);
+      background: linear-gradient(135deg, #3d5a45 0%, #2a4030 100%);
       border: 2px solid var(--gold);
       border-radius: 12px;
       padding: 16px 20px;
@@ -914,7 +914,7 @@
       position: sticky;
       top: 0;
       z-index: 100;
-      box-shadow: 0 4px 20px rgba(228, 170, 79, 0.2);
+      box-shadow: 0 4px 20px rgba(228, 170, 79, 0.25), inset 0 1px 0 rgba(255,255,255,0.1);
     }
 
     .tutorial-header {
@@ -1013,21 +1013,61 @@
       margin-bottom: 8px;
     }
 
-    /* Highlighted field during tutorial */
+    /* Tutorial overlay - frosts the modal content */
+    .tutorial-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+      z-index: 50;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    /* Ensure banner stays above overlay */
+    .tutorial-banner {
+      position: relative;
+      z-index: 200;
+    }
+
+    /* Modal body needs relative positioning for overlay */
+    .modal-body {
+      position: relative;
+    }
+
+    /* Highlighted field during tutorial - pops above overlay */
     .tutorial-highlight {
+      position: relative;
+      z-index: 100 !important;
       outline: 3px solid var(--gold) !important;
       outline-offset: 2px;
-      box-shadow: 0 0 0 6px rgba(228, 170, 79, 0.25) !important;
+      box-shadow: 0 0 0 6px rgba(228, 170, 79, 0.4), 0 0 30px rgba(228, 170, 79, 0.3) !important;
       border-radius: 8px;
+      background: var(--bg-card) !important;
       transition: all 0.3s ease;
     }
 
     /* Highlight for form groups and larger areas */
     .tutorial-highlight-group {
+      position: relative;
+      z-index: 100 !important;
       outline: 3px solid var(--gold);
       outline-offset: 4px;
       border-radius: 12px;
-      box-shadow: 0 0 0 8px rgba(228, 170, 79, 0.2);
+      box-shadow: 0 0 0 8px rgba(228, 170, 79, 0.3), 0 0 30px rgba(228, 170, 79, 0.25);
+      background: var(--bg-card);
+      padding: 12px;
+    }
+
+    /* Parent form-group needs to be lifted too */
+    .tutorial-highlight-parent {
+      position: relative;
+      z-index: 100 !important;
+      background: var(--bg-card);
+      border-radius: 12px;
+      padding: 12px;
+      margin: -12px;
     }
 
     /* Mobile adjustments for tutorial */
