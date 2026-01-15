@@ -253,12 +253,6 @@
       const orderQueue = window.ScoreboardState ? window.ScoreboardState.orderQueue : null;
       const section = document.getElementById('orderQueueSection');
 
-      // Debug: Log what data we received
-      console.log('[renderOrderQueue] orderQueue:', JSON.stringify(orderQueue, null, 2));
-      if (orderQueue && orderQueue.currentItems) {
-        console.log('[renderOrderQueue] currentItems count:', orderQueue.currentItems.length);
-      }
-
       if (!section) return;
 
       // Hide section if no order data
@@ -279,7 +273,6 @@
         this.renderCurrentItems(orderQueue.currentItems);
       } else if (hasLegacyCurrent) {
         // Fallback: wrap single current item in array for backwards compatibility
-        console.log('[renderOrderQueue] Using legacy current format (backend not updated?)');
         this.renderCurrentItems([orderQueue.current]);
       } else {
         document.getElementById('currentOrderPill').style.display = 'none';
@@ -332,6 +325,34 @@
         progressContainer.style.display = 'flex';
         progressFill.style.width = combinedPercent + '%';
         progressText.textContent = totalCompleted + ' / ' + totalQuantity + ' kg (' + Math.round(combinedPercent) + '%)';
+
+        // Add individual strain breakdown below the main progress bar
+        let breakdownContainer = document.getElementById('currentItemsBreakdown');
+        if (!breakdownContainer) {
+          breakdownContainer = document.createElement('div');
+          breakdownContainer.id = 'currentItemsBreakdown';
+          breakdownContainer.style.cssText = 'display: flex; flex-direction: column; gap: 4px; margin-top: 8px; font-size: 13px;';
+          progressContainer.parentNode.insertBefore(breakdownContainer, progressContainer.nextSibling);
+        }
+
+        // Build breakdown HTML for each strain
+        let breakdownHTML = '';
+        for (let i = 0; i < currentItems.length; i++) {
+          const item = currentItems[i];
+          const itemCompleted = item.completedKg || 0;
+          const itemPercent = item.quantityKg > 0 ? (itemCompleted / item.quantityKg) * 100 : 0;
+          const isComplete = itemPercent >= 100;
+          const statusIcon = isComplete ? '✓' : '○';
+          const statusColor = isComplete ? 'rgba(122, 157, 135, 1)' : 'rgba(255, 255, 255, 0.7)';
+
+          breakdownHTML += '<div style="display: flex; align-items: center; gap: 8px;">';
+          breakdownHTML += '<span style="color: ' + statusColor + ';">' + statusIcon + '</span>';
+          breakdownHTML += '<span style="flex: 1; color: rgba(255, 255, 255, 0.9);">' + item.strain + '</span>';
+          breakdownHTML += '<span style="color: rgba(255, 255, 255, 0.7);">' + itemCompleted + '/' + item.quantityKg + 'kg</span>';
+          breakdownHTML += '<span style="color: ' + (itemPercent >= 100 ? 'rgba(122, 157, 135, 1)' : 'rgba(228, 170, 79, 1)') + '; min-width: 45px; text-align: right;">' + Math.round(itemPercent) + '%</span>';
+          breakdownHTML += '</div>';
+        }
+        breakdownContainer.innerHTML = breakdownHTML;
       }
 
       // Build expanded detail with individual item progress
