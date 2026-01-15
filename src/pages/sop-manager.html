@@ -88,6 +88,20 @@
         <button class="modal-close" onclick="closeModal('editModal')">&times;</button>
       </div>
       <div class="modal-body">
+        <!-- Tutorial Walkthrough Banner -->
+        <div class="tutorial-banner" id="tutorialBanner" style="display:none;">
+          <div class="tutorial-header">
+            <span class="tutorial-step-label" id="tutorialStepLabel">Step 1 of 12</span>
+          </div>
+          <div class="tutorial-hint" id="tutorialHint">Choose which language you're writing in</div>
+          <div class="tutorial-actions">
+            <button type="button" class="tutorial-btn skip" id="tutorialSkipBtn" onclick="tutorialSkip()">Skip</button>
+            <button type="button" class="tutorial-btn next" id="tutorialNextBtn" onclick="tutorialNext()">Next <i class="ph-bold ph-arrow-right"></i></button>
+          </div>
+          <div class="tutorial-progress">
+            <div class="tutorial-progress-fill" id="tutorialProgressFill"></div>
+          </div>
+        </div>
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">SOP Title * <button type="button" class="ai-improve-btn" onclick="aiImproveTitle()" title="AI Improve"><i class="ph-duotone ph-sparkle"></i> Improve</button></label>
@@ -539,6 +553,25 @@
     let redoHistory = [];
     let freehandPoints = [];
 
+    // Tutorial walkthrough state
+    let tutorialActive = false;
+    let tutorialStep = 0;
+    const TUTORIAL_TOTAL_STEPS = 12;
+    const tutorialSteps = [
+      { field: 'editLangToggle', type: 'toggle', canSkip: false },
+      { field: 'sopTitle', type: 'input', canSkip: false },
+      { field: 'sopDept', type: 'select', canSkip: false },
+      { field: 'sopDocNum', type: 'input', canSkip: true },
+      { field: 'sopRevision', type: 'input', canSkip: true },
+      { field: 'sopStatus', type: 'select', canSkip: false },
+      { field: 'sopDesc', type: 'textarea', canSkip: true },
+      { field: 'editTagsList', type: 'tags', canSkip: true },
+      { field: 'addStepBtn', type: 'button', canSkip: false },
+      { field: 'stepTitle', type: 'stepInput', canSkip: false },
+      { field: 'stepDesc', type: 'stepTextarea', canSkip: false },
+      { field: 'stepMedia', type: 'stepMedia', canSkip: true }
+    ];
+
     // Translation strings
     const translations = {
       en: {
@@ -592,7 +625,26 @@
         processing: 'Processing...',
         editImage: 'Edit Image',
         saveImage: 'Save Image',
-        annotationSaved: 'Image saved!'
+        annotationSaved: 'Image saved!',
+        // Tutorial walkthrough hints
+        tutorialStep: 'Step',
+        tutorialOf: 'of',
+        tutorialSkip: 'Skip',
+        tutorialNext: 'Next',
+        tutorialGotIt: 'Got it!',
+        tutorialComplete: 'Tutorial Complete! You\'re ready to create SOPs.',
+        tutorialHint1: 'Choose which language you\'re writing in',
+        tutorialHint2: 'Enter a clear, descriptive title for this procedure',
+        tutorialHint3: 'Select which department this SOP belongs to',
+        tutorialHint4: 'Optional: Enter a document number (e.g., SOP-001)',
+        tutorialHint5: 'Version number - leave as 1.0 for new SOPs',
+        tutorialHint6: 'Draft = work in progress, Published = ready for use',
+        tutorialHint7: 'Brief summary of what this procedure covers',
+        tutorialHint8: 'Optional: Add tags to help organize and find this SOP',
+        tutorialHint9: 'Click "Add" to create your first step',
+        tutorialHint10: 'Enter a short title for this step',
+        tutorialHint11: 'Describe what to do in this step',
+        tutorialHint12: 'Optional: Add a photo or video to illustrate this step'
       },
       es: {
         addMedia: 'Agregar Media',
@@ -645,7 +697,26 @@
         processing: 'Procesando...',
         editImage: 'Editar Imagen',
         saveImage: 'Guardar Imagen',
-        annotationSaved: '¡Imagen guardada!'
+        annotationSaved: '¡Imagen guardada!',
+        // Tutorial walkthrough hints
+        tutorialStep: 'Paso',
+        tutorialOf: 'de',
+        tutorialSkip: 'Saltar',
+        tutorialNext: 'Siguiente',
+        tutorialGotIt: '¡Entendido!',
+        tutorialComplete: '¡Tutorial Completo! Ya puedes crear SOPs.',
+        tutorialHint1: 'Elige en qué idioma vas a escribir',
+        tutorialHint2: 'Ingresa un título claro y descriptivo para este procedimiento',
+        tutorialHint3: 'Selecciona a qué departamento pertenece este SOP',
+        tutorialHint4: 'Opcional: Ingresa un número de documento (ej. SOP-001)',
+        tutorialHint5: 'Número de versión - deja 1.0 para SOPs nuevos',
+        tutorialHint6: 'Borrador = en progreso, Publicado = listo para usar',
+        tutorialHint7: 'Breve resumen de lo que cubre este procedimiento',
+        tutorialHint8: 'Opcional: Agrega etiquetas para organizar y encontrar este SOP',
+        tutorialHint9: 'Haz clic en "Agregar" para crear tu primer paso',
+        tutorialHint10: 'Ingresa un título corto para este paso',
+        tutorialHint11: 'Describe qué hacer en este paso',
+        tutorialHint12: 'Opcional: Agrega una foto o video para ilustrar este paso'
       }
     };
 
@@ -1301,6 +1372,274 @@
     }
 
     // =====================================================
+    // Tutorial Walkthrough Functions
+    // =====================================================
+
+    function startTutorial() {
+      tutorialActive = true;
+      tutorialStep = 0;
+      document.getElementById('tutorialBanner').style.display = 'block';
+      updateTutorialUI();
+      highlightCurrentField();
+      setupTutorialListeners();
+    }
+
+    function endTutorial() {
+      tutorialActive = false;
+      document.getElementById('tutorialBanner').style.display = 'none';
+      clearTutorialHighlight();
+      removeTutorialListeners();
+    }
+
+    function updateTutorialUI() {
+      const stepLabel = document.getElementById('tutorialStepLabel');
+      const hint = document.getElementById('tutorialHint');
+      const skipBtn = document.getElementById('tutorialSkipBtn');
+      const nextBtn = document.getElementById('tutorialNextBtn');
+      const progressFill = document.getElementById('tutorialProgressFill');
+      const banner = document.getElementById('tutorialBanner');
+
+      // Check if tutorial is complete
+      if (tutorialStep >= TUTORIAL_TOTAL_STEPS) {
+        banner.classList.add('complete');
+        stepLabel.style.display = 'none';
+        hint.innerHTML = '<div class="tutorial-complete-icon">🎉</div>' + t('tutorialComplete');
+        skipBtn.style.display = 'none';
+        nextBtn.textContent = t('tutorialGotIt');
+        nextBtn.onclick = endTutorial;
+        progressFill.style.width = '100%';
+        return;
+      }
+
+      banner.classList.remove('complete');
+      stepLabel.style.display = 'block';
+
+      // Use the language selected in step 1 for subsequent hints
+      const currentLang = tutorialStep === 0 ? appLang : (document.querySelector('#editLangToggle .active')?.textContent === 'Español' ? 'es' : 'en');
+      const hintKey = 'tutorialHint' + (tutorialStep + 1);
+
+      stepLabel.textContent = t('tutorialStep') + ' ' + (tutorialStep + 1) + ' ' + t('tutorialOf') + ' ' + TUTORIAL_TOTAL_STEPS;
+      hint.textContent = translations[currentLang]?.[hintKey] || translations.en[hintKey];
+
+      // Show/hide skip button based on whether field can be skipped
+      const currentStepConfig = tutorialSteps[tutorialStep];
+      skipBtn.style.display = currentStepConfig.canSkip ? 'flex' : 'none';
+      skipBtn.textContent = t('tutorialSkip');
+
+      nextBtn.innerHTML = t('tutorialNext') + ' <i class="ph-bold ph-arrow-right"></i>';
+      nextBtn.onclick = tutorialNext;
+
+      // Update progress bar
+      progressFill.style.width = ((tutorialStep / TUTORIAL_TOTAL_STEPS) * 100) + '%';
+    }
+
+    function highlightCurrentField() {
+      clearTutorialHighlight();
+
+      if (tutorialStep >= TUTORIAL_TOTAL_STEPS) return;
+
+      const stepConfig = tutorialSteps[tutorialStep];
+      let element = null;
+
+      switch (stepConfig.field) {
+        case 'editLangToggle':
+          element = document.getElementById('editLangToggle');
+          break;
+        case 'sopTitle':
+        case 'sopDocNum':
+        case 'sopRevision':
+        case 'sopDesc':
+          element = document.getElementById(stepConfig.field);
+          break;
+        case 'sopDept':
+        case 'sopStatus':
+          element = document.getElementById(stepConfig.field);
+          break;
+        case 'editTagsList':
+          element = document.getElementById('editTagsList')?.closest('.form-group');
+          break;
+        case 'addStepBtn':
+          element = document.querySelector('.steps-header .header-btn');
+          break;
+        case 'stepTitle':
+          element = document.querySelector('.step-item:first-child .step-title-input');
+          break;
+        case 'stepDesc':
+          element = document.querySelector('.step-item:first-child .step-desc-input');
+          break;
+        case 'stepMedia':
+          element = document.querySelector('.step-item:first-child .step-image-preview');
+          break;
+      }
+
+      if (element) {
+        if (stepConfig.type === 'toggle' || stepConfig.type === 'tags') {
+          element.classList.add('tutorial-highlight-group');
+        } else {
+          element.classList.add('tutorial-highlight');
+        }
+
+        // Scroll element into view
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+
+    function clearTutorialHighlight() {
+      document.querySelectorAll('.tutorial-highlight, .tutorial-highlight-group').forEach(el => {
+        el.classList.remove('tutorial-highlight', 'tutorial-highlight-group');
+      });
+    }
+
+    function tutorialNext() {
+      if (tutorialStep < TUTORIAL_TOTAL_STEPS) {
+        tutorialStep++;
+        updateTutorialUI();
+        highlightCurrentField();
+      }
+    }
+
+    function tutorialSkip() {
+      tutorialNext();
+    }
+
+    function setupTutorialListeners() {
+      // Language toggle
+      const langToggle = document.getElementById('editLangToggle');
+      if (langToggle) {
+        langToggle.querySelectorAll('button').forEach(btn => {
+          btn.addEventListener('click', handleTutorialLangChange);
+        });
+      }
+
+      // Input fields
+      ['sopTitle', 'sopDocNum', 'sopRevision', 'sopDesc'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', handleTutorialInput);
+      });
+
+      // Select fields
+      ['sopDept', 'sopStatus'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('change', handleTutorialSelect);
+      });
+
+      // Add step button - use MutationObserver to detect when steps are added
+      setupStepObserver();
+    }
+
+    function removeTutorialListeners() {
+      const langToggle = document.getElementById('editLangToggle');
+      if (langToggle) {
+        langToggle.querySelectorAll('button').forEach(btn => {
+          btn.removeEventListener('click', handleTutorialLangChange);
+        });
+      }
+
+      ['sopTitle', 'sopDocNum', 'sopRevision', 'sopDesc'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.removeEventListener('input', handleTutorialInput);
+      });
+
+      ['sopDept', 'sopStatus'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.removeEventListener('change', handleTutorialSelect);
+      });
+    }
+
+    function handleTutorialLangChange() {
+      if (!tutorialActive || tutorialStep !== 0) return;
+      // Small delay to let the active class update
+      setTimeout(() => {
+        tutorialNext();
+      }, 100);
+    }
+
+    function handleTutorialInput(e) {
+      if (!tutorialActive) return;
+
+      const fieldMap = {
+        'sopTitle': 1,
+        'sopDocNum': 3,
+        'sopRevision': 4,
+        'sopDesc': 6
+      };
+
+      const expectedStep = fieldMap[e.target.id];
+      if (tutorialStep === expectedStep && e.target.value.trim().length > 0) {
+        setTimeout(() => tutorialNext(), 300);
+      }
+    }
+
+    function handleTutorialSelect(e) {
+      if (!tutorialActive) return;
+
+      const fieldMap = {
+        'sopDept': 2,
+        'sopStatus': 5
+      };
+
+      const expectedStep = fieldMap[e.target.id];
+      if (tutorialStep === expectedStep) {
+        setTimeout(() => tutorialNext(), 200);
+      }
+    }
+
+    function setupStepObserver() {
+      const stepsList = document.getElementById('stepsList');
+      if (!stepsList) return;
+
+      const observer = new MutationObserver((mutations) => {
+        if (!tutorialActive) return;
+
+        // Check if we're on the "Add Step" step (step 8, index 8)
+        if (tutorialStep === 8) {
+          const stepItems = stepsList.querySelectorAll('.step-item');
+          if (stepItems.length > 0) {
+            setTimeout(() => {
+              tutorialNext();
+              // Now set up listeners for step inputs
+              setupStepInputListeners();
+            }, 200);
+          }
+        }
+      });
+
+      observer.observe(stepsList, { childList: true, subtree: true });
+    }
+
+    function setupStepInputListeners() {
+      // Listen for step title input
+      const titleInput = document.querySelector('.step-item:first-child .step-title-input');
+      if (titleInput) {
+        titleInput.addEventListener('input', (e) => {
+          if (tutorialActive && tutorialStep === 9 && e.target.value.trim().length > 0) {
+            setTimeout(() => tutorialNext(), 300);
+          }
+        });
+      }
+
+      // Listen for step description input
+      const descInput = document.querySelector('.step-item:first-child .step-desc-input');
+      if (descInput) {
+        descInput.addEventListener('input', (e) => {
+          if (tutorialActive && tutorialStep === 10 && e.target.value.trim().length > 0) {
+            setTimeout(() => tutorialNext(), 300);
+          }
+        });
+      }
+
+      // Listen for media preview click (to add image/video)
+      const mediaPreview = document.querySelector('.step-item:first-child .step-image-preview');
+      if (mediaPreview) {
+        mediaPreview.addEventListener('click', () => {
+          if (tutorialActive && tutorialStep === 11) {
+            setTimeout(() => tutorialNext(), 200);
+          }
+        });
+      }
+    }
+
+    // =====================================================
     // Data Loading & Saving (API-based)
     // =====================================================
     
@@ -1710,13 +2049,18 @@
     
     function closeModal(id) {
       document.getElementById(id).classList.remove('active');
+      // End tutorial if closing edit modal
+      if (id === 'editModal' && tutorialActive) {
+        endTutorial();
+      }
     }
     
     function openCreateModal() {
       currentSopId = null;
-      editingSteps = [{ title: '', description: '', image: '', safety: false, quality: false }];
+      // Start with empty steps for tutorial - user will click "Add" to create first step
+      editingSteps = [];
       window.sopTranslations = {};
-      
+
       document.getElementById('modalTitle').innerHTML = '<i class="ph-duotone ph-file-text"></i> Create New SOP';
       document.getElementById('sopTitle').value = '';
       document.getElementById('sopDept').value = '';
@@ -1724,14 +2068,17 @@
       document.getElementById('sopRevision').value = '1.0';
       document.getElementById('sopStatus').value = 'draft';
       document.getElementById('sopDesc').value = '';
-      
+
       settings.tags.forEach(t => {
         const cb = document.getElementById('tag_' + t.name);
         if (cb) cb.checked = false;
       });
-      
+
       renderSteps();
       openModal('editModal');
+
+      // Start tutorial walkthrough
+      setTimeout(() => startTutorial(), 300);
     }
     
     function editSOP(id) {
