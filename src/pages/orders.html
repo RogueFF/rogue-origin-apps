@@ -464,7 +464,7 @@
                 <th>Strain</th>
                 <th>Type</th>
                 <th>Qty (kg)</th>
-                <th>Done (kg)</th>
+                <th title="Manual adjustment - adds to automatic bag count">+/- Adjust</th>
                 <th>$/Unit</th>
                 <th>Total</th>
                 <th></th>
@@ -485,7 +485,7 @@
                   <input type="number" class="form-input" step="0.01" placeholder="5">
                 </td>
                 <td>
-                  <input type="number" class="form-input" step="0.01" placeholder="0" title="Already completed (kg)">
+                  <input type="number" class="form-input" step="1" placeholder="0" title="Manual adjustment (kg) - adds to automatic bag count. Use negative to subtract.">
                 </td>
                 <td>
                   <input type="number" class="form-input" step="0.01" placeholder="350">
@@ -1150,6 +1150,7 @@
             </select>
           </td>
           <td><input type="number" class="form-input" step="0.01" placeholder="5" oninput="calculateLineTotal(this)"></td>
+          <td><input type="number" class="form-input" step="1" placeholder="0" title="Manual adjustment (kg) - adds to automatic bag count"></td>
           <td><input type="number" class="form-input" step="0.01" placeholder="350" oninput="calculateLineTotal(this)"></td>
           <td><span class="line-item-total">$0.00</span></td>
           <td>
@@ -1238,7 +1239,7 @@
               </select>
             </td>
             <td><input type="number" class="form-input" step="0.01" value="${item.quantity || 0}" oninput="calculateLineTotal(this)"></td>
-            <td><input type="number" class="form-input" step="0.01" value="${item.completedKg || 0}" title="Already completed (kg)"></td>
+            <td><input type="number" class="form-input" step="1" value="${item.adjustmentKg || 0}" title="Manual adjustment (kg) - adds to automatic bag count"></td>
             <td><input type="number" class="form-input" step="0.01" value="${item.unitPrice || 0}" oninput="calculateLineTotal(this)"></td>
             <td><span class="line-item-total">$${formatNumber(item.quantity * item.unitPrice)}</span></td>
             <td>
@@ -1899,7 +1900,7 @@
           </select>
         </td>
         <td><input type="number" class="form-input" step="0.01" placeholder="0" oninput="calculateLineTotal(this)"></td>
-        <td><input type="number" class="form-input" step="0.01" placeholder="0" title="Already completed (kg)"></td>
+        <td><input type="number" class="form-input" step="1" placeholder="0" title="Manual adjustment (kg) - adds to automatic bag count"></td>
         <td><input type="number" class="form-input" step="0.01" placeholder="0" oninput="calculateLineTotal(this)"></td>
         <td><span class="line-item-total">$0.00</span></td>
         <td>
@@ -2176,7 +2177,7 @@
         const strain = row.children[0].querySelector('input').value.trim();
         const type = row.children[1].querySelector('select').value;
         const qty = parseFloat(row.children[2].querySelector('input').value) || 0;
-        const completedKg = parseFloat(row.children[3].querySelector('input').value) || 0;
+        const adjustmentKg = parseFloat(row.children[3].querySelector('input').value) || 0;
         const price = parseFloat(row.children[4].querySelector('input').value) || 0;
 
         if (strain && qty > 0) {
@@ -2184,7 +2185,7 @@
             strain,
             type,
             quantity: qty,
-            completedKg: completedKg,
+            adjustmentKg: adjustmentKg,
             unitPrice: price,
             totalValue: qty * price,
             countryOfOrigin: 'USA'
