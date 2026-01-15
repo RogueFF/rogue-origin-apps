@@ -350,9 +350,9 @@
         breakdownHTML += '<span style="flex: 1; color: #fff; ' + textStyle + '">' + item.strain + '</span>';
 
         if (isComplete) {
-          breakdownHTML += '<span style="color: #7a9d87; font-weight: 500;">Done!</span>';
+          breakdownHTML += '<span style="color: #7a9d87; font-weight: 500;">' + completed + '/' + item.quantityKg + ' Done!</span>';
         } else {
-          breakdownHTML += '<span style="color: #e4aa4f; font-weight: 600;">' + remaining + 'kg left</span>';
+          breakdownHTML += '<span style="color: #e4aa4f; font-weight: 600;">' + completed + '/' + item.quantityKg + ' <span style="opacity: 0.8;">' + remaining + 'kg left</span></span>';
         }
         breakdownHTML += '</div>';
 
