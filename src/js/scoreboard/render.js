@@ -247,34 +247,112 @@
 
     /**
      * Render order queue section
-     * Shows current order being worked on and next order in queue
+     * Shows all items from current shipment and next order in queue
      */
     renderOrderQueue: function() {
       const orderQueue = window.ScoreboardState ? window.ScoreboardState.orderQueue : null;
       const section = document.getElementById('orderQueueSection');
 
+      // Debug: Log what data we received
+      console.log('[renderOrderQueue] orderQueue:', JSON.stringify(orderQueue, null, 2));
+      if (orderQueue && orderQueue.currentItems) {
+        console.log('[renderOrderQueue] currentItems count:', orderQueue.currentItems.length);
+      }
+
       if (!section) return;
 
       // Hide section if no order data
-      if (!orderQueue || (!orderQueue.current && !orderQueue.next)) {
+      // Support both new format (currentItems[]) and old format (current)
+      const hasCurrentItems = orderQueue && orderQueue.currentItems && orderQueue.currentItems.length > 0;
+      const hasLegacyCurrent = orderQueue && orderQueue.current && !hasCurrentItems;
+      const hasNext = orderQueue && orderQueue.next;
+
+      if (!hasCurrentItems && !hasLegacyCurrent && !hasNext) {
         section.style.display = 'none';
         return;
       }
 
       section.style.display = 'flex';
 
-      // Render current order pill
-      if (orderQueue.current) {
-        this.renderOrderPill('current', orderQueue.current);
+      // Render all current items from the same shipment
+      if (hasCurrentItems) {
+        this.renderCurrentItems(orderQueue.currentItems);
+      } else if (hasLegacyCurrent) {
+        // Fallback: wrap single current item in array for backwards compatibility
+        console.log('[renderOrderQueue] Using legacy current format (backend not updated?)');
+        this.renderCurrentItems([orderQueue.current]);
       } else {
         document.getElementById('currentOrderPill').style.display = 'none';
       }
 
-      // Render next order pill
-      if (orderQueue.next) {
+      // Render next order pill (from different shipment)
+      if (hasNext) {
         this.renderOrderPill('next', orderQueue.next);
       } else {
         document.getElementById('nextOrderPill').style.display = 'none';
+      }
+    },
+
+    /**
+     * Render multiple current items from the same shipment
+     * @param {Array} currentItems - Array of order items from the current shipment
+     */
+    renderCurrentItems: function(currentItems) {
+      const pill = document.getElementById('currentOrderPill');
+      const summary = document.getElementById('currentOrderSummary');
+      const detail = document.getElementById('currentOrderDetail');
+      const t = window.ScoreboardI18n ? window.ScoreboardI18n.t : function(key) { return key; };
+
+      if (!pill || !summary) return;
+
+      pill.style.display = 'flex';
+
+      // Build summary with all strains: "Sour Lifter (75kg) + Lifter (115kg) • Hamburg"
+      const strainParts = currentItems.map(function(item) {
+        return item.strain + ' (' + item.quantityKg + 'kg)';
+      });
+      const summaryText = strainParts.join(' + ') + ' • ' + currentItems[0].customer;
+      summary.textContent = summaryText;
+
+      // Show combined progress bar
+      const progressContainer = document.getElementById('currentProgressBarContainer');
+      const progressFill = document.getElementById('currentProgressFill');
+      const progressText = document.getElementById('currentProgressText');
+
+      if (progressContainer && progressFill && progressText) {
+        // Calculate combined progress across all items
+        let totalCompleted = 0;
+        let totalQuantity = 0;
+        for (let i = 0; i < currentItems.length; i++) {
+          totalCompleted += (currentItems[i].completedKg || 0);
+          totalQuantity += currentItems[i].quantityKg;
+        }
+        const combinedPercent = totalQuantity > 0 ? (totalCompleted / totalQuantity) * 100 : 0;
+
+        progressContainer.style.display = 'flex';
+        progressFill.style.width = combinedPercent + '%';
+        progressText.textContent = totalCompleted + ' / ' + totalQuantity + ' kg (' + Math.round(combinedPercent) + '%)';
+      }
+
+      // Build expanded detail with individual item progress
+      if (detail) {
+        let detailHTML = '<div class="order-detail-section">';
+        detailHTML += '<div class="order-detail-row"><span class="order-detail-label">' + t('order') + ':</span> <span class="order-detail-value">' + currentItems[0].masterOrderId + '</span></div>';
+        detailHTML += '<div class="order-detail-row"><span class="order-detail-label">' + t('shipment') + ':</span> <span class="order-detail-value">' + currentItems[0].shipmentId + '</span></div>';
+        detailHTML += '<div class="order-detail-row"><span class="order-detail-label">' + t('customer') + ':</span> <span class="order-detail-value">' + currentItems[0].customer + '</span></div>';
+        detailHTML += '<div class="order-detail-row"><span class="order-detail-label">' + t('dueDate') + ':</span> <span class="order-detail-value">' + (currentItems[0].dueDate || '—') + '</span></div>';
+
+        // Show individual strain progress
+        detailHTML += '<div class="order-detail-divider"></div>';
+        detailHTML += '<div class="order-detail-row"><span class="order-detail-label">Items:</span></div>';
+        for (let i = 0; i < currentItems.length; i++) {
+          const item = currentItems[i];
+          const pct = Math.round(item.percentComplete || 0);
+          detailHTML += '<div class="order-detail-row"><span class="order-detail-value">• ' + item.strain + ': ' + (item.completedKg || 0) + '/' + item.quantityKg + 'kg (' + pct + '%)</span></div>';
+        }
+
+        detailHTML += '</div>';
+        detail.innerHTML = detailHTML;
       }
     },
 
