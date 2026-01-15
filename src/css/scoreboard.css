@@ -1821,4 +1821,192 @@ body.timer-fullscreen .started-badge {
   }
 }
 
-  </style>
+/* ========================================
+   IFRAME EMBED MODE
+   When scoreboard is embedded in dashboard iframe
+   ======================================== */
+body.iframe-embed {
+  overflow: hidden;
+}
+
+body.iframe-embed,
+body.iframe-embed html {
+  height: 100%;
+}
+
+body.iframe-embed .main-panel {
+  height: 100%;
+  padding: 15px 20px;
+}
+
+body.iframe-embed .timer-panel {
+  height: 100%;
+  width: 320px;
+  min-width: 320px;
+  padding: 20px;
+}
+
+/* Hide redundant elements in iframe mode */
+body.iframe-embed .strain-display,
+body.iframe-embed .time-display,
+body.iframe-embed .lang-toggle,
+body.iframe-embed .help-btn,
+body.iframe-embed .start-day-btn,
+body.iframe-embed .started-badge {
+  display: none;
+}
+
+/* Compact scoreboard in iframe */
+body.iframe-embed .scoreboard {
+  transform: scale(0.9);
+  transform-origin: center center;
+}
+
+body.iframe-embed .hour-card {
+  padding: 16px 20px;
+}
+
+body.iframe-embed .hour-card-header {
+  font-size: 11px;
+}
+
+body.iframe-embed .actual-lbs {
+  font-size: 56px;
+}
+
+body.iframe-embed .target-lbs {
+  font-size: 28px;
+}
+
+body.iframe-embed .percentage-value {
+  font-size: 36px;
+}
+
+/* Compact timer panel in iframe */
+body.iframe-embed .timer-display {
+  width: 180px;
+  height: 180px;
+  margin-bottom: 10px;
+}
+
+body.iframe-embed .timer-value {
+  font-size: 40px;
+}
+
+body.iframe-embed .timer-header {
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+body.iframe-embed .timer-target {
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+body.iframe-embed .manual-btn {
+  font-size: 14px;
+  padding: 12px 16px;
+  margin-bottom: 10px;
+}
+
+body.iframe-embed .timer-stats {
+  gap: 8px;
+}
+
+body.iframe-embed .timer-stat {
+  padding: 8px 12px;
+}
+
+body.iframe-embed .timer-stat-label {
+  font-size: 10px;
+}
+
+body.iframe-embed .timer-stat-value {
+  font-size: 16px;
+}
+
+body.iframe-embed .cycle-history {
+  margin-top: 8px;
+  max-width: 280px;
+}
+
+body.iframe-embed .cycle-history-title {
+  font-size: 10px;
+}
+
+/* Order queue compact in iframe */
+body.iframe-embed .order-queue-section {
+  padding: 12px;
+}
+
+body.iframe-embed .order-queue-title {
+  font-size: 13px;
+}
+
+body.iframe-embed .current-order-card {
+  padding: 12px 16px;
+}
+
+body.iframe-embed .current-order-name {
+  font-size: 18px;
+}
+
+body.iframe-embed .current-order-items {
+  font-size: 14px;
+}
+
+/* Responsive iframe adjustments */
+@media (max-width: 1200px) {
+  body.iframe-embed .main-panel {
+    padding: 10px 15px;
+  }
+
+  body.iframe-embed .timer-panel {
+    width: 280px;
+    min-width: 280px;
+    padding: 15px;
+  }
+
+  body.iframe-embed .timer-display {
+    width: 150px;
+    height: 150px;
+  }
+
+  body.iframe-embed .timer-value {
+    font-size: 34px;
+  }
+
+  body.iframe-embed .scoreboard {
+    transform: scale(0.85);
+  }
+}
+
+@media (max-width: 1024px) {
+  body.iframe-embed {
+    flex-direction: column;
+    overflow: auto;
+  }
+
+  body.iframe-embed .main-panel {
+    height: auto;
+    min-height: auto;
+    padding: 60px 15px 15px;
+  }
+
+  body.iframe-embed .timer-panel {
+    width: 100%;
+    min-width: 100%;
+    height: auto;
+    border-left: none;
+    border-top: 2px solid rgba(228,170,79,0.2);
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 15px;
+    padding: 15px;
+  }
+
+  body.iframe-embed .scoreboard {
+    transform: scale(0.9);
+  }
+}
