@@ -1905,9 +1905,9 @@ function count5kgBagsForStrain(strain, startDateTime) {
     Logger.log('[count5kgBagsForStrain] Checking ' + fiveKgBags.length + ' bags for strain: ' + strain);
 
     // Generate search terms from strain name
-    // For "Sour Lifter", we want to match "SLIFT", "SOUR", "LIFTER"
+    // For "Sour Lifter", we require ALL words to match to avoid "Lifter" matching "Sour Lifter"
     var strainUpper = strain.toUpperCase();
-    var strainWords = strainUpper.split(/[\s\-_]+/); // Split on spaces, hyphens, underscores
+    var strainWords = strainUpper.split(/[\s\-_]+/).filter(function(w) { return w.length >= 3; }); // Significant words only
 
     for (var b = 0; b < fiveKgBags.length; b++) {
       var bag = fiveKgBags[b];
@@ -1915,36 +1915,41 @@ function count5kgBagsForStrain(strain, startDateTime) {
 
       Logger.log('[count5kgBagsForStrain] Bag #' + (b + 1) + ' at ' + bag.timestamp + ' -> SKU: "' + bag.sku + '"');
 
-      // Check if SKU contains the full strain name or any significant words from it
+      // Check if SKU contains the full strain name (exact match)
       if (bag.sku.indexOf(strainUpper) !== -1) {
         matched = true;
-      } else {
-        // Check if SKU contains any significant word from the strain (3+ letters)
-        // Also check 4-character substrings (e.g., "LIFT" from "LIFTER" matches "SLIFT")
+        Logger.log('[count5kgBagsForStrain] Matched on full strain name');
+      } else if (strainWords.length > 0) {
+        // Require ALL significant words from strain to be present in SKU
+        // This prevents "Lifter" bags from matching "Sour Lifter" (missing "SOUR")
+        var allWordsFound = true;
         for (var w = 0; w < strainWords.length; w++) {
           var word = strainWords[w];
+          var wordFound = false;
 
           // Check if the full word appears in SKU
-          if (word.length >= 3 && bag.sku.indexOf(word) !== -1) {
-            matched = true;
-            break;
-          }
-
-          // Check if any 4+ character substring of the word appears in SKU
-          // This catches "LIFT" from "LIFTER" matching "SLIFT"
-          if (word.length >= 4) {
+          if (bag.sku.indexOf(word) !== -1) {
+            wordFound = true;
+          } else if (word.length >= 4) {
+            // Check if any 4+ character substring of the word appears in SKU
+            // This catches "LIFT" from "LIFTER" matching "SLIFT"
             for (var j = 0; j <= word.length - 4; j++) {
               var substring = word.substring(j, j + 4);
               if (bag.sku.indexOf(substring) !== -1) {
-                matched = true;
-                Logger.log('[count5kgBagsForStrain] Matched on substring: "' + substring + '"');
+                wordFound = true;
+                Logger.log('[count5kgBagsForStrain] Word "' + word + '" matched on substring: "' + substring + '"');
                 break;
               }
             }
           }
 
-          if (matched) break;
+          if (!wordFound) {
+            allWordsFound = false;
+            Logger.log('[count5kgBagsForStrain] Word "' + word + '" NOT found in SKU');
+            break;
+          }
         }
+        matched = allWordsFound;
       }
 
       if (matched) {
