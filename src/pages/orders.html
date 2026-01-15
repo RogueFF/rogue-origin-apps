@@ -1217,7 +1217,15 @@
 
       // Populate line items
       const tbody = document.getElementById('line-items-body');
-      const lineItems = shipment.lineItems || [];
+      let lineItems = shipment.lineItems || [];
+      // Parse lineItems if stored as JSON string
+      if (typeof lineItems === 'string') {
+        try {
+          lineItems = JSON.parse(lineItems);
+        } catch (e) {
+          lineItems = [];
+        }
+      }
 
       if (lineItems.length > 0) {
         tbody.innerHTML = lineItems.map(item => `
