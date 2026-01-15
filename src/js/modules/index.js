@@ -374,14 +374,17 @@ function renderHeroSection(data) {
   const trimmers = t.trimmers || 0;
   const todayRate = t.avgRate || 0;
   const productiveHoursElapsed = getProductiveHoursElapsed();
-  const totalProductiveHours = getTotalProductiveHours();
+  const totalProductiveHours = (data.current && data.current.effectiveHours) || getTotalProductiveHours();
   const remainingHours = Math.max(0, totalProductiveHours - productiveHoursElapsed);
 
-  // Expected production from backend
+  // Expected production from backend (uses same calculation as scoreboard)
   const expectedSoFar = (data.current && data.current.todayTarget) || (data.targets && data.targets.totalTops) || 0;
 
-  // Predicted end-of-day total
-  const predictedTops = tops + (trimmers * todayRate * remainingHours);
+  // Predicted end-of-day total - use backend projection (same as scoreboard) if available
+  // Backend projection accounts for: late start, actual measured rate, varying crew counts
+  const backendProjection = data.current && data.current.projectedTotal;
+  const localProjection = tops + (trimmers * todayRate * remainingHours);
+  const predictedTops = backendProjection > 0 ? backendProjection : localProjection;
 
   // Progress bar
   let progressPercent = 0;
