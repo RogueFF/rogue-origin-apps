@@ -1927,19 +1927,25 @@ function count5kgBagsForStrain(strain, startDateTime) {
 
     Logger.log('[count5kgBagsForStrain] Checking ' + fiveKgBags.length + ' bags for strain: ' + strain);
 
-    var strainUpper = strain.toUpperCase();
+    var strainUpper = strain.toUpperCase().trim();
 
     for (var b = 0; b < fiveKgBags.length; b++) {
       var bag = fiveKgBags[b];
       var matched = false;
 
-      Logger.log('[count5kgBagsForStrain] Bag #' + (b + 1) + ' at ' + bag.timestamp + ' -> Title: "' + bag.title + '"');
+      // Extract just the strain name from title: "Sour Lifter" from "Sour Lifter / Hand Trimmed / 5 kg."
+      var titleStrain = '';
+      if (bag.title && bag.title.indexOf('/') !== -1) {
+        titleStrain = bag.title.split('/')[0].trim();
+      }
 
-      // Primary matching: Check if Title contains the strain name
-      // Title format is like "Sour Lifter / Hand Trimmed / 5 kg." - much more reliable than SKU
-      if (bag.title && bag.title.indexOf(strainUpper) !== -1) {
+      Logger.log('[count5kgBagsForStrain] Bag #' + (b + 1) + ' -> Title strain: "' + titleStrain + '" vs search: "' + strainUpper + '"');
+
+      // Primary matching: EXACT match on extracted strain name from title
+      // This prevents "Lifter" from matching "Sour Lifter" bags
+      if (titleStrain && titleStrain === strainUpper) {
         matched = true;
-        Logger.log('[count5kgBagsForStrain] Matched on Title');
+        Logger.log('[count5kgBagsForStrain] Matched on Title (exact)');
       }
       // Fallback: Check SKU if no Title match (for backwards compatibility)
       else if (bag.sku && bag.sku.indexOf(strainUpper) !== -1) {
