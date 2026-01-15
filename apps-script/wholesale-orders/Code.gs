@@ -1684,8 +1684,10 @@ function getScoreboardOrderQueue() {
         lineItems = [];
       }
 
+      Logger.log('[getScoreboardOrderQueue] Shipment ' + shipment.id + ' has ' + lineItems.length + ' line items');
       for (var k = 0; k < lineItems.length; k++) {
         var item = lineItems[k];
+        Logger.log('[getScoreboardOrderQueue] Item ' + k + ': strain=' + item.strain + ', type=' + item.type + ', qty=' + item.quantity);
 
         // Only include tops (skip smalls)
         if (item.type && item.type.toLowerCase() === 'tops') {
@@ -1724,55 +1726,72 @@ function getScoreboardOrderQueue() {
       return dateA - dateB;
     });
 
-    // Get current and next
-    var current = null;
+    // Get current shipment items and next shipment
+    var currentItems = [];
     var next = null;
+    var currentShipmentId = null;
 
     if (topsLineItems.length > 0) {
-      var currentItem = topsLineItems[0];
+      // Get the shipment ID of the first (highest priority) item
+      currentShipmentId = topsLineItems[0].shipmentId;
 
-      // Calculate progress for current order (pass manual completedKg and startDateTime if set)
-      var progress = calculateOrderProgress(
-        currentItem.shipmentId,
-        currentItem.strain,
-        currentItem.type,
-        currentItem.quantityKg,
-        currentItem.completedKg,
-        currentItem.startDateTime
-      );
+      // Collect ALL line items from the same shipment
+      for (var i = 0; i < topsLineItems.length; i++) {
+        var item = topsLineItems[i];
 
-      current = {
-        masterOrderId: currentItem.masterOrderId,
-        shipmentId: currentItem.shipmentId,
-        customer: currentItem.customer,
-        strain: currentItem.strain,
-        type: currentItem.type,
-        quantityKg: currentItem.quantityKg,
-        completedKg: progress.completedKg,
-        percentComplete: progress.percentComplete,
-        dueDate: currentItem.dueDate,
-        estimatedHoursRemaining: progress.estimatedHoursRemaining,
-        invoiceNumber: currentItem.invoiceNumber
-      };
+        if (item.shipmentId === currentShipmentId) {
+          // Calculate progress for each item in current shipment
+          var progress = calculateOrderProgress(
+            item.shipmentId,
+            item.strain,
+            item.type,
+            item.quantityKg,
+            item.completedKg,
+            item.startDateTime
+          );
+
+          currentItems.push({
+            masterOrderId: item.masterOrderId,
+            shipmentId: item.shipmentId,
+            customer: item.customer,
+            strain: item.strain,
+            type: item.type,
+            quantityKg: item.quantityKg,
+            completedKg: progress.completedKg,
+            percentComplete: progress.percentComplete,
+            dueDate: item.dueDate,
+            estimatedHoursRemaining: progress.estimatedHoursRemaining,
+            invoiceNumber: item.invoiceNumber
+          });
+        } else if (!next) {
+          // First item from a DIFFERENT shipment becomes "next"
+          next = {
+            masterOrderId: item.masterOrderId,
+            shipmentId: item.shipmentId,
+            customer: item.customer,
+            strain: item.strain,
+            type: item.type,
+            quantityKg: item.quantityKg,
+            dueDate: item.dueDate,
+            invoiceNumber: item.invoiceNumber
+          };
+        }
+      }
     }
 
-    if (topsLineItems.length > 1) {
-      var nextItem = topsLineItems[1];
-      next = {
-        masterOrderId: nextItem.masterOrderId,
-        shipmentId: nextItem.shipmentId,
-        customer: nextItem.customer,
-        strain: nextItem.strain,
-        type: nextItem.type,
-        quantityKg: nextItem.quantityKg,
-        dueDate: nextItem.dueDate,
-        invoiceNumber: nextItem.invoiceNumber
-      };
+    // For backwards compatibility, also provide "current" as the first item
+    var current = currentItems.length > 0 ? currentItems[0] : null;
+
+    Logger.log('[getScoreboardOrderQueue] Total topsLineItems: ' + topsLineItems.length);
+    Logger.log('[getScoreboardOrderQueue] currentItems count: ' + currentItems.length);
+    for (var ci = 0; ci < currentItems.length; ci++) {
+      Logger.log('[getScoreboardOrderQueue] currentItem ' + ci + ': ' + currentItems[ci].strain + ' (' + currentItems[ci].quantityKg + 'kg)');
     }
 
     return {
       success: true,
       current: current,
+      currentItems: currentItems,
       next: next,
       queue: {
         totalShipments: topsLineItems.length,
