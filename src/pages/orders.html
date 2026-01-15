@@ -2179,7 +2179,7 @@
         const completedKg = parseFloat(row.children[3].querySelector('input').value) || 0;
         const price = parseFloat(row.children[4].querySelector('input').value) || 0;
 
-        if (strain && qty > 0 && price > 0) {
+        if (strain && qty > 0) {
           items.push({
             strain,
             type,
