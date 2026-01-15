@@ -149,6 +149,21 @@ testBreakMode(false); // Disable break mode (timer resumes)
 
 **Status**: ✅ All fixes deployed and verified
 
+### SOP Manager Enhancements (2026-01-15)
+
+**Features**:
+- **Media Upload Modal**: iPad-optimized with camera/photo/video capture options
+- **Image Annotation Editor**: Full markup toolkit for step images
+  - Tools: Arrow, Circle, Rectangle, Freehand, Text, Symbol
+  - Symbols: ⚠️ 🚫 ✓ ❌ ➡️ 👆 🔍
+  - Colors: Red, Yellow, Green, Blue
+  - Undo/redo with 30-step history
+- **Video Support**: YouTube URL detection with thumbnail preview
+- **iPad Optimization**: 44px touch targets, 16px fonts (prevents iOS zoom)
+- **Language Detection**: AI improvements preserve input language (EN/ES)
+
+**Files**: `src/pages/sop-manager.html`, `src/css/sop-manager.css`
+
 ---
 
 ## Quick Reference
