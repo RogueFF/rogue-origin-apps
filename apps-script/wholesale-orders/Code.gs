@@ -1823,7 +1823,7 @@ function count5kgBagsForStrain(strain, startDateTime) {
     var bagHeaders = bagData[0];
     var timestampCol = bagHeaders.indexOf('Timestamp');
     var sizeCol = bagHeaders.indexOf('Size');
-    var titleCol = bagHeaders.indexOf('Title'); // Title contains full strain name like "Sour Lifter / Hand Trimmed / 5 kg."
+    var titleCol = bagHeaders.indexOf('Variant Title'); // Variant Title contains full strain name like "Sour Lifter / Hand Trimmed / 5 kg."
     var skuCol = bagHeaders.indexOf('SKU'); // Fallback - SKU contains abbreviated cultivar like "SLIFT-INTL-HT-5-KG-2025"
 
     if (timestampCol === -1 || sizeCol === -1) return 0;
