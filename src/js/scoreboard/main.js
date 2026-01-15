@@ -174,6 +174,17 @@
   function init() {
     console.log('Scoreboard initializing...');
 
+    // Detect if running inside an iframe and add embed class
+    try {
+      if (window.self !== window.top) {
+        document.body.classList.add('iframe-embed');
+        console.log('Scoreboard running in iframe - embed mode enabled');
+      }
+    } catch (e) {
+      // Cross-origin iframe - assume embedded
+      document.body.classList.add('iframe-embed');
+    }
+
     // Load cycle display mode from localStorage
     if (Cycle && Cycle.loadCycleMode) {
       Cycle.loadCycleMode();

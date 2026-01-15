@@ -1,7 +1,7 @@
 // Service Worker for Rogue Origin Operations Hub
 // Version 3.7 - Updated order display format
 
-const CACHE_VERSION = 'ro-ops-v3.7';
+const CACHE_VERSION = 'ro-ops-v3.8';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
