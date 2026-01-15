@@ -14,7 +14,7 @@
 // ===== CONFIGURATION =====
 // Sheet ID for wholesale orders database
 var SHEET_ID = '1QLQaR4RMniUmwbJFrtMVaydyVMyCCxqHXWDCVs5dejw';
-var COA_FOLDER_ID = '1efudtjpm8fsSA6PZUirhtsmCO5-oS2Me';
+var COA_FOLDER_ID = '1vNjWtq701h_hSCA1gvjlD37xOZv6QbfO';
 
 /**********************************************************
  * SECURITY: Input Validation Functions
