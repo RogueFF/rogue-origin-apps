@@ -1370,11 +1370,20 @@ function getCOAsForStrains(strainList) {
       var bestScore = 0;
 
       for (var j = 0; j < coaIndex.length; j++) {
-        var coaStrain = coaIndex[j].strain;
-        var coaNormalized = normalizeStrainName_(coaStrain);
+        var coaFileName = coaIndex[j].fileName;
+        var coaFileNormalized = normalizeStrainName_(coaFileName);
 
-        var score = calculateMatchScore_(normalized, coaNormalized);
-        if (score > bestScore && score >= 0.7) { // 70% threshold
+        // Check if strain name is contained in filename (best match)
+        if (coaFileNormalized.indexOf(normalized) !== -1) {
+          // Direct substring match - high confidence
+          bestScore = 1.0;
+          bestMatch = coaIndex[j];
+          break; // Found exact match, no need to continue
+        }
+
+        // Fall back to word overlap scoring
+        var score = calculateMatchScore_(normalized, coaFileNormalized);
+        if (score > bestScore && score >= 0.6) { // 60% threshold for partial matches
           bestScore = score;
           bestMatch = coaIndex[j];
         }
