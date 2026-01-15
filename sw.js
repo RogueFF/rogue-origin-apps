@@ -1,7 +1,7 @@
 // Service Worker for Rogue Origin Operations Hub
-// Version 3.5 - Increased timeout to 20s for Apps Script cold starts
+// Version 3.6 - Added currentItems array for multi-line shipments
 
-const CACHE_VERSION = 'ro-ops-v3.5';
+const CACHE_VERSION = 'ro-ops-v3.6';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
