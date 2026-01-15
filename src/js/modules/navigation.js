@@ -128,8 +128,10 @@ export function toggleSidebar() {
 
   if (collapsed) {
     sidebar.classList.add('collapsed');
+    document.body.classList.add('sidebar-collapsed');
   } else {
     sidebar.classList.remove('collapsed');
+    document.body.classList.remove('sidebar-collapsed');
   }
 
   // Update toggle label if exists
@@ -187,6 +189,7 @@ export function initSidebarState() {
       const sidebar = safeGetEl('sidebar');
       if (sidebar) {
         sidebar.classList.add('collapsed');
+        document.body.classList.add('sidebar-collapsed');
         setSidebarCollapsed(true);
 
         const toggleLabel = sidebar.querySelector('.sidebar-toggle-label');
