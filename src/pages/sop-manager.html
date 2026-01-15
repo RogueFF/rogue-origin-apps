@@ -102,6 +102,8 @@
             <div class="tutorial-progress-fill" id="tutorialProgressFill"></div>
           </div>
         </div>
+        <!-- Tutorial Overlay - frosts background during tutorial -->
+        <div class="tutorial-overlay" id="tutorialOverlay" style="display:none;"></div>
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">SOP Title * <button type="button" class="ai-improve-btn" onclick="aiImproveTitle()" title="AI Improve"><i class="ph-duotone ph-sparkle"></i> Improve</button></label>
@@ -1379,6 +1381,7 @@
       tutorialActive = true;
       tutorialStep = 0;
       document.getElementById('tutorialBanner').style.display = 'block';
+      document.getElementById('tutorialOverlay').style.display = 'block';
       updateTutorialUI();
       highlightCurrentField();
       setupTutorialListeners();
@@ -1387,6 +1390,7 @@
     function endTutorial() {
       tutorialActive = false;
       document.getElementById('tutorialBanner').style.display = 'none';
+      document.getElementById('tutorialOverlay').style.display = 'none';
       clearTutorialHighlight();
       removeTutorialListeners();
     }
@@ -1408,6 +1412,9 @@
         nextBtn.textContent = t('tutorialGotIt');
         nextBtn.onclick = endTutorial;
         progressFill.style.width = '100%';
+        // Hide overlay and highlights on completion
+        document.getElementById('tutorialOverlay').style.display = 'none';
+        clearTutorialHighlight();
         return;
       }
 
@@ -1479,14 +1486,22 @@
           element.classList.add('tutorial-highlight');
         }
 
+        // Lift parent form-group above overlay for context
+        const parentGroup = element.closest('.form-group') || element.closest('.form-row') || element.closest('.steps-section');
+        if (parentGroup) {
+          parentGroup.classList.add('tutorial-highlight-parent');
+        }
+
         // Scroll element into view
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
       }
     }
 
     function clearTutorialHighlight() {
-      document.querySelectorAll('.tutorial-highlight, .tutorial-highlight-group').forEach(el => {
-        el.classList.remove('tutorial-highlight', 'tutorial-highlight-group');
+      document.querySelectorAll('.tutorial-highlight, .tutorial-highlight-group, .tutorial-highlight-parent').forEach(el => {
+        el.classList.remove('tutorial-highlight', 'tutorial-highlight-group', 'tutorial-highlight-parent');
       });
     }
 
@@ -1503,85 +1518,13 @@
     }
 
     function setupTutorialListeners() {
-      // Language toggle
-      const langToggle = document.getElementById('editLangToggle');
-      if (langToggle) {
-        langToggle.querySelectorAll('button').forEach(btn => {
-          btn.addEventListener('click', handleTutorialLangChange);
-        });
-      }
-
-      // Input fields
-      ['sopTitle', 'sopDocNum', 'sopRevision', 'sopDesc'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.addEventListener('input', handleTutorialInput);
-      });
-
-      // Select fields
-      ['sopDept', 'sopStatus'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.addEventListener('change', handleTutorialSelect);
-      });
-
-      // Add step button - use MutationObserver to detect when steps are added
+      // No auto-advance - users must click Next/Skip to proceed
+      // We only set up observer to track when steps are added for re-highlighting
       setupStepObserver();
     }
 
     function removeTutorialListeners() {
-      const langToggle = document.getElementById('editLangToggle');
-      if (langToggle) {
-        langToggle.querySelectorAll('button').forEach(btn => {
-          btn.removeEventListener('click', handleTutorialLangChange);
-        });
-      }
-
-      ['sopTitle', 'sopDocNum', 'sopRevision', 'sopDesc'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.removeEventListener('input', handleTutorialInput);
-      });
-
-      ['sopDept', 'sopStatus'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.removeEventListener('change', handleTutorialSelect);
-      });
-    }
-
-    function handleTutorialLangChange() {
-      if (!tutorialActive || tutorialStep !== 0) return;
-      // Small delay to let the active class update
-      setTimeout(() => {
-        tutorialNext();
-      }, 100);
-    }
-
-    function handleTutorialInput(e) {
-      if (!tutorialActive) return;
-
-      const fieldMap = {
-        'sopTitle': 1,
-        'sopDocNum': 3,
-        'sopRevision': 4,
-        'sopDesc': 6
-      };
-
-      const expectedStep = fieldMap[e.target.id];
-      if (tutorialStep === expectedStep && e.target.value.trim().length > 0) {
-        setTimeout(() => tutorialNext(), 300);
-      }
-    }
-
-    function handleTutorialSelect(e) {
-      if (!tutorialActive) return;
-
-      const fieldMap = {
-        'sopDept': 2,
-        'sopStatus': 5
-      };
-
-      const expectedStep = fieldMap[e.target.id];
-      if (tutorialStep === expectedStep) {
-        setTimeout(() => tutorialNext(), 200);
-      }
+      // Cleanup if needed
     }
 
     function setupStepObserver() {
@@ -1591,52 +1534,19 @@
       const observer = new MutationObserver((mutations) => {
         if (!tutorialActive) return;
 
-        // Check if we're on the "Add Step" step (step 8, index 8)
+        // When on "Add Step" step and a step is added, re-highlight the new step's title
         if (tutorialStep === 8) {
           const stepItems = stepsList.querySelectorAll('.step-item');
           if (stepItems.length > 0) {
+            // Step was added - update highlight to show on step title
             setTimeout(() => {
-              tutorialNext();
-              // Now set up listeners for step inputs
-              setupStepInputListeners();
-            }, 200);
+              highlightCurrentField();
+            }, 100);
           }
         }
       });
 
       observer.observe(stepsList, { childList: true, subtree: true });
-    }
-
-    function setupStepInputListeners() {
-      // Listen for step title input
-      const titleInput = document.querySelector('.step-item:first-child .step-title-input');
-      if (titleInput) {
-        titleInput.addEventListener('input', (e) => {
-          if (tutorialActive && tutorialStep === 9 && e.target.value.trim().length > 0) {
-            setTimeout(() => tutorialNext(), 300);
-          }
-        });
-      }
-
-      // Listen for step description input
-      const descInput = document.querySelector('.step-item:first-child .step-desc-input');
-      if (descInput) {
-        descInput.addEventListener('input', (e) => {
-          if (tutorialActive && tutorialStep === 10 && e.target.value.trim().length > 0) {
-            setTimeout(() => tutorialNext(), 300);
-          }
-        });
-      }
-
-      // Listen for media preview click (to add image/video)
-      const mediaPreview = document.querySelector('.step-item:first-child .step-image-preview');
-      if (mediaPreview) {
-        mediaPreview.addEventListener('click', () => {
-          if (tutorialActive && tutorialStep === 11) {
-            setTimeout(() => tutorialNext(), 200);
-          }
-        });
-      }
     }
 
     // =====================================================
