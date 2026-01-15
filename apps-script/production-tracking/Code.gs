@@ -948,14 +948,14 @@ function getBagTimerData() {
   
   result.bags5kgToday = bags5kgToday.length;
   result.bags10lbToday = bags10lbToday.length;
-  result.bagsToday = allBagsToday.length;
+  result.bagsToday = bags5kgToday.length;  // Only count 5KG bags for timer display
   
-  // Calculate individual cycle times for today
+  // Calculate individual cycle times for today (5KG bags only)
   var cycleHistory = [];
-  
-  if (allBagsToday.length >= 1) {
-    var bagsSortedOldestFirst = allBagsToday.slice().sort(function(a, b) { 
-      return a.timestamp - b.timestamp; 
+
+  if (bags5kgToday.length >= 1) {
+    var bagsSortedOldestFirst = bags5kgToday.slice().sort(function(a, b) {
+      return a.timestamp - b.timestamp;
     });
     
     for (var j = 0; j < bagsSortedOldestFirst.length; j++) {
@@ -1002,24 +1002,24 @@ function getBagTimerData() {
   
   result.cycleHistory = cycleHistory;
   
-  // Calculate average time between ALL bags today
-  if (allBagsToday.length >= 2) {
+  // Calculate average time between 5KG bags today
+  if (bags5kgToday.length >= 2) {
     var todayIntervals = [];
-    for (var k = 0; k < allBagsToday.length - 1; k++) {
-      var interval = (allBagsToday[k].timestamp - allBagsToday[k + 1].timestamp) / 1000;
+    for (var k = 0; k < bags5kgToday.length - 1; k++) {
+      var interval = (bags5kgToday[k].timestamp - bags5kgToday[k + 1].timestamp) / 1000;
       if (interval > 0 && interval < 7200) todayIntervals.push(interval);
     }
     if (todayIntervals.length > 0) {
       result.avgSecondsToday = Math.round(todayIntervals.reduce(function(a, b) { return a + b; }, 0) / todayIntervals.length);
     }
   }
-  
-  // 7-day average
-  var bags7Day = allBags.filter(function(b) { return b.timestamp >= sevenDaysAgo; });
-  if (bags7Day.length >= 2) {
+
+  // 7-day average (5KG bags only)
+  var bags5kg7Day = fiveKgBags.filter(function(b) { return b.timestamp >= sevenDaysAgo; });
+  if (bags5kg7Day.length >= 2) {
     var intervals7Day = [];
-    for (var m = 0; m < bags7Day.length - 1; m++) {
-      var interval2 = (bags7Day[m].timestamp - bags7Day[m + 1].timestamp) / 1000;
+    for (var m = 0; m < bags5kg7Day.length - 1; m++) {
+      var interval2 = (bags5kg7Day[m].timestamp - bags5kg7Day[m + 1].timestamp) / 1000;
       if (interval2 > 0 && interval2 < 7200) intervals7Day.push(interval2);
     }
     if (intervals7Day.length > 0) {
@@ -1260,7 +1260,7 @@ function getProductionDashboardData(startDate, endDate) {
 
   // Format bag timer data for dashboard
   var bagTimerFormatted = {
-    bagsToday: (bagTimer.bags5kgToday || 0) + (bagTimer.bags10lbToday || 0),
+    bagsToday: bagTimer.bags5kgToday || 0,  // Only count 5KG bags
     avgTime: bagTimer.avgSecondsToday > 0 ? Math.round(bagTimer.avgSecondsToday / 60) + ' min' : '—',
     avgMinutes: bagTimer.avgSecondsToday > 0 ? bagTimer.avgSecondsToday / 60 : 0,
     vsTarget: bagTimer.avgSeconds7Day > 0 ? Math.round((bagTimer.avgSecondsToday - bagTimer.avgSeconds7Day) / 60) + ' min' : '—'
