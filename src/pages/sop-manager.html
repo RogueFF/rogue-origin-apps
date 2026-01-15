@@ -413,6 +413,77 @@
   <input type="file" id="cameraVideoInput" accept="video/*" capture="environment" style="display:none;" onchange="handleMediaCapture(this, 'video')">
   <input type="file" id="libraryVideoInput" accept="video/*" style="display:none;" onchange="handleMediaCapture(this, 'video')">
 
+  <!-- Image Annotation Editor Modal -->
+  <div class="modal" id="annotationModal">
+    <div class="modal-box wide annotation-modal">
+      <div class="modal-header">
+        <h2><i class="ph-duotone ph-pencil-circle"></i> <span data-i18n="editImage">Edit Image</span></h2>
+        <button class="modal-close" onclick="closeAnnotationEditor()">&times;</button>
+      </div>
+      <div class="modal-body annotation-body">
+        <!-- Toolbar -->
+        <div class="annotation-toolbar">
+          <div class="tool-group">
+            <button class="tool-btn active" data-tool="arrow" title="Arrow">
+              <i class="ph-duotone ph-arrow-up-right"></i>
+            </button>
+            <button class="tool-btn" data-tool="circle" title="Circle">
+              <i class="ph-duotone ph-circle"></i>
+            </button>
+            <button class="tool-btn" data-tool="rect" title="Rectangle">
+              <i class="ph-duotone ph-rectangle"></i>
+            </button>
+            <button class="tool-btn" data-tool="freehand" title="Freehand">
+              <i class="ph-duotone ph-scribble"></i>
+            </button>
+            <button class="tool-btn" data-tool="text" title="Text">
+              <i class="ph-duotone ph-text-t"></i>
+            </button>
+            <button class="tool-btn" data-tool="symbol" title="Symbol">
+              <i class="ph-duotone ph-warning-circle"></i>
+            </button>
+          </div>
+          <div class="tool-divider"></div>
+          <div class="tool-group colors">
+            <button class="color-btn active" data-color="#e53935" title="Red" style="background:#e53935;"></button>
+            <button class="color-btn" data-color="#fdd835" title="Yellow" style="background:#fdd835;"></button>
+            <button class="color-btn" data-color="#43a047" title="Green" style="background:#43a047;"></button>
+            <button class="color-btn" data-color="#1e88e5" title="Blue" style="background:#1e88e5;"></button>
+          </div>
+          <div class="tool-divider"></div>
+          <div class="tool-group actions">
+            <button class="tool-btn action-btn" onclick="annotationUndo()" title="Undo">
+              <i class="ph-duotone ph-arrow-counter-clockwise"></i>
+            </button>
+            <button class="tool-btn action-btn" onclick="annotationRedo()" title="Redo">
+              <i class="ph-duotone ph-arrow-clockwise"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Symbol picker (hidden by default) -->
+        <div class="symbol-picker" id="symbolPicker" style="display:none;">
+          <button class="symbol-btn" data-symbol="⚠️" title="Caution">⚠️</button>
+          <button class="symbol-btn" data-symbol="🚫" title="Prohibited">🚫</button>
+          <button class="symbol-btn" data-symbol="✓" title="Check">✓</button>
+          <button class="symbol-btn" data-symbol="❌" title="Wrong">❌</button>
+          <button class="symbol-btn" data-symbol="➡️" title="Arrow">➡️</button>
+          <button class="symbol-btn" data-symbol="👆" title="Point">👆</button>
+          <button class="symbol-btn" data-symbol="🔍" title="Inspect">🔍</button>
+        </div>
+
+        <!-- Canvas container -->
+        <div class="canvas-container" id="canvasContainer">
+          <canvas id="annotationCanvas"></canvas>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="header-btn" onclick="closeAnnotationEditor()"><span data-i18n="cancel">Cancel</span></button>
+        <button class="header-btn primary" onclick="saveAnnotation()"><i class="ph-duotone ph-check"></i> <span data-i18n="saveImage">Save Image</span></button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"><i class="ph-duotone ph-check-circle"></i><span id="toastMsg"></span></div>
 
   <script>
@@ -453,6 +524,20 @@
     let currentMediaStepIndex = null;
     let pendingMediaData = null;
     let pendingMediaType = null;
+
+    // Annotation editor state
+    let annotationCanvas = null;
+    let annotationCtx = null;
+    let annotationImage = null;
+    let annotationStepIndex = null;
+    let annotationTool = 'arrow';
+    let annotationColor = '#e53935';
+    let annotationSymbol = '⚠️';
+    let isDrawing = false;
+    let drawStart = { x: 0, y: 0 };
+    let drawHistory = [];
+    let redoHistory = [];
+    let freehandPoints = [];
 
     // Translation strings
     const translations = {
@@ -504,7 +589,10 @@
         addImage: 'Add image',
         addVideo: 'Add video',
         compressing: 'Compressing...',
-        processing: 'Processing...'
+        processing: 'Processing...',
+        editImage: 'Edit Image',
+        saveImage: 'Save Image',
+        annotationSaved: 'Image saved!'
       },
       es: {
         addMedia: 'Agregar Media',
@@ -554,7 +642,10 @@
         addImage: 'Agregar imagen',
         addVideo: 'Agregar video',
         compressing: 'Comprimiendo...',
-        processing: 'Procesando...'
+        processing: 'Procesando...',
+        editImage: 'Editar Imagen',
+        saveImage: 'Guardar Imagen',
+        annotationSaved: '¡Imagen guardada!'
       }
     };
 
@@ -791,6 +882,422 @@
         return 'https://www.youtube.com/embed/' + match[2];
       }
       return null;
+    }
+
+    // =====================================================
+    // Image Annotation Editor
+    // =====================================================
+
+    function openAnnotationEditor(stepIndex) {
+      const step = editingSteps[stepIndex];
+      const imageUrl = step?.media || step?.image || '';
+      if (!imageUrl || !imageUrl.startsWith('data:image')) {
+        showToast(appLang === 'es' ? 'No hay imagen para editar' : 'No image to edit', 'error');
+        return;
+      }
+
+      annotationStepIndex = stepIndex;
+      annotationTool = 'arrow';
+      annotationColor = '#e53935';
+      annotationSymbol = '⚠️';
+      drawHistory = [];
+      redoHistory = [];
+      freehandPoints = [];
+
+      // Reset toolbar state
+      document.querySelectorAll('#annotationModal .tool-btn[data-tool]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tool === 'arrow');
+      });
+      document.querySelectorAll('#annotationModal .color-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.color === '#e53935');
+      });
+      document.getElementById('symbolPicker').style.display = 'none';
+
+      openModal('annotationModal');
+
+      // Initialize canvas after modal is visible
+      setTimeout(() => initAnnotationCanvas(imageUrl), 100);
+    }
+
+    function closeAnnotationEditor() {
+      closeModal('annotationModal');
+      annotationStepIndex = null;
+      annotationImage = null;
+      drawHistory = [];
+      redoHistory = [];
+    }
+
+    function initAnnotationCanvas(imageSrc) {
+      annotationCanvas = document.getElementById('annotationCanvas');
+      annotationCtx = annotationCanvas.getContext('2d');
+
+      annotationImage = new Image();
+      annotationImage.onload = function() {
+        // Calculate size to fit container while maintaining aspect ratio
+        const container = document.getElementById('canvasContainer');
+        const maxW = container.clientWidth - 20;
+        const maxH = container.clientHeight - 20;
+
+        let w = annotationImage.width;
+        let h = annotationImage.height;
+
+        // Scale down if needed
+        if (w > maxW) {
+          h = h * (maxW / w);
+          w = maxW;
+        }
+        if (h > maxH) {
+          w = w * (maxH / h);
+          h = maxH;
+        }
+
+        annotationCanvas.width = w;
+        annotationCanvas.height = h;
+
+        // Draw the image
+        annotationCtx.drawImage(annotationImage, 0, 0, w, h);
+
+        // Save initial state to history
+        saveToHistory();
+      };
+      annotationImage.src = imageSrc;
+
+      // Add event listeners
+      setupAnnotationEvents();
+    }
+
+    function setupAnnotationEvents() {
+      // Remove old listeners by replacing element
+      const oldCanvas = annotationCanvas;
+      const newCanvas = oldCanvas.cloneNode(true);
+      oldCanvas.parentNode.replaceChild(newCanvas, oldCanvas);
+      annotationCanvas = newCanvas;
+      annotationCtx = annotationCanvas.getContext('2d');
+
+      // Mouse events
+      annotationCanvas.addEventListener('mousedown', handleDrawStart);
+      annotationCanvas.addEventListener('mousemove', handleDrawMove);
+      annotationCanvas.addEventListener('mouseup', handleDrawEnd);
+      annotationCanvas.addEventListener('mouseleave', handleDrawEnd);
+
+      // Touch events (iPad)
+      annotationCanvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+      annotationCanvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+      annotationCanvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+
+      // Tool buttons
+      document.querySelectorAll('#annotationModal .tool-btn[data-tool]').forEach(btn => {
+        btn.onclick = () => selectTool(btn.dataset.tool);
+      });
+
+      // Color buttons
+      document.querySelectorAll('#annotationModal .color-btn').forEach(btn => {
+        btn.onclick = () => selectColor(btn.dataset.color);
+      });
+
+      // Symbol buttons
+      document.querySelectorAll('#annotationModal .symbol-btn').forEach(btn => {
+        btn.onclick = () => selectSymbol(btn.dataset.symbol);
+      });
+    }
+
+    function selectTool(tool) {
+      annotationTool = tool;
+      document.querySelectorAll('#annotationModal .tool-btn[data-tool]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tool === tool);
+      });
+
+      // Show/hide symbol picker
+      document.getElementById('symbolPicker').style.display = tool === 'symbol' ? 'flex' : 'none';
+
+      // Change cursor
+      if (tool === 'text' || tool === 'symbol') {
+        annotationCanvas.style.cursor = 'crosshair';
+      } else {
+        annotationCanvas.style.cursor = 'crosshair';
+      }
+    }
+
+    function selectColor(color) {
+      annotationColor = color;
+      document.querySelectorAll('#annotationModal .color-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.color === color);
+      });
+    }
+
+    function selectSymbol(symbol) {
+      annotationSymbol = symbol;
+      document.querySelectorAll('#annotationModal .symbol-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.symbol === symbol);
+      });
+    }
+
+    function getCanvasCoords(e) {
+      const rect = annotationCanvas.getBoundingClientRect();
+      const scaleX = annotationCanvas.width / rect.width;
+      const scaleY = annotationCanvas.height / rect.height;
+      return {
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY
+      };
+    }
+
+    function handleTouchStart(e) {
+      e.preventDefault();
+      if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        handleDrawStart({ clientX: touch.clientX, clientY: touch.clientY });
+      }
+    }
+
+    function handleTouchMove(e) {
+      e.preventDefault();
+      if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        handleDrawMove({ clientX: touch.clientX, clientY: touch.clientY });
+      }
+    }
+
+    function handleTouchEnd(e) {
+      e.preventDefault();
+      handleDrawEnd();
+    }
+
+    function handleDrawStart(e) {
+      if (annotationTool === 'text') {
+        handleTextInput(e);
+        return;
+      }
+      if (annotationTool === 'symbol') {
+        handleSymbolPlace(e);
+        return;
+      }
+
+      isDrawing = true;
+      drawStart = getCanvasCoords(e);
+      freehandPoints = [drawStart];
+
+      if (annotationTool === 'freehand') {
+        annotationCtx.beginPath();
+        annotationCtx.moveTo(drawStart.x, drawStart.y);
+        annotationCtx.strokeStyle = annotationColor;
+        annotationCtx.lineWidth = 3;
+        annotationCtx.lineCap = 'round';
+        annotationCtx.lineJoin = 'round';
+      }
+    }
+
+    function handleDrawMove(e) {
+      if (!isDrawing) return;
+
+      const pos = getCanvasCoords(e);
+
+      if (annotationTool === 'freehand') {
+        // Draw freehand line
+        annotationCtx.lineTo(pos.x, pos.y);
+        annotationCtx.stroke();
+        freehandPoints.push(pos);
+      } else {
+        // Preview shape - redraw from history
+        redrawFromHistory();
+        drawShape(drawStart, pos, true);
+      }
+    }
+
+    function handleDrawEnd() {
+      if (!isDrawing) return;
+      isDrawing = false;
+
+      if (annotationTool === 'freehand') {
+        annotationCtx.closePath();
+      }
+
+      // Save current state
+      saveToHistory();
+      redoHistory = [];
+    }
+
+    function drawShape(start, end, isPreview = false) {
+      annotationCtx.save();
+      annotationCtx.strokeStyle = annotationColor;
+      annotationCtx.fillStyle = annotationColor;
+      annotationCtx.lineWidth = 3;
+      annotationCtx.lineCap = 'round';
+      annotationCtx.lineJoin = 'round';
+
+      switch (annotationTool) {
+        case 'arrow':
+          drawArrow(start, end);
+          break;
+        case 'circle':
+          drawCircle(start, end);
+          break;
+        case 'rect':
+          drawRect(start, end);
+          break;
+      }
+
+      annotationCtx.restore();
+    }
+
+    function drawArrow(start, end) {
+      const headLen = 15;
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      const angle = Math.atan2(dy, dx);
+
+      // Draw line
+      annotationCtx.beginPath();
+      annotationCtx.moveTo(start.x, start.y);
+      annotationCtx.lineTo(end.x, end.y);
+      annotationCtx.stroke();
+
+      // Draw arrowhead
+      annotationCtx.beginPath();
+      annotationCtx.moveTo(end.x, end.y);
+      annotationCtx.lineTo(
+        end.x - headLen * Math.cos(angle - Math.PI / 6),
+        end.y - headLen * Math.sin(angle - Math.PI / 6)
+      );
+      annotationCtx.lineTo(
+        end.x - headLen * Math.cos(angle + Math.PI / 6),
+        end.y - headLen * Math.sin(angle + Math.PI / 6)
+      );
+      annotationCtx.closePath();
+      annotationCtx.fill();
+    }
+
+    function drawCircle(start, end) {
+      const rx = Math.abs(end.x - start.x) / 2;
+      const ry = Math.abs(end.y - start.y) / 2;
+      const cx = Math.min(start.x, end.x) + rx;
+      const cy = Math.min(start.y, end.y) + ry;
+
+      annotationCtx.beginPath();
+      annotationCtx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+      annotationCtx.stroke();
+    }
+
+    function drawRect(start, end) {
+      const x = Math.min(start.x, end.x);
+      const y = Math.min(start.y, end.y);
+      const w = Math.abs(end.x - start.x);
+      const h = Math.abs(end.y - start.y);
+
+      annotationCtx.strokeRect(x, y, w, h);
+    }
+
+    function handleTextInput(e) {
+      const pos = getCanvasCoords(e);
+      const text = prompt(appLang === 'es' ? 'Ingrese texto:' : 'Enter text:');
+      if (!text) return;
+
+      annotationCtx.save();
+      annotationCtx.font = 'bold 18px sans-serif';
+      annotationCtx.fillStyle = annotationColor;
+
+      // Add background for readability
+      const metrics = annotationCtx.measureText(text);
+      const padding = 4;
+      annotationCtx.fillStyle = 'rgba(255,255,255,0.85)';
+      annotationCtx.fillRect(
+        pos.x - padding,
+        pos.y - 16 - padding,
+        metrics.width + padding * 2,
+        20 + padding * 2
+      );
+
+      annotationCtx.fillStyle = annotationColor;
+      annotationCtx.fillText(text, pos.x, pos.y);
+      annotationCtx.restore();
+
+      saveToHistory();
+      redoHistory = [];
+    }
+
+    function handleSymbolPlace(e) {
+      const pos = getCanvasCoords(e);
+
+      annotationCtx.save();
+      annotationCtx.font = '32px serif';
+      annotationCtx.textAlign = 'center';
+      annotationCtx.textBaseline = 'middle';
+      annotationCtx.fillText(annotationSymbol, pos.x, pos.y);
+      annotationCtx.restore();
+
+      saveToHistory();
+      redoHistory = [];
+    }
+
+    function saveToHistory() {
+      const imageData = annotationCanvas.toDataURL('image/png');
+      drawHistory.push(imageData);
+      // Limit history to prevent memory issues
+      if (drawHistory.length > 30) {
+        drawHistory.shift();
+      }
+    }
+
+    function redrawFromHistory() {
+      if (drawHistory.length === 0) return;
+
+      const img = new Image();
+      img.onload = function() {
+        annotationCtx.clearRect(0, 0, annotationCanvas.width, annotationCanvas.height);
+        annotationCtx.drawImage(img, 0, 0);
+      };
+      img.src = drawHistory[drawHistory.length - 1];
+    }
+
+    function annotationUndo() {
+      if (drawHistory.length <= 1) return; // Keep at least the original
+
+      const current = drawHistory.pop();
+      redoHistory.push(current);
+
+      const previous = drawHistory[drawHistory.length - 1];
+      const img = new Image();
+      img.onload = function() {
+        annotationCtx.clearRect(0, 0, annotationCanvas.width, annotationCanvas.height);
+        annotationCtx.drawImage(img, 0, 0);
+      };
+      img.src = previous;
+    }
+
+    function annotationRedo() {
+      if (redoHistory.length === 0) return;
+
+      const next = redoHistory.pop();
+      drawHistory.push(next);
+
+      const img = new Image();
+      img.onload = function() {
+        annotationCtx.clearRect(0, 0, annotationCanvas.width, annotationCanvas.height);
+        annotationCtx.drawImage(img, 0, 0);
+      };
+      img.src = next;
+    }
+
+    function saveAnnotation() {
+      if (annotationStepIndex === null) return;
+
+      // Get flattened image as JPEG
+      const dataUrl = annotationCanvas.toDataURL('image/jpeg', 0.85);
+
+      // Update step image - use media field if it exists, otherwise image
+      if (editingSteps[annotationStepIndex].media) {
+        editingSteps[annotationStepIndex].media = dataUrl;
+      } else {
+        editingSteps[annotationStepIndex].image = dataUrl;
+      }
+
+      // Re-render steps
+      renderSteps();
+
+      // Close modal
+      closeAnnotationEditor();
+
+      showToast(t('annotationSaved'), 'success');
     }
 
     // =====================================================
@@ -1410,7 +1917,12 @@
               '</div>';
             }
           } else {
+            // Check if it's a base64 image (editable) vs URL image (not editable)
+            const isBase64Image = mediaUrl.startsWith('data:image');
             mediaPreviewHtml = '<img src="' + mediaUrl + '">';
+            if (isBase64Image) {
+              mediaPreviewHtml += '<button type="button" class="step-image-edit-btn" onclick="event.stopPropagation(); openAnnotationEditor(' + i + ')" title="Edit Image"><i class="ph-duotone ph-pencil-simple"></i></button>';
+            }
           }
         } else {
           mediaPreviewHtml = '<div class="placeholder"><i class="ph-duotone ph-image"></i>' + t('addImage') + '/' + t('addVideo').split(' ')[1] + '</div>';
