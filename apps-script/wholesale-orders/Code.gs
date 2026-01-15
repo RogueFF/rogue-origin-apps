@@ -1699,6 +1699,7 @@ function getScoreboardOrderQueue() {
             type: item.type,
             quantityKg: parseFloat(item.quantity) || 0,
             completedKg: parseFloat(item.completedKg) || null,
+            adjustmentKg: parseFloat(item.adjustmentKg) || 0,
             startDateTime: shipment.startDateTime || null,
             dueDate: parentOrder.dueDate,
             orderPriority: parentOrder.priority,
@@ -1747,7 +1748,8 @@ function getScoreboardOrderQueue() {
             item.type,
             item.quantityKg,
             item.completedKg,
-            item.startDateTime
+            item.startDateTime,
+            item.adjustmentKg
           );
 
           currentItems.push({
@@ -1761,7 +1763,10 @@ function getScoreboardOrderQueue() {
             percentComplete: progress.percentComplete,
             dueDate: item.dueDate,
             estimatedHoursRemaining: progress.estimatedHoursRemaining,
-            invoiceNumber: item.invoiceNumber
+            invoiceNumber: item.invoiceNumber,
+            bagCount: progress.bagCount,
+            bagKg: progress.bagKg,
+            adjustmentKg: progress.adjustmentKg || item.adjustmentKg
           });
         } else if (!next) {
           // First item from a DIFFERENT shipment becomes "next"
@@ -2123,20 +2128,21 @@ function getCultivarAtTime_(ss, timezone, timestamp) {
 
 /**
  * Calculates order progress by matching production data to shipment line items
- * Priority: 1) Manual completedKg, 2) Scanned bag count, 3) Today's production data
+ * Priority: 1) Manual completedKg override, 2) Scanned bag count + manual adjustment, 3) Today's production data
  *
  * @param {string} shipmentId - The shipment ID to calculate progress for
  * @param {string} strain - The cultivar/strain name (e.g., "Cherry Wine")
  * @param {string} type - The product type ("Tops" or "Smalls")
  * @param {number} targetKg - The target quantity in kg
- * @param {number} manualCompletedKg - Optional manual completion override
+ * @param {number} manualCompletedKg - Optional manual completion override (replaces automatic count entirely)
  * @param {string} startDateTime - Optional start date/time to filter bag counts
- * @returns {object} { completedKg, percentComplete, estimatedHoursRemaining }
+ * @param {number} manualAdjustmentKg - Optional manual adjustment to ADD to automatic bag count
+ * @returns {object} { completedKg, percentComplete, estimatedHoursRemaining, bagCount, adjustmentKg }
  */
-function calculateOrderProgress(shipmentId, strain, type, targetKg, manualCompletedKg, startDateTime) {
+function calculateOrderProgress(shipmentId, strain, type, targetKg, manualCompletedKg, startDateTime, manualAdjustmentKg) {
   try {
-    // Priority 1: If manual completion is set, use that
-    if (manualCompletedKg != null && manualCompletedKg >= 0) {
+    // Priority 1: If manual completion OVERRIDE is set (not 0), use that instead of automatic counting
+    if (manualCompletedKg != null && manualCompletedKg > 0) {
       var completedKg = parseFloat(manualCompletedKg) || 0;
       var percentComplete = targetKg > 0 ? Math.round((completedKg / targetKg) * 100) : 0;
       if (percentComplete > 100) percentComplete = 100;
@@ -2164,12 +2170,16 @@ function calculateOrderProgress(shipmentId, strain, type, targetKg, manualComple
       return { completedKg: completedKg, percentComplete: percentComplete, estimatedHoursRemaining: estimatedHoursRemaining };
     }
 
-    // Priority 2: Count scanned bags for this strain (automatic tracking)
+    // Priority 2: Count scanned bags for this strain (automatic tracking) + manual adjustment
     // Each bag = 5kg, match bags to strain by production timing
     // Filter by startDateTime if provided (excludes bags scanned before shipment started)
     var bagCount = count5kgBagsForStrain(strain, startDateTime);
-    if (bagCount > 0) {
-      var completedKg = bagCount * 5; // Each bag is 5kg
+    var adjustmentKg = parseFloat(manualAdjustmentKg) || 0;
+
+    if (bagCount > 0 || adjustmentKg !== 0) {
+      var bagKg = bagCount * 5; // Each bag is 5kg
+      var completedKg = bagKg + adjustmentKg; // Add manual adjustment to automatic count
+      if (completedKg < 0) completedKg = 0; // Don't go negative
       var percentComplete = targetKg > 0 ? Math.round((completedKg / targetKg) * 100) : 0;
       if (percentComplete > 100) percentComplete = 100;
 
@@ -2193,8 +2203,8 @@ function calculateOrderProgress(shipmentId, strain, type, targetKg, manualComple
         estimatedHoursRemaining = crewRate > 0 ? Math.ceil(remainingLbs / crewRate) : 0;
       }
 
-      Logger.log('[calculateOrderProgress] Using bag count: ' + bagCount + ' bags × 5kg = ' + completedKg + 'kg for ' + strain);
-      return { completedKg: completedKg, percentComplete: percentComplete, estimatedHoursRemaining: estimatedHoursRemaining };
+      Logger.log('[calculateOrderProgress] Bags: ' + bagCount + ' (' + bagKg + 'kg) + Adjustment: ' + adjustmentKg + 'kg = ' + completedKg + 'kg for ' + strain);
+      return { completedKg: completedKg, percentComplete: percentComplete, estimatedHoursRemaining: estimatedHoursRemaining, bagCount: bagCount, bagKg: bagKg, adjustmentKg: adjustmentKg };
     }
 
     // Priority 3: Fall back to today's production data (old method)
