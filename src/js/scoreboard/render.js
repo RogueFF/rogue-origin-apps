@@ -300,60 +300,76 @@
 
       pill.style.display = 'flex';
 
-      // Build summary with all strains: "Sour Lifter (75kg) + Lifter (115kg) • Hamburg"
-      const strainParts = currentItems.map(function(item) {
-        return item.strain + ' (' + item.quantityKg + 'kg)';
-      });
-      const summaryText = strainParts.join(' + ') + ' • ' + currentItems[0].customer;
-      summary.textContent = summaryText;
+      // Simple header: just customer name
+      summary.textContent = currentItems[0].customer;
 
-      // Show combined progress bar
+      // Hide the default progress bar container - we'll use our custom breakdown
       const progressContainer = document.getElementById('currentProgressBarContainer');
-      const progressFill = document.getElementById('currentProgressFill');
-      const progressText = document.getElementById('currentProgressText');
-
-      if (progressContainer && progressFill && progressText) {
-        // Calculate combined progress across all items
-        let totalCompleted = 0;
-        let totalQuantity = 0;
-        for (let i = 0; i < currentItems.length; i++) {
-          totalCompleted += (currentItems[i].completedKg || 0);
-          totalQuantity += currentItems[i].quantityKg;
-        }
-        const combinedPercent = totalQuantity > 0 ? (totalCompleted / totalQuantity) * 100 : 0;
-
-        progressContainer.style.display = 'flex';
-        progressFill.style.width = combinedPercent + '%';
-        progressText.textContent = totalCompleted + ' / ' + totalQuantity + ' kg (' + Math.round(combinedPercent) + '%)';
-
-        // Add individual strain breakdown below the main progress bar
-        let breakdownContainer = document.getElementById('currentItemsBreakdown');
-        if (!breakdownContainer) {
-          breakdownContainer = document.createElement('div');
-          breakdownContainer.id = 'currentItemsBreakdown';
-          breakdownContainer.style.cssText = 'display: flex; flex-direction: column; gap: 4px; margin-top: 8px; font-size: 13px;';
-          progressContainer.parentNode.insertBefore(breakdownContainer, progressContainer.nextSibling);
-        }
-
-        // Build breakdown HTML for each strain
-        let breakdownHTML = '';
-        for (let i = 0; i < currentItems.length; i++) {
-          const item = currentItems[i];
-          const itemCompleted = item.completedKg || 0;
-          const itemPercent = item.quantityKg > 0 ? (itemCompleted / item.quantityKg) * 100 : 0;
-          const isComplete = itemPercent >= 100;
-          const statusIcon = isComplete ? '✓' : '○';
-          const statusColor = isComplete ? 'rgba(122, 157, 135, 1)' : 'rgba(255, 255, 255, 0.7)';
-
-          breakdownHTML += '<div style="display: flex; align-items: center; gap: 8px;">';
-          breakdownHTML += '<span style="color: ' + statusColor + ';">' + statusIcon + '</span>';
-          breakdownHTML += '<span style="flex: 1; color: rgba(255, 255, 255, 0.9);">' + item.strain + '</span>';
-          breakdownHTML += '<span style="color: rgba(255, 255, 255, 0.7);">' + itemCompleted + '/' + item.quantityKg + 'kg</span>';
-          breakdownHTML += '<span style="color: ' + (itemPercent >= 100 ? 'rgba(122, 157, 135, 1)' : 'rgba(228, 170, 79, 1)') + '; min-width: 45px; text-align: right;">' + Math.round(itemPercent) + '%</span>';
-          breakdownHTML += '</div>';
-        }
-        breakdownContainer.innerHTML = breakdownHTML;
+      if (progressContainer) {
+        progressContainer.style.display = 'none';
       }
+
+      // Calculate totals
+      let totalCompleted = 0;
+      let totalQuantity = 0;
+      for (let i = 0; i < currentItems.length; i++) {
+        totalCompleted += (currentItems[i].completedKg || 0);
+        totalQuantity += currentItems[i].quantityKg;
+      }
+      const totalRemaining = totalQuantity - totalCompleted;
+
+      // Create streamlined breakdown focused on what's LEFT to do
+      let breakdownContainer = document.getElementById('currentItemsBreakdown');
+      if (!breakdownContainer) {
+        breakdownContainer = document.createElement('div');
+        breakdownContainer.id = 'currentItemsBreakdown';
+        progressContainer.parentNode.insertBefore(breakdownContainer, progressContainer.nextSibling);
+      }
+
+      // Build clean task-list style breakdown
+      let breakdownHTML = '<div style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;">';
+
+      for (let i = 0; i < currentItems.length; i++) {
+        const item = currentItems[i];
+        const completed = item.completedKg || 0;
+        const remaining = item.quantityKg - completed;
+        const percent = item.quantityKg > 0 ? (completed / item.quantityKg) * 100 : 0;
+        const isComplete = percent >= 100;
+
+        // Status icon and color
+        const icon = isComplete ? '✓' : '○';
+        const iconColor = isComplete ? '#7a9d87' : '#e4aa4f';
+        const textStyle = isComplete ? 'text-decoration: line-through; opacity: 0.6;' : '';
+
+        // Mini progress bar
+        const barWidth = Math.min(100, percent);
+        const barColor = isComplete ? '#7a9d87' : '#e4aa4f';
+
+        breakdownHTML += '<div style="display: flex; align-items: center; gap: 10px; font-size: 14px;">';
+        breakdownHTML += '<span style="color: ' + iconColor + '; font-size: 16px;">' + icon + '</span>';
+        breakdownHTML += '<span style="flex: 1; color: #fff; ' + textStyle + '">' + item.strain + '</span>';
+
+        if (isComplete) {
+          breakdownHTML += '<span style="color: #7a9d87; font-weight: 500;">Done!</span>';
+        } else {
+          breakdownHTML += '<span style="color: #e4aa4f; font-weight: 600;">' + remaining + 'kg left</span>';
+        }
+        breakdownHTML += '</div>';
+
+        // Mini progress bar for each item
+        breakdownHTML += '<div style="height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; margin: -2px 0 2px 26px;">';
+        breakdownHTML += '<div style="height: 100%; width: ' + barWidth + '%; background: ' + barColor + '; border-radius: 2px;"></div>';
+        breakdownHTML += '</div>';
+      }
+
+      // Total remaining footer
+      breakdownHTML += '<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; font-size: 13px;">';
+      breakdownHTML += '<span style="color: rgba(255,255,255,0.7);">Total remaining:</span>';
+      breakdownHTML += '<span style="color: #e4aa4f; font-weight: 600;">' + totalRemaining + 'kg</span>';
+      breakdownHTML += '</div>';
+
+      breakdownHTML += '</div>';
+      breakdownContainer.innerHTML = breakdownHTML;
 
       // Build expanded detail with individual item progress
       if (detail) {
