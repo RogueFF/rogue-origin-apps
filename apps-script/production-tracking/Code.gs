@@ -1339,7 +1339,12 @@ function getProductionDashboardData(startDate, endDate) {
         targetRate: scoreboard.targetRate,
         todayLbs: scoreboard.todayLbs,
         todayTarget: scoreboard.todayTarget,
-        todayPercentage: scoreboard.todayPercentage
+        todayPercentage: scoreboard.todayPercentage,
+        // Projection values (same as scoreboard)
+        projectedTotal: scoreboard.projectedTotal || 0,
+        dailyGoal: scoreboard.dailyGoal || 0,
+        projectedDelta: scoreboard.projectedDelta || 0,
+        effectiveHours: scoreboard.effectiveHours || 8.5
       },
       bagTimer: bagTimerFormatted,
       strains: []
