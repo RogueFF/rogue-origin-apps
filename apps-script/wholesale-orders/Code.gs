@@ -1823,20 +1823,23 @@ function count5kgBagsForStrain(strain, startDateTime) {
     var bagHeaders = bagData[0];
     var timestampCol = bagHeaders.indexOf('Timestamp');
     var sizeCol = bagHeaders.indexOf('Size');
-    var skuCol = bagHeaders.indexOf('SKU'); // SKU contains cultivar name like "SLIFT-INTL-HT-5-KG-2025"
+    var titleCol = bagHeaders.indexOf('Title'); // Title contains full strain name like "Sour Lifter / Hand Trimmed / 5 kg."
+    var skuCol = bagHeaders.indexOf('SKU'); // Fallback - SKU contains abbreviated cultivar like "SLIFT-INTL-HT-5-KG-2025"
 
     if (timestampCol === -1 || sizeCol === -1) return 0;
-    if (skuCol === -1) {
-      Logger.log('[count5kgBagsForStrain] SKU column not found in tracking sheet');
+    if (titleCol === -1 && skuCol === -1) {
+      Logger.log('[count5kgBagsForStrain] Neither Title nor SKU column found in tracking sheet');
       return 0;
     }
 
-    // Get all 5kg bags with timestamps and SKUs
+    // Get all 5kg bags with timestamps and titles
     var fiveKgBags = [];
     for (var i = 1; i < bagData.length; i++) {
       var size = String(bagData[i][sizeCol] || '').toLowerCase().trim();
       var timestamp = bagData[i][timestampCol];
-      var sku = String(bagData[i][skuCol] || '').toUpperCase().trim();
+      // Prefer Title column for strain matching (has full name like "Sour Lifter / Hand Trimmed / 5 kg.")
+      var title = titleCol !== -1 ? String(bagData[i][titleCol] || '').toUpperCase().trim() : '';
+      var sku = skuCol !== -1 ? String(bagData[i][skuCol] || '').toUpperCase().trim() : '';
 
       if (timestamp instanceof Date && !isNaN(timestamp.getTime())) {
         // Check if it's a 5kg bag
@@ -1844,6 +1847,7 @@ function count5kgBagsForStrain(strain, startDateTime) {
           fiveKgBags.push({
             timestamp: timestamp,
             size: size,
+            title: title,
             sku: sku
           });
         }
@@ -1904,52 +1908,24 @@ function count5kgBagsForStrain(strain, startDateTime) {
 
     Logger.log('[count5kgBagsForStrain] Checking ' + fiveKgBags.length + ' bags for strain: ' + strain);
 
-    // Generate search terms from strain name
-    // For "Sour Lifter", we require ALL words to match to avoid "Lifter" matching "Sour Lifter"
     var strainUpper = strain.toUpperCase();
-    var strainWords = strainUpper.split(/[\s\-_]+/).filter(function(w) { return w.length >= 3; }); // Significant words only
 
     for (var b = 0; b < fiveKgBags.length; b++) {
       var bag = fiveKgBags[b];
       var matched = false;
 
-      Logger.log('[count5kgBagsForStrain] Bag #' + (b + 1) + ' at ' + bag.timestamp + ' -> SKU: "' + bag.sku + '"');
+      Logger.log('[count5kgBagsForStrain] Bag #' + (b + 1) + ' at ' + bag.timestamp + ' -> Title: "' + bag.title + '"');
 
-      // Check if SKU contains the full strain name (exact match)
-      if (bag.sku.indexOf(strainUpper) !== -1) {
+      // Primary matching: Check if Title contains the strain name
+      // Title format is like "Sour Lifter / Hand Trimmed / 5 kg." - much more reliable than SKU
+      if (bag.title && bag.title.indexOf(strainUpper) !== -1) {
         matched = true;
-        Logger.log('[count5kgBagsForStrain] Matched on full strain name');
-      } else if (strainWords.length > 0) {
-        // Require ALL significant words from strain to be present in SKU
-        // This prevents "Lifter" bags from matching "Sour Lifter" (missing "SOUR")
-        var allWordsFound = true;
-        for (var w = 0; w < strainWords.length; w++) {
-          var word = strainWords[w];
-          var wordFound = false;
-
-          // Check if the full word appears in SKU
-          if (bag.sku.indexOf(word) !== -1) {
-            wordFound = true;
-          } else if (word.length >= 4) {
-            // Check if any 4+ character substring of the word appears in SKU
-            // This catches "LIFT" from "LIFTER" matching "SLIFT"
-            for (var j = 0; j <= word.length - 4; j++) {
-              var substring = word.substring(j, j + 4);
-              if (bag.sku.indexOf(substring) !== -1) {
-                wordFound = true;
-                Logger.log('[count5kgBagsForStrain] Word "' + word + '" matched on substring: "' + substring + '"');
-                break;
-              }
-            }
-          }
-
-          if (!wordFound) {
-            allWordsFound = false;
-            Logger.log('[count5kgBagsForStrain] Word "' + word + '" NOT found in SKU');
-            break;
-          }
-        }
-        matched = allWordsFound;
+        Logger.log('[count5kgBagsForStrain] Matched on Title');
+      }
+      // Fallback: Check SKU if no Title match (for backwards compatibility)
+      else if (bag.sku && bag.sku.indexOf(strainUpper) !== -1) {
+        matched = true;
+        Logger.log('[count5kgBagsForStrain] Matched on SKU (fallback)');
       }
 
       if (matched) {
