@@ -27,6 +27,16 @@
     },
 
     /**
+     * Get Wholesale Orders API URL (separate backend for order management)
+     * @returns {string} Wholesale orders API endpoint URL
+     */
+    getWholesaleApiUrl: function() {
+      var config = window.ScoreboardConfig;
+      return (config && config.WHOLESALE_API_URL) ||
+        'https://script.google.com/macros/s/AKfycbxU5dBd5GU1RZeJ-UyNFf1Z8n3jCdIZ0VM6nXVj6_A7Pu2VbbxYWXMiDhkkgB3_8L9MyQ/exec';
+    },
+
+    /**
      * Load scoreboard data (scoreboard + timer)
      * @param {Function} onSuccess - Callback with response data {scoreboard: ..., timer: ...}
      * @param {Function} onError - Error callback
@@ -296,8 +306,8 @@
           })
           .getScoreboardOrderQueue();
       } else {
-        // Running on GitHub Pages - use fetch API
-        var apiUrl = this.getApiUrl();
+        // Running on GitHub Pages - use fetch API to wholesale orders backend
+        var apiUrl = this.getWholesaleApiUrl();
 
         fetch(apiUrl + '?action=getScoreboardOrderQueue')
           .then(function(response) {
