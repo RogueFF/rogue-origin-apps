@@ -22,6 +22,7 @@
 var SHEET_ID = '1dARXrKU2u4KJY08ylA3GUKrT0zwmxCmtVh7IJxnn7is';
 var AI_MODEL = 'claude-sonnet-4-20250514';
 var WHOLESALE_ORDERS_API_URL = 'https://script.google.com/macros/s/AKfycbxU5dBd5GU1RZeJ-UyNFf1Z8n3jCdIZ0VM6nXVj6_A7Pu2VbbxYWXMiDhkkgB3_8L9MyQ/exec';
+var WHOLESALE_ORDERS_SHEET_ID = '1QLQaR4RMniUmwbJFrtMVaydyVMyCCxqHXWDCVs5dejw';
 
 /**
  * Task Registry - Defines all executable tasks
@@ -5535,8 +5536,7 @@ function calculateWeeklyComparison_(dailyData, timezone) {
  */
 function getCurrentOrderProgress_() {
   try {
-    var orderSheetId = '1QLQaR4RMniUmwbJFrtMVaydyVMyCCxqHXWDCVs5dejw';
-    var orderSs = SpreadsheetApp.openById(orderSheetId);
+    var orderSs = SpreadsheetApp.openById(WHOLESALE_ORDERS_SHEET_ID);
     var ordersSheet = orderSs.getSheetByName('Orders');
     var shipmentsSheet = orderSs.getSheetByName('Shipments');
 
@@ -5548,6 +5548,12 @@ function getCurrentOrderProgress_() {
     var statusCol = ordersHeaders.indexOf('Status');
     var orderIdCol = ordersHeaders.indexOf('Order ID');
     var customerCol = ordersHeaders.indexOf('Customer');
+
+    // Validate required columns exist in Orders sheet
+    if (statusCol === -1 || orderIdCol === -1 || customerCol === -1) {
+      Logger.log('getCurrentOrderProgress_: Missing required columns in Orders sheet');
+      return null;
+    }
 
     var currentOrder = null;
     for (var i = 1; i < ordersData.length; i++) {
@@ -5569,6 +5575,12 @@ function getCurrentOrderProgress_() {
     var shipStrainCol = shipHeaders.indexOf('Strain');
     var shipQtyCol = shipHeaders.indexOf('Quantity (kg)');
     var shipFilledCol = shipHeaders.indexOf('Filled (kg)');
+
+    // Validate required columns exist in Shipments sheet
+    if (shipOrderCol === -1 || shipQtyCol === -1) {
+      Logger.log('getCurrentOrderProgress_: Missing required columns in Shipments sheet');
+      return null;
+    }
 
     var totalKg = 0;
     var filledKg = 0;
