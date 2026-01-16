@@ -7,7 +7,7 @@
 (function(window) {
   'use strict';
 
-  var ScoreboardAPI = {
+  const ScoreboardAPI = {
     /**
      * Detect if running inside Google Apps Script container
      * @returns {boolean} True if Apps Script environment detected
@@ -21,7 +21,7 @@
      * @returns {string} API endpoint URL
      */
     getApiUrl: function() {
-      var config = window.ScoreboardConfig;
+      const config = window.ScoreboardConfig;
       return (config && config.API_URL) ||
         'https://script.google.com/macros/s/AKfycbxDAHSFl9cedGS49L3Lf5ztqy-SSToYigyA30ZtsdpmWNAR9H61X_Mm48JOOTGqqr-Z/exec';
     },
@@ -31,7 +31,7 @@
      * @returns {string} Wholesale orders API endpoint URL
      */
     getWholesaleApiUrl: function() {
-      var config = window.ScoreboardConfig;
+      const config = window.ScoreboardConfig;
       return (config && config.WHOLESALE_API_URL) ||
         'https://script.google.com/macros/s/AKfycbxU5dBd5GU1RZeJ-UyNFf1Z8n3jCdIZ0VM6nXVj6_A7Pu2VbbxYWXMiDhkkgB3_8L9MyQ/exec';
     },
@@ -55,21 +55,21 @@
           .getScoreboardWithTimerData();
       } else {
         // Running on GitHub Pages - use fetch API
-        var apiUrl = this.getApiUrl();
+        const apiUrl = this.getApiUrl();
 
         // Try api-cache.js if available
         if (window.ScoreboardAPICache && window.ScoreboardAPICache.get) {
-          var cached = window.ScoreboardAPICache.get('scoreboard');
+          const cached = window.ScoreboardAPICache.get('scoreboard');
           if (cached) {
             if (onSuccess) onSuccess(cached);
             return;
           }
         }
 
-        fetch(apiUrl + '?action=scoreboard')
+        fetch(`${apiUrl}?action=scoreboard`)
           .then(function(response) {
             if (!response.ok) {
-              throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
             return response.json();
           })
@@ -106,15 +106,15 @@
           .logManualBagCompletion();
       } else {
         // Running on GitHub Pages - use fetch API
-        var apiUrl = this.getApiUrl();
+        const apiUrl = this.getApiUrl();
 
-        fetch(apiUrl + '?action=logBag', {
+        fetch(`${apiUrl}?action=logBag`, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' }
         })
           .then(function(response) {
             if (!response.ok) {
-              throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
             return response.json();
           })
@@ -155,16 +155,16 @@
       } else {
         // Running on GitHub Pages - use fetch API
         // CRITICAL: Use text/plain to avoid CORS preflight
-        var apiUrl = this.getApiUrl();
+        const apiUrl = this.getApiUrl();
 
-        fetch(apiUrl + '?action=logPause', {
+        fetch(`${apiUrl}?action=logPause`, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({ reason: data.reason })
         })
           .then(function(response) {
             if (!response.ok) {
-              throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
             return response.json();
           })
@@ -205,9 +205,9 @@
       } else {
         // Running on GitHub Pages - use fetch API
         // CRITICAL: Use text/plain to avoid CORS preflight
-        var apiUrl = this.getApiUrl();
+        const apiUrl = this.getApiUrl();
 
-        fetch(apiUrl + '?action=logResume', {
+        fetch(`${apiUrl}?action=logResume`, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({
@@ -217,7 +217,7 @@
         })
           .then(function(response) {
             if (!response.ok) {
-              throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
             return response.json();
           })
@@ -233,20 +233,24 @@
 
     /**
      * Set shift start time
+     * @param {Date|null} startTime - Optional start time (null = use current server time)
      */
     setShiftStart: function(startTime, onSuccess, onError) {
       if (this.isAppsScript()) {
+        const params = startTime ? { time: startTime.toISOString() } : {};
         google.script.run
           .withSuccessHandler(onSuccess)
           .withFailureHandler(onError)
-          .handleSetShiftStart({ time: startTime.toISOString() });
+          .handleSetShiftStart(params);
       } else {
-        var apiUrl = this.getApiUrl();
-        var url = apiUrl + '?action=setShiftStart&time=' + encodeURIComponent(startTime.toISOString());
+        const apiUrl = this.getApiUrl();
+        const url = startTime
+          ? `${apiUrl}?action=setShiftStart&time=${encodeURIComponent(startTime.toISOString())}`
+          : `${apiUrl}?action=setShiftStart`;
 
         fetch(url)
           .then(function(response) {
-            if (!response.ok) throw new Error('HTTP ' + response.status);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             return response.json();
           })
           .then(onSuccess)
@@ -267,13 +271,13 @@
           .withFailureHandler(onError)
           .handleGetShiftStart({});
       } else {
-        var apiUrl = this.getApiUrl();
+        const apiUrl = this.getApiUrl();
         // Let backend determine "today" in its timezone (PST)
-        var url = apiUrl + '?action=getShiftStart';
+        const url = `${apiUrl}?action=getShiftStart`;
 
         fetch(url)
           .then(function(response) {
-            if (!response.ok) throw new Error('HTTP ' + response.status);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             return response.json();
           })
           .then(onSuccess)
@@ -307,12 +311,12 @@
           .getScoreboardOrderQueue();
       } else {
         // Running on GitHub Pages - use fetch API to wholesale orders backend
-        var apiUrl = this.getWholesaleApiUrl();
+        const apiUrl = this.getWholesaleApiUrl();
 
-        fetch(apiUrl + '?action=getScoreboardOrderQueue')
+        fetch(`${apiUrl}?action=getScoreboardOrderQueue`)
           .then(function(response) {
             if (!response.ok) {
-              throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
             return response.json();
           })

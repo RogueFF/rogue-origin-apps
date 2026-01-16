@@ -445,7 +445,8 @@ function doGet(e) {
  */
 function handleSetShiftStart(params) {
   try {
-    var timestamp = new Date(params.time);
+    // If no time provided, use current server time (one-click button)
+    var timestamp = params && params.time ? new Date(params.time) : new Date();
     var today = new Date();
 
     // Validation
