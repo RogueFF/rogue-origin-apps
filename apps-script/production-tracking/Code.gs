@@ -950,6 +950,9 @@ function getBagTimerData() {
   result.bags10lbToday = bags10lbToday.length;
   result.bagsToday = bags5kgToday.length;  // Only count 5KG bags for timer display
   
+  // Get manual shift start time if set
+  var manualShiftStart = getManualShiftStartTime_(ss, timezone, todayStr);
+
   // Calculate individual cycle times for today (5KG bags only)
   var cycleHistory = [];
 
@@ -957,23 +960,29 @@ function getBagTimerData() {
     var bagsSortedOldestFirst = bags5kgToday.slice().sort(function(a, b) {
       return a.timestamp - b.timestamp;
     });
-    
+
     for (var j = 0; j < bagsSortedOldestFirst.length; j++) {
       var bag = bagsSortedOldestFirst[j];
       var cycleTime = 0;
-      
+
       if (j === 0) {
-        var workdayStart = new Date(bag.timestamp);
-        workdayStart.setHours(7, 0, 0, 0);
-        
+        // Use manual shift start if available, otherwise default to 7:00 AM
+        var workdayStart;
+        if (manualShiftStart) {
+          workdayStart = manualShiftStart;
+        } else {
+          workdayStart = new Date(bag.timestamp);
+          workdayStart.setHours(7, 0, 0, 0);
+        }
+
         if (bag.timestamp > workdayStart) {
           cycleTime = Math.round((bag.timestamp - workdayStart) / 1000);
-          if (cycleTime > 7200) cycleTime = 0;
+          if (cycleTime > 14400) cycleTime = 0;  // Max 4 hours
         }
       } else {
         var prevBag = bagsSortedOldestFirst[j - 1];
         cycleTime = Math.round((bag.timestamp - prevBag.timestamp) / 1000);
-        if (cycleTime > 7200) cycleTime = 0;
+        if (cycleTime > 14400) cycleTime = 0;  // Max 4 hours
       }
       
       var bagHour = bag.timestamp.getHours();
@@ -987,7 +996,9 @@ function getBagTimerData() {
         targetAtTime = result.targetSeconds;
       }
       
-      if (cycleTime > 0 && cycleTime < 7200) {
+      // Include all valid cycle times (max 4 hours to filter out overnight bags)
+      // Exclude 0-minute cycles (bags scanned before shift start)
+      if (cycleTime > 0 && cycleTime < 14400) {
         cycleHistory.push({
           cycleTime: cycleTime,
           target: targetAtTime,
@@ -1007,7 +1018,7 @@ function getBagTimerData() {
     var todayIntervals = [];
     for (var k = 0; k < bags5kgToday.length - 1; k++) {
       var interval = (bags5kgToday[k].timestamp - bags5kgToday[k + 1].timestamp) / 1000;
-      if (interval > 0 && interval < 7200) todayIntervals.push(interval);
+      if (interval > 0 && interval < 14400) todayIntervals.push(interval);  // Max 4 hours
     }
     if (todayIntervals.length > 0) {
       result.avgSecondsToday = Math.round(todayIntervals.reduce(function(a, b) { return a + b; }, 0) / todayIntervals.length);
@@ -1020,7 +1031,7 @@ function getBagTimerData() {
     var intervals7Day = [];
     for (var m = 0; m < bags5kg7Day.length - 1; m++) {
       var interval2 = (bags5kg7Day[m].timestamp - bags5kg7Day[m + 1].timestamp) / 1000;
-      if (interval2 > 0 && interval2 < 7200) intervals7Day.push(interval2);
+      if (interval2 > 0 && interval2 < 14400) intervals7Day.push(interval2);  // Max 4 hours
     }
     if (intervals7Day.length > 0) {
       result.avgSeconds7Day = Math.round(intervals7Day.reduce(function(a, b) { return a + b; }, 0) / intervals7Day.length);
@@ -1104,6 +1115,43 @@ function getTrimmersForHour_(hourlyTrimmers, hour, fallback) {
   }
   
   return fallback || 0;
+}
+
+/**
+ * Get manual shift start time from Shift Adjustments sheet
+ * @param {Spreadsheet} ss - The spreadsheet object
+ * @param {string} timezone - Timezone string
+ * @param {string} dateStr - Date string in 'yyyy-MM-dd' format
+ * @returns {Date|null} - Manual shift start time or null if not set
+ */
+function getManualShiftStartTime_(ss, timezone, dateStr) {
+  try {
+    var sheet = ss.getSheetByName('Shift Adjustments');
+    if (!sheet) return null;
+
+    var data = sheet.getDataRange().getValues();
+
+    // Find today's entry (most recent if multiple entries)
+    for (var i = data.length - 1; i >= 1; i--) {
+      var rowDate = data[i][0];
+      if (!(rowDate instanceof Date)) continue;
+
+      var cellDateStr = Utilities.formatDate(rowDate, timezone, 'yyyy-MM-dd');
+
+      if (cellDateStr === dateStr) {
+        // Column 1 contains the shift start time
+        var shiftStartTime = data[i][1];
+        if (shiftStartTime instanceof Date) {
+          return shiftStartTime;
+        }
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error getting manual shift start:', error);
+    return null;
+  }
 }
 
 /**********************************************************
