@@ -8,7 +8,7 @@ import { workSchedule } from './config.js';
 // Safe DOM element getter with warning for debugging
 export function safeGetEl(id) {
   const el = document.getElementById(id);
-  if (!el) console.warn('Element not found: ' + id);
+  if (!el) console.warn(`Element not found: ${id}`);
   return el;
 }
 
@@ -36,12 +36,12 @@ export function safeNumber(value, decimals, defaultValue) {
 export function safeGetChartContext(canvasId) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) {
-    console.warn('Canvas element not found: ' + canvasId);
+    console.warn(`Canvas element not found: ${canvasId}`);
     return null;
   }
   const ctx = canvas.getContext('2d');
   if (!ctx) {
-    console.warn('Could not get 2d context for: ' + canvasId);
+    console.warn(`Could not get 2d context for: ${canvasId}`);
     return null;
   }
   return ctx;
@@ -65,7 +65,7 @@ export function getProductiveMinutesElapsed() {
   if (currentTimeInMin >= endTimeInMin) return workSchedule.totalProductiveMinutes;
 
   // Calculate raw minutes elapsed since start
-  let rawMinutesElapsed = currentTimeInMin - startTimeInMin;
+  const rawMinutesElapsed = currentTimeInMin - startTimeInMin;
 
   // Subtract break time that has passed
   let breakMinutesPassed = 0;
@@ -98,7 +98,7 @@ export function formatDateInput(d) {
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
-  return year + '-' + month + '-' + day;
+  return `${year}-${month}-${day}`;
 }
 
 // Format date for display (short format)
@@ -113,7 +113,7 @@ export function formatTime(date) {
   const hours = date.getHours() % 12 || 12;
   const minutes = date.getMinutes().toString().padStart(2, '0');
   const ampm = date.getHours() >= 12 ? 'PM' : 'AM';
-  return hours + ':' + minutes + ' ' + ampm;
+  return `${hours}:${minutes} ${ampm}`;
 }
 
 // Format full date for display
@@ -196,5 +196,5 @@ export function isEmpty(obj) {
 
 // Generate unique ID
 export function generateId(prefix = 'id') {
-  return prefix + '_' + Math.random().toString(36).substr(2, 9);
+  return `${prefix}_${Math.random().toString(36).substr(2, 9)}`;
 }

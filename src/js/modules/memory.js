@@ -18,7 +18,7 @@ export function getSessionId() {
 
     if (!sessionId) {
       // Generate new UUID-like session ID
-      sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      sessionId = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       sessionStorage.setItem('ai_session_id', sessionId);
     }
   }
