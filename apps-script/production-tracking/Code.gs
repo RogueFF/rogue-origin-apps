@@ -964,6 +964,7 @@ function getBagTimerData() {
     for (var j = 0; j < bagsSortedOldestFirst.length; j++) {
       var bag = bagsSortedOldestFirst[j];
       var cycleTime = 0;
+      var isCarryover = false;
 
       if (j === 0) {
         // Use manual shift start if available, otherwise default to 7:00 AM
@@ -975,7 +976,27 @@ function getBagTimerData() {
           workdayStart.setHours(7, 0, 0, 0);
         }
 
-        if (bag.timestamp > workdayStart) {
+        // Check if this is a carryover bag (completed before shift start)
+        if (bag.timestamp <= workdayStart) {
+          // This bag was started yesterday and finished before shift start today
+          var yesterdayData = getYesterdayLastBag_(fiveKgBags, timezone, todayStr);
+
+          if (yesterdayData) {
+            // Calculate working time from yesterday's last bag to cleanup cutoff
+            var yesterdayWorkSeconds = Math.round((yesterdayData.cleanupCutoff - yesterdayData.timestamp) / 1000);
+
+            // Calculate working time from shift start to bag completion today
+            var todayWorkSeconds = Math.round((bag.timestamp - workdayStart) / 1000);
+
+            // Total cycle time (yesterday work + today work)
+            cycleTime = Math.max(0, yesterdayWorkSeconds + todayWorkSeconds);
+            isCarryover = true;
+          } else {
+            // No yesterday data - treat as normal but likely invalid
+            cycleTime = 0;
+          }
+        } else if (bag.timestamp > workdayStart) {
+          // Normal first bag of the day
           cycleTime = Math.round((bag.timestamp - workdayStart) / 1000);
           if (cycleTime > 14400) cycleTime = 0;  // Max 4 hours
         }
@@ -997,15 +1018,18 @@ function getBagTimerData() {
       }
       
       // Include all valid cycle times (max 4 hours to filter out overnight bags)
-      // Exclude 0-minute cycles (bags scanned before shift start)
-      if (cycleTime > 0 && cycleTime < 14400) {
+      // Carryover bags can exceed 4 hours, so check separately
+      var shouldInclude = isCarryover ? (cycleTime > 0) : (cycleTime > 0 && cycleTime < 14400);
+
+      if (shouldInclude) {
         cycleHistory.push({
           cycleTime: cycleTime,
           target: targetAtTime,
           trimmers: trimmersAtTime,
           timestamp: bag.timestamp.toISOString(),
           size: bag.size,
-          hour: bagHour
+          hour: bagHour,
+          isCarryover: isCarryover
         });
       }
     }
@@ -1150,6 +1174,56 @@ function getManualShiftStartTime_(ss, timezone, dateStr) {
     return null;
   } catch (error) {
     console.error('Error getting manual shift start:', error);
+    return null;
+  }
+}
+
+/**
+ * Get yesterday's last 5kg bag before cleanup time (4:20 PM)
+ * @param {Array} fiveKgBags - All 5kg bags sorted newest first
+ * @param {string} timezone - Timezone string
+ * @param {string} todayStr - Today's date string 'yyyy-MM-dd'
+ * @returns {Object|null} - {timestamp: Date, cleanupCutoff: Date} or null
+ */
+function getYesterdayLastBag_(fiveKgBags, timezone, todayStr) {
+  try {
+    // Calculate yesterday's date
+    var today = new Date(todayStr + 'T00:00:00');
+    var yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    var yesterdayStr = Utilities.formatDate(yesterday, timezone, 'yyyy-MM-dd');
+
+    // Filter to yesterday's 5kg bags
+    var yesterdayBags = fiveKgBags.filter(function(b) {
+      return b.dateStr === yesterdayStr;
+    });
+
+    if (yesterdayBags.length === 0) return null;
+
+    // Sort oldest first to find last bag chronologically
+    yesterdayBags.sort(function(a, b) { return a.timestamp - b.timestamp; });
+
+    // Cleanup cutoff: yesterday at 4:20 PM
+    var cleanupCutoff = new Date(yesterday);
+    cleanupCutoff.setHours(16, 20, 0, 0); // 4:20 PM
+
+    // Find last bag before cleanup time
+    var lastBagBeforeCleanup = null;
+    for (var i = yesterdayBags.length - 1; i >= 0; i--) {
+      if (yesterdayBags[i].timestamp <= cleanupCutoff) {
+        lastBagBeforeCleanup = yesterdayBags[i].timestamp;
+        break;
+      }
+    }
+
+    if (!lastBagBeforeCleanup) return null;
+
+    return {
+      timestamp: lastBagBeforeCleanup,
+      cleanupCutoff: cleanupCutoff
+    };
+  } catch (error) {
+    console.error('Error getting yesterday last bag:', error);
     return null;
   }
 }
