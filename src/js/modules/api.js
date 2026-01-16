@@ -15,7 +15,6 @@ import {
   getCompareData,
   isSkeletonsShowing as _isSkeletonsShowing,
   setSkeletonsShowing as _setSkeletonsShowing,
-  getRetryCount,
   incrementRetryCount,
   resetRetryCount
 } from './state.js';
@@ -98,7 +97,7 @@ export function onError(error, skipAutoRetry = false) {
   console.error('API Error:', error);
 
   // Hide loading overlay if present
-  var loadingOverlay = document.getElementById('loadingOverlay');
+  const loadingOverlay = document.getElementById('loadingOverlay');
   if (loadingOverlay) {
     loadingOverlay.classList.add('hidden');
   }
@@ -106,12 +105,12 @@ export function onError(error, skipAutoRetry = false) {
   showSkeletons(false);
 
   // Show error in status bar
-  var errorMessage = error.message || String(error);
+  const errorMessage = error.message || String(error);
   showError(errorMessage);
 
   // Show toast only if not auto-retrying
   if (!shouldAutoRetry() || skipAutoRetry) {
-    showToast('Error loading data: ' + errorMessage, 'error');
+    showToast(`Error loading data: ${errorMessage}`, 'error');
   }
 
   // Auto-retry once after 5 seconds
@@ -133,16 +132,16 @@ function onDataLoaded(result) {
   showSkeletons(false);
 
   // Show connected state
-  var isFirstLoad = !getData();
+  const isFirstLoad = !getData();
   showConnected(!isFirstLoad); // Auto-hide on subsequent loads
 
   // Reset retry count on success
   resetRetryCount();
 
   // Only re-render if data actually changed
-  var newDataStr = JSON.stringify(result);
-  var oldData = getData();
-  var oldDataStr = oldData ? JSON.stringify(oldData) : '';
+  const newDataStr = JSON.stringify(result);
+  const oldData = getData();
+  const oldDataStr = oldData ? JSON.stringify(oldData) : '';
 
   if (newDataStr !== oldDataStr) {
     setData(result);
@@ -162,23 +161,23 @@ function onDataLoaded(result) {
  * Main data loading function
  */
 export function loadData() {
-  var startEl = document.getElementById('startDate');
-  var endEl = document.getElementById('endDate');
-  var s = startEl ? startEl.value : formatDateInput(new Date());
-  var e = endEl ? endEl.value : formatDateInput(new Date());
+  const startEl = document.getElementById('startDate');
+  const endEl = document.getElementById('endDate');
+  const s = startEl ? startEl.value : formatDateInput(new Date());
+  const e = endEl ? endEl.value : formatDateInput(new Date());
 
   // Show connecting state
   showConnecting();
 
   // Cancel any in-flight fetch requests to prevent stale data from overwriting current data
   // This fixes race conditions when user rapidly changes date range
-  var controller = getFetchController();
+  const controller = getFetchController();
   if (controller) {
     controller.abort();
   }
-  var newController = new AbortController();
+  const newController = new AbortController();
   setFetchController(newController);
-  var signal = newController.signal;
+  const signal = newController.signal;
 
   if (isAppsScript()) {
     // Apps Script mode - use google.script.run
@@ -192,8 +191,8 @@ export function loadData() {
       .getProductionDashboardData(s, e);
   } else {
     // GitHub Pages mode - use caching layer with optimistic UI
-    var isFirstCallForThisRequest = true;
-    var existingData = getData();
+    let isFirstCallForThisRequest = true;
+    const existingData = getData();
 
     // Check if fetchDashboardData helper is available (from api-cache.js)
     if (typeof window.fetchDashboardData === 'function') {
@@ -220,7 +219,7 @@ export function loadData() {
         // Ignore AbortError - this is expected when request is cancelled
         if (error.name === 'AbortError') {
           console.log('Fetch aborted - newer request in progress');
-          return;
+
         }
         // Error already handled by onError callback in fetchDashboardData
       });
@@ -229,8 +228,8 @@ export function loadData() {
       if (!existingData) {
         // Check if we have cached data
         if (typeof window.APICache !== 'undefined') {
-          var cacheKey = window.APICache.generateKey('dashboard', { start: s, end: e });
-          var cached = window.APICache.get(cacheKey);
+          const cacheKey = window.APICache.generateKey('dashboard', { start: s, end: e });
+          const cached = window.APICache.get(cacheKey);
           if (!cached || !cached.data) {
             // No cached data - show skeletons while loading
             showSkeletons(true);
@@ -245,7 +244,7 @@ export function loadData() {
         showSkeletons(true);
       }
 
-      var url = API_URL + '?action=dashboard&start=' + encodeURIComponent(s) + '&end=' + encodeURIComponent(e);
+      const url = `${API_URL}?action=dashboard&start=${encodeURIComponent(s)}&end=${encodeURIComponent(e)}`;
 
       fetch(url, {
         method: 'GET',
@@ -256,7 +255,7 @@ export function loadData() {
       })
       .then(function(response) {
         if (!response.ok) {
-          throw new Error('HTTP ' + response.status);
+          throw new Error(`HTTP ${response.status}`);
         }
         return response.json();
       })
@@ -285,8 +284,8 @@ export function loadData() {
  * Loads data for both current and previous periods based on compare mode
  */
 export function loadCompareData() {
-  var compareMode = null;
-  var compareModeEl = document.querySelector('[data-compare-mode].active');
+  let compareMode = null;
+  const compareModeEl = document.querySelector('[data-compare-mode].active');
   if (compareModeEl) {
     compareMode = compareModeEl.dataset.compareMode;
   }
@@ -305,31 +304,31 @@ export function loadCompareData() {
     showSkeletons(true);
   }
 
-  var today = new Date();
-  var cs, ce, ps, pe;
+  const today = new Date();
+  let cs, ce, ps, pe;
 
   if (compareMode === 'yesterday') {
     cs = ce = formatDateInput(today);
-    var y = new Date(today);
+    const y = new Date(today);
     y.setDate(y.getDate() - 1);
     ps = pe = formatDateInput(y);
   } else if (compareMode === 'lastWeek') {
-    var ws = new Date(today);
+    const ws = new Date(today);
     ws.setDate(today.getDate() - today.getDay());
     cs = formatDateInput(ws);
     ce = formatDateInput(today);
-    var pws = new Date(ws);
+    const pws = new Date(ws);
     pws.setDate(pws.getDate() - 7);
-    var pwe = new Date(ws);
+    const pwe = new Date(ws);
     pwe.setDate(pwe.getDate() - 1);
     ps = formatDateInput(pws);
     pe = formatDateInput(pwe);
   } else if (compareMode === 'lastMonth') {
-    var ms = new Date(today.getFullYear(), today.getMonth(), 1);
+    const ms = new Date(today.getFullYear(), today.getMonth(), 1);
     cs = formatDateInput(ms);
     ce = formatDateInput(today);
-    var pms = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    var pme = new Date(today.getFullYear(), today.getMonth(), 0);
+    const pms = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const pme = new Date(today.getFullYear(), today.getMonth(), 0);
     ps = formatDateInput(pms);
     pe = formatDateInput(pme);
   } else {
@@ -345,10 +344,10 @@ export function loadCompareData() {
         resetRetryCount();
 
         // Only re-render if data actually changed
-        var newDataStr = JSON.stringify(r) + JSON.stringify(pr);
-        var oldData = getData();
-        var oldCompareData = getCompareData();
-        var oldDataStr = (oldData ? JSON.stringify(oldData) : '') + (oldCompareData ? JSON.stringify(oldCompareData) : '');
+        const newDataStr = JSON.stringify(r) + JSON.stringify(pr);
+        const oldData = getData();
+        const oldCompareData = getCompareData();
+        const oldDataStr = (oldData ? JSON.stringify(oldData) : '') + (oldCompareData ? JSON.stringify(oldCompareData) : '');
 
         if (newDataStr !== oldDataStr) {
           setData(r);
@@ -373,22 +372,22 @@ export function loadCompareData() {
 export function loadCompareDataFetch(cs, ce, ps, pe) {
   // Cancel any in-flight fetch requests to prevent stale data from overwriting current data
   // This fixes race conditions when user rapidly changes compare mode
-  var controller = getFetchController();
+  const controller = getFetchController();
   if (controller) {
     controller.abort();
   }
-  var newController = new AbortController();
+  const newController = new AbortController();
   setFetchController(newController);
-  var signal = newController.signal;
+  const signal = newController.signal;
 
   // Check if fetchDashboardData helper is available
   if (typeof window.fetchDashboardData === 'function') {
     // Use caching for both current and previous period
-    var currentPromise = new Promise(function(resolve, reject) {
+    const currentPromise = new Promise(function(resolve, reject) {
       window.fetchDashboardData(cs, ce, resolve, reject, { apiUrl: API_URL, signal: signal });
     });
 
-    var prevPromise = new Promise(function(resolve, reject) {
+    const prevPromise = new Promise(function(resolve, reject) {
       window.fetchDashboardData(ps, pe, resolve, reject, { apiUrl: API_URL, signal: signal });
     });
 
@@ -397,13 +396,13 @@ export function loadCompareDataFetch(cs, ce, ps, pe) {
       showConnected(true); // Auto-hide
       resetRetryCount();
 
-      var currentResult = results[0];
-      var prevResult = results[1];
+      const currentResult = results[0];
+      const prevResult = results[1];
 
-      var newDataStr = JSON.stringify(currentResult) + JSON.stringify(prevResult);
-      var oldData = getData();
-      var oldCompareData = getCompareData();
-      var oldDataStr = (oldData ? JSON.stringify(oldData) : '') + (oldCompareData ? JSON.stringify(oldCompareData) : '');
+      const newDataStr = JSON.stringify(currentResult) + JSON.stringify(prevResult);
+      const oldData = getData();
+      const oldCompareData = getCompareData();
+      const oldDataStr = (oldData ? JSON.stringify(oldData) : '') + (oldCompareData ? JSON.stringify(oldCompareData) : '');
 
       if (newDataStr !== oldDataStr) {
         setData(currentResult);
@@ -420,10 +419,10 @@ export function loadCompareDataFetch(cs, ce, ps, pe) {
     });
   } else {
     // Fallback: Direct fetch without caching
-    var currentUrl = API_URL + '?action=dashboard&start=' + encodeURIComponent(cs) + '&end=' + encodeURIComponent(ce);
-    var prevUrl = API_URL + '?action=dashboard&start=' + encodeURIComponent(ps) + '&end=' + encodeURIComponent(pe);
+    const currentUrl = `${API_URL}?action=dashboard&start=${encodeURIComponent(cs)}&end=${encodeURIComponent(ce)}`;
+    const prevUrl = `${API_URL}?action=dashboard&start=${encodeURIComponent(ps)}&end=${encodeURIComponent(pe)}`;
 
-    var fetchOptions = {
+    const fetchOptions = {
       method: 'GET',
       headers: { 'Content-Type': 'text/plain' },
       signal: signal
@@ -437,13 +436,13 @@ export function loadCompareDataFetch(cs, ce, ps, pe) {
       showConnected(true); // Auto-hide
       resetRetryCount();
 
-      var currentResult = results[0].data || results[0];
-      var prevResult = results[1].data || results[1];
+      const currentResult = results[0].data || results[0];
+      const prevResult = results[1].data || results[1];
 
-      var newDataStr = JSON.stringify(currentResult) + JSON.stringify(prevResult);
-      var oldData = getData();
-      var oldCompareData = getCompareData();
-      var oldDataStr = (oldData ? JSON.stringify(oldData) : '') + (oldCompareData ? JSON.stringify(oldCompareData) : '');
+      const newDataStr = JSON.stringify(currentResult) + JSON.stringify(prevResult);
+      const oldData = getData();
+      const oldCompareData = getCompareData();
+      const oldDataStr = (oldData ? JSON.stringify(oldData) : '') + (oldCompareData ? JSON.stringify(oldCompareData) : '');
 
       if (newDataStr !== oldDataStr) {
         setData(currentResult);
@@ -466,7 +465,7 @@ export function loadCompareDataFetch(cs, ce, ps, pe) {
  */
 export function refreshData() {
   // Add subtle visual feedback
-  var heroNumber = document.getElementById('heroProductionNumber');
+  const heroNumber = document.getElementById('heroProductionNumber');
   if (heroNumber) {
     heroNumber.style.transition = 'transform 0.3s, text-shadow 0.3s';
     heroNumber.style.transform = 'scale(1.05)';
