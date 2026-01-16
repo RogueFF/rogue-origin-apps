@@ -529,11 +529,60 @@
     .cycle-history-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
     .cycle-history-title { font-size: 12px; color: var(--gold); text-transform: uppercase; letter-spacing: 1px; }
     .cycle-history-nav { display: flex; gap: 4px; align-items: center; }
-    .cycle-nav-btn { background: none; border: none; color: rgba(255,255,255,0.5); font-size: 16px; cursor: pointer; padding: 4px 8px; border-radius: 4px; line-height: 1; }
+    .cycle-nav-btn {
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.5);
+      font-size: 18px;
+      cursor: pointer;
+      padding: 8px 12px;
+      border-radius: 4px;
+      line-height: 1;
+      min-width: 44px; /* Mobile touch target */
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
     .cycle-nav-btn:hover { background: rgba(255,255,255,0.1); color: var(--gold); }
+    .cycle-nav-btn:active { transform: scale(0.95); }
     .cycle-mode-label { font-size: 10px; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; }
-    .cycle-history-toggle { background: none; border: none; color: rgba(255,255,255,0.5); font-size: 12px; cursor: pointer; padding: 4px 8px; border-radius: 4px; }
+    .cycle-history-toggle {
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.5);
+      font-size: 12px;
+      cursor: pointer;
+      padding: 8px 12px;
+      border-radius: 4px;
+      min-width: 44px; /* Mobile touch target */
+      min-height: 44px;
+    }
     .cycle-history-toggle:hover { background: rgba(255,255,255,0.1); color: var(--gold); }
+    .cycle-stats-bar {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 8px;
+      padding: 8px 10px;
+      background: rgba(0,0,0,0.2);
+      border-radius: 8px;
+      border-left: 3px solid var(--gold);
+    }
+    .cycle-stat {
+      flex: 1;
+      text-align: center;
+    }
+    .cycle-stat-value {
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .cycle-stat-label {
+      font-size: 9px;
+      color: rgba(255,255,255,0.5);
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
     .cycle-content { min-height: 120px; }
     .cycle-content.collapsed { max-height: 0; overflow: hidden; min-height: 0; }
     
@@ -597,21 +646,80 @@
     .cycle-chips-legend-dot { width: 10px; height: 10px; border-radius: 3px; }
     
     /* Mode 5: Horizontal Scroll Cards */
-    .cycle-cards { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x mandatory; }
-    .cycle-cards::-webkit-scrollbar { height: 4px; }
-    .cycle-cards::-webkit-scrollbar-track { background: rgba(255,255,255,0.1); border-radius: 2px; }
-    .cycle-cards::-webkit-scrollbar-thumb { background: var(--gold); border-radius: 2px; }
-    .cycle-card { flex-shrink: 0; width: 80px; padding: 10px 8px; border-radius: 10px; text-align: center; scroll-snap-align: start; border-left: 3px solid; }
+    .cycle-cards {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 8px;
+      scroll-snap-type: x mandatory;
+      scroll-behavior: smooth;
+      -webkit-overflow-scrolling: touch;
+    }
+    .cycle-cards::-webkit-scrollbar { height: 6px; }
+    .cycle-cards::-webkit-scrollbar-track { background: rgba(255,255,255,0.1); border-radius: 3px; }
+    .cycle-cards::-webkit-scrollbar-thumb { background: var(--gold); border-radius: 3px; }
+    .cycle-cards::-webkit-scrollbar-thumb:hover { background: #e4aa4f; }
+    .cycle-card {
+      flex-shrink: 0;
+      width: 90px;
+      padding: 10px 8px;
+      border-radius: 10px;
+      text-align: center;
+      scroll-snap-align: center;
+      scroll-snap-stop: normal;
+      border-left: 3px solid;
+      position: relative;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .cycle-card:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
     .cycle-card.early { background: rgba(34, 197, 94, 0.15); border-left-color: #22c55e; }
     .cycle-card.on-time { background: rgba(250, 204, 21, 0.15); border-left-color: #facc15; }
     .cycle-card.overtime { background: rgba(239, 68, 68, 0.15); border-left-color: #ef4444; }
-    .cycle-card-num { font-size: 10px; color: rgba(255,255,255,0.5); }
-    .cycle-card-time { font-size: 15px; font-weight: 700; color: #fff; margin: 4px 0; }
+    .cycle-card-num { font-size: 10px; color: rgba(255,255,255,0.5); display: flex; justify-content: space-between; align-items: center; }
+    .cycle-card-time { font-size: 15px; font-weight: 700; color: #fff; margin: 4px 0; position: relative; }
+    .cycle-card-time .carryover-badge {
+      display: inline-block;
+      background: rgba(228, 170, 79, 0.25);
+      color: var(--gold);
+      border: 1px solid var(--gold);
+      border-radius: 4px;
+      padding: 2px 4px;
+      font-size: 10px;
+      margin-left: 4px;
+      vertical-align: middle;
+    }
+    .cycle-card-trimmers {
+      background: rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.7);
+      border-radius: 3px;
+      padding: 1px 4px;
+      font-size: 8px;
+      font-weight: 600;
+    }
     .cycle-card-delta { font-size: 11px; font-weight: 600; }
     .cycle-card.early .cycle-card-delta { color: #4ade80; }
     .cycle-card.on-time .cycle-card-delta { color: #fde047; }
     .cycle-card.overtime .cycle-card-delta { color: #f87171; }
     .cycle-card-meta { font-size: 9px; color: rgba(255,255,255,0.5); margin-top: 2px; }
+    .cycle-card-progress {
+      width: 100%;
+      height: 3px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 2px;
+      margin-top: 6px;
+      overflow: hidden;
+    }
+    .cycle-card-progress-bar {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.3s ease;
+    }
+    .cycle-card.early .cycle-card-progress-bar { background: #22c55e; }
+    .cycle-card.on-time .cycle-card-progress-bar { background: #facc15; }
+    .cycle-card.overtime .cycle-card-progress-bar { background: #ef4444; }
     
     /* Fullscreen adjustments */
     .timer-panel.fullscreen .cycle-history { max-width: 500px; }
