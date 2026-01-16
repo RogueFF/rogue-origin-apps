@@ -189,7 +189,7 @@ export function speak(text) {
 
     // Get speakable version (smart mode)
     const speakableText = getSpeakableText(text);
-    console.log('[Voice] Speaking:', speakableText.substring(0, 50) + '...');
+    console.log('[Voice] Speaking:', `${speakableText.substring(0, 50)}...`);
 
     isSpeaking = true;
     showSpeakingIndicator(true);
@@ -210,13 +210,13 @@ export function speak(text) {
           console.error('[Voice] TTS error:', error);
           isSpeaking = false;
           showSpeakingIndicator(false);
-          reject(new Error('TTS failed: ' + error.message));
+          reject(new Error(`TTS failed: ${error.message}`));
         })
         .handleTTSRequest(requestData);
 
     } else {
       // Web app environment
-      fetch(API_URL + '?action=tts', {
+      fetch(`${API_URL}?action=tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(requestData),

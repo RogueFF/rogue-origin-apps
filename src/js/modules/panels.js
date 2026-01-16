@@ -212,7 +212,7 @@ export function sendAIMessage() {
 
             const label = document.createElement('span');
             label.className = 'metric-label';
-            label.textContent = key + ':';
+            label.textContent = `${key}:`;
 
             const value = document.createElement('span');
             value.className = 'metric-value';
@@ -245,7 +245,7 @@ export function sendAIMessage() {
 
         const label = document.createElement('span');
         label.className = 'metric-label';
-        label.textContent = key + ':';
+        label.textContent = `${key}:`;
 
         const value = document.createElement('span');
         value.className = 'metric-value';
@@ -274,7 +274,7 @@ export function sendAIMessage() {
 
         const label = document.createElement('span');
         label.className = 'metric-label';
-        label.textContent = key + ':';
+        label.textContent = `${key}:`;
 
         const value = document.createElement('span');
         value.className = 'metric-value';
@@ -329,7 +329,7 @@ export function sendAIMessage() {
     }
 
     // Create unique message ID based on timestamp
-    const messageId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     // Add assistant message to DOM with feedback buttons
     const assistantMsg = document.createElement('div');
@@ -421,7 +421,7 @@ export function sendAIMessage() {
       .withFailureHandler(handleError)
       .handleChatRequest(requestData);
   } else {
-    fetch(API_URL + '?action=chat', {
+    fetch(`${API_URL}?action=chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(requestData),
@@ -429,7 +429,7 @@ export function sendAIMessage() {
     })
     .then(function(r) {
       if (!r.ok) {
-        throw new Error('HTTP ' + r.status + ': ' + r.statusText);
+        throw new Error(`HTTP ${r.status}: ${r.statusText}`);
       }
       return r.json();
     })
@@ -499,7 +499,7 @@ export function submitAIFeedback(button, rating, messageId) {
       })
       .logChatFeedback(feedbackData);
   } else {
-    fetch(API_URL + '?action=feedback', {
+    fetch(`${API_URL}?action=feedback`, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(feedbackData),

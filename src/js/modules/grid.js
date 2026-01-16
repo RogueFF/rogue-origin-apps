@@ -287,7 +287,7 @@ export function cycleWidgetSize(btn) {
   // Find current size
   let currentIndex = -1;
   for (let i = 0; i < WIDGET_SIZES.length; i++) {
-    if (widget.classList.contains('widget-' + WIDGET_SIZES[i])) {
+    if (widget.classList.contains(`widget-${WIDGET_SIZES[i]}`)) {
       currentIndex = i;
       break;
     }
@@ -298,15 +298,15 @@ export function cycleWidgetSize(btn) {
 
   // Remove current size class
   WIDGET_SIZES.forEach(function(size) {
-    widget.classList.remove('widget-' + size);
+    widget.classList.remove(`widget-${size}`);
   });
 
   // Apply next size
   const nextIndex = (currentIndex + 1) % WIDGET_SIZES.length;
-  widget.classList.add('widget-' + WIDGET_SIZES[nextIndex]);
+  widget.classList.add(`widget-${WIDGET_SIZES[nextIndex]}`);
 
   // Update button title
-  btn.title = 'Size: ' + WIDGET_SIZES[nextIndex];
+  btn.title = `Size: ${WIDGET_SIZES[nextIndex]}`;
 
   // Refresh grid layout
   const grid = getGrid('widgets');
@@ -361,7 +361,7 @@ export function toggleWidgetCollapse(btn) {
  * @param {string} widgetId - The widget ID to hide
  */
 export function hideWidget(widgetId) {
-  const widget = document.querySelector('[data-widget-id="' + widgetId + '"]');
+  const widget = document.querySelector(`[data-widget-id="${widgetId}"]`);
   if (!widget) return;
 
   const grid = getGrid('widgets');
@@ -390,7 +390,7 @@ export function hideWidget(widgetId) {
  * @param {string} widgetId - The widget ID to show
  */
 export function showWidget(widgetId) {
-  const widget = document.querySelector('[data-widget-id="' + widgetId + '"]');
+  const widget = document.querySelector(`[data-widget-id="${widgetId}"]`);
   if (!widget) return;
 
   widget.style.display = '';
@@ -495,7 +495,7 @@ function saveWidgetSizes() {
       if (!id) return;
 
       for (let i = 0; i < WIDGET_SIZES.length; i++) {
-        if (widget.classList.contains('widget-' + WIDGET_SIZES[i])) {
+        if (widget.classList.contains(`widget-${WIDGET_SIZES[i]}`)) {
           sizes[id] = WIDGET_SIZES[i];
           break;
         }
@@ -520,16 +520,16 @@ function loadWidgetSizes() {
     if (!sizes || typeof sizes !== 'object') return;
 
     Object.keys(sizes).forEach(function(id) {
-      const widget = document.querySelector('[data-widget-id="' + id + '"]');
+      const widget = document.querySelector(`[data-widget-id="${id}"]`);
       if (!widget) return;
 
       // Remove all size classes
       WIDGET_SIZES.forEach(function(size) {
-        widget.classList.remove('widget-' + size);
+        widget.classList.remove(`widget-${size}`);
       });
 
       // Add saved size class
-      widget.classList.add('widget-' + sizes[id]);
+      widget.classList.add(`widget-${sizes[id]}`);
     });
   } catch (e) {
     console.warn('Error loading widget sizes:', e);
@@ -564,7 +564,7 @@ function loadCollapsedState() {
     if (!Array.isArray(collapsed)) return;
 
     collapsed.forEach(function(id) {
-      const widget = document.querySelector('[data-widget-id="' + id + '"]');
+      const widget = document.querySelector(`[data-widget-id="${id}"]`);
       if (!widget) return;
 
       widget.classList.add('collapsed');
@@ -615,7 +615,7 @@ function loadHiddenWidgets() {
     const grid = getGrid('widgets');
 
     hidden.forEach(function(id) {
-      const widget = document.querySelector('[data-widget-id="' + id + '"]');
+      const widget = document.querySelector(`[data-widget-id="${id}"]`);
       if (!widget) return;
 
       widget.style.display = 'none';
@@ -741,8 +741,8 @@ export function initWidgetResizeHandles() {
       const newWidth = Math.max(200, startWidth + deltaX);
       const newHeight = Math.max(150, startHeight + deltaY);
 
-      widget.style.width = newWidth + 'px';
-      widget.style.height = newHeight + 'px';
+      widget.style.width = `${newWidth}px`;
+      widget.style.height = `${newHeight}px`;
     }
 
     function onMouseUp() {

@@ -17,7 +17,11 @@
     "test:firefox": "playwright test kanban-tutorial.spec.js --project=firefox",
     "test:webkit": "playwright test kanban-tutorial.spec.js --project=webkit",
     "test:mobile": "playwright test kanban-tutorial.spec.js --project=mobile-chrome --project=mobile-safari",
-    "playwright:install": "playwright install"
+    "playwright:install": "playwright install",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "lint:dashboard": "eslint src/js/modules/",
+    "lint:scoreboard": "eslint src/js/scoreboard/"
   },
   "repository": {
     "type": "git",

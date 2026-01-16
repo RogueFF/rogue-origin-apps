@@ -248,7 +248,7 @@ export function initCharts() {
             borderWidth: 0
           },
           {
-            label: 'Target (' + dailyTarget + ' lbs)',
+            label: `Target (${dailyTarget} lbs)`,
             data: [],
             borderColor: '#c45c4a',
             borderDash: [8, 4],
@@ -469,7 +469,7 @@ function renderEfficiencyChart() {
     dailyRateChart.data.datasets[0].data = rates;
     dailyRateChart.data.datasets[0].label = 'Rate';
     dailyRateChart.data.datasets[1].data = avgLine;
-    dailyRateChart.data.datasets[1].label = 'Avg (' + avgRate.toFixed(2) + ')';
+    dailyRateChart.data.datasets[1].label = `Avg (${avgRate.toFixed(2)})`;
     dailyRateChart.update('none');
 
   } else if (numDays < 7) {
@@ -490,7 +490,7 @@ function renderEfficiencyChart() {
     dailyRateChart.data.datasets[0].data = rates;
     dailyRateChart.data.datasets[0].label = 'Rate';
     dailyRateChart.data.datasets[1].data = avgLine;
-    dailyRateChart.data.datasets[1].label = 'Avg (' + avgRate.toFixed(2) + ')';
+    dailyRateChart.data.datasets[1].label = `Avg (${avgRate.toFixed(2)})`;
     dailyRateChart.update('none');
 
   } else {
@@ -564,7 +564,7 @@ export function renderCharts() {
       // Daily target line
       if (dailyChart.data.datasets[2]) {
         dailyChart.data.datasets[2].data = data.daily.map(function() { return dailyTarget; });
-        dailyChart.data.datasets[2].label = 'Target (' + dailyTarget + ' lbs)';
+        dailyChart.data.datasets[2].label = `Target (${dailyTarget} lbs)`;
       }
       dailyChart.update('none');
     }

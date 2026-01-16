@@ -341,7 +341,7 @@ export function updateKPIValues(totals, prevTotals, targets, rolling, compareMod
       case 'hrs':
         return value.toFixed(1);
       case 'dollar':
-        return '$' + value.toFixed(2);
+        return `$${value.toFixed(2)}`;
       default:
         return String(value);
     }
