@@ -164,6 +164,78 @@ testBreakMode(false); // Disable break mode (timer resumes)
 
 **Files**: `src/pages/sop-manager.html`, `src/css/sop-manager.css`
 
+### Carryover Bag Tracking & One-Click Start Button (2026-01-15)
+
+**Feature**: Accurate cycle time tracking for bags started yesterday and finished today, plus simplified shift start button
+
+**Problem Solved**:
+- Bags started at end of shift yesterday (e.g., 4:00 PM), finished this morning (e.g., 8:00 AM) were showing 0 minutes or being excluded
+- Start production button required manual time entry, creating timezone issues and extra clicks
+
+**Implementation**:
+
+**1. Carryover Cycle Calculation**
+- Detects bags completed before shift start time
+- Calculates combined working time from yesterday + today
+- Excludes cleanup time (4:20-4:30 PM) automatically
+- Displays carryover symbol ⟲ in all cycle views
+- Allows carryover cycles to exceed normal 4-hour limit
+
+**Example Scenario**:
+```
+Yesterday:
+  3:45 PM - Last bag scanned
+  4:20 PM - Cleanup starts (work stops counting)
+
+Today:
+  7:26 AM - "Start Production" clicked
+  8:00 AM - First bag completed
+
+Cycle Time Calculation:
+  Yesterday work: 3:45 PM → 4:20 PM = 35 minutes
+  Today work: 7:26 AM → 8:00 AM = 34 minutes
+  Total: 1h 9m ⟲ (shown with carryover symbol)
+```
+
+**2. One-Click Start Button**
+- Click "Start Day" → Records current server time → Done
+- No manual time entry required
+- Uses accurate server time (eliminates timezone issues)
+- Shows immediate UI feedback, syncs with backend
+
+**Backend Changes** (`apps-script/production-tracking/Code.gs`):
+- New helper: `getYesterdayLastBag_()` (lines 1157-1205)
+  - Finds yesterday's last 5kg bag before cleanup (4:20 PM)
+  - Returns timestamp and cleanup cutoff
+- Updated cycle calculation (lines 979-997)
+  - Detects carryover scenario when `bag.timestamp <= workdayStart`
+  - Calculates: `yesterdayWork + todayWork`
+  - Adds `isCarryover: true` flag to cycle data
+- Simplified `handleSetShiftStart()` (lines 446-491)
+  - No time parameter = use current server time
+  - Eliminates client/server timezone differences
+
+**Frontend Changes**:
+- `src/js/scoreboard/cycle-history.js` - Display ⟲ symbol in all 5 visualization modes
+- `src/js/scoreboard/api.js` - Pass null for server time
+- `src/js/scoreboard/shift-start.js` - One-click behavior
+
+**Testing Results** (Playwright):
+- ✅ Zero-minute cycles eliminated
+- ✅ Carryover tracking deployed (backend ready)
+- ✅ One-click start button working (7:26 AM recorded)
+- ✅ All cycle display modes tested (Donut, Bars, Grid, Cards, List)
+- ✅ Cross-browser verified (Chrome, Safari, Mobile)
+
+**Files Modified**:
+- `apps-script/production-tracking/Code.gs` - Backend logic
+- `src/js/scoreboard/cycle-history.js` - Frontend display
+- `src/js/scoreboard/api.js` - API integration
+- `src/js/scoreboard/shift-start.js` - Start button behavior
+- `tests/carryover-bags.spec.js` - Automated verification
+
+**Status**: ✅ Deployed and verified
+
 ---
 
 ## Quick Reference
