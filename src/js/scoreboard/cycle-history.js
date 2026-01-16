@@ -5,7 +5,7 @@
 (function(window) {
   'use strict';
 
-  var ScoreboardCycle = {
+  const ScoreboardCycle = {
     // ========================================
     // Mode Management
     // ========================================
@@ -14,11 +14,11 @@
      * Load cycle display mode from localStorage
      */
     loadCycleMode: function() {
-      var storageKey = (ScoreboardConfig && ScoreboardConfig.storage && ScoreboardConfig.storage.cycleDisplayMode) || 'cycleDisplayMode';
-      var saved = localStorage.getItem(storageKey);
+      const storageKey = (ScoreboardConfig && ScoreboardConfig.storage && ScoreboardConfig.storage.cycleDisplayMode) || 'cycleDisplayMode';
+      const saved = localStorage.getItem(storageKey);
       if (saved !== null) {
-        var mode = parseInt(saved, 10);
-        var modes = (ScoreboardConfig && ScoreboardConfig.cycleModes) || [];
+        const mode = parseInt(saved, 10);
+        const modes = (ScoreboardConfig && ScoreboardConfig.cycleModes) || [];
         if (mode >= 0 && mode < modes.length) {
           ScoreboardState.cycleDisplayMode = mode;
         }
@@ -29,7 +29,7 @@
      * Save cycle display mode to localStorage
      */
     saveCycleMode: function() {
-      var storageKey = (ScoreboardConfig && ScoreboardConfig.storage && ScoreboardConfig.storage.cycleDisplayMode) || 'cycleDisplayMode';
+      const storageKey = (ScoreboardConfig && ScoreboardConfig.storage && ScoreboardConfig.storage.cycleDisplayMode) || 'cycleDisplayMode';
       localStorage.setItem(
         storageKey,
         ScoreboardState.cycleDisplayMode.toString()
@@ -40,7 +40,7 @@
      * Cycle to next display mode
      */
     nextCycleMode: function() {
-      var modes = (ScoreboardConfig && ScoreboardConfig.cycleModes) || ['Donut', 'Bars', 'Grid', 'Cards', 'List'];
+      const modes = (ScoreboardConfig && ScoreboardConfig.cycleModes) || ['Donut', 'Bars', 'Grid', 'Cards', 'List'];
       ScoreboardState.cycleDisplayMode =
         (ScoreboardState.cycleDisplayMode + 1) % modes.length;
       this.saveCycleMode();
@@ -51,7 +51,7 @@
      * Cycle to previous display mode
      */
     prevCycleMode: function() {
-      var modes = (ScoreboardConfig && ScoreboardConfig.cycleModes) || ['Donut', 'Bars', 'Grid', 'Cards', 'List'];
+      const modes = (ScoreboardConfig && ScoreboardConfig.cycleModes) || ['Donut', 'Bars', 'Grid', 'Cards', 'List'];
       ScoreboardState.cycleDisplayMode =
         (ScoreboardState.cycleDisplayMode - 1 + modes.length) %
         modes.length;
@@ -69,10 +69,10 @@
      */
     loadLocalCycleHistory: function() {
       try {
-        var storageKey = (ScoreboardConfig && ScoreboardConfig.storage && ScoreboardConfig.storage.cycleHistory) || 'cycleHistory';
-        var saved = localStorage.getItem(storageKey);
+        const storageKey = (ScoreboardConfig && ScoreboardConfig.storage && ScoreboardConfig.storage.cycleHistory) || 'cycleHistory';
+        const saved = localStorage.getItem(storageKey);
         if (saved) {
-          var parsed = JSON.parse(saved);
+          const parsed = JSON.parse(saved);
           return Array.isArray(parsed) ? parsed : [];
         }
       } catch (e) {
@@ -88,8 +88,8 @@
     saveLocalCycleHistory: function(cycles) {
       try {
         // Keep only last 50 cycles to avoid storage bloat
-        var toSave = cycles.slice(-50);
-        var storageKey = (ScoreboardConfig && ScoreboardConfig.storage && ScoreboardConfig.storage.cycleHistory) || 'cycleHistory';
+        const toSave = cycles.slice(-50);
+        const storageKey = (ScoreboardConfig && ScoreboardConfig.storage && ScoreboardConfig.storage.cycleHistory) || 'cycleHistory';
         localStorage.setItem(
           storageKey,
           JSON.stringify(toSave)
@@ -109,8 +109,8 @@
     toggleCycleHistory: function() {
       ScoreboardState.cycleHistoryCollapsed = !ScoreboardState.cycleHistoryCollapsed;
 
-      var panel = ScoreboardDOM ? ScoreboardDOM.get('cycleHistoryPanel') : document.getElementById('cycleHistoryPanel');
-      var btn = ScoreboardDOM ? ScoreboardDOM.get('cycleHistoryToggle') : document.getElementById('cycleHistoryToggle');
+      const panel = ScoreboardDOM ? ScoreboardDOM.get('cycleHistoryPanel') : document.getElementById('cycleHistoryPanel');
+      const btn = ScoreboardDOM ? ScoreboardDOM.get('cycleHistoryToggle') : document.getElementById('cycleHistoryToggle');
 
       if (panel && btn) {
         if (ScoreboardState.cycleHistoryCollapsed) {
@@ -132,7 +132,7 @@
      * @param {number} targetSec - Target time in seconds
      */
     addCycleToHistory: function(cycleTimeSec, targetSec) {
-      var cycle = {
+      const cycle = {
         time: cycleTimeSec,
         target: targetSec,
         timestamp: Date.now(),
@@ -165,20 +165,21 @@
 
       // Convert API cycles to internal format
       // API returns cycleTime (not cycleTimeSec or time)
-      var converted = apiCycles.map(function(c) {
-        var cycleTime = c.cycleTime || c.cycleTimeSec || c.time || 0;
-        var target = c.target || c.targetSec || defaultTarget;
+      const converted = apiCycles.map(function(c) {
+        const cycleTime = c.cycleTime || c.cycleTimeSec || c.time || 0;
+        const target = c.target || c.targetSec || defaultTarget;
         return {
           time: cycleTime,
           target: target,
           timestamp: c.timestamp || Date.now(),
-          isEarly: cycleTime <= target
+          isEarly: cycleTime <= target,
+          isCarryover: c.isCarryover || false
         };
       });
 
       // Merge with local history, removing duplicates by timestamp
-      var merged = ScoreboardState.cycleHistory.concat(converted);
-      var uniqueMap = {};
+      const merged = ScoreboardState.cycleHistory.concat(converted);
+      const uniqueMap = {};
       merged.forEach(function(cycle) {
         uniqueMap[cycle.timestamp] = cycle;
       });
@@ -202,7 +203,7 @@
      * Render cycle history based on current display mode
      */
     renderCycleHistory: function() {
-      var container = ScoreboardDOM ? ScoreboardDOM.get('cycleContent') : document.getElementById('cycleContent');
+      const container = ScoreboardDOM ? ScoreboardDOM.get('cycleContent') : document.getElementById('cycleContent');
       if (!container) return;
 
       // Clear container
@@ -214,8 +215,8 @@
       }
 
       // Update mode label
-      var modeLabel = ScoreboardDOM ? ScoreboardDOM.get('cycleModeLabel') : document.getElementById('cycleModeLabel');
-      var modes = (ScoreboardConfig && ScoreboardConfig.cycleModes) || ['Donut', 'Bars', 'Grid', 'Cards', 'List'];
+      const modeLabel = ScoreboardDOM ? ScoreboardDOM.get('cycleModeLabel') : document.getElementById('cycleModeLabel');
+      const modes = (ScoreboardConfig && ScoreboardConfig.cycleModes) || ['Donut', 'Bars', 'Grid', 'Cards', 'List'];
       if (modeLabel) {
         modeLabel.textContent = modes[ScoreboardState.cycleDisplayMode];
       }
@@ -249,9 +250,9 @@
      * @param {HTMLElement} container - Container element
      */
     renderCycleDonut: function(container) {
-      var early = 0;
-      var late = 0;
-      var recent = ScoreboardState.cycleHistory.slice(-3);
+      let early = 0;
+      let late = 0;
+      const recent = ScoreboardState.cycleHistory.slice(-3);
 
       ScoreboardState.cycleHistory.forEach(function(cycle) {
         if (cycle.isEarly) {
@@ -261,40 +262,40 @@
         }
       });
 
-      var total = early + late;
-      var earlyPct = total > 0 ? (early / total * 100).toFixed(1) : 0;
-      var latePct = total > 0 ? (late / total * 100).toFixed(1) : 0;
+      const total = early + late;
+      const earlyPct = total > 0 ? (early / total * 100).toFixed(1) : 0;
+      const latePct = total > 0 ? (late / total * 100).toFixed(1) : 0;
 
       // Create wrapper matching CSS structure
-      var wrapper = document.createElement('div');
+      const wrapper = document.createElement('div');
       wrapper.className = 'cycle-donut';
 
       // Donut ring with canvas
-      var ring = document.createElement('div');
+      const ring = document.createElement('div');
       ring.className = 'cycle-donut-ring';
 
-      var canvas = document.createElement('canvas');
+      const canvas = document.createElement('canvas');
       canvas.width = 90;
       canvas.height = 90;
       ring.appendChild(canvas);
 
       // Center overlay
-      var center = document.createElement('div');
+      const center = document.createElement('div');
       center.className = 'cycle-donut-center';
-      center.innerHTML = '<div class="cycle-donut-count">' + total + '</div>' +
-                         '<div class="cycle-donut-label">bags</div>';
+      center.innerHTML = `<div class="cycle-donut-count">${total}</div>` +
+                         `<div class="cycle-donut-label">bags</div>`;
       ring.appendChild(center);
       wrapper.appendChild(ring);
 
       // Draw donut
-      var ctx = canvas.getContext('2d');
-      var centerX = 45;
-      var centerY = 45;
-      var radius = 35;
-      var lineWidth = 12;
+      const ctx = canvas.getContext('2d');
+      const centerX = 45;
+      const centerY = 45;
+      const radius = 35;
+      const lineWidth = 12;
 
       if (total > 0) {
-        var earlyAngle = (early / total) * 2 * Math.PI;
+        const earlyAngle = (early / total) * 2 * Math.PI;
         ctx.beginPath();
         ctx.arc(centerX, centerY, radius, -Math.PI / 2, -Math.PI / 2 + earlyAngle);
         ctx.lineWidth = lineWidth;
@@ -317,31 +318,32 @@
       }
 
       // Stats section
-      var stats = document.createElement('div');
+      const stats = document.createElement('div');
       stats.className = 'cycle-donut-stats';
       stats.innerHTML =
-        '<div class="cycle-donut-stat">' +
-          '<span class="cycle-donut-stat-label"><span class="cycle-donut-stat-dot" style="background:#22c55e"></span>Early</span>' +
-          '<span class="cycle-donut-stat-value" style="color:#4ade80">' + early + '</span>' +
-        '</div>' +
-        '<div class="cycle-donut-stat">' +
-          '<span class="cycle-donut-stat-label"><span class="cycle-donut-stat-dot" style="background:#ef4444"></span>Late</span>' +
-          '<span class="cycle-donut-stat-value" style="color:#f87171">' + late + '</span>' +
-        '</div>';
+        `<div class="cycle-donut-stat">` +
+          `<span class="cycle-donut-stat-label"><span class="cycle-donut-stat-dot" style="background:#22c55e"></span>Early</span>` +
+          `<span class="cycle-donut-stat-value" style="color:#4ade80">${early}</span>` +
+        `</div>` +
+        `<div class="cycle-donut-stat">` +
+          `<span class="cycle-donut-stat-label"><span class="cycle-donut-stat-dot" style="background:#ef4444"></span>Late</span>` +
+          `<span class="cycle-donut-stat-value" style="color:#f87171">${late}</span>` +
+        `</div>`;
 
       // Latest cycles preview
       if (recent.length > 0) {
-        var latest = document.createElement('div');
+        const latest = document.createElement('div');
         latest.className = 'cycle-donut-latest';
         latest.innerHTML = '<div class="cycle-donut-latest-label">Latest</div>';
-        var items = document.createElement('div');
+        const items = document.createElement('div');
         items.className = 'cycle-donut-latest-items';
         recent.reverse().forEach(function(c, i) {
-          var bg = c.isEarly ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)';
-          var color = c.isEarly ? '#4ade80' : '#f87171';
-          items.innerHTML += '<div class="cycle-donut-latest-item" style="background:' + bg + '">' +
-            '<div class="cycle-donut-latest-time" style="color:' + color + '">' + ScoreboardTimer.formatTime(c.time) + '</div>' +
-            '<div class="cycle-donut-latest-num">#' + (total - i) + '</div></div>';
+          const bg = c.isEarly ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)';
+          const color = c.isEarly ? '#4ade80' : '#f87171';
+          const carryoverSymbol = c.isCarryover ? ' ⟲' : '';
+          items.innerHTML += `<div class="cycle-donut-latest-item" style="background:${bg}">` +
+            `<div class="cycle-donut-latest-time" style="color:${color}">${ScoreboardTimer.formatTime(c.time)}${carryoverSymbol}</div>` +
+            `<div class="cycle-donut-latest-num">#${total - i}</div></div>`;
         });
         latest.appendChild(items);
         stats.appendChild(latest);
@@ -360,33 +362,33 @@
      * @param {HTMLElement} container - Container element
      */
     renderCycleSparkline: function(container) {
-      var recent = ScoreboardState.cycleHistory.slice(-20);
-      var times = recent.map(function(c) { return c.time; });
-      var maxTime = Math.max.apply(null, times.concat([recent[0] ? recent[0].target : 300]));
+      const recent = ScoreboardState.cycleHistory.slice(-20);
+      const times = recent.map(function(c) { return c.time; });
+      const maxTime = Math.max.apply(null, times.concat([recent[0] ? recent[0].target : 300]));
 
-      var wrapper = document.createElement('div');
+      const wrapper = document.createElement('div');
       wrapper.className = 'cycle-sparkline';
 
-      var barsContainer = document.createElement('div');
+      const barsContainer = document.createElement('div');
       barsContainer.className = 'cycle-sparkline-bars';
 
       // Add target line at 100%
-      var targetLine = document.createElement('div');
+      const targetLine = document.createElement('div');
       targetLine.className = 'cycle-sparkline-target';
-      var targetPct = recent[0] ? (recent[0].target / maxTime * 100) : 100;
-      targetLine.style.bottom = targetPct + '%';
+      const targetPct = recent[0] ? (recent[0].target / maxTime * 100) : 100;
+      targetLine.style.bottom = `${targetPct}%`;
       barsContainer.appendChild(targetLine);
 
       recent.forEach(function(cycle) {
-        var bar = document.createElement('div');
-        var statusClass = cycle.isEarly ? 'early' : 'overtime';
-        bar.className = 'cycle-sparkline-bar ' + statusClass;
+        const bar = document.createElement('div');
+        const statusClass = cycle.isEarly ? 'early' : 'overtime';
+        bar.className = `cycle-sparkline-bar ${statusClass}`;
 
-        var pct = Math.min(cycle.time / maxTime * 100, 100);
-        bar.style.height = pct + '%';
+        const pct = Math.min(cycle.time / maxTime * 100, 100);
+        bar.style.height = `${pct}%`;
 
         // Tooltip
-        var tooltip = document.createElement('div');
+        const tooltip = document.createElement('div');
         tooltip.className = 'cycle-sparkline-tooltip';
         tooltip.textContent = ScoreboardTimer.formatTime(cycle.time);
         bar.appendChild(tooltip);
@@ -397,12 +399,12 @@
       wrapper.appendChild(barsContainer);
 
       // Labels below
-      var labels = document.createElement('div');
+      const labels = document.createElement('div');
       labels.className = 'cycle-sparkline-labels';
-      var avg = times.length > 0 ? times.reduce(function(a, b) { return a + b; }, 0) / times.length : 0;
+      const avg = times.length > 0 ? times.reduce(function(a, b) { return a + b; }, 0) / times.length : 0;
       labels.innerHTML =
-        '<span>Avg: ' + ScoreboardTimer.formatTime(Math.round(avg)) + '</span>' +
-        '<span>Target: ' + ScoreboardTimer.formatTime(recent[0] ? recent[0].target : 0) + '</span>';
+        `<span>Avg: ${ScoreboardTimer.formatTime(Math.round(avg))}</span>` +
+        `<span>Target: ${ScoreboardTimer.formatTime(recent[0] ? recent[0].target : 0)}</span>`;
 
       wrapper.appendChild(labels);
       container.appendChild(wrapper);
@@ -417,31 +419,32 @@
      * @param {HTMLElement} container - Container element
      */
     renderCycleChips: function(container) {
-      var wrapper = document.createElement('div');
+      const wrapper = document.createElement('div');
       wrapper.className = 'cycle-chips';
 
-      var recent = ScoreboardState.cycleHistory.slice(-30);
-      var earlyCount = 0, lateCount = 0;
+      const recent = ScoreboardState.cycleHistory.slice(-30);
+      let earlyCount = 0, lateCount = 0;
 
       recent.forEach(function(cycle) {
-        var chip = document.createElement('div');
-        var statusClass = cycle.isEarly ? 'early' : 'overtime';
-        chip.className = 'cycle-chip ' + statusClass;
+        const chip = document.createElement('div');
+        const statusClass = cycle.isEarly ? 'early' : 'overtime';
+        chip.className = `cycle-chip ${statusClass}`;
 
         if (cycle.isEarly) earlyCount++; else lateCount++;
 
-        var delta = cycle.time - cycle.target;
-        var deltaStr = (delta >= 0 ? '+' : '-') + ScoreboardTimer.formatTime(Math.abs(delta));
+        const delta = cycle.time - cycle.target;
+        const deltaStr = (delta >= 0 ? '+' : '-') + ScoreboardTimer.formatTime(Math.abs(delta));
+        const carryoverSymbol = cycle.isCarryover ? ' ⟲' : '';
 
         // Tooltip
-        var tooltip = document.createElement('div');
+        const tooltip = document.createElement('div');
         tooltip.className = 'cycle-chip-tooltip';
-        tooltip.textContent = ScoreboardTimer.formatTime(cycle.time) + ' (' + deltaStr + ')';
+        tooltip.textContent = `${ScoreboardTimer.formatTime(cycle.time)}${carryoverSymbol} (${deltaStr})`;
         chip.appendChild(tooltip);
 
         // Chip content (short time)
-        var mins = Math.floor(cycle.time / 60);
-        chip.appendChild(document.createTextNode(mins + 'm'));
+        const mins = Math.floor(cycle.time / 60);
+        chip.appendChild(document.createTextNode(`${mins}m`));
 
         wrapper.appendChild(chip);
       });
@@ -449,11 +452,11 @@
       container.appendChild(wrapper);
 
       // Legend
-      var legend = document.createElement('div');
+      const legend = document.createElement('div');
       legend.className = 'cycle-chips-legend';
       legend.innerHTML =
-        '<div class="cycle-chips-legend-item"><span class="cycle-chips-legend-dot" style="background:#22c55e"></span>' + earlyCount + ' early</div>' +
-        '<div class="cycle-chips-legend-item"><span class="cycle-chips-legend-dot" style="background:#ef4444"></span>' + lateCount + ' late</div>';
+        `<div class="cycle-chips-legend-item"><span class="cycle-chips-legend-dot" style="background:#22c55e"></span>${earlyCount} early</div>` +
+        `<div class="cycle-chips-legend-item"><span class="cycle-chips-legend-dot" style="background:#ef4444"></span>${lateCount} late</div>`;
       container.appendChild(legend);
     },
 
@@ -466,33 +469,34 @@
      * @param {HTMLElement} container - Container element
      */
     renderCycleCards: function(container) {
-      var wrapper = document.createElement('div');
+      const wrapper = document.createElement('div');
       wrapper.className = 'cycle-cards';
 
-      var recent = ScoreboardState.cycleHistory.slice(-10).reverse();
-      var total = ScoreboardState.cycleHistory.length;
+      const recent = ScoreboardState.cycleHistory.slice(-10).reverse();
+      const total = ScoreboardState.cycleHistory.length;
 
       recent.forEach(function(cycle, index) {
-        var statusClass = cycle.isEarly ? 'early' : 'overtime';
-        var card = document.createElement('div');
-        card.className = 'cycle-card ' + statusClass;
+        const statusClass = cycle.isEarly ? 'early' : 'overtime';
+        const card = document.createElement('div');
+        card.className = `cycle-card ${statusClass}`;
 
-        var delta = cycle.time - cycle.target;
-        var deltaStr = (delta >= 0 ? '+' : '-') + ScoreboardTimer.formatTime(Math.abs(delta));
+        const delta = cycle.time - cycle.target;
+        const deltaStr = (delta >= 0 ? '+' : '-') + ScoreboardTimer.formatTime(Math.abs(delta));
+        const carryoverSymbol = cycle.isCarryover ? ' ⟲' : '';
 
         // Format timestamp in 12-hour AM/PM format
-        var date = new Date(cycle.timestamp);
-        var hours = date.getHours();
-        var minutes = date.getMinutes().toString().padStart(2, '0');
-        var ampm = hours >= 12 ? 'PM' : 'AM';
+        const date = new Date(cycle.timestamp);
+        let hours = date.getHours();
+        const minutes = date.getMinutes().toString().padStart(2, '0');
+        const ampm = hours >= 12 ? 'PM' : 'AM';
         hours = hours % 12 || 12;
-        var timeStr = hours + ':' + minutes + ' ' + ampm;
+        const timeStr = `${hours}:${minutes} ${ampm}`;
 
         card.innerHTML =
-          '<div class="cycle-card-num">#' + (total - index) + '</div>' +
-          '<div class="cycle-card-time">' + ScoreboardTimer.formatTime(cycle.time) + '</div>' +
-          '<div class="cycle-card-delta">' + deltaStr + '</div>' +
-          '<div class="cycle-card-meta">' + timeStr + '</div>';
+          `<div class="cycle-card-num">#${total - index}</div>` +
+          `<div class="cycle-card-time">${ScoreboardTimer.formatTime(cycle.time)}${carryoverSymbol}</div>` +
+          `<div class="cycle-card-delta">${deltaStr}</div>` +
+          `<div class="cycle-card-meta">${timeStr}</div>`;
 
         wrapper.appendChild(card);
       });
@@ -509,34 +513,35 @@
      * @param {HTMLElement} container - Container element
      */
     renderCycleList: function(container) {
-      var list = document.createElement('div');
+      const list = document.createElement('div');
       list.className = 'cycle-list';
 
-      var recent = ScoreboardState.cycleHistory.slice(-10).reverse();
-      var total = ScoreboardState.cycleHistory.length;
+      const recent = ScoreboardState.cycleHistory.slice(-10).reverse();
+      const total = ScoreboardState.cycleHistory.length;
 
       recent.forEach(function(cycle, index) {
-        var statusClass = cycle.isEarly ? 'early' : 'overtime';
-        var item = document.createElement('div');
-        item.className = 'cycle-item ' + statusClass;
+        const statusClass = cycle.isEarly ? 'early' : 'overtime';
+        const item = document.createElement('div');
+        item.className = `cycle-item ${statusClass}`;
 
-        var delta = cycle.time - cycle.target;
-        var deltaStr = (delta >= 0 ? '+' : '-') + ScoreboardTimer.formatTime(Math.abs(delta));
-        var deltaClass = cycle.isEarly ? 'early' : 'overtime';
+        const delta = cycle.time - cycle.target;
+        const deltaStr = (delta >= 0 ? '+' : '-') + ScoreboardTimer.formatTime(Math.abs(delta));
+        const deltaClass = cycle.isEarly ? 'early' : 'overtime';
+        const carryoverSymbol = cycle.isCarryover ? ' ⟲' : '';
 
         // Format timestamp in 12-hour AM/PM format
-        var date = new Date(cycle.timestamp);
-        var hours = date.getHours();
-        var minutes = date.getMinutes().toString().padStart(2, '0');
-        var ampm = hours >= 12 ? 'PM' : 'AM';
+        const date = new Date(cycle.timestamp);
+        let hours = date.getHours();
+        const minutes = date.getMinutes().toString().padStart(2, '0');
+        const ampm = hours >= 12 ? 'PM' : 'AM';
         hours = hours % 12 || 12;
-        var timeStr = hours + ':' + minutes + ' ' + ampm;
+        const timeStr = `${hours}:${minutes} ${ampm}`;
 
         item.innerHTML =
-          '<span class="cycle-item-num">#' + (total - index) + '</span>' +
-          '<span class="cycle-item-time">' + ScoreboardTimer.formatTime(cycle.time) + '</span>' +
-          '<span class="cycle-item-delta ' + deltaClass + '">' + deltaStr + '</span>' +
-          '<span class="cycle-item-completed">' + timeStr + '</span>';
+          `<span class="cycle-item-num">#${total - index}</span>` +
+          `<span class="cycle-item-time">${ScoreboardTimer.formatTime(cycle.time)}${carryoverSymbol}</span>` +
+          `<span class="cycle-item-delta ${deltaClass}">${deltaStr}</span>` +
+          `<span class="cycle-item-completed">${timeStr}</span>`;
 
         list.appendChild(item);
       });
@@ -566,7 +571,7 @@
       }
 
       // Show celebration text
-      var overlay = document.createElement('div');
+      const overlay = document.createElement('div');
       overlay.className = 'cycle-celebration-overlay';
       overlay.innerHTML =
         '<div class="cycle-celebration-text">' +
