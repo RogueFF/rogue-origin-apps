@@ -5,19 +5,19 @@
 (function(window) {
   'use strict';
 
-  var State = window.ScoreboardState;
-  var Config = window.ScoreboardConfig;
-  var DOM = window.ScoreboardDOM;
+  const State = window.ScoreboardState;
+  const Config = window.ScoreboardConfig;
+  const DOM = window.ScoreboardDOM;
 
   /**
    * Initialize shift start UI on page load
    */
   function initShiftStartUI() {
     // Check for existing manual start from localStorage
-    var savedStart = localStorage.getItem('manualShiftStart');
-    var savedLocked = localStorage.getItem('shiftStartLocked') === 'true';
-    var today = new Date().toDateString();
-    var savedDate = localStorage.getItem('shiftStartDate');
+    let savedStart = localStorage.getItem('manualShiftStart');
+    let savedLocked = localStorage.getItem('shiftStartLocked') === 'true';
+    const today = new Date().toDateString();
+    const savedDate = localStorage.getItem('shiftStartDate');
 
     // Reset if different day
     if (savedDate !== today) {
@@ -41,7 +41,7 @@
       window.ScoreboardAPI.getShiftStart(
         function(response) {
           if (response.success && response.shiftAdjustment) {
-            var apiStartTime = new Date(response.shiftAdjustment.manualStartTime);
+            const apiStartTime = new Date(response.shiftAdjustment.manualStartTime);
 
             // Use API time if different from localStorage
             if (!savedStart || apiStartTime.getTime() !== new Date(savedStart).getTime()) {
@@ -59,12 +59,12 @@
     }
 
     // Set up time input to current time by default
-    var now = new Date();
-    var hours = String(now.getHours()).padStart(2, '0');
-    var minutes = String(now.getMinutes()).padStart(2, '0');
-    var timeInput = document.getElementById('startTimeInput');
+    const now = new Date();
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const timeInput = document.getElementById('startTimeInput');
     if (timeInput) {
-      timeInput.value = hours + ':' + minutes;
+      timeInput.value = `${hours}:${minutes}`;
       timeInput.addEventListener('input', updateImpactPreview);
     }
   }
@@ -73,8 +73,8 @@
    * Show Start Day button (initial state)
    */
   function showStartDayButton() {
-    var btn = document.getElementById('startDayBtn');
-    var badge = document.getElementById('startedBadge');
+    const btn = document.getElementById('startDayBtn');
+    const badge = document.getElementById('startedBadge');
     if (btn) btn.style.display = 'flex';
     if (badge) badge.style.display = 'none';
   }
@@ -83,10 +83,10 @@
    * Show Started badge with time
    */
   function showStartedBadge(startTime, locked) {
-    var btn = document.getElementById('startDayBtn');
-    var badge = document.getElementById('startedBadge');
-    var timeDisplay = document.getElementById('startTimeDisplay');
-    var badgeIcon = document.getElementById('badgeIcon');
+    const btn = document.getElementById('startDayBtn');
+    const badge = document.getElementById('startedBadge');
+    const timeDisplay = document.getElementById('startTimeDisplay');
+    const badgeIcon = document.getElementById('badgeIcon');
 
     if (btn) btn.style.display = 'none';
     if (badge) {
@@ -95,11 +95,11 @@
     }
 
     if (timeDisplay) {
-      var hours = startTime.getHours();
-      var minutes = String(startTime.getMinutes()).padStart(2, '0');
-      var ampm = hours >= 12 ? 'PM' : 'AM';
+      let hours = startTime.getHours();
+      const minutes = String(startTime.getMinutes()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
       hours = hours % 12 || 12;
-      timeDisplay.textContent = hours + ':' + minutes + ' ' + ampm;
+      timeDisplay.textContent = `${hours}:${minutes} ${ampm}`;
     }
 
     if (badgeIcon) {
@@ -108,28 +108,34 @@
   }
 
   /**
-   * Start day now - uses current time immediately
+   * Start day now - uses current server time (one-click)
    */
   function startDayNow() {
-    var startTime = new Date();
+    // Use current client time for immediate UI feedback
+    const tempStartTime = new Date();
 
-    // Save to state and localStorage
-    State.manualShiftStart = startTime;
+    // Save to state and localStorage temporarily
+    State.manualShiftStart = tempStartTime;
     State.shiftStartLocked = false;
-    localStorage.setItem('manualShiftStart', startTime.toISOString());
+    localStorage.setItem('manualShiftStart', tempStartTime.toISOString());
     localStorage.setItem('shiftStartLocked', 'false');
     localStorage.setItem('shiftStartDate', new Date().toDateString());
 
-    // Update UI
-    showStartedBadge(startTime, false);
+    // Update UI immediately
+    showStartedBadge(tempStartTime, false);
 
-    // Save to API
+    // Save to API - passing null uses server time
     if (window.ScoreboardAPI) {
       window.ScoreboardAPI.setShiftStart(
-        startTime,
+        null,  // Use server time for accuracy
         function(response) {
           if (response.success && response.shiftAdjustment) {
+            // Update with actual server time
+            const serverTime = new Date(response.shiftAdjustment.manualStartTime);
+            State.manualShiftStart = serverTime;
             State.shiftAdjustment = response.shiftAdjustment;
+            localStorage.setItem('manualShiftStart', serverTime.toISOString());
+            showStartedBadge(serverTime, false);
             console.log('Shift start saved to API:', response.shiftAdjustment);
           }
         },
@@ -144,7 +150,7 @@
    * Open time picker modal (for editing)
    */
   function openStartDayModal() {
-    var modal = document.getElementById('startDayModal');
+    const modal = document.getElementById('startDayModal');
     if (modal) {
       modal.style.display = 'flex';
       updateImpactPreview();
@@ -155,7 +161,7 @@
    * Close time picker modal
    */
   function cancelStartTime() {
-    var modal = document.getElementById('startDayModal');
+    const modal = document.getElementById('startDayModal');
     if (modal) modal.style.display = 'none';
   }
 
@@ -163,33 +169,33 @@
    * Update impact preview based on selected time
    */
   function updateImpactPreview() {
-    var timeInput = document.getElementById('startTimeInput');
+    const timeInput = document.getElementById('startTimeInput');
     if (!timeInput || !timeInput.value) return;
 
-    var timeParts = timeInput.value.split(':');
-    var hours = parseInt(timeParts[0], 10);
-    var minutes = parseInt(timeParts[1], 10);
+    const timeParts = timeInput.value.split(':');
+    const hours = parseInt(timeParts[0], 10);
+    const minutes = parseInt(timeParts[1], 10);
 
-    var startTime = new Date();
+    const startTime = new Date();
     startTime.setHours(hours, minutes, 0, 0);
 
     // Calculate available hours
-    var availableHours = getAvailableProductiveHours(startTime);
-    var normalHours = 8.5;
-    var scaleFactor = availableHours / normalHours;
+    const availableHours = getAvailableProductiveHours(startTime);
+    const normalHours = 8.5;
+    const scaleFactor = availableHours / normalHours;
 
     // Get baseline daily goal (from API or default)
-    var baselineGoal = (State.data && State.data.dailyGoal) || 200;
-    var adjustedGoal = Math.round(baselineGoal * scaleFactor);
-    var goalDifference = adjustedGoal - baselineGoal;
+    const baselineGoal = (State.data && State.data.dailyGoal) || 200;
+    const adjustedGoal = Math.round(baselineGoal * scaleFactor);
+    const goalDifference = adjustedGoal - baselineGoal;
 
     // Update preview UI
-    var goalReduction = document.getElementById('goalReduction');
-    var originalGoal = document.getElementById('originalGoal');
-    var adjustedGoalPreview = document.getElementById('adjustedGoalPreview');
+    const goalReduction = document.getElementById('goalReduction');
+    const originalGoal = document.getElementById('originalGoal');
+    const adjustedGoalPreview = document.getElementById('adjustedGoalPreview');
 
     if (goalReduction) {
-      goalReduction.textContent = (goalDifference >= 0 ? '+' : '') + goalDifference + ' lbs';
+      goalReduction.textContent = `${(goalDifference >= 0 ? '+' : '') + goalDifference} lbs`;
       goalReduction.style.color = goalDifference >= 0 ? '#22c55e' : '#f87171';
     }
     if (originalGoal) originalGoal.textContent = baselineGoal;
@@ -201,28 +207,28 @@
    * TODO: Consider moving to shared utils
    */
   function getAvailableProductiveHours(shiftStart) {
-    var shiftEnd = new Date();
+    const shiftEnd = new Date();
     shiftEnd.setHours(16, 30, 0, 0);
 
-    var totalMinutes = (shiftEnd - shiftStart) / 60000;
+    const totalMinutes = (shiftEnd - shiftStart) / 60000;
 
-    var breaks = (Config && Config.workday && Config.workday.breaks) || [
+    const breaks = (Config && Config.workday && Config.workday.breaks) || [
       [9, 0, 9, 10],
       [12, 0, 12, 30],
       [14, 30, 14, 40],
       [16, 20, 16, 30]
     ];
 
-    var breakMinutes = 0;
+    let breakMinutes = 0;
     breaks.forEach(function(brk) {
-      var breakStart = new Date();
+      const breakStart = new Date();
       breakStart.setHours(brk[0], brk[1], 0, 0);
-      var breakEnd = new Date();
+      const breakEnd = new Date();
       breakEnd.setHours(brk[2], brk[3], 0, 0);
 
       if (shiftStart < breakEnd && breakStart < shiftEnd) {
-        var overlapStart = Math.max(shiftStart.getTime(), breakStart.getTime());
-        var overlapEnd = Math.min(shiftEnd.getTime(), breakEnd.getTime());
+        const overlapStart = Math.max(shiftStart.getTime(), breakStart.getTime());
+        const overlapEnd = Math.min(shiftEnd.getTime(), breakEnd.getTime());
         breakMinutes += (overlapEnd - overlapStart) / 60000;
       }
     });
@@ -234,24 +240,24 @@
    * Confirm and save start time
    */
   function confirmStartTime() {
-    var timeInput = document.getElementById('startTimeInput');
+    const timeInput = document.getElementById('startTimeInput');
     if (!timeInput || !timeInput.value) return;
 
-    var timeParts = timeInput.value.split(':');
-    var hours = parseInt(timeParts[0], 10);
-    var minutes = parseInt(timeParts[1], 10);
+    const timeParts = timeInput.value.split(':');
+    const hours = parseInt(timeParts[0], 10);
+    const minutes = parseInt(timeParts[1], 10);
 
-    var startTime = new Date();
+    const startTime = new Date();
     startTime.setHours(hours, minutes, 0, 0);
 
     // Validation
-    var now = new Date();
+    const now = new Date();
     if (startTime > now) {
       alert('Cannot set future start time');
       return;
     }
 
-    var fiveAM = new Date();
+    const fiveAM = new Date();
     fiveAM.setHours(5, 0, 0, 0);
     if (startTime < fiveAM) {
       alert('Start time too early (before 5:00 AM)');
@@ -297,10 +303,10 @@
 
     // Pre-fill current time
     if (State.manualShiftStart) {
-      var hours = String(State.manualShiftStart.getHours()).padStart(2, '0');
-      var minutes = String(State.manualShiftStart.getMinutes()).padStart(2, '0');
-      var timeInput = document.getElementById('startTimeInput');
-      if (timeInput) timeInput.value = hours + ':' + minutes;
+      const hours = String(State.manualShiftStart.getHours()).padStart(2, '0');
+      const minutes = String(State.manualShiftStart.getMinutes()).padStart(2, '0');
+      const timeInput = document.getElementById('startTimeInput');
+      if (timeInput) timeInput.value = `${hours}:${minutes}`;
     }
 
     openStartDayModal();
@@ -310,10 +316,10 @@
    * Show tooltip message
    */
   function showTooltip(message) {
-    var badge = document.getElementById('startedBadge');
+    const badge = document.getElementById('startedBadge');
     if (!badge) return;
 
-    var tooltip = document.createElement('div');
+    const tooltip = document.createElement('div');
     tooltip.className = 'lock-tooltip';
     tooltip.textContent = message;
     badge.appendChild(tooltip);
@@ -330,7 +336,7 @@
   function checkLockStatus() {
     if (State.shiftStartLocked) return;  // Already locked
 
-    var bagsToday = (State.timerData && State.timerData.bagsToday) || 0;
+    const bagsToday = (State.timerData && State.timerData.bagsToday) || 0;
 
     if (bagsToday > 0 && State.manualShiftStart) {
       State.shiftStartLocked = true;
