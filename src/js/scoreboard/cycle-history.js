@@ -214,6 +214,32 @@
         return;
       }
 
+      // Calculate quick stats
+      const total = ScoreboardState.cycleHistory.length;
+      const early = ScoreboardState.cycleHistory.filter(function(c) { return c.isEarly; }).length;
+      const successRate = total > 0 ? Math.round((early / total) * 100) : 0;
+      const avgTime = total > 0
+        ? Math.round(ScoreboardState.cycleHistory.reduce(function(sum, c) { return sum + c.time; }, 0) / total)
+        : 0;
+
+      // Render stats bar
+      const statsBar = document.createElement('div');
+      statsBar.className = 'cycle-stats-bar';
+      statsBar.innerHTML =
+        '<div class="cycle-stat">' +
+          `<div class="cycle-stat-value">${total}</div>` +
+          '<div class="cycle-stat-label">Bags</div>' +
+        '</div>' +
+        '<div class="cycle-stat">' +
+          `<div class="cycle-stat-value">${ScoreboardTimer.formatTime(avgTime)}</div>` +
+          '<div class="cycle-stat-label">Avg</div>' +
+        '</div>' +
+        '<div class="cycle-stat">' +
+          `<div class="cycle-stat-value" style="color: ${successRate >= 60 ? '#4ade80' : '#f87171'}">${successRate}%</div>` +
+          '<div class="cycle-stat-label">Early</div>' +
+        '</div>';
+      container.appendChild(statsBar);
+
       // Update mode label
       const modeLabel = ScoreboardDOM ? ScoreboardDOM.get('cycleModeLabel') : document.getElementById('cycleModeLabel');
       const modes = (ScoreboardConfig && ScoreboardConfig.cycleModes) || ['Donut', 'Bars', 'Grid', 'Cards', 'List'];
@@ -482,7 +508,12 @@
 
         const delta = cycle.time - cycle.target;
         const deltaStr = (delta >= 0 ? '+' : '-') + ScoreboardTimer.formatTime(Math.abs(delta));
-        const carryoverSymbol = cycle.isCarryover ? ' ⟲' : '';
+
+        // Carryover badge (prominent)
+        const carryoverBadge = cycle.isCarryover ? '<span class="carryover-badge">⟲</span>' : '';
+
+        // Trimmer count badge
+        const trimmerBadge = cycle.trimmers ? `<span class="cycle-card-trimmers">${cycle.trimmers}T</span>` : '';
 
         // Format timestamp in 12-hour AM/PM format
         const date = new Date(cycle.timestamp);
@@ -492,11 +523,15 @@
         hours = hours % 12 || 12;
         const timeStr = `${hours}:${minutes} ${ampm}`;
 
+        // Progress bar (actual vs target)
+        const progressPct = cycle.target > 0 ? Math.min((cycle.time / cycle.target) * 100, 100) : 0;
+
         card.innerHTML =
-          `<div class="cycle-card-num">#${total - index}</div>` +
-          `<div class="cycle-card-time">${ScoreboardTimer.formatTime(cycle.time)}${carryoverSymbol}</div>` +
+          `<div class="cycle-card-num">#${total - index}${trimmerBadge}</div>` +
+          `<div class="cycle-card-time">${ScoreboardTimer.formatTime(cycle.time)}${carryoverBadge}</div>` +
           `<div class="cycle-card-delta">${deltaStr}</div>` +
-          `<div class="cycle-card-meta">${timeStr}</div>`;
+          `<div class="cycle-card-meta">${timeStr}</div>` +
+          `<div class="cycle-card-progress"><div class="cycle-card-progress-bar" style="width: ${progressPct}%"></div></div>`;
 
         wrapper.appendChild(card);
       });
@@ -527,7 +562,12 @@
         const delta = cycle.time - cycle.target;
         const deltaStr = (delta >= 0 ? '+' : '-') + ScoreboardTimer.formatTime(Math.abs(delta));
         const deltaClass = cycle.isEarly ? 'early' : 'overtime';
-        const carryoverSymbol = cycle.isCarryover ? ' ⟲' : '';
+
+        // Carryover badge (prominent)
+        const carryoverBadge = cycle.isCarryover ? ' <span class="carryover-badge">⟲</span>' : '';
+
+        // Trimmer count
+        const trimmerInfo = cycle.trimmers ? ` <span style="opacity:0.5">(${cycle.trimmers}T)</span>` : '';
 
         // Format timestamp in 12-hour AM/PM format
         const date = new Date(cycle.timestamp);
@@ -538,8 +578,8 @@
         const timeStr = `${hours}:${minutes} ${ampm}`;
 
         item.innerHTML =
-          `<span class="cycle-item-num">#${total - index}</span>` +
-          `<span class="cycle-item-time">${ScoreboardTimer.formatTime(cycle.time)}${carryoverSymbol}</span>` +
+          `<span class="cycle-item-num">#${total - index}${trimmerInfo}</span>` +
+          `<span class="cycle-item-time">${ScoreboardTimer.formatTime(cycle.time)}${carryoverBadge}</span>` +
           `<span class="cycle-item-delta ${deltaClass}">${deltaStr}</span>` +
           `<span class="cycle-item-completed">${timeStr}</span>`;
 
