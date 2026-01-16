@@ -148,7 +148,7 @@ export function applyCustomRange() {
   // Update label
   const datePickerLabel = document.getElementById('datePickerLabel');
   if (datePickerLabel) {
-    datePickerLabel.textContent = formatDateShort(customStart) + ' - ' + formatDateShort(customEnd);
+    datePickerLabel.textContent = `${formatDateShort(customStart)} - ${formatDateShort(customEnd)}`;
   }
 
   // Close dropdown
@@ -223,7 +223,7 @@ export function setCompare(mode) {
 
   // Update date picker label
   if (datePickerLabel) {
-    datePickerLabel.textContent = currentLabel + ' vs ' + prevLabel;
+    datePickerLabel.textContent = `${currentLabel} vs ${prevLabel}`;
   }
 
   // Load compare data
@@ -268,7 +268,7 @@ export function clearCompare() {
       const startDateEl = document.getElementById('startDate');
       const endDateEl = document.getElementById('endDate');
       if (startDateEl && endDateEl && startDateEl.value && endDateEl.value) {
-        datePickerLabel.textContent = formatDateShort(startDateEl.value) + ' - ' + formatDateShort(endDateEl.value);
+        datePickerLabel.textContent = `${formatDateShort(startDateEl.value)} - ${formatDateShort(endDateEl.value)}`;
       }
     }
   }

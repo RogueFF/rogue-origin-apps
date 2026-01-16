@@ -214,12 +214,7 @@ import {
 
 // ===== STATUS IMPORTS =====
 import {
-  initStatusBar,
-  showConnecting,
-  showConnected,
-  showError,
-  showRetrying,
-  hideStatus
+  initStatusBar
 } from './status.js';
 
 // ===== SKELETON LOADING UI =====
@@ -261,7 +256,7 @@ function showToast(message, type, duration) {
 
   // Create toast element
   const toast = document.createElement('div');
-  toast.className = 'toast toast-' + type;
+  toast.className = `toast toast-${type}`;
   toast.textContent = message;
 
   toastContainer.appendChild(toast);
@@ -367,7 +362,7 @@ function renderHeroSection(data) {
   // Subtitle with totals
   const elHeroSubtitle = document.getElementById('heroSubtitle');
   if (elHeroSubtitle) {
-    elHeroSubtitle.textContent = 'Total: ' + totalProduction.toFixed(1) + ' lbs (incl. ' + smalls.toFixed(1) + ' lbs smalls)';
+    elHeroSubtitle.textContent = `Total: ${totalProduction.toFixed(1)} lbs (incl. ${smalls.toFixed(1)} lbs smalls)`;
   }
 
   // Time-aware production calculation
@@ -403,12 +398,12 @@ function renderHeroSection(data) {
   const elHeroProgressFill = document.getElementById('heroProgressFill');
   const elHeroProgressText = document.getElementById('heroProgressText');
   if (elHeroProgressFill) {
-    elHeroProgressFill.style.width = Math.min(progressPercent, 100) + '%';
-    elHeroProgressFill.className = 'hero-progress-fill ' + progressStatus;
+    elHeroProgressFill.style.width = `${Math.min(progressPercent, 100)}%`;
+    elHeroProgressFill.className = `hero-progress-fill ${progressStatus}`;
   }
   if (elHeroProgressText) {
     if (productiveHoursElapsed > 0 && expectedSoFar > 0) {
-      elHeroProgressText.textContent = progressPercent.toFixed(0) + '% of expected (' + expectedSoFar.toFixed(0) + ' lbs)';
+      elHeroProgressText.textContent = `${progressPercent.toFixed(0)}% of expected (${expectedSoFar.toFixed(0)} lbs)`;
     } else {
       elHeroProgressText.textContent = 'Shift not started';
     }
@@ -425,7 +420,7 @@ function renderHeroSection(data) {
   const elHeroTargetValue = document.getElementById('heroTargetValue');
   if (elHeroTargetValue) {
     if (predictedTops > 0) {
-      elHeroTargetValue.textContent = predictedTops.toFixed(0) + ' lbs';
+      elHeroTargetValue.textContent = `${predictedTops.toFixed(0)} lbs`;
     } else {
       elHeroTargetValue.textContent = '--';
     }
@@ -438,7 +433,7 @@ function renderHeroSection(data) {
     elHeroBagsValue.textContent = (data.bagTimer && data.bagTimer.bagsToday) || '--';
   }
   if (elHeroAvgCycleTime) {
-    elHeroAvgCycleTime.textContent = (data.bagTimer && data.bagTimer.avgTime) ? 'Avg: ' + data.bagTimer.avgTime : 'Avg: --';
+    elHeroAvgCycleTime.textContent = (data.bagTimer && data.bagTimer.avgTime) ? `Avg: ${data.bagTimer.avgTime}` : 'Avg: --';
   }
 }
 
@@ -517,7 +512,7 @@ function setupKeyboardShortcuts() {
     if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
       e.preventDefault();
       toggleSettings();
-      return;
+
     }
   };
 
@@ -801,7 +796,9 @@ window.dismissWelcome = function() {
   if (modal) modal.style.display = 'none';
   try {
     localStorage.setItem('rogueOrigin_welcomeDismissed', '1');
-  } catch (_e) {}
+  } catch {
+    // Ignore localStorage errors (private browsing, quota exceeded, etc.)
+  }
 };
 
 window.showWidgetHelp = function(widgetId) {

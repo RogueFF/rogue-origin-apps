@@ -143,7 +143,7 @@ export function toggleSidebar() {
   // Save preference to localStorage
   try {
     localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0');
-  } catch (_e) {
+  } catch {
     // localStorage not available
   }
 }
@@ -198,7 +198,7 @@ export function initSidebarState() {
         }
       }
     }
-  } catch (_e) {
+  } catch {
     // localStorage not available
   }
 }
