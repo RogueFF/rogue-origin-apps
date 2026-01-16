@@ -419,6 +419,8 @@ function doGet(e) {
       result = handleSetShiftStart(e.parameter);
     } else if (action === 'getShiftStart') {
       result = handleGetShiftStart(e.parameter);
+    } else if (action === 'morningReport') {
+      result = getMorningReportData();
     } else if (action === 'test') {
       result = { ok: true, message: 'API is working', timestamp: new Date().toISOString() };
     } else {
@@ -5284,4 +5286,317 @@ function testGetShipments() {
 
   Logger.log('Result: ' + JSON.stringify(result, null, 2));
   return result;
+}
+
+// ============================================================================
+// MORNING REPORT FUNCTIONS
+// ============================================================================
+
+/**
+ * Get morning report data for scoreboard display
+ * Compares yesterday vs day before, this week vs last week
+ * @returns {Object} Report data structure
+ */
+function getMorningReportData() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var timezone = ss.getSpreadsheetTimeZone() || 'America/Los_Angeles';
+  var now = new Date();
+
+  // Get last 14 days of daily data (covers this week + last week)
+  var dailyData = getExtendedDailyDataLine1_(ss, timezone, 14);
+
+  // Sort by date descending
+  dailyData.sort(function(a, b) {
+    return new Date(b.date) - new Date(a.date);
+  });
+
+  // Find yesterday and day before (skip today if present)
+  var today = Utilities.formatDate(now, timezone, 'yyyy-MM-dd');
+  var filteredDays = dailyData.filter(function(d) {
+    var dateStr = Utilities.formatDate(new Date(d.date), timezone, 'yyyy-MM-dd');
+    return dateStr !== today;
+  });
+
+  var yesterday = filteredDays[0] || null;
+  var dayBefore = filteredDays[1] || null;
+
+  // Get cycle times for yesterday
+  var yesterdayCycles = yesterday ? getCycleTimesForDate_(ss, timezone, yesterday.date) : null;
+  var dayBeforeCycles = dayBefore ? getCycleTimesForDate_(ss, timezone, dayBefore.date) : null;
+
+  // Get best hour for yesterday
+  var yesterdayBestHour = yesterday ? getBestHourForDate_(ss, timezone, yesterday.date) : null;
+
+  // Calculate weekly data
+  var weekData = calculateWeeklyComparison_(dailyData, timezone);
+
+  // Get current order progress
+  var orderProgress = getCurrentOrderProgress_();
+
+  return {
+    success: true,
+    generatedAt: now.toISOString(),
+
+    yesterday: yesterday ? {
+      date: Utilities.formatDate(new Date(yesterday.date), timezone, 'yyyy-MM-dd'),
+      dateDisplay: Utilities.formatDate(new Date(yesterday.date), timezone, 'EEEE, MMM d'),
+      tops: Math.round(yesterday.totalTops * 10) / 10,
+      smalls: Math.round(yesterday.totalSmalls * 10) / 10,
+      bags: yesterdayCycles ? yesterdayCycles.count : 0,
+      rate: Math.round(yesterday.avgRate * 100) / 100,
+      crew: yesterday.crew || 0,
+      bestHour: yesterdayBestHour,
+      avgCycleTime: yesterdayCycles ? yesterdayCycles.avgMinutes : 0
+    } : null,
+
+    dayBefore: dayBefore ? {
+      date: Utilities.formatDate(new Date(dayBefore.date), timezone, 'yyyy-MM-dd'),
+      dateDisplay: Utilities.formatDate(new Date(dayBefore.date), timezone, 'EEEE, MMM d'),
+      tops: Math.round(dayBefore.totalTops * 10) / 10,
+      smalls: Math.round(dayBefore.totalSmalls * 10) / 10,
+      bags: dayBeforeCycles ? dayBeforeCycles.count : 0,
+      rate: Math.round(dayBefore.avgRate * 100) / 100,
+      crew: dayBefore.crew || 0,
+      avgCycleTime: dayBeforeCycles ? dayBeforeCycles.avgMinutes : 0
+    } : null,
+
+    thisWeek: weekData.thisWeek,
+    lastWeek: weekData.lastWeek,
+
+    currentOrder: orderProgress
+  };
+}
+
+/**
+ * Get cycle times for a specific date
+ */
+function getCycleTimesForDate_(ss, timezone, targetDate) {
+  var trackingSheet = ss.getSheetByName('Rogue Origin Production Tracking');
+  if (!trackingSheet) return { count: 0, avgMinutes: 0 };
+
+  var targetDateStr = Utilities.formatDate(new Date(targetDate), timezone, 'yyyy-MM-dd');
+  var data = trackingSheet.getRange(2, 1, Math.min(trackingSheet.getLastRow() - 1, 2000), 10).getValues();
+
+  var bags = [];
+  for (var i = 0; i < data.length; i++) {
+    var row = data[i];
+    var timestamp = row[0];
+    if (!timestamp) continue;
+
+    var rowDate = new Date(timestamp);
+    var rowDateStr = Utilities.formatDate(rowDate, timezone, 'yyyy-MM-dd');
+
+    if (rowDateStr === targetDateStr) {
+      var size = String(row[1] || '').toLowerCase();
+      if (size.indexOf('5kg') >= 0 || size === '5kg') {
+        bags.push(rowDate);
+      }
+    }
+  }
+
+  if (bags.length === 0) return { count: 0, avgMinutes: 0 };
+
+  // Sort bags by time
+  bags.sort(function(a, b) { return a - b; });
+
+  // Calculate cycle times (time between consecutive bags)
+  var cycleTimes = [];
+  for (var j = 1; j < bags.length; j++) {
+    var diffMs = bags[j] - bags[j-1];
+    var diffMin = diffMs / 60000;
+    // Only count reasonable cycles (5 min to 4 hours)
+    if (diffMin >= 5 && diffMin <= 240) {
+      cycleTimes.push(diffMin);
+    }
+  }
+
+  var avgMinutes = cycleTimes.length > 0
+    ? Math.round(cycleTimes.reduce(function(a, b) { return a + b; }, 0) / cycleTimes.length)
+    : 0;
+
+  return {
+    count: bags.length,
+    avgMinutes: avgMinutes
+  };
+}
+
+/**
+ * Get best production hour for a specific date
+ */
+function getBestHourForDate_(ss, timezone, targetDate) {
+  var targetDateStr = Utilities.formatDate(new Date(targetDate), timezone, 'yyyy-MM-dd');
+  var monthName = Utilities.formatDate(new Date(targetDate), timezone, 'yyyy-MM');
+
+  var sheet = ss.getSheetByName(monthName);
+  if (!sheet) return null;
+
+  var vals = sheet.getDataRange().getValues();
+  var inTargetDate = false;
+  var cols = null;
+  var bestHour = null;
+  var bestLbs = 0;
+
+  for (var i = 0; i < vals.length; i++) {
+    var row = vals[i];
+
+    if (row[0] === 'Date:') {
+      var dateVal = row[1];
+      if (dateVal) {
+        var rowDateStr = Utilities.formatDate(new Date(dateVal), timezone, 'yyyy-MM-dd');
+        inTargetDate = (rowDateStr === targetDateStr);
+      }
+      var headerRow = vals[i + 1] || [];
+      cols = getColumnIndices_(headerRow);
+      continue;
+    }
+
+    if (!inTargetDate || !cols) continue;
+    if (isEndOfBlock_(row)) {
+      inTargetDate = false;
+      continue;
+    }
+
+    var timeSlot = row[0];
+    var tops = parseFloat(row[cols.tops1]) || 0;
+
+    if (tops > bestLbs) {
+      bestLbs = tops;
+      bestHour = {
+        time: String(timeSlot),
+        lbs: Math.round(tops * 10) / 10
+      };
+    }
+  }
+
+  return bestHour;
+}
+
+/**
+ * Calculate weekly comparison data
+ */
+function calculateWeeklyComparison_(dailyData, timezone) {
+  var now = new Date();
+  var dayOfWeek = now.getDay(); // 0=Sun, 1=Mon, ...
+
+  // Find start of this week (Monday)
+  var thisWeekStart = new Date(now);
+  var daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  thisWeekStart.setDate(thisWeekStart.getDate() - daysFromMonday);
+  thisWeekStart.setHours(0, 0, 0, 0);
+
+  // Find start of last week
+  var lastWeekStart = new Date(thisWeekStart);
+  lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+  var lastWeekEnd = new Date(thisWeekStart);
+  lastWeekEnd.setDate(lastWeekEnd.getDate() - 1);
+
+  var thisWeek = { tops: 0, smalls: 0, bags: 0, totalRate: 0, daysCount: 0, days: [] };
+  var lastWeek = { tops: 0, smalls: 0, bags: 0, totalRate: 0, daysCount: 0 };
+
+  dailyData.forEach(function(d) {
+    var date = new Date(d.date);
+    date.setHours(0, 0, 0, 0);
+
+    if (date >= thisWeekStart && date < now) {
+      // This week (up to yesterday)
+      thisWeek.tops += d.totalTops || 0;
+      thisWeek.smalls += d.totalSmalls || 0;
+      thisWeek.totalRate += d.avgRate || 0;
+      thisWeek.daysCount++;
+
+      var dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      thisWeek.days.push(dayNames[date.getDay()]);
+    } else if (date >= lastWeekStart && date <= lastWeekEnd) {
+      // Last week (full week)
+      lastWeek.tops += d.totalTops || 0;
+      lastWeek.smalls += d.totalSmalls || 0;
+      lastWeek.totalRate += d.avgRate || 0;
+      lastWeek.daysCount++;
+    }
+  });
+
+  return {
+    thisWeek: {
+      days: thisWeek.days,
+      tops: Math.round(thisWeek.tops * 10) / 10,
+      smalls: Math.round(thisWeek.smalls * 10) / 10,
+      avgRate: thisWeek.daysCount > 0 ? Math.round((thisWeek.totalRate / thisWeek.daysCount) * 100) / 100 : 0
+    },
+    lastWeek: {
+      tops: Math.round(lastWeek.tops * 10) / 10,
+      smalls: Math.round(lastWeek.smalls * 10) / 10,
+      avgRate: lastWeek.daysCount > 0 ? Math.round((lastWeek.totalRate / lastWeek.daysCount) * 100) / 100 : 0
+    }
+  };
+}
+
+/**
+ * Get current order progress from wholesale orders sheet
+ */
+function getCurrentOrderProgress_() {
+  try {
+    var orderSheetId = '1QLQaR4RMniUmwbJFrtMVaydyVMyCCxqHXWDCVs5dejw';
+    var orderSs = SpreadsheetApp.openById(orderSheetId);
+    var ordersSheet = orderSs.getSheetByName('Orders');
+    var shipmentsSheet = orderSs.getSheetByName('Shipments');
+
+    if (!ordersSheet || !shipmentsSheet) return null;
+
+    // Find current (in progress) order
+    var ordersData = ordersSheet.getDataRange().getValues();
+    var ordersHeaders = ordersData[0];
+    var statusCol = ordersHeaders.indexOf('Status');
+    var orderIdCol = ordersHeaders.indexOf('Order ID');
+    var customerCol = ordersHeaders.indexOf('Customer');
+
+    var currentOrder = null;
+    for (var i = 1; i < ordersData.length; i++) {
+      if (ordersData[i][statusCol] === 'In Progress') {
+        currentOrder = {
+          id: ordersData[i][orderIdCol],
+          customer: ordersData[i][customerCol]
+        };
+        break;
+      }
+    }
+
+    if (!currentOrder) return null;
+
+    // Find shipments for this order
+    var shipmentsData = shipmentsSheet.getDataRange().getValues();
+    var shipHeaders = shipmentsData[0];
+    var shipOrderCol = shipHeaders.indexOf('Order ID');
+    var shipStrainCol = shipHeaders.indexOf('Strain');
+    var shipQtyCol = shipHeaders.indexOf('Quantity (kg)');
+    var shipFilledCol = shipHeaders.indexOf('Filled (kg)');
+
+    var totalKg = 0;
+    var filledKg = 0;
+    var strain = '';
+
+    for (var j = 1; j < shipmentsData.length; j++) {
+      if (shipmentsData[j][shipOrderCol] === currentOrder.id) {
+        totalKg += parseFloat(shipmentsData[j][shipQtyCol]) || 0;
+        filledKg += parseFloat(shipmentsData[j][shipFilledCol]) || 0;
+        if (!strain) strain = shipmentsData[j][shipStrainCol] || '';
+      }
+    }
+
+    // Estimate days remaining based on recent production rate
+    var recentRate = 25; // Default: ~25 kg/day
+    var remaining = totalKg - filledKg;
+    var daysRemaining = remaining > 0 ? Math.round((remaining / recentRate) * 10) / 10 : 0;
+
+    return {
+      id: currentOrder.id,
+      strain: strain,
+      customer: currentOrder.customer,
+      targetKg: Math.round(totalKg),
+      completedKg: Math.round(filledKg),
+      estimatedDaysRemaining: daysRemaining
+    };
+  } catch (e) {
+    Logger.log('getCurrentOrderProgress_ error: ' + e.message);
+    return null;
+  }
 }
