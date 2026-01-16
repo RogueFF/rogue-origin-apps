@@ -285,8 +285,12 @@
       document.body.classList.toggle('dark-mode');
       var isDark = document.body.classList.contains('dark-mode');
       try { localStorage.setItem('barcodeDarkMode', isDark ? 'true' : 'false'); } catch(e) {}
-      
-      if (btn) btn.textContent = isDark ? '☀️' : '<i class="ph ph-moon"></i>';
+
+      var btn = document.getElementById('darkModeBtn');
+      if (btn) {
+        var icon = btn.querySelector('i');
+        if (icon) icon.className = isDark ? 'ph ph-sun' : 'ph ph-moon';
+      }
     }
 
     function initSettings() {
@@ -297,8 +301,7 @@
         var savedDark = localStorage.getItem('barcodeDarkMode');
         if (savedDark === 'true') {
           document.body.classList.add('dark-mode');
-          
-          
+          var btn = document.getElementById('darkModeBtn');
           if (btn) {
             var icon = btn.querySelector('i');
             if (icon) icon.className = 'ph ph-sun';
@@ -556,8 +559,7 @@
       doc.write('<div class="label">');
       doc.write('<div class="name">' + name.substring(0, 25) + '</div>');
       doc.write('<img class="barcode" src="' + barcodeUrl + '">');
-      doc.write('</div>  <script src="../js/sw-register.js" async><\/script>
-</body></html>');
+      doc.write('</div></body></html>');
       doc.close();
       
       var img = doc.querySelector('img');
@@ -608,7 +610,7 @@
       } else {
         fetch(API_URL + '?action=add', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({ header: h, sku: s, barcode: b })
         })
           .then(function(response) { return response.json(); })
@@ -631,7 +633,7 @@
       } else {
         fetch(API_URL + '?action=import', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({ csv: csv })
         })
           .then(function(response) { return response.json(); })
