@@ -211,7 +211,16 @@
 
       if (ScoreboardState.cycleHistory.length === 0) {
         container.innerHTML = '<div class="cycle-empty">No cycles yet</div>';
+        // Auto-collapse when empty
+        if (!ScoreboardState.cycleHistoryCollapsed) {
+          this.toggleCycleHistory();
+        }
         return;
+      } else {
+        // Auto-expand when cycles exist and currently collapsed
+        if (ScoreboardState.cycleHistoryCollapsed) {
+          this.toggleCycleHistory();
+        }
       }
 
       // Calculate quick stats
@@ -222,6 +231,27 @@
         ? Math.round(ScoreboardState.cycleHistory.reduce(function(sum, c) { return sum + c.time; }, 0) / total)
         : 0;
 
+      // Calculate velocity trend (last 3 vs previous 3)
+      let trendArrow = '';
+      let trendColor = '';
+      if (total >= 6) {
+        const recent3 = ScoreboardState.cycleHistory.slice(-3);
+        const previous3 = ScoreboardState.cycleHistory.slice(-6, -3);
+        const recentAvg = recent3.reduce(function(sum, c) { return sum + c.time; }, 0) / 3;
+        const previousAvg = previous3.reduce(function(sum, c) { return sum + c.time; }, 0) / 3;
+
+        if (recentAvg < previousAvg - 30) {
+          trendArrow = ' ↓'; // Getting faster
+          trendColor = '#4ade80';
+        } else if (recentAvg > previousAvg + 30) {
+          trendArrow = ' ↑'; // Getting slower
+          trendColor = '#f87171';
+        } else {
+          trendArrow = ' →'; // Stable
+          trendColor = '#facc15';
+        }
+      }
+
       // Render stats bar
       const statsBar = document.createElement('div');
       statsBar.className = 'cycle-stats-bar';
@@ -231,7 +261,9 @@
           '<div class="cycle-stat-label">Bags</div>' +
         '</div>' +
         '<div class="cycle-stat">' +
-          `<div class="cycle-stat-value">${ScoreboardTimer.formatTime(avgTime)}</div>` +
+          `<div class="cycle-stat-value">${ScoreboardTimer.formatTime(avgTime)}` +
+          (trendArrow ? `<span style="color:${trendColor};font-size:14px">${trendArrow}</span>` : '') +
+          '</div>' +
           '<div class="cycle-stat-label">Avg</div>' +
         '</div>' +
         '<div class="cycle-stat">' +
