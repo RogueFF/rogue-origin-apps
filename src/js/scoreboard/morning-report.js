@@ -366,6 +366,7 @@
             }
           ]
         },
+        plugins: [ChartDataLabels],
         options: {
           responsive: true,
           maintainAspectRatio: false,
@@ -385,6 +386,19 @@
                 label: function(context) {
                   return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + ' lbs';
                 }
+              }
+            },
+            datalabels: {
+              color: '#fff',
+              anchor: 'center',
+              align: 'center',
+              font: {
+                family: "'JetBrains Mono', monospace",
+                size: 18,
+                weight: 'bold'
+              },
+              formatter: function(value) {
+                return Math.round(value) + ' lbs';
               }
             }
           },
