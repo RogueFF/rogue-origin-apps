@@ -227,7 +227,7 @@
         }
       }
 
-      var arrow = diff > 0 ? '\u2b06\ufe0f' : (diff < 0 ? '\u2b07\ufe0f' : '');
+      var arrow = diff > 0 ? '<span class="mr-arrow up">\u25B2</span>' : (diff < 0 ? '<span class="mr-arrow down">\u25BC</span>' : '');
       var diffDisplay = diff !== 0 ? (diff > 0 ? '+' : '') + this.formatNumber(diff) : '';
 
       var html = '<div class="mr-card mr-' + status + '">';
@@ -239,7 +239,7 @@
       }
       html += '</div>';
       if (diff !== 0 && betterWhen !== 'neutral') {
-        html += '<div class="mr-diff">' + arrow + ' ' + diffDisplay + ' ' + unit + '</div>';
+        html += '<div class="mr-diff">' + arrow + diffDisplay + ' ' + unit + '</div>';
       }
       html += '</div>';
       return html;
@@ -250,7 +250,7 @@
      */
     renderBestHourCard: function(bestHour) {
       var html = '<div class="mr-card mr-best-hour">';
-      html += '<div class="mr-card-header">\ud83c\udfc6 BEST HOUR / MEJOR HORA <span class="mr-fire">\ud83d\udd25</span></div>';
+      html += '<div class="mr-card-header"><span class="mr-trophy"></span> BEST HOUR / MEJOR HORA</div>';
       if (bestHour) {
         html += '<div class="mr-best-time">' + bestHour.time + '</div>';
         html += '<div class="mr-best-lbs">' + bestHour.lbs + ' lbs</div>';
@@ -283,9 +283,9 @@
       // Table header row aligned with data columns
       html += '<div class="mr-weekly-row mr-weekly-header">';
       html += '<span class="mr-row-label"></span>';
-      html += '<span class="mr-row-this">This Week<br><span class="mr-days">(' + (thisWeek.days || []).join(', ') + ')</span></span>';
-      html += '<span class="mr-row-diff">Change</span>';
-      html += '<span class="mr-row-last">Last Week<br><span class="mr-days">(Full week)</span></span>';
+      html += '<span class="mr-row-this">This Week / Esta Semana<br><span class="mr-days">(' + (thisWeek.days || []).join(', ') + ')</span></span>';
+      html += '<span class="mr-row-diff">+/-</span>';
+      html += '<span class="mr-row-last">Last Week / Semana Pasada<br><span class="mr-days">(Full week / Semana completa)</span></span>';
       html += '</div>';
 
       // Data rows
@@ -294,9 +294,10 @@
       html += this.renderWeeklyRow('Avg Rate / Ritmo', thisWeek.avgRate, lastWeek.avgRate, thisWeek.avgRate - lastWeek.avgRate, 'lbs/hr');
 
       // Total row
+      var totalArrow = totalDiff >= 0 ? '<span class="mr-arrow up">\u25B2</span>' : '<span class="mr-arrow down">\u25BC</span>';
       html += '<div class="mr-weekly-total mr-' + totalStatus + '">';
       html += '<span>TOTAL:</span> <span class="mr-total-value">' + this.formatNumber(totalThis) + ' lbs</span>';
-      html += '<span class="mr-total-diff">' + (totalDiff >= 0 ? '\u2b06\ufe0f +' : '\u2b07\ufe0f ') + this.formatNumber(totalDiff) + ' lbs vs last week</span>';
+      html += '<span class="mr-total-diff">' + totalArrow + ' ' + (totalDiff >= 0 ? '+' : '') + this.formatNumber(totalDiff) + ' lbs vs last week</span>';
       html += '</div>';
 
       html += '</div>';
@@ -307,11 +308,12 @@
      * Render a weekly comparison row
      */
     renderWeeklyRow: function(label, thisVal, lastVal, diff, unit) {
-      var arrow = diff > 0 ? '\u2b06\ufe0f' : (diff < 0 ? '\u2b07\ufe0f' : '');
+      var arrow = diff > 0 ? '<span class="mr-arrow up">\u25B2</span>' : (diff < 0 ? '<span class="mr-arrow down">\u25BC</span>' : '');
+      var diffClass = diff > 0 ? 'positive' : (diff < 0 ? 'negative' : '');
       var html = '<div class="mr-weekly-row">';
       html += '<span class="mr-row-label">' + label + ':</span>';
       html += '<span class="mr-row-this">' + this.formatNumber(thisVal) + ' ' + unit + '</span>';
-      html += '<span class="mr-row-diff">' + arrow + ' ' + (diff >= 0 ? '+' : '') + this.formatNumber(diff) + '</span>';
+      html += '<span class="mr-row-diff ' + diffClass + '">' + arrow + ' ' + (diff >= 0 ? '+' : '') + this.formatNumber(diff) + '</span>';
       html += '<span class="mr-row-last">' + this.formatNumber(lastVal) + ' ' + unit + '</span>';
       html += '</div>';
       return html;
@@ -329,7 +331,7 @@
       var remaining = order.targetKg - order.completedKg;
 
       var html = '<div class="mr-section mr-order">';
-      html += '<div class="mr-section-header">\ud83c\udfaf ORDER / PEDIDO: ' + order.id + ' \u2014 ' + order.strain + ' (' + order.customer + ')</div>';
+      html += '<div class="mr-section-header">CURRENT ORDER / PEDIDO ACTUAL: ' + order.id + ' \u2014 ' + order.strain + ' (' + order.customer + ')</div>';
 
       html += '<div class="mr-order-bar-container">';
       html += '<div class="mr-order-bar"><div class="mr-order-fill" style="width:' + pct + '%"></div></div>';
