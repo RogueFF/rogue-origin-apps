@@ -2438,6 +2438,47 @@ body.iframe-embed .current-order-items {
 
 .mr-weekly-total.mr-red .mr-total-diff { color: #ef4444; }
 
+/* Weekly Chart */
+.mr-chart-container {
+  height: 280px;
+  margin: 20px 0;
+  padding: 16px;
+  background: rgba(0,0,0,0.2);
+  border-radius: 12px;
+}
+
+.mr-weekly-legend {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  margin-bottom: 16px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 18px;
+  color: #ccc;
+}
+
+.mr-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mr-legend-color {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+}
+
+.mr-legend-this {
+  background: #668971;
+  border: 2px solid #4a6b54;
+}
+
+.mr-legend-last {
+  background: rgba(102, 137, 113, 0.4);
+  border: 2px solid #668971;
+}
+
 /* Order Progress */
 .mr-order-bar-container {
   display: flex;
