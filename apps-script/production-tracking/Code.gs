@@ -5474,7 +5474,7 @@ function getBestHourForDate_(ss, timezone, targetDate) {
 }
 
 /**
- * Calculate weekly comparison data
+ * Calculate weekly comparison data with rate-based metrics
  */
 function calculateWeeklyComparison_(dailyData, timezone) {
   var now = new Date();
@@ -5492,8 +5492,12 @@ function calculateWeeklyComparison_(dailyData, timezone) {
   var lastWeekEnd = new Date(thisWeekStart);
   lastWeekEnd.setDate(lastWeekEnd.getDate() - 1);
 
-  var thisWeek = { tops: 0, smalls: 0, bags: 0, totalRate: 0, daysCount: 0, days: [] };
-  var lastWeek = { tops: 0, smalls: 0, bags: 0, totalRate: 0, daysCount: 0 };
+  var thisWeek = {
+    tops: 0, smalls: 0, trimmerHours: 0, totalCrew: 0, daysCount: 0, days: []
+  };
+  var lastWeek = {
+    tops: 0, smalls: 0, trimmerHours: 0, totalCrew: 0, daysCount: 0
+  };
 
   dailyData.forEach(function(d) {
     var date = new Date(d.date);
@@ -5503,7 +5507,8 @@ function calculateWeeklyComparison_(dailyData, timezone) {
       // This week (up to yesterday)
       thisWeek.tops += d.totalTops || 0;
       thisWeek.smalls += d.totalSmalls || 0;
-      thisWeek.totalRate += d.avgRate || 0;
+      thisWeek.trimmerHours += d.trimmerHours || 0;
+      thisWeek.totalCrew += d.crew || 0;
       thisWeek.daysCount++;
 
       var dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -5512,22 +5517,37 @@ function calculateWeeklyComparison_(dailyData, timezone) {
       // Last week (full week)
       lastWeek.tops += d.totalTops || 0;
       lastWeek.smalls += d.totalSmalls || 0;
-      lastWeek.totalRate += d.avgRate || 0;
+      lastWeek.trimmerHours += d.trimmerHours || 0;
+      lastWeek.totalCrew += d.crew || 0;
       lastWeek.daysCount++;
     }
   });
 
+  // Calculate rates: lbs per trimmer-hour (more accurate than averaging daily rates)
+  var thisWeekRate = thisWeek.trimmerHours > 0 ? thisWeek.tops / thisWeek.trimmerHours : 0;
+  var lastWeekRate = lastWeek.trimmerHours > 0 ? lastWeek.tops / lastWeek.trimmerHours : 0;
+
+  // Average crew per day
+  var thisWeekAvgCrew = thisWeek.daysCount > 0 ? thisWeek.totalCrew / thisWeek.daysCount : 0;
+  var lastWeekAvgCrew = lastWeek.daysCount > 0 ? lastWeek.totalCrew / lastWeek.daysCount : 0;
+
   return {
     thisWeek: {
       days: thisWeek.days,
+      daysCount: thisWeek.daysCount,
       tops: Math.round(thisWeek.tops * 10) / 10,
       smalls: Math.round(thisWeek.smalls * 10) / 10,
-      avgRate: thisWeek.daysCount > 0 ? Math.round((thisWeek.totalRate / thisWeek.daysCount) * 100) / 100 : 0
+      trimmerHours: Math.round(thisWeek.trimmerHours * 10) / 10,
+      avgRate: Math.round(thisWeekRate * 100) / 100,
+      avgCrew: Math.round(thisWeekAvgCrew * 10) / 10
     },
     lastWeek: {
+      daysCount: lastWeek.daysCount,
       tops: Math.round(lastWeek.tops * 10) / 10,
       smalls: Math.round(lastWeek.smalls * 10) / 10,
-      avgRate: lastWeek.daysCount > 0 ? Math.round((lastWeek.totalRate / lastWeek.daysCount) * 100) / 100 : 0
+      trimmerHours: Math.round(lastWeek.trimmerHours * 10) / 10,
+      avgRate: Math.round(lastWeekRate * 100) / 100,
+      avgCrew: Math.round(lastWeekAvgCrew * 10) / 10
     }
   };
 }
