@@ -161,60 +161,50 @@
 
       var html = '<div class="mr-section">';
       html += '<div class="mr-section-header">YESTERDAY vs DAY BEFORE / AYER vs ANTEAYER</div>';
+
+      // Crew summary line (shows crew context once, not on every card)
+      var crewSummary = 'Yesterday / Ayer: ' + (yesterday.crew || 0) + ' crew';
+      if (dayBefore && dayBefore.crew) {
+        crewSummary += ' \u2022 Day Before / Anteayer: ' + dayBefore.crew + ' crew';
+      }
+      html += '<div class="mr-crew-summary">' + crewSummary + '</div>';
+
       html += '<div class="mr-cards">';
 
-      // Crew context for volume-based metrics
-      var crewOpts = {
-        crewYesterday: yesterday.crew || 0,
-        crewDayBefore: dayBefore ? dayBefore.crew : null
-      };
-
-      // Tops card (with crew context)
+      // Tops card
       html += this.renderMetricCard(
         'Tops / Puntas',
         yesterday.tops,
         dayBefore ? dayBefore.tops : null,
         'lbs',
-        'higher',
-        crewOpts
+        'higher'
       );
 
-      // Smalls card (with crew context)
+      // Smalls card
       html += this.renderMetricCard(
         'Smalls / Peque\u00f1os',
         yesterday.smalls,
         dayBefore ? dayBefore.smalls : null,
         'lbs',
-        'higher',
-        crewOpts
+        'higher'
       );
 
-      // Bags card (with crew context)
+      // Bags card
       html += this.renderMetricCard(
         'Bags / Bolsas',
         yesterday.bags,
         dayBefore ? dayBefore.bags : null,
         '',
-        'higher',
-        crewOpts
+        'higher'
       );
 
-      // Rate card
+      // Rate card (already normalized per trimmer)
       html += this.renderMetricCard(
         'Rate / Ritmo',
         yesterday.rate,
         dayBefore ? dayBefore.rate : null,
         'lbs/hr',
         'higher'
-      );
-
-      // Crew card (neutral - no color)
-      html += this.renderMetricCard(
-        'Crew / Equipo',
-        yesterday.crew,
-        dayBefore ? dayBefore.crew : null,
-        '',
-        'neutral'
       );
 
       // Best Hour card (special)
@@ -255,8 +245,10 @@
         }
       }
 
-      var arrow = diff > 0 ? '<span class="mr-arrow up">\u25B2</span>' : (diff < 0 ? '<span class="mr-arrow down">\u25BC</span>' : '');
-      var diffDisplay = diff !== 0 ? (diff > 0 ? '+' : '') + this.formatNumber(diff) : '';
+      // Only show arrow if the rounded diff is meaningful (not 0 after rounding)
+      var roundedDiff = Math.round(diff * 10) / 10;
+      var arrow = roundedDiff > 0 ? '<span class="mr-arrow up">\u25B2</span>' : (roundedDiff < 0 ? '<span class="mr-arrow down">\u25BC</span>' : '');
+      var diffDisplay = roundedDiff !== 0 ? (roundedDiff > 0 ? '+' : '') + this.formatNumber(diff) : '';
 
       // Crew context strings
       var crewYesterday = opts.crewYesterday ? '<span class="mr-crew-context">(' + opts.crewYesterday + ' crew)</span>' : '';
@@ -270,7 +262,7 @@
         html += '<div class="mr-value-col"><div class="mr-value-label">Day Before / Anteayer</div><div class="mr-value">' + this.formatNumber(compareValue) + ' ' + unit + '</div>' + crewDayBefore + '</div>';
       }
       html += '</div>';
-      if (diff !== 0 && betterWhen !== 'neutral') {
+      if (roundedDiff !== 0 && betterWhen !== 'neutral') {
         html += '<div class="mr-diff">' + arrow + diffDisplay + ' ' + unit + '</div>';
       }
       html += '</div>';
