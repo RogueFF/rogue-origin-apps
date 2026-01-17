@@ -39,12 +39,28 @@
   <script defer src="../js/scoreboard/render.js?v=2"></script>
   <script defer src="../js/scoreboard/main.js?v=4"></script>
   <script defer src="../js/scoreboard/shift-start.js?v=1"></script>
+  <script defer src="../js/scoreboard/morning-report.js?v=1"></script>
   <!-- Performance: CSS Preloading -->
   <link rel="stylesheet" href="../css/shared-base.css">
   <link rel="preload" href="../css/scoreboard.css" as="style">
   <link rel="stylesheet" href="../css/scoreboard.css">
 </head>
 <body class="idle timer-neutral">
+  <!-- Morning Report View -->
+  <div id="morningReportContainer">
+    <div class="mr-header">
+      <div>
+        <div class="mr-title">MORNING REPORT / REPORTE MATUTINO</div>
+        <div class="mr-subtitle" id="mrDate">Loading...</div>
+      </div>
+      <button class="mr-back-btn" onclick="toggleMorningReport()">
+        <i class="ph-duotone ph-arrow-left"></i>
+        Back to Live / Volver en Vivo
+      </button>
+    </div>
+    <div id="morningReportContent"></div>
+  </div>
+
   <div class="strain-display">
     <div class="strain-label" id="strainLabel">Line 1 • Current Strain</div>
     <div class="strain-name" id="strainName">—</div>
@@ -54,6 +70,12 @@
     <div class="time" id="clock">--:--</div>
     <div class="date" id="date">Loading...</div>
   </div>
+  <!-- Morning Report Button -->
+  <button id="morningReportBtn" onclick="toggleMorningReport()">
+    <i class="ph-duotone ph-chart-bar"></i>
+    Morning Report / Reporte Matutino
+  </button>
+
   <div class="lang-toggle">
     <button class="lang-btn active" id="btnEn" onclick="setLanguage('en')">EN</button>
     <button class="lang-btn" id="btnEs" onclick="setLanguage('es')">ES</button>
