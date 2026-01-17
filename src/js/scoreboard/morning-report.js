@@ -280,43 +280,64 @@
     },
 
     /**
-     * Render weekly comparison section
+     * Render weekly comparison section with rate-based metrics
      */
     renderWeeklyComparison: function(thisWeek, lastWeek) {
       if (!thisWeek || !lastWeek) {
         return '<div class="mr-section"><div class="mr-no-data">No weekly data available</div></div>';
       }
 
-      var totalThis = thisWeek.tops + thisWeek.smalls;
-      var totalLast = lastWeek.tops + lastWeek.smalls;
-      var totalDiff = totalThis - totalLast;
-      var totalStatus = totalDiff > 0 ? 'green' : (totalDiff < 0 ? 'red' : 'yellow');
+      // Rate comparison (main metric - normalizes for crew size)
+      var rateDiff = (thisWeek.avgRate || 0) - (lastWeek.avgRate || 0);
+      var ratePctChange = lastWeek.avgRate > 0 ? (rateDiff / lastWeek.avgRate * 100) : 0;
+      var rateStatus = rateDiff > 0.05 ? 'green' : (rateDiff < -0.05 ? 'red' : 'yellow');
 
       var html = '<div class="mr-section mr-weekly">';
-      html += '<div class="mr-section-header">THIS WEEK vs LAST WEEK / ESTA SEMANA vs SEMANA PASADA</div>';
+      html += '<div class="mr-section-header">PRODUCTIVITY / PRODUCTIVIDAD</div>';
 
-      // Chart container
+      // Main rate comparison card
+      html += '<div class="mr-rate-comparison">';
+
+      // This week rate
+      html += '<div class="mr-rate-card mr-rate-this">';
+      html += '<div class="mr-rate-label">This Week / Esta Semana</div>';
+      html += '<div class="mr-rate-value">' + this.formatNumber(thisWeek.avgRate) + '</div>';
+      html += '<div class="mr-rate-unit">lbs/trimmer/hr</div>';
+      html += '<div class="mr-rate-context">' + (thisWeek.days || []).join(', ') + ' \u2022 ~' + this.formatNumber(thisWeek.avgCrew) + ' crew avg</div>';
+      html += '</div>';
+
+      // vs indicator
+      var rateArrow = rateDiff > 0 ? '\u25B2' : (rateDiff < 0 ? '\u25BC' : '');
+      html += '<div class="mr-rate-vs mr-' + rateStatus + '">';
+      html += '<div class="mr-rate-diff">' + rateArrow + ' ' + (rateDiff >= 0 ? '+' : '') + this.formatNumber(rateDiff) + '</div>';
+      html += '<div class="mr-rate-pct">' + (ratePctChange >= 0 ? '+' : '') + Math.round(ratePctChange) + '%</div>';
+      html += '</div>';
+
+      // Last week rate
+      html += '<div class="mr-rate-card mr-rate-last">';
+      html += '<div class="mr-rate-label">Last Week / Semana Pasada</div>';
+      html += '<div class="mr-rate-value">' + this.formatNumber(lastWeek.avgRate) + '</div>';
+      html += '<div class="mr-rate-unit">lbs/trimmer/hr</div>';
+      html += '<div class="mr-rate-context">Full week \u2022 ~' + this.formatNumber(lastWeek.avgCrew) + ' crew avg</div>';
+      html += '</div>';
+
+      html += '</div>';
+
+      // Chart container - now shows totals with context
       html += '<div class="mr-chart-container">';
       html += '<canvas id="weeklyComparisonChart"></canvas>';
       html += '</div>';
 
-      // Legend / summary below chart
+      // Legend with crew context
       html += '<div class="mr-weekly-legend">';
       html += '<div class="mr-legend-item">';
       html += '<span class="mr-legend-color mr-legend-this"></span>';
-      html += '<span>This Week / Esta Semana (' + (thisWeek.days || []).join(', ') + ')</span>';
+      html += '<span>This Week: ' + this.formatNumber(thisWeek.tops + thisWeek.smalls) + ' lbs (' + (thisWeek.daysCount || 0) + ' days, ~' + this.formatNumber(thisWeek.avgCrew) + ' crew)</span>';
       html += '</div>';
       html += '<div class="mr-legend-item">';
       html += '<span class="mr-legend-color mr-legend-last"></span>';
-      html += '<span>Last Week / Semana Pasada (Full week)</span>';
+      html += '<span>Last Week: ' + this.formatNumber(lastWeek.tops + lastWeek.smalls) + ' lbs (' + (lastWeek.daysCount || 0) + ' days, ~' + this.formatNumber(lastWeek.avgCrew) + ' crew)</span>';
       html += '</div>';
-      html += '</div>';
-
-      // Total row
-      var totalArrow = totalDiff >= 0 ? '<span class="mr-arrow up">\u25B2</span>' : '<span class="mr-arrow down">\u25BC</span>';
-      html += '<div class="mr-weekly-total mr-' + totalStatus + '">';
-      html += '<span>TOTAL:</span> <span class="mr-total-value">' + this.formatNumber(totalThis) + ' lbs</span>';
-      html += '<span class="mr-total-diff">' + totalArrow + ' ' + (totalDiff >= 0 ? '+' : '') + this.formatNumber(totalDiff) + ' lbs vs last week</span>';
       html += '</div>';
 
       html += '</div>';

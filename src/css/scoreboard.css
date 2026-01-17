@@ -2479,6 +2479,98 @@ body.iframe-embed .current-order-items {
   border: 2px solid #668971;
 }
 
+/* Rate Comparison Cards */
+.mr-rate-comparison {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.mr-rate-card {
+  background: rgba(0,0,0,0.3);
+  border-radius: 12px;
+  padding: 20px 32px;
+  text-align: center;
+  min-width: 220px;
+}
+
+.mr-rate-this {
+  border: 2px solid #668971;
+}
+
+.mr-rate-last {
+  border: 2px solid rgba(102, 137, 113, 0.5);
+  opacity: 0.8;
+}
+
+.mr-rate-label {
+  font-family: 'Outfit', sans-serif;
+  font-size: 16px;
+  color: #aaa;
+  margin-bottom: 8px;
+}
+
+.mr-rate-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 48px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+}
+
+.mr-rate-unit {
+  font-family: 'Outfit', sans-serif;
+  font-size: 14px;
+  color: #888;
+  margin-top: 4px;
+}
+
+.mr-rate-context {
+  font-family: 'Outfit', sans-serif;
+  font-size: 14px;
+  color: #666;
+  margin-top: 12px;
+}
+
+.mr-rate-vs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px;
+  border-radius: 50%;
+  min-width: 80px;
+}
+
+.mr-rate-vs.mr-green {
+  background: rgba(34,197,94,0.2);
+}
+
+.mr-rate-vs.mr-red {
+  background: rgba(239,68,68,0.2);
+}
+
+.mr-rate-vs.mr-yellow {
+  background: rgba(234,179,8,0.2);
+}
+
+.mr-rate-diff {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.mr-rate-vs.mr-green .mr-rate-diff { color: #22c55e; }
+.mr-rate-vs.mr-red .mr-rate-diff { color: #ef4444; }
+.mr-rate-vs.mr-yellow .mr-rate-diff { color: #eab308; }
+
+.mr-rate-pct {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;
+  color: #888;
+}
+
 /* Order Progress */
 .mr-order-bar-container {
   display: flex;
