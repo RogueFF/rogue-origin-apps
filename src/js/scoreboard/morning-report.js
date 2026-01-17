@@ -19,6 +19,11 @@
     data: null,
 
     /**
+     * Chart.js instance for weekly comparison
+     */
+    weeklyChart: null,
+
+    /**
      * Toggle morning report view
      */
     toggle: function() {
@@ -59,6 +64,12 @@
     hide: function() {
       this.isActive = false;
       document.body.classList.remove('morning-report-active');
+
+      // Destroy chart instance
+      if (this.weeklyChart) {
+        this.weeklyChart.destroy();
+        this.weeklyChart = null;
+      }
 
       var container = document.getElementById('morningReportContainer');
       if (container) {
@@ -116,6 +127,7 @@
      * Render the report
      */
     render: function() {
+      var self = this;
       var container = document.getElementById('morningReportContent');
       if (!container || !this.data) return;
 
@@ -132,6 +144,11 @@
       html += this.renderOrderProgress(d.currentOrder);
 
       container.innerHTML = html;
+
+      // Initialize chart after DOM is ready
+      setTimeout(function() {
+        self.renderWeeklyChart(d.thisWeek, d.lastWeek);
+      }, 50);
     },
 
     /**
@@ -270,8 +287,6 @@
         return '<div class="mr-section"><div class="mr-no-data">No weekly data available</div></div>';
       }
 
-      var topsDiff = thisWeek.tops - lastWeek.tops;
-      var smallsDiff = thisWeek.smalls - lastWeek.smalls;
       var totalThis = thisWeek.tops + thisWeek.smalls;
       var totalLast = lastWeek.tops + lastWeek.smalls;
       var totalDiff = totalThis - totalLast;
@@ -280,18 +295,22 @@
       var html = '<div class="mr-section mr-weekly">';
       html += '<div class="mr-section-header">THIS WEEK vs LAST WEEK / ESTA SEMANA vs SEMANA PASADA</div>';
 
-      // Table header row aligned with data columns
-      html += '<div class="mr-weekly-row mr-weekly-header">';
-      html += '<span class="mr-row-label"></span>';
-      html += '<span class="mr-row-this">This Week / Esta Semana<br><span class="mr-days">(' + (thisWeek.days || []).join(', ') + ')</span></span>';
-      html += '<span class="mr-row-diff">+/-</span>';
-      html += '<span class="mr-row-last">Last Week / Semana Pasada<br><span class="mr-days">(Full week / Semana completa)</span></span>';
+      // Chart container
+      html += '<div class="mr-chart-container">';
+      html += '<canvas id="weeklyComparisonChart"></canvas>';
       html += '</div>';
 
-      // Data rows
-      html += this.renderWeeklyRow('Tops / Puntas', thisWeek.tops, lastWeek.tops, topsDiff, 'lbs');
-      html += this.renderWeeklyRow('Smalls / Peque\u00f1os', thisWeek.smalls, lastWeek.smalls, smallsDiff, 'lbs');
-      html += this.renderWeeklyRow('Avg Rate / Ritmo', thisWeek.avgRate, lastWeek.avgRate, thisWeek.avgRate - lastWeek.avgRate, 'lbs/hr');
+      // Legend / summary below chart
+      html += '<div class="mr-weekly-legend">';
+      html += '<div class="mr-legend-item">';
+      html += '<span class="mr-legend-color mr-legend-this"></span>';
+      html += '<span>This Week / Esta Semana (' + (thisWeek.days || []).join(', ') + ')</span>';
+      html += '</div>';
+      html += '<div class="mr-legend-item">';
+      html += '<span class="mr-legend-color mr-legend-last"></span>';
+      html += '<span>Last Week / Semana Pasada (Full week)</span>';
+      html += '</div>';
+      html += '</div>';
 
       // Total row
       var totalArrow = totalDiff >= 0 ? '<span class="mr-arrow up">\u25B2</span>' : '<span class="mr-arrow down">\u25BC</span>';
@@ -305,18 +324,96 @@
     },
 
     /**
-     * Render a weekly comparison row
+     * Render the weekly comparison bar chart
      */
-    renderWeeklyRow: function(label, thisVal, lastVal, diff, unit) {
-      var arrow = diff > 0 ? '<span class="mr-arrow up">\u25B2</span>' : (diff < 0 ? '<span class="mr-arrow down">\u25BC</span>' : '');
-      var diffClass = diff > 0 ? 'positive' : (diff < 0 ? 'negative' : '');
-      var html = '<div class="mr-weekly-row">';
-      html += '<span class="mr-row-label">' + label + ':</span>';
-      html += '<span class="mr-row-this">' + this.formatNumber(thisVal) + ' ' + unit + '</span>';
-      html += '<span class="mr-row-diff ' + diffClass + '">' + arrow + ' ' + (diff >= 0 ? '+' : '') + this.formatNumber(diff) + '</span>';
-      html += '<span class="mr-row-last">' + this.formatNumber(lastVal) + ' ' + unit + '</span>';
-      html += '</div>';
-      return html;
+    renderWeeklyChart: function(thisWeek, lastWeek) {
+      if (!thisWeek || !lastWeek) return;
+
+      var canvas = document.getElementById('weeklyComparisonChart');
+      if (!canvas) return;
+
+      // Destroy existing chart
+      if (this.weeklyChart) {
+        this.weeklyChart.destroy();
+      }
+
+      var ctx = canvas.getContext('2d');
+
+      this.weeklyChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Tops / Puntas', 'Smalls / Peque\u00f1os', 'Total'],
+          datasets: [
+            {
+              label: 'This Week / Esta Semana',
+              data: [thisWeek.tops, thisWeek.smalls, thisWeek.tops + thisWeek.smalls],
+              backgroundColor: '#668971',
+              borderColor: '#4a6b54',
+              borderWidth: 2,
+              borderRadius: 6,
+              barPercentage: 0.8,
+              categoryPercentage: 0.7
+            },
+            {
+              label: 'Last Week / Semana Pasada',
+              data: [lastWeek.tops, lastWeek.smalls, lastWeek.tops + lastWeek.smalls],
+              backgroundColor: 'rgba(102, 137, 113, 0.4)',
+              borderColor: '#668971',
+              borderWidth: 2,
+              borderRadius: 6,
+              barPercentage: 0.8,
+              categoryPercentage: 0.7
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: false
+            },
+            tooltip: {
+              backgroundColor: '#2d2d2d',
+              titleColor: '#fff',
+              bodyColor: '#fff',
+              titleFont: { size: 16, weight: 'bold' },
+              bodyFont: { size: 14 },
+              padding: 12,
+              cornerRadius: 8,
+              callbacks: {
+                label: function(context) {
+                  return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + ' lbs';
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: {
+                display: false
+              },
+              ticks: {
+                color: '#fff',
+                font: { size: 18, weight: 'bold' }
+              }
+            },
+            y: {
+              beginAtZero: true,
+              grid: {
+                color: 'rgba(255, 255, 255, 0.1)'
+              },
+              ticks: {
+                color: '#fff',
+                font: { size: 16 },
+                callback: function(value) {
+                  return value + ' lbs';
+                }
+              }
+            }
+          }
+        }
+      });
     },
 
     /**
