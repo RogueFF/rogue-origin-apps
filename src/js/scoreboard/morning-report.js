@@ -280,19 +280,18 @@
       var html = '<div class="mr-section mr-weekly">';
       html += '<div class="mr-section-header">THIS WEEK vs LAST WEEK / ESTA SEMANA vs SEMANA PASADA</div>';
 
-      html += '<div class="mr-weekly-grid">';
-      html += '<div class="mr-weekly-col">';
-      html += '<div class="mr-weekly-label">This Week So Far / Esta Semana<br><span class="mr-days">(' + (thisWeek.days || []).join(', ') + ')</span></div>';
-      html += '</div>';
-      html += '<div class="mr-weekly-col">';
-      html += '<div class="mr-weekly-label">Last Week / Semana Pasada<br><span class="mr-days">(Full week)</span></div>';
-      html += '</div>';
+      // Table header row aligned with data columns
+      html += '<div class="mr-weekly-row mr-weekly-header">';
+      html += '<span class="mr-row-label"></span>';
+      html += '<span class="mr-row-this">This Week<br><span class="mr-days">(' + (thisWeek.days || []).join(', ') + ')</span></span>';
+      html += '<span class="mr-row-diff">Change</span>';
+      html += '<span class="mr-row-last">Last Week<br><span class="mr-days">(Full week)</span></span>';
       html += '</div>';
 
-      // Rows
-      html += this.renderWeeklyRow('Tops', thisWeek.tops, lastWeek.tops, topsDiff, 'lbs');
-      html += this.renderWeeklyRow('Smalls', thisWeek.smalls, lastWeek.smalls, smallsDiff, 'lbs');
-      html += this.renderWeeklyRow('Avg Rate / Ritmo Prom', thisWeek.avgRate, lastWeek.avgRate, thisWeek.avgRate - lastWeek.avgRate, 'lbs/hr');
+      // Data rows
+      html += this.renderWeeklyRow('Tops / Puntas', thisWeek.tops, lastWeek.tops, topsDiff, 'lbs');
+      html += this.renderWeeklyRow('Smalls / Peque\u00f1os', thisWeek.smalls, lastWeek.smalls, smallsDiff, 'lbs');
+      html += this.renderWeeklyRow('Avg Rate / Ritmo', thisWeek.avgRate, lastWeek.avgRate, thisWeek.avgRate - lastWeek.avgRate, 'lbs/hr');
 
       // Total row
       html += '<div class="mr-weekly-total mr-' + totalStatus + '">';
