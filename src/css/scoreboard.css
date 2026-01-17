@@ -2131,7 +2131,7 @@ body.iframe-embed .current-order-items {
   left: 0;
   right: 0;
   bottom: 0;
-  background: var(--bg-main, #1a1a1a);
+  background: #1a1a1a;
   z-index: 100;
   flex-direction: column;
   overflow-y: auto;
@@ -2148,7 +2148,7 @@ body.iframe-embed .current-order-items {
   justify-content: space-between;
   align-items: center;
   padding: 16px 24px;
-  background: var(--bg-card, #2d2d2d);
+  background: #2d2d2d;
   border-radius: 12px;
   margin-bottom: 20px;
 }
@@ -2191,7 +2191,7 @@ body.iframe-embed .current-order-items {
 
 /* Sections */
 .mr-section {
-  background: var(--bg-card, #2d2d2d);
+  background: #2d2d2d;
   border-radius: 12px;
   padding: 20px;
   margin-bottom: 20px;
@@ -2201,10 +2201,10 @@ body.iframe-embed .current-order-items {
   font-family: 'Outfit', sans-serif;
   font-size: 18px;
   font-weight: 700;
-  color: #1a1a1a;
+  color: #fff;
   margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 2px solid rgba(0,0,0,0.1);
+  border-bottom: 2px solid rgba(255,255,255,0.1);
 }
 
 /* Metric Cards Grid */
@@ -2231,7 +2231,7 @@ body.iframe-embed .current-order-items {
   font-family: 'Outfit', sans-serif;
   font-size: 14px;
   font-weight: 600;
-  color: #555;
+  color: #ccc;
   margin-bottom: 12px;
   display: flex;
   justify-content: space-between;
@@ -2270,7 +2270,7 @@ body.iframe-embed .current-order-items {
   font-family: 'JetBrains Mono', monospace;
   font-size: 24px;
   font-weight: 700;
-  color: #1a1a1a;
+  color: #fff;
 }
 
 .mr-diff {
@@ -2280,7 +2280,7 @@ body.iframe-embed .current-order-items {
   color: #22c55e;
   text-align: center;
   padding-top: 8px;
-  border-top: 1px solid rgba(0,0,0,0.1);
+  border-top: 1px solid rgba(255,255,255,0.1);
 }
 
 .mr-red .mr-diff { color: #ef4444; }
@@ -2317,7 +2317,7 @@ body.iframe-embed .current-order-items {
 .mr-best-lbs {
   font-family: 'JetBrains Mono', monospace;
   font-size: 24px;
-  color: #1a1a1a;
+  color: #fff;
   margin: 8px 0;
 }
 
@@ -2344,7 +2344,7 @@ body.iframe-embed .current-order-items {
   font-family: 'Outfit', sans-serif;
   font-size: 14px;
   font-weight: 600;
-  color: #555;
+  color: #ccc;
 }
 
 .mr-days {
@@ -2358,21 +2358,21 @@ body.iframe-embed .current-order-items {
   grid-template-columns: 1fr 1fr 80px 1fr;
   gap: 12px;
   padding: 12px 0;
-  border-bottom: 1px solid rgba(0,0,0,0.1);
+  border-bottom: 1px solid rgba(255,255,255,0.1);
   align-items: center;
 }
 
 .mr-row-label {
   font-family: 'Outfit', sans-serif;
   font-size: 14px;
-  color: #555;
+  color: #ccc;
 }
 
 .mr-row-this, .mr-row-last {
   font-family: 'JetBrains Mono', monospace;
   font-size: 18px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: #fff;
   text-align: center;
 }
 
@@ -2389,12 +2389,12 @@ body.iframe-embed .current-order-items {
   gap: 16px;
   padding: 16px;
   margin-top: 16px;
-  background: rgba(0,0,0,0.05);
+  background: rgba(255,255,255,0.05);
   border-radius: 8px;
   font-family: 'Outfit', sans-serif;
   font-size: 16px;
   font-weight: 700;
-  color: #1a1a1a;
+  color: #fff;
 }
 
 .mr-weekly-total.mr-green { background: rgba(34,197,94,0.15); }
@@ -2403,7 +2403,7 @@ body.iframe-embed .current-order-items {
 .mr-total-value {
   font-family: 'JetBrains Mono', monospace;
   font-size: 24px;
-  color: #1a1a1a;
+  color: #fff;
 }
 
 .mr-total-diff {
@@ -2441,7 +2441,7 @@ body.iframe-embed .current-order-items {
   font-family: 'JetBrains Mono', monospace;
   font-size: 18px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: #fff;
   min-width: 120px;
 }
 
