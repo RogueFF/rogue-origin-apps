@@ -5388,8 +5388,9 @@ function getCycleTimesForDate_(ss, timezone, targetDate) {
     var rowDateStr = Utilities.formatDate(rowDate, timezone, 'yyyy-MM-dd');
 
     if (rowDateStr === targetDateStr) {
-      var size = String(row[1] || '').toLowerCase();
-      if (size.indexOf('5kg') >= 0 || size === '5kg') {
+      // Size is in column F (index 5): "5 kg.", "10 lb.", etc.
+      var size = String(row[5] || '').toLowerCase().replace(/\s+/g, '');
+      if (size.indexOf('5kg') >= 0) {
         bags.push(rowDate);
       }
     }
