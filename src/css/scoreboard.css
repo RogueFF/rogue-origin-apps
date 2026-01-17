@@ -2282,6 +2282,16 @@ body.iframe-embed .current-order-items {
   margin-top: 4px;
 }
 
+.mr-crew-summary {
+  font-family: 'Outfit', sans-serif;
+  font-size: 18px;
+  color: #aaa;
+  text-align: center;
+  padding: 12px 0;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
 .mr-diff {
   font-family: 'JetBrains Mono', monospace;
   font-size: 22px;
