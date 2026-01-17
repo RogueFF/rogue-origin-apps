@@ -163,31 +163,40 @@
       html += '<div class="mr-section-header">YESTERDAY vs DAY BEFORE / AYER vs ANTEAYER</div>';
       html += '<div class="mr-cards">';
 
-      // Tops card
+      // Crew context for volume-based metrics
+      var crewOpts = {
+        crewYesterday: yesterday.crew || 0,
+        crewDayBefore: dayBefore ? dayBefore.crew : null
+      };
+
+      // Tops card (with crew context)
       html += this.renderMetricCard(
         'Tops / Puntas',
         yesterday.tops,
         dayBefore ? dayBefore.tops : null,
         'lbs',
-        'higher'
+        'higher',
+        crewOpts
       );
 
-      // Smalls card
+      // Smalls card (with crew context)
       html += this.renderMetricCard(
         'Smalls / Peque\u00f1os',
         yesterday.smalls,
         dayBefore ? dayBefore.smalls : null,
         'lbs',
-        'higher'
+        'higher',
+        crewOpts
       );
 
-      // Bags card
+      // Bags card (with crew context)
       html += this.renderMetricCard(
         'Bags / Bolsas',
         yesterday.bags,
         dayBefore ? dayBefore.bags : null,
         '',
-        'higher'
+        'higher',
+        crewOpts
       );
 
       // Rate card
@@ -226,8 +235,10 @@
 
     /**
      * Render a single metric card
+     * @param {object} opts - Optional: { crewYesterday, crewDayBefore } for crew context
      */
-    renderMetricCard: function(label, value, compareValue, unit, betterWhen) {
+    renderMetricCard: function(label, value, compareValue, unit, betterWhen, opts) {
+      opts = opts || {};
       var diff = compareValue !== null ? value - compareValue : 0;
       var pctChange = compareValue && compareValue !== 0 ? Math.abs(diff / compareValue * 100) : 0;
 
@@ -247,12 +258,16 @@
       var arrow = diff > 0 ? '<span class="mr-arrow up">\u25B2</span>' : (diff < 0 ? '<span class="mr-arrow down">\u25BC</span>' : '');
       var diffDisplay = diff !== 0 ? (diff > 0 ? '+' : '') + this.formatNumber(diff) : '';
 
+      // Crew context strings
+      var crewYesterday = opts.crewYesterday ? '<span class="mr-crew-context">(' + opts.crewYesterday + ' crew)</span>' : '';
+      var crewDayBefore = opts.crewDayBefore ? '<span class="mr-crew-context">(' + opts.crewDayBefore + ' crew)</span>' : '';
+
       var html = '<div class="mr-card mr-' + status + '">';
       html += '<div class="mr-card-header">' + label + ' <span class="mr-status-dot"></span></div>';
       html += '<div class="mr-card-values">';
-      html += '<div class="mr-value-col"><div class="mr-value-label">Yesterday / Ayer</div><div class="mr-value">' + this.formatNumber(value) + ' ' + unit + '</div></div>';
+      html += '<div class="mr-value-col"><div class="mr-value-label">Yesterday / Ayer</div><div class="mr-value">' + this.formatNumber(value) + ' ' + unit + '</div>' + crewYesterday + '</div>';
       if (compareValue !== null) {
-        html += '<div class="mr-value-col"><div class="mr-value-label">Day Before / Anteayer</div><div class="mr-value">' + this.formatNumber(compareValue) + ' ' + unit + '</div></div>';
+        html += '<div class="mr-value-col"><div class="mr-value-label">Day Before / Anteayer</div><div class="mr-value">' + this.formatNumber(compareValue) + ' ' + unit + '</div>' + crewDayBefore + '</div>';
       }
       html += '</div>';
       if (diff !== 0 && betterWhen !== 'neutral') {
