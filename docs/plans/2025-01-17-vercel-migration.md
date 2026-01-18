@@ -20,10 +20,10 @@
 
 ## Phase 0: Setup & Tooling
 
-- [ ] Set up Google Service Account for Sheets API
-- [ ] Configure environment variables in Vercel dashboard
-- [ ] Test basic endpoint deploys
-- [ ] Run `npm install` in api/ folder
+- [x] Set up Google Service Account for Sheets API
+- [x] Configure environment variables in Vercel dashboard
+- [x] Test basic endpoint deploys
+- [x] Run `npm install` in api/ folder
 
 ---
 
@@ -180,9 +180,17 @@ After every session or major step:
 - Added shared utilities (_lib/)
 - Created migration plan
 - Set up ESLint config
-- **Next**: Phase 0 - Vercel project setup, Google Service Account
+
+### 2025-01-18: Phase 0 Complete
+- Installed Vercel CLI, logged in
+- Created Vercel project, deployed hello endpoint
+- Set up Google Service Account (`rogue-origin-vercel@rogue-origin-tts.iam.gserviceaccount.com`)
+- Configured env vars (fixed trailing newline issues)
+- Verified Sheets API connection works
+- **Lesson**: Use `printf` not `echo` when setting env vars (avoids trailing newlines)
+- **Next**: Phase 1 - Barcode app migration
 
 ---
 
-**Current Phase**: 0 - Setup & Tooling
-**Last Updated**: 2025-01-17
+**Current Phase**: 1 - Barcode App
+**Last Updated**: 2025-01-18
