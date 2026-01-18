@@ -2426,13 +2426,6 @@ body:not(.muuri-active) .widget-item[data-size="full"] { flex-basis: calc(100% -
     gap: 10px;
   }
 
-  /* Panel close buttons */
-  .panel-close {
-    min-width: 44px;
-    min-height: 44px;
-    padding: 12px;
-  }
-
   /* Ensure adequate spacing between interactive elements */
   .kpi-row {
     gap: 16px;
@@ -2548,17 +2541,6 @@ body:not(.muuri-active) .widget-item[data-size="full"] { flex-basis: calc(100% -
     right: 16px;
     width: 56px;
     height: 56px;
-  }
-
-  /* Header controls - stack vertically */
-  .header-controls {
-    flex-direction: column;
-    width: 100%;
-    gap: 8px;
-  }
-
-  .header-controls > * {
-    width: 100%;
   }
 
   /* Responsive strain list - more space on mobile */
