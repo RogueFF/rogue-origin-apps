@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://unpkg.com">
-  <link rel="dns-prefetch" href="https://script.google.com">
+  <link rel="dns-prefetch" href="https://rogue-origin-apps-master.vercel.app">
 
   <!-- Fonts: DM Serif Display, JetBrains Mono, Outfit -->
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=optional" rel="stylesheet">
@@ -32,8 +32,8 @@
   <link rel="preload" href="../css/orders.css" as="style">
   <link rel="stylesheet" href="../css/orders.css">
 
-  <!-- Authentication is now handled server-side via Apps Script -->
-  <!-- Password stored securely in Script Properties (not in code or Git) -->
+  <!-- Authentication is now handled server-side via Vercel Functions -->
+  <!-- Password stored securely in Vercel env vars (not in code or Git) -->
 
 </head>
 <body class="auth-required">
@@ -693,10 +693,10 @@
     // ========================================
     // AUTHENTICATION (SERVER-SIDE)
     // ========================================
-    // Password is stored in Apps Script Script Properties (not in code or Git)
+    // Password is stored in Vercel env vars (ORDERS_PASSWORD)
     // Similar to how Claude API key is stored
     const AUTH_STORAGE_KEY = 'orders_auth_session';
-    const AUTH_API_URL = 'https://script.google.com/macros/s/AKfycbxU5dBd5GU1RZeJ-UyNFf1Z8n3jCdIZ0VM6nXVj6_A7Pu2VbbxYWXMiDhkkgB3_8L9MyQ/exec';
+    const AUTH_API_URL = 'https://rogue-origin-apps-master.vercel.app/api/orders';
 
     // Check authentication on page load
     (function checkAuth() {
@@ -752,14 +752,15 @@
       loginBtn.textContent = 'Validating...';
 
       try {
-        // Call Apps Script to validate password (using GET to avoid CORS preflight)
+        // Call Vercel API to validate password (using GET to avoid CORS preflight)
         // Password is in URL parameter but connection is HTTPS encrypted
         const url = AUTH_API_URL + '?action=validatePassword&password=' + encodeURIComponent(enteredPassword);
         const response = await fetch(url, {
           method: 'GET'
         });
 
-        const result = await response.json();
+        const raw = await response.json();
+        const result = raw.data || raw; // Handle Vercel wrapper
 
         if (result.success) {
           // Correct password - save session token
@@ -808,7 +809,7 @@
     // ========================================
     // CONFIGURATION
     // ========================================
-    const API_URL = 'https://script.google.com/macros/s/AKfycbxU5dBd5GU1RZeJ-UyNFf1Z8n3jCdIZ0VM6nXVj6_A7Pu2VbbxYWXMiDhkkgB3_8L9MyQ/exec';
+    const API_URL = 'https://rogue-origin-apps-master.vercel.app/api/orders';
     const isAppsScript = typeof google !== 'undefined' && google.script;
 
     // State
@@ -3287,7 +3288,8 @@
       try {
         const strainsParam = strains.join(',');
         const response = await fetch(`${API_URL}?action=getCOAsForStrains&strains=${encodeURIComponent(strainsParam)}`);
-        return await response.json();
+        const raw = await response.json();
+        return raw.data || raw; // Handle Vercel wrapper
       } catch (error) {
         console.error('Failed to fetch COAs:', error);
         return { success: false, error: error.message };
@@ -3744,18 +3746,20 @@
             .withFailureHandler(reject)[action](params);
         });
       } else {
-        // GitHub Pages mode
+        // Vercel API mode
         if (method === 'GET') {
           const queryString = new URLSearchParams({ action, ...params }).toString();
           const response = await fetch(`${API_URL}?${queryString}`);
-          return await response.json();
+          const raw = await response.json();
+          return raw.data || raw; // Handle Vercel wrapper
         } else {
           const response = await fetch(`${API_URL}?action=${action}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(params)
           });
-          return await response.json();
+          const raw = await response.json();
+          return raw.data || raw; // Handle Vercel wrapper
         }
       }
     }
