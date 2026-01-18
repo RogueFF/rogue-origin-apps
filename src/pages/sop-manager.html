@@ -22,7 +22,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://unpkg.com">
   <link rel="preconnect" href="https://cdnjs.cloudflare.com">
-  <link rel="dns-prefetch" href="https://script.google.com">
+  <link rel="dns-prefetch" href="https://rogue-origin-apps-master.vercel.app">
 
   <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=optional" rel="stylesheet">
@@ -504,9 +504,9 @@
 
   <script>
     // =====================================================
-    // API Configuration - Google Sheets Backend
+    // API Configuration - Vercel Functions
     // =====================================================
-    const API_URL = 'https://script.google.com/macros/s/AKfycbyyDNEHl78fewANzo_9j2zvMES_4HIFOdD8QbwE52kdhJOcWfwig7vcSV53cQal7bQj/exec';
+    const API_URL = 'https://rogue-origin-apps-master.vercel.app/api/sop';
     
     // =====================================================
     // State
@@ -1560,29 +1560,32 @@
       try {
         // Load SOPs
         const sopsResponse = await fetch(API_URL + '?action=getSOPs');
-        const sopsResult = await sopsResponse.json();
+        const sopsRaw = await sopsResponse.json();
+        const sopsResult = sopsRaw.data || sopsRaw; // Handle Vercel wrapper
         if (sopsResult.success) {
-          sops = sopsResult.data || [];
+          sops = sopsResult.sops || [];
         } else {
           console.error('Failed to load SOPs:', sopsResult.error);
           sops = [];
         }
-        
+
         // Load Requests
         const reqResponse = await fetch(API_URL + '?action=getRequests');
-        const reqResult = await reqResponse.json();
+        const reqRaw = await reqResponse.json();
+        const reqResult = reqRaw.data || reqRaw; // Handle Vercel wrapper
         if (reqResult.success) {
-          sopRequests = reqResult.data || [];
+          sopRequests = reqResult.requests || [];
         } else {
           sopRequests = [];
         }
-        
+
         // Load Settings
         const settingsResponse = await fetch(API_URL + '?action=getSettings');
-        const settingsResult = await settingsResponse.json();
-        if (settingsResult.success && settingsResult.data) {
-          if (settingsResult.data.departments) settings.departments = settingsResult.data.departments;
-          if (settingsResult.data.tags) settings.tags = settingsResult.data.tags;
+        const settingsRaw = await settingsResponse.json();
+        const settingsResult = settingsRaw.data || settingsRaw; // Handle Vercel wrapper
+        if (settingsResult.success && settingsResult.settings) {
+          if (settingsResult.settings.departments) settings.departments = settingsResult.settings.departments;
+          if (settingsResult.settings.tags) settings.tags = settingsResult.settings.tags;
         }
         
       } catch (e) {
@@ -1633,14 +1636,15 @@
       
       try {
         const action = currentSopId ? 'updateSOP' : 'createSOP';
-        const response = await fetch(API_URL, {
+        const response = await fetch(API_URL + '?action=' + action, {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({ action: action, sop: sopData })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sop: sopData })
         });
-        
-        const result = await response.json();
-        
+
+        const raw = await response.json();
+        const result = raw.data || raw; // Handle Vercel wrapper
+
         if (result.success) {
           showToast(status === 'published' ? 'Published!' : 'Saved!', 'success');
           closeModal('editModal');
@@ -1661,14 +1665,15 @@
       showLoading();
       
       try {
-        const response = await fetch(API_URL, {
+        const response = await fetch(API_URL + '?action=deleteSOP', {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({ action: 'deleteSOP', id: id })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: id })
         });
-        
-        const result = await response.json();
-        
+
+        const raw = await response.json();
+        const result = raw.data || raw; // Handle Vercel wrapper
+
         if (result.success) {
           showToast('Deleted', 'success');
           await loadData();
@@ -1696,14 +1701,15 @@
       };
       
       try {
-        const response = await fetch(API_URL, {
+        const response = await fetch(API_URL + '?action=createRequest', {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({ action: 'createRequest', request: reqData })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ request: reqData })
         });
-        
-        const result = await response.json();
-        
+
+        const raw = await response.json();
+        const result = raw.data || raw; // Handle Vercel wrapper
+
         if (result.success) {
           showToast('Request added', 'success');
           document.getElementById('reqTitle').value = '';
@@ -1725,14 +1731,15 @@
       req.completed = true;
       
       try {
-        const response = await fetch(API_URL, {
+        const response = await fetch(API_URL + '?action=updateRequest', {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({ action: 'updateRequest', request: req })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ request: req })
         });
-        
-        const result = await response.json();
-        
+
+        const raw = await response.json();
+        const result = raw.data || raw; // Handle Vercel wrapper
+
         if (result.success) {
           showToast('Marked complete', 'success');
           await loadData();
@@ -1747,14 +1754,15 @@
       if (!confirm('Delete this request?')) return;
       
       try {
-        const response = await fetch(API_URL, {
+        const response = await fetch(API_URL + '?action=deleteRequest', {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({ action: 'deleteRequest', id: id })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: id })
         });
-        
-        const result = await response.json();
-        
+
+        const raw = await response.json();
+        const result = raw.data || raw; // Handle Vercel wrapper
+
         if (result.success) {
           showToast('Deleted', 'success');
           await loadData();
@@ -2332,10 +2340,10 @@
     
     async function saveSettingsToServer() {
       try {
-        await fetch(API_URL, {
+        await fetch(API_URL + '?action=saveSettings', {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({ action: 'saveSettings', settings: settings })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ settings: settings })
         });
       } catch (e) {
         console.error('Error saving settings:', e);
@@ -2403,20 +2411,18 @@
     
     async function callAI(prompt) {
       try {
-        const response = await fetch(API_URL, {
+        const response = await fetch(API_URL + '?action=anthropic', {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain' },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            action: 'anthropic',
-            body: {
-              model: 'claude-3-5-haiku-20241022',
-              max_tokens: 500,
-              messages: [{ role: 'user', content: prompt }]
-            }
+            model: 'claude-3-5-haiku-20241022',
+            max_tokens: 500,
+            messages: [{ role: 'user', content: prompt }]
           })
         });
-        
-        const data = await response.json();
+
+        const raw = await response.json();
+        const data = raw.data || raw; // Handle Vercel wrapper
         if (data.content && data.content[0]) {
           return data.content[0].text.trim();
         }
@@ -2539,12 +2545,13 @@
     async function testApiConnection() {
       const status = document.getElementById('apiKeyStatus');
       status.innerHTML = '<i class="ph-duotone ph-spinner" style="animation:spin 1s linear infinite"></i> Testing...';
-      
+
       try {
         const response = await fetch(API_URL + '?action=test');
-        const result = await response.json();
-        
-        if (result.success) {
+        const raw = await response.json();
+        const result = raw.data || raw; // Handle Vercel wrapper
+
+        if (result.ok || result.success) {
           status.innerHTML = '<i class="ph-duotone ph-check-circle" style="color:var(--green)"></i> Connection successful!';
         } else {
           status.innerHTML = '<i class="ph-duotone ph-x-circle" style="color:var(--danger)"></i> ' + result.error;
