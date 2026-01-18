@@ -12,7 +12,7 @@
 | 0 | Setup & Tooling | Low | Foundation |
 | 1 | Barcode | Low | ✅ Complete |
 | 2 | Kanban | Low | ✅ Complete |
-| 3 | SOP Manager | Medium | Media uploads |
+| 3 | SOP Manager | Medium | ✅ Complete |
 | 4 | Orders | Medium | Auth required |
 | 5 | Production + Scoreboard | High | Shared backend, AI chat |
 
@@ -142,7 +142,9 @@ Run before committing. Catches common bugs.
 - Added supplier detection from URL hostname (Amazon, Walmart, etc.)
 
 ### Phase 3: SOP Manager
-- *TBD*
+- 12 endpoints: getSOPs, getRequests, getSettings, test, createSOP, updateSOP, deleteSOP, createRequest, updateRequest, deleteRequest, saveSettings, anthropic
+- AI features use shared ANTHROPIC_API_KEY env var
+- Steps stored as JSON in single column (not separate sheet)
 
 ### Phase 4: Orders
 - *TBD*
@@ -206,9 +208,15 @@ After every session or major step:
 - Added `KANBAN_SHEET_ID` env var (sheet: `12.12 Supplies`)
 - Updated `kanban-script.js` to use Vercel API
 - Implemented auto-fill feature (fetches product info from URLs)
-- **Next**: Phase 3 - SOP Manager migration
+
+### 2025-01-18: Phase 3 Complete - SOP Manager
+- Created `api/sop/index.js` with 12 endpoints including AI features
+- Added `SOP_SHEET_ID` and `ANTHROPIC_API_KEY` env vars
+- Sheet tabs: SOPs, SOP_Requests, SOP_Settings
+- Updated `sop-manager.html` to use Vercel API
+- **Next**: Phase 4 - Orders migration
 
 ---
 
-**Current Phase**: 3 - SOP Manager
+**Current Phase**: 4 - Orders
 **Last Updated**: 2025-01-18
