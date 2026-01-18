@@ -148,5 +148,41 @@ Run before committing. Catches common bugs.
 
 ---
 
+## Documentation Protocol
+
+After every session or major step:
+
+1. **Update this file**
+   - Check off completed tasks
+   - Update "Current Phase" and "Last Updated"
+   - Add to "Lessons Learned" if anything notable
+
+2. **Update CLAUDE.md** (if relevant)
+   - New API URLs
+   - New environment variables
+   - Changed architecture
+
+3. **Update api/README.md** (if relevant)
+   - New endpoints
+   - Changed setup steps
+
+4. **Commit with clear message**
+   ```bash
+   git add -A && git commit -m "docs: update migration progress - Phase X complete"
+   ```
+
+---
+
+## Session Log
+
+### 2025-01-17: Initial Setup
+- Created api/ folder structure
+- Added shared utilities (_lib/)
+- Created migration plan
+- Set up ESLint config
+- **Next**: Phase 0 - Vercel project setup, Google Service Account
+
+---
+
 **Current Phase**: 0 - Setup & Tooling
 **Last Updated**: 2025-01-17
