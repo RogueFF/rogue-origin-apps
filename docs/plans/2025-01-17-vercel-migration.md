@@ -10,7 +10,7 @@
 | Phase | App | Complexity | Notes |
 |-------|-----|------------|-------|
 | 0 | Setup & Tooling | Low | Foundation |
-| 1 | Barcode | Low | Pilot - learn the pattern |
+| 1 | Barcode | Low | ✅ Complete |
 | 2 | Kanban | Low | Simple CRUD |
 | 3 | SOP Manager | Medium | Media uploads |
 | 4 | Orders | Medium | Auth required |
@@ -129,10 +129,12 @@ Run before committing. Catches common bugs.
 ## Lessons Learned
 
 ### Phase 0: Setup
-- *TBD*
+- Use `printf` not `echo` when setting env vars (avoids trailing newlines)
+- Double-escaped newlines in private key need regex replacement: `key.replace(/\\\\n/g, '\n').replace(/\\n/g, '\n')`
 
 ### Phase 1: Barcode
-- *TBD*
+- Response format: Vercel wrapper `{success, data}` needs unwrapping in frontend
+- Changed Content-Type from `text/plain` to `application/json` (Vercel handles CORS properly)
 
 ### Phase 2: Kanban
 - *TBD*
@@ -188,9 +190,17 @@ After every session or major step:
 - Configured env vars (fixed trailing newline issues)
 - Verified Sheets API connection works
 - **Lesson**: Use `printf` not `echo` when setting env vars (avoids trailing newlines)
-- **Next**: Phase 1 - Barcode app migration
+
+### 2025-01-18: Phase 1 Complete - Barcode App
+- Audited Apps Script endpoints: products, test, add, update, delete, import
+- Created `api/barcode/index.js` with full validation and error handling
+- Deployed to Vercel: `https://rogue-origin-apps-master.vercel.app/api/barcode`
+- Updated `src/pages/barcode.html` to use new API
+- Fixed response unwrapping (`data.data || data` pattern)
+- **Response times**: ~200-400ms (vs 10-15s on Apps Script)
+- **Next**: Phase 2 - Kanban app migration
 
 ---
 
-**Current Phase**: 1 - Barcode App
+**Current Phase**: 2 - Kanban App
 **Last Updated**: 2025-01-18
