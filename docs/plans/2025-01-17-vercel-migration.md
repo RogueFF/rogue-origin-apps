@@ -11,7 +11,7 @@
 |-------|-----|------------|-------|
 | 0 | Setup & Tooling | Low | Foundation |
 | 1 | Barcode | Low | ✅ Complete |
-| 2 | Kanban | Low | Simple CRUD |
+| 2 | Kanban | Low | ✅ Complete |
 | 3 | SOP Manager | Medium | Media uploads |
 | 4 | Orders | Medium | Auth required |
 | 5 | Production + Scoreboard | High | Shared backend, AI chat |
@@ -137,7 +137,9 @@ Run before committing. Catches common bugs.
 - Changed Content-Type from `text/plain` to `application/json` (Vercel handles CORS properly)
 
 ### Phase 2: Kanban
-- *TBD*
+- Sheet names with special characters (dots, spaces) work fine without escaping
+- Auto-fill from URL feature implemented with basic HTML parsing
+- Added supplier detection from URL hostname (Amazon, Walmart, etc.)
 
 ### Phase 3: SOP Manager
 - *TBD*
@@ -198,9 +200,15 @@ After every session or major step:
 - Updated `src/pages/barcode.html` to use new API
 - Fixed response unwrapping (`data.data || data` pattern)
 - **Response times**: ~200-400ms (vs 10-15s on Apps Script)
-- **Next**: Phase 2 - Kanban app migration
+
+### 2025-01-18: Phase 2 Complete - Kanban App
+- Created `api/kanban/index.js` with 6 endpoints: cards, test, add, update, delete, fetchProduct
+- Added `KANBAN_SHEET_ID` env var (sheet: `12.12 Supplies`)
+- Updated `kanban-script.js` to use Vercel API
+- Implemented auto-fill feature (fetches product info from URLs)
+- **Next**: Phase 3 - SOP Manager migration
 
 ---
 
-**Current Phase**: 2 - Kanban App
+**Current Phase**: 3 - SOP Manager
 **Last Updated**: 2025-01-18
