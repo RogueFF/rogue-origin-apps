@@ -282,8 +282,11 @@ export function toggleKPIExpand(id) {
   const muuriKPI = getGrid('kpi');
   if (muuriKPI && !muuriKPI._isDestroyed) {
     setTimeout(() => {
-      muuriKPI.refreshItems();
-      muuriKPI.layout(true);
+      // Re-check grid validity - it could be destroyed during the 50ms delay
+      if (muuriKPI && !muuriKPI._isDestroyed) {
+        muuriKPI.refreshItems();
+        muuriKPI.layout(true);
+      }
     }, 50);
   }
 }

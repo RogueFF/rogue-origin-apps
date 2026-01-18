@@ -328,7 +328,6 @@ export function toggleWidgetCollapse(btn) {
   const widget = btn.closest('.widget-item');
   if (!widget) return;
 
-  const _content = widget.querySelector('.widget-content');
   const icon = btn.querySelector('i');
 
   widget.classList.toggle('collapsed');

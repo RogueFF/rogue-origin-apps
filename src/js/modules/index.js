@@ -22,9 +22,7 @@ import {
   toggleVoice,
   isVoiceActive,
   startListening,
-  stopListening as _stopListening,
-  stopSpeaking,
-  initVoiceRecognition as _initVoiceRecognition
+  stopSpeaking
 } from './voice.js';
 
 // ===== STATE IMPORTS =====
