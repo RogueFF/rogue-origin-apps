@@ -67,3 +67,5 @@ test-results/
 
 # Git worktrees
 .worktrees/
+.vercel
+.env*.local
