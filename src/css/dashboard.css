@@ -1389,57 +1389,6 @@ body.tutorial-active::before {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.tutorial-tooltip-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-.tutorial-tooltip-icon {
-  width: 32px;
-  height: 32px;
-  background: var(--gold-dim);
-  color: var(--gold);
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-}
-.tutorial-tooltip-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text);
-  flex: 1;
-}
-.tutorial-tooltip-step {
-  font-size: 11px;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-}
-.tutorial-tooltip-content {
-  font-size: 13px;
-  color: var(--text-light);
-  line-height: 1.5;
-  margin-bottom: 16px;
-}
-.tutorial-interactive-hint {
-  display: flex;
-  align-items: center;
-  padding: 8px 12px;
-  background: rgba(228, 170, 79, 0.15);
-  border-left: 3px solid var(--gold);
-  border-radius: 6px;
-  font-size: 12px;
-  color: var(--gold);
-  font-weight: 600;
-  margin-bottom: 16px;
-}
-.tutorial-tooltip-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: space-between;
-}
 .tutorial-btn {
   padding: 8px 16px;
   border-radius: 8px;
@@ -1448,22 +1397,6 @@ body.tutorial-active::before {
   cursor: pointer;
   border: none;
   transition: all 0.2s;
-}
-.tutorial-btn-primary {
-  background: var(--gold);
-  color: #1a1f16;
-}
-.tutorial-btn-primary:hover {
-  background: var(--gold-400);
-  transform: translateY(-1px);
-}
-.tutorial-btn-secondary {
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--border);
-}
-.tutorial-btn-secondary:hover {
-  background: var(--border-light);
 }
 /* Widget help icon (lightbulb) */
 .widget-help {
@@ -1486,37 +1419,6 @@ body.tutorial-active::before {
   color: var(--gold);
   background: var(--gold-dim);
 }
-/* Widget help popup */
-.widget-help-popup {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 8px;
-  width: 280px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 14px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
-  z-index: 100; /* Dropdown: tooltips range */
-  animation: helpPopupSlide 0.2s var(--ease-spring);
-}
-@keyframes helpPopupSlide {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.widget-help-popup-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 6px;
-}
-.widget-help-popup-content {
-  font-size: 12px;
-  color: var(--text-light);
-  line-height: 1.4;
-}
-
 /* Welcome Modal */
 .welcome-modal-overlay {
   position: fixed;
@@ -1926,19 +1828,6 @@ body.tutorial-active::before {
 /* ========================================
    ANIMATED TIMELINE WIDGET
    ======================================== */
-.timeline-svg {
-  width: 100%;
-  height: 200px;
-  overflow: visible;
-}
-
-.timeline-path {
-  fill: none;
-  stroke: var(--green);
-  stroke-width: 2;
-  opacity: 0.3;
-}
-
 .timeline-dot {
   transition: all 0.3s var(--spring);
   cursor: pointer;
@@ -2516,13 +2405,6 @@ body:not(.muuri-active) .widget-item[data-size="full"] { flex-basis: calc(100% -
     padding: 12px 16px;
     min-height: 44px;
     font-size: 13px;
-  }
-
-  /* Settings panel action buttons */
-  .reset-layout-btn,
-  .close-settings-btn {
-    min-height: 44px;
-    padding: 12px 16px;
   }
 
   /* Responsive typography scaling */
