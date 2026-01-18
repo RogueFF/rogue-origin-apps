@@ -57,8 +57,8 @@ export const brandColors = {
   indoorLight: 'rgba(98,117,141,0.3)'
 };
 
-// API Configuration
-export const API_URL = 'https://script.google.com/macros/s/AKfycbxDAHSFl9cedGS49L3Lf5ztqy-SSToYigyA30ZtsdpmWNAR9H61X_Mm48JOOTGqqr-Z/exec';
+// API Configuration - Vercel Functions
+export const API_URL = 'https://rogue-origin-apps-master.vercel.app/api/production';
 
 // Work schedule configuration
 // Day: 7:00 AM - 4:30 PM (9.5 hours)

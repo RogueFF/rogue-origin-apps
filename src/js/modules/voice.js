@@ -215,15 +215,17 @@ export function speak(text) {
         .handleTTSRequest(requestData);
 
     } else {
-      // Web app environment
+      // Web app environment (Vercel Functions)
       fetch(`${API_URL}?action=tts`, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestData),
         cache: 'no-store'
       })
       .then(function(r) { return r.json(); })
-      .then(function(response) {
+      .then(function(raw) {
+        // Handle Vercel response wrapper
+        const response = raw.data || raw;
         playAudio(response, resolve, reject);
       })
       .catch(function(error) {
@@ -243,7 +245,8 @@ export function speak(text) {
  * @param {Function} reject - Promise reject
  */
 function playAudio(response, resolve, reject) {
-  if (!response.success || !response.audioBase64) {
+  // Check for audioBase64 (Vercel returns data.audioBase64, Apps Script returns response.audioBase64)
+  if (!response.audioBase64) {
     console.error('[Voice] TTS failed:', response.error);
     isSpeaking = false;
     showSpeakingIndicator(false);
