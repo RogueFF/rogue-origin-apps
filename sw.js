@@ -1,7 +1,7 @@
 // Service Worker for Rogue Origin Operations Hub
-// Version 3.9 - Fixed KPI card Muuri grid layout
+// Version 3.10 - CSS cleanup: removed unused classes
 
-const CACHE_VERSION = 'ro-ops-v3.9';
+const CACHE_VERSION = 'ro-ops-v3.10';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
