@@ -820,6 +820,29 @@
     let cachedPayments = []; // Cache payments to avoid redundant API calls
     let pdfLibrariesLoaded = false; // Track if PDF libraries have been loaded
 
+    // Session cache for order details (5 minute TTL)
+    const orderCache = new Map();
+    const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+    function getCachedOrderData(orderID) {
+      const cached = orderCache.get(orderID);
+      if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+        console.log(`Cache hit for order ${orderID}`);
+        return cached.data;
+      }
+      console.log(`Cache miss for order ${orderID}`);
+      return null;
+    }
+
+    function setCachedOrderData(orderID, data) {
+      orderCache.set(orderID, { data, timestamp: Date.now() });
+    }
+
+    function invalidateOrderCache(orderID) {
+      orderCache.delete(orderID);
+      console.log(`Cache invalidated for order ${orderID}`);
+    }
+
     // ========================================
     // LAZY-LOAD PDF LIBRARIES
     // ========================================
@@ -1270,7 +1293,8 @@
 
       const result = await apiCall('deleteShipment', { shipmentID: shipmentId }, 'POST');
       if (result.success) {
-        // Refresh detail panel
+        // Invalidate cache and refresh detail panel
+        invalidateOrderCache(currentOrderID);
         await openDetailPanel(currentOrderID);
         showToast('Shipment deleted successfully!');
       } else {
@@ -1322,7 +1346,8 @@
 
       const result = await apiCall('deletePayment', { paymentID: paymentId }, 'POST');
       if (result.success) {
-        // Refresh detail panel
+        // Invalidate cache and refresh detail panel
+        invalidateOrderCache(currentOrderID);
         await openDetailPanel(currentOrderID);
         showToast('Payment deleted successfully!');
       } else {
@@ -1603,6 +1628,8 @@
 
       if (successCount > 0) {
         showToast(`✅ Imported ${successCount} shipment(s) from Shopify!`, 'success');
+        // Clear all caches since import may affect multiple orders
+        orderCache.clear();
         // Refresh the current order panel if open
         if (currentOrderID) {
           await openDetailPanel(currentOrderID);
@@ -1625,13 +1652,22 @@
       const order = orders.find(o => o.id === orderID);
       if (!order) return;
 
-      // Show panel immediately with loading state
+      // Show panel immediately
       const panel = document.getElementById('detail-panel');
       panel.classList.add('active');
       document.getElementById('detail-order-id').textContent = order.id;
       document.getElementById('detail-customer-name').textContent = order.customerName;
 
-      // Show loading indicators
+      // Check session cache first for instant display
+      const cached = getCachedOrderData(orderID);
+      if (cached) {
+        // Use cached data - instant!
+        applyOrderData(orderID, cached.financials, cached.shipments, cached.payments);
+        switchTab('summary');
+        return;
+      }
+
+      // Cache miss - show loading indicators and fetch
       document.getElementById('shipments-list').innerHTML = '<div class="empty-state">Loading shipments...</div>';
       document.getElementById('payments-list').innerHTML = '<div class="empty-state">Loading payments...</div>';
       switchTab('summary');
@@ -1643,6 +1679,19 @@
         apiCall('getPayments', { orderID })
       ]);
 
+      // Cache the results for next time
+      setCachedOrderData(orderID, {
+        financials,
+        shipments: shipmentsResult,
+        payments: paymentsResult
+      });
+
+      // Apply the data
+      applyOrderData(orderID, financials, shipmentsResult, paymentsResult);
+    }
+
+    // Helper to apply order data (used by both cached and fresh data paths)
+    function applyOrderData(orderID, financials, shipmentsResult, paymentsResult) {
       // Process financials
       if (financials.success) {
         updateSummaryTab(financials);
@@ -2135,7 +2184,8 @@
 
         if (result.success) {
           closeShipmentModal();
-          // Refresh detail panel (which will also update local orders array)
+          // Invalidate cache and refresh detail panel
+          invalidateOrderCache(currentOrderID);
           await openDetailPanel(currentOrderID);
           showToast(editingShipmentId ? 'Shipment updated successfully!' : 'Shipment saved successfully!');
           return true;
@@ -2182,7 +2232,8 @@
       const result = await apiCall('savePayment', paymentData, 'POST');
       if (result.success) {
         closePaymentModal();
-        // Refresh detail panel (which will also update local orders array)
+        // Invalidate cache and refresh detail panel
+        invalidateOrderCache(currentOrderID);
         await openDetailPanel(currentOrderID);
         showToast(editingPaymentId ? 'Payment updated successfully!' : 'Payment recorded successfully!');
       } else {
