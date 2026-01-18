@@ -7,8 +7,8 @@
   'use strict';
 
   var ScoreboardConfig = {
-    // API Configuration
-    API_URL: 'https://script.google.com/macros/s/REDACTED-PRODUCTION-API-ID/exec',
+    // API Configuration - Vercel Functions
+    API_URL: 'https://rogue-origin-apps-master.vercel.app/api/production',
 
     // Timing intervals (milliseconds)
     intervals: {
