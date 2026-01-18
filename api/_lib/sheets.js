@@ -35,8 +35,8 @@ async function getSheetsClient() {
   }
 
   try {
-    // Parse the private key (may have escaped newlines from env var)
-    const key = privateKey.replace(/\\n/g, '\n');
+    // Parse the private key (handle double-escaped newlines from env var)
+    const key = privateKey.replace(/\\\\n/g, '\n').replace(/\\n/g, '\n');
 
     cachedAuth = new google.auth.JWT({
       email,
