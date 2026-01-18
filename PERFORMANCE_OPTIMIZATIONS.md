@@ -131,7 +131,6 @@ Changed all Google Fonts from `display=swap` to `display=optional`
 ### Files Created
 - `css/ai-chat.css` (10KB)
 - `css/barcode.css` (13KB)
-- `css/critical.css` (2.5KB - reference)
 - `css/dashboard.css` (81KB - existing)
 - `css/kanban.css` (22KB)
 - `css/ops-hub.css` (48KB)
