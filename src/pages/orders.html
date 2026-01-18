@@ -2048,21 +2048,20 @@
     let isSavingShipment = false;
 
     async function saveShipment() {
-      try {
-        // Prevent double-submit
-        if (isSavingShipment) {
-          console.log('Already saving shipment, ignoring duplicate call');
-          return false;
-        }
-        isSavingShipment = true;
+      // Prevent double-submit (check before try so finally doesn't reset on early return)
+      if (isSavingShipment) {
+        console.log('Already saving shipment, ignoring duplicate call');
+        return false;
+      }
+      isSavingShipment = true;
 
+      try {
         console.log('Starting saveShipment...');
 
         // Validate currentOrderID first
         if (!currentOrderID) {
           console.error('No order selected (currentOrderID is null)');
           showToast('Please select an order first', 'error');
-          isSavingShipment = false;
           return false;
         }
         console.log('Current Order ID:', currentOrderID);
@@ -2071,7 +2070,26 @@
         console.log('Collected line items:', lineItems);
 
         if (lineItems.length === 0) {
-          showToast('Please add at least one line item', 'warning');
+          // Check WHY it's empty and give specific feedback
+          const rows = document.querySelectorAll('#line-items-body tr');
+          if (rows.length === 0) {
+            showToast('Please add at least one line item', 'warning');
+          } else {
+            // Rows exist but failed validation - check first row for specific issue
+            const firstRow = rows[0];
+            const strain = firstRow.children[0]?.querySelector('input')?.value?.trim();
+            const qty = parseFloat(firstRow.children[2]?.querySelector('input')?.value) || 0;
+
+            if (!strain) {
+              showToast('Please enter a strain name', 'warning');
+              firstRow.children[0]?.querySelector('input')?.focus();
+            } else if (qty <= 0) {
+              showToast('Please enter a quantity greater than 0', 'warning');
+              firstRow.children[2]?.querySelector('input')?.focus();
+            } else {
+              showToast('Please complete all line item fields', 'warning');
+            }
+          }
           return false;
         }
 
@@ -2130,6 +2148,9 @@
         console.error('Exception in saveShipment:', error);
         showToast('Error saving shipment: ' + error.message, 'error');
         return false;
+      } finally {
+        // Always reset the lock so save button keeps working
+        isSavingShipment = false;
       }
     }
 
