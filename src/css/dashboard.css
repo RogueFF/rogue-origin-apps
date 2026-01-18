@@ -1166,6 +1166,17 @@ body.sidebar-collapsed .main { margin-left: var(--sidebar-collapsed); }
 .kpi-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 6px; margin-bottom: 20px; }
 /* Override grid when Muuri is active - Muuri uses absolute positioning */
 .kpi-row.muuri { display: block; position: relative; }
+
+/* KPI Grid Item - Muuri wrapper for positioning */
+.kpi-grid-item {
+  position: absolute; /* Required for Muuri to position items */
+  width: 175px;
+  min-width: 140px;
+  max-width: 100%;
+  padding: 3px; /* Half of gap for proper spacing */
+}
+.kpi-grid-item[data-hidden="true"] { display: none; }
+
 .kpi-card {
   background: var(--bg-card);
   border: 2px solid var(--border-light);
@@ -1176,18 +1187,12 @@ body.sidebar-collapsed .main { margin-left: var(--sidebar-collapsed); }
   box-shadow: var(--shadow-sm);
   transition: box-shadow 0.3s var(--ease-spring), border-color 0.3s var(--ease-spring);
   min-height: 120px;
-  margin: 6px;
   /* Flex layout for proper vertical spacing */
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-}
-/* Set explicit width for KPI cards when using Muuri - responsive */
-.kpi-row.muuri .kpi-card {
-  width: 175px;
-  min-width: 140px;
-  max-width: 100%;
-  position: absolute; /* Required for Muuri to properly position items */
+  width: 100%; /* Fill the wrapper */
+  box-sizing: border-box;
 }
 .kpi-card:hover { box-shadow: var(--shadow-md), 0 0 20px rgba(228, 170, 79, 0.1); border-color: rgba(228, 170, 79, 0.4); }
 .kpi-card.muuri-item-dragging { transition: none !important; }
@@ -1198,7 +1203,6 @@ body.sidebar-collapsed .main { margin-left: var(--sidebar-collapsed); }
 .kpi-card.sungrown::before { background: var(--sungrown); }
 .kpi-card.greenhouse::before { background: var(--greenhouse); }
 .kpi-card.indoor::before { background: var(--indoor); }
-.kpi-card[data-hidden="true"] { display: none; }
 .kpi-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
 .kpi-icon { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 22px; }
 .kpi-card.gold .kpi-icon { background: var(--gold-dim); color: var(--gold); }
@@ -2578,9 +2582,9 @@ body:not(.muuri-active) .widget-item[data-size="full"] { flex-basis: calc(100% -
 
 /* 768px breakpoint - tablets */
 @media (max-width: 768px) {
-  /* KPI cards responsive for tablets */
-  .kpi-row.muuri .kpi-card {
-    width: calc(50% - 12px);
+  /* KPI grid items responsive for tablets */
+  .kpi-row.muuri .kpi-grid-item {
+    width: calc(50% - 6px);
     min-width: 140px;
   }
 
@@ -2592,8 +2596,8 @@ body:not(.muuri-active) .widget-item[data-size="full"] { flex-basis: calc(100% -
 
 /* 600px breakpoint - mobile: KPI cards in Muuri grid stack to single column */
 @media (max-width: 600px) {
-  .kpi-row.muuri .kpi-card {
-    width: calc(100% - 12px) !important;
+  .kpi-row.muuri .kpi-grid-item {
+    width: calc(100% - 6px) !important;
     min-width: unset !important;
   }
 }
@@ -2637,15 +2641,16 @@ body:not(.muuri-active) .widget-item[data-size="full"] { flex-basis: calc(100% -
   }
 
   /* KPI cards - ensure single column */
-  .kpi-card {
+  /* KPI grid items - static positioning on very small screens */
+  .kpi-grid-item {
     position: static !important;
     width: 100% !important;
     margin-bottom: 12px !important;
   }
 
-  /* KPI cards responsive width on very small screens */
-  .kpi-row.muuri .kpi-card {
-    width: calc(100% - 12px) !important;
+  /* KPI grid items responsive width on very small screens */
+  .kpi-row.muuri .kpi-grid-item {
+    width: calc(100% - 6px) !important;
     min-width: unset !important;
   }
 
