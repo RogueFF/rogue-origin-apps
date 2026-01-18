@@ -423,7 +423,7 @@ export function sendAIMessage() {
   } else {
     fetch(`${API_URL}?action=chat`, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestData),
       cache: 'no-store'
     })
@@ -433,7 +433,9 @@ export function sendAIMessage() {
       }
       return r.json();
     })
-    .then(function(response) {
+    .then(function(raw) {
+      // Handle Vercel response wrapper
+      const response = raw.data || raw;
       // Ensure response is valid
       if (!response || typeof response !== 'object') {
         console.error('[AI Chat] Invalid response type:', typeof response);
@@ -501,12 +503,14 @@ export function submitAIFeedback(button, rating, messageId) {
   } else {
     fetch(`${API_URL}?action=feedback`, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(feedbackData),
       cache: 'no-store'
     })
     .then(function(r) { return r.json(); })
-    .then(function(response) {
+    .then(function(raw) {
+      // Handle Vercel response wrapper
+      const response = raw.data || raw;
       console.log('Feedback logged:', response);
       // Show brief confirmation
       button.innerHTML = rating === 'up' ? '✓👍' : '✓👎';
