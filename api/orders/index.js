@@ -20,6 +20,8 @@
  * - GET  ?action=getOrderFinancials - Get order financial summary
  * - GET  ?action=getPriceHistory   - Get price history
  * - GET  ?action=getCOAIndex       - Get COA index
+ * - GET  ?action=syncCOAIndex      - Sync COA index from Drive
+ * - GET  ?action=getCOAsForStrains - Get COA PDFs as base64
  * - POST ?action=saveCustomer      - Create/update customer
  * - POST ?action=deleteCustomer    - Delete customer
  * - POST ?action=saveMasterOrder   - Create/update order
@@ -31,6 +33,7 @@
  * - POST ?action=updateOrderPriority - Update order priority
  */
 
+const { google } = require('googleapis');
 const { createHandler, success } = require('../_lib/response');
 const { readSheet, appendSheet, writeSheet, clearSheet } = require('../_lib/sheets');
 const { sanitizeForSheets } = require('../_lib/validate');
@@ -38,6 +41,37 @@ const { createError } = require('../_lib/errors');
 
 const SHEET_ID = process.env.ORDERS_SHEET_ID;
 const ORDERS_PASSWORD = process.env.ORDERS_PASSWORD;
+const COA_FOLDER_ID = '1vNjWtq701h_hSCA1gvjlD37xOZv6QbfO';
+
+// Cache Drive client
+let cachedDrive = null;
+
+/**
+ * Get authenticated Drive API client
+ */
+async function getDriveClient() {
+  if (cachedDrive) {
+    return cachedDrive;
+  }
+
+  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const privateKey = process.env.GOOGLE_PRIVATE_KEY;
+
+  if (!email || !privateKey) {
+    throw createError('INTERNAL_ERROR', 'Drive API not configured');
+  }
+
+  const key = privateKey.replace(/\\\\n/g, '\n').replace(/\\n/g, '\n');
+
+  const auth = new google.auth.JWT({
+    email,
+    key,
+    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+  });
+
+  cachedDrive = google.drive({ version: 'v3', auth });
+  return cachedDrive;
+}
 
 // Sheet tab names
 const SHEETS = {
@@ -742,6 +776,193 @@ async function getCOAIndex(req, res) {
   success(res, { success: true, coas });
 }
 
+/**
+ * Sync COA index from Google Drive folder
+ * Scans the COA folder and updates the index in the Sheet
+ */
+async function syncCOAIndex(req, res) {
+  const drive = await getDriveClient();
+
+  // List all PDF files in the COA folder
+  const response = await drive.files.list({
+    q: `'${COA_FOLDER_ID}' in parents and mimeType='application/pdf' and trashed=false`,
+    fields: 'files(id, name, webViewLink)',
+    pageSize: 1000,
+  });
+
+  const files = response.data.files || [];
+  const coaData = [];
+
+  for (const file of files) {
+    // Extract strain name from filename
+    const strain = file.name
+      .replace(/\.pdf$/i, '')
+      .replace(/[\s_-]*COA[\s_-]*/gi, '')
+      .replace(/_/g, ' ')
+      .trim();
+
+    coaData.push([
+      strain,
+      file.name,
+      file.id,
+      file.webViewLink || '',
+      `https://drive.google.com/uc?export=download&id=${file.id}`,
+      new Date().toISOString(),
+    ]);
+  }
+
+  // Clear existing data and write new
+  if (coaData.length > 0) {
+    // Write headers if needed
+    const existing = await readSheet(SHEET_ID, `${SHEETS.coaIndex}!A1:F1`);
+    if (!existing || existing.length === 0) {
+      await writeSheet(SHEET_ID, `${SHEETS.coaIndex}!A1:F1`, [
+        ['Strain', 'FileName', 'FileID', 'URL', 'DownloadURL', 'LastSynced'],
+      ]);
+    }
+
+    // Clear old data (rows 2+)
+    await clearSheet(SHEET_ID, `${SHEETS.coaIndex}!A2:F1000`);
+
+    // Write new data
+    await writeSheet(SHEET_ID, `${SHEETS.coaIndex}!A2:F${coaData.length + 1}`, coaData);
+  }
+
+  success(res, { success: true, count: coaData.length });
+}
+
+/**
+ * Get COA PDFs for a list of strains as base64
+ * Uses fuzzy matching to find best COA match
+ */
+async function getCOAsForStrains(req, res) {
+  const strainsParam = req.query?.strains;
+  if (!strainsParam) {
+    throw createError('VALIDATION_ERROR', 'Missing strains parameter');
+  }
+
+  const strainList = strainsParam.split(',').map(s => s.trim());
+  const drive = await getDriveClient();
+
+  // Get COA index
+  const indexData = await readSheet(SHEET_ID, `${SHEETS.coaIndex}!A:C`);
+  const coaIndex = [];
+  for (let i = 1; i < indexData.length; i++) {
+    if (indexData[i][0]) {
+      coaIndex.push({
+        strain: indexData[i][0],
+        fileName: indexData[i][1],
+        fileID: indexData[i][2],
+      });
+    }
+  }
+
+  const results = [];
+
+  for (const requestedStrain of strainList) {
+    const normalized = normalizeStrainName(requestedStrain);
+
+    // Find best match
+    let bestMatch = null;
+    let bestScore = 0;
+
+    for (const coa of coaIndex) {
+      const coaNormalized = normalizeStrainName(coa.fileName);
+
+      // Check if strain name is contained in filename
+      if (coaNormalized.includes(normalized)) {
+        bestScore = 1.0;
+        bestMatch = coa;
+        break;
+      }
+
+      // Fall back to word overlap scoring
+      const score = calculateMatchScore(normalized, coaNormalized);
+      if (score > bestScore && score >= 0.6) {
+        bestScore = score;
+        bestMatch = coa;
+      }
+    }
+
+    if (bestMatch) {
+      try {
+        // Fetch file content as base64
+        const fileResponse = await drive.files.get({
+          fileId: bestMatch.fileID,
+          alt: 'media',
+        }, { responseType: 'arraybuffer' });
+
+        const base64 = Buffer.from(fileResponse.data).toString('base64');
+
+        results.push({
+          strain: requestedStrain,
+          matched: true,
+          matchedStrain: bestMatch.strain,
+          fileName: bestMatch.fileName,
+          base64,
+        });
+      } catch (fileError) {
+        console.error(`Failed to fetch COA for ${bestMatch.strain}:`, fileError.message);
+        results.push({
+          strain: requestedStrain,
+          matched: false,
+          error: 'Failed to fetch COA file',
+        });
+      }
+    } else {
+      results.push({
+        strain: requestedStrain,
+        matched: false,
+        error: 'No matching COA found',
+      });
+    }
+  }
+
+  success(res, { success: true, coas: results });
+}
+
+/**
+ * Normalize strain name for matching
+ */
+function normalizeStrainName(name) {
+  if (!name) return '';
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/^20\d{2}\s+/, '') // Remove year prefixes
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Calculate match score between two strain names
+ */
+function calculateMatchScore(name1, name2) {
+  if (name1 === name2) return 1.0;
+  if (!name1 || !name2) return 0;
+
+  if (name1.includes(name2) || name2.includes(name1)) {
+    return 0.9;
+  }
+
+  // Word overlap scoring
+  const words1 = name1.split(' ');
+  const words2 = name2.split(' ');
+  let matchedWords = 0;
+
+  for (const w1 of words1) {
+    for (const w2 of words2) {
+      if (w1 === w2 && w1.length > 2) {
+        matchedWords++;
+        break;
+      }
+    }
+  }
+
+  return matchedWords / Math.max(words1.length, words2.length);
+}
+
 // ===== TEST =====
 
 async function test(req, res) {
@@ -786,6 +1007,8 @@ module.exports = createHandler({
 
   // COA
   getCOAIndex,
+  syncCOAIndex,
+  getCOAsForStrains,
 
   // Test
   test,
