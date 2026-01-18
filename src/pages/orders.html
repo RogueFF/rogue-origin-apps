@@ -1873,11 +1873,12 @@
           }
         }
 
+        const pendingClass = shipment.isPending ? ' pending' : '';
         return `
-          <div class="list-item">
+          <div class="list-item${pendingClass}">
             <div class="list-item-header">
               <span class="list-item-title">
-                ${shipment.invoiceNumber}
+                ${shipment.invoiceNumber || 'New Shipment'}
                 ${shopifyBadge}
               </span>
               <div style="display: flex; align-items: center; gap: 8px;">
@@ -2095,6 +2096,7 @@
 
     // Prevent double-submission
     let isSavingShipment = false;
+    let pendingShipmentFormData = null; // Store form data for rollback on failure
 
     async function saveShipment() {
       // Prevent double-submit (check before try so finally doesn't reset on early return)
@@ -2171,29 +2173,83 @@
           notes: document.getElementById('shipment-notes').value
         };
 
-        // If editing, include the shipment ID
+        // If editing, include the shipment ID and use traditional flow (no optimistic UI)
         if (editingShipmentId) {
           shipmentData.id = editingShipmentId;
+          return await saveShipmentTraditional(shipmentData, true);
         }
 
+        // NEW SHIPMENT: Use optimistic UI flow
+        console.log('Using optimistic UI for new shipment');
+
+        // Store form data for rollback
+        pendingShipmentFormData = { ...shipmentData };
+
+        // Create optimistic shipment with temp ID
+        const tempId = `TEMP-${Date.now()}`;
+        const optimisticShipment = {
+          id: tempId,
+          invoiceNumber: 'New Shipment',
+          ...shipmentData,
+          isPending: true
+        };
+
+        // Close modal immediately (feels instant!)
+        closeShipmentModal();
+
+        // Add to cache and render
+        cachedShipments.unshift(optimisticShipment);
+        renderShipments(cachedShipments);
+
+        // Update financials optimistically
+        const orderIndex = orders.findIndex(o => o.id === currentOrderID);
+        const previousFulfilled = orderIndex !== -1 ? (orders[orderIndex].fulfilled || 0) : 0;
+        if (orderIndex !== -1) {
+          orders[orderIndex].fulfilled = previousFulfilled + total;
+          updateOrderRow(currentOrderID, orders[orderIndex]);
+        }
+        updateStats();
+
+        // Now make the API call in background
         console.log('Shipment data to save:', shipmentData);
-        console.log('Calling API...');
+        console.log('Calling API in background...');
 
-        const result = await apiCall('saveShipment', shipmentData, 'POST');
-        console.log('API result:', result);
+        try {
+          const result = await apiCall('saveShipment', shipmentData, 'POST');
+          console.log('API result:', result);
 
-        if (result.success) {
-          closeShipmentModal();
-          // Invalidate cache and refresh detail panel
-          invalidateOrderCache(currentOrderID);
-          await openDetailPanel(currentOrderID);
-          showToast(editingShipmentId ? 'Shipment updated successfully!' : 'Shipment saved successfully!');
-          return true;
-        } else {
-          console.error('API returned error:', result.error);
-          showToast('Error saving shipment: ' + (result.error || 'Unknown error'), 'error');
+          if (result.success) {
+            // Success! Update temp shipment with real data
+            const shipmentIndex = cachedShipments.findIndex(s => s.id === tempId);
+            if (shipmentIndex !== -1) {
+              cachedShipments[shipmentIndex] = {
+                ...cachedShipments[shipmentIndex],
+                id: result.shipment?.id || result.id,
+                invoiceNumber: result.shipment?.invoiceNumber || result.invoiceNumber,
+                isPending: false
+              };
+              renderShipments(cachedShipments);
+            }
+            // Invalidate cache so next open gets fresh data
+            invalidateOrderCache(currentOrderID);
+            showToast('Shipment saved successfully!');
+            pendingShipmentFormData = null;
+            return true;
+          } else {
+            // API error - rollback
+            console.error('API returned error:', result.error);
+            await rollbackOptimisticShipment(tempId, previousFulfilled, orderIndex);
+            showToast('Error saving shipment: ' + (result.error || 'Unknown error'), 'error');
+            return false;
+          }
+        } catch (apiError) {
+          // Network/exception error - rollback
+          console.error('Exception calling API:', apiError);
+          await rollbackOptimisticShipment(tempId, previousFulfilled, orderIndex);
+          showToast('Error saving shipment: ' + apiError.message, 'error');
           return false;
         }
+
       } catch (error) {
         console.error('Exception in saveShipment:', error);
         showToast('Error saving shipment: ' + error.message, 'error');
@@ -2201,6 +2257,86 @@
       } finally {
         // Always reset the lock so save button keeps working
         isSavingShipment = false;
+      }
+    }
+
+    // Traditional save flow for editing existing shipments
+    async function saveShipmentTraditional(shipmentData, isEdit) {
+      console.log('Shipment data to save:', shipmentData);
+      console.log('Calling API...');
+
+      const result = await apiCall('saveShipment', shipmentData, 'POST');
+      console.log('API result:', result);
+
+      if (result.success) {
+        closeShipmentModal();
+        invalidateOrderCache(currentOrderID);
+        await openDetailPanel(currentOrderID);
+        showToast(isEdit ? 'Shipment updated successfully!' : 'Shipment saved successfully!');
+        return true;
+      } else {
+        console.error('API returned error:', result.error);
+        showToast('Error saving shipment: ' + (result.error || 'Unknown error'), 'error');
+        return false;
+      }
+    }
+
+    // Rollback optimistic shipment on failure
+    async function rollbackOptimisticShipment(tempId, previousFulfilled, orderIndex) {
+      console.log('Rolling back optimistic shipment:', tempId);
+
+      // Remove from cached shipments
+      const shipmentIndex = cachedShipments.findIndex(s => s.id === tempId);
+      if (shipmentIndex !== -1) {
+        cachedShipments.splice(shipmentIndex, 1);
+        renderShipments(cachedShipments);
+      }
+
+      // Revert financials
+      if (orderIndex !== -1) {
+        orders[orderIndex].fulfilled = previousFulfilled;
+        updateOrderRow(currentOrderID, orders[orderIndex]);
+      }
+      updateStats();
+
+      // Reopen modal with preserved data
+      if (pendingShipmentFormData) {
+        reopenShipmentModalWithData(pendingShipmentFormData);
+        pendingShipmentFormData = null;
+      }
+    }
+
+    // Reopen shipment modal with preserved form data after failure
+    function reopenShipmentModalWithData(data) {
+      openNewShipmentModal();
+
+      // Restore form values
+      document.getElementById('shipment-date').value = data.shipmentDate || '';
+      document.getElementById('shipment-carrier').value = data.carrier || '';
+      document.getElementById('shipment-start-datetime').value = data.startDateTime || '';
+      document.getElementById('shipment-length').value = data.dimensions?.length || '';
+      document.getElementById('shipment-width').value = data.dimensions?.width || '';
+      document.getElementById('shipment-height').value = data.dimensions?.height || '';
+      document.getElementById('shipment-weight').value = data.dimensions?.weight || '';
+      document.getElementById('shipment-discount').value = data.discount || 0;
+      document.getElementById('shipment-freight').value = data.freightCost || 0;
+      document.getElementById('shipment-tracking').value = data.trackingNumber || '';
+      document.getElementById('shipment-notes').value = data.notes || '';
+
+      // Restore line items
+      const tbody = document.getElementById('line-items-body');
+      tbody.innerHTML = '';
+      if (data.lineItems && data.lineItems.length > 0) {
+        data.lineItems.forEach(item => {
+          addLineItem();
+          const lastRow = tbody.lastElementChild;
+          lastRow.children[0].querySelector('input').value = item.strain || '';
+          lastRow.children[1].querySelector('select').value = item.type || 'tops';
+          lastRow.children[2].querySelector('input').value = item.quantity || '';
+          lastRow.children[3].querySelector('input').value = item.adjustmentKg || 0;
+          lastRow.children[4].querySelector('input').value = item.unitPrice || '';
+        });
+        calculateShipmentTotal();
       }
     }
 
