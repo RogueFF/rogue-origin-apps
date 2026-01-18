@@ -14,7 +14,7 @@
 | 2 | Kanban | Low | ✅ Complete |
 | 3 | SOP Manager | Medium | ✅ Complete |
 | 4 | Orders | Medium | ✅ Complete |
-| 5 | Production + Scoreboard | High | Shared backend, AI chat |
+| 5 | Production + Scoreboard | High | ✅ Complete |
 
 ---
 
@@ -120,9 +120,9 @@ Run before committing. Catches common bugs.
 
 ## Success Criteria
 
-- [ ] Response time < 500ms (vs 10-15s on Apps Script)
-- [ ] All endpoints working
-- [ ] 1 week stable before removing Apps Script
+- [x] Response time < 500ms (vs 10-15s on Apps Script)
+- [x] All endpoints working
+- [ ] 1 week stable before removing Apps Script (monitoring period)
 
 ---
 
@@ -154,7 +154,15 @@ Run before committing. Catches common bugs.
 - Changed Content-Type from `text/plain` to `application/json` for POST requests
 
 ### Phase 5: Production + Scoreboard
-- *TBD*
+- 17 endpoints: test, scoreboard, dashboard, getOrders, getOrder, getScoreboardOrderQueue, setShiftStart, getShiftStart, morningReport, logBag, logPause, logResume, chat, feedback, tts, saveOrder, deleteOrder
+- Sheet ID uses PRODUCTION_SHEET_ID env var (sheet: `1dARXrKU2u4KJY08ylA3GUKrT0zwmxCmtVh7IJxnn7is`)
+- AI chat uses ANTHROPIC_API_KEY env var (model: claude-sonnet-4-20250514)
+- TTS uses GOOGLE_TTS_API_KEY env var for Google Cloud Text-to-Speech
+- Scoreboard calculations ported: time slot multipliers, projections, targets, crew tracking
+- Bag timer with cycle history, break detection, carryover bag support
+- Complex date math for work schedule (7:00 AM - 4:30 PM, with breaks)
+- Frontend files updated: scoreboard.html, scoreboard/api.js, scoreboard/config.js, modules/config.js, modules/api.js, modules/panels.js, modules/voice.js
+- Response pattern: Vercel wrapper `{success, data}` unwrapped with `raw.data || raw`
 
 ---
 
@@ -229,7 +237,27 @@ After every session or major step:
 - Added Drive API for COA features (uses same service account, folder shared with service account)
 - **Next**: Phase 5 - Production + Scoreboard migration
 
+### 2026-01-17: Phase 5 Complete - Production + Scoreboard
+- Audited Apps Script endpoints (17 total actions)
+- Created `api/production/index.js` (~1300 lines) with all endpoints
+- Added env vars: `PRODUCTION_SHEET_ID`, `ANTHROPIC_API_KEY`, `GOOGLE_TTS_API_KEY`
+- Ported complex scoreboard calculations (time slots, projections, targets)
+- Ported bag timer logic with cycle history and break handling
+- Ported AI chat with Anthropic API integration
+- Ported TTS with Google Cloud Text-to-Speech
+- Updated frontend files to use Vercel API:
+  - `src/pages/scoreboard.html`
+  - `src/js/scoreboard/api.js`
+  - `src/js/scoreboard/config.js`
+  - `src/js/modules/config.js`
+  - `src/js/modules/api.js`
+  - `src/js/modules/panels.js`
+  - `src/js/modules/voice.js`
+- Changed Content-Type from `text/plain` to `application/json`
+- **Response times**: ~200-500ms (vs 10-15s on Apps Script cold starts)
+- **Migration Complete**: All 5 phases finished
+
 ---
 
-**Current Phase**: 5 - Production + Scoreboard
+**Current Phase**: Complete (all phases migrated)
 **Last Updated**: 2026-01-17

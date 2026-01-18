@@ -23,7 +23,7 @@
     getApiUrl: function() {
       const config = window.ScoreboardConfig;
       return (config && config.API_URL) ||
-        'https://script.google.com/macros/s/AKfycbxDAHSFl9cedGS49L3Lf5ztqy-SSToYigyA30ZtsdpmWNAR9H61X_Mm48JOOTGqqr-Z/exec';
+        'https://rogue-origin-apps-master.vercel.app/api/production';
     },
 
     /**
@@ -33,7 +33,7 @@
     getWholesaleApiUrl: function() {
       const config = window.ScoreboardConfig;
       return (config && config.WHOLESALE_API_URL) ||
-        'https://script.google.com/macros/s/AKfycbxU5dBd5GU1RZeJ-UyNFf1Z8n3jCdIZ0VM6nXVj6_A7Pu2VbbxYWXMiDhkkgB3_8L9MyQ/exec';
+        'https://rogue-origin-apps-master.vercel.app/api/orders';
     },
 
     /**
@@ -73,7 +73,9 @@
             }
             return response.json();
           })
-          .then(function(response) {
+          .then(function(raw) {
+            // Handle Vercel response wrapper
+            const response = raw.data || raw;
             // Cache response if api-cache.js available
             if (window.ScoreboardAPICache && window.ScoreboardAPICache.set) {
               window.ScoreboardAPICache.set('scoreboard', response);
@@ -105,12 +107,13 @@
           })
           .logManualBagCompletion();
       } else {
-        // Running on GitHub Pages - use fetch API
+        // Running on GitHub Pages - use fetch API (Vercel Functions)
         const apiUrl = this.getApiUrl();
 
         fetch(`${apiUrl}?action=logBag`, {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ size: '5 kg.' })
         })
           .then(function(response) {
             if (!response.ok) {
@@ -118,7 +121,9 @@
             }
             return response.json();
           })
-          .then(function(response) {
+          .then(function(raw) {
+            // Handle Vercel response wrapper
+            const response = raw.data || raw;
             if (onSuccess) onSuccess(response);
           })
           .catch(function(error) {
@@ -153,13 +158,12 @@
           })
           .logTimerPause(data.reason);
       } else {
-        // Running on GitHub Pages - use fetch API
-        // CRITICAL: Use text/plain to avoid CORS preflight
+        // Running on GitHub Pages - use fetch API (Vercel Functions)
         const apiUrl = this.getApiUrl();
 
         fetch(`${apiUrl}?action=logPause`, {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ reason: data.reason })
         })
           .then(function(response) {
@@ -168,7 +172,9 @@
             }
             return response.json();
           })
-          .then(function(response) {
+          .then(function(raw) {
+            // Handle Vercel response wrapper
+            const response = raw.data || raw;
             if (onSuccess) onSuccess(response);
           })
           .catch(function(error) {
@@ -203,13 +209,12 @@
           })
           .logTimerResume(data.pauseId, data.duration);
       } else {
-        // Running on GitHub Pages - use fetch API
-        // CRITICAL: Use text/plain to avoid CORS preflight
+        // Running on GitHub Pages - use fetch API (Vercel Functions)
         const apiUrl = this.getApiUrl();
 
         fetch(`${apiUrl}?action=logResume`, {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             pauseId: data.pauseId,
             duration: data.duration
@@ -221,7 +226,9 @@
             }
             return response.json();
           })
-          .then(function(response) {
+          .then(function(raw) {
+            // Handle Vercel response wrapper
+            const response = raw.data || raw;
             if (onSuccess) onSuccess(response);
           })
           .catch(function(error) {
@@ -253,7 +260,11 @@
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             return response.json();
           })
-          .then(onSuccess)
+          .then(function(raw) {
+            // Handle Vercel response wrapper
+            const response = raw.data || raw;
+            if (onSuccess) onSuccess(response);
+          })
           .catch(function(error) {
             console.error('setShiftStart error:', error);
             if (onError) onError(error);
@@ -280,7 +291,11 @@
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             return response.json();
           })
-          .then(onSuccess)
+          .then(function(raw) {
+            // Handle Vercel response wrapper
+            const response = raw.data || raw;
+            if (onSuccess) onSuccess(response);
+          })
           .catch(function(error) {
             console.error('getShiftStart error:', error);
             if (onError) onError(error);
@@ -310,7 +325,7 @@
           })
           .getScoreboardOrderQueue();
       } else {
-        // Running on GitHub Pages - use fetch API to wholesale orders backend
+        // Running on GitHub Pages - use fetch API to wholesale orders backend (Vercel)
         const apiUrl = this.getWholesaleApiUrl();
 
         fetch(`${apiUrl}?action=getScoreboardOrderQueue`)
@@ -320,7 +335,9 @@
             }
             return response.json();
           })
-          .then(function(response) {
+          .then(function(raw) {
+            // Handle Vercel response wrapper
+            const response = raw.data || raw;
             // Store in state if available
             if (window.ScoreboardState) {
               window.ScoreboardState.orderQueue = response;

@@ -249,7 +249,7 @@ export function loadData() {
       fetch(url, {
         method: 'GET',
         headers: {
-          'Content-Type': 'text/plain'
+          'Content-Type': 'application/json'
         },
         signal: signal
       })
@@ -424,7 +424,7 @@ export function loadCompareDataFetch(cs, ce, ps, pe) {
 
     const fetchOptions = {
       method: 'GET',
-      headers: { 'Content-Type': 'text/plain' },
+      headers: { 'Content-Type': 'application/json' },
       signal: signal
     };
 

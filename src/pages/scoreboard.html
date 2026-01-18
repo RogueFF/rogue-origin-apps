@@ -989,8 +989,8 @@
     
     function toggleHelp(){document.getElementById('helpModal').classList.toggle('active');document.getElementById('helpTitle').textContent=t[currentLang].helpTitle;document.getElementById('helpGreen').textContent=t[currentLang].helpGreen;document.getElementById('helpYellow').textContent=t[currentLang].helpYellow;document.getElementById('helpRed').textContent=t[currentLang].helpRed;}
     
-    // API Configuration - use config module if available, fallback to hardcoded
-    var API_URL = (window.ScoreboardConfig && ScoreboardConfig.API_URL) || 'https://script.google.com/macros/s/AKfycbxDAHSFl9cedGS49L3Lf5ztqy-SSToYigyA30ZtsdpmWNAR9H61X_Mm48JOOTGqqr-Z/exec';
+    // API Configuration - use config module if available, fallback to Vercel Functions
+    var API_URL = (window.ScoreboardConfig && ScoreboardConfig.API_URL) || 'https://rogue-origin-apps-master.vercel.app/api/production';
     
     // Detect environment: Apps Script (google.script.run available) or GitHub Pages (use fetch)
     var isAppsScript = typeof google !== 'undefined' && google.script && google.script.run;
@@ -1019,10 +1019,11 @@
           .withFailureHandler(function(e){ console.error(e); showToast('Error loading data', 'error'); })
           .getScoreboardWithTimerData();
       } else {
-        // Running on GitHub Pages - use fetch API
+        // Running on GitHub Pages - use fetch API (Vercel Functions)
         fetch(API_URL + '?action=scoreboard')
           .then(function(response) { return response.json(); })
-          .then(function(r) {
+          .then(function(raw) {
+            var r = raw.data || raw; // Handle Vercel wrapper
             data = r.scoreboard;
             timerData = r.timer;
             if (timerData && timerData.lastBagTime) lastBagTimestamp = new Date(timerData.lastBagTime);
@@ -1344,11 +1345,16 @@
           })
           .logManualBagCompletion();
       } else {
-        // Running on GitHub Pages - use fetch API
-        fetch(API_URL + '?action=logBag', { method: 'POST' })
+        // Running on GitHub Pages - use fetch API (Vercel Functions)
+        fetch(API_URL + '?action=logBag', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ size: '5 kg.' })
+        })
           .then(function(response) { return response.json(); })
-          .then(function(r) {
-            if (r.success) {
+          .then(function(raw) {
+            var r = raw.data || raw; // Handle Vercel wrapper
+            if (r.timestamp || raw.success) {
               setTimeout(loadData, 1000);
             }
           })
@@ -1358,7 +1364,7 @@
           });
       }
     }
-    
+
     // ========== PAUSE FUNCTIONALITY ==========
     function handlePauseClick() {
       if (isPaused) {
@@ -1474,32 +1480,34 @@
     
     function logPauseToSheet() {
       if (!API_URL) return;
-      
+
       fetch(API_URL + '?action=logPause', {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason: pauseReason })
       })
       .then(response => response.json())
-      .then(result => {
-        if (result.success) {
+      .then(raw => {
+        var result = raw.data || raw; // Handle Vercel wrapper
+        if (result.pauseId || raw.success) {
           pauseId = result.pauseId;
           console.log('Pause logged:', result);
         }
       })
       .catch(err => console.error('Failed to log pause:', err));
     }
-    
+
     function logResumeToSheet(duration) {
       if (!API_URL || !pauseId) return;
-      
+
       fetch(API_URL + '?action=logResume', {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pauseId: pauseId, duration: duration })
       })
       .then(response => response.json())
-      .then(result => {
+      .then(raw => {
+        var result = raw.data || raw; // Handle Vercel wrapper
         console.log('Resume logged:', result);
         pauseId = null;
       })
