@@ -311,8 +311,8 @@
       updateAllText();
     }
 
-    // API Configuration for GitHub Pages - will be updated after deployment
-    var API_URL = 'https://script.google.com/macros/s/AKfycbw7E0oVCTPQfEi6tSDpL_FVk2XrgE6jsoM7I8Ei62VUO_L9tU1bKyH7OwkWOxSG5TGYmw/exec';
+    // API Configuration - Vercel Functions
+    var API_URL = 'https://rogue-origin-apps-master.vercel.app/api/barcode';
 
     // Detect environment: Apps Script or GitHub Pages
     var isAppsScript = typeof google !== 'undefined' && google.script && google.script.run;
@@ -339,7 +339,9 @@
         fetch(API_URL + '?action=products')
           .then(function(response) { return response.json(); })
           .then(function(data) {
-            products = data.products || [];
+            // Handle both old (Apps Script) and new (Vercel) response formats
+            var result = data.data || data;
+            products = result.products || [];
             populateCultivarDropdown();
             document.getElementById('loading').style.display = 'none';
             showMessage('Loaded ' + products.length + ' products', 'success');
@@ -601,16 +603,17 @@
       if (!h || !s || !b) { alert('Please fill all fields'); return; }
       
       function handleResult(r) {
-        showMessage(r.message, r.success ? 'success' : 'error');
-        if (r.success) { loadProducts(); closeModal(); }
+        var result = r.data || r; // Handle Vercel wrapper
+        showMessage(result.message || result.error, result.success ? 'success' : 'error');
+        if (result.success) { loadProducts(); closeModal(); }
       }
-      
+
       if (isAppsScript) {
         google.script.run.withSuccessHandler(handleResult).addProduct(h, s, b);
       } else {
         fetch(API_URL + '?action=add', {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ header: h, sku: s, barcode: b })
         })
           .then(function(response) { return response.json(); })
@@ -624,16 +627,17 @@
       if (!csv) { alert('Paste CSV data'); return; }
       
       function handleResult(r) {
-        showMessage(r.message, r.success ? 'success' : 'error');
-        if (r.success) { loadProducts(); closeImportModal(); }
+        var result = r.data || r; // Handle Vercel wrapper
+        showMessage(result.message || result.error, result.success ? 'success' : 'error');
+        if (result.success) { loadProducts(); closeImportModal(); }
       }
-      
+
       if (isAppsScript) {
         google.script.run.withSuccessHandler(handleResult).importCSV(csv);
       } else {
         fetch(API_URL + '?action=import', {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ csv: csv })
         })
           .then(function(response) { return response.json(); })
