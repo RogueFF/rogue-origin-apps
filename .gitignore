@@ -1,7 +1,12 @@
 # Dependencies
 node_modules/
 tests/node_modules/
+api/node_modules/
 package-lock.json
+
+# Vercel
+.vercel/
+api/.vercel/
 
 # Claude Code
 .claude/

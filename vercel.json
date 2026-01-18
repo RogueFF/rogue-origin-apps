@@ -1,0 +1,55 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
+  "framework": null,
+  "buildCommand": null,
+  "outputDirectory": null,
+  "installCommand": "cd api && npm install",
+  "functions": {
+    "api/**/*.js": {
+      "memory": 256,
+      "maxDuration": 30
+    }
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type, Authorization"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/barcode",
+      "destination": "/api/barcode/index.js"
+    },
+    {
+      "source": "/api/kanban",
+      "destination": "/api/kanban/index.js"
+    },
+    {
+      "source": "/api/sop",
+      "destination": "/api/sop/index.js"
+    },
+    {
+      "source": "/api/orders",
+      "destination": "/api/orders/index.js"
+    },
+    {
+      "source": "/api/production",
+      "destination": "/api/production/index.js"
+    }
+  ]
+}
