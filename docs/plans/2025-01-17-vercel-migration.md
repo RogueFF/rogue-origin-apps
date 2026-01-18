@@ -147,10 +147,10 @@ Run before committing. Catches common bugs.
 - Steps stored as JSON in single column (not separate sheet)
 
 ### Phase 4: Orders
-- 19 endpoints: validatePassword, getCustomers, getMasterOrders, getShipments, getPayments, getOrderFinancials, getPriceHistory, getCOAIndex, test, saveCustomer, deleteCustomer, saveMasterOrder, deleteMasterOrder, saveShipment, deleteShipment, savePayment, deletePayment, updateOrderPriority
+- 21 endpoints: validatePassword, getCustomers, getMasterOrders, getShipments, getPayments, getOrderFinancials, getPriceHistory, getCOAIndex, syncCOAIndex, getCOAsForStrains, test, saveCustomer, deleteCustomer, saveMasterOrder, deleteMasterOrder, saveShipment, deleteShipment, savePayment, deletePayment, updateOrderPriority
 - Auth uses ORDERS_PASSWORD env var
 - Sheet ID uses ORDERS_SHEET_ID env var (sheet: `1QLQaR4RMniUmwbJFrtMVaydyVMyCCxqHXWDCVs5dejw`)
-- COA features (getCOAsForStrains, syncCOAIndex) require Drive API - not migrated yet, using cached index from Sheet
+- COA features use Drive API (same service account) - folder ID: `1vNjWtq701h_hSCA1gvjlD37xOZv6QbfO`
 - Changed Content-Type from `text/plain` to `application/json` for POST requests
 
 ### Phase 5: Production + Scoreboard
@@ -221,12 +221,12 @@ After every session or major step:
 - **Next**: Phase 4 - Orders migration
 
 ### 2026-01-17: Phase 4 Complete - Orders
-- Created `api/orders/index.js` with 19 endpoints
-- Endpoints: validatePassword, getCustomers, getMasterOrders, getShipments, getPayments, getOrderFinancials, getPriceHistory, getCOAIndex, test, saveCustomer, deleteCustomer, saveMasterOrder, deleteMasterOrder, saveShipment, deleteShipment, savePayment, deletePayment, updateOrderPriority
+- Created `api/orders/index.js` with 21 endpoints
+- Endpoints: validatePassword, getCustomers, getMasterOrders, getShipments, getPayments, getOrderFinancials, getPriceHistory, getCOAIndex, syncCOAIndex, getCOAsForStrains, test, saveCustomer, deleteCustomer, saveMasterOrder, deleteMasterOrder, saveShipment, deleteShipment, savePayment, deletePayment, updateOrderPriority
 - Updated `orders.html` to use Vercel API
 - Changed Content-Type from `text/plain` to `application/json`
 - Added env vars: `ORDERS_SHEET_ID`, `ORDERS_PASSWORD`
-- **Note**: COA features (getCOAsForStrains, syncCOAIndex) require Drive API - reading from cached index only
+- Added Drive API for COA features (uses same service account, folder shared with service account)
 - **Next**: Phase 5 - Production + Scoreboard migration
 
 ---
