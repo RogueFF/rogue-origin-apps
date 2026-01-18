@@ -23,10 +23,15 @@ export function renderKPICards() {
   container.innerHTML = '';
 
   kpiDefinitions.forEach(kpi => {
+    // Create wrapper element for Muuri grid (required for proper positioning)
+    const wrapper = document.createElement('div');
+    wrapper.className = 'kpi-grid-item';
+    wrapper.dataset.kpi = kpi.id;
+    wrapper.dataset.hidden = !kpi.visible;
+
     const card = document.createElement('div');
     card.className = `kpi-card ${kpi.color} loading`;
     card.dataset.kpi = kpi.id;
-    card.dataset.hidden = !kpi.visible;
     card.style.cursor = 'pointer';
 
     card.onclick = () => toggleKPIExpand(kpi.id);
@@ -60,7 +65,8 @@ export function renderKPICards() {
       </div>
     `;
 
-    container.appendChild(card);
+    wrapper.appendChild(card);
+    container.appendChild(wrapper);
   });
 }
 
@@ -155,18 +161,18 @@ export function toggleKPI(id, visible) {
     kpi.visible = visible;
   }
 
-  // Find the card element
-  const card = document.querySelector(`.kpi-card[data-kpi="${id}"]`);
-  if (!card) return;
+  // Find the wrapper element (Muuri operates on the wrapper, not the card)
+  const wrapper = document.querySelector(`.kpi-grid-item[data-kpi="${id}"]`);
+  if (!wrapper) return;
 
-  // Update data-hidden attribute
-  card.dataset.hidden = !visible;
+  // Update data-hidden attribute on wrapper
+  wrapper.dataset.hidden = !visible;
 
   // Use Muuri show/hide if available
   const muuriKPI = getGrid('kpi');
   if (muuriKPI && !muuriKPI._isDestroyed) {
     const items = muuriKPI.getItems();
-    const targetItem = items.find(item => item.getElement() === card);
+    const targetItem = items.find(item => item.getElement() === wrapper);
 
     if (targetItem) {
       if (visible) {
