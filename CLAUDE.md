@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Rogue Origin Operations Hub
 
 > Hemp processing company in Southern Oregon. Data-driven operations, bilingual (EN/ES) workforce.
-> **Architecture**: Static HTML frontend (GitHub Pages) + Google Apps Script backend + Google Sheets database
+> **Architecture**: Static HTML frontend (GitHub Pages) + Vercel Functions backend + Google Sheets database
 
 ## Current Status
 
@@ -67,6 +67,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **To continue**: Start with Phase 3.1 (error handling) or Phase 5.1 (accessibility)
 
 ## Recent Features (January 2026)
+
+### Vercel Functions Migration Complete (2026-01-17)
+
+**Backend Migration**: All Apps Script backends migrated to Vercel Functions for faster response times.
+
+| App | API Endpoint | Status |
+|-----|--------------|--------|
+| Barcode | `/api/barcode` | ✅ Complete |
+| Kanban | `/api/kanban` | ✅ Complete |
+| SOP Manager | `/api/sop` | ✅ Complete |
+| Orders | `/api/orders` | ✅ Complete |
+| Production + Scoreboard | `/api/production` | ✅ Complete |
+
+**Key Changes**:
+- Response times improved from 10-15s (Apps Script cold start) to ~200-500ms
+- Base URL: `https://rogue-origin-apps-master.vercel.app/api/{app}`
+- Content-Type changed from `text/plain` to `application/json`
+- Response wrapper pattern: `{ success: true, data: {...} }`
+- Frontend response handling: `const response = raw.data || raw;`
+
+**Environment Variables** (in Vercel dashboard):
+- `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY` (shared)
+- `BARCODE_SHEET_ID`, `KANBAN_SHEET_ID`, `SOP_SHEET_ID`, `ORDERS_SHEET_ID`, `PRODUCTION_SHEET_ID`
+- `ANTHROPIC_API_KEY` (AI chat/SOP features)
+- `GOOGLE_TTS_API_KEY` (voice features)
+- `ORDERS_PASSWORD` (orders auth)
+
+**Migration Plan**: See `docs/plans/2025-01-17-vercel-migration.md`
+
+---
 
 ### Wholesale Orders System Deployment (2026-01-09)
 
@@ -244,8 +274,11 @@ Cycle Time Calculation:
 | Resource | Value |
 |----------|-------|
 | **Live Apps** | https://rogueff.github.io/rogue-origin-apps/ |
-| **Production API** | `https://script.google.com/macros/s/AKfycbxDAHSFl9cedGS49L3Lf5ztqy-SSToYigyA30ZtsdpmWNAR9H61X_Mm48JOOTGqqr-Z/exec` |
+| **Vercel API Base** | `https://rogue-origin-apps-master.vercel.app/api` |
+| **Production API** | `https://rogue-origin-apps-master.vercel.app/api/production` |
+| **Orders API** | `https://rogue-origin-apps-master.vercel.app/api/orders` |
 | **Production Sheet** | `1dARXrKU2u4KJY08ylA3GUKrT0zwmxCmtVh7IJxnn7is` |
+| **Orders Sheet** | `1QLQaR4RMniUmwbJFrtMVaydyVMyCCxqHXWDCVs5dejw` |
 | **Barcode Sheet** | `1JQRU1-kW5hLcAdNhRvOvvj91fhezBE_-StN5X1Ni6zE` |
 
 ### Brand Colors
@@ -451,29 +484,38 @@ Work hours: 7am-4:30pm, ~7.5 effective hours (minus breaks)
 
 ## Code Patterns
 
-### Dual-Mode Detection (Required)
+### Vercel API Calls (Standard Pattern)
 ```javascript
-const isAppsScript = typeof google !== 'undefined' && google.script;
-const API_URL = 'https://script.google.com/macros/s/AKfycbx.../exec';
+const API_URL = 'https://rogue-origin-apps-master.vercel.app/api/production';
 
+// GET request
 async function loadData(action) {
-  if (isAppsScript) {
-    return new Promise((resolve, reject) => {
-      google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getData(action);
-    });
-  }
-  return fetch(`${API_URL}?action=${action}`).then(r => r.json());
+  const response = await fetch(`${API_URL}?action=${action}`);
+  const raw = await response.json();
+  return raw.data || raw;  // Unwrap Vercel response wrapper
 }
-```
 
-### CORS-Safe POST (Critical)
-```javascript
-// MUST use text/plain to avoid CORS preflight
+// POST request
 fetch(`${API_URL}?action=chat`, {
   method: 'POST',
-  headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+  headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify(data)
+})
+.then(r => r.json())
+.then(raw => {
+  const response = raw.data || raw;  // Unwrap Vercel wrapper
+  // Use response...
 });
+```
+
+### Legacy: Apps Script Mode (for embedded dialogs)
+```javascript
+const isAppsScript = typeof google !== 'undefined' && google.script;
+
+if (isAppsScript) {
+  // Used when HTML is served from within Google Sheets dialog
+  google.script.run.withSuccessHandler(callback).withFailureHandler(onError).getData(action);
+}
 ```
 
 ### Bilingual Support (Required for UI)
