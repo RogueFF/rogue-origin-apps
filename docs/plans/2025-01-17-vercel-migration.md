@@ -13,7 +13,7 @@
 | 1 | Barcode | Low | ✅ Complete |
 | 2 | Kanban | Low | ✅ Complete |
 | 3 | SOP Manager | Medium | ✅ Complete |
-| 4 | Orders | Medium | Auth required |
+| 4 | Orders | Medium | ✅ Complete |
 | 5 | Production + Scoreboard | High | Shared backend, AI chat |
 
 ---
@@ -147,7 +147,11 @@ Run before committing. Catches common bugs.
 - Steps stored as JSON in single column (not separate sheet)
 
 ### Phase 4: Orders
-- *TBD*
+- 19 endpoints: validatePassword, getCustomers, getMasterOrders, getShipments, getPayments, getOrderFinancials, getPriceHistory, getCOAIndex, test, saveCustomer, deleteCustomer, saveMasterOrder, deleteMasterOrder, saveShipment, deleteShipment, savePayment, deletePayment, updateOrderPriority
+- Auth uses ORDERS_PASSWORD env var
+- Sheet ID uses ORDERS_SHEET_ID env var (sheet: `1QLQaR4RMniUmwbJFrtMVaydyVMyCCxqHXWDCVs5dejw`)
+- COA features (getCOAsForStrains, syncCOAIndex) require Drive API - not migrated yet, using cached index from Sheet
+- Changed Content-Type from `text/plain` to `application/json` for POST requests
 
 ### Phase 5: Production + Scoreboard
 - *TBD*
@@ -216,7 +220,16 @@ After every session or major step:
 - Updated `sop-manager.html` to use Vercel API
 - **Next**: Phase 4 - Orders migration
 
+### 2026-01-17: Phase 4 Complete - Orders
+- Created `api/orders/index.js` with 19 endpoints
+- Endpoints: validatePassword, getCustomers, getMasterOrders, getShipments, getPayments, getOrderFinancials, getPriceHistory, getCOAIndex, test, saveCustomer, deleteCustomer, saveMasterOrder, deleteMasterOrder, saveShipment, deleteShipment, savePayment, deletePayment, updateOrderPriority
+- Updated `orders.html` to use Vercel API
+- Changed Content-Type from `text/plain` to `application/json`
+- Added env vars: `ORDERS_SHEET_ID`, `ORDERS_PASSWORD`
+- **Note**: COA features (getCOAsForStrains, syncCOAIndex) require Drive API - reading from cached index only
+- **Next**: Phase 5 - Production + Scoreboard migration
+
 ---
 
-**Current Phase**: 4 - Orders
-**Last Updated**: 2025-01-18
+**Current Phase**: 5 - Production + Scoreboard
+**Last Updated**: 2026-01-17
