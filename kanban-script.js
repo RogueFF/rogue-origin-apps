@@ -9,8 +9,8 @@ var previewSide = 'front';
 var previewColor = 'green';
 var currentLang = 'en';
 
-// API Configuration for GitHub Pages
-var API_URL = 'https://script.google.com/macros/s/AKfycbzVxbQLZVr21vnINQi9b8LphvLnJNQW76Fmd1aDd6dgDvZEq-GiB3aVXcxP-e6rat_X/exec';
+// API Configuration - Vercel Functions
+var API_URL = 'https://rogue-origin-apps-master.vercel.app/api/kanban';
 
 // Detect environment: Apps Script (google.script.run available) or GitHub Pages (use fetch)
 var isAppsScript = typeof google !== 'undefined' && google.script && google.script.run;
@@ -326,8 +326,9 @@ function load(preserveFilters) {
 
 function onLoad(r, preserveFilters) {
   hide('loading');
-  if (!r.success) { toast(r.error, 'err'); return; }
-  allCards = r.cards;
+  var result = r.data || r; // Handle Vercel wrapper
+  if (!result.success) { toast(result.error, 'err'); return; }
+  allCards = result.cards;
   updateSuppliers();
   
   if (preserveFilters) {
@@ -554,9 +555,8 @@ function saveCard() {
     var action = data.id ? 'update' : 'add';
     fetch(API_URL + '?action=' + action, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(data),
-      redirect: 'follow'
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
     })
       .then(function(response) { return response.json(); })
       .then(onSave)
@@ -565,8 +565,9 @@ function saveCard() {
 }
 
 function onSave(r) {
-  if (r.success) { toast(r.message, 'ok'); load(true); }
-  else { hide('loading'); toast(r.error, 'err'); }
+  var result = r.data || r; // Handle Vercel wrapper
+  if (result.success) { toast(result.message, 'ok'); load(true); }
+  else { hide('loading'); toast(result.error, 'err'); }
 }
 
 function reorder(id) {
@@ -588,9 +589,8 @@ function del(id) {
   } else {
     fetch(API_URL + '?action=delete', {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ id: id }),
-      redirect: 'follow'
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id })
     })
       .then(function(response) { return response.json(); })
       .then(onSave)
@@ -647,12 +647,11 @@ function autoFillFromUrl() {
   } else {
     fetch(API_URL + '?action=fetchProduct', {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ url: url }),
-      redirect: 'follow'
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: url })
     })
       .then(function(response) { return response.json(); })
-      .then(handleResult)
+      .then(function(r) { handleResult(r.data || r); })
       .catch(function(e) { toast('Error: ' + e.message, 'err'); });
   }
 }
