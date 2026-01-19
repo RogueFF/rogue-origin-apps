@@ -569,7 +569,7 @@ async function getBagTimerData() {
       }
     }
 
-    result.bagsToday = bags5kg + bags10lb;
+    result.bagsToday = bags5kg;  // Only count 5kg bags for main display
     result.bags5kgToday = bags5kg;
     result.bags10lbToday = bags10lb;
 
