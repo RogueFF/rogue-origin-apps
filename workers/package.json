@@ -17,6 +17,6 @@
   "author": "Rogue Origin",
   "license": "MIT",
   "devDependencies": {
-    "wrangler": "^3.0.0"
+    "wrangler": "^4.59.2"
   }
 }
