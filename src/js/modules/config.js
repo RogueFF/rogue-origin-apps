@@ -57,8 +57,14 @@ export const brandColors = {
   indoorLight: 'rgba(98,117,141,0.3)'
 };
 
-// API Configuration - Vercel Functions
-export const API_URL = 'https://rogue-origin-apps-master.vercel.app/api/production';
+// API Configuration
+// Cloudflare Workers (100K free requests/day, no cold starts)
+export const API_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api';
+// Vercel Functions (backup - rate limited)
+// export const API_BASE = 'https://rogue-origin-apps-master.vercel.app/api';
+
+// Endpoint URLs
+export const API_URL = `${API_BASE}/production`;
 
 // Work schedule configuration
 // Day: 7:00 AM - 4:30 PM (9.5 hours)

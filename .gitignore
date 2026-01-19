@@ -2,6 +2,7 @@
 node_modules/
 tests/node_modules/
 api/node_modules/
+workers/node_modules/
 package-lock.json
 
 # Vercel
@@ -51,6 +52,8 @@ build/
 # Environment variables
 .env
 .env.local
+.env.production
+.env.vercel
 .env.production.local
 .env.development.local
 

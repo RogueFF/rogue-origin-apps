@@ -311,8 +311,12 @@
       updateAllText();
     }
 
-    // API Configuration - Vercel Functions
-    var API_URL = 'https://rogue-origin-apps-master.vercel.app/api/barcode';
+    // API Configuration
+    // Cloudflare Workers (100K free requests/day, no cold starts)
+    var API_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api';
+    // Vercel Functions (backup - rate limited)
+    // var API_BASE = 'https://rogue-origin-apps-master.vercel.app/api';
+    var API_URL = API_BASE + '/barcode';
 
     // Detect environment: Apps Script or GitHub Pages
     var isAppsScript = typeof google !== 'undefined' && google.script && google.script.run;
