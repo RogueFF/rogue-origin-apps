@@ -515,9 +515,6 @@ async function getBagTimerData() {
           .replace(/:\s*(AM|PM)/gi, ' $1') // Fix ": AM" -> " AM"
           .replace(/,/g, ''); // Remove commas
 
-        // Check if timestamp already has timezone info
-        const hasTimezone = /[Zz]$|[+-]\d{2}:\d{2}$|[+-]\d{4}$/.test(cleanTimestamp);
-
         // Check if it's time-only (no date) - common formats: "10:39 AM", "10:39:00"
         const timeOnlyPattern = /^(\d{1,2}):(\d{2})(:\d{2})?\s*(AM|PM)?$/i;
         const timeMatch = cleanTimestamp.match(timeOnlyPattern);
@@ -535,13 +532,6 @@ async function getBagTimerData() {
         }
 
         rowDate = new Date(cleanTimestamp);
-
-        // If no timezone was specified, assume Pacific Time and adjust
-        // JavaScript parses timezone-less strings as local time (UTC on server)
-        // Add 8 hours to convert from "parsed as UTC" to "intended as Pacific"
-        if (!hasTimezone && !timeMatch && !isNaN(rowDate.getTime())) {
-          rowDate = new Date(rowDate.getTime() + 8 * 60 * 60 * 1000);
-        }
       } else if (typeof timestamp === 'number') {
         // Excel/Sheets serial date number
         if (timestamp < 1) {
