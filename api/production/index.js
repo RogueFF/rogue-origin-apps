@@ -220,6 +220,8 @@ async function getScoreboardData() {
     effectiveHours: 0,
     avgPercentage: 0,
     bestPercentage: 0,
+    avgDelta: 0,
+    bestDelta: 0,
     streak: 0,
     vsYesterday: null,
     vs7Day: null,
@@ -332,8 +334,10 @@ async function getScoreboardData() {
   // Calculate metrics
   let totalTarget = 0;
   const hourlyPercentages = [];
+  const hourlyDeltas = [];
   const hourlyRates = [];
   let bestPct = 0;
+  let bestDelta = null;
   let streak = 0;
   let currentStreak = 0;
 
@@ -344,8 +348,13 @@ async function getScoreboardData() {
       totalTarget += hourTarget;
 
       const pct = hourTarget > 0 ? (row.tops / hourTarget) * 100 : 0;
+      const delta = row.tops - hourTarget;
       hourlyPercentages.push(pct);
-      if (pct > bestPct) bestPct = pct;
+      hourlyDeltas.push(delta);
+      if (pct > bestPct) {
+        bestPct = pct;
+        bestDelta = delta;
+      }
 
       if (pct >= 90) {
         currentStreak++;
@@ -366,7 +375,11 @@ async function getScoreboardData() {
   result.avgPercentage = hourlyPercentages.length > 0
     ? hourlyPercentages.reduce((a, b) => a + b, 0) / hourlyPercentages.length
     : 0;
+  result.avgDelta = hourlyDeltas.length > 0
+    ? hourlyDeltas.reduce((a, b) => a + b, 0) / hourlyDeltas.length
+    : 0;
   result.bestPercentage = bestPct;
+  result.bestDelta = bestDelta !== null ? bestDelta : 0;
   result.streak = streak;
 
   // Daily projection
