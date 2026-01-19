@@ -693,10 +693,15 @@
     // ========================================
     // AUTHENTICATION (SERVER-SIDE)
     // ========================================
-    // Password is stored in Vercel env vars (ORDERS_PASSWORD)
-    // Similar to how Claude API key is stored
+    // API Configuration
+    // Cloudflare Workers (100K free requests/day, no cold starts)
+    const API_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api';
+    // Vercel Functions (backup - rate limited)
+    // const API_BASE = 'https://rogue-origin-apps-master.vercel.app/api';
+    // ========================================
+    // Password is stored in env vars (ORDERS_PASSWORD)
     const AUTH_STORAGE_KEY = 'orders_auth_session';
-    const AUTH_API_URL = 'https://rogue-origin-apps-master.vercel.app/api/orders';
+    const AUTH_API_URL = API_BASE + '/orders';
 
     // Check authentication on page load
     (function checkAuth() {
@@ -809,7 +814,7 @@
     // ========================================
     // CONFIGURATION
     // ========================================
-    const API_URL = 'https://rogue-origin-apps-master.vercel.app/api/orders';
+    const API_URL = API_BASE + '/orders';
     const isAppsScript = typeof google !== 'undefined' && google.script;
 
     // State

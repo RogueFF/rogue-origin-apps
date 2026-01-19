@@ -1,0 +1,22 @@
+{
+  "name": "rogue-origin-api",
+  "version": "1.0.0",
+  "description": "Rogue Origin API - Cloudflare Workers",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "api"
+  ],
+  "author": "Rogue Origin",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}
