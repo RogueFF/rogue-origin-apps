@@ -14,6 +14,7 @@ import { handleOrders } from './handlers/orders.js';
 import { handleBarcode } from './handlers/barcode.js';
 import { handleBarcodeD1 } from './handlers/barcode-d1.js';
 import { handleKanban } from './handlers/kanban.js';
+import { handleKanbanD1 } from './handlers/kanban-d1.js';
 import { handleSop } from './handlers/sop.js';
 import { corsHeaders, handleCors } from './lib/cors.js';
 import { jsonResponse, errorResponse } from './lib/response.js';
@@ -21,6 +22,7 @@ import { ApiError } from './lib/errors.js';
 
 // Feature flags for D1 migration (set to true to use D1 instead of Google Sheets)
 const USE_D1_BARCODE = true;
+const USE_D1_KANBAN = true;
 
 export default {
   async fetch(request, env, ctx) {
@@ -45,7 +47,9 @@ export default {
           ? await handleBarcodeD1(request, env, ctx)
           : await handleBarcode(request, env, ctx);
       } else if (path.startsWith('/api/kanban')) {
-        response = await handleKanban(request, env, ctx);
+        response = USE_D1_KANBAN
+          ? await handleKanbanD1(request, env, ctx)
+          : await handleKanban(request, env, ctx);
       } else if (path.startsWith('/api/sop')) {
         response = await handleSop(request, env, ctx);
       } else if (path === '/' || path === '/api') {
