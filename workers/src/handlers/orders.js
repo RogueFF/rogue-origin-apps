@@ -1061,10 +1061,31 @@ async function count5kgBagsForStrain(strain, startDateTime, env) {
     }
 
     const cultivarTimeline = [];
-    let currentCultivar = null;
-    const cultivarCol = 4;
 
-    for (let i = 1; i < productionData.length; i++) {
+    // Find header row and get cultivar column index dynamically
+    // Sheet structure: Date: [label], then header row, then data rows
+    let cultivarCol = -1;
+    let headerRowIndex = -1;
+
+    for (let i = 0; i < productionData.length; i++) {
+      const row = productionData[i];
+      // Look for header row containing 'Cultivar 1'
+      const cultivarIndex = row.findIndex(cell => String(cell || '').trim() === 'Cultivar 1');
+      if (cultivarIndex !== -1) {
+        cultivarCol = cultivarIndex;
+        headerRowIndex = i;
+        console.log(`[count5kgBagsForStrain] Found headers at row ${i}, Cultivar 1 at column ${cultivarCol}`);
+        break;
+      }
+    }
+
+    if (cultivarCol === -1) {
+      console.log('[count5kgBagsForStrain] Cultivar 1 column not found in headers');
+      return 0;
+    }
+
+    // Build cultivar timeline from data rows (after header row)
+    for (let i = headerRowIndex + 1; i < productionData.length; i++) {
       const row = productionData[i];
       if (!row[0]) continue;
       if (row[0] === 'Date:') continue;
@@ -1073,7 +1094,6 @@ async function count5kgBagsForStrain(strain, startDateTime, env) {
       const cultivar = String(row[cultivarCol] || '').trim();
 
       if (timeSlot.includes(':') && cultivar) {
-        currentCultivar = cultivar;
         const timeParts = timeSlot.split(':');
         if (timeParts.length >= 2) {
           const hour = parseInt(timeParts[0]);
@@ -1084,6 +1104,8 @@ async function count5kgBagsForStrain(strain, startDateTime, env) {
         }
       }
     }
+
+    console.log(`[count5kgBagsForStrain] Built cultivar timeline with ${cultivarTimeline.length} entries`);
 
     let bagCount = 0;
     const normalizedStrain = strain.toLowerCase().trim();
