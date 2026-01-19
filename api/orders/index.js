@@ -22,6 +22,7 @@
  * - GET  ?action=getCOAIndex       - Get COA index
  * - GET  ?action=syncCOAIndex      - Sync COA index from Drive
  * - GET  ?action=getCOAsForStrains - Get COA PDFs as base64
+ * - GET  ?action=getScoreboardOrderQueue - Get order queue for production scoreboard
  * - POST ?action=saveCustomer      - Create/update customer
  * - POST ?action=deleteCustomer    - Delete customer
  * - POST ?action=saveMasterOrder   - Create/update order
@@ -40,8 +41,10 @@ const { sanitizeForSheets } = require('../_lib/validate');
 const { createError } = require('../_lib/errors');
 
 const SHEET_ID = process.env.ORDERS_SHEET_ID;
+const PRODUCTION_SHEET_ID = process.env.PRODUCTION_SHEET_ID;
 const ORDERS_PASSWORD = process.env.ORDERS_PASSWORD;
 const COA_FOLDER_ID = '1vNjWtq701h_hSCA1gvjlD37xOZv6QbfO';
+const TIMEZONE = 'America/Los_Angeles';
 
 // Cache Drive client
 let cachedDrive = null;
@@ -963,6 +966,372 @@ function calculateMatchScore(name1, name2) {
   return matchedWords / Math.max(words1.length, words2.length);
 }
 
+// ===== SCOREBOARD ORDER QUEUE =====
+
+/**
+ * Count 5kg bags for a specific strain from production tracking sheet
+ * Matches bags to strains by checking what cultivar was being worked on at scan time
+ */
+async function count5kgBagsForStrain(strain, startDateTime) {
+  if (!PRODUCTION_SHEET_ID) {
+    console.log('[count5kgBagsForStrain] PRODUCTION_SHEET_ID not configured');
+    return 0;
+  }
+
+  try {
+    // Read bag tracking data (first 2000 rows after header)
+    const trackingData = await readSheet(PRODUCTION_SHEET_ID, "'Rogue Origin Production Tracking'!A1:F2001");
+    if (!trackingData || trackingData.length < 2) return 0;
+
+    const headers = trackingData[0];
+    const timestampCol = headers.indexOf('Timestamp');
+    const sizeCol = headers.indexOf('Size');
+
+    if (timestampCol === -1 || sizeCol === -1) {
+      console.log('[count5kgBagsForStrain] Required columns not found');
+      return 0;
+    }
+
+    // Parse startDateTime filter
+    let startFilter = null;
+    if (startDateTime) {
+      startFilter = new Date(startDateTime);
+      if (isNaN(startFilter.getTime())) startFilter = null;
+    }
+
+    // Get current month production data to match cultivars
+    const now = new Date();
+    const pacificOffset = -8 * 60; // Pacific Time offset in minutes
+    const pacificDate = new Date(now.getTime() + (pacificOffset + now.getTimezoneOffset()) * 60000);
+    const year = pacificDate.getFullYear();
+    const month = String(pacificDate.getMonth() + 1).padStart(2, '0');
+    const monthSheetName = `${year}-${month}`;
+
+    let productionData = [];
+    try {
+      productionData = await readSheet(PRODUCTION_SHEET_ID, `'${monthSheetName}'!A:L`);
+    } catch (e) {
+      console.log('[count5kgBagsForStrain] Could not read month sheet:', e.message);
+    }
+
+    // Build cultivar timeline from production data
+    const cultivarTimeline = [];
+    let currentCultivar = null;
+    const cultivarCol = 4; // Column E is typically cultivar
+
+    for (let i = 1; i < productionData.length; i++) {
+      const row = productionData[i];
+      if (!row[0]) continue;
+
+      // Check for date block
+      if (row[0] === 'Date:') continue;
+
+      // Check for time slot with cultivar
+      const timeSlot = String(row[0] || '');
+      const cultivar = String(row[cultivarCol] || '').trim();
+
+      if (timeSlot.includes(':') && cultivar) {
+        currentCultivar = cultivar;
+        // Parse time into approximate timestamp
+        const timeParts = timeSlot.split(':');
+        if (timeParts.length >= 2) {
+          const hour = parseInt(timeParts[0]);
+          const min = parseInt(timeParts[1]) || 0;
+          const timestamp = new Date(pacificDate);
+          timestamp.setHours(hour, min, 0, 0);
+          cultivarTimeline.push({ timestamp, cultivar });
+        }
+      }
+    }
+
+    // Count matching bags
+    let bagCount = 0;
+    const normalizedStrain = strain.toLowerCase().trim();
+
+    for (let i = 1; i < trackingData.length; i++) {
+      const row = trackingData[i];
+      const size = String(row[sizeCol] || '').toUpperCase();
+
+      // Only count 5KG bags
+      if (!size.includes('5KG') && !size.includes('5 KG')) continue;
+
+      // Parse timestamp
+      let bagTimestamp = row[timestampCol];
+      if (!bagTimestamp) continue;
+
+      let bagDate;
+      if (bagTimestamp instanceof Date) {
+        bagDate = bagTimestamp;
+      } else {
+        // Parse various timestamp formats
+        const cleanTs = String(bagTimestamp).trim();
+        bagDate = new Date(cleanTs);
+        if (isNaN(bagDate.getTime())) {
+          // Try US date format
+          const usMatch = cleanTs.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i);
+          if (usMatch) {
+            const [, m, d, y, h, min, sec, ampm] = usMatch;
+            let hours = parseInt(h);
+            if (ampm) {
+              if (ampm.toUpperCase() === 'PM' && hours !== 12) hours += 12;
+              if (ampm.toUpperCase() === 'AM' && hours === 12) hours = 0;
+            }
+            bagDate = new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T${String(hours).padStart(2, '0')}:${min}:${sec || '00'}-08:00`);
+          }
+        }
+      }
+
+      if (!bagDate || isNaN(bagDate.getTime())) continue;
+
+      // Apply start time filter
+      if (startFilter && bagDate < startFilter) continue;
+
+      // Match bag to cultivar using timeline
+      let bagCultivar = null;
+      for (let j = cultivarTimeline.length - 1; j >= 0; j--) {
+        if (bagDate >= cultivarTimeline[j].timestamp) {
+          bagCultivar = cultivarTimeline[j].cultivar;
+          break;
+        }
+      }
+
+      // Check if cultivar matches strain (case-insensitive, partial match)
+      if (bagCultivar) {
+        const normalizedCultivar = bagCultivar.toLowerCase().trim();
+        if (normalizedCultivar.includes(normalizedStrain) || normalizedStrain.includes(normalizedCultivar)) {
+          bagCount++;
+        }
+      }
+    }
+
+    console.log(`[count5kgBagsForStrain] Found ${bagCount} bags for strain "${strain}"`);
+    return bagCount;
+  } catch (error) {
+    console.error('[count5kgBagsForStrain] Error:', error.message);
+    return 0;
+  }
+}
+
+/**
+ * Calculate order progress for a shipment line item
+ */
+async function calculateOrderProgress(shipmentId, strain, type, targetKg, manualCompletedKg, startDateTime, manualAdjustmentKg) {
+  try {
+    // Priority 1: If manual completion OVERRIDE is set (not 0), use that
+    if (manualCompletedKg != null && manualCompletedKg > 0) {
+      const completedKg = parseFloat(manualCompletedKg) || 0;
+      let percentComplete = targetKg > 0 ? Math.round((completedKg / targetKg) * 100) : 0;
+      if (percentComplete > 100) percentComplete = 100;
+
+      let estimatedHoursRemaining = 0;
+      const remainingKg = targetKg - completedKg;
+      if (remainingKg > 0) {
+        const crewRate = 5.0; // Default: 5 trimmers * 1.0 lbs/hr
+        const remainingLbs = remainingKg * 2.205;
+        estimatedHoursRemaining = crewRate > 0 ? Math.ceil(remainingLbs / crewRate) : 0;
+      }
+
+      return { completedKg, percentComplete, estimatedHoursRemaining };
+    }
+
+    // Priority 2: Count scanned bags for this strain (automatic tracking) + manual adjustment
+    const bagCount = await count5kgBagsForStrain(strain, startDateTime);
+    const adjustmentKg = parseFloat(manualAdjustmentKg) || 0;
+
+    if (bagCount > 0 || adjustmentKg !== 0) {
+      const bagKg = bagCount * 5; // Each bag is 5kg
+      let completedKg = bagKg + adjustmentKg;
+      if (completedKg < 0) completedKg = 0;
+
+      let percentComplete = targetKg > 0 ? Math.round((completedKg / targetKg) * 100) : 0;
+      if (percentComplete > 100) percentComplete = 100;
+
+      let estimatedHoursRemaining = 0;
+      const remainingKg = targetKg - completedKg;
+      if (remainingKg > 0) {
+        const crewRate = 5.0;
+        const remainingLbs = remainingKg * 2.205;
+        estimatedHoursRemaining = crewRate > 0 ? Math.ceil(remainingLbs / crewRate) : 0;
+      }
+
+      console.log(`[calculateOrderProgress] Bags: ${bagCount} (${bagKg}kg) + Adjustment: ${adjustmentKg}kg = ${completedKg}kg for ${strain}`);
+      return { completedKg, percentComplete, estimatedHoursRemaining, bagCount, bagKg, adjustmentKg };
+    }
+
+    // Priority 3: No data found
+    return { completedKg: 0, percentComplete: 0, estimatedHoursRemaining: 0 };
+  } catch (error) {
+    console.error('[calculateOrderProgress] Error:', error.message);
+    return { completedKg: 0, percentComplete: 0, estimatedHoursRemaining: 0 };
+  }
+}
+
+/**
+ * Get scoreboard order queue for production floor display
+ * Returns current order, next order, and queue summary
+ */
+async function getScoreboardOrderQueue(req, res) {
+  try {
+    // Get all master orders
+    const ordersData = await readSheet(SHEET_ID, `${SHEETS.orders}!A:V`);
+    const orders = [];
+    for (let i = 1; i < ordersData.length; i++) {
+      const row = ordersData[i];
+      if (!row[0]) continue;
+      orders.push({
+        id: row[0],
+        customerID: row[1] || '',
+        customerName: row[2] || '',
+        status: row[5] || 'pending',
+        createdDate: formatDate(row[8]),
+        dueDate: formatDate(row[9]),
+        priority: parseInt(row[21]) || null,
+      });
+    }
+
+    // Get all shipments
+    const shipmentsData = await readSheet(SHEET_ID, `${SHEETS.shipments}!A:O`);
+    const shipments = [];
+    for (let i = 1; i < shipmentsData.length; i++) {
+      const row = shipmentsData[i];
+      if (!row[0]) continue;
+      let lineItems = [];
+      try {
+        lineItems = JSON.parse(row[7] || '[]');
+      } catch (e) {
+        lineItems = [];
+      }
+      shipments.push({
+        id: row[0],
+        orderID: row[1] || '',
+        invoiceNumber: row[2] || '',
+        startDateTime: row[4] ? String(row[4]) : null,
+        status: row[5] || 'pending',
+        lineItems,
+      });
+    }
+
+    // Build a list of TOPS-only line items from active shipments
+    const topsLineItems = [];
+
+    for (const shipment of shipments) {
+      // Find the parent order
+      const parentOrder = orders.find(o => o.id === shipment.orderID);
+      if (!parentOrder) continue;
+
+      // Skip completed or cancelled orders
+      if (parentOrder.status === 'completed' || parentOrder.status === 'cancelled') continue;
+
+      // Filter for TOPS only line items
+      for (const item of shipment.lineItems) {
+        if (item.type && item.type.toLowerCase() === 'tops') {
+          topsLineItems.push({
+            masterOrderId: parentOrder.id,
+            shipmentId: shipment.id,
+            customer: parentOrder.customerName,
+            strain: item.strain,
+            type: item.type,
+            quantityKg: parseFloat(item.quantity) || 0,
+            completedKg: parseFloat(item.completedKg) || null,
+            adjustmentKg: parseFloat(item.adjustmentKg) || 0,
+            startDateTime: shipment.startDateTime || null,
+            dueDate: parentOrder.dueDate,
+            orderPriority: parentOrder.priority,
+            createdDate: parentOrder.createdDate,
+            invoiceNumber: shipment.invoiceNumber,
+            orderStatus: parentOrder.status,
+            shipmentStatus: shipment.status,
+          });
+        }
+      }
+    }
+
+    // Sort by priority (manual override) or creation date (FIFO)
+    topsLineItems.sort((a, b) => {
+      if (a.orderPriority != null && b.orderPriority != null) {
+        return a.orderPriority - b.orderPriority;
+      }
+      if (a.orderPriority != null) return -1;
+      if (b.orderPriority != null) return 1;
+      const dateA = new Date(a.createdDate);
+      const dateB = new Date(b.createdDate);
+      return dateA - dateB;
+    });
+
+    // Get current shipment items and next shipment
+    const currentItems = [];
+    let next = null;
+    let currentShipmentId = null;
+
+    if (topsLineItems.length > 0) {
+      currentShipmentId = topsLineItems[0].shipmentId;
+
+      for (const item of topsLineItems) {
+        if (item.shipmentId === currentShipmentId) {
+          // Calculate progress for current shipment items
+          const progress = await calculateOrderProgress(
+            item.shipmentId,
+            item.strain,
+            item.type,
+            item.quantityKg,
+            item.completedKg,
+            item.startDateTime,
+            item.adjustmentKg
+          );
+
+          currentItems.push({
+            masterOrderId: item.masterOrderId,
+            shipmentId: item.shipmentId,
+            customer: item.customer,
+            strain: item.strain,
+            type: item.type,
+            quantityKg: item.quantityKg,
+            completedKg: progress.completedKg,
+            percentComplete: progress.percentComplete,
+            dueDate: item.dueDate,
+            estimatedHoursRemaining: progress.estimatedHoursRemaining,
+            invoiceNumber: item.invoiceNumber,
+            bagCount: progress.bagCount || 0,
+            bagKg: progress.bagKg || 0,
+            adjustmentKg: progress.adjustmentKg || item.adjustmentKg,
+          });
+        } else if (!next) {
+          // First item from a DIFFERENT shipment becomes "next"
+          next = {
+            masterOrderId: item.masterOrderId,
+            shipmentId: item.shipmentId,
+            customer: item.customer,
+            strain: item.strain,
+            type: item.type,
+            quantityKg: item.quantityKg,
+            dueDate: item.dueDate,
+            invoiceNumber: item.invoiceNumber,
+          };
+        }
+      }
+    }
+
+    // For backwards compatibility, also provide "current" as the first item
+    const current = currentItems.length > 0 ? currentItems[0] : null;
+
+    console.log(`[getScoreboardOrderQueue] Total topsLineItems: ${topsLineItems.length}, currentItems: ${currentItems.length}`);
+
+    success(res, {
+      success: true,
+      current,
+      currentItems,
+      next,
+      queue: {
+        totalShipments: topsLineItems.length,
+        totalKg: topsLineItems.reduce((sum, item) => sum + item.quantityKg, 0),
+      },
+    });
+  } catch (error) {
+    console.error('[getScoreboardOrderQueue] Error:', error.message);
+    throw createError('INTERNAL_ERROR', error.message);
+  }
+}
+
 // ===== TEST =====
 
 async function test(req, res) {
@@ -1009,6 +1378,9 @@ module.exports = createHandler({
   getCOAIndex,
   syncCOAIndex,
   getCOAsForStrains,
+
+  // Scoreboard
+  getScoreboardOrderQueue,
 
   // Test
   test,
