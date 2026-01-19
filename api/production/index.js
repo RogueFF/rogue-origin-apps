@@ -531,6 +531,24 @@ async function getBagTimerData() {
           cleanTimestamp = `${today}T${String(hours).padStart(2, '0')}:${minutes}:00-08:00`;
         }
 
+        // Check for US date format without timezone: "M/D/YYYY H:M:S" or "M/D/YYYY H:M:S AM/PM"
+        // These are Pacific times that need timezone added
+        const usDatePattern = /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i;
+        const usDateMatch = cleanTimestamp.match(usDatePattern);
+        if (usDateMatch) {
+          const [, month, day, year, hourStr, min, sec, ampm] = usDateMatch;
+          let hours = parseInt(hourStr, 10);
+
+          if (ampm) {
+            if (ampm.toUpperCase() === 'PM' && hours !== 12) hours += 12;
+            if (ampm.toUpperCase() === 'AM' && hours === 12) hours = 0;
+          }
+
+          // Build ISO format with Pacific timezone
+          const isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${String(hours).padStart(2, '0')}:${min}:${sec || '00'}-08:00`;
+          cleanTimestamp = isoDate;
+        }
+
         rowDate = new Date(cleanTimestamp);
       } else if (typeof timestamp === 'number') {
         // Excel/Sheets serial date number
