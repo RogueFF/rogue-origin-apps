@@ -511,11 +511,22 @@ async function getBagTimerData() {
       const originalTimestamp = timestamp;
       if (typeof timestamp === 'string') {
         // Clean up timestamp string (remove extra colons, normalize format)
-        const cleanTimestamp = timestamp
+        let cleanTimestamp = timestamp.trim()
           .replace(/at\s+/gi, '') // Remove "at "
           .replace(/:\s*(AM|PM)/gi, ' $1') // Fix ": AM" -> " AM"
           .replace(/,/g, ''); // Remove commas
+
+        // Check if it's time-only (no date) - common formats: "10:39 AM", "10:39:00"
+        const timeOnlyPattern = /^\d{1,2}:\d{2}(:\d{2})?\s*(AM|PM)?$/i;
+        if (timeOnlyPattern.test(cleanTimestamp)) {
+          // Prepend today's date
+          cleanTimestamp = `${today} ${cleanTimestamp}`;
+        }
+
         rowDate = new Date(cleanTimestamp);
+      } else if (typeof timestamp === 'number') {
+        // Excel/Sheets serial date number
+        rowDate = new Date((timestamp - 25569) * 86400 * 1000);
       } else {
         rowDate = new Date(timestamp);
       }
