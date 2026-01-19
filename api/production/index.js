@@ -712,6 +712,7 @@ async function scoreboard(req, res) {
 
 /**
  * Get dashboard data with date range
+ * Returns full dashboard data including today's metrics, bag timer, and historical data
  * If requested date range has no data, falls back to most recent working day
  */
 async function dashboard(req, res) {
@@ -726,8 +727,16 @@ async function dashboard(req, res) {
     throw createError('VALIDATION_ERROR', 'Invalid end date');
   }
 
-  // Get extended daily data
-  const days = 30; // Default to 30 days
+  // Get today's date in Pacific timezone
+  const today = formatDatePT(new Date(), 'yyyy-MM-dd');
+  const isRequestingToday = (!start && !end) || (start === today || end === today);
+
+  // Get scoreboard and timer data for "today" metrics
+  const scoreboardData = await getScoreboardData();
+  const timerData = await getBagTimerData();
+
+  // Get extended daily data for historical/rolling averages
+  const days = 30;
   const dailyData = await getExtendedDailyData(days);
 
   // Filter by date range if provided
@@ -743,36 +752,108 @@ async function dashboard(req, res) {
       return true;
     });
 
-    // If no data for requested range, show most recent working day
-    if (filteredData.length === 0 && dailyData.length > 0) {
-      // dailyData is sorted oldest first, so last item is most recent
-      const mostRecent = dailyData[dailyData.length - 1];
-      filteredData = [mostRecent];
-      showingFallback = true;
-      fallbackDate = formatDatePT(mostRecent.date, 'yyyy-MM-dd');
+    // If no data for requested range and not requesting today with live data
+    if (filteredData.length === 0) {
+      if (isRequestingToday && scoreboardData.todayLbs > 0) {
+        // We have live data for today from scoreboard - use it
+        showingFallback = false;
+      } else if (dailyData.length > 0) {
+        // Fall back to most recent working day
+        const mostRecent = dailyData[dailyData.length - 1];
+        filteredData = [mostRecent];
+        showingFallback = true;
+        fallbackDate = formatDatePT(mostRecent.date, 'yyyy-MM-dd');
+      }
     }
   }
 
-  // Calculate summary stats
-  const totalTops = filteredData.reduce((sum, d) => sum + d.totalTops, 0);
-  const totalSmalls = filteredData.reduce((sum, d) => sum + d.totalSmalls, 0);
-  const avgRate = filteredData.length > 0
-    ? filteredData.reduce((sum, d) => sum + d.avgRate, 0) / filteredData.length
-    : 0;
+  // Calculate rolling averages from last 7 days with data
+  const validDays = dailyData.filter((d) => d.totalTops > 0).slice(-7);
+  const rollingAverage = {
+    totalTops: validDays.length > 0 ? validDays.reduce((s, d) => s + d.totalTops, 0) / validDays.length : 0,
+    totalSmalls: validDays.length > 0 ? validDays.reduce((s, d) => s + d.totalSmalls, 0) / validDays.length : 0,
+    avgRate: validDays.length > 0 ? validDays.reduce((s, d) => s + d.avgRate, 0) / validDays.length : 0,
+    totalLbs: validDays.length > 0 ? validDays.reduce((s, d) => s + (d.totalTops + d.totalSmalls), 0) / validDays.length : 0,
+  };
+
+  // Build "today" object from scoreboard data (live production metrics)
+  const todayData = {
+    totalTops: scoreboardData.todayLbs || 0,
+    totalSmalls: 0, // Scoreboard doesn't track smalls separately for today
+    totalLbs: scoreboardData.todayLbs || 0,
+    avgRate: scoreboardData.hourlyRates && scoreboardData.hourlyRates.length > 0
+      ? scoreboardData.hourlyRates.reduce((s, h) => s + h.rate, 0) / scoreboardData.hourlyRates.length
+      : 0,
+    maxRate: scoreboardData.hourlyRates && scoreboardData.hourlyRates.length > 0
+      ? Math.max(...scoreboardData.hourlyRates.map((h) => h.rate))
+      : 0,
+    trimmers: scoreboardData.lastHourTrimmers || scoreboardData.currentHourTrimmers || 0,
+    buckers: 0,
+    qc: 0,
+    tzero: 0,
+    totalOperatorHours: (scoreboardData.effectiveHours || 0) * (scoreboardData.lastHourTrimmers || 0),
+    totalTrimmerHours: (scoreboardData.effectiveHours || 0) * (scoreboardData.lastHourTrimmers || 0),
+    totalLaborCost: 0,
+    costPerLb: 0,
+  };
+
+  // If showing fallback, override todayData with fallback day's data
+  if (showingFallback && filteredData.length > 0) {
+    const fb = filteredData[0];
+    todayData.totalTops = fb.totalTops || 0;
+    todayData.totalSmalls = fb.totalSmalls || 0;
+    todayData.totalLbs = (fb.totalTops || 0) + (fb.totalSmalls || 0);
+    todayData.avgRate = fb.avgRate || 0;
+    todayData.trimmers = fb.trimmers || 0;
+    todayData.totalTrimmerHours = fb.trimmerHours || 0;
+  }
+
+  // Build "current" object (strain, projections)
+  const current = {
+    strain: scoreboardData.strain || '',
+    todayPercentage: scoreboardData.todayPercentage || 0,
+    todayTarget: scoreboardData.todayTarget || 0,
+    projectedTotal: scoreboardData.projectedTotal || 0,
+    effectiveHours: scoreboardData.effectiveHours || 0,
+  };
+
+  // Build targets
+  const targets = {
+    totalTops: scoreboardData.dailyGoal || 66,
+  };
+
+  // Build bag timer data
+  const bagTimer = {
+    bagsToday: timerData.bagsToday || 0,
+    avgTime: timerData.avgSecondsToday > 0 ? `${Math.round(timerData.avgSecondsToday / 60)} min` : '--',
+    vsTarget: timerData.targetSeconds > 0 && timerData.avgSecondsToday > 0
+      ? `${timerData.avgSecondsToday < timerData.targetSeconds ? '-' : '+'}${Math.abs(Math.round((timerData.avgSecondsToday - timerData.targetSeconds) / 60))} min`
+      : '--',
+  };
+
+  // Build hourly data from scoreboard
+  const hourly = (scoreboardData.hourlyRates || []).map((h) => ({
+    label: h.timeSlot,
+    tops: h.rate * (scoreboardData.lastHourTrimmers || 1), // Approximate
+    rate: h.rate,
+    target: h.target,
+  }));
 
   return success(res, {
+    // Main data structure expected by frontend
+    today: todayData,
+    current,
+    targets,
+    bagTimer,
+    hourly,
+    rollingAverage,
+    // Historical daily data
     daily: filteredData.map((d) => ({
       date: formatDatePT(d.date, 'yyyy-MM-dd'),
       totalTops: Math.round(d.totalTops * 10) / 10,
       totalSmalls: Math.round(d.totalSmalls * 10) / 10,
       avgRate: Math.round(d.avgRate * 100) / 100,
     })),
-    summary: {
-      totalTops: Math.round(totalTops * 10) / 10,
-      totalSmalls: Math.round(totalSmalls * 10) / 10,
-      avgRate: Math.round(avgRate * 100) / 100,
-      daysWorked: filteredData.length,
-    },
     // Include fallback info so frontend can show appropriate message
     fallback: showingFallback ? {
       active: true,
