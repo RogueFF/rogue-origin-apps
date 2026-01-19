@@ -164,7 +164,7 @@
       }
 
       // Convert API cycles to internal format
-      // API returns cycleTime (not cycleTimeSec or time)
+      // API is the single source of truth - no localStorage merge
       const converted = apiCycles.map(function(c) {
         const cycleTime = c.cycleTime || c.cycleTimeSec || c.time || 0;
         const target = c.target || c.targetSec || defaultTarget;
@@ -177,18 +177,10 @@
         };
       });
 
-      // Merge with local history, removing duplicates by timestamp
-      const merged = ScoreboardState.cycleHistory.concat(converted);
-      const uniqueMap = {};
-      merged.forEach(function(cycle) {
-        uniqueMap[cycle.timestamp] = cycle;
+      // Use API data directly (sorted by timestamp)
+      ScoreboardState.cycleHistory = converted.sort(function(a, b) {
+        return new Date(a.timestamp) - new Date(b.timestamp);
       });
-
-      ScoreboardState.cycleHistory = Object.keys(uniqueMap)
-        .map(function(ts) { return uniqueMap[ts]; })
-        .sort(function(a, b) { return a.timestamp - b.timestamp; });
-
-      this.saveLocalCycleHistory(ScoreboardState.cycleHistory);
 
       // Always render - renderCycleHistory handles auto-expand/collapse
       this.renderCycleHistory();
