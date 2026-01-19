@@ -13,7 +13,7 @@
     // Timing intervals (milliseconds)
     intervals: {
       clockRefresh: 1000,      // Update clock every second
-      dataRefresh: 15000,      // Fetch API data every 15 seconds
+      dataRefresh: 30000,      // Fetch API data every 30 seconds (reduced to avoid rate limits)
       timerRefresh: 1000       // Update timer display every second
     },
 
