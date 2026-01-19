@@ -106,23 +106,41 @@ export function onError(error, skipAutoRetry = false) {
 
   showSkeletons(false);
 
-  // Show error in status bar
+  // Detect rate limit errors (HTTP 429)
   const errorMessage = error.message || String(error);
-  showError(errorMessage);
+  const isRateLimited = errorMessage.includes('429');
 
-  // Show toast only if not auto-retrying
-  if (!shouldAutoRetry() || skipAutoRetry) {
-    showToast(`Error loading data: ${errorMessage}`, 'error');
+  // Show appropriate error message
+  if (isRateLimited) {
+    showError('Rate limited - using cached data');
+    // For rate limit errors, don't show toast - it's normal during high traffic
+    // The cache layer should provide data
+  } else {
+    showError(errorMessage);
+    // Show toast only if not auto-retrying
+    if (!shouldAutoRetry() || skipAutoRetry) {
+      showToast(`Error loading data: ${errorMessage}`, 'error');
+    }
   }
 
-  // Auto-retry once after 5 seconds
+  // Auto-retry logic with different delays for different errors
   if (shouldAutoRetry() && !skipAutoRetry) {
+    // Use longer delay for rate limit errors (30s), shorter for other errors (5s)
+    const retryDelay = isRateLimited ? 30000 : 5000;
+    const delayText = isRateLimited ? '30 seconds' : '5 seconds';
+
+    if (isRateLimited) {
+      console.log(`Rate limited - will retry in ${delayText}...`);
+    } else {
+      console.log(`Auto-retry in ${delayText}...`);
+    }
+
     setTimeout(function() {
       console.log('Auto-retry after error...');
       showRetrying();
       incrementRetryCount();
       loadData();
-    }, 5000);
+    }, retryDelay);
   }
 }
 

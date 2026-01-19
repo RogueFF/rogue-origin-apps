@@ -57,12 +57,13 @@
         // Running on GitHub Pages - use fetch API
         const apiUrl = this.getApiUrl();
 
-        // Try api-cache.js if available
+        // Try api-cache.js if available - serve cached data immediately
+        let cachedData = null;
         if (window.ScoreboardAPICache && window.ScoreboardAPICache.get) {
-          const cached = window.ScoreboardAPICache.get('scoreboard');
-          if (cached) {
-            if (onSuccess) onSuccess(cached);
-            return;
+          cachedData = window.ScoreboardAPICache.get('scoreboard');
+          if (cachedData) {
+            // Serve cached data immediately for instant UI
+            if (onSuccess) onSuccess(cachedData);
           }
         }
 
@@ -80,11 +81,40 @@
             if (window.ScoreboardAPICache && window.ScoreboardAPICache.set) {
               window.ScoreboardAPICache.set('scoreboard', response);
             }
-            if (onSuccess) onSuccess(response);
+            // Only call onSuccess if this is fresh data (not already served from cache)
+            // or if data has changed
+            if (!cachedData || JSON.stringify(response) !== JSON.stringify(cachedData)) {
+              if (onSuccess) onSuccess(response);
+            }
           })
           .catch(function(error) {
-            console.error('Fetch loadData error:', error);
-            if (onError) onError(error);
+            // Check if this is a rate limit error (429)
+            const isRateLimited = error.message && error.message.includes('429');
+
+            if (isRateLimited) {
+              console.warn('Rate limited, using cached data if available');
+              // If we already served cached data, don't show error
+              if (!cachedData && window.ScoreboardAPICache && window.ScoreboardAPICache.get) {
+                // Try to get any cached data as fallback
+                const staleCache = window.ScoreboardAPICache.get('scoreboard');
+                if (staleCache) {
+                  console.warn('Serving stale cached data due to rate limit');
+                  if (onSuccess) onSuccess(staleCache);
+                  return;
+                }
+              }
+              // Only show error if we have no cached data at all
+              if (!cachedData) {
+                console.error('Rate limited with no cached data:', error);
+                if (onError) onError(error);
+              }
+            } else {
+              console.error('Fetch loadData error:', error);
+              // If we already served cached data, don't show error to user
+              if (!cachedData) {
+                if (onError) onError(error);
+              }
+            }
           });
       }
     },
@@ -328,6 +358,12 @@
         // Running on GitHub Pages - use fetch API to wholesale orders backend (Vercel)
         const apiUrl = this.getWholesaleApiUrl();
 
+        // Check for cached order queue data
+        let cachedOrders = null;
+        if (window.ScoreboardState && window.ScoreboardState.orderQueue) {
+          cachedOrders = window.ScoreboardState.orderQueue;
+        }
+
         fetch(`${apiUrl}?action=getScoreboardOrderQueue`)
           .then(function(response) {
             if (!response.ok) {
@@ -345,6 +381,18 @@
             if (onSuccess) onSuccess(response);
           })
           .catch(function(error) {
+            // Check if this is a rate limit error (429)
+            const isRateLimited = error.message && error.message.includes('429');
+
+            if (isRateLimited) {
+              console.warn('Order queue rate limited, using cached data if available');
+              if (cachedOrders) {
+                // Use existing cached order queue data
+                if (onSuccess) onSuccess(cachedOrders);
+                return;
+              }
+            }
+
             console.error('Fetch loadOrderQueue error:', error);
             if (onError) onError(error);
           });
