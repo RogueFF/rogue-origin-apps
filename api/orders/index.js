@@ -971,6 +971,7 @@ function calculateMatchScore(name1, name2) {
 /**
  * Count 5kg bags for a specific strain from production tracking sheet
  * Matches bags to strains by checking what cultivar was being worked on at scan time
+ * Returns 0 on any error (including rate limits) to allow order queue to still display
  */
 async function count5kgBagsForStrain(strain, startDateTime) {
   if (!PRODUCTION_SHEET_ID) {
@@ -1173,7 +1174,17 @@ async function calculateOrderProgress(shipmentId, strain, type, targetKg, manual
 async function getScoreboardOrderQueue(req, res) {
   try {
     // Get all master orders
-    const ordersData = await readSheet(SHEET_ID, `${SHEETS.orders}!A:V`);
+    let ordersData;
+    try {
+      ordersData = await readSheet(SHEET_ID, `${SHEETS.orders}!A:V`);
+    } catch (orderError) {
+      // Re-throw rate limit errors with proper code
+      if (orderError.code === 'RATE_LIMITED') {
+        throw orderError;
+      }
+      console.error('[getScoreboardOrderQueue] Failed to read orders:', orderError.message);
+      ordersData = [];
+    }
     const orders = [];
     for (let i = 1; i < ordersData.length; i++) {
       const row = ordersData[i];
@@ -1190,7 +1201,16 @@ async function getScoreboardOrderQueue(req, res) {
     }
 
     // Get all shipments
-    const shipmentsData = await readSheet(SHEET_ID, `${SHEETS.shipments}!A:O`);
+    let shipmentsData;
+    try {
+      shipmentsData = await readSheet(SHEET_ID, `${SHEETS.shipments}!A:O`);
+    } catch (shipmentError) {
+      if (shipmentError.code === 'RATE_LIMITED') {
+        throw shipmentError;
+      }
+      console.error('[getScoreboardOrderQueue] Failed to read shipments:', shipmentError.message);
+      shipmentsData = [];
+    }
     const shipments = [];
     for (let i = 1; i < shipmentsData.length; i++) {
       const row = shipmentsData[i];
@@ -1327,7 +1347,11 @@ async function getScoreboardOrderQueue(req, res) {
       },
     });
   } catch (error) {
-    console.error('[getScoreboardOrderQueue] Error:', error.message);
+    console.error('[getScoreboardOrderQueue] Error:', error.message, error.code);
+    // Propagate rate limit errors properly
+    if (error.code === 'RATE_LIMITED') {
+      throw error;
+    }
     throw createError('INTERNAL_ERROR', error.message);
   }
 }
