@@ -9,8 +9,12 @@ var previewSide = 'front';
 var previewColor = 'green';
 var currentLang = 'en';
 
-// API Configuration - Vercel Functions
-var API_URL = 'https://rogue-origin-apps-master.vercel.app/api/kanban';
+// API Configuration
+// Cloudflare Workers (100K free requests/day, no cold starts)
+var API_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api';
+// Vercel Functions (backup - rate limited)
+// var API_BASE = 'https://rogue-origin-apps-master.vercel.app/api';
+var API_URL = API_BASE + '/kanban';
 
 // Detect environment: Apps Script (google.script.run available) or GitHub Pages (use fetch)
 var isAppsScript = typeof google !== 'undefined' && google.script && google.script.run;
