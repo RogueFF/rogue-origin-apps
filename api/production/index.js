@@ -604,6 +604,7 @@ async function getBagTimerData() {
         if (cycleSec >= 300 && cycleSec <= 14400) {
           result.cycleHistory.push({
             timestamp: todayBags[i].toISOString(),
+            time: cycleSec,  // Frontend expects 'time' field
             cycleSeconds: cycleSec,
             cycleMinutes: Math.round(cycleSec / 60),
           });
