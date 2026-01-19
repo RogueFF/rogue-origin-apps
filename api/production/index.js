@@ -524,7 +524,17 @@ async function getBagTimerData() {
         rowDate = new Date(cleanTimestamp);
       } else if (typeof timestamp === 'number') {
         // Excel/Sheets serial date number
-        rowDate = new Date((timestamp - 25569) * 86400 * 1000);
+        if (timestamp < 1) {
+          // Time-only serial (fraction of day, e.g., 0.444 = 10:40 AM)
+          // Convert to time string and prepend today's date
+          const hours = Math.floor(timestamp * 24);
+          const minutes = Math.floor((timestamp * 24 - hours) * 60);
+          const timeStr = `${today} ${hours}:${String(minutes).padStart(2, '0')}:00`;
+          rowDate = new Date(timeStr);
+        } else {
+          // Full date serial (days since 1900)
+          rowDate = new Date((timestamp - 25569) * 86400 * 1000);
+        }
       } else {
         rowDate = new Date(timestamp);
       }
