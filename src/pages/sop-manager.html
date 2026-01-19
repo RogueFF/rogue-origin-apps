@@ -504,9 +504,13 @@
 
   <script>
     // =====================================================
-    // API Configuration - Vercel Functions
+    // API Configuration
+    // Cloudflare Workers (100K free requests/day, no cold starts)
+    const API_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api';
+    // Vercel Functions (backup - rate limited)
+    // const API_BASE = 'https://rogue-origin-apps-master.vercel.app/api';
     // =====================================================
-    const API_URL = 'https://rogue-origin-apps-master.vercel.app/api/sop';
+    const API_URL = API_BASE + '/sop';
     
     // =====================================================
     // State

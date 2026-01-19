@@ -6,9 +6,15 @@
 (function(window) {
   'use strict';
 
+  // API Configuration
+  // Cloudflare Workers (100K free requests/day, no cold starts)
+  var API_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api';
+  // Vercel Functions (backup - rate limited)
+  // var API_BASE = 'https://rogue-origin-apps-master.vercel.app/api';
+
   var ScoreboardConfig = {
-    // API Configuration - Vercel Functions
-    API_URL: 'https://rogue-origin-apps-master.vercel.app/api/production',
+    // API URL
+    API_URL: API_BASE + '/production',
 
     // Timing intervals (milliseconds)
     intervals: {
