@@ -515,10 +515,18 @@ async function getBagTimerData() {
           .replace(/,/g, ''); // Remove commas
 
         // Check if it's time-only (no date) - common formats: "10:39 AM", "10:39:00"
-        const timeOnlyPattern = /^\d{1,2}:\d{2}(:\d{2})?\s*(AM|PM)?$/i;
-        if (timeOnlyPattern.test(cleanTimestamp)) {
-          // Prepend today's date
-          cleanTimestamp = `${today} ${cleanTimestamp}`;
+        const timeOnlyPattern = /^(\d{1,2}):(\d{2})(:\d{2})?\s*(AM|PM)?$/i;
+        const timeMatch = cleanTimestamp.match(timeOnlyPattern);
+        if (timeMatch) {
+          // Convert to 24-hour format and create proper date string
+          let hours = parseInt(timeMatch[1], 10);
+          const minutes = timeMatch[2];
+          const ampm = timeMatch[4] ? timeMatch[4].toUpperCase() : null;
+
+          if (ampm === 'PM' && hours !== 12) hours += 12;
+          if (ampm === 'AM' && hours === 12) hours = 0;
+
+          cleanTimestamp = `${today}T${String(hours).padStart(2, '0')}:${minutes}:00`;
         }
 
         rowDate = new Date(cleanTimestamp);
