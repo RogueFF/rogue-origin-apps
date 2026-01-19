@@ -72,7 +72,8 @@ import {
   destroyAllGrids,
   cleanup,
   isAppsScript,
-  debugState
+  debugState,
+  getFallback
 } from './state.js';
 
 // ===== UTILITY IMPORTS =====
@@ -382,7 +383,22 @@ function renderHeroSection(data) {
   // Progress bar
   let progressPercent = 0;
   let progressStatus = '';
-  if (expectedSoFar > 0) {
+  const fallback = getFallback();
+
+  if (fallback && fallback.active) {
+    // For fallback data, calculate progress against daily target
+    const dailyTarget = (data.targets && data.targets.totalTops) || getDailyTarget();
+    if (dailyTarget > 0) {
+      progressPercent = (tops / dailyTarget * 100);
+      if (progressPercent >= 100) {
+        progressStatus = 'ahead';
+      } else if (progressPercent >= 90) {
+        progressStatus = 'on-track';
+      } else {
+        progressStatus = 'behind';
+      }
+    }
+  } else if (expectedSoFar > 0) {
     progressPercent = (tops / expectedSoFar * 100);
     if (progressPercent >= 100) {
       progressStatus = 'ahead';
@@ -400,7 +416,15 @@ function renderHeroSection(data) {
     elHeroProgressFill.className = `hero-progress-fill ${progressStatus}`;
   }
   if (elHeroProgressText) {
-    if (productiveHoursElapsed > 0 && expectedSoFar > 0) {
+    if (fallback && fallback.active) {
+      // Showing previous day's data - display completion info
+      const dailyTarget = (data.targets && data.targets.totalTops) || getDailyTarget();
+      if (dailyTarget > 0) {
+        elHeroProgressText.textContent = `${progressPercent.toFixed(0)}% of daily target`;
+      } else {
+        elHeroProgressText.textContent = 'Previous day\'s data';
+      }
+    } else if (productiveHoursElapsed > 0 && expectedSoFar > 0) {
       elHeroProgressText.textContent = `${progressPercent.toFixed(0)}% of expected (${expectedSoFar.toFixed(0)} lbs)`;
     } else {
       elHeroProgressText.textContent = 'Shift not started';
