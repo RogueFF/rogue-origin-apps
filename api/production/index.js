@@ -518,7 +518,7 @@ async function getBagTimerData() {
         const timeOnlyPattern = /^(\d{1,2}):(\d{2})(:\d{2})?\s*(AM|PM)?$/i;
         const timeMatch = cleanTimestamp.match(timeOnlyPattern);
         if (timeMatch) {
-          // Convert to 24-hour format and create proper date string
+          // Convert to 24-hour format and create proper date string with Pacific timezone
           let hours = parseInt(timeMatch[1], 10);
           const minutes = timeMatch[2];
           const ampm = timeMatch[4] ? timeMatch[4].toUpperCase() : null;
@@ -526,7 +526,10 @@ async function getBagTimerData() {
           if (ampm === 'PM' && hours !== 12) hours += 12;
           if (ampm === 'AM' && hours === 12) hours = 0;
 
-          cleanTimestamp = `${today}T${String(hours).padStart(2, '0')}:${minutes}:00`;
+          // Use Pacific timezone offset (PST = -08:00, PDT = -07:00)
+          // January is PST
+          const tzOffset = '-08:00';
+          cleanTimestamp = `${today}T${String(hours).padStart(2, '0')}:${minutes}:00${tzOffset}`;
         }
 
         rowDate = new Date(cleanTimestamp);
@@ -534,10 +537,11 @@ async function getBagTimerData() {
         // Excel/Sheets serial date number
         if (timestamp < 1) {
           // Time-only serial (fraction of day, e.g., 0.444 = 10:40 AM)
-          // Convert to time string and prepend today's date
+          // Convert to ISO string with Pacific timezone
           const hours = Math.floor(timestamp * 24);
           const minutes = Math.floor((timestamp * 24 - hours) * 60);
-          const timeStr = `${today} ${hours}:${String(minutes).padStart(2, '0')}:00`;
+          const tzOffset = '-08:00'; // PST
+          const timeStr = `${today}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00${tzOffset}`;
           rowDate = new Date(timeStr);
         } else {
           // Full date serial (days since 1900)
