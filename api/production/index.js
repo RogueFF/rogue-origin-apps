@@ -500,15 +500,46 @@ async function getBagTimerData() {
     let lastBag = null;
     let bags5kg = 0;
     let bags10lb = 0;
+    const debugRows = []; // Debug logging
 
     for (const row of vals) {
       const timestamp = row[timestampCol];
       if (!timestamp) continue;
 
-      const rowDate = new Date(timestamp);
+      // Parse timestamp - handle various formats
+      let rowDate;
+      const originalTimestamp = timestamp;
+      if (typeof timestamp === 'string') {
+        // Clean up timestamp string (remove extra colons, normalize format)
+        const cleanTimestamp = timestamp
+          .replace(/at\s+/gi, '') // Remove "at "
+          .replace(/:\s*(AM|PM)/gi, ' $1') // Fix ": AM" -> " AM"
+          .replace(/,/g, ''); // Remove commas
+        rowDate = new Date(cleanTimestamp);
+      } else {
+        rowDate = new Date(timestamp);
+      }
+
+      // Skip invalid dates
+      if (isNaN(rowDate.getTime())) {
+        debugRows.push({ raw: originalTimestamp, parsed: 'INVALID', size: row[sizeCol] });
+        continue;
+      }
+
       const rowDateStr = formatDatePT(rowDate, 'yyyy-MM-dd');
       const size = String(row[sizeCol] || '').toLowerCase();
       const sku = skuCol >= 0 ? String(row[skuCol] || '').toUpperCase() : '';
+
+      // Debug first 10 rows to see what data looks like
+      if (debugRows.length < 10) {
+        debugRows.push({
+          raw: originalTimestamp,
+          parsed: rowDateStr,
+          size: row[sizeCol],
+          is5kg: is5kgBag(size),
+          isToday: rowDateStr === today
+        });
+      }
 
       if (rowDateStr === today) {
         if (is5kgBag(size)) {
@@ -528,6 +559,7 @@ async function getBagTimerData() {
     result.bagsToday = bags5kg + bags10lb;
     result.bags5kgToday = bags5kg;
     result.bags10lbToday = bags10lb;
+    result._debug = { today, rowsRead: vals.length, debugRows }; // Temporary debug
 
     if (lastBag) {
       result.lastBagTime = lastBag.time.toISOString();
