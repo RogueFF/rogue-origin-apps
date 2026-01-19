@@ -190,9 +190,8 @@
 
       this.saveLocalCycleHistory(ScoreboardState.cycleHistory);
 
-      if (!ScoreboardState.cycleHistoryCollapsed) {
-        this.renderCycleHistory();
-      }
+      // Always render - renderCycleHistory handles auto-expand/collapse
+      this.renderCycleHistory();
     },
 
     // ========================================
