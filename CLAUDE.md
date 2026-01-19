@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Rogue Origin Operations Hub
 
 > Hemp processing company in Southern Oregon. Data-driven operations, bilingual (EN/ES) workforce.
-> **Architecture**: Static HTML frontend (GitHub Pages) + Vercel Functions backend + Google Sheets database
+> **Architecture**: Static HTML frontend (GitHub Pages) + Cloudflare Workers backend + Google Sheets database
 
 ## Current Status
 
@@ -68,9 +68,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Recent Features (January 2026)
 
-### Vercel Functions Migration Complete (2026-01-17)
+### Cloudflare Workers Migration Complete (2026-01-19)
 
-**Backend Migration**: All Apps Script backends migrated to Vercel Functions for faster response times.
+**Backend Migration**: All API endpoints migrated from Vercel Functions to Cloudflare Workers for better performance and higher free tier limits.
 
 | App | API Endpoint | Status |
 |-----|--------------|--------|
@@ -80,21 +80,61 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Orders | `/api/orders` | ✅ Complete |
 | Production + Scoreboard | `/api/production` | ✅ Complete |
 
+**Why Cloudflare Workers**:
+- 100,000 free requests/day (vs Vercel's lower limits causing 429 errors)
+- No cold starts (~0ms vs 10-15s on Vercel/Apps Script)
+- Edge deployment for faster global responses
+- Lightweight: Direct REST API (~300 lines) vs googleapis package (15MB)
+
 **Key Changes**:
-- Response times improved from 10-15s (Apps Script cold start) to ~200-500ms
-- Base URL: `https://rogue-origin-apps-master.vercel.app/api/{app}`
-- Content-Type changed from `text/plain` to `application/json`
+- Base URL: `https://rogue-origin-api.roguefamilyfarms.workers.dev/api`
+- Workers code in `workers/` directory
+- Google Sheets accessed via direct REST API with JWT service account auth
 - Response wrapper pattern: `{ success: true, data: {...} }`
-- Frontend response handling: `const response = raw.data || raw;`
 
-**Environment Variables** (in Vercel dashboard):
-- `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY` (shared)
+**Worker Structure**:
+```
+workers/
+├── wrangler.toml           # Cloudflare config
+├── package.json
+└── src/
+    ├── index.js            # Router
+    ├── handlers/           # API endpoints
+    │   ├── production.js   # Production + Scoreboard
+    │   ├── orders.js       # Wholesale Orders
+    │   ├── barcode.js      # Label Printer
+    │   ├── kanban.js       # Supply Kanban
+    │   └── sop.js          # SOP Manager
+    └── lib/                # Shared utilities
+        ├── sheets.js       # Google Sheets REST client
+        ├── auth.js         # JWT authentication
+        ├── errors.js       # Error handling
+        ├── response.js     # Response formatting
+        └── validate.js     # Input validation
+```
+
+**Environment Variables** (via `wrangler secret put`):
+- `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`
 - `BARCODE_SHEET_ID`, `KANBAN_SHEET_ID`, `SOP_SHEET_ID`, `ORDERS_SHEET_ID`, `PRODUCTION_SHEET_ID`
-- `ANTHROPIC_API_KEY` (AI chat/SOP features)
-- `GOOGLE_TTS_API_KEY` (voice features)
-- `ORDERS_PASSWORD` (orders auth)
+- `ANTHROPIC_API_KEY`, `ORDERS_PASSWORD`
 
-**Migration Plan**: See `docs/plans/2025-01-17-vercel-migration.md`
+**Deployment**:
+```bash
+cd workers
+npm install
+npx wrangler login
+npx wrangler deploy
+```
+
+**Fallback**: Vercel Functions still available at `https://rogue-origin-apps-master.vercel.app/api` (commented out in frontend configs)
+
+---
+
+### Vercel Functions Migration (2026-01-17) - Superseded
+
+**Note**: Vercel Functions were replaced by Cloudflare Workers on 2026-01-19 due to rate limiting issues.
+
+**Original Migration Plan**: See `docs/plans/2025-01-17-vercel-migration.md`
 
 ---
 
@@ -274,9 +314,10 @@ Cycle Time Calculation:
 | Resource | Value |
 |----------|-------|
 | **Live Apps** | https://rogueff.github.io/rogue-origin-apps/ |
-| **Vercel API Base** | `https://rogue-origin-apps-master.vercel.app/api` |
-| **Production API** | `https://rogue-origin-apps-master.vercel.app/api/production` |
-| **Orders API** | `https://rogue-origin-apps-master.vercel.app/api/orders` |
+| **Cloudflare API Base** | `https://rogue-origin-api.roguefamilyfarms.workers.dev/api` |
+| **Production API** | `https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production` |
+| **Orders API** | `https://rogue-origin-api.roguefamilyfarms.workers.dev/api/orders` |
+| **Vercel API (backup)** | `https://rogue-origin-apps-master.vercel.app/api` |
 | **Production Sheet** | `1dARXrKU2u4KJY08ylA3GUKrT0zwmxCmtVh7IJxnn7is` |
 | **Orders Sheet** | `1QLQaR4RMniUmwbJFrtMVaydyVMyCCxqHXWDCVs5dejw` |
 | **Barcode Sheet** | `1JQRU1-kW5hLcAdNhRvOvvj91fhezBE_-StN5X1Ni6zE` |
@@ -484,15 +525,15 @@ Work hours: 7am-4:30pm, ~7.5 effective hours (minus breaks)
 
 ## Code Patterns
 
-### Vercel API Calls (Standard Pattern)
+### Cloudflare Workers API Calls (Standard Pattern)
 ```javascript
-const API_URL = 'https://rogue-origin-apps-master.vercel.app/api/production';
+const API_URL = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
 
 // GET request
 async function loadData(action) {
   const response = await fetch(`${API_URL}?action=${action}`);
   const raw = await response.json();
-  return raw.data || raw;  // Unwrap Vercel response wrapper
+  return raw.data || raw;  // Unwrap response wrapper
 }
 
 // POST request
@@ -503,7 +544,7 @@ fetch(`${API_URL}?action=chat`, {
 })
 .then(r => r.json())
 .then(raw => {
-  const response = raw.data || raw;  // Unwrap Vercel wrapper
+  const response = raw.data || raw;  // Unwrap wrapper
   // Use response...
 });
 ```
