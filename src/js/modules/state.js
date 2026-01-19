@@ -11,6 +11,7 @@ const state = {
   // Data
   data: null,
   compareData: null,
+  fallback: null, // { active: true, date: 'YYYY-MM-DD', requestedRange: {...} }
 
   // Date range
   currentRange: 'today',
@@ -291,6 +292,19 @@ export function resetRetryCount() {
 
 export function getRetryCount() {
   return state.connection.retryCount;
+}
+
+// Fallback data state (showing previous working day when today has no data)
+export function setFallback(fallbackInfo) {
+  state.fallback = fallbackInfo;
+}
+
+export function getFallback() {
+  return state.fallback;
+}
+
+export function clearFallback() {
+  state.fallback = null;
 }
 
 // Event listener registry management

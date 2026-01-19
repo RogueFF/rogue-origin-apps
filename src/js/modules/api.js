@@ -16,7 +16,9 @@ import {
   isSkeletonsShowing as _isSkeletonsShowing,
   setSkeletonsShowing as _setSkeletonsShowing,
   incrementRetryCount,
-  resetRetryCount
+  resetRetryCount,
+  setFallback,
+  clearFallback
 } from './state.js';
 import { formatDateInput } from './utils.js';
 import {
@@ -138,6 +140,21 @@ function onDataLoaded(result) {
   // Reset retry count on success
   resetRetryCount();
 
+  // Handle fallback data (showing previous working day when today has no data)
+  if (result.fallback && result.fallback.active) {
+    setFallback(result.fallback);
+    // Format the fallback date nicely
+    const fallbackDate = new Date(result.fallback.date + 'T12:00:00');
+    const dateStr = fallbackDate.toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'short',
+      day: 'numeric'
+    });
+    showToast(`Showing last working day: ${dateStr}`, 'info', 5000);
+  } else {
+    clearFallback();
+  }
+
   // Only re-render if data actually changed
   const newDataStr = JSON.stringify(result);
   const oldData = getData();
@@ -148,7 +165,7 @@ function onDataLoaded(result) {
     renderAll();
 
     // Show subtle update notification (only on auto-refresh, not initial load)
-    if (oldDataStr) {
+    if (oldDataStr && !result.fallback) {
       showToast('Data updated', 'success', 2000);
     }
   }
