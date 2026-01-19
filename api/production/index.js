@@ -700,6 +700,7 @@ async function scoreboard(req, res) {
 
 /**
  * Get dashboard data with date range
+ * If requested date range has no data, falls back to most recent working day
  */
 async function dashboard(req, res) {
   const start = req.query.start || '';
@@ -719,6 +720,9 @@ async function dashboard(req, res) {
 
   // Filter by date range if provided
   let filteredData = dailyData;
+  let showingFallback = false;
+  let fallbackDate = null;
+
   if (start || end) {
     filteredData = dailyData.filter((d) => {
       const dateStr = formatDatePT(d.date, 'yyyy-MM-dd');
@@ -726,6 +730,15 @@ async function dashboard(req, res) {
       if (end && dateStr > end) return false;
       return true;
     });
+
+    // If no data for requested range, show most recent working day
+    if (filteredData.length === 0 && dailyData.length > 0) {
+      // dailyData is sorted newest first, so first item is most recent
+      const mostRecent = dailyData[0];
+      filteredData = [mostRecent];
+      showingFallback = true;
+      fallbackDate = formatDatePT(mostRecent.date, 'yyyy-MM-dd');
+    }
   }
 
   // Calculate summary stats
@@ -748,6 +761,12 @@ async function dashboard(req, res) {
       avgRate: Math.round(avgRate * 100) / 100,
       daysWorked: filteredData.length,
     },
+    // Include fallback info so frontend can show appropriate message
+    fallback: showingFallback ? {
+      active: true,
+      date: fallbackDate,
+      requestedRange: { start, end },
+    } : null,
   });
 }
 
