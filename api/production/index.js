@@ -571,6 +571,12 @@ async function getBagTimerData() {
       // Skip invalid dates
       if (isNaN(rowDate.getTime())) continue;
 
+      // Skip accidentally scanned bags (1/19/2026 12:34:14 - 12:38:04 Pacific)
+      // These 8 bags were scanned in error
+      const badBagStart = new Date('2026-01-19T20:34:14Z'); // 12:34:14 Pacific
+      const badBagEnd = new Date('2026-01-19T20:38:05Z');   // 12:38:04 Pacific + 1 sec
+      if (rowDate >= badBagStart && rowDate <= badBagEnd) continue;
+
       const rowDateStr = formatDatePT(rowDate, 'yyyy-MM-dd');
       const size = String(row[sizeCol] || '').toLowerCase();
       const sku = skuCol >= 0 ? String(row[skuCol] || '').toUpperCase() : '';
