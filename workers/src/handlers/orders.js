@@ -1119,27 +1119,49 @@ async function count5kgBagsForStrain(strain, startDateTime, env) {
       let bagTimestamp = row[timestampCol];
       if (!bagTimestamp) continue;
 
+      // Get today's date string for time-only serials
+      const todayStr = `${pacificDate.getFullYear()}-${String(pacificDate.getMonth() + 1).padStart(2, '0')}-${String(pacificDate.getDate()).padStart(2, '0')}`;
+
       let bagDate;
-      if (bagTimestamp instanceof Date) {
-        bagDate = bagTimestamp;
-      } else {
-        const cleanTs = String(bagTimestamp).trim();
-        bagDate = new Date(cleanTs);
-        if (isNaN(bagDate.getTime())) {
-          const usMatch = cleanTs.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i);
-          if (usMatch) {
-            const [, m, d, y, h, min, sec, ampm] = usMatch;
-            let hours = parseInt(h);
-            if (ampm) {
-              if (ampm.toUpperCase() === 'PM' && hours !== 12) hours += 12;
-              if (ampm.toUpperCase() === 'AM' && hours === 12) hours = 0;
-            }
-            bagDate = new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T${String(hours).padStart(2, '0')}:${min}:${sec || '00'}-08:00`);
+      if (typeof bagTimestamp === 'string') {
+        let cleanTs = bagTimestamp.trim();
+
+        // Check for US date format: "M/D/YYYY H:M:S" or "M/D/YYYY H:M:S AM/PM"
+        const usMatch = cleanTs.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i);
+        if (usMatch) {
+          const [, m, d, y, h, min, sec, ampm] = usMatch;
+          let hours = parseInt(h, 10);
+          if (ampm) {
+            if (ampm.toUpperCase() === 'PM' && hours !== 12) hours += 12;
+            if (ampm.toUpperCase() === 'AM' && hours === 12) hours = 0;
           }
+          // Build ISO format with Pacific timezone
+          cleanTs = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T${String(hours).padStart(2, '0')}:${min}:${sec || '00'}-08:00`;
         }
+
+        bagDate = new Date(cleanTs);
+      } else if (typeof bagTimestamp === 'number') {
+        if (bagTimestamp < 1) {
+          // Time-only serial (fraction of day)
+          const hours = Math.floor(bagTimestamp * 24);
+          const minutes = Math.floor((bagTimestamp * 24 - hours) * 60);
+          bagDate = new Date(`${todayStr}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00-08:00`);
+        } else {
+          // Full date serial (days since 1900)
+          bagDate = new Date((bagTimestamp - 25569) * 86400 * 1000);
+        }
+      } else {
+        bagDate = new Date(bagTimestamp);
       }
 
       if (!bagDate || isNaN(bagDate.getTime())) continue;
+
+      // Skip accidentally scanned bags (1/19/2026 12:34:14 - 12:38:04 Pacific)
+      // These 8 bags were scanned in error
+      const badBagStart = new Date('2026-01-19T20:34:14Z'); // 12:34:14 Pacific
+      const badBagEnd = new Date('2026-01-19T20:38:05Z');   // 12:38:04 Pacific + 1 sec
+      if (bagDate >= badBagStart && bagDate <= badBagEnd) continue;
+
       if (startFilter && bagDate < startFilter) continue;
 
       let bagCultivar = null;
