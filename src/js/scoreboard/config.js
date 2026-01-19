@@ -13,8 +13,9 @@
   // var API_BASE = 'https://rogue-origin-apps-master.vercel.app/api';
 
   var ScoreboardConfig = {
-    // API URL
+    // API URLs
     API_URL: API_BASE + '/production',
+    WHOLESALE_API_URL: API_BASE + '/orders',
 
     // Timing intervals (milliseconds)
     intervals: {
