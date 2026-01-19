@@ -733,8 +733,8 @@ async function dashboard(req, res) {
 
     // If no data for requested range, show most recent working day
     if (filteredData.length === 0 && dailyData.length > 0) {
-      // dailyData is sorted newest first, so first item is most recent
-      const mostRecent = dailyData[0];
+      // dailyData is sorted oldest first, so last item is most recent
+      const mostRecent = dailyData[dailyData.length - 1];
       filteredData = [mostRecent];
       showingFallback = true;
       fallbackDate = formatDatePT(mostRecent.date, 'yyyy-MM-dd');
