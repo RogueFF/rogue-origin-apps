@@ -238,6 +238,34 @@ function sanitizeForSheets(value) {
 }
 
 /**
+ * Validate a date string (YYYY-MM-DD format)
+ */
+function validateDate(dateStr) {
+  if (!dateStr || typeof dateStr !== 'string') {
+    return { valid: false, error: 'Date is required' };
+  }
+
+  // Check format
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return { valid: false, error: 'Date must be in YYYY-MM-DD format' };
+  }
+
+  // Check if it's a valid date
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return { valid: false, error: 'Invalid date' };
+  }
+
+  return { valid: true, date };
+}
+
+/**
  * Sanitize all string fields in an object
  */
 function sanitizeObject(obj) {
@@ -263,6 +291,7 @@ module.exports = {
   validate,
   validateField,
   validateOrThrow,
+  validateDate,
   sanitizeForSheets,
   sanitizeObject,
   CommonSchemas,
