@@ -454,9 +454,37 @@ async function getBagTimerData(env) {
 
       let rowDate;
       if (typeof timestamp === 'string') {
-        rowDate = new Date(timestamp);
+        let cleanTimestamp = timestamp.trim();
+
+        // Check for US date format: "M/D/YYYY H:M:S" or "M/D/YYYY H:M:S AM/PM"
+        const usDatePattern = /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i;
+        const usDateMatch = cleanTimestamp.match(usDatePattern);
+        if (usDateMatch) {
+          const [, month, day, year, hourStr, min, sec, ampm] = usDateMatch;
+          let hours = parseInt(hourStr, 10);
+
+          if (ampm) {
+            if (ampm.toUpperCase() === 'PM' && hours !== 12) hours += 12;
+            if (ampm.toUpperCase() === 'AM' && hours === 12) hours = 0;
+          }
+
+          // Build ISO format with Pacific timezone
+          const isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${String(hours).padStart(2, '0')}:${min}:${sec || '00'}-08:00`;
+          cleanTimestamp = isoDate;
+        }
+
+        rowDate = new Date(cleanTimestamp);
       } else if (typeof timestamp === 'number') {
-        rowDate = new Date((timestamp - 25569) * 86400 * 1000);
+        if (timestamp < 1) {
+          // Time-only serial (fraction of day)
+          const hours = Math.floor(timestamp * 24);
+          const minutes = Math.floor((timestamp * 24 - hours) * 60);
+          const timeStr = `${today}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00-08:00`;
+          rowDate = new Date(timeStr);
+        } else {
+          // Full date serial (days since 1900)
+          rowDate = new Date((timestamp - 25569) * 86400 * 1000);
+        }
       } else {
         rowDate = new Date(timestamp);
       }
