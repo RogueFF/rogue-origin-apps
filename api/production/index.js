@@ -506,6 +506,7 @@ async function getBagTimerData() {
       if (!timestamp) continue;
 
       // Parse timestamp - handle various formats
+      // All timestamps from the tracking sheet are in Pacific Time
       let rowDate;
       if (typeof timestamp === 'string') {
         // Clean up timestamp string (remove extra colons, normalize format)
@@ -513,6 +514,9 @@ async function getBagTimerData() {
           .replace(/at\s+/gi, '') // Remove "at "
           .replace(/:\s*(AM|PM)/gi, ' $1') // Fix ": AM" -> " AM"
           .replace(/,/g, ''); // Remove commas
+
+        // Check if timestamp already has timezone info
+        const hasTimezone = /[Zz]$|[+-]\d{2}:\d{2}$|[+-]\d{4}$/.test(cleanTimestamp);
 
         // Check if it's time-only (no date) - common formats: "10:39 AM", "10:39:00"
         const timeOnlyPattern = /^(\d{1,2}):(\d{2})(:\d{2})?\s*(AM|PM)?$/i;
@@ -526,13 +530,18 @@ async function getBagTimerData() {
           if (ampm === 'PM' && hours !== 12) hours += 12;
           if (ampm === 'AM' && hours === 12) hours = 0;
 
-          // Use Pacific timezone offset (PST = -08:00, PDT = -07:00)
-          // January is PST
-          const tzOffset = '-08:00';
-          cleanTimestamp = `${today}T${String(hours).padStart(2, '0')}:${minutes}:00${tzOffset}`;
+          // Use Pacific timezone offset (PST = -08:00)
+          cleanTimestamp = `${today}T${String(hours).padStart(2, '0')}:${minutes}:00-08:00`;
         }
 
         rowDate = new Date(cleanTimestamp);
+
+        // If no timezone was specified, assume Pacific Time and adjust
+        // JavaScript parses timezone-less strings as local time (UTC on server)
+        // Add 8 hours to convert from "parsed as UTC" to "intended as Pacific"
+        if (!hasTimezone && !timeMatch && !isNaN(rowDate.getTime())) {
+          rowDate = new Date(rowDate.getTime() + 8 * 60 * 60 * 1000);
+        }
       } else if (typeof timestamp === 'number') {
         // Excel/Sheets serial date number
         if (timestamp < 1) {
