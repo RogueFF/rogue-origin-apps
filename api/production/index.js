@@ -464,6 +464,17 @@ async function getBagTimerData() {
   };
 
   try {
+    // Get header row to find correct column indices
+    const headerRow = await readSheet(SHEET_ID, `'${SHEETS.tracking}'!1:1`);
+    if (!headerRow || !headerRow[0]) return result;
+
+    const headers = headerRow[0];
+    const timestampCol = headers.indexOf('Timestamp');
+    const sizeCol = headers.indexOf('Size');
+    const skuCol = headers.indexOf('SKU');
+
+    if (timestampCol === -1 || sizeCol === -1) return result;
+
     // Get tracking data (read most recent 2000 rows from top)
     const vals = await readSheet(SHEET_ID, `'${SHEETS.tracking}'!A2:J2001`);
     if (!vals || vals.length === 0) return result;
@@ -491,18 +502,19 @@ async function getBagTimerData() {
     let bags10lb = 0;
 
     for (const row of vals) {
-      const timestamp = row[0];
+      const timestamp = row[timestampCol];
       if (!timestamp) continue;
 
       const rowDate = new Date(timestamp);
       const rowDateStr = formatDatePT(rowDate, 'yyyy-MM-dd');
-      const size = String(row[5] || '').toLowerCase();
+      const size = String(row[sizeCol] || '').toLowerCase();
+      const sku = skuCol >= 0 ? String(row[skuCol] || '').toUpperCase() : '';
 
       if (rowDateStr === today) {
         if (is5kgBag(size)) {
           bags5kg++;
           todayBags.push(rowDate);
-        } else if (size.includes('10lb') || size.includes('10 lb')) {
+        } else if (sku.includes('TOP-10-LB') || size.includes('10lb') || size.includes('10 lb')) {
           bags10lb++;
         }
       }
