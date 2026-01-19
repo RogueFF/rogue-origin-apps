@@ -1,7 +1,7 @@
 // Service Worker for Rogue Origin Operations Hub
-// Version 3.10 - CSS cleanup: removed unused classes
+// Version 3.11 - Rate limit (429) resilience: serve cached data when rate limited
 
-const CACHE_VERSION = 'ro-ops-v3.10';
+const CACHE_VERSION = 'ro-ops-v3.11';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
@@ -203,6 +203,19 @@ async function networkFirstWithTimeout(request, cacheName, timeout) {
       fetch(request),
       timeoutPromise
     ]);
+
+    // Handle rate limiting (429) - serve cached data instead
+    if (response.status === 429) {
+      console.warn('[SW] Rate limited (429), checking cache:', request.url);
+      const cachedResponse = await caches.match(request);
+      if (cachedResponse) {
+        console.log('[SW] Serving cached data due to rate limit:', request.url);
+        return cachedResponse;
+      }
+      // No cached data available - return the 429 response
+      console.warn('[SW] No cached data available, returning 429:', request.url);
+      return response;
+    }
 
     // Only cache GET requests - POST requests cannot be cached
     if (response.ok && request.method === 'GET') {
