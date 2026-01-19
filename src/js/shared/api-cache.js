@@ -13,10 +13,10 @@
 (function(window) {
   'use strict';
 
-  var CACHE_VERSION = '1.1';
+  var CACHE_VERSION = '1.2';
   var CACHE_PREFIX = 'ro-api-cache-v' + CACHE_VERSION + '-';
-  var DEFAULT_TTL = 5 * 60 * 1000; // 5 minutes default
-  var STALE_TTL = 60 * 60 * 1000; // 1 hour - serve stale data if fresh fetch fails
+  var DEFAULT_TTL = 5 * 60 * 1000; // 5 minutes default - data considered "fresh"
+  var STALE_TTL = 24 * 60 * 60 * 1000; // 24 hours - serve stale data if rate limited or fetch fails
 
   // In-flight request tracking to prevent duplicate fetches
   var inflightRequests = {};
@@ -174,12 +174,11 @@
     var calledWithCached = false;
 
     // Step 1: Return cached data immediately if available
+    // For rate limit resilience, serve ANY cached data (even stale) on first load
     if (cached && cached.data) {
-      // Even if stale, show it immediately for instant UI
-      if (!cached.isStale) {
-        onData(cached.data, { fromCache: true, isFresh: cached.isFresh });
-        calledWithCached = true;
-      }
+      // Serve cached data immediately - even if stale, it's better than nothing
+      onData(cached.data, { fromCache: true, isFresh: cached.isFresh, isStale: cached.isStale });
+      calledWithCached = true;
     }
 
     // Step 2: Check if identical request is already in-flight
@@ -209,14 +208,29 @@
         // Clean up in-flight tracking
         delete inflightRequests[cacheKey];
 
+        // Check if this is a rate limit error (429)
+        var isRateLimited = error.message && error.message.includes('429');
+
         // If we showed cached data, don't call error handler
         // User already has usable UI
         if (!calledWithCached) {
-          // No cached data and fetch failed - show error
-          if (onError) onError(error);
+          // No cached data and fetch failed
+          // For rate limit errors, try to use stale cache as fallback
+          if (isRateLimited && cached && cached.data && cached.isStale) {
+            console.warn('Rate limited, serving stale cached data');
+            onData(cached.data, { fromCache: true, isFresh: false, isStale: true, rateLimited: true });
+            calledWithCached = true;
+          } else {
+            // Show error to user
+            if (onError) onError(error);
+          }
         } else {
           // We showed cached data, just log the error
-          console.warn('Background fetch failed, using cached data:', error);
+          if (isRateLimited) {
+            console.warn('Rate limited on background refresh, using cached data');
+          } else {
+            console.warn('Background fetch failed, using cached data:', error);
+          }
         }
 
         throw error; // Re-throw so promise rejects
