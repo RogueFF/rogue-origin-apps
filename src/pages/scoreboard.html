@@ -507,11 +507,11 @@
     }
 
     // Toggle AVG/BEST KPIs visibility
-    function toggleAvgBest() {
+    window.toggleAvgBest = function() {
       const container = document.getElementById('avgBestContainer');
       const isHidden = container.classList.toggle('hidden');
       try { localStorage.setItem('hideAvgBest', isHidden ? 'true' : 'false'); } catch(e) {}
-    }
+    };
 
     // Initialize AVG/BEST visibility from localStorage
     function initAvgBestVisibility() {
