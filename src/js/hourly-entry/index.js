@@ -24,6 +24,8 @@ const LABELS = {
     today: 'Today',
     target: 'Target',
     hoursLogged: 'hrs logged',
+    crew: 'Crew',
+    production: 'Production',
     line1: 'Line 1',
     line2: 'Line 2',
     buckers: 'Buckers',
@@ -43,6 +45,8 @@ const LABELS = {
     today: 'Hoy',
     target: 'Meta',
     hoursLogged: 'hrs registradas',
+    crew: 'Equipo',
+    production: 'Producción',
     line1: 'Linea 1',
     line2: 'Linea 2',
     buckers: 'Buckers',
@@ -67,6 +71,10 @@ let dayData = {};
 let cultivarOptions = [];
 let saveTimeout = null;
 let targetRate = 0.9; // Default, will be updated from API
+let originalCrewData = null; // Track original crew for modification detection
+
+// Crew fields to track for modifications
+const CREW_FIELDS = ['buckers1', 'trimmers1', 'tzero1', 'qcperson', 'cultivar1', 'buckers2', 'trimmers2', 'tzero2', 'cultivar2'];
 
 // DOM Elements
 const timelineView = document.getElementById('timeline-view');
@@ -236,10 +244,90 @@ function populateForm(slot) {
   document.getElementById('qcperson').value = data.qcperson ?? 1;  // Default to 1
   document.getElementById('qcNotes').value = data.qcNotes || '';
 
+  // Store original crew data for modification tracking
+  originalCrewData = {
+    buckers1: data.buckers1 || 0,
+    trimmers1: data.trimmers1 || 0,
+    tzero1: data.tzero1 ?? 1,
+    qcperson: data.qcperson ?? 1,
+    cultivar1: data.cultivar1 || '',
+    buckers2: data.buckers2 || 0,
+    trimmers2: data.trimmers2 || 0,
+    tzero2: data.tzero2 ?? 1,
+    cultivar2: data.cultivar2 || '',
+    // Track if production data existed when we loaded
+    hadProduction: (data.tops1 || 0) + (data.tops2 || 0) > 0,
+  };
+
+  // Reset modified badge
+  updateCrewModifiedBadge();
+
   // Auto-expand Line 2 if it has data
   const line2Section = document.getElementById('line2-section');
   const hasLine2Data = data.trimmers2 > 0 || data.tops2 > 0;
   line2Section.classList.toggle('expanded', hasLine2Data);
+}
+
+function getCurrentCrewData() {
+  return {
+    buckers1: parseInt(document.getElementById('buckers1').value, 10) || 0,
+    trimmers1: parseInt(document.getElementById('trimmers1').value, 10) || 0,
+    tzero1: parseInt(document.getElementById('tzero1').value, 10) || 0,
+    qcperson: parseInt(document.getElementById('qcperson').value, 10) || 0,
+    cultivar1: document.getElementById('cultivar1').value,
+    buckers2: parseInt(document.getElementById('buckers2').value, 10) || 0,
+    trimmers2: parseInt(document.getElementById('trimmers2').value, 10) || 0,
+    tzero2: parseInt(document.getElementById('tzero2').value, 10) || 0,
+    cultivar2: document.getElementById('cultivar2').value,
+  };
+}
+
+function isCrewModified() {
+  if (!originalCrewData) return false;
+
+  const current = getCurrentCrewData();
+
+  for (const field of CREW_FIELDS) {
+    if (current[field] !== originalCrewData[field]) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function getCrewChanges() {
+  if (!originalCrewData) return [];
+
+  const current = getCurrentCrewData();
+  const changes = [];
+
+  const fieldLabels = {
+    buckers1: 'Buckers L1',
+    trimmers1: 'Trimmers L1',
+    tzero1: 'T-Zero L1',
+    qcperson: 'QC',
+    cultivar1: 'Cultivar L1',
+    buckers2: 'Buckers L2',
+    trimmers2: 'Trimmers L2',
+    tzero2: 'T-Zero L2',
+    cultivar2: 'Cultivar L2',
+  };
+
+  for (const field of CREW_FIELDS) {
+    if (current[field] !== originalCrewData[field]) {
+      changes.push(`${fieldLabels[field]}: ${originalCrewData[field]} → ${current[field]}`);
+    }
+  }
+
+  return changes;
+}
+
+function updateCrewModifiedBadge() {
+  const badge = document.getElementById('crew-modified-badge');
+  if (badge) {
+    const modified = isCrewModified();
+    badge.style.display = modified ? 'inline-block' : 'none';
+  }
 }
 
 function collectFormData() {
@@ -266,6 +354,10 @@ function collectFormData() {
 
 function scheduleAutoSave() {
   if (saveTimeout) clearTimeout(saveTimeout);
+
+  // Update crew modified badge immediately
+  updateCrewModifiedBadge();
+
   saveTimeout = setTimeout(() => saveEntry(), 1000);
 }
 
@@ -274,6 +366,27 @@ async function saveEntry() {
 
   const data = collectFormData();
   const indicator = document.getElementById('save-indicator');
+
+  // Check if crew was modified and production already existed
+  const crewModified = isCrewModified();
+  const hadProduction = originalCrewData?.hadProduction || false;
+
+  // If crew changed mid-hour (after production was entered), record it
+  if (crewModified && hadProduction) {
+    const changes = getCrewChanges();
+    if (changes.length > 0) {
+      const timestamp = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      const changeNote = `[Crew change ${timestamp}: ${changes.join(', ')}]`;
+
+      // Append to QC Notes if not already recorded
+      if (!data.qcNotes.includes(changeNote)) {
+        data.qcNotes = data.qcNotes
+          ? `${data.qcNotes}\n${changeNote}`
+          : changeNote;
+        document.getElementById('qcNotes').value = data.qcNotes;
+      }
+    }
+  }
 
   try {
     const response = await fetch(`${API_URL}?action=addProduction`, {
@@ -291,6 +404,15 @@ async function saveEntry() {
     // Update local data
     const slot = TIME_SLOTS[currentSlotIndex];
     dayData[slot] = data;
+
+    // Update original crew data after successful save (so subsequent changes are tracked from new baseline)
+    if (crewModified) {
+      originalCrewData = {
+        ...getCurrentCrewData(),
+        hadProduction: (data.tops1 || 0) + (data.tops2 || 0) > 0,
+      };
+      updateCrewModifiedBadge();
+    }
 
     // Show saved indicator
     indicator.classList.add('visible');
