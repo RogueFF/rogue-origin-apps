@@ -11,6 +11,7 @@
 
 import { handleProduction } from './handlers/production.js';
 import { handleOrders } from './handlers/orders.js';
+import { handleOrdersD1 } from './handlers/orders-d1.js';
 import { handleBarcode } from './handlers/barcode.js';
 import { handleBarcodeD1 } from './handlers/barcode-d1.js';
 import { handleKanban } from './handlers/kanban.js';
@@ -25,6 +26,7 @@ import { ApiError } from './lib/errors.js';
 const USE_D1_BARCODE = true;
 const USE_D1_KANBAN = true;
 const USE_D1_SOP = true;
+const USE_D1_ORDERS = true;
 
 export default {
   async fetch(request, env, ctx) {
@@ -43,7 +45,9 @@ export default {
       if (path.startsWith('/api/production')) {
         response = await handleProduction(request, env, ctx);
       } else if (path.startsWith('/api/orders')) {
-        response = await handleOrders(request, env, ctx);
+        response = USE_D1_ORDERS
+          ? await handleOrdersD1(request, env, ctx)
+          : await handleOrders(request, env, ctx);
       } else if (path.startsWith('/api/barcode')) {
         response = USE_D1_BARCODE
           ? await handleBarcodeD1(request, env, ctx)
