@@ -92,6 +92,44 @@ const TIME_SLOT_MULTIPLIERS = {
   '3:00 PM – 3:30 PM': 0.5,
 };
 
+// Break schedule: [startHour, startMin, durationMinutes]
+const BREAKS = [
+  [9, 0, 10],    // 9:00 AM - 10 min break
+  [12, 0, 30],   // 12:00 PM - 30 min lunch
+  [14, 30, 10],  // 2:30 PM - 10 min break
+  [16, 20, 10],  // 4:20 PM - 10 min cleanup
+];
+
+/**
+ * Calculate total break minutes that fall within a time window
+ * @param {Date} startTime - Start of the cycle (previous bag completion)
+ * @param {Date} endTime - End of the cycle (current bag completion)
+ * @returns {number} Total break minutes within the window
+ */
+function getBreakMinutesInWindow(startTime, endTime) {
+  let breakMinutes = 0;
+
+  for (const [breakHour, breakMin, duration] of BREAKS) {
+    // Create break start/end times on the same day as endTime
+    const breakStart = new Date(endTime);
+    breakStart.setHours(breakHour, breakMin, 0, 0);
+    const breakEnd = new Date(breakStart.getTime() + duration * 60000);
+
+    // Check if break overlaps with our cycle window
+    if (breakEnd > startTime && breakStart < endTime) {
+      // Calculate overlap
+      const overlapStart = Math.max(startTime.getTime(), breakStart.getTime());
+      const overlapEnd = Math.min(endTime.getTime(), breakEnd.getTime());
+      const overlapMinutes = (overlapEnd - overlapStart) / 60000;
+      if (overlapMinutes > 0) {
+        breakMinutes += overlapMinutes;
+      }
+    }
+  }
+
+  return Math.round(breakMinutes);
+}
+
 // ===== HELPER FUNCTIONS =====
 
 function formatDatePT(date, format = 'yyyy-MM-dd') {
@@ -567,7 +605,10 @@ async function getBagTimerData(env) {
       todayBags.sort((a, b) => a - b);
       const cycleTimes = [];
       for (let i = 1; i < todayBags.length; i++) {
-        const diffSec = Math.floor((todayBags[i] - todayBags[i - 1]) / 1000);
+        const rawDiffSec = Math.floor((todayBags[i] - todayBags[i - 1]) / 1000);
+        // Subtract any break time that falls within this cycle
+        const breakMinutes = getBreakMinutesInWindow(todayBags[i - 1], todayBags[i]);
+        const diffSec = rawDiffSec - (breakMinutes * 60);
         if (diffSec >= 300 && diffSec <= 14400) {
           cycleTimes.push(diffSec);
         }
@@ -580,7 +621,10 @@ async function getBagTimerData(env) {
     if (todayBags.length > 1) {
       todayBags.sort((a, b) => b - a);
       for (let i = 0; i < Math.min(todayBags.length - 1, 20); i++) {
-        const cycleSec = Math.floor((todayBags[i] - todayBags[i + 1]) / 1000);
+        const rawCycleSec = Math.floor((todayBags[i] - todayBags[i + 1]) / 1000);
+        // Subtract any break time that falls within this cycle
+        const breakMinutes = getBreakMinutesInWindow(todayBags[i + 1], todayBags[i]);
+        const cycleSec = rawCycleSec - (breakMinutes * 60);
         if (cycleSec >= 300 && cycleSec <= 14400) {
           result.cycleHistory.push({
             timestamp: todayBags[i].toISOString(),
