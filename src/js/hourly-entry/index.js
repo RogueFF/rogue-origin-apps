@@ -974,11 +974,42 @@ function updateEditorSummary() {
 }
 
 function getSlotMultiplier(slot) {
-  // Half-hour slots get 0.5 multiplier, lunch slot gets 0.5
+  // Base multiplier: half-hour slots get 0.5, full hours get 1.0
+  let baseMultiplier = 1;
   if (slot === '4:00 PM – 4:30 PM' || slot === '12:30 PM – 1:00 PM') {
-    return 0.5;
+    baseMultiplier = 0.5;
   }
-  return 1;
+
+  // Adjust for shift start time (only affects today)
+  const isToday = currentDate === formatDateLocal(new Date());
+  if (!isToday || !shiftStartTime) {
+    return baseMultiplier;
+  }
+
+  const slotStartMinutes = SLOT_START_MINUTES[slot];
+  if (slotStartMinutes === undefined) return baseMultiplier;
+
+  // Calculate slot end time (in minutes)
+  const slotDuration = baseMultiplier === 0.5 ? 30 : 60;
+  const slotEndMinutes = slotStartMinutes + slotDuration;
+
+  const shiftStartMinutes = shiftStartTime.getHours() * 60 + shiftStartTime.getMinutes();
+
+  // If shift starts after slot ends, multiplier is 0 (slot hidden anyway)
+  if (shiftStartMinutes >= slotEndMinutes) {
+    return 0;
+  }
+
+  // If shift starts before slot begins, use full multiplier
+  if (shiftStartMinutes <= slotStartMinutes) {
+    return baseMultiplier;
+  }
+
+  // Partial slot: calculate fraction of slot that's worked
+  const minutesWorked = slotEndMinutes - shiftStartMinutes;
+  const fractionWorked = minutesWorked / slotDuration;
+
+  return baseMultiplier * fractionWorked;
 }
 
 function getCurrentTimeSlot() {
