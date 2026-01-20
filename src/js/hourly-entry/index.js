@@ -106,6 +106,28 @@ let isSaving = false; // Prevent concurrent saves
 // Crew fields to track for modifications
 const CREW_FIELDS = ['buckers1', 'trimmers1', 'tzero1', 'qcperson', 'cultivar1', 'buckers2', 'trimmers2', 'tzero2', 'cultivar2'];
 
+// Event listener registry for cleanup (prevents memory leaks)
+const listenerRegistry = [];
+
+function registerListener(element, event, handler, options) {
+  if (!element) return;
+  element.addEventListener(event, handler, options);
+  listenerRegistry.push({ element, event, handler, options });
+}
+
+function cleanupListeners() {
+  listenerRegistry.forEach(({ element, event, handler, options }) => {
+    element.removeEventListener(event, handler, options);
+  });
+  listenerRegistry.length = 0;
+}
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+  cleanupListeners();
+  if (saveTimeout) clearTimeout(saveTimeout);
+});
+
 // DOM Elements
 const timelineView = document.getElementById('timeline-view');
 const editorView = document.getElementById('editor-view');
@@ -907,16 +929,26 @@ function initTutorial() {
   showTutorial();
 }
 
+// Tutorial event handlers (stored for cleanup)
+let tutorialHandlers = null;
+
 function showTutorial() {
   const overlay = document.getElementById('tutorial-overlay');
   overlay.classList.add('active');
   tutorialStep = 0;
   renderTutorialStep();
 
-  // Event listeners
-  document.getElementById('tutorial-skip').addEventListener('click', closeTutorial);
-  document.getElementById('tutorial-prev').addEventListener('click', prevTutorialStep);
-  document.getElementById('tutorial-next').addEventListener('click', nextTutorialStep);
+  // Store handlers for cleanup
+  tutorialHandlers = {
+    skip: closeTutorial,
+    prev: prevTutorialStep,
+    next: nextTutorialStep,
+  };
+
+  // Event listeners (using registry for cleanup)
+  registerListener(document.getElementById('tutorial-skip'), 'click', tutorialHandlers.skip);
+  registerListener(document.getElementById('tutorial-prev'), 'click', tutorialHandlers.prev);
+  registerListener(document.getElementById('tutorial-next'), 'click', tutorialHandlers.next);
 }
 
 function renderTutorialStep() {
@@ -1068,6 +1100,9 @@ function closeTutorial() {
   showInlineTooltips();
 }
 
+// Track if tooltip listener is already added
+let tooltipListenerAdded = false;
+
 function showInlineTooltips() {
   // Check if tooltips already dismissed
   if (localStorage.getItem('hourlyEntry_tooltipsDismissed') === 'true') {
@@ -1085,11 +1120,16 @@ function showInlineTooltips() {
       timelineTooltip.style.left = `${rect.left + 20}px`;
       timelineTooltip.classList.add('visible');
 
-      // Close button
-      timelineTooltip.querySelector('.tooltip-close').addEventListener('click', () => {
-        timelineTooltip.classList.remove('visible');
-        localStorage.setItem('hourlyEntry_tooltipsDismissed', 'true');
-      });
+      // Close button (only add listener once)
+      if (!tooltipListenerAdded) {
+        const closeBtn = timelineTooltip.querySelector('.tooltip-close');
+        const closeHandler = () => {
+          timelineTooltip.classList.remove('visible');
+          localStorage.setItem('hourlyEntry_tooltipsDismissed', 'true');
+        };
+        registerListener(closeBtn, 'click', closeHandler);
+        tooltipListenerAdded = true;
+      }
 
       // Auto-hide after 8 seconds
       setTimeout(() => timelineTooltip.classList.remove('visible'), 8000);
