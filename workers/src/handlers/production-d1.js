@@ -855,45 +855,183 @@ async function tts(body, env) {
 
 // ===== DATA ENTRY =====
 
-async function addProduction(body, env) {
-  const { date, timeSlot, trimmers1, buckers1, cultivar1, tops1, smalls1, trimmers2, buckers2, cultivar2, tops2, smalls2 } = body;
-
-  if (!date || !timeSlot) {
-    return errorResponse('Date and time slot are required', 'VALIDATION_ERROR', 400);
+// Validation helpers
+function validateCrewCount(value, fieldName) {
+  const num = parseInt(value, 10);
+  if (isNaN(num) || num < 0 || num > 50) {
+    return { valid: false, error: `${fieldName} must be between 0 and 50` };
   }
+  return { valid: true, value: num };
+}
+
+function validateLbs(value, fieldName) {
+  const num = parseFloat(value);
+  if (isNaN(num) || num < 0 || num > 200) {
+    return { valid: false, error: `${fieldName} must be between 0 and 200 lbs` };
+  }
+  return { valid: true, value: Math.round(num * 10) / 10 }; // Round to 1 decimal
+}
+
+function validateTimeSlot(slot) {
+  const normalizedSlot = String(slot || '').trim().replace(/[-–—]/g, '–');
+  const validSlots = ALL_TIME_SLOTS.map(s => s.replace(/[-–—]/g, '–'));
+  if (!validSlots.includes(normalizedSlot)) {
+    return { valid: false, error: `Invalid time slot: ${slot}` };
+  }
+  return { valid: true, value: normalizedSlot };
+}
+
+function validateProductionDate(dateStr) {
+  if (!dateStr) return { valid: false, error: 'Date is required' };
+
+  // Must be YYYY-MM-DD format
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return { valid: false, error: 'Date must be in YYYY-MM-DD format' };
+  }
+
+  const d = new Date(dateStr + 'T12:00:00');
+  if (isNaN(d.getTime())) {
+    return { valid: false, error: 'Invalid date' };
+  }
+
+  // Not in the future
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  if (d > today) {
+    return { valid: false, error: 'Date cannot be in the future' };
+  }
+
+  // Not more than 2 years old
+  const twoYearsAgo = new Date();
+  twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+  if (d < twoYearsAgo) {
+    return { valid: false, error: 'Date cannot be more than 2 years in the past' };
+  }
+
+  return { valid: true, value: dateStr };
+}
+
+async function addProduction(body, env) {
+  const { date, timeSlot, trimmers1, buckers1, tzero1, cultivar1, tops1, smalls1,
+          trimmers2, buckers2, tzero2, cultivar2, tops2, smalls2, qc } = body;
+
+  // Validate required fields
+  const dateValidation = validateProductionDate(date);
+  if (!dateValidation.valid) {
+    return errorResponse(dateValidation.error, 'VALIDATION_ERROR', 400);
+  }
+
+  const slotValidation = validateTimeSlot(timeSlot);
+  if (!slotValidation.valid) {
+    return errorResponse(slotValidation.error, 'VALIDATION_ERROR', 400);
+  }
+
+  // Validate crew counts (0-50)
+  const validations = [];
+  const crew1 = { trimmers: 0, buckers: 0, tzero: 0 };
+  const crew2 = { trimmers: 0, buckers: 0, tzero: 0 };
+
+  if (trimmers1 !== undefined && trimmers1 !== '') {
+    const v = validateCrewCount(trimmers1, 'Trimmers Line 1');
+    if (!v.valid) validations.push(v.error);
+    else crew1.trimmers = v.value;
+  }
+  if (buckers1 !== undefined && buckers1 !== '') {
+    const v = validateCrewCount(buckers1, 'Buckers Line 1');
+    if (!v.valid) validations.push(v.error);
+    else crew1.buckers = v.value;
+  }
+  if (tzero1 !== undefined && tzero1 !== '') {
+    const v = validateCrewCount(tzero1, 'T-Zero Line 1');
+    if (!v.valid) validations.push(v.error);
+    else crew1.tzero = v.value;
+  }
+  if (trimmers2 !== undefined && trimmers2 !== '') {
+    const v = validateCrewCount(trimmers2, 'Trimmers Line 2');
+    if (!v.valid) validations.push(v.error);
+    else crew2.trimmers = v.value;
+  }
+  if (buckers2 !== undefined && buckers2 !== '') {
+    const v = validateCrewCount(buckers2, 'Buckers Line 2');
+    if (!v.valid) validations.push(v.error);
+    else crew2.buckers = v.value;
+  }
+  if (tzero2 !== undefined && tzero2 !== '') {
+    const v = validateCrewCount(tzero2, 'T-Zero Line 2');
+    if (!v.valid) validations.push(v.error);
+    else crew2.tzero = v.value;
+  }
+
+  // Validate lbs (0-200)
+  const lbs1 = { tops: 0, smalls: 0 };
+  const lbs2 = { tops: 0, smalls: 0 };
+
+  if (tops1 !== undefined && tops1 !== '') {
+    const v = validateLbs(tops1, 'Tops Line 1');
+    if (!v.valid) validations.push(v.error);
+    else lbs1.tops = v.value;
+  }
+  if (smalls1 !== undefined && smalls1 !== '') {
+    const v = validateLbs(smalls1, 'Smalls Line 1');
+    if (!v.valid) validations.push(v.error);
+    else lbs1.smalls = v.value;
+  }
+  if (tops2 !== undefined && tops2 !== '') {
+    const v = validateLbs(tops2, 'Tops Line 2');
+    if (!v.valid) validations.push(v.error);
+    else lbs2.tops = v.value;
+  }
+  if (smalls2 !== undefined && smalls2 !== '') {
+    const v = validateLbs(smalls2, 'Smalls Line 2');
+    if (!v.valid) validations.push(v.error);
+    else lbs2.smalls = v.value;
+  }
+
+  if (validations.length > 0) {
+    return errorResponse(validations.join('; '), 'VALIDATION_ERROR', 400);
+  }
+
+  // Sanitize text fields
+  const safeCultivar1 = sanitizeForSheets(cultivar1 || '').substring(0, 100);
+  const safeCultivar2 = sanitizeForSheets(cultivar2 || '').substring(0, 100);
+  const safeQc = sanitizeForSheets(qc || '').substring(0, 500);
 
   // Upsert - update if exists, insert if not
   const existing = await queryOne(env.DB,
     'SELECT id FROM monthly_production WHERE production_date = ? AND time_slot = ?',
-    [date, timeSlot]
+    [dateValidation.value, slotValidation.value]
   );
 
   if (existing) {
     await execute(env.DB, `
       UPDATE monthly_production SET
-        trimmers_line1 = ?, buckers_line1 = ?, cultivar1 = ?, tops_lbs1 = ?, smalls_lbs1 = ?,
-        trimmers_line2 = ?, buckers_line2 = ?, cultivar2 = ?, tops_lbs2 = ?, smalls_lbs2 = ?
+        trimmers_line1 = ?, buckers_line1 = ?, tzero_line1 = ?, cultivar1 = ?, tops_lbs1 = ?, smalls_lbs1 = ?,
+        trimmers_line2 = ?, buckers_line2 = ?, tzero_line2 = ?, cultivar2 = ?, tops_lbs2 = ?, smalls_lbs2 = ?,
+        qc = ?, updated_at = datetime('now')
       WHERE id = ?
     `, [
-      trimmers1 || 0, buckers1 || 0, cultivar1 || '', tops1 || 0, smalls1 || 0,
-      trimmers2 || 0, buckers2 || 0, cultivar2 || '', tops2 || 0, smalls2 || 0,
-      existing.id
+      crew1.trimmers, crew1.buckers, crew1.tzero, safeCultivar1, lbs1.tops, lbs1.smalls,
+      crew2.trimmers, crew2.buckers, crew2.tzero, safeCultivar2, lbs2.tops, lbs2.smalls,
+      safeQc, existing.id
     ]);
     return successResponse({ success: true, message: 'Production data updated', id: existing.id });
   } else {
     const id = await insert(env.DB, 'monthly_production', {
-      production_date: date,
-      time_slot: timeSlot,
-      trimmers_line1: trimmers1 || 0,
-      buckers_line1: buckers1 || 0,
-      cultivar1: cultivar1 || '',
-      tops_lbs1: tops1 || 0,
-      smalls_lbs1: smalls1 || 0,
-      trimmers_line2: trimmers2 || 0,
-      buckers_line2: buckers2 || 0,
-      cultivar2: cultivar2 || '',
-      tops_lbs2: tops2 || 0,
-      smalls_lbs2: smalls2 || 0,
+      production_date: dateValidation.value,
+      time_slot: slotValidation.value,
+      trimmers_line1: crew1.trimmers,
+      buckers_line1: crew1.buckers,
+      tzero_line1: crew1.tzero,
+      cultivar1: safeCultivar1,
+      tops_lbs1: lbs1.tops,
+      smalls_lbs1: lbs1.smalls,
+      trimmers_line2: crew2.trimmers,
+      buckers_line2: crew2.buckers,
+      tzero_line2: crew2.tzero,
+      cultivar2: safeCultivar2,
+      tops_lbs2: lbs2.tops,
+      smalls_lbs2: lbs2.smalls,
+      qc: safeQc,
     });
     return successResponse({ success: true, message: 'Production data added', id });
   }
@@ -901,6 +1039,11 @@ async function addProduction(body, env) {
 
 async function getProduction(params, env) {
   const date = params.date || formatDatePT(new Date(), 'yyyy-MM-dd');
+
+  // Validate date format
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return errorResponse('Invalid date format. Use YYYY-MM-DD', 'VALIDATION_ERROR', 400);
+  }
 
   const rows = await query(env.DB, `
     SELECT * FROM monthly_production
@@ -911,33 +1054,100 @@ async function getProduction(params, env) {
   return successResponse({
     success: true,
     date,
+    timeSlots: ALL_TIME_SLOTS,
     production: rows.map(r => ({
       timeSlot: r.time_slot,
-      trimmers1: r.trimmers_line1,
-      buckers1: r.buckers_line1,
-      cultivar1: r.cultivar1,
-      tops1: r.tops_lbs1,
-      smalls1: r.smalls_lbs1,
-      trimmers2: r.trimmers_line2,
-      buckers2: r.buckers_line2,
-      cultivar2: r.cultivar2,
-      tops2: r.tops_lbs2,
-      smalls2: r.smalls_lbs2,
+      trimmers1: r.trimmers_line1 || 0,
+      buckers1: r.buckers_line1 || 0,
+      tzero1: r.tzero_line1 || 0,
+      cultivar1: r.cultivar1 || '',
+      tops1: r.tops_lbs1 || 0,
+      smalls1: r.smalls_lbs1 || 0,
+      trimmers2: r.trimmers_line2 || 0,
+      buckers2: r.buckers_line2 || 0,
+      tzero2: r.tzero_line2 || 0,
+      cultivar2: r.cultivar2 || '',
+      tops2: r.tops_lbs2 || 0,
+      smalls2: r.smalls_lbs2 || 0,
+      qc: r.qc || '',
     })),
   });
 }
 
+async function getCultivars(env) {
+  // Get distinct cultivars from both lines
+  const rows = await query(env.DB, `
+    SELECT DISTINCT cultivar FROM (
+      SELECT cultivar1 as cultivar FROM monthly_production WHERE cultivar1 IS NOT NULL AND cultivar1 != ''
+      UNION
+      SELECT cultivar2 FROM monthly_production WHERE cultivar2 IS NOT NULL AND cultivar2 != ''
+    )
+    ORDER BY cultivar
+  `);
+
+  return successResponse({
+    success: true,
+    cultivars: rows.map(r => r.cultivar),
+  });
+}
+
 // ===== MIGRATION =====
+
+// Migration validation helpers
+function validateMigrationCrewCount(value) {
+  if (value === undefined || value === null || value === '') return 0;
+  const num = parseInt(value, 10);
+  if (isNaN(num) || num < 0) return 0;
+  if (num > 50) return 50; // Cap at max
+  return num;
+}
+
+function validateMigrationLbs(value) {
+  if (value === undefined || value === null || value === '') return 0;
+  const num = parseFloat(value);
+  if (isNaN(num) || num < 0) return 0;
+  if (num > 200) return 200; // Cap at max
+  return Math.round(num * 10) / 10;
+}
+
+function validateMigrationTimeSlot(slot) {
+  if (!slot) return null;
+  const normalizedSlot = String(slot).trim().replace(/[-–—]/g, '–');
+  const validSlots = ALL_TIME_SLOTS.map(s => s.replace(/[-–—]/g, '–'));
+  if (!validSlots.includes(normalizedSlot)) return null;
+  return normalizedSlot;
+}
+
+function validateMigrationDate(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+
+  // Not in the future (with 1-day buffer for timezone issues)
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  if (d > tomorrow) return null;
+
+  // Not more than 3 years old
+  const threeYearsAgo = new Date();
+  threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
+  if (d < threeYearsAgo) return null;
+
+  return formatDatePT(d, 'yyyy-MM-dd');
+}
 
 async function migrateFromSheets(env) {
   const sheetId = env.PRODUCTION_SHEET_ID;
   if (!sheetId) throw createError('INTERNAL_ERROR', 'PRODUCTION_SHEET_ID not configured');
 
   let trackingMigrated = 0;
+  let trackingSkipped = 0;
   let productionMigrated = 0;
+  let productionSkipped = 0;
   let pausesMigrated = 0;
   let shiftsMigrated = 0;
   const errors = [];
+  const monthsProcessed = [];
 
   // Migrate production tracking (bag completions)
   try {
@@ -950,13 +1160,21 @@ async function migrateFromSheets(env) {
       const sizeCol = headers.indexOf('Size');
       const skuCol = headers.indexOf('SKU');
 
-      // Only migrate last 2000 rows (most recent data)
-      const startRow = Math.max(1, data.length - 2000);
-
-      for (let i = startRow; i < data.length; i++) {
+      // Migrate all rows (dedupe handled by existing check)
+      for (let i = 1; i < data.length; i++) {
         const row = data[i];
         const timestamp = row[timestampCol];
-        if (!timestamp) continue;
+        if (!timestamp) {
+          trackingSkipped++;
+          continue;
+        }
+
+        // Validate timestamp is a valid date
+        const d = new Date(timestamp);
+        if (isNaN(d.getTime())) {
+          trackingSkipped++;
+          continue;
+        }
 
         // Check if already exists
         const existing = await queryOne(env.DB,
@@ -967,8 +1185,8 @@ async function migrateFromSheets(env) {
 
         await insert(env.DB, 'production_tracking', {
           timestamp: timestamp,
-          bag_type: row[sizeCol] || '',
-          sku: row[skuCol] || '',
+          bag_type: String(row[sizeCol] || '').substring(0, 50),
+          sku: String(row[skuCol] || '').substring(0, 50),
           source: 'sheets_migration',
         });
         trackingMigrated++;
@@ -979,78 +1197,110 @@ async function migrateFromSheets(env) {
     errors.push(`Tracking: ${e.message || e}`);
   }
 
-  // Migrate monthly production data
+  // Migrate monthly production data - ALL months
   try {
     const sheetNames = await getSheetNames(sheetId, env);
-    const monthSheets = sheetNames.filter(name => /^\d{4}-\d{2}$/.test(name));
+    const monthSheets = sheetNames.filter(name => /^\d{4}-\d{2}$/.test(name)).sort();
 
-    for (const monthSheet of monthSheets.slice(0, 3)) { // Last 3 months
-      const vals = await readSheet(sheetId, `'${monthSheet}'!A:Z`, env);
-      let currentDate = null;
-      let cols = null;
+    for (const monthSheet of monthSheets) {
+      try {
+        const vals = await readSheet(sheetId, `'${monthSheet}'!A:Z`, env);
+        let currentDate = null;
+        let cols = null;
+        let monthCount = 0;
 
-      for (let i = 0; i < vals.length; i++) {
-        const row = vals[i];
+        for (let i = 0; i < vals.length; i++) {
+          const row = vals[i];
 
-        if (row[0] === 'Date:') {
-          const dateStr = row[1];
-          if (dateStr) {
-            const d = new Date(dateStr);
-            if (!isNaN(d.getTime())) {
-              currentDate = formatDatePT(d, 'yyyy-MM-dd');
-            }
+          if (row[0] === 'Date:') {
+            const dateStr = row[1];
+            currentDate = validateMigrationDate(dateStr);
+
+            // Next row is headers
+            const headerRow = vals[i + 1] || [];
+            cols = {
+              cultivar1: headerRow.indexOf('Cultivar 1'),
+              tops1: headerRow.indexOf('Tops 1'),
+              smalls1: headerRow.indexOf('Smalls 1'),
+              buckers1: headerRow.indexOf('Buckers 1'),
+              trimmers1: headerRow.indexOf('Trimmers 1'),
+              tzero1: headerRow.indexOf('T-Zero 1'),
+              cultivar2: headerRow.indexOf('Cultivar 2'),
+              tops2: headerRow.indexOf('Tops 2'),
+              smalls2: headerRow.indexOf('Smalls 2'),
+              buckers2: headerRow.indexOf('Buckers 2'),
+              trimmers2: headerRow.indexOf('Trimmers 2'),
+              tzero2: headerRow.indexOf('T-Zero 2'),
+              qc: headerRow.indexOf('QC'),
+            };
+            continue;
           }
 
-          // Next row is headers
-          const headerRow = vals[i + 1] || [];
-          cols = {
-            cultivar1: headerRow.indexOf('Cultivar 1'),
-            tops1: headerRow.indexOf('Tops 1'),
-            smalls1: headerRow.indexOf('Smalls 1'),
-            buckers1: headerRow.indexOf('Buckers 1'),
-            trimmers1: headerRow.indexOf('Trimmers 1'),
-            cultivar2: headerRow.indexOf('Cultivar 2'),
-            tops2: headerRow.indexOf('Tops 2'),
-            smalls2: headerRow.indexOf('Smalls 2'),
-            buckers2: headerRow.indexOf('Buckers 2'),
-            trimmers2: headerRow.indexOf('Trimmers 2'),
-          };
-          continue;
+          if (!currentDate || !cols) continue;
+
+          const rawTimeSlot = row[0];
+          if (!rawTimeSlot || rawTimeSlot === 'Date:' || String(rawTimeSlot).includes('Performance')) continue;
+
+          // Validate time slot
+          const timeSlot = validateMigrationTimeSlot(rawTimeSlot);
+          if (!timeSlot) {
+            productionSkipped++;
+            continue;
+          }
+
+          // Validate and sanitize numeric values
+          const tops1 = validateMigrationLbs(row[cols.tops1]);
+          const smalls1 = validateMigrationLbs(row[cols.smalls1]);
+          const trimmers1 = validateMigrationCrewCount(row[cols.trimmers1]);
+          const buckers1 = validateMigrationCrewCount(row[cols.buckers1]);
+          const tzero1 = cols.tzero1 >= 0 ? validateMigrationCrewCount(row[cols.tzero1]) : 0;
+          const tops2 = validateMigrationLbs(row[cols.tops2]);
+          const smalls2 = validateMigrationLbs(row[cols.smalls2]);
+          const trimmers2 = validateMigrationCrewCount(row[cols.trimmers2]);
+          const buckers2 = validateMigrationCrewCount(row[cols.buckers2]);
+          const tzero2 = cols.tzero2 >= 0 ? validateMigrationCrewCount(row[cols.tzero2]) : 0;
+
+          // Skip rows with no meaningful data
+          if (tops1 === 0 && smalls1 === 0 && trimmers1 === 0 && tops2 === 0 && smalls2 === 0 && trimmers2 === 0) {
+            continue;
+          }
+
+          // Check if exists
+          const existing = await queryOne(env.DB,
+            'SELECT id FROM monthly_production WHERE production_date = ? AND time_slot = ?',
+            [currentDate, timeSlot]
+          );
+          if (existing) continue;
+
+          // Sanitize text fields
+          const cultivar1 = sanitizeForSheets(row[cols.cultivar1] || '').substring(0, 100);
+          const cultivar2 = sanitizeForSheets(row[cols.cultivar2] || '').substring(0, 100);
+          const qc = cols.qc >= 0 ? sanitizeForSheets(row[cols.qc] || '').substring(0, 500) : '';
+
+          await insert(env.DB, 'monthly_production', {
+            production_date: currentDate,
+            time_slot: timeSlot,
+            buckers_line1: buckers1,
+            trimmers_line1: trimmers1,
+            tzero_line1: tzero1,
+            buckers_line2: buckers2,
+            trimmers_line2: trimmers2,
+            tzero_line2: tzero2,
+            cultivar1,
+            cultivar2,
+            tops_lbs1: tops1,
+            smalls_lbs1: smalls1,
+            tops_lbs2: tops2,
+            smalls_lbs2: smalls2,
+            qc,
+          });
+          productionMigrated++;
+          monthCount++;
         }
 
-        if (!currentDate || !cols) continue;
-
-        const timeSlot = row[0];
-        if (!timeSlot || timeSlot === 'Date:' || String(timeSlot).includes('Performance')) continue;
-
-        const tops1 = parseFloat(row[cols.tops1]) || 0;
-        const smalls1 = parseFloat(row[cols.smalls1]) || 0;
-        const trimmers1 = parseFloat(row[cols.trimmers1]) || 0;
-
-        if (tops1 === 0 && smalls1 === 0 && trimmers1 === 0) continue;
-
-        // Check if exists
-        const existing = await queryOne(env.DB,
-          'SELECT id FROM monthly_production WHERE production_date = ? AND time_slot = ?',
-          [currentDate, timeSlot]
-        );
-        if (existing) continue;
-
-        await insert(env.DB, 'monthly_production', {
-          production_date: currentDate,
-          time_slot: timeSlot,
-          buckers_line1: parseFloat(row[cols.buckers1]) || 0,
-          trimmers_line1: trimmers1,
-          buckers_line2: parseFloat(row[cols.buckers2]) || 0,
-          trimmers_line2: parseFloat(row[cols.trimmers2]) || 0,
-          cultivar1: row[cols.cultivar1] || '',
-          cultivar2: row[cols.cultivar2] || '',
-          tops_lbs1: tops1,
-          smalls_lbs1: smalls1,
-          tops_lbs2: parseFloat(row[cols.tops2]) || 0,
-          smalls_lbs2: parseFloat(row[cols.smalls2]) || 0,
-        });
-        productionMigrated++;
+        monthsProcessed.push(`${monthSheet}: ${monthCount} rows`);
+      } catch (monthError) {
+        errors.push(`${monthSheet}: ${monthError.message || monthError}`);
       }
     }
   } catch (e) {
@@ -1063,7 +1313,7 @@ async function migrateFromSheets(env) {
     const pauseData = await readSheet(sheetId, `'Timer Pause Log'!A:G`, env);
     for (let i = 1; i < pauseData.length; i++) {
       const row = pauseData[i];
-      if (!row[0]) continue;
+      if (!row[0] || !row[1]) continue;
 
       const existing = await queryOne(env.DB,
         'SELECT id FROM pause_log WHERE start_time LIKE ?',
@@ -1072,11 +1322,11 @@ async function migrateFromSheets(env) {
       if (existing) continue;
 
       await insert(env.DB, 'pause_log', {
-        start_time: `${row[1]}T${row[2]}`,
+        start_time: `${row[1]}T${row[2] || '00:00:00'}`,
         end_time: row[3] ? `${row[1]}T${row[3]}` : null,
         duration_min: parseFloat(row[4]) || null,
-        reason: row[5] || '',
-        created_by: row[6] || '',
+        reason: sanitizeForSheets(row[5] || '').substring(0, 200),
+        created_by: sanitizeForSheets(row[6] || '').substring(0, 50),
       });
       pausesMigrated++;
     }
@@ -1092,17 +1342,21 @@ async function migrateFromSheets(env) {
       const row = shiftData[i];
       if (!row[0]) continue;
 
+      // Validate date
+      const adjDate = validateMigrationDate(row[0]);
+      if (!adjDate) continue;
+
       const existing = await queryOne(env.DB,
         'SELECT id FROM shift_adjustments WHERE adjustment_date = ?',
-        [row[0]]
+        [adjDate]
       );
       if (existing) continue;
 
       await insert(env.DB, 'shift_adjustments', {
-        adjustment_date: row[0],
+        adjustment_date: adjDate,
         original_start: '07:00:00',
-        new_start: row[1] || '',
-        reason: `Available hours: ${row[3] || 0}, Scale: ${row[4] || 1}`,
+        new_start: String(row[1] || '').substring(0, 20),
+        reason: `Available hours: ${parseFloat(row[3]) || 0}, Scale: ${parseFloat(row[4]) || 1}`,
       });
       shiftsMigrated++;
     }
@@ -1113,11 +1367,14 @@ async function migrateFromSheets(env) {
 
   return successResponse({
     success: errors.length === 0,
-    message: `Migration complete. Tracking: ${trackingMigrated}, Production: ${productionMigrated}, Pauses: ${pausesMigrated}, Shifts: ${shiftsMigrated}${errors.length > 0 ? '. Errors: ' + errors.join('; ') : ''}`,
+    message: `Migration complete. Tracking: ${trackingMigrated} (${trackingSkipped} skipped), Production: ${productionMigrated} (${productionSkipped} skipped), Pauses: ${pausesMigrated}, Shifts: ${shiftsMigrated}`,
     trackingMigrated,
+    trackingSkipped,
     productionMigrated,
+    productionSkipped,
     pausesMigrated,
     shiftsMigrated,
+    monthsProcessed,
     errors: errors.length > 0 ? errors : undefined,
   });
 }
@@ -1161,6 +1418,8 @@ export async function handleProductionD1(request, env, ctx) {
         return await addProduction(body, env);
       case 'getProduction':
         return await getProduction(params, env);
+      case 'getCultivars':
+        return await getCultivars(env);
       case 'migrate':
         return await migrateFromSheets(env);
       default:
