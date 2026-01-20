@@ -102,6 +102,7 @@ const BREAKS = [
 
 /**
  * Calculate total break minutes that fall within a time window
+ * Break times are in PST (America/Los_Angeles)
  * @param {Date} startTime - Start of the cycle (previous bag completion)
  * @param {Date} endTime - End of the cycle (current bag completion)
  * @returns {number} Total break minutes within the window
@@ -109,17 +110,40 @@ const BREAKS = [
 function getBreakMinutesInWindow(startTime, endTime) {
   let breakMinutes = 0;
 
+  // Get the date in PST for creating break times
+  const pstDateStr = endTime.toLocaleDateString('en-CA', { timeZone: TIMEZONE });
+  // pstDateStr is like "2026-01-20"
+
   for (const [breakHour, breakMin, duration] of BREAKS) {
-    // Create break start/end times on the same day as endTime
-    const breakStart = new Date(endTime);
-    breakStart.setHours(breakHour, breakMin, 0, 0);
-    const breakEnd = new Date(breakStart.getTime() + duration * 60000);
+    // Create break time string in PST, then parse as PST
+    // Format: "2026-01-20T12:00:00" interpreted as PST
+    const breakTimeStr = `${pstDateStr}T${String(breakHour).padStart(2, '0')}:${String(breakMin).padStart(2, '0')}:00`;
+
+    // Parse as PST by using the Intl API to get UTC offset
+    const pstFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: TIMEZONE,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    });
+
+    // Get current PST offset by comparing a known time
+    const testDate = new Date(pstDateStr + 'T12:00:00Z');
+    const pstParts = pstFormatter.formatToParts(testDate);
+    const pstHour = parseInt(pstParts.find(p => p.type === 'hour').value);
+    // If UTC 12:00 shows as 04:00 PST, offset is -8 hours (PST)
+    // If UTC 12:00 shows as 05:00 PDT, offset is -7 hours (PDT)
+    const offsetHours = 12 - pstHour;
+
+    // Create break start in UTC by adding offset
+    const breakStartUTC = new Date(breakTimeStr + 'Z');
+    breakStartUTC.setUTCHours(breakStartUTC.getUTCHours() + offsetHours);
+    const breakEndUTC = new Date(breakStartUTC.getTime() + duration * 60000);
 
     // Check if break overlaps with our cycle window
-    if (breakEnd > startTime && breakStart < endTime) {
+    if (breakEndUTC > startTime && breakStartUTC < endTime) {
       // Calculate overlap
-      const overlapStart = Math.max(startTime.getTime(), breakStart.getTime());
-      const overlapEnd = Math.min(endTime.getTime(), breakEnd.getTime());
+      const overlapStart = Math.max(startTime.getTime(), breakStartUTC.getTime());
+      const overlapEnd = Math.min(endTime.getTime(), breakEndUTC.getTime());
       const overlapMinutes = (overlapEnd - overlapStart) / 60000;
       if (overlapMinutes > 0) {
         breakMinutes += overlapMinutes;
