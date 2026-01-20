@@ -828,7 +828,8 @@ async function getShiftStart(params, env) {
     }
 
     for (let i = vals.length - 1; i >= 1; i--) {
-      const cellDate = formatDatePT(new Date(vals[i][0]), 'yyyy-MM-dd');
+      // Use string directly - don't convert to Date (causes timezone shift)
+      const cellDate = String(vals[i][0]).trim();
       if (cellDate === date) {
         return successResponse({
           shiftAdjustment: {
