@@ -222,7 +222,6 @@ function populateForm(slot) {
   document.getElementById('buckers1').value = data.buckers1 || 0;
   document.getElementById('trimmers1').value = data.trimmers1 || 0;
   document.getElementById('tzero1').value = data.tzero1 || 0;
-  document.getElementById('qcperson1').value = data.qcperson1 || 0;
   document.getElementById('cultivar1').value = data.cultivar1 || '';
   document.getElementById('tops1').value = data.tops1 || 0;
   document.getElementById('smalls1').value = data.smalls1 || 0;
@@ -230,12 +229,12 @@ function populateForm(slot) {
   document.getElementById('buckers2').value = data.buckers2 || 0;
   document.getElementById('trimmers2').value = data.trimmers2 || 0;
   document.getElementById('tzero2').value = data.tzero2 || 0;
-  document.getElementById('qcperson2').value = data.qcperson2 || 0;
   document.getElementById('cultivar2').value = data.cultivar2 || '';
   document.getElementById('tops2').value = data.tops2 || 0;
   document.getElementById('smalls2').value = data.smalls2 || 0;
 
-  document.getElementById('qc').value = data.qc || '';
+  document.getElementById('qcperson').value = data.qcperson || 0;
+  document.getElementById('qcNotes').value = data.qcNotes || '';
 
   // Auto-expand Line 2 if it has data
   const line2Section = document.getElementById('line2-section');
@@ -251,18 +250,17 @@ function collectFormData() {
     buckers1: parseInt(document.getElementById('buckers1').value, 10) || 0,
     trimmers1: parseInt(document.getElementById('trimmers1').value, 10) || 0,
     tzero1: parseInt(document.getElementById('tzero1').value, 10) || 0,
-    qcperson1: parseInt(document.getElementById('qcperson1').value, 10) || 0,
     cultivar1: document.getElementById('cultivar1').value,
     tops1: parseFloat(document.getElementById('tops1').value) || 0,
     smalls1: parseFloat(document.getElementById('smalls1').value) || 0,
     buckers2: parseInt(document.getElementById('buckers2').value, 10) || 0,
     trimmers2: parseInt(document.getElementById('trimmers2').value, 10) || 0,
     tzero2: parseInt(document.getElementById('tzero2').value, 10) || 0,
-    qcperson2: parseInt(document.getElementById('qcperson2').value, 10) || 0,
     cultivar2: document.getElementById('cultivar2').value,
     tops2: parseFloat(document.getElementById('tops2').value) || 0,
     smalls2: parseFloat(document.getElementById('smalls2').value) || 0,
-    qc: document.getElementById('qc').value,
+    qcperson: parseInt(document.getElementById('qcperson').value, 10) || 0,
+    qcNotes: document.getElementById('qcNotes').value,
   };
 }
 
