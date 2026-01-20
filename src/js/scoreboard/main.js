@@ -42,6 +42,31 @@
   }
 
   /**
+   * Check for data updates (smart polling)
+   * Only fetches full data when version changes
+   */
+  function checkForUpdates() {
+    if (!API || !API.checkVersion) {
+      // Fallback to regular load if version check not available
+      loadData();
+      return;
+    }
+
+    API.checkVersion(
+      function(changed) {
+        if (changed) {
+          console.log('Data version changed, fetching fresh data...');
+          loadData();
+        }
+      },
+      function(error) {
+        console.error('Version check failed, falling back to data load:', error);
+        loadData();
+      }
+    );
+  }
+
+  /**
    * Load data from API and update state
    */
   function loadData() {
@@ -202,36 +227,37 @@
 
     // Get intervals from config or use defaults
     var clockInterval = (Config && Config.intervals && Config.intervals.clockRefresh) || 1000;
-    var dataInterval = (Config && Config.intervals && Config.intervals.dataRefresh) || 15000;
+    var versionCheckInterval = (Config && Config.intervals && Config.intervals.versionCheck) || 5000; // Smart polling every 5s
     var timerInterval = (Config && Config.intervals && Config.intervals.timerRefresh) || 1000;
 
     // Register intervals using State's interval registry if available
     if (State && State.registerInterval) {
       State.registerInterval(updateClock, clockInterval);
-      State.registerInterval(loadData, dataInterval);
+      State.registerInterval(checkForUpdates, versionCheckInterval); // Smart polling
       if (Timer && Timer.renderTimer) {
         State.registerInterval(Timer.renderTimer, timerInterval);
       }
     } else {
       // Fallback to direct setInterval
       setInterval(updateClock, clockInterval);
-      setInterval(loadData, dataInterval);
+      setInterval(checkForUpdates, versionCheckInterval); // Smart polling
       if (Timer && Timer.renderTimer) {
         setInterval(Timer.renderTimer, timerInterval);
       }
     }
 
-    // Initial data load
+    // Initial data load (always fetch on page load)
     loadData();
 
     // Initial order queue load
     loadOrderQueue();
 
-    // Register order queue loading interval
+    // Register order queue loading interval (less frequent since it changes rarely)
+    var orderQueueInterval = (Config && Config.intervals && Config.intervals.orderQueueRefresh) || 30000; // 30 seconds
     if (State && State.registerInterval) {
-      State.registerInterval(loadOrderQueue, dataInterval);
+      State.registerInterval(loadOrderQueue, orderQueueInterval);
     } else {
-      setInterval(loadOrderQueue, dataInterval);
+      setInterval(loadOrderQueue, orderQueueInterval);
     }
 
     // Initial cycle history render

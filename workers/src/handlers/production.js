@@ -35,6 +35,38 @@ const scoreboardCache = {
   TTL: 10000, // 10 seconds
 };
 
+// ===== VERSION TRACKING FOR SMART POLLING =====
+
+/**
+ * Get current data version from D1
+ * @returns {number} Current version number
+ */
+async function getDataVersion(env) {
+  try {
+    const result = await env.DB.prepare(
+      'SELECT version, updated_at FROM data_version WHERE key = ?'
+    ).bind('scoreboard').first();
+    return result ? { version: result.version, updatedAt: result.updated_at } : { version: 0, updatedAt: null };
+  } catch (error) {
+    console.error('Error getting data version:', error);
+    return { version: 0, updatedAt: null };
+  }
+}
+
+/**
+ * Increment data version in D1 (call when data changes)
+ */
+async function incrementDataVersion(env) {
+  try {
+    await env.DB.prepare(
+      `INSERT INTO data_version (key, version, updated_at) VALUES ('scoreboard', 1, datetime('now'))
+       ON CONFLICT(key) DO UPDATE SET version = version + 1, updated_at = datetime('now')`
+    ).run();
+  } catch (error) {
+    console.error('Error incrementing data version:', error);
+  }
+}
+
 // Sheet tab names
 const SHEETS = {
   tracking: 'Rogue Origin Production Tracking',
@@ -663,6 +695,18 @@ async function test(env) {
   });
 }
 
+/**
+ * Get current data version (lightweight endpoint for smart polling)
+ * Clients poll this frequently and only fetch full data when version changes
+ */
+async function version(env) {
+  const versionData = await getDataVersion(env);
+  return successResponse({
+    version: versionData.version,
+    updatedAt: versionData.updatedAt,
+  });
+}
+
 async function scoreboard(env) {
   // Check cache first to reduce Google Sheets API calls
   const now = Date.now();
@@ -827,6 +871,9 @@ async function setShiftStart(params, env) {
     [dateStr, shiftStartStr, setAtStr, availableHours.toFixed(2), scaleFactor.toFixed(3), ''],
   ], env);
 
+  // Increment version to notify clients of new data
+  await incrementDataVersion(env);
+
   return successResponse({
     success: true,
     shiftAdjustment: {
@@ -929,6 +976,9 @@ async function logBag(body, env) {
 
   await appendSheet(sheetId, `'${SHEETS.tracking}'!A:Z`, [newRow], env);
 
+  // Increment version to notify clients of new data
+  await incrementDataVersion(env);
+
   return successResponse({ timestamp: now.toISOString(), size });
 }
 
@@ -944,6 +994,9 @@ async function logPause(body, env) {
   await appendSheet(sheetId, `'${SHEETS.pauseLog}'!A:G`, [
     [pauseId, dateStr, timeStr, '', '', reason, 'Scoreboard'],
   ], env);
+
+  // Increment version to notify clients of new data
+  await incrementDataVersion(env);
 
   return successResponse({ pauseId, timestamp: now.toISOString(), reason });
 }
@@ -965,6 +1018,8 @@ async function logResume(body, env) {
   for (let i = 1; i < vals.length; i++) {
     if (String(vals[i][0]) === pauseId) {
       await writeSheet(sheetId, `'${SHEETS.pauseLog}'!D${i + 1}:E${i + 1}`, [[timeStr, durationMin]], env);
+      // Increment version to notify clients of new data
+      await incrementDataVersion(env);
       return successResponse({ pauseId, resumeTime: now.toISOString(), durationMinutes: durationMin });
     }
   }
@@ -1178,6 +1233,8 @@ async function inventoryWebhook(body, env) {
 
   // Return status
   if (d1Success && sheetsSuccess) {
+    // Increment version to notify clients of new data
+    await incrementDataVersion(env);
     return successResponse({
       success: true,
       message: 'Inventory adjustment recorded (D1 + Sheets)',
@@ -1186,6 +1243,8 @@ async function inventoryWebhook(body, env) {
       quantityAdjusted,
     });
   } else if (d1Success || sheetsSuccess) {
+    // Increment version even for partial success
+    await incrementDataVersion(env);
     return successResponse({
       success: true,
       partial: true,
@@ -1440,6 +1499,9 @@ async function addProduction(body, env) {
     const range = `'${sheetMonth}'!A${targetRowIndex + 1}`;
     await writeSheet(sheetId, range, [newRow], env);
 
+    // Increment version to notify clients of new data
+    await incrementDataVersion(env);
+
     return successResponse({
       success: true,
       message: 'Production data saved',
@@ -1467,6 +1529,8 @@ export async function handleProduction(request, env, ctx) {
     switch (action) {
       case 'test':
         return await test(env);
+      case 'version':
+        return await version(env);
       case 'scoreboard':
         return await scoreboard(env);
       case 'dashboard':
