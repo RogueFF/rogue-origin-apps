@@ -1132,6 +1132,15 @@ const TUTORIAL_STEPS = [
     },
   },
   {
+    id: 'start-day',
+    target: 'start-day-btn',
+    title: { en: 'Start Day Button', es: 'Botón Iniciar Día' },
+    text: {
+      en: 'Tap "Start Day" when work begins. If you start late (meetings, etc.), early hours will be hidden and targets adjust automatically.\n\nExample: Start at 8:30 AM → the 7-8 AM slot is hidden, and 8-9 AM gets a reduced target.',
+      es: 'Toca "Iniciar Día" cuando comience el trabajo. Si empiezas tarde (juntas, etc.), las horas tempranas se ocultan y las metas se ajustan.\n\nEjemplo: Empezar a las 8:30 AM → la hora 7-8 se oculta, y 8-9 AM tiene meta reducida.',
+    },
+  },
+  {
     id: 'editor-intro',
     target: null,
     title: { en: 'Entering Data', es: 'Ingresando Datos' },
