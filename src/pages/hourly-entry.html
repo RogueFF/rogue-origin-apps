@@ -60,9 +60,14 @@
     <div class="editor-content">
       <h2 class="editor-time-label" id="editor-time-label">9:00 AM - 10:00 AM</h2>
 
-      <!-- Line 1 -->
-      <section class="editor-section">
-        <h3 class="section-label" data-i18n="line1">Line 1</h3>
+      <!-- Crew Entry Section -->
+      <section class="editor-section crew-section">
+        <div class="section-header">
+          <h3 class="section-label" data-i18n="crew">Crew</h3>
+          <span id="crew-modified-badge" class="modified-badge" style="display: none;">Modified</span>
+        </div>
+
+        <h4 class="subsection-label" data-i18n="line1">Line 1</h4>
 
         <div class="crew-grid">
           <div class="crew-field">
@@ -106,6 +111,56 @@
           </select>
         </div>
 
+        <!-- Line 2 (Collapsible) -->
+        <div class="line2-collapsible" id="line2-section">
+          <button type="button" class="subsection-toggle" id="line2-toggle">
+            <h4 class="subsection-label" data-i18n="line2">Line 2</h4>
+            <span class="toggle-icon">+</span>
+          </button>
+
+          <div class="section-content" id="line2-content">
+            <div class="crew-grid">
+              <div class="crew-field">
+                <label data-i18n="buckers">Buckers</label>
+                <div class="number-input">
+                  <button type="button" class="decrement" data-field="buckers2">-</button>
+                  <input type="number" id="buckers2" value="0" min="0" max="50" inputmode="numeric">
+                  <button type="button" class="increment" data-field="buckers2">+</button>
+                </div>
+              </div>
+              <div class="crew-field">
+                <label data-i18n="trimmers">Trimmers</label>
+                <div class="number-input">
+                  <button type="button" class="decrement" data-field="trimmers2">-</button>
+                  <input type="number" id="trimmers2" value="0" min="0" max="50" inputmode="numeric">
+                  <button type="button" class="increment" data-field="trimmers2">+</button>
+                </div>
+              </div>
+              <div class="crew-field">
+                <label data-i18n="tzero">T-Zero</label>
+                <div class="number-input">
+                  <button type="button" class="decrement" data-field="tzero2">-</button>
+                  <input type="number" id="tzero2" value="1" min="0" max="50" inputmode="numeric">
+                  <button type="button" class="increment" data-field="tzero2">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="field-row">
+              <label data-i18n="cultivar">Cultivar</label>
+              <select id="cultivar2" class="cultivar-select">
+                <option value="">Select...</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Production Section (End of Hour) -->
+      <section class="editor-section production-section">
+        <h3 class="section-label" data-i18n="production">Production</h3>
+
+        <h4 class="subsection-label" data-i18n="line1">Line 1</h4>
         <div class="production-grid">
           <div class="production-field">
             <label data-i18n="tops">Tops (lbs)</label>
@@ -116,59 +171,16 @@
             <input type="number" id="smalls1" value="0" min="0" max="200" step="0.1" inputmode="decimal" class="lbs-input">
           </div>
         </div>
-      </section>
 
-      <!-- Line 2 (Collapsible) -->
-      <section class="editor-section collapsible" id="line2-section">
-        <button type="button" class="section-toggle" id="line2-toggle">
-          <h3 class="section-label" data-i18n="line2">Line 2</h3>
-          <span class="toggle-icon">+</span>
-        </button>
-
-        <div class="section-content" id="line2-content">
-          <div class="crew-grid">
-            <div class="crew-field">
-              <label data-i18n="buckers">Buckers</label>
-              <div class="number-input">
-                <button type="button" class="decrement" data-field="buckers2">-</button>
-                <input type="number" id="buckers2" value="0" min="0" max="50" inputmode="numeric">
-                <button type="button" class="increment" data-field="buckers2">+</button>
-              </div>
-            </div>
-            <div class="crew-field">
-              <label data-i18n="trimmers">Trimmers</label>
-              <div class="number-input">
-                <button type="button" class="decrement" data-field="trimmers2">-</button>
-                <input type="number" id="trimmers2" value="0" min="0" max="50" inputmode="numeric">
-                <button type="button" class="increment" data-field="trimmers2">+</button>
-              </div>
-            </div>
-            <div class="crew-field">
-              <label data-i18n="tzero">T-Zero</label>
-              <div class="number-input">
-                <button type="button" class="decrement" data-field="tzero2">-</button>
-                <input type="number" id="tzero2" value="1" min="0" max="50" inputmode="numeric">
-                <button type="button" class="increment" data-field="tzero2">+</button>
-              </div>
-            </div>
+        <h4 class="subsection-label" data-i18n="line2">Line 2</h4>
+        <div class="production-grid">
+          <div class="production-field">
+            <label data-i18n="tops">Tops (lbs)</label>
+            <input type="number" id="tops2" value="0" min="0" max="200" step="0.1" inputmode="decimal" class="lbs-input">
           </div>
-
-          <div class="field-row">
-            <label data-i18n="cultivar">Cultivar</label>
-            <select id="cultivar2" class="cultivar-select">
-              <option value="">Select...</option>
-            </select>
-          </div>
-
-          <div class="production-grid">
-            <div class="production-field">
-              <label data-i18n="tops">Tops (lbs)</label>
-              <input type="number" id="tops2" value="0" min="0" max="200" step="0.1" inputmode="decimal" class="lbs-input">
-            </div>
-            <div class="production-field">
-              <label data-i18n="smalls">Smalls (lbs)</label>
-              <input type="number" id="smalls2" value="0" min="0" max="200" step="0.1" inputmode="decimal" class="lbs-input">
-            </div>
+          <div class="production-field">
+            <label data-i18n="smalls">Smalls (lbs)</label>
+            <input type="number" id="smalls2" value="0" min="0" max="200" step="0.1" inputmode="decimal" class="lbs-input">
           </div>
         </div>
       </section>
@@ -198,6 +210,6 @@
     <div class="spinner"></div>
   </div>
 
-  <script type="module" src="../js/hourly-entry/index.js?v=10"></script>
+  <script type="module" src="../js/hourly-entry/index.js?v=11"></script>
 </body>
 </html>
