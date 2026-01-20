@@ -1477,6 +1477,29 @@ export async function handleProductionD1(request, env, ctx) {
         return await getCultivars(env);
       case 'migrate':
         return await migrateFromSheets(env);
+      case 'checkSheet': {
+        // Debug: Check what's in Google Sheets for a specific date
+        const date = params.date || formatDatePT(new Date(), 'yyyy-MM-dd');
+        const sheetId = env.PRODUCTION_SHEET_ID;
+        const monthSheet = date.substring(0, 7); // YYYY-MM
+        try {
+          const data = await readSheet(sheetId, `'${monthSheet}'!A:Z`, env);
+          const rows = [];
+          let currentDate = null;
+          for (const row of data) {
+            if (row[0] === 'Date:') {
+              currentDate = row[1];
+              continue;
+            }
+            if (currentDate && String(currentDate).includes(date.split('-')[2])) {
+              rows.push({ date: currentDate, slot: row[0], data: row.slice(1, 15) });
+            }
+          }
+          return successResponse({ date, monthSheet, rowCount: rows.length, rows: rows.slice(0, 20) });
+        } catch (e) {
+          return successResponse({ date, monthSheet, error: e.message });
+        }
+      }
       default:
         return errorResponse(`Unknown action: ${action}`, 'NOT_FOUND', 404);
     }
