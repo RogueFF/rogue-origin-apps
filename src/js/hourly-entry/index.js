@@ -46,6 +46,10 @@ const LABELS = {
     stepProductionHint: 'End of hour: how much was trimmed?',
     stepCompleteTitle: 'All Done',
     stepCompleteHint: 'This hour is complete',
+    stepCelebrateTitle: 'Target Met!',
+    stepCelebrateHint: 'Great work this hour!',
+    stepMissedTitle: 'Below Target',
+    stepMissedHint: 'Add a note explaining why',
   },
   es: {
     title: 'Entrada por Hora',
@@ -74,6 +78,10 @@ const LABELS = {
     stepProductionHint: 'Fin de hora: cuánto se podó?',
     stepCompleteTitle: 'Completado',
     stepCompleteHint: 'Esta hora está completa',
+    stepCelebrateTitle: '¡Meta Cumplida!',
+    stepCelebrateHint: '¡Buen trabajo esta hora!',
+    stepMissedTitle: 'Bajo la Meta',
+    stepMissedHint: 'Agrega una nota explicando por qué',
   },
 };
 
@@ -354,24 +362,39 @@ function updateStepGuide() {
   const stepHint = document.getElementById('step-hint');
   const crewSection = document.querySelector('.crew-section');
   const productionSection = document.querySelector('.production-section');
+  const qcNotesSection = document.querySelector('.editor-section:has(#qcNotes)');
+  const qcNotesField = document.getElementById('qcNotes');
 
   if (!stepGuide) return;
 
   // Check current state
   const trimmers1 = parseInt(document.getElementById('trimmers1').value, 10) || 0;
   const trimmers2 = parseInt(document.getElementById('trimmers2').value, 10) || 0;
-  const hasCrew = trimmers1 > 0 || trimmers2 > 0;
+  const totalTrimmers = trimmers1 + trimmers2;
+  const hasCrew = totalTrimmers > 0;
 
   const tops1 = parseFloat(document.getElementById('tops1').value) || 0;
   const tops2 = parseFloat(document.getElementById('tops2').value) || 0;
   const smalls1 = parseFloat(document.getElementById('smalls1').value) || 0;
   const smalls2 = parseFloat(document.getElementById('smalls2').value) || 0;
-  const hasProduction = (tops1 + tops2 + smalls1 + smalls2) > 0;
+  const totalProduction = tops1 + tops2 + smalls1 + smalls2;
+  const hasProduction = totalProduction > 0;
+
+  // Calculate hourly target
+  const slot = TIME_SLOTS[currentSlotIndex];
+  const multiplier = getSlotMultiplier(slot);
+  const hourlyTarget = totalTrimmers * targetRate * multiplier;
+  const metTarget = totalProduction >= hourlyTarget;
+
+  // Check if reason provided for missed target
+  const qcNotes = qcNotesField?.value?.trim() || '';
+  const hasReason = qcNotes.length > 0;
 
   // Reset classes
-  stepGuide.classList.remove('step-production', 'step-complete');
+  stepGuide.classList.remove('step-production', 'step-complete', 'step-celebrate', 'step-missed');
   crewSection?.classList.remove('needs-attention', 'completed');
   productionSection?.classList.remove('needs-attention', 'completed');
+  qcNotesSection?.classList.remove('needs-attention', 'completed');
 
   const labels = LABELS[currentLang];
 
@@ -389,14 +412,32 @@ function updateStepGuide() {
     stepHint.textContent = labels.stepProductionHint;
     crewSection?.classList.add('completed');
     productionSection?.classList.add('needs-attention');
+  } else if (metTarget) {
+    // Target met - celebrate!
+    stepGuide.classList.add('step-celebrate');
+    stepIcon.textContent = '🎉';
+    stepTitle.textContent = labels.stepCelebrateTitle;
+    stepHint.textContent = `${totalProduction.toFixed(1)} / ${hourlyTarget.toFixed(1)} lbs`;
+    crewSection?.classList.add('completed');
+    productionSection?.classList.add('completed');
+  } else if (!hasReason) {
+    // Target missed, need reason
+    stepGuide.classList.add('step-missed');
+    stepIcon.textContent = '!';
+    stepTitle.textContent = labels.stepMissedTitle;
+    stepHint.textContent = `${totalProduction.toFixed(1)} / ${hourlyTarget.toFixed(1)} lbs — ${labels.stepMissedHint}`;
+    crewSection?.classList.add('completed');
+    productionSection?.classList.add('completed');
+    qcNotesSection?.classList.add('needs-attention');
   } else {
-    // Complete
+    // Target missed but reason provided
     stepGuide.classList.add('step-complete');
     stepIcon.textContent = '✓';
     stepTitle.textContent = labels.stepCompleteTitle;
-    stepHint.textContent = labels.stepCompleteHint;
+    stepHint.textContent = `${totalProduction.toFixed(1)} / ${hourlyTarget.toFixed(1)} lbs`;
     crewSection?.classList.add('completed');
     productionSection?.classList.add('completed');
+    qcNotesSection?.classList.add('completed');
   }
 }
 
