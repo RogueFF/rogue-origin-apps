@@ -22,9 +22,6 @@ import { createError, formatError } from '../lib/errors.js';
 import { sanitizeForSheets, validateDate } from '../lib/validate.js';
 import { insert } from '../lib/db.js';
 
-// Sheet ID for Shopify webhook dual-write (original inventory tracking sheet)
-const SHOPIFY_WEBHOOK_SHEET_ID = '1z3RLYOaxIOEV05UPKoY0Borle4-uYv9EGSuEXRX8Bt0';
-
 const AI_MODEL = 'claude-sonnet-4-20250514';
 const TIMEZONE = 'America/Los_Angeles';
 
@@ -1114,9 +1111,11 @@ async function inventoryWebhook(body, env) {
     }
   }
 
-  // 2. Write to Google Sheets (dual-write for IMPORTRANGE compatibility)
+  // 2. Write to Google Sheets (production sheet's tracking tab)
   try {
-    // Format row to match original sheet columns:
+    const sheetId = env.PRODUCTION_SHEET_ID;
+
+    // Format row to match "Rogue Origin Production Tracking" columns:
     // Timestamp, SKU, Product Name, Variant Title, Strain Name, Size,
     // Quantity Adjusted, New Total Available, Previous Available, Location,
     // Product Type, Barcode, Price, Flow Run ID, Event Type, Adjustment Source, Normalized Strain
@@ -1140,7 +1139,7 @@ async function inventoryWebhook(body, env) {
       normalizedStrain,
     ];
 
-    await appendSheet(SHOPIFY_WEBHOOK_SHEET_ID, "'Production Adjustments Only'!A:Q", [row], env);
+    await appendSheet(sheetId, `'${SHEETS.tracking}'!A:Q`, [row], env);
     sheetsSuccess = true;
   } catch (err) {
     errors.push(`Sheets error: ${err.message}`);
