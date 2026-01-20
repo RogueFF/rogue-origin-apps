@@ -197,6 +197,7 @@ CREATE INDEX IF NOT EXISTS idx_coa_strain ON coa_index(strain);
 -- PRODUCTION SYSTEM
 -- ============================================
 
+-- Legacy table (kept for compatibility)
 CREATE TABLE IF NOT EXISTS production_tracking (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   timestamp TEXT NOT NULL,
@@ -210,6 +211,34 @@ CREATE TABLE IF NOT EXISTS production_tracking (
 
 CREATE INDEX IF NOT EXISTS idx_tracking_timestamp ON production_tracking(timestamp);
 CREATE INDEX IF NOT EXISTS idx_tracking_cultivar ON production_tracking(cultivar);
+
+-- New table for Shopify inventory webhooks (full data)
+CREATE TABLE IF NOT EXISTS inventory_adjustments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  timestamp TEXT NOT NULL,
+  sku TEXT,
+  product_name TEXT,
+  variant_title TEXT,
+  strain_name TEXT,
+  size TEXT,
+  quantity_adjusted INTEGER,
+  new_total_available INTEGER,
+  previous_available INTEGER,
+  location TEXT,
+  product_type TEXT,
+  barcode TEXT,
+  price REAL,
+  flow_run_id TEXT UNIQUE,
+  event_type TEXT,
+  adjustment_source TEXT,
+  normalized_strain TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_inv_adj_timestamp ON inventory_adjustments(timestamp);
+CREATE INDEX IF NOT EXISTS idx_inv_adj_sku ON inventory_adjustments(sku);
+CREATE INDEX IF NOT EXISTS idx_inv_adj_strain ON inventory_adjustments(normalized_strain);
+CREATE INDEX IF NOT EXISTS idx_inv_adj_flow_run ON inventory_adjustments(flow_run_id);
 
 CREATE TABLE IF NOT EXISTS pause_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
