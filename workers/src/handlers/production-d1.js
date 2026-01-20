@@ -853,6 +853,80 @@ async function tts(body, env) {
   return errorResponse('TTS failed', 'INTERNAL_ERROR', 500);
 }
 
+// ===== DATA ENTRY =====
+
+async function addProduction(body, env) {
+  const { date, timeSlot, trimmers1, buckers1, cultivar1, tops1, smalls1, trimmers2, buckers2, cultivar2, tops2, smalls2 } = body;
+
+  if (!date || !timeSlot) {
+    return errorResponse('Date and time slot are required', 'VALIDATION_ERROR', 400);
+  }
+
+  // Upsert - update if exists, insert if not
+  const existing = await queryOne(env.DB,
+    'SELECT id FROM monthly_production WHERE production_date = ? AND time_slot = ?',
+    [date, timeSlot]
+  );
+
+  if (existing) {
+    await execute(env.DB, `
+      UPDATE monthly_production SET
+        trimmers_line1 = ?, buckers_line1 = ?, cultivar1 = ?, tops_lbs1 = ?, smalls_lbs1 = ?,
+        trimmers_line2 = ?, buckers_line2 = ?, cultivar2 = ?, tops_lbs2 = ?, smalls_lbs2 = ?
+      WHERE id = ?
+    `, [
+      trimmers1 || 0, buckers1 || 0, cultivar1 || '', tops1 || 0, smalls1 || 0,
+      trimmers2 || 0, buckers2 || 0, cultivar2 || '', tops2 || 0, smalls2 || 0,
+      existing.id
+    ]);
+    return successResponse({ success: true, message: 'Production data updated', id: existing.id });
+  } else {
+    const id = await insert(env.DB, 'monthly_production', {
+      production_date: date,
+      time_slot: timeSlot,
+      trimmers_line1: trimmers1 || 0,
+      buckers_line1: buckers1 || 0,
+      cultivar1: cultivar1 || '',
+      tops_lbs1: tops1 || 0,
+      smalls_lbs1: smalls1 || 0,
+      trimmers_line2: trimmers2 || 0,
+      buckers_line2: buckers2 || 0,
+      cultivar2: cultivar2 || '',
+      tops_lbs2: tops2 || 0,
+      smalls_lbs2: smalls2 || 0,
+    });
+    return successResponse({ success: true, message: 'Production data added', id });
+  }
+}
+
+async function getProduction(params, env) {
+  const date = params.date || formatDatePT(new Date(), 'yyyy-MM-dd');
+
+  const rows = await query(env.DB, `
+    SELECT * FROM monthly_production
+    WHERE production_date = ?
+    ORDER BY time_slot
+  `, [date]);
+
+  return successResponse({
+    success: true,
+    date,
+    production: rows.map(r => ({
+      timeSlot: r.time_slot,
+      trimmers1: r.trimmers_line1,
+      buckers1: r.buckers_line1,
+      cultivar1: r.cultivar1,
+      tops1: r.tops_lbs1,
+      smalls1: r.smalls_lbs1,
+      trimmers2: r.trimmers_line2,
+      buckers2: r.buckers_line2,
+      cultivar2: r.cultivar2,
+      tops2: r.tops_lbs2,
+      smalls2: r.smalls_lbs2,
+    })),
+  });
+}
+
 // ===== MIGRATION =====
 
 async function migrateFromSheets(env) {
@@ -863,6 +937,7 @@ async function migrateFromSheets(env) {
   let productionMigrated = 0;
   let pausesMigrated = 0;
   let shiftsMigrated = 0;
+  const errors = [];
 
   // Migrate production tracking (bag completions)
   try {
@@ -901,6 +976,7 @@ async function migrateFromSheets(env) {
     }
   } catch (e) {
     console.error('Error migrating tracking:', e);
+    errors.push(`Tracking: ${e.message || e}`);
   }
 
   // Migrate monthly production data
@@ -979,6 +1055,7 @@ async function migrateFromSheets(env) {
     }
   } catch (e) {
     console.error('Error migrating monthly production:', e);
+    errors.push(`Monthly: ${e.message || e}`);
   }
 
   // Migrate pause log
@@ -1005,6 +1082,7 @@ async function migrateFromSheets(env) {
     }
   } catch (e) {
     console.error('Error migrating pauses:', e);
+    errors.push(`Pauses: ${e.message || e}`);
   }
 
   // Migrate shift adjustments
@@ -1030,15 +1108,17 @@ async function migrateFromSheets(env) {
     }
   } catch (e) {
     console.error('Error migrating shifts:', e);
+    errors.push(`Shifts: ${e.message || e}`);
   }
 
   return successResponse({
-    success: true,
-    message: `Migration complete. Tracking: ${trackingMigrated}, Production: ${productionMigrated}, Pauses: ${pausesMigrated}, Shifts: ${shiftsMigrated}`,
+    success: errors.length === 0,
+    message: `Migration complete. Tracking: ${trackingMigrated}, Production: ${productionMigrated}, Pauses: ${pausesMigrated}, Shifts: ${shiftsMigrated}${errors.length > 0 ? '. Errors: ' + errors.join('; ') : ''}`,
     trackingMigrated,
     productionMigrated,
     pausesMigrated,
     shiftsMigrated,
+    errors: errors.length > 0 ? errors : undefined,
   });
 }
 
@@ -1077,6 +1157,10 @@ export async function handleProductionD1(request, env, ctx) {
         return await chat(body, env);
       case 'tts':
         return await tts(body, env);
+      case 'addProduction':
+        return await addProduction(body, env);
+      case 'getProduction':
+        return await getProduction(params, env);
       case 'migrate':
         return await migrateFromSheets(env);
       default:
