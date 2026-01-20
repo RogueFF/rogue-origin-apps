@@ -535,16 +535,25 @@ body {
   margin-bottom: 12px;
 }
 
-/* Compact buttons in crew grid to fit without overflow */
+/* Compact buttons in crew grid to fit on narrow screens */
+.crew-grid .number-input {
+  flex-shrink: 1;
+}
+
 .crew-grid .number-input button {
-  width: 38px;
+  width: 32px;
+  min-width: 32px;
+  padding: 0;
   min-height: 44px;
-  font-size: 20px;
+  font-size: 18px;
+  flex-shrink: 0;
 }
 
 .crew-grid .number-input input {
-  min-width: 36px;
-  font-size: 18px;
+  min-width: 24px;
+  width: 100%;
+  padding: 8px 2px;
+  font-size: 16px;
 }
 
 /* QC row - prominent standalone field */
