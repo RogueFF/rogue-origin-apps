@@ -539,11 +539,13 @@ body {
 .qc-row {
   display: flex;
   justify-content: center;
+  width: 100%;
   margin-bottom: 16px;
   padding: 12px;
   background: rgba(228, 170, 79, 0.15);
   border: 2px solid var(--gold);
   border-radius: 10px;
+  clear: both;
 }
 
 .qc-row .crew-field {
