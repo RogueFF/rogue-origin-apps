@@ -342,6 +342,22 @@ body {
   border-color: var(--success);
 }
 
+.step-guide.step-celebrate {
+  background: linear-gradient(135deg, rgba(74, 222, 128, 0.3), rgba(102, 137, 113, 0.2));
+  border-color: var(--success);
+  animation: celebrate-pulse 1.5s ease-in-out 3;
+}
+
+@keyframes celebrate-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+
+.step-guide.step-missed {
+  background: linear-gradient(135deg, rgba(196, 92, 74, 0.2), rgba(196, 92, 74, 0.1));
+  border-color: var(--danger);
+}
+
 .step-icon {
   display: flex;
   align-items: center;
@@ -363,6 +379,17 @@ body {
 .step-guide.step-complete .step-icon {
   background: var(--success);
   font-size: 18px;
+}
+
+.step-guide.step-celebrate .step-icon {
+  background: var(--success);
+  font-size: 20px;
+}
+
+.step-guide.step-missed .step-icon {
+  background: var(--danger);
+  font-size: 18px;
+  font-weight: 800;
 }
 
 .step-text {
