@@ -1000,7 +1000,13 @@ async function morningReport(env) {
   dailyData.sort((a, b) => b.date - a.date);
 
   const today = formatDatePT(now, 'yyyy-MM-dd');
-  const filteredDays = dailyData.filter((d) => formatDatePT(d.date, 'yyyy-MM-dd') !== today);
+
+  // Filter out today and weekends (only Mon-Fri work days)
+  const filteredDays = dailyData.filter((d) => {
+    const dateStr = formatDatePT(d.date, 'yyyy-MM-dd');
+    if (dateStr === today) return false;
+    return isWeekday(new Date(d.date));
+  });
 
   const yesterday = filteredDays[0] || null;
   const dayBefore = filteredDays[1] || null;
@@ -1051,7 +1057,7 @@ async function morningReport(env) {
 }
 
 /**
- * Get bag counts and cycle times for recent days
+ * Get bag counts and cycle times for recent weekdays (Mon-Fri only)
  */
 async function getBagDataForDays(env, numDays) {
   const sheetId = env.PRODUCTION_SHEET_ID;
@@ -1061,14 +1067,25 @@ async function getBagDataForDays(env, numDays) {
     const vals = await readSheet(sheetId, `'${SHEETS.tracking}'!A:B`, env);
     if (!vals || vals.length <= 1) return result;
 
+    // Find the last two weekdays (skip weekends)
     const now = new Date();
-    const yesterdayDate = new Date(now);
-    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-    const dayBeforeDate = new Date(now);
-    dayBeforeDate.setDate(dayBeforeDate.getDate() - 2);
+    const lastWeekday = new Date(now);
+    lastWeekday.setDate(lastWeekday.getDate() - 1);
 
-    const yesterdayStr = formatDatePT(yesterdayDate, 'yyyy-MM-dd');
-    const dayBeforeStr = formatDatePT(dayBeforeDate, 'yyyy-MM-dd');
+    // Find last weekday (yesterday, but skip to Friday if yesterday was a weekend)
+    while (!isWeekday(lastWeekday)) {
+      lastWeekday.setDate(lastWeekday.getDate() - 1);
+    }
+
+    // Find day before last weekday
+    const dayBeforeLastWeekday = new Date(lastWeekday);
+    dayBeforeLastWeekday.setDate(dayBeforeLastWeekday.getDate() - 1);
+    while (!isWeekday(dayBeforeLastWeekday)) {
+      dayBeforeLastWeekday.setDate(dayBeforeLastWeekday.getDate() - 1);
+    }
+
+    const yesterdayStr = formatDatePT(lastWeekday, 'yyyy-MM-dd');
+    const dayBeforeStr = formatDatePT(dayBeforeLastWeekday, 'yyyy-MM-dd');
 
     const yesterdayBags = [];
     const dayBeforeBags = [];
@@ -1125,7 +1142,22 @@ async function getBagDataForDays(env, numDays) {
 }
 
 /**
- * Get weekly aggregated data
+ * Check if a date is a weekday (Mon-Fri) in Pacific Time
+ * @param {Date} date - Date to check
+ * @returns {boolean} True if weekday
+ */
+function isWeekday(date) {
+  // Get day of week in Pacific timezone
+  const pstDayName = date.toLocaleDateString('en-US', {
+    timeZone: TIMEZONE,
+    weekday: 'short',
+  });
+  // Mon, Tue, Wed, Thu, Fri are weekdays
+  return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(pstDayName);
+}
+
+/**
+ * Get weekly aggregated data (Mon-Fri only)
  * @param {Array} dailyData - Array of daily data objects sorted by date desc
  * @param {number} weeksAgo - 0 for current week, 1 for last week
  */
@@ -1141,13 +1173,15 @@ function getWeekData(dailyData, weeksAgo) {
   targetMonday.setDate(targetMonday.getDate() + mondayOffset - (weeksAgo * 7));
   targetMonday.setHours(0, 0, 0, 0);
 
-  const targetSunday = new Date(targetMonday);
-  targetSunday.setDate(targetSunday.getDate() + 6);
-  targetSunday.setHours(23, 59, 59, 999);
+  // Use Friday as the end of work week instead of Sunday
+  const targetFriday = new Date(targetMonday);
+  targetFriday.setDate(targetFriday.getDate() + 4); // Mon + 4 = Fri
+  targetFriday.setHours(23, 59, 59, 999);
 
+  // Filter to only Mon-Fri days
   const weekDays = dailyData.filter((d) => {
     const date = new Date(d.date);
-    return date >= targetMonday && date <= targetSunday;
+    return date >= targetMonday && date <= targetFriday && isWeekday(date);
   });
 
   if (weekDays.length === 0) return null;
