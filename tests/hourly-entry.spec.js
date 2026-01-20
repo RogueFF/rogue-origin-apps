@@ -186,4 +186,20 @@ test.describe('Hourly Entry Page', () => {
     // Should move to tzero1
     await expect(page.locator('#tzero1')).toBeFocused();
   });
+
+  test('start day button and time badge exist', async ({ page }) => {
+    await page.waitForLoadState('networkidle');
+
+    // Check start day button exists
+    const startBtn = page.locator('#start-day-btn');
+    await expect(startBtn).toBeAttached();
+
+    // Check time badge exists (hidden initially)
+    const timeBadge = page.locator('#start-time-badge');
+    await expect(timeBadge).toBeAttached();
+
+    // Check time display exists
+    const timeDisplay = page.locator('#start-time-display');
+    await expect(timeDisplay).toBeAttached();
+  });
 });
