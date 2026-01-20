@@ -28,13 +28,25 @@
     
     /* Vivid Timer-based Backgrounds */
     body.timer-green { background: linear-gradient(145deg, #052e16 0%, #14532d 50%, #052e16 100%); }
-    body.timer-yellow { background: linear-gradient(145deg, #422006 0%, #713f12 50%, #422006 100%); }
+    body.timer-yellow {
+      background: linear-gradient(145deg, #0c1929 0%, #1e3a5f 25%, #0a4a7a 50%, #1e3a5f 75%, #0c1929 100%);
+      background-size: 400% 400%;
+      animation: blueBreakGlow 8s ease-in-out infinite;
+    }
     body.timer-red { background: linear-gradient(145deg, #450a0a 0%, #7f1d1d 50%, #450a0a 100%); animation: redBackgroundPulse 1.5s ease-in-out infinite; }
     body.timer-neutral { background: linear-gradient(145deg, #1a1f16 0%, #2d3a2e 50%, #1a1f16 100%); }
-    
-    @keyframes redBackgroundPulse { 
-      0%, 100% { background: linear-gradient(145deg, #450a0a 0%, #7f1d1d 50%, #450a0a 100%); } 
-      50% { background: linear-gradient(145deg, #5c1010 0%, #991b1b 50%, #5c1010 100%); } 
+
+    @keyframes blueBreakGlow {
+      0% { background-position: 0% 50%; }
+      25% { background-position: 100% 50%; }
+      50% { background-position: 100% 100%; }
+      75% { background-position: 0% 100%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    @keyframes redBackgroundPulse {
+      0%, 100% { background: linear-gradient(145deg, #450a0a 0%, #7f1d1d 50%, #450a0a 100%); }
+      50% { background: linear-gradient(145deg, #5c1010 0%, #991b1b 50%, #5c1010 100%); }
     }
     
     .main-panel { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px 30px; height: 100vh; overflow: hidden; }
