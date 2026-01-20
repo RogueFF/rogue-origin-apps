@@ -28,7 +28,7 @@ const USE_D1_BARCODE = true;
 const USE_D1_KANBAN = true;
 const USE_D1_SOP = true;
 const USE_D1_ORDERS = true;
-const USE_D1_PRODUCTION = false; // TODO: Enable after migration debugging
+const USE_D1_PRODUCTION = false; // Keep Sheets for manual data entry; D1 ready when migration completes
 
 export default {
   async fetch(request, env, ctx) {
