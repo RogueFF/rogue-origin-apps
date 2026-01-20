@@ -14,6 +14,7 @@
   --border-color: #404040;
   --success: #4ade80;
   --error: #f87171;
+  --danger: #c45c4a;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -820,14 +821,65 @@ body {
 .save-indicator {
   text-align: center;
   padding: 12px;
-  color: var(--success);
   font-size: 14px;
   opacity: 0;
   transition: opacity 0.3s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
 }
 
 .save-indicator.visible {
   opacity: 1;
+}
+
+.save-indicator .save-success {
+  color: var(--success);
+  display: none;
+}
+
+.save-indicator .save-error {
+  color: var(--danger);
+  display: none;
+  font-weight: 600;
+}
+
+.save-indicator .retry-btn {
+  display: none;
+  padding: 8px 16px;
+  background: var(--danger);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.save-indicator .retry-btn:hover {
+  background: #a84a3a;
+}
+
+.save-indicator.visible.success .save-success {
+  display: block;
+}
+
+.save-indicator.visible.error .save-error,
+.save-indicator.visible.error .retry-btn {
+  display: block;
+}
+
+.save-indicator.visible.saving .save-success::after {
+  content: '...';
+  animation: saving-dots 1s infinite;
+}
+
+@keyframes saving-dots {
+  0%, 20% { content: '.'; }
+  40% { content: '..'; }
+  60%, 100% { content: '...'; }
 }
 
 /* Editor Footer */
