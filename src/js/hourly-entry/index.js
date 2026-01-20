@@ -106,6 +106,18 @@ let isSaving = false; // Prevent concurrent saves
 // Crew fields to track for modifications
 const CREW_FIELDS = ['buckers1', 'trimmers1', 'tzero1', 'qcperson', 'cultivar1', 'buckers2', 'trimmers2', 'tzero2', 'cultivar2'];
 
+// Field order for Enter key navigation (Line 1 → QC → Line 1 production → Line 2 if expanded)
+const FIELD_ORDER = [
+  'buckers1', 'trimmers1', 'tzero1',  // Line 1 crew
+  'qcperson',                          // QC
+  'cultivar1',                         // Line 1 cultivar
+  'tops1', 'smalls1',                  // Line 1 production
+  'buckers2', 'trimmers2', 'tzero2',  // Line 2 crew (if expanded)
+  'cultivar2',                         // Line 2 cultivar
+  'tops2', 'smalls2',                  // Line 2 production
+  'qcNotes',                           // QC notes
+];
+
 // Event listener registry for cleanup (prevents memory leaks)
 const listenerRegistry = [];
 
@@ -209,10 +221,18 @@ function initializeUI() {
     });
   });
 
-  // Form inputs - auto-save on change
+  // Form inputs - auto-save on change and Enter key navigation
   document.querySelectorAll('#editor-view input, #editor-view select, #editor-view textarea').forEach((el) => {
     el.addEventListener('blur', () => scheduleAutoSave());
     el.addEventListener('change', () => scheduleAutoSave());
+
+    // Enter key: save immediately and move to next field
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && el.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        handleEnterKey(el.id);
+      }
+    });
   });
 
   // Retry button for failed saves
@@ -535,13 +555,58 @@ function scheduleAutoSave() {
   saveTimeout = setTimeout(() => saveEntry(), 1000);
 }
 
+function handleEnterKey(currentFieldId) {
+  // Save immediately (cancel pending auto-save and save now)
+  if (saveTimeout) clearTimeout(saveTimeout);
+  saveEntry();
+
+  // Find current position in field order
+  const currentIndex = FIELD_ORDER.indexOf(currentFieldId);
+  if (currentIndex === -1) return;
+
+  // Check if Line 2 is expanded
+  const line2Expanded = document.getElementById('line2-section')?.classList.contains('expanded');
+
+  // Find next field
+  for (let i = currentIndex + 1; i < FIELD_ORDER.length; i++) {
+    const nextFieldId = FIELD_ORDER[i];
+
+    // Skip Line 2 fields if not expanded
+    if (!line2Expanded && ['buckers2', 'trimmers2', 'tzero2', 'cultivar2', 'tops2', 'smalls2'].includes(nextFieldId)) {
+      continue;
+    }
+
+    const nextField = document.getElementById(nextFieldId);
+    if (nextField) {
+      nextField.focus();
+      // Select all text for number inputs for easy overwriting
+      if (nextField.type === 'number' || nextField.type === 'text') {
+        nextField.select();
+      }
+      return;
+    }
+  }
+
+  // If we're at the last field, move to next time slot
+  if (currentSlotIndex < TIME_SLOTS.length - 1) {
+    openEditor(currentSlotIndex + 1);
+    // Focus first field in new slot
+    setTimeout(() => {
+      const firstField = document.getElementById('buckers1');
+      if (firstField) {
+        firstField.focus();
+        firstField.select();
+      }
+    }, 100);
+  }
+}
+
 async function saveEntry(retryData = null) {
   if (currentSlotIndex < 0 && !retryData) return;
   if (isSaving) return;
 
   isSaving = true;
   const data = retryData || collectFormData();
-  const indicator = document.getElementById('save-indicator');
 
   // Check if crew was modified and production already existed
   const crewModified = !retryData && isCrewModified();
