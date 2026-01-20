@@ -1,7 +1,7 @@
 // Service Worker for Rogue Origin Operations Hub
-// Version 3.11 - Rate limit (429) resilience: serve cached data when rate limited
+// Version 3.12 - Smart polling: only fetch data when version changes
 
-const CACHE_VERSION = 'ro-ops-v3.11';
+const CACHE_VERSION = 'ro-ops-v3.12';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
