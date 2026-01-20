@@ -2657,6 +2657,23 @@ body.iframe-embed .current-order-items {
   color: #ef4444;
 }
 
+.mr-retry-btn {
+  margin-top: 20px;
+  padding: 12px 32px;
+  background: #668971;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 18px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.mr-retry-btn:hover {
+  background: #4a6b54;
+}
+
 /* Morning Report Button */
 #morningReportBtn {
   background: rgba(102, 137, 113, 0.2);

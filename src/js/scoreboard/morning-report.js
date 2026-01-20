@@ -87,13 +87,19 @@
     },
 
     /**
-     * Load report data from API
+     * Load report data from API with retry for rate limits
      */
-    loadData: function() {
+    loadData: function(retryCount) {
       var self = this;
+      retryCount = retryCount || 0;
+      var maxRetries = 3;
       var container = document.getElementById('morningReportContent');
+
       if (container) {
-        container.innerHTML = '<div class="mr-loading">Loading report data...</div>';
+        var loadingMsg = retryCount > 0
+          ? '<div class="mr-loading">Rate limited, retrying in ' + (retryCount * 2) + 's... (attempt ' + (retryCount + 1) + '/' + (maxRetries + 1) + ')</div>'
+          : '<div class="mr-loading">Loading report data...</div>';
+        container.innerHTML = loadingMsg;
       }
 
       // Update date subtitle
@@ -108,17 +114,32 @@
 
       fetch(apiUrl + '?action=morningReport')
         .then(function(response) {
+          if (response.status === 429 && retryCount < maxRetries) {
+            // Rate limited - retry with exponential backoff
+            var delay = (retryCount + 1) * 2000; // 2s, 4s, 6s
+            console.log('Morning report rate limited, retrying in ' + (delay / 1000) + 's...');
+            setTimeout(function() {
+              self.loadData(retryCount + 1);
+            }, delay);
+            return null;
+          }
           if (!response.ok) throw new Error('HTTP ' + response.status);
           return response.json();
         })
         .then(function(data) {
-          self.data = data;
-          self.render();
+          if (data) {
+            self.data = data;
+            self.render();
+          }
         })
         .catch(function(error) {
           console.error('Morning report error:', error);
           if (container) {
-            container.innerHTML = '<div class="mr-error">Failed to load report data. Please try again.</div>';
+            var isRateLimit = error.message && error.message.includes('429');
+            var errorMsg = isRateLimit
+              ? '<div class="mr-error">API rate limited. Please wait a minute and try again.<br><button onclick="MorningReport.loadData()" class="mr-retry-btn">Retry Now</button></div>'
+              : '<div class="mr-error">Failed to load report data.<br><button onclick="MorningReport.loadData()" class="mr-retry-btn">Try Again</button></div>';
+            container.innerHTML = errorMsg;
           }
         });
     },
