@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../css/hourly-entry.css?v=10">
+  <link rel="stylesheet" href="../css/hourly-entry.css?v=11">
 </head>
 <body>
   <a href="#timeline-list" class="skip-link">Skip to timeline</a>
@@ -20,6 +20,12 @@
         <h1 data-i18n="title">Hourly Entry</h1>
       </div>
       <div class="header-right">
+        <!-- Shift Start (shared with scoreboard) -->
+        <button id="start-day-btn" class="start-day-btn" data-i18n="startDay">Start Day</button>
+        <div id="start-time-badge" class="start-time-badge" style="display: none;">
+          <span class="start-time-icon">▶</span>
+          <span id="start-time-display">7:30 AM</span>
+        </div>
         <button id="lang-toggle" class="lang-btn">ES</button>
         <input type="date" id="date-picker" class="date-picker">
       </div>
@@ -262,6 +268,6 @@
     <button class="tooltip-close">×</button>
   </div>
 
-  <script type="module" src="../js/hourly-entry/index.js?v=19"></script>
+  <script type="module" src="../js/hourly-entry/index.js?v=20"></script>
 </body>
 </html>
