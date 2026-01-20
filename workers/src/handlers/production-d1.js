@@ -122,19 +122,27 @@ async function getScoreboardData(env) {
     SELECT time_slot, cultivar1, tops_lbs1, trimmers_line1
     FROM monthly_production
     WHERE production_date = ?
-    ORDER BY time_slot
   `, [today]);
 
   if (todayRows.length === 0) return result;
 
-  // Transform to working format
-  const rows = todayRows.map(r => ({
-    timeSlot: r.time_slot || '',
-    tops: r.tops_lbs1 || 0,
-    trimmers: r.trimmers_line1 || 0,
-    strain: r.cultivar1 || '',
-    multiplier: getTimeSlotMultiplier(r.time_slot),
-  }));
+  // Transform to working format and sort by TIME_SLOTS order (not alphabetically)
+  const rowsBySlot = {};
+  todayRows.forEach(r => {
+    const slot = (r.time_slot || '').replace(/[-–—]/g, '–');
+    rowsBySlot[slot] = {
+      timeSlot: r.time_slot || '',
+      tops: r.tops_lbs1 || 0,
+      trimmers: r.trimmers_line1 || 0,
+      strain: r.cultivar1 || '',
+      multiplier: getTimeSlotMultiplier(r.time_slot),
+    };
+  });
+
+  // Build rows array in chronological order
+  const rows = ALL_TIME_SLOTS
+    .map(slot => rowsBySlot[slot])
+    .filter(r => r !== undefined);
 
   // Find last completed and current hour
   let lastCompletedHourIndex = -1;
