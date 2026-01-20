@@ -531,18 +531,25 @@ body {
 .crew-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: 12px;
   margin-bottom: 12px;
+  justify-items: center;
+}
+
+.crew-grid .crew-field {
+  width: 100%;
+  max-width: 120px;
 }
 
 /* Compact buttons in crew grid to fit on narrow screens */
 .crew-grid .number-input {
-  flex-shrink: 1;
+  display: flex;
+  justify-content: center;
 }
 
 .crew-grid .number-input button {
-  width: 32px;
-  min-width: 32px;
+  width: 36px;
+  min-width: 36px;
   padding: 0;
   min-height: 44px;
   font-size: 18px;
@@ -550,10 +557,11 @@ body {
 }
 
 .crew-grid .number-input input {
-  min-width: 24px;
-  width: 100%;
-  padding: 8px 2px;
-  font-size: 16px;
+  width: 40px;
+  min-width: 40px;
+  padding: 8px 4px;
+  font-size: 18px;
+  text-align: center;
 }
 
 /* QC row - prominent standalone field */
