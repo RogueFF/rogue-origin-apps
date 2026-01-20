@@ -39,6 +39,13 @@ const LABELS = {
     saved: 'Saved',
     prev: 'Prev',
     next: 'Next',
+    // Step guide labels
+    stepCrewTitle: 'Enter Crew',
+    stepCrewHint: 'Start of hour: who\'s working?',
+    stepProductionTitle: 'Enter Production',
+    stepProductionHint: 'End of hour: how much was trimmed?',
+    stepCompleteTitle: 'All Done',
+    stepCompleteHint: 'This hour is complete',
   },
   es: {
     title: 'Entrada por Hora',
@@ -60,6 +67,13 @@ const LABELS = {
     saved: 'Guardado',
     prev: 'Ant',
     next: 'Sig',
+    // Step guide labels
+    stepCrewTitle: 'Ingresar Equipo',
+    stepCrewHint: 'Inicio de hora: quién trabaja?',
+    stepProductionTitle: 'Ingresar Producción',
+    stepProductionHint: 'Fin de hora: cuánto se podó?',
+    stepCompleteTitle: 'Completado',
+    stepCompleteHint: 'Esta hora está completa',
   },
 };
 
@@ -266,6 +280,9 @@ function populateForm(slot) {
   const line2Section = document.getElementById('line2-section');
   const hasLine2Data = data.trimmers2 > 0 || data.tops2 > 0;
   line2Section.classList.toggle('expanded', hasLine2Data);
+
+  // Update step guide to show current state
+  updateStepGuide();
 }
 
 function getCurrentCrewData() {
@@ -330,6 +347,59 @@ function updateCrewModifiedBadge() {
   }
 }
 
+function updateStepGuide() {
+  const stepGuide = document.getElementById('step-guide');
+  const stepIcon = document.getElementById('step-icon');
+  const stepTitle = document.getElementById('step-title');
+  const stepHint = document.getElementById('step-hint');
+  const crewSection = document.querySelector('.crew-section');
+  const productionSection = document.querySelector('.production-section');
+
+  if (!stepGuide) return;
+
+  // Check current state
+  const trimmers1 = parseInt(document.getElementById('trimmers1').value, 10) || 0;
+  const trimmers2 = parseInt(document.getElementById('trimmers2').value, 10) || 0;
+  const hasCrew = trimmers1 > 0 || trimmers2 > 0;
+
+  const tops1 = parseFloat(document.getElementById('tops1').value) || 0;
+  const tops2 = parseFloat(document.getElementById('tops2').value) || 0;
+  const smalls1 = parseFloat(document.getElementById('smalls1').value) || 0;
+  const smalls2 = parseFloat(document.getElementById('smalls2').value) || 0;
+  const hasProduction = (tops1 + tops2 + smalls1 + smalls2) > 0;
+
+  // Reset classes
+  stepGuide.classList.remove('step-production', 'step-complete');
+  crewSection?.classList.remove('needs-attention', 'completed');
+  productionSection?.classList.remove('needs-attention', 'completed');
+
+  const labels = LABELS[currentLang];
+
+  if (!hasCrew) {
+    // Step 1: Enter Crew
+    stepIcon.textContent = '1';
+    stepTitle.textContent = labels.stepCrewTitle;
+    stepHint.textContent = labels.stepCrewHint;
+    crewSection?.classList.add('needs-attention');
+  } else if (!hasProduction) {
+    // Step 2: Enter Production
+    stepGuide.classList.add('step-production');
+    stepIcon.textContent = '2';
+    stepTitle.textContent = labels.stepProductionTitle;
+    stepHint.textContent = labels.stepProductionHint;
+    crewSection?.classList.add('completed');
+    productionSection?.classList.add('needs-attention');
+  } else {
+    // Complete
+    stepGuide.classList.add('step-complete');
+    stepIcon.textContent = '✓';
+    stepTitle.textContent = labels.stepCompleteTitle;
+    stepHint.textContent = labels.stepCompleteHint;
+    crewSection?.classList.add('completed');
+    productionSection?.classList.add('completed');
+  }
+}
+
 function collectFormData() {
   const slot = TIME_SLOTS[currentSlotIndex];
   return {
@@ -355,8 +425,9 @@ function collectFormData() {
 function scheduleAutoSave() {
   if (saveTimeout) clearTimeout(saveTimeout);
 
-  // Update crew modified badge immediately
+  // Update UI state immediately
   updateCrewModifiedBadge();
+  updateStepGuide();
 
   saveTimeout = setTimeout(() => saveEntry(), 1000);
 }
