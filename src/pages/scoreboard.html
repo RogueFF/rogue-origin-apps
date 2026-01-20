@@ -236,10 +236,12 @@
         <div class="info-section"><span class="info-icon"><i class="ph-duotone ph-users-three"></i></span><span><span id="crewCount">—</span> <span id="trimmersLabel">Trimmers</span></span></div>
         <div class="info-divider"></div>
         <div class="info-section"><span class="info-icon"><i class="ph-duotone ph-crosshair"></i></span><span><span id="targetRateLabel">Target:</span> <span id="targetRate">—</span> lbs/hr</span></div>
-        <div class="info-divider"></div>
-        <div class="stat-group"><span class="label" id="avgTargetLabel">AVG</span><span class="value" id="avgPercentage">—</span></div>
-        <div class="info-divider"></div>
-        <div class="stat-group"><span class="label" id="bestHourLabel">BEST</span><span class="value" id="bestHour">—</span></div>
+        <div id="avgBestContainer" class="avg-best-container" onclick="toggleAvgBest()">
+          <div class="info-divider" id="avgDivider"></div>
+          <div class="stat-group"><span class="label" id="avgTargetLabel">AVG</span><span class="value" id="avgPercentage">—</span></div>
+          <div class="info-divider" id="bestDivider"></div>
+          <div class="stat-group"><span class="label" id="bestHourLabel">BEST</span><span class="value" id="bestHour">—</span></div>
+        </div>
       </div>
       
       <!-- Hourly Rate Chart - Bottom -->
@@ -478,7 +480,8 @@
     
     // Load on startup
     loadLocalCycleHistory();
-    
+    initAvgBestVisibility();
+
     // Sound effects using Web Audio API
     let audioContext = null;
 
@@ -502,7 +505,23 @@
       content.classList.toggle('collapsed', cycleHistoryCollapsed);
       toggle.textContent = cycleHistoryCollapsed ? 'Show' : 'Hide';
     }
-    
+
+    // Toggle AVG/BEST KPIs visibility
+    function toggleAvgBest() {
+      const container = document.getElementById('avgBestContainer');
+      const isHidden = container.classList.toggle('hidden');
+      try { localStorage.setItem('hideAvgBest', isHidden ? 'true' : 'false'); } catch(e) {}
+    }
+
+    // Initialize AVG/BEST visibility from localStorage
+    function initAvgBestVisibility() {
+      const hideAvgBest = localStorage.getItem('hideAvgBest') === 'true';
+      if (hideAvgBest) {
+        const container = document.getElementById('avgBestContainer');
+        if (container) container.classList.add('hidden');
+      }
+    }
+
     function addCycleToHistory(cycleTimeSec, targetSec) {
       const delta = targetSec - cycleTimeSec;
       const deltaSec = Math.abs(delta);
