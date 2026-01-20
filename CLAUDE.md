@@ -68,6 +68,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Recent Features (January 2026)
 
+### Smart Polling for Scoreboard (2026-01-20)
+
+**Feature**: Scoreboard only fetches full data when backend data actually changes, reducing API calls by ~90%.
+
+**How It Works**:
+1. Frontend polls lightweight `?action=version` endpoint every 5 seconds (~50 bytes)
+2. Compares version number with last known version
+3. Only fetches full scoreboard data if version changed
+4. Version auto-increments when data changes (webhook, bag logged, pause, shift start, etc.)
+
+**Backend Changes** (`workers/src/handlers/production.js`):
+- New D1 table: `data_version` (key, version, updated_at)
+- New endpoint: `?action=version` returns `{ version: N, updatedAt: "..." }`
+- `incrementDataVersion()` called by: inventoryWebhook, addProduction, logBag, logPause, logResume, setShiftStart
+
+**Frontend Changes**:
+- `api.js` - New `checkVersion()` function with local version tracking
+- `main.js` - `checkForUpdates()` replaces direct `loadData()` polling
+
+**Benefits**:
+- ~90% fewer API calls when data is static
+- Faster: version check is tiny vs full scoreboard payload
+- Reduces Google Sheets API load
+- Updates still arrive within 5 seconds of any change
+
+**Future Upgrade Path**: $5/month Cloudflare paid tier enables Durable Objects for true WebSocket real-time updates (zero polling).
+
+---
+
 ### Cloudflare Workers + D1 Migration (2026-01-19)
 
 **Backend Migration**: All API endpoints migrated from Vercel Functions to Cloudflare Workers for better performance and higher free tier limits. Most handlers now use Cloudflare D1 (SQLite) instead of Google Sheets.
@@ -143,6 +172,7 @@ const USE_D1_PRODUCTION = false; // Using Sheets (manual data entry workflow)
 - `sops`, `sop_requests`, `sop_settings`
 - `orders_customers`, `orders_orders`, `orders_shipments`, `orders_shipment_lines`, `orders_payments`
 - `production_tracking`, `monthly_production`, `pause_log`, `shift_adjustments`
+- `data_version` - Smart polling version tracking for scoreboard
 
 **Environment Variables** (via `wrangler secret put`):
 - `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`
