@@ -8,6 +8,9 @@
  * - GET  ?action=setShiftStart     - Set shift start time
  * - GET  ?action=getShiftStart     - Get shift start time
  * - GET  ?action=morningReport     - Morning report data
+ * - GET  ?action=getCultivars      - Get cultivar list (for hourly entry)
+ * - GET  ?action=getProduction     - Get hourly production data for date
+ * - POST ?action=addProduction     - Add/update hourly production data
  * - POST ?action=logBag            - Log bag completion
  * - POST ?action=logPause          - Log timer pause
  * - POST ?action=logResume         - Log timer resume
@@ -1167,6 +1170,257 @@ async function inventoryWebhook(body, env) {
   }
 }
 
+// ===== HOURLY ENTRY ENDPOINTS =====
+
+/**
+ * Get list of cultivars from Data sheet
+ */
+async function getCultivars(env) {
+  const sheetId = env.PRODUCTION_SHEET_ID;
+
+  try {
+    const vals = await readSheet(sheetId, `'${SHEETS.data}'!A:A`, env);
+    if (!vals || vals.length === 0) {
+      return successResponse({ cultivars: [] });
+    }
+
+    // Extract non-empty cultivar names, skip header if present
+    const cultivars = [];
+    for (let i = 0; i < vals.length; i++) {
+      const name = (vals[i][0] || '').toString().trim();
+      if (name && name.toLowerCase() !== 'cultivar' && name.toLowerCase() !== 'cultivars') {
+        cultivars.push(name);
+      }
+    }
+
+    return successResponse({ cultivars });
+  } catch (error) {
+    console.error('Error getting cultivars:', error);
+    return successResponse({ cultivars: [] });
+  }
+}
+
+/**
+ * Get hourly production data for a specific date
+ */
+async function getProduction(params, env) {
+  const sheetId = env.PRODUCTION_SHEET_ID;
+  const date = params.date || formatDatePT(new Date(), 'yyyy-MM-dd');
+
+  if (!validateDate(date)) {
+    return errorResponse('Invalid date format', 'VALIDATION_ERROR', 400);
+  }
+
+  try {
+    // Determine which month sheet to use
+    const sheetMonth = date.substring(0, 7); // YYYY-MM
+    const sheetNames = await getSheetNames(sheetId, env);
+
+    // Check if the month sheet exists
+    const monthSheetExists = sheetNames.includes(sheetMonth);
+    if (!monthSheetExists) {
+      // Return empty data if no sheet for this month
+      return successResponse({
+        date,
+        slots: {},
+        targetRate: 0.9
+      });
+    }
+
+    // Read the sheet data
+    const vals = await readSheet(sheetId, `'${sheetMonth}'!A:Z`, env);
+    if (!vals || vals.length === 0) {
+      return successResponse({ date, slots: {}, targetRate: 0.9 });
+    }
+
+    // Parse date to match sheet format (MMMM dd, yyyy)
+    const dateObj = new Date(date + 'T12:00:00');
+    const dateLabel = dateObj.toLocaleDateString('en-US', {
+      timeZone: TIMEZONE,
+      month: 'long',
+      day: '2-digit',
+      year: 'numeric',
+    });
+
+    // Find the date row
+    const dateRowIndex = findDateRow(vals, dateLabel);
+    if (dateRowIndex === -1) {
+      return successResponse({ date, slots: {}, targetRate: 0.9 });
+    }
+
+    // Get column indices from header row
+    const headerRowIndex = dateRowIndex + 1;
+    const headers = vals[headerRowIndex] || [];
+    const cols = getColumnIndices(headers);
+
+    // Get historical rate for target
+    const dailyData = await getExtendedDailyData(7, env);
+    const targetRate = dailyData.length > 0
+      ? dailyData.reduce((sum, d) => sum + (d.avgRate || 0), 0) / dailyData.length
+      : 0.9;
+
+    // Collect slot data
+    const slots = {};
+    for (let r = headerRowIndex + 1; r < vals.length; r++) {
+      const row = vals[r];
+      if (isEndOfBlock(row)) break;
+
+      const timeSlot = (row[0] || '').toString().trim();
+      if (!timeSlot) continue;
+
+      slots[timeSlot] = {
+        buckers1: parseFloat(row[cols.buckers1]) || 0,
+        trimmers1: parseFloat(row[cols.trimmers1]) || 0,
+        tzero1: parseFloat(row[cols.tzero1]) || 0,
+        cultivar1: row[cols.cultivar1] || '',
+        tops1: parseFloat(row[cols.tops1]) || 0,
+        smalls1: parseFloat(row[cols.smalls1]) || 0,
+        buckers2: parseFloat(row[cols.buckers2]) || 0,
+        trimmers2: parseFloat(row[cols.trimmers2]) || 0,
+        tzero2: parseFloat(row[cols.tzero2]) || 0,
+        cultivar2: row[cols.cultivar2] || '',
+        tops2: parseFloat(row[cols.tops2]) || 0,
+        smalls2: parseFloat(row[cols.smalls2]) || 0,
+        qc: row[cols.qc] || '',
+      };
+    }
+
+    return successResponse({ date, slots, targetRate });
+  } catch (error) {
+    console.error('Error getting production:', error);
+    return errorResponse('Failed to get production data', 'INTERNAL_ERROR', 500);
+  }
+}
+
+/**
+ * Add/update hourly production data
+ * Accepts flat fields: date, timeSlot, buckers1, trimmers1, etc.
+ */
+async function addProduction(body, env) {
+  const sheetId = env.PRODUCTION_SHEET_ID;
+
+  const { date, timeSlot, buckers1, trimmers1, tzero1, cultivar1, tops1, smalls1,
+          buckers2, trimmers2, tzero2, cultivar2, tops2, smalls2, qc } = body;
+
+  if (!date || !timeSlot) {
+    return errorResponse('Missing required fields: date, timeSlot', 'VALIDATION_ERROR', 400);
+  }
+
+  if (!validateDate(date)) {
+    return errorResponse('Invalid date format', 'VALIDATION_ERROR', 400);
+  }
+
+  // Build data object from flat fields
+  const data = {
+    buckers1: buckers1 ?? 0,
+    trimmers1: trimmers1 ?? 0,
+    tzero1: tzero1 ?? 0,
+    cultivar1: cultivar1 ?? '',
+    tops1: tops1 ?? 0,
+    smalls1: smalls1 ?? 0,
+    buckers2: buckers2 ?? 0,
+    trimmers2: trimmers2 ?? 0,
+    tzero2: tzero2 ?? 0,
+    cultivar2: cultivar2 ?? '',
+    tops2: tops2 ?? 0,
+    smalls2: smalls2 ?? 0,
+    qc: qc ?? '',
+  };
+
+  try {
+    // Determine which month sheet to use
+    const sheetMonth = date.substring(0, 7); // YYYY-MM
+    const sheetNames = await getSheetNames(sheetId, env);
+
+    if (!sheetNames.includes(sheetMonth)) {
+      return errorResponse(`Sheet for ${sheetMonth} does not exist`, 'NOT_FOUND', 404);
+    }
+
+    // Read the sheet data
+    const vals = await readSheet(sheetId, `'${sheetMonth}'!A:Z`, env);
+    if (!vals || vals.length === 0) {
+      return errorResponse('Sheet is empty', 'INTERNAL_ERROR', 500);
+    }
+
+    // Parse date to match sheet format
+    const dateObj = new Date(date + 'T12:00:00');
+    const dateLabel = dateObj.toLocaleDateString('en-US', {
+      timeZone: TIMEZONE,
+      month: 'long',
+      day: '2-digit',
+      year: 'numeric',
+    });
+
+    // Find the date row
+    const dateRowIndex = findDateRow(vals, dateLabel);
+    if (dateRowIndex === -1) {
+      return errorResponse(`No data block found for ${dateLabel}`, 'NOT_FOUND', 404);
+    }
+
+    // Get header row and column indices
+    const headerRowIndex = dateRowIndex + 1;
+    const headers = vals[headerRowIndex] || [];
+    const cols = getColumnIndices(headers);
+
+    // Find the row with matching time slot
+    let targetRowIndex = -1;
+    for (let r = headerRowIndex + 1; r < vals.length; r++) {
+      if (isEndOfBlock(vals[r])) break;
+
+      const rowSlot = (vals[r][0] || '').toString().trim();
+      // Normalize dashes for comparison
+      const normalizedRowSlot = rowSlot.replace(/[-–—]/g, '–');
+      const normalizedTimeSlot = timeSlot.replace(/[-–—]/g, '–');
+
+      if (normalizedRowSlot === normalizedTimeSlot) {
+        targetRowIndex = r;
+        break;
+      }
+    }
+
+    if (targetRowIndex === -1) {
+      return errorResponse(`Time slot ${timeSlot} not found in date block`, 'NOT_FOUND', 404);
+    }
+
+    // Build updated row data
+    const existingRow = vals[targetRowIndex];
+    const newRow = [...existingRow];
+
+    // Update Line 1 fields
+    if (cols.buckers1 >= 0 && data.buckers1 !== undefined) newRow[cols.buckers1] = data.buckers1;
+    if (cols.trimmers1 >= 0 && data.trimmers1 !== undefined) newRow[cols.trimmers1] = data.trimmers1;
+    if (cols.tzero1 >= 0 && data.tzero1 !== undefined) newRow[cols.tzero1] = data.tzero1;
+    if (cols.cultivar1 >= 0 && data.cultivar1 !== undefined) newRow[cols.cultivar1] = sanitizeForSheets(data.cultivar1);
+    if (cols.tops1 >= 0 && data.tops1 !== undefined) newRow[cols.tops1] = data.tops1;
+    if (cols.smalls1 >= 0 && data.smalls1 !== undefined) newRow[cols.smalls1] = data.smalls1;
+
+    // Update Line 2 fields
+    if (cols.buckers2 >= 0 && data.buckers2 !== undefined) newRow[cols.buckers2] = data.buckers2;
+    if (cols.trimmers2 >= 0 && data.trimmers2 !== undefined) newRow[cols.trimmers2] = data.trimmers2;
+    if (cols.tzero2 >= 0 && data.tzero2 !== undefined) newRow[cols.tzero2] = data.tzero2;
+    if (cols.cultivar2 >= 0 && data.cultivar2 !== undefined) newRow[cols.cultivar2] = sanitizeForSheets(data.cultivar2);
+    if (cols.tops2 >= 0 && data.tops2 !== undefined) newRow[cols.tops2] = data.tops2;
+    if (cols.smalls2 >= 0 && data.smalls2 !== undefined) newRow[cols.smalls2] = data.smalls2;
+
+    // Update QC notes
+    if (cols.qc >= 0 && data.qc !== undefined) newRow[cols.qc] = sanitizeForSheets(data.qc);
+
+    // Write the updated row back to sheet (row index is 1-based in Sheets API)
+    const range = `'${sheetMonth}'!A${targetRowIndex + 1}`;
+    await writeSheet(sheetId, range, [newRow], env);
+
+    return successResponse({
+      success: true,
+      message: 'Production data saved',
+      date,
+      timeSlot
+    });
+  } catch (error) {
+    console.error('Error adding production:', error);
+    return errorResponse('Failed to save production data', 'INTERNAL_ERROR', 500);
+  }
+}
+
 // ===== MAIN HANDLER =====
 
 export async function handleProduction(request, env, ctx) {
@@ -1192,6 +1446,12 @@ export async function handleProduction(request, env, ctx) {
         return await getShiftStart(params, env);
       case 'morningReport':
         return await morningReport(env);
+      case 'getCultivars':
+        return await getCultivars(env);
+      case 'getProduction':
+        return await getProduction(params, env);
+      case 'addProduction':
+        return await addProduction(body, env);
       case 'logBag':
         return await logBag(body, env);
       case 'logPause':

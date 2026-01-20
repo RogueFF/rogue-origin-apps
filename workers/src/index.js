@@ -28,7 +28,7 @@ const USE_D1_BARCODE = true;
 const USE_D1_KANBAN = true;
 const USE_D1_SOP = true;
 const USE_D1_ORDERS = true;
-const USE_D1_PRODUCTION = true; // D1 enabled - use hourly entry app for data entry
+const USE_D1_PRODUCTION = false; // Disabled - use Google Sheets for hourly entry writes
 
 export default {
   async fetch(request, env, ctx) {
