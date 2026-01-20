@@ -186,6 +186,12 @@ function formatDatePT(date, format = 'yyyy-MM-dd') {
       day: 'numeric',
     });
   }
+  if (format === 'EEE') {
+    return d.toLocaleDateString('en-US', {
+      ...options,
+      weekday: 'short',
+    });
+  }
   return d.toISOString();
 }
 
@@ -999,23 +1005,208 @@ async function morningReport(env) {
   const yesterday = filteredDays[0] || null;
   const dayBefore = filteredDays[1] || null;
 
+  // Get bag data for yesterday and day before
+  const bagData = await getBagDataForDays(env, 2);
+
+  // Calculate weekly data
+  const thisWeekData = getWeekData(filteredDays, 0); // Current week (Mon-Sun containing yesterday)
+  const lastWeekData = getWeekData(filteredDays, 1); // Previous week
+
+  // Get current order from orders API
+  const currentOrder = await getCurrentOrderProgress(env);
+
+  // Format yesterday's data
+  const yesterdayFormatted = yesterday ? {
+    date: formatDatePT(yesterday.date, 'yyyy-MM-dd'),
+    dateDisplay: formatDatePT(yesterday.date, 'EEEE, MMM d'),
+    tops: Math.round(yesterday.totalTops * 10) / 10,
+    smalls: Math.round(yesterday.totalSmalls * 10) / 10,
+    rate: Math.round(yesterday.avgRate * 100) / 100,
+    crew: yesterday.trimmerHours > 0 ? Math.round(yesterday.trimmerHours / 7.5) : 0, // Estimate crew from hours
+    bags: bagData.yesterday?.bags || 0,
+    avgCycleTime: bagData.yesterday?.avgCycleTime || null,
+    bestHour: yesterday.bestHour || null,
+  } : null;
+
+  // Format day before's data
+  const dayBeforeFormatted = dayBefore ? {
+    date: formatDatePT(dayBefore.date, 'yyyy-MM-dd'),
+    dateDisplay: formatDatePT(dayBefore.date, 'EEEE, MMM d'),
+    tops: Math.round(dayBefore.totalTops * 10) / 10,
+    smalls: Math.round(dayBefore.totalSmalls * 10) / 10,
+    rate: Math.round(dayBefore.avgRate * 100) / 100,
+    crew: dayBefore.trimmerHours > 0 ? Math.round(dayBefore.trimmerHours / 7.5) : 0,
+    bags: bagData.dayBefore?.bags || 0,
+    avgCycleTime: bagData.dayBefore?.avgCycleTime || null,
+  } : null;
+
   return successResponse({
     generatedAt: now.toISOString(),
-    yesterday: yesterday ? {
-      date: formatDatePT(yesterday.date, 'yyyy-MM-dd'),
-      dateDisplay: formatDatePT(yesterday.date, 'EEEE, MMM d'),
-      tops: Math.round(yesterday.totalTops * 10) / 10,
-      smalls: Math.round(yesterday.totalSmalls * 10) / 10,
-      rate: Math.round(yesterday.avgRate * 100) / 100,
-    } : null,
-    dayBefore: dayBefore ? {
-      date: formatDatePT(dayBefore.date, 'yyyy-MM-dd'),
-      dateDisplay: formatDatePT(dayBefore.date, 'EEEE, MMM d'),
-      tops: Math.round(dayBefore.totalTops * 10) / 10,
-      smalls: Math.round(dayBefore.totalSmalls * 10) / 10,
-      rate: Math.round(dayBefore.avgRate * 100) / 100,
-    } : null,
+    yesterday: yesterdayFormatted,
+    dayBefore: dayBeforeFormatted,
+    thisWeek: thisWeekData,
+    lastWeek: lastWeekData,
+    currentOrder: currentOrder,
   });
+}
+
+/**
+ * Get bag counts and cycle times for recent days
+ */
+async function getBagDataForDays(env, numDays) {
+  const sheetId = env.PRODUCTION_SHEET_ID;
+  const result = { yesterday: null, dayBefore: null };
+
+  try {
+    const vals = await readSheet(sheetId, `'${SHEETS.tracking}'!A:B`, env);
+    if (!vals || vals.length <= 1) return result;
+
+    const now = new Date();
+    const yesterdayDate = new Date(now);
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    const dayBeforeDate = new Date(now);
+    dayBeforeDate.setDate(dayBeforeDate.getDate() - 2);
+
+    const yesterdayStr = formatDatePT(yesterdayDate, 'yyyy-MM-dd');
+    const dayBeforeStr = formatDatePT(dayBeforeDate, 'yyyy-MM-dd');
+
+    const yesterdayBags = [];
+    const dayBeforeBags = [];
+
+    for (let i = 1; i < vals.length; i++) {
+      const row = vals[i];
+      if (!row[0]) continue;
+
+      const timestamp = new Date(row[0]);
+      if (isNaN(timestamp.getTime())) continue;
+
+      const size = String(row[1] || '').toLowerCase();
+      if (!size.includes('5 kg')) continue;
+
+      const dateStr = formatDatePT(timestamp, 'yyyy-MM-dd');
+      if (dateStr === yesterdayStr) {
+        yesterdayBags.push(timestamp);
+      } else if (dateStr === dayBeforeStr) {
+        dayBeforeBags.push(timestamp);
+      }
+    }
+
+    // Calculate cycle times
+    if (yesterdayBags.length > 0) {
+      yesterdayBags.sort((a, b) => a - b);
+      const cycleTimes = [];
+      for (let i = 1; i < yesterdayBags.length; i++) {
+        const diff = (yesterdayBags[i] - yesterdayBags[i - 1]) / 60000; // minutes
+        if (diff >= 5 && diff <= 240) cycleTimes.push(diff);
+      }
+      result.yesterday = {
+        bags: yesterdayBags.length,
+        avgCycleTime: cycleTimes.length > 0 ? Math.round(cycleTimes.reduce((a, b) => a + b, 0) / cycleTimes.length) : null,
+      };
+    }
+
+    if (dayBeforeBags.length > 0) {
+      dayBeforeBags.sort((a, b) => a - b);
+      const cycleTimes = [];
+      for (let i = 1; i < dayBeforeBags.length; i++) {
+        const diff = (dayBeforeBags[i] - dayBeforeBags[i - 1]) / 60000;
+        if (diff >= 5 && diff <= 240) cycleTimes.push(diff);
+      }
+      result.dayBefore = {
+        bags: dayBeforeBags.length,
+        avgCycleTime: cycleTimes.length > 0 ? Math.round(cycleTimes.reduce((a, b) => a + b, 0) / cycleTimes.length) : null,
+      };
+    }
+  } catch (error) {
+    console.error('Error getting bag data:', error);
+  }
+
+  return result;
+}
+
+/**
+ * Get weekly aggregated data
+ * @param {Array} dailyData - Array of daily data objects sorted by date desc
+ * @param {number} weeksAgo - 0 for current week, 1 for last week
+ */
+function getWeekData(dailyData, weeksAgo) {
+  if (!dailyData || dailyData.length === 0) return null;
+
+  const now = new Date();
+  const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon, etc.
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+
+  // Get Monday of target week
+  const targetMonday = new Date(now);
+  targetMonday.setDate(targetMonday.getDate() + mondayOffset - (weeksAgo * 7));
+  targetMonday.setHours(0, 0, 0, 0);
+
+  const targetSunday = new Date(targetMonday);
+  targetSunday.setDate(targetSunday.getDate() + 6);
+  targetSunday.setHours(23, 59, 59, 999);
+
+  const weekDays = dailyData.filter((d) => {
+    const date = new Date(d.date);
+    return date >= targetMonday && date <= targetSunday;
+  });
+
+  if (weekDays.length === 0) return null;
+
+  const totalTops = weekDays.reduce((sum, d) => sum + (d.totalTops || 0), 0);
+  const totalSmalls = weekDays.reduce((sum, d) => sum + (d.totalSmalls || 0), 0);
+  const totalTrimmerHours = weekDays.reduce((sum, d) => sum + (d.trimmerHours || 0), 0);
+  const avgRate = totalTrimmerHours > 0 ? totalTops / totalTrimmerHours : 0;
+  const avgCrew = weekDays.length > 0 ? totalTrimmerHours / weekDays.length / 7.5 : 0;
+
+  const dayNames = weekDays.map((d) => formatDatePT(d.date, 'EEE'));
+
+  return {
+    tops: Math.round(totalTops * 10) / 10,
+    smalls: Math.round(totalSmalls * 10) / 10,
+    avgRate: Math.round(avgRate * 100) / 100,
+    avgCrew: Math.round(avgCrew),
+    days: dayNames,
+    daysCount: weekDays.length,
+  };
+}
+
+/**
+ * Get current order progress from orders API
+ */
+async function getCurrentOrderProgress(env) {
+  try {
+    // Try to get order queue data
+    const ordersSheetId = env.ORDERS_SHEET_ID;
+    if (!ordersSheetId) return null;
+
+    const vals = await readSheet(ordersSheetId, "'Orders'!A:M", env);
+    if (!vals || vals.length <= 1) return null;
+
+    // Find first in-progress order
+    const headers = vals[0];
+    const statusCol = headers.indexOf('Status');
+    const idCol = headers.indexOf('Order ID');
+    const customerCol = headers.indexOf('Customer');
+
+    for (let i = 1; i < vals.length; i++) {
+      const row = vals[i];
+      const status = String(row[statusCol] || '').toLowerCase();
+      if (status === 'in progress' || status === 'active') {
+        return {
+          id: row[idCol] || 'Unknown',
+          customer: row[customerCol] || 'Unknown',
+          strain: 'Current Strain',
+          targetKg: 100,
+          completedKg: 0,
+          estimatedDaysRemaining: 0,
+        };
+      }
+    }
+  } catch (error) {
+    console.error('Error getting current order:', error);
+  }
+
+  return null;
 }
 
 // POST handlers
