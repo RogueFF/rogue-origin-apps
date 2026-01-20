@@ -94,7 +94,9 @@
           lhp.textContent = `-${deltaAbs} lbs`;
           lhp.style.color = '#f87171';
         } else {
-          lhp.textContent = `0 lbs`;
+          // On pace - use i18n translation
+          var I18n = window.ScoreboardI18n;
+          lhp.textContent = I18n ? I18n.t('onPace') : 'On pace';
           lhp.style.color = '#e4aa4f';
         }
       } else {
