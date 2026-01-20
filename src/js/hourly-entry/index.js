@@ -53,6 +53,11 @@ const LABELS = {
     stepCelebrateHint: 'Great work this hour!',
     stepMissedTitle: 'Below Target',
     stepMissedHint: 'Add a note explaining why',
+    // Shift start labels
+    startDay: 'Start Day',
+    started: 'Started',
+    setStartTime: 'Set Start Time',
+    startTimeSet: 'Start time set',
   },
   es: {
     title: 'Entrada por Hora',
@@ -88,6 +93,11 @@ const LABELS = {
     stepCelebrateHint: '¡Buen trabajo esta hora!',
     stepMissedTitle: 'Bajo la Meta',
     stepMissedHint: 'Agrega una nota explicando por qué',
+    // Shift start labels
+    startDay: 'Iniciar Día',
+    started: 'Iniciado',
+    setStartTime: 'Establecer Hora de Inicio',
+    startTimeSet: 'Hora de inicio establecida',
   },
 };
 
@@ -102,6 +112,7 @@ let targetRate = 0.9; // Default, will be updated from API
 let originalCrewData = null; // Track original crew for modification detection
 let pendingSaveData = null; // Track failed save for retry
 let isSaving = false; // Prevent concurrent saves
+let shiftStartTime = null; // Shared shift start time (syncs with scoreboard)
 
 // Crew fields to track for modifications
 const CREW_FIELDS = ['buckers1', 'trimmers1', 'tzero1', 'qcperson', 'cultivar1', 'buckers2', 'trimmers2', 'tzero2', 'cultivar2'];
@@ -140,6 +151,154 @@ window.addEventListener('beforeunload', () => {
   if (saveTimeout) clearTimeout(saveTimeout);
 });
 
+// ===================
+// SHIFT START (shared with scoreboard)
+// ===================
+
+// Slot start times in minutes from midnight
+const SLOT_START_MINUTES = {
+  '7:00 AM – 8:00 AM': 7 * 60,
+  '8:00 AM – 9:00 AM': 8 * 60,
+  '9:00 AM – 10:00 AM': 9 * 60,
+  '10:00 AM – 11:00 AM': 10 * 60,
+  '11:00 AM – 12:00 PM': 11 * 60,
+  '12:30 PM – 1:00 PM': 12 * 60 + 30,
+  '1:00 PM – 2:00 PM': 13 * 60,
+  '2:00 PM – 3:00 PM': 14 * 60,
+  '3:00 PM – 4:00 PM': 15 * 60,
+  '4:00 PM – 4:30 PM': 16 * 60,
+};
+
+/**
+ * Load shift start from localStorage and sync with API
+ * Uses same keys as scoreboard for cross-page sync
+ */
+async function loadShiftStart() {
+  const today = new Date().toDateString();
+  const savedDate = localStorage.getItem('shiftStartDate');
+
+  // Reset if different day
+  if (savedDate !== today) {
+    localStorage.removeItem('manualShiftStart');
+    localStorage.removeItem('shiftStartLocked');
+    localStorage.setItem('shiftStartDate', today);
+    shiftStartTime = null;
+  } else {
+    // Load from localStorage first for instant UI
+    const savedStart = localStorage.getItem('manualShiftStart');
+    if (savedStart) {
+      shiftStartTime = new Date(savedStart);
+    }
+  }
+
+  // Sync with API (may have been set from scoreboard)
+  try {
+    const response = await fetch(`${API_URL}?action=getShiftStart`);
+    const result = await response.json();
+    const data = result.data || result;
+
+    if (data.success && data.shiftAdjustment) {
+      const apiStartTime = new Date(data.shiftAdjustment.manualStartTime);
+
+      // Check if API time is for today
+      if (apiStartTime.toDateString() === today) {
+        // Use API time (more authoritative, may be from scoreboard)
+        shiftStartTime = apiStartTime;
+        localStorage.setItem('manualShiftStart', apiStartTime.toISOString());
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load shift start from API:', error);
+  }
+
+  updateShiftStartUI();
+}
+
+/**
+ * Set shift start time and sync to API
+ * @param {Date|null} time - Start time (null = use current time)
+ */
+async function setShiftStart(time = null) {
+  const startTime = time || new Date();
+
+  // Save locally first for instant feedback
+  shiftStartTime = startTime;
+  localStorage.setItem('manualShiftStart', startTime.toISOString());
+  localStorage.setItem('shiftStartDate', new Date().toDateString());
+
+  updateShiftStartUI();
+  renderTimeline();
+
+  // Sync to API (so scoreboard sees it)
+  try {
+    const response = await fetch(`${API_URL}?action=setShiftStart`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        time: time ? startTime.toISOString() : null, // null = server time
+      }),
+    });
+
+    const result = await response.json();
+    const data = result.data || result;
+
+    if (data.success && data.shiftAdjustment) {
+      // Update with server-confirmed time
+      const serverTime = new Date(data.shiftAdjustment.manualStartTime);
+      shiftStartTime = serverTime;
+      localStorage.setItem('manualShiftStart', serverTime.toISOString());
+      updateShiftStartUI();
+    }
+  } catch (error) {
+    console.error('Failed to save shift start to API:', error);
+  }
+}
+
+/**
+ * Update the shift start UI elements
+ */
+function updateShiftStartUI() {
+  const startBtn = document.getElementById('start-day-btn');
+  const startBadge = document.getElementById('start-time-badge');
+  const startTimeDisplay = document.getElementById('start-time-display');
+
+  if (shiftStartTime) {
+    // Show badge with time
+    if (startBtn) startBtn.style.display = 'none';
+    if (startBadge) startBadge.style.display = 'flex';
+
+    if (startTimeDisplay) {
+      let hours = shiftStartTime.getHours();
+      const minutes = String(shiftStartTime.getMinutes()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12 || 12;
+      startTimeDisplay.textContent = `${hours}:${minutes} ${ampm}`;
+    }
+  } else {
+    // Show start button
+    if (startBtn) startBtn.style.display = 'flex';
+    if (startBadge) startBadge.style.display = 'none';
+  }
+}
+
+/**
+ * Check if a time slot should be visible based on shift start
+ * @param {string} slot - Time slot string
+ * @returns {boolean} - True if slot should be shown
+ */
+function isSlotVisible(slot) {
+  if (!shiftStartTime) return true; // No start time set, show all
+
+  const slotStartMinutes = SLOT_START_MINUTES[slot];
+  if (slotStartMinutes === undefined) return true;
+
+  const shiftStartMinutes = shiftStartTime.getHours() * 60 + shiftStartTime.getMinutes();
+
+  // Show slot if it starts at or after shift start
+  // We add some tolerance - if shift starts within 15 min of slot start, show the slot
+  return slotStartMinutes >= shiftStartMinutes - 15;
+}
+
 // DOM Elements
 const timelineView = document.getElementById('timeline-view');
 const editorView = document.getElementById('editor-view');
@@ -147,6 +306,7 @@ const editorView = document.getElementById('editor-view');
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
   initializeUI();
+  await loadShiftStart();  // Load shared shift start (syncs with scoreboard)
   await loadCultivars();
   await loadDayData(currentDate);
   highlightCurrentTimeSlot();
@@ -180,6 +340,12 @@ function initializeUI() {
     langBtn.textContent = currentLang === 'en' ? 'ES' : 'EN';
     updateLabels();
   });
+
+  // Start Day button
+  const startDayBtn = document.getElementById('start-day-btn');
+  if (startDayBtn) {
+    startDayBtn.addEventListener('click', () => setShiftStart());
+  }
 
   // Back to timeline button
   document.getElementById('back-to-timeline').addEventListener('click', () => {
@@ -262,7 +428,14 @@ function renderTimeline() {
 
   const currentSlot = getCurrentTimeSlot();
 
-  TIME_SLOTS.forEach((slot, index) => {
+  // Filter visible slots based on shift start (for today only)
+  const isToday = currentDate === formatDateLocal(new Date());
+  const visibleSlots = isToday
+    ? TIME_SLOTS.filter(slot => isSlotVisible(slot))
+    : TIME_SLOTS;
+
+  visibleSlots.forEach((slot) => {
+    const index = TIME_SLOTS.indexOf(slot);
     const data = dayData[slot] || {};
     const totalLbs = (data.tops1 || 0) + (data.tops2 || 0);
     const hasData = totalLbs > 0 || data.trimmers1 > 0;

@@ -130,6 +130,44 @@ body {
   color: var(--bg-dark);
 }
 
+/* Start Day Button & Badge */
+.start-day-btn {
+  padding: 8px 16px;
+  border: 1px solid var(--green);
+  border-radius: 8px;
+  background: var(--green);
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  min-height: 44px;
+  transition: all 0.2s;
+}
+
+.start-day-btn:hover {
+  background: var(--green-dark);
+  border-color: var(--green-dark);
+}
+
+.start-time-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(102, 137, 113, 0.2);
+  border: 1px solid var(--green);
+  border-radius: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--green-bright);
+  min-height: 44px;
+}
+
+.start-time-icon {
+  font-size: 10px;
+  color: var(--green);
+}
+
 /* Progress Summary */
 .progress-summary {
   background: var(--bg-card);
