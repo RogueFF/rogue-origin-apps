@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Rogue Origin Operations Hub
 
 > Hemp processing company in Southern Oregon. Data-driven operations, bilingual (EN/ES) workforce.
-> **Architecture**: Static HTML frontend (GitHub Pages) + Cloudflare Workers backend + Google Sheets database
+> **Architecture**: Static HTML frontend (GitHub Pages) + Cloudflare Workers backend + Cloudflare D1 database (SQLite) + Google Sheets (production data entry)
 
 ## Current Status
 
@@ -68,17 +68,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Recent Features (January 2026)
 
-### Cloudflare Workers Migration Complete (2026-01-19)
+### Cloudflare Workers + D1 Migration (2026-01-19)
 
-**Backend Migration**: All API endpoints migrated from Vercel Functions to Cloudflare Workers for better performance and higher free tier limits.
+**Backend Migration**: All API endpoints migrated from Vercel Functions to Cloudflare Workers for better performance and higher free tier limits. Most handlers now use Cloudflare D1 (SQLite) instead of Google Sheets.
 
-| App | API Endpoint | Status |
-|-----|--------------|--------|
-| Barcode | `/api/barcode` | ✅ Complete |
-| Kanban | `/api/kanban` | ✅ Complete |
-| SOP Manager | `/api/sop` | ✅ Complete |
-| Orders | `/api/orders` | ✅ Complete |
-| Production + Scoreboard | `/api/production` | ✅ Complete |
+| App | API Endpoint | Data Source | Status |
+|-----|--------------|-------------|--------|
+| Barcode | `/api/barcode` | D1 | ✅ Complete |
+| Kanban | `/api/kanban` | D1 | ✅ Complete |
+| SOP Manager | `/api/sop` | D1 | ✅ Complete |
+| Orders | `/api/orders` | D1 | ✅ Complete |
+| Production + Scoreboard | `/api/production` | Google Sheets | ✅ Complete (D1 ready) |
 
 **Why Cloudflare Workers**:
 - 100,000 free requests/day (vs Vercel's lower limits causing 429 errors)
@@ -86,32 +86,63 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Edge deployment for faster global responses
 - Lightweight: Direct REST API (~300 lines) vs googleapis package (15MB)
 
+**Why D1 (SQLite)**:
+- Faster queries than Google Sheets REST API
+- No rate limiting issues
+- SQL queries vs complex row parsing
+- Data stays on Cloudflare edge (low latency)
+
 **Key Changes**:
 - Base URL: `https://rogue-origin-api.roguefamilyfarms.workers.dev/api`
 - Workers code in `workers/` directory
-- Google Sheets accessed via direct REST API with JWT service account auth
+- D1 database: `rogue-origin-db` (ID: `31397aa4-aa8c-47c4-965d-d51d36be8b13`)
+- Feature flags in `index.js` control Sheets vs D1 per handler
 - Response wrapper pattern: `{ success: true, data: {...} }`
 
 **Worker Structure**:
 ```
 workers/
-├── wrangler.toml           # Cloudflare config
+├── wrangler.toml           # Cloudflare config (D1 binding)
+├── schema.sql              # D1 database schema (15 tables)
 ├── package.json
 └── src/
-    ├── index.js            # Router
+    ├── index.js            # Router + feature flags
     ├── handlers/           # API endpoints
-    │   ├── production.js   # Production + Scoreboard
-    │   ├── orders.js       # Wholesale Orders
-    │   ├── barcode.js      # Label Printer
-    │   ├── kanban.js       # Supply Kanban
-    │   └── sop.js          # SOP Manager
+    │   ├── production.js      # Google Sheets version
+    │   ├── production-d1.js   # D1 version (ready, not enabled)
+    │   ├── orders.js          # Google Sheets version
+    │   ├── orders-d1.js       # D1 version ✅
+    │   ├── barcode.js         # Google Sheets version
+    │   ├── barcode-d1.js      # D1 version ✅
+    │   ├── kanban.js          # Google Sheets version
+    │   ├── kanban-d1.js       # D1 version ✅
+    │   ├── sop.js             # Google Sheets version
+    │   └── sop-d1.js          # D1 version ✅
     └── lib/                # Shared utilities
+        ├── db.js           # D1 query helpers
         ├── sheets.js       # Google Sheets REST client
         ├── auth.js         # JWT authentication
+        ├── cors.js         # CORS handling
         ├── errors.js       # Error handling
         ├── response.js     # Response formatting
         └── validate.js     # Input validation
 ```
+
+**Feature Flags** (in `workers/src/index.js`):
+```javascript
+const USE_D1_BARCODE = true;     // ✅ Using D1
+const USE_D1_KANBAN = true;      // ✅ Using D1
+const USE_D1_SOP = true;         // ✅ Using D1
+const USE_D1_ORDERS = true;      // ✅ Using D1
+const USE_D1_PRODUCTION = false; // Using Sheets (manual data entry workflow)
+```
+
+**D1 Tables** (schema.sql):
+- `barcode_inventory`, `barcode_bags`, `barcode_labels`, `barcode_blacklist`
+- `kanban_cards`
+- `sops`, `sop_requests`, `sop_settings`
+- `orders_customers`, `orders_orders`, `orders_shipments`, `orders_shipment_lines`, `orders_payments`
+- `production_tracking`, `monthly_production`, `pause_log`, `shift_adjustments`
 
 **Environment Variables** (via `wrangler secret put`):
 - `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`
@@ -124,7 +155,15 @@ cd workers
 npm install
 npx wrangler login
 npx wrangler deploy
+
+# Apply schema to D1 (one-time)
+npx wrangler d1 execute rogue-origin-db --remote --file=schema.sql
+
+# Run migration for a handler (one-time)
+curl "https://rogue-origin-api.roguefamilyfarms.workers.dev/api/barcode?action=migrate"
 ```
+
+**Production Note**: Production handler stays on Google Sheets because hourly data is entered manually in the spreadsheet. D1 handler (`production-d1.js`) is ready with `addProduction`/`getProduction` endpoints when workflow changes.
 
 **Fallback**: Vercel Functions still available at `https://rogue-origin-apps-master.vercel.app/api` (commented out in frontend configs)
 
@@ -668,15 +707,21 @@ const isAppsScript = typeof google !== 'undefined' && google.script;
 4. Response returns as JSON
 5. Frontend updates UI
 
-### Google Sheets as Database
+### Database Architecture
 
-**Monthly Production Sheets** (tabs named "YYYY-MM"):
-- Hour-by-hour production data
-- Date blocks separated by blank rows
+**Cloudflare D1** (primary for most handlers):
+- SQLite database on Cloudflare edge
+- 15 tables defined in `workers/schema.sql`
+- Used by: Barcode, Kanban, SOP, Orders
+- Query helpers in `workers/src/lib/db.js`
+
+**Google Sheets** (production data entry):
+- Production handler still uses Sheets for manual hourly data entry
+- Monthly sheets named "YYYY-MM" with hour-by-hour data
 - Columns: Time Slot, Crew counts (Buckers/Trimmers Line 1/2), Cultivar, Tops/Smalls lbs, Wage Rate
 - Backend finds current month sheet dynamically
 
-**Special Tabs**:
+**Special Tabs** (Production Sheet):
 - `Data` - Reference data (cultivars, target rates, configuration)
 - `Master` - Auto-generated consolidation (via generateMasterSheet())
 - `Rogue Origin Production Tracking` - Webhook log for bag completions
@@ -779,8 +824,8 @@ fetch('https://script.google.com/.../exec?action=test')
 ## Important Constraints
 
 - **No build system** - Pure HTML/CSS/JS, no bundler or transpilation
-- **No database** - Google Sheets is the database (use Sheets API patterns)
+- **Database**: Cloudflare D1 (SQLite) for most data, Google Sheets for production (manual data entry workflow)
 - **CORS limitations** - Must use `text/plain` content-type for POST to avoid preflight
-- **Apps Script quotas** - 6 min execution time limit, rate limits on external URLs
+- **Apps Script quotas** - 6 min execution time limit, rate limits on external URLs (mostly replaced by Workers)
 - **Mobile-first** - Boss primarily uses phone, all UIs must work well on mobile
 - **Bilingual required** - All user-facing text needs EN + ES translations
