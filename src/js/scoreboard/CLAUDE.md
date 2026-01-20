@@ -5,16 +5,18 @@
 
 ## 2026-01-20: Morning Report Enhancement
 
-**Feature**: Morning report now includes all required data fields
+**Feature**: Morning report now includes all required data fields, weekdays only (Mon-Fri)
 
 **Problem**: Report showed "0 crew", bags as "--", weekly data as "No weekly data available"
 
 **Backend Changes** (`workers/src/handlers/production.js`):
-- Added `getBagDataForDays()` - gets bag counts and cycle times for yesterday/day before
+- Added `isWeekday()` - PST timezone-aware weekday check (Mon-Fri)
+- Added `getBagDataForDays()` - gets bag counts and cycle times for last 2 weekdays
 - Added `getWeekData()` - aggregates weekly data (tops, smalls, avgRate, avgCrew, day names)
 - Added `getCurrentOrderProgress()` - looks up current in-progress order
 - Added `EEE` date format support for short weekday names (Mon, Tue, etc.)
 - Crew count estimated from trimmer hours (trimmerHours / 7.5)
+- **Weekend filtering**: All data filters out Sat/Sun (Mon-Fri schedule only)
 
 **Data Now Returned**:
 - `yesterday`: date, tops, smalls, rate, crew, bags, avgCycleTime, bestHour
