@@ -422,6 +422,21 @@ function doGet(e) {
       result = handleGetShiftStart(e.parameter);
     } else if (action === 'morningReport') {
       result = getMorningReportData();
+    } else if (action === 'getCultivars') {
+      // Return list of cultivars for hourly entry dropdowns
+      result = { success: true, cultivars: getCultivarList() };
+    } else if (action === 'getProduction') {
+      // Get hourly production data for a specific date
+      var dateParam = e.parameter.date || '';
+      var dateValidation = validateDateInput(dateParam);
+      if (!dateValidation.valid) {
+        result = { success: false, error: 'Invalid date: ' + dateValidation.error };
+      } else {
+        result = getHourlyProductionForDate_(dateValidation.value);
+      }
+    } else if (action === 'addProduction') {
+      // Handle via POST instead
+      result = { success: false, error: 'Use POST method for addProduction' };
     } else if (action === 'test') {
       result = { ok: true, message: 'API is working', timestamp: new Date().toISOString() };
     } else {
@@ -429,7 +444,7 @@ function doGet(e) {
       result = {
         ok: true,
         message: 'Rogue Origin Production API',
-        endpoints: ['scoreboard', 'dashboard', 'getScoreboardOrderQueue', 'test'],
+        endpoints: ['scoreboard', 'dashboard', 'getScoreboardOrderQueue', 'getCultivars', 'getProduction', 'test'],
         timestamp: new Date().toISOString()
       };
     }
@@ -641,6 +656,11 @@ function doPost(e) {
     } else if (action === 'deleteOrder') {
       var deleteData = e.postData ? JSON.parse(e.postData.contents) : {};
       result = deleteOrder(deleteData.id);
+    } else if (action === 'addProduction') {
+      // Hourly production entry
+      var prodData = e.postData ? JSON.parse(e.postData.contents) : {};
+      result = addHourlyProduction_(prodData);
+      clearProductionCache_();
     } else {
       result = { error: 'Unknown action: ' + action };
     }
@@ -3620,6 +3640,171 @@ function getTodayHourlyBreakdown_(ss, timezone) {
   }
 
   return result;
+}
+
+/**
+ * Get hourly production data for a specific date (for hourly-entry app)
+ * @param {string} dateStr - Date in YYYY-MM-DD format
+ * @returns {Object} Production data with hourly breakdown
+ */
+function getHourlyProductionForDate_(dateStr) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var timezone = ss.getSpreadsheetTimeZone();
+
+  // Parse the date string (YYYY-MM-DD)
+  var parts = dateStr.split('-');
+  var year = parseInt(parts[0], 10);
+  var month = parseInt(parts[1], 10) - 1; // JS months are 0-indexed
+  var day = parseInt(parts[2], 10);
+  var targetDate = new Date(year, month, day);
+
+  // Format for sheet lookup
+  var dateLabel = Utilities.formatDate(targetDate, timezone, 'MMMM dd, yyyy');
+
+  // Find the correct sheet (YYYY-MM format)
+  var sheetName = Utilities.formatDate(targetDate, timezone, 'yyyy-MM');
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    return { success: true, production: [], targetRate: 0.9 };
+  }
+
+  var vals = sheet.getDataRange().getValues();
+  var dateRowIndex = findDateRow_(vals, dateLabel);
+
+  if (dateRowIndex === -1) {
+    return { success: true, production: [], targetRate: 0.9 };
+  }
+
+  var headerRowIndex = dateRowIndex + 1;
+  var headers = vals[headerRowIndex] || [];
+  var cols = getColumnIndices_(headers);
+
+  var production = [];
+  for (var r = headerRowIndex + 1; r < vals.length; r++) {
+    var row = vals[r];
+    if (isEndOfBlock_(row)) break;
+
+    var timeSlot = row[0] || '';
+    if (!timeSlot) continue;
+
+    production.push({
+      timeSlot: timeSlot,
+      buckers1: parseFloat(row[cols.buckers1]) || 0,
+      trimmers1: parseFloat(row[cols.trimmers1]) || 0,
+      tzero1: parseFloat(row[cols.tzero1]) || 0,
+      cultivar1: row[cols.cultivar1] || '',
+      tops1: parseFloat(row[cols.tops1]) || 0,
+      smalls1: parseFloat(row[cols.smalls1]) || 0,
+      buckers2: parseFloat(row[cols.buckers2]) || 0,
+      trimmers2: parseFloat(row[cols.trimmers2]) || 0,
+      tzero2: parseFloat(row[cols.tzero2]) || 0,
+      cultivar2: row[cols.cultivar2] || '',
+      tops2: parseFloat(row[cols.tops2]) || 0,
+      smalls2: parseFloat(row[cols.smalls2]) || 0,
+      qc: row[cols.qc] || ''
+    });
+  }
+
+  // Get target rate from Data sheet
+  var targetRate = 0.9;
+  var dataSheet = ss.getSheetByName('Data');
+  if (dataSheet) {
+    var rateCell = dataSheet.getRange('O3').getValue();
+    if (rateCell && !isNaN(parseFloat(rateCell))) {
+      targetRate = parseFloat(rateCell);
+    }
+  }
+
+  return { success: true, production: production, targetRate: targetRate };
+}
+
+/**
+ * Add or update hourly production data (for hourly-entry app)
+ * @param {Object} data - Production data with date, timeSlot, and line data
+ * @returns {Object} Success/error response
+ */
+function addHourlyProduction_(data) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var timezone = ss.getSpreadsheetTimeZone();
+
+    // Validate required fields
+    if (!data.date || !data.timeSlot) {
+      return { success: false, error: 'Missing required fields: date and timeSlot' };
+    }
+
+    // Parse the date string (YYYY-MM-DD)
+    var parts = data.date.split('-');
+    var year = parseInt(parts[0], 10);
+    var month = parseInt(parts[1], 10) - 1;
+    var day = parseInt(parts[2], 10);
+    var targetDate = new Date(year, month, day);
+
+    // Format for sheet lookup
+    var dateLabel = Utilities.formatDate(targetDate, timezone, 'MMMM dd, yyyy');
+
+    // Find the correct sheet (YYYY-MM format)
+    var sheetName = Utilities.formatDate(targetDate, timezone, 'yyyy-MM');
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) {
+      return { success: false, error: 'Sheet not found for date: ' + sheetName };
+    }
+
+    var vals = sheet.getDataRange().getValues();
+    var dateRowIndex = findDateRow_(vals, dateLabel);
+
+    if (dateRowIndex === -1) {
+      return { success: false, error: 'Date not found in sheet: ' + dateLabel };
+    }
+
+    var headerRowIndex = dateRowIndex + 1;
+    var headers = vals[headerRowIndex] || [];
+    var cols = getColumnIndices_(headers);
+
+    // Find the row for this time slot
+    var targetRow = -1;
+    for (var r = headerRowIndex + 1; r < vals.length; r++) {
+      var row = vals[r];
+      if (isEndOfBlock_(row)) break;
+
+      var timeSlot = row[0] || '';
+      if (timeSlot === data.timeSlot) {
+        targetRow = r + 1; // Convert to 1-based for setValues
+        break;
+      }
+    }
+
+    if (targetRow === -1) {
+      return { success: false, error: 'Time slot not found: ' + data.timeSlot };
+    }
+
+    // Update the row with new data
+    var updates = [];
+
+    // Line 1 data
+    if (cols.buckers1 >= 0) sheet.getRange(targetRow, cols.buckers1 + 1).setValue(data.buckers1 || 0);
+    if (cols.trimmers1 >= 0) sheet.getRange(targetRow, cols.trimmers1 + 1).setValue(data.trimmers1 || 0);
+    if (cols.tzero1 >= 0) sheet.getRange(targetRow, cols.tzero1 + 1).setValue(data.tzero1 || 0);
+    if (cols.cultivar1 >= 0) sheet.getRange(targetRow, cols.cultivar1 + 1).setValue(data.cultivar1 || '');
+    if (cols.tops1 >= 0) sheet.getRange(targetRow, cols.tops1 + 1).setValue(data.tops1 || 0);
+    if (cols.smalls1 >= 0) sheet.getRange(targetRow, cols.smalls1 + 1).setValue(data.smalls1 || 0);
+
+    // Line 2 data
+    if (cols.buckers2 >= 0) sheet.getRange(targetRow, cols.buckers2 + 1).setValue(data.buckers2 || 0);
+    if (cols.trimmers2 >= 0) sheet.getRange(targetRow, cols.trimmers2 + 1).setValue(data.trimmers2 || 0);
+    if (cols.tzero2 >= 0) sheet.getRange(targetRow, cols.tzero2 + 1).setValue(data.tzero2 || 0);
+    if (cols.cultivar2 >= 0) sheet.getRange(targetRow, cols.cultivar2 + 1).setValue(data.cultivar2 || '');
+    if (cols.tops2 >= 0) sheet.getRange(targetRow, cols.tops2 + 1).setValue(data.tops2 || 0);
+    if (cols.smalls2 >= 0) sheet.getRange(targetRow, cols.smalls2 + 1).setValue(data.smalls2 || 0);
+
+    // QC notes
+    if (cols.qc >= 0 && data.qc) sheet.getRange(targetRow, cols.qc + 1).setValue(data.qc);
+
+    return { success: true, message: 'Production data saved', timeSlot: data.timeSlot };
+
+  } catch (error) {
+    return { success: false, error: error.toString() };
+  }
 }
 
 /**
