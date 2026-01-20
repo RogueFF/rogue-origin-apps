@@ -221,19 +221,19 @@ function populateForm(slot) {
 
   document.getElementById('buckers1').value = data.buckers1 || 0;
   document.getElementById('trimmers1').value = data.trimmers1 || 0;
-  document.getElementById('tzero1').value = data.tzero1 || 0;
+  document.getElementById('tzero1').value = data.tzero1 ?? 1;  // Default to 1
   document.getElementById('cultivar1').value = data.cultivar1 || '';
   document.getElementById('tops1').value = data.tops1 || 0;
   document.getElementById('smalls1').value = data.smalls1 || 0;
 
   document.getElementById('buckers2').value = data.buckers2 || 0;
   document.getElementById('trimmers2').value = data.trimmers2 || 0;
-  document.getElementById('tzero2').value = data.tzero2 || 0;
+  document.getElementById('tzero2').value = data.tzero2 ?? 1;  // Default to 1
   document.getElementById('cultivar2').value = data.cultivar2 || '';
   document.getElementById('tops2').value = data.tops2 || 0;
   document.getElementById('smalls2').value = data.smalls2 || 0;
 
-  document.getElementById('qcperson').value = data.qcperson || 0;
+  document.getElementById('qcperson').value = data.qcperson ?? 1;  // Default to 1
   document.getElementById('qcNotes').value = data.qcNotes || '';
 
   // Auto-expand Line 2 if it has data
