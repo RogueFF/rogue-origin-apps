@@ -776,13 +776,14 @@ const TUTORIAL_STEPS = [
     target: null,
     title: { en: 'Entering Data', es: 'Ingresando Datos' },
     text: {
-      en: 'When you tap an hour, you\'ll see the Editor. There are TWO things to enter:\n\n1️⃣ CREW — at the START of the hour\n2️⃣ PRODUCTION — at the END of the hour',
-      es: 'Al tocar una hora, verás el Editor. Hay DOS cosas que ingresar:\n\n1️⃣ EQUIPO — al INICIO de la hora\n2️⃣ PRODUCCIÓN — al FINAL de la hora',
+      en: 'Tap any hour in the timeline to open it. There are TWO things to enter each hour:\n\n1️⃣ CREW — at the START of the hour\n2️⃣ PRODUCTION — at the END of the hour\n\nLet\'s go to the first empty hour now!',
+      es: 'Toca cualquier hora en la línea de tiempo para abrirla. Hay DOS cosas que ingresar cada hora:\n\n1️⃣ EQUIPO — al INICIO de la hora\n2️⃣ PRODUCCIÓN — al FINAL de la hora\n\n¡Vamos a la primera hora vacía!',
     },
+    action: 'openFirstEmpty',
   },
   {
     id: 'crew-section',
-    target: null,
+    target: 'crew-section',
     title: { en: '1️⃣ Crew Entry', es: '1️⃣ Entrada de Equipo' },
     text: {
       en: 'At the START of each hour, enter how many people are working:\n• Buckers — removing buds from stems\n• Trimmers — trimming the buds\n• T-Zero — operating the machine\n• QC — quality control person',
@@ -791,7 +792,7 @@ const TUTORIAL_STEPS = [
   },
   {
     id: 'production-section',
-    target: null,
+    target: 'production-section',
     title: { en: '2️⃣ Production Entry', es: '2️⃣ Entrada de Producción' },
     text: {
       en: 'At the END of each hour, weigh and enter production:\n• Tops — premium flower (counts toward target)\n• Smalls — smaller buds (byproduct, doesn\'t count toward target)',
@@ -800,11 +801,11 @@ const TUTORIAL_STEPS = [
   },
   {
     id: 'step-guide',
-    target: null,
+    target: 'step-guide',
     title: { en: 'The Step Guide', es: 'La Guía de Pasos' },
     text: {
-      en: 'The colored banner at the top tells you what to do:\n🟢 Green — Enter crew (start of hour)\n🟡 Gold — Enter production (end of hour)\n🎉 Celebration — Target met!\n🔴 Red — Target missed, add a note why',
-      es: 'El banner de color arriba te dice qué hacer:\n🟢 Verde — Ingresar equipo (inicio de hora)\n🟡 Dorado — Ingresar producción (fin de hora)\n🎉 Celebración — ¡Meta cumplida!\n🔴 Rojo — Meta no alcanzada, agrega nota',
+      en: 'This banner tells you what to do next:\n🟢 Green — Enter crew (start of hour)\n🟡 Gold — Enter production (end of hour)\n🎉 Celebration — Target met!\n🔴 Red — Target missed, add a note why',
+      es: 'Este banner te dice qué hacer:\n🟢 Verde — Ingresar equipo (inicio de hora)\n🟡 Dorado — Ingresar producción (fin de hora)\n🎉 Celebración — ¡Meta cumplida!\n🔴 Rojo — Meta no alcanzada, agrega nota',
     },
   },
   {
@@ -894,6 +895,12 @@ function positionTutorialElements(step) {
       targetEl = document.querySelector('.progress-summary');
     } else if (step.target === 'date-picker') {
       targetEl = document.getElementById('date-picker');
+    } else if (step.target === 'crew-section') {
+      targetEl = document.querySelector('.crew-section');
+    } else if (step.target === 'production-section') {
+      targetEl = document.querySelector('.production-section');
+    } else if (step.target === 'step-guide') {
+      targetEl = document.getElementById('step-guide');
     } else {
       targetEl = document.getElementById(step.target) || document.querySelector(`.${step.target}`);
     }
@@ -939,12 +946,39 @@ function positionTutorialElements(step) {
 }
 
 function nextTutorialStep() {
+  const currentStep = TUTORIAL_STEPS[tutorialStep];
+
+  // Handle special actions
+  if (currentStep.action === 'openFirstEmpty') {
+    // Find first empty hour or current hour
+    const firstEmptyIndex = findFirstEmptySlot();
+    if (firstEmptyIndex >= 0) {
+      openEditor(firstEmptyIndex);
+    }
+  }
+
   if (tutorialStep < TUTORIAL_STEPS.length - 1) {
     tutorialStep++;
     renderTutorialStep();
   } else {
     closeTutorial();
   }
+}
+
+function findFirstEmptySlot() {
+  // Find the first slot without production data
+  for (let i = 0; i < TIME_SLOTS.length; i++) {
+    const slot = TIME_SLOTS[i];
+    const data = dayData[slot] || {};
+    const hasProduction = (data.tops1 || 0) + (data.tops2 || 0) > 0;
+    if (!hasProduction) {
+      return i;
+    }
+  }
+  // If all slots have data, return current time slot or first
+  const currentSlot = getCurrentTimeSlot();
+  const currentIndex = TIME_SLOTS.indexOf(currentSlot);
+  return currentIndex >= 0 ? currentIndex : 0;
 }
 
 function prevTutorialStep() {
