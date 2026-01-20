@@ -37,6 +37,7 @@
       // Progress Indicators
       upBy: 'Up',
       downBy: 'Down',
+      onPace: 'On pace',
       hrStreak: 'hr streak',
 
       // Status Headers
@@ -115,6 +116,7 @@
       // Progress Indicators
       upBy: 'Arriba',
       downBy: 'Abajo',
+      onPace: 'Al ritmo',
       hrStreak: 'hrs seguidas',
 
       // Status Headers
