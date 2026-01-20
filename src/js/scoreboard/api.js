@@ -7,6 +7,9 @@
 (function(window) {
   'use strict';
 
+  // Track last known version for smart polling
+  let lastKnownVersion = null;
+
   const ScoreboardAPI = {
     /**
      * Detect if running inside Google Apps Script container
@@ -14,6 +17,60 @@
      */
     isAppsScript: function() {
       return typeof google !== 'undefined' && google.script && google.script.run;
+    },
+
+    /**
+     * Check if data has changed (lightweight version check)
+     * @param {Function} onChanged - Called with true if data changed, false if same
+     * @param {Function} onError - Error callback
+     */
+    checkVersion: function(onChanged, onError) {
+      if (this.isAppsScript()) {
+        // Apps Script doesn't support version checking, always report changed
+        if (onChanged) onChanged(true);
+        return;
+      }
+
+      const apiUrl = this.getApiUrl();
+
+      fetch(`${apiUrl}?action=version`)
+        .then(function(response) {
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          return response.json();
+        })
+        .then(function(raw) {
+          const response = raw.data || raw;
+          const currentVersion = response.version;
+
+          // First check - always report changed to load initial data
+          if (lastKnownVersion === null) {
+            lastKnownVersion = currentVersion;
+            if (onChanged) onChanged(true);
+            return;
+          }
+
+          // Compare versions
+          if (currentVersion !== lastKnownVersion) {
+            lastKnownVersion = currentVersion;
+            if (onChanged) onChanged(true);
+          } else {
+            if (onChanged) onChanged(false);
+          }
+        })
+        .catch(function(error) {
+          console.error('checkVersion error:', error);
+          // On error, report changed to trigger data fetch as fallback
+          if (onChanged) onChanged(true);
+        });
+    },
+
+    /**
+     * Get last known version (for debugging)
+     */
+    getLastKnownVersion: function() {
+      return lastKnownVersion;
     },
 
     /**

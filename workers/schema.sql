@@ -287,3 +287,16 @@ CREATE TABLE IF NOT EXISTS monthly_production (
 );
 
 CREATE INDEX IF NOT EXISTS idx_production_date ON monthly_production(production_date);
+
+-- ============================================
+-- DATA VERSION TRACKING (for smart polling)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS data_version (
+  key TEXT PRIMARY KEY,
+  version INTEGER DEFAULT 0,
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Initialize scoreboard version
+INSERT OR IGNORE INTO data_version (key, version, updated_at) VALUES ('scoreboard', 0, datetime('now'));
