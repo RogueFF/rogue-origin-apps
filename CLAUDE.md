@@ -68,6 +68,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Recent Features (January 2026)
 
+### Break-Adjusted Cycle Times (2026-01-20)
+
+**Feature**: Bag cycle times now subtract break periods that fall within the cycle window, giving accurate working time instead of wall-clock time.
+
+**Breaks Subtracted** (PST timezone):
+| Break | Time | Duration |
+|-------|------|----------|
+| Morning | 9:00 AM | 10 min |
+| Lunch | 12:00 PM | 30 min |
+| Afternoon | 2:30 PM | 10 min |
+| Cleanup | 4:20 PM | 10 min |
+
+**Example**: Bag started at 11:39 AM, completed at 1:36 PM
+- Wall-clock time: 117 min
+- Lunch break (12:00-12:30): -30 min
+- **Actual cycle time: 87 min** ✅
+
+**Implementation** (`workers/src/handlers/production.js`):
+- `BREAKS` constant defines break schedule
+- `getBreakMinutesInWindow(startTime, endTime)` calculates overlap
+- Timezone-aware: converts break times to PST before comparison
+- Applied to both `avgSecondsToday` and `cycleHistory` calculations
+
+---
+
 ### Smart Polling for Scoreboard (2026-01-20)
 
 **Feature**: Scoreboard only fetches full data when backend data actually changes, reducing API calls by ~90%.
