@@ -741,12 +741,16 @@ async function getExtendedDailyData(days, env) {
         dayData.totalSmalls += smalls1;
         dayData.totalTrimmerHours += tr1;
 
-        // Track best hour (highest lbs)
-        if (!dayData.bestHour || tops1 > dayData.bestHour.lbs) {
-          dayData.bestHour = {
-            time: timeSlot.split('–')[0].trim(), // e.g., "10:00 AM"
-            lbs: Math.round(tops1 * 10) / 10,
-          };
+        // Track best hour (highest lbs/trimmer rate)
+        if (tr1 > 0) {
+          const hourRate = tops1 / tr1;
+          if (!dayData.bestHour || hourRate > dayData.bestHour.rate) {
+            dayData.bestHour = {
+              time: timeSlot.split('–')[0].trim(), // e.g., "10:00 AM"
+              lbs: Math.round(tops1 * 10) / 10,
+              rate: Math.round(hourRate * 100) / 100,
+            };
+          }
         }
       }
     }
