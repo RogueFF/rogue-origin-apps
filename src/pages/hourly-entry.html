@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../css/hourly-entry.css?v=8">
+  <link rel="stylesheet" href="../css/hourly-entry.css?v=9">
 </head>
 <body>
   <!-- TIMELINE VIEW -->
@@ -223,6 +223,41 @@
     <div class="spinner"></div>
   </div>
 
-  <script type="module" src="../js/hourly-entry/index.js?v=15"></script>
+  <!-- Onboarding Tutorial Overlay -->
+  <div id="tutorial-overlay" class="tutorial-overlay">
+    <div class="tutorial-backdrop"></div>
+    <div class="tutorial-spotlight" id="tutorial-spotlight"></div>
+    <div class="tutorial-card" id="tutorial-card">
+      <div class="tutorial-step-indicator" id="tutorial-steps"></div>
+      <h3 class="tutorial-title" id="tutorial-title"></h3>
+      <p class="tutorial-text" id="tutorial-text"></p>
+      <div class="tutorial-actions">
+        <button id="tutorial-skip" class="tutorial-btn tutorial-btn-skip" data-i18n="skip">Skip</button>
+        <div class="tutorial-nav">
+          <button id="tutorial-prev" class="tutorial-btn tutorial-btn-prev" data-i18n="back">Back</button>
+          <button id="tutorial-next" class="tutorial-btn tutorial-btn-next" data-i18n="next">Next</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Inline Tooltips (shown after tutorial) -->
+  <div class="tooltip-hint" id="tooltip-timeline" data-target="timeline-list">
+    <span class="tooltip-icon">💡</span>
+    <span class="tooltip-text" data-i18n="tipTimeline">Tap any hour to edit</span>
+    <button class="tooltip-close">×</button>
+  </div>
+  <div class="tooltip-hint" id="tooltip-crew" data-target="crew-section">
+    <span class="tooltip-icon">👥</span>
+    <span class="tooltip-text" data-i18n="tipCrew">Enter at START of hour</span>
+    <button class="tooltip-close">×</button>
+  </div>
+  <div class="tooltip-hint" id="tooltip-production" data-target="production-section">
+    <span class="tooltip-icon">⚖️</span>
+    <span class="tooltip-text" data-i18n="tipProduction">Enter at END of hour</span>
+    <button class="tooltip-close">×</button>
+  </div>
+
+  <script type="module" src="../js/hourly-entry/index.js?v=16"></script>
 </body>
 </html>
