@@ -372,7 +372,8 @@ async function loadCultivars() {
     const result = await response.json();
     const data = result.data || result;
 
-    cultivarOptions = data.cultivars || [];
+    // Filter to only 2025 cultivars
+    cultivarOptions = (data.cultivars || []).filter(c => c.startsWith('2025'));
     populateCultivarSelects();
   } catch (error) {
     console.error('Failed to load cultivars:', error);
