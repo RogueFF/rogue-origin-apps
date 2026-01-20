@@ -308,10 +308,16 @@ async function loadDayData(date) {
     const data = result.data || result;
 
     dayData = {};
+
+    // Handle D1 format: production array
     if (data.production && Array.isArray(data.production)) {
       data.production.forEach((row) => {
         dayData[row.timeSlot] = row;
       });
+    }
+    // Handle Sheets format: slots object
+    else if (data.slots && typeof data.slots === 'object') {
+      dayData = data.slots;
     }
 
     // Get target rate if available
