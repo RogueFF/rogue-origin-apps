@@ -236,12 +236,15 @@
         <div class="info-section"><span class="info-icon"><i class="ph-duotone ph-users-three"></i></span><span><span id="crewCount">—</span> <span id="trimmersLabel">Trimmers</span></span></div>
         <div class="info-divider"></div>
         <div class="info-section"><span class="info-icon"><i class="ph-duotone ph-crosshair"></i></span><span><span id="targetRateLabel">Target:</span> <span id="targetRate">—</span> lbs/hr</span></div>
+        <div class="info-divider" id="avgBestDivider"></div>
         <div id="avgBestContainer" class="avg-best-container" onclick="toggleAvgBest()">
-          <div class="info-divider" id="avgDivider"></div>
-          <div class="stat-group"><span class="label" id="avgTargetLabel">AVG</span><span class="value" id="avgPercentage">—</span></div>
+          <div class="stat-group" id="avgGroup"><span class="label" id="avgTargetLabel">AVG</span><span class="value" id="avgPercentage">—</span></div>
           <div class="info-divider" id="bestDivider"></div>
-          <div class="stat-group"><span class="label" id="bestHourLabel">BEST</span><span class="value" id="bestHour">—</span></div>
+          <div class="stat-group" id="bestGroup"><span class="label" id="bestHourLabel">BEST</span><span class="value" id="bestHour">—</span></div>
         </div>
+        <button class="avg-best-toggle" id="avgBestToggle" onclick="toggleAvgBest()" title="Toggle AVG/BEST">
+          <i class="ph-duotone ph-chart-bar"></i>
+        </button>
       </div>
       
       <!-- Hourly Rate Chart - Bottom -->
@@ -509,7 +512,9 @@
     // Toggle AVG/BEST KPIs visibility
     window.toggleAvgBest = function() {
       const container = document.getElementById('avgBestContainer');
+      const divider = document.getElementById('avgBestDivider');
       const isHidden = container.classList.toggle('hidden');
+      if (divider) divider.classList.toggle('hidden', isHidden);
       try { localStorage.setItem('hideAvgBest', isHidden ? 'true' : 'false'); } catch(e) {}
     };
 
@@ -518,7 +523,9 @@
       const hideAvgBest = localStorage.getItem('hideAvgBest') === 'true';
       if (hideAvgBest) {
         const container = document.getElementById('avgBestContainer');
+        const divider = document.getElementById('avgBestDivider');
         if (container) container.classList.add('hidden');
+        if (divider) divider.classList.add('hidden');
       }
     }
 
