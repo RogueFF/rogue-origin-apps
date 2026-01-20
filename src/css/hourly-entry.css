@@ -329,6 +329,17 @@ body {
   border: 1px solid var(--border-color);
 }
 
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.section-header .section-label {
+  margin-bottom: 0;
+}
+
 .section-label {
   font-size: 14px;
   font-weight: 600;
@@ -338,12 +349,114 @@ body {
   letter-spacing: 0.5px;
 }
 
+.subsection-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* Modified Badge */
+.modified-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--bg-dark);
+  background: var(--gold);
+  padding: 4px 10px;
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  animation: badge-pulse 2s ease-in-out infinite;
+}
+
+@keyframes badge-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Crew Section */
+.crew-section {
+  border-color: var(--green);
+  border-width: 2px;
+}
+
+/* Production Section */
+.production-section {
+  border-color: var(--gold);
+  border-width: 2px;
+}
+
+.production-section .section-label {
+  color: var(--gold);
+}
+
+.production-section .production-grid {
+  margin-bottom: 16px;
+}
+
+.production-section .production-grid:last-child {
+  margin-bottom: 0;
+}
+
 /* Crew Grid */
 .crew-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
   margin-bottom: 16px;
+}
+
+/* Line 2 crew grid has 3 columns (no QC) */
+.line2-collapsible .crew-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* Line 2 Collapsible inside Crew Section */
+.line2-collapsible {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.line2-collapsible .section-content {
+  display: none;
+  margin-top: 12px;
+}
+
+.line2-collapsible.expanded .section-content {
+  display: block;
+}
+
+.subsection-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.subsection-toggle h4 {
+  margin: 0;
+}
+
+.line2-collapsible.expanded .subsection-label {
+  color: var(--green);
+}
+
+.line2-collapsible .toggle-icon {
+  font-size: 20px;
+  color: var(--text-secondary);
+  transition: transform 0.3s;
+}
+
+.line2-collapsible.expanded .toggle-icon {
+  transform: rotate(45deg);
 }
 
 .crew-field label {
