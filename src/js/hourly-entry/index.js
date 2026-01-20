@@ -3,7 +3,7 @@
  * Two-view architecture: Timeline (list) and Editor (full-screen)
  */
 
-const API_URL = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
+const API_URL = 'https://script.google.com/macros/s/AKfycbxDAHSFl9cedGS49L3Lf5ztqy-SSToYigyA30ZtsdpmWNAR9H61X_Mm48JOOTGqqr-Z/exec';
 
 const TIME_SLOTS = [
   '7:00 AM – 8:00 AM',
@@ -274,13 +274,13 @@ async function saveEntry() {
   try {
     const response = await fetch(`${API_URL}?action=addProduction`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(data),
     });
 
     const result = await response.json();
 
-    if (!response.ok || !result.success) {
+    if (!result.success) {
       throw new Error(result.message || 'Save failed');
     }
 
