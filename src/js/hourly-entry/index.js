@@ -375,16 +375,14 @@ function updateStepGuide() {
 
   const tops1 = parseFloat(document.getElementById('tops1').value) || 0;
   const tops2 = parseFloat(document.getElementById('tops2').value) || 0;
-  const smalls1 = parseFloat(document.getElementById('smalls1').value) || 0;
-  const smalls2 = parseFloat(document.getElementById('smalls2').value) || 0;
-  const totalProduction = tops1 + tops2 + smalls1 + smalls2;
-  const hasProduction = totalProduction > 0;
+  const totalTops = tops1 + tops2;  // Only tops count toward target (smalls are byproduct)
+  const hasProduction = totalTops > 0;
 
   // Calculate hourly target
   const slot = TIME_SLOTS[currentSlotIndex];
   const multiplier = getSlotMultiplier(slot);
   const hourlyTarget = totalTrimmers * targetRate * multiplier;
-  const metTarget = totalProduction >= hourlyTarget;
+  const metTarget = totalTops >= hourlyTarget;
 
   // Check if reason provided for missed target
   const qcNotes = qcNotesField?.value?.trim() || '';
@@ -417,7 +415,7 @@ function updateStepGuide() {
     stepGuide.classList.add('step-celebrate');
     stepIcon.textContent = '🎉';
     stepTitle.textContent = labels.stepCelebrateTitle;
-    stepHint.textContent = `${totalProduction.toFixed(1)} / ${hourlyTarget.toFixed(1)} lbs`;
+    stepHint.textContent = `${totalTops.toFixed(1)} / ${hourlyTarget.toFixed(1)} lbs`;
     crewSection?.classList.add('completed');
     productionSection?.classList.add('completed');
   } else if (!hasReason) {
@@ -434,7 +432,7 @@ function updateStepGuide() {
     stepGuide.classList.add('step-complete');
     stepIcon.textContent = '✓';
     stepTitle.textContent = labels.stepCompleteTitle;
-    stepHint.textContent = `${totalProduction.toFixed(1)} / ${hourlyTarget.toFixed(1)} lbs`;
+    stepHint.textContent = `${totalTops.toFixed(1)} / ${hourlyTarget.toFixed(1)} lbs`;
     crewSection?.classList.add('completed');
     productionSection?.classList.add('completed');
     qcNotesSection?.classList.add('completed');

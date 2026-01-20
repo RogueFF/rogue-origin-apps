@@ -531,8 +531,20 @@ body {
 .crew-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+  gap: 8px;
   margin-bottom: 16px;
+}
+
+/* Tighter buttons in crew grid to fit 4 columns */
+.crew-grid .number-input button {
+  width: 36px;
+  font-size: 18px;
+}
+
+.crew-grid .number-input input {
+  min-width: 28px;
+  font-size: 18px;
+  padding: 10px 2px;
 }
 
 /* Line 2 crew grid has 3 columns (no QC) */
@@ -592,6 +604,23 @@ body {
   color: var(--text-secondary);
   margin-bottom: 6px;
   text-align: center;
+}
+
+/* QC field highlight - make it stand out */
+.crew-field:has(#qcperson) {
+  background: rgba(228, 170, 79, 0.1);
+  padding: 8px 4px;
+  border-radius: 8px;
+  margin: -8px -4px;
+}
+
+.crew-field:has(#qcperson) label {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.crew-field:has(#qcperson) .number-input {
+  border-color: var(--gold);
 }
 
 .number-input {
