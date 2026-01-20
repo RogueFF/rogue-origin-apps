@@ -346,10 +346,46 @@
     }
   }
 
+  /**
+   * Sync shift start from API (called periodically)
+   * Allows other devices to see when shift is started elsewhere
+   */
+  function syncShiftStart() {
+    // Only sync if we don't have a local shift start yet
+    // (avoids overwriting a click that's still saving)
+    if (State.manualShiftStart) return;
+
+    if (!window.ScoreboardAPI) return;
+
+    window.ScoreboardAPI.getShiftStart(
+      function(response) {
+        if (response.success && response.shiftAdjustment) {
+          const apiStartTime = new Date(response.shiftAdjustment.manualStartTime);
+
+          // Check if this is for today
+          const today = new Date().toDateString();
+          if (apiStartTime.toDateString() !== today) return;
+
+          // Another device set the shift start - update local state
+          State.manualShiftStart = apiStartTime;
+          State.shiftAdjustment = response.shiftAdjustment;
+          localStorage.setItem('manualShiftStart', apiStartTime.toISOString());
+          localStorage.setItem('shiftStartDate', today);
+          showStartedBadge(apiStartTime, State.shiftStartLocked);
+          console.log('Shift start synced from another device:', apiStartTime);
+        }
+      },
+      function(error) {
+        // Silent fail - don't spam console on network issues
+      }
+    );
+  }
+
   // Expose for external calls
   window.ScoreboardShiftStart = {
     checkLockStatus: checkLockStatus,
-    initShiftStartUI: initShiftStartUI
+    initShiftStartUI: initShiftStartUI,
+    syncShiftStart: syncShiftStart
   };
 
   // Expose global functions
