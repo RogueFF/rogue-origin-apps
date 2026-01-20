@@ -87,6 +87,48 @@ function is5kgBag(size) {
   return s.includes('5kg') || s.includes('5 kg');
 }
 
+// Parse human-readable timestamp from webhook logs
+// Format: "Wednesday, January 14, 2026 at 9:46: AM" or similar
+function parseHumanTimestamp(timestamp) {
+  if (!timestamp) return null;
+  const str = String(timestamp).trim();
+
+  // If already ISO format or parseable by Date constructor
+  const direct = new Date(str);
+  if (!isNaN(direct.getTime()) && !str.includes(' at ')) {
+    return direct;
+  }
+
+  // Parse "Wednesday, January 14, 2026 at 9:46: AM" format
+  // Note: there's an extra colon before AM/PM in some entries
+  const match = str.match(/(\w+),?\s+(\w+)\s+(\d+),?\s+(\d{4})\s+at\s+(\d+):(\d+):?\s*(AM|PM)/i);
+  if (match) {
+    const [, , month, day, year, hour, minute, ampm] = match;
+    const monthNames = {
+      'january': 0, 'february': 1, 'march': 2, 'april': 3, 'may': 4, 'june': 5,
+      'july': 6, 'august': 7, 'september': 8, 'october': 9, 'november': 10, 'december': 11
+    };
+    const monthNum = monthNames[month.toLowerCase()];
+    if (monthNum === undefined) return null;
+
+    let hourNum = parseInt(hour, 10);
+    if (ampm.toUpperCase() === 'PM' && hourNum !== 12) hourNum += 12;
+    if (ampm.toUpperCase() === 'AM' && hourNum === 12) hourNum = 0;
+
+    // Create date in Pacific timezone
+    const date = new Date(Date.UTC(
+      parseInt(year, 10),
+      monthNum,
+      parseInt(day, 10),
+      hourNum + 8, // Pacific is UTC-8 (rough, ignoring DST)
+      parseInt(minute, 10)
+    ));
+    return date;
+  }
+
+  return null;
+}
+
 // ===== SCOREBOARD DATA =====
 
 async function getScoreboardData(env) {
@@ -345,14 +387,13 @@ async function getBagTimerData(env) {
     const today = formatDatePT(new Date(), 'yyyy-MM-dd');
     const now = new Date();
 
-    // Get today's bags from D1
+    // Get recent bags from D1 (timestamps are human-readable, need JS parsing)
     const bags = await query(env.DB, `
       SELECT timestamp, bag_type
       FROM production_tracking
-      WHERE DATE(timestamp) = ?
-      ORDER BY timestamp DESC
+      ORDER BY rowid DESC
       LIMIT 2001
-    `, [today]);
+    `);
 
     const scoreboardData = await getScoreboardData(env);
     result.currentTrimmers = scoreboardData.currentHourTrimmers || scoreboardData.lastHourTrimmers || 0;
@@ -368,16 +409,22 @@ async function getBagTimerData(env) {
     let lastBag = null;
     let bags5kg = 0;
 
-    // Bad bags blacklist
-    const badBagStart = new Date('2026-01-19T20:34:14Z');
-    const badBagEnd = new Date('2026-01-19T20:38:05Z');
+    // Bad bags blacklist - accidental scans on Jan 19 around 12:34 PM
+    // Timestamps in DB are local time parsed as UTC, so use matching UTC times
+    const badBagStart = new Date('2026-01-19T12:34:14Z');
+    const badBagEnd = new Date('2026-01-19T12:38:05Z');
 
     for (const row of bags) {
       const timestamp = row.timestamp;
       if (!timestamp) continue;
 
-      const rowDate = new Date(timestamp);
-      if (isNaN(rowDate.getTime())) continue;
+      // Parse human-readable timestamps
+      const rowDate = parseHumanTimestamp(timestamp);
+      if (!rowDate || isNaN(rowDate.getTime())) continue;
+
+      // Filter by today's date (Pacific time)
+      const rowDateStr = formatDatePT(rowDate, 'yyyy-MM-dd');
+      if (rowDateStr !== today) continue;
 
       // Skip accidentally scanned bags
       if (rowDate >= badBagStart && rowDate <= badBagEnd) continue;
