@@ -215,6 +215,8 @@ function showView(view) {
 function renderTimeline() {
   const list = document.getElementById('timeline-list');
   list.innerHTML = '';
+  list.setAttribute('role', 'list');
+  list.setAttribute('aria-label', currentLang === 'es' ? 'Horas del día' : 'Time slots');
 
   const currentSlot = getCurrentTimeSlot();
 
@@ -226,12 +228,41 @@ function renderTimeline() {
 
     const div = document.createElement('div');
     div.className = 'timeline-slot' + (hasData ? ' has-data' : '') + (isCurrent ? ' current' : '');
+    div.setAttribute('role', 'listitem');
+    div.setAttribute('tabindex', '0');
+    div.setAttribute('aria-label', `${slot}, ${hasData
+      ? (currentLang === 'es' ? `${totalLbs.toFixed(1)} libras registradas` : `${totalLbs.toFixed(1)} lbs logged`)
+      : (currentLang === 'es' ? 'sin datos' : 'no data')}`);
+
+    // Status text for colorblind accessibility
+    const statusText = hasData
+      ? (currentLang === 'es' ? 'Completo' : 'Done')
+      : (currentLang === 'es' ? 'Pendiente' : 'Empty');
+
     div.innerHTML = `
       <span class="slot-time">${formatSlotShort(slot)}</span>
       <span class="slot-lbs ${hasData ? '' : 'empty'}">${hasData ? totalLbs.toFixed(1) + ' lbs' : '—'}</span>
-      <span class="slot-status">${hasData ? '✓' : '○'}</span>
+      <span class="slot-status" aria-hidden="true">${hasData ? '✓' : '○'}</span>
+      <span class="slot-status-text visually-hidden">${statusText}</span>
     `;
+
+    // Click handler
     div.addEventListener('click', () => openEditor(index));
+
+    // Keyboard handler
+    div.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openEditor(index);
+      } else if (e.key === 'ArrowDown' && index < TIME_SLOTS.length - 1) {
+        e.preventDefault();
+        div.nextElementSibling?.focus();
+      } else if (e.key === 'ArrowUp' && index > 0) {
+        e.preventDefault();
+        div.previousElementSibling?.focus();
+      }
+    });
+
     list.appendChild(div);
   });
 }
