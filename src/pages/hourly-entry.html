@@ -10,6 +10,8 @@
   <link rel="stylesheet" href="../css/hourly-entry.css?v=9">
 </head>
 <body>
+  <a href="#timeline-list" class="skip-link">Skip to timeline</a>
+
   <!-- TIMELINE VIEW -->
   <div id="timeline-view" class="view active">
     <header class="app-header">
@@ -80,27 +82,27 @@
 
         <div class="crew-grid">
           <div class="crew-field">
-            <label data-i18n="buckers">Buckers</label>
+            <label data-i18n="buckers" id="label-buckers1">Buckers</label>
             <div class="number-input">
-              <button type="button" class="decrement" data-field="buckers1">-</button>
-              <input type="number" id="buckers1" value="0" min="0" max="50" inputmode="numeric">
-              <button type="button" class="increment" data-field="buckers1">+</button>
+              <button type="button" class="decrement" data-field="buckers1" aria-label="Decrease buckers">-</button>
+              <input type="number" id="buckers1" value="0" min="0" max="50" inputmode="numeric" aria-labelledby="label-buckers1">
+              <button type="button" class="increment" data-field="buckers1" aria-label="Increase buckers">+</button>
             </div>
           </div>
           <div class="crew-field">
-            <label data-i18n="trimmers">Trimmers</label>
+            <label data-i18n="trimmers" id="label-trimmers1">Trimmers</label>
             <div class="number-input">
-              <button type="button" class="decrement" data-field="trimmers1">-</button>
-              <input type="number" id="trimmers1" value="0" min="0" max="50" inputmode="numeric">
-              <button type="button" class="increment" data-field="trimmers1">+</button>
+              <button type="button" class="decrement" data-field="trimmers1" aria-label="Decrease trimmers">-</button>
+              <input type="number" id="trimmers1" value="0" min="0" max="50" inputmode="numeric" aria-labelledby="label-trimmers1">
+              <button type="button" class="increment" data-field="trimmers1" aria-label="Increase trimmers">+</button>
             </div>
           </div>
           <div class="crew-field">
-            <label data-i18n="tzero">T-Zero</label>
+            <label data-i18n="tzero" id="label-tzero1">T-Zero</label>
             <div class="number-input">
-              <button type="button" class="decrement" data-field="tzero1">-</button>
-              <input type="number" id="tzero1" value="1" min="0" max="50" inputmode="numeric">
-              <button type="button" class="increment" data-field="tzero1">+</button>
+              <button type="button" class="decrement" data-field="tzero1" aria-label="Decrease T-Zero">-</button>
+              <input type="number" id="tzero1" value="1" min="0" max="50" inputmode="numeric" aria-labelledby="label-tzero1">
+              <button type="button" class="increment" data-field="tzero1" aria-label="Increase T-Zero">+</button>
             </div>
           </div>
         </div>
@@ -108,11 +110,11 @@
         <!-- QC field on its own row for visibility -->
         <div class="qc-row">
           <div class="crew-field">
-            <label data-i18n="qcperson">QC Person</label>
+            <label data-i18n="qcperson" id="label-qcperson">QC Person</label>
             <div class="number-input">
-              <button type="button" class="decrement" data-field="qcperson">-</button>
-              <input type="number" id="qcperson" value="1" min="0" max="10" inputmode="numeric">
-              <button type="button" class="increment" data-field="qcperson">+</button>
+              <button type="button" class="decrement" data-field="qcperson" aria-label="Decrease QC person">-</button>
+              <input type="number" id="qcperson" value="1" min="0" max="10" inputmode="numeric" aria-labelledby="label-qcperson">
+              <button type="button" class="increment" data-field="qcperson" aria-label="Increase QC person">+</button>
             </div>
           </div>
         </div>
@@ -134,27 +136,27 @@
           <div class="section-content" id="line2-content">
             <div class="crew-grid">
               <div class="crew-field">
-                <label data-i18n="buckers">Buckers</label>
+                <label data-i18n="buckers" id="label-buckers2">Buckers</label>
                 <div class="number-input">
-                  <button type="button" class="decrement" data-field="buckers2">-</button>
-                  <input type="number" id="buckers2" value="0" min="0" max="50" inputmode="numeric">
-                  <button type="button" class="increment" data-field="buckers2">+</button>
+                  <button type="button" class="decrement" data-field="buckers2" aria-label="Decrease buckers line 2">-</button>
+                  <input type="number" id="buckers2" value="0" min="0" max="50" inputmode="numeric" aria-labelledby="label-buckers2">
+                  <button type="button" class="increment" data-field="buckers2" aria-label="Increase buckers line 2">+</button>
                 </div>
               </div>
               <div class="crew-field">
-                <label data-i18n="trimmers">Trimmers</label>
+                <label data-i18n="trimmers" id="label-trimmers2">Trimmers</label>
                 <div class="number-input">
-                  <button type="button" class="decrement" data-field="trimmers2">-</button>
-                  <input type="number" id="trimmers2" value="0" min="0" max="50" inputmode="numeric">
-                  <button type="button" class="increment" data-field="trimmers2">+</button>
+                  <button type="button" class="decrement" data-field="trimmers2" aria-label="Decrease trimmers line 2">-</button>
+                  <input type="number" id="trimmers2" value="0" min="0" max="50" inputmode="numeric" aria-labelledby="label-trimmers2">
+                  <button type="button" class="increment" data-field="trimmers2" aria-label="Increase trimmers line 2">+</button>
                 </div>
               </div>
               <div class="crew-field">
-                <label data-i18n="tzero">T-Zero</label>
+                <label data-i18n="tzero" id="label-tzero2">T-Zero</label>
                 <div class="number-input">
-                  <button type="button" class="decrement" data-field="tzero2">-</button>
-                  <input type="number" id="tzero2" value="1" min="0" max="50" inputmode="numeric">
-                  <button type="button" class="increment" data-field="tzero2">+</button>
+                  <button type="button" class="decrement" data-field="tzero2" aria-label="Decrease T-Zero line 2">-</button>
+                  <input type="number" id="tzero2" value="1" min="0" max="50" inputmode="numeric" aria-labelledby="label-tzero2">
+                  <button type="button" class="increment" data-field="tzero2" aria-label="Increase T-Zero line 2">+</button>
                 </div>
               </div>
             </div>
