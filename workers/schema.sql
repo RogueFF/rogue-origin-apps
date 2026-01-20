@@ -270,8 +270,10 @@ CREATE TABLE IF NOT EXISTS monthly_production (
   time_slot TEXT NOT NULL,
   buckers_line1 INTEGER DEFAULT 0,
   trimmers_line1 INTEGER DEFAULT 0,
+  tzero_line1 INTEGER DEFAULT 0,
   buckers_line2 INTEGER DEFAULT 0,
   trimmers_line2 INTEGER DEFAULT 0,
+  tzero_line2 INTEGER DEFAULT 0,
   cultivar1 TEXT,
   cultivar2 TEXT,
   tops_lbs1 REAL DEFAULT 0,
@@ -279,6 +281,7 @@ CREATE TABLE IF NOT EXISTS monthly_production (
   tops_lbs2 REAL DEFAULT 0,
   smalls_lbs2 REAL DEFAULT 0,
   wage_rate REAL,
+  qc TEXT,
   notes TEXT,
   UNIQUE(production_date, time_slot)
 );
