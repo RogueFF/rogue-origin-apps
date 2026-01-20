@@ -28,6 +28,13 @@ import { insert } from '../lib/db.js';
 const AI_MODEL = 'claude-sonnet-4-20250514';
 const TIMEZONE = 'America/Los_Angeles';
 
+// In-memory cache for scoreboard (reduces Google Sheets API calls)
+const scoreboardCache = {
+  data: null,
+  timestamp: 0,
+  TTL: 10000, // 10 seconds
+};
+
 // Sheet tab names
 const SHEETS = {
   tracking: 'Rogue Origin Production Tracking',
@@ -657,13 +664,26 @@ async function test(env) {
 }
 
 async function scoreboard(env) {
+  // Check cache first to reduce Google Sheets API calls
+  const now = Date.now();
+  if (scoreboardCache.data && (now - scoreboardCache.timestamp) < scoreboardCache.TTL) {
+    return successResponse(scoreboardCache.data);
+  }
+
+  // Fetch fresh data
   const scoreboardData = await getScoreboardData(env);
   const timerData = await getBagTimerData(env);
 
-  return successResponse({
+  const responseData = {
     scoreboard: scoreboardData,
     timer: timerData,
-  });
+  };
+
+  // Update cache
+  scoreboardCache.data = responseData;
+  scoreboardCache.timestamp = now;
+
+  return successResponse(responseData);
 }
 
 async function dashboard(params, env) {
