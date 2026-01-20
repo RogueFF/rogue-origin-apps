@@ -531,8 +531,20 @@ body {
 .crew-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+  gap: 8px;
   margin-bottom: 12px;
+}
+
+/* Compact buttons in crew grid to fit without overflow */
+.crew-grid .number-input button {
+  width: 38px;
+  min-height: 44px;
+  font-size: 20px;
+}
+
+.crew-grid .number-input input {
+  min-width: 36px;
+  font-size: 18px;
 }
 
 /* QC row - prominent standalone field */
