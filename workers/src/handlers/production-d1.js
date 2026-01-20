@@ -1273,9 +1273,9 @@ async function migrateFromSheets(env) {
           if (existing) continue;
 
           // Sanitize text fields
-          const cultivar1 = sanitizeForSheets(row[cols.cultivar1] || '').substring(0, 100);
-          const cultivar2 = sanitizeForSheets(row[cols.cultivar2] || '').substring(0, 100);
-          const qc = cols.qc >= 0 ? sanitizeForSheets(row[cols.qc] || '').substring(0, 500) : '';
+          const cultivar1 = String(row[cols.cultivar1] || '').substring(0, 100);
+          const cultivar2 = String(row[cols.cultivar2] || '').substring(0, 100);
+          const qc = cols.qc >= 0 ? String(row[cols.qc] || '').substring(0, 500) : '';
 
           await insert(env.DB, 'monthly_production', {
             production_date: currentDate,
