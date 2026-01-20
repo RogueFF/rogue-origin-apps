@@ -10,6 +10,7 @@
  */
 
 import { handleProduction } from './handlers/production.js';
+import { handleProductionD1 } from './handlers/production-d1.js';
 import { handleOrders } from './handlers/orders.js';
 import { handleOrdersD1 } from './handlers/orders-d1.js';
 import { handleBarcode } from './handlers/barcode.js';
@@ -27,6 +28,7 @@ const USE_D1_BARCODE = true;
 const USE_D1_KANBAN = true;
 const USE_D1_SOP = true;
 const USE_D1_ORDERS = true;
+const USE_D1_PRODUCTION = false; // TODO: Enable after migration debugging
 
 export default {
   async fetch(request, env, ctx) {
@@ -43,7 +45,9 @@ export default {
       let response;
 
       if (path.startsWith('/api/production')) {
-        response = await handleProduction(request, env, ctx);
+        response = USE_D1_PRODUCTION
+          ? await handleProductionD1(request, env, ctx)
+          : await handleProduction(request, env, ctx);
       } else if (path.startsWith('/api/orders')) {
         response = USE_D1_ORDERS
           ? await handleOrdersD1(request, env, ctx)
