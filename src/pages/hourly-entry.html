@@ -89,6 +89,14 @@
               <button type="button" class="increment" data-field="tzero1">+</button>
             </div>
           </div>
+          <div class="crew-field">
+            <label data-i18n="qcperson">QC</label>
+            <div class="number-input">
+              <button type="button" class="decrement" data-field="qcperson">-</button>
+              <input type="number" id="qcperson" value="0" min="0" max="10" inputmode="numeric">
+              <button type="button" class="increment" data-field="qcperson">+</button>
+            </div>
+          </div>
         </div>
 
         <div class="field-row">
@@ -165,20 +173,9 @@
         </div>
       </section>
 
-      <!-- QC Section (Shared) -->
+      <!-- QC Notes -->
       <section class="editor-section">
-        <h3 class="section-label" data-i18n="qcperson">QC</h3>
-        <div class="crew-grid" style="max-width: 200px;">
-          <div class="crew-field">
-            <label data-i18n="qcperson">QC Person</label>
-            <div class="number-input">
-              <button type="button" class="decrement" data-field="qcperson">-</button>
-              <input type="number" id="qcperson" value="0" min="0" max="10" inputmode="numeric">
-              <button type="button" class="increment" data-field="qcperson">+</button>
-            </div>
-          </div>
-        </div>
-        <div class="field-row" style="margin-top: 1rem;">
+        <div class="field-row">
           <label data-i18n="qcNotes">QC Notes</label>
           <textarea id="qcNotes" rows="2" placeholder="Optional quality notes..." class="qc-textarea"></textarea>
         </div>
@@ -201,6 +198,6 @@
     <div class="spinner"></div>
   </div>
 
-  <script type="module" src="../js/hourly-entry/index.js?v=8"></script>
+  <script type="module" src="../js/hourly-entry/index.js?v=9"></script>
 </body>
 </html>
