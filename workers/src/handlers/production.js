@@ -808,6 +808,7 @@ async function setShiftStart(params, env) {
   ], env);
 
   return successResponse({
+    success: true,
     shiftAdjustment: {
       manualStartTime: timestamp.toISOString(),
       availableHours,
@@ -831,9 +832,14 @@ async function getShiftStart(params, env) {
       // Use string directly - don't convert to Date (causes timezone shift)
       const cellDate = String(vals[i][0]).trim();
       if (cellDate === date) {
+        // Ensure time has leading zeros (e.g., "8:15:00" -> "08:15:00")
+        const timeStr = String(vals[i][1]).trim();
+        const timeParts = timeStr.split(':');
+        const paddedTime = timeParts.map(p => p.padStart(2, '0')).join(':');
         return successResponse({
+          success: true,
           shiftAdjustment: {
-            manualStartTime: `${date}T${vals[i][1]}`,
+            manualStartTime: `${date}T${paddedTime}`,
             availableHours: parseFloat(vals[i][3]) || 0,
             scaleFactor: parseFloat(vals[i][4]) || 1,
           },
