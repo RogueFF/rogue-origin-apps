@@ -39,6 +39,9 @@ const LABELS = {
     saved: 'Saved',
     prev: 'Prev',
     next: 'Next',
+    saveFailed: 'Save failed',
+    tapToRetry: 'Tap to retry',
+    saving: 'Saving',
     // Step guide labels
     stepCrewTitle: 'Enter Crew',
     stepCrewHint: 'Start of hour: who\'s working?',
@@ -71,6 +74,9 @@ const LABELS = {
     saved: 'Guardado',
     prev: 'Ant',
     next: 'Sig',
+    saveFailed: 'Error al guardar',
+    tapToRetry: 'Toca para reintentar',
+    saving: 'Guardando',
     // Step guide labels
     stepCrewTitle: 'Ingresar Equipo',
     stepCrewHint: 'Inicio de hora: quién trabaja?',
@@ -94,6 +100,8 @@ let cultivarOptions = [];
 let saveTimeout = null;
 let targetRate = 0.9; // Default, will be updated from API
 let originalCrewData = null; // Track original crew for modification detection
+let pendingSaveData = null; // Track failed save for retry
+let isSaving = false; // Prevent concurrent saves
 
 // Crew fields to track for modifications
 const CREW_FIELDS = ['buckers1', 'trimmers1', 'tzero1', 'qcperson', 'cultivar1', 'buckers2', 'trimmers2', 'tzero2', 'cultivar2'];
@@ -184,6 +192,9 @@ function initializeUI() {
     el.addEventListener('blur', () => scheduleAutoSave());
     el.addEventListener('change', () => scheduleAutoSave());
   });
+
+  // Retry button for failed saves
+  document.getElementById('retry-save').addEventListener('click', retrySave);
 
   updateLabels();
   renderTimeline();
@@ -423,7 +434,7 @@ function updateStepGuide() {
     stepGuide.classList.add('step-missed');
     stepIcon.textContent = '!';
     stepTitle.textContent = labels.stepMissedTitle;
-    stepHint.textContent = `${totalProduction.toFixed(1)} / ${hourlyTarget.toFixed(1)} lbs — ${labels.stepMissedHint}`;
+    stepHint.textContent = `${totalTops.toFixed(1)} / ${hourlyTarget.toFixed(1)} lbs — ${labels.stepMissedHint}`;
     crewSection?.classList.add('completed');
     productionSection?.classList.add('completed');
     qcNotesSection?.classList.add('needs-attention');
@@ -471,14 +482,16 @@ function scheduleAutoSave() {
   saveTimeout = setTimeout(() => saveEntry(), 1000);
 }
 
-async function saveEntry() {
-  if (currentSlotIndex < 0) return;
+async function saveEntry(retryData = null) {
+  if (currentSlotIndex < 0 && !retryData) return;
+  if (isSaving) return;
 
-  const data = collectFormData();
+  isSaving = true;
+  const data = retryData || collectFormData();
   const indicator = document.getElementById('save-indicator');
 
   // Check if crew was modified and production already existed
-  const crewModified = isCrewModified();
+  const crewModified = !retryData && isCrewModified();
   const hadProduction = originalCrewData?.hadProduction || false;
 
   // If crew changed mid-hour (after production was entered), record it
@@ -498,6 +511,9 @@ async function saveEntry() {
     }
   }
 
+  // Show saving state
+  showSaveIndicator('saving');
+
   try {
     const response = await fetch(`${API_URL}?action=addProduction`, {
       method: 'POST',
@@ -512,8 +528,9 @@ async function saveEntry() {
     }
 
     // Update local data
-    const slot = TIME_SLOTS[currentSlotIndex];
+    const slot = data.timeSlot;
     dayData[slot] = data;
+    pendingSaveData = null; // Clear any pending retry
 
     // Update original crew data after successful save (so subsequent changes are tracked from new baseline)
     if (crewModified) {
@@ -524,14 +541,35 @@ async function saveEntry() {
       updateCrewModifiedBadge();
     }
 
-    // Show saved indicator
-    indicator.classList.add('visible');
-    setTimeout(() => indicator.classList.remove('visible'), 2000);
+    // Show success indicator
+    showSaveIndicator('success');
+    setTimeout(() => hideSaveIndicator(), 2000);
 
     // Update summaries
     updateEditorSummary();
   } catch (error) {
     console.error('Save error:', error);
+    pendingSaveData = data; // Store for retry
+    showSaveIndicator('error');
+  } finally {
+    isSaving = false;
+  }
+}
+
+function showSaveIndicator(state) {
+  const indicator = document.getElementById('save-indicator');
+  indicator.classList.remove('success', 'error', 'saving');
+  indicator.classList.add('visible', state);
+}
+
+function hideSaveIndicator() {
+  const indicator = document.getElementById('save-indicator');
+  indicator.classList.remove('visible', 'success', 'error', 'saving');
+}
+
+function retrySave() {
+  if (pendingSaveData) {
+    saveEntry(pendingSaveData);
   }
 }
 
