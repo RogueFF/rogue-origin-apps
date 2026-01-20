@@ -98,6 +98,8 @@
         // Check if shift start should be locked
         if (window.ScoreboardShiftStart) {
           window.ScoreboardShiftStart.checkLockStatus();
+          // Sync shift start from API (in case another device set it)
+          window.ScoreboardShiftStart.syncShiftStart();
         }
       },
       function(error) {
