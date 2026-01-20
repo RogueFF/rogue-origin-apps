@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../css/hourly-entry.css?v=3">
+  <link rel="stylesheet" href="../css/hourly-entry.css?v=4">
 </head>
 <body>
   <!-- TIMELINE VIEW -->
@@ -103,8 +103,12 @@
               <button type="button" class="increment" data-field="tzero1">+</button>
             </div>
           </div>
+        </div>
+
+        <!-- QC field on its own row for visibility -->
+        <div class="qc-row">
           <div class="crew-field">
-            <label data-i18n="qcperson">QC</label>
+            <label data-i18n="qcperson">QC Person</label>
             <div class="number-input">
               <button type="button" class="decrement" data-field="qcperson">-</button>
               <input type="number" id="qcperson" value="1" min="0" max="10" inputmode="numeric">
@@ -219,6 +223,6 @@
     <div class="spinner"></div>
   </div>
 
-  <script type="module" src="../js/hourly-entry/index.js?v=14"></script>
+  <script type="module" src="../js/hourly-entry/index.js?v=15"></script>
 </body>
 </html>

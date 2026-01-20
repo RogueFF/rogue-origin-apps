@@ -530,26 +530,34 @@ body {
 /* Crew Grid */
 .crew-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-/* Tighter buttons in crew grid to fit 4 columns */
-.crew-grid .number-input button {
-  width: 36px;
-  font-size: 18px;
-}
-
-.crew-grid .number-input input {
-  min-width: 28px;
-  font-size: 18px;
-  padding: 10px 2px;
-}
-
-/* Line 2 crew grid has 3 columns (no QC) */
-.line2-collapsible .crew-grid {
   grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+/* QC row - prominent standalone field */
+.qc-row {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: rgba(228, 170, 79, 0.15);
+  border: 2px solid var(--gold);
+  border-radius: 10px;
+}
+
+.qc-row .crew-field {
+  min-width: 150px;
+}
+
+.qc-row .crew-field label {
+  color: var(--gold);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.qc-row .number-input {
+  border-color: var(--gold);
 }
 
 /* Line 2 Collapsible inside Crew Section */
@@ -604,23 +612,6 @@ body {
   color: var(--text-secondary);
   margin-bottom: 6px;
   text-align: center;
-}
-
-/* QC field highlight - make it stand out */
-.crew-field:has(#qcperson) {
-  background: rgba(228, 170, 79, 0.1);
-  padding: 8px 4px;
-  border-radius: 8px;
-  margin: -8px -4px;
-}
-
-.crew-field:has(#qcperson) label {
-  color: var(--gold);
-  font-weight: 600;
-}
-
-.crew-field:has(#qcperson) .number-input {
-  border-color: var(--gold);
 }
 
 .number-input {
