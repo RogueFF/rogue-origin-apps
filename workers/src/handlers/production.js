@@ -117,12 +117,14 @@ function getColumnIndices(headers) {
     buckers1: headers.indexOf('Buckers 1'),
     trimmers1: headers.indexOf('Trimmers 1'),
     tzero1: headers.indexOf('T-Zero 1'),
+    qcperson1: headers.indexOf('QC 1'),
     cultivar2: headers.indexOf('Cultivar 2'),
     tops2: headers.indexOf('Tops 2'),
     smalls2: headers.indexOf('Smalls 2'),
     buckers2: headers.indexOf('Buckers 2'),
     trimmers2: headers.indexOf('Trimmers 2'),
     tzero2: headers.indexOf('T-Zero 2'),
+    qcperson2: headers.indexOf('QC 2'),
     qc: headers.indexOf('QC'),
   };
 }
@@ -1272,12 +1274,14 @@ async function getProduction(params, env) {
         buckers1: parseFloat(row[cols.buckers1]) || 0,
         trimmers1: parseFloat(row[cols.trimmers1]) || 0,
         tzero1: parseFloat(row[cols.tzero1]) || 0,
+        qcperson1: parseFloat(row[cols.qcperson1]) || 0,
         cultivar1: row[cols.cultivar1] || '',
         tops1: parseFloat(row[cols.tops1]) || 0,
         smalls1: parseFloat(row[cols.smalls1]) || 0,
         buckers2: parseFloat(row[cols.buckers2]) || 0,
         trimmers2: parseFloat(row[cols.trimmers2]) || 0,
         tzero2: parseFloat(row[cols.tzero2]) || 0,
+        qcperson2: parseFloat(row[cols.qcperson2]) || 0,
         cultivar2: row[cols.cultivar2] || '',
         tops2: parseFloat(row[cols.tops2]) || 0,
         smalls2: parseFloat(row[cols.smalls2]) || 0,
@@ -1299,8 +1303,8 @@ async function getProduction(params, env) {
 async function addProduction(body, env) {
   const sheetId = env.PRODUCTION_SHEET_ID;
 
-  const { date, timeSlot, buckers1, trimmers1, tzero1, cultivar1, tops1, smalls1,
-          buckers2, trimmers2, tzero2, cultivar2, tops2, smalls2, qc } = body;
+  const { date, timeSlot, buckers1, trimmers1, tzero1, qcperson1, cultivar1, tops1, smalls1,
+          buckers2, trimmers2, tzero2, qcperson2, cultivar2, tops2, smalls2, qc } = body;
 
   if (!date || !timeSlot) {
     return errorResponse('Missing required fields: date, timeSlot', 'VALIDATION_ERROR', 400);
@@ -1315,12 +1319,14 @@ async function addProduction(body, env) {
     buckers1: buckers1 ?? 0,
     trimmers1: trimmers1 ?? 0,
     tzero1: tzero1 ?? 0,
+    qcperson1: qcperson1 ?? 0,
     cultivar1: cultivar1 ?? '',
     tops1: tops1 ?? 0,
     smalls1: smalls1 ?? 0,
     buckers2: buckers2 ?? 0,
     trimmers2: trimmers2 ?? 0,
     tzero2: tzero2 ?? 0,
+    qcperson2: qcperson2 ?? 0,
     cultivar2: cultivar2 ?? '',
     tops2: tops2 ?? 0,
     smalls2: smalls2 ?? 0,
@@ -1390,6 +1396,7 @@ async function addProduction(body, env) {
     if (cols.buckers1 >= 0 && data.buckers1 !== undefined) newRow[cols.buckers1] = data.buckers1;
     if (cols.trimmers1 >= 0 && data.trimmers1 !== undefined) newRow[cols.trimmers1] = data.trimmers1;
     if (cols.tzero1 >= 0 && data.tzero1 !== undefined) newRow[cols.tzero1] = data.tzero1;
+    if (cols.qcperson1 >= 0 && data.qcperson1 !== undefined) newRow[cols.qcperson1] = data.qcperson1;
     if (cols.cultivar1 >= 0 && data.cultivar1 !== undefined) newRow[cols.cultivar1] = sanitizeForSheets(data.cultivar1);
     if (cols.tops1 >= 0 && data.tops1 !== undefined) newRow[cols.tops1] = data.tops1;
     if (cols.smalls1 >= 0 && data.smalls1 !== undefined) newRow[cols.smalls1] = data.smalls1;
@@ -1398,6 +1405,7 @@ async function addProduction(body, env) {
     if (cols.buckers2 >= 0 && data.buckers2 !== undefined) newRow[cols.buckers2] = data.buckers2;
     if (cols.trimmers2 >= 0 && data.trimmers2 !== undefined) newRow[cols.trimmers2] = data.trimmers2;
     if (cols.tzero2 >= 0 && data.tzero2 !== undefined) newRow[cols.tzero2] = data.tzero2;
+    if (cols.qcperson2 >= 0 && data.qcperson2 !== undefined) newRow[cols.qcperson2] = data.qcperson2;
     if (cols.cultivar2 >= 0 && data.cultivar2 !== undefined) newRow[cols.cultivar2] = sanitizeForSheets(data.cultivar2);
     if (cols.tops2 >= 0 && data.tops2 !== undefined) newRow[cols.tops2] = data.tops2;
     if (cols.smalls2 >= 0 && data.smalls2 !== undefined) newRow[cols.smalls2] = data.smalls2;
