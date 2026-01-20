@@ -729,3 +729,283 @@ function updateLabels() {
 function showLoading(show) {
   document.getElementById('loading-overlay').classList.toggle('active', show);
 }
+
+// ===================
+// TUTORIAL SYSTEM
+// ===================
+
+const TUTORIAL_STEPS = [
+  {
+    id: 'welcome',
+    target: null, // No spotlight, centered modal
+    title: { en: 'Welcome to Hourly Entry! 👋', es: '¡Bienvenido a Entrada por Hora! 👋' },
+    text: {
+      en: 'This app helps you track production data hour by hour. Let\'s walk through how it works.',
+      es: 'Esta app te ayuda a registrar datos de producción hora por hora. Veamos cómo funciona.',
+    },
+  },
+  {
+    id: 'timeline',
+    target: 'timeline-list',
+    title: { en: 'Timeline View', es: 'Vista de Línea de Tiempo' },
+    text: {
+      en: 'Each row is one hour of the workday. Tap any hour to enter or edit data. Hours with data show a ✓ checkmark.',
+      es: 'Cada fila es una hora del día. Toca cualquier hora para ingresar o editar datos. Las horas con datos muestran ✓.',
+    },
+  },
+  {
+    id: 'progress',
+    target: 'progress-summary',
+    title: { en: 'Daily Progress', es: 'Progreso Diario' },
+    text: {
+      en: 'Track your total production against the daily target. The progress bar fills as you enter data.',
+      es: 'Sigue tu producción total contra la meta diaria. La barra de progreso se llena al ingresar datos.',
+    },
+  },
+  {
+    id: 'datepicker',
+    target: 'date-picker',
+    title: { en: 'Date Selection', es: 'Selección de Fecha' },
+    text: {
+      en: 'Use the date picker to view or edit past days. The "Today" button returns you to the current day.',
+      es: 'Usa el selector de fecha para ver o editar días pasados. El botón "Hoy" te regresa al día actual.',
+    },
+  },
+  {
+    id: 'editor-intro',
+    target: null,
+    title: { en: 'Entering Data', es: 'Ingresando Datos' },
+    text: {
+      en: 'When you tap an hour, you\'ll see the Editor. There are TWO things to enter:\n\n1️⃣ CREW — at the START of the hour\n2️⃣ PRODUCTION — at the END of the hour',
+      es: 'Al tocar una hora, verás el Editor. Hay DOS cosas que ingresar:\n\n1️⃣ EQUIPO — al INICIO de la hora\n2️⃣ PRODUCCIÓN — al FINAL de la hora',
+    },
+  },
+  {
+    id: 'crew-section',
+    target: null,
+    title: { en: '1️⃣ Crew Entry', es: '1️⃣ Entrada de Equipo' },
+    text: {
+      en: 'At the START of each hour, enter how many people are working:\n• Buckers — removing buds from stems\n• Trimmers — trimming the buds\n• T-Zero — operating the machine\n• QC — quality control person',
+      es: 'Al INICIO de cada hora, ingresa cuántas personas trabajan:\n• Buckers — quitando cogollos de tallos\n• Podadores — podando los cogollos\n• T-Zero — operando la máquina\n• QC — persona de control de calidad',
+    },
+  },
+  {
+    id: 'production-section',
+    target: null,
+    title: { en: '2️⃣ Production Entry', es: '2️⃣ Entrada de Producción' },
+    text: {
+      en: 'At the END of each hour, weigh and enter production:\n• Tops — premium flower (counts toward target)\n• Smalls — smaller buds (byproduct, doesn\'t count toward target)',
+      es: 'Al FINAL de cada hora, pesa e ingresa producción:\n• Tops — flor premium (cuenta para la meta)\n• Smalls — cogollos pequeños (subproducto, no cuenta)',
+    },
+  },
+  {
+    id: 'step-guide',
+    target: null,
+    title: { en: 'The Step Guide', es: 'La Guía de Pasos' },
+    text: {
+      en: 'The colored banner at the top tells you what to do:\n🟢 Green — Enter crew (start of hour)\n🟡 Gold — Enter production (end of hour)\n🎉 Celebration — Target met!\n🔴 Red — Target missed, add a note why',
+      es: 'El banner de color arriba te dice qué hacer:\n🟢 Verde — Ingresar equipo (inicio de hora)\n🟡 Dorado — Ingresar producción (fin de hora)\n🎉 Celebración — ¡Meta cumplida!\n🔴 Rojo — Meta no alcanzada, agrega nota',
+    },
+  },
+  {
+    id: 'done',
+    target: null,
+    title: { en: 'You\'re Ready! ✨', es: '¡Estás Listo! ✨' },
+    text: {
+      en: 'Data saves automatically as you type. Use Prev/Next buttons to move between hours.\n\nTap "Got It" to start entering data!',
+      es: 'Los datos se guardan automáticamente. Usa los botones Ant/Sig para moverte entre horas.\n\n¡Toca "Entendido" para comenzar!',
+    },
+    nextLabel: { en: 'Got It!', es: '¡Entendido!' },
+  },
+];
+
+const TUTORIAL_LABELS = {
+  en: { skip: 'Skip', back: 'Back', next: 'Next' },
+  es: { skip: 'Saltar', back: 'Atrás', next: 'Siguiente' },
+};
+
+let tutorialStep = 0;
+
+function initTutorial() {
+  // Check if tutorial already completed
+  if (localStorage.getItem('hourlyEntry_tutorialComplete') === 'true') {
+    showInlineTooltips();
+    return;
+  }
+
+  // Start tutorial
+  showTutorial();
+}
+
+function showTutorial() {
+  const overlay = document.getElementById('tutorial-overlay');
+  overlay.classList.add('active');
+  tutorialStep = 0;
+  renderTutorialStep();
+
+  // Event listeners
+  document.getElementById('tutorial-skip').addEventListener('click', closeTutorial);
+  document.getElementById('tutorial-prev').addEventListener('click', prevTutorialStep);
+  document.getElementById('tutorial-next').addEventListener('click', nextTutorialStep);
+}
+
+function renderTutorialStep() {
+  const step = TUTORIAL_STEPS[tutorialStep];
+  const labels = TUTORIAL_LABELS[currentLang];
+
+  // Update step dots
+  const dotsContainer = document.getElementById('tutorial-steps');
+  dotsContainer.innerHTML = TUTORIAL_STEPS.map((_, i) => {
+    let cls = 'tutorial-step-dot';
+    if (i < tutorialStep) cls += ' completed';
+    if (i === tutorialStep) cls += ' active';
+    return `<div class="${cls}"></div>`;
+  }).join('');
+
+  // Update content
+  document.getElementById('tutorial-title').textContent = step.title[currentLang];
+  document.getElementById('tutorial-text').textContent = step.text[currentLang];
+
+  // Update buttons
+  document.getElementById('tutorial-prev').disabled = tutorialStep === 0;
+  document.getElementById('tutorial-prev').textContent = labels.back;
+  document.getElementById('tutorial-skip').textContent = labels.skip;
+
+  const nextBtn = document.getElementById('tutorial-next');
+  if (step.nextLabel) {
+    nextBtn.textContent = step.nextLabel[currentLang];
+  } else {
+    nextBtn.textContent = labels.next;
+  }
+
+  // Position spotlight and card
+  positionTutorialElements(step);
+}
+
+function positionTutorialElements(step) {
+  const spotlight = document.getElementById('tutorial-spotlight');
+  const card = document.getElementById('tutorial-card');
+  const backdrop = document.querySelector('.tutorial-backdrop');
+
+  if (step.target) {
+    // Find target element
+    let targetEl;
+    if (step.target === 'progress-summary') {
+      targetEl = document.querySelector('.progress-summary');
+    } else if (step.target === 'date-picker') {
+      targetEl = document.getElementById('date-picker');
+    } else {
+      targetEl = document.getElementById(step.target) || document.querySelector(`.${step.target}`);
+    }
+
+    if (targetEl) {
+      const rect = targetEl.getBoundingClientRect();
+      const padding = 8;
+
+      // Position spotlight
+      spotlight.style.display = 'block';
+      spotlight.style.top = `${rect.top - padding}px`;
+      spotlight.style.left = `${rect.left - padding}px`;
+      spotlight.style.width = `${rect.width + padding * 2}px`;
+      spotlight.style.height = `${rect.height + padding * 2}px`;
+      spotlight.classList.add('active');
+      backdrop.style.display = 'none';
+
+      // Position card below or above target
+      const cardHeight = 280;
+      const spaceBelow = window.innerHeight - rect.bottom;
+
+      if (spaceBelow > cardHeight + 20) {
+        card.style.top = `${rect.bottom + 16}px`;
+        card.style.bottom = 'auto';
+      } else {
+        card.style.top = 'auto';
+        card.style.bottom = `${window.innerHeight - rect.top + 16}px`;
+      }
+      card.style.left = '50%';
+      card.style.transform = 'translateX(-50%)';
+    }
+  } else {
+    // No target - center everything
+    spotlight.style.display = 'none';
+    spotlight.classList.remove('active');
+    backdrop.style.display = 'block';
+
+    card.style.top = '50%';
+    card.style.left = '50%';
+    card.style.transform = 'translate(-50%, -50%)';
+    card.style.bottom = 'auto';
+  }
+}
+
+function nextTutorialStep() {
+  if (tutorialStep < TUTORIAL_STEPS.length - 1) {
+    tutorialStep++;
+    renderTutorialStep();
+  } else {
+    closeTutorial();
+  }
+}
+
+function prevTutorialStep() {
+  if (tutorialStep > 0) {
+    tutorialStep--;
+    renderTutorialStep();
+  }
+}
+
+function closeTutorial() {
+  const overlay = document.getElementById('tutorial-overlay');
+  overlay.classList.remove('active');
+
+  // Mark as complete
+  localStorage.setItem('hourlyEntry_tutorialComplete', 'true');
+
+  // Show inline tooltips
+  showInlineTooltips();
+}
+
+function showInlineTooltips() {
+  // Check if tooltips already dismissed
+  if (localStorage.getItem('hourlyEntry_tooltipsDismissed') === 'true') {
+    return;
+  }
+
+  // Show timeline tooltip after a delay
+  setTimeout(() => {
+    const timelineTooltip = document.getElementById('tooltip-timeline');
+    const timelineList = document.getElementById('timeline-list');
+
+    if (timelineTooltip && timelineList) {
+      const rect = timelineList.getBoundingClientRect();
+      timelineTooltip.style.top = `${rect.top + 10}px`;
+      timelineTooltip.style.left = `${rect.left + 20}px`;
+      timelineTooltip.classList.add('visible');
+
+      // Close button
+      timelineTooltip.querySelector('.tooltip-close').addEventListener('click', () => {
+        timelineTooltip.classList.remove('visible');
+        localStorage.setItem('hourlyEntry_tooltipsDismissed', 'true');
+      });
+
+      // Auto-hide after 8 seconds
+      setTimeout(() => timelineTooltip.classList.remove('visible'), 8000);
+    }
+  }, 1000);
+}
+
+// Add tooltip labels to LABELS
+LABELS.en.tipTimeline = 'Tap any hour to edit';
+LABELS.en.tipCrew = 'Enter at START of hour';
+LABELS.en.tipProduction = 'Enter at END of hour';
+LABELS.en.skip = 'Skip';
+LABELS.en.back = 'Back';
+
+LABELS.es.tipTimeline = 'Toca cualquier hora para editar';
+LABELS.es.tipCrew = 'Ingresar al INICIO de la hora';
+LABELS.es.tipProduction = 'Ingresar al FINAL de la hora';
+LABELS.es.skip = 'Saltar';
+LABELS.es.back = 'Atrás';
+
+// Initialize tutorial after data loads
+setTimeout(() => initTutorial(), 500);
