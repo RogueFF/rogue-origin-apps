@@ -400,7 +400,11 @@
     .stat-group { display: flex; flex-direction: column; align-items: center; padding: 0 12px; }
     .stat-group .label { font-size: 11px; color: var(--gold); text-transform: uppercase; }
     .stat-group .value { font-size: 22px; font-weight: 700; }
-    
+    .avg-best-container { display: contents; cursor: pointer; }
+    .avg-best-container:hover .stat-group { opacity: 0.8; }
+    .avg-best-container.hidden .stat-group,
+    .avg-best-container.hidden .info-divider { display: none; }
+
     /* Time/Strain Display - brand colors */
     .time-display { position: fixed; top: 20px; right: 420px; text-align: right; }
     .time-display .time { font-size: 42px; font-weight: 700; color: rgba(255,255,255,0.9); }
