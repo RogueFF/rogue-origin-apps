@@ -1,6 +1,6 @@
 /**
- * Hourly Production Entry App
- * Mobile-friendly interface for entering hourly production data
+ * Hourly Production Entry App - Timeline View
+ * Two-view architecture: Timeline (list) and Editor (full-screen)
  */
 
 const API_URL = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
@@ -22,6 +22,8 @@ const LABELS = {
   en: {
     title: 'Hourly Entry',
     today: 'Today',
+    target: 'Target',
+    hoursLogged: 'hrs logged',
     line1: 'Line 1',
     line2: 'Line 2',
     buckers: 'Buckers',
@@ -31,21 +33,15 @@ const LABELS = {
     tops: 'Tops (lbs)',
     smalls: 'Smalls (lbs)',
     qcNotes: 'QC Notes',
-    save: 'Save',
     saved: 'Saved',
-    saving: 'Saving...',
-    daySummary: 'Day Summary',
-    totalTops: 'Total Tops',
-    totalSmalls: 'Total Smalls',
-    trimmerHours: 'Trimmer Hours',
-    avgRate: 'Avg Rate',
-    loading: 'Loading...',
-    error: 'Error',
-    saveError: 'Failed to save. Please try again.',
+    prev: 'Prev',
+    next: 'Next',
   },
   es: {
     title: 'Entrada por Hora',
     today: 'Hoy',
+    target: 'Meta',
+    hoursLogged: 'hrs registradas',
     line1: 'Linea 1',
     line2: 'Linea 2',
     buckers: 'Buckers',
@@ -55,34 +51,31 @@ const LABELS = {
     tops: 'Tops (lbs)',
     smalls: 'Smalls (lbs)',
     qcNotes: 'Notas QC',
-    save: 'Guardar',
     saved: 'Guardado',
-    saving: 'Guardando...',
-    daySummary: 'Resumen del Dia',
-    totalTops: 'Total Tops',
-    totalSmalls: 'Total Smalls',
-    trimmerHours: 'Horas Podadores',
-    avgRate: 'Promedio',
-    loading: 'Cargando...',
-    error: 'Error',
-    saveError: 'Error al guardar. Intente de nuevo.',
+    prev: 'Ant',
+    next: 'Sig',
   },
 };
 
 // State
 let currentLang = localStorage.getItem('lang') || 'en';
 let currentDate = formatDateLocal(new Date());
-let currentSlot = '';
+let currentSlotIndex = -1;
 let dayData = {};
 let cultivarOptions = [];
 let saveTimeout = null;
+let targetRate = 0.9; // Default, will be updated from API
+
+// DOM Elements
+const timelineView = document.getElementById('timeline-view');
+const editorView = document.getElementById('editor-view');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
   initializeUI();
   await loadCultivars();
   await loadDayData(currentDate);
-  selectCurrentTimeSlot();
+  highlightCurrentTimeSlot();
 });
 
 function initializeUI() {
@@ -92,6 +85,7 @@ function initializeUI() {
   datePicker.addEventListener('change', async (e) => {
     currentDate = e.target.value;
     await loadDayData(currentDate);
+    renderTimeline();
   });
 
   // Today button
@@ -99,7 +93,8 @@ function initializeUI() {
     currentDate = formatDateLocal(new Date());
     datePicker.value = currentDate;
     await loadDayData(currentDate);
-    selectCurrentTimeSlot();
+    renderTimeline();
+    highlightCurrentTimeSlot();
   });
 
   // Language toggle
@@ -112,14 +107,27 @@ function initializeUI() {
     updateLabels();
   });
 
-  // Time slots nav
-  renderTimeSlots();
+  // Back to timeline button
+  document.getElementById('back-to-timeline').addEventListener('click', () => {
+    showView('timeline');
+  });
+
+  // Prev/Next navigation
+  document.getElementById('prev-slot').addEventListener('click', () => {
+    if (currentSlotIndex > 0) {
+      openEditor(currentSlotIndex - 1);
+    }
+  });
+
+  document.getElementById('next-slot').addEventListener('click', () => {
+    if (currentSlotIndex < TIME_SLOTS.length - 1) {
+      openEditor(currentSlotIndex + 1);
+    }
+  });
 
   // Line 2 toggle
-  const line2Toggle = document.getElementById('line2-toggle');
-  const line2Section = line2Toggle.closest('.line-section');
-  line2Toggle.addEventListener('click', () => {
-    line2Section.classList.toggle('expanded');
+  document.getElementById('line2-toggle').addEventListener('click', () => {
+    document.getElementById('line2-section').classList.toggle('expanded');
   });
 
   // Number input +/- buttons
@@ -139,107 +147,71 @@ function initializeUI() {
     });
   });
 
-  // Form inputs - auto-save on blur
-  document.querySelectorAll('#entry-form input, #entry-form select, #entry-form textarea').forEach((el) => {
+  // Form inputs - auto-save on change
+  document.querySelectorAll('#editor-view input, #editor-view select, #editor-view textarea').forEach((el) => {
     el.addEventListener('blur', () => scheduleAutoSave());
     el.addEventListener('change', () => scheduleAutoSave());
   });
 
-  // Form submit
-  document.getElementById('entry-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    await saveEntry();
-  });
-
   updateLabels();
+  renderTimeline();
 }
 
-function renderTimeSlots() {
-  const nav = document.getElementById('time-slots-nav');
-  nav.innerHTML = '';
+function showView(view) {
+  if (view === 'timeline') {
+    timelineView.classList.add('active');
+    editorView.classList.remove('active');
+    renderTimeline();
+    updateTimelineSummary();
+  } else {
+    timelineView.classList.remove('active');
+    editorView.classList.add('active');
+  }
+}
 
-  TIME_SLOTS.forEach((slot) => {
-    const tab = document.createElement('button');
-    tab.type = 'button';
-    tab.className = 'time-slot-tab';
-    tab.textContent = formatSlotShort(slot);
-    tab.dataset.slot = slot;
-    tab.addEventListener('click', () => selectSlot(slot));
-    nav.appendChild(tab);
+function renderTimeline() {
+  const list = document.getElementById('timeline-list');
+  list.innerHTML = '';
+
+  const currentSlot = getCurrentTimeSlot();
+
+  TIME_SLOTS.forEach((slot, index) => {
+    const data = dayData[slot] || {};
+    const totalLbs = (data.tops1 || 0) + (data.tops2 || 0);
+    const hasData = totalLbs > 0 || data.trimmers1 > 0;
+    const isCurrent = slot === currentSlot;
+
+    const div = document.createElement('div');
+    div.className = 'timeline-slot' + (hasData ? ' has-data' : '') + (isCurrent ? ' current' : '');
+    div.innerHTML = `
+      <span class="slot-time">${formatSlotShort(slot)}</span>
+      <span class="slot-lbs ${hasData ? '' : 'empty'}">${hasData ? totalLbs.toFixed(1) + ' lbs' : '—'}</span>
+      <span class="slot-status">${hasData ? '✓' : '○'}</span>
+    `;
+    div.addEventListener('click', () => openEditor(index));
+    list.appendChild(div);
   });
 }
 
-function formatSlotShort(slot) {
-  // "7:00 AM – 8:00 AM" -> "7-8 AM"
-  const match = slot.match(/(\d+):00\s*(AM|PM)\s*[–-]\s*(\d+):(\d+)\s*(AM|PM)/i);
-  if (match) {
-    const startHour = match[1];
-    const endHour = match[3];
-    const endMin = match[4];
-    const period = match[5];
-    if (endMin === '00') {
-      return `${startHour}-${endHour} ${period}`;
-    }
-    return `${startHour}-${endHour}:${endMin} ${period}`;
-  }
-  return slot;
-}
+function openEditor(slotIndex) {
+  currentSlotIndex = slotIndex;
+  const slot = TIME_SLOTS[slotIndex];
 
-function selectCurrentTimeSlot() {
-  const now = new Date();
-  const hours = now.getHours();
-  const minutes = now.getMinutes();
-  const totalMinutes = hours * 60 + minutes;
+  // Update time label
+  document.getElementById('editor-time-label').textContent = slot;
 
-  // Find the slot that matches current time
-  const slotTimes = [
-    { slot: TIME_SLOTS[0], start: 7 * 60, end: 8 * 60 },
-    { slot: TIME_SLOTS[1], start: 8 * 60, end: 9 * 60 },
-    { slot: TIME_SLOTS[2], start: 9 * 60, end: 10 * 60 },
-    { slot: TIME_SLOTS[3], start: 10 * 60, end: 11 * 60 },
-    { slot: TIME_SLOTS[4], start: 11 * 60, end: 12 * 60 },
-    { slot: TIME_SLOTS[5], start: 12 * 60 + 30, end: 13 * 60 },
-    { slot: TIME_SLOTS[6], start: 13 * 60, end: 14 * 60 },
-    { slot: TIME_SLOTS[7], start: 14 * 60, end: 15 * 60 },
-    { slot: TIME_SLOTS[8], start: 15 * 60, end: 16 * 60 },
-    { slot: TIME_SLOTS[9], start: 16 * 60, end: 16 * 60 + 30 },
-  ];
-
-  let targetSlot = TIME_SLOTS[0];
-
-  for (const st of slotTimes) {
-    if (totalMinutes >= st.start && totalMinutes < st.end) {
-      targetSlot = st.slot;
-      break;
-    } else if (totalMinutes < st.start) {
-      // Before this slot, select previous
-      break;
-    }
-    targetSlot = st.slot;
-  }
-
-  selectSlot(targetSlot);
-}
-
-function selectSlot(slot) {
-  currentSlot = slot;
-
-  // Update tabs
-  document.querySelectorAll('.time-slot-tab').forEach((tab) => {
-    tab.classList.toggle('active', tab.dataset.slot === slot);
-  });
-
-  // Scroll to active tab
-  const activeTab = document.querySelector('.time-slot-tab.active');
-  if (activeTab) {
-    activeTab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-  }
-
-  // Update label
-  document.getElementById('current-slot-label').textContent = slot;
-
-  // Populate form with existing data
+  // Populate form
   populateForm(slot);
+
+  // Update nav buttons
+  document.getElementById('prev-slot').disabled = slotIndex === 0;
+  document.getElementById('next-slot').disabled = slotIndex === TIME_SLOTS.length - 1;
+
+  // Update header summary
+  updateEditorSummary();
+
+  // Show editor
+  showView('editor');
 }
 
 function populateForm(slot) {
@@ -262,15 +234,16 @@ function populateForm(slot) {
   document.getElementById('qc').value = data.qc || '';
 
   // Auto-expand Line 2 if it has data
-  const line2Section = document.getElementById('line2-toggle').closest('.line-section');
+  const line2Section = document.getElementById('line2-section');
   const hasLine2Data = data.trimmers2 > 0 || data.tops2 > 0;
   line2Section.classList.toggle('expanded', hasLine2Data);
 }
 
 function collectFormData() {
+  const slot = TIME_SLOTS[currentSlotIndex];
   return {
     date: currentDate,
-    timeSlot: currentSlot,
+    timeSlot: slot,
     buckers1: parseInt(document.getElementById('buckers1').value, 10) || 0,
     trimmers1: parseInt(document.getElementById('trimmers1').value, 10) || 0,
     tzero1: parseInt(document.getElementById('tzero1').value, 10) || 0,
@@ -288,22 +261,15 @@ function collectFormData() {
 }
 
 function scheduleAutoSave() {
-  // Debounce - save 1 second after last change
   if (saveTimeout) clearTimeout(saveTimeout);
-  saveTimeout = setTimeout(() => saveEntry(true), 1000);
+  saveTimeout = setTimeout(() => saveEntry(), 1000);
 }
 
-async function saveEntry(silent = false) {
-  if (!currentSlot) return;
+async function saveEntry() {
+  if (currentSlotIndex < 0) return;
 
   const data = collectFormData();
-  const saveBtn = document.getElementById('save-btn');
   const indicator = document.getElementById('save-indicator');
-
-  if (!silent) {
-    saveBtn.disabled = true;
-    saveBtn.textContent = t('saving');
-  }
 
   try {
     const response = await fetch(`${API_URL}?action=addProduction`, {
@@ -319,22 +285,17 @@ async function saveEntry(silent = false) {
     }
 
     // Update local data
-    dayData[currentSlot] = data;
-    updateSlotIndicators();
-    updateSummary();
+    const slot = TIME_SLOTS[currentSlotIndex];
+    dayData[slot] = data;
 
     // Show saved indicator
-    indicator.textContent = t('saved');
-    indicator.classList.remove('hidden');
-    setTimeout(() => indicator.classList.add('hidden'), 2000);
+    indicator.classList.add('visible');
+    setTimeout(() => indicator.classList.remove('visible'), 2000);
+
+    // Update summaries
+    updateEditorSummary();
   } catch (error) {
     console.error('Save error:', error);
-    if (!silent) {
-      alert(t('saveError'));
-    }
-  } finally {
-    saveBtn.disabled = false;
-    saveBtn.textContent = t('save');
   }
 }
 
@@ -353,12 +314,13 @@ async function loadDayData(date) {
       });
     }
 
-    updateSlotIndicators();
-    updateSummary();
-
-    if (currentSlot) {
-      populateForm(currentSlot);
+    // Get target rate if available
+    if (data.targetRate) {
+      targetRate = data.targetRate;
     }
+
+    renderTimeline();
+    updateTimelineSummary();
   } catch (error) {
     console.error('Load error:', error);
   } finally {
@@ -394,42 +356,123 @@ function populateCultivarSelects() {
       select.appendChild(option);
     });
 
-    // Add "Other" option for custom entry
-    const otherOption = document.createElement('option');
-    otherOption.value = '__custom__';
-    otherOption.textContent = '+ Add Custom...';
-    select.appendChild(otherOption);
-
     select.value = currentValue;
   });
 }
 
-function updateSlotIndicators() {
-  document.querySelectorAll('.time-slot-tab').forEach((tab) => {
-    const slot = tab.dataset.slot;
-    const data = dayData[slot];
-    const hasData = data && (data.tops1 > 0 || data.tops2 > 0 || data.trimmers1 > 0);
-    tab.classList.toggle('has-data', hasData);
+function updateTimelineSummary() {
+  let totalTops = 0;
+  let totalTarget = 0;
+  let hoursLogged = 0;
+
+  Object.values(dayData).forEach((row) => {
+    const rowTops = (row.tops1 || 0) + (row.tops2 || 0);
+    totalTops += rowTops;
+    if (rowTops > 0 || row.trimmers1 > 0) {
+      hoursLogged++;
+      // Calculate target based on trimmers
+      const trimmers = (row.trimmers1 || 0) + (row.trimmers2 || 0);
+      const multiplier = getSlotMultiplier(row.timeSlot);
+      totalTarget += trimmers * targetRate * multiplier;
+    }
   });
+
+  const percentage = totalTarget > 0 ? Math.round((totalTops / totalTarget) * 100) : 0;
+
+  document.getElementById('timeline-total').textContent = `${totalTops.toFixed(1)} lbs`;
+  document.getElementById('timeline-target').textContent = `${totalTarget.toFixed(1)} lbs`;
+  document.getElementById('timeline-hours').textContent = hoursLogged;
+  document.getElementById('timeline-progress').style.width = `${Math.min(percentage, 100)}%`;
 }
 
-function updateSummary() {
+function updateEditorSummary() {
   let totalTops = 0;
-  let totalSmalls = 0;
-  let totalTrimmerHours = 0;
+  let totalTarget = 0;
 
   Object.values(dayData).forEach((row) => {
     totalTops += (row.tops1 || 0) + (row.tops2 || 0);
-    totalSmalls += (row.smalls1 || 0) + (row.smalls2 || 0);
-    totalTrimmerHours += (row.trimmers1 || 0) + (row.trimmers2 || 0);
+    const trimmers = (row.trimmers1 || 0) + (row.trimmers2 || 0);
+    const multiplier = getSlotMultiplier(row.timeSlot);
+    totalTarget += trimmers * targetRate * multiplier;
   });
 
-  const avgRate = totalTrimmerHours > 0 ? (totalTops / totalTrimmerHours).toFixed(2) : '--';
+  const percentage = totalTarget > 0 ? Math.round((totalTops / totalTarget) * 100) : 0;
 
-  document.getElementById('total-tops').textContent = `${totalTops.toFixed(1)} lbs`;
-  document.getElementById('total-smalls').textContent = `${totalSmalls.toFixed(1)} lbs`;
-  document.getElementById('trimmer-hours').textContent = totalTrimmerHours;
-  document.getElementById('avg-rate').textContent = avgRate !== '--' ? `${avgRate} lbs/hr` : '-- lbs/hr';
+  document.getElementById('editor-total').textContent = `${totalTops.toFixed(1)} lbs`;
+  document.getElementById('editor-percent').textContent = `${percentage}%`;
+}
+
+function getSlotMultiplier(slot) {
+  // Half-hour slots get 0.5 multiplier, lunch slot gets 0.5
+  if (slot === '4:00 PM – 4:30 PM' || slot === '12:30 PM – 1:00 PM') {
+    return 0.5;
+  }
+  return 1;
+}
+
+function getCurrentTimeSlot() {
+  const now = new Date();
+  const hours = now.getHours();
+  const minutes = now.getMinutes();
+  const totalMinutes = hours * 60 + minutes;
+
+  const slotTimes = [
+    { slot: TIME_SLOTS[0], start: 7 * 60, end: 8 * 60 },
+    { slot: TIME_SLOTS[1], start: 8 * 60, end: 9 * 60 },
+    { slot: TIME_SLOTS[2], start: 9 * 60, end: 10 * 60 },
+    { slot: TIME_SLOTS[3], start: 10 * 60, end: 11 * 60 },
+    { slot: TIME_SLOTS[4], start: 11 * 60, end: 12 * 60 },
+    { slot: TIME_SLOTS[5], start: 12 * 60 + 30, end: 13 * 60 },
+    { slot: TIME_SLOTS[6], start: 13 * 60, end: 14 * 60 },
+    { slot: TIME_SLOTS[7], start: 14 * 60, end: 15 * 60 },
+    { slot: TIME_SLOTS[8], start: 15 * 60, end: 16 * 60 },
+    { slot: TIME_SLOTS[9], start: 16 * 60, end: 16 * 60 + 30 },
+  ];
+
+  for (const st of slotTimes) {
+    if (totalMinutes >= st.start && totalMinutes < st.end) {
+      return st.slot;
+    }
+  }
+
+  return null;
+}
+
+function highlightCurrentTimeSlot() {
+  const currentSlot = getCurrentTimeSlot();
+  if (!currentSlot) return;
+
+  // Scroll to current slot in timeline
+  setTimeout(() => {
+    const slots = document.querySelectorAll('.timeline-slot');
+    const currentEl = Array.from(slots).find(el => el.querySelector('.slot-time').textContent === formatSlotShort(currentSlot));
+    if (currentEl) {
+      currentEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, 100);
+}
+
+function formatSlotShort(slot) {
+  // "7:00 AM – 8:00 AM" -> "7-8 AM"
+  const match = slot.match(/(\d+):00\s*(AM|PM)\s*[–-]\s*(\d+):(\d+)\s*(AM|PM)/i);
+  if (match) {
+    const startHour = match[1];
+    const endHour = match[3];
+    const endMin = match[4];
+    const period = match[5];
+    if (endMin === '00') {
+      return `${startHour}-${endHour} ${period}`;
+    }
+    return `${startHour}-${endHour}:${endMin} ${period}`;
+  }
+  return slot;
+}
+
+function formatDateLocal(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function updateLabels() {
@@ -439,17 +482,6 @@ function updateLabels() {
       el.textContent = LABELS[currentLang][key];
     }
   });
-}
-
-function t(key) {
-  return LABELS[currentLang][key] || key;
-}
-
-function formatDateLocal(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
 }
 
 function showLoading(show) {
