@@ -694,7 +694,7 @@ async function getExtendedDailyData(days, env) {
     const vals = await readSheet(sheetId, `'${sheetName}'!A:Z`, env);
     let currentDate = null;
     let cols = null;
-    let dayData = { totalTops: 0, totalSmalls: 0, totalTrimmerHours: 0 };
+    let dayData = { totalTops: 0, totalSmalls: 0, totalTrimmerHours: 0, bestHour: null };
 
     for (let i = 0; i < vals.length; i++) {
       const row = vals[i];
@@ -709,6 +709,7 @@ async function getExtendedDailyData(days, env) {
               avgRate: dayData.totalTrimmerHours > 0 ? dayData.totalTops / dayData.totalTrimmerHours : 0,
               totalLbs: dayData.totalTops + dayData.totalSmalls,
               trimmerHours: dayData.totalTrimmerHours,
+              bestHour: dayData.bestHour,
             };
           }
         }
@@ -718,7 +719,7 @@ async function getExtendedDailyData(days, env) {
           const d = new Date(dateStr);
           if (!isNaN(d.getTime())) {
             currentDate = d;
-            dayData = { totalTops: 0, totalSmalls: 0, totalTrimmerHours: 0 };
+            dayData = { totalTops: 0, totalSmalls: 0, totalTrimmerHours: 0, bestHour: null };
           }
         }
 
@@ -730,6 +731,7 @@ async function getExtendedDailyData(days, env) {
       if (!currentDate || !cols || currentDate < cutoff) continue;
       if (isEndOfBlock(row)) continue;
 
+      const timeSlot = (row[0] || '').toString().trim();
       const tops1 = parseFloat(row[cols.tops1]) || 0;
       const smalls1 = parseFloat(row[cols.smalls1]) || 0;
       const tr1 = parseFloat(row[cols.trimmers1]) || 0;
@@ -738,6 +740,14 @@ async function getExtendedDailyData(days, env) {
         dayData.totalTops += tops1;
         dayData.totalSmalls += smalls1;
         dayData.totalTrimmerHours += tr1;
+
+        // Track best hour (highest lbs)
+        if (!dayData.bestHour || tops1 > dayData.bestHour.lbs) {
+          dayData.bestHour = {
+            time: timeSlot.split('–')[0].trim(), // e.g., "10:00 AM"
+            lbs: Math.round(tops1 * 10) / 10,
+          };
+        }
       }
     }
 
@@ -751,6 +761,7 @@ async function getExtendedDailyData(days, env) {
           avgRate: dayData.totalTrimmerHours > 0 ? dayData.totalTops / dayData.totalTrimmerHours : 0,
           totalLbs: dayData.totalTops + dayData.totalSmalls,
           trimmerHours: dayData.totalTrimmerHours,
+          bestHour: dayData.bestHour,
         };
       }
     }
