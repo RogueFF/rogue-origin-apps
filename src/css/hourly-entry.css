@@ -982,6 +982,74 @@ input[type="number"] {
 }
 
 /* ===================
+   ACCESSIBILITY
+   =================== */
+
+/* Visually hidden but accessible to screen readers */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Enhanced focus states for keyboard navigation */
+.timeline-slot:focus {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+  background: rgba(228, 170, 79, 0.15);
+}
+
+.timeline-slot:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.timeline-slot:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.number-input button:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+  background: rgba(228, 170, 79, 0.3);
+}
+
+.nav-btn:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.cultivar-select:focus-visible,
+.lbs-input:focus-visible,
+.qc-textarea:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* Skip to main content link (hidden until focused) */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: var(--gold);
+  color: var(--bg-dark);
+  padding: 8px 16px;
+  z-index: 9999;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
+/* ===================
    TUTORIAL WALKTHROUGH
    =================== */
 .tutorial-overlay {
