@@ -160,4 +160,30 @@ test.describe('Hourly Entry Page', () => {
     await expect(skipLink).toBeAttached();
     await expect(skipLink).toHaveAttribute('href', '#timeline-list');
   });
+
+  test('Enter key moves to next field and saves', async ({ page }) => {
+    await page.waitForLoadState('networkidle');
+
+    // Open editor
+    await page.locator('.timeline-slot').first().click();
+    await expect(page.locator('#editor-view')).toBeVisible();
+
+    // Focus first field
+    const buckers1 = page.locator('#buckers1');
+    await buckers1.focus();
+    await buckers1.fill('3');
+
+    // Press Enter
+    await page.keyboard.press('Enter');
+
+    // Should move to next field (trimmers1)
+    await expect(page.locator('#trimmers1')).toBeFocused();
+
+    // Fill and press Enter again
+    await page.locator('#trimmers1').fill('5');
+    await page.keyboard.press('Enter');
+
+    // Should move to tzero1
+    await expect(page.locator('#tzero1')).toBeFocused();
+  });
 });
