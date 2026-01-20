@@ -403,7 +403,11 @@
     .avg-best-container { display: contents; cursor: pointer; }
     .avg-best-container:hover .stat-group { opacity: 0.8; }
     .avg-best-container.hidden .stat-group,
-    .avg-best-container.hidden .info-divider { display: none; }
+    .avg-best-container.hidden #bestDivider,
+    #avgBestDivider.hidden { display: none; }
+    .avg-best-toggle { background: rgba(228,170,79,0.2); border: 1px solid rgba(228,170,79,0.4); color: var(--gold); padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 16px; display: none; align-items: center; }
+    .avg-best-toggle:hover { background: rgba(228,170,79,0.3); }
+    .avg-best-container.hidden ~ .avg-best-toggle { display: inline-flex; }
 
     /* Time/Strain Display - brand colors */
     .time-display { position: fixed; top: 20px; right: 420px; text-align: right; }
