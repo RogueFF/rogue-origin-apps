@@ -13,12 +13,17 @@
  * - POST ?action=logResume         - Log timer resume
  * - POST ?action=chat              - AI agent chat
  * - POST ?action=tts               - Text-to-speech
+ * - POST ?action=webhook           - Shopify inventory webhook (dual-write D1 + Sheets)
  */
 
 import { readSheet, appendSheet, writeSheet, getSheetNames } from '../lib/sheets.js';
 import { successResponse, errorResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
 import { createError, formatError } from '../lib/errors.js';
 import { sanitizeForSheets, validateDate } from '../lib/validate.js';
+import { insert } from '../lib/db.js';
+
+// Sheet ID for Shopify webhook dual-write (original inventory tracking sheet)
+const SHOPIFY_WEBHOOK_SHEET_ID = '1z3RLYOaxIOEV05UPKoY0Borle4-uYv9EGSuEXRX8Bt0';
 
 const AI_MODEL = 'claude-sonnet-4-20250514';
 const TIMEZONE = 'America/Los_Angeles';
@@ -1046,6 +1051,123 @@ async function tts(body, env) {
   return errorResponse('TTS failed', 'INTERNAL_ERROR', 500);
 }
 
+/**
+ * Shopify Inventory Webhook Handler (Dual-Write)
+ * Receives inventory adjustment webhooks from Shopify Flow
+ * Writes to both D1 and Google Sheets for backwards compatibility
+ */
+async function inventoryWebhook(body, env) {
+  // Extract fields from webhook payload
+  // Shopify Flow may send as flat object or nested
+  const data = body.data || body;
+
+  const timestamp = data.Timestamp || data.timestamp || new Date().toISOString();
+  const sku = data.SKU || data.sku || '';
+  const productName = data['Product Name'] || data.product_name || '';
+  const variantTitle = data['Variant Title'] || data.variant_title || '';
+  const strainName = data['Strain Name'] || data.strain_name || '';
+  const size = data.Size || data.size || '';
+  const quantityAdjusted = parseInt(data['Quantity Adjusted'] || data.quantity_adjusted || 0, 10);
+  const newTotalAvailable = parseInt(data['New Total Available'] || data.new_total_available || 0, 10);
+  const previousAvailable = parseInt(data['Previous Available'] || data.previous_available || 0, 10);
+  const location = data.Location || data.location || '';
+  const productType = data['Product Type'] || data.product_type || '';
+  const barcode = data.Barcode || data.barcode || '';
+  const price = parseFloat(data.Price || data.price || 0);
+  const flowRunId = data['Flow Run ID'] || data.flow_run_id || `manual-${Date.now()}`;
+  const eventType = data['Event Type'] || data.event_type || 'inventory_adjustment';
+  const adjustmentSource = data['Adjustment Source'] || data.adjustment_source || '';
+  const normalizedStrain = data['Normalized Strain'] || data.normalized_strain || '';
+
+  const errors = [];
+  let d1Success = false;
+  let sheetsSuccess = false;
+
+  // 1. Write to D1
+  try {
+    await insert(env.DB, 'inventory_adjustments', {
+      timestamp: sanitizeForSheets(timestamp),
+      sku: sanitizeForSheets(sku),
+      product_name: sanitizeForSheets(productName),
+      variant_title: sanitizeForSheets(variantTitle),
+      strain_name: sanitizeForSheets(strainName),
+      size: sanitizeForSheets(size),
+      quantity_adjusted: quantityAdjusted,
+      new_total_available: newTotalAvailable,
+      previous_available: previousAvailable,
+      location: sanitizeForSheets(location),
+      product_type: sanitizeForSheets(productType),
+      barcode: sanitizeForSheets(barcode),
+      price,
+      flow_run_id: sanitizeForSheets(flowRunId),
+      event_type: sanitizeForSheets(eventType),
+      adjustment_source: sanitizeForSheets(adjustmentSource),
+      normalized_strain: sanitizeForSheets(normalizedStrain),
+    });
+    d1Success = true;
+  } catch (err) {
+    // If duplicate flow_run_id, treat as success (idempotent)
+    if (err.message && err.message.includes('UNIQUE constraint failed')) {
+      d1Success = true;
+    } else {
+      errors.push(`D1 error: ${err.message}`);
+    }
+  }
+
+  // 2. Write to Google Sheets (dual-write for IMPORTRANGE compatibility)
+  try {
+    // Format row to match original sheet columns:
+    // Timestamp, SKU, Product Name, Variant Title, Strain Name, Size,
+    // Quantity Adjusted, New Total Available, Previous Available, Location,
+    // Product Type, Barcode, Price, Flow Run ID, Event Type, Adjustment Source, Normalized Strain
+    const row = [
+      timestamp,
+      sku,
+      productName,
+      variantTitle,
+      strainName,
+      size,
+      quantityAdjusted > 0 ? `+${quantityAdjusted}` : String(quantityAdjusted),
+      newTotalAvailable,
+      previousAvailable,
+      location,
+      productType,
+      barcode,
+      price,
+      flowRunId,
+      eventType,
+      adjustmentSource,
+      normalizedStrain,
+    ];
+
+    await appendSheet(SHOPIFY_WEBHOOK_SHEET_ID, "'Production Adjustments Only'!A:Q", [row], env);
+    sheetsSuccess = true;
+  } catch (err) {
+    errors.push(`Sheets error: ${err.message}`);
+  }
+
+  // Return status
+  if (d1Success && sheetsSuccess) {
+    return successResponse({
+      success: true,
+      message: 'Inventory adjustment recorded (D1 + Sheets)',
+      flowRunId,
+      sku,
+      quantityAdjusted,
+    });
+  } else if (d1Success || sheetsSuccess) {
+    return successResponse({
+      success: true,
+      partial: true,
+      message: `Recorded to ${d1Success ? 'D1' : ''}${d1Success && sheetsSuccess ? ' + ' : ''}${sheetsSuccess ? 'Sheets' : ''}`,
+      errors,
+      flowRunId,
+    });
+  } else {
+    return errorResponse(`Failed to record: ${errors.join('; ')}`, 'INTERNAL_ERROR', 500);
+  }
+}
+
 // ===== MAIN HANDLER =====
 
 export async function handleProduction(request, env, ctx) {
@@ -1081,6 +1203,9 @@ export async function handleProduction(request, env, ctx) {
         return await chat(body, env);
       case 'tts':
         return await tts(body, env);
+      case 'inventoryWebhook':
+      case 'webhook':
+        return await inventoryWebhook(body, env);
       default:
         return errorResponse(`Unknown action: ${action}`, 'NOT_FOUND', 404);
     }
