@@ -145,18 +145,22 @@ function updateSummaryTab(financials) {
 
 /**
  * Switch between tabs in detail panel
- * @param {string} tabName - 'summary', 'shipments', or 'payments'
+ * @param {string} tabName - 'summary', 'shipments', 'payments', or 'documents'
  */
 export function switchTab(tabName) {
   // Update tab buttons
-  document.querySelectorAll('.detail-tab').forEach(tab => {
-    tab.classList.toggle('active', tab.dataset.tab === tabName);
+  document.querySelectorAll('.tabs .tab').forEach(tab => {
+    tab.classList.remove('active');
   });
+  const activeTab = document.querySelector(`.tabs .tab[onclick*="${tabName}"]`);
+  if (activeTab) activeTab.classList.add('active');
 
   // Update tab content
-  document.querySelectorAll('.detail-tab-content').forEach(content => {
-    content.classList.toggle('active', content.id === `tab-${tabName}`);
+  document.querySelectorAll('.tab-content').forEach(content => {
+    content.classList.remove('active');
   });
+  const activeContent = document.getElementById(`tab-${tabName}`);
+  if (activeContent) activeContent.classList.add('active');
 }
 
 /**

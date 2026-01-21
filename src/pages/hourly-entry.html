@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../css/hourly-entry.css?v=18">
+  <link rel="stylesheet" href="../css/hourly-entry.css?v=19">
 </head>
 <body>
   <a href="#timeline-list" class="skip-link">Skip to timeline</a>
@@ -255,17 +255,30 @@
           <h2 class="card-title" data-i18n="bagTimer">Bag Timer</h2>
         </div>
         <div class="card-content">
-          <div class="timer-display">
-            <span class="timer-value" id="bag-timer-value">--:--</span>
+          <!-- Circular Timer Display (matches scoreboard) -->
+          <div class="timer-ring-container" id="timerPanel">
+            <svg class="timer-ring" viewBox="0 0 220 220">
+              <circle class="timer-ring-bg" cx="110" cy="110" r="95"/>
+              <circle class="timer-ring-progress green" id="timerRing" cx="110" cy="110" r="95"/>
+            </svg>
+            <div class="timer-center">
+              <div class="timer-value green" id="bag-timer-value">--:--</div>
+              <div class="timer-label" id="timerLabel" data-i18n="remaining">remaining</div>
+            </div>
           </div>
+          <!-- Timer Stats -->
           <div class="timer-stats">
             <div class="timer-stat">
               <span class="stat-label" data-i18n="bagsToday">Bags Today</span>
               <span class="stat-value" id="bags-today">0</span>
             </div>
             <div class="timer-stat">
-              <span class="stat-label" data-i18n="status">Status</span>
-              <span class="stat-value status-indicator" id="timer-status">--</span>
+              <span class="stat-label" data-i18n="avgToday">Avg Today</span>
+              <span class="stat-value" id="avg-today">--:--</span>
+            </div>
+            <div class="timer-stat">
+              <span class="stat-label" data-i18n="vsTarget">vs Target</span>
+              <span class="stat-value" id="vs-target">—</span>
             </div>
           </div>
         </div>
@@ -315,6 +328,6 @@
     <button class="tooltip-close">×</button>
   </div>
 
-  <script type="module" src="../js/hourly-entry/index.js?v=27"></script>
+  <script type="module" src="../js/hourly-entry/index.js?v=28"></script>
 </body>
 </html>
