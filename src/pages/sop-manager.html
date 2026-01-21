@@ -2680,8 +2680,22 @@
 
       // Auto-translate to English if needed (for SOPs written in Spanish)
       if (lang === 'en' && !s.title_en) {
-        // Check if content appears to be in Spanish (has title_es or sourceLang is 'es')
-        const needsEnglish = s.sourceLang === 'es' || (s.title_es && s.title_es === s.title);
+        // Helper to detect Spanish text (for legacy SOPs without sourceLang)
+        const looksLikeSpanish = (text) => {
+          if (!text) return false;
+          // Common Spanish words
+          const spanishWords = /\b(el|la|los|las|de|del|para|por|con|que|una|uno|es|está|están|son|al|en|y|o|su|sus)\b/i;
+          // Spanish-specific characters
+          const spanishChars = /[áéíóúüñ¿¡]/i;
+          return spanishWords.test(text) || spanishChars.test(text);
+        };
+
+        // Check if content appears to be in Spanish
+        const needsEnglish = s.sourceLang === 'es' ||
+          (s.title_es && s.title_es === s.title) ||
+          looksLikeSpanish(s.title) ||
+          looksLikeSpanish(s.description) ||
+          (s.steps || []).some(st => looksLikeSpanish(st.title) || looksLikeSpanish(st.description));
 
         if (needsEnglish) {
           const enBtn = document.querySelector('#viewLangToggle button:first-child');
