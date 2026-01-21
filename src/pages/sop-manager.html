@@ -170,6 +170,13 @@
             </div>
           </div>
         </div>
+        <div class="form-group">
+          <label class="form-label" data-i18n="linkedSops">Linked SOPs</label>
+          <div id="editLinkedSopsList" class="linked-sops-section"></div>
+          <button type="button" class="header-btn" onclick="openLinkSopModal('header')" style="margin-top:8px;">
+            <i class="ph-duotone ph-link"></i> <span data-i18n="linkSop">Link SOP</span>
+          </button>
+        </div>
         <div class="steps-section">
           <div class="steps-header">
             <h3><i class="ph-duotone ph-list-numbers"></i> Steps</h3>
@@ -230,6 +237,53 @@
         <button class="header-btn primary" onclick="downloadQR()"><i class="ph-duotone ph-download"></i> Download</button>
       </div>
     </div>
+  </div>
+
+  <!-- Link SOP Modal -->
+  <div class="modal" id="linkSopModal">
+    <div class="modal-box small">
+      <div class="modal-header">
+        <h2><i class="ph-duotone ph-link"></i> <span data-i18n="linkSop">Link SOP</span></h2>
+        <button class="modal-close" onclick="closeLinkSopModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label" data-i18n="searchSops">Search SOPs</label>
+          <input type="text" id="linkSopSearch" class="form-input" placeholder="Search..." oninput="filterLinkSops()">
+        </div>
+        <div id="linkSopList" class="link-sop-list"></div>
+        <div class="form-group" style="margin-top:16px;">
+          <label class="form-label" data-i18n="relationship">Relationship</label>
+          <select id="linkLabelSelect" class="form-input" onchange="toggleCustomLabel()">
+            <option value="Required before">Required before</option>
+            <option value="See also">See also</option>
+            <option value="Related">Related</option>
+            <option value="Follow procedure">Follow procedure</option>
+            <option value="__custom__">Other...</option>
+          </select>
+        </div>
+        <div id="customLabelGroup" class="form-group" style="display:none;margin-top:8px;">
+          <input type="text" id="customLabelEn" class="form-input" placeholder="Label (English)" style="margin-bottom:6px;">
+          <input type="text" id="customLabelEs" class="form-input" placeholder="Label (Español)">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="header-btn" onclick="closeLinkSopModal()" data-i18n="cancel">Cancel</button>
+        <button class="header-btn primary" onclick="confirmLinkSop()" data-i18n="addLink">Add Link</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SOP Preview Popup -->
+  <div id="sopPreviewPopup" class="sop-preview-popup" style="display:none;">
+    <div class="sop-preview-header">
+      <span id="previewTitle"></span>
+      <span id="previewDocNum"></span>
+    </div>
+    <div class="sop-preview-meta" id="previewMeta"></div>
+    <div class="sop-preview-desc" id="previewDesc"></div>
+    <button class="sop-preview-open" onclick="openPreviewedSop()">Open Full SOP</button>
+    <button class="sop-preview-close" onclick="closePreviewPopup()">&times;</button>
   </div>
 
   <!-- PDF Modal -->
@@ -522,6 +576,14 @@
     let selectedTagColor = 'gold';
     let editLang = 'en';
     let viewLang = 'en';
+
+    // SOP linking state
+    let editingLinkedSops = [];        // Header-level links being edited
+    let linkingContext = null;         // 'header' or step index
+    let selectedLinkSopId = null;      // Selected SOP in link modal
+    let sopViewStack = [];             // For back navigation
+    let previewingSopId = null;        // Currently previewed SOP
+
     let currentRequestTab = 'pending';
     let appLang = 'en';
     let isLoading = false;
@@ -650,7 +712,15 @@
         tutorialHint9: 'Click "Add" to create your first step',
         tutorialHint10: 'Enter a short title for this step',
         tutorialHint11: 'Describe what to do in this step',
-        tutorialHint12: 'Optional: Add a photo or video to illustrate this step'
+        tutorialHint12: 'Optional: Add a photo or video to illustrate this step',
+        // SOP linking
+        linkSop: 'Link SOP',
+        searchSops: 'Search SOPs',
+        relationship: 'Relationship',
+        addLink: 'Add Link',
+        linkedSops: 'Linked SOPs',
+        noLinkedSops: 'No linked SOPs',
+        backTo: 'Back to'
       },
       es: {
         addMedia: 'Agregar Media',
@@ -722,9 +792,25 @@
         tutorialHint9: 'Haz clic en "Agregar" para crear tu primer paso',
         tutorialHint10: 'Ingresa un título corto para este paso',
         tutorialHint11: 'Describe qué hacer en este paso',
-        tutorialHint12: 'Opcional: Agrega una foto o video para ilustrar este paso'
+        tutorialHint12: 'Opcional: Agrega una foto o video para ilustrar este paso',
+        // SOP linking
+        linkSop: 'Vincular SOP',
+        searchSops: 'Buscar SOPs',
+        relationship: 'Relación',
+        addLink: 'Agregar Vínculo',
+        linkedSops: 'SOPs Vinculados',
+        noLinkedSops: 'Sin SOPs vinculados',
+        backTo: 'Volver a'
       }
     };
+
+    // SOP link relationship labels (bilingual)
+    const LINK_LABELS = [
+      { en: 'Required before', es: 'Requerido antes' },
+      { en: 'See also', es: 'Ver también' },
+      { en: 'Related', es: 'Relacionado' },
+      { en: 'Follow procedure', es: 'Seguir procedimiento' }
+    ];
 
     function t(key) {
       return translations[appLang]?.[key] || translations.en[key] || key;
@@ -1632,6 +1718,7 @@
         desc_en: sourceLang === 'en' ? description : (window.sopTranslations?.desc_en || ''),
         desc_es: sourceLang === 'es' ? description : (window.sopTranslations?.desc_es || ''),
         tags: getSelectedTags(),
+        linkedSops: editingLinkedSops,
         steps: editingSteps.map(s => ({
           title: s.title || '',
           title_en: sourceLang === 'en' ? (s.title || '') : (s.title_en || ''),
@@ -1643,7 +1730,8 @@
           media: s.media || s.image || '',
           mediaType: s.mediaType || detectMediaType(s.media || s.image || ''),
           safety: s.safety || false,
-          quality: s.quality || false
+          quality: s.quality || false,
+          refs: s.refs || []
         }))
       };
       
@@ -1986,12 +2074,17 @@
       if (id === 'editModal' && tutorialActive) {
         endTutorial();
       }
+      // Reset view stack when closing view modal
+      if (id === 'viewModal') {
+        sopViewStack = [];
+      }
     }
     
     function openCreateModal() {
       currentSopId = null;
       // Start with empty steps for tutorial - user will click "Add" to create first step
       editingSteps = [];
+      editingLinkedSops = [];
       window.sopTranslations = {};
 
       document.getElementById('modalTitle').innerHTML = '<i class="ph-duotone ph-file-text"></i> Create New SOP';
@@ -2008,6 +2101,7 @@
       });
 
       renderSteps();
+      renderEditLinkedSops();
       openModal('editModal');
 
       // Start tutorial walkthrough
@@ -2017,18 +2111,19 @@
     function editSOP(id) {
       const s = sops.find(x => x.id == id);
       if (!s) return;
-      
+
       currentSopId = id;
       editingSteps = (s.steps || []).map(st => ({ ...st }));
       if (editingSteps.length === 0) {
         editingSteps = [{ title: '', description: '', image: '', safety: false, quality: false }];
       }
-      
+      editingLinkedSops = (s.linkedSops || []).map(l => ({ ...l }));
+
       window.sopTranslations = {
         title_es: s.title_es || '',
         desc_es: s.desc_es || ''
       };
-      
+
       document.getElementById('modalTitle').innerHTML = '<i class="ph-duotone ph-pencil-simple"></i> Edit SOP';
       document.getElementById('sopTitle').value = s.title;
       document.getElementById('sopDept').value = s.dept;
@@ -2036,13 +2131,14 @@
       document.getElementById('sopRevision').value = s.revision || '1.0';
       document.getElementById('sopStatus').value = s.status || 'draft';
       document.getElementById('sopDesc').value = s.description || '';
-      
+
       settings.tags.forEach(t => {
         const cb = document.getElementById('tag_' + t.name);
         if (cb) cb.checked = (s.tags || []).includes(t.name);
       });
-      
+
       renderSteps();
+      renderEditLinkedSops();
       openModal('editModal');
     }
     
@@ -2056,17 +2152,294 @@
       if (!s) return;
 
       currentSopId = id;
+      sopViewStack = [];  // Reset view stack when opening fresh
       openModal('viewModal');
       // Use setViewLang to trigger auto-translation if needed
       await setViewLang('en');
     }
-    
+
+    // =====================================================
+    // SOP Linking Functions
+    // =====================================================
+
+    function openLinkSopModal(context) {
+      // context: 'header' or step index (number)
+      linkingContext = context;
+      selectedLinkSopId = null;
+      document.getElementById('linkSopSearch').value = '';
+      document.getElementById('linkLabelSelect').value = 'Required before';
+      document.getElementById('customLabelGroup').style.display = 'none';
+      document.getElementById('customLabelEn').value = '';
+      document.getElementById('customLabelEs').value = '';
+      renderLinkSopList();
+      openModal('linkSopModal');
+    }
+
+    function closeLinkSopModal() {
+      closeModal('linkSopModal');
+      linkingContext = null;
+      selectedLinkSopId = null;
+    }
+
+    function filterLinkSops() {
+      renderLinkSopList();
+    }
+
+    function renderLinkSopList() {
+      const search = document.getElementById('linkSopSearch').value.toLowerCase();
+      const list = document.getElementById('linkSopList');
+
+      // Filter out current SOP and already linked SOPs
+      const alreadyLinked = linkingContext === 'header'
+        ? editingLinkedSops.map(l => l.sopId)
+        : (editingSteps[linkingContext]?.refs || []).map(r => r.sopId);
+
+      const available = sops.filter(s =>
+        s.id != currentSopId &&
+        !alreadyLinked.includes(String(s.id)) &&
+        !alreadyLinked.includes(s.id) &&
+        (s.title.toLowerCase().includes(search) || (s.docNum || '').toLowerCase().includes(search))
+      );
+
+      if (available.length === 0) {
+        list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);">No SOPs available</div>';
+        return;
+      }
+
+      list.innerHTML = available.map(s =>
+        '<label class="link-sop-item' + (selectedLinkSopId == s.id ? ' selected' : '') + '">' +
+          '<input type="radio" name="linkSop" value="' + s.id + '" onchange="selectLinkSop(\'' + s.id + '\')"' + (selectedLinkSopId == s.id ? ' checked' : '') + '>' +
+          '<div>' +
+            '<div class="link-sop-item-title">' + esc(s.title) + '</div>' +
+            '<div class="link-sop-item-meta">' + (s.docNum || 'No ID') + ' • ' + s.dept + ' • ' + (s.steps?.length || 0) + ' steps</div>' +
+          '</div>' +
+        '</label>'
+      ).join('');
+    }
+
+    function selectLinkSop(id) {
+      selectedLinkSopId = id;
+      renderLinkSopList();
+    }
+
+    function toggleCustomLabel() {
+      const select = document.getElementById('linkLabelSelect');
+      const customGroup = document.getElementById('customLabelGroup');
+      customGroup.style.display = select.value === '__custom__' ? 'block' : 'none';
+    }
+
+    function confirmLinkSop() {
+      if (!selectedLinkSopId) {
+        showToast('Select an SOP', 'error');
+        return;
+      }
+
+      const select = document.getElementById('linkLabelSelect');
+      let labelEn, labelEs;
+
+      if (select.value === '__custom__') {
+        labelEn = document.getElementById('customLabelEn').value.trim();
+        labelEs = document.getElementById('customLabelEs').value.trim();
+        if (!labelEn) {
+          showToast('Enter English label', 'error');
+          return;
+        }
+        if (!labelEs) labelEs = labelEn; // Fallback
+      } else {
+        const preset = LINK_LABELS.find(l => l.en === select.value);
+        labelEn = preset.en;
+        labelEs = preset.es;
+      }
+
+      const link = { sopId: selectedLinkSopId, label: labelEn, label_es: labelEs };
+
+      if (linkingContext === 'header') {
+        editingLinkedSops.push(link);
+        renderEditLinkedSops();
+      } else {
+        // Step-level link
+        if (!editingSteps[linkingContext].refs) {
+          editingSteps[linkingContext].refs = [];
+        }
+        editingSteps[linkingContext].refs.push(link);
+        renderSteps();
+      }
+
+      closeLinkSopModal();
+    }
+
+    function removeLinkedSop(index) {
+      editingLinkedSops.splice(index, 1);
+      renderEditLinkedSops();
+    }
+
+    function removeStepRef(stepIndex, refIndex) {
+      editingSteps[stepIndex].refs.splice(refIndex, 1);
+      renderSteps();
+    }
+
+    function getSopById(id) {
+      return sops.find(s => s.id == id);
+    }
+
+    function renderEditLinkedSops() {
+      const container = document.getElementById('editLinkedSopsList');
+      if (!container) return;
+
+      if (editingLinkedSops.length === 0) {
+        container.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">' + t('noLinkedSops') + '</div>';
+        return;
+      }
+
+      // Group by label
+      const groups = {};
+      editingLinkedSops.forEach((link, i) => {
+        const label = appLang === 'es' ? (link.label_es || link.label) : link.label;
+        if (!groups[label]) groups[label] = [];
+        groups[label].push({ ...link, index: i });
+      });
+
+      container.innerHTML = Object.entries(groups).map(([label, links]) =>
+        '<div class="linked-sops-group">' +
+          '<div class="linked-sops-label">' + esc(label) + ':</div>' +
+          '<div class="linked-sops-chips">' +
+            links.map(link => {
+              const s = getSopById(link.sopId);
+              const title = s ? (s['title_' + appLang] || s.title) : '[Deleted SOP]';
+              return '<span class="sop-link-chip">' +
+                '<i class="ph-duotone ph-file-text"></i> ' + esc(title) +
+                ' <span class="remove-link" onclick="removeLinkedSop(' + link.index + ')">&times;</span>' +
+              '</span>';
+            }).join('') +
+          '</div>' +
+        '</div>'
+      ).join('');
+    }
+
+    // =====================================================
+    // SOP Preview Popup Functions
+    // =====================================================
+
+    function showSopPreview(sopId, event) {
+      event.stopPropagation();
+      const s = getSopById(sopId);
+      if (!s) return;
+
+      previewingSopId = sopId;
+      const lang = viewLang;
+
+      document.getElementById('previewTitle').textContent = s['title_' + lang] || s.title;
+      document.getElementById('previewDocNum').textContent = s.docNum || '';
+      document.getElementById('previewMeta').textContent = s.dept + ' • ' + (s.steps?.length || 0) + ' steps • ' + (s.status || 'draft');
+      document.getElementById('previewDesc').textContent = s['desc_' + lang] || s.description || 'No description';
+
+      const popup = document.getElementById('sopPreviewPopup');
+      popup.style.display = 'block';
+
+      // Position popup
+      const rect = event.target.getBoundingClientRect();
+
+      // Center on mobile, near element on desktop
+      if (window.innerWidth < 600) {
+        popup.style.left = '50%';
+        popup.style.top = '50%';
+        popup.style.transform = 'translate(-50%, -50%)';
+      } else {
+        popup.style.left = Math.min(rect.left, window.innerWidth - 320) + 'px';
+        popup.style.top = (rect.bottom + 10) + 'px';
+        popup.style.transform = 'none';
+      }
+    }
+
+    function closePreviewPopup() {
+      document.getElementById('sopPreviewPopup').style.display = 'none';
+      previewingSopId = null;
+    }
+
+    function openPreviewedSop() {
+      if (!previewingSopId) return;
+      closePreviewPopup();
+
+      // Save current SOP to stack for back navigation
+      if (currentSopId) {
+        sopViewStack.push({
+          sopId: currentSopId,
+          scrollTop: document.getElementById('viewModalBody')?.scrollTop || 0
+        });
+      }
+
+      // Open the previewed SOP
+      const s = getSopById(previewingSopId);
+      if (s) {
+        currentSopId = previewingSopId;
+        renderViewSOP(s);
+      }
+    }
+
+    function goBackSop() {
+      if (sopViewStack.length === 0) return;
+
+      const prev = sopViewStack.pop();
+      const s = getSopById(prev.sopId);
+      if (s) {
+        currentSopId = prev.sopId;
+        renderViewSOP(s);
+        // Restore scroll position
+        setTimeout(() => {
+          const body = document.getElementById('viewModalBody');
+          if (body) body.scrollTop = prev.scrollTop;
+        }, 50);
+      }
+    }
+
+    // Close preview on click outside
+    document.addEventListener('click', function(e) {
+      const popup = document.getElementById('sopPreviewPopup');
+      if (popup && popup.style.display === 'block' && !popup.contains(e.target) && !e.target.closest('.sop-link-chip')) {
+        closePreviewPopup();
+      }
+    });
+
     function renderViewSOP(s) {
       if (!s) return;
       const lang = viewLang;
       const title = s['title_' + lang] || s.title;
       const desc = s['desc_' + lang] || s.description;
       const u = window.location.origin + window.location.pathname + '?view=' + s.id;
+
+      // Render linked SOPs section
+      let linkedHtml = '';
+      if (s.linkedSops && s.linkedSops.length > 0) {
+        const groups = {};
+        s.linkedSops.forEach(link => {
+          const label = lang === 'es' ? (link.label_es || link.label) : link.label;
+          if (!groups[label]) groups[label] = [];
+          groups[label].push(link);
+        });
+
+        linkedHtml = '<div class="linked-sops-section" style="margin-top:16px;">' +
+          Object.entries(groups).map(([label, links]) =>
+            '<div class="linked-sops-group">' +
+              '<div class="linked-sops-label"><i class="ph-duotone ph-link"></i> ' + esc(label) + ':</div>' +
+              '<div class="linked-sops-chips">' +
+                links.map(link => {
+                  const linked = getSopById(link.sopId);
+                  if (!linked) return '<span class="sop-link-chip" style="opacity:0.5;">[Deleted SOP]</span>';
+                  const linkTitle = linked['title_' + lang] || linked.title;
+                  return '<span class="sop-link-chip" onclick="showSopPreview(\'' + link.sopId + '\', event)">' +
+                    '<i class="ph-duotone ph-file-text"></i> ' + esc(linkTitle) +
+                  '</span>';
+                }).join('') +
+              '</div>' +
+            '</div>'
+          ).join('') +
+        '</div>';
+      }
+
+      // Back button if we came from another SOP
+      const backBtn = sopViewStack.length > 0
+        ? '<button class="view-back-btn" onclick="goBackSop()"><i class="ph-duotone ph-arrow-left"></i> ' + t('backTo') + ' "' + esc(getSopById(sopViewStack[sopViewStack.length-1].sopId)?.title || 'Previous') + '"</button>'
+        : '';
 
       const stepsHtml = (s.steps || []).map((st, i) => {
         const stepTitle = st['title_' + lang] || st.title;
@@ -2089,6 +2462,21 @@
           }
         }
 
+        // Step refs in view mode
+        let stepRefsHtml = '';
+        if (st.refs && st.refs.length > 0) {
+          stepRefsHtml = '<div class="step-refs" style="margin-top:8px;">' +
+            st.refs.map(ref => {
+              const linked = getSopById(ref.sopId);
+              if (!linked) return '';
+              const refTitle = linked['title_' + lang] || linked.title;
+              return '<span class="sop-link-chip step-ref-chip" onclick="showSopPreview(\'' + ref.sopId + '\', event)">' +
+                '<i class="ph-duotone ph-link"></i> ' + esc(refTitle) +
+              '</span>';
+            }).join('') +
+          '</div>';
+        }
+
         return '<div class="view-step">' +
           '<div class="view-step-number">' + (i + 1) + '</div>' +
           '<div class="view-step-content">' +
@@ -2097,12 +2485,14 @@
               (st.quality ? ' <i class="ph-duotone ph-seal-check icon quality"></i>' : '') +
             '</div>' +
             '<div class="view-step-desc">' + esc(stepDesc) + '</div>' +
+            stepRefsHtml +
           '</div>' +
           mediaHtml +
         '</div>';
       }).join('');
 
       document.getElementById('viewModalBody').innerHTML =
+        backBtn +
         '<div class="view-sop-header"><div><div class="view-sop-title">' + esc(title) + '</div>' +
         '<div class="view-sop-meta">' +
           '<div class="view-sop-meta-item"><i class="ph-duotone ph-folder"></i> ' + s.dept + '</div>' +
@@ -2111,6 +2501,7 @@
           '<div class="view-sop-meta-item"><i class="ph-duotone ph-calendar"></i> ' + fmtDate(s.updatedAt) + '</div>' +
         '</div>' +
         (desc ? '<p style="margin-top:12px;color:var(--text-muted)">' + esc(desc) + '</p>' : '') +
+        linkedHtml +
         '</div>' +
         '<div class="view-sop-qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=78x78&data=' + encodeURIComponent(u) + '" width="78" height="78"></div></div>' +
         stepsHtml;
@@ -2216,6 +2607,19 @@
               '<button type="button" class="step-icon-btn safety ' + (s.safety ? 'active' : '') + '" onclick="toggleStepFlag(' + i + ',\'safety\')" title="Safety Warning"><i class="ph-duotone ph-warning"></i></button>' +
               '<button type="button" class="step-icon-btn quality ' + (s.quality ? 'active' : '') + '" onclick="toggleStepFlag(' + i + ',\'quality\')" title="Quality Checkpoint"><i class="ph-duotone ph-seal-check"></i></button>' +
               (hasMedia ? '<button type="button" class="step-icon-btn" onclick="clearStepMedia(' + i + ')" title="Remove media"><i class="ph-duotone ph-trash"></i></button>' : '') +
+            '</div>' +
+            '<div class="step-refs">' +
+              (s.refs || []).map((ref, ri) => {
+                const linked = getSopById(ref.sopId);
+                const refTitle = linked ? (linked.title) : '[Deleted]';
+                return '<span class="sop-link-chip step-ref-chip">' +
+                  '<i class="ph-duotone ph-link"></i> ' + esc(refTitle) +
+                  ' <span class="remove-link" onclick="event.stopPropagation();removeStepRef(' + i + ',' + ri + ')">&times;</span>' +
+                '</span>';
+              }).join('') +
+              '<button type="button" class="sop-link-chip step-ref-chip" onclick="openLinkSopModal(' + i + ')" style="background:transparent;border-style:dashed;">' +
+                '<i class="ph-duotone ph-plus"></i> Link' +
+              '</button>' +
             '</div>' +
           '</div>' +
           '<div class="step-image">' +
