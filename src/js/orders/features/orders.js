@@ -214,7 +214,7 @@ export async function saveMasterOrder() {
 }
 
 /**
- * Delete an order
+ * Delete an order (optimistic UI - removes immediately)
  * @param {string} orderID
  */
 export async function deleteOrder(orderID) {
@@ -222,29 +222,40 @@ export async function deleteOrder(orderID) {
     return;
   }
 
+  // Optimistic: Remove from UI immediately
+  const orders = getOrders();
+  const deletedOrder = orders.find(o => (o.orderID || o.id) === orderID);
+  const filteredOrders = orders.filter(o => (o.orderID || o.id) !== orderID);
+  setOrders(filteredOrders);
+  removeOrderRowFromDOM(orderID);
+  updateStats();
+
+  // Close detail panel if open
+  if (getCurrentOrderID() === orderID) {
+    window.orderActions?.closeDetail?.();
+  }
+
+  // Delete from API in background
   try {
     const result = await apiCall('deleteMasterOrder', { orderID }, 'POST');
 
-    if (result.success !== false) {
-      // Remove from state - support both 'orderID' and 'id' property names
-      const orders = getOrders().filter(o => (o.orderID || o.id) !== orderID);
-      setOrders(orders);
-
-      // Remove from DOM
-      removeOrderRowFromDOM(orderID);
-      updateStats();
-
-      // Close detail panel if open for this order
-      if (getCurrentOrderID() === orderID) {
-        window.orderActions?.closeDetail?.();
+    if (result.success === false) {
+      // Restore on failure
+      if (deletedOrder) {
+        filteredOrders.push(deletedOrder);
+        setOrders(filteredOrders);
+        renderOrdersTable();
       }
-
-      showToast('Order deleted successfully!');
-    } else {
       showToast('Error deleting order: ' + (result.error || 'Unknown error'), 'error');
     }
   } catch (error) {
     console.error('Error deleting order:', error);
+    // Restore on failure
+    if (deletedOrder) {
+      filteredOrders.push(deletedOrder);
+      setOrders(filteredOrders);
+      renderOrdersTable();
+    }
     showToast('Error deleting order', 'error');
   }
 }
