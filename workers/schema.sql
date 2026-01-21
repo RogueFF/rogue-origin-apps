@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS sops (
   desc_es TEXT,
   tags TEXT,
   steps TEXT,
+  linked_sops TEXT,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
