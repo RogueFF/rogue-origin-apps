@@ -60,12 +60,12 @@ test.describe('Hourly Entry Page', () => {
     // Click first time slot
     await page.locator('.timeline-slot').first().click();
 
-    // Editor view should be visible
-    await expect(page.locator('#editor-view')).toBeVisible();
-    await expect(page.locator('#editor-view')).toHaveClass(/active/);
+    // Editor content should be visible (in-card layout)
+    await expect(page.locator('#editor-content')).toBeVisible();
+    await expect(page.locator('#editor-content')).toHaveClass(/active/);
 
-    // Timeline view should be hidden
-    await expect(page.locator('#timeline-view')).not.toHaveClass(/active/);
+    // Timeline content should be hidden (in-card layout)
+    await expect(page.locator('#timeline-content')).not.toHaveClass(/active/);
   });
 
   test('editor has accessible form controls', async ({ page }) => {
@@ -73,7 +73,7 @@ test.describe('Hourly Entry Page', () => {
 
     // Open editor
     await page.locator('.timeline-slot').first().click();
-    await expect(page.locator('#editor-view')).toBeVisible();
+    await expect(page.locator('#editor-content')).toBeVisible();
 
     // Check +/- buttons have aria-labels
     const decrementBtn = page.locator('button[data-field="buckers1"].decrement');
@@ -96,11 +96,11 @@ test.describe('Hourly Entry Page', () => {
 
     // Press Enter to open
     await page.keyboard.press('Enter');
-    await expect(page.locator('#editor-view')).toBeVisible();
+    await expect(page.locator('#editor-content')).toBeVisible();
 
     // Go back
     await page.locator('#back-to-timeline').click();
-    await expect(page.locator('#timeline-view')).toHaveClass(/active/);
+    await expect(page.locator('#timeline-content')).toHaveClass(/active/);
 
     // Focus and use arrow keys
     await firstSlot.focus();
@@ -166,7 +166,7 @@ test.describe('Hourly Entry Page', () => {
 
     // Open editor
     await page.locator('.timeline-slot').first().click();
-    await expect(page.locator('#editor-view')).toBeVisible();
+    await expect(page.locator('#editor-content')).toBeVisible();
 
     // Focus first field
     const buckers1 = page.locator('#buckers1');
