@@ -1176,6 +1176,49 @@ input[type="number"] {
   text-align: center;
 }
 
+/* Tutorial Language Choice */
+.tutorial-lang-choice {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.lang-choice-label {
+  display: block;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.lang-choice-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.lang-choice-btn {
+  padding: 12px 24px;
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 48px;
+}
+
+.lang-choice-btn:hover {
+  border-color: var(--gold);
+  background: rgba(228, 170, 79, 0.1);
+}
+
+.lang-choice-btn.active {
+  border-color: var(--gold);
+  background: var(--gold);
+  color: var(--bg-dark);
+}
+
 .tutorial-actions {
   display: flex;
   justify-content: space-between;
