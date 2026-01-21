@@ -159,6 +159,11 @@ body::before {
       justify-content: center;
     }
 
+    .icon-btn.danger:hover {
+      background: var(--danger);
+      color: white;
+    }
+
     .btn-icon {
       background: none;
       border: none;

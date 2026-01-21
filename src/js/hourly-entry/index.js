@@ -331,9 +331,11 @@ function isSlotVisible(slot) {
   return slotStartMinutes >= shiftStartMinutes - 15;
 }
 
-// DOM Elements
-const timelineView = document.getElementById('timeline-view');
-const editorView = document.getElementById('editor-view');
+// DOM Elements (in-card views)
+const timelineContent = document.getElementById('timeline-content');
+const editorContent = document.getElementById('editor-content');
+const editorHeaderInline = document.getElementById('editor-header-inline');
+const cardTitle = document.querySelector('.card-hourly .card-title');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
@@ -420,7 +422,7 @@ function initializeUI() {
   });
 
   // Form inputs - auto-save on change and Enter key navigation
-  document.querySelectorAll('#editor-view input, #editor-view select, #editor-view textarea').forEach((el) => {
+  document.querySelectorAll('#editor-content input, #editor-content select, #editor-content textarea').forEach((el) => {
     el.addEventListener('blur', () => scheduleAutoSave());
     el.addEventListener('change', () => scheduleAutoSave());
 
@@ -442,13 +444,19 @@ function initializeUI() {
 
 function showView(view) {
   if (view === 'timeline') {
-    timelineView.classList.add('active');
-    editorView.classList.remove('active');
+    // Show timeline, hide editor (within card)
+    timelineContent.classList.add('active');
+    editorContent.classList.remove('active');
+    editorHeaderInline.style.display = 'none';
+    if (cardTitle) cardTitle.style.display = '';
     renderTimeline();
     updateTimelineSummary();
   } else {
-    timelineView.classList.remove('active');
-    editorView.classList.add('active');
+    // Show editor, hide timeline (within card)
+    timelineContent.classList.remove('active');
+    editorContent.classList.add('active');
+    editorHeaderInline.style.display = 'flex';
+    if (cardTitle) cardTitle.style.display = 'none';
   }
 }
 
@@ -518,8 +526,8 @@ function openEditor(slotIndex) {
   currentSlotIndex = slotIndex;
   const slot = TIME_SLOTS[slotIndex];
 
-  // Update time label
-  document.getElementById('editor-time-label').textContent = slot;
+  // Update time label (inline header)
+  document.getElementById('editor-time-label-inline').textContent = formatSlotShort(slot);
 
   // Populate form
   populateForm(slot);
@@ -989,20 +997,9 @@ function updateTimelineSummary() {
 }
 
 function updateEditorSummary() {
-  let totalTops = 0;
-  let totalTarget = 0;
-
-  Object.values(dayData).forEach((row) => {
-    totalTops += (row.tops1 || 0) + (row.tops2 || 0);
-    const trimmers = (row.trimmers1 || 0) + (row.trimmers2 || 0);
-    const multiplier = getSlotMultiplier(row.timeSlot);
-    totalTarget += trimmers * targetRate * multiplier;
-  });
-
-  const percentage = totalTarget > 0 ? Math.round((totalTops / totalTarget) * 100) : 0;
-
-  document.getElementById('editor-total').textContent = `${totalTops.toFixed(1)} lbs`;
-  document.getElementById('editor-percent').textContent = `${percentage}%`;
+  // Editor summary elements removed in in-card layout
+  // The timeline summary already shows daily totals
+  // This function is kept for backward compatibility but does nothing
 }
 
 function getSlotMultiplier(slot) {

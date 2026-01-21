@@ -25,7 +25,8 @@ export async function openDetailPanel(orderID) {
   setCurrentOrderID(orderID);
 
   const orders = getOrders();
-  const order = orders.find(o => o.id === orderID);
+  // Support both 'orderID' and 'id' property names
+  const order = orders.find(o => (o.orderID || o.id) === orderID);
   if (!order) {
     showToast('Order not found', 'error');
     return;
@@ -96,7 +97,8 @@ function applyOrderData(orderID, financials, shipmentsResult, paymentsResult) {
 
     // Update order in state
     const orders = getOrders();
-    const orderIndex = orders.findIndex(o => o.id === orderID);
+    // Support both 'orderID' and 'id' property names
+    const orderIndex = orders.findIndex(o => (o.orderID || o.id) === orderID);
     if (orderIndex !== -1) {
       orders[orderIndex].fulfilled = financials.fulfilled;
       orders[orderIndex].paid = financials.paid;
