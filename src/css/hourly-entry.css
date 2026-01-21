@@ -419,6 +419,33 @@ body {
 /* ===================
    BAG TIMER CARD
    =================== */
+.card-timer {
+  transition: background 0.5s ease;
+}
+
+/* Timer panel background states (matches scoreboard, boosted for smaller card) */
+.card-timer.timer-green {
+  background: linear-gradient(180deg, rgba(102, 137, 113, 0.5) 0%, rgba(102, 137, 113, 0.25) 100%);
+  border-color: rgba(102, 137, 113, 0.6);
+  box-shadow: inset 0 0 40px rgba(102, 137, 113, 0.15);
+}
+
+.card-timer.timer-yellow {
+  background: linear-gradient(180deg, rgba(228, 170, 79, 0.5) 0%, rgba(228, 170, 79, 0.25) 100%);
+  border-color: rgba(228, 170, 79, 0.6);
+  box-shadow: inset 0 0 40px rgba(228, 170, 79, 0.15);
+}
+
+.card-timer.timer-red {
+  background: linear-gradient(180deg, rgba(239, 68, 68, 0.4) 0%, rgba(185, 28, 28, 0.25) 100%);
+  border-color: rgba(239, 68, 68, 0.6);
+  box-shadow: inset 0 0 40px rgba(239, 68, 68, 0.15);
+}
+
+.card-timer.timer-neutral {
+  background: var(--bg-card);
+}
+
 .card-timer .card-content {
   display: flex;
   flex-direction: column;
