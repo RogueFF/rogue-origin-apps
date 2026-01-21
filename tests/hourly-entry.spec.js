@@ -102,11 +102,11 @@ test.describe('Hourly Entry Page', () => {
     await page.locator('#back-to-timeline').click();
     await expect(page.locator('#timeline-content')).toHaveClass(/active/);
 
-    // Focus and use arrow keys
+    // Focus and use arrow keys (grid layout: ArrowRight moves to adjacent column)
     await firstSlot.focus();
-    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowRight');
 
-    // Second slot should now be focused
+    // Second slot (afternoon column, same row) should now be focused
     const secondSlot = page.locator('.timeline-slot').nth(1);
     await expect(secondSlot).toBeFocused();
   });

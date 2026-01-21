@@ -468,58 +468,106 @@ function renderTimeline() {
 
   const currentSlot = getCurrentTimeSlot();
 
-  // Filter visible slots based on shift start (for today only)
-  const isToday = currentDate === formatDateLocal(new Date());
-  const visibleSlots = isToday
-    ? TIME_SLOTS.filter(slot => isSlotVisible(slot))
-    : TIME_SLOTS;
+  // Split into morning (0-4) and afternoon (5-9) for two-column layout
+  const morningSlots = TIME_SLOTS.slice(0, 5);  // 7-8 through 11-12
+  const afternoonSlots = TIME_SLOTS.slice(5);    // 12:30-1 through 4-4:30
 
-  visibleSlots.forEach((slot) => {
-    const index = TIME_SLOTS.indexOf(slot);
-    const data = dayData[slot] || {};
-    const totalLbs = (data.tops1 || 0) + (data.tops2 || 0);
-    const hasData = totalLbs > 0 || data.trimmers1 > 0;
-    const isCurrent = slot === currentSlot;
+  // Render in pairs: morning left, afternoon right (row by row)
+  for (let row = 0; row < 5; row++) {
+    const morningSlot = morningSlots[row];
+    const afternoonSlot = afternoonSlots[row];
 
-    const div = document.createElement('div');
-    div.className = 'timeline-slot' + (hasData ? ' has-data' : '') + (isCurrent ? ' current' : '');
-    div.setAttribute('role', 'listitem');
-    div.setAttribute('tabindex', '0');
-    div.setAttribute('aria-label', `${slot}, ${hasData
-      ? (currentLang === 'es' ? `${totalLbs.toFixed(1)} libras registradas` : `${totalLbs.toFixed(1)} lbs logged`)
-      : (currentLang === 'es' ? 'sin datos' : 'no data')}`);
+    // Filter by shift start (for today only)
+    const isToday = currentDate === formatDateLocal(new Date());
 
-    // Status text for colorblind accessibility
-    const statusText = hasData
-      ? (currentLang === 'es' ? 'Completo' : 'Done')
-      : (currentLang === 'es' ? 'Pendiente' : 'Empty');
+    // Render morning slot
+    if (!isToday || isSlotVisible(morningSlot)) {
+      list.appendChild(createSlotElement(morningSlot, currentSlot));
+    } else {
+      // Add placeholder to maintain grid alignment
+      const placeholder = document.createElement('div');
+      placeholder.className = 'timeline-slot-placeholder';
+      list.appendChild(placeholder);
+    }
 
-    div.innerHTML = `
+    // Render afternoon slot
+    if (!isToday || isSlotVisible(afternoonSlot)) {
+      list.appendChild(createSlotElement(afternoonSlot, currentSlot));
+    } else {
+      const placeholder = document.createElement('div');
+      placeholder.className = 'timeline-slot-placeholder';
+      list.appendChild(placeholder);
+    }
+  }
+}
+
+function createSlotElement(slot, currentSlot) {
+  const index = TIME_SLOTS.indexOf(slot);
+  const data = dayData[slot] || {};
+  const totalLbs = (data.tops1 || 0) + (data.tops2 || 0);
+  const hasData = totalLbs > 0 || data.trimmers1 > 0;
+  const isCurrent = slot === currentSlot;
+
+  // Get cultivar (prefer Line 1, fallback to Line 2)
+  const cultivar = data.cultivar1 || data.cultivar2 || '';
+  // Shorten cultivar name (remove year prefix if present)
+  const cultivarShort = cultivar.replace(/^\d{4}\s*/, '');
+
+  const div = document.createElement('div');
+  div.className = 'timeline-slot' + (hasData ? ' has-data' : '') + (isCurrent ? ' current' : '');
+  div.setAttribute('role', 'listitem');
+  div.setAttribute('tabindex', '0');
+  div.setAttribute('aria-label', `${slot}, ${cultivarShort || (currentLang === 'es' ? 'sin cultivar' : 'no cultivar')}, ${hasData
+    ? (currentLang === 'es' ? `${totalLbs.toFixed(1)} libras` : `${totalLbs.toFixed(1)} lbs`)
+    : (currentLang === 'es' ? 'sin datos' : 'no data')}`);
+
+  // Status indicator
+  const statusIcon = hasData ? '✓' : '○';
+  const statusText = hasData
+    ? (currentLang === 'es' ? 'Completo' : 'Done')
+    : (currentLang === 'es' ? 'Pendiente' : 'Empty');
+
+  div.innerHTML = `
+    <div class="slot-row">
       <span class="slot-time">${formatSlotShort(slot)}</span>
+      <span class="slot-status" aria-hidden="true">${statusIcon}</span>
+    </div>
+    <span class="slot-cultivar">${cultivarShort || '—'}</span>
+    <div class="slot-row">
       <span class="slot-lbs ${hasData ? '' : 'empty'}">${hasData ? totalLbs.toFixed(1) + ' lbs' : '—'}</span>
-      <span class="slot-status" aria-hidden="true">${hasData ? '✓' : '○'}</span>
       <span class="slot-status-text visually-hidden">${statusText}</span>
-    `;
+    </div>
+  `;
 
-    // Click handler
-    div.addEventListener('click', () => openEditor(index));
+  // Click handler
+  div.addEventListener('click', () => openEditor(index));
 
-    // Keyboard handler
-    div.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        openEditor(index);
-      } else if (e.key === 'ArrowDown' && index < TIME_SLOTS.length - 1) {
-        e.preventDefault();
-        div.nextElementSibling?.focus();
-      } else if (e.key === 'ArrowUp' && index > 0) {
-        e.preventDefault();
-        div.previousElementSibling?.focus();
-      }
-    });
-
-    list.appendChild(div);
+  // Keyboard handler (adjusted for grid navigation)
+  div.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      openEditor(index);
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      const next = div.nextElementSibling;
+      if (next && !next.classList.contains('timeline-slot-placeholder')) next.focus();
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const prev = div.previousElementSibling;
+      if (prev && !prev.classList.contains('timeline-slot-placeholder')) prev.focus();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      // Skip 2 elements to get to next row same column
+      let target = div.nextElementSibling?.nextElementSibling;
+      if (target && !target.classList.contains('timeline-slot-placeholder')) target.focus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      let target = div.previousElementSibling?.previousElementSibling;
+      if (target && !target.classList.contains('timeline-slot-placeholder')) target.focus();
+    }
   });
+
+  return div;
 }
 
 function openEditor(slotIndex) {
