@@ -329,12 +329,8 @@
       colorClass = 'green';
       if (breakStatus.onBreak) {
         colorClass = 'yellow';
-      } else if (effectiveTarget > 0) {
-        if (isOvertime) {
-          colorClass = 'red';
-        } else if (remainingSec < effectiveTarget * 0.2) {
-          colorClass = 'yellow';
-        }
+      } else if (effectiveTarget > 0 && isOvertime) {
+        colorClass = 'red';
       }
     }
 
