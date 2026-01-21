@@ -10,9 +10,10 @@
 import { API_URL } from './core/config.js';
 import {
   getState, setCustomers, setOrders, setCurrentOrderID,
-  getOrders, getCustomers, getCurrentOrderID
+  getOrders, getCustomers, getCurrentOrderID,
+  resetState, clearSessionState
 } from './core/state.js';
-import { apiCall } from './core/api.js';
+import { apiCall, cancelAllRequests } from './core/api.js';
 
 // ============================================
 // UI Imports
@@ -246,6 +247,39 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // ============================================
+// Cleanup
+// ============================================
+
+/**
+ * Clean up on page unload
+ * Prevents memory leaks by canceling pending requests and clearing state
+ */
+function cleanup() {
+  cancelAllRequests();
+  resetState();
+  console.log('Orders module cleanup complete');
+}
+
+// Register cleanup handlers
+window.addEventListener('beforeunload', cleanup);
+window.addEventListener('pagehide', cleanup);
+
+// ============================================
+// Global Error Handler
+// ============================================
+
+/**
+ * Handle uncaught errors in async operations
+ */
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('Unhandled promise rejection:', event.reason);
+  // Don't show toast for aborted requests
+  if (event.reason?.name !== 'AbortError') {
+    showToast('An unexpected error occurred', 'error');
+  }
+});
+
+// ============================================
 // Export for potential external use
 // ============================================
 export {
@@ -253,5 +287,6 @@ export {
   loadCustomers,
   loadOrders,
   renderOrdersTable,
-  updateStats
+  updateStats,
+  cleanup
 };

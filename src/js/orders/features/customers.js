@@ -7,6 +7,7 @@ import { apiCall, fetchCustomers } from '../core/api.js';
 import { getCustomers, setCustomers, addCustomer } from '../core/state.js';
 import { openModal, closeModal, clearForm } from '../ui/modals.js';
 import { showToast } from '../ui/toast.js';
+import { withButtonLoading } from '../ui/loading.js';
 
 const MODAL_ID = 'customer-modal';
 const FORM_ID = 'customer-form';
@@ -79,7 +80,7 @@ export async function saveCustomer() {
     return;
   }
 
-  try {
+  await withButtonLoading('customer-submit-btn', async () => {
     const result = await apiCall('saveCustomer', customerData, 'POST');
 
     if (result.success !== false) {
@@ -95,10 +96,7 @@ export async function saveCustomer() {
     } else {
       showToast('Error saving customer: ' + (result.error || 'Unknown error'), 'error');
     }
-  } catch (error) {
-    console.error('Error saving customer:', error);
-    showToast('Error saving customer', 'error');
-  }
+  }, 'Saving...');
 }
 
 /**

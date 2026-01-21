@@ -91,3 +91,49 @@ export function validateAll(...validators) {
   }
   return null;
 }
+
+/**
+ * Validate date is not in the future
+ * @param {string} dateStr - Date string in YYYY-MM-DD format
+ * @param {string} fieldName - Name of field for error message
+ * @returns {string|null} Error message or null if valid
+ */
+export function validateNotFutureDate(dateStr, fieldName) {
+  if (!dateStr) return null;
+  const date = new Date(dateStr);
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  if (date > today) {
+    return `${fieldName} cannot be in the future`;
+  }
+  return null;
+}
+
+/**
+ * Validate string length
+ * @param {string} value - Value to check
+ * @param {number} maxLength - Maximum allowed length
+ * @param {string} fieldName - Name of field for error message
+ * @returns {string|null} Error message or null if valid
+ */
+export function validateMaxLength(value, maxLength, fieldName) {
+  if (!value) return null;
+  if (value.length > maxLength) {
+    return `${fieldName} must be ${maxLength} characters or less`;
+  }
+  return null;
+}
+
+/**
+ * Validate that amount is greater than zero
+ * @param {*} value - Value to check
+ * @param {string} fieldName - Name of field for error message
+ * @returns {string|null} Error message or null if valid
+ */
+export function validateGreaterThanZero(value, fieldName) {
+  const num = parseFloat(value);
+  if (isNaN(num) || num <= 0) {
+    return `${fieldName} must be greater than zero`;
+  }
+  return null;
+}
