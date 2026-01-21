@@ -226,8 +226,8 @@ export async function deleteOrder(orderID) {
     const result = await apiCall('deleteMasterOrder', { orderID }, 'POST');
 
     if (result.success !== false) {
-      // Remove from state
-      const orders = getOrders().filter(o => o.id !== orderID);
+      // Remove from state - support both 'orderID' and 'id' property names
+      const orders = getOrders().filter(o => (o.orderID || o.id) !== orderID);
       setOrders(orders);
 
       // Remove from DOM
