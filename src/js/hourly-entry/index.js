@@ -1897,6 +1897,7 @@ function formatTimeMMSS(totalSeconds) {
 function setTimerColor(color) {
   const timerValue = document.getElementById('bag-timer-value');
   const timerRing = document.getElementById('timerRing');
+  const timerCard = document.querySelector('.card-timer');
 
   if (timerValue) {
     timerValue.classList.remove('green', 'yellow', 'red');
@@ -1906,6 +1907,12 @@ function setTimerColor(color) {
   if (timerRing) {
     timerRing.classList.remove('green', 'yellow', 'red');
     timerRing.classList.add(color);
+  }
+
+  // Update card background gradient
+  if (timerCard) {
+    timerCard.classList.remove('timer-green', 'timer-yellow', 'timer-red', 'timer-neutral');
+    timerCard.classList.add(`timer-${color}`);
   }
 }
 
