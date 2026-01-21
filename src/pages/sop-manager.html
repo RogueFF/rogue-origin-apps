@@ -2646,7 +2646,7 @@
     async function setViewLang(lang) {
       viewLang = lang;
       document.querySelectorAll('#viewLangToggle button').forEach(b => b.classList.toggle('active', b.textContent === lang.toUpperCase()));
-      const s = sops.find(x => x.id === currentSopId);
+      const s = sops.find(x => x.id == currentSopId);
       if (!s) return;
 
       // Auto-translate to Spanish if needed
@@ -2751,7 +2751,7 @@
     }
 
     async function generatePDF() {
-      const s = sops.find(x => x.id === currentSopId);
+      const s = sops.find(x => x.id == currentSopId);
       if (!s) return;
 
       const btn = document.getElementById('generatePdfBtn');
