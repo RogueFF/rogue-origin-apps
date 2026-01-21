@@ -174,19 +174,22 @@ export async function saveMasterOrder() {
       const orders = getOrders();
 
       if (isEditing) {
-        // Update existing
-        const index = orders.findIndex(o => o.id === editingOrderID);
+        // Update existing - support both 'orderID' and 'id' property names
+        const index = orders.findIndex(o => (o.orderID || o.id) === editingOrderID);
         if (index !== -1) {
           orders[index] = { ...orders[index], ...orderData };
           setOrders(orders);
           updateOrderRowInDOM(editingOrderID, orders[index]);
         }
       } else {
-        // Add new
+        // Add new - use orderID as the canonical property name
+        const newOrderID = result.order?.orderID || result.order?.id || result.orderID || result.id;
         const newOrder = {
           ...orderData,
-          id: result.order?.id || result.id,
-          status: 'pending',
+          orderID: newOrderID,
+          id: newOrderID, // Keep both for compatibility
+          status: 'Open',
+          fulfilledAmount: 0,
           fulfilled: 0,
           paid: 0
         };
@@ -290,31 +293,39 @@ function addOrderRowToDOM(order) {
     tbody.innerHTML = '';
   }
 
-  const fulfillPct = order.commitmentAmount > 0
-    ? Math.round((order.fulfilled || 0) / order.commitmentAmount * 100)
+  // Support both 'orderID' and 'id' property names
+  const orderID = order.orderID || order.id;
+  const commitment = parseFloat(order.commitmentAmount) || 0;
+  const fulfilled = parseFloat(order.fulfilledAmount || order.fulfilled) || 0;
+  const fulfillPct = commitment > 0
+    ? Math.min(100, Math.round((fulfilled / commitment) * 100))
     : 0;
 
+  const progressColor = fulfillPct >= 100 ? 'var(--success)' :
+                        fulfillPct >= 50 ? 'var(--gold)' :
+                        'var(--ro-green)';
+
   const row = document.createElement('tr');
-  row.setAttribute('onclick', `window.orderActions.openDetail('${order.id}')`);
+  row.setAttribute('onclick', `window.orderActions.openDetail('${orderID}')`);
   row.style.cursor = 'pointer';
   row.innerHTML = `
-    <td data-label="Order ID" class="order-id">${order.id}</td>
-    <td data-label="Customer">${order.customerName || 'Unknown'}</td>
-    <td data-label="Commitment" class="order-amount">$${formatNumber(order.commitmentAmount)}</td>
-    <td data-label="Fulfilled" class="order-amount">$${formatNumber(order.fulfilled || 0)}</td>
-    <td data-label="Progress" class="progress-cell">
-      ${fulfillPct}%
-      <div class="progress-mini">
-        <div class="progress-mini-fill" style="width: ${fulfillPct}%"></div>
+    <td style="font-family: var(--font-mono);">${orderID}</td>
+    <td>${order.customerName || ''}</td>
+    <td style="font-family: var(--font-mono);">$${formatNumber(commitment)}</td>
+    <td style="font-family: var(--font-mono);">$${formatNumber(fulfilled)}</td>
+    <td>
+      <div class="progress-bar" style="background: var(--bg-tertiary); border-radius: 4px; height: 8px; width: 100%; overflow: hidden;">
+        <div class="progress-fill" style="width: ${fulfillPct}%; height: 100%; background: ${progressColor}; transition: width 0.3s;"></div>
       </div>
+      <span style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">${fulfillPct}%</span>
     </td>
-    <td data-label="Status"><span class="order-status ${order.status}">${order.status}</span></td>
-    <td data-label="Actions" onclick="event.stopPropagation()" style="white-space: nowrap;">
-      <button class="btn-icon" onclick="window.orderActions.editOrder('${order.id}')" title="Edit Order">
-        <i class="ph ph-pencil-simple"></i>
+    <td><span class="status-badge status-${(order.status || 'Open').toLowerCase()}">${order.status || 'Open'}</span></td>
+    <td class="actions" onclick="event.stopPropagation()">
+      <button class="icon-btn" onclick="window.orderActions.openShipmentModal('${orderID}')" title="Add Shipment">
+        <i class="ph ph-package"></i>
       </button>
-      <button class="btn-icon" onclick="window.orderActions.deleteOrder('${order.id}')" title="Delete Order" style="color: var(--danger);">
-        <i class="ph ph-trash"></i>
+      <button class="icon-btn" onclick="window.orderActions.openPaymentModal('${orderID}')" title="Record Payment">
+        <i class="ph ph-currency-dollar"></i>
       </button>
     </td>
   `;
