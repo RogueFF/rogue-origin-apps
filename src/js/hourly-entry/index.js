@@ -1508,30 +1508,60 @@ setTimeout(() => initTutorial(), 500);
 // BARCODE PRINTER
 // ===================
 
+const BARCODE_API_URL = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/barcode';
+let barcodeProducts = []; // Products loaded from barcode API
+
 /**
  * Initialize barcode card functionality
  * Called after cultivars are loaded
  */
-function initBarcodeCard() {
+async function initBarcodeCard() {
+  await loadBarcodeProducts();
   populateBarcodeStrainSelect();
   initBarcodePrintButtons();
 }
 
 /**
- * Populate the barcode strain dropdown with cultivar options
+ * Load products from barcode API
+ */
+async function loadBarcodeProducts() {
+  try {
+    const response = await fetch(`${BARCODE_API_URL}?action=products`);
+    const result = await response.json();
+    const data = result.data || result;
+    barcodeProducts = data.products || [];
+  } catch (error) {
+    console.error('Failed to load barcode products:', error);
+    barcodeProducts = [];
+  }
+}
+
+/**
+ * Populate the barcode strain dropdown with cultivars that have products
  */
 function populateBarcodeStrainSelect() {
   const select = document.getElementById('barcode-strain');
   if (!select) return;
 
+  // Get unique cultivars from products (extract cultivar name from header)
+  const cultivarsWithProducts = new Set();
+  barcodeProducts.forEach((p) => {
+    // Header format: "Cultivar Name - Tops 5KG" or similar
+    const match = p.header.match(/^(.+?)\s*-\s*(Tops|Smalls)/i);
+    if (match) {
+      cultivarsWithProducts.add(match[1].trim());
+    }
+  });
+
   const currentValue = select.value;
   select.innerHTML = `<option value="">${LABELS[currentLang].selectStrain}</option>`;
 
-  cultivarOptions.forEach((cultivar) => {
+  // Sort cultivars alphabetically
+  const sortedCultivars = Array.from(cultivarsWithProducts).sort();
+  sortedCultivars.forEach((cultivar) => {
     const option = document.createElement('option');
     option.value = cultivar;
-    // Display cultivar name without year prefix for cleaner UI
-    option.textContent = cultivar.replace(/^\d{4}\s*/, '');
+    option.textContent = cultivar;
     select.appendChild(option);
   });
 
@@ -1560,26 +1590,55 @@ function initBarcodePrintButtons() {
 }
 
 /**
+ * Find product matching strain and bag type
+ * @param {string} strain - Cultivar name
+ * @param {string} bagType - '5kg', '10lb-tops', or '10lb-smalls'
+ * @returns {Object|null} - Product object or null if not found
+ */
+function findBarcodeProduct(strain, bagType) {
+  // Map bag type to size and type
+  let targetSize, targetType;
+  if (bagType === '5kg') {
+    targetSize = '5KG';
+    targetType = 'Tops'; // 5kg bags are typically tops
+  } else if (bagType === '10lb-tops') {
+    targetSize = '10 LB';
+    targetType = 'Tops';
+  } else {
+    targetSize = '10 LB';
+    targetType = 'Smalls';
+  }
+
+  // Find matching product
+  return barcodeProducts.find((p) => {
+    const header = p.header.toUpperCase();
+    const strainUpper = strain.toUpperCase();
+    return header.includes(strainUpper) &&
+           header.includes(targetType.toUpperCase()) &&
+           header.includes(targetSize);
+  });
+}
+
+/**
  * Print a barcode label for the given strain and bag type
  * @param {string} strain - Cultivar name
  * @param {string} bagType - '5kg', '10lb-tops', or '10lb-smalls'
  */
 function printBarcodeLabel(strain, bagType) {
-  // Generate barcode data (format: STRAIN-TYPE-TIMESTAMP)
-  const strainCode = strain.replace(/^\d{4}\s*/, '').substring(0, 10).toUpperCase().replace(/\s/g, '');
-  const timestamp = Date.now().toString(36).toUpperCase();
-  const typeCode = bagType === '5kg' ? '5K' : bagType === '10lb-tops' ? 'T' : 'S';
-  const barcode = `${strainCode}-${typeCode}-${timestamp}`;
+  // Find the product in the database
+  const product = findBarcodeProduct(strain, bagType);
 
-  // Label text
-  let labelText = strain.replace(/^\d{4}\s*/, '');
-  if (bagType === '5kg') {
-    labelText += ' - 5kg';
-  } else if (bagType === '10lb-tops') {
-    labelText += ' - 10lb Tops';
-  } else {
-    labelText += ' - 10lb Smalls';
+  if (!product) {
+    // Product not found - show alert
+    const sizeLabel = bagType === '5kg' ? '5KG' : '10 LB';
+    const typeLabel = bagType === '10lb-smalls' ? 'Smalls' : 'Tops';
+    alert(`No barcode found for ${strain} - ${typeLabel} ${sizeLabel}.\n\nPlease add this product in the Barcode Manager app.`);
+    return;
   }
+
+  // Use the existing barcode from the database
+  const barcode = product.barcode;
+  const labelText = product.header;
 
   // Generate barcode URL using TEC-IT
   const barcodeUrl = 'https://barcode.tec-it.com/barcode.ashx?data=' + encodeURIComponent(barcode) +
