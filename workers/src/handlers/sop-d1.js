@@ -22,7 +22,7 @@ const SHEETS = {
 async function getSOPs(env) {
   const sops = await query(env.DB, `
     SELECT id, title, title_es, dept, doc_num, revision, status,
-           description, desc_es, tags, steps, created_at, updated_at
+           description, desc_es, tags, steps, linked_sops, created_at, updated_at
     FROM sops
     ORDER BY created_at DESC
   `);
@@ -41,6 +41,7 @@ async function getSOPs(env) {
       desc_es: s.desc_es || '',
       tags: s.tags ? JSON.parse(s.tags) : [],
       steps: s.steps ? JSON.parse(s.steps) : [],
+      linkedSops: s.linked_sops ? JSON.parse(s.linked_sops) : [],
       createdAt: s.created_at || '',
       updatedAt: s.updated_at || '',
     }))
@@ -131,6 +132,7 @@ async function createSOP(body, env) {
     desc_es: sanitizeForSheets(sop.desc_es || ''),
     tags: JSON.stringify(sop.tags || []),
     steps: JSON.stringify(sop.steps || []),
+    linked_sops: JSON.stringify(sop.linkedSops || []),
     created_at: now,
     updated_at: now,
   });
@@ -166,6 +168,7 @@ async function updateSOP(body, env) {
     desc_es: sanitizeForSheets(sop.desc_es || ''),
     tags: JSON.stringify(sop.tags || []),
     steps: JSON.stringify(sop.steps || []),
+    linked_sops: JSON.stringify(sop.linkedSops || []),
     updated_at: now,
   }, 'id = ?', [sop.id]);
 
