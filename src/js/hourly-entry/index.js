@@ -69,6 +69,10 @@ const LABELS = {
     print10lbTops: '10lb Tops',
     print10lbSmalls: '10lb Smalls',
     bagsToday: 'Bags Today',
+    avgToday: 'Avg Today',
+    vsTarget: 'vs Target',
+    remaining: 'remaining',
+    elapsed: 'elapsed',
     status: 'Status',
     onTrack: 'On Track',
     behind: 'Behind',
@@ -125,6 +129,10 @@ const LABELS = {
     print10lbTops: '10lb Tops',
     print10lbSmalls: '10lb Smalls',
     bagsToday: 'Bolsas Hoy',
+    avgToday: 'Prom Hoy',
+    vsTarget: 'vs Meta',
+    remaining: 'restante',
+    elapsed: 'transcurrido',
     status: 'Estado',
     onTrack: 'A Tiempo',
     behind: 'Atrasado',
@@ -1741,12 +1749,18 @@ function escapeHtml(str) {
 }
 
 // ===================
-// BAG TIMER
+// BAG TIMER (Scoreboard-style circular progress)
 // ===================
 
 let bagTimerInterval = null;
+let bagTimerTickInterval = null;
 let lastBagTimestamp = null;
 let timerTargetSeconds = 90 * 60; // Default 90 min target
+let timerAvgSeconds = 0;
+let timerIsPaused = false;
+
+// SVG constants (matching scoreboard)
+const RING_CIRCUMFERENCE = 2 * Math.PI * 95; // 597
 
 /**
  * Initialize bag timer card
@@ -1756,7 +1770,7 @@ function initBagTimer() {
   // Poll every 30 seconds for timer updates
   bagTimerInterval = setInterval(loadBagTimerData, 30000);
   // Update countdown every second
-  setInterval(updateBagTimerCountdown, 1000);
+  bagTimerTickInterval = setInterval(updateBagTimerTick, 1000);
 }
 
 /**
@@ -1783,13 +1797,19 @@ async function loadBagTimerData() {
       lastBagTimestamp = null;
     }
 
-    // Store target seconds
-    if (timer.targetSeconds) {
-      timerTargetSeconds = timer.targetSeconds;
-    }
+    // Store target and avg seconds
+    timerTargetSeconds = timer.targetSeconds || 90 * 60;
+    timerAvgSeconds = timer.avgSecondsToday || 0;
+    timerIsPaused = timer.isPaused || false;
 
-    // Update status indicator
-    updateTimerStatus(timer);
+    // Update Avg Today stat
+    updateAvgTodayStat(timerAvgSeconds);
+
+    // Update vs Target stat
+    updateVsTargetStat(timerAvgSeconds, timerTargetSeconds);
+
+    // Initial render
+    updateBagTimerTick();
 
   } catch (error) {
     console.error('Failed to load bag timer data:', error);
@@ -1797,85 +1817,159 @@ async function loadBagTimerData() {
 }
 
 /**
- * Update the countdown timer display
+ * Update timer tick (called every second)
  */
-function updateBagTimerCountdown() {
+function updateBagTimerTick() {
   const timerValue = document.getElementById('bag-timer-value');
+  const timerLabel = document.getElementById('timerLabel');
+  const timerRing = document.getElementById('timerRing');
+
   if (!timerValue) return;
 
-  if (!lastBagTimestamp) {
-    timerValue.textContent = '--:--';
+  // If paused, show paused state
+  if (timerIsPaused) {
+    setTimerColor('yellow');
+    timerLabel.textContent = LABELS[currentLang].onBreak;
     return;
   }
 
+  // If no last bag timestamp, show waiting state
+  if (!lastBagTimestamp) {
+    timerValue.textContent = '--:--';
+    timerLabel.textContent = LABELS[currentLang].waiting;
+    setTimerColor('green');
+    setRingProgress(0);
+    return;
+  }
+
+  // Calculate elapsed time
   const now = new Date();
   const elapsedMs = now - lastBagTimestamp;
   const elapsedSeconds = Math.floor(elapsedMs / 1000);
-  const minutes = Math.floor(elapsedSeconds / 60);
-  const seconds = elapsedSeconds % 60;
 
-  // Format as MM:SS or H:MM:SS if over an hour
+  // Calculate remaining time
+  const remainingSeconds = Math.max(0, timerTargetSeconds - elapsedSeconds);
+
+  // Determine color based on remaining time
+  let color = 'green';
+  if (elapsedSeconds > timerTargetSeconds) {
+    color = 'red';
+  } else if (elapsedSeconds > timerTargetSeconds * 0.8) {
+    color = 'yellow';
+  }
+
+  setTimerColor(color);
+
+  // Format display
+  if (remainingSeconds > 0) {
+    // Show remaining time
+    timerValue.textContent = formatTimeMMSS(remainingSeconds);
+    timerLabel.textContent = LABELS[currentLang].remaining;
+  } else {
+    // Overtime - show elapsed
+    timerValue.textContent = '+' + formatTimeMMSS(elapsedSeconds - timerTargetSeconds);
+    timerLabel.textContent = LABELS[currentLang].elapsed;
+  }
+
+  // Update ring progress
+  const progress = Math.min(1, elapsedSeconds / timerTargetSeconds);
+  setRingProgress(progress);
+}
+
+/**
+ * Format seconds as MM:SS or H:MM:SS
+ */
+function formatTimeMMSS(totalSeconds) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
   if (minutes >= 60) {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
-    timerValue.textContent = `${hours}:${String(mins).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-  } else {
-    timerValue.textContent = `${minutes}:${String(seconds).padStart(2, '0')}`;
+    return `${hours}:${String(mins).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+/**
+ * Set timer color (green, yellow, red)
+ */
+function setTimerColor(color) {
+  const timerValue = document.getElementById('bag-timer-value');
+  const timerRing = document.getElementById('timerRing');
+
+  if (timerValue) {
+    timerValue.classList.remove('green', 'yellow', 'red');
+    timerValue.classList.add(color);
   }
 
-  // Update color based on target
-  const targetMinutes = Math.floor(timerTargetSeconds / 60);
-  if (minutes > targetMinutes * 1.2) {
-    timerValue.style.color = 'var(--error)';
-  } else if (minutes > targetMinutes) {
-    timerValue.style.color = 'var(--gold)';
-  } else {
-    timerValue.style.color = 'var(--text-primary)';
+  if (timerRing) {
+    timerRing.classList.remove('green', 'yellow', 'red');
+    timerRing.classList.add(color);
   }
 }
 
 /**
- * Update the status indicator based on timer data
- * @param {Object} timer - Timer data from API
+ * Set ring progress (0 to 1)
  */
-function updateTimerStatus(timer) {
-  const statusEl = document.getElementById('timer-status');
-  if (!statusEl) return;
+function setRingProgress(progress) {
+  const timerRing = document.getElementById('timerRing');
+  if (!timerRing) return;
 
-  // Remove all status classes
-  statusEl.classList.remove('on-track', 'behind', 'on-break');
+  // Progress ring fills from 0 to full
+  const offset = RING_CIRCUMFERENCE * (1 - progress);
+  timerRing.style.strokeDashoffset = offset;
+}
 
-  // Check if on break (scoreboard provides pause state)
-  if (timer.isPaused || timer.onBreak) {
-    statusEl.textContent = LABELS[currentLang].onBreak;
-    statusEl.classList.add('on-break');
-    return;
-  }
+/**
+ * Update Avg Today stat
+ */
+function updateAvgTodayStat(avgSeconds) {
+  const avgEl = document.getElementById('avg-today');
+  if (!avgEl) return;
 
-  // No bags yet today
-  if (!timer.bagsToday || timer.bagsToday === 0) {
-    statusEl.textContent = LABELS[currentLang].waiting;
-    return;
-  }
-
-  // Check if current cycle is on track
-  const avgSeconds = timer.avgSecondsToday || 0;
-  const targetSeconds = timer.targetSeconds || timerTargetSeconds;
-
-  if (avgSeconds > 0 && avgSeconds <= targetSeconds) {
-    statusEl.textContent = LABELS[currentLang].onTrack;
-    statusEl.classList.add('on-track');
-  } else if (avgSeconds > targetSeconds) {
-    statusEl.textContent = LABELS[currentLang].behind;
-    statusEl.classList.add('behind');
+  if (avgSeconds > 0) {
+    const minutes = Math.floor(avgSeconds / 60);
+    const secs = avgSeconds % 60;
+    avgEl.textContent = `${minutes}:${String(secs).padStart(2, '0')}`;
   } else {
-    statusEl.textContent = '--';
+    avgEl.textContent = '--:--';
+  }
+}
+
+/**
+ * Update vs Target stat
+ */
+function updateVsTargetStat(avgSeconds, targetSeconds) {
+  const vsEl = document.getElementById('vs-target');
+  if (!vsEl) return;
+
+  // Remove existing classes
+  vsEl.classList.remove('on-track', 'behind');
+
+  if (avgSeconds <= 0) {
+    vsEl.textContent = '—';
+    return;
+  }
+
+  const diffSeconds = avgSeconds - targetSeconds;
+  const diffMinutes = Math.abs(Math.floor(diffSeconds / 60));
+
+  if (diffSeconds <= 0) {
+    // Ahead or on target
+    vsEl.textContent = diffMinutes > 0 ? `-${diffMinutes}m` : '✓';
+    vsEl.classList.add('on-track');
+  } else {
+    // Behind
+    vsEl.textContent = `+${diffMinutes}m`;
+    vsEl.classList.add('behind');
   }
 }
 
 // Cleanup bag timer on page unload
 window.addEventListener('beforeunload', () => {
   if (bagTimerInterval) clearInterval(bagTimerInterval);
+  if (bagTimerTickInterval) clearInterval(bagTimerTickInterval);
 });
 
 // Initialize barcode and timer after cultivars load
