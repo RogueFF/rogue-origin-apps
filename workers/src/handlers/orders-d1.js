@@ -239,12 +239,17 @@ async function deleteMasterOrder(body, env) {
   const orderID = body.orderID;
   if (!orderID) throw createError('VALIDATION_ERROR', 'Order ID is required');
 
-  const changes = await deleteRows(env.DB, 'orders', 'id = ?', [orderID]);
-  if (changes === 0) throw createError('NOT_FOUND', 'Order not found');
+  // Check order exists first
+  const order = await queryOne(env.DB, 'SELECT id FROM orders WHERE id = ?', [orderID]);
+  if (!order) throw createError('NOT_FOUND', 'Order not found');
 
-  // Delete associated shipments and payments
+  // Delete associated records FIRST (foreign key constraints require this order)
+  await deleteRows(env.DB, 'shipment_lines', 'shipment_id IN (SELECT id FROM shipments WHERE order_id = ?)', [orderID]);
   await deleteRows(env.DB, 'shipments', 'order_id = ?', [orderID]);
   await deleteRows(env.DB, 'payments', 'order_id = ?', [orderID]);
+
+  // Now delete the order
+  await deleteRows(env.DB, 'orders', 'id = ?', [orderID]);
 
   return successResponse({ success: true, message: 'Order and associated records deleted' });
 }
