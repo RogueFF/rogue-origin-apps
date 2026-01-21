@@ -1103,6 +1103,7 @@ const TUTORIAL_STEPS = [
       en: 'This app helps you track production data hour by hour. Let\'s walk through how it works.',
       es: 'Esta app te ayuda a registrar datos de producción hora por hora. Veamos cómo funciona.',
     },
+    showLanguageChoice: true, // Show EN/ES buttons on this step
   },
   {
     id: 'timeline',
@@ -1245,6 +1246,46 @@ function renderTutorialStep() {
   // Update content
   document.getElementById('tutorial-title').textContent = step.title[currentLang];
   document.getElementById('tutorial-text').textContent = step.text[currentLang];
+
+  // Show/hide language choice buttons
+  const textEl = document.getElementById('tutorial-text');
+  let langChoiceEl = document.getElementById('tutorial-lang-choice');
+
+  if (step.showLanguageChoice) {
+    if (!langChoiceEl) {
+      // Create language choice buttons
+      langChoiceEl = document.createElement('div');
+      langChoiceEl.id = 'tutorial-lang-choice';
+      langChoiceEl.className = 'tutorial-lang-choice';
+      langChoiceEl.innerHTML = `
+        <span class="lang-choice-label">Choose language / Elige idioma:</span>
+        <div class="lang-choice-buttons">
+          <button type="button" class="lang-choice-btn" data-lang="en">English</button>
+          <button type="button" class="lang-choice-btn" data-lang="es">Español</button>
+        </div>
+      `;
+      textEl.after(langChoiceEl);
+
+      // Add click handlers
+      langChoiceEl.querySelectorAll('.lang-choice-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const newLang = btn.dataset.lang;
+          currentLang = newLang;
+          localStorage.setItem('lang', newLang);
+          document.getElementById('lang-toggle').textContent = newLang === 'en' ? 'ES' : 'EN';
+          updateLabels();
+          renderTutorialStep(); // Re-render with new language
+        });
+      });
+    }
+    // Update active state
+    langChoiceEl.querySelectorAll('.lang-choice-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.lang === currentLang);
+    });
+    langChoiceEl.style.display = 'block';
+  } else if (langChoiceEl) {
+    langChoiceEl.style.display = 'none';
+  }
 
   // Update buttons
   document.getElementById('tutorial-prev').disabled = tutorialStep === 0;
