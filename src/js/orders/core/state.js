@@ -268,3 +268,37 @@ export function addOrder(order) {
 export function addCustomer(customer) {
   state.customers.push(customer);
 }
+
+// ============================================
+// Cleanup
+// ============================================
+
+/**
+ * Reset state to initial values
+ * Call on logout or page unload
+ */
+export function resetState() {
+  state.customers = [];
+  state.orders = [];
+  state.currentOrderID = null;
+  state.editingOrderID = null;
+  state.editingPaymentID = null;
+  state.cachedShipments = [];
+  state.cachedPayments = [];
+  state.pdfLibrariesLoaded = false;
+  state.parsedShopifyData = [];
+  orderCache.clear();
+}
+
+/**
+ * Clear session-specific data (detail panel, editing states)
+ * Keep customers and orders loaded
+ */
+export function clearSessionState() {
+  state.currentOrderID = null;
+  state.editingOrderID = null;
+  state.editingPaymentID = null;
+  state.cachedShipments = [];
+  state.cachedPayments = [];
+  state.parsedShopifyData = [];
+}

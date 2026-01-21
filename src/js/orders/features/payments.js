@@ -11,6 +11,7 @@ import {
 import { openModal, closeModal, clearForm } from '../ui/modals.js';
 import { showToast } from '../ui/toast.js';
 import { formatCurrency, formatDate } from '../utils/format.js';
+import { withButtonLoading } from '../ui/loading.js';
 
 const MODAL_ID = 'payment-modal';
 const FORM_ID = 'payment-form';
@@ -132,8 +133,9 @@ export async function savePayment() {
     paymentData.id = editingId;
   }
 
-  try {
-    const action = editingId ? 'updatePayment' : 'recordPayment';
+  const isEditing = !!editingId;
+  await withButtonLoading('payment-submit-btn', async () => {
+    const action = isEditing ? 'updatePayment' : 'recordPayment';
     const result = await apiCall(action, paymentData, 'POST');
 
     if (result.success !== false) {
@@ -143,14 +145,11 @@ export async function savePayment() {
       // Refresh payments list
       await refreshPayments(orderID);
 
-      showToast(editingId ? 'Payment updated!' : 'Payment recorded!');
+      showToast(isEditing ? 'Payment updated!' : 'Payment recorded!');
     } else {
       showToast('Error saving payment: ' + (result.error || 'Unknown error'), 'error');
     }
-  } catch (error) {
-    console.error('Error saving payment:', error);
-    showToast('Error saving payment', 'error');
-  }
+  }, isEditing ? 'Updating...' : 'Recording...');
 }
 
 /**

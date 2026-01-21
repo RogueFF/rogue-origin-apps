@@ -12,6 +12,7 @@ import { openModal, closeModal, clearForm } from '../ui/modals.js';
 import { showToast } from '../ui/toast.js';
 import { formatCurrency, formatDate, formatNumber } from '../utils/format.js';
 import { updateStats } from '../ui/stats.js';
+import { withButtonLoading } from '../ui/loading.js';
 
 const MODAL_ID = 'shipment-modal';
 const FORM_ID = 'shipment-form';
@@ -217,78 +218,83 @@ export async function saveShipment() {
   }
   isSavingShipment = true;
 
-  try {
-    const modal = document.getElementById(MODAL_ID);
-    const orderID = modal?.dataset.orderID || getCurrentOrderID();
+  const modal = document.getElementById(MODAL_ID);
+  const orderID = modal?.dataset.orderID || getCurrentOrderID();
 
-    if (!orderID) {
-      showToast('Please select an order first', 'error');
-      return false;
-    }
-
-    const lineItems = collectLineItems();
-    if (lineItems.length === 0) {
-      showToast('Please add at least one line item with strain and quantity', 'warning');
-      return false;
-    }
-
-    const dimensions = {
-      length: parseFloat(getFieldValue('shipment-length')) || 0,
-      width: parseFloat(getFieldValue('shipment-width')) || 0,
-      height: parseFloat(getFieldValue('shipment-height')) || 0,
-      weight: parseFloat(getFieldValue('shipment-weight')) || 0
-    };
-
-    const subtotal = parseFloat(document.getElementById('shipment-subtotal')?.textContent.replace(/[$,]/g, '')) || 0;
-    const discount = parseFloat(getFieldValue('shipment-discount')) || 0;
-    const freight = parseFloat(getFieldValue('shipment-freight')) || 0;
-    const total = parseFloat(document.getElementById('shipment-total')?.textContent.replace(/[$,]/g, '')) || 0;
-
-    const editingShipmentId = modal?.dataset.editingShipmentId;
-
-    const shipmentData = {
-      orderID,
-      shipmentDate: getFieldValue('shipment-date'),
-      startDateTime: getFieldValue('shipment-start-datetime') || null,
-      carrier: getFieldValue('shipment-carrier'),
-      dimensions,
-      lineItems,
-      subTotal: subtotal,
-      discount,
-      freightCost: freight,
-      totalAmount: total,
-      trackingNumber: getFieldValue('shipment-tracking'),
-      notes: getFieldValue('shipment-notes')
-    };
-
-    if (editingShipmentId) {
-      shipmentData.id = editingShipmentId;
-    }
-
-    const action = editingShipmentId ? 'updateShipment' : 'saveShipment';
-    const result = await apiCall(action, shipmentData, 'POST');
-
-    if (result.success !== false) {
-      closeShipmentModal();
-      invalidateCache(orderID);
-
-      // Refresh shipments
-      await refreshShipments(orderID);
-      updateStats();
-
-      showToast(editingShipmentId ? 'Shipment updated!' : 'Shipment saved!');
-      return true;
-    } else {
-      showToast('Error saving shipment: ' + (result.error || 'Unknown error'), 'error');
-      return false;
-    }
-  } catch (error) {
-    console.error('Error saving shipment:', error);
-    showToast('Error saving shipment', 'error');
-    return false;
-  } finally {
+  if (!orderID) {
+    showToast('Please select an order first', 'error');
     isSavingShipment = false;
+    return false;
   }
+
+  const lineItems = collectLineItems();
+  if (lineItems.length === 0) {
+    showToast('Please add at least one line item with strain and quantity', 'warning');
+    isSavingShipment = false;
+    return false;
+  }
+
+  const editingShipmentId = modal?.dataset.editingShipmentId;
+  const isEditing = !!editingShipmentId;
+
+  let success = false;
+  await withButtonLoading('shipment-save-btn', async () => {
+    try {
+      const dimensions = {
+        length: parseFloat(getFieldValue('shipment-length')) || 0,
+        width: parseFloat(getFieldValue('shipment-width')) || 0,
+        height: parseFloat(getFieldValue('shipment-height')) || 0,
+        weight: parseFloat(getFieldValue('shipment-weight')) || 0
+      };
+
+      const subtotal = parseFloat(document.getElementById('shipment-subtotal')?.textContent.replace(/[$,]/g, '')) || 0;
+      const discount = parseFloat(getFieldValue('shipment-discount')) || 0;
+      const freight = parseFloat(getFieldValue('shipment-freight')) || 0;
+      const total = parseFloat(document.getElementById('shipment-total')?.textContent.replace(/[$,]/g, '')) || 0;
+
+      const shipmentData = {
+        orderID,
+        shipmentDate: getFieldValue('shipment-date'),
+        startDateTime: getFieldValue('shipment-start-datetime') || null,
+        carrier: getFieldValue('shipment-carrier'),
+        dimensions,
+        lineItems,
+        subTotal: subtotal,
+        discount,
+        freightCost: freight,
+        totalAmount: total,
+        trackingNumber: getFieldValue('shipment-tracking'),
+        notes: getFieldValue('shipment-notes')
+      };
+
+      if (editingShipmentId) {
+        shipmentData.id = editingShipmentId;
+      }
+
+      const action = isEditing ? 'updateShipment' : 'saveShipment';
+      const result = await apiCall(action, shipmentData, 'POST');
+
+      if (result.success !== false) {
+        closeShipmentModal();
+        invalidateCache(orderID);
+
+        // Refresh shipments
+        await refreshShipments(orderID);
+        updateStats();
+
+        showToast(isEditing ? 'Shipment updated!' : 'Shipment saved!');
+        success = true;
+      } else {
+        showToast('Error saving shipment: ' + (result.error || 'Unknown error'), 'error');
+      }
+    } catch (error) {
+      console.error('Error saving shipment:', error);
+      showToast('Error saving shipment', 'error');
+    }
+  }, isEditing ? 'Updating...' : 'Saving...');
+
+  isSavingShipment = false;
+  return success;
 }
 
 /**
