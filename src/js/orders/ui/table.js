@@ -3,7 +3,7 @@
  * @module ui/table
  */
 
-import { getOrders } from '../core/state.js';
+import { getOrders, getCustomers } from '../core/state.js';
 import { formatCurrency } from '../utils/format.js';
 
 /**
@@ -34,22 +34,33 @@ export function renderOrdersTable() {
  * @private
  */
 function renderOrderRow(order) {
+  // Support both 'orderID' and 'id' property names
+  const orderID = order.orderID || order.id;
+
+  // Get customer name - try order first, then lookup from customers
+  let customerName = order.customerName;
+  if (!customerName && order.customerID) {
+    const customers = getCustomers();
+    const customer = customers.find(c => c.id === order.customerID);
+    customerName = customer?.companyName || '';
+  }
+
   const commitment = parseFloat(order.commitmentAmount) || 0;
-  const fulfilled = parseFloat(order.fulfilledAmount) || 0;
+  const fulfilled = parseFloat(order.fulfilledAmount || order.fulfilled) || 0;
   const fulfillPct = commitment > 0
     ? Math.min(100, (fulfilled / commitment) * 100)
     : 0;
 
   return `
-    <tr onclick="window.orderActions.openDetail('${order.orderID}')" style="cursor: pointer;">
-      <td style="font-family: var(--font-mono);">${escapeHtml(order.orderID)}</td>
-      <td>${escapeHtml(order.customerName || '')}</td>
+    <tr onclick="window.orderActions.openDetail('${orderID}')" style="cursor: pointer;">
+      <td style="font-family: var(--font-mono);">${escapeHtml(orderID)}</td>
+      <td>${escapeHtml(customerName || '')}</td>
       <td style="font-family: var(--font-mono);">${formatCurrency(commitment)}</td>
       <td style="font-family: var(--font-mono);">${formatCurrency(fulfilled)}</td>
       <td>${renderProgressBar(fulfillPct)}</td>
       <td>${renderStatusBadge(order.status)}</td>
       <td class="actions" onclick="event.stopPropagation()">
-        ${renderActionButtons(order)}
+        ${renderActionButtons(orderID)}
       </td>
     </tr>
   `;
@@ -95,12 +106,12 @@ function renderStatusBadge(status) {
  * Render action buttons
  * @private
  */
-function renderActionButtons(order) {
+function renderActionButtons(orderID) {
   return `
-    <button class="icon-btn" onclick="window.orderActions.openShipmentModal('${order.orderID}')" title="Add Shipment">
+    <button class="icon-btn" onclick="window.orderActions.openShipmentModal('${orderID}')" title="Add Shipment">
       <i class="ph ph-package"></i>
     </button>
-    <button class="icon-btn" onclick="window.orderActions.openPaymentModal('${order.orderID}')" title="Record Payment">
+    <button class="icon-btn" onclick="window.orderActions.openPaymentModal('${orderID}')" title="Record Payment">
       <i class="ph ph-currency-dollar"></i>
     </button>
   `;
