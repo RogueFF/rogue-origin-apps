@@ -16,8 +16,8 @@ test.describe('Hourly Entry Page', () => {
   });
 
   test('page loads without errors', async ({ page }) => {
-    // Check page title
-    await expect(page).toHaveTitle(/Hourly.*Entry/i);
+    // Check page title (Floor Manager dashboard)
+    await expect(page).toHaveTitle(/Floor Manager|Hourly.*Entry/i);
 
     // Check no console errors
     const errors = [];
