@@ -624,7 +624,7 @@
     // Tutorial walkthrough state
     let tutorialActive = false;
     let tutorialStep = 0;
-    const TUTORIAL_TOTAL_STEPS = 12;
+    const TUTORIAL_TOTAL_STEPS = 13;
     const tutorialSteps = [
       { field: 'editLangToggle', type: 'toggle', canSkip: false },
       { field: 'sopTitle', type: 'input', canSkip: false },
@@ -634,6 +634,7 @@
       { field: 'sopStatus', type: 'select', canSkip: false },
       { field: 'sopDesc', type: 'textarea', canSkip: true },
       { field: 'editTagsList', type: 'tags', canSkip: true },
+      { field: 'editLinkedSopsList', type: 'linkedSops', canSkip: true },
       { field: 'addStepBtn', type: 'button', canSkip: false },
       { field: 'stepTitle', type: 'stepInput', canSkip: false },
       { field: 'stepDesc', type: 'stepTextarea', canSkip: false },
@@ -709,10 +710,11 @@
         tutorialHint6: 'Draft = work in progress, Published = ready for use',
         tutorialHint7: 'Brief summary of what this procedure covers',
         tutorialHint8: 'Optional: Add tags to help organize and find this SOP',
-        tutorialHint9: 'Click "Add" to create your first step',
-        tutorialHint10: 'Enter a short title for this step',
-        tutorialHint11: 'Describe what to do in this step',
-        tutorialHint12: 'Optional: Add a photo or video to illustrate this step',
+        tutorialHint9: 'Optional: Link related SOPs that should be referenced',
+        tutorialHint10: 'Click "Add" to create your first step',
+        tutorialHint11: 'Enter a short title for this step',
+        tutorialHint12: 'Describe what to do in this step',
+        tutorialHint13: 'Optional: Add a photo or video to illustrate this step',
         // SOP linking
         linkSop: 'Link SOP',
         searchSops: 'Search SOPs',
@@ -789,10 +791,11 @@
         tutorialHint6: 'Borrador = en progreso, Publicado = listo para usar',
         tutorialHint7: 'Breve resumen de lo que cubre este procedimiento',
         tutorialHint8: 'Opcional: Agrega etiquetas para organizar y encontrar este SOP',
-        tutorialHint9: 'Haz clic en "Agregar" para crear tu primer paso',
-        tutorialHint10: 'Ingresa un título corto para este paso',
-        tutorialHint11: 'Describe qué hacer en este paso',
-        tutorialHint12: 'Opcional: Agrega una foto o video para ilustrar este paso',
+        tutorialHint9: 'Opcional: Vincula SOPs relacionados que deben referenciarse',
+        tutorialHint10: 'Haz clic en "Agregar" para crear tu primer paso',
+        tutorialHint11: 'Ingresa un título corto para este paso',
+        tutorialHint12: 'Describe qué hacer en este paso',
+        tutorialHint13: 'Opcional: Agrega una foto o video para ilustrar este paso',
         // SOP linking
         linkSop: 'Vincular SOP',
         searchSops: 'Buscar SOPs',
@@ -1555,6 +1558,9 @@
         case 'editTagsList':
           element = document.getElementById('editTagsList')?.closest('.form-group');
           break;
+        case 'editLinkedSopsList':
+          element = document.getElementById('editLinkedSopsList')?.closest('.form-group');
+          break;
         case 'addStepBtn':
           element = document.querySelector('.steps-header .header-btn');
           break;
@@ -1570,7 +1576,7 @@
       }
 
       if (element) {
-        if (stepConfig.type === 'toggle' || stepConfig.type === 'tags') {
+        if (stepConfig.type === 'toggle' || stepConfig.type === 'tags' || stepConfig.type === 'linkedSops') {
           element.classList.add('tutorial-highlight-group');
         } else {
           element.classList.add('tutorial-highlight');
