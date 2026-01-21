@@ -1612,22 +1612,33 @@
       if (!dept) { showToast('Select department', 'error'); return; }
       if (editingSteps.length === 0) { showToast('Add at least 1 step', 'error'); return; }
       
+      const description = document.getElementById('sopDesc').value.trim();
+
+      // Track which language the SOP was written in
+      const sourceLang = editLang;
+
+      // Store content in the appropriate language field based on editLang
       const sopData = {
         id: currentSopId,
         title: title,
-        title_es: window.sopTranslations?.title_es || '',
+        title_en: sourceLang === 'en' ? title : (window.sopTranslations?.title_en || ''),
+        title_es: sourceLang === 'es' ? title : (window.sopTranslations?.title_es || ''),
+        sourceLang: sourceLang,
         dept: dept,
         docNum: document.getElementById('sopDocNum').value.trim() || generateDocNum(),
         revision: document.getElementById('sopRevision').value.trim() || '1.0',
         status: status,
-        description: document.getElementById('sopDesc').value.trim(),
-        desc_es: window.sopTranslations?.desc_es || '',
+        description: description,
+        desc_en: sourceLang === 'en' ? description : (window.sopTranslations?.desc_en || ''),
+        desc_es: sourceLang === 'es' ? description : (window.sopTranslations?.desc_es || ''),
         tags: getSelectedTags(),
         steps: editingSteps.map(s => ({
           title: s.title || '',
-          title_es: s.title_es || '',
+          title_en: sourceLang === 'en' ? (s.title || '') : (s.title_en || ''),
+          title_es: sourceLang === 'es' ? (s.title || '') : (s.title_es || ''),
           description: s.description || '',
-          desc_es: s.desc_es || '',
+          desc_en: sourceLang === 'en' ? (s.description || '') : (s.desc_en || ''),
+          desc_es: sourceLang === 'es' ? (s.description || '') : (s.desc_es || ''),
           image: s.image || '',
           media: s.media || s.image || '',
           mediaType: s.mediaType || detectMediaType(s.media || s.image || ''),
@@ -2040,15 +2051,14 @@
       editSOP(currentSopId);
     }
     
-    function viewSOP(id) {
+    async function viewSOP(id) {
       const s = sops.find(x => x.id == id);
       if (!s) return;
-      
+
       currentSopId = id;
-      viewLang = 'en';
-      document.querySelectorAll('#viewLangToggle button').forEach(b => b.classList.toggle('active', b.textContent === 'EN'));
-      renderViewSOP(s);
       openModal('viewModal');
+      // Use setViewLang to trigger auto-translation if needed
+      await setViewLang('en');
     }
     
     function renderViewSOP(s) {
@@ -2638,30 +2648,70 @@
       document.querySelectorAll('#viewLangToggle button').forEach(b => b.classList.toggle('active', b.textContent === lang.toUpperCase()));
       const s = sops.find(x => x.id === currentSopId);
       if (!s) return;
-      
+
+      // Auto-translate to Spanish if needed
       if (lang === 'es' && !s.title_es) {
         const esBtn = document.querySelector('#viewLangToggle button:last-child');
         esBtn.innerHTML = '<i class="ph-duotone ph-spinner" style="animation:spin 1s linear infinite"></i>';
         esBtn.disabled = true;
-        
+
         try {
-          showToast('Translating...', 'success');
-          s.title_es = await translateText(s.title, 'en', 'es');
-          if (s.description) s.desc_es = await translateText(s.description, 'en', 'es');
+          showToast('Translating to Spanish...', 'success');
+          // Use title_en if available, otherwise fall back to base title
+          const sourceTitle = s.title_en || s.title;
+          const sourceDesc = s.desc_en || s.description;
+          s.title_es = await translateText(sourceTitle, 'en', 'es');
+          if (sourceDesc) s.desc_es = await translateText(sourceDesc, 'en', 'es');
           for (let step of (s.steps || [])) {
-            if (step.title && !step.title_es) step.title_es = await translateText(step.title, 'en', 'es');
-            if (step.description && !step.desc_es) step.desc_es = await translateText(step.description, 'en', 'es');
+            const stepSourceTitle = step.title_en || step.title;
+            const stepSourceDesc = step.desc_en || step.description;
+            if (stepSourceTitle && !step.title_es) step.title_es = await translateText(stepSourceTitle, 'en', 'es');
+            if (stepSourceDesc && !step.desc_es) step.desc_es = await translateText(stepSourceDesc, 'en', 'es');
           }
           showToast('Translation complete!', 'success');
         } catch (e) {
           console.error('Translation error:', e);
           showToast('Translation failed', 'error');
         }
-        
+
         esBtn.innerHTML = 'ES';
         esBtn.disabled = false;
       }
-      
+
+      // Auto-translate to English if needed (for SOPs written in Spanish)
+      if (lang === 'en' && !s.title_en) {
+        // Check if content appears to be in Spanish (has title_es or sourceLang is 'es')
+        const needsEnglish = s.sourceLang === 'es' || (s.title_es && s.title_es === s.title);
+
+        if (needsEnglish) {
+          const enBtn = document.querySelector('#viewLangToggle button:first-child');
+          enBtn.innerHTML = '<i class="ph-duotone ph-spinner" style="animation:spin 1s linear infinite"></i>';
+          enBtn.disabled = true;
+
+          try {
+            showToast('Translating to English...', 'success');
+            // Use title_es if available, otherwise fall back to base title (which is in Spanish)
+            const sourceTitle = s.title_es || s.title;
+            const sourceDesc = s.desc_es || s.description;
+            s.title_en = await translateText(sourceTitle, 'es', 'en');
+            if (sourceDesc) s.desc_en = await translateText(sourceDesc, 'es', 'en');
+            for (let step of (s.steps || [])) {
+              const stepSourceTitle = step.title_es || step.title;
+              const stepSourceDesc = step.desc_es || step.description;
+              if (stepSourceTitle && !step.title_en) step.title_en = await translateText(stepSourceTitle, 'es', 'en');
+              if (stepSourceDesc && !step.desc_en) step.desc_en = await translateText(stepSourceDesc, 'es', 'en');
+            }
+            showToast('Translation complete!', 'success');
+          } catch (e) {
+            console.error('Translation error:', e);
+            showToast('Translation failed', 'error');
+          }
+
+          enBtn.innerHTML = 'EN';
+          enBtn.disabled = false;
+        }
+      }
+
       renderViewSOP(s);
     }
     
