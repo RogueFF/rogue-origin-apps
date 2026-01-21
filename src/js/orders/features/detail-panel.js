@@ -15,6 +15,7 @@ import { updateStats } from '../ui/stats.js';
 import { formatCurrency, formatNumber } from '../utils/format.js';
 import { renderShipments } from './shipments.js';
 import { renderPayments } from './payments.js';
+import { showSkeleton } from '../ui/loading.js';
 
 /**
  * Open detail panel for an order
@@ -46,11 +47,9 @@ export async function openDetailPanel(orderID) {
     return;
   }
 
-  // Show loading state
-  const shipmentsContainer = document.getElementById('shipments-list');
-  const paymentsContainer = document.getElementById('payments-list');
-  if (shipmentsContainer) shipmentsContainer.innerHTML = '<div class="empty-state">Loading shipments...</div>';
-  if (paymentsContainer) paymentsContainer.innerHTML = '<div class="empty-state">Loading payments...</div>';
+  // Show skeleton loading state
+  showSkeleton('shipments-list', 2);
+  showSkeleton('payments-list', 2);
 
   switchTab('summary');
 

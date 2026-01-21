@@ -14,6 +14,7 @@ import { showToast } from '../ui/toast.js';
 import { renderOrdersTable } from '../ui/table.js';
 import { updateStats } from '../ui/stats.js';
 import { formatNumber } from '../utils/format.js';
+import { withButtonLoading } from '../ui/loading.js';
 
 const MODAL_ID = 'order-modal';
 const FORM_ID = 'order-form';
@@ -163,7 +164,8 @@ export async function saveMasterOrder() {
     return;
   }
 
-  try {
+  const isEditing = !!editingOrderID;
+  await withButtonLoading('order-submit-btn', async () => {
     const result = await apiCall('saveMasterOrder', orderData, 'POST');
 
     if (result.success !== false) {
@@ -171,7 +173,7 @@ export async function saveMasterOrder() {
 
       const orders = getOrders();
 
-      if (editingOrderID) {
+      if (isEditing) {
         // Update existing
         const index = orders.findIndex(o => o.id === editingOrderID);
         if (index !== -1) {
@@ -196,19 +198,16 @@ export async function saveMasterOrder() {
       updateStats();
 
       // Refresh detail panel if open for this order
-      if (editingOrderID && getCurrentOrderID() === editingOrderID) {
+      if (isEditing && getCurrentOrderID() === editingOrderID) {
         // Trigger detail panel refresh
         window.orderActions?.openDetail?.(editingOrderID);
       }
 
-      showToast(editingOrderID ? 'Order updated successfully!' : 'Order created successfully!');
+      showToast(isEditing ? 'Order updated successfully!' : 'Order created successfully!');
     } else {
       showToast('Error saving order: ' + (result.error || 'Unknown error'), 'error');
     }
-  } catch (error) {
-    console.error('Error saving order:', error);
-    showToast('Error saving order', 'error');
-  }
+  }, isEditing ? 'Updating...' : 'Creating...');
 }
 
 /**
