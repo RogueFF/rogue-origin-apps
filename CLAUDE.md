@@ -4,6 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## Model Preferences
+
+| Task Type | Model | Notes |
+|-----------|-------|-------|
+| **Thinking/Planning** | Opus | Design, architecture, brainstorming, analysis |
+| **Code Execution** | Sonnet | Writing code, implementation, file edits |
+
+Unless otherwise specified, use Opus for planning/thinking tasks and Sonnet for code writing.
+
+---
+
 # Rogue Origin Operations Hub
 
 > Hemp processing company in Southern Oregon. Data-driven operations, bilingual (EN/ES) workforce.
