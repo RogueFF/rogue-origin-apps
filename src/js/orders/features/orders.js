@@ -327,6 +327,9 @@ function addOrderRowToDOM(order) {
       <button class="icon-btn" onclick="window.orderActions.openPaymentModal('${orderID}')" title="Record Payment">
         <i class="ph ph-currency-dollar"></i>
       </button>
+      <button class="icon-btn danger" onclick="window.orderActions.deleteOrder('${orderID}')" title="Delete Order">
+        <i class="ph ph-trash"></i>
+      </button>
     </td>
   `;
   tbody.appendChild(row);
