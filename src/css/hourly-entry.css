@@ -211,6 +211,13 @@ body {
   visibility: hidden;
 }
 
+/* Override legacy max-width for in-card layout */
+.card-hourly .timeline-list,
+.card-hourly #editor-content {
+  max-width: none;
+  margin: 0;
+}
+
 /* Inline editor header */
 .editor-header-inline {
   display: flex;
