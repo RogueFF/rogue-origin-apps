@@ -21,6 +21,7 @@ const TIME_SLOTS = [
 const LABELS = {
   en: {
     title: 'Hourly Entry',
+    floorManager: 'Floor Manager',
     today: 'Today',
     target: 'Target',
     hoursLogged: 'hrs logged',
@@ -58,9 +59,25 @@ const LABELS = {
     started: 'Started',
     setStartTime: 'Set Start Time',
     startTimeSet: 'Start time set',
+    // Dashboard card labels
+    hourlyEntry: 'Hourly Entry',
+    barcodePrinter: 'Barcode Printer',
+    bagTimer: 'Bag Timer',
+    strain: 'Strain',
+    selectStrain: 'Select strain...',
+    print5kg: '5kg',
+    print10lbTops: '10lb Tops',
+    print10lbSmalls: '10lb Smalls',
+    bagsToday: 'Bags Today',
+    status: 'Status',
+    onTrack: 'On Track',
+    behind: 'Behind',
+    onBreak: 'On Break',
+    waiting: 'Waiting',
   },
   es: {
     title: 'Entrada por Hora',
+    floorManager: 'Gerente de Piso',
     today: 'Hoy',
     target: 'Meta',
     hoursLogged: 'hrs registradas',
@@ -98,6 +115,21 @@ const LABELS = {
     started: 'Iniciado',
     setStartTime: 'Establecer Hora de Inicio',
     startTimeSet: 'Hora de inicio establecida',
+    // Dashboard card labels
+    hourlyEntry: 'Entrada por Hora',
+    barcodePrinter: 'Impresora de Códigos',
+    bagTimer: 'Temporizador',
+    strain: 'Cepa',
+    selectStrain: 'Seleccionar cepa...',
+    print5kg: '5kg',
+    print10lbTops: '10lb Tops',
+    print10lbSmalls: '10lb Smalls',
+    bagsToday: 'Bolsas Hoy',
+    status: 'Estado',
+    onTrack: 'A Tiempo',
+    behind: 'Atrasado',
+    onBreak: 'En Descanso',
+    waiting: 'Esperando',
   },
 };
 
@@ -1471,3 +1503,281 @@ LABELS.es.back = 'Atrás';
 
 // Initialize tutorial after data loads
 setTimeout(() => initTutorial(), 500);
+
+// ===================
+// BARCODE PRINTER
+// ===================
+
+/**
+ * Initialize barcode card functionality
+ * Called after cultivars are loaded
+ */
+function initBarcodeCard() {
+  populateBarcodeStrainSelect();
+  initBarcodePrintButtons();
+}
+
+/**
+ * Populate the barcode strain dropdown with cultivar options
+ */
+function populateBarcodeStrainSelect() {
+  const select = document.getElementById('barcode-strain');
+  if (!select) return;
+
+  const currentValue = select.value;
+  select.innerHTML = `<option value="">${LABELS[currentLang].selectStrain}</option>`;
+
+  cultivarOptions.forEach((cultivar) => {
+    const option = document.createElement('option');
+    option.value = cultivar;
+    // Display cultivar name without year prefix for cleaner UI
+    option.textContent = cultivar.replace(/^\d{4}\s*/, '');
+    select.appendChild(option);
+  });
+
+  select.value = currentValue;
+}
+
+/**
+ * Initialize barcode print button click handlers
+ */
+function initBarcodePrintButtons() {
+  const buttons = document.querySelectorAll('.barcode-btn');
+  buttons.forEach((btn) => {
+    registerListener(btn, 'click', () => {
+      const strainSelect = document.getElementById('barcode-strain');
+      const strain = strainSelect?.value;
+
+      if (!strain) {
+        strainSelect?.focus();
+        return;
+      }
+
+      const bagType = btn.dataset.type;
+      printBarcodeLabel(strain, bagType);
+    });
+  });
+}
+
+/**
+ * Print a barcode label for the given strain and bag type
+ * @param {string} strain - Cultivar name
+ * @param {string} bagType - '5kg', '10lb-tops', or '10lb-smalls'
+ */
+function printBarcodeLabel(strain, bagType) {
+  // Generate barcode data (format: STRAIN-TYPE-TIMESTAMP)
+  const strainCode = strain.replace(/^\d{4}\s*/, '').substring(0, 10).toUpperCase().replace(/\s/g, '');
+  const timestamp = Date.now().toString(36).toUpperCase();
+  const typeCode = bagType === '5kg' ? '5K' : bagType === '10lb-tops' ? 'T' : 'S';
+  const barcode = `${strainCode}-${typeCode}-${timestamp}`;
+
+  // Label text
+  let labelText = strain.replace(/^\d{4}\s*/, '');
+  if (bagType === '5kg') {
+    labelText += ' - 5kg';
+  } else if (bagType === '10lb-tops') {
+    labelText += ' - 10lb Tops';
+  } else {
+    labelText += ' - 10lb Smalls';
+  }
+
+  // Generate barcode URL using TEC-IT
+  const barcodeUrl = 'https://barcode.tec-it.com/barcode.ashx?data=' + encodeURIComponent(barcode) +
+    '&code=Code128&dpi=203&modulewidth=fit&height=35&hidetext=1';
+
+  // Create or reuse print iframe
+  let iframe = document.getElementById('barcode-print-frame');
+  if (!iframe) {
+    iframe = document.createElement('iframe');
+    iframe.id = 'barcode-print-frame';
+    iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:none;';
+    document.body.appendChild(iframe);
+  }
+
+  // Build print document
+  const doc = iframe.contentWindow.document;
+  doc.open();
+  doc.write('<!DOCTYPE html><html><head><style>');
+  doc.write('@page { size: 1.65in 0.5in; margin: 0 0.15in !important; }');
+  doc.write('@media print { html, body { width: 1.35in !important; height: 0.5in !important; margin: 0 !important; padding: 0 !important; overflow: hidden; } }');
+  doc.write('body { margin: 0; padding: 0; font-family: Arial; }');
+  doc.write('.label { width: 1.35in; height: 0.5in; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1px; }');
+  doc.write('.name { font-size: 6pt; font-weight: bold; margin-bottom: 1px; }');
+  doc.write('img { max-width: 1.3in; height: 0.25in; }');
+  doc.write('.code { font-size: 5pt; margin-top: 1px; }');
+  doc.write('</style></head><body>');
+  doc.write('<div class="label">');
+  doc.write('<div class="name">' + escapeHtml(labelText) + '</div>');
+  doc.write('<img src="' + barcodeUrl + '" alt="barcode">');
+  doc.write('<div class="code">' + escapeHtml(barcode) + '</div>');
+  doc.write('</div></body></html>');
+  doc.close();
+
+  // Wait for barcode image to load then print
+  const img = doc.querySelector('img');
+  img.onload = function () {
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+  };
+
+  // Fallback if image already cached
+  if (img.complete) {
+    setTimeout(function () {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    }, 100);
+  }
+}
+
+/**
+ * Escape HTML special characters
+ */
+function escapeHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ===================
+// BAG TIMER
+// ===================
+
+let bagTimerInterval = null;
+let lastBagTimestamp = null;
+let timerTargetSeconds = 90 * 60; // Default 90 min target
+
+/**
+ * Initialize bag timer card
+ */
+function initBagTimer() {
+  loadBagTimerData();
+  // Poll every 30 seconds for timer updates
+  bagTimerInterval = setInterval(loadBagTimerData, 30000);
+  // Update countdown every second
+  setInterval(updateBagTimerCountdown, 1000);
+}
+
+/**
+ * Load bag timer data from scoreboard API
+ */
+async function loadBagTimerData() {
+  try {
+    const response = await fetch(`${API_URL}?action=scoreboard`);
+    const result = await response.json();
+    const data = result.data || result;
+
+    const timer = data.timer || {};
+
+    // Update bags today count
+    const bagsToday = document.getElementById('bags-today');
+    if (bagsToday) {
+      bagsToday.textContent = timer.bagsToday || 0;
+    }
+
+    // Store last bag timestamp for countdown
+    if (timer.lastBagTime) {
+      lastBagTimestamp = new Date(timer.lastBagTime);
+    } else {
+      lastBagTimestamp = null;
+    }
+
+    // Store target seconds
+    if (timer.targetSeconds) {
+      timerTargetSeconds = timer.targetSeconds;
+    }
+
+    // Update status indicator
+    updateTimerStatus(timer);
+
+  } catch (error) {
+    console.error('Failed to load bag timer data:', error);
+  }
+}
+
+/**
+ * Update the countdown timer display
+ */
+function updateBagTimerCountdown() {
+  const timerValue = document.getElementById('bag-timer-value');
+  if (!timerValue) return;
+
+  if (!lastBagTimestamp) {
+    timerValue.textContent = '--:--';
+    return;
+  }
+
+  const now = new Date();
+  const elapsedMs = now - lastBagTimestamp;
+  const elapsedSeconds = Math.floor(elapsedMs / 1000);
+  const minutes = Math.floor(elapsedSeconds / 60);
+  const seconds = elapsedSeconds % 60;
+
+  // Format as MM:SS or H:MM:SS if over an hour
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    timerValue.textContent = `${hours}:${String(mins).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  } else {
+    timerValue.textContent = `${minutes}:${String(seconds).padStart(2, '0')}`;
+  }
+
+  // Update color based on target
+  const targetMinutes = Math.floor(timerTargetSeconds / 60);
+  if (minutes > targetMinutes * 1.2) {
+    timerValue.style.color = 'var(--error)';
+  } else if (minutes > targetMinutes) {
+    timerValue.style.color = 'var(--gold)';
+  } else {
+    timerValue.style.color = 'var(--text-primary)';
+  }
+}
+
+/**
+ * Update the status indicator based on timer data
+ * @param {Object} timer - Timer data from API
+ */
+function updateTimerStatus(timer) {
+  const statusEl = document.getElementById('timer-status');
+  if (!statusEl) return;
+
+  // Remove all status classes
+  statusEl.classList.remove('on-track', 'behind', 'on-break');
+
+  // Check if on break (scoreboard provides pause state)
+  if (timer.isPaused || timer.onBreak) {
+    statusEl.textContent = LABELS[currentLang].onBreak;
+    statusEl.classList.add('on-break');
+    return;
+  }
+
+  // No bags yet today
+  if (!timer.bagsToday || timer.bagsToday === 0) {
+    statusEl.textContent = LABELS[currentLang].waiting;
+    return;
+  }
+
+  // Check if current cycle is on track
+  const avgSeconds = timer.avgSecondsToday || 0;
+  const targetSeconds = timer.targetSeconds || timerTargetSeconds;
+
+  if (avgSeconds > 0 && avgSeconds <= targetSeconds) {
+    statusEl.textContent = LABELS[currentLang].onTrack;
+    statusEl.classList.add('on-track');
+  } else if (avgSeconds > targetSeconds) {
+    statusEl.textContent = LABELS[currentLang].behind;
+    statusEl.classList.add('behind');
+  } else {
+    statusEl.textContent = '--';
+  }
+}
+
+// Cleanup bag timer on page unload
+window.addEventListener('beforeunload', () => {
+  if (bagTimerInterval) clearInterval(bagTimerInterval);
+});
+
+// Initialize barcode and timer after cultivars load
+const originalLoadCultivars = loadCultivars;
+loadCultivars = async function () {
+  await originalLoadCultivars();
+  initBarcodeCard();
+  initBagTimer();
+};

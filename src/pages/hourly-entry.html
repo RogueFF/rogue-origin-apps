@@ -3,21 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Hourly Production Entry | Rogue Origin</title>
+  <title>Floor Manager | Rogue Origin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../css/hourly-entry.css?v=13">
+  <link rel="stylesheet" href="../css/hourly-entry.css?v=14">
 </head>
 <body>
   <a href="#timeline-list" class="skip-link">Skip to timeline</a>
 
-  <!-- TIMELINE VIEW -->
+  <!-- DASHBOARD VIEW -->
   <div id="timeline-view" class="view active">
     <header class="app-header">
       <div class="header-left">
         <a href="index.html" class="back-btn" title="Back to Dashboard">&larr;</a>
-        <h1 data-i18n="title">Hourly Entry</h1>
+        <h1 data-i18n="floorManager">Floor Manager</h1>
       </div>
       <div class="header-right">
         <!-- Shift Start (shared with scoreboard) -->
@@ -31,25 +31,78 @@
       </div>
     </header>
 
-    <!-- Progress Summary -->
-    <section class="progress-summary">
-      <div class="progress-header">
-        <span class="progress-label" data-i18n="today">TODAY</span>
-        <span class="progress-value" id="timeline-total">0 lbs</span>
-      </div>
-      <div class="progress-bar-container">
-        <div class="progress-bar" id="timeline-progress" style="width: 0%"></div>
-      </div>
-      <div class="progress-details">
-        <span><span data-i18n="target">Target</span>: <span id="timeline-target">0 lbs</span></span>
-        <span><span id="timeline-hours">0</span> <span data-i18n="hoursLogged">hrs logged</span></span>
-      </div>
-    </section>
+    <!-- Dashboard Grid -->
+    <div class="dashboard-grid">
+      <!-- CARD 1: Hourly Entry (50%) -->
+      <div class="dashboard-card card-hourly">
+        <div class="card-header">
+          <h2 class="card-title" data-i18n="hourlyEntry">Hourly Entry</h2>
+        </div>
+        <div class="card-content">
+          <!-- Progress Summary -->
+          <section class="progress-summary">
+            <div class="progress-header">
+              <span class="progress-label" data-i18n="today">TODAY</span>
+              <span class="progress-value" id="timeline-total">0 lbs</span>
+            </div>
+            <div class="progress-bar-container">
+              <div class="progress-bar" id="timeline-progress" style="width: 0%"></div>
+            </div>
+            <div class="progress-details">
+              <span><span data-i18n="target">Target</span>: <span id="timeline-target">0 lbs</span></span>
+              <span><span id="timeline-hours">0</span> <span data-i18n="hoursLogged">hrs logged</span></span>
+            </div>
+          </section>
 
-    <!-- Time Slots List -->
-    <main class="timeline-list" id="timeline-list">
-      <!-- Populated by JS -->
-    </main>
+          <!-- Time Slots List -->
+          <main class="timeline-list" id="timeline-list" role="list">
+            <!-- Populated by JS -->
+          </main>
+        </div>
+      </div>
+
+      <!-- CARD 2: Barcode Printer (25%) -->
+      <div class="dashboard-card card-barcode">
+        <div class="card-header">
+          <h2 class="card-title" data-i18n="barcodePrinter">Barcode Printer</h2>
+        </div>
+        <div class="card-content">
+          <div class="barcode-controls">
+            <label class="barcode-label" data-i18n="strain">Strain</label>
+            <select id="barcode-strain" class="barcode-select">
+              <option value="">Select strain...</option>
+            </select>
+          </div>
+          <div class="barcode-buttons">
+            <button type="button" class="barcode-btn" data-type="5kg" data-i18n="print5kg">5kg</button>
+            <button type="button" class="barcode-btn" data-type="10lb-tops" data-i18n="print10lbTops">10lb Tops</button>
+            <button type="button" class="barcode-btn" data-type="10lb-smalls" data-i18n="print10lbSmalls">10lb Smalls</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- CARD 3: Bag Timer (25%) -->
+      <div class="dashboard-card card-timer">
+        <div class="card-header">
+          <h2 class="card-title" data-i18n="bagTimer">Bag Timer</h2>
+        </div>
+        <div class="card-content">
+          <div class="timer-display">
+            <span class="timer-value" id="bag-timer-value">--:--</span>
+          </div>
+          <div class="timer-stats">
+            <div class="timer-stat">
+              <span class="stat-label" data-i18n="bagsToday">Bags Today</span>
+              <span class="stat-value" id="bags-today">0</span>
+            </div>
+            <div class="timer-stat">
+              <span class="stat-label" data-i18n="status">Status</span>
+              <span class="stat-value status-indicator" id="timer-status">--</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Today Button -->
     <button id="today-btn" class="today-fab" data-i18n="today">Today</button>
@@ -268,6 +321,6 @@
     <button class="tooltip-close">×</button>
   </div>
 
-  <script type="module" src="../js/hourly-entry/index.js?v=23"></script>
+  <script type="module" src="../js/hourly-entry/index.js?v=24"></script>
 </body>
 </html>

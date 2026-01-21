@@ -46,10 +46,248 @@ body {
 }
 
 /* ===================
-   TIMELINE VIEW
+   DASHBOARD GRID
+   =================== */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 50% 25% 25%;
+  gap: 16px;
+  padding: 16px;
+  height: calc(100vh - 70px); /* Full height minus header */
+  min-height: 600px;
+}
+
+.dashboard-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.card-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.card-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.card-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+/* Card-specific adjustments */
+.card-hourly .card-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.card-hourly .progress-summary {
+  border-bottom: none;
+  padding: 0 0 12px 0;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.card-hourly .timeline-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+}
+
+/* Bigger timeline slots */
+.card-hourly .timeline-slot {
+  padding: 16px;
+  font-size: 15px;
+}
+
+.card-hourly .slot-lbs {
+  font-size: 18px;
+}
+
+/* ===================
+   BARCODE CARD
+   =================== */
+.card-barcode .card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.barcode-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.barcode-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.barcode-select {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.barcode-select:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+.barcode-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+
+.barcode-btn {
+  flex: 1;
+  min-height: 70px;
+  padding: 16px;
+  border: 2px solid var(--gold);
+  border-radius: 12px;
+  background: rgba(228, 170, 79, 0.1);
+  color: var(--gold);
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.barcode-btn:hover {
+  background: var(--gold);
+  color: var(--bg-dark);
+}
+
+.barcode-btn:active {
+  transform: scale(0.98);
+}
+
+/* ===================
+   BAG TIMER CARD
+   =================== */
+.card-timer .card-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 24px;
+  height: 100%;
+}
+
+.timer-display {
+  text-align: center;
+}
+
+.timer-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 56px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 2px;
+}
+
+.timer-stats {
+  display: flex;
+  gap: 32px;
+  text-align: center;
+}
+
+.timer-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.status-indicator {
+  font-size: 16px;
+}
+
+.status-indicator.on-track {
+  color: var(--success);
+}
+
+.status-indicator.behind {
+  color: var(--error);
+}
+
+.status-indicator.on-break {
+  color: var(--gold);
+}
+
+/* ===================
+   TIMELINE VIEW (legacy)
    =================== */
 #timeline-view {
   padding-bottom: 80px; /* Space for FAB */
+}
+
+/* Responsive: Stack cards on smaller screens */
+@media (max-width: 1200px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+    height: auto;
+    min-height: auto;
+  }
+
+  .card-hourly {
+    grid-column: 1 / -1;
+    max-height: 50vh;
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .card-hourly {
+    max-height: 60vh;
+  }
+
+  .timer-value {
+    font-size: 40px;
+  }
+
+  .barcode-btn {
+    min-height: 60px;
+  }
 }
 
 .app-header {
