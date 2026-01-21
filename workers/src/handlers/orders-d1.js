@@ -244,7 +244,6 @@ async function deleteMasterOrder(body, env) {
   if (!order) throw createError('NOT_FOUND', 'Order not found');
 
   // Delete associated records FIRST (foreign key constraints require this order)
-  await deleteRows(env.DB, 'shipment_lines', 'shipment_id IN (SELECT id FROM shipments WHERE order_id = ?)', [orderID]);
   await deleteRows(env.DB, 'shipments', 'order_id = ?', [orderID]);
   await deleteRows(env.DB, 'payments', 'order_id = ?', [orderID]);
 
