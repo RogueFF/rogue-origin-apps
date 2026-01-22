@@ -72,6 +72,39 @@ body {
   padding: 10px 12px;
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
+  position: relative;
+}
+
+/* Subtle gradient accent under card headers */
+.card-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  opacity: 0.6;
+}
+
+.card-hourly .card-header::after {
+  background: linear-gradient(90deg, var(--green), transparent 80%);
+}
+
+.card-barcode .card-header::after {
+  background: linear-gradient(90deg, var(--gold), transparent 80%);
+}
+
+.card-timer .card-header::after {
+  background: linear-gradient(90deg, var(--green), transparent 80%);
+  transition: background 0.5s ease;
+}
+
+.card-timer.timer-yellow .card-header::after {
+  background: linear-gradient(90deg, var(--gold), transparent 80%);
+}
+
+.card-timer.timer-red .card-header::after {
+  background: linear-gradient(90deg, var(--error), transparent 80%);
 }
 
 .card-title {
@@ -207,6 +240,46 @@ body {
 .card-hourly .slot-status {
   font-size: 14px;
   flex-shrink: 0;
+}
+
+/* Timeline Slot States */
+.card-hourly .timeline-slot {
+  border-left: 3px solid transparent;
+  transition: all 0.2s ease;
+}
+
+/* Completed slots - green accent */
+.card-hourly .timeline-slot.has-data {
+  background: rgba(102, 137, 113, 0.15);
+  border-left-color: var(--green);
+}
+
+.card-hourly .timeline-slot.has-data:hover {
+  background: rgba(102, 137, 113, 0.25);
+  box-shadow: inset 0 0 20px rgba(102, 137, 113, 0.15);
+}
+
+/* Current hour slot - gold accent with subtle pulse */
+.card-hourly .timeline-slot.current {
+  background: rgba(228, 170, 79, 0.15);
+  border-left-color: var(--gold);
+  animation: current-slot-pulse 3s ease-in-out infinite;
+}
+
+.card-hourly .timeline-slot.current:hover {
+  background: rgba(228, 170, 79, 0.25);
+  box-shadow: inset 0 0 20px rgba(228, 170, 79, 0.15);
+}
+
+@keyframes current-slot-pulse {
+  0%, 100% { box-shadow: inset 0 0 15px rgba(228, 170, 79, 0.1); }
+  50% { box-shadow: inset 0 0 25px rgba(228, 170, 79, 0.2); }
+}
+
+/* Empty future slots - neutral hover */
+.card-hourly .timeline-slot:not(.has-data):not(.current):hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-left-color: var(--border-color);
 }
 
 /* Placeholder for hidden slots (maintains grid alignment) */
@@ -377,16 +450,26 @@ body {
   width: 100%;
   padding: 14px 16px;
   border: 1px solid var(--border-color);
+  border-left: 3px solid transparent;
   border-radius: 8px;
   background: var(--bg-input);
   color: var(--text-primary);
   font-size: 16px;
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .barcode-select:focus {
   outline: none;
   border-color: var(--gold);
+  border-left-color: var(--gold);
+}
+
+/* Strain selected state */
+.barcode-select.has-selection {
+  background: rgba(102, 137, 113, 0.1);
+  border-left-color: var(--green);
+  border-color: var(--green);
 }
 
 .barcode-buttons {
@@ -407,16 +490,51 @@ body {
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s ease;
 }
 
 .barcode-btn:hover {
-  background: var(--gold);
-  color: var(--bg-dark);
+  transform: scale(1.02);
 }
 
 .barcode-btn:active {
   transform: scale(0.98);
+}
+
+/* 5kg Button - Green identity */
+.barcode-btn.btn-5kg {
+  background: linear-gradient(135deg, rgba(102, 137, 113, 0.3), rgba(102, 137, 113, 0.15));
+  border-color: var(--green);
+  color: #8fbf9d;
+}
+
+.barcode-btn.btn-5kg:hover {
+  background: linear-gradient(135deg, rgba(102, 137, 113, 0.5), rgba(102, 137, 113, 0.3));
+  box-shadow: inset 0 0 25px rgba(102, 137, 113, 0.2);
+}
+
+/* 10lb Tops Button - Gold identity */
+.barcode-btn.btn-tops {
+  background: linear-gradient(135deg, rgba(228, 170, 79, 0.3), rgba(228, 170, 79, 0.15));
+  border-color: var(--gold);
+  color: #f0c87a;
+}
+
+.barcode-btn.btn-tops:hover {
+  background: linear-gradient(135deg, rgba(228, 170, 79, 0.5), rgba(228, 170, 79, 0.3));
+  box-shadow: inset 0 0 25px rgba(228, 170, 79, 0.2);
+}
+
+/* 10lb Smalls Button - Copper identity */
+.barcode-btn.btn-smalls {
+  background: linear-gradient(135deg, rgba(196, 130, 80, 0.3), rgba(196, 130, 80, 0.15));
+  border-color: #c48250;
+  color: #daa070;
+}
+
+.barcode-btn.btn-smalls:hover {
+  background: linear-gradient(135deg, rgba(196, 130, 80, 0.5), rgba(196, 130, 80, 0.3));
+  box-shadow: inset 0 0 25px rgba(196, 130, 80, 0.2);
 }
 
 /* ===================
@@ -795,15 +913,22 @@ body {
   height: 8px;
   background: var(--bg-input);
   border-radius: 4px;
-  overflow: hidden;
+  overflow: visible;
   margin-bottom: 8px;
+  position: relative;
 }
 
 .progress-bar {
   height: 100%;
   background: linear-gradient(90deg, var(--green), var(--green-bright));
   border-radius: 4px;
-  transition: width 0.5s ease;
+  transition: width 0.5s ease, box-shadow 0.3s ease;
+  box-shadow: 0 0 12px rgba(102, 137, 113, 0.4);
+}
+
+/* Progress bar at/near target - brighter glow */
+.progress-bar.on-target {
+  box-shadow: 0 0 16px rgba(74, 222, 128, 0.5);
 }
 
 .progress-details {
