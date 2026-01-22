@@ -6,7 +6,8 @@
 import { apiCall } from '../core/api.js';
 import {
   getCurrentOrderID, getCachedPayments, setCachedPayments,
-  getEditingPaymentID, setEditingPaymentID, invalidateCache
+  getEditingPaymentID, setEditingPaymentID, invalidateCache,
+  getCachedShipments
 } from '../core/state.js';
 import { openModal, closeModal, clearForm } from '../ui/modals.js';
 import { showToast } from '../ui/toast.js';
@@ -17,11 +18,14 @@ const MODAL_ID = 'payment-modal';
 const FORM_ID = 'payment-form';
 const DETAIL_MODAL_ID = 'payment-detail-modal';
 
+// Track selected shipments for linking
+let selectedShipmentIds = [];
+
 /**
  * Open payment modal for current order
  * @param {string} orderID - Optional order ID override
  */
-export function openPaymentModal(orderID = null) {
+export async function openPaymentModal(orderID = null) {
   const targetOrderID = orderID || getCurrentOrderID();
   if (!targetOrderID) {
     showToast('Please select an order first', 'warning');
@@ -30,6 +34,7 @@ export function openPaymentModal(orderID = null) {
 
   setEditingPaymentID(null);
   clearForm(FORM_ID);
+  selectedShipmentIds = [];
 
   // Set today's date
   const dateInput = document.getElementById('payment-date');
@@ -54,6 +59,9 @@ export function openPaymentModal(orderID = null) {
   const modal = document.getElementById(MODAL_ID);
   if (modal) modal.dataset.orderID = targetOrderID;
 
+  // Load and display shipments for linking
+  await loadShipmentsForLinking(targetOrderID);
+
   openModal(MODAL_ID);
 }
 
@@ -69,7 +77,7 @@ export function closePaymentModal() {
  * Edit existing payment
  * @param {string} paymentId
  */
-export function editPayment(paymentId) {
+export async function editPayment(paymentId) {
   const payments = getCachedPayments();
   const payment = payments.find(p => p.id === paymentId);
   if (!payment) {
@@ -78,6 +86,7 @@ export function editPayment(paymentId) {
   }
 
   setEditingPaymentID(paymentId);
+  selectedShipmentIds = [];
 
   // Populate form
   setFieldValue('payment-amount', payment.amount);
@@ -92,6 +101,10 @@ export function editPayment(paymentId) {
 
   const submitBtn = document.getElementById('payment-submit-btn');
   if (submitBtn) submitBtn.textContent = 'Update Payment';
+
+  // Load shipments and existing links
+  const orderID = payment.orderID || getCurrentOrderID();
+  await loadShipmentsForLinking(orderID, paymentId);
 
   openModal(MODAL_ID);
 }
@@ -133,17 +146,31 @@ export async function savePayment() {
     paymentData.id = editingId;
   }
 
+  // Include linked shipment IDs
+  paymentData.linkedShipmentIds = selectedShipmentIds;
+
   const isEditing = !!editingId;
   await withButtonLoading('payment-submit-btn', async () => {
     const action = isEditing ? 'updatePayment' : 'recordPayment';
     const result = await apiCall(action, paymentData, 'POST');
 
     if (result.success !== false) {
+      const paymentId = result.payment?.id || editingId;
+
+      // Save shipment links
+      if (paymentId && selectedShipmentIds.length > 0) {
+        await savePaymentShipmentLinks(paymentId, selectedShipmentIds);
+      } else if (paymentId && isEditing) {
+        // Clear existing links if none selected during edit
+        await clearPaymentShipmentLinks(paymentId);
+      }
+
       closePaymentModal();
       invalidateCache(orderID);
 
-      // Refresh payments list
+      // Refresh payments and shipments list (to update payment status)
       await refreshPayments(orderID);
+      await refreshShipmentPaymentStatus(orderID);
 
       showToast(isEditing ? 'Payment updated!' : 'Payment recorded!');
     } else {
@@ -183,7 +210,7 @@ export async function deletePayment(paymentId) {
  * Open payment detail modal
  * @param {string} paymentId
  */
-export function openPaymentDetailModal(paymentId) {
+export async function openPaymentDetailModal(paymentId) {
   const payments = getCachedPayments();
   const payment = payments.find(p => p.id === paymentId);
   if (!payment) return;
@@ -195,6 +222,9 @@ export function openPaymentDetailModal(paymentId) {
   setDetailValue('detail-payment-reference', payment.reference || '-');
   setDetailValue('detail-payment-notes', payment.notes || '-');
   setDetailValue('detail-payment-recorded', payment.createdAt ? formatDate(payment.createdAt) : '-');
+
+  // Load and display linked shipments
+  await loadLinkedShipmentsForDetail(paymentId);
 
   // Store payment ID for edit button
   const editBtn = document.getElementById('detail-edit-btn');
@@ -288,4 +318,169 @@ function getFieldValue(id) {
 function setDetailValue(id, value) {
   const el = document.getElementById(id);
   if (el) el.textContent = value || '';
+}
+
+/**
+ * Load shipments for linking in payment modal
+ * @param {string} orderID
+ * @param {string} [paymentId] - If editing, load existing links
+ */
+async function loadShipmentsForLinking(orderID, paymentId = null) {
+  const container = document.getElementById('payment-shipments-list');
+  if (!container) return;
+
+  container.innerHTML = '<span class="text-muted">Loading shipments...</span>';
+
+  try {
+    // Get shipments from cache or fetch
+    let shipments = getCachedShipments();
+    if (!shipments || shipments.length === 0) {
+      const result = await apiCall('getShipments', { orderID });
+      shipments = result.shipments || [];
+    }
+
+    // If editing, get existing links
+    let linkedIds = [];
+    if (paymentId) {
+      const linksResult = await apiCall('getPaymentLinks', { paymentId });
+      linkedIds = (linksResult.links || []).map(l => l.shipmentId);
+    }
+    selectedShipmentIds = [...linkedIds];
+
+    if (shipments.length === 0) {
+      container.innerHTML = '<span class="text-muted">No shipments to link</span>';
+      return;
+    }
+
+    container.innerHTML = shipments.map(shipment => {
+      const isLinked = linkedIds.includes(shipment.id);
+      return `
+        <label class="shipment-checkbox-item ${isLinked ? 'selected' : ''}" data-shipment-id="${shipment.id}">
+          <input type="checkbox" ${isLinked ? 'checked' : ''} onchange="window.toggleShipmentSelection('${shipment.id}', this)">
+          <div class="shipment-checkbox-info">
+            <div>
+              <span class="shipment-checkbox-label">${shipment.invoiceNumber || 'No Invoice'}</span>
+              <span class="shipment-checkbox-date">${formatDate(shipment.shipmentDate)}</span>
+            </div>
+            <span class="shipment-checkbox-amount">${formatCurrency(shipment.totalAmount)}</span>
+          </div>
+        </label>
+      `;
+    }).join('');
+  } catch (error) {
+    console.error('Error loading shipments for linking:', error);
+    container.innerHTML = '<span class="text-muted">Error loading shipments</span>';
+  }
+}
+
+/**
+ * Toggle shipment selection for payment linking
+ * @param {string} shipmentId
+ * @param {HTMLInputElement} checkbox
+ */
+export function toggleShipmentSelection(shipmentId, checkbox) {
+  const item = checkbox.closest('.shipment-checkbox-item');
+  if (checkbox.checked) {
+    if (!selectedShipmentIds.includes(shipmentId)) {
+      selectedShipmentIds.push(shipmentId);
+    }
+    item?.classList.add('selected');
+  } else {
+    selectedShipmentIds = selectedShipmentIds.filter(id => id !== shipmentId);
+    item?.classList.remove('selected');
+  }
+}
+
+// Expose to window for onclick
+window.toggleShipmentSelection = toggleShipmentSelection;
+
+/**
+ * Save payment-shipment links
+ * @param {string} paymentId
+ * @param {string[]} shipmentIds
+ */
+async function savePaymentShipmentLinks(paymentId, shipmentIds) {
+  try {
+    // Clear existing links first
+    await apiCall('deletePaymentLink', { paymentId, all: true }, 'POST');
+
+    // Create new links
+    for (const shipmentId of shipmentIds) {
+      await apiCall('savePaymentLink', { paymentId, shipmentId }, 'POST');
+    }
+  } catch (error) {
+    console.error('Error saving payment-shipment links:', error);
+  }
+}
+
+/**
+ * Clear all links for a payment
+ * @param {string} paymentId
+ */
+async function clearPaymentShipmentLinks(paymentId) {
+  try {
+    await apiCall('deletePaymentLink', { paymentId, all: true }, 'POST');
+  } catch (error) {
+    console.error('Error clearing payment-shipment links:', error);
+  }
+}
+
+/**
+ * Load linked shipments for payment detail modal
+ * @param {string} paymentId
+ */
+async function loadLinkedShipmentsForDetail(paymentId) {
+  const container = document.getElementById('detail-payment-shipments');
+  if (!container) return;
+
+  try {
+    const linksResult = await apiCall('getPaymentLinks', { paymentId });
+    const links = linksResult.links || [];
+
+    if (links.length === 0) {
+      container.innerHTML = '<span class="text-muted">No linked shipments</span>';
+      return;
+    }
+
+    // Get shipment details
+    const shipments = getCachedShipments() || [];
+    container.innerHTML = links.map(link => {
+      const shipment = shipments.find(s => s.id === link.shipmentId);
+      return `
+        <div class="linked-shipment-item">
+          <span class="linked-shipment-invoice">${shipment?.invoiceNumber || link.shipmentId}</span>
+          <span class="linked-shipment-amount">${formatCurrency(shipment?.totalAmount || 0)}</span>
+        </div>
+      `;
+    }).join('');
+  } catch (error) {
+    console.error('Error loading linked shipments:', error);
+    container.innerHTML = '<span class="text-muted">Error loading linked shipments</span>';
+  }
+}
+
+/**
+ * Refresh shipment payment status after payment changes
+ * @param {string} orderID
+ */
+async function refreshShipmentPaymentStatus(orderID) {
+  // Trigger shipment list refresh to update payment status badges
+  const { renderShipments } = await import('./shipments.js');
+  try {
+    const result = await apiCall('getShipments', { orderID });
+    if (result.success !== false) {
+      // Get payment status for each shipment
+      const shipments = result.shipments || [];
+      for (const shipment of shipments) {
+        const statusResult = await apiCall('getShipmentPaymentStatus', { shipmentId: shipment.id });
+        if (statusResult.success !== false) {
+          shipment.paymentStatus = statusResult.status;
+          shipment.paidAmount = statusResult.paidAmount;
+        }
+      }
+      renderShipments(shipments);
+    }
+  } catch (error) {
+    console.error('Error refreshing shipment payment status:', error);
+  }
 }

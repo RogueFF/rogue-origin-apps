@@ -169,6 +169,21 @@ CREATE TABLE IF NOT EXISTS payments (
 CREATE INDEX IF NOT EXISTS idx_payments_order ON payments(order_id);
 CREATE INDEX IF NOT EXISTS idx_payments_date ON payments(payment_date);
 
+-- Payment-Shipment Links (many-to-many)
+-- Allows tracking which shipments a payment covers
+CREATE TABLE IF NOT EXISTS payment_shipment_links (
+  id TEXT PRIMARY KEY,
+  payment_id TEXT NOT NULL,
+  shipment_id TEXT NOT NULL,
+  amount REAL,  -- portion of payment applied to this shipment
+  created_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE CASCADE,
+  FOREIGN KEY (shipment_id) REFERENCES shipments(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_psl_payment ON payment_shipment_links(payment_id);
+CREATE INDEX IF NOT EXISTS idx_psl_shipment ON payment_shipment_links(shipment_id);
+
 CREATE TABLE IF NOT EXISTS price_history (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   strain TEXT NOT NULL,
