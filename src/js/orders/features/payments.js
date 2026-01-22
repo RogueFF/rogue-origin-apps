@@ -442,14 +442,17 @@ async function loadLinkedShipmentsForDetail(paymentId) {
       return;
     }
 
-    // Get shipment details
+    // Get shipment details from cache, but API also provides invoice/amount as fallback
     const shipments = getCachedShipments() || [];
     container.innerHTML = links.map(link => {
       const shipment = shipments.find(s => s.id === link.shipmentId);
+      // Use cached shipment data if available, otherwise use API-provided data
+      const invoiceNumber = shipment?.invoiceNumber || link.invoiceNumber || link.shipmentId;
+      const amount = shipment?.totalAmount || link.shipmentAmount || 0;
       return `
         <div class="linked-shipment-item">
-          <span class="linked-shipment-invoice">${shipment?.invoiceNumber || link.shipmentId}</span>
-          <span class="linked-shipment-amount">${formatCurrency(shipment?.totalAmount || 0)}</span>
+          <span class="linked-shipment-invoice">${invoiceNumber}</span>
+          <span class="linked-shipment-amount">${formatCurrency(amount)}</span>
         </div>
       `;
     }).join('');
