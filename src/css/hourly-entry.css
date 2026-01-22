@@ -582,8 +582,8 @@ body {
 /* Circular Timer Ring (matches scoreboard) */
 .timer-ring-container {
   position: relative;
-  width: 180px;
-  height: 180px;
+  width: 240px;
+  height: 240px;
   flex-shrink: 0;
 }
 
@@ -630,10 +630,10 @@ body {
 
 .timer-value {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 32px;
+  font-size: 44px;
   font-weight: 600;
   color: var(--text-primary);
-  letter-spacing: 1px;
+  letter-spacing: 2px;
   line-height: 1;
 }
 
@@ -650,17 +650,17 @@ body {
 }
 
 .timer-label {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
 /* Timer Stats */
 .timer-stats {
   display: flex;
-  gap: 16px;
+  gap: 24px;
   text-align: center;
   flex-wrap: wrap;
   justify-content: center;
@@ -669,20 +669,20 @@ body {
 .timer-stat {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  min-width: 60px;
+  gap: 4px;
+  min-width: 70px;
 }
 
 .stat-label {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.5px;
 }
 
 .stat-value {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 18px;
+  font-size: 24px;
   font-weight: 600;
   color: var(--text-primary);
 }
