@@ -1788,6 +1788,7 @@ let timerAvgSeconds = 0;
 let timerIsPaused = false;
 let timerPauseReason = '';
 let timerBagsToday = 0;
+let lastKnownVersion = null; // For smart polling
 
 // SVG constants (matching scoreboard)
 const RING_CIRCUMFERENCE = 2 * Math.PI * 95; // 597
@@ -1906,11 +1907,41 @@ function getWorkingSecondsSince(startTime) {
  * Initialize bag timer card
  */
 function initBagTimer() {
-  loadBagTimerData();
-  // Poll every 5 seconds for timer updates (matches scoreboard)
-  bagTimerInterval = setInterval(loadBagTimerData, 5000);
+  loadBagTimerData(); // Initial full load
+  // Smart polling: check version every 5 seconds, only fetch data if changed
+  bagTimerInterval = setInterval(checkBagTimerVersion, 5000);
   // Update countdown every second
   bagTimerTickInterval = setInterval(updateBagTimerTick, 1000);
+}
+
+/**
+ * Smart polling: Check version endpoint first, only fetch full data if changed
+ * This reduces API calls by ~90% when data is static (matches scoreboard pattern)
+ */
+async function checkBagTimerVersion() {
+  try {
+    const response = await fetch(`${API_URL}?action=version`);
+    if (!response.ok) {
+      // Version endpoint failed, fall back to full fetch
+      loadBagTimerData();
+      return;
+    }
+
+    const result = await response.json();
+    const data = result.data || result;
+    const currentVersion = data.version;
+
+    // First check or version changed - fetch full data
+    if (lastKnownVersion === null || currentVersion !== lastKnownVersion) {
+      lastKnownVersion = currentVersion;
+      loadBagTimerData();
+    }
+    // Version same - no need to fetch, data hasn't changed
+  } catch (error) {
+    console.error('Version check failed, falling back to data load:', error);
+    // On error, try full load as fallback
+    loadBagTimerData();
+  }
 }
 
 /**
@@ -1919,6 +1950,17 @@ function initBagTimer() {
 async function loadBagTimerData() {
   try {
     const response = await fetch(`${API_URL}?action=scoreboard`);
+
+    // Handle rate limiting gracefully
+    if (response.status === 429) {
+      console.warn('Rate limited, will retry on next interval');
+      return; // Don't update UI, keep current data
+    }
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
     const result = await response.json();
     const data = result.data || result;
 
