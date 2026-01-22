@@ -512,8 +512,10 @@ function renderTimeline() {
 function createSlotElement(slot, currentSlot) {
   const index = TIME_SLOTS.indexOf(slot);
   const data = dayData[slot] || {};
-  const totalLbs = (data.tops1 || 0) + (data.tops2 || 0);
-  const hasData = totalLbs > 0 || data.trimmers1 > 0;
+  const totalTops = (data.tops1 || 0) + (data.tops2 || 0);
+  const totalSmalls = (data.smalls1 || 0) + (data.smalls2 || 0);
+  const totalTrimmers = (data.trimmers1 || 0) + (data.trimmers2 || 0);
+  const hasData = totalTops > 0 || data.trimmers1 > 0;
   const isCurrent = slot === currentSlot;
 
   // Get cultivar (prefer Line 1, fallback to Line 2)
@@ -521,12 +523,17 @@ function createSlotElement(slot, currentSlot) {
   // Shorten cultivar name (remove year prefix if present)
   const cultivarShort = cultivar.replace(/^\d{4}\s*/, '');
 
+  // Calculate hourly target (trimmers × rate × slot multiplier)
+  const multiplier = getSlotMultiplier(slot);
+  const hourlyTarget = totalTrimmers * targetRate * multiplier;
+  const metTarget = totalTops >= hourlyTarget;
+
   const div = document.createElement('div');
   div.className = 'timeline-slot' + (hasData ? ' has-data' : '') + (isCurrent ? ' current' : '');
   div.setAttribute('role', 'listitem');
   div.setAttribute('tabindex', '0');
   div.setAttribute('aria-label', `${slot}, ${cultivarShort || (currentLang === 'es' ? 'sin cultivar' : 'no cultivar')}, ${hasData
-    ? (currentLang === 'es' ? `${totalLbs.toFixed(1)} libras` : `${totalLbs.toFixed(1)} lbs`)
+    ? (currentLang === 'es' ? `${totalTops.toFixed(1)} libras` : `${totalTops.toFixed(1)} lbs`)
     : (currentLang === 'es' ? 'sin datos' : 'no data')}`);
 
   // Status indicator
@@ -535,6 +542,16 @@ function createSlotElement(slot, currentSlot) {
     ? (currentLang === 'es' ? 'Completo' : 'Done')
     : (currentLang === 'es' ? 'Pendiente' : 'Empty');
 
+  // Smalls display (only show if > 0)
+  const smallsDisplay = totalSmalls > 0
+    ? `<span class="slot-smalls">+ ${totalSmalls.toFixed(1)} sm</span>`
+    : '';
+
+  // Target display (only show if we have trimmers/target)
+  const targetDisplay = hourlyTarget > 0
+    ? `<span class="slot-target ${metTarget ? 'met' : 'missed'}">/ ${hourlyTarget.toFixed(1)}</span>`
+    : '';
+
   div.innerHTML = `
     <div class="slot-row">
       <span class="slot-time">${formatSlotShort(slot)}</span>
@@ -542,9 +559,11 @@ function createSlotElement(slot, currentSlot) {
     </div>
     <span class="slot-cultivar">${cultivarShort || '—'}</span>
     <div class="slot-row">
-      <span class="slot-lbs ${hasData ? '' : 'empty'}">${hasData ? totalLbs.toFixed(1) + ' lbs' : '—'}</span>
+      <span class="slot-lbs ${hasData ? '' : 'empty'}">${hasData ? totalTops.toFixed(1) + ' lbs' : '—'}</span>
+      ${targetDisplay}
       <span class="slot-status-text visually-hidden">${statusText}</span>
     </div>
+    ${smallsDisplay ? `<div class="slot-row">${smallsDisplay}</div>` : ''}
   `;
 
   // Click handler
