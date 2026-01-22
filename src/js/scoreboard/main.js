@@ -113,6 +113,11 @@
               Cycle.loadCycleHistoryFromAPI(response.timer.cycleHistory, defaultTarget);
             }
           }
+
+          // Sync pause state from server (cross-device sync)
+          if (Timer && Timer.applyPauseState) {
+            Timer.applyPauseState(response.pause);
+          }
         }
 
         // Render the scoreboard
