@@ -846,20 +846,25 @@ async function scoreboard(env) {
   // Check cache first to reduce Google Sheets API calls
   const now = Date.now();
   if (scoreboardCache.data && (now - scoreboardCache.timestamp) < scoreboardCache.TTL) {
-    return successResponse(scoreboardCache.data);
+    // Even with cache, always check for active pause (it's lightweight)
+    const pauseState = await getActivePause(env);
+    const cachedWithPause = { ...scoreboardCache.data, pause: pauseState };
+    return successResponse(cachedWithPause);
   }
 
   // Fetch fresh data
   const scoreboardData = await getScoreboardData(env);
   const timerData = await getBagTimerData(env);
+  const pauseState = await getActivePause(env);
 
   const responseData = {
     scoreboard: scoreboardData,
     timer: timerData,
+    pause: pauseState,
   };
 
-  // Update cache
-  scoreboardCache.data = responseData;
+  // Update cache (pause state not cached - always fetched fresh)
+  scoreboardCache.data = { scoreboard: scoreboardData, timer: timerData };
   scoreboardCache.timestamp = now;
 
   return successResponse(responseData);
