@@ -1786,6 +1786,7 @@ let lastBagTimestamp = null;
 let timerTargetSeconds = 90 * 60; // Default 90 min target
 let timerAvgSeconds = 0;
 let timerIsPaused = false;
+let timerPauseReason = '';
 let timerBagsToday = 0;
 
 // SVG constants (matching scoreboard)
@@ -1940,8 +1941,16 @@ async function loadBagTimerData() {
     // Store target and avg seconds
     timerTargetSeconds = timer.targetSeconds || 90 * 60;
     timerAvgSeconds = timer.avgSecondsToday || 0;
-    // Note: isPaused is a client-side state on scoreboard, not from API
-    // We detect breaks locally using isOnBreakOrAfterHours()
+
+    // Sync pause state from server (cross-device sync - matches scoreboard)
+    const pauseData = data.pause;
+    if (pauseData && pauseData.isPaused) {
+      timerIsPaused = true;
+      timerPauseReason = pauseData.pauseReason || 'Unknown';
+    } else {
+      timerIsPaused = false;
+      timerPauseReason = '';
+    }
 
     // Update Avg Today stat
     updateAvgTodayStat(timerAvgSeconds);
@@ -1970,6 +1979,26 @@ function updateBagTimerTick() {
 
   // Check break/after hours status (matches scoreboard logic)
   const breakStatus = isOnBreakOrAfterHours();
+
+  // If manually paused (synced from server), show paused state
+  if (timerIsPaused) {
+    setTimerColor('yellow');
+    // Show frozen time during pause
+    if (lastBagTimestamp) {
+      const elapsedSeconds = getWorkingSecondsSince(lastBagTimestamp);
+      const remainingSeconds = Math.max(0, timerTargetSeconds - elapsedSeconds);
+      timerValue.textContent = formatTimeMMSS(remainingSeconds);
+    } else {
+      timerValue.textContent = '--:--';
+    }
+    timerLabel.textContent = currentLang === 'es' ? 'PAUSADO' : 'PAUSED';
+    // Keep ring at current position during pause
+    if (lastBagTimestamp) {
+      const elapsedSeconds = getWorkingSecondsSince(lastBagTimestamp);
+      setRingProgress(Math.min(1, elapsedSeconds / timerTargetSeconds));
+    }
+    return;
+  }
 
   // If on break or after hours, show break state
   if (breakStatus.onBreak) {
