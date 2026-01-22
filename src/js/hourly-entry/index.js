@@ -1050,14 +1050,22 @@ function updateTimelineSummary() {
   let totalTarget = 0;
   let hoursLogged = 0;
 
-  Object.values(dayData).forEach((row) => {
+  // For today, exclude current hour from target (data entered at END of hour)
+  const isToday = currentDate === formatDateLocal(new Date());
+  const currentSlot = isToday ? getCurrentTimeSlot() : null;
+
+  Object.entries(dayData).forEach(([slot, row]) => {
     const rowTops = (row.tops1 || 0) + (row.tops2 || 0);
     totalTops += rowTops;
     if (rowTops > 0 || row.trimmers1 > 0) {
       hoursLogged++;
+      // Skip current hour for target calculation (still being worked on)
+      if (slot === currentSlot) {
+        return; // Don't add to target - hour not complete
+      }
       // Calculate target based on trimmers
       const trimmers = (row.trimmers1 || 0) + (row.trimmers2 || 0);
-      const multiplier = getSlotMultiplier(row.timeSlot);
+      const multiplier = getSlotMultiplier(row.timeSlot || slot);
       totalTarget += trimmers * targetRate * multiplier;
     }
   });
