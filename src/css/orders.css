@@ -593,6 +593,156 @@ body::before {
       font-family: var(--font-ui);
     }
 
+    /* ========================================
+       SHIPMENT & PAYMENT CARDS
+       ======================================== */
+    .shipment-card,
+    .payment-card {
+      background: var(--bg);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      padding: var(--space-md);
+      margin-bottom: var(--space-sm);
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .shipment-card,
+    .payment-card {
+      cursor: pointer;
+    }
+
+    .shipment-card:hover,
+    .payment-card:hover {
+      border-color: var(--ro-green);
+      box-shadow: 0 2px 8px rgba(102, 137, 113, 0.15);
+    }
+
+    .shipment-card::after,
+    .payment-card::after {
+      content: "\e13e"; /* Phosphor caret-right */
+      font-family: "Phosphor";
+      position: absolute;
+      right: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      font-size: 20px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    .shipment-card:hover::after,
+    .payment-card:hover::after {
+      opacity: 1;
+    }
+
+    .shipment-card.pending,
+    .payment-card.pending {
+      opacity: 0.6;
+      pointer-events: none;
+    }
+
+    .shipment-header,
+    .payment-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .shipment-invoice,
+    .payment-amount {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      font-size: 16px;
+      color: var(--text);
+    }
+
+    .payment-amount {
+      color: var(--success);
+    }
+
+    .shipment-amount {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      color: var(--ro-green);
+    }
+
+    .payment-method {
+      font-size: 12px;
+      padding: 2px 8px;
+      border-radius: var(--radius-sm);
+      background: var(--border-light);
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .shipment-meta,
+    .payment-meta {
+      display: flex;
+      gap: 12px;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .shipment-date,
+    .payment-date {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .shipment-carrier {
+      padding: 2px 6px;
+      background: var(--border-light);
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+    }
+
+    .payment-ref {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .shipment-actions,
+    .payment-actions {
+      display: flex;
+      gap: 4px;
+      justify-content: flex-end;
+    }
+
+    .shipment-actions .btn-icon,
+    .payment-actions .btn-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .shipment-actions .btn-icon:hover,
+    .payment-actions .btn-icon:hover {
+      background: var(--border-light);
+      color: var(--text);
+    }
+
+    /* Shipments list container */
+    #shipments-list,
+    #payments-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
     .empty-state {
       text-align: center;
       padding: var(--space-lg);
