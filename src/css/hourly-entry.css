@@ -52,20 +52,22 @@ body {
 .dashboard-grid {
   display: grid;
   grid-template-columns: 2fr 1fr 1fr; /* Use fr units to properly account for gaps */
-  gap: 12px;
-  padding: 12px;
+  gap: 20px;
+  padding: 20px 24px;
   height: calc(100vh - 56px); /* Full height minus header */
   overflow: hidden;
   box-sizing: border-box;
+  background: var(--bg-dark);
 }
 
 .dashboard-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 12px;
+  border-radius: 16px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 
 .card-header {
