@@ -544,7 +544,7 @@ function createSlotElement(slot, currentSlot) {
 
   // Smalls display (only show if > 0)
   const smallsDisplay = totalSmalls > 0
-    ? `<span class="slot-smalls">+ ${totalSmalls.toFixed(1)} sm</span>`
+    ? ` <span class="slot-smalls">+${totalSmalls.toFixed(1)}sm</span>`
     : '';
 
   // Target display (only show if we have trimmers/target)
@@ -559,11 +559,10 @@ function createSlotElement(slot, currentSlot) {
     </div>
     <span class="slot-cultivar">${cultivarShort || '—'}</span>
     <div class="slot-row">
-      <span class="slot-lbs ${hasData ? '' : 'empty'}">${hasData ? totalTops.toFixed(1) + ' lbs' : '—'}</span>
+      <span class="slot-lbs ${hasData ? '' : 'empty'}">${hasData ? totalTops.toFixed(1) + ' lbs' : '—'}</span>${smallsDisplay}
       ${targetDisplay}
       <span class="slot-status-text visually-hidden">${statusText}</span>
     </div>
-    ${smallsDisplay ? `<div class="slot-row">${smallsDisplay}</div>` : ''}
   `;
 
   // Click handler
