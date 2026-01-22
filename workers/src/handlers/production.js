@@ -1494,28 +1494,36 @@ async function tts(body, env) {
  * Shopify Inventory Webhook Handler (Dual-Write)
  * Receives inventory adjustment webhooks from Shopify Flow
  * Writes to both D1 and Google Sheets for backwards compatibility
+ * Supports both flat format and nested Shopify Flow format
  */
 async function inventoryWebhook(body, env) {
   // Extract fields from webhook payload
   // Shopify Flow may send as flat object or nested
   const data = body.data || body;
 
-  const timestamp = data.Timestamp || data.timestamp || new Date().toISOString();
-  const sku = data.SKU || data.sku || '';
-  const productName = data['Product Name'] || data.product_name || '';
-  const variantTitle = data['Variant Title'] || data.variant_title || '';
+  // Support nested Shopify Flow format: { product: {}, variant: {}, inventory: {}, context: {} }
+  const product = data.product || {};
+  const variant = data.variant || {};
+  const inventory = data.inventory || {};
+  const context = data.context || {};
+
+  // Extract with fallbacks for both flat and nested formats
+  const timestamp = data.Timestamp || data.timestamp || inventory.updated_at || new Date().toISOString();
+  const sku = data.SKU || data.sku || variant.sku || '';
+  const productName = data['Product Name'] || data.product_name || product.title || '';
+  const variantTitle = data['Variant Title'] || data.variant_title || variant.title || '';
   const strainName = data['Strain Name'] || data.strain_name || '';
   const size = data.Size || data.size || '';
   const quantityAdjusted = parseInt(data['Quantity Adjusted'] || data.quantity_adjusted || 0, 10);
-  const newTotalAvailable = parseInt(data['New Total Available'] || data.new_total_available || 0, 10);
+  const newTotalAvailable = parseInt(data['New Total Available'] || data.new_total_available || inventory.available_quantity || 0, 10);
   const previousAvailable = parseInt(data['Previous Available'] || data.previous_available || 0, 10);
-  const location = data.Location || data.location || '';
-  const productType = data['Product Type'] || data.product_type || '';
-  const barcode = data.Barcode || data.barcode || '';
-  const price = parseFloat(data.Price || data.price || 0);
-  const flowRunId = data['Flow Run ID'] || data.flow_run_id || `manual-${Date.now()}`;
+  const location = data.Location || data.location || inventory.location_name || '';
+  const productType = data['Product Type'] || data.product_type || product.type || '';
+  const barcode = data.Barcode || data.barcode || variant.barcode || '';
+  const price = parseFloat(data.Price || data.price || variant.price || 0);
+  const flowRunId = data['Flow Run ID'] || data.flow_run_id || context.flow_run_id || `manual-${Date.now()}`;
   const eventType = data['Event Type'] || data.event_type || 'inventory_adjustment';
-  const adjustmentSource = data['Adjustment Source'] || data.adjustment_source || '';
+  const adjustmentSource = data['Adjustment Source'] || data.adjustment_source || context.source || '';
   const normalizedStrain = data['Normalized Strain'] || data.normalized_strain || '';
 
   const errors = [];
