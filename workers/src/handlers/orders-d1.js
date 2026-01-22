@@ -947,6 +947,235 @@ async function migrateFromSheets(env) {
   });
 }
 
+// ===== PAYMENT-SHIPMENT LINKING =====
+
+async function migratePaymentLinks(env) {
+  // Create the table if it doesn't exist
+  await execute(env.DB, `
+    CREATE TABLE IF NOT EXISTS payment_shipment_links (
+      id TEXT PRIMARY KEY,
+      payment_id TEXT NOT NULL,
+      shipment_id TEXT NOT NULL,
+      amount REAL,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE CASCADE,
+      FOREIGN KEY (shipment_id) REFERENCES shipments(id) ON DELETE CASCADE
+    )
+  `);
+
+  await execute(env.DB, `CREATE INDEX IF NOT EXISTS idx_psl_payment ON payment_shipment_links(payment_id)`);
+  await execute(env.DB, `CREATE INDEX IF NOT EXISTS idx_psl_shipment ON payment_shipment_links(shipment_id)`);
+
+  // Get all payments and shipments
+  const payments = await query(env.DB, 'SELECT * FROM payments');
+  const shipments = await query(env.DB, 'SELECT * FROM shipments');
+
+  let linked = 0;
+
+  for (const payment of payments) {
+    // Extract invoice number from payment reference (e.g., "D6806 #25682" -> "D6806")
+    const ref = payment.reference || '';
+    const invoiceMatch = ref.match(/^([A-Za-z]?\d+)/);
+    if (!invoiceMatch) continue;
+
+    const invoicePrefix = invoiceMatch[1];
+
+    // Find matching shipment(s)
+    const matchingShipments = shipments.filter(s => {
+      const shipInvoice = s.invoice_number || '';
+      return shipInvoice.startsWith(invoicePrefix) || shipInvoice.includes(invoicePrefix);
+    });
+
+    for (const shipment of matchingShipments) {
+      // Check if link already exists
+      const existing = await queryOne(env.DB,
+        'SELECT id FROM payment_shipment_links WHERE payment_id = ? AND shipment_id = ?',
+        [payment.id, shipment.id]
+      );
+
+      if (!existing) {
+        const linkId = `PSL-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+        await insert(env.DB, 'payment_shipment_links', {
+          id: linkId,
+          payment_id: payment.id,
+          shipment_id: shipment.id,
+          amount: payment.amount, // Full amount for now; can be adjusted
+          created_at: new Date().toISOString()
+        });
+        linked++;
+      }
+    }
+  }
+
+  return successResponse({
+    success: true,
+    message: `Created payment_shipment_links table and linked ${linked} payment-shipment pairs`
+  });
+}
+
+async function getPaymentLinks(params, env) {
+  const { paymentID, shipmentID } = params;
+
+  let sql = `
+    SELECT psl.*,
+           p.amount as payment_amount, p.payment_date, p.reference as payment_reference,
+           s.invoice_number, s.total_value as shipment_amount
+    FROM payment_shipment_links psl
+    LEFT JOIN payments p ON psl.payment_id = p.id
+    LEFT JOIN shipments s ON psl.shipment_id = s.id
+  `;
+  const sqlParams = [];
+
+  if (paymentID) {
+    sql += ' WHERE psl.payment_id = ?';
+    sqlParams.push(paymentID);
+  } else if (shipmentID) {
+    sql += ' WHERE psl.shipment_id = ?';
+    sqlParams.push(shipmentID);
+  }
+
+  const links = await query(env.DB, sql, sqlParams);
+
+  return successResponse({
+    success: true,
+    links: links.map(l => ({
+      id: l.id,
+      paymentId: l.payment_id,
+      shipmentId: l.shipment_id,
+      amount: l.amount,
+      paymentAmount: l.payment_amount,
+      paymentDate: l.payment_date,
+      paymentReference: l.payment_reference,
+      invoiceNumber: l.invoice_number,
+      shipmentAmount: l.shipment_amount
+    }))
+  });
+}
+
+async function savePaymentLink(body, env) {
+  const { paymentId, shipmentId, amount } = body;
+
+  if (!paymentId || !shipmentId) {
+    throw createError('VALIDATION_ERROR', 'paymentId and shipmentId are required');
+  }
+
+  // Check if link already exists
+  const existing = await queryOne(env.DB,
+    'SELECT id FROM payment_shipment_links WHERE payment_id = ? AND shipment_id = ?',
+    [paymentId, shipmentId]
+  );
+
+  if (existing) {
+    // Update existing link
+    await update(env.DB, 'payment_shipment_links', { amount }, 'id = ?', [existing.id]);
+    return successResponse({ success: true, id: existing.id, updated: true });
+  }
+
+  const linkId = `PSL-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+  await insert(env.DB, 'payment_shipment_links', {
+    id: linkId,
+    payment_id: paymentId,
+    shipment_id: shipmentId,
+    amount: amount || null,
+    created_at: new Date().toISOString()
+  });
+
+  return successResponse({ success: true, id: linkId });
+}
+
+async function deletePaymentLink(body, env) {
+  const { linkId, paymentId, shipmentId, all } = body;
+
+  if (linkId) {
+    await deleteRows(env.DB, 'payment_shipment_links', 'id = ?', [linkId]);
+  } else if (paymentId && all) {
+    // Delete all links for a payment
+    await deleteRows(env.DB, 'payment_shipment_links', 'payment_id = ?', [paymentId]);
+  } else if (paymentId && shipmentId) {
+    await deleteRows(env.DB, 'payment_shipment_links', 'payment_id = ? AND shipment_id = ?', [paymentId, shipmentId]);
+  } else if (shipmentId && all) {
+    // Delete all links for a shipment
+    await deleteRows(env.DB, 'payment_shipment_links', 'shipment_id = ?', [shipmentId]);
+  } else {
+    throw createError('VALIDATION_ERROR', 'linkId or (paymentId and shipmentId) or (paymentId/shipmentId with all=true) required');
+  }
+
+  return successResponse({ success: true });
+}
+
+async function getShipmentPaymentStatus(params, env) {
+  const { orderID, shipmentId } = params;
+
+  let sql = `
+    SELECT s.id, s.invoice_number, s.total_value,
+           COALESCE(SUM(psl.amount), 0) as amount_paid
+    FROM shipments s
+    LEFT JOIN payment_shipment_links psl ON s.id = psl.shipment_id
+  `;
+  const sqlParams = [];
+  const conditions = [];
+
+  if (shipmentId) {
+    conditions.push('s.id = ?');
+    sqlParams.push(shipmentId);
+  }
+
+  if (orderID) {
+    conditions.push('s.order_id = ?');
+    sqlParams.push(orderID);
+  }
+
+  if (conditions.length > 0) {
+    sql += ' WHERE ' + conditions.join(' AND ');
+  }
+
+  sql += ' GROUP BY s.id';
+
+  const results = await query(env.DB, sql, sqlParams);
+
+  // If single shipment requested, return simplified response
+  if (shipmentId && results.length === 1) {
+    const r = results[0];
+    const totalAmount = r.total_value || 0;
+    const paidAmount = r.amount_paid || 0;
+    let status = 'unpaid';
+    if (paidAmount >= totalAmount && totalAmount > 0) {
+      status = 'paid';
+    } else if (paidAmount > 0) {
+      status = 'partial';
+    }
+    return successResponse({
+      success: true,
+      status,
+      paidAmount,
+      totalAmount,
+      balance: totalAmount - paidAmount
+    });
+  }
+
+  return successResponse({
+    success: true,
+    shipments: results.map(r => {
+      const totalAmount = r.total_value || 0;
+      const paidAmount = r.amount_paid || 0;
+      let status = 'unpaid';
+      if (paidAmount >= totalAmount && totalAmount > 0) {
+        status = 'paid';
+      } else if (paidAmount > 0) {
+        status = 'partial';
+      }
+      return {
+        id: r.id,
+        invoiceNumber: r.invoice_number,
+        totalAmount,
+        paidAmount,
+        balance: totalAmount - paidAmount,
+        status
+      };
+    })
+  });
+}
+
 // ===== MAIN HANDLER =====
 
 export async function handleOrdersD1(request, env) {
@@ -977,6 +1206,11 @@ export async function handleOrdersD1(request, env) {
     getScoreboardOrderQueue: () => getScoreboardOrderQueue(env),
     test: () => test(),
     migrate: () => migrateFromSheets(env),
+    migratePaymentLinks: () => migratePaymentLinks(env),
+    getPaymentLinks: () => getPaymentLinks(params, env),
+    savePaymentLink: () => savePaymentLink(body, env),
+    deletePaymentLink: () => deletePaymentLink(body, env),
+    getShipmentPaymentStatus: () => getShipmentPaymentStatus(params, env),
   };
 
   if (!action || !actions[action]) {
