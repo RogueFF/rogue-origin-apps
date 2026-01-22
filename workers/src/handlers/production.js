@@ -32,7 +32,7 @@ const TIMEZONE = 'America/Los_Angeles';
 const scoreboardCache = {
   data: null,
   timestamp: 0,
-  TTL: 10000, // 10 seconds
+  TTL: 30000, // 30 seconds (smart polling handles freshness via version check)
 };
 
 // ===== VERSION TRACKING FOR SMART POLLING =====
@@ -846,13 +846,10 @@ async function scoreboard(env) {
   // Check cache first to reduce Google Sheets API calls
   const now = Date.now();
   if (scoreboardCache.data && (now - scoreboardCache.timestamp) < scoreboardCache.TTL) {
-    // Even with cache, always check for active pause (it's lightweight)
-    const pauseState = await getActivePause(env);
-    const cachedWithPause = { ...scoreboardCache.data, pause: pauseState };
-    return successResponse(cachedWithPause);
+    return successResponse(scoreboardCache.data);
   }
 
-  // Fetch fresh data
+  // Fetch fresh data (pause state included - it's refreshed when version changes)
   const scoreboardData = await getScoreboardData(env);
   const timerData = await getBagTimerData(env);
   const pauseState = await getActivePause(env);
@@ -863,8 +860,8 @@ async function scoreboard(env) {
     pause: pauseState,
   };
 
-  // Update cache (pause state not cached - always fetched fresh)
-  scoreboardCache.data = { scoreboard: scoreboardData, timer: timerData };
+  // Update cache (includes pause state - refreshed when data version changes)
+  scoreboardCache.data = responseData;
   scoreboardCache.timestamp = now;
 
   return successResponse(responseData);
