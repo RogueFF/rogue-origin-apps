@@ -638,6 +638,56 @@
     </div>
   </div>
 
+  <!-- Shipment Detail Modal -->
+  <div class="modal-overlay" id="shipment-detail-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Shipment Details</div>
+        <button class="icon-btn btn-secondary" onclick="closeShipmentDetailModal()">
+          <i class="ph ph-x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="detail-grid">
+          <div class="detail-row">
+            <span class="detail-label">Invoice #</span>
+            <span class="detail-value" id="detail-shipment-invoice" style="font-family: var(--font-mono); font-size: 18px; color: var(--ro-green);"></span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Total Amount</span>
+            <span class="detail-value" id="detail-shipment-amount" style="font-family: var(--font-mono); font-size: 24px; font-weight: 600;"></span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Date</span>
+            <span class="detail-value" id="detail-shipment-date"></span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Carrier</span>
+            <span class="detail-value" id="detail-shipment-carrier"></span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Tracking #</span>
+            <span class="detail-value" id="detail-shipment-tracking" style="font-family: var(--font-mono);"></span>
+          </div>
+          <div class="detail-row" style="flex-direction: column; align-items: flex-start;">
+            <span class="detail-label">Line Items</span>
+            <div id="detail-shipment-lines" style="margin-top: 8px; width: 100%;"></div>
+          </div>
+          <div class="detail-row" style="flex-direction: column; align-items: flex-start;">
+            <span class="detail-label">Notes</span>
+            <span class="detail-value" id="detail-shipment-notes" style="margin-top: 8px; white-space: pre-wrap;"></span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeShipmentDetailModal()">Close</button>
+        <button class="btn btn-primary" id="detail-shipment-edit-btn" onclick="editShipmentFromDetail()">
+          <i class="ph ph-pencil-simple"></i> Edit
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Shopify Import Modal -->
   <div class="modal-overlay" id="shopify-import-modal">
     <div class="modal modal-large">
