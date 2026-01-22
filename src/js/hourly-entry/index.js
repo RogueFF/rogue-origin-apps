@@ -1787,6 +1787,7 @@ let timerTargetSeconds = 90 * 60; // Default 90 min target
 let timerAvgSeconds = 0;
 let timerIsPaused = false;
 let timerPauseReason = '';
+let timerPauseStartTime = null; // When pause started (for freezing timer)
 let timerBagsToday = 0;
 let lastKnownVersion = null; // For smart polling
 
@@ -1989,9 +1990,11 @@ async function loadBagTimerData() {
     if (pauseData && pauseData.isPaused) {
       timerIsPaused = true;
       timerPauseReason = pauseData.pauseReason || 'Unknown';
+      timerPauseStartTime = pauseData.pauseStartTime ? new Date(pauseData.pauseStartTime) : new Date();
     } else {
       timerIsPaused = false;
       timerPauseReason = '';
+      timerPauseStartTime = null;
     }
 
     // Update Avg Today stat
@@ -2025,20 +2028,21 @@ function updateBagTimerTick() {
   // If manually paused (synced from server), show paused state
   if (timerIsPaused) {
     setTimerColor('yellow');
-    // Show frozen time during pause
+    // Show frozen time during pause (subtract pause duration to freeze at pause start)
     if (lastBagTimestamp) {
-      const elapsedSeconds = getWorkingSecondsSince(lastBagTimestamp);
+      let elapsedSeconds = getWorkingSecondsSince(lastBagTimestamp);
+      // Subtract time since pause started to freeze the timer
+      if (timerPauseStartTime) {
+        const pauseDuration = Math.floor((new Date() - timerPauseStartTime) / 1000);
+        elapsedSeconds = Math.max(0, elapsedSeconds - pauseDuration);
+      }
       const remainingSeconds = Math.max(0, timerTargetSeconds - elapsedSeconds);
       timerValue.textContent = formatTimeMMSS(remainingSeconds);
+      setRingProgress(Math.min(1, elapsedSeconds / timerTargetSeconds));
     } else {
       timerValue.textContent = '--:--';
     }
     timerLabel.textContent = currentLang === 'es' ? 'PAUSADO' : 'PAUSED';
-    // Keep ring at current position during pause
-    if (lastBagTimestamp) {
-      const elapsedSeconds = getWorkingSecondsSince(lastBagTimestamp);
-      setRingProgress(Math.min(1, elapsedSeconds / timerTargetSeconds));
-    }
     return;
   }
 
