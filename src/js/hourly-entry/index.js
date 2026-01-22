@@ -1409,6 +1409,14 @@ function positionTutorialElements(step) {
       targetEl = document.querySelector('.progress-summary');
     } else if (step.target === 'date-picker') {
       targetEl = document.getElementById('date-picker');
+    } else if (step.target === 'start-day-btn') {
+      // Start day button or the time badge if already started
+      targetEl = document.getElementById('start-day-btn');
+      if (targetEl && targetEl.style.display === 'none') {
+        targetEl = document.getElementById('start-time-badge');
+      }
+    } else if (step.target === 'editor-nav-inline') {
+      targetEl = document.querySelector('.editor-nav-inline');
     } else if (step.target === 'crew-section') {
       targetEl = document.querySelector('.crew-section');
     } else if (step.target === 'production-section') {
