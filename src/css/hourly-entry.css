@@ -212,13 +212,13 @@ body {
 }
 
 .card-hourly .slot-time {
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .card-hourly .slot-cultivar {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 500;
   color: var(--text-secondary);
   white-space: nowrap;
@@ -229,28 +229,28 @@ body {
 
 .card-hourly .slot-lbs {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 700;
   color: var(--gold);
 }
 
 .card-hourly .slot-lbs.empty {
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 400;
   color: var(--text-secondary);
 }
 
 .card-hourly .slot-smalls {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 500;
   color: var(--text-secondary);
-  margin-left: 4px;
+  margin-left: 6px;
 }
 
 .card-hourly .slot-target {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text-muted, #888);
   opacity: 0.8;
 }
