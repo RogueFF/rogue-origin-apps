@@ -1786,17 +1786,128 @@ let lastBagTimestamp = null;
 let timerTargetSeconds = 90 * 60; // Default 90 min target
 let timerAvgSeconds = 0;
 let timerIsPaused = false;
+let timerBagsToday = 0;
 
 // SVG constants (matching scoreboard)
 const RING_CIRCUMFERENCE = 2 * Math.PI * 95; // 597
+
+// Break schedule (PST) - must match scoreboard config
+const TIMER_BREAKS = [
+  [9, 0, 9, 10],      // 9:00-9:10 AM morning break
+  [12, 0, 12, 30],    // 12:00-12:30 PM lunch
+  [14, 30, 14, 40],   // 2:30-2:40 PM afternoon break
+  [16, 20, 16, 30],   // 4:20-4:30 PM cleanup
+];
+
+// Workday boundaries
+const WORKDAY_START_MINUTES = 7 * 60;  // 7:00 AM
+const WORKDAY_END_MINUTES = 16 * 60 + 30;  // 4:30 PM
+
+/**
+ * Check if currently on break or outside work hours
+ * @returns {Object} { onBreak: boolean, afterHours: boolean }
+ */
+function isOnBreakOrAfterHours() {
+  const now = new Date();
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+
+  // Before workday
+  if (nowMins < WORKDAY_START_MINUTES) {
+    return { onBreak: true, afterHours: true };
+  }
+
+  // After workday
+  if (nowMins >= WORKDAY_END_MINUTES) {
+    return { onBreak: true, afterHours: true };
+  }
+
+  // Check scheduled breaks
+  for (const brk of TIMER_BREAKS) {
+    const bStart = brk[0] * 60 + brk[1];
+    const bEnd = brk[2] * 60 + brk[3];
+    if (nowMins >= bStart && nowMins < bEnd) {
+      return { onBreak: true, afterHours: false };
+    }
+  }
+
+  return { onBreak: false, afterHours: false };
+}
+
+/**
+ * Calculate working seconds since startTime, excluding breaks
+ * This matches the scoreboard's getWorkingSecondsSince() function
+ * @param {Date} startTime - The start time
+ * @returns {number} Working seconds elapsed
+ */
+function getWorkingSecondsSince(startTime) {
+  if (!startTime) return 0;
+
+  const now = new Date();
+
+  // If different day, return 0 (timer resets daily)
+  if (startTime.toDateString() !== now.toDateString()) {
+    return 0;
+  }
+
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+
+  // Check if we're currently ON a break
+  let currentlyOnBreak = false;
+  let currentBreakStart = 0;
+
+  for (const brk of TIMER_BREAKS) {
+    const bStart = brk[0] * 60 + brk[1];
+    const bEnd = brk[2] * 60 + brk[3];
+    if (nowMins >= bStart && nowMins < bEnd) {
+      currentlyOnBreak = true;
+      currentBreakStart = bStart;
+      break;
+    }
+  }
+
+  // If currently on break, calculate elapsed time up to break start
+  let endTime;
+  if (currentlyOnBreak) {
+    endTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(),
+      Math.floor(currentBreakStart / 60), currentBreakStart % 60, 0);
+  } else {
+    endTime = now;
+  }
+
+  let totalSecs = Math.floor((endTime - startTime) / 1000);
+  const startMins = startTime.getHours() * 60 + startTime.getMinutes();
+  const endMins = endTime.getHours() * 60 + endTime.getMinutes();
+
+  // Subtract time spent on COMPLETED breaks (not current break)
+  for (const brk of TIMER_BREAKS) {
+    const bStart = brk[0] * 60 + brk[1];
+    const bEnd = brk[2] * 60 + brk[3];
+
+    // Skip the current break (already handled above)
+    if (currentlyOnBreak && bStart === currentBreakStart) {
+      continue;
+    }
+
+    // If timer span includes this break, subtract it
+    if (startMins < bEnd && endMins > bStart) {
+      const overlapStart = Math.max(startMins, bStart);
+      const overlapEnd = Math.min(endMins, bEnd);
+      if (overlapEnd > overlapStart) {
+        totalSecs -= (overlapEnd - overlapStart) * 60;
+      }
+    }
+  }
+
+  return Math.max(0, totalSecs);
+}
 
 /**
  * Initialize bag timer card
  */
 function initBagTimer() {
   loadBagTimerData();
-  // Poll every 30 seconds for timer updates
-  bagTimerInterval = setInterval(loadBagTimerData, 30000);
+  // Poll every 5 seconds for timer updates (matches scoreboard)
+  bagTimerInterval = setInterval(loadBagTimerData, 5000);
   // Update countdown every second
   bagTimerTickInterval = setInterval(updateBagTimerTick, 1000);
 }
@@ -1812,10 +1923,11 @@ async function loadBagTimerData() {
 
     const timer = data.timer || {};
 
-    // Update bags today count
-    const bagsToday = document.getElementById('bags-today');
-    if (bagsToday) {
-      bagsToday.textContent = timer.bagsToday || 0;
+    // Store bags today count
+    timerBagsToday = timer.bagsToday || 0;
+    const bagsTodayEl = document.getElementById('bags-today');
+    if (bagsTodayEl) {
+      bagsTodayEl.textContent = timerBagsToday;
     }
 
     // Store last bag timestamp for countdown
@@ -1828,7 +1940,8 @@ async function loadBagTimerData() {
     // Store target and avg seconds
     timerTargetSeconds = timer.targetSeconds || 90 * 60;
     timerAvgSeconds = timer.avgSecondsToday || 0;
-    timerIsPaused = timer.isPaused || false;
+    // Note: isPaused is a client-side state on scoreboard, not from API
+    // We detect breaks locally using isOnBreakOrAfterHours()
 
     // Update Avg Today stat
     updateAvgTodayStat(timerAvgSeconds);
@@ -1846,6 +1959,7 @@ async function loadBagTimerData() {
 
 /**
  * Update timer tick (called every second)
+ * Uses break-adjusted time calculation to match scoreboard
  */
 function updateBagTimerTick() {
   const timerValue = document.getElementById('bag-timer-value');
@@ -1854,10 +1968,31 @@ function updateBagTimerTick() {
 
   if (!timerValue) return;
 
-  // If paused, show paused state
-  if (timerIsPaused) {
+  // Check break/after hours status (matches scoreboard logic)
+  const breakStatus = isOnBreakOrAfterHours();
+
+  // If on break or after hours, show break state
+  if (breakStatus.onBreak) {
     setTimerColor('yellow');
-    timerLabel.textContent = LABELS[currentLang].onBreak;
+    if (breakStatus.afterHours) {
+      timerValue.textContent = '--:--';
+      timerLabel.textContent = currentLang === 'es' ? 'Turno terminado' : 'Shift ended';
+    } else {
+      // During break, show frozen time (time remaining when break started)
+      if (lastBagTimestamp) {
+        const elapsedSeconds = getWorkingSecondsSince(lastBagTimestamp);
+        const remainingSeconds = Math.max(0, timerTargetSeconds - elapsedSeconds);
+        timerValue.textContent = formatTimeMMSS(remainingSeconds);
+      } else {
+        timerValue.textContent = '--:--';
+      }
+      timerLabel.textContent = LABELS[currentLang].onBreak;
+    }
+    // Keep ring at current position during break
+    if (lastBagTimestamp) {
+      const elapsedSeconds = getWorkingSecondsSince(lastBagTimestamp);
+      setRingProgress(Math.min(1, elapsedSeconds / timerTargetSeconds));
+    }
     return;
   }
 
@@ -1870,33 +2005,31 @@ function updateBagTimerTick() {
     return;
   }
 
-  // Calculate elapsed time
-  const now = new Date();
-  const elapsedMs = now - lastBagTimestamp;
-  const elapsedSeconds = Math.floor(elapsedMs / 1000);
+  // Calculate WORKING elapsed time (excludes breaks) - matches scoreboard
+  const elapsedSeconds = getWorkingSecondsSince(lastBagTimestamp);
 
   // Calculate remaining time
-  const remainingSeconds = Math.max(0, timerTargetSeconds - elapsedSeconds);
+  const remainingSeconds = timerTargetSeconds - elapsedSeconds;
+  const isOvertime = remainingSeconds < 0;
 
-  // Determine color based on remaining time
+  // Determine color based on remaining time (matches scoreboard)
   let color = 'green';
-  if (elapsedSeconds > timerTargetSeconds) {
+  if (isOvertime) {
     color = 'red';
-  } else if (elapsedSeconds > timerTargetSeconds * 0.8) {
-    color = 'yellow';
   }
+  // Note: Removed yellow warning state at 80% to match scoreboard (only green/red during work)
 
   setTimerColor(color);
 
   // Format display
-  if (remainingSeconds > 0) {
+  if (!isOvertime) {
     // Show remaining time
     timerValue.textContent = formatTimeMMSS(remainingSeconds);
     timerLabel.textContent = LABELS[currentLang].remaining;
   } else {
-    // Overtime - show elapsed
-    timerValue.textContent = '+' + formatTimeMMSS(elapsedSeconds - timerTargetSeconds);
-    timerLabel.textContent = LABELS[currentLang].elapsed;
+    // Overtime - show how much over
+    timerValue.textContent = '+' + formatTimeMMSS(Math.abs(remainingSeconds));
+    timerLabel.textContent = currentLang === 'es' ? 'transcurrido' : 'overtime';
   }
 
   // Update ring progress
