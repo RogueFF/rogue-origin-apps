@@ -242,9 +242,10 @@ body {
 
 .card-hourly .slot-smalls {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--text-secondary);
+  margin-left: 4px;
 }
 
 .card-hourly .slot-target {
