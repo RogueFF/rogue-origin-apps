@@ -307,8 +307,10 @@ async function saveShipment(body, env) {
 
   if (!body.id) {
     const orderNum = body.orderID ? body.orderID.split('-').pop() : '000';
-    const count = await query(env.DB, 'SELECT COUNT(*) as cnt FROM shipments');
-    body.id = `SH-${orderNum}-${String((count[0]?.cnt || 0) + 1).padStart(2, '0')}`;
+    // Use MAX to find highest existing shipment number, not COUNT (which fails after deletions)
+    const maxResult = await query(env.DB, `SELECT MAX(CAST(SUBSTR(id, -2) AS INTEGER)) as maxNum FROM shipments WHERE id LIKE 'SH-${orderNum}-%'`);
+    const maxNum = maxResult[0]?.maxNum || 0;
+    body.id = `SH-${orderNum}-${String(maxNum + 1).padStart(2, '0')}`;
   }
 
   if (!body.invoiceNumber) {
