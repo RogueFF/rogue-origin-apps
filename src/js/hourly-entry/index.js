@@ -1608,8 +1608,8 @@ function populateBarcodeStrainSelect() {
   // Get unique cultivars from products (extract cultivar name from header)
   const cultivarsWithProducts = new Set();
   barcodeProducts.forEach((p) => {
-    // Header format: "Cultivar Name - Tops 5KG" or similar
-    const match = p.header.match(/^(.+?)\s*-\s*(Tops|Smalls)/i);
+    // Header format: "Cultivar Name Tops 5KG" or "Cultivar Name - Tops 5KG"
+    const match = p.header.match(/^(.+?)\s+(?:-\s*)?(Tops|Smalls)/i);
     if (match) {
       cultivarsWithProducts.add(match[1].trim());
     }
