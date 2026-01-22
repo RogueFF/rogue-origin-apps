@@ -19,9 +19,10 @@
 
     // Timing intervals (milliseconds)
     intervals: {
-      clockRefresh: 1000,      // Update clock every second
-      dataRefresh: 30000,      // Fetch API data every 30 seconds (reduced to avoid rate limits)
-      timerRefresh: 1000       // Update timer display every second
+      clockRefresh: 1000,       // Update clock every second
+      versionCheck: 5000,       // Smart polling: check if data changed every 5 seconds
+      timerRefresh: 1000,       // Update timer display every second
+      orderQueueRefresh: 60000  // Order queue refresh every 60 seconds (was 30s)
     },
 
     // Work schedule (24-hour format)
