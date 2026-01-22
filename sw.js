@@ -1,7 +1,7 @@
 // Service Worker for Rogue Origin Operations Hub
-// Version 3.12 - Smart polling: only fetch data when version changes
+// Version 3.13 - Fix SOP onclick handlers (quote IDs)
 
-const CACHE_VERSION = 'ro-ops-v3.12';
+const CACHE_VERSION = 'ro-ops-v3.13';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
