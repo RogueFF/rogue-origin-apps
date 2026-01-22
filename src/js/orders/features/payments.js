@@ -342,7 +342,7 @@ async function loadShipmentsForLinking(orderID, paymentId = null) {
     // If editing, get existing links
     let linkedIds = [];
     if (paymentId) {
-      const linksResult = await apiCall('getPaymentLinks', { paymentId });
+      const linksResult = await apiCall('getPaymentLinks', { paymentID: paymentId });
       linkedIds = (linksResult.links || []).map(l => l.shipmentId);
     }
     selectedShipmentIds = [...linkedIds];
@@ -434,7 +434,7 @@ async function loadLinkedShipmentsForDetail(paymentId) {
   if (!container) return;
 
   try {
-    const linksResult = await apiCall('getPaymentLinks', { paymentId });
+    const linksResult = await apiCall('getPaymentLinks', { paymentID: paymentId });
     const links = linksResult.links || [];
 
     if (links.length === 0) {
