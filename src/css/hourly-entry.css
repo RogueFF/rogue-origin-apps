@@ -218,7 +218,8 @@ body {
 }
 
 .card-hourly .slot-cultivar {
-  font-size: 14px;
+  font-size: 16px;
+  font-weight: 500;
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -237,6 +238,28 @@ body {
   font-size: 15px;
   font-weight: 400;
   color: var(--text-secondary);
+}
+
+.card-hourly .slot-smalls {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.card-hourly .slot-target {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--text-muted, #888);
+  opacity: 0.8;
+}
+
+.card-hourly .slot-target.met {
+  color: var(--green);
+}
+
+.card-hourly .slot-target.missed {
+  color: var(--danger);
 }
 
 .card-hourly .slot-status {
