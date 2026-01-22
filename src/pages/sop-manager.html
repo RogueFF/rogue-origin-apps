@@ -1921,7 +1921,7 @@
           return '<span class="sop-tag ' + color + '">' + esc(t) + '</span>';
         }).join('');
         
-        return '<div class="sop-card" onclick="viewSOP(' + s.id + ')">' +
+        return '<div class="sop-card" onclick="viewSOP(\'' + s.id + '\')">' +
           '<div class="sop-card-header">' +
             '<div><div class="sop-card-title">' + esc(s.title) + '</div>' +
             '<div class="sop-card-dept"><i class="ph-duotone ph-folder"></i> ' + esc(s.dept) + '</div></div>' +
@@ -1935,25 +1935,25 @@
             '<div class="sop-card-tags">' + tags + '</div>' +
           '</div>' +
           '<div class="sop-card-actions">' +
-            '<button onclick="event.stopPropagation();viewSOP(' + s.id + ')"><i class="ph-duotone ph-eye"></i></button>' +
-            '<button class="qr-btn" onclick="event.stopPropagation();showQR(' + s.id + ')"><i class="ph-duotone ph-qr-code"></i></button>' +
-            '<button onclick="event.stopPropagation();editSOP(' + s.id + ')"><i class="ph-duotone ph-pencil-simple"></i></button>' +
-            '<button class="del-btn" onclick="event.stopPropagation();deleteSOP(' + s.id + ')"><i class="ph-duotone ph-trash"></i></button>' +
+            '<button onclick="event.stopPropagation();viewSOP(\'' + s.id + '\')"><i class="ph-duotone ph-eye"></i></button>' +
+            '<button class="qr-btn" onclick="event.stopPropagation();showQR(\'' + s.id + '\')"><i class="ph-duotone ph-qr-code"></i></button>' +
+            '<button onclick="event.stopPropagation();editSOP(\'' + s.id + '\')"><i class="ph-duotone ph-pencil-simple"></i></button>' +
+            '<button class="del-btn" onclick="event.stopPropagation();deleteSOP(\'' + s.id + '\')"><i class="ph-duotone ph-trash"></i></button>' +
           '</div>' +
         '</div>';
       }).join('');
       
       // Table view
       tbody.innerHTML = filtered.map(s => {
-        return '<tr onclick="viewSOP(' + s.id + ')">' +
+        return '<tr onclick="viewSOP(\'' + s.id + '\')">' +
           '<td class="title-cell">' + esc(s.title) + '</td>' +
           '<td>' + esc(s.dept) + '</td>' +
           '<td>' + (s.steps ? s.steps.length : 0) + '</td>' +
           '<td><span class="sop-card-rev ' + (s.status === 'draft' ? 'draft' : '') + '">' + (s.status === 'draft' ? 'Draft' : 'Published') + '</span></td>' +
           '<td>' + fmtDate(s.updatedAt) + '</td>' +
           '<td class="actions-cell">' +
-            '<button onclick="event.stopPropagation();editSOP(' + s.id + ')"><i class="ph-duotone ph-pencil-simple"></i></button>' +
-            '<button onclick="event.stopPropagation();deleteSOP(' + s.id + ')"><i class="ph-duotone ph-trash"></i></button>' +
+            '<button onclick="event.stopPropagation();editSOP(\'' + s.id + '\')"><i class="ph-duotone ph-pencil-simple"></i></button>' +
+            '<button onclick="event.stopPropagation();deleteSOP(\'' + s.id + '\')"><i class="ph-duotone ph-trash"></i></button>' +
           '</td>' +
         '</tr>';
       }).join('');
@@ -2058,9 +2058,9 @@
             '<span><i class="ph-duotone ph-clock"></i>Created ' + fmtDate(r.createdAt) + '</span>' +
           '</div>' +
           '<div class="request-item-actions">' +
-            (!r.completed ? '<button class="request-action-create" onclick="createSOPFromRequest(' + r.id + ')"><i class="ph-duotone ph-file-plus"></i> Create SOP</button>' : '') +
-            (!r.completed ? '<button class="request-action-complete" onclick="completeRequest(' + r.id + ')"><i class="ph-duotone ph-check"></i> Done</button>' : '') +
-            '<button class="request-action-delete" onclick="deleteRequest(' + r.id + ')"><i class="ph-duotone ph-trash"></i></button>' +
+            (!r.completed ? '<button class="request-action-create" onclick="createSOPFromRequest(\'' + r.id + '\')"><i class="ph-duotone ph-file-plus"></i> Create SOP</button>' : '') +
+            (!r.completed ? '<button class="request-action-complete" onclick="completeRequest(\'' + r.id + '\')"><i class="ph-duotone ph-check"></i> Done</button>' : '') +
+            '<button class="request-action-delete" onclick="deleteRequest(\'' + r.id + '\')"><i class="ph-duotone ph-trash"></i></button>' +
           '</div>' +
         '</div>';
       }).join('');

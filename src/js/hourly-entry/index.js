@@ -1747,9 +1747,9 @@ function printBarcodeLabel(strain, bagType) {
   const barcode = product.barcode;
   const labelText = product.header;
 
-  // Generate barcode URL using TEC-IT
+  // Generate barcode URL using TEC-IT (optimized for 1" x 0.5" labels)
   const barcodeUrl = 'https://barcode.tec-it.com/barcode.ashx?data=' + encodeURIComponent(barcode) +
-    '&code=Code128&dpi=203&modulewidth=fit&height=35&hidetext=1';
+    '&code=Code128&dpi=203&modulewidth=fit&height=30&hidetext=1';
 
   // Create or reuse print iframe
   let iframe = document.getElementById('barcode-print-frame');
@@ -1760,17 +1760,17 @@ function printBarcodeLabel(strain, bagType) {
     document.body.appendChild(iframe);
   }
 
-  // Build print document
+  // Build print document - 1" x 0.5" label layout (fills the label)
   const doc = iframe.contentWindow.document;
   doc.open();
   doc.write('<!DOCTYPE html><html><head><style>');
-  doc.write('@page { size: 1.65in 0.5in; margin: 0 0.15in !important; }');
-  doc.write('@media print { html, body { width: 1.35in !important; height: 0.5in !important; margin: 0 !important; padding: 0 !important; overflow: hidden; } }');
-  doc.write('body { margin: 0; padding: 0; font-family: Arial; }');
-  doc.write('.label { width: 1.35in; height: 0.5in; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1px; }');
-  doc.write('.name { font-size: 6pt; font-weight: bold; margin-bottom: 1px; }');
-  doc.write('img { max-width: 1.3in; height: 0.25in; }');
-  doc.write('.code { font-size: 5pt; margin-top: 1px; }');
+  doc.write('@page { size: 1in 0.5in; margin: 0 !important; }');
+  doc.write('@media print { html, body { width: 1in !important; height: 0.5in !important; margin: 0 !important; padding: 0 !important; overflow: hidden; } }');
+  doc.write('body { margin: 0; padding: 0; font-family: Arial, sans-serif; }');
+  doc.write('.label { width: 1in; height: 0.5in; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0; box-sizing: border-box; }');
+  doc.write('.name { font-size: 7pt; font-weight: bold; margin-bottom: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 0.95in; }');
+  doc.write('img { width: 0.95in; height: 0.28in; }');
+  doc.write('.code { font-size: 6pt; margin-top: 1px; font-family: monospace; }');
   doc.write('</style></head><body>');
   doc.write('<div class="label">');
   doc.write('<div class="name">' + escapeHtml(labelText) + '</div>');
