@@ -110,7 +110,7 @@ body {
 }
 
 .card-title {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
@@ -172,7 +172,7 @@ body {
 }
 
 #timeline-content .progress-value {
-  font-size: 28px;
+  font-size: 34px;
 }
 
 #timeline-content .progress-bar-container {
@@ -180,7 +180,7 @@ body {
 }
 
 #timeline-content .progress-details {
-  font-size: 13px;
+  font-size: 15px;
 }
 
 #timeline-content .timeline-list {
@@ -198,10 +198,10 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 12px 14px;
-  font-size: 15px;
+  padding: 14px 16px;
+  font-size: 17px;
   min-height: 0;
-  gap: 3px;
+  gap: 4px;
 }
 
 .card-hourly .slot-row {
@@ -212,13 +212,13 @@ body {
 }
 
 .card-hourly .slot-time {
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .card-hourly .slot-cultivar {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -228,19 +228,19 @@ body {
 
 .card-hourly .slot-lbs {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 700;
   color: var(--gold);
 }
 
 .card-hourly .slot-lbs.empty {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 400;
   color: var(--text-secondary);
 }
 
 .card-hourly .slot-status {
-  font-size: 16px;
+  font-size: 18px;
   flex-shrink: 0;
 }
 
@@ -442,7 +442,7 @@ body {
 }
 
 .barcode-label {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -451,21 +451,21 @@ body {
 
 .barcode-select {
   width: 100%;
-  padding: 16px 20px;
+  padding: 18px 22px;
   border: 2px solid var(--border-color);
   border-left: 4px solid var(--gold);
   border-radius: 10px;
   background: var(--bg-input);
   color: var(--text-primary);
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23e4aa4f' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23e4aa4f' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 16px center;
-  padding-right: 48px;
+  padding-right: 52px;
 }
 
 .barcode-select:focus {
@@ -492,13 +492,13 @@ body {
 
 .barcode-btn {
   flex: 1;
-  min-height: 56px;
-  padding: 14px;
+  min-height: 64px;
+  padding: 16px;
   border: 2px solid var(--gold);
   border-radius: 12px;
   background: rgba(228, 170, 79, 0.1);
   color: var(--gold);
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -591,8 +591,8 @@ body {
 /* Circular Timer Ring (matches scoreboard) */
 .timer-ring-container {
   position: relative;
-  width: 240px;
-  height: 240px;
+  width: 260px;
+  height: 260px;
   flex-shrink: 0;
 }
 
@@ -639,7 +639,7 @@ body {
 
 .timer-value {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 44px;
+  font-size: 52px;
   font-weight: 600;
   color: var(--text-primary);
   letter-spacing: 2px;
@@ -659,11 +659,11 @@ body {
 }
 
 .timer-label {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-top: 6px;
+  margin-top: 8px;
 }
 
 /* Timer Stats */
@@ -683,7 +683,7 @@ body {
 }
 
 .stat-label {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -691,7 +691,7 @@ body {
 
 .stat-value {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 600;
   color: var(--text-primary);
 }
