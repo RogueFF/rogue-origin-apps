@@ -1496,7 +1496,20 @@ async function tts(body, env) {
  * Writes to both D1 and Google Sheets for backwards compatibility
  * Supports both flat format and nested Shopify Flow format
  */
-async function inventoryWebhook(body, env) {
+async function inventoryWebhook(body, env, request) {
+  // Verify webhook secret (check header or query param)
+  const webhookSecret = env.WEBHOOK_SECRET;
+  if (webhookSecret) {
+    const headerSecret = request?.headers?.get('X-Webhook-Secret');
+    const url = new URL(request?.url || 'http://localhost');
+    const paramSecret = url.searchParams.get('secret');
+
+    if (headerSecret !== webhookSecret && paramSecret !== webhookSecret) {
+      console.warn('Webhook rejected: invalid or missing secret');
+      return errorResponse('Unauthorized', 'UNAUTHORIZED', 401);
+    }
+  }
+
   // Extract fields from webhook payload
   // Shopify Flow may send as flat object or nested
   const data = body.data || body;
@@ -1923,7 +1936,7 @@ export async function handleProduction(request, env, ctx) {
         return await tts(body, env);
       case 'inventoryWebhook':
       case 'webhook':
-        return await inventoryWebhook(body, env);
+        return await inventoryWebhook(body, env, request);
       default:
         return errorResponse(`Unknown action: ${action}`, 'NOT_FOUND', 404);
     }
