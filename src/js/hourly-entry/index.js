@@ -1619,6 +1619,17 @@ function populateBarcodeStrainSelect() {
   });
 
   select.value = currentValue;
+
+  // Update has-selection class based on current value
+  select.classList.toggle('has-selection', !!select.value);
+
+  // Add change listener for selection state styling
+  if (!select.dataset.listenerAdded) {
+    registerListener(select, 'change', () => {
+      select.classList.toggle('has-selection', !!select.value);
+    });
+    select.dataset.listenerAdded = 'true';
+  }
 }
 
 /**
