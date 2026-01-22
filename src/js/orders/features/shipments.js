@@ -351,7 +351,20 @@ export function renderShipments(shipments) {
     return;
   }
 
-  container.innerHTML = shipments.map(shipment => `
+  container.innerHTML = shipments.map(shipment => {
+    // Determine payment status badge
+    let paymentBadge = '';
+    if (shipment.paymentStatus) {
+      const statusClass = shipment.paymentStatus === 'paid' ? 'paid' :
+                          shipment.paymentStatus === 'partial' ? 'partial' : 'unpaid';
+      const statusIcon = shipment.paymentStatus === 'paid' ? 'ph-check-circle' :
+                         shipment.paymentStatus === 'partial' ? 'ph-clock' : 'ph-x-circle';
+      const statusLabel = shipment.paymentStatus === 'paid' ? 'Paid' :
+                          shipment.paymentStatus === 'partial' ? `$${(shipment.paidAmount || 0).toLocaleString()}` : 'Unpaid';
+      paymentBadge = `<span class="shipment-payment-status ${statusClass}"><i class="ph ${statusIcon}"></i> ${statusLabel}</span>`;
+    }
+
+    return `
     <div class="shipment-card ${shipment.isPending ? 'pending' : ''}" onclick="window.shipmentActions.openDetail('${shipment.id}')">
       <div class="shipment-header">
         <span class="shipment-invoice">${shipment.invoiceNumber || 'New Shipment'}</span>
@@ -360,6 +373,7 @@ export function renderShipments(shipments) {
       <div class="shipment-meta">
         <span class="shipment-date">${formatDate(shipment.shipmentDate)}</span>
         ${shipment.carrier ? `<span class="shipment-carrier">${shipment.carrier}</span>` : ''}
+        ${paymentBadge}
       </div>
       <div class="shipment-actions" onclick="event.stopPropagation()">
         <button class="btn-icon" onclick="window.shipmentActions.edit('${shipment.id}')" title="Edit">
@@ -370,7 +384,8 @@ export function renderShipments(shipments) {
         </button>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 /**

@@ -735,6 +735,118 @@ body::before {
       color: var(--text);
     }
 
+    /* Shipment checkboxes in payment modal */
+    .shipment-checkboxes {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 200px;
+      overflow-y: auto;
+      padding: 8px;
+      background: var(--bg);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-light);
+    }
+
+    .shipment-checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      background: var(--bg-card);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: 1px solid transparent;
+    }
+
+    .shipment-checkbox-item:hover {
+      border-color: var(--ro-green);
+    }
+
+    .shipment-checkbox-item.selected {
+      background: rgba(102, 137, 113, 0.15);
+      border-color: var(--ro-green);
+    }
+
+    .shipment-checkbox-item input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--ro-green);
+      cursor: pointer;
+    }
+
+    .shipment-checkbox-info {
+      flex: 1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .shipment-checkbox-label {
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .shipment-checkbox-amount {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      color: var(--ro-green);
+    }
+
+    .shipment-checkbox-date {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Payment status badge on shipment cards */
+    .shipment-payment-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 500;
+    }
+
+    .shipment-payment-status.paid {
+      background: rgba(34, 197, 94, 0.15);
+      color: var(--success);
+    }
+
+    .shipment-payment-status.partial {
+      background: rgba(228, 170, 79, 0.15);
+      color: var(--gold);
+    }
+
+    .shipment-payment-status.unpaid {
+      background: rgba(196, 92, 74, 0.15);
+      color: var(--danger);
+    }
+
+    /* Linked shipments in payment detail modal */
+    .linked-shipment-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: var(--bg);
+      border-radius: var(--radius-sm);
+      margin-bottom: 4px;
+    }
+
+    .linked-shipment-invoice {
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .linked-shipment-amount {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--ro-green);
+    }
+
     /* Shipments list container */
     #shipments-list,
     #payments-list {
