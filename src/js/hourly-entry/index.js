@@ -1264,12 +1264,21 @@ const TUTORIAL_STEPS = [
     },
   },
   {
+    id: 'navigation-arrows',
+    target: 'editor-nav-inline',
+    title: { en: 'Hour Navigation', es: 'Navegación por Hora' },
+    text: {
+      en: 'Use the arrow buttons ← → to quickly move between hours without going back to the timeline.\n\n← Previous hour\n→ Next hour\n\nThis makes it fast to enter data for multiple hours in a row!',
+      es: 'Usa los botones de flecha ← → para moverte rápido entre horas sin volver a la línea de tiempo.\n\n← Hora anterior\n→ Hora siguiente\n\n¡Esto hace rápido ingresar datos de varias horas seguidas!',
+    },
+  },
+  {
     id: 'done',
     target: null,
     title: { en: 'You\'re Ready! ✨', es: '¡Estás Listo! ✨' },
     text: {
-      en: 'Data saves automatically as you type. Use Prev/Next buttons to move between hours.\n\nTap "Got It" to start entering data!',
-      es: 'Los datos se guardan automáticamente. Usa los botones Ant/Sig para moverte entre horas.\n\n¡Toca "Entendido" para comenzar!',
+      en: 'Data saves automatically as you type. Use the arrow buttons to move between hours, or tap the ← back button to return to the timeline.\n\nTap "Got It" to start entering data!',
+      es: 'Los datos se guardan automáticamente. Usa las flechas para moverte entre horas, o toca ← para volver a la línea de tiempo.\n\n¡Toca "Entendido" para comenzar!',
     },
     nextLabel: { en: 'Got It!', es: '¡Entendido!' },
   },
