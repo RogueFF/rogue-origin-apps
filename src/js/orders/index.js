@@ -41,7 +41,8 @@ import {
   openShipmentModal, closeShipmentModal, editShipment,
   saveShipment, saveShipmentAndGenerateDocs, deleteShipment,
   addLineItem, removeLineItem, calculateLineTotal, calculateShipmentTotal,
-  renderShipments
+  renderShipments,
+  openShipmentDetailModal, closeShipmentDetailModal, editShipmentFromDetail
 } from './features/shipments.js';
 import {
   openPaymentModal, closePaymentModal, editPayment,
@@ -83,6 +84,7 @@ window.orderActions = {
  * Shipment-related actions
  */
 window.shipmentActions = {
+  openDetail: openShipmentDetailModal,
   edit: editShipment,
   delete: deleteShipment,
   addLine: addLineItem,
@@ -152,6 +154,11 @@ window.savePayment = savePayment;
 window.openPaymentDetailModal = openPaymentDetailModal;
 window.closePaymentDetailModal = closePaymentDetailModal;
 window.editPaymentFromDetail = editPaymentFromDetail;
+
+// Shipment Detail Modal
+window.openShipmentDetailModal = openShipmentDetailModal;
+window.closeShipmentDetailModal = closeShipmentDetailModal;
+window.editShipmentFromDetail = editShipmentFromDetail;
 
 // Detail Panel
 window.openDetailPanel = openDetailPanel;

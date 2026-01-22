@@ -352,7 +352,7 @@ export function renderShipments(shipments) {
   }
 
   container.innerHTML = shipments.map(shipment => `
-    <div class="shipment-card ${shipment.isPending ? 'pending' : ''}">
+    <div class="shipment-card ${shipment.isPending ? 'pending' : ''}" onclick="window.shipmentActions.openDetail('${shipment.id}')">
       <div class="shipment-header">
         <span class="shipment-invoice">${shipment.invoiceNumber || 'New Shipment'}</span>
         <span class="shipment-amount">${formatCurrency(shipment.totalAmount)}</span>
@@ -361,7 +361,7 @@ export function renderShipments(shipments) {
         <span class="shipment-date">${formatDate(shipment.shipmentDate)}</span>
         ${shipment.carrier ? `<span class="shipment-carrier">${shipment.carrier}</span>` : ''}
       </div>
-      <div class="shipment-actions">
+      <div class="shipment-actions" onclick="event.stopPropagation()">
         <button class="btn-icon" onclick="window.shipmentActions.edit('${shipment.id}')" title="Edit">
           <i class="ph ph-pencil-simple"></i>
         </button>
@@ -418,6 +418,71 @@ async function refreshShipments(orderID) {
   }
 }
 
+const DETAIL_MODAL_ID = 'shipment-detail-modal';
+
+/**
+ * Open shipment detail modal
+ * @param {string} shipmentId
+ */
+export function openShipmentDetailModal(shipmentId) {
+  const shipments = getCachedShipments();
+  const shipment = shipments.find(s => s.id === shipmentId);
+  if (!shipment) return;
+
+  // Populate detail fields
+  setDetailValue('detail-shipment-invoice', shipment.invoiceNumber || '-');
+  setDetailValue('detail-shipment-amount', formatCurrency(shipment.totalAmount));
+  setDetailValue('detail-shipment-date', formatDate(shipment.shipmentDate));
+  setDetailValue('detail-shipment-carrier', shipment.carrier || '-');
+  setDetailValue('detail-shipment-tracking', shipment.trackingNumber || '-');
+  setDetailValue('detail-shipment-notes', shipment.notes || '-');
+
+  // Render line items
+  let lineItems = shipment.lineItems || [];
+  if (typeof lineItems === 'string') {
+    try { lineItems = JSON.parse(lineItems); } catch (e) { lineItems = []; }
+  }
+
+  const linesContainer = document.getElementById('detail-shipment-lines');
+  if (linesContainer) {
+    if (lineItems.length === 0) {
+      linesContainer.innerHTML = '<span style="color: var(--text-muted);">No line items</span>';
+    } else {
+      linesContainer.innerHTML = lineItems.map(item => `
+        <div style="display: flex; justify-content: space-between; padding: 8px 12px; background: var(--bg); border-radius: var(--radius-sm); margin-bottom: 4px;">
+          <span style="font-weight: 500;">${item.strain || 'Unknown'} <span style="color: var(--text-muted); font-size: 12px;">(${item.type || 'tops'})</span></span>
+          <span style="font-family: var(--font-mono);">${item.quantity || 0}kg @ ${formatCurrency(item.unitPrice || 0)} = ${formatCurrency(item.total || 0)}</span>
+        </div>
+      `).join('');
+    }
+  }
+
+  // Store shipment ID for edit button
+  const editBtn = document.getElementById('detail-shipment-edit-btn');
+  if (editBtn) editBtn.dataset.shipmentId = shipmentId;
+
+  openModal(DETAIL_MODAL_ID);
+}
+
+/**
+ * Close shipment detail modal
+ */
+export function closeShipmentDetailModal() {
+  closeModal(DETAIL_MODAL_ID);
+}
+
+/**
+ * Edit shipment from detail modal
+ */
+export function editShipmentFromDetail() {
+  const editBtn = document.getElementById('detail-shipment-edit-btn');
+  const shipmentId = editBtn?.dataset.shipmentId;
+  if (shipmentId) {
+    closeShipmentDetailModal();
+    editShipment(shipmentId);
+  }
+}
+
 // Helper functions
 function setFieldValue(id, value) {
   const el = document.getElementById(id);
@@ -427,4 +492,9 @@ function setFieldValue(id, value) {
 function getFieldValue(id) {
   const el = document.getElementById(id);
   return el ? el.value : '';
+}
+
+function setDetailValue(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value || '';
 }
