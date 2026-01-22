@@ -76,6 +76,52 @@ const SHEETS = {
   data: 'Data',
 };
 
+/**
+ * Get the currently active pause (if any) from the pause log.
+ * An active pause has no resume time (column D is empty).
+ * Only returns pauses from today to avoid stale data.
+ */
+async function getActivePause(env) {
+  try {
+    const sheetId = env.PRODUCTION_SHEET_ID;
+    const vals = await readSheet(sheetId, `'${SHEETS.pauseLog}'!A:G`, env);
+
+    if (!vals || vals.length < 2) return null;
+
+    const today = formatDatePT(new Date(), 'yyyy-MM-dd');
+
+    // Find the most recent pause from today that has no resume time
+    for (let i = vals.length - 1; i >= 1; i--) {
+      const row = vals[i];
+      const pauseId = row[0];
+      const pauseDate = row[1];
+      const startTime = row[2];
+      const resumeTime = row[3];
+      const reason = row[5];
+
+      // Only consider today's pauses
+      if (pauseDate !== today) continue;
+
+      // If resume time is empty, this pause is still active
+      if (!resumeTime || resumeTime === '') {
+        // Parse start time to ISO
+        const startDateTime = new Date(`${pauseDate}T${startTime}`);
+        return {
+          isPaused: true,
+          pauseId: String(pauseId),
+          pauseStartTime: startDateTime.toISOString(),
+          pauseReason: reason || 'Unknown',
+        };
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error getting active pause:', error);
+    return null;
+  }
+}
+
 // Time slot multipliers for break adjustments
 const TIME_SLOT_MULTIPLIERS = {
   '7:00 AM – 8:00 AM': 1.0,
