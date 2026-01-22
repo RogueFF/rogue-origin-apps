@@ -151,8 +151,8 @@ export async function savePayment() {
 
   const isEditing = !!editingId;
   await withButtonLoading('payment-submit-btn', async () => {
-    const action = isEditing ? 'updatePayment' : 'recordPayment';
-    const result = await apiCall(action, paymentData, 'POST');
+    // Backend uses savePayment for both create and update
+    const result = await apiCall('savePayment', paymentData, 'POST');
 
     if (result.success !== false) {
       const paymentId = result.payment?.id || editingId;
