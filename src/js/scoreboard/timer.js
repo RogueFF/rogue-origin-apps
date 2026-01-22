@@ -702,6 +702,80 @@
     );
   }
 
+  /**
+   * Apply pause state from server (for cross-device sync)
+   * @param {Object|null} pauseData - Pause state from server
+   * @param {boolean} pauseData.isPaused - Whether currently paused
+   * @param {string} pauseData.pauseId - Unique pause ID
+   * @param {string} pauseData.pauseStartTime - ISO timestamp of pause start
+   * @param {string} pauseData.pauseReason - Reason for pause
+   */
+  function applyPauseState(pauseData) {
+    // If server says paused and we're not locally paused, apply pause
+    if (pauseData && pauseData.isPaused) {
+      // Check if this is a different pause than what we have locally
+      var serverPauseId = String(pauseData.pauseId);
+      var localPauseId = State.pauseId ? String(State.pauseId) : null;
+
+      if (!State.isPaused || serverPauseId !== localPauseId) {
+        console.log('Syncing pause state from server:', pauseData);
+
+        // Apply pause state without re-logging to server
+        State.isPaused = true;
+        State.pauseId = serverPauseId;
+        State.pauseStartTime = new Date(pauseData.pauseStartTime);
+        State.pauseReason = pauseData.pauseReason || 'Unknown';
+
+        // Update UI
+        var pauseBtn = DOM ? DOM.get('pauseBtn') : document.getElementById('pauseBtn');
+        if (pauseBtn) {
+          pauseBtn.classList.add('paused');
+          pauseBtn.innerHTML = '<i class="ph-duotone ph-play"></i>';
+        }
+
+        var banner = DOM ? DOM.get('pauseBanner') : document.getElementById('pauseBanner');
+        var reasonDisplay = DOM ? DOM.get('pauseReasonDisplay') : document.getElementById('pauseReasonDisplay');
+        if (banner && reasonDisplay) {
+          reasonDisplay.textContent = State.pauseReason;
+          banner.classList.add('visible');
+        }
+
+        // Start counting pause time (if not already)
+        if (!State.pauseInterval) {
+          updatePauseTimer();
+          State.pauseInterval = setInterval(updatePauseTimer, 1000);
+        }
+      }
+    }
+    // If server says not paused but we are locally paused, clear local pause
+    else if (!pauseData && State.isPaused) {
+      console.log('Clearing local pause state (server says not paused)');
+
+      State.isPaused = false;
+      State.pauseId = null;
+      State.pauseStartTime = null;
+      State.pauseReason = '';
+
+      // Clear interval
+      if (State.pauseInterval) {
+        clearInterval(State.pauseInterval);
+        State.pauseInterval = null;
+      }
+
+      // Update UI
+      var pauseBtn = DOM ? DOM.get('pauseBtn') : document.getElementById('pauseBtn');
+      if (pauseBtn) {
+        pauseBtn.classList.remove('paused');
+        pauseBtn.innerHTML = '<i class="ph-duotone ph-pause"></i>';
+      }
+
+      var banner = DOM ? DOM.get('pauseBanner') : document.getElementById('pauseBanner');
+      if (banner) {
+        banner.classList.remove('visible');
+      }
+    }
+  }
+
   // Export public API
   window.ScoreboardTimer = {
     formatTime: formatTime,
@@ -716,7 +790,8 @@
     confirmPause: confirmPause,
     startPause: startPause,
     updatePauseTimer: updatePauseTimer,
-    resumeTimer: resumeTimer
+    resumeTimer: resumeTimer,
+    applyPauseState: applyPauseState
   };
 
 })(window);
