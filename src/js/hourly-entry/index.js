@@ -774,7 +774,6 @@ function updateStepGuide() {
   const stepGuide = document.getElementById('step-guide');
   const stepIcon = document.getElementById('step-icon');
   const stepTitle = document.getElementById('step-title');
-  const stepHint = document.getElementById('step-hint');
   const crewSection = document.querySelector('.crew-section');
   const productionSection = document.querySelector('.production-section');
   const qcNotesSection = document.querySelector('.editor-section:has(#qcNotes)');
@@ -815,30 +814,26 @@ function updateStepGuide() {
     // Step 1: Enter Crew
     stepIcon.textContent = '1';
     stepTitle.textContent = labels.stepCrewTitle;
-    stepHint.textContent = labels.stepCrewHint;
     crewSection?.classList.add('needs-attention');
   } else if (!hasProduction) {
     // Step 2: Enter Production
     stepGuide.classList.add('step-production');
     stepIcon.textContent = '2';
     stepTitle.textContent = labels.stepProductionTitle;
-    stepHint.textContent = labels.stepProductionHint;
     crewSection?.classList.add('completed');
     productionSection?.classList.add('needs-attention');
   } else if (metTarget) {
     // Target met - celebrate!
     stepGuide.classList.add('step-celebrate');
     stepIcon.textContent = '🎉';
-    stepTitle.textContent = labels.stepCelebrateTitle;
-    stepHint.textContent = `${totalTops.toFixed(1)} / ${hourlyTarget.toFixed(1)} lbs`;
+    stepTitle.textContent = `${labels.stepCelebrateTitle} ${totalTops.toFixed(1)}lbs`;
     crewSection?.classList.add('completed');
     productionSection?.classList.add('completed');
   } else if (!hasReason) {
     // Target missed, need reason
     stepGuide.classList.add('step-missed');
     stepIcon.textContent = '!';
-    stepTitle.textContent = labels.stepMissedTitle;
-    stepHint.textContent = `${totalTops.toFixed(1)} / ${hourlyTarget.toFixed(1)} lbs — ${labels.stepMissedHint}`;
+    stepTitle.textContent = `${labels.stepMissedTitle} ${totalTops.toFixed(1)}/${hourlyTarget.toFixed(1)}`;
     crewSection?.classList.add('completed');
     productionSection?.classList.add('completed');
     qcNotesSection?.classList.add('needs-attention');
@@ -846,8 +841,7 @@ function updateStepGuide() {
     // Target missed but reason provided
     stepGuide.classList.add('step-complete');
     stepIcon.textContent = '✓';
-    stepTitle.textContent = labels.stepCompleteTitle;
-    stepHint.textContent = `${totalTops.toFixed(1)} / ${hourlyTarget.toFixed(1)} lbs`;
+    stepTitle.textContent = `${labels.stepCompleteTitle} ${totalTops.toFixed(1)}lbs`;
     crewSection?.classList.add('completed');
     productionSection?.classList.add('completed');
     qcNotesSection?.classList.add('completed');
