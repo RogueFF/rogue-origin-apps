@@ -2164,6 +2164,16 @@ async function loadBagTimerData() {
     timerTargetSeconds = typeof timer.targetSeconds === 'number' ? timer.targetSeconds : 90 * 60;
     timerAvgSeconds = timer.avgSecondsToday || 0;
 
+    // Update target time and trimmers display
+    const targetTimeEl = document.getElementById('timer-target-time');
+    const trimmersEl = document.getElementById('timer-trimmers');
+    if (targetTimeEl) {
+      targetTimeEl.textContent = timerTargetSeconds > 0 ? formatTimeMMSS(timerTargetSeconds) : '--:--';
+    }
+    if (trimmersEl) {
+      trimmersEl.textContent = timer.currentTrimmers || 0;
+    }
+
     // Sync pause state from server (cross-device sync - matches scoreboard)
     const pauseData = data.pause;
     if (pauseData && pauseData.isPaused) {
