@@ -79,6 +79,43 @@ Unless otherwise specified, use Opus for planning/thinking tasks and Sonnet for 
 
 ## Recent Features (January 2026)
 
+### Shopify Webhook Migration to Cloudflare (2026-01-23)
+
+**Feature**: Shopify Flow inventory webhook migrated from Google Apps Script to Cloudflare Workers
+
+**Problem**: Google Apps Script webhook had rate limiting issues (429 errors) and slow cold starts (10-15 seconds)
+
+**Solution**:
+- Migrated webhook to Cloudflare Workers (0ms cold start, no rate limits)
+- Dual-write pattern: webhook writes to both D1 (SQLite) and Google Sheets for backwards compatibility
+- Bag timer data (`getBagTimerData`) now reads from D1 instead of Google Sheets
+- Added secret token authentication for security
+
+**Webhook URL**:
+```
+https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production?action=webhook&secret=<token>
+```
+
+**D1 Table**: `inventory_adjustments`
+- timestamp, sku, product_name, variant_title, strain_name, size
+- quantity_adjusted, new_total_available, previous_available
+- location, product_type, barcode, price, flow_run_id
+
+**Blacklist System** (for test/accidental scans):
+```javascript
+const BLACKLISTED_BAGS = [
+  { start: new Date('2026-01-19T20:34:14Z'), end: new Date('2026-01-19T20:38:05Z') }, // Range
+  { exact: new Date('2026-01-23T19:45:35Z'), tolerance: 2000 }, // Single bag
+];
+```
+
+**Environment Variables** (via `wrangler secret put`):
+- `WEBHOOK_SECRET` - secret token for webhook authentication
+
+**Status**: ✅ Deployed (Shopify Flow fires to both old and new endpoints during transition)
+
+---
+
 ### Break-Adjusted Cycle Times (2026-01-20)
 
 **Feature**: Bag cycle times now subtract break periods that fall within the cycle window, giving accurate working time instead of wall-clock time.
