@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../css/hourly-entry.css?v=35">
+  <link rel="stylesheet" href="../css/hourly-entry.css?v=37">
 </head>
 <body>
   <a href="#timeline-list" class="skip-link">Skip to timeline</a>
@@ -40,6 +40,11 @@
           <h2 class="card-title" data-i18n="hourlyEntry">Hourly Entry</h2>
           <!-- Editor header (shown when editing) -->
           <div id="editor-header-inline" class="editor-header-inline" style="display: none;">
+            <!-- Step Guide Pill (far left) -->
+            <div class="step-pill" id="step-guide">
+              <span class="step-icon" id="step-icon">1</span>
+              <span class="step-title" id="step-title">Enter Crew</span>
+            </div>
             <button id="back-to-timeline" class="back-btn-day" title="Back to day view">
               <span class="day-icon">▦</span>
               <span class="day-label" data-i18n="dayView">Day</span>
@@ -77,15 +82,6 @@
 
           <!-- EDITOR VIEW (within card) -->
           <div id="editor-content" class="card-view">
-            <!-- Step Guide Banner -->
-            <div class="step-guide" id="step-guide">
-              <div class="step-icon" id="step-icon">1</div>
-              <div class="step-text">
-                <span class="step-title" id="step-title">Enter Crew</span>
-                <span class="step-hint" id="step-hint">Start of hour: who's working?</span>
-              </div>
-            </div>
-
             <!-- Crew Entry Section -->
             <section class="editor-section crew-section">
               <div class="section-header">
@@ -344,6 +340,6 @@
     <button class="tooltip-close">×</button>
   </div>
 
-  <script type="module" src="../js/hourly-entry/index.js?v=45"></script>
+  <script type="module" src="../js/hourly-entry/index.js?v=46"></script>
 </body>
 </html>
