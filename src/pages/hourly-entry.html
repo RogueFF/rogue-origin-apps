@@ -40,11 +40,14 @@
           <h2 class="card-title" data-i18n="hourlyEntry">Hourly Entry</h2>
           <!-- Editor header (shown when editing) -->
           <div id="editor-header-inline" class="editor-header-inline" style="display: none;">
-            <button id="back-to-timeline" class="back-btn-inline" title="Back to timeline">&larr;</button>
-            <span id="editor-time-label-inline" class="editor-time-inline">9-10 AM</span>
-            <div class="editor-nav-inline">
-              <button id="prev-slot" class="nav-btn-inline" title="Previous hour">&larr;</button>
-              <button id="next-slot" class="nav-btn-inline" title="Next hour">&rarr;</button>
+            <button id="back-to-timeline" class="back-btn-day" title="Back to day view">
+              <span class="day-icon">▦</span>
+              <span class="day-label" data-i18n="dayView">Day</span>
+            </button>
+            <div class="hour-nav-group">
+              <button id="prev-slot" class="nav-btn-hour" title="Previous hour">‹</button>
+              <span id="editor-time-label-inline" class="editor-time-inline">9-10 AM</span>
+              <button id="next-slot" class="nav-btn-hour" title="Next hour">›</button>
             </div>
           </div>
         </div>
