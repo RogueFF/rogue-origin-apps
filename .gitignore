@@ -73,3 +73,6 @@ test-results/
 .vercel
 .env*.local
 .wrangler/
+
+# Git worktrees
+.worktrees/
