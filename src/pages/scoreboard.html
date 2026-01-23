@@ -40,7 +40,7 @@
   <script defer src="../js/scoreboard/render.js?v=3"></script>
   <script defer src="../js/scoreboard/shift-start.js?v=2"></script>
   <script defer src="../js/scoreboard/morning-report.js?v=3"></script>
-  <script defer src="../js/scoreboard/scale.js?v=1"></script>
+  <script defer src="../js/scoreboard/scale.js?v=3"></script>
   <script defer src="../js/scoreboard/main.js?v=7"></script>
   <!-- Performance: CSS Preloading -->
   <link rel="stylesheet" href="../css/shared-base.css">
@@ -71,6 +71,17 @@
   <div class="time-display">
     <div class="time" id="clock">--:--</div>
     <div class="date" id="date">Loading...</div>
+    <!-- Start Day Button (appears until shift start is set) -->
+    <button id="startDayBtn" class="start-day-btn pulse-green" onclick="startDayNow()" style="display:none;">
+      <i class="ph-duotone ph-play-circle"></i>
+      Start Day
+    </button>
+    <!-- Started Badge (appears after shift start is set) -->
+    <div id="startedBadge" class="started-badge" onclick="editStartTime()" style="display:none;">
+      <i class="ph-duotone ph-clock"></i>
+      Started: <span id="startTimeDisplay">—</span>
+      <i id="badgeIcon" class="ph-duotone ph-pencil-simple"></i>
+    </div>
   </div>
   <!-- Morning Report Button -->
   <button id="morningReportBtn" onclick="toggleMorningReport()">
@@ -86,19 +97,6 @@
     </a>
   </div>
   <button class="help-btn" onclick="toggleHelp()">?</button>
-
-  <!-- Start Day Button (appears until shift start is set) -->
-  <button id="startDayBtn" class="start-day-btn pulse-green" onclick="startDayNow()" style="display:none;">
-    <i class="ph-duotone ph-play-circle"></i>
-    Start Day
-  </button>
-
-  <!-- Started Badge (appears after shift start is set) -->
-  <div id="startedBadge" class="started-badge" onclick="editStartTime()" style="display:none;">
-    <i class="ph-duotone ph-clock"></i>
-    Started: <span id="startTimeDisplay">—</span>
-    <i id="badgeIcon" class="ph-duotone ph-pencil-simple"></i>
-  </div>
 
   <div class="help-modal" id="helpModal" onclick="if(event.target===this)toggleHelp()">
     <div class="help-content">
@@ -265,6 +263,23 @@
     <div class="drag-handle" id="dragHandle"></div>
     <div class="expand-hint" id="expandHint">◀</div>
     <button class="fullscreen-toggle" id="fullscreenToggle" onclick="toggleTimerFullscreen()"><i class="ph-duotone ph-arrows-out"></i></button>
+
+    <!-- Scale Weight Display (circular ring like timer) - ABOVE bag timer -->
+    <div class="scale-section" id="scaleSection">
+      <div class="scale-header" id="scaleHeader">Live Scale</div>
+      <div class="scale-display" id="scaleDisplay">
+        <svg class="scale-ring" viewBox="0 0 220 220">
+          <circle class="scale-ring-bg" cx="110" cy="110" r="95"/>
+          <circle class="scale-ring-progress" id="scaleRing" cx="110" cy="110" r="95" stroke-dasharray="597" stroke-dashoffset="597"/>
+        </svg>
+        <div class="scale-center">
+          <div class="scale-value" id="scaleWeight">—</div>
+          <div class="scale-label" id="scaleWeightLabel">of 5.0 kg</div>
+        </div>
+        <div class="scale-status-dot" id="scaleStatusDot"></div>
+      </div>
+    </div>
+
     <div class="timer-header" id="timerHeader">5KG Bag Timer</div>
     <div class="timer-display" id="timerDisplay">
       <svg class="timer-ring" viewBox="0 0 220 220">
@@ -285,18 +300,8 @@
       <div class="timer-stat"><span class="timer-stat-label" id="bagsTodayLabel">Bags Today</span><span class="timer-stat-value" id="bagsToday">0</span></div>
       <div class="timer-stat"><span class="timer-stat-label" id="avgTodayLabel">Avg Today</span><span class="timer-stat-value" id="avgToday">--:--</span></div>
       <div class="timer-stat"><span class="timer-stat-label" id="vsTargetLabel">vs Target</span><span class="timer-stat-value" id="vsTarget">—</span></div>
-      <div class="timer-stat scale-stat" id="scaleStat">
-        <span class="timer-stat-label">
-          <span class="scale-status-dot" id="scaleStatusDot"></span>
-          <span id="scaleWeightLabel">Scale</span>
-        </span>
-        <span class="timer-stat-value" id="scaleWeight">—</span>
-        <div class="scale-progress-bar">
-          <div class="scale-progress-fill" id="scaleProgressFill"></div>
-        </div>
-      </div>
     </div>
-    
+
     <div class="cycle-history" id="cycleHistory">
       <div class="cycle-history-header">
         <span class="cycle-history-title" id="cycleHistoryTitle">Today's Cycles</span>
