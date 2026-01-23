@@ -691,6 +691,19 @@ body {
   margin-top: 8px;
 }
 
+/* Timer Target Info */
+.timer-target {
+  font-size: 14px;
+  color: var(--text-secondary);
+  text-align: center;
+  margin: 12px 0;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.timer-target span {
+  color: var(--text-primary);
+}
+
 /* Timer Stats */
 .timer-stats {
   display: flex;

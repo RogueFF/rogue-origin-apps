@@ -30,11 +30,13 @@ import { insert } from '../lib/db.js';
 const AI_MODEL = 'claude-sonnet-4-20250514';
 const TIMEZONE = 'America/Los_Angeles';
 
-// In-memory cache for scoreboard (reduces Google Sheets API calls)
+// Short in-memory cache to reduce Google Sheets API calls
+// Note: Each edge node has its own cache, but 5s TTL is short enough
+// that stale data is acceptable (smart polling checks version every 5s anyway)
 const scoreboardCache = {
   data: null,
   timestamp: 0,
-  TTL: 30000, // 30 seconds (smart polling handles freshness via version check)
+  TTL: 5000, // 5 seconds - matches smart polling interval
 };
 
 // ===== VERSION TRACKING FOR SMART POLLING =====
@@ -575,8 +577,11 @@ function calculateDailyProjection(todayRows, lastCompletedHourIndex, currentHour
 const BLACKLISTED_BAGS = [
   // 8 accidentally scanned bags on 1/19/2026 12:34:14 - 12:38:04 Pacific
   { start: new Date('2026-01-19T20:34:14Z'), end: new Date('2026-01-19T20:38:05Z') },
-  // Test bag from POST fix testing on 1/23/2026 1:01:22 PM Pacific (21:01:22 UTC)
-  { exact: new Date('2026-01-23T21:01:22Z'), tolerance: 2000 },
+  // Test bags from webhook testing on 1/23/2026 (keep 11:45 AM and 1:10 PM)
+  { exact: new Date('2026-01-23T21:01:22Z'), tolerance: 2000 }, // 1:01 PM - test
+  { exact: new Date('2026-01-23T21:28:36Z'), tolerance: 2000 }, // 1:28 PM - test
+  { exact: new Date('2026-01-23T21:31:40Z'), tolerance: 2000 }, // 1:31 PM - test
+  { exact: new Date('2026-01-23T21:35:11Z'), tolerance: 2000 }, // 1:35 PM - test
 ];
 
 /**
