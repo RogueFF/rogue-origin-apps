@@ -981,18 +981,20 @@ function filterSizeOptions(selectId, isStickerMule) {
 
     if (isStickerMule) {
       // Sticker Mule: only show sticker sizes
-      opt.style.display = isStickerSize ? '' : 'none';
+      opt.hidden = !isStickerSize;
+      opt.disabled = !isStickerSize;
       if (isStickerSize && !firstVisibleValue) firstVisibleValue = opt.value;
     } else {
       // Other suppliers: hide sticker sizes
-      opt.style.display = isStickerSize ? 'none' : '';
+      opt.hidden = isStickerSize;
+      opt.disabled = isStickerSize;
       if (!isStickerSize && !firstVisibleValue) firstVisibleValue = opt.value;
     }
   });
 
   // If current selection is now hidden, switch to first visible option
   var currentOpt = select.querySelector('option[value="' + select.value + '"]');
-  if (currentOpt && currentOpt.style.display === 'none' && firstVisibleValue) {
+  if (currentOpt && (currentOpt.hidden || currentOpt.disabled) && firstVisibleValue) {
     select.value = firstVisibleValue;
   }
 }
