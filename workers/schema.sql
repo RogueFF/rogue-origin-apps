@@ -316,3 +316,18 @@ CREATE TABLE IF NOT EXISTS data_version (
 
 -- Initialize scoreboard version
 INSERT OR IGNORE INTO data_version (key, version, updated_at) VALUES ('scoreboard', 0, datetime('now'));
+
+-- ============================================
+-- LIVE SCALE WEIGHT TRACKING
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS scale_readings (
+  station_id TEXT PRIMARY KEY DEFAULT 'line1',
+  weight REAL NOT NULL DEFAULT 0,
+  target_weight REAL DEFAULT 5.0,
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Initialize default station
+INSERT OR IGNORE INTO scale_readings (station_id, weight, target_weight, updated_at)
+VALUES ('line1', 0, 5.0, datetime('now'));
