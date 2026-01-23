@@ -1,6 +1,6 @@
 /**
  * Scoreboard Scale Module
- * Polls live scale weight and updates display
+ * Polls live scale weight and updates circular ring display
  */
 (function(window) {
   'use strict';
@@ -13,6 +13,7 @@
   // Scale-specific config
   var POLL_INTERVAL = 1000; // 1 second polling for scale
   var API_URL = (Config && Config.apiUrl) || 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
+  var RING_CIRCUMFERENCE = 2 * Math.PI * 95; // ~597, matches timer ring
 
   /**
    * Fetch scale weight from API
@@ -48,7 +49,7 @@
   }
 
   /**
-   * Render scale weight display
+   * Render scale weight display (circular ring)
    */
   function renderScale() {
     var scaleData = (State && State.scaleData) || null;
@@ -56,34 +57,49 @@
     // Get DOM elements
     var statusDot = DOM ? DOM.get('scaleStatusDot') : document.getElementById('scaleStatusDot');
     var weightEl = DOM ? DOM.get('scaleWeight') : document.getElementById('scaleWeight');
-    var progressFill = DOM ? DOM.get('scaleProgressFill') : document.getElementById('scaleProgressFill');
     var scaleLabel = DOM ? DOM.get('scaleWeightLabel') : document.getElementById('scaleWeightLabel');
+    var scaleRing = DOM ? DOM.get('scaleRing') : document.getElementById('scaleRing');
+    var scaleHeader = DOM ? DOM.get('scaleHeader') : document.getElementById('scaleHeader');
 
-    // Update label with i18n
-    if (scaleLabel && I18n && I18n.t) {
-      scaleLabel.textContent = I18n.t('scaleWeight') || 'Scale';
+    // Update header with i18n
+    if (scaleHeader && I18n && I18n.t) {
+      scaleHeader.textContent = I18n.t('scaleWeight') || 'Live Scale';
     }
 
     if (!scaleData) {
-      // No data yet
+      // No data yet - show stale state
       if (statusDot) {
         statusDot.classList.remove('connected');
         statusDot.classList.add('stale');
       }
       if (weightEl) {
         weightEl.textContent = '—';
-        weightEl.classList.remove('near-target', 'at-target');
+        weightEl.className = 'scale-value stale';
       }
-      if (progressFill) {
-        progressFill.style.width = '0%';
-        progressFill.classList.remove('near-target', 'at-target');
+      if (scaleLabel) {
+        scaleLabel.textContent = 'of 5.0 kg';
+      }
+      if (scaleRing) {
+        scaleRing.style.strokeDashoffset = RING_CIRCUMFERENCE; // Empty ring
+        scaleRing.setAttribute('class', 'scale-ring-progress stale');
       }
       return;
     }
 
     var weight = scaleData.weight || 0;
+    var targetWeight = scaleData.targetWeight || 5.0;
     var percent = scaleData.percentComplete || 0;
     var isStale = scaleData.isStale !== false; // Default to stale if not explicitly false
+
+    // Determine color state
+    var colorClass = 'filling';
+    if (isStale) {
+      colorClass = 'stale';
+    } else if (percent >= 100) {
+      colorClass = 'at-target';
+    } else if (percent >= 90) {
+      colorClass = 'near-target';
+    }
 
     // Update status dot
     if (statusDot) {
@@ -95,33 +111,23 @@
     if (weightEl) {
       if (isStale) {
         weightEl.textContent = '—';
-        weightEl.classList.remove('near-target', 'at-target');
       } else {
         weightEl.textContent = weight.toFixed(2) + ' kg';
-
-        // Color states
-        var isNearTarget = percent >= 90 && percent < 100;
-        var isAtTarget = percent >= 100;
-
-        weightEl.classList.toggle('near-target', isNearTarget);
-        weightEl.classList.toggle('at-target', isAtTarget);
       }
+      weightEl.className = 'scale-value ' + colorClass;
     }
 
-    // Update progress bar
-    if (progressFill) {
-      if (isStale) {
-        progressFill.style.width = '0%';
-        progressFill.classList.remove('near-target', 'at-target');
-      } else {
-        progressFill.style.width = Math.min(100, percent) + '%';
+    // Update label
+    if (scaleLabel) {
+      scaleLabel.textContent = 'of ' + targetWeight.toFixed(1) + ' kg';
+    }
 
-        var isNearTarget = percent >= 90 && percent < 100;
-        var isAtTarget = percent >= 100;
-
-        progressFill.classList.toggle('near-target', isNearTarget);
-        progressFill.classList.toggle('at-target', isAtTarget);
-      }
+    // Update circular ring progress
+    if (scaleRing) {
+      var progress = isStale ? 0 : Math.min(1, percent / 100);
+      var offset = RING_CIRCUMFERENCE * (1 - progress);
+      scaleRing.style.strokeDashoffset = offset;
+      scaleRing.setAttribute('class', 'scale-ring-progress ' + colorClass);
     }
   }
 
