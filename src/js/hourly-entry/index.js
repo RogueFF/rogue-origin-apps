@@ -2160,8 +2160,8 @@ async function loadBagTimerData() {
       lastBagTimestamp = null;
     }
 
-    // Store target and avg seconds
-    timerTargetSeconds = timer.targetSeconds || 90 * 60;
+    // Store target and avg seconds (use explicit check - 0 is valid, not falsy default)
+    timerTargetSeconds = typeof timer.targetSeconds === 'number' ? timer.targetSeconds : 90 * 60;
     timerAvgSeconds = timer.avgSecondsToday || 0;
 
     // Sync pause state from server (cross-device sync - matches scoreboard)
