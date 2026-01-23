@@ -37,6 +37,7 @@ const LABELS = {
     tops: 'Tops (lbs)',
     smalls: 'Smalls (lbs)',
     qcNotes: 'QC Notes',
+    hourlyTarget: 'Hourly Target',
     saved: 'Saved',
     prev: 'Prev',
     next: 'Next',
@@ -97,6 +98,7 @@ const LABELS = {
     tops: 'Tops (lbs)',
     smalls: 'Smalls (lbs)',
     qcNotes: 'Notas QC',
+    hourlyTarget: 'Meta por Hora',
     saved: 'Guardado',
     prev: 'Ant',
     next: 'Sig',
@@ -190,6 +192,36 @@ window.addEventListener('beforeunload', () => {
   cleanupListeners();
   if (saveTimeout) clearTimeout(saveTimeout);
 });
+
+// ===================
+// DATE FORMATTING
+// ===================
+
+function getDaySuffix(day) {
+  if (day >= 11 && day <= 13) return 'th';
+  switch (day % 10) {
+    case 1: return 'st';
+    case 2: return 'nd';
+    case 3: return 'rd';
+    default: return 'th';
+  }
+}
+
+function formatDateDisplay(dateStr) {
+  const date = new Date(dateStr + 'T12:00:00'); // Avoid timezone issues
+  const months = ['January', 'February', 'March', 'April', 'May', 'June',
+                  'July', 'August', 'September', 'October', 'November', 'December'];
+  const day = date.getDate();
+  const suffix = getDaySuffix(day);
+  return `${months[date.getMonth()]}, ${day}${suffix}`;
+}
+
+function updateDateDisplay(dateStr) {
+  const display = document.getElementById('date-display');
+  if (display) {
+    display.textContent = formatDateDisplay(dateStr);
+  }
+}
 
 // ===================
 // SHIFT START (shared with scoreboard)
@@ -355,11 +387,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 function initializeUI() {
-  // Date picker
+  // Date picker with formatted display
   const datePicker = document.getElementById('date-picker');
+  const dateDisplay = document.getElementById('date-display');
   datePicker.value = currentDate;
+  updateDateDisplay(currentDate);
+
+  // Click on display opens the date picker
+  if (dateDisplay) {
+    dateDisplay.addEventListener('click', () => datePicker.showPicker());
+  }
+
   datePicker.addEventListener('change', async (e) => {
     currentDate = e.target.value;
+    updateDateDisplay(currentDate);
     await loadDayData(currentDate);
     renderTimeline();
   });
@@ -368,6 +409,7 @@ function initializeUI() {
   document.getElementById('today-btn').addEventListener('click', async () => {
     currentDate = formatDateLocal(new Date());
     datePicker.value = currentDate;
+    updateDateDisplay(currentDate);
     await loadDayData(currentDate);
     renderTimeline();
     highlightCurrentTimeSlot();
@@ -807,6 +849,12 @@ function updateStepGuide() {
     crewSection?.classList.add('completed');
     productionSection?.classList.add('completed');
     qcNotesSection?.classList.add('completed');
+  }
+
+  // Update hourly target display
+  const hourlyTargetEl = document.getElementById('hourly-target-value');
+  if (hourlyTargetEl) {
+    hourlyTargetEl.textContent = hourlyTarget > 0 ? `${hourlyTarget.toFixed(1)} lbs` : '-- lbs';
   }
 }
 

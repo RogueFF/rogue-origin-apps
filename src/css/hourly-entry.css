@@ -250,7 +250,7 @@ body {
 
 .card-hourly .slot-target {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 16px;
+  font-size: 20px;
   color: var(--text-muted, #888);
   opacity: 0.8;
 }
@@ -505,6 +505,7 @@ body {
   background-color: rgba(102, 137, 113, 0.15);
   border-left-color: var(--green);
   border-color: var(--green);
+  color: var(--text-primary) !important;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23668971' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
 }
 
@@ -862,15 +863,35 @@ body {
   }
 }
 
-.date-picker {
-  padding: 8px 12px;
+/* Visible date display (clickable to open picker) */
+.date-display {
+  padding: 8px 16px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   background: var(--bg-input);
   color: var(--text-primary);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 14px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 15px;
+  font-weight: 500;
   min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.date-display:hover {
+  border-color: var(--ro-green);
+  background: rgba(102, 137, 113, 0.1);
+}
+
+/* Hidden date picker (opened programmatically) */
+.date-picker-hidden {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 0;
+  height: 0;
 }
 
 .lang-btn {
@@ -944,7 +965,7 @@ body {
 }
 
 .progress-label {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -983,7 +1004,7 @@ body {
 .progress-details {
   display: flex;
   justify-content: space-between;
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text-secondary);
 }
 
@@ -1169,13 +1190,13 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   background: var(--green);
   color: var(--bg-dark);
   border-radius: 50%;
   font-weight: 700;
-  font-size: 16px;
+  font-size: 20px;
   flex-shrink: 0;
 }
 
@@ -1207,12 +1228,12 @@ body {
 
 .step-title {
   font-weight: 600;
-  font-size: 15px;
+  font-size: 18px;
   color: var(--text-primary);
 }
 
 .step-hint {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--text-secondary);
 }
 
@@ -1275,7 +1296,7 @@ body {
 }
 
 .section-label {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--green);
   margin-bottom: 16px;
@@ -1284,7 +1305,7 @@ body {
 }
 
 .subsection-label {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--text-secondary);
   margin-bottom: 12px;
@@ -1446,7 +1467,7 @@ body {
 
 .crew-field label {
   display: block;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-secondary);
   margin-bottom: 6px;
   text-align: center;
@@ -1519,9 +1540,9 @@ body {
   padding: 14px 16px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  background: var(--bg-input);
-  color: var(--text-primary);
-  font-size: 16px;
+  background: var(--bg-input) !important;
+  color: var(--text-primary) !important;
+  font-size: 18px;
   min-height: 52px;
   cursor: pointer;
 }
@@ -1621,6 +1642,35 @@ body {
 
 .editor-section.collapsible.expanded .toggle-icon {
   transform: rotate(45deg);
+}
+
+/* Hourly Target Display */
+.target-section {
+  margin-top: 16px;
+}
+
+.hourly-target-display {
+  text-align: center;
+  padding: 20px;
+  background: rgba(102, 137, 113, 0.1);
+  border-radius: 12px;
+  border: 2px solid var(--ro-green);
+}
+
+.hourly-target-display .target-label {
+  display: block;
+  font-size: 16px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.hourly-target-display .target-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 32px;
+  font-weight: 600;
+  color: var(--gold);
 }
 
 /* Save Indicator */
