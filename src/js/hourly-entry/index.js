@@ -2310,17 +2310,11 @@ function updateBagTimerTick() {
 }
 
 /**
- * Format seconds as MM:SS or H:MM:SS
+ * Format seconds as M:SS (matches scoreboard format - no hour conversion)
  */
 function formatTimeMMSS(totalSeconds) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-
-  if (minutes >= 60) {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${hours}:${String(mins).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-  }
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
