@@ -570,8 +570,36 @@ function calculateDailyProjection(todayRows, lastCompletedHourIndex, currentHour
 
 // ===== BAG TIMER DATA =====
 
+// Blacklisted bag timestamps (test bags, accidentally scanned bags)
+// Format: { start: Date, end: Date } for ranges, or { exact: Date, tolerance: number } for single bags
+const BLACKLISTED_BAGS = [
+  // 8 accidentally scanned bags on 1/19/2026 12:34:14 - 12:38:04 Pacific
+  { start: new Date('2026-01-19T20:34:14Z'), end: new Date('2026-01-19T20:38:05Z') },
+  // Test bag from POST fix testing on 1/23/2026 1:01:22 PM Pacific (21:01:22 UTC)
+  { exact: new Date('2026-01-23T21:01:22Z'), tolerance: 2000 },
+];
+
+/**
+ * Check if a timestamp should be excluded (blacklisted test bag)
+ */
+function isBlacklistedBag(timestamp) {
+  for (const entry of BLACKLISTED_BAGS) {
+    if (entry.start && entry.end) {
+      // Range check
+      if (timestamp >= entry.start && timestamp <= entry.end) return true;
+    } else if (entry.exact) {
+      // Exact match with tolerance
+      if (Math.abs(timestamp.getTime() - entry.exact.getTime()) < entry.tolerance) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Get bag timer data from D1 (inventory_adjustments table)
+ * The webhook writes to D1, so we read directly from there for speed and reliability
+ */
 async function getBagTimerData(env) {
-  const sheetId = env.PRODUCTION_SHEET_ID;
   const result = {
     lastBagTime: null,
     secondsSinceLastBag: 0,
@@ -585,22 +613,12 @@ async function getBagTimerData(env) {
   };
 
   try {
-    const headerRow = await readSheet(sheetId, `'${SHEETS.tracking}'!1:1`, env);
-    if (!headerRow || !headerRow[0]) return result;
-
-    const headers = headerRow[0];
-    const timestampCol = headers.indexOf('Timestamp');
-    const sizeCol = headers.indexOf('Size');
-
-    if (timestampCol === -1 || sizeCol === -1) return result;
-
-    const vals = await readSheet(sheetId, `'${SHEETS.tracking}'!A2:J2001`, env);
-    if (!vals || vals.length === 0) return result;
-
+    // Get scoreboard data for trimmers and target rate
     const scoreboardData = await getScoreboardData(env);
     result.currentTrimmers = scoreboardData.currentHourTrimmers || scoreboardData.lastHourTrimmers || 0;
     result.targetRate = scoreboardData.targetRate || 1.0;
 
+    // Calculate target seconds based on team rate
     const bagWeightLbs = 11.0231;
     const teamRateLbsPerHour = result.currentTrimmers * result.targetRate;
     if (teamRateLbsPerHour > 0) {
@@ -610,84 +628,45 @@ async function getBagTimerData(env) {
     const today = formatDatePT(new Date(), 'yyyy-MM-dd');
     const now = new Date();
 
+    // Query D1 for today's 5kg bag adjustments
+    const rows = await env.DB.prepare(`
+      SELECT timestamp, size, flow_run_id
+      FROM inventory_adjustments
+      WHERE date(timestamp) = ?
+        AND (lower(size) LIKE '%5kg%' OR lower(size) LIKE '%5 kg%')
+      ORDER BY timestamp ASC
+    `).bind(today).all();
+
+    if (!rows.results || rows.results.length === 0) {
+      return result;
+    }
+
     const todayBags = [];
     let lastBag = null;
-    let bags5kg = 0;
 
-    for (const row of vals) {
-      const timestamp = row[timestampCol];
-      if (!timestamp) continue;
-
-      let rowDate;
-      if (typeof timestamp === 'string') {
-        let cleanTimestamp = timestamp.trim();
-
-        // Check for US date format: "M/D/YYYY H:M:S" or "M/D/YYYY H:M:S AM/PM"
-        const usDatePattern = /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i;
-        const usDateMatch = cleanTimestamp.match(usDatePattern);
-        if (usDateMatch) {
-          const [, month, day, year, hourStr, min, sec, ampm] = usDateMatch;
-          let hours = parseInt(hourStr, 10);
-
-          if (ampm) {
-            if (ampm.toUpperCase() === 'PM' && hours !== 12) hours += 12;
-            if (ampm.toUpperCase() === 'AM' && hours === 12) hours = 0;
-          }
-
-          // Build ISO format with Pacific timezone
-          const isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${String(hours).padStart(2, '0')}:${min}:${sec || '00'}-08:00`;
-          cleanTimestamp = isoDate;
-        }
-
-        rowDate = new Date(cleanTimestamp);
-      } else if (typeof timestamp === 'number') {
-        if (timestamp < 1) {
-          // Time-only serial (fraction of day)
-          const hours = Math.floor(timestamp * 24);
-          const minutes = Math.floor((timestamp * 24 - hours) * 60);
-          const timeStr = `${today}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00-08:00`;
-          rowDate = new Date(timeStr);
-        } else {
-          // Full date serial (days since 1900)
-          rowDate = new Date((timestamp - 25569) * 86400 * 1000);
-        }
-      } else {
-        rowDate = new Date(timestamp);
-      }
-
+    for (const row of rows.results) {
+      const rowDate = new Date(row.timestamp);
       if (isNaN(rowDate.getTime())) continue;
 
-      // Skip accidentally scanned bags (1/19/2026 12:34:14 - 12:38:04 Pacific)
-      // These 8 bags were scanned in error
-      const badBagStart = new Date('2026-01-19T20:34:14Z'); // 12:34:14 Pacific
-      const badBagEnd = new Date('2026-01-19T20:38:05Z');   // 12:38:04 Pacific + 1 sec
-      if (rowDate >= badBagStart && rowDate <= badBagEnd) continue;
+      // Skip blacklisted bags (test scans, accidental scans)
+      if (isBlacklistedBag(rowDate)) continue;
 
-      // Skip test bag from webhook testing (1/23/2026 11:45:35 Pacific)
-      const testBag = new Date('2026-01-23T19:45:35Z'); // 11:45:35 Pacific
-      if (Math.abs(rowDate.getTime() - testBag.getTime()) < 2000) continue;
+      todayBags.push(rowDate);
 
-      const rowDateStr = formatDatePT(rowDate, 'yyyy-MM-dd');
-      const size = String(row[sizeCol] || '').toLowerCase();
-
-      if (rowDateStr === today && is5kgBag(size)) {
-        bags5kg++;
-        todayBags.push(rowDate);
-      }
-
-      if (!lastBag || rowDate > lastBag.time) {
-        lastBag = { time: rowDate, size };
+      if (!lastBag || rowDate > lastBag) {
+        lastBag = rowDate;
       }
     }
 
-    result.bagsToday = bags5kg;
-    result.bags5kgToday = bags5kg;
+    result.bagsToday = todayBags.length;
+    result.bags5kgToday = todayBags.length;
 
     if (lastBag) {
-      result.lastBagTime = lastBag.time.toISOString();
-      result.secondsSinceLastBag = Math.floor((now - lastBag.time) / 1000);
+      result.lastBagTime = lastBag.toISOString();
+      result.secondsSinceLastBag = Math.floor((now - lastBag) / 1000);
     }
 
+    // Calculate average cycle time
     if (todayBags.length > 1) {
       todayBags.sort((a, b) => a - b);
       const cycleTimes = [];
@@ -696,6 +675,7 @@ async function getBagTimerData(env) {
         // Subtract any break time that falls within this cycle
         const breakMinutes = getBreakMinutesInWindow(todayBags[i - 1], todayBags[i]);
         const diffSec = rawDiffSec - (breakMinutes * 60);
+        // Valid cycle: 5 min to 4 hours
         if (diffSec >= 300 && diffSec <= 14400) {
           cycleTimes.push(diffSec);
         }
@@ -705,13 +685,15 @@ async function getBagTimerData(env) {
       }
     }
 
+    // Build cycle history (most recent first, up to 20 cycles)
     if (todayBags.length > 1) {
-      todayBags.sort((a, b) => b - a);
+      todayBags.sort((a, b) => b - a); // Sort descending (newest first)
       for (let i = 0; i < Math.min(todayBags.length - 1, 20); i++) {
         const rawCycleSec = Math.floor((todayBags[i] - todayBags[i + 1]) / 1000);
         // Subtract any break time that falls within this cycle
         const breakMinutes = getBreakMinutesInWindow(todayBags[i + 1], todayBags[i]);
         const cycleSec = rawCycleSec - (breakMinutes * 60);
+        // Valid cycle: 5 min to 4 hours
         if (cycleSec >= 300 && cycleSec <= 14400) {
           result.cycleHistory.push({
             timestamp: todayBags[i].toISOString(),
@@ -724,7 +706,7 @@ async function getBagTimerData(env) {
     }
 
   } catch (error) {
-    console.error('Error getting bag timer data:', error.message);
+    console.error('Error getting bag timer data from D1:', error.message);
   }
 
   return result;
@@ -1131,16 +1113,12 @@ async function morningReport(env) {
 }
 
 /**
- * Get bag counts and cycle times for recent weekdays (Mon-Fri only)
+ * Get bag counts and cycle times for recent weekdays from D1
  */
 async function getBagDataForDays(env, numDays) {
-  const sheetId = env.PRODUCTION_SHEET_ID;
   const result = { yesterday: null, dayBefore: null };
 
   try {
-    const vals = await readSheet(sheetId, `'${SHEETS.tracking}'!A:B`, env);
-    if (!vals || vals.length <= 1) return result;
-
     // Find the last two weekdays (skip weekends)
     const now = new Date();
     const lastWeekday = new Date(now);
@@ -1161,18 +1139,24 @@ async function getBagDataForDays(env, numDays) {
     const yesterdayStr = formatDatePT(lastWeekday, 'yyyy-MM-dd');
     const dayBeforeStr = formatDatePT(dayBeforeLastWeekday, 'yyyy-MM-dd');
 
+    // Query D1 for 5kg bags from both days
+    const rows = await env.DB.prepare(`
+      SELECT timestamp, size
+      FROM inventory_adjustments
+      WHERE date(timestamp) IN (?, ?)
+        AND (lower(size) LIKE '%5kg%' OR lower(size) LIKE '%5 kg%')
+      ORDER BY timestamp ASC
+    `).bind(yesterdayStr, dayBeforeStr).all();
+
     const yesterdayBags = [];
     const dayBeforeBags = [];
 
-    for (let i = 1; i < vals.length; i++) {
-      const row = vals[i];
-      if (!row[0]) continue;
-
-      const timestamp = new Date(row[0]);
+    for (const row of (rows.results || [])) {
+      const timestamp = new Date(row.timestamp);
       if (isNaN(timestamp.getTime())) continue;
 
-      const size = String(row[1] || '').toLowerCase();
-      if (!size.includes('5 kg')) continue;
+      // Skip blacklisted bags
+      if (isBlacklistedBag(timestamp)) continue;
 
       const dateStr = formatDatePT(timestamp, 'yyyy-MM-dd');
       if (dateStr === yesterdayStr) {
@@ -1182,12 +1166,14 @@ async function getBagDataForDays(env, numDays) {
       }
     }
 
-    // Calculate cycle times
+    // Calculate cycle times for yesterday
     if (yesterdayBags.length > 0) {
       yesterdayBags.sort((a, b) => a - b);
       const cycleTimes = [];
       for (let i = 1; i < yesterdayBags.length; i++) {
-        const diff = (yesterdayBags[i] - yesterdayBags[i - 1]) / 60000; // minutes
+        const rawDiff = (yesterdayBags[i] - yesterdayBags[i - 1]) / 60000; // minutes
+        const breakMinutes = getBreakMinutesInWindow(yesterdayBags[i - 1], yesterdayBags[i]);
+        const diff = rawDiff - breakMinutes;
         if (diff >= 5 && diff <= 240) cycleTimes.push(diff);
       }
       result.yesterday = {
@@ -1196,11 +1182,14 @@ async function getBagDataForDays(env, numDays) {
       };
     }
 
+    // Calculate cycle times for day before
     if (dayBeforeBags.length > 0) {
       dayBeforeBags.sort((a, b) => a - b);
       const cycleTimes = [];
       for (let i = 1; i < dayBeforeBags.length; i++) {
-        const diff = (dayBeforeBags[i] - dayBeforeBags[i - 1]) / 60000;
+        const rawDiff = (dayBeforeBags[i] - dayBeforeBags[i - 1]) / 60000;
+        const breakMinutes = getBreakMinutesInWindow(dayBeforeBags[i - 1], dayBeforeBags[i]);
+        const diff = rawDiff - breakMinutes;
         if (diff >= 5 && diff <= 240) cycleTimes.push(diff);
       }
       result.dayBefore = {
@@ -1209,7 +1198,7 @@ async function getBagDataForDays(env, numDays) {
       };
     }
   } catch (error) {
-    console.error('Error getting bag data:', error);
+    console.error('Error getting bag data from D1:', error);
   }
 
   return result;
