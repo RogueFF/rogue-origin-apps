@@ -93,6 +93,7 @@
               <option value="Amazon">
               <option value="Walmart">
               <option value="Uline">
+              <option value="Sticker Mule">
             </datalist>
           </div>
           <div class="form-group">
@@ -168,6 +169,8 @@
               <option value="shop-small">Shop Card Small (5" × 3") - Portrait</option>
               <option value="shop-letter">Shop Card (11" × 8.5") - Landscape</option>
               <option value="full">Full Sheet (8.5" × 11")</option>
+              <option value="sticker-4x4" data-supplier="Sticker Mule">Sticker Mule (4" × 4.45")</option>
+              <option value="sticker-4x8" data-supplier="Sticker Mule">Sticker Mule (4" × 8")</option>
             </select>
           </div>
           <div class="form-group">
@@ -243,6 +246,8 @@
             <option value="shop-small">Shop Card Small (5" × 3") - Portrait</option>
             <option value="shop-letter">Shop Card (11" × 8.5") - Landscape</option>
             <option value="full">Full Sheet (8.5" × 11")</option>
+            <option value="sticker-4x4" data-supplier="Sticker Mule">Sticker Mule (4" × 4.45")</option>
+            <option value="sticker-4x8" data-supplier="Sticker Mule">Sticker Mule (4" × 8")</option>
           </select>
           <div id="previewSizeInfo" style="margin-top:6px;padding:8px 10px;background:var(--bg);border-radius:6px;color:var(--text-muted);font-size:11px;border:1px solid var(--border)">2 cards per page (front/back)</div>
         </div>
@@ -349,7 +354,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbzVxbQLZVr21vnINQi9b8Lphv
 var isAppsScript = typeof google !== 'undefined' && google.script && google.script.run;
 
 // Custom options storage
-var defaultSuppliers = ['Amazon', 'Walmart', 'Uline'];
+var defaultSuppliers = ['Amazon', 'Walmart', 'Uline', 'Sticker Mule'];
 var defaultDeliveryTimes = ['1 Day', '3 Days', '5 Days', '1 Week', '2 Weeks'];
 var customSuppliers = [];
 var customDeliveryTimes = [];
@@ -958,7 +963,38 @@ function preview(id) {
   previewColor = 'green';
   updatePreviewBtns();
   renderPreview();
+  filterSizeOptions('previewPrintSize', previewCard.supplier === 'Sticker Mule');
   show('previewModal');
+}
+
+// Filter size dropdown based on supplier
+// Sticker Mule cards can ONLY use sticker sizes, other cards cannot use sticker sizes
+function filterSizeOptions(selectId, isStickerMule) {
+  var select = document.getElementById(selectId);
+  if (!select) return;
+
+  var options = select.querySelectorAll('option');
+  var firstVisibleValue = null;
+
+  options.forEach(function(opt) {
+    var isStickerSize = opt.value.indexOf('sticker-') === 0;
+
+    if (isStickerMule) {
+      // Sticker Mule: only show sticker sizes
+      opt.style.display = isStickerSize ? '' : 'none';
+      if (isStickerSize && !firstVisibleValue) firstVisibleValue = opt.value;
+    } else {
+      // Other suppliers: hide sticker sizes
+      opt.style.display = isStickerSize ? 'none' : '';
+      if (!isStickerSize && !firstVisibleValue) firstVisibleValue = opt.value;
+    }
+  });
+
+  // If current selection is now hidden, switch to first visible option
+  var currentOpt = select.querySelector('option[value="' + select.value + '"]');
+  if (currentOpt && currentOpt.style.display === 'none' && firstVisibleValue) {
+    select.value = firstVisibleValue;
+  }
 }
 
 function closePreview() { hide('previewModal'); }
@@ -1025,7 +1061,7 @@ function renderPreview() {
 }
 
 function cardHtml(c, color, side, size) {
-  var qrSize = (size === 'full' || size === 'shop-letter' || size === 'shop-portrait') ? '400x400' : '200x200';
+  var qrSize = (size === 'full' || size === 'shop-letter' || size === 'shop-portrait' || size === 'sticker-4x8') ? '400x400' : '200x200';
   var qr = c.url ? 'https://api.qrserver.com/v1/create-qr-code/?size=' + qrSize + '&data=' + encodeURIComponent(c.url) : '';
   var logoUrl = '../assets/ro-logo-horizontal.png';
   
@@ -1122,6 +1158,14 @@ function getSelectedCardIds() {
 
 function updatePrintCount() {
   var selectedIds = getSelectedCardIds();
+
+  // Check if all selected cards are from Sticker Mule supplier
+  var selectedCards = allCards.filter(function(c) { return selectedIds.indexOf(c.id) >= 0; });
+  var allStickerMule = selectedCards.length > 0 && selectedCards.every(function(c) { return c.supplier === 'Sticker Mule'; });
+
+  // Filter size options based on selected cards' supplier
+  filterSizeOptions('printSize', allStickerMule);
+
   var side = document.getElementById('printSide').value;
   var size = document.getElementById('printSize').value;
   var color = document.getElementById('printColor').value;
@@ -1129,7 +1173,8 @@ function updatePrintCount() {
   var colorsCount = color === 'both' ? 2 : 1;
   var cardsPerPage = (size === 'full' || size === 'shop-letter') ? 1 : (size === 'shop-portrait' ? 2 : (size === 'shop-small' ? 3 : 2));
   // Shop-letter: 1 per page, shop-portrait: 2 per page grid, shop-small: 3 per page grid
-  if (size === 'shop-letter') {
+  // Sticker sizes: 1 per page (front only, neutral color)
+  if (size === 'shop-letter' || size === 'sticker-4x4' || size === 'sticker-4x8') {
     var pages = selectedIds.length; // 1 card per page
   } else if (size === 'shop-portrait') {
     var pages = Math.ceil(selectedIds.length / 2); // 2 cards per page
@@ -1149,7 +1194,9 @@ function updatePrintCount() {
     'shop-portrait': '6"×4" neutral shop cards, 2 per page in grid',
     'shop-small': '5"×3" compact neutral shop cards, 3 per page in grid',
     'shop-letter': '10"×7.5" neutral shop card, 1 per page (landscape)',
-    'full': '7.5"×5" full sheet, 1 per page'
+    'full': '7.5"×5" full sheet, 1 per page',
+    'sticker-4x4': '4"×4.45" Sticker Mule, 1 per page',
+    'sticker-4x8': '4"×8" Sticker Mule, 1 per page'
   };
   document.getElementById('printSizeInfo').textContent = sizeInfo[size] || '';
 }
@@ -1163,7 +1210,9 @@ function updatePreviewSizeInfo() {
     'shop-portrait': '6"×4" neutral shop cards, 2 per page in grid',
     'shop-small': '5"×3" compact neutral shop cards, 3 per page in grid',
     'shop-letter': '10"×7.5" neutral shop card, 1 per page (landscape)',
-    'full': '7.5"×5" full sheet, 1 card per page'
+    'full': '7.5"×5" full sheet, 1 card per page',
+    'sticker-4x4': '4"×4.45" Sticker Mule sticker, 1 per page',
+    'sticker-4x8': '4"×8" Sticker Mule sticker, 1 per page'
   };
   document.getElementById('previewSizeInfo').textContent = sizeInfo[size] || '';
 }
@@ -1343,6 +1392,61 @@ function getPrintCSS(size) {
       '.no-print{padding:12px;background:#1a1f16;color:#fff;position:fixed;top:0;left:0;right:0;z-index:100}' +
       '.no-print button{padding:10px 20px;border:none;border-radius:6px;cursor:pointer;margin-right:8px}' +
       '@media print{.no-print{display:none}.print-wrapper{padding-top:0 !important}body{background:#fff}}';
+  } else if (size === 'sticker-4x4') {
+    // 4" x 4.45" Sticker Mule sticker - square-ish, 1 per page, front only
+    return '@page{size:letter portrait;margin:0.25in}*{box-sizing:border-box;margin:0;padding:0}' +
+      'body{font-family:system-ui,sans-serif;background:#faf8f5;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.page{page-break-after:always;width:8.5in;height:11in;margin:0;display:flex;justify-content:center;align-items:center;box-sizing:border-box;padding:0.25in}' +
+      '.page:last-child{page-break-after:auto}' +
+      '.page-inner{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%}' +
+      '.kanban{width:4in;height:4.45in;padding:10px;border-radius:8px;position:relative;flex-shrink:0;page-break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.kanban{background:#e8e4de !important;color:#2d3a2e !important}' +
+      '.kanban-border{position:absolute;inset:0;border:4px solid #8f9263;border-radius:8px}' +
+      '.kanban-inner{position:absolute;inset:12px;border:3px solid #8f9263;border-radius:6px}' +
+      '.kanban-content{height:100%;display:flex;flex-direction:column;padding:16px 18px}' +
+      '.kanban-header{border-bottom:2px solid currentColor;padding-bottom:6px;margin-bottom:6px}' +
+      '.kanban-header h3{text-transform:uppercase;margin:0;font-weight:700;letter-spacing:0.5px;font-size:18px}' +
+      '.kanban-loc{text-align:right;font-weight:700;font-size:11px;margin-bottom:2px}' +
+      '.kanban-body{flex:1;display:flex;justify-content:center;align-items:center}' +
+      '.kanban-left{display:none}' +
+      '.kanban-right{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}' +
+      '.kanban-img{background:#fff;border-radius:6px;border:3px solid #8f9263;display:flex;align-items:center;justify-content:center;overflow:hidden;width:160px;height:140px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.kanban-img img{width:100%;height:100%;object-fit:contain}' +
+      '.kanban-price{background:#8f9263;border-radius:18px;font-weight:700;color:#faf8f5;padding:6px 22px;font-size:16px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.kanban-logo{position:absolute;border-radius:50%;bottom:14px;left:14px;width:32px;height:32px}' +
+      '.kanban-back{display:none}' +
+      '.no-print{padding:12px;background:#1a1f16;color:#fff;position:fixed;top:0;left:0;right:0;z-index:100}' +
+      '.no-print button{padding:10px 20px;border:none;border-radius:6px;cursor:pointer;margin-right:8px}' +
+      '@media print{.no-print{display:none}.print-wrapper{padding-top:0 !important}body{background:#fff}}';
+  } else if (size === 'sticker-4x8') {
+    // 4" x 8" Sticker Mule sticker - tall vertical, 1 per page, front only
+    return '@page{size:letter portrait;margin:0.25in}*{box-sizing:border-box;margin:0;padding:0}' +
+      'body{font-family:system-ui,sans-serif;background:#faf8f5;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.page{page-break-after:always;width:8.5in;height:11in;margin:0;display:flex;justify-content:center;align-items:center;box-sizing:border-box;padding:0.25in}' +
+      '.page:last-child{page-break-after:auto}' +
+      '.page-inner{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%}' +
+      '.kanban{width:4in;height:8in;padding:12px;border-radius:10px;position:relative;flex-shrink:0;page-break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.kanban{background:#e8e4de !important;color:#2d3a2e !important}' +
+      '.kanban-border{position:absolute;inset:0;border:5px solid #8f9263;border-radius:10px}' +
+      '.kanban-inner{position:absolute;inset:14px;border:4px solid #8f9263;border-radius:8px}' +
+      '.kanban-content{height:100%;display:flex;flex-direction:column;padding:20px 22px}' +
+      '.kanban-header{border-bottom:3px solid currentColor;padding-bottom:10px;margin-bottom:10px}' +
+      '.kanban-header h3{text-transform:uppercase;margin:0;font-weight:700;letter-spacing:1px;font-size:24px}' +
+      '.kanban-loc{text-align:right;font-weight:700;font-size:14px;margin-bottom:4px}' +
+      '.kanban-body{flex:1;display:flex;flex-direction:column;justify-content:flex-start;align-items:center;gap:16px;padding-top:10px}' +
+      '.kanban-left{flex:none;display:flex;flex-direction:column;justify-content:center;gap:12px;width:100%}' +
+      '.kanban-field{margin-bottom:0}' +
+      '.kanban-field small{text-transform:uppercase;opacity:0.8;display:block;font-weight:600;font-size:11px;margin-bottom:2px}' +
+      '.kanban-field span{font-weight:700;font-size:18px}' +
+      '.kanban-right{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}' +
+      '.kanban-img{background:#fff;border-radius:8px;border:4px solid #8f9263;display:flex;align-items:center;justify-content:center;overflow:hidden;width:200px;height:180px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.kanban-img img{width:100%;height:100%;object-fit:contain}' +
+      '.kanban-price{background:#8f9263;border-radius:22px;font-weight:700;color:#faf8f5;padding:10px 36px;font-size:24px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.kanban-logo{position:absolute;border-radius:50%;bottom:18px;left:18px;width:45px;height:45px}' +
+      '.kanban-back{display:none}' +
+      '.no-print{padding:12px;background:#1a1f16;color:#fff;position:fixed;top:0;left:0;right:0;z-index:100}' +
+      '.no-print button{padding:10px 20px;border:none;border-radius:6px;cursor:pointer;margin-right:8px}' +
+      '@media print{.no-print{display:none}.print-wrapper{padding-top:0 !important}body{background:#fff}}';
   } else if (size === 'full') {
     // 8.5" x 11" full sheet - one card per page, maximum size
     return base +
@@ -1392,8 +1496,8 @@ function getPrintCSS(size) {
 
 function printOneCard(card, size) {
   var allHtml = [];
-  if (size === 'shop-letter' || size === 'shop-portrait' || size === 'shop-small') {
-    // Shop card: neutral color, front only, 1 per page
+  if (size === 'shop-letter' || size === 'shop-portrait' || size === 'shop-small' || size === 'sticker-4x4' || size === 'sticker-4x8') {
+    // Shop card / Sticker: neutral color, front only, 1 per page
     allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(card, 'neutral', 'front', size) + '</div></div>');
   } else if (size === 'full') {
     // One card per page for full size
@@ -1436,8 +1540,8 @@ function printCards(cards) {
   
   var allHtml = [];
 
-  if (size === 'shop-letter') {
-    // Shop letter: 1 card per page
+  if (size === 'shop-letter' || size === 'sticker-4x4' || size === 'sticker-4x8') {
+    // Shop letter / Stickers: 1 card per page, neutral color, front only
     cards.forEach(function(c) {
       allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(c, 'neutral', 'front', size) + '</div></div>');
     });
