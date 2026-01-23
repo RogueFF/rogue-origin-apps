@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../css/hourly-entry.css?v=32">
+  <link rel="stylesheet" href="../css/hourly-entry.css?v=33">
 </head>
 <body>
   <a href="#timeline-list" class="skip-link">Skip to timeline</a>
@@ -266,6 +266,10 @@
               <div class="timer-label" id="timerLabel" data-i18n="remaining">remaining</div>
             </div>
           </div>
+          <!-- Target info (matches scoreboard) -->
+          <div class="timer-target">
+            <span data-i18n="target">Target</span>: <span id="timer-target-time">--:--</span> • <span id="timer-trimmers">0</span> <span data-i18n="trimmers">trimmers</span>
+          </div>
           <!-- Timer Stats -->
           <div class="timer-stats">
             <div class="timer-stat">
@@ -328,6 +332,6 @@
     <button class="tooltip-close">×</button>
   </div>
 
-  <script type="module" src="../js/hourly-entry/index.js?v=43"></script>
+  <script type="module" src="../js/hourly-entry/index.js?v=44"></script>
 </body>
 </html>
