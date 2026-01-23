@@ -1606,7 +1606,26 @@ async function inventoryWebhook(body, env, request) {
   const productName = data['Product Name'] || data.product_name || product.title || '';
   const variantTitle = data['Variant Title'] || data.variant_title || variant.title || '';
   const strainName = data['Strain Name'] || data.strain_name || '';
-  const size = data.Size || data.size || '';
+
+  // Extract size - check explicit field, then infer from weight, then parse from title
+  let size = data.Size || data.size || '';
+  if (!size && variant.weight && variant.weight_unit) {
+    const weight = parseFloat(variant.weight);
+    const unit = String(variant.weight_unit).toLowerCase();
+    if (unit.includes('kilogram') || unit === 'kg') {
+      size = `${weight}kg`;
+    } else if (unit.includes('pound') || unit === 'lb') {
+      // Convert lbs to kg (5kg = ~11.02 lbs)
+      const kg = weight / 2.205;
+      if (Math.abs(kg - 5) < 0.5) size = '5kg';
+    }
+  }
+  // Fallback: check if variant title contains size
+  if (!size && variantTitle) {
+    const match = variantTitle.match(/(\d+)\s*kg/i);
+    if (match) size = `${match[1]}kg`;
+  }
+
   const quantityAdjusted = parseInt(data['Quantity Adjusted'] || data.quantity_adjusted || 0, 10);
   const newTotalAvailable = parseInt(data['New Total Available'] || data.new_total_available || inventory.available_quantity || 0, 10);
   const previousAvailable = parseInt(data['Previous Available'] || data.previous_available || 0, 10);
