@@ -40,7 +40,8 @@
   <script defer src="../js/scoreboard/render.js?v=3"></script>
   <script defer src="../js/scoreboard/shift-start.js?v=2"></script>
   <script defer src="../js/scoreboard/morning-report.js?v=3"></script>
-  <script defer src="../js/scoreboard/main.js?v=6"></script>
+  <script defer src="../js/scoreboard/scale.js?v=1"></script>
+  <script defer src="../js/scoreboard/main.js?v=7"></script>
   <!-- Performance: CSS Preloading -->
   <link rel="stylesheet" href="../css/shared-base.css">
   <link rel="preload" href="../css/scoreboard.css" as="style">
@@ -284,6 +285,16 @@
       <div class="timer-stat"><span class="timer-stat-label" id="bagsTodayLabel">Bags Today</span><span class="timer-stat-value" id="bagsToday">0</span></div>
       <div class="timer-stat"><span class="timer-stat-label" id="avgTodayLabel">Avg Today</span><span class="timer-stat-value" id="avgToday">--:--</span></div>
       <div class="timer-stat"><span class="timer-stat-label" id="vsTargetLabel">vs Target</span><span class="timer-stat-value" id="vsTarget">—</span></div>
+      <div class="timer-stat scale-stat" id="scaleStat">
+        <span class="timer-stat-label">
+          <span class="scale-status-dot" id="scaleStatusDot"></span>
+          <span id="scaleWeightLabel">Scale</span>
+        </span>
+        <span class="timer-stat-value" id="scaleWeight">—</span>
+        <div class="scale-progress-bar">
+          <div class="scale-progress-fill" id="scaleProgressFill"></div>
+        </div>
+      </div>
     </div>
     
     <div class="cycle-history" id="cycleHistory">
