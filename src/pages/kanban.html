@@ -1077,14 +1077,16 @@ function cardHtml(c, color, side, size) {
 
   // 4x4.45 sticker: Clean vertical layout - name, image, QR+price
   if (size === 'sticker-4x4') {
-    return '<div class="kanban sticker sticker-square ' + color + '"><div class="kanban-border"></div><div class="kanban-inner"></div>' +
-      '<div class="sticker-content">' +
-      '<div class="sticker-header"><h3>' + esc(c.item) + '</h3></div>' +
-      '<div class="sticker-image">' + (c.picture && sanitizeImageUrl(c.picture) ? '<img src="' + esc(sanitizeImageUrl(c.picture)) + '" onerror="this.outerHTML=\'📷\'">' : '📷') + '</div>' +
-      '<div class="sticker-bottom"><div class="sticker-qr">' + (qr ? '<img src="' + qr + '">' : 'No URL') + '</div>' +
-      '<div class="sticker-info"><div class="sticker-price">' + esc(c.price || '$0') + '</div>' +
-      '<div class="sticker-scan">SCAN TO ORDER</div></div></div>' +
-      '</div><img class="kanban-logo" src="' + logoUrl + '"></div>';
+    return '<div class="kanban sticker sticker-square ' + color + '" style="display:flex;flex-direction:column"><div class="kanban-border"></div><div class="kanban-inner"></div>' +
+      '<div class="sticker-content" style="height:100%;display:flex;flex-direction:column;align-items:center;padding:16px 20px 12px">' +
+      '<div class="sticker-header" style="width:100%;text-align:center;border-bottom:3px solid currentColor;padding-bottom:8px;margin-bottom:10px"><h3 style="text-transform:uppercase;margin:0;font-weight:800;letter-spacing:1px;font-size:18px">' + esc(c.item) + '</h3></div>' +
+      '<div class="sticker-image" style="background:#fff;border-radius:8px;border:3px solid #e4aa4f;display:flex;align-items:center;justify-content:center;overflow:hidden;width:140px;height:95px;margin-bottom:10px">' + (c.picture && sanitizeImageUrl(c.picture) ? '<img src="' + esc(sanitizeImageUrl(c.picture)) + '" style="width:100%;height:100%;object-fit:contain" onerror="this.outerHTML=\'📷\'">' : '📷') + '</div>' +
+      '<div class="sticker-bottom" style="display:flex;align-items:center;gap:12px;width:100%">' +
+      '<div class="sticker-qr" style="background:#fff;border-radius:8px;border:3px solid #e4aa4f;display:flex;align-items:center;justify-content:center;width:90px;height:90px;flex-shrink:0">' + (qr ? '<img src="' + qr + '" style="width:85%;height:85%">' : 'No URL') + '</div>' +
+      '<div class="sticker-info" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px">' +
+      '<div class="sticker-price" style="background:#e4aa4f;border-radius:16px;font-weight:800;color:#1a1f16;padding:6px 16px;font-size:16px">' + esc(c.price || '$0') + '</div>' +
+      '<div class="sticker-scan" style="font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;opacity:0.9">SCAN TO ORDER</div></div></div>' +
+      '</div><img class="kanban-logo" src="' + logoUrl + '" style="position:absolute;border-radius:50%;bottom:14px;left:14px;width:24px;height:24px"></div>';
   }
 
   // 8x4 sticker: Wide horizontal layout
