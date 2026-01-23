@@ -1863,7 +1863,134 @@ function isOnBreakOrAfterHours() {
 }
 
 /**
+ * Get shift end time for a given date
+ * @param {Date} date - The date to get shift end for
+ * @returns {Date} Shift end time (4:30 PM)
+ */
+function getShiftEndTime(date) {
+  const shiftEnd = new Date(date);
+  shiftEnd.setHours(16, 30, 0, 0); // 4:30 PM
+  return shiftEnd;
+}
+
+/**
+ * Calculate working seconds from a previous day's timestamp, carrying over to today
+ * Used when a bag was not finished before shift ended yesterday
+ * @param {Date} startTime - The timestamp from a previous day
+ * @returns {number} Total working seconds (yesterday's remainder + today's elapsed)
+ */
+function getWorkingSecondsCarryOver(startTime) {
+  if (!startTime) return 0;
+
+  const now = new Date();
+  const startDate = new Date(startTime);
+
+  // Get yesterday's shift end
+  const yesterdayShiftEnd = getShiftEndTime(startDate);
+
+  // Calculate working seconds from lastBag to end of that day's shift
+  // (only if lastBag was before shift end)
+  let yesterdayRemaining = 0;
+  if (startTime < yesterdayShiftEnd) {
+    // Time from lastBag to shift end, excluding any breaks in between
+    const startMins = startDate.getHours() * 60 + startDate.getMinutes();
+    const endMins = WORKDAY_END_MINUTES;
+
+    yesterdayRemaining = (endMins - startMins) * 60;
+
+    // Subtract breaks that occurred between lastBag and shift end
+    for (const brk of TIMER_BREAKS) {
+      const bStart = brk[0] * 60 + brk[1];
+      const bEnd = brk[2] * 60 + brk[3];
+
+      if (startMins < bEnd && endMins > bStart) {
+        const overlapStart = Math.max(startMins, bStart);
+        const overlapEnd = Math.min(endMins, bEnd);
+        if (overlapEnd > overlapStart) {
+          yesterdayRemaining -= (overlapEnd - overlapStart) * 60;
+        }
+      }
+    }
+  }
+
+  // Add today's working seconds from shift start to now
+  const todayShiftStart = new Date(now);
+  todayShiftStart.setHours(Math.floor(WORKDAY_START_MINUTES / 60), WORKDAY_START_MINUTES % 60, 0, 0);
+  const todayElapsed = getWorkingSecondsSinceInternal(todayShiftStart);
+
+  return Math.max(0, yesterdayRemaining + todayElapsed);
+}
+
+/**
+ * Internal helper: Calculate working seconds since startTime (same day only)
+ * @param {Date} startTime - The start time
+ * @returns {number} Working seconds elapsed
+ */
+function getWorkingSecondsSinceInternal(startTime) {
+  if (!startTime) return 0;
+
+  const now = new Date();
+
+  // If different day, return 0
+  if (startTime.toDateString() !== now.toDateString()) {
+    return 0;
+  }
+
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+
+  // Check if we're currently ON a break
+  let currentlyOnBreak = false;
+  let currentBreakStart = 0;
+
+  for (const brk of TIMER_BREAKS) {
+    const bStart = brk[0] * 60 + brk[1];
+    const bEnd = brk[2] * 60 + brk[3];
+    if (nowMins >= bStart && nowMins < bEnd) {
+      currentlyOnBreak = true;
+      currentBreakStart = bStart;
+      break;
+    }
+  }
+
+  // If currently on break, calculate elapsed time up to break start
+  let endTime;
+  if (currentlyOnBreak) {
+    endTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(),
+      Math.floor(currentBreakStart / 60), currentBreakStart % 60, 0);
+  } else {
+    endTime = now;
+  }
+
+  let totalSecs = Math.floor((endTime - startTime) / 1000);
+  const startMins = startTime.getHours() * 60 + startTime.getMinutes();
+  const endMins = endTime.getHours() * 60 + endTime.getMinutes();
+
+  // Subtract time spent on COMPLETED breaks (not current break)
+  for (const brk of TIMER_BREAKS) {
+    const bStart = brk[0] * 60 + brk[1];
+    const bEnd = brk[2] * 60 + brk[3];
+
+    // Skip the current break (already handled above)
+    if (currentlyOnBreak && bStart === currentBreakStart) {
+      continue;
+    }
+
+    // If timer span includes this break, subtract it
+    if (startMins < bEnd && endMins > bStart) {
+      const overlapStart = Math.max(startMins, bStart);
+      const overlapEnd = Math.min(endMins, bEnd);
+      if (overlapEnd > overlapStart) {
+        totalSecs -= (overlapEnd - overlapStart) * 60;
+      }
+    }
+  }
+
+  return Math.max(0, totalSecs);
+}
+
+/**
  * Calculate working seconds since startTime, excluding breaks
+ * Handles both same-day and carryover (previous day) scenarios
  * This matches the scoreboard's getWorkingSecondsSince() function
  * @param {Date} startTime - The start time
  * @returns {number} Working seconds elapsed
@@ -1873,9 +2000,10 @@ function getWorkingSecondsSince(startTime) {
 
   const now = new Date();
 
-  // If different day, return 0 (timer resets daily)
+  // Check if lastBag is from a previous day (carryover scenario)
   if (startTime.toDateString() !== now.toDateString()) {
-    return 0;
+    // Use carryover calculation for bags started yesterday
+    return getWorkingSecondsCarryOver(startTime);
   }
 
   const nowMins = now.getHours() * 60 + now.getMinutes();
