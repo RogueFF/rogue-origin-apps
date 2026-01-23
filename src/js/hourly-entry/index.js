@@ -1816,6 +1816,7 @@ let timerPauseReason = '';
 let timerPauseStartTime = null; // When pause started (for freezing timer)
 let timerBagsToday = 0;
 let lastKnownVersion = null; // For smart polling
+let manualShiftStart = null; // Manual shift start time (synced from server)
 
 // SVG constants (matching scoreboard)
 const RING_CIRCUMFERENCE = 2 * Math.PI * 95; // 597
@@ -1831,6 +1832,30 @@ const TIMER_BREAKS = [
 // Workday boundaries
 const WORKDAY_START_MINUTES = 7 * 60;  // 7:00 AM
 const WORKDAY_END_MINUTES = 16 * 60 + 30;  // 4:30 PM
+
+/**
+ * Get today's shift start time
+ * Checks localStorage first (shared with scoreboard), falls back to 7 AM
+ * @returns {Date} Today at shift start time
+ */
+function getShiftStartTime() {
+  // Check localStorage for manual shift start (shared with scoreboard)
+  const savedStart = localStorage.getItem('manualShiftStart');
+  const savedDate = localStorage.getItem('shiftStartDate');
+  const today = new Date().toDateString();
+
+  if (savedStart && savedDate === today) {
+    const startTime = new Date(savedStart);
+    if (startTime.toDateString() === today) {
+      return startTime;
+    }
+  }
+
+  // Default: 7:00 AM today
+  const defaultStart = new Date();
+  defaultStart.setHours(7, 0, 0, 0);
+  return defaultStart;
+}
 
 /**
  * Check if currently on break or outside work hours
@@ -2225,44 +2250,62 @@ function updateBagTimerTick() {
     return;
   }
 
-  // If no last bag timestamp, show waiting state
-  if (!lastBagTimestamp) {
-    timerValue.textContent = '--:--';
-    timerLabel.textContent = LABELS[currentLang].waiting;
-    setTimerColor('green');
-    setRingProgress(0);
-    return;
+  // Calculate elapsed seconds - use lastBagTimestamp if available, otherwise shift start
+  let elapsedSeconds = 0;
+  const referenceTime = lastBagTimestamp || getShiftStartTime();
+
+  // Check if reference is from today or previous day
+  const isToday = referenceTime.toDateString() === new Date().toDateString();
+  const isPreviousDay = !isToday && referenceTime < new Date();
+
+  if (isToday) {
+    elapsedSeconds = getWorkingSecondsSinceInternal(referenceTime);
+  } else if (isPreviousDay) {
+    // Carryover from previous day
+    elapsedSeconds = getWorkingSecondsCarryOver(referenceTime);
+  } else {
+    // Future date or invalid - use shift start
+    elapsedSeconds = getWorkingSecondsSinceInternal(getShiftStartTime());
   }
 
-  // Calculate WORKING elapsed time (excludes breaks) - matches scoreboard
-  const elapsedSeconds = getWorkingSecondsSince(lastBagTimestamp);
+  // Determine if we have a valid target
+  const hasTarget = timerTargetSeconds > 0;
 
-  // Calculate remaining time
-  const remainingSeconds = timerTargetSeconds - elapsedSeconds;
-  const isOvertime = remainingSeconds < 0;
+  // Calculate remaining time (only meaningful if we have a target)
+  const remainingSeconds = hasTarget ? timerTargetSeconds - elapsedSeconds : 0;
+  const isOvertime = hasTarget && remainingSeconds < 0;
 
-  // Determine color based on remaining time (matches scoreboard)
+  // Determine color based on state (matches scoreboard)
   let color = 'green';
   if (isOvertime) {
     color = 'red';
   }
-  // Note: Removed yellow warning state at 80% to match scoreboard (only green/red during work)
 
   setTimerColor(color);
 
-  // Format display
-  if (!isOvertime) {
-    // Show remaining time
-    timerValue.textContent = formatTimeMMSS(remainingSeconds);
-    timerLabel.textContent = LABELS[currentLang].remaining;
+  // Format display based on whether we have a target
+  if (hasTarget) {
+    if (!isOvertime) {
+      // Show remaining time
+      timerValue.textContent = formatTimeMMSS(remainingSeconds);
+      timerLabel.textContent = LABELS[currentLang].remaining;
+    } else {
+      // Overtime - show how much over
+      timerValue.textContent = '+' + formatTimeMMSS(Math.abs(remainingSeconds));
+      timerLabel.textContent = currentLang === 'es' ? 'excedido' : 'overtime';
+    }
   } else {
-    // Overtime - show how much over
-    timerValue.textContent = '+' + formatTimeMMSS(Math.abs(remainingSeconds));
-    timerLabel.textContent = currentLang === 'es' ? 'transcurrido' : 'overtime';
+    // No target - show elapsed time since shift start or last bag
+    timerValue.textContent = formatTimeMMSS(elapsedSeconds);
+    timerLabel.textContent = currentLang === 'es' ? 'transcurrido' : 'elapsed';
   }
 
   // Update ring progress
-  const progress = Math.min(1, elapsedSeconds / timerTargetSeconds);
+  // When no target, show minimal progress; when overtime, show full ring
+  let progress = 0;
+  if (hasTarget) {
+    progress = isOvertime ? 1 : Math.min(1, elapsedSeconds / timerTargetSeconds);
+  }
   setRingProgress(progress);
 }
 
