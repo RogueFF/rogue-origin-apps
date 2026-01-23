@@ -1063,17 +1063,35 @@ function renderPreview() {
 }
 
 function cardHtml(c, color, side, size) {
-  var qrSize = (size === 'full' || size === 'shop-letter' || size === 'shop-portrait' || size === 'sticker-4x8') ? '400x400' : '200x200';
+  var qrSize = (size === 'full' || size === 'shop-letter' || size === 'shop-portrait' || size === 'sticker-4x8' || size === 'sticker-4x4') ? '400x400' : '200x200';
   var qr = c.url ? 'https://api.qrserver.com/v1/create-qr-code/?size=' + qrSize + '&data=' + encodeURIComponent(c.url) : '';
   var logoUrl = '../assets/ro-logo-horizontal.png';
-  
+
+  // Sticker sizes: QR on front, no back needed
+  if (size === 'sticker-4x4' || size === 'sticker-4x8') {
+    if (side === 'back') {
+      return ''; // No back for stickers - QR is on front
+    }
+    return '<div class="kanban sticker ' + color + '"><div class="kanban-border"></div><div class="kanban-inner"></div>' +
+      '<div class="kanban-content"><div class="kanban-header"><h3>' + esc(c.item) + '</h3></div>' +
+      '<div class="kanban-loc">' + esc(c.crumbtrail) + '</div>' +
+      '<div class="kanban-body"><div class="kanban-left">' +
+      '<div class="kanban-field"><small>' + t('supplier') + '</small><span>' + esc(c.supplier) + '</span></div>' +
+      '<div class="kanban-field"><small>' + t('orderQty') + '</small><span>' + esc(c.orderQty) + '</span></div>' +
+      '<div class="kanban-field"><small>' + t('delivery') + '</small><span>' + esc(c.deliveryTime) + '</span></div>' +
+      '<div class="kanban-price">' + esc(c.price || '$0') + '</div></div>' +
+      '<div class="kanban-right sticker-right"><div class="kanban-img">' + (c.picture && sanitizeImageUrl(c.picture) ? '<img src="' + esc(sanitizeImageUrl(c.picture)) + '" onerror="this.outerHTML=\'📷\'">' : '📷') + '</div>' +
+      '<div class="kanban-qr sticker-qr">' + (qr ? '<img src="' + qr + '">' : 'No URL') + '</div></div></div></div>' +
+      '<img class="kanban-logo" src="' + logoUrl + '"></div>';
+  }
+
   if (side === 'back') {
     return '<div class="kanban ' + color + '"><div class="kanban-border"></div><div class="kanban-inner"></div>' +
       '<div class="kanban-back"><h3>' + t('scanToOrder') + '</h3>' +
       '<div class="kanban-qr">' + (qr ? '<img src="' + qr + '">' : 'No URL') + '</div>' +
       '</div><img class="kanban-logo" src="' + logoUrl + '"></div>';
   }
-  
+
   // Shop labels have simplified layout - header, picture, price, logo, crumbtrail
   if (size === 'shop') {
     return '<div class="kanban ' + color + '"><div class="kanban-border"></div><div class="kanban-inner"></div>' +
@@ -1197,8 +1215,8 @@ function updatePrintCount() {
     'shop-small': '5"×3" compact neutral shop cards, 3 per page in grid',
     'shop-letter': '10"×7.5" neutral shop card, 1 per page (landscape)',
     'full': '7.5"×5" full sheet, 1 per page',
-    'sticker-4x4': '4"×4.45" Sticker Mule, 1 per page',
-    'sticker-4x8': '4"×8" Sticker Mule, 1 per page'
+    'sticker-4x4': '4"×4.45" Sticker Mule, 1 per page (QR on front)',
+    'sticker-4x8': '8"×4" Sticker Mule, 1 per page (QR on front)'
   };
   document.getElementById('printSizeInfo').textContent = sizeInfo[size] || '';
 }
@@ -1213,8 +1231,8 @@ function updatePreviewSizeInfo() {
     'shop-small': '5"×3" compact neutral shop cards, 3 per page in grid',
     'shop-letter': '10"×7.5" neutral shop card, 1 per page (landscape)',
     'full': '7.5"×5" full sheet, 1 card per page',
-    'sticker-4x4': '4"×4.45" Sticker Mule sticker, 1 per page',
-    'sticker-4x8': '4"×8" Sticker Mule sticker, 1 per page'
+    'sticker-4x4': '4"×4.45" sticker, 1 per page (QR on front)',
+    'sticker-4x8': '8"×4" sticker, 1 per page (QR on front)'
   };
   document.getElementById('previewSizeInfo').textContent = sizeInfo[size] || '';
 }
@@ -1395,7 +1413,7 @@ function getPrintCSS(size) {
       '.no-print button{padding:10px 20px;border:none;border-radius:6px;cursor:pointer;margin-right:8px}' +
       '@media print{.no-print{display:none}.print-wrapper{padding-top:0 !important}body{background:#fff}}';
   } else if (size === 'sticker-4x4') {
-    // 4" x 4.45" Sticker Mule sticker - square-ish, 1 per page, kanban card design
+    // 4" x 4.45" Sticker Mule sticker - square-ish, 1 per page, QR on front
     return '@page{size:letter portrait;margin:0.25in}*{box-sizing:border-box;margin:0;padding:0}' +
       'body{font-family:system-ui,sans-serif;background:#faf8f5;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
       '.page{page-break-after:always;width:8.5in;height:11in;margin:0;display:flex;justify-content:center;align-items:center;box-sizing:border-box;padding:0.25in}' +
@@ -1410,53 +1428,49 @@ function getPrintCSS(size) {
       '.kanban-header{border-bottom:2px solid currentColor;padding-bottom:5px;margin-bottom:4px}' +
       '.kanban-header h3{text-transform:uppercase;margin:0;font-weight:700;letter-spacing:0.5px;font-size:16px}' +
       '.kanban-loc{text-align:right;font-weight:700;font-size:10px;margin-bottom:2px}' +
-      '.kanban-body{flex:1;display:flex;gap:12px}' +
-      '.kanban-left{flex:1;display:flex;flex-direction:column;justify-content:flex-start;padding-top:2px;padding-bottom:30px}' +
+      '.kanban-body{flex:1;display:flex;gap:8px}' +
+      '.kanban-left{flex:1;display:flex;flex-direction:column;justify-content:flex-start;padding-top:2px}' +
       '.kanban-field{margin-bottom:4px}' +
       '.kanban-field small{text-transform:uppercase;opacity:0.8;display:block;font-weight:600;font-size:8px;margin-bottom:0}' +
-      '.kanban-field span{font-weight:700;font-size:12px}' +
-      '.kanban-right{display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-start;padding-top:2px}' +
-      '.kanban-img{background:#fff;border-radius:6px;border:3px solid #e4aa4f;display:flex;align-items:center;justify-content:center;overflow:hidden;width:110px;height:80px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.kanban-field span{font-weight:700;font-size:11px}' +
+      '.kanban-price{background:#e4aa4f;border-radius:14px;font-weight:700;color:#1a1f16;padding:4px 12px;font-size:11px;margin-top:auto;display:inline-block;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.kanban-right.sticker-right{display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding-top:2px;gap:4px}' +
+      '.kanban-img{background:#fff;border-radius:6px;border:2px solid #e4aa4f;display:flex;align-items:center;justify-content:center;overflow:hidden;width:90px;height:65px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
       '.kanban-img img{width:100%;height:100%;object-fit:contain}' +
-      '.kanban-price{background:#e4aa4f;border-radius:16px;font-weight:700;color:#1a1f16;padding:4px 16px;font-size:12px;margin-top:6px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-      '.kanban-logo{position:absolute;border-radius:50%;bottom:12px;left:12px;width:28px;height:28px}' +
-      '.kanban-back{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center}' +
-      '.kanban-back h3{text-transform:uppercase;font-weight:700;letter-spacing:1px;font-size:20px;margin-bottom:12px}' +
-      '.kanban-qr{background:#fff;border-radius:8px;border:3px solid #e4aa4f;display:flex;align-items:center;justify-content:center;width:140px;height:140px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-      '.kanban-qr img{width:92%;height:92%}' +
+      '.sticker-qr{background:#fff;border-radius:6px;border:2px solid #e4aa4f;display:flex;align-items:center;justify-content:center;width:90px;height:90px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.sticker-qr img{width:90%;height:90%}' +
+      '.kanban-logo{position:absolute;border-radius:50%;bottom:12px;left:12px;width:24px;height:24px}' +
       '.no-print{padding:12px;background:#1a1f16;color:#fff;position:fixed;top:0;left:0;right:0;z-index:100}' +
       '.no-print button{padding:10px 20px;border:none;border-radius:6px;cursor:pointer;margin-right:8px}' +
       '@media print{.no-print{display:none}.print-wrapper{padding-top:0 !important}body{background:#fff}}';
   } else if (size === 'sticker-4x8') {
-    // 4" x 8" Sticker Mule sticker - tall vertical, 1 per page, kanban card design
-    return '@page{size:letter portrait;margin:0.25in}*{box-sizing:border-box;margin:0;padding:0}' +
+    // 8" x 4" Sticker Mule sticker - wide horizontal, 1 per page, QR on front
+    return '@page{size:letter landscape;margin:0.25in}*{box-sizing:border-box;margin:0;padding:0}' +
       'body{font-family:system-ui,sans-serif;background:#faf8f5;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-      '.page{page-break-after:always;width:8.5in;height:11in;margin:0;display:flex;justify-content:center;align-items:center;box-sizing:border-box;padding:0.25in}' +
+      '.page{page-break-after:always;width:11in;height:8.5in;margin:0;display:flex;justify-content:center;align-items:center;box-sizing:border-box;padding:0.25in}' +
       '.page:last-child{page-break-after:auto}' +
       '.page-inner{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%}' +
-      '.kanban{width:4in;height:8in;padding:12px;border-radius:10px;position:relative;flex-shrink:0;page-break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.kanban{width:8in;height:4in;padding:14px;border-radius:10px;position:relative;flex-shrink:0;page-break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
       '.kanban.green{background:#668971 !important;color:#1a1f16 !important}' +
       '.kanban.red{background:#bd4a28 !important;color:#f0cb60 !important}' +
       '.kanban-border{position:absolute;inset:0;border:5px solid #e4aa4f;border-radius:10px}' +
       '.kanban-inner{position:absolute;inset:14px;border:4px solid #e4aa4f;border-radius:8px}' +
-      '.kanban-content{height:100%;display:flex;flex-direction:column;padding:24px 26px}' +
-      '.kanban-header{border-bottom:3px solid currentColor;padding-bottom:10px;margin-bottom:8px}' +
+      '.kanban-content{height:100%;display:flex;flex-direction:column;padding:20px 24px}' +
+      '.kanban-header{border-bottom:3px solid currentColor;padding-bottom:8px;margin-bottom:6px}' +
       '.kanban-header h3{text-transform:uppercase;margin:0;font-weight:700;letter-spacing:1px;font-size:28px}' +
-      '.kanban-loc{text-align:right;font-weight:700;font-size:16px;margin-bottom:6px}' +
+      '.kanban-loc{text-align:right;font-weight:700;font-size:14px;margin-bottom:4px}' +
       '.kanban-body{flex:1;display:flex;gap:20px}' +
-      '.kanban-left{flex:1;display:flex;flex-direction:column;justify-content:flex-start;padding-top:4px;padding-bottom:50px}' +
-      '.kanban-field{margin-bottom:12px}' +
-      '.kanban-field small{text-transform:uppercase;opacity:0.8;display:block;font-weight:600;font-size:12px;margin-bottom:2px}' +
-      '.kanban-field span{font-weight:700;font-size:20px}' +
-      '.kanban-right{display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-start;padding-top:4px}' +
-      '.kanban-img{background:#fff;border-radius:8px;border:4px solid #e4aa4f;display:flex;align-items:center;justify-content:center;overflow:hidden;width:160px;height:120px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.kanban-left{flex:1;display:flex;flex-direction:column;justify-content:flex-start;padding-top:4px}' +
+      '.kanban-field{margin-bottom:8px}' +
+      '.kanban-field small{text-transform:uppercase;opacity:0.8;display:block;font-weight:600;font-size:11px;margin-bottom:1px}' +
+      '.kanban-field span{font-weight:700;font-size:18px}' +
+      '.kanban-price{background:#e4aa4f;border-radius:20px;font-weight:700;color:#1a1f16;padding:6px 24px;font-size:18px;margin-top:auto;display:inline-block;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.kanban-right.sticker-right{display:flex;flex-direction:row;align-items:center;justify-content:flex-end;padding-top:4px;gap:16px}' +
+      '.kanban-img{background:#fff;border-radius:8px;border:3px solid #e4aa4f;display:flex;align-items:center;justify-content:center;overflow:hidden;width:140px;height:110px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
       '.kanban-img img{width:100%;height:100%;object-fit:contain}' +
-      '.kanban-price{background:#e4aa4f;border-radius:25px;font-weight:700;color:#1a1f16;padding:8px 32px;font-size:20px;margin-top:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-      '.kanban-logo{position:absolute;border-radius:50%;bottom:20px;left:20px;width:50px;height:50px}' +
-      '.kanban-back{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center}' +
-      '.kanban-back h3{text-transform:uppercase;font-weight:700;letter-spacing:2px;font-size:36px;margin-bottom:24px}' +
-      '.kanban-qr{background:#fff;border-radius:10px;border:4px solid #e4aa4f;display:flex;align-items:center;justify-content:center;width:220px;height:220px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-      '.kanban-qr img{width:92%;height:92%}' +
+      '.sticker-qr{background:#fff;border-radius:8px;border:3px solid #e4aa4f;display:flex;align-items:center;justify-content:center;width:130px;height:130px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.sticker-qr img{width:90%;height:90%}' +
+      '.kanban-logo{position:absolute;border-radius:50%;bottom:16px;left:16px;width:40px;height:40px}' +
       '.no-print{padding:12px;background:#1a1f16;color:#fff;position:fixed;top:0;left:0;right:0;z-index:100}' +
       '.no-print button{padding:10px 20px;border:none;border-radius:6px;cursor:pointer;margin-right:8px}' +
       '@media print{.no-print{display:none}.print-wrapper{padding-top:0 !important}body{background:#fff}}';
@@ -1512,8 +1526,12 @@ function printOneCard(card, size) {
   if (size === 'shop-letter' || size === 'shop-portrait' || size === 'shop-small') {
     // Shop card: neutral color, front only, 1 per page
     allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(card, 'neutral', 'front', size) + '</div></div>');
-  } else if (size === 'full' || size === 'sticker-4x4' || size === 'sticker-4x8') {
-    // One card per page for full size
+  } else if (size === 'sticker-4x4' || size === 'sticker-4x8') {
+    // Sticker: front only with QR, green and red
+    allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(card, 'green', 'front', size) + '</div></div>');
+    allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(card, 'red', 'front', size) + '</div></div>');
+  } else if (size === 'full') {
+    // Full sheet: one card per page, front and back
     allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(card, 'green', 'front', size) + '</div></div>');
     allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(card, 'red', 'front', size) + '</div></div>');
     allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(card, 'green', 'back', size) + '</div></div>');
@@ -1581,11 +1599,21 @@ function printCards(cards) {
       }
       allHtml.push('<div class="page"><div class="page-inner">' + pageCards + '</div></div>');
     }
+  } else if (size === 'sticker-4x4' || size === 'sticker-4x8') {
+    // Sticker sizes: front only with QR, one card per page
+    cards.forEach(function(c) {
+      if (color === 'both') {
+        allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(c, 'green', 'front', size) + '</div></div>');
+        allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(c, 'red', 'front', size) + '</div></div>');
+      } else {
+        allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(c, color, 'front', size) + '</div></div>');
+      }
+    });
   } else {
     cards.forEach(function(c) {
       sides.forEach(function(sd) {
-        if (size === 'full' || size === 'sticker-4x4' || size === 'sticker-4x8') {
-          // One card per page for full size and sticker sizes
+        if (size === 'full') {
+          // One card per page for full size
           if (color === 'both') {
             allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(c, 'green', sd, size) + '</div></div>');
             allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(c, 'red', sd, size) + '</div></div>');
