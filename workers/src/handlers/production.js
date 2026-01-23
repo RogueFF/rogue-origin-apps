@@ -57,6 +57,7 @@ async function getDataVersion(env) {
 
 /**
  * Increment data version in D1 (call when data changes)
+ * Also invalidates scoreboard cache so next request gets fresh data
  */
 async function incrementDataVersion(env) {
   try {
@@ -64,6 +65,10 @@ async function incrementDataVersion(env) {
       `INSERT INTO data_version (key, version, updated_at) VALUES ('scoreboard', 1, datetime('now'))
        ON CONFLICT(key) DO UPDATE SET version = version + 1, updated_at = datetime('now')`
     ).run();
+
+    // Invalidate scoreboard cache so next request fetches fresh data
+    scoreboardCache.data = null;
+    scoreboardCache.timestamp = 0;
   } catch (error) {
     console.error('Error incrementing data version:', error);
   }
@@ -657,6 +662,10 @@ async function getBagTimerData(env) {
       const badBagStart = new Date('2026-01-19T20:34:14Z'); // 12:34:14 Pacific
       const badBagEnd = new Date('2026-01-19T20:38:05Z');   // 12:38:04 Pacific + 1 sec
       if (rowDate >= badBagStart && rowDate <= badBagEnd) continue;
+
+      // Skip test bag from webhook testing (1/23/2026 11:45:35 Pacific)
+      const testBag = new Date('2026-01-23T19:45:35Z'); // 11:45:35 Pacific
+      if (Math.abs(rowDate.getTime() - testBag.getTime()) < 2000) continue;
 
       const rowDateStr = formatDatePT(rowDate, 'yyyy-MM-dd');
       const size = String(row[sizeCol] || '').toLowerCase();
