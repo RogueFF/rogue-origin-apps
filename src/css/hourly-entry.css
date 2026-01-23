@@ -454,6 +454,169 @@ body {
 /* ===================
    BARCODE CARD
    =================== */
+
+/* Barcode Tabs */
+.barcode-tabs {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+}
+
+.barcode-tab {
+  flex: 1;
+  padding: 10px 16px;
+  background: transparent;
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.barcode-tab:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.barcode-tab.active {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: var(--bg-dark);
+}
+
+.barcode-tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.barcode-tab-content.hidden {
+  display: none;
+}
+
+/* Scanner Tab Styles */
+.scanner-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+}
+
+.pool-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pool-input {
+  flex: 1;
+  padding: 14px 16px;
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 22px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.pool-input:focus {
+  outline: none;
+  border-color: var(--green);
+  background: rgba(102, 137, 113, 0.1);
+}
+
+.pool-unit {
+  font-size: 16px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.scanner-btn {
+  padding: 14px 16px;
+  border: 2px solid var(--green);
+  border-radius: 10px;
+  background: rgba(102, 137, 113, 0.2);
+  color: var(--green-bright);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.scanner-btn:hover {
+  background: rgba(102, 137, 113, 0.4);
+  transform: scale(1.02);
+}
+
+.scanner-btn:active {
+  transform: scale(0.98);
+}
+
+.scanner-btn.btn-pool {
+  background: linear-gradient(135deg, rgba(102, 137, 113, 0.3), rgba(102, 137, 113, 0.15));
+}
+
+.scan-input {
+  width: 100%;
+  padding: 16px;
+  border: 2px solid var(--gold);
+  border-radius: 10px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px;
+  text-align: center;
+}
+
+.scan-input:focus {
+  outline: none;
+  border-color: var(--gold);
+  background: rgba(228, 170, 79, 0.1);
+  box-shadow: 0 0 0 3px rgba(228, 170, 79, 0.2);
+}
+
+.scan-input::placeholder {
+  color: var(--text-secondary);
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-weight: 400;
+}
+
+.scan-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(102, 137, 113, 0.1);
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.scan-status-label {
+  color: var(--text-secondary);
+}
+
+.scan-status-value {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--green-bright);
+  font-weight: 500;
+}
+
+.scan-status.success .scan-status-value {
+  color: var(--success);
+}
+
+.scan-status.error .scan-status-value {
+  color: var(--error);
+}
+
 .card-barcode .card-content {
   display: flex;
   flex-direction: column;
