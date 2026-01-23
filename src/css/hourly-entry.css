@@ -828,24 +828,24 @@ body {
   gap: 12px;
 }
 
-.back-btn {
+/* Small home icon - subtle dashboard link */
+.home-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
-  background: rgba(255,255,255,0.1);
-  border-radius: 10px;
-  color: var(--text-primary);
+  width: 28px;
+  height: 28px;
+  color: var(--text-secondary);
   text-decoration: none;
-  font-size: 20px;
-  border: none;
+  font-size: 16px;
+  opacity: 0.5;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: opacity 0.2s, color 0.2s;
 }
 
-.back-btn:hover {
-  background: rgba(255,255,255,0.2);
+.home-icon:hover {
+  opacity: 1;
+  color: var(--ro-green);
 }
 
 .app-header h1 {
