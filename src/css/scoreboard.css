@@ -780,7 +780,21 @@
     .timer-stat-value { font-size: 16px; font-weight: 700; color: rgba(255,255,255,0.9); }
     .timer-stat-value.positive { color: #4ade80; }
     .timer-stat-value.negative { color: #f87171; }
-    
+
+    /* Scale weight stat */
+    .scale-stat { flex-direction: column; align-items: flex-start; gap: 6px; }
+    .scale-stat .timer-stat-label { display: flex; align-items: center; gap: 6px; }
+    .scale-status-dot { width: 8px; height: 8px; border-radius: 50%; background: #666; transition: background 0.3s; }
+    .scale-status-dot.connected { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
+    .scale-status-dot.stale { background: #666; }
+    .scale-stat .timer-stat-value { font-size: 18px; }
+    .scale-stat .timer-stat-value.near-target { color: #7cb888; }
+    .scale-stat .timer-stat-value.at-target { color: var(--gold); }
+    .scale-progress-bar { width: 100%; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; }
+    .scale-progress-fill { height: 100%; width: 0%; background: var(--green); border-radius: 2px; transition: width 0.15s ease-out, background 0.3s; }
+    .scale-progress-fill.near-target { background: #7cb888; }
+    .scale-progress-fill.at-target { background: var(--gold); }
+
     /* Animations */
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
     @keyframes urgentPulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.85; transform: scale(1.02); } }

@@ -82,7 +82,12 @@
       customer: 'Customer',
       dueDate: 'Due Date',
       estCompletion: 'Est. Completion',
-      fullOrder: 'Full Order Context'
+      fullOrder: 'Full Order Context',
+
+      // Scale
+      scaleWeight: 'Scale',
+      scaleConnected: 'Connected',
+      scaleDisconnected: 'Disconnected'
     },
 
     es: {
@@ -161,7 +166,12 @@
       customer: 'Cliente',
       dueDate: 'Fecha de Vencimiento',
       estCompletion: 'Tiempo Estimado',
-      fullOrder: 'Contexto Completo del Pedido'
+      fullOrder: 'Contexto Completo del Pedido',
+
+      // Scale
+      scaleWeight: 'Peso',
+      scaleConnected: 'Conectado',
+      scaleDisconnected: 'Desconectado'
     }
   };
 
