@@ -68,6 +68,12 @@ const LABELS = {
     print5kg: '5kg',
     print10lbTops: '10lb Tops',
     print10lbSmalls: '10lb Smalls',
+    printer: 'Printer',
+    scanner: 'Scanner',
+    poolSmalls: 'Pool (Smalls)',
+    addToPool: '+ Add to Pool',
+    scanToInventory: 'Scan to Inventory',
+    lastScanned: 'Last scanned:',
     bagsToday: 'Bags Today',
     avgToday: 'Avg Today',
     vsTarget: 'vs Target',
@@ -128,6 +134,12 @@ const LABELS = {
     print5kg: '5kg',
     print10lbTops: '10lb Tops',
     print10lbSmalls: '10lb Smalls',
+    printer: 'Impresora',
+    scanner: 'Escáner',
+    poolSmalls: 'Pool (Smalls)',
+    addToPool: '+ Agregar al Pool',
+    scanToInventory: 'Escanear a Inventario',
+    lastScanned: 'Último escaneado:',
     bagsToday: 'Bolsas Hoy',
     avgToday: 'Prom Hoy',
     vsTarget: 'vs Meta',
@@ -1615,6 +1627,8 @@ async function initBarcodeCard() {
   await loadBarcodeProducts();
   populateBarcodeStrainSelect();
   initBarcodePrintButtons();
+  initBarcodeTabs();
+  initScannerTab();
 }
 
 /**
@@ -1793,6 +1807,202 @@ function printBarcodeLabel(strain, bagType) {
       iframe.contentWindow.print();
     }, 100);
   }
+}
+
+/**
+ * Initialize barcode tab switching
+ */
+function initBarcodeTabs() {
+  const tabs = document.querySelectorAll('.barcode-tab');
+  const contents = document.querySelectorAll('.barcode-tab-content');
+
+  tabs.forEach((tab) => {
+    registerListener(tab, 'click', () => {
+      const targetTab = tab.dataset.tab;
+
+      // Update active tab
+      tabs.forEach((t) => t.classList.remove('active'));
+      tab.classList.add('active');
+
+      // Show/hide content
+      contents.forEach((content) => {
+        if (content.id === `tab-${targetTab}`) {
+          content.classList.remove('hidden');
+        } else {
+          content.classList.add('hidden');
+        }
+      });
+    });
+  });
+}
+
+/**
+ * Initialize scanner tab functionality
+ */
+function initScannerTab() {
+  populateScannerStrainSelect();
+  initPoolButton();
+  initBarcodeScanner();
+}
+
+/**
+ * Populate the scanner strain dropdown with cultivars that have products
+ */
+function populateScannerStrainSelect() {
+  const select = document.getElementById('scanner-strain');
+  if (!select) return;
+
+  // Get unique cultivars from products (extract cultivar name from header)
+  const cultivarsWithProducts = new Set();
+  barcodeProducts.forEach((p) => {
+    // Header format: "Cultivar Name Tops 5KG" or "Cultivar Name - Tops 5KG"
+    const match = p.header.match(/^(.+?)\s+(?:-\s*)?(Tops|Smalls)/i);
+    if (match) {
+      cultivarsWithProducts.add(match[1].trim());
+    }
+  });
+
+  const currentValue = select.value;
+  select.innerHTML = `<option value="">${LABELS[currentLang].selectStrain}</option>`;
+
+  // Sort cultivars alphabetically
+  const sortedCultivars = Array.from(cultivarsWithProducts).sort();
+  sortedCultivars.forEach((cultivar) => {
+    const option = document.createElement('option');
+    option.value = cultivar;
+    option.textContent = cultivar;
+    select.appendChild(option);
+  });
+
+  select.value = currentValue;
+
+  // Update has-selection class based on current value
+  select.classList.toggle('has-selection', !!select.value);
+
+  // Add change listener for selection state styling
+  if (!select.dataset.listenerAdded) {
+    registerListener(select, 'change', () => {
+      select.classList.toggle('has-selection', !!select.value);
+    });
+    select.dataset.listenerAdded = 'true';
+  }
+}
+
+/**
+ * Initialize pool add button
+ */
+function initPoolButton() {
+  const addBtn = document.getElementById('add-to-pool');
+  if (!addBtn) return;
+
+  registerListener(addBtn, 'click', async () => {
+    const strainSelect = document.getElementById('scanner-strain');
+    const gramsInput = document.getElementById('pool-grams');
+    const strain = strainSelect?.value;
+    const grams = parseFloat(gramsInput?.value) || 0;
+
+    if (!strain) {
+      strainSelect?.focus();
+      return;
+    }
+
+    if (grams <= 0) {
+      gramsInput?.focus();
+      return;
+    }
+
+    // Call API to add to pool (smalls metadata in Shopify)
+    try {
+      addBtn.disabled = true;
+      addBtn.textContent = 'Adding...';
+
+      const response = await fetch(`${BARCODE_API_URL}?action=addToPool`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ strain, grams })
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        // Clear input and show success
+        gramsInput.value = '';
+        addBtn.textContent = '✓ Added!';
+        setTimeout(() => {
+          addBtn.textContent = LABELS[currentLang].addToPool || '+ Add to Pool';
+          addBtn.disabled = false;
+        }, 1500);
+      } else {
+        throw new Error(result.error || 'Failed to add to pool');
+      }
+    } catch (error) {
+      console.error('Pool add error:', error);
+      addBtn.textContent = '✗ Error';
+      setTimeout(() => {
+        addBtn.textContent = LABELS[currentLang].addToPool || '+ Add to Pool';
+        addBtn.disabled = false;
+      }, 2000);
+    }
+  });
+}
+
+/**
+ * Initialize barcode scanner input
+ */
+function initBarcodeScanner() {
+  const scanInput = document.getElementById('barcode-scan-input');
+  const statusEl = document.getElementById('scan-status');
+  const lastScannedEl = document.getElementById('last-scanned');
+
+  if (!scanInput) return;
+
+  // Handle barcode scan (barcode scanners typically send Enter after the barcode)
+  registerListener(scanInput, 'keydown', async (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const barcode = scanInput.value.trim();
+
+      if (!barcode) return;
+
+      // Process the scanned barcode
+      try {
+        scanInput.disabled = true;
+        statusEl.classList.remove('success', 'error');
+
+        const response = await fetch(`${BARCODE_API_URL}?action=scanToInventory`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ barcode })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          // Show success
+          lastScannedEl.textContent = barcode;
+          statusEl.classList.add('success');
+          scanInput.value = '';
+        } else {
+          throw new Error(result.error || 'Scan failed');
+        }
+      } catch (error) {
+        console.error('Scan error:', error);
+        lastScannedEl.textContent = `Error: ${error.message}`;
+        statusEl.classList.add('error');
+      } finally {
+        scanInput.disabled = false;
+        scanInput.focus();
+      }
+    }
+  });
+
+  // Keep focus on scan input when in scanner tab
+  registerListener(scanInput, 'blur', () => {
+    // Only refocus if scanner tab is active
+    const scannerTab = document.getElementById('tab-scanner');
+    if (scannerTab && !scannerTab.classList.contains('hidden')) {
+      setTimeout(() => scanInput.focus(), 100);
+    }
+  });
 }
 
 /**
