@@ -320,67 +320,88 @@ body {
   margin: 0;
 }
 
-/* Inline editor header */
+/* Inline editor header - improved navigation */
 .editor-header-inline {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   margin-left: auto;
 }
 
-.back-btn-inline {
-  width: 32px;
-  height: 32px;
+/* Day View button - grid icon + text */
+.back-btn-day {
   display: flex;
   align-items: center;
-  justify-content: center;
-  background: rgba(255,255,255,0.1);
-  border: none;
-  border-radius: 6px;
-  color: var(--text-primary);
-  font-size: 16px;
+  gap: 6px;
+  padding: 8px 14px;
+  background: rgba(102, 137, 113, 0.2);
+  border: 1px solid var(--ro-green);
+  border-radius: 8px;
+  color: var(--ro-green);
+  font-size: 15px;
+  font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.2s;
+  min-height: 44px;
 }
 
-.back-btn-inline:hover {
-  background: rgba(255,255,255,0.2);
+.back-btn-day .day-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.back-btn-day .day-label {
+  font-family: 'Outfit', sans-serif;
+}
+
+.back-btn-day:hover {
+  background: rgba(102, 137, 113, 0.35);
+  transform: scale(1.02);
+}
+
+/* Hour navigation group */
+.hour-nav-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 4px;
 }
 
 .editor-time-inline {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--gold);
+  min-width: 80px;
+  text-align: center;
 }
 
-.editor-nav-inline {
-  display: flex;
-  gap: 4px;
-}
-
-.nav-btn-inline {
-  width: 40px;
-  height: 40px;
+/* Prev/Next hour buttons - chevron style */
+.nav-btn-hour {
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--green);
-  border: none;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
-  color: #fff;
-  font-size: 18px;
-  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 24px;
+  font-weight: 300;
   cursor: pointer;
   transition: all 0.2s;
 }
 
-.nav-btn-inline:hover:not(:disabled) {
-  background: var(--green-dark);
-  transform: scale(1.05);
+.nav-btn-hour:hover:not(:disabled) {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
 }
 
-.nav-btn-inline:disabled {
+.nav-btn-hour:disabled {
   opacity: 0.3;
   cursor: not-allowed;
 }
