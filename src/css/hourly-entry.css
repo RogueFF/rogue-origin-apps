@@ -405,12 +405,12 @@ body {
 }
 
 #editor-content .section-label {
-  font-size: 13px;
+  font-size: 18px;
   margin-bottom: 8px;
 }
 
 #editor-content .subsection-label {
-  font-size: 12px;
+  font-size: 16px;
   margin: 8px 0 6px;
 }
 
@@ -1412,7 +1412,7 @@ body {
 .qc-row .crew-field label {
   color: var(--gold);
   font-weight: 600;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .qc-row .number-input {
@@ -1467,7 +1467,7 @@ body {
 
 .crew-field label {
   display: block;
-  font-size: 14px;
+  font-size: 16px;
   color: var(--text-secondary);
   margin-bottom: 6px;
   text-align: center;
@@ -1561,7 +1561,7 @@ body {
 
 .production-field label {
   display: block;
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text-secondary);
   margin-bottom: 6px;
 }
