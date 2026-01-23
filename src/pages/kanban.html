@@ -1059,7 +1059,10 @@ function updatePreviewBtns() {
 }
 
 function renderPreview() {
-  document.getElementById('previewArea').innerHTML = cardHtml(previewCard, previewColor, previewSide);
+  var size = document.getElementById('previewPrintSize').value;
+  // For stickers, always show front (no back available)
+  var side = (size === 'sticker-4x4' || size === 'sticker-4x8') ? 'front' : previewSide;
+  document.getElementById('previewArea').innerHTML = cardHtml(previewCard, previewColor, side, size);
 }
 
 function cardHtml(c, color, side, size) {
@@ -1235,6 +1238,8 @@ function updatePreviewSizeInfo() {
     'sticker-4x8': '8"×4" sticker, 1 per page (QR on front)'
   };
   document.getElementById('previewSizeInfo').textContent = sizeInfo[size] || '';
+  // Re-render preview with new size
+  if (previewCard) renderPreview();
 }
 
 function printOne() {
