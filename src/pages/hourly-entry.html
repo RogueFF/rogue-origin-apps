@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../css/hourly-entry.css?v=37">
+  <link rel="stylesheet" href="../css/hourly-entry.css?v=38">
 </head>
 <body>
   <a href="#timeline-list" class="skip-link">Skip to timeline</a>
@@ -86,6 +86,10 @@
             <section class="editor-section crew-section">
               <div class="section-header">
                 <h3 class="section-label" data-i18n="crew">Crew</h3>
+                <button id="copy-crew-btn" class="copy-crew-btn" title="Copy from previous hour">
+                  <span class="copy-icon">📋</span>
+                  <span class="copy-label" data-i18n="copyPrev">Copy Prev</span>
+                </button>
                 <span id="crew-modified-badge" class="modified-badge" style="display: none;">Modified</span>
               </div>
 
@@ -340,6 +344,6 @@
     <button class="tooltip-close">×</button>
   </div>
 
-  <script type="module" src="../js/hourly-entry/index.js?v=46"></script>
+  <script type="module" src="../js/hourly-entry/index.js?v=48"></script>
 </body>
 </html>
