@@ -39,6 +39,9 @@ const LABELS = {
     qcNotes: 'QC Notes',
     hourlyTarget: 'Hourly Target',
     dayView: 'Day',
+    copyPrev: 'Copy Prev',
+    copied: 'Copied!',
+    noPrevData: 'No previous data',
     saved: 'Saved',
     prev: 'Prev',
     next: 'Next',
@@ -101,6 +104,9 @@ const LABELS = {
     qcNotes: 'Notas QC',
     hourlyTarget: 'Meta por Hora',
     dayView: 'Día',
+    copyPrev: 'Copiar Ant',
+    copied: '¡Copiado!',
+    noPrevData: 'Sin datos previos',
     saved: 'Guardado',
     prev: 'Ant',
     next: 'Sig',
@@ -300,8 +306,21 @@ async function setShiftStart(time = null) {
   localStorage.setItem('manualShiftStart', startTime.toISOString());
   localStorage.setItem('shiftStartDate', new Date().toDateString());
 
+  // Ensure we're viewing today and refresh data
+  const today = formatDateLocal(new Date());
+  if (currentDate !== today) {
+    currentDate = today;
+    const datePicker = document.getElementById('date-picker');
+    if (datePicker) datePicker.value = today;
+    updateDateDisplay(today);
+  }
+
+  // Refresh data from API to get fresh entries
+  await loadDayData(currentDate);
+
   updateShiftStartUI();
   renderTimeline();
+  highlightCurrentTimeSlot();
 
   // Sync to API (so scoreboard sees it)
   try {
@@ -455,6 +474,12 @@ function initializeUI() {
   document.getElementById('line2-toggle').addEventListener('click', () => {
     document.getElementById('line2-section').classList.toggle('expanded');
   });
+
+  // Copy crew from previous hour
+  const copyCrewBtn = document.getElementById('copy-crew-btn');
+  if (copyCrewBtn) {
+    copyCrewBtn.addEventListener('click', copyCrewFromPrevious);
+  }
 
   // Number input +/- buttons
   document.querySelectorAll('.number-input button').forEach((btn) => {
@@ -720,6 +745,61 @@ function getCurrentCrewData() {
     tzero2: parseInt(document.getElementById('tzero2').value, 10) || 0,
     cultivar2: document.getElementById('cultivar2').value,
   };
+}
+
+function copyCrewFromPrevious() {
+  const labels = LABELS[currentLang];
+  const copyBtn = document.getElementById('copy-crew-btn');
+  const copyLabel = copyBtn?.querySelector('.copy-label');
+
+  // Can't copy if we're at the first slot
+  if (currentSlotIndex === 0) {
+    if (copyLabel) copyLabel.textContent = labels.noPrevData;
+    setTimeout(() => {
+      if (copyLabel) copyLabel.textContent = labels.copyPrev;
+    }, 1500);
+    return;
+  }
+
+  // Get previous slot's data
+  const prevSlot = TIME_SLOTS[currentSlotIndex - 1];
+  const prevData = dayData[prevSlot];
+
+  if (!prevData || (!prevData.trimmers1 && !prevData.trimmers2)) {
+    if (copyLabel) copyLabel.textContent = labels.noPrevData;
+    setTimeout(() => {
+      if (copyLabel) copyLabel.textContent = labels.copyPrev;
+    }, 1500);
+    return;
+  }
+
+  // Copy crew fields
+  document.getElementById('buckers1').value = prevData.buckers1 || 0;
+  document.getElementById('trimmers1').value = prevData.trimmers1 || 0;
+  document.getElementById('tzero1').value = prevData.tzero1 || 0;
+  document.getElementById('qcperson').value = prevData.qcperson || 0;
+  document.getElementById('cultivar1').value = prevData.cultivar1 || '';
+
+  // Copy Line 2 if it has data
+  if (prevData.trimmers2 > 0) {
+    document.getElementById('buckers2').value = prevData.buckers2 || 0;
+    document.getElementById('trimmers2').value = prevData.trimmers2 || 0;
+    document.getElementById('tzero2').value = prevData.tzero2 || 0;
+    document.getElementById('cultivar2').value = prevData.cultivar2 || '';
+    document.getElementById('line2-section').classList.add('expanded');
+  }
+
+  // Visual feedback
+  copyBtn?.classList.add('copied');
+  if (copyLabel) copyLabel.textContent = labels.copied;
+  setTimeout(() => {
+    copyBtn?.classList.remove('copied');
+    if (copyLabel) copyLabel.textContent = labels.copyPrev;
+  }, 1500);
+
+  // Trigger save and update UI
+  handleFieldChange();
+  updateStepGuide();
 }
 
 function isCrewModified() {

@@ -1399,13 +1399,49 @@ body {
 
 .section-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 8px;
   margin-bottom: 16px;
 }
 
 .section-header .section-label {
   margin-bottom: 0;
+}
+
+/* Copy crew button */
+.copy-crew-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: rgba(228, 170, 79, 0.15);
+  border: 1px solid var(--gold);
+  border-radius: 6px;
+  color: var(--gold);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-left: auto;
+}
+
+.copy-crew-btn .copy-icon {
+  font-size: 12px;
+}
+
+.copy-crew-btn:hover {
+  background: rgba(228, 170, 79, 0.3);
+}
+
+.copy-crew-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.copy-crew-btn.copied {
+  background: rgba(102, 137, 113, 0.2);
+  border-color: var(--green);
+  color: var(--green);
 }
 
 .section-label {
