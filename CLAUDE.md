@@ -4,14 +4,44 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
-## Model Preferences
+## Learned Behaviors
 
+These are patterns and preferences observed over time. Follow them unless explicitly told otherwise.
+
+### Model Selection
 | Task Type | Model | Notes |
 |-----------|-------|-------|
 | **Thinking/Planning** | Opus | Design, architecture, brainstorming, analysis |
 | **Code Execution** | Sonnet | Writing code, implementation, file edits |
 
 Unless otherwise specified, use Opus for planning/thinking tasks and Sonnet for code writing.
+
+### Workflow Instincts
+
+| Trigger | Action | Source |
+|---------|--------|--------|
+| Making UI/frontend changes | Start local server (`python -m http.server`) and let user verify before committing | Explicit |
+| About to push to git | Confirm with user first - they say "push it" when ready | Observed |
+| Multiple related tasks | Use TodoWrite to track progress and show the user what's happening | Explicit |
+| Searching for code/files | Use Task tool with Explore agent instead of running Glob/Grep directly | Best practice |
+| Modifying existing files | Read the file first to understand context before editing | Best practice |
+
+### Communication Style
+
+| Preference | Description |
+|------------|-------------|
+| **Concise** | Short, direct responses. No fluff or excessive explanation |
+| **Technical** | User is technical - skip hand-holding, get to the point |
+| **Chaotic-friendly** | User flows between ideas - adapt and follow the energy |
+
+---
+
+## How to Add New Instincts
+
+When you notice a pattern or the user explicitly states a preference:
+1. Add it to the appropriate table above
+2. Include the trigger, action, and whether it was explicit or observed
+3. These persist across all future sessions
 
 ---
 

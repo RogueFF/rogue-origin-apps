@@ -30,6 +30,11 @@ import { insert } from '../lib/db.js';
 const AI_MODEL = 'claude-sonnet-4-20250514';
 const TIMEZONE = 'America/Los_Angeles';
 
+// ===== FEATURE FLAGS =====
+// When true, D1 is the source of truth for production data
+// When false, Google Sheets is the source of truth (legacy)
+const USE_D1_PRODUCTION = true;
+
 // Short in-memory cache to reduce Google Sheets API calls
 // Note: Each edge node has its own cache, but 5s TTL is short enough
 // that stale data is acceptable (smart polling checks version every 5s anyway)
@@ -570,6 +575,242 @@ function calculateDailyProjection(todayRows, lastCompletedHourIndex, currentHour
   };
 }
 
+// ===== D1 SCOREBOARD DATA (Primary Source) =====
+
+/**
+ * Get scoreboard data from D1 database (primary source of truth)
+ * Queries monthly_production table for today's hourly data
+ */
+async function getScoreboardDataFromD1(env) {
+  const result = {
+    lastHourLbs: 0,
+    lastHourTarget: 0,
+    lastHourTrimmers: 0,
+    lastTimeSlot: '',
+    lastHourMultiplier: 1.0,
+    currentHourTrimmers: 0,
+    currentHourTarget: 0,
+    currentTimeSlot: '',
+    currentHourMultiplier: 1.0,
+    targetRate: 0,
+    strain: '',
+    todayLbs: 0,
+    todayTarget: 0,
+    todayPercentage: 0,
+    hoursLogged: 0,
+    effectiveHours: 0,
+    avgPercentage: 0,
+    bestPercentage: 0,
+    avgDelta: 0,
+    bestDelta: 0,
+    streak: 0,
+    hourlyRates: [],
+  };
+
+  try {
+    // Get today's date in PT timezone
+    const today = formatDatePT(new Date(), 'yyyy-MM-dd');
+
+    // Query today's production data from D1
+    const rows = await env.DB.prepare(`
+      SELECT time_slot,
+             trimmers_line1, trimmers_line2,
+             tops_lbs1, tops_lbs2, smalls_lbs1, smalls_lbs2,
+             cultivar1, cultivar2
+      FROM monthly_production
+      WHERE production_date = ?
+      ORDER BY time_slot
+    `).bind(today).all();
+
+    if (!rows.results || rows.results.length === 0) {
+      // No data today - try to get target rate from historical data
+      const targetRate = await getHistoricalTargetRateFromD1(env, 7);
+      result.targetRate = targetRate || 1.0;
+      return result;
+    }
+
+    // Build todayRows array (same structure as Sheets version)
+    const todayRows = rows.results.map(row => {
+      const trimmers = (row.trimmers_line1 || 0) + (row.trimmers_line2 || 0);
+      const tops = (row.tops_lbs1 || 0) + (row.tops_lbs2 || 0);
+      const strain = row.cultivar1 || row.cultivar2 || '';
+      const multiplier = getTimeSlotMultiplier(row.time_slot);
+
+      return {
+        timeSlot: row.time_slot,
+        tops,
+        trimmers,
+        strain,
+        multiplier,
+      };
+    });
+
+    // Find last completed and current hour
+    let lastCompletedHourIndex = -1;
+    let currentHourIndex = -1;
+
+    for (let i = 0; i < todayRows.length; i++) {
+      const row = todayRows[i];
+      if (row.tops > 0) {
+        lastCompletedHourIndex = i;
+      } else if (row.trimmers > 0 && row.tops === 0) {
+        currentHourIndex = i;
+      }
+    }
+
+    // Determine active strain
+    let activeStrain = '';
+    if (currentHourIndex >= 0 && todayRows[currentHourIndex].strain) {
+      activeStrain = todayRows[currentHourIndex].strain;
+    } else if (lastCompletedHourIndex >= 0 && todayRows[lastCompletedHourIndex].strain) {
+      activeStrain = todayRows[lastCompletedHourIndex].strain;
+    }
+    result.strain = activeStrain;
+
+    // Get target rate from historical D1 data (7-day average)
+    const targetRate = await getHistoricalTargetRateFromD1(env, 7) || 1.0;
+    result.targetRate = targetRate;
+
+    // Calculate totals
+    let totalLbs = 0;
+    let hoursWorked = 0;
+    let effectiveHours = 0;
+
+    for (let i = 0; i <= lastCompletedHourIndex && i < todayRows.length; i++) {
+      const row = todayRows[i];
+      if (row.tops > 0 && row.trimmers > 0) {
+        totalLbs += row.tops;
+        hoursWorked++;
+        effectiveHours += row.multiplier;
+      }
+    }
+
+    // Last completed hour
+    if (lastCompletedHourIndex >= 0) {
+      const lastRow = todayRows[lastCompletedHourIndex];
+      result.lastHourLbs = lastRow.tops;
+      result.lastHourTrimmers = lastRow.trimmers;
+      result.lastHourMultiplier = lastRow.multiplier;
+      result.lastHourTarget = lastRow.trimmers * targetRate * lastRow.multiplier;
+      result.lastTimeSlot = lastRow.timeSlot;
+    }
+
+    // Current hour
+    if (currentHourIndex >= 0) {
+      const currentRow = todayRows[currentHourIndex];
+      result.currentHourTrimmers = currentRow.trimmers;
+      result.currentHourMultiplier = currentRow.multiplier;
+      result.currentHourTarget = currentRow.trimmers * targetRate * currentRow.multiplier;
+      result.currentTimeSlot = currentRow.timeSlot;
+    }
+
+    result.todayLbs = totalLbs;
+    result.hoursLogged = hoursWorked;
+    result.effectiveHours = effectiveHours;
+
+    // Calculate metrics
+    let totalTarget = 0;
+    const hourlyPercentages = [];
+    const hourlyDeltas = [];
+    const hourlyRates = [];
+    let bestPct = 0;
+    let bestDelta = null;
+    let streak = 0;
+    let currentStreak = 0;
+
+    for (let i = 0; i <= lastCompletedHourIndex && i < todayRows.length; i++) {
+      const row = todayRows[i];
+      if (row.trimmers > 0 && row.tops > 0) {
+        const hourTarget = row.trimmers * targetRate * row.multiplier;
+        totalTarget += hourTarget;
+
+        const pct = hourTarget > 0 ? (row.tops / hourTarget) * 100 : 0;
+        const delta = row.tops - hourTarget;
+        hourlyPercentages.push(pct);
+        hourlyDeltas.push(delta);
+        if (pct > bestPct) {
+          bestPct = pct;
+          bestDelta = delta;
+        }
+
+        if (pct >= 90) {
+          currentStreak++;
+          streak = currentStreak;
+        } else {
+          currentStreak = 0;
+        }
+
+        const rate = (row.tops / row.trimmers) / row.multiplier;
+        hourlyRates.push({ timeSlot: row.timeSlot, rate, target: targetRate });
+      }
+    }
+
+    result.hourlyRates = hourlyRates;
+    result.todayTarget = totalTarget;
+    result.todayPercentage = totalTarget > 0 ? (totalLbs / totalTarget) * 100 : 0;
+    result.avgPercentage = hourlyPercentages.length > 0
+      ? hourlyPercentages.reduce((a, b) => a + b, 0) / hourlyPercentages.length
+      : 0;
+    result.avgDelta = hourlyDeltas.length > 0
+      ? hourlyDeltas.reduce((a, b) => a + b, 0) / hourlyDeltas.length
+      : 0;
+    result.bestPercentage = bestPct;
+    result.bestDelta = bestDelta !== null ? bestDelta : 0;
+    result.streak = streak;
+
+    // Daily projection (reuse same calculation)
+    const projection = calculateDailyProjection(todayRows, lastCompletedHourIndex, currentHourIndex, targetRate, totalLbs);
+    result.projectedTotal = projection.projectedTotal;
+    result.dailyGoal = projection.dailyGoal;
+
+    return result;
+  } catch (error) {
+    console.error('Error fetching scoreboard data from D1:', error);
+    return result;
+  }
+}
+
+/**
+ * Calculate historical target rate from D1 (average lbs per trimmer per hour)
+ * @param {number} days - Number of days to look back
+ */
+async function getHistoricalTargetRateFromD1(env, days = 7) {
+  try {
+    const result = await env.DB.prepare(`
+      SELECT
+        SUM(tops_lbs1 + tops_lbs2) as total_lbs,
+        SUM(
+          (trimmers_line1 *
+            CASE
+              WHEN time_slot LIKE '%12:30%' THEN 0.5
+              WHEN time_slot LIKE '%4:00 PM%' THEN 0.5
+              ELSE 1.0
+            END
+          ) +
+          (trimmers_line2 *
+            CASE
+              WHEN time_slot LIKE '%12:30%' THEN 0.5
+              WHEN time_slot LIKE '%4:00 PM%' THEN 0.5
+              ELSE 1.0
+            END
+          )
+        ) as total_trimmer_hours
+      FROM monthly_production
+      WHERE production_date >= date('now', '-' || ? || ' days')
+        AND (tops_lbs1 > 0 OR tops_lbs2 > 0)
+        AND (trimmers_line1 > 0 OR trimmers_line2 > 0)
+    `).bind(days).first();
+
+    if (result && result.total_lbs > 0 && result.total_trimmer_hours > 0) {
+      return result.total_lbs / result.total_trimmer_hours;
+    }
+    return 1.0; // Default fallback
+  } catch (error) {
+    console.error('Error calculating historical rate from D1:', error);
+    return 1.0;
+  }
+}
+
 // ===== BAG TIMER DATA =====
 
 // Blacklisted bag timestamps (test bags, accidentally scanned bags)
@@ -618,8 +859,10 @@ async function getBagTimerData(env) {
   };
 
   try {
-    // Get scoreboard data for trimmers and target rate
-    const scoreboardData = await getScoreboardData(env);
+    // Get scoreboard data for trimmers and target rate (use D1 or Sheets based on flag)
+    const scoreboardData = USE_D1_PRODUCTION
+      ? await getScoreboardDataFromD1(env)
+      : await getScoreboardData(env);
     result.currentTrimmers = scoreboardData.currentHourTrimmers || scoreboardData.lastHourTrimmers || 0;
     result.targetRate = scoreboardData.targetRate || 1.0;
 
@@ -818,6 +1061,94 @@ async function getExtendedDailyData(days, env) {
   return Object.values(dailyMap).sort((a, b) => a.date - b.date);
 }
 
+/**
+ * Get extended daily production data from D1
+ * @param {number} days - Number of days to retrieve
+ * @param {object} env - Environment with DB binding
+ * @returns {Array} Daily production data
+ */
+async function getExtendedDailyDataFromD1(days, env) {
+  try {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    const cutoffStr = formatDatePT(cutoffDate, 'yyyy-MM-dd');
+
+    // Query all hourly slots for the last N days
+    const rows = await env.DB.prepare(`
+      SELECT
+        production_date,
+        time_slot,
+        trimmers_line1,
+        trimmers_line2,
+        tops_lbs1,
+        smalls_lbs1,
+        tops_lbs2,
+        smalls_lbs2
+      FROM monthly_production
+      WHERE production_date >= ?
+      ORDER BY production_date, time_slot
+    `).bind(cutoffStr).all();
+
+    if (!rows.results || rows.results.length === 0) {
+      return [];
+    }
+
+    // Aggregate by day
+    const dailyMap = {};
+
+    for (const row of rows.results) {
+      const dateKey = row.production_date;
+
+      if (!dailyMap[dateKey]) {
+        dailyMap[dateKey] = {
+          date: new Date(dateKey + 'T12:00:00'),
+          totalTops: 0,
+          totalSmalls: 0,
+          totalTrimmerHours: 0,
+          bestHour: null,
+        };
+      }
+
+      const dayData = dailyMap[dateKey];
+      const tops = (row.tops_lbs1 || 0) + (row.tops_lbs2 || 0);
+      const smalls = (row.smalls_lbs1 || 0) + (row.smalls_lbs2 || 0);
+      const trimmers = (row.trimmers_line1 || 0) + (row.trimmers_line2 || 0);
+
+      dayData.totalTops += tops;
+      dayData.totalSmalls += smalls;
+      dayData.totalTrimmerHours += trimmers;
+
+      // Track best hour (highest lbs/trimmer rate)
+      if (trimmers > 0 && tops > 0) {
+        const hourRate = tops / trimmers;
+        if (!dayData.bestHour || hourRate > dayData.bestHour.rate) {
+          dayData.bestHour = {
+            time: row.time_slot.split('–')[0].trim() || row.time_slot.split('-')[0].trim(),
+            lbs: Math.round(tops * 10) / 10,
+            rate: Math.round(hourRate * 100) / 100,
+          };
+        }
+      }
+    }
+
+    // Calculate final metrics and return sorted array
+    return Object.values(dailyMap)
+      .map(day => ({
+        date: day.date,
+        totalTops: day.totalTops,
+        totalSmalls: day.totalSmalls,
+        avgRate: day.totalTrimmerHours > 0 ? day.totalTops / day.totalTrimmerHours : 0,
+        totalLbs: day.totalTops + day.totalSmalls,
+        trimmerHours: day.totalTrimmerHours,
+        bestHour: day.bestHour,
+      }))
+      .sort((a, b) => a.date - b.date);
+  } catch (error) {
+    console.error('Error getting extended daily data from D1:', error);
+    return [];
+  }
+}
+
 // ===== API HANDLERS =====
 
 async function test(env) {
@@ -841,14 +1172,16 @@ async function version(env) {
 }
 
 async function scoreboard(env) {
-  // Check cache first to reduce Google Sheets API calls
+  // Check cache first to reduce API calls
   const now = Date.now();
   if (scoreboardCache.data && (now - scoreboardCache.timestamp) < scoreboardCache.TTL) {
     return successResponse(scoreboardCache.data);
   }
 
-  // Fetch fresh data (pause state included - it's refreshed when version changes)
-  const scoreboardData = await getScoreboardData(env);
+  // Fetch fresh data - use D1 or Sheets based on feature flag
+  const scoreboardData = USE_D1_PRODUCTION
+    ? await getScoreboardDataFromD1(env)
+    : await getScoreboardData(env);
   const timerData = await getBagTimerData(env);
   const pauseState = await getActivePause(env);
 
@@ -856,6 +1189,7 @@ async function scoreboard(env) {
     scoreboard: scoreboardData,
     timer: timerData,
     pause: pauseState,
+    source: USE_D1_PRODUCTION ? 'D1' : 'Sheets',
   };
 
   // Update cache (includes pause state - refreshed when data version changes)
@@ -877,9 +1211,13 @@ async function dashboard(params, env) {
   }
 
   const today = formatDatePT(new Date(), 'yyyy-MM-dd');
-  const scoreboardData = await getScoreboardData(env);
+  const scoreboardData = USE_D1_PRODUCTION
+    ? await getScoreboardDataFromD1(env)
+    : await getScoreboardData(env);
   const timerData = await getBagTimerData(env);
-  const dailyData = await getExtendedDailyData(30, env);
+  const dailyData = USE_D1_PRODUCTION
+    ? await getExtendedDailyDataFromD1(30, env)
+    : await getExtendedDailyData(30, env);
 
   let filteredData = dailyData;
   let showingFallback = false;
@@ -1769,8 +2107,135 @@ async function getCultivars(env) {
 /**
  * Get hourly production data for a specific date
  */
-async function getProduction(params, env) {
+/**
+ * Get production data from D1 for a specific date
+ */
+async function getProductionFromD1(date, env) {
+  try {
+    // Get historical target rate from D1
+    const targetRate = await getHistoricalTargetRateFromD1(env, 7) || 0.9;
+
+    // Query D1 for all time slots for this date
+    const rows = await env.DB.prepare(`
+      SELECT time_slot,
+             buckers_line1, trimmers_line1, tzero_line1,
+             buckers_line2, trimmers_line2, tzero_line2,
+             cultivar1, cultivar2,
+             tops_lbs1, smalls_lbs1, tops_lbs2, smalls_lbs2,
+             qc, notes
+      FROM monthly_production
+      WHERE production_date = ?
+      ORDER BY time_slot
+    `).bind(date).all();
+
+    const slots = {};
+    if (rows.results) {
+      for (const row of rows.results) {
+        slots[row.time_slot] = {
+          buckers1: row.buckers_line1 || 0,
+          trimmers1: row.trimmers_line1 || 0,
+          tzero1: row.tzero_line1 || 0,
+          cultivar1: row.cultivar1 || '',
+          tops1: row.tops_lbs1 || 0,
+          smalls1: row.smalls_lbs1 || 0,
+          buckers2: row.buckers_line2 || 0,
+          trimmers2: row.trimmers_line2 || 0,
+          tzero2: row.tzero_line2 || 0,
+          cultivar2: row.cultivar2 || '',
+          tops2: row.tops_lbs2 || 0,
+          smalls2: row.smalls_lbs2 || 0,
+          qcperson: row.qc || 0,
+          qcNotes: row.notes || '',
+        };
+      }
+    }
+
+    return { date, slots, targetRate, source: 'D1' };
+  } catch (error) {
+    console.error('Error getting production from D1:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get production data from Google Sheets for a specific date (legacy)
+ */
+async function getProductionFromSheets(date, env) {
   const sheetId = env.PRODUCTION_SHEET_ID;
+
+  // Determine which month sheet to use
+  const sheetMonth = date.substring(0, 7); // YYYY-MM
+  const sheetNames = await getSheetNames(sheetId, env);
+
+  // Check if the month sheet exists
+  const monthSheetExists = sheetNames.includes(sheetMonth);
+  if (!monthSheetExists) {
+    return { date, slots: {}, targetRate: 0.9 };
+  }
+
+  // Read the sheet data
+  const vals = await readSheet(sheetId, `'${sheetMonth}'!A:Z`, env);
+  if (!vals || vals.length === 0) {
+    return { date, slots: {}, targetRate: 0.9 };
+  }
+
+  // Parse date to match sheet format (MMMM dd, yyyy)
+  const dateObj = new Date(date + 'T12:00:00');
+  const dateLabel = dateObj.toLocaleDateString('en-US', {
+    timeZone: TIMEZONE,
+    month: 'long',
+    day: '2-digit',
+    year: 'numeric',
+  });
+
+  // Find the date row
+  const dateRowIndex = findDateRow(vals, dateLabel);
+  if (dateRowIndex === -1) {
+    return { date, slots: {}, targetRate: 0.9 };
+  }
+
+  // Get column indices from header row
+  const headerRowIndex = dateRowIndex + 1;
+  const headers = vals[headerRowIndex] || [];
+  const cols = getColumnIndices(headers);
+
+  // Get historical rate for target
+  const dailyData = await getExtendedDailyData(7, env);
+  const targetRate = dailyData.length > 0
+    ? dailyData.reduce((sum, d) => sum + (d.avgRate || 0), 0) / dailyData.length
+    : 0.9;
+
+  // Collect slot data
+  const slots = {};
+  for (let r = headerRowIndex + 1; r < vals.length; r++) {
+    const row = vals[r];
+    if (isEndOfBlock(row)) break;
+
+    const timeSlot = (row[0] || '').toString().trim();
+    if (!timeSlot) continue;
+
+    slots[timeSlot] = {
+      buckers1: parseFloat(row[cols.buckers1]) || 0,
+      trimmers1: parseFloat(row[cols.trimmers1]) || 0,
+      tzero1: parseFloat(row[cols.tzero1]) || 0,
+      cultivar1: row[cols.cultivar1] || '',
+      tops1: parseFloat(row[cols.tops1]) || 0,
+      smalls1: parseFloat(row[cols.smalls1]) || 0,
+      buckers2: parseFloat(row[cols.buckers2]) || 0,
+      trimmers2: parseFloat(row[cols.trimmers2]) || 0,
+      tzero2: parseFloat(row[cols.tzero2]) || 0,
+      cultivar2: row[cols.cultivar2] || '',
+      tops2: parseFloat(row[cols.tops2]) || 0,
+      smalls2: parseFloat(row[cols.smalls2]) || 0,
+      qcperson: parseFloat(row[cols.qcperson]) || 0,
+      qcNotes: row[cols.qcNotes] || '',
+    };
+  }
+
+  return { date, slots, targetRate };
+}
+
+async function getProduction(params, env) {
   const date = params.date || formatDatePT(new Date(), 'yyyy-MM-dd');
 
   if (!validateDate(date)) {
@@ -1778,81 +2243,12 @@ async function getProduction(params, env) {
   }
 
   try {
-    // Determine which month sheet to use
-    const sheetMonth = date.substring(0, 7); // YYYY-MM
-    const sheetNames = await getSheetNames(sheetId, env);
+    // Use D1 or Sheets based on feature flag
+    const result = USE_D1_PRODUCTION
+      ? await getProductionFromD1(date, env)
+      : await getProductionFromSheets(date, env);
 
-    // Check if the month sheet exists
-    const monthSheetExists = sheetNames.includes(sheetMonth);
-    if (!monthSheetExists) {
-      // Return empty data if no sheet for this month
-      return successResponse({
-        date,
-        slots: {},
-        targetRate: 0.9
-      });
-    }
-
-    // Read the sheet data
-    const vals = await readSheet(sheetId, `'${sheetMonth}'!A:Z`, env);
-    if (!vals || vals.length === 0) {
-      return successResponse({ date, slots: {}, targetRate: 0.9 });
-    }
-
-    // Parse date to match sheet format (MMMM dd, yyyy)
-    const dateObj = new Date(date + 'T12:00:00');
-    const dateLabel = dateObj.toLocaleDateString('en-US', {
-      timeZone: TIMEZONE,
-      month: 'long',
-      day: '2-digit',
-      year: 'numeric',
-    });
-
-    // Find the date row
-    const dateRowIndex = findDateRow(vals, dateLabel);
-    if (dateRowIndex === -1) {
-      return successResponse({ date, slots: {}, targetRate: 0.9 });
-    }
-
-    // Get column indices from header row
-    const headerRowIndex = dateRowIndex + 1;
-    const headers = vals[headerRowIndex] || [];
-    const cols = getColumnIndices(headers);
-
-    // Get historical rate for target
-    const dailyData = await getExtendedDailyData(7, env);
-    const targetRate = dailyData.length > 0
-      ? dailyData.reduce((sum, d) => sum + (d.avgRate || 0), 0) / dailyData.length
-      : 0.9;
-
-    // Collect slot data
-    const slots = {};
-    for (let r = headerRowIndex + 1; r < vals.length; r++) {
-      const row = vals[r];
-      if (isEndOfBlock(row)) break;
-
-      const timeSlot = (row[0] || '').toString().trim();
-      if (!timeSlot) continue;
-
-      slots[timeSlot] = {
-        buckers1: parseFloat(row[cols.buckers1]) || 0,
-        trimmers1: parseFloat(row[cols.trimmers1]) || 0,
-        tzero1: parseFloat(row[cols.tzero1]) || 0,
-        cultivar1: row[cols.cultivar1] || '',
-        tops1: parseFloat(row[cols.tops1]) || 0,
-        smalls1: parseFloat(row[cols.smalls1]) || 0,
-        buckers2: parseFloat(row[cols.buckers2]) || 0,
-        trimmers2: parseFloat(row[cols.trimmers2]) || 0,
-        tzero2: parseFloat(row[cols.tzero2]) || 0,
-        cultivar2: row[cols.cultivar2] || '',
-        tops2: parseFloat(row[cols.tops2]) || 0,
-        smalls2: parseFloat(row[cols.smalls2]) || 0,
-        qcperson: parseFloat(row[cols.qcperson]) || 0,  // Shared QC person count
-        qcNotes: row[cols.qcNotes] || '',
-      };
-    }
-
-    return successResponse({ date, slots, targetRate });
+    return successResponse(result);
   } catch (error) {
     console.error('Error getting production:', error);
     return errorResponse('Failed to get production data', 'INTERNAL_ERROR', 500);
@@ -1860,40 +2256,55 @@ async function getProduction(params, env) {
 }
 
 /**
- * Add/update hourly production data
- * Accepts flat fields: date, timeSlot, buckers1, trimmers1, etc.
+ * Add/update hourly production data to D1 (primary)
+ * Uses UPSERT pattern - inserts or updates based on date + time_slot unique constraint
  */
-async function addProduction(body, env) {
+async function addProductionToD1(date, timeSlot, data, env) {
+  try {
+    await env.DB.prepare(`
+      INSERT INTO monthly_production (
+        production_date, time_slot,
+        buckers_line1, trimmers_line1, tzero_line1,
+        buckers_line2, trimmers_line2, tzero_line2,
+        cultivar1, cultivar2,
+        tops_lbs1, smalls_lbs1, tops_lbs2, smalls_lbs2,
+        qc, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(production_date, time_slot) DO UPDATE SET
+        buckers_line1 = excluded.buckers_line1,
+        trimmers_line1 = excluded.trimmers_line1,
+        tzero_line1 = excluded.tzero_line1,
+        buckers_line2 = excluded.buckers_line2,
+        trimmers_line2 = excluded.trimmers_line2,
+        tzero_line2 = excluded.tzero_line2,
+        cultivar1 = excluded.cultivar1,
+        cultivar2 = excluded.cultivar2,
+        tops_lbs1 = excluded.tops_lbs1,
+        smalls_lbs1 = excluded.smalls_lbs1,
+        tops_lbs2 = excluded.tops_lbs2,
+        smalls_lbs2 = excluded.smalls_lbs2,
+        qc = excluded.qc,
+        notes = excluded.notes
+    `).bind(
+      date, timeSlot,
+      data.buckers1, data.trimmers1, data.tzero1,
+      data.buckers2, data.trimmers2, data.tzero2,
+      data.cultivar1, data.cultivar2,
+      data.tops1, data.smalls1, data.tops2, data.smalls2,
+      data.qcperson, data.qcNotes
+    ).run();
+    return { success: true };
+  } catch (error) {
+    console.error('Error writing to D1:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Add/update hourly production data to Google Sheets (backup)
+ */
+async function addProductionToSheets(date, timeSlot, data, env) {
   const sheetId = env.PRODUCTION_SHEET_ID;
-
-  const { date, timeSlot, buckers1, trimmers1, tzero1, cultivar1, tops1, smalls1,
-          buckers2, trimmers2, tzero2, cultivar2, tops2, smalls2, qcperson, qcNotes } = body;
-
-  if (!date || !timeSlot) {
-    return errorResponse('Missing required fields: date, timeSlot', 'VALIDATION_ERROR', 400);
-  }
-
-  if (!validateDate(date)) {
-    return errorResponse('Invalid date format', 'VALIDATION_ERROR', 400);
-  }
-
-  // Build data object from flat fields
-  const data = {
-    buckers1: buckers1 ?? 0,
-    trimmers1: trimmers1 ?? 0,
-    tzero1: tzero1 ?? 0,
-    cultivar1: cultivar1 ?? '',
-    tops1: tops1 ?? 0,
-    smalls1: smalls1 ?? 0,
-    buckers2: buckers2 ?? 0,
-    trimmers2: trimmers2 ?? 0,
-    tzero2: tzero2 ?? 0,
-    cultivar2: cultivar2 ?? '',
-    tops2: tops2 ?? 0,
-    smalls2: smalls2 ?? 0,
-    qcperson: qcperson ?? 0,  // Shared QC person count
-    qcNotes: qcNotes ?? '',
-  };
 
   try {
     // Determine which month sheet to use
@@ -1901,13 +2312,14 @@ async function addProduction(body, env) {
     const sheetNames = await getSheetNames(sheetId, env);
 
     if (!sheetNames.includes(sheetMonth)) {
-      return errorResponse(`Sheet for ${sheetMonth} does not exist`, 'NOT_FOUND', 404);
+      console.warn(`Sheet for ${sheetMonth} does not exist - skipping Sheets backup`);
+      return { success: false, error: 'Sheet not found' };
     }
 
     // Read the sheet data
     const vals = await readSheet(sheetId, `'${sheetMonth}'!A:Z`, env);
     if (!vals || vals.length === 0) {
-      return errorResponse('Sheet is empty', 'INTERNAL_ERROR', 500);
+      return { success: false, error: 'Sheet is empty' };
     }
 
     // Parse date to match sheet format
@@ -1922,7 +2334,7 @@ async function addProduction(body, env) {
     // Find the date row
     const dateRowIndex = findDateRow(vals, dateLabel);
     if (dateRowIndex === -1) {
-      return errorResponse(`No data block found for ${dateLabel}`, 'NOT_FOUND', 404);
+      return { success: false, error: `No data block found for ${dateLabel}` };
     }
 
     // Get header row and column indices
@@ -1947,7 +2359,7 @@ async function addProduction(body, env) {
     }
 
     if (targetRowIndex === -1) {
-      return errorResponse(`Time slot ${timeSlot} not found in date block`, 'NOT_FOUND', 404);
+      return { success: false, error: `Time slot ${timeSlot} not found` };
     }
 
     // Build updated row data
@@ -1978,6 +2390,61 @@ async function addProduction(body, env) {
     const range = `'${sheetMonth}'!A${targetRowIndex + 1}`;
     await writeSheet(sheetId, range, [newRow], env);
 
+    return { success: true };
+  } catch (error) {
+    console.error('Error writing to Sheets:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Add/update hourly production data
+ * Dual-write: D1 (primary) + Google Sheets (backup)
+ * Accepts flat fields: date, timeSlot, buckers1, trimmers1, etc.
+ */
+async function addProduction(body, env) {
+  const { date, timeSlot, buckers1, trimmers1, tzero1, cultivar1, tops1, smalls1,
+          buckers2, trimmers2, tzero2, cultivar2, tops2, smalls2, qcperson, qcNotes } = body;
+
+  if (!date || !timeSlot) {
+    return errorResponse('Missing required fields: date, timeSlot', 'VALIDATION_ERROR', 400);
+  }
+
+  if (!validateDate(date)) {
+    return errorResponse('Invalid date format', 'VALIDATION_ERROR', 400);
+  }
+
+  // Build data object from flat fields
+  const data = {
+    buckers1: buckers1 ?? 0,
+    trimmers1: trimmers1 ?? 0,
+    tzero1: tzero1 ?? 0,
+    cultivar1: cultivar1 ?? '',
+    tops1: tops1 ?? 0,
+    smalls1: smalls1 ?? 0,
+    buckers2: buckers2 ?? 0,
+    trimmers2: trimmers2 ?? 0,
+    tzero2: tzero2 ?? 0,
+    cultivar2: cultivar2 ?? '',
+    tops2: tops2 ?? 0,
+    smalls2: smalls2 ?? 0,
+    qcperson: qcperson ?? 0,
+    qcNotes: qcNotes ?? '',
+  };
+
+  try {
+    // Write to D1 first (primary source of truth)
+    const d1Result = await addProductionToD1(date, timeSlot, data, env);
+    if (!d1Result.success) {
+      console.error('D1 write failed:', d1Result.error);
+      return errorResponse('Failed to save production data to D1', 'INTERNAL_ERROR', 500);
+    }
+
+    // Write to Google Sheets as backup (fire and forget - don't fail if Sheets fails)
+    addProductionToSheets(date, timeSlot, data, env).catch(error => {
+      console.warn('Sheets backup write failed (non-blocking):', error);
+    });
+
     // Increment version to notify clients of new data
     await incrementDataVersion(env);
 
@@ -1985,7 +2452,8 @@ async function addProduction(body, env) {
       success: true,
       message: 'Production data saved',
       date,
-      timeSlot
+      timeSlot,
+      source: 'D1'
     });
   } catch (error) {
     console.error('Error adding production:', error);
