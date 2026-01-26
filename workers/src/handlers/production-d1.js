@@ -1454,7 +1454,7 @@ export async function handleProductionD1(request, env, ctx) {
       case 'dashboard':
         return await dashboard(params, env);
       case 'setShiftStart':
-        return await setShiftStart(params, env);
+        return await setShiftStart({ ...params, ...body }, env);
       case 'getShiftStart':
         return await getShiftStart(params, env);
       case 'morningReport':
