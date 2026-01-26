@@ -14,15 +14,16 @@ let expandedKPI = null;
  * Render KPI cards to the #kpiRow container
  */
 export function renderKPICards() {
-  const container = document.getElementById('kpiRow');
-  if (!container) {
-    console.warn('KPI row container not found');
-    return;
-  }
+  try {
+    const container = document.getElementById('kpiRow');
+    if (!container) {
+      console.warn('KPI row container not found');
+      return;
+    }
 
-  container.innerHTML = '';
+    container.innerHTML = '';
 
-  kpiDefinitions.forEach(kpi => {
+    kpiDefinitions.forEach(kpi => {
     // Create wrapper element for Muuri grid (required for proper positioning)
     const wrapper = document.createElement('div');
     wrapper.className = 'kpi-grid-item';
@@ -68,18 +69,22 @@ export function renderKPICards() {
     wrapper.appendChild(card);
     container.appendChild(wrapper);
   });
+  } catch (error) {
+    console.error('Error rendering KPI cards:', error);
+  }
 }
 
 /**
  * Render KPI toggle switches in settings panel
  */
 export function renderKPIToggles() {
-  const container = document.getElementById('kpiToggles');
-  if (!container) return;
+  try {
+    const container = document.getElementById('kpiToggles');
+    if (!container) return;
 
-  container.innerHTML = '';
+    container.innerHTML = '';
 
-  kpiDefinitions.forEach(kpi => {
+    kpiDefinitions.forEach(kpi => {
     const toggle = document.createElement('div');
     toggle.className = 'widget-toggle';
     toggle.innerHTML = `
@@ -103,14 +108,18 @@ export function renderKPIToggles() {
 
     container.appendChild(toggle);
   });
+  } catch (error) {
+    console.error('Error rendering KPI toggles:', error);
+  }
 }
 
 /**
  * Render widget toggle switches in settings panel
  */
 export function renderWidgetToggles() {
-  const container = document.getElementById('widgetToggles');
-  if (!container) return;
+  try {
+    const container = document.getElementById('widgetToggles');
+    if (!container) return;
 
   container.innerHTML = '';
 
@@ -147,6 +156,9 @@ export function renderWidgetToggles() {
 
     container.appendChild(toggle);
   });
+  } catch (error) {
+    console.error('Error rendering widget toggles:', error);
+  }
 }
 
 /**
@@ -155,15 +167,16 @@ export function renderWidgetToggles() {
  * @param {boolean} visible - Whether the KPI should be visible
  */
 export function toggleKPI(id, visible) {
-  // Update definition visible state
-  const kpi = kpiDefinitions.find(k => k.id === id);
-  if (kpi) {
-    kpi.visible = visible;
-  }
+  try {
+    // Update definition visible state
+    const kpi = kpiDefinitions.find(k => k.id === id);
+    if (kpi) {
+      kpi.visible = visible;
+    }
 
-  // Find the wrapper element (Muuri operates on the wrapper, not the card)
-  const wrapper = document.querySelector(`.kpi-grid-item[data-kpi="${id}"]`);
-  if (!wrapper) return;
+    // Find the wrapper element (Muuri operates on the wrapper, not the card)
+    const wrapper = document.querySelector(`.kpi-grid-item[data-kpi="${id}"]`);
+    if (!wrapper) return;
 
   // Update data-hidden attribute on wrapper
   wrapper.dataset.hidden = !visible;
@@ -198,6 +211,9 @@ export function toggleKPI(id, visible) {
   }
 
   saveSettings();
+  } catch (error) {
+    console.error('Error toggling KPI:', error);
+  }
 }
 
 /**
@@ -206,14 +222,15 @@ export function toggleKPI(id, visible) {
  * @param {boolean} visible - Whether the widget should be visible
  */
 export function toggleWidget(id, visible) {
-  // Update definition visible state
-  const widget = widgetDefinitions.find(w => w.id === id);
-  if (widget) {
-    widget.visible = visible;
-  }
+  try {
+    // Update definition visible state
+    const widget = widgetDefinitions.find(w => w.id === id);
+    if (widget) {
+      widget.visible = visible;
+    }
 
-  const widgetId = `widget-${id}`;
-  const muuriGrid = getGrid('widgets');
+    const widgetId = `widget-${id}`;
+    const muuriGrid = getGrid('widgets');
 
   if (muuriGrid && !muuriGrid._isDestroyed) {
     const widgetElement = document.querySelector(`[data-widget-id="${widgetId}"]`);
@@ -256,6 +273,9 @@ export function toggleWidget(id, visible) {
   }
 
   saveSettings();
+  } catch (error) {
+    console.error('Error toggling widget:', error);
+  }
 }
 
 /**
@@ -263,8 +283,9 @@ export function toggleWidget(id, visible) {
  * @param {string} id - KPI identifier
  */
 export function toggleKPIExpand(id) {
-  const card = document.querySelector(`.kpi-card[data-kpi="${id}"]`);
-  if (!card) return;
+  try {
+    const card = document.querySelector(`.kpi-card[data-kpi="${id}"]`);
+    if (!card) return;
 
   // Accordion behavior - close currently expanded card
   if (expandedKPI && expandedKPI !== id) {
@@ -295,6 +316,9 @@ export function toggleKPIExpand(id) {
       }
     }, 50);
   }
+  } catch (error) {
+    console.error('Error toggling KPI expand:', error);
+  }
 }
 
 /**
@@ -302,26 +326,30 @@ export function toggleKPIExpand(id) {
  * @param {string} id - KPI identifier
  */
 function populateKPIExpandedContent(id) {
-  const data = getData();
-  if (!data) return;
+  try {
+    const data = getData();
+    if (!data) return;
 
-  const kpi = kpiDefinitions.find(k => k.id === id);
-  if (!kpi) return;
+    const kpi = kpiDefinitions.find(k => k.id === id);
+    if (!kpi) return;
 
-  // Get elements
-  const rollingEl = document.getElementById(`kpiRolling_${id}`);
-  const normalizedEl = document.getElementById(`kpiNormalized_${id}`);
-  const notesEl = document.getElementById(`kpiNotes_${id}`);
+    // Get elements with null checks
+    const rollingEl = document.getElementById(`kpiRolling_${id}`);
+    const normalizedEl = document.getElementById(`kpiNormalized_${id}`);
+    const notesEl = document.getElementById(`kpiNotes_${id}`);
 
-  // Populate with placeholder data - actual implementation would use real data
-  if (rollingEl) {
-    rollingEl.textContent = '—';
-  }
-  if (normalizedEl) {
-    normalizedEl.textContent = '—';
-  }
-  if (notesEl) {
-    notesEl.textContent = '';
+    // Populate with placeholder data - actual implementation would use real data
+    if (rollingEl) {
+      rollingEl.textContent = '—';
+    }
+    if (normalizedEl) {
+      normalizedEl.textContent = '—';
+    }
+    if (notesEl) {
+      notesEl.textContent = '';
+    }
+  } catch (error) {
+    console.error('Error populating KPI expanded content:', error);
   }
 }
 
@@ -334,74 +362,90 @@ function populateKPIExpandedContent(id) {
  * @param {boolean} compareMode - Whether comparison mode is active
  */
 export function updateKPIValues(totals, prevTotals, targets, rolling, compareMode) {
-  if (!totals) return;
-
-  // Helper to format values based on format type
-  const formatValue = (value, format) => {
-    if (value == null || isNaN(value)) return '—';
-
-    switch (format) {
-      case 'lbs':
-        return value.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-      case 'rate':
-        return value.toFixed(2);
-      case 'num':
-        return Math.round(value).toLocaleString();
-      case 'hrs':
-        return value.toFixed(1);
-      case 'dollar':
-        return `$${value.toFixed(2)}`;
-      default:
-        return String(value);
+  try {
+    if (!totals) {
+      console.warn('updateKPIValues: No totals data provided');
+      return;
     }
-  };
+
+    // Helper to format values based on format type
+    const formatValue = (value, format) => {
+      try {
+        if (value == null || isNaN(value)) return '—';
+
+        switch (format) {
+          case 'lbs':
+            return value.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+          case 'rate':
+            return value.toFixed(2);
+          case 'num':
+            return Math.round(value).toLocaleString();
+          case 'hrs':
+            return value.toFixed(1);
+          case 'dollar':
+            return `$${value.toFixed(2)}`;
+          default:
+            return String(value);
+        }
+      } catch (error) {
+        console.warn('Error formatting value:', error);
+        return '—';
+      }
+    };
 
   // Helper to set KPI value and comparison
   const setKPI = (id, val, prevVal, format, invertDelta = false, target = null, rollingAvg = null) => {
-    const el = document.getElementById(`kpi_${id}`);
-    const cmpEl = document.getElementById(`kpiCmp_${id}`);
-    const deltaEl = document.getElementById(`delta_${id}`);
-    const card = document.querySelector(`.kpi-card[data-kpi="${id}"]`);
+    try {
+      const el = document.getElementById(`kpi_${id}`);
+      const cmpEl = document.getElementById(`kpiCmp_${id}`);
+      const deltaEl = document.getElementById(`delta_${id}`);
+      const card = document.querySelector(`.kpi-card[data-kpi="${id}"]`);
 
-    if (!el) return;
-
-    // Set main value
-    el.textContent = formatValue(val, format);
-
-    // Remove loading state
-    if (card) {
-      card.classList.remove('loading');
-    }
-
-    // Set comparison value and delta
-    if (prevVal != null && compareMode && cmpEl && deltaEl) {
-      cmpEl.textContent = `vs ${formatValue(prevVal, format)}`;
-
-      const pct = prevVal !== 0 ? ((val - prevVal) / prevVal * 100) : 0;
-      const isUp = invertDelta ? pct < 0 : pct > 0;
-
-      if (Math.abs(pct) < 1) {
-        deltaEl.className = 'kpi-delta neutral';
-        deltaEl.textContent = '~0%';
-      } else if (isUp) {
-        deltaEl.className = 'kpi-delta up';
-        deltaEl.textContent = `+${Math.abs(pct).toFixed(0)}%`;
-      } else {
-        deltaEl.className = 'kpi-delta down';
-        deltaEl.textContent = `-${Math.abs(pct).toFixed(0)}%`;
+      if (!el) {
+        console.warn(`KPI element not found: kpi_${id}`);
+        return;
       }
-    }
 
-    // Apply state-based styling
-    if (card) {
-      card.classList.remove('state-ahead', 'state-behind');
-      if (val != null && val !== 0) {
-        if (target != null && val >= target) {
-          card.classList.add('state-ahead');
-        } else if (rollingAvg != null && val < rollingAvg * 0.9) {
-          card.classList.add('state-behind');
+      // Set main value
+      el.textContent = formatValue(val, format);
+
+      // Remove loading state
+      if (card) {
+        card.classList.remove('loading');
+      }
+
+      // Set comparison value and delta
+      if (prevVal != null && compareMode && cmpEl && deltaEl) {
+        cmpEl.textContent = `vs ${formatValue(prevVal, format)}`;
+
+        const pct = prevVal !== 0 ? ((val - prevVal) / prevVal * 100) : 0;
+        const isUp = invertDelta ? pct < 0 : pct > 0;
+
+        if (Math.abs(pct) < 1) {
+          deltaEl.className = 'kpi-delta neutral';
+          deltaEl.textContent = '~0%';
+        } else if (isUp) {
+          deltaEl.className = 'kpi-delta up';
+          deltaEl.textContent = `+${Math.abs(pct).toFixed(0)}%`;
+        } else {
+          deltaEl.className = 'kpi-delta down';
+          deltaEl.textContent = `-${Math.abs(pct).toFixed(0)}%`;
         }
       }
+
+      // Apply state-based styling
+      if (card) {
+        card.classList.remove('state-ahead', 'state-behind');
+        if (val != null && val !== 0) {
+          if (target != null && val >= target) {
+            card.classList.add('state-ahead');
+          } else if (rollingAvg != null && val < rollingAvg * 0.9) {
+            card.classList.add('state-behind');
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`Error setting KPI ${id}:`, error);
     }
   };
 
@@ -423,12 +467,23 @@ export function updateKPIValues(totals, prevTotals, targets, rolling, compareMod
   setKPI('laborCost', t.totalLaborCost, p?.totalLaborCost, 'dollar', true);
 
   // Refresh Muuri KPI layout
-  const muuriKPI = getGrid('kpi');
-  if (muuriKPI && !muuriKPI._isDestroyed) {
-    setTimeout(() => {
-      muuriKPI.refreshItems();
-      muuriKPI.layout(true);
-    }, 50);
+  try {
+    const muuriKPI = getGrid('kpi');
+    if (muuriKPI && !muuriKPI._isDestroyed) {
+      setTimeout(() => {
+        // Re-check grid validity - it could be destroyed during the 50ms delay
+        if (muuriKPI && !muuriKPI._isDestroyed) {
+          muuriKPI.refreshItems();
+          muuriKPI.layout(true);
+        }
+      }, 50);
+    }
+  } catch (error) {
+    console.error('Error refreshing Muuri KPI layout:', error);
+  }
+  } catch (error) {
+    console.error('Error in updateKPIValues:', error);
+    // Don't crash the app - show error but continue
   }
 }
 

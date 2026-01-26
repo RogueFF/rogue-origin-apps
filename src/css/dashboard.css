@@ -2779,3 +2779,249 @@ body:not(.muuri-active) .widget-item[data-size="full"] { flex-basis: calc(100% -
     justify-content: center;
   }
 }
+
+/* ========================================
+   ACCESSIBILITY ENHANCEMENTS (WCAG AA)
+   Phase 5.1 - Added comprehensive accessibility features
+   ======================================== */
+
+/* Skip link for keyboard users (visually hidden until focused) */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: var(--ro-green, #668971);
+  color: white;
+  padding: 8px 16px;
+  z-index: 10000;
+  text-decoration: none;
+  font-weight: 600;
+  border-radius: 0 0 8px 0;
+  transition: top 0.2s ease;
+}
+
+.skip-link:focus {
+  top: 0;
+  outline: 3px solid var(--gold, #e4aa4f);
+  outline-offset: 2px;
+}
+
+/* Comprehensive focus indicators for keyboard navigation */
+.nav-item:focus,
+.tool-btn:focus,
+.date-chip:focus,
+.compare-option:focus,
+.header-btn:focus,
+.theme-toggle:focus,
+.mobile-menu-btn:focus,
+.sidebar-toggle:focus,
+.date-picker-trigger:focus,
+.date-apply-btn:focus,
+.widget-help:focus,
+.widget-collapse:focus,
+.widget-hide:focus,
+.widget-resize:focus,
+.widget-drag-handle:focus,
+.settings-close:focus,
+.fab:focus,
+.kpi-card:focus,
+.modal-close:focus,
+.install-prompt button:focus,
+.install-modal-content button:focus {
+  outline: 2px solid var(--ro-green, #668971);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(102, 137, 113, 0.2);
+}
+
+/* Focus-visible for modern browsers (no outline for mouse clicks) */
+button:focus-visible,
+[role="button"]:focus-visible,
+[role="menuitem"]:focus-visible,
+[role="tab"]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--ro-green, #668971);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(102, 137, 113, 0.2);
+}
+
+/* Enhanced focus for form inputs */
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="date"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="search"]:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--ro-green, #668971);
+  outline: 2px solid var(--ro-green, #668971);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(102, 137, 113, 0.15);
+}
+
+/* Ensure focus is visible on dark mode */
+body.dark-mode button:focus-visible,
+body.dark-mode [role="button"]:focus-visible,
+body.dark-mode input:focus-visible,
+body.dark-mode a:focus-visible {
+  outline: 2px solid var(--gold, #e4aa4f);
+  box-shadow: 0 0 0 4px rgba(228, 170, 79, 0.25);
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .nav-item:focus,
+  button:focus,
+  a:focus,
+  input:focus {
+    outline: 3px solid currentColor;
+    outline-offset: 3px;
+  }
+
+  .skip-link:focus {
+    outline: 4px solid yellow;
+  }
+}
+
+/* Keyboard navigation visual feedback */
+[role="button"][tabindex="0"]:focus,
+[onclick][tabindex="0"]:focus {
+  outline: 2px solid var(--ro-green, #668971);
+  outline-offset: 2px;
+  background-color: rgba(102, 137, 113, 0.08);
+}
+
+/* Remove focus outline when using mouse (prevents double outline) */
+button:focus:not(:focus-visible),
+[role="button"]:focus:not(:focus-visible),
+a:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Ensure disabled elements are clearly marked */
+[disabled],
+[aria-disabled="true"] {
+  cursor: not-allowed !important;
+  opacity: 0.5;
+  filter: grayscale(0.4);
+}
+
+/* Screen reader only content */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Enhanced color contrast for text (WCAG AA compliance) */
+/* Ensure minimum 4.5:1 contrast ratio for normal text */
+.text-muted,
+.text-light {
+  /* Dark mode inherits better contrast from shared-base.css */
+  color: var(--text-muted);
+  /* Minimum contrast enforced by CSS variable values */
+}
+
+/* Improve contrast for small text */
+.text-xs,
+.text-sm,
+small {
+  /* Enforce darker color for better readability of small text */
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+/* Enhanced link contrast */
+a {
+  color: var(--ro-green, #668971);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+a:hover {
+  color: var(--green-dark, #4a6b54);
+  text-decoration-thickness: 2px;
+}
+
+body.dark-mode a {
+  color: var(--green-light, #7a9d86);
+}
+
+body.dark-mode a:hover {
+  color: var(--ro-green, #668971);
+}
+
+/* Ensure sufficient contrast for interactive elements */
+.header-btn,
+.tool-btn {
+  /* Background and border contrast checked in design */
+  min-height: 36px; /* Ensure touch target size */
+  position: relative;
+}
+
+/* Focus trap for modals (accessibility) */
+.modal-content:focus,
+.settings-panel:focus {
+  outline: none; /* Modal itself doesn't need outline, content inside does */
+}
+
+/* Improve table accessibility */
+table {
+  border-collapse: collapse;
+}
+
+th {
+  font-weight: 600;
+  text-align: left;
+  background: var(--bg-warm);
+}
+
+/* Accessible tooltips with proper timing */
+[title] {
+  cursor: help;
+}
+
+/* Motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .skip-link {
+    transition: none;
+  }
+}
+
+/* Print accessibility */
+@media print {
+  .skip-link,
+  .sidebar,
+  .header-btn,
+  .fab {
+    display: none;
+  }
+
+  body {
+    background: white;
+    color: black;
+  }
+}
+
+/* ========================================
+   END ACCESSIBILITY ENHANCEMENTS
+   ======================================== */

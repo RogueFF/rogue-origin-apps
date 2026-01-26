@@ -1413,3 +1413,51 @@ body::before {
     .btn.loading i.ph-spin {
       margin-right: 6px;
     }
+
+/* ========================================
+   ACCESSIBILITY ENHANCEMENTS (WCAG AA)
+   ======================================== */
+/* Skip link for keyboard users */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: var(--ro-green, #668971);
+  color: white;
+  padding: 8px 16px;
+  z-index: 10000;
+  text-decoration: none;
+  font-weight: 600;
+  border-radius: 0 0 8px 0;
+}
+.skip-link:focus {
+  top: 0;
+  outline: 3px solid var(--gold, #e4aa4f);
+  outline-offset: 2px;
+}
+
+/* Focus indicators for keyboard navigation */
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+[role="button"]:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--ro-green, #668971);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(102, 137, 113, 0.2);
+}
+
+/* Enhanced focus for dark mode */
+body.dark-mode button:focus-visible,
+body.dark-mode input:focus-visible {
+  outline: 2px solid var(--gold, #e4aa4f);
+  box-shadow: 0 0 0 4px rgba(228, 170, 79, 0.25);
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
