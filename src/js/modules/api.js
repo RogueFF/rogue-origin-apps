@@ -29,6 +29,9 @@ import {
   shouldAutoRetry
 } from './status.js';
 
+// Race condition fix: Track request counter to discard stale responses
+let requestCounter = 0;
+
 // Forward declarations for functions that will be set by the main module
 let renderAllFn = null;
 let showSkeletonsFn = null;
@@ -282,6 +285,9 @@ export function loadData() {
   const s = startEl ? startEl.value : formatDateInput(new Date());
   const e = endEl ? endEl.value : formatDateInput(new Date());
 
+  // Race condition fix: Assign unique ID to this request
+  const requestId = ++requestCounter;
+
   // Show connecting state
   showConnecting();
 
@@ -295,6 +301,15 @@ export function loadData() {
   setFetchController(newController);
   const signal = newController.signal;
 
+  // Wrapper to check if response is from latest request
+  const onDataLoadedChecked = function(result) {
+    if (requestId !== requestCounter) {
+      console.log('Discarding stale API response (request #' + requestId + ', current #' + requestCounter + ')');
+      return;
+    }
+    onDataLoaded(result);
+  };
+
   if (isAppsScript()) {
     // Apps Script mode - use google.script.run
     // Only show skeletons on initial load (no existing data)
@@ -302,7 +317,7 @@ export function loadData() {
       showSkeletons(true);
     }
     google.script.run
-      .withSuccessHandler(onDataLoaded)
+      .withSuccessHandler(onDataLoadedChecked)
       .withFailureHandler(onError)
       .getProductionDashboardData(s, e);
   } else {
@@ -316,6 +331,12 @@ export function loadData() {
         s,
         e,
         function(fetchedData, meta) {
+          // Race condition check: discard stale responses
+          if (requestId !== requestCounter) {
+            console.log('Discarding stale API response (request #' + requestId + ', current #' + requestCounter + ')');
+            return;
+          }
+
           // meta.fromCache = true if this is cached data
           // meta.isFresh = true if cached data is still within TTL
 
@@ -376,6 +397,12 @@ export function loadData() {
         return response.json();
       })
       .then(function(result) {
+        // Race condition check: discard stale responses
+        if (requestId !== requestCounter) {
+          console.log('Discarding stale API response (request #' + requestId + ', current #' + requestCounter + ')');
+          return;
+        }
+
         if (result.success && result.data) {
           onDataLoaded(result.data);
         } else if (result.data) {
