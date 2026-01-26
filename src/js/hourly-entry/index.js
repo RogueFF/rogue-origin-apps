@@ -163,6 +163,8 @@ let originalCrewData = null; // Track original crew for modification detection
 let pendingSaveData = null; // Track failed save for retry
 let isSaving = false; // Prevent concurrent saves
 let shiftStartTime = null; // Shared shift start time (syncs with scoreboard)
+let isOpeningTimePicker = false; // Track when we're programmatically opening the picker
+let lastTimePickerValue = null; // Track last value to detect real changes
 
 // Crew fields to track for modifications
 const CREW_FIELDS = ['buckers1', 'trimmers1', 'tzero1', 'qcperson', 'cultivar1', 'buckers2', 'trimmers2', 'tzero2', 'cultivar2'];
@@ -465,15 +467,34 @@ function initializeUI() {
       if (shiftStartTime) {
         const hours = String(shiftStartTime.getHours()).padStart(2, '0');
         const minutes = String(shiftStartTime.getMinutes()).padStart(2, '0');
-        startTimePicker.value = `${hours}:${minutes}`;
+        const presetValue = `${hours}:${minutes}`;
+        startTimePicker.value = presetValue;
+        lastTimePickerValue = presetValue; // Track what we set it to
+      } else {
+        lastTimePickerValue = startTimePicker.value || '';
       }
+      isOpeningTimePicker = true;
       startTimePicker.showPicker();
+      // Reset flag after picker has opened (short delay to avoid race)
+      setTimeout(() => { isOpeningTimePicker = false; }, 100);
     });
 
     // When time is selected, update shift start
     startTimePicker.addEventListener('change', (e) => {
       const timeValue = e.target.value; // "HH:MM" format
+      
+      // Ignore if we're in the middle of opening the picker (spurious event)
+      if (isOpeningTimePicker) {
+        return;
+      }
+      
+      // Ignore if value hasn't actually changed (browser auto-fill or spurious event)
+      if (timeValue === lastTimePickerValue) {
+        return;
+      }
+      
       if (timeValue) {
+        lastTimePickerValue = timeValue;
         const [hours, minutes] = timeValue.split(':').map(Number);
         const newStartTime = new Date();
         newStartTime.setHours(hours, minutes, 0, 0);

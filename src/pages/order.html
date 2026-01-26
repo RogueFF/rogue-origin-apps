@@ -20,10 +20,13 @@
 
   <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@400;500;600;700&display=optional" rel="stylesheet">
-  <!-- Performance: CSS Preloading -->
+  
+  <!-- Critical CSS: Loaded synchronously -->
   <link rel="stylesheet" href="../css/shared-base.css">
-  <link rel="preload" href="../css/order.css" as="style">
-  <link rel="stylesheet" href="../css/order.css">
+  
+  <!-- Non-critical CSS: Deferred for faster initial render -->
+  <link rel="preload" href="../css/order.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/order.css"></noscript>
 </head>
 <body>
   <a href="#mainContent" class="skip-link">Skip to main content</a>
