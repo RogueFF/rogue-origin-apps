@@ -19,19 +19,22 @@
   <link rel="preconnect" href="https://unpkg.com">
   <link rel="dns-prefetch" href="https://script.google.com">
 
-  <!-- Scripts: Deferred for faster initial render -->
-  <script defer src="https://unpkg.com/@phosphor-icons/web"></script>
-  <!-- Performance: CSS Preloading -->
+  <!-- Scripts: Lazy loaded when needed -->
+  <!-- Phosphor Icons loaded on-demand -->
+  
+  <!-- Critical CSS: Loaded synchronously -->
   <link rel="stylesheet" href="../css/shared-base.css">
-  <link rel="preload" href="../css/kanban.css" as="style">
-  <link rel="stylesheet" href="../css/kanban.css">
+  
+  <!-- Non-critical CSS: Deferred for faster initial render -->
+  <link rel="preload" href="../css/kanban.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/kanban.css"></noscript>
 </head>
 <body>
   <a href="#supply-closet" class="skip-link">Skip to main content</a>
   <header class="header">
     <div class="header-inner">
       <div class="brand">
-        <img class="logo" src="../assets/ro-logo-horizontal.png" alt="Logo">
+        <img class="logo" src="../assets/ro-logo-horizontal.png" alt="Logo" loading="eager" width="150" height="40">
         <div><h1>Kanban Card Manager</h1><p>Supply Closet Inventory System</p></div>
       </div>
       <div class="btns">
