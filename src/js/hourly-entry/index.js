@@ -455,6 +455,33 @@ function initializeUI() {
     startDayBtn.addEventListener('click', () => setShiftStart());
   }
 
+  // Start time badge (click to edit)
+  const startTimeBadge = document.getElementById('start-time-badge');
+  const startTimePicker = document.getElementById('start-time-picker');
+  if (startTimeBadge && startTimePicker) {
+    // Click badge to open time picker
+    startTimeBadge.addEventListener('click', () => {
+      // Pre-populate with current start time
+      if (shiftStartTime) {
+        const hours = String(shiftStartTime.getHours()).padStart(2, '0');
+        const minutes = String(shiftStartTime.getMinutes()).padStart(2, '0');
+        startTimePicker.value = `${hours}:${minutes}`;
+      }
+      startTimePicker.showPicker();
+    });
+
+    // When time is selected, update shift start
+    startTimePicker.addEventListener('change', (e) => {
+      const timeValue = e.target.value; // "HH:MM" format
+      if (timeValue) {
+        const [hours, minutes] = timeValue.split(':').map(Number);
+        const newStartTime = new Date();
+        newStartTime.setHours(hours, minutes, 0, 0);
+        setShiftStart(newStartTime);
+      }
+    });
+  }
+
   // Back to timeline button
   document.getElementById('back-to-timeline').addEventListener('click', () => {
     showView('timeline');
