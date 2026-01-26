@@ -22,15 +22,15 @@
   <!-- Fonts: DM Serif Display, JetBrains Mono, Outfit -->
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=optional" rel="stylesheet">
 
-  <!-- Scripts: Deferred for faster initial render -->
-  <script defer src="https://unpkg.com/@phosphor-icons/web"></script>
+  <!-- Scripts: Lazy loaded when needed -->
+  <!-- Phosphor Icons and jsPDF are loaded on-demand -->
 
-  <!-- jsPDF libraries are lazy-loaded only when needed for better performance -->
-
-  <!-- Performance: CSS Preloading -->
+  <!-- Critical CSS: Loaded synchronously -->
   <link rel="stylesheet" href="../css/shared-base.css">
-  <link rel="preload" href="../css/orders.css" as="style">
-  <link rel="stylesheet" href="../css/orders.css">
+  
+  <!-- Non-critical CSS: Deferred for faster initial render -->
+  <link rel="preload" href="../css/orders.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/orders.css"></noscript>
 
   <!-- Authentication is now handled server-side via Vercel Functions -->
   <!-- Password stored securely in Vercel env vars (not in code or Git) -->

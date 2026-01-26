@@ -6,6 +6,7 @@
 import { brandColors } from './config.js';
 import { getChart, setChart, getData, getDailyTarget, getCompareMode, getCompareData, setFlag, getFlags } from './state.js';
 import { safeGetChartContext } from './utils.js';
+import { loadChartJs } from './lazy-loader.js';
 
 // Register ChartDataLabels plugin (called once during initialization)
 function registerPlugins() {
@@ -110,8 +111,12 @@ function createBarDataLabels() {
 /**
  * Initialize all chart instances
  * Creates empty charts ready for data
+ * Lazy loads Chart.js library if not already loaded
  */
-export function initCharts() {
+export async function initCharts() {
+  // Lazy load Chart.js library
+  await loadChartJs();
+
   // Destroy any existing charts first to prevent memory leaks
   destroyChartIfExists(getChart('hourly'));
   destroyChartIfExists(getChart('rate'));

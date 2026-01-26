@@ -23,10 +23,8 @@
   <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@400;600;700;900&display=optional" rel="stylesheet">
 
-  <!-- Scripts: Deferred for faster initial render -->
-  <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
-  <script defer src="https://unpkg.com/@phosphor-icons/web"></script>
+  <!-- Scripts: Lazy loaded by modules when needed -->
+  <!-- Chart.js and Phosphor Icons are loaded on-demand by lazy-loader.js -->
 
   <!-- Scoreboard Modules -->
   <script defer src="../js/scoreboard/config.js?v=2"></script>
@@ -42,10 +40,12 @@
   <script defer src="../js/scoreboard/morning-report.js?v=3"></script>
   <script defer src="../js/scoreboard/scale.js?v=3"></script>
   <script defer src="../js/scoreboard/main.js?v=7"></script>
-  <!-- Performance: CSS Preloading -->
+  <!-- Critical CSS: Loaded synchronously -->
   <link rel="stylesheet" href="../css/shared-base.css">
-  <link rel="preload" href="../css/scoreboard.css" as="style">
-  <link rel="stylesheet" href="../css/scoreboard.css">
+  
+  <!-- Non-critical CSS: Deferred for faster initial render -->
+  <link rel="preload" href="../css/scoreboard.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/scoreboard.css"></noscript>
 </head>
 <body class="idle timer-neutral">
   <a href="#morningReportContainer" class="skip-link">Skip to main content</a>
