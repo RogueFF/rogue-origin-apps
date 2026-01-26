@@ -1954,11 +1954,22 @@ async function inventoryWebhook(body, env, request) {
     const weight = parseFloat(variant.weight);
     const unit = String(variant.weight_unit).toLowerCase();
     if (unit.includes('kilogram') || unit === 'kg') {
-      size = `${weight}kg`;
+      // Direct kg weight
+      if (Math.abs(weight - 5) < 0.25) {
+        size = '5kg';
+      } else {
+        size = `${weight}kg`;
+      }
     } else if (unit.includes('pound') || unit === 'lb') {
-      // Convert lbs to kg (5kg = ~11.02 lbs)
-      const kg = weight / 2.205;
-      if (Math.abs(kg - 5) < 0.5) size = '5kg';
+      // Handle common bag sizes in pounds
+      // 5kg ≈ 11.02 lbs, 10lb = 10 lbs
+      if (Math.abs(weight - 11) < 0.5) {
+        size = '5kg';  // 5kg bags (~11 lbs)
+      } else if (Math.abs(weight - 10) < 0.5) {
+        size = '10lb';  // 10lb bags
+      } else {
+        size = `${weight}lb`;  // Other sizes
+      }
     }
   }
   // Fallback: check if variant title contains size
