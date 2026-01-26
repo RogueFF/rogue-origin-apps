@@ -1056,11 +1056,42 @@ body {
   font-size: 13px;
   color: var(--green-bright);
   min-height: 44px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.start-time-badge:hover {
+  background: rgba(102, 137, 113, 0.3);
+  border-color: var(--green-bright);
+}
+
+.start-time-badge:active {
+  transform: scale(0.98);
 }
 
 .start-time-icon {
   font-size: 10px;
   color: var(--green);
+}
+
+.edit-icon {
+  font-size: 11px;
+  color: var(--green);
+  opacity: 0.6;
+  margin-left: 2px;
+}
+
+.start-time-badge:hover .edit-icon {
+  opacity: 1;
+}
+
+/* Hidden time picker for editing start time */
+.start-time-picker-hidden {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
 }
 
 /* Progress Summary */

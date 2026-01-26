@@ -7,7 +7,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../css/hourly-entry.css?v=38">
+  
+  <!-- Non-critical CSS: Deferred for faster initial render -->
+  <link rel="preload" href="../css/hourly-entry.css?v=39" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/hourly-entry.css?v=39"></noscript>
 </head>
 <body>
   <a href="#timeline-list" class="skip-link">Skip to timeline</a>
@@ -22,10 +25,12 @@
       <div class="header-right">
         <!-- Shift Start (shared with scoreboard) -->
         <button id="start-day-btn" class="start-day-btn" data-i18n="startDay">Start Day</button>
-        <div id="start-time-badge" class="start-time-badge" style="display: none;">
+        <div id="start-time-badge" class="start-time-badge" style="display: none;" title="Tap to edit start time">
           <span class="start-time-icon">▶</span>
           <span id="start-time-display">7:30 AM</span>
+          <span class="edit-icon">✎</span>
         </div>
+        <input type="time" id="start-time-picker" class="start-time-picker-hidden">
         <button id="lang-toggle" class="lang-btn">ES</button>
         <span id="date-display" class="date-display">January, 23rd</span>
         <input type="date" id="date-picker" class="date-picker-hidden">
@@ -344,6 +349,6 @@
     <button class="tooltip-close">×</button>
   </div>
 
-  <script type="module" src="../js/hourly-entry/index.js?v=48"></script>
+  <script type="module" src="../js/hourly-entry/index.js?v=49"></script>
 </body>
 </html>
