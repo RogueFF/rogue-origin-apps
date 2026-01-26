@@ -20,7 +20,7 @@
     // Timing intervals (milliseconds)
     intervals: {
       clockRefresh: 1000,       // Update clock every second
-      versionCheck: 5000,       // Smart polling: check if data changed every 5 seconds
+      versionCheck: 30000,      // Smart polling: check if data changed every 30 seconds
       timerRefresh: 1000,       // Update timer display every second
       orderQueueRefresh: 60000  // Order queue refresh every 60 seconds (was 30s)
     },
