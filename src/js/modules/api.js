@@ -91,56 +91,119 @@ function showToast(message, type, duration) {
 }
 
 /**
+ * Get user-friendly error message from error object
+ * @param {Error} error - The error object
+ * @returns {string} User-friendly error message
+ */
+function getUserFriendlyErrorMessage(error) {
+  try {
+    const errorMessage = error.message || String(error);
+    
+    // Network errors
+    if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+      return 'Network connection failed. Please check your internet connection.';
+    }
+    
+    // Timeout errors
+    if (errorMessage.includes('timeout') || errorMessage.includes('Timeout')) {
+      return 'Request timed out. The server took too long to respond.';
+    }
+    
+    // HTTP status errors
+    if (errorMessage.includes('HTTP 429')) {
+      return 'Too many requests. Using cached data.';
+    }
+    if (errorMessage.includes('HTTP 500') || errorMessage.includes('HTTP 502') || errorMessage.includes('HTTP 503')) {
+      return 'Server error. Please try again in a moment.';
+    }
+    if (errorMessage.includes('HTTP 401') || errorMessage.includes('HTTP 403')) {
+      return 'Authentication error. Please refresh the page.';
+    }
+    if (errorMessage.includes('HTTP 404')) {
+      return 'Data not found. Please try a different date range.';
+    }
+    if (errorMessage.includes('HTTP')) {
+      const statusMatch = errorMessage.match(/HTTP (\d+)/);
+      if (statusMatch) {
+        return `Server returned error (${statusMatch[1]}). Please try again.`;
+      }
+    }
+    
+    // Parse errors
+    if (errorMessage.includes('JSON') || errorMessage.includes('parse')) {
+      return 'Invalid data received from server. Please refresh the page.';
+    }
+    
+    // Generic fallback - keep it user-friendly
+    if (errorMessage.length > 100) {
+      return 'An error occurred. Please try again or refresh the page.';
+    }
+    
+    return errorMessage;
+  } catch (e) {
+    return 'An unexpected error occurred. Please refresh the page.';
+  }
+}
+
+/**
  * Error handler for API requests
  * @param {Error} error - The error object
  * @param {boolean} skipAutoRetry - Skip auto-retry logic (default: false)
  */
 export function onError(error, skipAutoRetry = false) {
-  console.error('API Error:', error);
+  try {
+    console.error('API Error:', error);
 
-  // Hide loading overlay if present
-  const loadingOverlay = document.getElementById('loadingOverlay');
-  if (loadingOverlay) {
-    loadingOverlay.classList.add('hidden');
-  }
-
-  showSkeletons(false);
-
-  // Detect rate limit errors (HTTP 429)
-  const errorMessage = error.message || String(error);
-  const isRateLimited = errorMessage.includes('429');
-
-  // Show appropriate error message
-  if (isRateLimited) {
-    showError('Rate limited - using cached data');
-    // For rate limit errors, don't show toast - it's normal during high traffic
-    // The cache layer should provide data
-  } else {
-    showError(errorMessage);
-    // Show toast only if not auto-retrying
-    if (!shouldAutoRetry() || skipAutoRetry) {
-      showToast(`Error loading data: ${errorMessage}`, 'error');
+    // Hide loading overlay if present
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    if (loadingOverlay) {
+      loadingOverlay.classList.add('hidden');
     }
-  }
 
-  // Auto-retry logic with different delays for different errors
-  if (shouldAutoRetry() && !skipAutoRetry) {
-    // Use longer delay for rate limit errors (30s), shorter for other errors (5s)
-    const retryDelay = isRateLimited ? 30000 : 5000;
-    const delayText = isRateLimited ? '30 seconds' : '5 seconds';
+    showSkeletons(false);
 
+    // Detect rate limit errors (HTTP 429)
+    const errorMessage = error.message || String(error);
+    const isRateLimited = errorMessage.includes('429');
+    
+    // Get user-friendly error message
+    const userMessage = getUserFriendlyErrorMessage(error);
+
+    // Show appropriate error message
     if (isRateLimited) {
-      console.log(`Rate limited - will retry in ${delayText}...`);
+      showError('Rate limited - using cached data');
+      // For rate limit errors, don't show toast - it's normal during high traffic
+      // The cache layer should provide data
     } else {
-      console.log(`Auto-retry in ${delayText}...`);
+      showError(userMessage);
+      // Show toast only if not auto-retrying
+      if (!shouldAutoRetry() || skipAutoRetry) {
+        showToast(userMessage, 'error', 5000);
+      }
     }
 
-    setTimeout(function() {
-      console.log('Auto-retry after error...');
-      showRetrying();
-      incrementRetryCount();
-      loadData();
-    }, retryDelay);
+    // Auto-retry logic with different delays for different errors
+    if (shouldAutoRetry() && !skipAutoRetry) {
+      // Use longer delay for rate limit errors (30s), shorter for other errors (5s)
+      const retryDelay = isRateLimited ? 30000 : 5000;
+      const delayText = isRateLimited ? '30 seconds' : '5 seconds';
+
+      if (isRateLimited) {
+        console.log(`Rate limited - will retry in ${delayText}...`);
+      } else {
+        console.log(`Auto-retry in ${delayText}...`);
+      }
+
+      setTimeout(function() {
+        console.log('Auto-retry after error...');
+        showRetrying();
+        incrementRetryCount();
+        loadData();
+      }, retryDelay);
+    }
+  } catch (handlerError) {
+    // Error in error handler - log but don't crash
+    console.error('Error in error handler:', handlerError);
   }
 }
 
@@ -149,46 +212,64 @@ export function onError(error, skipAutoRetry = false) {
  * @param {object} result - The data result from API
  */
 function onDataLoaded(result) {
-  showSkeletons(false);
+  try {
+    showSkeletons(false);
 
-  // Show connected state
-  const isFirstLoad = !getData();
-  showConnected(!isFirstLoad); // Auto-hide on subsequent loads
-
-  // Reset retry count on success
-  resetRetryCount();
-
-  // Handle fallback data (showing previous working day when today has no data)
-  if (result.fallback && result.fallback.active) {
-    setFallback(result.fallback);
-    // Format the fallback date nicely
-    const fallbackDate = new Date(result.fallback.date + 'T12:00:00');
-    const dateStr = fallbackDate.toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'short',
-      day: 'numeric'
-    });
-    showToast(`Showing last working day: ${dateStr}`, 'info', 5000);
-  } else {
-    clearFallback();
-  }
-
-  // Only re-render if data actually changed
-  const newDataStr = JSON.stringify(result);
-  const oldData = getData();
-  const oldDataStr = oldData ? JSON.stringify(oldData) : '';
-
-  if (newDataStr !== oldDataStr) {
-    setData(result);
-    renderAll();
-
-    // Show subtle update notification (only on auto-refresh, not initial load)
-    if (oldDataStr && !result.fallback) {
-      showToast('Data updated', 'success', 2000);
+    // Validate result data
+    if (!result || typeof result !== 'object') {
+      throw new Error('Invalid data format received from API');
     }
-  }
 
-  return isFirstLoad;
+    // Show connected state
+    const isFirstLoad = !getData();
+    showConnected(!isFirstLoad); // Auto-hide on subsequent loads
+
+    // Reset retry count on success
+    resetRetryCount();
+
+    // Handle fallback data (showing previous working day when today has no data)
+    if (result.fallback && result.fallback.active) {
+      try {
+        setFallback(result.fallback);
+        // Format the fallback date nicely
+        const fallbackDate = new Date(result.fallback.date + 'T12:00:00');
+        const dateStr = fallbackDate.toLocaleDateString('en-US', {
+          weekday: 'long',
+          month: 'short',
+          day: 'numeric'
+        });
+        showToast(`Showing last working day: ${dateStr}`, 'info', 5000);
+      } catch (dateError) {
+        console.warn('Error formatting fallback date:', dateError);
+        clearFallback();
+      }
+    } else {
+      clearFallback();
+    }
+
+    // Only re-render if data actually changed
+    const newDataStr = JSON.stringify(result);
+    const oldData = getData();
+    const oldDataStr = oldData ? JSON.stringify(oldData) : '';
+
+    if (newDataStr !== oldDataStr) {
+      setData(result);
+      renderAll();
+
+      // Show subtle update notification (only on auto-refresh, not initial load)
+      if (oldDataStr && !result.fallback) {
+        showToast('Data updated', 'success', 2000);
+      }
+    }
+
+    return isFirstLoad;
+  } catch (error) {
+    console.error('Error in onDataLoaded:', error);
+    // Don't call onError here to avoid retry loop - just show a toast
+    showToast('Error processing data. Please refresh the page.', 'error', 5000);
+    showSkeletons(false);
+    return false;
+  }
 }
 
 /**
