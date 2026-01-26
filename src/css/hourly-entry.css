@@ -22,6 +22,7 @@
 html {
   font-size: 16px;
   -webkit-tap-highlight-color: transparent;
+  color-scheme: dark;
 }
 
 body {
@@ -611,6 +612,12 @@ body {
   border-color: var(--gold);
   border-left-color: var(--gold);
   box-shadow: 0 0 0 3px rgba(228, 170, 79, 0.2);
+}
+
+.barcode-select option {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  padding: 12px;
 }
 
 /* Strain selected state */
