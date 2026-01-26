@@ -9,7 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
   
   <!-- Non-critical CSS: Deferred for faster initial render -->
-  <link rel="preload" href="../css/hourly-entry.css?v=40" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <link rel="preload" href="../css/hourly-entry.css?v=41" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="../css/hourly-entry.css?v=39"></noscript>
 </head>
 <body>
@@ -254,9 +254,24 @@
         <div class="card-content">
           <div class="barcode-controls">
             <label class="barcode-label" data-i18n="strain">Strain</label>
-            <select id="barcode-strain" class="barcode-select">
-              <option value="">Select strain...</option>
-            </select>
+            <!-- Custom dropdown for better styling -->
+            <div class="custom-select" id="barcode-strain-dropdown">
+              <button type="button" class="custom-select-trigger" aria-haspopup="listbox" aria-expanded="false">
+                <span class="custom-select-value" data-i18n="selectStrain">Select strain...</span>
+                <svg class="custom-select-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+              <div class="custom-select-menu" role="listbox">
+                <div class="custom-select-search">
+                  <input type="text" class="custom-select-search-input" placeholder="Search strains..." aria-label="Search strains">
+                </div>
+                <div class="custom-select-options">
+                  <!-- Options populated by JS -->
+                </div>
+              </div>
+              <input type="hidden" id="barcode-strain" name="barcode-strain">
+            </div>
           </div>
           <div class="barcode-buttons">
             <button type="button" class="barcode-btn btn-5kg" data-type="5kg" data-i18n="print5kg">5kg</button>
@@ -349,6 +364,6 @@
     <button class="tooltip-close">×</button>
   </div>
 
-  <script type="module" src="../js/hourly-entry/index.js?v=50"></script>
+  <script type="module" src="../js/hourly-entry/index.js?v=51"></script>
 </body>
 </html>
