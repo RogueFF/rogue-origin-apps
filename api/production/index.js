@@ -973,7 +973,8 @@ async function getScoreboardOrderQueue(req, res) {
  * Set shift start time
  */
 async function setShiftStart(req, res) {
-  const timeParam = req.query.time;
+  // Read time from body (POST) or query string (GET) for backwards compatibility
+  const timeParam = req.body?.time || req.query.time;
 
   // If no time provided, use current server time (one-click button)
   const timestamp = timeParam ? new Date(timeParam) : new Date();
