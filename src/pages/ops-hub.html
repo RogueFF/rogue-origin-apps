@@ -23,16 +23,17 @@
   <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=optional" rel="stylesheet">
 
-  <!-- Scripts: Deferred for faster initial render -->
-  <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-  <script defer src="https://unpkg.com/@phosphor-icons/web"></script>
-  <!-- Performance: CSS Preloading -->
+  <!-- Scripts: Lazy loaded by modules when needed -->
+  <!-- Chart.js and other libraries are loaded on-demand -->
+  
+  <!-- Critical CSS: Loaded synchronously -->
   <link rel="stylesheet" href="../css/shared-base.css">
-  <link rel="preload" href="../css/ops-hub.css" as="style">
-  <link rel="stylesheet" href="../css/ops-hub.css">
-  <link rel="stylesheet" href="../css/ai-chat.css">
+  
+  <!-- Non-critical CSS: Deferred for faster initial render -->
+  <link rel="preload" href="../css/ops-hub.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/ops-hub.css"></noscript>
+  <link rel="preload" href="../css/ai-chat.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/ai-chat.css"></noscript>
 </head>
 <body>
   <a href="#dashboard" class="skip-link">Skip to main content</a>
