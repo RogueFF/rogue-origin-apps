@@ -199,6 +199,9 @@ function cleanupListeners() {
 window.addEventListener('beforeunload', () => {
   cleanupListeners();
   if (saveTimeout) clearTimeout(saveTimeout);
+  // Clear bag timer intervals to prevent memory leaks
+  if (bagTimerInterval) clearInterval(bagTimerInterval);
+  if (bagTimerTickInterval) clearInterval(bagTimerTickInterval);
 });
 
 // ===================
