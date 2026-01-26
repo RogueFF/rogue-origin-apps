@@ -1808,11 +1808,17 @@ async function loadBarcodeProducts() {
 }
 
 /**
+ * Custom dropdown state
+ */
+let customDropdownCultivars = [];
+
+/**
  * Populate the barcode strain dropdown with cultivars that have products
  */
 function populateBarcodeStrainSelect() {
-  const select = document.getElementById('barcode-strain');
-  if (!select) return;
+  const dropdown = document.getElementById('barcode-strain-dropdown');
+  const hiddenInput = document.getElementById('barcode-strain');
+  if (!dropdown || !hiddenInput) return;
 
   // Get unique cultivars from products (extract cultivar name from header)
   const cultivarsWithProducts = new Set();
@@ -1824,30 +1830,133 @@ function populateBarcodeStrainSelect() {
     }
   });
 
-  const currentValue = select.value;
-  select.innerHTML = `<option value="">${LABELS[currentLang].selectStrain}</option>`;
-
   // Sort cultivars alphabetically
-  const sortedCultivars = Array.from(cultivarsWithProducts).sort();
-  sortedCultivars.forEach((cultivar) => {
-    const option = document.createElement('option');
-    option.value = cultivar;
-    option.textContent = cultivar;
-    select.appendChild(option);
+  customDropdownCultivars = Array.from(cultivarsWithProducts).sort();
+
+  // Render options
+  renderCustomDropdownOptions(dropdown, customDropdownCultivars, hiddenInput.value);
+
+  // Initialize dropdown behavior if not already done
+  if (!dropdown.dataset.initialized) {
+    initCustomDropdown(dropdown);
+    dropdown.dataset.initialized = 'true';
+  }
+}
+
+/**
+ * Render custom dropdown options
+ */
+function renderCustomDropdownOptions(dropdown, cultivars, selectedValue, filter = '') {
+  const optionsContainer = dropdown.querySelector('.custom-select-options');
+  if (!optionsContainer) return;
+
+  const filterLower = filter.toLowerCase();
+  const filtered = filter
+    ? cultivars.filter((c) => c.toLowerCase().includes(filterLower))
+    : cultivars;
+
+  if (filtered.length === 0) {
+    optionsContainer.innerHTML = `<div class="custom-select-no-results">No strains found</div>`;
+    return;
+  }
+
+  optionsContainer.innerHTML = filtered
+    .map(
+      (cultivar) => `
+      <div class="custom-select-option${cultivar === selectedValue ? ' selected' : ''}" 
+           data-value="${cultivar}" 
+           role="option"
+           aria-selected="${cultivar === selectedValue}">
+        ${cultivar}
+      </div>
+    `
+    )
+    .join('');
+}
+
+/**
+ * Initialize custom dropdown behavior
+ */
+function initCustomDropdown(dropdown) {
+  const trigger = dropdown.querySelector('.custom-select-trigger');
+  const menu = dropdown.querySelector('.custom-select-menu');
+  const searchInput = dropdown.querySelector('.custom-select-search-input');
+  const optionsContainer = dropdown.querySelector('.custom-select-options');
+  const valueDisplay = dropdown.querySelector('.custom-select-value');
+  const hiddenInput = dropdown.querySelector('input[type="hidden"]');
+
+  // Toggle dropdown on trigger click
+  registerListener(trigger, 'click', (e) => {
+    e.stopPropagation();
+    const isOpen = dropdown.classList.contains('open');
+    closeAllCustomDropdowns();
+    if (!isOpen) {
+      dropdown.classList.add('open');
+      trigger.setAttribute('aria-expanded', 'true');
+      searchInput.value = '';
+      renderCustomDropdownOptions(dropdown, customDropdownCultivars, hiddenInput.value);
+      setTimeout(() => searchInput.focus(), 50);
+    }
   });
 
-  select.value = currentValue;
+  // Filter on search input
+  registerListener(searchInput, 'input', () => {
+    renderCustomDropdownOptions(dropdown, customDropdownCultivars, hiddenInput.value, searchInput.value);
+  });
 
-  // Update has-selection class based on current value
-  select.classList.toggle('has-selection', !!select.value);
+  // Prevent menu clicks from closing
+  registerListener(menu, 'click', (e) => {
+    e.stopPropagation();
+  });
 
-  // Add change listener for selection state styling
-  if (!select.dataset.listenerAdded) {
-    registerListener(select, 'change', () => {
-      select.classList.toggle('has-selection', !!select.value);
-    });
-    select.dataset.listenerAdded = 'true';
-  }
+  // Handle option selection
+  registerListener(optionsContainer, 'click', (e) => {
+    const option = e.target.closest('.custom-select-option');
+    if (!option) return;
+
+    const value = option.dataset.value;
+    selectCustomDropdownValue(dropdown, value);
+    closeAllCustomDropdowns();
+  });
+
+  // Close on outside click
+  registerListener(document, 'click', () => {
+    closeAllCustomDropdowns();
+  });
+
+  // Close on escape
+  registerListener(document, 'keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeAllCustomDropdowns();
+    }
+  });
+}
+
+/**
+ * Select a value in the custom dropdown
+ */
+function selectCustomDropdownValue(dropdown, value) {
+  const valueDisplay = dropdown.querySelector('.custom-select-value');
+  const hiddenInput = dropdown.querySelector('input[type="hidden"]');
+
+  hiddenInput.value = value;
+  valueDisplay.textContent = value || LABELS[currentLang].selectStrain || 'Select strain...';
+  valueDisplay.classList.toggle('placeholder', !value);
+  dropdown.classList.toggle('has-selection', !!value);
+
+  // Dispatch change event on hidden input
+  hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+/**
+ * Close all custom dropdowns
+ */
+function closeAllCustomDropdowns() {
+  document.querySelectorAll('.custom-select.open').forEach((dropdown) => {
+    dropdown.classList.remove('open');
+    const trigger = dropdown.querySelector('.custom-select-trigger');
+    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+  });
 }
 
 /**
