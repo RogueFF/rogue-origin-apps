@@ -2373,7 +2373,7 @@ function getWorkingSecondsSince(startTime) {
 function initBagTimer() {
   loadBagTimerData(); // Initial full load
   // Smart polling: check version every 5 seconds, only fetch data if changed
-  bagTimerInterval = setInterval(checkBagTimerVersion, 10000);
+  bagTimerInterval = setInterval(checkBagTimerVersion, 3000);
   // Update countdown every second
   bagTimerTickInterval = setInterval(updateBagTimerTick, 1000);
 }
