@@ -617,6 +617,273 @@ body {
   color: var(--error);
 }
 
+/* Pool Type Toggle */
+.pool-type-toggle {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+  margin-bottom: 8px;
+}
+
+.pool-type-btn {
+  flex: 1;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pool-type-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.pool-type-btn.active {
+  background: var(--green);
+  color: white;
+  box-shadow: 0 2px 8px rgba(102, 137, 113, 0.3);
+}
+
+/* Current Pool Display */
+.current-pool-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px;
+  background: rgba(102, 137, 113, 0.1);
+  border: 1px solid var(--green);
+  border-radius: 8px;
+  margin-top: 8px;
+}
+
+.current-pool-display .pool-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.current-pool-display .pool-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--green-bright);
+}
+
+.current-pool-display .pool-unit {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+/* Operation Selector */
+.operation-selector {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.operation-btn {
+  flex: 1;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.operation-btn:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.operation-btn.active {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: var(--bg-dark);
+  box-shadow: 0 2px 6px rgba(228, 170, 79, 0.3);
+}
+
+/* Pool Note Input */
+.pool-note-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: 'Outfit', system-ui, sans-serif;
+}
+
+.pool-note-input:focus {
+  outline: none;
+  border-color: var(--gold);
+  background: rgba(228, 170, 79, 0.05);
+}
+
+.pool-note-input::placeholder {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* Pool Update Result */
+.pool-update-result {
+  padding: 12px;
+  background: rgba(102, 137, 113, 0.1);
+  border: 1px solid var(--green);
+  border-radius: 8px;
+  margin-top: 8px;
+}
+
+.pool-update-result .result-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 14px;
+}
+
+.pool-update-result .result-row + .result-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.pool-update-result .result-row span:first-child {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.pool-update-result .result-row span:last-child {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pool-update-result .result-row.change span:last-child {
+  color: var(--gold);
+  font-size: 16px;
+}
+
+.pool-update-result .result-row.new span:last-child {
+  color: var(--green-bright);
+  font-size: 18px;
+}
+
+/* Recent Changes Section */
+.recent-changes-section {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.section-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.refresh-btn {
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.refresh-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  transform: rotate(90deg);
+}
+
+.recent-changes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.no-changes {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-style: italic;
+}
+
+.change-entry {
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.change-entry-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.change-entry-product {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.change-entry-timestamp {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.change-entry-details {
+  display: flex;
+  gap: 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.change-entry-action {
+  padding: 2px 6px;
+  background: rgba(228, 170, 79, 0.2);
+  border-radius: 4px;
+  color: var(--gold);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.change-entry-action.add {
+  background: rgba(102, 137, 113, 0.2);
+  color: var(--green-bright);
+}
+
+.change-entry-action.subtract {
+  background: rgba(196, 92, 74, 0.2);
+  color: var(--error);
+}
+
+.change-entry-note {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+  font-style: italic;
+  font-size: 12px;
+}
+
 .card-barcode .card-content {
   display: flex;
   flex-direction: column;
@@ -663,12 +930,26 @@ body {
   box-shadow: 0 0 0 3px rgba(228, 170, 79, 0.2);
 }
 
+/* Dropdown option styling for dark theme */
+.barcode-select option {
+  background-color: #2d2d2d;
+  color: #e0e0e0;
+  padding: 12px;
+  font-size: 18px;
+}
+
+.barcode-select option:hover,
+.barcode-select option:checked {
+  background-color: rgba(102, 137, 113, 0.3);
+  color: var(--green-bright);
+}
+
 /* Strain selected state */
 .barcode-select.has-selection {
   background-color: rgba(102, 137, 113, 0.15);
   border-left-color: var(--green);
   border-color: var(--green);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23668971' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2020/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23668971' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
 }
 
 .barcode-buttons {
