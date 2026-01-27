@@ -15,6 +15,7 @@
   var Render = window.ScoreboardRender;
   var Chart = window.ScoreboardChart;
   var Cycle = window.ScoreboardCycle;
+  var Scale = window.ScoreboardScale;
 
   /**
    * Update the clock display
@@ -268,6 +269,11 @@
     // Initial cycle history render
     if (Cycle && Cycle.renderCycleHistory) {
       Cycle.renderCycleHistory();
+    }
+
+    // Initialize scale module (1-second polling for live weight)
+    if (Scale && Scale.init) {
+      Scale.init();
     }
 
     console.log('Scoreboard initialized successfully');

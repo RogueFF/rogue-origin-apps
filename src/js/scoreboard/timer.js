@@ -535,13 +535,33 @@
   }
 
   /**
+   * Sanitizes pause reason input to prevent XSS attacks
+   */
+  function sanitizePauseReason(reason) {
+    if (!reason) return '';
+    // Remove HTML tags
+    let sanitized = reason.replace(/<[^>]*>/g, '');
+    // Remove potential script injections
+    sanitized = sanitized.replace(/javascript:/gi, '');
+    sanitized = sanitized.replace(/on\w+=/gi, '');
+    // Limit length to 200 characters
+    return sanitized.slice(0, 200).trim();
+  }
+
+  /**
    * Handles custom pause reason input
    */
   function onCustomReasonInput() {
     var customInput = DOM ? DOM.get('pauseCustomReason') : document.getElementById('pauseCustomReason');
     if (!customInput) return;
 
-    var customReason = customInput.value.trim();
+    var rawValue = customInput.value;
+    var customReason = sanitizePauseReason(rawValue);
+
+    // Always update input with sanitized value (clears malicious content visually)
+    if (rawValue !== customReason) {
+      customInput.value = customReason;
+    }
 
     if (customReason) {
       var reasonBtns = document.querySelectorAll('.pause-reason-btn');
@@ -593,7 +613,8 @@
 
     // Start counting pause time
     updatePauseTimer();
-    State.pauseInterval = setInterval(updatePauseTimer, 1000);
+    // Use State.registerInterval for proper cleanup on page unload
+    State.pauseInterval = State.registerInterval ? State.registerInterval(updatePauseTimer, 1000) : setInterval(updatePauseTimer, 1000);
 
     // Log to Google Sheets
     logPauseToSheet();
@@ -743,7 +764,8 @@
         // Start counting pause time (if not already)
         if (!State.pauseInterval) {
           updatePauseTimer();
-          State.pauseInterval = setInterval(updatePauseTimer, 1000);
+          // Use State.registerInterval for proper cleanup on page unload
+          State.pauseInterval = State.registerInterval ? State.registerInterval(updatePauseTimer, 1000) : setInterval(updatePauseTimer, 1000);
         }
       }
     }
