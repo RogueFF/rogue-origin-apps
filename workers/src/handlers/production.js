@@ -335,9 +335,11 @@ async function getScoreboardData(env) {
     lastHourLbs: 0,
     lastHourTarget: 0,
     lastHourTrimmers: 0,
+    lastHourBuckers: 0,
     lastTimeSlot: '',
     lastHourMultiplier: 1.0,
     currentHourTrimmers: 0,
+    currentHourBuckers: 0,
     currentHourTarget: 0,
     currentTimeSlot: '',
     currentHourMultiplier: 1.0,
@@ -375,6 +377,7 @@ async function getScoreboardData(env) {
     const timeSlot = row[0] || '';
     const tops1 = parseFloat(row[cols.tops1]) || 0;
     const tr1 = parseFloat(row[cols.trimmers1]) || 0;
+    const bk1 = parseFloat(row[cols.buckers1]) || 0;
     const cv1 = row[cols.cultivar1] || '';
     const multiplier = getTimeSlotMultiplier(timeSlot);
 
@@ -382,6 +385,7 @@ async function getScoreboardData(env) {
       timeSlot,
       tops: tops1,
       trimmers: tr1,
+      buckers: bk1,
       strain: cv1,
       multiplier,
     });
@@ -438,6 +442,7 @@ async function getScoreboardData(env) {
     const lastRow = todayRows[lastCompletedHourIndex];
     result.lastHourLbs = lastRow.tops;
     result.lastHourTrimmers = lastRow.trimmers;
+    result.lastHourBuckers = lastRow.buckers || 0;
     result.lastHourMultiplier = lastRow.multiplier;
     result.lastHourTarget = lastRow.trimmers * targetRate * lastRow.multiplier;
     result.lastTimeSlot = lastRow.timeSlot;
@@ -447,6 +452,7 @@ async function getScoreboardData(env) {
   if (currentHourIndex >= 0) {
     const currentRow = todayRows[currentHourIndex];
     result.currentHourTrimmers = currentRow.trimmers;
+    result.currentHourBuckers = currentRow.buckers || 0;
     result.currentHourMultiplier = currentRow.multiplier;
     result.currentHourTarget = currentRow.trimmers * targetRate * currentRow.multiplier;
     result.currentTimeSlot = currentRow.timeSlot;
@@ -592,9 +598,11 @@ async function getScoreboardDataFromD1(env) {
     lastHourLbs: 0,
     lastHourTarget: 0,
     lastHourTrimmers: 0,
+    lastHourBuckers: 0,
     lastTimeSlot: '',
     lastHourMultiplier: 1.0,
     currentHourTrimmers: 0,
+    currentHourBuckers: 0,
     currentHourTarget: 0,
     currentTimeSlot: '',
     currentHourMultiplier: 1.0,
