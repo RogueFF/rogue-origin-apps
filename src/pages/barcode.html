@@ -24,18 +24,22 @@
   <!-- Google Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
 
-  <!-- Scripts: Deferred for faster initial render -->
-  <script defer src="https://unpkg.com/@phosphor-icons/web"></script>
-  <!-- Performance: CSS Preloading -->
+  <!-- Scripts: Lazy loaded when needed -->
+  <!-- Phosphor Icons loaded on-demand -->
+  
+  <!-- Critical CSS: Loaded synchronously -->
   <link rel="stylesheet" href="../css/shared-base.css">
-  <link rel="preload" href="../css/barcode.css" as="style">
-  <link rel="stylesheet" href="../css/barcode.css">
+  
+  <!-- Non-critical CSS: Deferred for faster initial render -->
+  <link rel="preload" href="../css/barcode.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/barcode.css"></noscript>
 </head>
 <body>
+  <a href="#message" class="skip-link">Skip to main content</a>
   <div class="container">
     <!-- Header -->
     <div class="header">
-      <img src="../assets/ro-logo-horizontal.png" alt="Rogue Origin" class="logo">
+      <img src="../assets/ro-logo-horizontal.png" alt="Rogue Origin" class="logo" loading="eager" width="150" height="40">
       <div class="subtitle"><i class="ph-duotone ph-tag" style="margin-right:6px"></i> <span data-i18n="labelPrinter">Label Printer</span></div>
       <div style="display:flex;gap:8px;margin-top:10px;justify-content:center">
         <button id="langBtn" class="outline" onclick="toggleLang()" aria-label="Toggle language" style="padding:8px 12px;font-size:12px"><i class="ph ph-translate"></i> <span id="langText">Español</span></button>
