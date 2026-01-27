@@ -17,6 +17,8 @@
  * - POST ?action=chat              - AI agent chat
  * - POST ?action=tts               - Text-to-speech
  * - POST ?action=webhook           - Shopify inventory webhook (dual-write D1 + Sheets)
+ * - GET  ?action=scaleWeight       - Get live scale weight
+ * - POST ?action=scaleWeight       - Update scale weight (from station PC)
  */
 
 import { readSheet, appendSheet, writeSheet, getSheetNames } from '../lib/sheets.js';
@@ -28,11 +30,18 @@ import { insert } from '../lib/db.js';
 const AI_MODEL = 'claude-sonnet-4-20250514';
 const TIMEZONE = 'America/Los_Angeles';
 
-// In-memory cache for scoreboard (reduces Google Sheets API calls)
+// ===== FEATURE FLAGS =====
+// When true, D1 is the source of truth for production data
+// When false, Google Sheets is the source of truth (legacy)
+const USE_D1_PRODUCTION = true;
+
+// Short in-memory cache to reduce Google Sheets API calls
+// Note: Each edge node has its own cache, but 5s TTL is short enough
+// that stale data is acceptable (smart polling checks version every 5s anyway)
 const scoreboardCache = {
   data: null,
   timestamp: 0,
-  TTL: 30000, // 30 seconds (smart polling handles freshness via version check)
+  TTL: 5000, // 5 seconds - matches smart polling interval
 };
 
 // ===== VERSION TRACKING FOR SMART POLLING =====
@@ -55,6 +64,7 @@ async function getDataVersion(env) {
 
 /**
  * Increment data version in D1 (call when data changes)
+ * Also invalidates scoreboard cache so next request gets fresh data
  */
 async function incrementDataVersion(env) {
   try {
@@ -62,6 +72,10 @@ async function incrementDataVersion(env) {
       `INSERT INTO data_version (key, version, updated_at) VALUES ('scoreboard', 1, datetime('now'))
        ON CONFLICT(key) DO UPDATE SET version = version + 1, updated_at = datetime('now')`
     ).run();
+
+    // Invalidate scoreboard cache so next request fetches fresh data
+    scoreboardCache.data = null;
+    scoreboardCache.timestamp = 0;
   } catch (error) {
     console.error('Error incrementing data version:', error);
   }
@@ -561,10 +575,277 @@ function calculateDailyProjection(todayRows, lastCompletedHourIndex, currentHour
   };
 }
 
+// ===== D1 SCOREBOARD DATA (Primary Source) =====
+
+/**
+ * Get scoreboard data from D1 database (primary source of truth)
+ * Queries monthly_production table for today's hourly data
+ */
+async function getScoreboardDataFromD1(env) {
+  const result = {
+    lastHourLbs: 0,
+    lastHourTarget: 0,
+    lastHourTrimmers: 0,
+    lastTimeSlot: '',
+    lastHourMultiplier: 1.0,
+    currentHourTrimmers: 0,
+    currentHourTarget: 0,
+    currentTimeSlot: '',
+    currentHourMultiplier: 1.0,
+    targetRate: 0,
+    strain: '',
+    todayLbs: 0,
+    todayTarget: 0,
+    todayPercentage: 0,
+    hoursLogged: 0,
+    effectiveHours: 0,
+    avgPercentage: 0,
+    bestPercentage: 0,
+    avgDelta: 0,
+    bestDelta: 0,
+    streak: 0,
+    hourlyRates: [],
+  };
+
+  try {
+    // Get today's date in PT timezone
+    const today = formatDatePT(new Date(), 'yyyy-MM-dd');
+
+    // Query today's production data from D1
+    const rows = await env.DB.prepare(`
+      SELECT time_slot,
+             trimmers_line1, trimmers_line2,
+             tops_lbs1, tops_lbs2, smalls_lbs1, smalls_lbs2,
+             cultivar1, cultivar2
+      FROM monthly_production
+      WHERE production_date = ?
+      ORDER BY time_slot
+    `).bind(today).all();
+
+    if (!rows.results || rows.results.length === 0) {
+      // No data today - try to get target rate from historical data
+      const targetRate = await getHistoricalTargetRateFromD1(env, 7);
+      result.targetRate = targetRate || 1.0;
+      return result;
+    }
+
+    // Build todayRows array (same structure as Sheets version)
+    const todayRows = rows.results.map(row => {
+      const trimmers = (row.trimmers_line1 || 0) + (row.trimmers_line2 || 0);
+      const tops = (row.tops_lbs1 || 0) + (row.tops_lbs2 || 0);
+      const strain = row.cultivar1 || row.cultivar2 || '';
+      const multiplier = getTimeSlotMultiplier(row.time_slot);
+
+      return {
+        timeSlot: row.time_slot,
+        tops,
+        trimmers,
+        strain,
+        multiplier,
+      };
+    });
+
+    // Find last completed and current hour
+    let lastCompletedHourIndex = -1;
+    let currentHourIndex = -1;
+
+    for (let i = 0; i < todayRows.length; i++) {
+      const row = todayRows[i];
+      if (row.tops > 0) {
+        lastCompletedHourIndex = i;
+      } else if (row.trimmers > 0 && row.tops === 0) {
+        currentHourIndex = i;
+      }
+    }
+
+    // Determine active strain
+    let activeStrain = '';
+    if (currentHourIndex >= 0 && todayRows[currentHourIndex].strain) {
+      activeStrain = todayRows[currentHourIndex].strain;
+    } else if (lastCompletedHourIndex >= 0 && todayRows[lastCompletedHourIndex].strain) {
+      activeStrain = todayRows[lastCompletedHourIndex].strain;
+    }
+    result.strain = activeStrain;
+
+    // Get target rate from historical D1 data (7-day average)
+    const targetRate = await getHistoricalTargetRateFromD1(env, 7) || 1.0;
+    result.targetRate = targetRate;
+
+    // Calculate totals
+    let totalLbs = 0;
+    let hoursWorked = 0;
+    let effectiveHours = 0;
+
+    for (let i = 0; i <= lastCompletedHourIndex && i < todayRows.length; i++) {
+      const row = todayRows[i];
+      if (row.tops > 0 && row.trimmers > 0) {
+        totalLbs += row.tops;
+        hoursWorked++;
+        effectiveHours += row.multiplier;
+      }
+    }
+
+    // Last completed hour
+    if (lastCompletedHourIndex >= 0) {
+      const lastRow = todayRows[lastCompletedHourIndex];
+      result.lastHourLbs = lastRow.tops;
+      result.lastHourTrimmers = lastRow.trimmers;
+      result.lastHourMultiplier = lastRow.multiplier;
+      result.lastHourTarget = lastRow.trimmers * targetRate * lastRow.multiplier;
+      result.lastTimeSlot = lastRow.timeSlot;
+    }
+
+    // Current hour
+    if (currentHourIndex >= 0) {
+      const currentRow = todayRows[currentHourIndex];
+      result.currentHourTrimmers = currentRow.trimmers;
+      result.currentHourMultiplier = currentRow.multiplier;
+      result.currentHourTarget = currentRow.trimmers * targetRate * currentRow.multiplier;
+      result.currentTimeSlot = currentRow.timeSlot;
+    }
+
+    result.todayLbs = totalLbs;
+    result.hoursLogged = hoursWorked;
+    result.effectiveHours = effectiveHours;
+
+    // Calculate metrics
+    let totalTarget = 0;
+    const hourlyPercentages = [];
+    const hourlyDeltas = [];
+    const hourlyRates = [];
+    let bestPct = 0;
+    let bestDelta = null;
+    let streak = 0;
+    let currentStreak = 0;
+
+    for (let i = 0; i <= lastCompletedHourIndex && i < todayRows.length; i++) {
+      const row = todayRows[i];
+      if (row.trimmers > 0 && row.tops > 0) {
+        const hourTarget = row.trimmers * targetRate * row.multiplier;
+        totalTarget += hourTarget;
+
+        const pct = hourTarget > 0 ? (row.tops / hourTarget) * 100 : 0;
+        const delta = row.tops - hourTarget;
+        hourlyPercentages.push(pct);
+        hourlyDeltas.push(delta);
+        if (pct > bestPct) {
+          bestPct = pct;
+          bestDelta = delta;
+        }
+
+        if (pct >= 90) {
+          currentStreak++;
+          streak = currentStreak;
+        } else {
+          currentStreak = 0;
+        }
+
+        const rate = (row.tops / row.trimmers) / row.multiplier;
+        hourlyRates.push({ timeSlot: row.timeSlot, rate, target: targetRate });
+      }
+    }
+
+    result.hourlyRates = hourlyRates;
+    result.todayTarget = totalTarget;
+    result.todayPercentage = totalTarget > 0 ? (totalLbs / totalTarget) * 100 : 0;
+    result.avgPercentage = hourlyPercentages.length > 0
+      ? hourlyPercentages.reduce((a, b) => a + b, 0) / hourlyPercentages.length
+      : 0;
+    result.avgDelta = hourlyDeltas.length > 0
+      ? hourlyDeltas.reduce((a, b) => a + b, 0) / hourlyDeltas.length
+      : 0;
+    result.bestPercentage = bestPct;
+    result.bestDelta = bestDelta !== null ? bestDelta : 0;
+    result.streak = streak;
+
+    // Daily projection (reuse same calculation)
+    const projection = calculateDailyProjection(todayRows, lastCompletedHourIndex, currentHourIndex, targetRate, totalLbs);
+    result.projectedTotal = projection.projectedTotal;
+    result.dailyGoal = projection.dailyGoal;
+
+    return result;
+  } catch (error) {
+    console.error('Error fetching scoreboard data from D1:', error);
+    return result;
+  }
+}
+
+/**
+ * Calculate historical target rate from D1 (average lbs per trimmer per hour)
+ * @param {number} days - Number of days to look back
+ */
+async function getHistoricalTargetRateFromD1(env, days = 7) {
+  try {
+    const result = await env.DB.prepare(`
+      SELECT
+        SUM(tops_lbs1 + tops_lbs2) as total_lbs,
+        SUM(
+          (trimmers_line1 *
+            CASE
+              WHEN time_slot LIKE '%12:30%' THEN 0.5
+              WHEN time_slot LIKE '%4:00 PM%' THEN 0.5
+              ELSE 1.0
+            END
+          ) +
+          (trimmers_line2 *
+            CASE
+              WHEN time_slot LIKE '%12:30%' THEN 0.5
+              WHEN time_slot LIKE '%4:00 PM%' THEN 0.5
+              ELSE 1.0
+            END
+          )
+        ) as total_trimmer_hours
+      FROM monthly_production
+      WHERE production_date >= date('now', '-' || ? || ' days')
+        AND (tops_lbs1 > 0 OR tops_lbs2 > 0)
+        AND (trimmers_line1 > 0 OR trimmers_line2 > 0)
+    `).bind(days).first();
+
+    if (result && result.total_lbs > 0 && result.total_trimmer_hours > 0) {
+      return result.total_lbs / result.total_trimmer_hours;
+    }
+    return 1.0; // Default fallback
+  } catch (error) {
+    console.error('Error calculating historical rate from D1:', error);
+    return 1.0;
+  }
+}
+
 // ===== BAG TIMER DATA =====
 
+// Blacklisted bag timestamps (test bags, accidentally scanned bags)
+// Format: { start: Date, end: Date } for ranges, or { exact: Date, tolerance: number } for single bags
+const BLACKLISTED_BAGS = [
+  // 8 accidentally scanned bags on 1/19/2026 12:34:14 - 12:38:04 Pacific
+  { start: new Date('2026-01-19T20:34:14Z'), end: new Date('2026-01-19T20:38:05Z') },
+  // Test bags from webhook testing on 1/23/2026 (keep 11:45 AM and 1:10 PM)
+  { exact: new Date('2026-01-23T21:01:22Z'), tolerance: 2000 }, // 1:01 PM - test
+  { exact: new Date('2026-01-23T21:28:36Z'), tolerance: 2000 }, // 1:28 PM - test
+  { exact: new Date('2026-01-23T21:31:40Z'), tolerance: 2000 }, // 1:31 PM - test
+  { exact: new Date('2026-01-23T21:35:11Z'), tolerance: 2000 }, // 1:35 PM - test
+];
+
+/**
+ * Check if a timestamp should be excluded (blacklisted test bag)
+ */
+function isBlacklistedBag(timestamp) {
+  for (const entry of BLACKLISTED_BAGS) {
+    if (entry.start && entry.end) {
+      // Range check
+      if (timestamp >= entry.start && timestamp <= entry.end) return true;
+    } else if (entry.exact) {
+      // Exact match with tolerance
+      if (Math.abs(timestamp.getTime() - entry.exact.getTime()) < entry.tolerance) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Get bag timer data from D1 (inventory_adjustments table)
+ * The webhook writes to D1, so we read directly from there for speed and reliability
+ */
 async function getBagTimerData(env) {
-  const sheetId = env.PRODUCTION_SHEET_ID;
   const result = {
     lastBagTime: null,
     secondsSinceLastBag: 0,
@@ -578,22 +859,14 @@ async function getBagTimerData(env) {
   };
 
   try {
-    const headerRow = await readSheet(sheetId, `'${SHEETS.tracking}'!1:1`, env);
-    if (!headerRow || !headerRow[0]) return result;
-
-    const headers = headerRow[0];
-    const timestampCol = headers.indexOf('Timestamp');
-    const sizeCol = headers.indexOf('Size');
-
-    if (timestampCol === -1 || sizeCol === -1) return result;
-
-    const vals = await readSheet(sheetId, `'${SHEETS.tracking}'!A2:J2001`, env);
-    if (!vals || vals.length === 0) return result;
-
-    const scoreboardData = await getScoreboardData(env);
+    // Get scoreboard data for trimmers and target rate (use D1 or Sheets based on flag)
+    const scoreboardData = USE_D1_PRODUCTION
+      ? await getScoreboardDataFromD1(env)
+      : await getScoreboardData(env);
     result.currentTrimmers = scoreboardData.currentHourTrimmers || scoreboardData.lastHourTrimmers || 0;
     result.targetRate = scoreboardData.targetRate || 1.0;
 
+    // Calculate target seconds based on team rate
     const bagWeightLbs = 11.0231;
     const teamRateLbsPerHour = result.currentTrimmers * result.targetRate;
     if (teamRateLbsPerHour > 0) {
@@ -603,80 +876,45 @@ async function getBagTimerData(env) {
     const today = formatDatePT(new Date(), 'yyyy-MM-dd');
     const now = new Date();
 
+    // Query D1 for today's 5kg bag adjustments
+    const rows = await env.DB.prepare(`
+      SELECT timestamp, size, flow_run_id
+      FROM inventory_adjustments
+      WHERE date(timestamp) = ?
+        AND (lower(size) LIKE '%5kg%' OR lower(size) LIKE '%5 kg%')
+      ORDER BY timestamp ASC
+    `).bind(today).all();
+
+    if (!rows.results || rows.results.length === 0) {
+      return result;
+    }
+
     const todayBags = [];
     let lastBag = null;
-    let bags5kg = 0;
 
-    for (const row of vals) {
-      const timestamp = row[timestampCol];
-      if (!timestamp) continue;
-
-      let rowDate;
-      if (typeof timestamp === 'string') {
-        let cleanTimestamp = timestamp.trim();
-
-        // Check for US date format: "M/D/YYYY H:M:S" or "M/D/YYYY H:M:S AM/PM"
-        const usDatePattern = /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i;
-        const usDateMatch = cleanTimestamp.match(usDatePattern);
-        if (usDateMatch) {
-          const [, month, day, year, hourStr, min, sec, ampm] = usDateMatch;
-          let hours = parseInt(hourStr, 10);
-
-          if (ampm) {
-            if (ampm.toUpperCase() === 'PM' && hours !== 12) hours += 12;
-            if (ampm.toUpperCase() === 'AM' && hours === 12) hours = 0;
-          }
-
-          // Build ISO format with Pacific timezone
-          const isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${String(hours).padStart(2, '0')}:${min}:${sec || '00'}-08:00`;
-          cleanTimestamp = isoDate;
-        }
-
-        rowDate = new Date(cleanTimestamp);
-      } else if (typeof timestamp === 'number') {
-        if (timestamp < 1) {
-          // Time-only serial (fraction of day)
-          const hours = Math.floor(timestamp * 24);
-          const minutes = Math.floor((timestamp * 24 - hours) * 60);
-          const timeStr = `${today}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00-08:00`;
-          rowDate = new Date(timeStr);
-        } else {
-          // Full date serial (days since 1900)
-          rowDate = new Date((timestamp - 25569) * 86400 * 1000);
-        }
-      } else {
-        rowDate = new Date(timestamp);
-      }
-
+    for (const row of rows.results) {
+      const rowDate = new Date(row.timestamp);
       if (isNaN(rowDate.getTime())) continue;
 
-      // Skip accidentally scanned bags (1/19/2026 12:34:14 - 12:38:04 Pacific)
-      // These 8 bags were scanned in error
-      const badBagStart = new Date('2026-01-19T20:34:14Z'); // 12:34:14 Pacific
-      const badBagEnd = new Date('2026-01-19T20:38:05Z');   // 12:38:04 Pacific + 1 sec
-      if (rowDate >= badBagStart && rowDate <= badBagEnd) continue;
+      // Skip blacklisted bags (test scans, accidental scans)
+      if (isBlacklistedBag(rowDate)) continue;
 
-      const rowDateStr = formatDatePT(rowDate, 'yyyy-MM-dd');
-      const size = String(row[sizeCol] || '').toLowerCase();
+      todayBags.push(rowDate);
 
-      if (rowDateStr === today && is5kgBag(size)) {
-        bags5kg++;
-        todayBags.push(rowDate);
-      }
-
-      if (!lastBag || rowDate > lastBag.time) {
-        lastBag = { time: rowDate, size };
+      if (!lastBag || rowDate > lastBag) {
+        lastBag = rowDate;
       }
     }
 
-    result.bagsToday = bags5kg;
-    result.bags5kgToday = bags5kg;
+    result.bagsToday = todayBags.length;
+    result.bags5kgToday = todayBags.length;
 
     if (lastBag) {
-      result.lastBagTime = lastBag.time.toISOString();
-      result.secondsSinceLastBag = Math.floor((now - lastBag.time) / 1000);
+      result.lastBagTime = lastBag.toISOString();
+      result.secondsSinceLastBag = Math.floor((now - lastBag) / 1000);
     }
 
+    // Calculate average cycle time
     if (todayBags.length > 1) {
       todayBags.sort((a, b) => a - b);
       const cycleTimes = [];
@@ -685,6 +923,7 @@ async function getBagTimerData(env) {
         // Subtract any break time that falls within this cycle
         const breakMinutes = getBreakMinutesInWindow(todayBags[i - 1], todayBags[i]);
         const diffSec = rawDiffSec - (breakMinutes * 60);
+        // Valid cycle: 5 min to 4 hours
         if (diffSec >= 300 && diffSec <= 14400) {
           cycleTimes.push(diffSec);
         }
@@ -694,13 +933,15 @@ async function getBagTimerData(env) {
       }
     }
 
+    // Build cycle history (most recent first, up to 20 cycles)
     if (todayBags.length > 1) {
-      todayBags.sort((a, b) => b - a);
+      todayBags.sort((a, b) => b - a); // Sort descending (newest first)
       for (let i = 0; i < Math.min(todayBags.length - 1, 20); i++) {
         const rawCycleSec = Math.floor((todayBags[i] - todayBags[i + 1]) / 1000);
         // Subtract any break time that falls within this cycle
         const breakMinutes = getBreakMinutesInWindow(todayBags[i + 1], todayBags[i]);
         const cycleSec = rawCycleSec - (breakMinutes * 60);
+        // Valid cycle: 5 min to 4 hours
         if (cycleSec >= 300 && cycleSec <= 14400) {
           result.cycleHistory.push({
             timestamp: todayBags[i].toISOString(),
@@ -713,7 +954,7 @@ async function getBagTimerData(env) {
     }
 
   } catch (error) {
-    console.error('Error getting bag timer data:', error.message);
+    console.error('Error getting bag timer data from D1:', error.message);
   }
 
   return result;
@@ -820,6 +1061,94 @@ async function getExtendedDailyData(days, env) {
   return Object.values(dailyMap).sort((a, b) => a.date - b.date);
 }
 
+/**
+ * Get extended daily production data from D1
+ * @param {number} days - Number of days to retrieve
+ * @param {object} env - Environment with DB binding
+ * @returns {Array} Daily production data
+ */
+async function getExtendedDailyDataFromD1(days, env) {
+  try {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    const cutoffStr = formatDatePT(cutoffDate, 'yyyy-MM-dd');
+
+    // Query all hourly slots for the last N days
+    const rows = await env.DB.prepare(`
+      SELECT
+        production_date,
+        time_slot,
+        trimmers_line1,
+        trimmers_line2,
+        tops_lbs1,
+        smalls_lbs1,
+        tops_lbs2,
+        smalls_lbs2
+      FROM monthly_production
+      WHERE production_date >= ?
+      ORDER BY production_date, time_slot
+    `).bind(cutoffStr).all();
+
+    if (!rows.results || rows.results.length === 0) {
+      return [];
+    }
+
+    // Aggregate by day
+    const dailyMap = {};
+
+    for (const row of rows.results) {
+      const dateKey = row.production_date;
+
+      if (!dailyMap[dateKey]) {
+        dailyMap[dateKey] = {
+          date: new Date(dateKey + 'T12:00:00'),
+          totalTops: 0,
+          totalSmalls: 0,
+          totalTrimmerHours: 0,
+          bestHour: null,
+        };
+      }
+
+      const dayData = dailyMap[dateKey];
+      const tops = (row.tops_lbs1 || 0) + (row.tops_lbs2 || 0);
+      const smalls = (row.smalls_lbs1 || 0) + (row.smalls_lbs2 || 0);
+      const trimmers = (row.trimmers_line1 || 0) + (row.trimmers_line2 || 0);
+
+      dayData.totalTops += tops;
+      dayData.totalSmalls += smalls;
+      dayData.totalTrimmerHours += trimmers;
+
+      // Track best hour (highest lbs/trimmer rate)
+      if (trimmers > 0 && tops > 0) {
+        const hourRate = tops / trimmers;
+        if (!dayData.bestHour || hourRate > dayData.bestHour.rate) {
+          dayData.bestHour = {
+            time: row.time_slot.split('–')[0].trim() || row.time_slot.split('-')[0].trim(),
+            lbs: Math.round(tops * 10) / 10,
+            rate: Math.round(hourRate * 100) / 100,
+          };
+        }
+      }
+    }
+
+    // Calculate final metrics and return sorted array
+    return Object.values(dailyMap)
+      .map(day => ({
+        date: day.date,
+        totalTops: day.totalTops,
+        totalSmalls: day.totalSmalls,
+        avgRate: day.totalTrimmerHours > 0 ? day.totalTops / day.totalTrimmerHours : 0,
+        totalLbs: day.totalTops + day.totalSmalls,
+        trimmerHours: day.totalTrimmerHours,
+        bestHour: day.bestHour,
+      }))
+      .sort((a, b) => a.date - b.date);
+  } catch (error) {
+    console.error('Error getting extended daily data from D1:', error);
+    return [];
+  }
+}
+
 // ===== API HANDLERS =====
 
 async function test(env) {
@@ -843,14 +1172,16 @@ async function version(env) {
 }
 
 async function scoreboard(env) {
-  // Check cache first to reduce Google Sheets API calls
+  // Check cache first to reduce API calls
   const now = Date.now();
   if (scoreboardCache.data && (now - scoreboardCache.timestamp) < scoreboardCache.TTL) {
     return successResponse(scoreboardCache.data);
   }
 
-  // Fetch fresh data (pause state included - it's refreshed when version changes)
-  const scoreboardData = await getScoreboardData(env);
+  // Fetch fresh data - use D1 or Sheets based on feature flag
+  const scoreboardData = USE_D1_PRODUCTION
+    ? await getScoreboardDataFromD1(env)
+    : await getScoreboardData(env);
   const timerData = await getBagTimerData(env);
   const pauseState = await getActivePause(env);
 
@@ -858,6 +1189,7 @@ async function scoreboard(env) {
     scoreboard: scoreboardData,
     timer: timerData,
     pause: pauseState,
+    source: USE_D1_PRODUCTION ? 'D1' : 'Sheets',
   };
 
   // Update cache (includes pause state - refreshed when data version changes)
@@ -879,9 +1211,13 @@ async function dashboard(params, env) {
   }
 
   const today = formatDatePT(new Date(), 'yyyy-MM-dd');
-  const scoreboardData = await getScoreboardData(env);
+  const scoreboardData = USE_D1_PRODUCTION
+    ? await getScoreboardDataFromD1(env)
+    : await getScoreboardData(env);
   const timerData = await getBagTimerData(env);
-  const dailyData = await getExtendedDailyData(30, env);
+  const dailyData = USE_D1_PRODUCTION
+    ? await getExtendedDailyDataFromD1(30, env)
+    : await getExtendedDailyData(30, env);
 
   let filteredData = dailyData;
   let showingFallback = false;
@@ -1120,16 +1456,12 @@ async function morningReport(env) {
 }
 
 /**
- * Get bag counts and cycle times for recent weekdays (Mon-Fri only)
+ * Get bag counts and cycle times for recent weekdays from D1
  */
 async function getBagDataForDays(env, numDays) {
-  const sheetId = env.PRODUCTION_SHEET_ID;
   const result = { yesterday: null, dayBefore: null };
 
   try {
-    const vals = await readSheet(sheetId, `'${SHEETS.tracking}'!A:B`, env);
-    if (!vals || vals.length <= 1) return result;
-
     // Find the last two weekdays (skip weekends)
     const now = new Date();
     const lastWeekday = new Date(now);
@@ -1150,18 +1482,24 @@ async function getBagDataForDays(env, numDays) {
     const yesterdayStr = formatDatePT(lastWeekday, 'yyyy-MM-dd');
     const dayBeforeStr = formatDatePT(dayBeforeLastWeekday, 'yyyy-MM-dd');
 
+    // Query D1 for 5kg bags from both days
+    const rows = await env.DB.prepare(`
+      SELECT timestamp, size
+      FROM inventory_adjustments
+      WHERE date(timestamp) IN (?, ?)
+        AND (lower(size) LIKE '%5kg%' OR lower(size) LIKE '%5 kg%')
+      ORDER BY timestamp ASC
+    `).bind(yesterdayStr, dayBeforeStr).all();
+
     const yesterdayBags = [];
     const dayBeforeBags = [];
 
-    for (let i = 1; i < vals.length; i++) {
-      const row = vals[i];
-      if (!row[0]) continue;
-
-      const timestamp = new Date(row[0]);
+    for (const row of (rows.results || [])) {
+      const timestamp = new Date(row.timestamp);
       if (isNaN(timestamp.getTime())) continue;
 
-      const size = String(row[1] || '').toLowerCase();
-      if (!size.includes('5 kg')) continue;
+      // Skip blacklisted bags
+      if (isBlacklistedBag(timestamp)) continue;
 
       const dateStr = formatDatePT(timestamp, 'yyyy-MM-dd');
       if (dateStr === yesterdayStr) {
@@ -1171,12 +1509,14 @@ async function getBagDataForDays(env, numDays) {
       }
     }
 
-    // Calculate cycle times
+    // Calculate cycle times for yesterday
     if (yesterdayBags.length > 0) {
       yesterdayBags.sort((a, b) => a - b);
       const cycleTimes = [];
       for (let i = 1; i < yesterdayBags.length; i++) {
-        const diff = (yesterdayBags[i] - yesterdayBags[i - 1]) / 60000; // minutes
+        const rawDiff = (yesterdayBags[i] - yesterdayBags[i - 1]) / 60000; // minutes
+        const breakMinutes = getBreakMinutesInWindow(yesterdayBags[i - 1], yesterdayBags[i]);
+        const diff = rawDiff - breakMinutes;
         if (diff >= 5 && diff <= 240) cycleTimes.push(diff);
       }
       result.yesterday = {
@@ -1185,11 +1525,14 @@ async function getBagDataForDays(env, numDays) {
       };
     }
 
+    // Calculate cycle times for day before
     if (dayBeforeBags.length > 0) {
       dayBeforeBags.sort((a, b) => a - b);
       const cycleTimes = [];
       for (let i = 1; i < dayBeforeBags.length; i++) {
-        const diff = (dayBeforeBags[i] - dayBeforeBags[i - 1]) / 60000;
+        const rawDiff = (dayBeforeBags[i] - dayBeforeBags[i - 1]) / 60000;
+        const breakMinutes = getBreakMinutesInWindow(dayBeforeBags[i - 1], dayBeforeBags[i]);
+        const diff = rawDiff - breakMinutes;
         if (diff >= 5 && diff <= 240) cycleTimes.push(diff);
       }
       result.dayBefore = {
@@ -1198,7 +1541,7 @@ async function getBagDataForDays(env, numDays) {
       };
     }
   } catch (error) {
-    console.error('Error getting bag data:', error);
+    console.error('Error getting bag data from D1:', error);
   }
 
   return result;
@@ -1490,6 +1833,84 @@ async function tts(body, env) {
   return errorResponse('TTS failed', 'INTERNAL_ERROR', 500);
 }
 
+// ===== LIVE SCALE WEIGHT =====
+
+/**
+ * Get current scale weight from D1
+ * Returns weight, target, percentage, and stale status
+ */
+async function getScaleWeight(params, env) {
+  const stationId = params.stationId || 'line1';
+  const STALE_THRESHOLD_MS = 3000; // 3 seconds
+
+  try {
+    const result = await env.DB.prepare(
+      'SELECT weight, target_weight, updated_at FROM scale_readings WHERE station_id = ?'
+    ).bind(stationId).first();
+
+    if (!result) {
+      return successResponse({
+        weight: 0,
+        targetWeight: 5.0,
+        percentComplete: 0,
+        stationId,
+        updatedAt: null,
+        isStale: true,
+      });
+    }
+
+    const updatedAt = new Date(result.updated_at + 'Z');
+    const now = new Date();
+    const isStale = (now - updatedAt) > STALE_THRESHOLD_MS;
+    const percentComplete = result.target_weight > 0
+      ? Math.min(100, Math.round((result.weight / result.target_weight) * 100))
+      : 0;
+
+    return successResponse({
+      weight: result.weight,
+      targetWeight: result.target_weight,
+      percentComplete,
+      stationId,
+      updatedAt: updatedAt.toISOString(),
+      isStale,
+    });
+  } catch (error) {
+    console.error('Error getting scale weight:', error);
+    return errorResponse('Failed to get scale weight', 'INTERNAL_ERROR', 500);
+  }
+}
+
+/**
+ * Update scale weight from station PC
+ * Called every 500ms by the scale reader app
+ */
+async function setScaleWeight(body, env) {
+  const stationId = body.stationId || 'line1';
+  const weight = parseFloat(body.weight);
+
+  if (isNaN(weight) || weight < 0) {
+    return errorResponse('Invalid weight value', 'VALIDATION_ERROR', 400);
+  }
+
+  // Cap at reasonable max (10kg for safety)
+  const safeWeight = Math.min(weight, 10);
+
+  try {
+    await env.DB.prepare(
+      `INSERT INTO scale_readings (station_id, weight, updated_at)
+       VALUES (?, ?, datetime('now'))
+       ON CONFLICT(station_id) DO UPDATE SET
+         weight = excluded.weight,
+         updated_at = datetime('now')`
+    ).bind(stationId, safeWeight).run();
+
+    return successResponse({ success: true });
+  } catch (error) {
+    console.error('Error setting scale weight:', error);
+    return errorResponse('Failed to update scale weight', 'INTERNAL_ERROR', 500);
+  }
+}
+
 /**
  * Shopify Inventory Webhook Handler (Dual-Write)
  * Receives inventory adjustment webhooks from Shopify Flow
@@ -1526,7 +1947,37 @@ async function inventoryWebhook(body, env, request) {
   const productName = data['Product Name'] || data.product_name || product.title || '';
   const variantTitle = data['Variant Title'] || data.variant_title || variant.title || '';
   const strainName = data['Strain Name'] || data.strain_name || '';
-  const size = data.Size || data.size || '';
+
+  // Extract size - check explicit field, then infer from weight, then parse from title
+  let size = data.Size || data.size || '';
+  if (!size && variant.weight && variant.weight_unit) {
+    const weight = parseFloat(variant.weight);
+    const unit = String(variant.weight_unit).toLowerCase();
+    if (unit.includes('kilogram') || unit === 'kg') {
+      // Direct kg weight
+      if (Math.abs(weight - 5) < 0.25) {
+        size = '5kg';
+      } else {
+        size = `${weight}kg`;
+      }
+    } else if (unit.includes('pound') || unit === 'lb') {
+      // Handle common bag sizes in pounds
+      // 5kg ≈ 11.02 lbs, 10lb = 10 lbs
+      if (Math.abs(weight - 11) < 0.5) {
+        size = '5kg';  // 5kg bags (~11 lbs)
+      } else if (Math.abs(weight - 10) < 0.5) {
+        size = '10lb';  // 10lb bags
+      } else {
+        size = `${weight}lb`;  // Other sizes
+      }
+    }
+  }
+  // Fallback: check if variant title contains size
+  if (!size && variantTitle) {
+    const match = variantTitle.match(/(\d+)\s*kg/i);
+    if (match) size = `${match[1]}kg`;
+  }
+
   const quantityAdjusted = parseInt(data['Quantity Adjusted'] || data.quantity_adjusted || 0, 10);
   const newTotalAvailable = parseInt(data['New Total Available'] || data.new_total_available || inventory.available_quantity || 0, 10);
   const previousAvailable = parseInt(data['Previous Available'] || data.previous_available || 0, 10);
@@ -1667,8 +2118,135 @@ async function getCultivars(env) {
 /**
  * Get hourly production data for a specific date
  */
-async function getProduction(params, env) {
+/**
+ * Get production data from D1 for a specific date
+ */
+async function getProductionFromD1(date, env) {
+  try {
+    // Get historical target rate from D1
+    const targetRate = await getHistoricalTargetRateFromD1(env, 7) || 0.9;
+
+    // Query D1 for all time slots for this date
+    const rows = await env.DB.prepare(`
+      SELECT time_slot,
+             buckers_line1, trimmers_line1, tzero_line1,
+             buckers_line2, trimmers_line2, tzero_line2,
+             cultivar1, cultivar2,
+             tops_lbs1, smalls_lbs1, tops_lbs2, smalls_lbs2,
+             qc, notes
+      FROM monthly_production
+      WHERE production_date = ?
+      ORDER BY time_slot
+    `).bind(date).all();
+
+    const slots = {};
+    if (rows.results) {
+      for (const row of rows.results) {
+        slots[row.time_slot] = {
+          buckers1: row.buckers_line1 || 0,
+          trimmers1: row.trimmers_line1 || 0,
+          tzero1: row.tzero_line1 || 0,
+          cultivar1: row.cultivar1 || '',
+          tops1: row.tops_lbs1 || 0,
+          smalls1: row.smalls_lbs1 || 0,
+          buckers2: row.buckers_line2 || 0,
+          trimmers2: row.trimmers_line2 || 0,
+          tzero2: row.tzero_line2 || 0,
+          cultivar2: row.cultivar2 || '',
+          tops2: row.tops_lbs2 || 0,
+          smalls2: row.smalls_lbs2 || 0,
+          qcperson: row.qc || 0,
+          qcNotes: row.notes || '',
+        };
+      }
+    }
+
+    return { date, slots, targetRate, source: 'D1' };
+  } catch (error) {
+    console.error('Error getting production from D1:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get production data from Google Sheets for a specific date (legacy)
+ */
+async function getProductionFromSheets(date, env) {
   const sheetId = env.PRODUCTION_SHEET_ID;
+
+  // Determine which month sheet to use
+  const sheetMonth = date.substring(0, 7); // YYYY-MM
+  const sheetNames = await getSheetNames(sheetId, env);
+
+  // Check if the month sheet exists
+  const monthSheetExists = sheetNames.includes(sheetMonth);
+  if (!monthSheetExists) {
+    return { date, slots: {}, targetRate: 0.9 };
+  }
+
+  // Read the sheet data
+  const vals = await readSheet(sheetId, `'${sheetMonth}'!A:Z`, env);
+  if (!vals || vals.length === 0) {
+    return { date, slots: {}, targetRate: 0.9 };
+  }
+
+  // Parse date to match sheet format (MMMM dd, yyyy)
+  const dateObj = new Date(date + 'T12:00:00');
+  const dateLabel = dateObj.toLocaleDateString('en-US', {
+    timeZone: TIMEZONE,
+    month: 'long',
+    day: '2-digit',
+    year: 'numeric',
+  });
+
+  // Find the date row
+  const dateRowIndex = findDateRow(vals, dateLabel);
+  if (dateRowIndex === -1) {
+    return { date, slots: {}, targetRate: 0.9 };
+  }
+
+  // Get column indices from header row
+  const headerRowIndex = dateRowIndex + 1;
+  const headers = vals[headerRowIndex] || [];
+  const cols = getColumnIndices(headers);
+
+  // Get historical rate for target
+  const dailyData = await getExtendedDailyData(7, env);
+  const targetRate = dailyData.length > 0
+    ? dailyData.reduce((sum, d) => sum + (d.avgRate || 0), 0) / dailyData.length
+    : 0.9;
+
+  // Collect slot data
+  const slots = {};
+  for (let r = headerRowIndex + 1; r < vals.length; r++) {
+    const row = vals[r];
+    if (isEndOfBlock(row)) break;
+
+    const timeSlot = (row[0] || '').toString().trim();
+    if (!timeSlot) continue;
+
+    slots[timeSlot] = {
+      buckers1: parseFloat(row[cols.buckers1]) || 0,
+      trimmers1: parseFloat(row[cols.trimmers1]) || 0,
+      tzero1: parseFloat(row[cols.tzero1]) || 0,
+      cultivar1: row[cols.cultivar1] || '',
+      tops1: parseFloat(row[cols.tops1]) || 0,
+      smalls1: parseFloat(row[cols.smalls1]) || 0,
+      buckers2: parseFloat(row[cols.buckers2]) || 0,
+      trimmers2: parseFloat(row[cols.trimmers2]) || 0,
+      tzero2: parseFloat(row[cols.tzero2]) || 0,
+      cultivar2: row[cols.cultivar2] || '',
+      tops2: parseFloat(row[cols.tops2]) || 0,
+      smalls2: parseFloat(row[cols.smalls2]) || 0,
+      qcperson: parseFloat(row[cols.qcperson]) || 0,
+      qcNotes: row[cols.qcNotes] || '',
+    };
+  }
+
+  return { date, slots, targetRate };
+}
+
+async function getProduction(params, env) {
   const date = params.date || formatDatePT(new Date(), 'yyyy-MM-dd');
 
   if (!validateDate(date)) {
@@ -1676,81 +2254,12 @@ async function getProduction(params, env) {
   }
 
   try {
-    // Determine which month sheet to use
-    const sheetMonth = date.substring(0, 7); // YYYY-MM
-    const sheetNames = await getSheetNames(sheetId, env);
+    // Use D1 or Sheets based on feature flag
+    const result = USE_D1_PRODUCTION
+      ? await getProductionFromD1(date, env)
+      : await getProductionFromSheets(date, env);
 
-    // Check if the month sheet exists
-    const monthSheetExists = sheetNames.includes(sheetMonth);
-    if (!monthSheetExists) {
-      // Return empty data if no sheet for this month
-      return successResponse({
-        date,
-        slots: {},
-        targetRate: 0.9
-      });
-    }
-
-    // Read the sheet data
-    const vals = await readSheet(sheetId, `'${sheetMonth}'!A:Z`, env);
-    if (!vals || vals.length === 0) {
-      return successResponse({ date, slots: {}, targetRate: 0.9 });
-    }
-
-    // Parse date to match sheet format (MMMM dd, yyyy)
-    const dateObj = new Date(date + 'T12:00:00');
-    const dateLabel = dateObj.toLocaleDateString('en-US', {
-      timeZone: TIMEZONE,
-      month: 'long',
-      day: '2-digit',
-      year: 'numeric',
-    });
-
-    // Find the date row
-    const dateRowIndex = findDateRow(vals, dateLabel);
-    if (dateRowIndex === -1) {
-      return successResponse({ date, slots: {}, targetRate: 0.9 });
-    }
-
-    // Get column indices from header row
-    const headerRowIndex = dateRowIndex + 1;
-    const headers = vals[headerRowIndex] || [];
-    const cols = getColumnIndices(headers);
-
-    // Get historical rate for target
-    const dailyData = await getExtendedDailyData(7, env);
-    const targetRate = dailyData.length > 0
-      ? dailyData.reduce((sum, d) => sum + (d.avgRate || 0), 0) / dailyData.length
-      : 0.9;
-
-    // Collect slot data
-    const slots = {};
-    for (let r = headerRowIndex + 1; r < vals.length; r++) {
-      const row = vals[r];
-      if (isEndOfBlock(row)) break;
-
-      const timeSlot = (row[0] || '').toString().trim();
-      if (!timeSlot) continue;
-
-      slots[timeSlot] = {
-        buckers1: parseFloat(row[cols.buckers1]) || 0,
-        trimmers1: parseFloat(row[cols.trimmers1]) || 0,
-        tzero1: parseFloat(row[cols.tzero1]) || 0,
-        cultivar1: row[cols.cultivar1] || '',
-        tops1: parseFloat(row[cols.tops1]) || 0,
-        smalls1: parseFloat(row[cols.smalls1]) || 0,
-        buckers2: parseFloat(row[cols.buckers2]) || 0,
-        trimmers2: parseFloat(row[cols.trimmers2]) || 0,
-        tzero2: parseFloat(row[cols.tzero2]) || 0,
-        cultivar2: row[cols.cultivar2] || '',
-        tops2: parseFloat(row[cols.tops2]) || 0,
-        smalls2: parseFloat(row[cols.smalls2]) || 0,
-        qcperson: parseFloat(row[cols.qcperson]) || 0,  // Shared QC person count
-        qcNotes: row[cols.qcNotes] || '',
-      };
-    }
-
-    return successResponse({ date, slots, targetRate });
+    return successResponse(result);
   } catch (error) {
     console.error('Error getting production:', error);
     return errorResponse('Failed to get production data', 'INTERNAL_ERROR', 500);
@@ -1758,40 +2267,55 @@ async function getProduction(params, env) {
 }
 
 /**
- * Add/update hourly production data
- * Accepts flat fields: date, timeSlot, buckers1, trimmers1, etc.
+ * Add/update hourly production data to D1 (primary)
+ * Uses UPSERT pattern - inserts or updates based on date + time_slot unique constraint
  */
-async function addProduction(body, env) {
+async function addProductionToD1(date, timeSlot, data, env) {
+  try {
+    await env.DB.prepare(`
+      INSERT INTO monthly_production (
+        production_date, time_slot,
+        buckers_line1, trimmers_line1, tzero_line1,
+        buckers_line2, trimmers_line2, tzero_line2,
+        cultivar1, cultivar2,
+        tops_lbs1, smalls_lbs1, tops_lbs2, smalls_lbs2,
+        qc, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(production_date, time_slot) DO UPDATE SET
+        buckers_line1 = excluded.buckers_line1,
+        trimmers_line1 = excluded.trimmers_line1,
+        tzero_line1 = excluded.tzero_line1,
+        buckers_line2 = excluded.buckers_line2,
+        trimmers_line2 = excluded.trimmers_line2,
+        tzero_line2 = excluded.tzero_line2,
+        cultivar1 = excluded.cultivar1,
+        cultivar2 = excluded.cultivar2,
+        tops_lbs1 = excluded.tops_lbs1,
+        smalls_lbs1 = excluded.smalls_lbs1,
+        tops_lbs2 = excluded.tops_lbs2,
+        smalls_lbs2 = excluded.smalls_lbs2,
+        qc = excluded.qc,
+        notes = excluded.notes
+    `).bind(
+      date, timeSlot,
+      data.buckers1, data.trimmers1, data.tzero1,
+      data.buckers2, data.trimmers2, data.tzero2,
+      data.cultivar1, data.cultivar2,
+      data.tops1, data.smalls1, data.tops2, data.smalls2,
+      data.qcperson, data.qcNotes
+    ).run();
+    return { success: true };
+  } catch (error) {
+    console.error('Error writing to D1:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Add/update hourly production data to Google Sheets (backup)
+ */
+async function addProductionToSheets(date, timeSlot, data, env) {
   const sheetId = env.PRODUCTION_SHEET_ID;
-
-  const { date, timeSlot, buckers1, trimmers1, tzero1, cultivar1, tops1, smalls1,
-          buckers2, trimmers2, tzero2, cultivar2, tops2, smalls2, qcperson, qcNotes } = body;
-
-  if (!date || !timeSlot) {
-    return errorResponse('Missing required fields: date, timeSlot', 'VALIDATION_ERROR', 400);
-  }
-
-  if (!validateDate(date)) {
-    return errorResponse('Invalid date format', 'VALIDATION_ERROR', 400);
-  }
-
-  // Build data object from flat fields
-  const data = {
-    buckers1: buckers1 ?? 0,
-    trimmers1: trimmers1 ?? 0,
-    tzero1: tzero1 ?? 0,
-    cultivar1: cultivar1 ?? '',
-    tops1: tops1 ?? 0,
-    smalls1: smalls1 ?? 0,
-    buckers2: buckers2 ?? 0,
-    trimmers2: trimmers2 ?? 0,
-    tzero2: tzero2 ?? 0,
-    cultivar2: cultivar2 ?? '',
-    tops2: tops2 ?? 0,
-    smalls2: smalls2 ?? 0,
-    qcperson: qcperson ?? 0,  // Shared QC person count
-    qcNotes: qcNotes ?? '',
-  };
 
   try {
     // Determine which month sheet to use
@@ -1799,13 +2323,14 @@ async function addProduction(body, env) {
     const sheetNames = await getSheetNames(sheetId, env);
 
     if (!sheetNames.includes(sheetMonth)) {
-      return errorResponse(`Sheet for ${sheetMonth} does not exist`, 'NOT_FOUND', 404);
+      console.warn(`Sheet for ${sheetMonth} does not exist - skipping Sheets backup`);
+      return { success: false, error: 'Sheet not found' };
     }
 
     // Read the sheet data
     const vals = await readSheet(sheetId, `'${sheetMonth}'!A:Z`, env);
     if (!vals || vals.length === 0) {
-      return errorResponse('Sheet is empty', 'INTERNAL_ERROR', 500);
+      return { success: false, error: 'Sheet is empty' };
     }
 
     // Parse date to match sheet format
@@ -1820,7 +2345,7 @@ async function addProduction(body, env) {
     // Find the date row
     const dateRowIndex = findDateRow(vals, dateLabel);
     if (dateRowIndex === -1) {
-      return errorResponse(`No data block found for ${dateLabel}`, 'NOT_FOUND', 404);
+      return { success: false, error: `No data block found for ${dateLabel}` };
     }
 
     // Get header row and column indices
@@ -1845,7 +2370,7 @@ async function addProduction(body, env) {
     }
 
     if (targetRowIndex === -1) {
-      return errorResponse(`Time slot ${timeSlot} not found in date block`, 'NOT_FOUND', 404);
+      return { success: false, error: `Time slot ${timeSlot} not found` };
     }
 
     // Build updated row data
@@ -1876,6 +2401,61 @@ async function addProduction(body, env) {
     const range = `'${sheetMonth}'!A${targetRowIndex + 1}`;
     await writeSheet(sheetId, range, [newRow], env);
 
+    return { success: true };
+  } catch (error) {
+    console.error('Error writing to Sheets:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Add/update hourly production data
+ * Dual-write: D1 (primary) + Google Sheets (backup)
+ * Accepts flat fields: date, timeSlot, buckers1, trimmers1, etc.
+ */
+async function addProduction(body, env) {
+  const { date, timeSlot, buckers1, trimmers1, tzero1, cultivar1, tops1, smalls1,
+          buckers2, trimmers2, tzero2, cultivar2, tops2, smalls2, qcperson, qcNotes } = body;
+
+  if (!date || !timeSlot) {
+    return errorResponse('Missing required fields: date, timeSlot', 'VALIDATION_ERROR', 400);
+  }
+
+  if (!validateDate(date)) {
+    return errorResponse('Invalid date format', 'VALIDATION_ERROR', 400);
+  }
+
+  // Build data object from flat fields
+  const data = {
+    buckers1: buckers1 ?? 0,
+    trimmers1: trimmers1 ?? 0,
+    tzero1: tzero1 ?? 0,
+    cultivar1: cultivar1 ?? '',
+    tops1: tops1 ?? 0,
+    smalls1: smalls1 ?? 0,
+    buckers2: buckers2 ?? 0,
+    trimmers2: trimmers2 ?? 0,
+    tzero2: tzero2 ?? 0,
+    cultivar2: cultivar2 ?? '',
+    tops2: tops2 ?? 0,
+    smalls2: smalls2 ?? 0,
+    qcperson: qcperson ?? 0,
+    qcNotes: qcNotes ?? '',
+  };
+
+  try {
+    // Write to D1 first (primary source of truth)
+    const d1Result = await addProductionToD1(date, timeSlot, data, env);
+    if (!d1Result.success) {
+      console.error('D1 write failed:', d1Result.error);
+      return errorResponse('Failed to save production data to D1', 'INTERNAL_ERROR', 500);
+    }
+
+    // Write to Google Sheets as backup (fire and forget - don't fail if Sheets fails)
+    addProductionToSheets(date, timeSlot, data, env).catch(error => {
+      console.warn('Sheets backup write failed (non-blocking):', error);
+    });
+
     // Increment version to notify clients of new data
     await incrementDataVersion(env);
 
@@ -1883,7 +2463,8 @@ async function addProduction(body, env) {
       success: true,
       message: 'Production data saved',
       date,
-      timeSlot
+      timeSlot,
+      source: 'D1'
     });
   } catch (error) {
     console.error('Error adding production:', error);
@@ -1913,7 +2494,7 @@ export async function handleProduction(request, env, ctx) {
       case 'dashboard':
         return await dashboard(params, env);
       case 'setShiftStart':
-        return await setShiftStart(params, env);
+        return await setShiftStart({ ...params, ...body }, env);
       case 'getShiftStart':
         return await getShiftStart(params, env);
       case 'morningReport':
@@ -1934,6 +2515,11 @@ export async function handleProduction(request, env, ctx) {
         return await chat(body, env);
       case 'tts':
         return await tts(body, env);
+      case 'scaleWeight':
+        if (request.method === 'POST') {
+          return await setScaleWeight(body, env);
+        }
+        return await getScaleWeight(params, env);
       case 'inventoryWebhook':
       case 'webhook':
         return await inventoryWebhook(body, env, request);

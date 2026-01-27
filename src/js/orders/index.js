@@ -16,6 +16,11 @@ import {
 import { apiCall, cancelAllRequests } from './core/api.js';
 
 // ============================================
+// Event Cleanup Import (for memory leak prevention)
+// ============================================
+import { registerEventListener, cleanupAllListeners } from '../modules/event-cleanup.js';
+
+// ============================================
 // UI Imports
 // ============================================
 import { initTheme, toggleTheme } from './ui/theme.js';
@@ -229,7 +234,7 @@ async function loadInitialData() {
 /**
  * Main initialization
  */
-document.addEventListener('DOMContentLoaded', async () => {
+const initHandler = async () => {
   console.log('Orders module initializing...');
 
   // Initialize theme
@@ -251,7 +256,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadInitialData();
 
   console.log('Orders module initialized');
-});
+};
+
+// Register DOMContentLoaded with cleanup tracking
+registerEventListener(document, 'DOMContentLoaded', initHandler);
 
 // ============================================
 // Cleanup
@@ -259,17 +267,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 /**
  * Clean up on page unload
- * Prevents memory leaks by canceling pending requests and clearing state
+ * Prevents memory leaks by canceling pending requests, clearing state, and removing all event listeners
  */
 function cleanup() {
+  console.log('Orders module cleanup starting...');
+  
+  // Cancel any pending API requests
   cancelAllRequests();
+  
+  // Clear application state
   resetState();
+  
+  // Remove all registered event listeners
+  cleanupAllListeners();
+  
   console.log('Orders module cleanup complete');
 }
 
-// Register cleanup handlers
-window.addEventListener('beforeunload', cleanup);
-window.addEventListener('pagehide', cleanup);
+// Register cleanup handlers with tracking
+registerEventListener(window, 'beforeunload', cleanup);
+registerEventListener(window, 'pagehide', cleanup);
 
 // ============================================
 // Global Error Handler
@@ -278,13 +295,16 @@ window.addEventListener('pagehide', cleanup);
 /**
  * Handle uncaught errors in async operations
  */
-window.addEventListener('unhandledrejection', (event) => {
+const unhandledRejectionHandler = (event) => {
   console.error('Unhandled promise rejection:', event.reason);
   // Don't show toast for aborted requests
   if (event.reason?.name !== 'AbortError') {
     showToast('An unexpected error occurred', 'error');
   }
-});
+};
+
+// Register error handler with tracking
+registerEventListener(window, 'unhandledrejection', unhandledRejectionHandler);
 
 // ============================================
 // Export for potential external use

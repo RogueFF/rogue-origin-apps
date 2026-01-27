@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scale Weight - Rogue Origin</title>
+  <link rel="stylesheet" href="scale.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Connection status -->
+    <div class="status" id="status">
+      <span class="status-dot"></span>
+      <span class="status-text">Connecting...</span>
+    </div>
+
+    <!-- Circular progress ring -->
+    <div class="ring-container">
+      <svg class="ring" viewBox="0 0 200 200">
+        <!-- Background ring -->
+        <circle
+          class="ring-bg"
+          cx="100"
+          cy="100"
+          r="90"
+          fill="none"
+          stroke-width="12"
+        />
+        <!-- Progress ring -->
+        <circle
+          class="ring-progress"
+          id="ring-progress"
+          cx="100"
+          cy="100"
+          r="90"
+          fill="none"
+          stroke-width="12"
+          stroke-linecap="round"
+          transform="rotate(-90 100 100)"
+        />
+      </svg>
+
+      <!-- Center content -->
+      <div class="ring-center">
+        <div class="weight-value" id="weight">0.00</div>
+        <div class="weight-unit">kg</div>
+      </div>
+
+      <!-- Checkmark overlay (shown at target) -->
+      <div class="checkmark" id="checkmark">✓</div>
+    </div>
+
+    <!-- Target info -->
+    <div class="target-info">
+      <span data-i18n="target">Target</span>: <span id="target-weight">5.00</span> kg
+    </div>
+
+    <!-- Language toggle -->
+    <button class="lang-toggle" id="lang-toggle">ES</button>
+  </div>
+
+  <script src="scale.js"></script>
+</body>
+</html>

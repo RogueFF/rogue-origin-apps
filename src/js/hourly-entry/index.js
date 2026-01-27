@@ -37,6 +37,11 @@ const LABELS = {
     tops: 'Tops (lbs)',
     smalls: 'Smalls (lbs)',
     qcNotes: 'QC Notes',
+    hourlyTarget: 'Hourly Target',
+    dayView: 'Day',
+    copyPrev: 'Copy Prev',
+    copied: 'Copied!',
+    noPrevData: 'No previous data',
     saved: 'Saved',
     prev: 'Prev',
     next: 'Next',
@@ -117,6 +122,11 @@ const LABELS = {
     tops: 'Tops (lbs)',
     smalls: 'Smalls (lbs)',
     qcNotes: 'Notas QC',
+    hourlyTarget: 'Meta por Hora',
+    dayView: 'Día',
+    copyPrev: 'Copiar Ant',
+    copied: '¡Copiado!',
+    noPrevData: 'Sin datos previos',
     saved: 'Guardado',
     prev: 'Ant',
     next: 'Sig',
@@ -193,6 +203,8 @@ let originalCrewData = null; // Track original crew for modification detection
 let pendingSaveData = null; // Track failed save for retry
 let isSaving = false; // Prevent concurrent saves
 let shiftStartTime = null; // Shared shift start time (syncs with scoreboard)
+let isOpeningTimePicker = false; // Track when we're programmatically opening the picker
+let lastTimePickerValue = null; // Track last value to detect real changes
 
 // Crew fields to track for modifications
 const CREW_FIELDS = ['buckers1', 'trimmers1', 'tzero1', 'qcperson', 'cultivar1', 'buckers2', 'trimmers2', 'tzero2', 'cultivar2'];
@@ -229,7 +241,40 @@ function cleanupListeners() {
 window.addEventListener('beforeunload', () => {
   cleanupListeners();
   if (saveTimeout) clearTimeout(saveTimeout);
+  // Clear bag timer intervals to prevent memory leaks
+  if (bagTimerInterval) clearInterval(bagTimerInterval);
+  if (bagTimerTickInterval) clearInterval(bagTimerTickInterval);
 });
+
+// ===================
+// DATE FORMATTING
+// ===================
+
+function getDaySuffix(day) {
+  if (day >= 11 && day <= 13) return 'th';
+  switch (day % 10) {
+    case 1: return 'st';
+    case 2: return 'nd';
+    case 3: return 'rd';
+    default: return 'th';
+  }
+}
+
+function formatDateDisplay(dateStr) {
+  const date = new Date(dateStr + 'T12:00:00'); // Avoid timezone issues
+  const months = ['January', 'February', 'March', 'April', 'May', 'June',
+                  'July', 'August', 'September', 'October', 'November', 'December'];
+  const day = date.getDate();
+  const suffix = getDaySuffix(day);
+  return `${months[date.getMonth()]}, ${day}${suffix}`;
+}
+
+function updateDateDisplay(dateStr) {
+  const display = document.getElementById('date-display');
+  if (display) {
+    display.textContent = formatDateDisplay(dateStr);
+  }
+}
 
 // ===================
 // SHIFT START (shared with scoreboard)
@@ -306,8 +351,21 @@ async function setShiftStart(time = null) {
   localStorage.setItem('manualShiftStart', startTime.toISOString());
   localStorage.setItem('shiftStartDate', new Date().toDateString());
 
+  // Ensure we're viewing today and refresh data
+  const today = formatDateLocal(new Date());
+  if (currentDate !== today) {
+    currentDate = today;
+    const datePicker = document.getElementById('date-picker');
+    if (datePicker) datePicker.value = today;
+    updateDateDisplay(today);
+  }
+
+  // Refresh data from API to get fresh entries
+  await loadDayData(currentDate);
+
   updateShiftStartUI();
   renderTimeline();
+  highlightCurrentTimeSlot();
 
   // Sync to API (so scoreboard sees it)
   try {
@@ -395,11 +453,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 function initializeUI() {
-  // Date picker
+  // Date picker with formatted display
   const datePicker = document.getElementById('date-picker');
+  const dateDisplay = document.getElementById('date-display');
   datePicker.value = currentDate;
+  updateDateDisplay(currentDate);
+
+  // Click on display opens the date picker
+  if (dateDisplay) {
+    dateDisplay.addEventListener('click', () => datePicker.showPicker());
+  }
+
   datePicker.addEventListener('change', async (e) => {
     currentDate = e.target.value;
+    updateDateDisplay(currentDate);
     await loadDayData(currentDate);
     renderTimeline();
   });
@@ -408,6 +475,7 @@ function initializeUI() {
   document.getElementById('today-btn').addEventListener('click', async () => {
     currentDate = formatDateLocal(new Date());
     datePicker.value = currentDate;
+    updateDateDisplay(currentDate);
     await loadDayData(currentDate);
     renderTimeline();
     highlightCurrentTimeSlot();
@@ -427,6 +495,52 @@ function initializeUI() {
   const startDayBtn = document.getElementById('start-day-btn');
   if (startDayBtn) {
     startDayBtn.addEventListener('click', () => setShiftStart());
+  }
+
+  // Start time badge (click to edit)
+  const startTimeBadge = document.getElementById('start-time-badge');
+  const startTimePicker = document.getElementById('start-time-picker');
+  if (startTimeBadge && startTimePicker) {
+    // Click badge to open time picker
+    startTimeBadge.addEventListener('click', () => {
+      // Pre-populate with current start time
+      if (shiftStartTime) {
+        const hours = String(shiftStartTime.getHours()).padStart(2, '0');
+        const minutes = String(shiftStartTime.getMinutes()).padStart(2, '0');
+        const presetValue = `${hours}:${minutes}`;
+        startTimePicker.value = presetValue;
+        lastTimePickerValue = presetValue; // Track what we set it to
+      } else {
+        lastTimePickerValue = startTimePicker.value || '';
+      }
+      isOpeningTimePicker = true;
+      startTimePicker.showPicker();
+      // Reset flag after picker has opened (short delay to avoid race)
+      setTimeout(() => { isOpeningTimePicker = false; }, 100);
+    });
+
+    // When time is selected, update shift start
+    startTimePicker.addEventListener('change', (e) => {
+      const timeValue = e.target.value; // "HH:MM" format
+      
+      // Ignore if we're in the middle of opening the picker (spurious event)
+      if (isOpeningTimePicker) {
+        return;
+      }
+      
+      // Ignore if value hasn't actually changed (browser auto-fill or spurious event)
+      if (timeValue === lastTimePickerValue) {
+        return;
+      }
+      
+      if (timeValue) {
+        lastTimePickerValue = timeValue;
+        const [hours, minutes] = timeValue.split(':').map(Number);
+        const newStartTime = new Date();
+        newStartTime.setHours(hours, minutes, 0, 0);
+        setShiftStart(newStartTime);
+      }
+    });
   }
 
   // Back to timeline button
@@ -451,6 +565,12 @@ function initializeUI() {
   document.getElementById('line2-toggle').addEventListener('click', () => {
     document.getElementById('line2-section').classList.toggle('expanded');
   });
+
+  // Copy crew from previous hour
+  const copyCrewBtn = document.getElementById('copy-crew-btn');
+  if (copyCrewBtn) {
+    copyCrewBtn.addEventListener('click', copyCrewFromPrevious);
+  }
 
   // Number input +/- buttons
   document.querySelectorAll('.number-input button').forEach((btn) => {
@@ -718,6 +838,61 @@ function getCurrentCrewData() {
   };
 }
 
+function copyCrewFromPrevious() {
+  const labels = LABELS[currentLang];
+  const copyBtn = document.getElementById('copy-crew-btn');
+  const copyLabel = copyBtn?.querySelector('.copy-label');
+
+  // Can't copy if we're at the first slot
+  if (currentSlotIndex === 0) {
+    if (copyLabel) copyLabel.textContent = labels.noPrevData;
+    setTimeout(() => {
+      if (copyLabel) copyLabel.textContent = labels.copyPrev;
+    }, 1500);
+    return;
+  }
+
+  // Get previous slot's data
+  const prevSlot = TIME_SLOTS[currentSlotIndex - 1];
+  const prevData = dayData[prevSlot];
+
+  if (!prevData || (!prevData.trimmers1 && !prevData.trimmers2)) {
+    if (copyLabel) copyLabel.textContent = labels.noPrevData;
+    setTimeout(() => {
+      if (copyLabel) copyLabel.textContent = labels.copyPrev;
+    }, 1500);
+    return;
+  }
+
+  // Copy crew fields
+  document.getElementById('buckers1').value = prevData.buckers1 || 0;
+  document.getElementById('trimmers1').value = prevData.trimmers1 || 0;
+  document.getElementById('tzero1').value = prevData.tzero1 || 0;
+  document.getElementById('qcperson').value = prevData.qcperson || 0;
+  document.getElementById('cultivar1').value = prevData.cultivar1 || '';
+
+  // Copy Line 2 if it has data
+  if (prevData.trimmers2 > 0) {
+    document.getElementById('buckers2').value = prevData.buckers2 || 0;
+    document.getElementById('trimmers2').value = prevData.trimmers2 || 0;
+    document.getElementById('tzero2').value = prevData.tzero2 || 0;
+    document.getElementById('cultivar2').value = prevData.cultivar2 || '';
+    document.getElementById('line2-section').classList.add('expanded');
+  }
+
+  // Visual feedback
+  copyBtn?.classList.add('copied');
+  if (copyLabel) copyLabel.textContent = labels.copied;
+  setTimeout(() => {
+    copyBtn?.classList.remove('copied');
+    if (copyLabel) copyLabel.textContent = labels.copyPrev;
+  }, 1500);
+
+  // Trigger save and update UI
+  handleFieldChange();
+  updateStepGuide();
+}
+
 function isCrewModified() {
   if (!originalCrewData) return false;
 
@@ -770,7 +945,6 @@ function updateStepGuide() {
   const stepGuide = document.getElementById('step-guide');
   const stepIcon = document.getElementById('step-icon');
   const stepTitle = document.getElementById('step-title');
-  const stepHint = document.getElementById('step-hint');
   const crewSection = document.querySelector('.crew-section');
   const productionSection = document.querySelector('.production-section');
   const qcNotesSection = document.querySelector('.editor-section:has(#qcNotes)');
@@ -811,30 +985,26 @@ function updateStepGuide() {
     // Step 1: Enter Crew
     stepIcon.textContent = '1';
     stepTitle.textContent = labels.stepCrewTitle;
-    stepHint.textContent = labels.stepCrewHint;
     crewSection?.classList.add('needs-attention');
   } else if (!hasProduction) {
     // Step 2: Enter Production
     stepGuide.classList.add('step-production');
     stepIcon.textContent = '2';
     stepTitle.textContent = labels.stepProductionTitle;
-    stepHint.textContent = labels.stepProductionHint;
     crewSection?.classList.add('completed');
     productionSection?.classList.add('needs-attention');
   } else if (metTarget) {
     // Target met - celebrate!
     stepGuide.classList.add('step-celebrate');
     stepIcon.textContent = '🎉';
-    stepTitle.textContent = labels.stepCelebrateTitle;
-    stepHint.textContent = `${totalTops.toFixed(1)} / ${hourlyTarget.toFixed(1)} lbs`;
+    stepTitle.textContent = `${labels.stepCelebrateTitle} ${totalTops.toFixed(1)}lbs`;
     crewSection?.classList.add('completed');
     productionSection?.classList.add('completed');
   } else if (!hasReason) {
     // Target missed, need reason
     stepGuide.classList.add('step-missed');
     stepIcon.textContent = '!';
-    stepTitle.textContent = labels.stepMissedTitle;
-    stepHint.textContent = `${totalTops.toFixed(1)} / ${hourlyTarget.toFixed(1)} lbs — ${labels.stepMissedHint}`;
+    stepTitle.textContent = `${labels.stepMissedTitle} ${totalTops.toFixed(1)}/${hourlyTarget.toFixed(1)}`;
     crewSection?.classList.add('completed');
     productionSection?.classList.add('completed');
     qcNotesSection?.classList.add('needs-attention');
@@ -842,11 +1012,16 @@ function updateStepGuide() {
     // Target missed but reason provided
     stepGuide.classList.add('step-complete');
     stepIcon.textContent = '✓';
-    stepTitle.textContent = labels.stepCompleteTitle;
-    stepHint.textContent = `${totalTops.toFixed(1)} / ${hourlyTarget.toFixed(1)} lbs`;
+    stepTitle.textContent = `${labels.stepCompleteTitle} ${totalTops.toFixed(1)}lbs`;
     crewSection?.classList.add('completed');
     productionSection?.classList.add('completed');
     qcNotesSection?.classList.add('completed');
+  }
+
+  // Update hourly target display
+  const hourlyTargetEl = document.getElementById('hourly-target-value');
+  if (hourlyTargetEl) {
+    hourlyTargetEl.textContent = hourlyTarget > 0 ? `${hourlyTarget.toFixed(1)} lbs` : '-- lbs';
   }
 }
 
@@ -1680,11 +1855,17 @@ async function loadBarcodeProducts() {
 }
 
 /**
+ * Custom dropdown state
+ */
+let customDropdownCultivars = [];
+
+/**
  * Populate the barcode strain dropdown with cultivars that have products
  */
 function populateBarcodeStrainSelect() {
-  const select = document.getElementById('barcode-strain');
-  if (!select) return;
+  const dropdown = document.getElementById('barcode-strain-dropdown');
+  const hiddenInput = document.getElementById('barcode-strain');
+  if (!dropdown || !hiddenInput) return;
 
   // Get unique cultivars from products (extract cultivar name from header)
   const cultivarsWithProducts = new Set();
@@ -1696,30 +1877,133 @@ function populateBarcodeStrainSelect() {
     }
   });
 
-  const currentValue = select.value;
-  select.innerHTML = `<option value="">${LABELS[currentLang].selectStrain}</option>`;
-
   // Sort cultivars alphabetically
-  const sortedCultivars = Array.from(cultivarsWithProducts).sort();
-  sortedCultivars.forEach((cultivar) => {
-    const option = document.createElement('option');
-    option.value = cultivar;
-    option.textContent = cultivar;
-    select.appendChild(option);
+  customDropdownCultivars = Array.from(cultivarsWithProducts).sort();
+
+  // Render options
+  renderCustomDropdownOptions(dropdown, customDropdownCultivars, hiddenInput.value);
+
+  // Initialize dropdown behavior if not already done
+  if (!dropdown.dataset.initialized) {
+    initCustomDropdown(dropdown);
+    dropdown.dataset.initialized = 'true';
+  }
+}
+
+/**
+ * Render custom dropdown options
+ */
+function renderCustomDropdownOptions(dropdown, cultivars, selectedValue, filter = '') {
+  const optionsContainer = dropdown.querySelector('.custom-select-options');
+  if (!optionsContainer) return;
+
+  const filterLower = filter.toLowerCase();
+  const filtered = filter
+    ? cultivars.filter((c) => c.toLowerCase().includes(filterLower))
+    : cultivars;
+
+  if (filtered.length === 0) {
+    optionsContainer.innerHTML = `<div class="custom-select-no-results">No strains found</div>`;
+    return;
+  }
+
+  optionsContainer.innerHTML = filtered
+    .map(
+      (cultivar) => `
+      <div class="custom-select-option${cultivar === selectedValue ? ' selected' : ''}" 
+           data-value="${cultivar}" 
+           role="option"
+           aria-selected="${cultivar === selectedValue}">
+        ${cultivar}
+      </div>
+    `
+    )
+    .join('');
+}
+
+/**
+ * Initialize custom dropdown behavior
+ */
+function initCustomDropdown(dropdown) {
+  const trigger = dropdown.querySelector('.custom-select-trigger');
+  const menu = dropdown.querySelector('.custom-select-menu');
+  const searchInput = dropdown.querySelector('.custom-select-search-input');
+  const optionsContainer = dropdown.querySelector('.custom-select-options');
+  const valueDisplay = dropdown.querySelector('.custom-select-value');
+  const hiddenInput = dropdown.querySelector('input[type="hidden"]');
+
+  // Toggle dropdown on trigger click
+  registerListener(trigger, 'click', (e) => {
+    e.stopPropagation();
+    const isOpen = dropdown.classList.contains('open');
+    closeAllCustomDropdowns();
+    if (!isOpen) {
+      dropdown.classList.add('open');
+      trigger.setAttribute('aria-expanded', 'true');
+      searchInput.value = '';
+      renderCustomDropdownOptions(dropdown, customDropdownCultivars, hiddenInput.value);
+      setTimeout(() => searchInput.focus(), 50);
+    }
   });
 
-  select.value = currentValue;
+  // Filter on search input
+  registerListener(searchInput, 'input', () => {
+    renderCustomDropdownOptions(dropdown, customDropdownCultivars, hiddenInput.value, searchInput.value);
+  });
 
-  // Update has-selection class based on current value
-  select.classList.toggle('has-selection', !!select.value);
+  // Prevent menu clicks from closing
+  registerListener(menu, 'click', (e) => {
+    e.stopPropagation();
+  });
 
-  // Add change listener for selection state styling
-  if (!select.dataset.listenerAdded) {
-    registerListener(select, 'change', () => {
-      select.classList.toggle('has-selection', !!select.value);
-    });
-    select.dataset.listenerAdded = 'true';
-  }
+  // Handle option selection
+  registerListener(optionsContainer, 'click', (e) => {
+    const option = e.target.closest('.custom-select-option');
+    if (!option) return;
+
+    const value = option.dataset.value;
+    selectCustomDropdownValue(dropdown, value);
+    closeAllCustomDropdowns();
+  });
+
+  // Close on outside click
+  registerListener(document, 'click', () => {
+    closeAllCustomDropdowns();
+  });
+
+  // Close on escape
+  registerListener(document, 'keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeAllCustomDropdowns();
+    }
+  });
+}
+
+/**
+ * Select a value in the custom dropdown
+ */
+function selectCustomDropdownValue(dropdown, value) {
+  const valueDisplay = dropdown.querySelector('.custom-select-value');
+  const hiddenInput = dropdown.querySelector('input[type="hidden"]');
+
+  hiddenInput.value = value;
+  valueDisplay.textContent = value || LABELS[currentLang].selectStrain || 'Select strain...';
+  valueDisplay.classList.toggle('placeholder', !value);
+  dropdown.classList.toggle('has-selection', !!value);
+
+  // Dispatch change event on hidden input
+  hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+/**
+ * Close all custom dropdowns
+ */
+function closeAllCustomDropdowns() {
+  document.querySelectorAll('.custom-select.open').forEach((dropdown) => {
+    dropdown.classList.remove('open');
+    const trigger = dropdown.querySelector('.custom-select-trigger');
+    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+  });
 }
 
 /**
@@ -2208,6 +2492,7 @@ let timerPauseReason = '';
 let timerPauseStartTime = null; // When pause started (for freezing timer)
 let timerBagsToday = 0;
 let lastKnownVersion = null; // For smart polling
+let manualShiftStart = null; // Manual shift start time (synced from server)
 
 // SVG constants (matching scoreboard)
 const RING_CIRCUMFERENCE = 2 * Math.PI * 95; // 597
@@ -2223,6 +2508,30 @@ const TIMER_BREAKS = [
 // Workday boundaries
 const WORKDAY_START_MINUTES = 7 * 60;  // 7:00 AM
 const WORKDAY_END_MINUTES = 16 * 60 + 30;  // 4:30 PM
+
+/**
+ * Get today's shift start time
+ * Checks localStorage first (shared with scoreboard), falls back to 7 AM
+ * @returns {Date} Today at shift start time
+ */
+function getShiftStartTime() {
+  // Check localStorage for manual shift start (shared with scoreboard)
+  const savedStart = localStorage.getItem('manualShiftStart');
+  const savedDate = localStorage.getItem('shiftStartDate');
+  const today = new Date().toDateString();
+
+  if (savedStart && savedDate === today) {
+    const startTime = new Date(savedStart);
+    if (startTime.toDateString() === today) {
+      return startTime;
+    }
+  }
+
+  // Default: 7:00 AM today
+  const defaultStart = new Date();
+  defaultStart.setHours(7, 0, 0, 0);
+  return defaultStart;
+}
 
 /**
  * Check if currently on break or outside work hours
@@ -2255,7 +2564,134 @@ function isOnBreakOrAfterHours() {
 }
 
 /**
+ * Get shift end time for a given date
+ * @param {Date} date - The date to get shift end for
+ * @returns {Date} Shift end time (4:30 PM)
+ */
+function getShiftEndTime(date) {
+  const shiftEnd = new Date(date);
+  shiftEnd.setHours(16, 30, 0, 0); // 4:30 PM
+  return shiftEnd;
+}
+
+/**
+ * Calculate working seconds from a previous day's timestamp, carrying over to today
+ * Used when a bag was not finished before shift ended yesterday
+ * @param {Date} startTime - The timestamp from a previous day
+ * @returns {number} Total working seconds (yesterday's remainder + today's elapsed)
+ */
+function getWorkingSecondsCarryOver(startTime) {
+  if (!startTime) return 0;
+
+  const now = new Date();
+  const startDate = new Date(startTime);
+
+  // Get yesterday's shift end
+  const yesterdayShiftEnd = getShiftEndTime(startDate);
+
+  // Calculate working seconds from lastBag to end of that day's shift
+  // (only if lastBag was before shift end)
+  let yesterdayRemaining = 0;
+  if (startTime < yesterdayShiftEnd) {
+    // Time from lastBag to shift end, excluding any breaks in between
+    const startMins = startDate.getHours() * 60 + startDate.getMinutes();
+    const endMins = WORKDAY_END_MINUTES;
+
+    yesterdayRemaining = (endMins - startMins) * 60;
+
+    // Subtract breaks that occurred between lastBag and shift end
+    for (const brk of TIMER_BREAKS) {
+      const bStart = brk[0] * 60 + brk[1];
+      const bEnd = brk[2] * 60 + brk[3];
+
+      if (startMins < bEnd && endMins > bStart) {
+        const overlapStart = Math.max(startMins, bStart);
+        const overlapEnd = Math.min(endMins, bEnd);
+        if (overlapEnd > overlapStart) {
+          yesterdayRemaining -= (overlapEnd - overlapStart) * 60;
+        }
+      }
+    }
+  }
+
+  // Add today's working seconds from shift start to now
+  const todayShiftStart = new Date(now);
+  todayShiftStart.setHours(Math.floor(WORKDAY_START_MINUTES / 60), WORKDAY_START_MINUTES % 60, 0, 0);
+  const todayElapsed = getWorkingSecondsSinceInternal(todayShiftStart);
+
+  return Math.max(0, yesterdayRemaining + todayElapsed);
+}
+
+/**
+ * Internal helper: Calculate working seconds since startTime (same day only)
+ * @param {Date} startTime - The start time
+ * @returns {number} Working seconds elapsed
+ */
+function getWorkingSecondsSinceInternal(startTime) {
+  if (!startTime) return 0;
+
+  const now = new Date();
+
+  // If different day, return 0
+  if (startTime.toDateString() !== now.toDateString()) {
+    return 0;
+  }
+
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+
+  // Check if we're currently ON a break
+  let currentlyOnBreak = false;
+  let currentBreakStart = 0;
+
+  for (const brk of TIMER_BREAKS) {
+    const bStart = brk[0] * 60 + brk[1];
+    const bEnd = brk[2] * 60 + brk[3];
+    if (nowMins >= bStart && nowMins < bEnd) {
+      currentlyOnBreak = true;
+      currentBreakStart = bStart;
+      break;
+    }
+  }
+
+  // If currently on break, calculate elapsed time up to break start
+  let endTime;
+  if (currentlyOnBreak) {
+    endTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(),
+      Math.floor(currentBreakStart / 60), currentBreakStart % 60, 0);
+  } else {
+    endTime = now;
+  }
+
+  let totalSecs = Math.floor((endTime - startTime) / 1000);
+  const startMins = startTime.getHours() * 60 + startTime.getMinutes();
+  const endMins = endTime.getHours() * 60 + endTime.getMinutes();
+
+  // Subtract time spent on COMPLETED breaks (not current break)
+  for (const brk of TIMER_BREAKS) {
+    const bStart = brk[0] * 60 + brk[1];
+    const bEnd = brk[2] * 60 + brk[3];
+
+    // Skip the current break (already handled above)
+    if (currentlyOnBreak && bStart === currentBreakStart) {
+      continue;
+    }
+
+    // If timer span includes this break, subtract it
+    if (startMins < bEnd && endMins > bStart) {
+      const overlapStart = Math.max(startMins, bStart);
+      const overlapEnd = Math.min(endMins, bEnd);
+      if (overlapEnd > overlapStart) {
+        totalSecs -= (overlapEnd - overlapStart) * 60;
+      }
+    }
+  }
+
+  return Math.max(0, totalSecs);
+}
+
+/**
  * Calculate working seconds since startTime, excluding breaks
+ * Handles both same-day and carryover (previous day) scenarios
  * This matches the scoreboard's getWorkingSecondsSince() function
  * @param {Date} startTime - The start time
  * @returns {number} Working seconds elapsed
@@ -2265,9 +2701,10 @@ function getWorkingSecondsSince(startTime) {
 
   const now = new Date();
 
-  // If different day, return 0 (timer resets daily)
+  // Check if lastBag is from a previous day (carryover scenario)
   if (startTime.toDateString() !== now.toDateString()) {
-    return 0;
+    // Use carryover calculation for bags started yesterday
+    return getWorkingSecondsCarryOver(startTime);
   }
 
   const nowMins = now.getHours() * 60 + now.getMinutes();
@@ -2328,7 +2765,7 @@ function getWorkingSecondsSince(startTime) {
 function initBagTimer() {
   loadBagTimerData(); // Initial full load
   // Smart polling: check version every 5 seconds, only fetch data if changed
-  bagTimerInterval = setInterval(checkBagTimerVersion, 5000);
+  bagTimerInterval = setInterval(checkBagTimerVersion, 3000);
   // Update countdown every second
   bagTimerTickInterval = setInterval(updateBagTimerTick, 1000);
 }
@@ -2399,9 +2836,19 @@ async function loadBagTimerData() {
       lastBagTimestamp = null;
     }
 
-    // Store target and avg seconds
-    timerTargetSeconds = timer.targetSeconds || 90 * 60;
+    // Store target and avg seconds (use explicit check - 0 is valid, not falsy default)
+    timerTargetSeconds = typeof timer.targetSeconds === 'number' ? timer.targetSeconds : 90 * 60;
     timerAvgSeconds = timer.avgSecondsToday || 0;
+
+    // Update target time and trimmers display
+    const targetTimeEl = document.getElementById('timer-target-time');
+    const trimmersEl = document.getElementById('timer-trimmers');
+    if (targetTimeEl) {
+      targetTimeEl.textContent = timerTargetSeconds > 0 ? formatTimeMMSS(timerTargetSeconds) : '--:--';
+    }
+    if (trimmersEl) {
+      trimmersEl.textContent = timer.currentTrimmers || 0;
+    }
 
     // Sync pause state from server (cross-device sync - matches scoreboard)
     const pauseData = data.pause;
@@ -2489,59 +2936,71 @@ function updateBagTimerTick() {
     return;
   }
 
-  // If no last bag timestamp, show waiting state
-  if (!lastBagTimestamp) {
-    timerValue.textContent = '--:--';
-    timerLabel.textContent = LABELS[currentLang].waiting;
-    setTimerColor('green');
-    setRingProgress(0);
-    return;
+  // Calculate elapsed seconds - use lastBagTimestamp if available, otherwise shift start
+  let elapsedSeconds = 0;
+  const referenceTime = lastBagTimestamp || getShiftStartTime();
+
+  // Check if reference is from today or previous day
+  const isToday = referenceTime.toDateString() === new Date().toDateString();
+  const isPreviousDay = !isToday && referenceTime < new Date();
+
+  if (isToday) {
+    elapsedSeconds = getWorkingSecondsSinceInternal(referenceTime);
+  } else if (isPreviousDay) {
+    // Carryover from previous day
+    elapsedSeconds = getWorkingSecondsCarryOver(referenceTime);
+  } else {
+    // Future date or invalid - use shift start
+    elapsedSeconds = getWorkingSecondsSinceInternal(getShiftStartTime());
   }
 
-  // Calculate WORKING elapsed time (excludes breaks) - matches scoreboard
-  const elapsedSeconds = getWorkingSecondsSince(lastBagTimestamp);
+  // Determine if we have a valid target
+  const hasTarget = timerTargetSeconds > 0;
 
-  // Calculate remaining time
-  const remainingSeconds = timerTargetSeconds - elapsedSeconds;
-  const isOvertime = remainingSeconds < 0;
+  // Calculate remaining time (only meaningful if we have a target)
+  const remainingSeconds = hasTarget ? timerTargetSeconds - elapsedSeconds : 0;
+  const isOvertime = hasTarget && remainingSeconds < 0;
 
-  // Determine color based on remaining time (matches scoreboard)
+  // Determine color based on state (matches scoreboard)
   let color = 'green';
   if (isOvertime) {
     color = 'red';
   }
-  // Note: Removed yellow warning state at 80% to match scoreboard (only green/red during work)
 
   setTimerColor(color);
 
-  // Format display
-  if (!isOvertime) {
-    // Show remaining time
-    timerValue.textContent = formatTimeMMSS(remainingSeconds);
-    timerLabel.textContent = LABELS[currentLang].remaining;
+  // Format display based on whether we have a target
+  if (hasTarget) {
+    if (!isOvertime) {
+      // Show remaining time
+      timerValue.textContent = formatTimeMMSS(remainingSeconds);
+      timerLabel.textContent = LABELS[currentLang].remaining;
+    } else {
+      // Overtime - show how much over
+      timerValue.textContent = '+' + formatTimeMMSS(Math.abs(remainingSeconds));
+      timerLabel.textContent = currentLang === 'es' ? 'excedido' : 'overtime';
+    }
   } else {
-    // Overtime - show how much over
-    timerValue.textContent = '+' + formatTimeMMSS(Math.abs(remainingSeconds));
-    timerLabel.textContent = currentLang === 'es' ? 'transcurrido' : 'overtime';
+    // No target - show elapsed time since shift start or last bag
+    timerValue.textContent = formatTimeMMSS(elapsedSeconds);
+    timerLabel.textContent = currentLang === 'es' ? 'transcurrido' : 'elapsed';
   }
 
   // Update ring progress
-  const progress = Math.min(1, elapsedSeconds / timerTargetSeconds);
+  // When no target, show minimal progress; when overtime, show full ring
+  let progress = 0;
+  if (hasTarget) {
+    progress = isOvertime ? 1 : Math.min(1, elapsedSeconds / timerTargetSeconds);
+  }
   setRingProgress(progress);
 }
 
 /**
- * Format seconds as MM:SS or H:MM:SS
+ * Format seconds as M:SS (matches scoreboard format - no hour conversion)
  */
 function formatTimeMMSS(totalSeconds) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-
-  if (minutes >= 60) {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${hours}:${String(mins).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-  }
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 

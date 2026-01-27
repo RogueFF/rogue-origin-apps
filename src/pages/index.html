@@ -26,12 +26,8 @@
   <!-- Performance: Preload critical images -->
   <link rel="preload" href="../assets/ro-logo-square.png" as="image">
 
-  <!-- Scripts: Deferred for faster initial render -->
-  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/muuri@0.9.5/dist/muuri.min.js"></script>
-  <script defer src="https://unpkg.com/@phosphor-icons/web"></script>
-
+  <!-- Scripts: Lazy loaded by modules when needed -->
+  <!-- Chart.js, Muuri.js, and Phosphor Icons are loaded on-demand by lazy-loader.js -->
   
   <!-- Critical CSS: Inline for fastest render -->
   <style>
@@ -58,12 +54,14 @@
 @media(max-width:768px){.mobile-menu-btn{display:block}.sidebar{transform:translateX(-100%)}}
   </style>
 
-  <!-- Performance: CSS Preloading -->
+  <!-- Critical CSS: Loaded synchronously -->
   <link rel="stylesheet" href="../css/shared-base.css">
-  <link rel="preload" href="../css/dashboard.css" as="style">
-  <link rel="preload" href="../css/ai-chat.css" as="style">
-  <link rel="stylesheet" href="../css/dashboard.css">
-  <link rel="stylesheet" href="../css/ai-chat.css">
+  
+  <!-- Non-critical CSS: Deferred for faster initial render -->
+  <link rel="preload" href="../css/dashboard.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/dashboard.css"></noscript>
+  <link rel="preload" href="../css/ai-chat.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/ai-chat.css"></noscript>
 </head>
 <body>
   <a href="#dashboardView" class="skip-link">Skip to main content</a>
@@ -114,7 +112,7 @@
       <span class="sidebar-toggle-label">Collapse</span>
     </div>
     <div class="brand">
-      <img src="../assets/ro-logo-horizontal.png" alt="Rogue Origin" class="logo" loading="lazy" decoding="async" width="32" height="32">
+      <img src="../assets/ro-logo-horizontal.png" alt="Rogue Origin" class="logo" loading="eager" decoding="async" width="32" height="32">
       <h1>Rogue Origin</h1>
     </div>
     <div class="nav-item active" data-view="dashboard" onclick="switchView('dashboard')" role="button" tabindex="0" aria-label="Navigate to Dashboard" aria-current="page" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('dashboard')"><span class="icon" aria-hidden="true"><i class="ph-duotone ph-chart-pie-slice"></i></span><span>Dashboard</span></div>
