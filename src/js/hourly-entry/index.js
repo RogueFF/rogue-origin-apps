@@ -74,6 +74,20 @@ const LABELS = {
     addToPool: '+ Add to Pool',
     scanToInventory: 'Scan to Inventory',
     lastScanned: 'Last scanned:',
+    currentPool: 'Current Pool',
+    updatePool: 'Update Pool',
+    add: 'Add',
+    subtract: 'Subtract',
+    set: 'Set',
+    optionalNote: 'Optional note...',
+    previous: 'Previous',
+    newValue: 'New',
+    recentChanges: 'Recent Changes',
+    noChangesYet: 'No changes yet',
+    updating: 'Updating...',
+    added: 'Added:',
+    subtracted: 'Subtracted:',
+    changed: 'Changed:',
     bagsToday: 'Bags Today',
     avgToday: 'Avg Today',
     vsTarget: 'vs Target',
@@ -140,6 +154,20 @@ const LABELS = {
     addToPool: '+ Agregar al Pool',
     scanToInventory: 'Escanear a Inventario',
     lastScanned: 'Último escaneado:',
+    currentPool: 'Pool Actual',
+    updatePool: 'Actualizar Pool',
+    add: 'Agregar',
+    subtract: 'Restar',
+    set: 'Establecer',
+    optionalNote: 'Nota opcional...',
+    previous: 'Anterior',
+    newValue: 'Nuevo',
+    recentChanges: 'Cambios Recientes',
+    noChangesYet: 'Sin cambios aún',
+    updating: 'Actualizando...',
+    added: 'Agregado:',
+    subtracted: 'Restado:',
+    changed: 'Cambiado:',
     bagsToday: 'Bolsas Hoy',
     avgToday: 'Prom Hoy',
     vsTarget: 'vs Meta',
@@ -1617,7 +1645,12 @@ setTimeout(() => initTutorial(), 500);
 // ===================
 
 const BARCODE_API_URL = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/barcode';
+const POOL_API_URL = 'YOUR_POOL_API_URL_HERE'; // TODO: Replace with actual Pool Inventory API URL
+
 let barcodeProducts = []; // Products loaded from barcode API
+let poolProducts = []; // Products loaded from Pool API
+let currentPoolType = 'smalls'; // Current pool type selection (smalls or tops)
+let currentOperation = 'add'; // Current operation selection (add, subtract, set)
 
 /**
  * Initialize barcode card functionality
@@ -1839,170 +1872,325 @@ function initBarcodeTabs() {
 /**
  * Initialize scanner tab functionality
  */
-function initScannerTab() {
+async function initScannerTab() {
+  await loadPoolProducts();
+  initPoolTypeToggle();
   populateScannerStrainSelect();
-  initPoolButton();
-  initBarcodeScanner();
+  initOperationButtons();
+  initPoolUpdateButton();
+  initRecentChanges();
 }
 
 /**
- * Populate the scanner strain dropdown with cultivars that have products
+ * Load pool products from Pool Inventory API
+ */
+async function loadPoolProducts() {
+  try {
+    const response = await fetch(POOL_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'list_products',
+        apiKey: 'YOUR_API_KEY_HERE', // TODO: Move to backend proxy
+        poolType: currentPoolType
+      })
+    });
+
+    const result = await response.json();
+    poolProducts = result.products || [];
+  } catch (error) {
+    console.error('Failed to load pool products:', error);
+    poolProducts = [];
+  }
+}
+
+/**
+ * Initialize pool type toggle buttons (Smalls/Tops)
+ */
+function initPoolTypeToggle() {
+  const toggleBtns = document.querySelectorAll('.pool-type-btn');
+
+  toggleBtns.forEach((btn) => {
+    registerListener(btn, 'click', async () => {
+      // Update active state
+      toggleBtns.forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      // Update current pool type
+      currentPoolType = btn.dataset.poolType;
+
+      // Reload products for new pool type
+      await loadPoolProducts();
+      populateScannerStrainSelect();
+
+      // Update current pool display
+      updateCurrentPoolDisplay();
+    });
+  });
+}
+
+/**
+ * Populate the scanner strain dropdown with products from Pool API
  */
 function populateScannerStrainSelect() {
   const select = document.getElementById('scanner-strain');
   if (!select) return;
 
-  // Get unique cultivars from products (extract cultivar name from header)
-  const cultivarsWithProducts = new Set();
-  barcodeProducts.forEach((p) => {
-    // Header format: "Cultivar Name Tops 5KG" or "Cultivar Name - Tops 5KG"
-    const match = p.header.match(/^(.+?)\s+(?:-\s*)?(Tops|Smalls)/i);
-    if (match) {
-      cultivarsWithProducts.add(match[1].trim());
-    }
-  });
-
   const currentValue = select.value;
-  select.innerHTML = `<option value="">${LABELS[currentLang].selectStrain}</option>`;
+  select.innerHTML = `<option value="">${LABELS[currentLang].selectStrain || 'Select strain...'}</option>`;
 
-  // Sort cultivars alphabetically
-  const sortedCultivars = Array.from(cultivarsWithProducts).sort();
-  sortedCultivars.forEach((cultivar) => {
+  // Sort products by title
+  const sortedProducts = [...poolProducts].sort((a, b) => a.title.localeCompare(b.title));
+
+  sortedProducts.forEach((product) => {
     const option = document.createElement('option');
-    option.value = cultivar;
-    option.textContent = cultivar;
+    option.value = product.id; // Store product ID
+    option.textContent = product.title;
+    option.dataset.poolValue = product.poolValue;
     select.appendChild(option);
   });
 
   select.value = currentValue;
 
-  // Update has-selection class based on current value
+  // Update has-selection class
   select.classList.toggle('has-selection', !!select.value);
 
-  // Add change listener for selection state styling
+  // Add change listener
   if (!select.dataset.listenerAdded) {
     registerListener(select, 'change', () => {
       select.classList.toggle('has-selection', !!select.value);
+      updateCurrentPoolDisplay();
     });
     select.dataset.listenerAdded = 'true';
   }
 }
 
 /**
- * Initialize pool add button
+ * Update the current pool value display
  */
-function initPoolButton() {
-  const addBtn = document.getElementById('add-to-pool');
-  if (!addBtn) return;
+function updateCurrentPoolDisplay() {
+  const select = document.getElementById('scanner-strain');
+  const poolValueEl = document.getElementById('current-pool-value');
 
-  registerListener(addBtn, 'click', async () => {
+  if (!select || !poolValueEl) return;
+
+  const selectedOption = select.options[select.selectedIndex];
+  if (selectedOption && selectedOption.dataset.poolValue) {
+    const poolValue = parseFloat(selectedOption.dataset.poolValue);
+    poolValueEl.textContent = poolValue.toLocaleString('en-US', { minimumFractionDigits: 1 });
+  } else {
+    poolValueEl.textContent = '--';
+  }
+}
+
+/**
+ * Initialize operation buttons (Add/Subtract/Set)
+ */
+function initOperationButtons() {
+  const operationBtns = document.querySelectorAll('.operation-btn');
+
+  operationBtns.forEach((btn) => {
+    registerListener(btn, 'click', () => {
+      // Update active state
+      operationBtns.forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      // Update current operation
+      currentOperation = btn.dataset.operation;
+    });
+  });
+}
+
+/**
+ * Initialize pool update button
+ */
+function initPoolUpdateButton() {
+  const updateBtn = document.getElementById('update-pool-btn');
+  if (!updateBtn) return;
+
+  registerListener(updateBtn, 'click', async () => {
     const strainSelect = document.getElementById('scanner-strain');
     const gramsInput = document.getElementById('pool-grams');
-    const strain = strainSelect?.value;
-    const grams = parseFloat(gramsInput?.value) || 0;
+    const noteInput = document.getElementById('pool-note');
 
-    if (!strain) {
+    const productId = strainSelect?.value;
+    const amount = parseFloat(gramsInput?.value) || 0;
+    const note = noteInput?.value.trim() || '';
+
+    // Validation
+    if (!productId) {
       strainSelect?.focus();
       return;
     }
 
-    if (grams <= 0) {
+    if (amount <= 0) {
       gramsInput?.focus();
       return;
     }
 
-    // Call API to add to pool (smalls metadata in Shopify)
+    // Call Pool API to update pool
     try {
-      addBtn.disabled = true;
-      addBtn.textContent = 'Adding...';
+      updateBtn.disabled = true;
+      updateBtn.textContent = LABELS[currentLang].updating || 'Updating...';
 
-      const response = await fetch(`${BARCODE_API_URL}?action=addToPool`, {
+      const response = await fetch(POOL_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ strain, grams })
+        body: JSON.stringify({
+          action: 'update_pool',
+          apiKey: 'YOUR_API_KEY_HERE', // TODO: Move to backend proxy
+          productId,
+          operation: currentOperation,
+          amount,
+          note,
+          poolType: currentPoolType
+        })
       });
 
       const result = await response.json();
+
       if (result.success) {
-        // Clear input and show success
+        // Show result
+        displayUpdateResult(result);
+
+        // Clear inputs
         gramsInput.value = '';
-        addBtn.textContent = '✓ Added!';
+        noteInput.value = '';
+
+        // Reload products to update pool values
+        await loadPoolProducts();
+        populateScannerStrainSelect();
+
+        // Restore selection
+        strainSelect.value = productId;
+        updateCurrentPoolDisplay();
+
+        // Reload recent changes
+        loadRecentChanges();
+
+        // Reset button
         setTimeout(() => {
-          addBtn.textContent = LABELS[currentLang].addToPool || '+ Add to Pool';
-          addBtn.disabled = false;
+          updateBtn.textContent = LABELS[currentLang].updatePool || 'Update Pool';
+          updateBtn.disabled = false;
         }, 1500);
       } else {
-        throw new Error(result.error || 'Failed to add to pool');
+        throw new Error(result.error || 'Failed to update pool');
       }
     } catch (error) {
-      console.error('Pool add error:', error);
-      addBtn.textContent = '✗ Error';
+      console.error('Pool update error:', error);
+      updateBtn.textContent = '✗ Error';
       setTimeout(() => {
-        addBtn.textContent = LABELS[currentLang].addToPool || '+ Add to Pool';
-        addBtn.disabled = false;
+        updateBtn.textContent = LABELS[currentLang].updatePool || 'Update Pool';
+        updateBtn.disabled = false;
       }, 2000);
     }
   });
 }
 
 /**
- * Initialize barcode scanner input
+ * Display pool update result
  */
-function initBarcodeScanner() {
-  const scanInput = document.getElementById('barcode-scan-input');
-  const statusEl = document.getElementById('scan-status');
-  const lastScannedEl = document.getElementById('last-scanned');
+function displayUpdateResult(result) {
+  const resultEl = document.getElementById('pool-update-result');
+  const previousEl = document.getElementById('result-previous');
+  const changeEl = document.getElementById('result-change');
+  const changeLabelEl = document.getElementById('result-change-label');
+  const newEl = document.getElementById('result-new');
 
-  if (!scanInput) return;
+  if (!resultEl) return;
 
-  // Handle barcode scan (barcode scanners typically send Enter after the barcode)
-  registerListener(scanInput, 'keydown', async (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const barcode = scanInput.value.trim();
+  // Set values
+  previousEl.textContent = `${result.previousValue}g`;
+  newEl.textContent = `${result.newValue}g`;
 
-      if (!barcode) return;
+  // Set change with appropriate label and sign
+  const changeAmount = result.changeAmount;
+  const changeSign = result.operation === 'subtract' ? '-' : '+';
+  changeEl.textContent = `${changeSign}${Math.abs(changeAmount)}g`;
 
-      // Process the scanned barcode
-      try {
-        scanInput.disabled = true;
-        statusEl.classList.remove('success', 'error');
+  // Update change label based on operation
+  if (result.operation === 'add') {
+    changeLabelEl.textContent = LABELS[currentLang].added || 'Added:';
+  } else if (result.operation === 'subtract') {
+    changeLabelEl.textContent = LABELS[currentLang].subtracted || 'Subtracted:';
+  } else {
+    changeLabelEl.textContent = LABELS[currentLang].changed || 'Changed:';
+  }
 
-        const response = await fetch(`${BARCODE_API_URL}?action=scanToInventory`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ barcode })
-        });
+  // Show result
+  resultEl.style.display = 'block';
 
-        const result = await response.json();
+  // Hide after 5 seconds
+  setTimeout(() => {
+    resultEl.style.display = 'none';
+  }, 5000);
+}
 
-        if (result.success) {
-          // Show success
-          lastScannedEl.textContent = barcode;
-          statusEl.classList.add('success');
-          scanInput.value = '';
-        } else {
-          throw new Error(result.error || 'Scan failed');
-        }
-      } catch (error) {
-        console.error('Scan error:', error);
-        lastScannedEl.textContent = `Error: ${error.message}`;
-        statusEl.classList.add('error');
-      } finally {
-        scanInput.disabled = false;
-        scanInput.focus();
-      }
+/**
+ * Initialize recent changes section
+ */
+function initRecentChanges() {
+  const refreshBtn = document.getElementById('refresh-history-btn');
+  if (refreshBtn) {
+    registerListener(refreshBtn, 'click', () => loadRecentChanges());
+  }
+
+  // Load initial changes
+  loadRecentChanges();
+}
+
+/**
+ * Load recent changes from Pool API
+ */
+async function loadRecentChanges() {
+  const listEl = document.getElementById('recent-changes-list');
+  if (!listEl) return;
+
+  try {
+    const response = await fetch(POOL_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'get_recent_changes',
+        apiKey: 'YOUR_API_KEY_HERE', // TODO: Move to backend proxy
+        count: 10
+      })
+    });
+
+    const result = await response.json();
+    const entries = result.entries || [];
+
+    if (entries.length === 0) {
+      listEl.innerHTML = `<div class="no-changes">${LABELS[currentLang].noChangesYet || 'No changes yet'}</div>`;
+      return;
     }
-  });
 
-  // Keep focus on scan input when in scanner tab
-  registerListener(scanInput, 'blur', () => {
-    // Only refocus if scanner tab is active
-    const scannerTab = document.getElementById('tab-scanner');
-    if (scannerTab && !scannerTab.classList.contains('hidden')) {
-      setTimeout(() => scanInput.focus(), 100);
-    }
-  });
+    // Build HTML for entries
+    listEl.innerHTML = entries.map((entry) => {
+      const timestamp = new Date(entry.timestamp).toLocaleString();
+      const actionClass = entry.action === 'add' ? 'add' : entry.action === 'subtract' ? 'subtract' : 'set';
+      const actionLabel = entry.action === 'add' ? '+' : entry.action === 'subtract' ? '-' : '=';
+
+      return `
+        <div class="change-entry">
+          <div class="change-entry-header">
+            <span class="change-entry-product">${escapeHtml(entry.productTitle)}</span>
+            <span class="change-entry-timestamp">${timestamp}</span>
+          </div>
+          <div class="change-entry-details">
+            <span class="change-entry-action ${actionClass}">${actionLabel}${entry.changeAmount}g</span>
+            <span>→</span>
+            <span>${entry.newValue}g</span>
+          </div>
+          ${entry.note ? `<div class="change-entry-note">${escapeHtml(entry.note)}</div>` : ''}
+        </div>
+      `;
+    }).join('');
+
+  } catch (error) {
+    console.error('Failed to load recent changes:', error);
+    listEl.innerHTML = `<div class="no-changes">Error loading changes</div>`;
+  }
 }
 
 /**
