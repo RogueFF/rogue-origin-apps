@@ -333,6 +333,47 @@ function renderAll() {
     if (bagsVsTargetEl) bagsVsTargetEl.textContent = '—';
   }
 
+  // Update Last Hour widget (Current Production)
+  const currentStrainEl = document.getElementById('currentStrain');
+  const currentTimeEl = document.getElementById('currentTime');
+  const statusBadgeEl = document.getElementById('statusBadge');
+  const currentTopsEl = document.getElementById('currentTops');
+  const currentSmallsEl = document.getElementById('currentSmalls');
+  const currentTrimmersEl = document.getElementById('currentTrimmers');
+  const currentBuckersEl = document.getElementById('currentBuckers');
+  const currentRateEl = document.getElementById('currentRate');
+  const currentTotalEl = document.getElementById('currentTotal');
+
+  if (data.current && data.current.strain) {
+    // Get last hour data from hourly array
+    const lastHour = data.hourly && data.hourly.length > 0 ? data.hourly[data.hourly.length - 1] : null;
+
+    if (lastHour) {
+      const trimmers = lastHour.trimmers || 0;
+      const lbs = lastHour.lbs || 0;
+      const rate = trimmers > 0 ? lbs / trimmers : 0;
+
+      if (currentStrainEl) currentStrainEl.textContent = data.current.strain || 'No Data';
+      if (currentTimeEl) currentTimeEl.textContent = lastHour.label || '—';
+      if (statusBadgeEl) statusBadgeEl.textContent = 'Last Hour';
+      if (currentTopsEl) currentTopsEl.textContent = lbs.toFixed(1);
+      if (currentSmallsEl) currentSmallsEl.textContent = '0'; // Not tracked hourly
+      if (currentTrimmersEl) currentTrimmersEl.textContent = trimmers;
+      if (currentBuckersEl) currentBuckersEl.textContent = '0'; // Not tracked hourly
+      if (currentRateEl) currentRateEl.textContent = rate.toFixed(2);
+      if (currentTotalEl) currentTotalEl.textContent = lbs.toFixed(1);
+    }
+  } else {
+    if (currentStrainEl) currentStrainEl.textContent = 'No Data';
+    if (currentTimeEl) currentTimeEl.textContent = '—';
+    if (currentTopsEl) currentTopsEl.textContent = '0';
+    if (currentSmallsEl) currentSmallsEl.textContent = '0';
+    if (currentTrimmersEl) currentTrimmersEl.textContent = '0';
+    if (currentBuckersEl) currentBuckersEl.textContent = '0';
+    if (currentRateEl) currentRateEl.textContent = '0.00';
+    if (currentTotalEl) currentTotalEl.textContent = '0';
+  }
+
   // Refresh grid layouts
   const widgetGrid = getGrid('widgets');
   const kpiGrid = getGrid('kpi');
