@@ -950,8 +950,6 @@ export {
   clearAllIntervals,
   setFetchController,
   setFlag,
-  registerEventListener,
-  cleanupEventListeners,
   destroyChart,
   destroyAllCharts,
   destroyGrid,
@@ -1100,9 +1098,10 @@ export {
   renderAll
 };
 
-// Event cleanup functions (cleanupEventListeners already exported above)
+// Event cleanup functions
 export {
   registerEventListener,
+  cleanupEventListeners,
   debugListeners,
   getListenerStats
 };

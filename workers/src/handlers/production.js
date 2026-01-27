@@ -1292,13 +1292,16 @@ async function dashboard(params, env) {
     avgRate: validDays.length > 0 ? validDays.reduce((s, d) => s + d.avgRate, 0) / validDays.length : 0,
   };
 
+  // Find today's data from dailyData for accurate avgRate calculation
+  const todayDateStr = formatDatePT(new Date(), 'yyyy-MM-dd');
+  const todayDailyData = dailyData.find(d => formatDatePT(d.date, 'yyyy-MM-dd') === todayDateStr);
+
   const todayData = {
     totalTops: scoreboardData.todayLbs || 0,
-    totalSmalls: 0,
-    totalLbs: scoreboardData.todayLbs || 0,
-    avgRate: scoreboardData.hourlyRates?.length > 0
-      ? scoreboardData.hourlyRates.reduce((s, h) => s + h.rate, 0) / scoreboardData.hourlyRates.length
-      : 0,
+    totalSmalls: todayDailyData?.totalSmalls || 0,
+    totalLbs: (scoreboardData.todayLbs || 0) + (todayDailyData?.totalSmalls || 0),
+    // Use correct calculation: totalTops / totalTrimmerHours (not average of hourly rates)
+    avgRate: todayDailyData?.avgRate || 0,
     trimmers: scoreboardData.lastHourTrimmers || scoreboardData.currentHourTrimmers || 0,
   };
 
