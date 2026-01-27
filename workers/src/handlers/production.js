@@ -877,11 +877,17 @@ async function getBagTimerData(env) {
     const now = new Date();
 
     // Query D1 for today's 5kg bag adjustments
+    // Check both size field and SKU pattern (size is often empty, so we infer from SKU)
     const rows = await env.DB.prepare(`
-      SELECT timestamp, size, flow_run_id
+      SELECT timestamp, size, sku, flow_run_id
       FROM inventory_adjustments
-      WHERE date(timestamp) = ?
-        AND (lower(size) LIKE '%5kg%' OR lower(size) LIKE '%5 kg%')
+      WHERE date(datetime(timestamp, '-8 hours')) = ?
+        AND (
+          lower(size) LIKE '%5kg%'
+          OR lower(size) LIKE '%5 kg%'
+          OR lower(sku) LIKE '%5-KG%'
+          OR lower(sku) LIKE '%-5KG-%'
+        )
       ORDER BY timestamp ASC
     `).bind(today).all();
 
@@ -1157,6 +1163,46 @@ async function test(env) {
     message: 'Production API is working (Cloudflare Workers)',
     timestamp: new Date().toISOString(),
   });
+}
+
+/**
+ * Debug endpoint to check D1 inventory_adjustments data
+ */
+async function debugBags(env) {
+  try {
+    const allBags = await env.DB.prepare(`
+      SELECT timestamp, size, sku, product_name
+      FROM inventory_adjustments
+      ORDER BY timestamp DESC
+      LIMIT 20
+    `).all();
+
+    const today = formatDatePT(new Date(), 'yyyy-MM-dd');
+    const todayBagsUTC = await env.DB.prepare(`
+      SELECT timestamp, size, sku
+      FROM inventory_adjustments
+      WHERE date(timestamp) = ?
+    `).bind(today).all();
+
+    // Also try with Pacific time conversion
+    const todayBagsPT = await env.DB.prepare(`
+      SELECT timestamp, size, sku
+      FROM inventory_adjustments
+      WHERE date(datetime(timestamp, '-8 hours')) = ?
+    `).bind(today).all();
+
+    return successResponse({
+      totalBags: allBags.results.length,
+      todayPacific: today,
+      recentBags: allBags.results,
+      todayBagsUTC: todayBagsUTC.results.length,
+      todayBagsPT: todayBagsPT.results.length,
+      utcResults: todayBagsUTC.results,
+      ptResults: todayBagsPT.results,
+    });
+  } catch (error) {
+    return errorResponse('Debug failed: ' + error.message);
+  }
 }
 
 /**
@@ -2487,6 +2533,8 @@ export async function handleProduction(request, env, ctx) {
     switch (action) {
       case 'test':
         return await test(env);
+      case 'debugBags':
+        return await debugBags(env);
       case 'version':
         return await version(env);
       case 'scoreboard':
