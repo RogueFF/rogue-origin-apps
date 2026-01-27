@@ -1100,10 +1100,9 @@ export {
   renderAll
 };
 
-// Event cleanup functions
+// Event cleanup functions (cleanupEventListeners already exported above)
 export {
   registerEventListener,
-  cleanupEventListeners,
   debugListeners,
   getListenerStats
 };
