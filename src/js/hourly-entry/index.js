@@ -1645,7 +1645,7 @@ setTimeout(() => initTutorial(), 500);
 // ===================
 
 const BARCODE_API_URL = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/barcode';
-const POOL_API_URL = 'YOUR_POOL_API_URL_HERE'; // TODO: Replace with actual Pool Inventory API URL
+const POOL_API_URL = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/pool';
 
 let barcodeProducts = []; // Products loaded from barcode API
 let poolProducts = []; // Products loaded from Pool API
@@ -1886,12 +1886,10 @@ async function initScannerTab() {
  */
 async function loadPoolProducts() {
   try {
-    const response = await fetch(POOL_API_URL, {
+    const response = await fetch(`${POOL_API_URL}?action=list_products`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        action: 'list_products',
-        apiKey: 'YOUR_API_KEY_HERE', // TODO: Move to backend proxy
         poolType: currentPoolType
       })
     });
@@ -2033,12 +2031,10 @@ function initPoolUpdateButton() {
       updateBtn.disabled = true;
       updateBtn.textContent = LABELS[currentLang].updating || 'Updating...';
 
-      const response = await fetch(POOL_API_URL, {
+      const response = await fetch(`${POOL_API_URL}?action=update_pool`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'update_pool',
-          apiKey: 'YOUR_API_KEY_HERE', // TODO: Move to backend proxy
           productId,
           operation: currentOperation,
           amount,
@@ -2147,12 +2143,10 @@ async function loadRecentChanges() {
   if (!listEl) return;
 
   try {
-    const response = await fetch(POOL_API_URL, {
+    const response = await fetch(`${POOL_API_URL}?action=get_recent_changes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        action: 'get_recent_changes',
-        apiKey: 'YOUR_API_KEY_HERE', // TODO: Move to backend proxy
         count: 10
       })
     });
