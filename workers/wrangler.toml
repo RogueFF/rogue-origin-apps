@@ -23,6 +23,8 @@ name = "rogue-origin-api"
 # - ANTHROPIC_API_KEY
 # - GOOGLE_TTS_API_KEY
 # - ORDERS_PASSWORD
+# - POOL_INVENTORY_API_URL (Pool Inventory Service base URL)
+# - POOL_INVENTORY_API_KEY (Pool Inventory Service API key)
 
 # D1 Database
 [[d1_databases]]
