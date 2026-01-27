@@ -2310,7 +2310,42 @@ function initPoolUpdateButton() {
       return;
     }
 
-    // Call Pool API to update pool
+    // Get current pool value for optimistic update
+    const poolValueEl = document.getElementById('current-pool-value');
+    const currentValue = parseFloat(poolValueEl.textContent.replace(/,/g, '')) || 0;
+
+    // Calculate optimistic new value
+    let optimisticNewValue;
+    if (currentOperation === 'add') {
+      optimisticNewValue = currentValue + amount;
+    } else if (currentOperation === 'subtract') {
+      optimisticNewValue = Math.max(0, currentValue - amount);
+    } else {
+      optimisticNewValue = amount;
+    }
+
+    // Update UI instantly (optimistic)
+    poolValueEl.textContent = optimisticNewValue.toLocaleString('en-US', { minimumFractionDigits: 1 });
+
+    // Update cached product data
+    const product = poolProducts.find(p => p.id === productId);
+    if (product) {
+      product.poolValue = optimisticNewValue;
+    }
+
+    // Show optimistic result immediately
+    displayUpdateResult({
+      previousValue: currentValue,
+      changeAmount: currentOperation === 'subtract' ? -amount : amount,
+      newValue: optimisticNewValue,
+      operation: currentOperation
+    });
+
+    // Clear inputs immediately
+    gramsInput.value = '';
+    noteInput.value = '';
+
+    // Call Pool API to update pool (in background)
     try {
       updateBtn.disabled = true;
       updateBtn.textContent = LABELS[currentLang].updating || 'Updating...';
@@ -2330,22 +2365,24 @@ function initPoolUpdateButton() {
       const result = await response.json();
 
       if (result.success) {
-        // Show result
-        displayUpdateResult(result);
+        // Update with actual server value (in case it differs)
+        const actualNewValue = result.newValue || result.data?.newValue || optimisticNewValue;
+        poolValueEl.textContent = actualNewValue.toLocaleString('en-US', { minimumFractionDigits: 1 });
 
-        // Clear inputs
-        gramsInput.value = '';
-        noteInput.value = '';
+        // Update cached product with actual value
+        if (product) {
+          product.poolValue = actualNewValue;
+        }
 
-        // Reload products to update pool values
-        await loadPoolProducts();
-        populateScannerStrainSelect();
+        // Update result display with actual values
+        displayUpdateResult({
+          previousValue: result.previousValue || result.data?.previousValue || currentValue,
+          changeAmount: result.changeAmount || result.data?.changeAmount || (currentOperation === 'subtract' ? -amount : amount),
+          newValue: actualNewValue,
+          operation: currentOperation
+        });
 
-        // Restore selection
-        strainSelect.value = productId;
-        updateCurrentPoolDisplay();
-
-        // Reload recent changes
+        // Reload recent changes (background, non-blocking)
         loadRecentChanges();
 
         // Reset button
@@ -2358,6 +2395,13 @@ function initPoolUpdateButton() {
       }
     } catch (error) {
       console.error('Pool update error:', error);
+
+      // Revert optimistic update on error
+      poolValueEl.textContent = currentValue.toLocaleString('en-US', { minimumFractionDigits: 1 });
+      if (product) {
+        product.poolValue = currentValue;
+      }
+
       updateBtn.textContent = '✗ Error';
       setTimeout(() => {
         updateBtn.textContent = LABELS[currentLang].updatePool || 'Update Pool';
