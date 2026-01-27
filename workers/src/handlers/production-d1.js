@@ -138,9 +138,11 @@ async function getScoreboardData(env) {
     lastHourLbs: 0,
     lastHourTarget: 0,
     lastHourTrimmers: 0,
+    lastHourBuckers: 0,
     lastTimeSlot: '',
     lastHourMultiplier: 1.0,
     currentHourTrimmers: 0,
+    currentHourBuckers: 0,
     currentHourTarget: 0,
     currentTimeSlot: '',
     currentHourMultiplier: 1.0,
@@ -161,7 +163,7 @@ async function getScoreboardData(env) {
 
   // Get today's hourly production data from D1
   const todayRows = await query(env.DB, `
-    SELECT time_slot, cultivar1, tops_lbs1, trimmers_line1
+    SELECT time_slot, cultivar1, tops_lbs1, trimmers_line1, buckers_line1
     FROM monthly_production
     WHERE production_date = ?
   `, [today]);
@@ -176,6 +178,7 @@ async function getScoreboardData(env) {
       timeSlot: r.time_slot || '',
       tops: r.tops_lbs1 || 0,
       trimmers: r.trimmers_line1 || 0,
+      buckers: r.buckers_line1 || 0,
       strain: r.cultivar1 || '',
       multiplier: getTimeSlotMultiplier(r.time_slot),
     };
@@ -237,6 +240,7 @@ async function getScoreboardData(env) {
     const lastRow = rows[lastCompletedHourIndex];
     result.lastHourLbs = lastRow.tops;
     result.lastHourTrimmers = lastRow.trimmers;
+    result.lastHourBuckers = lastRow.buckers || 0;
     result.lastHourMultiplier = lastRow.multiplier;
     result.lastHourTarget = lastRow.trimmers * targetRate * lastRow.multiplier;
     result.lastTimeSlot = lastRow.timeSlot;
@@ -246,6 +250,7 @@ async function getScoreboardData(env) {
   if (currentHourIndex >= 0) {
     const currentRow = rows[currentHourIndex];
     result.currentHourTrimmers = currentRow.trimmers;
+    result.currentHourBuckers = currentRow.buckers || 0;
     result.currentHourMultiplier = currentRow.multiplier;
     result.currentHourTarget = currentRow.trimmers * targetRate * currentRow.multiplier;
     result.currentTimeSlot = currentRow.timeSlot;
