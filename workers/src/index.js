@@ -7,6 +7,7 @@
  * - /api/barcode - Barcode/label management
  * - /api/kanban - Kanban board
  * - /api/sop - Standard operating procedures
+ * - /api/pool - Pool inventory proxy
  */
 
 import { handleProduction } from './handlers/production.js';
@@ -19,6 +20,7 @@ import { handleKanban } from './handlers/kanban.js';
 import { handleKanbanD1 } from './handlers/kanban-d1.js';
 import { handleSop } from './handlers/sop.js';
 import { handleSopD1 } from './handlers/sop-d1.js';
+import { handlePoolRequest } from './handlers/pool.js';
 import { corsHeaders, handleCors } from './lib/cors.js';
 import { jsonResponse, errorResponse } from './lib/response.js';
 import { ApiError } from './lib/errors.js';
@@ -64,13 +66,15 @@ export default {
         response = USE_D1_SOP
           ? await handleSopD1(request, env, ctx)
           : await handleSop(request, env, ctx);
+      } else if (path.startsWith('/api/pool')) {
+        response = await handlePoolRequest(request, env, ctx);
       } else if (path === '/' || path === '/api') {
         // Health check
         response = jsonResponse({
           success: true,
           message: 'Rogue Origin API - Cloudflare Workers',
           version: '1.0.0',
-          endpoints: ['/api/production', '/api/orders', '/api/barcode', '/api/kanban', '/api/sop']
+          endpoints: ['/api/production', '/api/orders', '/api/barcode', '/api/kanban', '/api/sop', '/api/pool']
         });
       } else {
         response = errorResponse('Not found', 'NOT_FOUND', 404);
