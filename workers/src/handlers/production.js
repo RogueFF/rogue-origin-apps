@@ -489,7 +489,13 @@ async function getScoreboardData(env) {
       }
 
       const rate = (row.tops / row.trimmers) / row.multiplier;
-      hourlyRates.push({ timeSlot: row.timeSlot, rate, target: targetRate });
+      hourlyRates.push({
+        timeSlot: row.timeSlot,
+        rate,
+        target: targetRate,
+        trimmers: row.trimmers,
+        lbs: row.tops
+      });
     }
   }
 
@@ -741,7 +747,13 @@ async function getScoreboardDataFromD1(env) {
         }
 
         const rate = (row.tops / row.trimmers) / row.multiplier;
-        hourlyRates.push({ timeSlot: row.timeSlot, rate, target: targetRate });
+        hourlyRates.push({
+          timeSlot: row.timeSlot,
+          rate,
+          target: targetRate,
+          trimmers: row.trimmers,
+          lbs: row.tops
+        });
       }
     }
 
@@ -1292,16 +1304,30 @@ async function dashboard(params, env) {
     avgRate: validDays.length > 0 ? validDays.reduce((s, d) => s + d.avgRate, 0) / validDays.length : 0,
   };
 
-  // Find today's data from dailyData for accurate avgRate calculation
+  // Find today's data from dailyData for smalls
   const todayDateStr = formatDatePT(new Date(), 'yyyy-MM-dd');
   const todayDailyData = dailyData.find(d => formatDatePT(d.date, 'yyyy-MM-dd') === todayDateStr);
+
+  // Calculate weighted average rate (each hourly rate weighted by trimmer count)
+  const hourlyRates = scoreboardData.hourlyRates || [];
+  let weightedRateSum = 0;
+  let totalTrimmerHours = 0;
+
+  for (const hour of hourlyRates) {
+    if (hour.trimmers && hour.rate != null) {
+      weightedRateSum += hour.rate * hour.trimmers;
+      totalTrimmerHours += hour.trimmers;
+    }
+  }
+
+  const avgRate = totalTrimmerHours > 0 ? weightedRateSum / totalTrimmerHours : 0;
 
   const todayData = {
     totalTops: scoreboardData.todayLbs || 0,
     totalSmalls: todayDailyData?.totalSmalls || 0,
     totalLbs: (scoreboardData.todayLbs || 0) + (todayDailyData?.totalSmalls || 0),
-    // Use correct calculation: totalTops / totalTrimmerHours (not average of hourly rates)
-    avgRate: todayDailyData?.avgRate || 0,
+    // Weighted average: each hourly rate weighted by trimmer count
+    avgRate: Math.round(avgRate * 100) / 100,
     trimmers: scoreboardData.lastHourTrimmers || scoreboardData.currentHourTrimmers || 0,
   };
 
