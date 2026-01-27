@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rogue Origin Design Assets</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/shared-base.css">
+  <style>
+    body {
+      padding: 40px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .header {
+      background: var(--bg-dark);
+      color: var(--header-text);
+      padding: 32px;
+      border-radius: var(--radius-lg);
+      margin-bottom: 40px;
+      text-align: center;
+    }
+
+    .header h1 {
+      font-family: var(--font-display);
+      font-size: 48px;
+      margin: 0;
+      color: var(--ro-gold);
+    }
+
+    .header p {
+      margin: 8px 0 0 0;
+      opacity: 0.8;
+    }
+
+    .theme-toggle {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 12px 20px;
+      background: var(--ro-green);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-family: var(--font-ui);
+      font-weight: 600;
+      z-index: 1000;
+    }
+
+    .theme-toggle:hover {
+      background: var(--green-dark);
+    }
+
+    .section {
+      background: var(--bg-card);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      margin-bottom: 32px;
+      box-shadow: var(--shadow-md);
+    }
+
+    .section-title {
+      font-family: var(--font-ui);
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--ro-green);
+      margin: 0 0 24px 0;
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 12px;
+    }
+
+    .subsection-title {
+      font-family: var(--font-ui);
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text);
+      margin: 24px 0 16px 0;
+    }
+
+    /* Color Swatches */
+    .color-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .color-swatch {
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--border);
+    }
+
+    .color-box {
+      height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .color-info {
+      padding: 12px;
+      background: var(--bg);
+    }
+
+    .color-name {
+      font-family: var(--font-ui);
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+
+    .color-code {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .color-var {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    /* Typography Samples */
+    .type-sample {
+      margin-bottom: 24px;
+      padding: 16px;
+      background: var(--bg);
+      border-radius: var(--radius-sm);
+      border-left: 4px solid var(--ro-gold);
+    }
+
+    .type-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 8px;
+    }
+
+    .hero-number {
+      font-family: var(--font-display);
+      font-size: 96px;
+      line-height: 1.1;
+      color: var(--ro-gold);
+      font-weight: 400;
+    }
+
+    .display-text {
+      font-family: var(--font-display);
+      font-size: 48px;
+      line-height: 1.1;
+      font-weight: 400;
+    }
+
+    .h1-text {
+      font-family: var(--font-ui);
+      font-size: 28px;
+      font-weight: 600;
+      line-height: 1.25;
+    }
+
+    .h2-text {
+      font-family: var(--font-ui);
+      font-size: 22px;
+      font-weight: 600;
+      line-height: 1.25;
+    }
+
+    .body-text {
+      font-family: var(--font-ui);
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 1.5;
+    }
+
+    .mono-text {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 500;
+      line-height: 1.5;
+    }
+
+    /* Spacing Visual */
+    .spacing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 16px;
+    }
+
+    .spacing-box {
+      text-align: center;
+    }
+
+    .spacing-visual {
+      background: var(--ro-green);
+      border-radius: var(--radius-sm);
+      margin: 0 auto 8px;
+    }
+
+    .spacing-label {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .spacing-value {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* Border Radius Visual */
+    .radius-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 16px;
+    }
+
+    .radius-box {
+      text-align: center;
+    }
+
+    .radius-visual {
+      width: 100px;
+      height: 100px;
+      background: var(--ro-gold);
+      margin: 0 auto 8px;
+    }
+
+    .radius-label {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    /* Shadow Visual */
+    .shadow-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 24px;
+    }
+
+    .shadow-box {
+      text-align: center;
+      padding: 24px;
+    }
+
+    .shadow-visual {
+      width: 120px;
+      height: 120px;
+      background: var(--bg-card);
+      border-radius: var(--radius-md);
+      margin: 0 auto 12px;
+    }
+
+    .shadow-label {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    /* Component Previews */
+    .component-grid {
+      display: grid;
+      gap: 24px;
+    }
+
+    .component-preview {
+      padding: 24px;
+      background: var(--bg);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+    }
+
+    .component-label {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    /* Buttons */
+    .btn {
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      border: none;
+      font-family: var(--font-ui);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition-normal);
+      margin-right: 12px;
+      margin-bottom: 12px;
+    }
+
+    .btn-primary {
+      background: var(--ro-green);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--green-dark);
+    }
+
+    .btn-secondary {
+      background: var(--ro-gold);
+      color: white;
+    }
+
+    .btn-secondary:hover {
+      background: var(--gold-600);
+    }
+
+    .btn-outline {
+      background: transparent;
+      color: var(--ro-green);
+      border: 2px solid var(--ro-green);
+    }
+
+    .btn-outline:hover {
+      background: var(--green-dim);
+    }
+
+    /* Cards */
+    .card-preview {
+      background: var(--bg-card);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--border);
+    }
+
+    .card-title {
+      font-family: var(--font-ui);
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text);
+      margin: 0 0 8px 0;
+    }
+
+    .card-content {
+      font-family: var(--font-ui);
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-family: var(--font-ui);
+      font-size: 12px;
+      font-weight: 600;
+      margin-right: 8px;
+      margin-bottom: 8px;
+    }
+
+    .badge-success {
+      background: var(--green-dim);
+      color: var(--ro-green);
+      border: 1px solid var(--ro-green);
+    }
+
+    .badge-warning {
+      background: var(--gold-dim);
+      color: var(--ro-gold);
+      border: 1px solid var(--ro-gold);
+    }
+
+    .badge-danger {
+      background: var(--danger-dim);
+      color: var(--danger);
+      border: 1px solid var(--danger);
+    }
+
+    .badge-sungrown {
+      background: var(--sungrown-dim);
+      color: var(--sungrown);
+      border: 1px solid var(--sungrown);
+    }
+
+    .badge-greenhouse {
+      background: var(--greenhouse-dim);
+      color: var(--greenhouse);
+      border: 1px solid var(--greenhouse);
+    }
+
+    .badge-indoor {
+      background: var(--indoor-dim);
+      color: var(--indoor);
+      border: 1px solid var(--indoor);
+    }
+
+    /* Inputs */
+    .input {
+      padding: 12px 16px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      font-family: var(--font-ui);
+      font-size: 14px;
+      background: var(--bg);
+      color: var(--text);
+      width: 100%;
+      max-width: 300px;
+      margin-bottom: 12px;
+    }
+
+    .input:focus {
+      outline: none;
+      border-color: var(--ro-green);
+      box-shadow: 0 0 0 3px var(--green-dim);
+    }
+
+    /* Logo Display */
+    .logo-display {
+      display: flex;
+      gap: 32px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .logo-box {
+      text-align: center;
+    }
+
+    .logo-img {
+      max-width: 200px;
+      height: auto;
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 12px;
+      background: var(--bg);
+      padding: 16px;
+    }
+
+    .logo-label {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Mobile */
+    @media (max-width: 768px) {
+      body {
+        padding: 16px;
+      }
+
+      .section {
+        padding: 20px;
+      }
+
+      .hero-number {
+        font-size: 64px;
+      }
+
+      .display-text {
+        font-size: 36px;
+      }
+
+      .color-grid,
+      .spacing-grid,
+      .radius-grid,
+      .shadow-grid {
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <button class="theme-toggle" onclick="toggleTheme()">
+    <span id="theme-icon">🌙</span> Toggle Theme
+  </button>
+
+  <div class="header">
+    <h1>Rogue Origin Design Assets</h1>
+    <p>Visual style guide for Rogue Origin Operations Hub</p>
+  </div>
+
+  <!-- BRAND COLORS -->
+  <section class="section">
+    <h2 class="section-title">Brand Colors</h2>
+    <div class="color-grid">
+      <div class="color-swatch">
+        <div class="color-box" style="background: #668971; color: white;">
+          #668971
+        </div>
+        <div class="color-info">
+          <div class="color-name">Rogue Green</div>
+          <div class="color-code">rgb(102, 137, 113)</div>
+          <div class="color-var">--ro-green</div>
+        </div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-box" style="background: #e4aa4f; color: white;">
+          #e4aa4f
+        </div>
+        <div class="color-info">
+          <div class="color-name">Rogue Gold</div>
+          <div class="color-code">rgb(228, 170, 79)</div>
+          <div class="color-var">--ro-gold</div>
+        </div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-box" style="background: #f0cb60; color: #2d3a32;">
+          #f0cb60
+        </div>
+        <div class="color-info">
+          <div class="color-name">Gold Light</div>
+          <div class="color-code">rgb(240, 203, 96)</div>
+          <div class="color-var">--gold-light</div>
+        </div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-box" style="background: #4a6b54; color: white;">
+          #4a6b54
+        </div>
+        <div class="color-info">
+          <div class="color-name">Green Dark</div>
+          <div class="color-code">rgb(74, 107, 84)</div>
+          <div class="color-var">--green-dark</div>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="subsection-title">Semantic Colors</h3>
+    <div class="color-grid">
+      <div class="color-swatch">
+        <div class="color-box" style="background: #668971; color: white;">
+          Success
+        </div>
+        <div class="color-info">
+          <div class="color-name">Success</div>
+          <div class="color-code">#668971</div>
+          <div class="color-var">--success</div>
+        </div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-box" style="background: #e4aa4f; color: white;">
+          Warning
+        </div>
+        <div class="color-info">
+          <div class="color-name">Warning</div>
+          <div class="color-code">#e4aa4f</div>
+          <div class="color-var">--warning</div>
+        </div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-box" style="background: #c45c4a; color: white;">
+          Danger
+        </div>
+        <div class="color-info">
+          <div class="color-name">Danger</div>
+          <div class="color-code">#c45c4a</div>
+          <div class="color-var">--danger</div>
+        </div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-box" style="background: #62758d; color: white;">
+          Info
+        </div>
+        <div class="color-info">
+          <div class="color-name">Info</div>
+          <div class="color-code">#62758d</div>
+          <div class="color-var">--info</div>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="subsection-title">Cultivation Types</h3>
+    <div class="color-grid">
+      <div class="color-swatch">
+        <div class="color-box" style="background: #bf8e4e; color: white;">
+          Sungrown
+        </div>
+        <div class="color-info">
+          <div class="color-name">Sungrown</div>
+          <div class="color-code">#bf8e4e</div>
+          <div class="color-var">--sungrown</div>
+        </div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-box" style="background: #8f9263; color: white;">
+          Greenhouse
+        </div>
+        <div class="color-info">
+          <div class="color-name">Greenhouse</div>
+          <div class="color-code">#8f9263</div>
+          <div class="color-var">--greenhouse</div>
+        </div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-box" style="background: #62758d; color: white;">
+          Indoor
+        </div>
+        <div class="color-info">
+          <div class="color-name">Indoor</div>
+          <div class="color-code">#62758d</div>
+          <div class="color-var">--indoor</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TYPOGRAPHY -->
+  <section class="section">
+    <h2 class="section-title">Typography</h2>
+
+    <div class="type-sample">
+      <div class="type-label">Hero Number - DM Serif Display 96px</div>
+      <div class="hero-number">1,248</div>
+    </div>
+
+    <div class="type-sample">
+      <div class="type-label">Display - DM Serif Display 48px</div>
+      <div class="display-text">Large KPI Value</div>
+    </div>
+
+    <div class="type-sample">
+      <div class="type-label">Heading 1 - Outfit 28px Semibold</div>
+      <div class="h1-text">Page Title or Main Heading</div>
+    </div>
+
+    <div class="type-sample">
+      <div class="type-label">Heading 2 - Outfit 22px Semibold</div>
+      <div class="h2-text">Section Header</div>
+    </div>
+
+    <div class="type-sample">
+      <div class="type-label">Body Text - Outfit 14px Regular</div>
+      <div class="body-text">This is body text used for paragraphs and descriptions. It should be readable at 14px with a line height of 1.5 for comfortable reading.</div>
+    </div>
+
+    <div class="type-sample">
+      <div class="type-label">Monospace - JetBrains Mono 14px Medium</div>
+      <div class="mono-text">12:34:56 | SKU-12345 | 1,248.50 lbs</div>
+    </div>
+  </section>
+
+  <!-- SPACING -->
+  <section class="section">
+    <h2 class="section-title">Spacing (8px Grid)</h2>
+    <div class="spacing-grid">
+      <div class="spacing-box">
+        <div class="spacing-visual" style="width: 8px; height: 8px;"></div>
+        <div class="spacing-label">XS</div>
+        <div class="spacing-value">8px</div>
+      </div>
+      <div class="spacing-box">
+        <div class="spacing-visual" style="width: 16px; height: 16px;"></div>
+        <div class="spacing-label">SM</div>
+        <div class="spacing-value">16px</div>
+      </div>
+      <div class="spacing-box">
+        <div class="spacing-visual" style="width: 24px; height: 24px;"></div>
+        <div class="spacing-label">MD</div>
+        <div class="spacing-value">24px</div>
+      </div>
+      <div class="spacing-box">
+        <div class="spacing-visual" style="width: 40px; height: 40px;"></div>
+        <div class="spacing-label">LG</div>
+        <div class="spacing-value">40px</div>
+      </div>
+      <div class="spacing-box">
+        <div class="spacing-visual" style="width: 64px; height: 64px;"></div>
+        <div class="spacing-label">XL</div>
+        <div class="spacing-value">64px</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BORDER RADIUS -->
+  <section class="section">
+    <h2 class="section-title">Border Radius</h2>
+    <div class="radius-grid">
+      <div class="radius-box">
+        <div class="radius-visual" style="border-radius: 8px;"></div>
+        <div class="radius-label">SM</div>
+        <div class="spacing-value">8px</div>
+      </div>
+      <div class="radius-box">
+        <div class="radius-visual" style="border-radius: 12px;"></div>
+        <div class="radius-label">MD</div>
+        <div class="spacing-value">12px</div>
+      </div>
+      <div class="radius-box">
+        <div class="radius-visual" style="border-radius: 16px;"></div>
+        <div class="radius-label">LG</div>
+        <div class="spacing-value">16px</div>
+      </div>
+      <div class="radius-box">
+        <div class="radius-visual" style="border-radius: 20px;"></div>
+        <div class="radius-label">XL</div>
+        <div class="spacing-value">20px</div>
+      </div>
+      <div class="radius-box">
+        <div class="radius-visual" style="border-radius: 9999px;"></div>
+        <div class="radius-label">FULL</div>
+        <div class="spacing-value">Pill</div>
+      </div>
+      <div class="radius-box">
+        <div class="radius-visual" style="border-radius: 8px 12px 10px 14px;"></div>
+        <div class="radius-label">ORGANIC</div>
+        <div class="spacing-value">Asymmetric</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SHADOWS -->
+  <section class="section">
+    <h2 class="section-title">Shadows</h2>
+    <div class="shadow-grid">
+      <div class="shadow-box">
+        <div class="shadow-visual" style="box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);"></div>
+        <div class="shadow-label">SM</div>
+      </div>
+      <div class="shadow-box">
+        <div class="shadow-visual" style="box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);"></div>
+        <div class="shadow-label">MD</div>
+      </div>
+      <div class="shadow-box">
+        <div class="shadow-visual" style="box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);"></div>
+        <div class="shadow-label">LG</div>
+      </div>
+      <div class="shadow-box">
+        <div class="shadow-visual" style="box-shadow: 0 16px 32px rgba(0, 0, 0, 0.12);"></div>
+        <div class="shadow-label">XL</div>
+      </div>
+      <div class="shadow-box">
+        <div class="shadow-visual" style="box-shadow: 0 0 32px rgba(228, 170, 79, 0.5);"></div>
+        <div class="shadow-label">GOLD GLOW</div>
+      </div>
+      <div class="shadow-box">
+        <div class="shadow-visual" style="box-shadow: 0 0 32px rgba(102, 137, 113, 0.5);"></div>
+        <div class="shadow-label">GREEN GLOW</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- COMPONENTS -->
+  <section class="section">
+    <h2 class="section-title">Components</h2>
+
+    <div class="component-grid">
+      <div class="component-preview">
+        <div class="component-label">Buttons</div>
+        <button class="btn btn-primary">Primary Button</button>
+        <button class="btn btn-secondary">Secondary Button</button>
+        <button class="btn btn-outline">Outline Button</button>
+      </div>
+
+      <div class="component-preview">
+        <div class="component-label">Badges</div>
+        <span class="badge badge-success">Success</span>
+        <span class="badge badge-warning">Warning</span>
+        <span class="badge badge-danger">Danger</span>
+        <span class="badge badge-sungrown">Sungrown</span>
+        <span class="badge badge-greenhouse">Greenhouse</span>
+        <span class="badge badge-indoor">Indoor</span>
+      </div>
+
+      <div class="component-preview">
+        <div class="component-label">Input Field</div>
+        <input type="text" class="input" placeholder="Enter text here...">
+      </div>
+
+      <div class="component-preview">
+        <div class="component-label">Card</div>
+        <div class="card-preview">
+          <div class="card-title">Card Title</div>
+          <div class="card-content">
+            This is a card component with a title and content. Cards are used throughout the application to group related information.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LOGOS -->
+  <section class="section">
+    <h2 class="section-title">Logos & Assets</h2>
+    <div class="logo-display">
+      <div class="logo-box">
+        <img src="../assets/ro-logo-square.png" alt="Rogue Origin Square Logo" class="logo-img">
+        <div class="logo-label">Square Logo (512x512)</div>
+      </div>
+      <div class="logo-box">
+        <img src="../assets/ro-logo-horizontal.png" alt="Rogue Origin Horizontal Logo" class="logo-img" style="max-width: 300px;">
+        <div class="logo-label">Horizontal Logo</div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    function toggleTheme() {
+      const body = document.body;
+      const icon = document.getElementById('theme-icon');
+
+      if (body.classList.contains('dark-mode')) {
+        body.classList.remove('dark-mode');
+        icon.textContent = '🌙';
+        localStorage.setItem('theme', 'light');
+      } else {
+        body.classList.add('dark-mode');
+        icon.textContent = '☀️';
+        localStorage.setItem('theme', 'dark');
+      }
+    }
+
+    // Load saved theme
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark') {
+      document.body.classList.add('dark-mode');
+      document.getElementById('theme-icon').textContent = '☀️';
+    }
+  </script>
+</body>
+</html>
