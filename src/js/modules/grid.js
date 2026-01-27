@@ -11,6 +11,7 @@ import {
   clearTimer,
   setFlag
 } from './state.js';
+import { loadMuuri } from './lazy-loader.js';
 
 // Widget size cycle order
 const WIDGET_SIZES = ['small', 'medium', 'large', 'xl', 'full'];
@@ -26,9 +27,13 @@ const STORAGE_KEYS = {
 
 /**
  * Initialize Muuri grid for widgets
- * @returns {Muuri|null} The grid instance or null if initialization fails
+ * Lazy loads Muuri library if not already loaded
+ * @returns {Promise<Muuri|null>} The grid instance or null if initialization fails
  */
-export function initMuuriGrid() {
+export async function initMuuriGrid() {
+  // Lazy load Muuri library
+  await loadMuuri();
+
   const container = document.querySelector('.widgets-container');
   if (!container) {
     console.warn('Widget grid container not found');
@@ -124,9 +129,13 @@ export function initMuuriGrid() {
 
 /**
  * Initialize Muuri grid for KPI cards
- * @returns {Muuri|null} The grid instance or null if initialization fails
+ * Lazy loads Muuri library if not already loaded
+ * @returns {Promise<Muuri|null>} The grid instance or null if initialization fails
  */
-export function initMuuriKPI() {
+export async function initMuuriKPI() {
+  // Lazy load Muuri library
+  await loadMuuri();
+
   const container = document.querySelector('.kpi-row');
   if (!container) {
     console.warn('KPI grid container not found');
