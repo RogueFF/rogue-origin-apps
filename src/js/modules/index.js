@@ -64,8 +64,6 @@ import {
   clearAllIntervals,
   setFetchController,
   setFlag,
-  registerEventListener,
-  cleanupEventListeners,
   destroyChart,
   destroyAllCharts,
   destroyGrid,
@@ -75,6 +73,14 @@ import {
   debugState,
   getFallback
 } from './state.js';
+
+// ===== EVENT CLEANUP IMPORTS =====
+import {
+  registerEventListener,
+  cleanupAllListeners as cleanupEventListeners,
+  debugListeners,
+  getListenerStats
+} from './event-cleanup.js';
 
 // ===== UTILITY IMPORTS =====
 import {
@@ -624,11 +630,15 @@ function setupDocumentClickHandler() {
 }
 
 // ===== MAIN INITIALIZATION =====
-function init() {
+async function init() {
   console.log('Initializing Rogue Origin Dashboard...');
 
   // 1. Set up cleanup for page unload (registered for tracking)
-  registerEventListener(window, 'beforeunload', cleanup);
+  const beforeUnloadHandler = () => {
+    cleanup();
+    cleanupEventListeners(); // Clean up ALL registered listeners
+  };
+  registerEventListener(window, 'beforeunload', beforeUnloadHandler);
 
   // 2. Wire up cross-module callbacks
   setRenderCallback(renderAll);
@@ -667,16 +677,16 @@ function init() {
   // 9. Render widget toggles in settings
   renderWidgetToggles();
 
-  // 10. Initialize charts
-  initCharts();
+  // 10. Initialize charts (lazy loads Chart.js when needed)
+  await initCharts();
 
-  // 11. Initialize Muuri grids (desktop only)
+  // 11. Initialize Muuri grids (desktop only, lazy loads Muuri.js when needed)
   // Delay initialization to ensure DOM layout is complete and charts are rendered
   if (window.innerWidth >= 600) {
-    setTimeout(function() {
+    setTimeout(async function() {
       console.log('Initializing Muuri grids...');
-      const kpiGrid = initMuuriKPI();
-      const widgetGrid = initMuuriGrid();
+      const kpiGrid = await initMuuriKPI();
+      const widgetGrid = await initMuuriGrid();
       console.log('Muuri initialization complete:', {
         kpiGrid: !!kpiGrid,
         widgetGrid: !!widgetGrid
@@ -1088,4 +1098,12 @@ export {
   showSkeletons,
   showToast,
   renderAll
+};
+
+// Event cleanup functions
+export {
+  registerEventListener,
+  cleanupEventListeners,
+  debugListeners,
+  getListenerStats
 };

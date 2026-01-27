@@ -780,7 +780,50 @@
     .timer-stat-value { font-size: 16px; font-weight: 700; color: rgba(255,255,255,0.9); }
     .timer-stat-value.positive { color: #4ade80; }
     .timer-stat-value.negative { color: #f87171; }
-    
+
+    /* Scale Section - Circular Ring Display (matches timer exactly) */
+    .scale-section { display: flex; flex-direction: column; align-items: center; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid rgba(228,170,79,0.2); }
+    .scale-header { font-size: 16px; font-weight: 700; color: var(--gold); text-transform: uppercase; letter-spacing: 3px; margin-bottom: 15px; }
+    .scale-display { position: relative; width: 220px; height: 220px; }
+    .scale-ring { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .scale-ring-bg { fill: none; stroke: rgba(255,255,255,0.1); stroke-width: 12; }
+    .scale-ring-progress { fill: none; stroke-width: 12; stroke-linecap: round; transition: stroke-dashoffset 0.15s ease-out, stroke 0.3s ease; }
+    .scale-ring-progress.filling { stroke: #22c55e; filter: drop-shadow(0 0 6px rgba(34, 197, 94, 0.5)); }
+    .scale-ring-progress.near-target { stroke: #7cb888; filter: drop-shadow(0 0 8px rgba(124, 184, 136, 0.6)); }
+    .scale-ring-progress.at-target { stroke: var(--gold); filter: drop-shadow(0 0 10px rgba(228, 170, 79, 0.7)); }
+    .scale-ring-progress.stale { stroke: #64748b; filter: none; }
+    .scale-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+    .scale-value { font-size: 48px; font-weight: 900; color: #fff; line-height: 1; font-variant-numeric: tabular-nums; }
+    .scale-value.filling { color: #4ade80; text-shadow: 0 0 20px rgba(34, 197, 94, 0.5); }
+    .scale-value.near-target { color: #7cb888; text-shadow: 0 0 20px rgba(124, 184, 136, 0.5); }
+    .scale-value.at-target { color: var(--gold); text-shadow: 0 0 25px rgba(228, 170, 79, 0.6); animation: scaleComplete 0.5s ease-out; }
+    .scale-value.stale { color: rgba(255,255,255,0.4); text-shadow: none; }
+    .scale-label { font-size: 14px; color: rgba(255,255,255,0.5); margin-top: 6px; }
+    .scale-status-dot { position: absolute; top: 8px; right: 8px; width: 10px; height: 10px; border-radius: 50%; background: #666; transition: background 0.3s; }
+    .scale-status-dot.connected { background: #4ade80; box-shadow: 0 0 8px #4ade80; animation: statusPulse 2s ease-in-out infinite; }
+    .scale-status-dot.stale { background: #64748b; }
+    @keyframes scaleComplete { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+    @keyframes statusPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+    /* Scale responsive - matches timer breakpoints */
+    @media (max-width: 1200px) {
+      .scale-display { width: 180px; height: 180px; }
+      .scale-value { font-size: 40px; }
+    }
+    @media (max-width: 768px) {
+      .scale-display { width: 160px; height: 160px; }
+      .scale-value { font-size: 36px; }
+      .scale-header { display: none; } /* Hide header like timer */
+    }
+    @media (max-width: 480px) {
+      .scale-display { width: 140px; height: 140px; }
+      .scale-value { font-size: 32px; }
+    }
+    @media (max-width: 400px) {
+      .scale-display { width: 120px; height: 120px; }
+      .scale-value { font-size: 28px; }
+    }
+
     /* Animations */
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
     @keyframes urgentPulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.85; transform: scale(1.02); } }
@@ -1592,11 +1635,10 @@
    SHIFT START ADJUSTMENT - START DAY BUTTON & BADGE
    ============================================ */
 
-/* Start Day Button */
+/* Start Day Button - now inside time-display */
 .start-day-btn {
-  position: fixed;
-  top: 20px;
-  right: 180px;
+  position: relative;
+  margin-top: 10px;
   background: rgba(34, 197, 94, 0.2);
   border: 2px solid #22c55e;
   color: #22c55e;
@@ -1630,11 +1672,10 @@
   }
 }
 
-/* Started Badge */
+/* Started Badge - now inside time-display */
 .started-badge {
-  position: fixed;
-  top: 20px;
-  right: 180px;
+  position: relative;
+  margin-top: 10px;
   background: rgba(228, 170, 79, 0.15);
   border: 2px solid #e4aa4f;
   color: #e4aa4f;
@@ -1665,43 +1706,13 @@
   background: rgba(148, 163, 184, 0.1);
 }
 
-/* Responsive Breakpoints */
-@media (max-width: 1400px) {
-  .start-day-btn,
-  .started-badge {
-    right: 140px;
-  }
-}
-
-@media (max-width: 1200px) {
-  .start-day-btn,
-  .started-badge {
-    right: 100px;
-  }
-}
-
-@media (max-width: 900px) {
-  .start-day-btn,
-  .started-badge {
-    top: 70px;
-    right: 20px;
-  }
-}
-
+/* Responsive Breakpoints - button/badge now in time-display */
 @media (max-width: 640px) {
   .start-day-btn,
   .started-badge {
     font-size: 12px;
     padding: 6px 12px;
   }
-}
-
-/* Fullscreen Timer Mode */
-body.timer-fullscreen .start-day-btn,
-body.timer-fullscreen .started-badge {
-  top: 100px;
-  right: 20px;
-  z-index: 101;
 }
 
 /* ============================================
@@ -2738,5 +2749,53 @@ body.iframe-embed .current-order-items {
     flex-direction: column;
     gap: 16px;
     text-align: center;
+  }
+}
+
+/* ========================================
+   ACCESSIBILITY ENHANCEMENTS (WCAG AA)
+   ======================================== */
+/* Skip link for keyboard users */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: var(--ro-green, #668971);
+  color: white;
+  padding: 8px 16px;
+  z-index: 10000;
+  text-decoration: none;
+  font-weight: 600;
+  border-radius: 0 0 8px 0;
+}
+.skip-link:focus {
+  top: 0;
+  outline: 3px solid var(--gold, #e4aa4f);
+  outline-offset: 2px;
+}
+
+/* Focus indicators for keyboard navigation */
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+[role="button"]:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--ro-green, #668971);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(102, 137, 113, 0.2);
+}
+
+/* Enhanced focus for dark mode */
+body.dark-mode button:focus-visible,
+body.dark-mode input:focus-visible {
+  outline: 2px solid var(--gold, #e4aa4f);
+  box-shadow: 0 0 0 4px rgba(228, 170, 79, 0.25);
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }

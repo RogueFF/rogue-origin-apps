@@ -7,7 +7,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../css/hourly-entry.css?v=33">
+
+  <!-- Non-critical CSS: Deferred for faster initial render -->
+  <link rel="preload" href="../css/hourly-entry.css?v=42" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/hourly-entry.css?v=42"></noscript>
 </head>
 <body>
   <a href="#timeline-list" class="skip-link">Skip to timeline</a>
@@ -16,18 +19,21 @@
   <div id="timeline-view" class="view active">
     <header class="app-header">
       <div class="header-left">
-        <a href="index.html" class="back-btn" title="Back to Dashboard">&larr;</a>
         <h1 data-i18n="floorManager">Floor Manager</h1>
+        <a href="index.html" class="home-icon" title="Back to Dashboard">⌂</a>
       </div>
       <div class="header-right">
         <!-- Shift Start (shared with scoreboard) -->
         <button id="start-day-btn" class="start-day-btn" data-i18n="startDay">Start Day</button>
-        <div id="start-time-badge" class="start-time-badge" style="display: none;">
+        <div id="start-time-badge" class="start-time-badge" style="display: none;" title="Tap to edit start time">
           <span class="start-time-icon">▶</span>
           <span id="start-time-display">7:30 AM</span>
+          <span class="edit-icon">✎</span>
         </div>
+        <input type="time" id="start-time-picker" class="start-time-picker-hidden">
         <button id="lang-toggle" class="lang-btn">ES</button>
-        <input type="date" id="date-picker" class="date-picker">
+        <span id="date-display" class="date-display">January, 23rd</span>
+        <input type="date" id="date-picker" class="date-picker-hidden">
       </div>
     </header>
 
@@ -39,11 +45,19 @@
           <h2 class="card-title" data-i18n="hourlyEntry">Hourly Entry</h2>
           <!-- Editor header (shown when editing) -->
           <div id="editor-header-inline" class="editor-header-inline" style="display: none;">
-            <button id="back-to-timeline" class="back-btn-inline" title="Back to timeline">&larr;</button>
-            <span id="editor-time-label-inline" class="editor-time-inline">9-10 AM</span>
-            <div class="editor-nav-inline">
-              <button id="prev-slot" class="nav-btn-inline" title="Previous hour">&larr;</button>
-              <button id="next-slot" class="nav-btn-inline" title="Next hour">&rarr;</button>
+            <!-- Step Guide Pill (far left) -->
+            <div class="step-pill" id="step-guide">
+              <span class="step-icon" id="step-icon">1</span>
+              <span class="step-title" id="step-title">Enter Crew</span>
+            </div>
+            <button id="back-to-timeline" class="back-btn-day" title="Back to day view">
+              <span class="day-icon">▦</span>
+              <span class="day-label" data-i18n="dayView">Day</span>
+            </button>
+            <div class="hour-nav-group">
+              <button id="prev-slot" class="nav-btn-hour" title="Previous hour">‹</button>
+              <span id="editor-time-label-inline" class="editor-time-inline">9-10 AM</span>
+              <button id="next-slot" class="nav-btn-hour" title="Next hour">›</button>
             </div>
           </div>
         </div>
@@ -73,19 +87,14 @@
 
           <!-- EDITOR VIEW (within card) -->
           <div id="editor-content" class="card-view">
-            <!-- Step Guide Banner -->
-            <div class="step-guide" id="step-guide">
-              <div class="step-icon" id="step-icon">1</div>
-              <div class="step-text">
-                <span class="step-title" id="step-title">Enter Crew</span>
-                <span class="step-hint" id="step-hint">Start of hour: who's working?</span>
-              </div>
-            </div>
-
             <!-- Crew Entry Section -->
             <section class="editor-section crew-section">
               <div class="section-header">
                 <h3 class="section-label" data-i18n="crew">Crew</h3>
+                <button id="copy-crew-btn" class="copy-crew-btn" title="Copy from previous hour">
+                  <span class="copy-icon">📋</span>
+                  <span class="copy-label" data-i18n="copyPrev">Copy Prev</span>
+                </button>
                 <span id="crew-modified-badge" class="modified-badge" style="display: none;">Modified</span>
               </div>
 
@@ -219,6 +228,14 @@
               </div>
             </section>
 
+            <!-- Hourly Target Display -->
+            <section class="editor-section target-section">
+              <div class="hourly-target-display">
+                <span class="target-label" data-i18n="hourlyTarget">Hourly Target</span>
+                <span class="target-value" id="hourly-target-value">-- lbs</span>
+              </div>
+            </section>
+
             <!-- Save Indicator -->
             <div class="save-indicator" id="save-indicator">
               <span class="save-success" data-i18n="saved">Saved</span>
@@ -242,9 +259,24 @@
           <div class="barcode-tab-content" id="tab-printer">
             <div class="barcode-controls">
               <label class="barcode-label" data-i18n="strain">Strain</label>
-              <select id="barcode-strain" class="barcode-select">
-                <option value="">Select strain...</option>
-              </select>
+              <!-- Custom dropdown for better styling -->
+              <div class="custom-select" id="barcode-strain-dropdown">
+                <button type="button" class="custom-select-trigger" aria-haspopup="listbox" aria-expanded="false">
+                  <span class="custom-select-value" data-i18n="selectStrain">Select strain...</span>
+                  <svg class="custom-select-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
+                <div class="custom-select-menu" role="listbox">
+                  <div class="custom-select-search">
+                    <input type="text" class="custom-select-search-input" placeholder="Search strains..." aria-label="Search strains">
+                  </div>
+                  <div class="custom-select-options">
+                    <!-- Options populated by JS -->
+                  </div>
+                </div>
+                <input type="hidden" id="barcode-strain" name="barcode-strain">
+              </div>
             </div>
             <div class="barcode-buttons">
               <button type="button" class="barcode-btn btn-5kg" data-type="5kg" data-i18n="print5kg">5kg</button>
@@ -344,6 +376,10 @@
               <div class="timer-label" id="timerLabel" data-i18n="remaining">remaining</div>
             </div>
           </div>
+          <!-- Target info (matches scoreboard) -->
+          <div class="timer-target">
+            <span data-i18n="target">Target</span>: <span id="timer-target-time">--:--</span> • <span id="timer-trimmers">0</span> <span data-i18n="trimmers">trimmers</span>
+          </div>
           <!-- Timer Stats -->
           <div class="timer-stats">
             <div class="timer-stat">
@@ -406,6 +442,6 @@
     <button class="tooltip-close">×</button>
   </div>
 
-  <script type="module" src="../js/hourly-entry/index.js?v=40"></script>
+  <script type="module" src="../js/hourly-entry/index.js?v=55"></script>
 </body>
 </html>

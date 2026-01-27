@@ -10,6 +10,7 @@ import {
   isSidebarCollapsed,
   setSidebarCollapsed
 } from './state.js';
+import { registerEventListener, cleanupAllListeners } from './event-cleanup.js';
 
 /**
  * Safe DOM element getter
@@ -229,11 +230,22 @@ export function initViewportTracking() {
   updateViewportHeight();
 
   // Update on resize (when iOS address bar hides/shows)
-  window.addEventListener('resize', updateViewportHeight);
+  // Use registerEventListener for proper cleanup
+  registerEventListener(window, 'resize', updateViewportHeight);
 
   // Update on orientation change
-  window.addEventListener('orientationchange', () => {
+  const orientationHandler = () => {
     // Delay to ensure dimensions are updated
     setTimeout(updateViewportHeight, 100);
-  });
+  };
+  registerEventListener(window, 'orientationchange', orientationHandler);
+}
+
+/**
+ * Cleanup all navigation-related event listeners
+ * Call this when destroying the module or navigating away
+ */
+export function cleanupNavigation() {
+  cleanupAllListeners();
+  console.log('[Navigation] Cleanup complete');
 }
