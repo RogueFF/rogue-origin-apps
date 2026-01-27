@@ -370,6 +370,7 @@ async function updateLastHourWidget() {
     if (scoreboard && scoreboard.lastHourLbs > 0) {
       const lbs = scoreboard.lastHourLbs || 0;
       const trimmers = scoreboard.lastHourTrimmers || 0;
+      const buckers = scoreboard.lastHourBuckers || 0;
       const timeSlot = scoreboard.lastTimeSlot || '—';
       const strain = scoreboard.strain || 'No Data';
       const rate = trimmers > 0 ? lbs / trimmers : 0;
@@ -380,7 +381,7 @@ async function updateLastHourWidget() {
       if (currentTopsEl) currentTopsEl.textContent = lbs.toFixed(1);
       if (currentSmallsEl) currentSmallsEl.textContent = '0'; // Not tracked hourly
       if (currentTrimmersEl) currentTrimmersEl.textContent = trimmers;
-      if (currentBuckersEl) currentBuckersEl.textContent = '0'; // Not tracked hourly
+      if (currentBuckersEl) currentBuckersEl.textContent = buckers;
       if (currentRateEl) currentRateEl.textContent = rate.toFixed(2);
       if (currentTotalEl) currentTotalEl.textContent = lbs.toFixed(1);
     } else {
