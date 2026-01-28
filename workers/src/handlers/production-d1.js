@@ -136,8 +136,9 @@ function parseHumanTimestamp(timestamp) {
 
 // ===== SCOREBOARD DATA =====
 
-async function getScoreboardData(env) {
-  const today = formatDatePT(new Date(), 'yyyy-MM-dd');
+async function getScoreboardData(env, date = null) {
+  // Use provided date or default to today
+  const today = date || formatDatePT(new Date(), 'yyyy-MM-dd');
 
   const result = {
     lastHourLbs: 0,
@@ -419,7 +420,7 @@ async function incrementDataVersion(env) {
 
 // ===== BAG TIMER DATA =====
 
-async function getBagTimerData(env) {
+async function getBagTimerData(env, date = null) {
   const result = {
     lastBagTime: null,
     secondsSinceLastBag: 0,
@@ -433,8 +434,10 @@ async function getBagTimerData(env) {
   };
 
   try {
-    const today = formatDatePT(new Date(), 'yyyy-MM-dd');
-    const now = new Date();
+    // Use provided date or default to today
+    const today = date || formatDatePT(new Date(), 'yyyy-MM-dd');
+    // For historical dates, use end of day; for live view, use current time
+    const now = date ? new Date(date + 'T23:59:59') : new Date();
 
     // Query D1 for today's 5kg bag adjustments
     // Check both size field and SKU pattern (size is often empty, so we infer from SKU)
@@ -451,7 +454,7 @@ async function getBagTimerData(env) {
       ORDER BY timestamp ASC
     `, [today]);
 
-    const scoreboardData = await getScoreboardData(env);
+    const scoreboardData = await getScoreboardData(env, today);
     result.currentTrimmers = scoreboardData.currentHourTrimmers || scoreboardData.lastHourTrimmers || 0;
     result.targetRate = scoreboardData.targetRate || 1.0;
 
@@ -647,13 +650,22 @@ async function version(env) {
   });
 }
 
-async function scoreboard(env) {
-  const scoreboardData = await getScoreboardData(env);
-  const timerData = await getBagTimerData(env);
+async function scoreboard(params, env) {
+  // Extract optional date parameter for historical view (format: YYYY-MM-DD)
+  const date = params.date || null;
+
+  // Validate date format if provided
+  if (date && !validateDate(date)) {
+    return errorResponse('Invalid date format. Use YYYY-MM-DD', 'VALIDATION_ERROR', 400);
+  }
+
+  const scoreboardData = await getScoreboardData(env, date);
+  const timerData = await getBagTimerData(env, date);
 
   return successResponse({
     scoreboard: scoreboardData,
     timer: timerData,
+    date: date || formatDatePT(new Date(), 'yyyy-MM-dd'), // Return the date being viewed
   });
 }
 
@@ -1681,7 +1693,7 @@ export async function handleProductionD1(request, env, ctx) {
       case 'version':
         return await version(env);
       case 'scoreboard':
-        return await scoreboard(env);
+        return await scoreboard(params, env);
       case 'dashboard':
         return await dashboard(params, env);
       case 'setShiftStart':
