@@ -5,7 +5,8 @@
 
 const API_URL = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
 
-const TIME_SLOTS = [
+// Default time slots (will be dynamically updated based on shift start)
+let TIME_SLOTS = [
   '7:00 AM – 8:00 AM',
   '8:00 AM – 9:00 AM',
   '9:00 AM – 10:00 AM',
@@ -17,6 +18,59 @@ const TIME_SLOTS = [
   '3:00 PM – 4:00 PM',
   '4:00 PM – 4:30 PM',
 ];
+
+/**
+ * Update TIME_SLOTS dynamically based on shift start time
+ * If shift starts before 8:00 AM, first slot becomes "X:XX AM - 8:00 AM"
+ */
+function updateTimeSlots(shiftStart) {
+  // Reset to defaults first
+  TIME_SLOTS = [
+    '7:00 AM – 8:00 AM',
+    '8:00 AM – 9:00 AM',
+    '9:00 AM – 10:00 AM',
+    '10:00 AM – 11:00 AM',
+    '11:00 AM – 12:00 PM',
+    '12:30 PM – 1:00 PM',
+    '1:00 PM – 2:00 PM',
+    '2:00 PM – 3:00 PM',
+    '3:00 PM – 4:00 PM',
+    '4:00 PM – 4:30 PM',
+  ];
+
+  // Reset SLOT_START_MINUTES to defaults
+  SLOT_START_MINUTES = {
+    '7:00 AM – 8:00 AM': 7 * 60,
+    '8:00 AM – 9:00 AM': 8 * 60,
+    '9:00 AM – 10:00 AM': 9 * 60,
+    '10:00 AM – 11:00 AM': 10 * 60,
+    '11:00 AM – 12:00 PM': 11 * 60,
+    '12:30 PM – 1:00 PM': 12 * 60 + 30,
+    '1:00 PM – 2:00 PM': 13 * 60,
+    '2:00 PM – 3:00 PM': 14 * 60,
+    '3:00 PM – 4:00 PM': 15 * 60,
+    '4:00 PM – 4:30 PM': 16 * 60,
+  };
+
+  if (!shiftStart) return;
+
+  const hours = shiftStart.getHours();
+  const minutes = shiftStart.getMinutes();
+
+  // If shift starts before 8:00 AM, replace first slot
+  if (hours < 8) {
+    const minutesPadded = String(minutes).padStart(2, '0');
+    const timeStr = `${hours}:${minutesPadded} AM`;
+    const newFirstSlot = `${timeStr} – 8:00 AM`;
+
+    // Remove old first slot from mapping
+    delete SLOT_START_MINUTES['7:00 AM – 8:00 AM'];
+
+    // Update TIME_SLOTS and add new mapping
+    TIME_SLOTS[0] = newFirstSlot;
+    SLOT_START_MINUTES[newFirstSlot] = hours * 60 + minutes;
+  }
+}
 
 const LABELS = {
   en: {
@@ -280,8 +334,8 @@ function updateDateDisplay(dateStr) {
 // SHIFT START (shared with scoreboard)
 // ===================
 
-// Slot start times in minutes from midnight
-const SLOT_START_MINUTES = {
+// Slot start times in minutes from midnight (will be dynamically updated)
+let SLOT_START_MINUTES = {
   '7:00 AM – 8:00 AM': 7 * 60,
   '8:00 AM – 9:00 AM': 8 * 60,
   '9:00 AM – 10:00 AM': 9 * 60,
@@ -336,6 +390,7 @@ async function loadShiftStart() {
     console.error('Failed to load shift start from API:', error);
   }
 
+  updateTimeSlots(shiftStartTime);
   updateShiftStartUI();
 }
 
@@ -363,6 +418,7 @@ async function setShiftStart(time = null) {
   // Refresh data from API to get fresh entries
   await loadDayData(currentDate);
 
+  updateTimeSlots(shiftStartTime);
   updateShiftStartUI();
   renderTimeline();
   highlightCurrentTimeSlot();
@@ -385,7 +441,9 @@ async function setShiftStart(time = null) {
       const serverTime = new Date(data.shiftAdjustment.manualStartTime);
       shiftStartTime = serverTime;
       localStorage.setItem('manualShiftStart', serverTime.toISOString());
+      updateTimeSlots(shiftStartTime);
       updateShiftStartUI();
+      renderTimeline();
     }
   } catch (error) {
     console.error('Failed to save shift start to API:', error);
