@@ -293,7 +293,13 @@ async function getScoreboardData(env) {
       }
 
       const rate = (row.tops / row.trimmers) / row.multiplier;
-      hourlyRates.push({ timeSlot: row.timeSlot, rate, target: targetRate });
+      hourlyRates.push({
+        timeSlot: row.timeSlot,
+        rate,
+        target: targetRate,
+        trimmers: row.trimmers,
+        lbs: row.tops
+      });
     }
   }
 
@@ -373,6 +379,39 @@ function calculateDailyProjection(todayRows, lastCompletedHourIndex, currentHour
   };
 }
 
+// ===== VERSION TRACKING FOR SMART POLLING =====
+
+/**
+ * Get current data version from D1
+ * @returns {number} Current version number
+ */
+async function getDataVersion(env) {
+  try {
+    const result = await queryOne(env.DB, `
+      SELECT version, updated_at FROM data_version WHERE key = ?
+    `, ['scoreboard']);
+    return result ? { version: result.version, updatedAt: result.updated_at } : { version: 0, updatedAt: null };
+  } catch (error) {
+    console.error('Error getting data version:', error);
+    return { version: 0, updatedAt: null };
+  }
+}
+
+/**
+ * Increment data version in D1 (call when data changes)
+ */
+async function incrementDataVersion(env) {
+  try {
+    await execute(env.DB, `
+      UPDATE data_version
+      SET version = version + 1, updated_at = datetime('now')
+      WHERE key = ?
+    `, ['scoreboard']);
+  } catch (error) {
+    console.error('Error incrementing data version:', error);
+  }
+}
+
 // ===== BAG TIMER DATA =====
 
 async function getBagTimerData(env) {
@@ -392,13 +431,20 @@ async function getBagTimerData(env) {
     const today = formatDatePT(new Date(), 'yyyy-MM-dd');
     const now = new Date();
 
-    // Get recent bags from D1 (timestamps are human-readable, need JS parsing)
+    // Query D1 for today's 5kg bag adjustments
+    // Check both size field and SKU pattern (size is often empty, so we infer from SKU)
     const bags = await query(env.DB, `
-      SELECT timestamp, bag_type
-      FROM production_tracking
-      ORDER BY rowid DESC
-      LIMIT 2001
-    `);
+      SELECT timestamp, size, sku, flow_run_id
+      FROM inventory_adjustments
+      WHERE date(datetime(timestamp, '-8 hours')) = ?
+        AND (
+          lower(size) LIKE '%5kg%'
+          OR lower(size) LIKE '%5 kg%'
+          OR lower(sku) LIKE '%5-KG%'
+          OR lower(sku) LIKE '%-5KG-%'
+        )
+      ORDER BY timestamp ASC
+    `, [today]);
 
     const scoreboardData = await getScoreboardData(env);
     result.currentTrimmers = scoreboardData.currentHourTrimmers || scoreboardData.lastHourTrimmers || 0;
@@ -410,43 +456,26 @@ async function getBagTimerData(env) {
       result.targetSeconds = Math.round((bagWeightLbs / teamRateLbsPerHour) * 3600);
     }
 
+    if (!bags || bags.length === 0) {
+      return result;
+    }
+
     const todayBags = [];
     let lastBag = null;
-    let bags5kg = 0;
-
-    // Bad bags blacklist - accidental scans on Jan 19 around 12:34 PM
-    // Timestamps in DB are local time parsed as UTC, so use matching UTC times
-    const badBagStart = new Date('2026-01-19T12:34:14Z');
-    const badBagEnd = new Date('2026-01-19T12:38:05Z');
 
     for (const row of bags) {
-      const timestamp = row.timestamp;
-      if (!timestamp) continue;
+      const rowDate = new Date(row.timestamp);
+      if (isNaN(rowDate.getTime())) continue;
 
-      // Parse human-readable timestamps
-      const rowDate = parseHumanTimestamp(timestamp);
-      if (!rowDate || isNaN(rowDate.getTime())) continue;
-
-      // Filter by today's date (Pacific time)
-      const rowDateStr = formatDatePT(rowDate, 'yyyy-MM-dd');
-      if (rowDateStr !== today) continue;
-
-      // Skip accidentally scanned bags
-      if (rowDate >= badBagStart && rowDate <= badBagEnd) continue;
-
-      const size = String(row.bag_type || '').toLowerCase();
-      if (is5kgBag(size)) {
-        bags5kg++;
-        todayBags.push(rowDate);
-      }
+      todayBags.push(rowDate);
 
       if (!lastBag || rowDate > lastBag.time) {
-        lastBag = { time: rowDate, size };
+        lastBag = { time: rowDate, size: row.size };
       }
     }
 
-    result.bagsToday = bags5kg;
-    result.bags5kgToday = bags5kg;
+    result.bagsToday = todayBags.length;
+    result.bags5kgToday = todayBags.length;
 
     if (lastBag) {
       result.lastBagTime = lastBag.time.toISOString();
@@ -501,21 +530,34 @@ async function getExtendedDailyData(days, env) {
     SELECT production_date,
            SUM(tops_lbs1) as total_tops,
            SUM(smalls_lbs1) as total_smalls,
-           SUM(trimmers_line1) as trimmer_hours
+           SUM(trimmers_line1) as trimmer_hours,
+           SUM(buckers_line1 + trimmers_line1 + tzero_line1) as operator_hours,
+           AVG(wage_rate) as avg_wage_rate
     FROM monthly_production
     WHERE production_date >= ?
     GROUP BY production_date
     ORDER BY production_date
   `, [cutoffStr]);
 
-  return rows.map(r => ({
-    date: new Date(r.production_date),
-    totalTops: r.total_tops || 0,
-    totalSmalls: r.total_smalls || 0,
-    avgRate: r.trimmer_hours > 0 ? r.total_tops / r.trimmer_hours : 0,
-    totalLbs: (r.total_tops || 0) + (r.total_smalls || 0),
-    trimmerHours: r.trimmer_hours || 0,
-  }));
+  return rows.map(r => {
+    const operatorHours = r.operator_hours || 0;
+    const wageRate = r.avg_wage_rate || 0;
+    const laborCost = operatorHours * wageRate;
+    const totalLbs = (r.total_tops || 0) + (r.total_smalls || 0);
+    const costPerLb = totalLbs > 0 ? laborCost / totalLbs : 0;
+
+    return {
+      date: new Date(r.production_date),
+      totalTops: r.total_tops || 0,
+      totalSmalls: r.total_smalls || 0,
+      avgRate: r.trimmer_hours > 0 ? r.total_tops / r.trimmer_hours : 0,
+      totalLbs,
+      trimmerHours: r.trimmer_hours || 0,
+      operatorHours,
+      laborCost,
+      costPerLb,
+    };
+  });
 }
 
 // ===== API HANDLERS =====
@@ -525,6 +567,65 @@ async function test(env) {
     ok: true,
     message: 'Production API is working (Cloudflare D1)',
     timestamp: new Date().toISOString(),
+  });
+}
+
+/**
+ * Debug endpoint to check D1 inventory_adjustments data
+ */
+async function debugBags(env) {
+  try {
+    const today = formatDatePT(new Date(), 'yyyy-MM-dd');
+
+    const allBags = await query(env.DB, `
+      SELECT timestamp, size, sku, product_name
+      FROM inventory_adjustments
+      ORDER BY timestamp DESC
+      LIMIT 20
+    `);
+
+    const todayBagsUTC = await query(env.DB, `
+      SELECT timestamp, size, sku
+      FROM inventory_adjustments
+      WHERE date(timestamp) = ?
+    `, [today]);
+
+    // Also try with Pacific time conversion
+    const todayBagsPT = await query(env.DB, `
+      SELECT timestamp, size, sku
+      FROM inventory_adjustments
+      WHERE date(datetime(timestamp, '-8 hours')) = ?
+        AND (
+          lower(size) LIKE '%5kg%'
+          OR lower(size) LIKE '%5 kg%'
+          OR lower(sku) LIKE '%5-KG%'
+          OR lower(sku) LIKE '%-5KG-%'
+        )
+    `, [today]);
+
+    return successResponse({
+      totalBags: allBags.length,
+      todayPacific: today,
+      recentBags: allBags,
+      todayBagsUTC: todayBagsUTC.length,
+      todayBagsPT: todayBagsPT.length,
+      utcResults: todayBagsUTC,
+      ptResults: todayBagsPT,
+    });
+  } catch (error) {
+    return errorResponse('Debug failed: ' + error.message);
+  }
+}
+
+/**
+ * Get current data version (lightweight endpoint for smart polling)
+ * Clients poll this frequently and only fetch full data when version changes
+ */
+async function version(env) {
+  const versionData = await getDataVersion(env);
+  return successResponse({
+    version: versionData.version,
+    updatedAt: versionData.updatedAt,
   });
 }
 
@@ -581,13 +682,21 @@ async function dashboard(params, env) {
     avgRate: validDays.length > 0 ? validDays.reduce((s, d) => s + d.avgRate, 0) / validDays.length : 0,
   };
 
+  // Calculate weighted average rate (each hourly rate weighted by trimmer count)
+  let weightedRateSum = 0;
+  let totalTrimmerHours = 0;
+  for (const hour of (scoreboardData.hourlyRates || [])) {
+    if (hour.trimmers && hour.rate != null) {
+      weightedRateSum += hour.rate * hour.trimmers;
+      totalTrimmerHours += hour.trimmers;
+    }
+  }
+
   const todayData = {
     totalTops: scoreboardData.todayLbs || 0,
     totalSmalls: 0,
     totalLbs: scoreboardData.todayLbs || 0,
-    avgRate: scoreboardData.hourlyRates?.length > 0
-      ? scoreboardData.hourlyRates.reduce((s, h) => s + h.rate, 0) / scoreboardData.hourlyRates.length
-      : 0,
+    avgRate: totalTrimmerHours > 0 ? weightedRateSum / totalTrimmerHours : 0,
     trimmers: scoreboardData.lastHourTrimmers || scoreboardData.currentHourTrimmers || 0,
   };
 
@@ -615,6 +724,8 @@ async function dashboard(params, env) {
     label: h.timeSlot,
     rate: h.rate,
     target: h.target,
+    trimmers: h.trimmers,
+    lbs: h.lbs,
   }));
 
   return successResponse({
@@ -628,7 +739,12 @@ async function dashboard(params, env) {
       date: formatDatePT(d.date, 'yyyy-MM-dd'),
       totalTops: Math.round(d.totalTops * 10) / 10,
       totalSmalls: Math.round(d.totalSmalls * 10) / 10,
+      totalLbs: Math.round(d.totalLbs * 10) / 10,
       avgRate: Math.round(d.avgRate * 100) / 100,
+      trimmerHours: Math.round(d.trimmerHours * 10) / 10,
+      operatorHours: Math.round(d.operatorHours * 10) / 10,
+      laborCost: Math.round(d.laborCost * 100) / 100,
+      costPerLb: Math.round(d.costPerLb * 100) / 100,
     })),
     fallback: showingFallback ? {
       active: true,
@@ -679,6 +795,9 @@ async function setShiftStart(params, env) {
     new_start: shiftStartStr,
     reason: `Available hours: ${availableHours.toFixed(2)}, Scale: ${scaleFactor.toFixed(3)}`,
   });
+
+  // Increment version to notify clients of new data
+  await incrementDataVersion(env);
 
   return successResponse({
     shiftAdjustment: {
@@ -761,6 +880,9 @@ async function logBag(body, env) {
     source: 'manual',
   });
 
+  // Increment version to notify clients of new data
+  await incrementDataVersion(env);
+
   return successResponse({ timestamp: now.toISOString(), size });
 }
 
@@ -774,6 +896,9 @@ async function logPause(body, env) {
     reason,
     created_by: 'Scoreboard',
   });
+
+  // Increment version to notify clients of new data
+  await incrementDataVersion(env);
 
   return successResponse({ pauseId, timestamp: now.toISOString(), reason });
 }
@@ -801,6 +926,9 @@ async function logResume(body, env) {
     await execute(env.DB, `
       UPDATE pause_log SET end_time = ?, duration_min = ? WHERE id = ?
     `, [now.toISOString(), durationMin, row.id]);
+
+    // Increment version to notify clients of new data
+    await incrementDataVersion(env);
   }
 
   return successResponse({ pauseId, resumeTime: now.toISOString(), durationMinutes: durationMin });
@@ -933,12 +1061,43 @@ function validateLbs(value, fieldName) {
 }
 
 function validateTimeSlot(slot) {
-  const normalizedSlot = String(slot || '').trim().replace(/[-–—]/g, '–');
-  const validSlots = ALL_TIME_SLOTS.map(s => s.replace(/[-–—]/g, '–'));
-  if (!validSlots.includes(normalizedSlot)) {
-    return { valid: false, error: `Invalid time slot: ${slot}` };
+  const input = String(slot || '').trim();
+
+  // Normalize all dash types (hyphen, en-dash, em-dash) to a standard dash for comparison
+  // This handles UTF-8 encoding variations and copy-paste issues
+  const normalizedInput = input
+    .replace(/[\u002D\u2013\u2014\uFE58\uFE63\uFF0D]/g, '-')  // Normalize to hyphen
+    .replace(/\s+/g, ' ');  // Normalize whitespace
+
+  // First check against known valid slots
+  for (const validSlot of ALL_TIME_SLOTS) {
+    const normalizedValid = validSlot
+      .replace(/[\u002D\u2013\u2014\uFE58\uFE63\uFF0D]/g, '-')  // Normalize to hyphen
+      .replace(/\s+/g, ' ');  // Normalize whitespace
+
+    if (normalizedInput === normalizedValid) {
+      return { valid: true, value: validSlot };
+    }
   }
-  return { valid: true, value: normalizedSlot };
+
+  // If not in list, check if it's a valid dynamic first slot (X:XX AM - 8:00 AM)
+  // This handles cases where shift starts before 8:00 AM
+  const dynamicSlotPattern = /^(\d{1,2}):(\d{2}) (AM|PM) - 8:00 (AM|PM)$/;
+  const match = normalizedInput.match(dynamicSlotPattern);
+
+  if (match) {
+    const [, hours, minutes, period1, period2] = match;
+    const hour = parseInt(hours, 10);
+    const min = parseInt(minutes, 10);
+
+    // Validate time values
+    if (hour >= 1 && hour <= 12 && min >= 0 && min <= 59 && period1 === 'AM' && period2 === 'AM') {
+      // Accept dynamic first slot (e.g., "7:30 AM - 8:00 AM")
+      return { valid: true, value: input };  // Return original with proper formatting
+    }
+  }
+
+  return { valid: false, error: `Invalid time slot: ${slot}` };
 }
 
 function validateProductionDate(dateStr) {
@@ -972,19 +1131,20 @@ function validateProductionDate(dateStr) {
 }
 
 async function addProduction(body, env) {
-  const { date, timeSlot, trimmers1, buckers1, tzero1, cultivar1, tops1, smalls1,
-          trimmers2, buckers2, tzero2, cultivar2, tops2, smalls2, qc } = body;
+  try {
+    const { date, timeSlot, trimmers1, buckers1, tzero1, cultivar1, tops1, smalls1,
+            trimmers2, buckers2, tzero2, cultivar2, tops2, smalls2, qc } = body;
 
-  // Validate required fields
-  const dateValidation = validateProductionDate(date);
-  if (!dateValidation.valid) {
-    return errorResponse(dateValidation.error, 'VALIDATION_ERROR', 400);
-  }
+    // Validate required fields
+    const dateValidation = validateProductionDate(date);
+    if (!dateValidation.valid) {
+      return errorResponse(dateValidation.error, 'VALIDATION_ERROR', 400);
+    }
 
-  const slotValidation = validateTimeSlot(timeSlot);
-  if (!slotValidation.valid) {
-    return errorResponse(slotValidation.error, 'VALIDATION_ERROR', 400);
-  }
+    const slotValidation = validateTimeSlot(timeSlot);
+    if (!slotValidation.valid) {
+      return errorResponse(slotValidation.error, 'VALIDATION_ERROR', 400);
+    }
 
   // Validate crew counts (0-50)
   const validations = [];
@@ -1067,13 +1227,17 @@ async function addProduction(body, env) {
       UPDATE monthly_production SET
         trimmers_line1 = ?, buckers_line1 = ?, tzero_line1 = ?, cultivar1 = ?, tops_lbs1 = ?, smalls_lbs1 = ?,
         trimmers_line2 = ?, buckers_line2 = ?, tzero_line2 = ?, cultivar2 = ?, tops_lbs2 = ?, smalls_lbs2 = ?,
-        qc = ?, updated_at = datetime('now')
+        qc = ?
       WHERE id = ?
     `, [
       crew1.trimmers, crew1.buckers, crew1.tzero, safeCultivar1, lbs1.tops, lbs1.smalls,
       crew2.trimmers, crew2.buckers, crew2.tzero, safeCultivar2, lbs2.tops, lbs2.smalls,
       safeQc, existing.id
     ]);
+
+    // Increment version to notify clients of new data
+    await incrementDataVersion(env);
+
     return successResponse({ success: true, message: 'Production data updated', id: existing.id });
   } else {
     const id = await insert(env.DB, 'monthly_production', {
@@ -1093,7 +1257,15 @@ async function addProduction(body, env) {
       smalls_lbs2: lbs2.smalls,
       qc: safeQc,
     });
+
+    // Increment version to notify clients of new data
+    await incrementDataVersion(env);
+
     return successResponse({ success: true, message: 'Production data added', id });
+  }
+  } catch (error) {
+    console.error('addProduction error:', error);
+    return errorResponse(`Failed to add production: ${error.message}`, 'INTERNAL_ERROR', 500);
   }
 }
 
@@ -1454,6 +1626,10 @@ export async function handleProductionD1(request, env, ctx) {
     switch (action) {
       case 'test':
         return await test(env);
+      case 'debugBags':
+        return await debugBags(env);
+      case 'version':
+        return await version(env);
       case 'scoreboard':
         return await scoreboard(env);
       case 'dashboard':
