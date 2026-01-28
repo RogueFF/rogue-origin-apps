@@ -536,7 +536,20 @@ async function getExtendedDailyData(days, env) {
            SUM(tops_lbs1) as total_tops,
            SUM(smalls_lbs1) as total_smalls,
            SUM(trimmers_line1) as trimmer_hours,
-           SUM(buckers_line1 + trimmers_line1 + tzero_line1) as operator_hours
+           SUM(
+             CASE
+               WHEN (buckers_line1 + trimmers_line1 + tzero_line1) > 0 AND tops_lbs1 > 0
+               THEN buckers_line1 + trimmers_line1 + tzero_line1
+               ELSE 0
+             END
+           ) as operator_hours,
+           COUNT(
+             CASE
+               WHEN (buckers_line1 + trimmers_line1 + tzero_line1) > 0 AND tops_lbs1 > 0
+               THEN 1
+               ELSE NULL
+             END
+           ) as hours_with_data
     FROM monthly_production
     WHERE production_date >= ?
     GROUP BY production_date
@@ -545,7 +558,9 @@ async function getExtendedDailyData(days, env) {
 
   return rows.map(r => {
     const operatorHours = r.operator_hours || 0;
-    const laborCost = operatorHours * TOTAL_LABOR_COST_PER_HOUR; // $26.22/hour (includes payroll taxes)
+    const waterspiderHours = r.hours_with_data || 0; // 1 waterspider per hour with data
+    const totalLaborHours = operatorHours + waterspiderHours;
+    const laborCost = totalLaborHours * TOTAL_LABOR_COST_PER_HOUR; // $26.22/hour (includes payroll taxes)
     const totalLbs = (r.total_tops || 0) + (r.total_smalls || 0);
     const costPerLb = totalLbs > 0 ? laborCost / totalLbs : 0;
 
@@ -556,7 +571,7 @@ async function getExtendedDailyData(days, env) {
       avgRate: r.trimmer_hours > 0 ? r.total_tops / r.trimmer_hours : 0,
       totalLbs,
       trimmerHours: r.trimmer_hours || 0,
-      operatorHours,
+      operatorHours: totalLaborHours,
       laborCost,
       costPerLb,
     };
@@ -696,14 +711,31 @@ async function dashboard(params, env) {
   }
 
   // Calculate today's operator hours and labor costs
+  // Only count hours with full data (crew + production)
   const todayOperatorData = await queryOne(env.DB, `
-    SELECT SUM(buckers_line1 + trimmers_line1 + tzero_line1) as operator_hours
+    SELECT
+      SUM(
+        CASE
+          WHEN (buckers_line1 + trimmers_line1 + tzero_line1) > 0 AND tops_lbs1 > 0
+          THEN buckers_line1 + trimmers_line1 + tzero_line1
+          ELSE 0
+        END
+      ) as operator_hours,
+      COUNT(
+        CASE
+          WHEN (buckers_line1 + trimmers_line1 + tzero_line1) > 0 AND tops_lbs1 > 0
+          THEN 1
+          ELSE NULL
+        END
+      ) as hours_with_data
     FROM monthly_production
     WHERE production_date = ?
   `, [today]);
 
   const todayOperatorHours = todayOperatorData?.operator_hours || 0;
-  const todayLaborCost = todayOperatorHours * TOTAL_LABOR_COST_PER_HOUR;
+  const todayWaterspiderHours = todayOperatorData?.hours_with_data || 0; // 1 waterspider per hour with data
+  const todayTotalLaborHours = todayOperatorHours + todayWaterspiderHours;
+  const todayLaborCost = todayTotalLaborHours * TOTAL_LABOR_COST_PER_HOUR;
   const todayTotalLbs = scoreboardData.todayLbs || 0;
   const todayCostPerLb = todayTotalLbs > 0 ? todayLaborCost / todayTotalLbs : 0;
 
@@ -713,7 +745,7 @@ async function dashboard(params, env) {
     totalLbs: todayTotalLbs,
     avgRate: totalTrimmerHours > 0 ? weightedRateSum / totalTrimmerHours : 0,
     trimmers: scoreboardData.lastHourTrimmers || scoreboardData.currentHourTrimmers || 0,
-    operatorHours: todayOperatorHours,
+    operatorHours: todayTotalLaborHours,
     laborCost: todayLaborCost,
     costPerLb: todayCostPerLb,
   };
