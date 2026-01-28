@@ -1739,6 +1739,42 @@
   font-size: 20px;
 }
 
+/* Order Queue Toggle Button */
+.order-queue-toggle-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 220px;
+  background: rgba(228, 170, 79, 0.15);
+  border: 2px solid #e4aa4f;
+  color: #e4aa4f;
+  padding: 12px 20px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 100;
+  font-family: 'Outfit', sans-serif;
+}
+
+.order-queue-toggle-btn:hover {
+  background: rgba(228, 170, 79, 0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.order-queue-toggle-btn i {
+  font-size: 20px;
+}
+
+.order-queue-toggle-btn.active {
+  background: rgba(228, 170, 79, 0.3);
+  border-color: #e4aa4f;
+}
+
 /* Responsive Breakpoints */
 @media (max-width: 640px) {
   .time-controls {
