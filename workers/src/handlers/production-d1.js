@@ -4,13 +4,22 @@
  */
 
 import { query, queryOne, insert, execute } from '../lib/db.js';
-import { readSheet, getSheetNames } from '../lib/sheets.js';
+import { readSheet, appendSheet, getSheetNames } from '../lib/sheets.js';
 import { successResponse, errorResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
 import { createError, formatError } from '../lib/errors.js';
 import { sanitizeForSheets, validateDate } from '../lib/validate.js';
 
 const AI_MODEL = 'claude-sonnet-4-20250514';
 const TIMEZONE = 'America/Los_Angeles';
+
+// Sheet tab names
+const SHEETS = {
+  tracking: 'Rogue Origin Production Tracking',
+  pauseLog: 'Timer Pause Log',
+  shiftAdjustments: 'Shift Adjustments',
+  orders: 'Orders',
+  data: 'Data',
+};
 
 // Labor cost configuration
 const BASE_WAGE_RATE = 23.00; // $/hour before taxes
@@ -1071,6 +1080,174 @@ async function logResume(body, env) {
   return successResponse({ pauseId, resumeTime: now.toISOString(), durationMinutes: durationMin });
 }
 
+async function inventoryWebhook(body, env, request) {
+  // Verify webhook secret (check header or query param)
+  const webhookSecret = env.WEBHOOK_SECRET;
+  if (webhookSecret) {
+    const headerSecret = request?.headers?.get('X-Webhook-Secret');
+    const url = new URL(request?.url || 'http://localhost');
+    const paramSecret = url.searchParams.get('secret');
+
+    if (headerSecret !== webhookSecret && paramSecret !== webhookSecret) {
+      console.warn('Webhook rejected: invalid or missing secret');
+      return errorResponse('Unauthorized', 'UNAUTHORIZED', 401);
+    }
+  }
+
+  // Extract fields from webhook payload
+  // Shopify Flow may send as flat object or nested
+  const data = body.data || body;
+
+  // Support nested Shopify Flow format: { product: {}, variant: {}, inventory: {}, context: {} }
+  const product = data.product || {};
+  const variant = data.variant || {};
+  const inventory = data.inventory || {};
+  const context = data.context || {};
+
+  // Extract with fallbacks for both flat and nested formats
+  const timestamp = data.Timestamp || data.timestamp || inventory.updated_at || new Date().toISOString();
+  const sku = data.SKU || data.sku || variant.sku || '';
+  const productName = data['Product Name'] || data.product_name || product.title || '';
+  const variantTitle = data['Variant Title'] || data.variant_title || variant.title || '';
+  const strainName = data['Strain Name'] || data.strain_name || '';
+
+  // Extract size - check explicit field, then infer from weight, then parse from title
+  let size = data.Size || data.size || '';
+  if (!size && variant.weight && variant.weight_unit) {
+    const weight = parseFloat(variant.weight);
+    const unit = String(variant.weight_unit).toLowerCase();
+    if (unit.includes('kilogram') || unit === 'kg') {
+      // Direct kg weight
+      if (Math.abs(weight - 5) < 0.25) {
+        size = '5kg';
+      } else {
+        size = `${weight}kg`;
+      }
+    } else if (unit.includes('pound') || unit === 'lb') {
+      // Handle common bag sizes in pounds
+      // 5kg ≈ 11.02 lbs, 10lb = 10 lbs
+      if (Math.abs(weight - 11) < 0.5) {
+        size = '5kg';  // 5kg bags (~11 lbs)
+      } else if (Math.abs(weight - 10) < 0.5) {
+        size = '10lb';  // 10lb bags
+      } else {
+        size = `${weight}lb`;  // Other sizes
+      }
+    }
+  }
+  // Fallback: check if variant title contains size
+  if (!size && variantTitle) {
+    const match = variantTitle.match(/(\d+)\s*kg/i);
+    if (match) size = `${match[1]}kg`;
+  }
+
+  const quantityAdjusted = parseInt(data['Quantity Adjusted'] || data.quantity_adjusted || 0, 10);
+  const newTotalAvailable = parseInt(data['New Total Available'] || data.new_total_available || inventory.available_quantity || 0, 10);
+  const previousAvailable = parseInt(data['Previous Available'] || data.previous_available || 0, 10);
+  const location = data.Location || data.location || inventory.location_name || '';
+  const productType = data['Product Type'] || data.product_type || product.type || '';
+  const barcode = data.Barcode || data.barcode || variant.barcode || '';
+  const price = parseFloat(data.Price || data.price || variant.price || 0);
+  const flowRunId = data['Flow Run ID'] || data.flow_run_id || context.flow_run_id || `manual-${Date.now()}`;
+  const eventType = data['Event Type'] || data.event_type || 'inventory_adjustment';
+  const adjustmentSource = data['Adjustment Source'] || data.adjustment_source || context.source || '';
+  const normalizedStrain = data['Normalized Strain'] || data.normalized_strain || '';
+
+  const errors = [];
+  let d1Success = false;
+  let sheetsSuccess = false;
+
+  // 1. Write to D1
+  try {
+    await insert(env.DB, 'inventory_adjustments', {
+      timestamp: sanitizeForSheets(timestamp),
+      sku: sanitizeForSheets(sku),
+      product_name: sanitizeForSheets(productName),
+      variant_title: sanitizeForSheets(variantTitle),
+      strain_name: sanitizeForSheets(strainName),
+      size: sanitizeForSheets(size),
+      quantity_adjusted: quantityAdjusted,
+      new_total_available: newTotalAvailable,
+      previous_available: previousAvailable,
+      location: sanitizeForSheets(location),
+      product_type: sanitizeForSheets(productType),
+      barcode: sanitizeForSheets(barcode),
+      price,
+      flow_run_id: sanitizeForSheets(flowRunId),
+      event_type: sanitizeForSheets(eventType),
+      adjustment_source: sanitizeForSheets(adjustmentSource),
+      normalized_strain: sanitizeForSheets(normalizedStrain),
+    });
+    d1Success = true;
+  } catch (err) {
+    // If duplicate flow_run_id, treat as success (idempotent)
+    if (err.message && err.message.includes('UNIQUE constraint failed')) {
+      d1Success = true;
+    } else {
+      errors.push(`D1 error: ${err.message}`);
+    }
+  }
+
+  // 2. Write to Google Sheets (production sheet's tracking tab)
+  try {
+    const sheetId = env.PRODUCTION_SHEET_ID;
+
+    // Format row to match "Rogue Origin Production Tracking" columns:
+    // Timestamp, SKU, Product Name, Variant Title, Strain Name, Size,
+    // Quantity Adjusted, New Total Available, Previous Available, Location,
+    // Product Type, Barcode, Price, Flow Run ID, Event Type, Adjustment Source, Normalized Strain
+    const row = [
+      timestamp,
+      sku,
+      productName,
+      variantTitle,
+      strainName,
+      size,
+      quantityAdjusted > 0 ? `+${quantityAdjusted}` : String(quantityAdjusted),
+      newTotalAvailable,
+      previousAvailable,
+      location,
+      productType,
+      barcode,
+      price,
+      flowRunId,
+      eventType,
+      adjustmentSource,
+      normalizedStrain,
+    ];
+
+    await appendSheet(sheetId, `'${SHEETS.tracking}'!A:Q`, [row], env);
+    sheetsSuccess = true;
+  } catch (err) {
+    errors.push(`Sheets error: ${err.message}`);
+  }
+
+  // Return status
+  if (d1Success && sheetsSuccess) {
+    // Increment version to notify clients of new data
+    await incrementDataVersion(env);
+    return successResponse({
+      success: true,
+      message: 'Inventory adjustment recorded (D1 + Sheets)',
+      flowRunId,
+      sku,
+      quantityAdjusted,
+    });
+  } else if (d1Success || sheetsSuccess) {
+    // Increment version even for partial success
+    await incrementDataVersion(env);
+    return successResponse({
+      success: true,
+      partial: true,
+      message: `Recorded to ${d1Success ? 'D1' : ''}${d1Success && sheetsSuccess ? ' + ' : ''}${sheetsSuccess ? 'Sheets' : ''}`,
+      errors,
+      flowRunId,
+    });
+  } else {
+    return errorResponse(`Failed to record: ${errors.join('; ')}`, 'INTERNAL_ERROR', 500);
+  }
+}
+
 async function chat(body, env) {
   if (!env.ANTHROPIC_API_KEY) {
     return errorResponse('AI chat not configured', 'INTERNAL_ERROR', 500);
@@ -1783,6 +1960,9 @@ export async function handleProductionD1(request, env, ctx) {
         return await logPause(body, env);
       case 'logResume':
         return await logResume(body, env);
+      case 'inventoryWebhook':
+      case 'webhook':
+        return await inventoryWebhook(body, env, request);
       case 'chat':
         return await chat(body, env);
       case 'tts':
