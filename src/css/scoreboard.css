@@ -1743,7 +1743,7 @@
 .order-queue-toggle-btn {
   position: fixed;
   bottom: 20px;
-  right: 220px;
+  right: 280px;
   background: rgba(228, 170, 79, 0.15);
   border: 2px solid #e4aa4f;
   color: #e4aa4f;
@@ -1800,8 +1800,8 @@
   }
 
   .order-queue-toggle-btn {
-    bottom: 10px;
-    right: 120px;
+    bottom: 60px;
+    right: 10px;
     padding: 10px 16px;
     font-size: 12px;
   }
