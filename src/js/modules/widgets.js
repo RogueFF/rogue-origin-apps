@@ -459,12 +459,12 @@ export function updateKPIValues(totals, prevTotals, targets, rolling, compareMod
   setKPI('totalSmalls', t.totalSmalls, p?.totalSmalls, 'lbs', false, tgt.totalSmalls, r.totalSmalls);
   setKPI('avgRate', t.avgRate, p?.avgRate, 'rate', false, tgt.avgRate, r.avgRate);
   setKPI('crew', t.trimmers, p?.trimmers, 'num');
-  setKPI('operatorHours', t.totalOperatorHours, p?.totalOperatorHours, 'hrs', false, null, r.operatorHours);
+  setKPI('operatorHours', t.operatorHours, p?.operatorHours, 'hrs', false, null, r.operatorHours);
   setKPI('costPerLb', t.costPerLb, p?.costPerLb, 'dollar', true, tgt.costPerLb, r.costPerLb);
   setKPI('totalLbs', t.totalLbs, p?.totalLbs, 'lbs', false, null, r.totalLbs);
   setKPI('maxRate', t.maxRate, p?.maxRate, 'rate');
-  setKPI('trimmerHours', t.totalTrimmerHours, p?.totalTrimmerHours, 'hrs');
-  setKPI('laborCost', t.totalLaborCost, p?.totalLaborCost, 'dollar', true);
+  setKPI('trimmerHours', t.trimmerHours, p?.trimmerHours, 'hrs');
+  setKPI('laborCost', t.laborCost, p?.laborCost, 'dollar', true);
 
   // Refresh Muuri KPI layout
   try {
