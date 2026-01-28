@@ -1708,6 +1708,11 @@
   z-index: 100;
 }
 
+/* Hide date picker input */
+.date-picker-hidden {
+  display: none !important;
+}
+
 /* Historical View Button */
 .historical-view-btn {
   position: fixed;
