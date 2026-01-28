@@ -739,7 +739,9 @@ async function dashboard(params, env) {
           THEN 1
           ELSE NULL
         END
-      ) as hours_with_data
+      ) as hours_with_data,
+      SUM(tops_lbs1) as total_tops,
+      SUM(smalls_lbs1) as total_smalls
     FROM monthly_production
     WHERE production_date = ?
   `, [today]);
@@ -748,12 +750,14 @@ async function dashboard(params, env) {
   const todayWaterspiderHours = todayOperatorData?.hours_with_data || 0; // 1 waterspider per hour with data
   const todayTotalLaborHours = todayOperatorHours + todayWaterspiderHours;
   const todayLaborCost = todayTotalLaborHours * TOTAL_LABOR_COST_PER_HOUR;
-  const todayTotalLbs = scoreboardData.todayLbs || 0;
+  const todayTops = todayOperatorData?.total_tops || 0;
+  const todaySmalls = todayOperatorData?.total_smalls || 0;
+  const todayTotalLbs = todayTops + todaySmalls;
   const todayCostPerLb = todayTotalLbs > 0 ? todayLaborCost / todayTotalLbs : 0;
 
   const todayData = {
-    totalTops: scoreboardData.todayLbs || 0,
-    totalSmalls: 0,
+    totalTops: todayTops,
+    totalSmalls: todaySmalls,
     totalLbs: todayTotalLbs,
     avgRate: totalTrimmerHours > 0 ? weightedRateSum / totalTrimmerHours : 0,
     trimmers: scoreboardData.lastHourTrimmers || scoreboardData.currentHourTrimmers || 0,
