@@ -1799,6 +1799,21 @@
     font-size: 18px;
   }
 
+  .order-queue-toggle-btn {
+    bottom: 10px;
+    right: 120px;
+    padding: 10px 16px;
+    font-size: 12px;
+  }
+
+  .order-queue-toggle-btn i {
+    font-size: 18px;
+  }
+
+  .order-queue-toggle-btn span {
+    display: none;
+  }
+
   .historical-date-banner {
     padding: 10px 12px;
   }
@@ -2105,7 +2120,8 @@ body.iframe-embed .time-display,
 body.iframe-embed .time-controls,
 body.iframe-embed .help-btn,
 body.iframe-embed .historical-date-banner,
-body.iframe-embed .historical-view-btn {
+body.iframe-embed .historical-view-btn,
+body.iframe-embed .order-queue-toggle-btn {
   display: none;
 }
 

@@ -228,6 +228,9 @@
       State.cycleHistory = Cycle.loadLocalCycleHistory();
     }
 
+    // Initialize order queue visibility from localStorage
+    initOrderQueueVisibility();
+
     // Initial clock update
     updateClock();
 
@@ -387,12 +390,62 @@
     loadData();
   }
 
+  /**
+   * Toggle order queue visibility
+   */
+  function toggleOrderQueue() {
+    var section = DOM ? DOM.get('orderQueueSection') : document.getElementById('orderQueueSection');
+    var toggleBtn = DOM ? DOM.get('orderQueueToggleBtn') : document.getElementById('orderQueueToggleBtn');
+
+    if (!section) return;
+
+    // Get current state
+    var isVisible = localStorage.getItem('orderQueueVisible') === 'true';
+
+    // Toggle state
+    var newState = !isVisible;
+    localStorage.setItem('orderQueueVisible', newState.toString());
+
+    // Update UI
+    if (newState) {
+      section.style.display = 'flex';
+      if (toggleBtn) toggleBtn.classList.add('active');
+    } else {
+      section.style.display = 'none';
+      if (toggleBtn) toggleBtn.classList.remove('active');
+    }
+
+    console.log('Order queue toggled:', newState ? 'visible' : 'hidden');
+  }
+
+  /**
+   * Initialize order queue visibility from localStorage
+   */
+  function initOrderQueueVisibility() {
+    var section = DOM ? DOM.get('orderQueueSection') : document.getElementById('orderQueueSection');
+    var toggleBtn = DOM ? DOM.get('orderQueueToggleBtn') : document.getElementById('orderQueueToggleBtn');
+
+    if (!section) return;
+
+    // Default to hidden if not set
+    var isVisible = localStorage.getItem('orderQueueVisible') === 'true';
+
+    if (isVisible) {
+      section.style.display = 'flex';
+      if (toggleBtn) toggleBtn.classList.add('active');
+    } else {
+      section.style.display = 'none';
+      if (toggleBtn) toggleBtn.classList.remove('active');
+    }
+  }
+
   // Expose global functions needed by inline HTML handlers
   window.setLanguage = setLanguage;
   window.toggleHelp = toggleHelp;
   window.toggleDatePicker = toggleDatePicker;
   window.loadHistoricalDate = loadHistoricalDate;
   window.clearHistoricalDate = clearHistoricalDate;
+  window.toggleOrderQueue = toggleOrderQueue;
 
   // Expose timer functions for pause button handlers
   if (Timer) {
