@@ -12,6 +12,11 @@ import { sanitizeForSheets, validateDate } from '../lib/validate.js';
 const AI_MODEL = 'claude-sonnet-4-20250514';
 const TIMEZONE = 'America/Los_Angeles';
 
+// Labor cost configuration
+const BASE_WAGE_RATE = 23.00; // $/hour before taxes
+const EMPLOYER_TAX_RATE = 0.14; // Oregon employer taxes: FICA 7.65%, FUTA 0.6%, SUI 2.4%, Workers' Comp 3%
+const TOTAL_LABOR_COST_PER_HOUR = BASE_WAGE_RATE * (1 + EMPLOYER_TAX_RATE); // $26.22/hour
+
 // Time slot multipliers for break adjustments
 const TIME_SLOT_MULTIPLIERS = {
   '7:00 AM – 8:00 AM': 1.0,
@@ -531,8 +536,7 @@ async function getExtendedDailyData(days, env) {
            SUM(tops_lbs1) as total_tops,
            SUM(smalls_lbs1) as total_smalls,
            SUM(trimmers_line1) as trimmer_hours,
-           SUM(buckers_line1 + trimmers_line1 + tzero_line1) as operator_hours,
-           AVG(wage_rate) as avg_wage_rate
+           SUM(buckers_line1 + trimmers_line1 + tzero_line1) as operator_hours
     FROM monthly_production
     WHERE production_date >= ?
     GROUP BY production_date
@@ -541,8 +545,7 @@ async function getExtendedDailyData(days, env) {
 
   return rows.map(r => {
     const operatorHours = r.operator_hours || 0;
-    const wageRate = r.avg_wage_rate || 0;
-    const laborCost = operatorHours * wageRate;
+    const laborCost = operatorHours * TOTAL_LABOR_COST_PER_HOUR; // $26.22/hour (includes payroll taxes)
     const totalLbs = (r.total_tops || 0) + (r.total_smalls || 0);
     const costPerLb = totalLbs > 0 ? laborCost / totalLbs : 0;
 
@@ -692,12 +695,27 @@ async function dashboard(params, env) {
     }
   }
 
+  // Calculate today's operator hours and labor costs
+  const todayOperatorData = await queryOne(env.DB, `
+    SELECT SUM(buckers_line1 + trimmers_line1 + tzero_line1) as operator_hours
+    FROM monthly_production
+    WHERE production_date = ?
+  `, [today]);
+
+  const todayOperatorHours = todayOperatorData?.operator_hours || 0;
+  const todayLaborCost = todayOperatorHours * TOTAL_LABOR_COST_PER_HOUR;
+  const todayTotalLbs = scoreboardData.todayLbs || 0;
+  const todayCostPerLb = todayTotalLbs > 0 ? todayLaborCost / todayTotalLbs : 0;
+
   const todayData = {
     totalTops: scoreboardData.todayLbs || 0,
     totalSmalls: 0,
-    totalLbs: scoreboardData.todayLbs || 0,
+    totalLbs: todayTotalLbs,
     avgRate: totalTrimmerHours > 0 ? weightedRateSum / totalTrimmerHours : 0,
     trimmers: scoreboardData.lastHourTrimmers || scoreboardData.currentHourTrimmers || 0,
+    operatorHours: todayOperatorHours,
+    laborCost: todayLaborCost,
+    costPerLb: todayCostPerLb,
   };
 
   const current = {

@@ -555,50 +555,61 @@ function initializeUI() {
     startDayBtn.addEventListener('click', () => setShiftStart());
   }
 
-  // Start time badge (click to edit)
+  // Start time badge (click to edit) - Toggle dropdown
   const startTimeBadge = document.getElementById('start-time-badge');
-  const startTimePicker = document.getElementById('start-time-picker');
-  if (startTimeBadge && startTimePicker) {
-    // Click badge to open time picker
-    startTimeBadge.addEventListener('click', () => {
-      // Pre-populate with current start time
-      if (shiftStartTime) {
-        const hours = String(shiftStartTime.getHours()).padStart(2, '0');
-        const minutes = String(shiftStartTime.getMinutes()).padStart(2, '0');
-        const presetValue = `${hours}:${minutes}`;
-        startTimePicker.value = presetValue;
-        lastTimePickerValue = presetValue; // Track what we set it to
-      } else {
-        lastTimePickerValue = startTimePicker.value || '';
-      }
-      isOpeningTimePicker = true;
-      startTimePicker.showPicker();
-      // Reset flag after picker has opened (short delay to avoid race)
-      setTimeout(() => { isOpeningTimePicker = false; }, 100);
+  const timePickerDropdown = document.getElementById('time-picker-dropdown');
+
+  if (startTimeBadge && timePickerDropdown) {
+    // Toggle dropdown on click
+    startTimeBadge.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isVisible = timePickerDropdown.style.display === 'block';
+      timePickerDropdown.style.display = isVisible ? 'none' : 'block';
     });
 
-    // When time is selected, update shift start
-    startTimePicker.addEventListener('change', (e) => {
-      const timeValue = e.target.value; // "HH:MM" format
-      
-      // Ignore if we're in the middle of opening the picker (spurious event)
-      if (isOpeningTimePicker) {
-        return;
-      }
-      
-      // Ignore if value hasn't actually changed (browser auto-fill or spurious event)
-      if (timeValue === lastTimePickerValue) {
-        return;
-      }
-      
-      if (timeValue) {
-        lastTimePickerValue = timeValue;
-        const [hours, minutes] = timeValue.split(':').map(Number);
-        const newStartTime = new Date();
-        newStartTime.setHours(hours, minutes, 0, 0);
-        setShiftStart(newStartTime);
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!timePickerDropdown.contains(e.target) && !startTimeBadge.contains(e.target)) {
+        timePickerDropdown.style.display = 'none';
       }
     });
+
+    // Preset time buttons
+    const presetButtons = timePickerDropdown.querySelectorAll('.time-preset-btn');
+    presetButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const timeStr = btn.dataset.time; // "H:MM" format
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        const startTime = new Date();
+        startTime.setHours(hours, minutes, 0, 0);
+        setShiftStart(startTime);
+        timePickerDropdown.style.display = 'none';
+      });
+    });
+
+    // Custom time input
+    const customTimeInput = document.getElementById('custom-time-input');
+    const setCustomTimeBtn = document.getElementById('set-custom-time');
+
+    if (setCustomTimeBtn && customTimeInput) {
+      setCustomTimeBtn.addEventListener('click', () => {
+        const timeValue = customTimeInput.value; // "HH:MM" format
+        if (timeValue) {
+          const [hours, minutes] = timeValue.split(':').map(Number);
+          const startTime = new Date();
+          startTime.setHours(hours, minutes, 0, 0);
+          setShiftStart(startTime);
+          timePickerDropdown.style.display = 'none';
+        }
+      });
+
+      // Also allow Enter key
+      customTimeInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          setCustomTimeBtn.click();
+        }
+      });
+    }
   }
 
   // Back to timeline button
