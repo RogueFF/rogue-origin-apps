@@ -23,8 +23,8 @@ const SHEETS = {
 
 // Blacklist for test/accidental bag scans
 const BLACKLISTED_BAGS = [
-  // Range: 1/28/2026 11:25-11:46 AM PST (test/accidental scans)
-  { start: new Date('2026-01-28T19:25:46Z'), end: new Date('2026-01-28T19:46:00Z') },
+  // Add entries here if needed for specific test scans
+  // Example: { exact: new Date('2026-01-28T19:25:46Z'), tolerance: 2000 }
 ];
 
 /**
@@ -505,6 +505,8 @@ async function getBagTimerData(env, date = null) {
     }
 
     const todayBags = [];
+    const seenFlowRunIds = new Set();
+    const seenTimestamps = new Map(); // timestamp -> bag date
     let lastBag = null;
 
     for (const row of bags) {
@@ -514,6 +516,39 @@ async function getBagTimerData(env, date = null) {
       // Skip blacklisted bags (test scans, accidental scans)
       if (isBlacklistedBag(rowDate)) continue;
 
+      // Skip duplicate flow_run_id (Shopify Flow retries/double-fires webhooks)
+      if (row.flow_run_id && seenFlowRunIds.has(row.flow_run_id)) {
+        console.log(`Skipping duplicate flow_run_id: ${row.flow_run_id} at ${row.timestamp}`);
+        continue;
+      }
+      if (row.flow_run_id) {
+        seenFlowRunIds.add(row.flow_run_id);
+      }
+
+      // Extract timestamp from flow_run_id if it contains one
+      // Format: LIFT-INTL-HT-5-KG-2025-2026-01-28T15:35:47Z
+      let isDuplicate = false;
+      if (row.flow_run_id && row.flow_run_id.includes('T') && row.flow_run_id.includes('Z')) {
+        const match = row.flow_run_id.match(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)/);
+        if (match) {
+          const embeddedTimestamp = match[1];
+          const embeddedDate = new Date(embeddedTimestamp);
+
+          // Check if this timestamp matches an existing bag (within 10 seconds)
+          for (const [seenTs, seenDate] of seenTimestamps.entries()) {
+            const timeDiffSec = Math.abs((embeddedDate - seenDate) / 1000);
+            if (timeDiffSec < 10) {
+              console.log(`Skipping duplicate: flow_run_id contains ${embeddedTimestamp}, matches existing bag at ${seenTs}`);
+              isDuplicate = true;
+              break;
+            }
+          }
+        }
+      }
+      if (isDuplicate) continue;
+
+      // Track this timestamp
+      seenTimestamps.set(row.timestamp, rowDate);
       todayBags.push(rowDate);
 
       if (!lastBag || rowDate > lastBag.time) {
@@ -679,9 +714,10 @@ async function debugBags(env) {
       WHERE date(timestamp) = ?
     `, [today]);
 
-    // Also try with Pacific time conversion
+    // Also try with Pacific time conversion - include flow_run_id to detect duplicates
     const todayBagsPT = await query(env.DB, `
-      SELECT timestamp, size, sku
+      SELECT timestamp, size, sku, flow_run_id,
+             datetime(timestamp, '-8 hours') as pst_time
       FROM inventory_adjustments
       WHERE date(datetime(timestamp, '-8 hours')) = ?
         AND (
@@ -690,6 +726,7 @@ async function debugBags(env) {
           OR lower(sku) LIKE '%5-KG%'
           OR lower(sku) LIKE '%-5KG-%'
         )
+      ORDER BY timestamp ASC
     `, [today]);
 
     return successResponse({
