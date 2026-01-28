@@ -64,14 +64,32 @@
     <div id="morningReportContent"></div>
   </div>
 
+  <!-- Historical Date Banner (shows when viewing past data) -->
+  <div id="historicalDateBanner" class="historical-date-banner" style="display:none;">
+    <div class="historical-banner-content">
+      <i class="ph-duotone ph-calendar-blank"></i>
+      <span class="historical-banner-label">Viewing Historical Data:</span>
+      <span id="historicalDateDisplay" class="historical-banner-date">—</span>
+    </div>
+    <button class="historical-banner-close" onclick="clearHistoricalDate();" title="Back to live view">
+      <i class="ph-duotone ph-x"></i>
+      Back to Live
+    </button>
+  </div>
+
   <div class="strain-display">
     <div class="strain-label" id="strainLabel">Line 1 • Current Strain</div>
     <div class="strain-name" id="strainName">—</div>
     <div class="strain-rate-indicator" id="strainRateIndicator"></div>
   </div>
+
   <div class="time-display">
     <div class="time" id="clock">--:--</div>
     <div class="date" id="date">Loading...</div>
+  </div>
+
+  <!-- Time Controls (positioned below time-display) -->
+  <div class="time-controls">
     <!-- Start Day Button (appears until shift start is set) -->
     <button id="startDayBtn" class="start-day-btn pulse-green" onclick="startDayNow()" style="display:none;">
       <i class="ph-duotone ph-play-circle"></i>
@@ -83,17 +101,10 @@
       Started: <span id="startTimeDisplay">—</span>
       <i id="badgeIcon" class="ph-duotone ph-pencil-simple"></i>
     </div>
-    <!-- Historical Date Picker Badge -->
-    <div id="historicalDateBadge" class="historical-date-badge" onclick="toggleDatePicker()" style="display:none;">
-      <i class="ph-duotone ph-calendar-blank"></i>
-      <span id="historicalDateDisplay">—</span>
-      <button class="close-historical-btn" onclick="event.stopPropagation(); clearHistoricalDate();" title="Back to live view">
-        <i class="ph-duotone ph-x"></i>
-      </button>
-    </div>
-    <!-- Date Picker Input (hidden) -->
-    <input type="date" id="historicalDatePicker" class="date-picker-hidden" onchange="loadHistoricalDate(this.value)">
   </div>
+
+  <!-- Date Picker Input (hidden) -->
+  <input type="date" id="historicalDatePicker" class="date-picker-hidden" onchange="loadHistoricalDate(this.value)">
   <!-- Morning Report Button -->
   <button id="morningReportBtn" onclick="toggleMorningReport()">
     <i class="ph-duotone ph-chart-bar"></i>
