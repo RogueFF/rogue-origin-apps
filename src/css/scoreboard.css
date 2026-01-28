@@ -1706,12 +1706,99 @@
   background: rgba(148, 163, 184, 0.1);
 }
 
+/* Historical Date Badge */
+.historical-date-badge {
+  position: relative;
+  margin-top: 10px;
+  background: rgba(98, 117, 141, 0.15);
+  border: 2px solid #62758d;
+  color: #62758d;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 100;
+}
+
+.historical-date-badge:hover {
+  background: rgba(98, 117, 141, 0.25);
+}
+
+.close-historical-btn {
+  background: none;
+  border: none;
+  color: #62758d;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 4px;
+  display: flex;
+  align-items: center;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.close-historical-btn:hover {
+  opacity: 1;
+}
+
+.close-historical-btn i {
+  font-size: 16px;
+}
+
+/* Historical View Button */
+.historical-view-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: rgba(98, 117, 141, 0.15);
+  border: 2px solid #62758d;
+  color: #62758d;
+  padding: 12px 20px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 100;
+  font-family: 'Outfit', sans-serif;
+}
+
+.historical-view-btn:hover {
+  background: rgba(98, 117, 141, 0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.historical-view-btn i {
+  font-size: 20px;
+}
+
 /* Responsive Breakpoints - button/badge now in time-display */
 @media (max-width: 640px) {
   .start-day-btn,
-  .started-badge {
+  .started-badge,
+  .historical-date-badge {
     font-size: 12px;
     padding: 6px 12px;
+  }
+
+  .historical-view-btn {
+    bottom: 10px;
+    right: 10px;
+    padding: 10px 16px;
+    font-size: 12px;
+  }
+
+  .historical-view-btn i {
+    font-size: 18px;
   }
 }
 

@@ -97,8 +97,9 @@
      * Load scoreboard data (scoreboard + timer)
      * @param {Function} onSuccess - Callback with response data {scoreboard: ..., timer: ...}
      * @param {Function} onError - Error callback
+     * @param {string} date - Optional date for historical data (YYYY-MM-DD format)
      */
-    loadData: function(onSuccess, onError) {
+    loadData: function(onSuccess, onError, date) {
       if (this.isAppsScript()) {
         // Running inside Google Apps Script web app
         google.script.run
@@ -114,9 +115,15 @@
         // Running on GitHub Pages - use fetch API
         const apiUrl = this.getApiUrl();
 
-        // Try api-cache.js if available - serve cached data immediately
+        // Build URL with optional date parameter
+        let url = `${apiUrl}?action=scoreboard`;
+        if (date) {
+          url += `&date=${encodeURIComponent(date)}`;
+        }
+
+        // Try api-cache.js if available - serve cached data immediately (only for live view)
         let cachedData = null;
-        if (window.ScoreboardAPICache && window.ScoreboardAPICache.get) {
+        if (!date && window.ScoreboardAPICache && window.ScoreboardAPICache.get) {
           cachedData = window.ScoreboardAPICache.get('scoreboard');
           if (cachedData) {
             // Serve cached data immediately for instant UI
@@ -124,7 +131,7 @@
           }
         }
 
-        fetch(`${apiUrl}?action=scoreboard`)
+        fetch(url)
           .then(function(response) {
             if (!response.ok) {
               throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -134,13 +141,13 @@
           .then(function(raw) {
             // Handle Vercel response wrapper
             const response = raw.data || raw;
-            // Cache response if api-cache.js available
-            if (window.ScoreboardAPICache && window.ScoreboardAPICache.set) {
+            // Cache response if api-cache.js available (only for live view)
+            if (!date && window.ScoreboardAPICache && window.ScoreboardAPICache.set) {
               window.ScoreboardAPICache.set('scoreboard', response);
             }
             // Only call onSuccess if this is fresh data (not already served from cache)
-            // or if data has changed
-            if (!cachedData || JSON.stringify(response) !== JSON.stringify(cachedData)) {
+            // or if data has changed (or if viewing historical data)
+            if (date || !cachedData || JSON.stringify(response) !== JSON.stringify(cachedData)) {
               if (onSuccess) onSuccess(response);
             }
           })

@@ -279,9 +279,120 @@
     console.log('Scoreboard initialized successfully');
   }
 
+  /**
+   * Toggle date picker for historical view
+   */
+  function toggleDatePicker() {
+    var datePicker = DOM ? DOM.get('historicalDatePicker') : document.getElementById('historicalDatePicker');
+    if (datePicker) {
+      datePicker.showPicker();
+    }
+  }
+
+  /**
+   * Load historical data for a specific date
+   * @param {string} dateStr - Date string in YYYY-MM-DD format
+   */
+  function loadHistoricalDate(dateStr) {
+    if (!dateStr || !API) return;
+
+    console.log('Loading historical data for:', dateStr);
+
+    // Update UI to show historical date
+    var badge = DOM ? DOM.get('historicalDateBadge') : document.getElementById('historicalDateBadge');
+    var dateDisplay = DOM ? DOM.get('historicalDateDisplay') : document.getElementById('historicalDateDisplay');
+    var liveBtn = DOM ? DOM.get('historicalViewBtn') : document.getElementById('historicalViewBtn');
+
+    if (badge && dateDisplay) {
+      // Format date for display
+      var date = new Date(dateStr + 'T12:00:00');
+      var lang = (State && State.currentLang) || 'en';
+      var options = { year: 'numeric', month: 'short', day: 'numeric' };
+      dateDisplay.textContent = date.toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US', options);
+      badge.style.display = 'flex';
+    }
+
+    // Hide the live view button when viewing historical data
+    if (liveBtn) {
+      liveBtn.style.display = 'none';
+    }
+
+    // Store historical date in state
+    if (State) {
+      State.historicalDate = dateStr;
+    }
+
+    // Load data with date parameter
+    if (API.loadData) {
+      API.loadData(
+        function(response) {
+          // Update state with response data
+          if (State) {
+            if (response.scoreboard) {
+              State.data = response.scoreboard;
+            } else if (response && !response.scoreboard) {
+              State.data = response;
+            }
+
+            if (response.timer) {
+              State.timerData = response.timer;
+
+              // Load cycle history from API if available
+              if (response.timer.cycleHistory && Cycle) {
+                var defaultTarget = (response.timer.targetSeconds) ||
+                  ((Config && Config.timer && Config.timer.defaultTargetSeconds) || 300);
+                Cycle.loadCycleHistoryFromAPI(response.timer.cycleHistory, defaultTarget);
+              }
+            }
+          }
+
+          // Render the scoreboard
+          if (Render && Render.renderScoreboard) {
+            Render.renderScoreboard();
+          }
+        },
+        function(error) {
+          console.error('Failed to load historical data:', error);
+        },
+        dateStr // Pass date as parameter
+      );
+    }
+  }
+
+  /**
+   * Clear historical date and return to live view
+   */
+  function clearHistoricalDate() {
+    console.log('Returning to live view');
+
+    // Hide historical date badge
+    var badge = DOM ? DOM.get('historicalDateBadge') : document.getElementById('historicalDateBadge');
+    var liveBtn = DOM ? DOM.get('historicalViewBtn') : document.getElementById('historicalViewBtn');
+
+    if (badge) {
+      badge.style.display = 'none';
+    }
+
+    // Show the live view button again
+    if (liveBtn) {
+      liveBtn.style.display = 'flex';
+    }
+
+    // Clear historical date from state
+    if (State) {
+      State.historicalDate = null;
+    }
+
+    // Reload current data
+    loadData();
+  }
+
   // Expose global functions needed by inline HTML handlers
   window.setLanguage = setLanguage;
   window.toggleHelp = toggleHelp;
+  window.toggleDatePicker = toggleDatePicker;
+  window.loadHistoricalDate = loadHistoricalDate;
+  window.clearHistoricalDate = clearHistoricalDate;
 
   // Expose timer functions for pause button handlers
   if (Timer) {
