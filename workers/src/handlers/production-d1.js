@@ -23,8 +23,8 @@ const SHEETS = {
 
 // Blacklist for test/accidental bag scans
 const BLACKLISTED_BAGS = [
-  // Exact timestamp with 2-second tolerance
-  { exact: new Date('2026-01-28T19:25:46Z'), tolerance: 2000 },
+  // Range: 1/28/2026 11:25-11:46 AM PST (test/accidental scans)
+  { start: new Date('2026-01-28T19:25:46Z'), end: new Date('2026-01-28T19:46:00Z') },
 ];
 
 /**
