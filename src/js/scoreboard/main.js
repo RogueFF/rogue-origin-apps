@@ -231,6 +231,9 @@
     // Initialize order queue visibility from localStorage
     initOrderQueueVisibility();
 
+    // Initialize AVG/BEST visibility from localStorage
+    initAvgBestVisibility();
+
     // Initial clock update
     updateClock();
 
@@ -439,6 +442,55 @@
     }
   }
 
+  /**
+   * Toggle AVG/BEST stats visibility
+   */
+  function toggleAvgBest() {
+    var container = DOM ? DOM.get('avgBestContainer') : document.getElementById('avgBestContainer');
+    var divider = DOM ? DOM.get('avgBestDivider') : document.getElementById('avgBestDivider');
+
+    if (!container) return;
+
+    // Get current state
+    var isHidden = localStorage.getItem('avgBestHidden') === 'true';
+
+    // Toggle state
+    var newState = !isHidden;
+    localStorage.setItem('avgBestHidden', newState.toString());
+
+    // Update UI
+    if (newState) {
+      container.classList.add('hidden');
+      if (divider) divider.classList.add('hidden');
+    } else {
+      container.classList.remove('hidden');
+      if (divider) divider.classList.remove('hidden');
+    }
+
+    console.log('AVG/BEST toggled:', newState ? 'hidden' : 'visible');
+  }
+
+  /**
+   * Initialize AVG/BEST visibility from localStorage
+   */
+  function initAvgBestVisibility() {
+    var container = DOM ? DOM.get('avgBestContainer') : document.getElementById('avgBestContainer');
+    var divider = DOM ? DOM.get('avgBestDivider') : document.getElementById('avgBestDivider');
+
+    if (!container) return;
+
+    // Default to visible if not set
+    var isHidden = localStorage.getItem('avgBestHidden') === 'true';
+
+    if (isHidden) {
+      container.classList.add('hidden');
+      if (divider) divider.classList.add('hidden');
+    } else {
+      container.classList.remove('hidden');
+      if (divider) divider.classList.remove('hidden');
+    }
+  }
+
   // Expose global functions needed by inline HTML handlers
   window.setLanguage = setLanguage;
   window.toggleHelp = toggleHelp;
@@ -446,6 +498,7 @@
   window.loadHistoricalDate = loadHistoricalDate;
   window.clearHistoricalDate = clearHistoricalDate;
   window.toggleOrderQueue = toggleOrderQueue;
+  window.toggleAvgBest = toggleAvgBest;
 
   // Expose timer functions for pause button handlers
   if (Timer) {
