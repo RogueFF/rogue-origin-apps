@@ -2146,6 +2146,8 @@ body.iframe-embed .order-queue-toggle-btn {
   display: flex;
   align-items: center;
   gap: 6px;
+  width: auto;
+  right: auto;
 }
 
 body.iframe-embed .historical-view-btn {
