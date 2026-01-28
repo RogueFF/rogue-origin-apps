@@ -2119,14 +2119,37 @@ body.iframe-embed .strain-display,
 body.iframe-embed .time-display,
 body.iframe-embed .time-controls,
 body.iframe-embed .help-btn,
-body.iframe-embed .historical-date-banner,
-body.iframe-embed .historical-view-btn,
-body.iframe-embed .order-queue-toggle-btn {
+body.iframe-embed .historical-date-banner {
   display: none;
 }
 
 /* Keep language toggle visible in iframe mode */
-body.iframe-embed .lang-toggle { left: 10px; bottom: 10px; }
+body.iframe-embed .lang-toggle {
+  left: 10px;
+  bottom: 10px;
+  gap: 8px;
+}
+
+/* Show toggle buttons in iframe, position them with lang buttons */
+body.iframe-embed .historical-view-btn,
+body.iframe-embed .order-queue-toggle-btn {
+  position: fixed;
+  bottom: 10px;
+  padding: 6px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+body.iframe-embed .historical-view-btn {
+  left: 200px; /* After EN, ES, complaints buttons */
+}
+
+body.iframe-embed .order-queue-toggle-btn {
+  left: 380px; /* After historical view button */
+}
 
 /* Compact scoreboard in iframe */
 body.iframe-embed .scoreboard {
