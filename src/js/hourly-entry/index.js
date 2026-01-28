@@ -560,11 +560,27 @@ function initializeUI() {
   const timePickerDropdown = document.getElementById('time-picker-dropdown');
 
   if (startTimeBadge && timePickerDropdown) {
+    const customTimeInput = document.getElementById('custom-time-input');
+    const setCustomTimeBtn = document.getElementById('set-custom-time');
+
     // Toggle dropdown on click
     startTimeBadge.addEventListener('click', (e) => {
       e.stopPropagation();
       const isVisible = timePickerDropdown.style.display === 'block';
-      timePickerDropdown.style.display = isVisible ? 'none' : 'block';
+
+      if (!isVisible) {
+        // Pre-populate with current start time when opening
+        if (shiftStartTime && customTimeInput) {
+          const hours = String(shiftStartTime.getHours()).padStart(2, '0');
+          const minutes = String(shiftStartTime.getMinutes()).padStart(2, '0');
+          customTimeInput.value = `${hours}:${minutes}`;
+        }
+        timePickerDropdown.style.display = 'block';
+        // Auto-focus the input
+        setTimeout(() => customTimeInput?.focus(), 100);
+      } else {
+        timePickerDropdown.style.display = 'none';
+      }
     });
 
     // Close dropdown when clicking outside
@@ -574,23 +590,7 @@ function initializeUI() {
       }
     });
 
-    // Preset time buttons
-    const presetButtons = timePickerDropdown.querySelectorAll('.time-preset-btn');
-    presetButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        const timeStr = btn.dataset.time; // "H:MM" format
-        const [hours, minutes] = timeStr.split(':').map(Number);
-        const startTime = new Date();
-        startTime.setHours(hours, minutes, 0, 0);
-        setShiftStart(startTime);
-        timePickerDropdown.style.display = 'none';
-      });
-    });
-
-    // Custom time input
-    const customTimeInput = document.getElementById('custom-time-input');
-    const setCustomTimeBtn = document.getElementById('set-custom-time');
-
+    // Set time button
     if (setCustomTimeBtn && customTimeInput) {
       setCustomTimeBtn.addEventListener('click', () => {
         const timeValue = customTimeInput.value; // "HH:MM" format
