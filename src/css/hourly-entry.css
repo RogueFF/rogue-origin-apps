@@ -1564,6 +1564,7 @@ body {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+  position: relative; /* For dropdown positioning */
 }
 
 /* On small screens, wrap header items */
