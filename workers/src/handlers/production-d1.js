@@ -539,6 +539,8 @@ async function getExtendedDailyData(days, env) {
            SUM(tops_lbs1) as total_tops,
            SUM(smalls_lbs1) as total_smalls,
            SUM(trimmers_line1) as trimmer_hours,
+           SUM(buckers_line1) as bucker_hours,
+           SUM(tzero_line1) as tzero_hours,
            SUM(
              CASE
                WHEN (buckers_line1 + trimmers_line1 + tzero_line1) > 0 AND tops_lbs1 > 0
@@ -560,23 +562,50 @@ async function getExtendedDailyData(days, env) {
   `, [cutoffStr]);
 
   return rows.map(r => {
-    const operatorHours = r.operator_hours || 0;
+    const totalTops = r.total_tops || 0;
+    const totalSmalls = r.total_smalls || 0;
+    const totalLbs = totalTops + totalSmalls;
+    const trimmerHours = r.trimmer_hours || 0;
+    const buckerHours = r.bucker_hours || 0;
+    const tzeroHours = r.tzero_hours || 0;
     const waterspiderHours = r.hours_with_data || 0; // 1 waterspider per hour with data
-    const totalLaborHours = operatorHours + waterspiderHours;
-    const laborCost = totalLaborHours * TOTAL_LABOR_COST_PER_HOUR; // $26.22/hour (includes payroll taxes)
-    const totalLbs = (r.total_tops || 0) + (r.total_smalls || 0);
-    const costPerLb = totalLbs > 0 ? laborCost / totalLbs : 0;
+
+    // Calculate weight ratio for cost splitting
+    const topsRatio = totalLbs > 0 ? totalTops / totalLbs : 1;
+    const smallsRatio = totalLbs > 0 ? totalSmalls / totalLbs : 0;
+
+    // Split costs by processing role:
+    // - Buckers + TZero + Waterspider: split by weight ratio (process both tops and smalls)
+    // - Trimmers: 100% to tops only
+    const sharedHours = buckerHours + tzeroHours + waterspiderHours;
+    const topsSharedHours = sharedHours * topsRatio;
+    const smallsSharedHours = sharedHours * smallsRatio;
+
+    const topsLaborHours = trimmerHours + topsSharedHours;
+    const smallsLaborHours = smallsSharedHours;
+
+    const topsLaborCost = topsLaborHours * TOTAL_LABOR_COST_PER_HOUR;
+    const smallsLaborCost = smallsLaborHours * TOTAL_LABOR_COST_PER_HOUR;
+    const totalLaborCost = topsLaborCost + smallsLaborCost;
+
+    const topsCostPerLb = totalTops > 0 ? topsLaborCost / totalTops : 0;
+    const smallsCostPerLb = totalSmalls > 0 ? smallsLaborCost / totalSmalls : 0;
+    const blendedCostPerLb = totalLbs > 0 ? totalLaborCost / totalLbs : 0;
+
+    const totalOperatorHours = buckerHours + trimmerHours + tzeroHours + waterspiderHours;
 
     return {
       date: new Date(r.production_date),
-      totalTops: r.total_tops || 0,
-      totalSmalls: r.total_smalls || 0,
-      avgRate: r.trimmer_hours > 0 ? r.total_tops / r.trimmer_hours : 0,
+      totalTops,
+      totalSmalls,
+      avgRate: trimmerHours > 0 ? totalTops / trimmerHours : 0,
       totalLbs,
-      trimmerHours: r.trimmer_hours || 0,
-      operatorHours: totalLaborHours,
-      laborCost,
-      costPerLb,
+      trimmerHours,
+      operatorHours: totalOperatorHours,
+      laborCost: totalLaborCost,
+      costPerLb: blendedCostPerLb,
+      topsCostPerLb,
+      smallsCostPerLb,
     };
   });
 }
@@ -724,15 +753,30 @@ async function dashboard(params, env) {
 
   // Calculate today's operator hours and labor costs
   // Only count hours with full data (crew + production)
+  // Split costs: Buckers+TZero+Waterspider by weight ratio, Trimmers 100% to tops
   const todayOperatorData = await queryOne(env.DB, `
     SELECT
       SUM(
         CASE
           WHEN (buckers_line1 + trimmers_line1 + tzero_line1) > 0 AND tops_lbs1 > 0
-          THEN buckers_line1 + trimmers_line1 + tzero_line1
+          THEN trimmers_line1
           ELSE 0
         END
-      ) as operator_hours,
+      ) as trimmer_hours,
+      SUM(
+        CASE
+          WHEN (buckers_line1 + trimmers_line1 + tzero_line1) > 0 AND tops_lbs1 > 0
+          THEN buckers_line1
+          ELSE 0
+        END
+      ) as bucker_hours,
+      SUM(
+        CASE
+          WHEN (buckers_line1 + trimmers_line1 + tzero_line1) > 0 AND tops_lbs1 > 0
+          THEN tzero_line1
+          ELSE 0
+        END
+      ) as tzero_hours,
       COUNT(
         CASE
           WHEN (buckers_line1 + trimmers_line1 + tzero_line1) > 0 AND tops_lbs1 > 0
@@ -746,14 +790,37 @@ async function dashboard(params, env) {
     WHERE production_date = ?
   `, [today]);
 
-  const todayOperatorHours = todayOperatorData?.operator_hours || 0;
-  const todayWaterspiderHours = todayOperatorData?.hours_with_data || 0; // 1 waterspider per hour with data
-  const todayTotalLaborHours = todayOperatorHours + todayWaterspiderHours;
-  const todayLaborCost = todayTotalLaborHours * TOTAL_LABOR_COST_PER_HOUR;
   const todayTops = todayOperatorData?.total_tops || 0;
   const todaySmalls = todayOperatorData?.total_smalls || 0;
   const todayTotalLbs = todayTops + todaySmalls;
-  const todayCostPerLb = todayTotalLbs > 0 ? todayLaborCost / todayTotalLbs : 0;
+  const todayTrimmerHours = todayOperatorData?.trimmer_hours || 0;
+  const todayBuckerHours = todayOperatorData?.bucker_hours || 0;
+  const todayTZeroHours = todayOperatorData?.tzero_hours || 0;
+  const todayWaterspiderHours = todayOperatorData?.hours_with_data || 0; // 1 waterspider per hour with data
+
+  // Calculate weight ratio for cost splitting
+  const todayTopsRatio = todayTotalLbs > 0 ? todayTops / todayTotalLbs : 1;
+  const todaySmallsRatio = todayTotalLbs > 0 ? todaySmalls / todayTotalLbs : 0;
+
+  // Split costs by processing role:
+  // - Buckers + TZero + Waterspider: split by weight ratio (process both tops and smalls)
+  // - Trimmers: 100% to tops only
+  const todaySharedHours = todayBuckerHours + todayTZeroHours + todayWaterspiderHours;
+  const todayTopsSharedHours = todaySharedHours * todayTopsRatio;
+  const todaySmallsSharedHours = todaySharedHours * todaySmallsRatio;
+
+  const todayTopsLaborHours = todayTrimmerHours + todayTopsSharedHours;
+  const todaySmallsLaborHours = todaySmallsSharedHours;
+
+  const todayTopsLaborCost = todayTopsLaborHours * TOTAL_LABOR_COST_PER_HOUR;
+  const todaySmallsLaborCost = todaySmallsLaborHours * TOTAL_LABOR_COST_PER_HOUR;
+  const todayTotalLaborCost = todayTopsLaborCost + todaySmallsLaborCost;
+
+  const todayTopsCostPerLb = todayTops > 0 ? todayTopsLaborCost / todayTops : 0;
+  const todaySmallsCostPerLb = todaySmalls > 0 ? todaySmallsLaborCost / todaySmalls : 0;
+  const todayBlendedCostPerLb = todayTotalLbs > 0 ? todayTotalLaborCost / todayTotalLbs : 0;
+
+  const todayTotalOperatorHours = todayBuckerHours + todayTrimmerHours + todayTZeroHours + todayWaterspiderHours;
 
   const todayData = {
     totalTops: todayTops,
@@ -761,9 +828,11 @@ async function dashboard(params, env) {
     totalLbs: todayTotalLbs,
     avgRate: totalTrimmerHours > 0 ? weightedRateSum / totalTrimmerHours : 0,
     trimmers: scoreboardData.lastHourTrimmers || scoreboardData.currentHourTrimmers || 0,
-    operatorHours: todayTotalLaborHours,
-    laborCost: todayLaborCost,
-    costPerLb: todayCostPerLb,
+    operatorHours: todayTotalOperatorHours,
+    laborCost: todayTotalLaborCost,
+    costPerLb: todayBlendedCostPerLb,
+    topsCostPerLb: todayTopsCostPerLb,
+    smallsCostPerLb: todaySmallsCostPerLb,
   };
 
   const current = {
@@ -811,6 +880,8 @@ async function dashboard(params, env) {
       operatorHours: Math.round(d.operatorHours * 10) / 10,
       laborCost: Math.round(d.laborCost * 100) / 100,
       costPerLb: Math.round(d.costPerLb * 100) / 100,
+      topsCostPerLb: Math.round(d.topsCostPerLb * 100) / 100,
+      smallsCostPerLb: Math.round(d.smallsCostPerLb * 100) / 100,
     })),
     fallback: showingFallback ? {
       active: true,
