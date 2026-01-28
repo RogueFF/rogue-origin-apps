@@ -21,6 +21,33 @@ const SHEETS = {
   data: 'Data',
 };
 
+// Blacklist for test/accidental bag scans
+const BLACKLISTED_BAGS = [
+  // Exact timestamp with 2-second tolerance
+  { exact: new Date('2026-01-28T19:25:46Z'), tolerance: 2000 },
+];
+
+/**
+ * Check if a bag timestamp should be blacklisted (test/accidental scans)
+ * @param {Date} bagDate - Bag timestamp to check
+ * @returns {boolean} True if blacklisted
+ */
+function isBlacklistedBag(bagDate) {
+  for (const entry of BLACKLISTED_BAGS) {
+    if (entry.exact) {
+      const diff = Math.abs(bagDate - entry.exact);
+      if (diff <= (entry.tolerance || 0)) {
+        return true;
+      }
+    } else if (entry.start && entry.end) {
+      if (bagDate >= entry.start && bagDate <= entry.end) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 // Labor cost configuration
 const BASE_WAGE_RATE = 23.00; // $/hour before taxes
 const EMPLOYER_TAX_RATE = 0.14; // Oregon employer taxes: FICA 7.65%, FUTA 0.6%, SUI 2.4%, Workers' Comp 3%
@@ -483,6 +510,9 @@ async function getBagTimerData(env, date = null) {
     for (const row of bags) {
       const rowDate = new Date(row.timestamp);
       if (isNaN(rowDate.getTime())) continue;
+
+      // Skip blacklisted bags (test scans, accidental scans)
+      if (isBlacklistedBag(rowDate)) continue;
 
       todayBags.push(rowDate);
 
