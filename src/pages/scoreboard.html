@@ -83,11 +83,27 @@
       Started: <span id="startTimeDisplay">—</span>
       <i id="badgeIcon" class="ph-duotone ph-pencil-simple"></i>
     </div>
+    <!-- Historical Date Picker Badge -->
+    <div id="historicalDateBadge" class="historical-date-badge" onclick="toggleDatePicker()" style="display:none;">
+      <i class="ph-duotone ph-calendar-blank"></i>
+      <span id="historicalDateDisplay">—</span>
+      <button class="close-historical-btn" onclick="event.stopPropagation(); clearHistoricalDate();" title="Back to live view">
+        <i class="ph-duotone ph-x"></i>
+      </button>
+    </div>
+    <!-- Date Picker Input (hidden) -->
+    <input type="date" id="historicalDatePicker" class="date-picker-hidden" onchange="loadHistoricalDate(this.value)">
   </div>
   <!-- Morning Report Button -->
   <button id="morningReportBtn" onclick="toggleMorningReport()">
     <i class="ph-duotone ph-chart-bar"></i>
     Morning Report / Reporte Matutino
+  </button>
+
+  <!-- Historical View Button -->
+  <button id="historicalViewBtn" onclick="toggleDatePicker()" class="historical-view-btn">
+    <i class="ph-duotone ph-clock-counter-clockwise"></i>
+    View Past Data / Ver Datos Pasados
   </button>
 
   <div class="lang-toggle">
