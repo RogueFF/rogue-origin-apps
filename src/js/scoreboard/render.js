@@ -268,6 +268,13 @@
         return;
       }
 
+      // Respect user's toggle preference
+      const isVisible = localStorage.getItem('orderQueueVisible') === 'true';
+      if (!isVisible) {
+        section.style.display = 'none';
+        return;
+      }
+
       section.style.display = 'flex';
 
       // Render all current items from the same shipment
