@@ -25,12 +25,29 @@
       <div class="header-right">
         <!-- Shift Start (shared with scoreboard) -->
         <button id="start-day-btn" class="start-day-btn" data-i18n="startDay">Start Day</button>
-        <div id="start-time-badge" class="start-time-badge" style="display: none;" title="Tap to edit start time">
+        <div id="start-time-badge" class="start-time-badge" style="display: none;" title="Tap to change start time">
           <span class="start-time-icon">▶</span>
           <span id="start-time-display">7:30 AM</span>
-          <span class="edit-icon">✎</span>
+          <span class="edit-icon">▼</span>
         </div>
-        <input type="time" id="start-time-picker" class="start-time-picker-hidden">
+
+        <!-- Custom Time Picker Dropdown -->
+        <div id="time-picker-dropdown" class="time-picker-dropdown" style="display: none;">
+          <div class="time-picker-header">Set Start Time</div>
+          <div class="time-picker-presets">
+            <button class="time-preset-btn" data-time="7:00">7:00 AM</button>
+            <button class="time-preset-btn" data-time="7:15">7:15 AM</button>
+            <button class="time-preset-btn" data-time="7:30">7:30 AM</button>
+            <button class="time-preset-btn" data-time="7:45">7:45 AM</button>
+            <button class="time-preset-btn" data-time="8:00">8:00 AM</button>
+            <button class="time-preset-btn" data-time="8:15">8:15 AM</button>
+          </div>
+          <div class="time-picker-custom">
+            <input type="time" id="custom-time-input" class="custom-time-input">
+            <button id="set-custom-time" class="set-custom-time-btn">Set</button>
+          </div>
+        </div>
+
         <button id="lang-toggle" class="lang-btn">ES</button>
         <span id="date-display" class="date-display">January, 23rd</span>
         <input type="date" id="date-picker" class="date-picker-hidden">
