@@ -1,7 +1,7 @@
 # Design Assets Reference
 
-**Version**: 2.1
-**Last Updated**: 2026-01-27
+**Version**: 2.2
+**Last Updated**: 2026-01-28
 **Purpose**: Single source of truth for all UI colors, themes, logos, and design assets
 
 ---
@@ -19,9 +19,30 @@
 |-------|-----------|--------|------------|-------|
 | Square Logo | `/src/assets/ro-logo-square.png` | PNG | 512x512 | App icons, favicons, social media |
 | Horizontal Logo | `/src/assets/ro-logo-horizontal.png` | PNG | Variable | Headers, email signatures |
+| Horizontal Logo (Print) | `RO_HORIZONTALOGO.eps` | EPS | Vector | Print materials, design work |
+| Stacked Logo (Print) | `RO_STACKEDLOGO.eps` | EPS | Vector | Print materials, vertical layouts |
+| Icon Only (Print) | `RO-Icon.eps` | EPS | Vector | Icon-only applications |
+| Brand Style Sheet | `RO-Style-Sheet.ai` | AI | - | Adobe Illustrator brand guide |
 | Hemp Leaf Pattern | `/src/assets/icons/hemp-leaf-pattern.svg` | SVG | Tileable | Background pattern overlay |
 | Hemp Fiber Texture | `/src/assets/icons/hemp-fiber-texture-preview.svg` | SVG | Tileable | Subtle background texture |
 | Pattern Preview | `/src/assets/icons/ro-pattern-preview.svg` | SVG | Variable | Design mockups |
+
+### Bag Icons
+| Asset | File Path | Format | Dimensions | Usage |
+|-------|-----------|--------|------------|-------|
+| Bag Icon 01 | `/src/assets/icons/Bag-Icon-01.png` | PNG | Small | Product selection UI |
+| Bag Icon 02 | `/src/assets/icons/Bag-Icon-02.png` | PNG | Small | Product selection UI |
+| Bag Icon 03 | `/src/assets/icons/Bag-Icon-03.png` | PNG | Small | Product selection UI |
+| Bag Icon 04 | `/src/assets/icons/Bag-Icon-04.png` | PNG | Small | Product selection UI |
+| Bag Icon 05 | `/src/assets/icons/Bag-Icon-05.png` | PNG | Small | Product selection UI |
+
+### Brand Fonts
+| Font Name | File Name | Format | Weights | Usage |
+|-----------|-----------|--------|---------|-------|
+| Flood Std | `Flood Std Regular.otf` | OTF | Regular | Primary brand headlines, packaging |
+| NeutraText | `NeutraText-Bold.otf`, `NeutraText-Book.otf` | OTF | Bold, Book | Brand emphasis and body copy |
+| Trebuchet MS | `Trebuchet MS.ttf` (+ variants) | TTF | Regular, Bold, Italic, Bold Italic | Web fallback font |
+| Helvetica | `Helvetica.ttc` | TTC | Multiple | Universal fallback
 
 ---
 
