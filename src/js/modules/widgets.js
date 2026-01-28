@@ -461,6 +461,8 @@ export function updateKPIValues(totals, prevTotals, targets, rolling, compareMod
   setKPI('crew', t.trimmers, p?.trimmers, 'num');
   setKPI('operatorHours', t.operatorHours, p?.operatorHours, 'hrs', false, null, r.operatorHours);
   setKPI('costPerLb', t.costPerLb, p?.costPerLb, 'dollar', true, tgt.costPerLb, r.costPerLb);
+  setKPI('topsCostPerLb', t.topsCostPerLb, p?.topsCostPerLb, 'dollar', true, null, r.topsCostPerLb);
+  setKPI('smallsCostPerLb', t.smallsCostPerLb, p?.smallsCostPerLb, 'dollar', true, null, r.smallsCostPerLb);
   setKPI('totalLbs', t.totalLbs, p?.totalLbs, 'lbs', false, null, r.totalLbs);
   setKPI('maxRate', t.maxRate, p?.maxRate, 'rate');
   setKPI('trimmerHours', t.trimmerHours, p?.trimmerHours, 'hrs');
