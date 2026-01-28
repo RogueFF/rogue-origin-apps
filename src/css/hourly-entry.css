@@ -1719,47 +1719,12 @@ body {
   font-family: 'DM Serif Display', serif;
   font-size: 16px;
   color: var(--text-primary);
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.time-picker-presets {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.time-preset-btn {
-  padding: 10px 16px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: var(--bg-input);
-  color: var(--text-primary);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  min-height: 44px;
-}
-
-.time-preset-btn:hover {
-  background: var(--green);
-  color: white;
-  border-color: var(--green);
-  transform: translateY(-1px);
-}
-
-.time-preset-btn:active {
-  transform: translateY(0);
+  margin-bottom: 16px;
 }
 
 .time-picker-custom {
   display: flex;
   gap: 8px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-color);
 }
 
 .custom-time-input {
