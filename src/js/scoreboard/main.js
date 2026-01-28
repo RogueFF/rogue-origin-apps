@@ -298,18 +298,18 @@
 
     console.log('Loading historical data for:', dateStr);
 
-    // Update UI to show historical date
-    var badge = DOM ? DOM.get('historicalDateBadge') : document.getElementById('historicalDateBadge');
+    // Update UI to show historical date banner
+    var banner = DOM ? DOM.get('historicalDateBanner') : document.getElementById('historicalDateBanner');
     var dateDisplay = DOM ? DOM.get('historicalDateDisplay') : document.getElementById('historicalDateDisplay');
     var liveBtn = DOM ? DOM.get('historicalViewBtn') : document.getElementById('historicalViewBtn');
 
-    if (badge && dateDisplay) {
+    if (banner && dateDisplay) {
       // Format date for display
       var date = new Date(dateStr + 'T12:00:00');
       var lang = (State && State.currentLang) || 'en';
-      var options = { year: 'numeric', month: 'short', day: 'numeric' };
+      var options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
       dateDisplay.textContent = date.toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US', options);
-      badge.style.display = 'flex';
+      banner.style.display = 'flex';
     }
 
     // Hide the live view button when viewing historical data
@@ -365,12 +365,12 @@
   function clearHistoricalDate() {
     console.log('Returning to live view');
 
-    // Hide historical date badge
-    var badge = DOM ? DOM.get('historicalDateBadge') : document.getElementById('historicalDateBadge');
+    // Hide historical date banner
+    var banner = DOM ? DOM.get('historicalDateBanner') : document.getElementById('historicalDateBanner');
     var liveBtn = DOM ? DOM.get('historicalViewBtn') : document.getElementById('historicalViewBtn');
 
-    if (badge) {
-      badge.style.display = 'none';
+    if (banner) {
+      banner.style.display = 'none';
     }
 
     // Show the live view button again
