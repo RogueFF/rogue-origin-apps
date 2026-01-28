@@ -1792,10 +1792,6 @@ body {
     min-width: 280px;
     max-width: calc(100vw - 32px);
   }
-
-  .time-picker-presets {
-    grid-template-columns: repeat(2, 1fr);
-  }
 }
 
 /* Progress Summary */
