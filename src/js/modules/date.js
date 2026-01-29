@@ -101,10 +101,16 @@ export function setDateRange(range) {
   const startDateEl = document.getElementById('startDate');
   const endDateEl = document.getElementById('endDate');
   const datePickerLabel = document.getElementById('datePickerLabel');
+  const dateRangeDisplay = document.getElementById('dateRangeDisplay');
 
   if (startDateEl) startDateEl.value = start;
   if (endDateEl) endDateEl.value = end;
   if (datePickerLabel) datePickerLabel.textContent = label;
+
+  // Update "Showing data for" label
+  if (dateRangeDisplay) {
+    dateRangeDisplay.innerHTML = `Showing data for <strong>${label}</strong>`;
+  }
 
   // Update custom dates in state
   setCustomDates(start, end);
@@ -147,8 +153,16 @@ export function applyCustomRange() {
 
   // Update label
   const datePickerLabel = document.getElementById('datePickerLabel');
+  const dateRangeDisplay = document.getElementById('dateRangeDisplay');
+  const customLabel = `${formatDateShort(customStart)} - ${formatDateShort(customEnd)}`;
+
   if (datePickerLabel) {
-    datePickerLabel.textContent = `${formatDateShort(customStart)} - ${formatDateShort(customEnd)}`;
+    datePickerLabel.textContent = customLabel;
+  }
+
+  // Update "Showing data for" label
+  if (dateRangeDisplay) {
+    dateRangeDisplay.innerHTML = `Showing data for <strong>${customLabel}</strong>`;
   }
 
   // Close dropdown
@@ -250,27 +264,35 @@ export function clearCompare() {
   const compareBanner = document.getElementById('compareBanner');
   if (compareBanner) compareBanner.classList.remove('active');
 
-  // Update date picker label
+  // Update date picker label and "Showing data for" label
   const datePickerLabel = document.getElementById('datePickerLabel');
+  const dateRangeDisplay = document.getElementById('dateRangeDisplay');
   const currentRange = getCurrentRange();
 
-  if (datePickerLabel) {
-    if (currentRange === 'today') {
-      datePickerLabel.textContent = 'Today';
-    } else if (currentRange === 'yesterday') {
-      datePickerLabel.textContent = 'Yesterday';
-    } else if (currentRange === 'week') {
-      datePickerLabel.textContent = 'Last 7 Days';
-    } else if (currentRange === 'month') {
-      datePickerLabel.textContent = 'Last 30 Days';
-    } else {
-      // Custom range - get dates from inputs
-      const startDateEl = document.getElementById('startDate');
-      const endDateEl = document.getElementById('endDate');
-      if (startDateEl && endDateEl && startDateEl.value && endDateEl.value) {
-        datePickerLabel.textContent = `${formatDateShort(startDateEl.value)} - ${formatDateShort(endDateEl.value)}`;
-      }
+  let label = '';
+  if (currentRange === 'today') {
+    label = 'Today';
+  } else if (currentRange === 'yesterday') {
+    label = 'Yesterday';
+  } else if (currentRange === 'week') {
+    label = 'Last 7 Days';
+  } else if (currentRange === 'month') {
+    label = 'Last 30 Days';
+  } else {
+    // Custom range - get dates from inputs
+    const startDateEl = document.getElementById('startDate');
+    const endDateEl = document.getElementById('endDate');
+    if (startDateEl && endDateEl && startDateEl.value && endDateEl.value) {
+      label = `${formatDateShort(startDateEl.value)} - ${formatDateShort(endDateEl.value)}`;
     }
+  }
+
+  if (datePickerLabel && label) {
+    datePickerLabel.textContent = label;
+  }
+
+  if (dateRangeDisplay && label) {
+    dateRangeDisplay.innerHTML = `Showing data for <strong>${label}</strong>`;
   }
 
   // Load regular data
