@@ -121,6 +121,23 @@ var TASK_REGISTRY = {
       }
     },
     function: 'executeGetShipments_'
+  },
+
+  'analyze_strain': {
+    description: 'Analyze production data for a specific strain (efficiency, costs, historical trends)',
+    parameters: {
+      strain: {
+        type: 'string',
+        required: true,
+        description: 'Strain name to analyze (e.g., "Lifter", "Sour Lifter"). Fuzzy matching supported.'
+      },
+      days: {
+        type: 'number',
+        required: false,
+        description: 'Number of days to analyze (default 90). Use 30 for monthly, 7 for weekly.'
+      }
+    },
+    function: 'executeAnalyzeStrain_'
   }
 };
 
@@ -3234,6 +3251,50 @@ function executeGetShipments_(params) {
 }
 
 /**
+ * Execute analyze_strain task
+ * Analyzes production data for a specific strain
+ */
+function executeAnalyzeStrain_(params) {
+  try {
+    if (!params.strain) {
+      return {
+        success: false,
+        error: 'Strain name is required'
+      };
+    }
+
+    var days = params.days || 90;
+    var apiUrl = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
+    var url = apiUrl + '?action=analyzeStrain&strain=' + encodeURIComponent(params.strain) + '&days=' + days;
+
+    var response = UrlFetchApp.fetch(url, {
+      method: 'GET',
+      muteHttpExceptions: true
+    });
+
+    var result = JSON.parse(response.getContentText());
+
+    if (!result.success) {
+      return {
+        success: false,
+        error: result.error || 'Strain analysis failed'
+      };
+    }
+
+    return {
+      success: true,
+      data: result.data
+    };
+  } catch (error) {
+    Logger.log('[executeAnalyzeStrain] Exception: ' + error.toString());
+    return {
+      success: false,
+      error: 'Failed to analyze strain: ' + error.toString()
+    };
+  }
+}
+
+/**
  * Gathers all relevant production data for AI context (V2 - enhanced)
  */
 function gatherProductionContext() {
@@ -3329,6 +3390,19 @@ function gatherProductionContext() {
     }
   } catch (error) {
     Logger.log('Error getting orders summary: ' + error.message);
+  }
+
+  // Get strain snapshot from dashboard API
+  try {
+    var apiUrl = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production?action=dashboard&days=7';
+    var response = UrlFetchApp.fetch(apiUrl, { muteHttpExceptions: true });
+    var dashboardData = JSON.parse(response.getContentText());
+
+    if (dashboardData && dashboardData.data && dashboardData.data.strainSnapshot) {
+      context.strainSnapshot = dashboardData.data.strainSnapshot;
+    }
+  } catch (error) {
+    Logger.log('Error getting strain snapshot: ' + error.message);
   }
 
   return context;
@@ -3476,7 +3550,22 @@ function buildSystemPrompt(context, corrections, memoryResults) {
         '- Last week: ' + context.history.weekOverWeek.lastWeek.toFixed(1) + ' lbs\n' +
         '- Change: ' + formatComparison(context.history.weekOverWeek.change) + '\n\n';
     }
+  }
 
+  // Add strain snapshot if available
+  if (context.strainSnapshot && context.strainSnapshot.length > 0) {
+    prompt += 'RECENT STRAIN ACTIVITY (Last 7 Days):\n';
+    for (var s = 0; s < context.strainSnapshot.length; s++) {
+      var strainData = context.strainSnapshot[s];
+      prompt += (s + 1) + '. ' + strainData.strain + ': ' +
+                strainData.totalLbs + ' lbs (' + strainData.daysWorked + ' days, ' +
+                strainData.avgRate + ' lbs/hr, $' + strainData.topsCostPerLb.toFixed(2) + '/lb tops, $' +
+                strainData.smallsCostPerLb.toFixed(2) + '/lb smalls)\n';
+    }
+    prompt += '\n';
+  }
+
+  if (context.history) {
     if (context.history.dailyStrainBreakdown && context.history.dailyStrainBreakdown.length > 0) {
       prompt += 'DETAILED DAILY STRAIN BREAKDOWN (Last 14 Days):\n';
       for (var m = 0; m < context.history.dailyStrainBreakdown.length; m++) {
