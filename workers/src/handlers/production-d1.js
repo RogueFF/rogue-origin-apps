@@ -1058,6 +1058,8 @@ async function dashboard(params, env) {
   }
 
   const today = formatDatePT(new Date(), 'yyyy-MM-dd');
+  // Use requested end date if provided, otherwise use today
+  const targetDate = end || start || today;
   const scoreboardData = await getScoreboardData(env);
   const timerData = await getBagTimerData(env);
 
@@ -1147,7 +1149,7 @@ async function dashboard(params, env) {
       SUM(smalls_lbs1) as total_smalls
     FROM monthly_production
     WHERE production_date = ?
-  `, [today]);
+  `, [targetDate]);
 
   const todayTops = todayOperatorData?.total_tops || 0;
   const todaySmalls = todayOperatorData?.total_smalls || 0;
