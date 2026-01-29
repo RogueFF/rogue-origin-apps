@@ -333,9 +333,8 @@ function renderAll() {
     if (bagsVsTargetEl) bagsVsTargetEl.textContent = '—';
   }
 
-  // Update Last Hour widget (Current Production)
-  // Note: This widget needs scoreboard data which is fetched separately
-  updateLastHourWidget();
+  // Update Last Hour widget from dashboard data (not separate scoreboard call)
+  updateLastHourWidget(data);
 
   // Refresh grid layouts
   const widgetGrid = getGrid('widgets');
@@ -350,7 +349,7 @@ function renderAll() {
 }
 
 // ===== LAST HOUR WIDGET =====
-async function updateLastHourWidget() {
+function updateLastHourWidget(data) {
   const currentStrainEl = document.getElementById('currentStrain');
   const currentTimeEl = document.getElementById('currentTime');
   const statusBadgeEl = document.getElementById('statusBadge');
@@ -361,42 +360,57 @@ async function updateLastHourWidget() {
   const currentRateEl = document.getElementById('currentRate');
   const currentTotalEl = document.getElementById('currentTotal');
 
-  try {
-    // Fetch scoreboard data for last hour details
-    const response = await fetch(`${API_URL}?action=scoreboard`);
-    const result = await response.json();
-    const scoreboard = result.scoreboard || result;
+  if (!data || !data.hourly || data.hourly.length === 0) {
+    // No hourly data - reset to defaults
+    if (currentStrainEl) currentStrainEl.textContent = 'No Data';
+    if (currentTimeEl) currentTimeEl.textContent = '—';
+    if (currentTopsEl) currentTopsEl.textContent = '0';
+    if (currentSmallsEl) currentSmallsEl.textContent = '0';
+    if (currentTrimmersEl) currentTrimmersEl.textContent = '0';
+    if (currentBuckersEl) currentBuckersEl.textContent = '0';
+    if (currentRateEl) currentRateEl.textContent = '0.00';
+    if (currentTotalEl) currentTotalEl.textContent = '0';
+    return;
+  }
 
-    if (scoreboard && scoreboard.lastHourLbs > 0) {
-      const lbs = scoreboard.lastHourLbs || 0;
-      const trimmers = scoreboard.lastHourTrimmers || 0;
-      const buckers = scoreboard.lastHourBuckers || 0;
-      const timeSlot = scoreboard.lastTimeSlot || '—';
-      const strain = scoreboard.strain || 'No Data';
-      const rate = trimmers > 0 ? lbs / trimmers : 0;
+  // Get the last hour with data (most recent hour)
+  const hourlyData = data.hourly;
+  let lastHour = null;
 
-      if (currentStrainEl) currentStrainEl.textContent = strain;
-      if (currentTimeEl) currentTimeEl.textContent = timeSlot;
-      if (statusBadgeEl) statusBadgeEl.textContent = 'Last Hour';
-      if (currentTopsEl) currentTopsEl.textContent = lbs.toFixed(1);
-      if (currentSmallsEl) currentSmallsEl.textContent = '0'; // Not tracked hourly
-      if (currentTrimmersEl) currentTrimmersEl.textContent = trimmers;
-      if (currentBuckersEl) currentBuckersEl.textContent = buckers;
-      if (currentRateEl) currentRateEl.textContent = rate.toFixed(2);
-      if (currentTotalEl) currentTotalEl.textContent = lbs.toFixed(1);
-    } else {
-      // No data - reset to defaults
-      if (currentStrainEl) currentStrainEl.textContent = 'No Data';
-      if (currentTimeEl) currentTimeEl.textContent = '—';
-      if (currentTopsEl) currentTopsEl.textContent = '0';
-      if (currentSmallsEl) currentSmallsEl.textContent = '0';
-      if (currentTrimmersEl) currentTrimmersEl.textContent = '0';
-      if (currentBuckersEl) currentBuckersEl.textContent = '0';
-      if (currentRateEl) currentRateEl.textContent = '0.00';
-      if (currentTotalEl) currentTotalEl.textContent = '0';
+  // Find the last hour with production data
+  for (let i = hourlyData.length - 1; i >= 0; i--) {
+    if (hourlyData[i].lbs && hourlyData[i].lbs > 0) {
+      lastHour = hourlyData[i];
+      break;
     }
-  } catch (error) {
-    console.error('Error updating Last Hour widget:', error);
+  }
+
+  if (lastHour) {
+    const lbs = lastHour.lbs || 0;
+    const trimmers = lastHour.trimmers || 0;
+    const timeSlot = lastHour.label || '—';
+    const strain = (data.current && data.current.strain) || 'No Data';
+    const rate = lastHour.rate || 0;
+
+    if (currentStrainEl) currentStrainEl.textContent = strain;
+    if (currentTimeEl) currentTimeEl.textContent = timeSlot;
+    if (statusBadgeEl) statusBadgeEl.textContent = 'Last Hour';
+    if (currentTopsEl) currentTopsEl.textContent = lbs.toFixed(1);
+    if (currentSmallsEl) currentSmallsEl.textContent = '0'; // Not tracked hourly
+    if (currentTrimmersEl) currentTrimmersEl.textContent = trimmers;
+    if (currentBuckersEl) currentBuckersEl.textContent = '0'; // Not in hourly data
+    if (currentRateEl) currentRateEl.textContent = rate.toFixed(2);
+    if (currentTotalEl) currentTotalEl.textContent = lbs.toFixed(1);
+  } else {
+    // No data - reset to defaults
+    if (currentStrainEl) currentStrainEl.textContent = 'No Data';
+    if (currentTimeEl) currentTimeEl.textContent = '—';
+    if (currentTopsEl) currentTopsEl.textContent = '0';
+    if (currentSmallsEl) currentSmallsEl.textContent = '0';
+    if (currentTrimmersEl) currentTrimmersEl.textContent = '0';
+    if (currentBuckersEl) currentBuckersEl.textContent = '0';
+    if (currentRateEl) currentRateEl.textContent = '0.00';
+    if (currentTotalEl) currentTotalEl.textContent = '0';
   }
 }
 
