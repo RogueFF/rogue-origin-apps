@@ -398,7 +398,7 @@ function updateLastHourWidget(data) {
     if (currentTopsEl) currentTopsEl.textContent = lbs.toFixed(1);
     if (currentSmallsEl) currentSmallsEl.textContent = (lastHour.smalls || 0).toFixed(1);
     if (currentTrimmersEl) currentTrimmersEl.textContent = trimmers;
-    if (currentBuckersEl) currentBuckersEl.textContent = '0'; // Not in hourly data
+    if (currentBuckersEl) currentBuckersEl.textContent = lastHour.buckers || 0;
     if (currentRateEl) currentRateEl.textContent = rate.toFixed(2);
     const smallsLbs = lastHour.smalls || 0;
     if (currentTotalEl) currentTotalEl.textContent = (lbs + smallsLbs).toFixed(1);
