@@ -798,6 +798,109 @@
     }
   }
 
+  /**
+   * Toggle timer panel fullscreen mode
+   */
+  function toggleTimerFullscreen() {
+    var panel = DOM ? DOM.get('timerPanel') : document.getElementById('timerPanel');
+    if (panel) {
+      panel.classList.toggle('fullscreen');
+    }
+  }
+
+  /**
+   * Log a manual bag entry (5kg bag complete button)
+   */
+  function logManualEntry() {
+    if (!API || !API.logBag) {
+      console.warn('API.logBag not available');
+      return;
+    }
+
+    var btn = DOM ? DOM.get('manualBtn') : document.getElementById('manualBtn');
+    if (!btn) return;
+
+    // Disable button and show loading state
+    btn.disabled = true;
+    btn.classList.add('loading');
+    var btnText = DOM ? DOM.get('manualBtnText') : document.getElementById('manualBtnText');
+    var originalText = btnText ? btnText.textContent : '5KG Bag Complete';
+    if (btnText) btnText.textContent = 'Logging...';
+
+    API.logBag(
+      {},
+      function(result) {
+        if (result && result.success) {
+          console.log('Manual bag logged:', result);
+
+          // Show success state
+          btn.classList.remove('loading');
+          btn.classList.add('success');
+          if (btnText) btnText.textContent = '✓ Logged';
+
+          // Reset button after 2 seconds
+          setTimeout(function() {
+            btn.disabled = false;
+            btn.classList.remove('success');
+            if (btnText) btnText.textContent = originalText;
+          }, 2000);
+
+          // Force data refresh to update timer
+          if (window.ScoreboardAPI && window.ScoreboardAPI.loadData && window.ScoreboardState) {
+            window.ScoreboardAPI.loadData(
+              function(response) {
+                if (window.ScoreboardState) {
+                  if (response.scoreboard) {
+                    window.ScoreboardState.data = response.scoreboard;
+                  }
+                  if (response.timer) {
+                    window.ScoreboardState.timerData = response.timer;
+
+                    // Update last bag timestamp
+                    if (response.timer.lastBagTime) {
+                      window.ScoreboardState.lastBagTimestamp = new Date(response.timer.lastBagTime);
+                    }
+
+                    // Add to cycle history
+                    if (response.timer.lastCycleTimeSec && window.ScoreboardCycle) {
+                      var targetSec = response.timer.targetSeconds || 300;
+                      window.ScoreboardCycle.addCycleToHistory(response.timer.lastCycleTimeSec, targetSec);
+                    }
+                  }
+                }
+
+                // Re-render scoreboard
+                if (window.ScoreboardRender && window.ScoreboardRender.renderScoreboard) {
+                  window.ScoreboardRender.renderScoreboard();
+                }
+              },
+              function(error) {
+                console.error('Failed to refresh data after manual entry:', error);
+              }
+            );
+          }
+        } else {
+          throw new Error('Logging failed');
+        }
+      },
+      function(error) {
+        console.error('Failed to log manual bag:', error);
+
+        // Show error state
+        btn.classList.remove('loading');
+        btn.classList.add('error');
+        if (btnText) btnText.textContent = '✗ Failed';
+
+        // Reset button after 3 seconds
+        setTimeout(function() {
+          btn.disabled = false;
+          btn.classList.remove('error');
+          if (btnText) btnText.textContent = originalText;
+        }, 3000);
+      }
+    );
+  }
+
   // Export public API
   window.ScoreboardTimer = {
     formatTime: formatTime,
@@ -813,7 +916,13 @@
     startPause: startPause,
     updatePauseTimer: updatePauseTimer,
     resumeTimer: resumeTimer,
-    applyPauseState: applyPauseState
+    applyPauseState: applyPauseState,
+    toggleTimerFullscreen: toggleTimerFullscreen,
+    logManualEntry: logManualEntry
   };
+
+  // Expose global functions for inline handlers and event listeners
+  window.toggleTimerFullscreen = toggleTimerFullscreen;
+  window.logManualEntry = logManualEntry;
 
 })(window);
