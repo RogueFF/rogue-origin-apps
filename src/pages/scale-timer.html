@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Scale + Timer | Rogue Origin</title>
+  <meta name="theme-color" content="#1a1a1a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="icon" type="image/png" href="/rogue-origin-apps/favicon.png">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=optional" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #1a1a1a;
+      color: #e0e0e0;
+      font-family: 'JetBrains Mono', monospace;
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* Side-by-side layout */
+    .display {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 60px;
+      height: 100vh;
+      width: 100vw;
+      padding: 20px;
+    }
+
+    .ring-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* Timer panel gets background glow */
+    .timer-panel {
+      padding: 24px 32px;
+      border-radius: 20px;
+      transition: background 0.5s ease, border-color 0.5s ease, box-shadow 0.5s ease;
+      border: 1px solid transparent;
+    }
+
+    .timer-panel.timer-green {
+      background: linear-gradient(180deg, rgba(102,137,113,0.4) 0%, rgba(102,137,113,0.15) 100%);
+      border-color: rgba(102,137,113,0.5);
+      box-shadow: inset 0 0 60px rgba(102,137,113,0.12);
+    }
+
+    .timer-panel.timer-yellow {
+      background: linear-gradient(180deg, rgba(228,170,79,0.4) 0%, rgba(228,170,79,0.15) 100%);
+      border-color: rgba(228,170,79,0.5);
+      box-shadow: inset 0 0 60px rgba(228,170,79,0.12);
+    }
+
+    .timer-panel.timer-red {
+      background: linear-gradient(180deg, rgba(239,68,68,0.35) 0%, rgba(185,28,28,0.15) 100%);
+      border-color: rgba(239,68,68,0.5);
+      box-shadow: inset 0 0 60px rgba(239,68,68,0.12);
+    }
+
+    .timer-panel.timer-neutral {
+      background: rgba(255,255,255,0.03);
+      border-color: rgba(255,255,255,0.06);
+    }
+
+    /* Ring container */
+    .ring-container {
+      position: relative;
+      width: 280px;
+      height: 280px;
+      flex-shrink: 0;
+    }
+
+    .ring-svg {
+      width: 100%;
+      height: 100%;
+      transform: rotate(-90deg);
+    }
+
+    .ring-bg {
+      fill: none;
+      stroke: rgba(255,255,255,0.08);
+      stroke-width: 10;
+    }
+
+    .ring-progress {
+      fill: none;
+      stroke-width: 10;
+      stroke-linecap: round;
+      stroke-dasharray: 597;
+      stroke-dashoffset: 597;
+      transition: stroke-dashoffset 0.5s ease, stroke 0.3s ease;
+    }
+
+    .ring-center {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+
+    .ring-value {
+      font-size: 42px;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: 2px;
+    }
+
+    .ring-label {
+      font-size: 14px;
+      color: rgba(255,255,255,0.5);
+      margin-top: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Scale color states */
+    .ring-progress.filling { stroke: #668971; }
+    .ring-progress.near-target { stroke: #9ae6b4; }
+    .ring-progress.at-target { stroke: #e4aa4f; }
+    .ring-progress.stale { stroke: rgba(255,255,255,0.1); }
+
+    .scale-value.filling { color: #668971; }
+    .scale-value.near-target { color: #9ae6b4; }
+    .scale-value.at-target { color: #e4aa4f; }
+    .scale-value.stale { color: rgba(255,255,255,0.4); }
+
+    /* Timer color states */
+    .ring-progress.green { stroke: #668971; }
+    .ring-progress.yellow { stroke: #e4aa4f; }
+    .ring-progress.red { stroke: #ef4444; }
+
+    .timer-value.green { color: #668971; }
+    .timer-value.yellow { color: #e4aa4f; }
+    .timer-value.red { color: #ef4444; }
+
+    /* Status dot */
+    .status-dot {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.15);
+    }
+
+    .status-dot.connected {
+      background: #668971;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* Target text below timer */
+    .timer-target {
+      font-size: 14px;
+      color: rgba(255,255,255,0.5);
+      text-align: center;
+      margin-top: 4px;
+    }
+
+    .timer-target span {
+      color: #e0e0e0;
+    }
+
+    /* Responsive: stack vertically on portrait / very small */
+    @media (max-width: 640px), (max-height: 400px) and (max-width: 800px) {
+      .display {
+        flex-direction: column;
+        gap: 24px;
+        padding: 12px;
+      }
+
+      .ring-container {
+        width: 200px;
+        height: 200px;
+      }
+
+      .ring-value {
+        font-size: 32px;
+      }
+
+      .timer-panel {
+        padding: 16px 20px;
+      }
+    }
+
+    /* Landscape tablet sweet spot */
+    @media (min-width: 800px) and (max-width: 1100px) {
+      .ring-container {
+        width: 260px;
+        height: 260px;
+      }
+
+      .ring-value {
+        font-size: 38px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="display">
+    <!-- Scale circle (left) -->
+    <div class="ring-panel">
+      <div class="ring-container">
+        <svg class="ring-svg" viewBox="0 0 220 220">
+          <circle class="ring-bg" cx="110" cy="110" r="95"/>
+          <circle class="ring-progress stale" id="scaleRing" cx="110" cy="110" r="95"
+                  stroke-dasharray="597" stroke-dashoffset="597"/>
+        </svg>
+        <div class="ring-center">
+          <div class="ring-value scale-value stale" id="scaleWeight">&mdash;</div>
+          <div class="ring-label" id="scaleLabel">of 5.0 kg</div>
+        </div>
+        <div class="status-dot" id="scaleStatusDot"></div>
+      </div>
+    </div>
+
+    <!-- Timer circle (right) -->
+    <div class="ring-panel timer-panel timer-neutral" id="timerPanel">
+      <div class="ring-container">
+        <svg class="ring-svg" viewBox="0 0 220 220">
+          <circle class="ring-bg" cx="110" cy="110" r="95"/>
+          <circle class="ring-progress green" id="timerRing" cx="110" cy="110" r="95"
+                  stroke-dasharray="597" stroke-dashoffset="597"/>
+        </svg>
+        <div class="ring-center">
+          <div class="ring-value timer-value" id="timerValue">--:--</div>
+          <div class="ring-label" id="timerLabel">remaining</div>
+        </div>
+      </div>
+      <div class="timer-target" id="timerTarget">Target: <span>--:--</span></div>
+    </div>
+  </div>
+
+  <script>
+    'use strict';
+
+    const API_URL = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
+    const RING_CIRCUMFERENCE = 2 * Math.PI * 95; // ~597
+
+    // Break schedule (PST)
+    const BREAKS = [
+      [9, 0, 9, 10],
+      [12, 0, 12, 30],
+      [14, 30, 14, 40],
+      [16, 20, 16, 30],
+    ];
+    const WORKDAY_START = 7 * 60;
+    const WORKDAY_END = 16 * 60 + 30;
+
+    // Timer state
+    let lastBagTimestamp = null;
+    let timerTargetSeconds = 90 * 60;
+    let timerIsPaused = false;
+    let timerPauseStartTime = null;
+    let lastKnownVersion = null;
+
+    // Intervals
+    let scaleInterval = null;
+    let timerDataInterval = null;
+    let timerTickInterval = null;
+
+    // --- Scale ---
+
+    async function loadScaleData() {
+      try {
+        const r = await fetch(`${API_URL}?action=scaleWeight`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const result = await r.json();
+        renderScale(result.data || result);
+      } catch {
+        renderScale(null);
+      }
+    }
+
+    function renderScale(data) {
+      const dot = document.getElementById('scaleStatusDot');
+      const wEl = document.getElementById('scaleWeight');
+      const lbl = document.getElementById('scaleLabel');
+      const ring = document.getElementById('scaleRing');
+
+      if (!data) {
+        if (dot) { dot.classList.remove('connected'); }
+        if (wEl) { wEl.textContent = '\u2014'; wEl.className = 'ring-value scale-value stale'; }
+        if (lbl) { lbl.textContent = 'of 5.0 kg'; }
+        if (ring) { ring.style.strokeDashoffset = RING_CIRCUMFERENCE; ring.setAttribute('class', 'ring-progress stale'); }
+        return;
+      }
+
+      const weight = data.weight || 0;
+      const target = data.targetWeight || 5.0;
+      const pct = data.percentComplete || 0;
+      const stale = data.isStale !== false;
+
+      let cls = 'filling';
+      if (stale) cls = 'stale';
+      else if (pct >= 100) cls = 'at-target';
+      else if (pct >= 90) cls = 'near-target';
+
+      if (dot) { dot.classList.toggle('connected', !stale); }
+      if (wEl) { wEl.textContent = stale ? '\u2014' : weight.toFixed(2) + ' kg'; wEl.className = 'ring-value scale-value ' + cls; }
+      if (lbl) { lbl.textContent = 'of ' + target.toFixed(1) + ' kg'; }
+      if (ring) {
+        const p = stale ? 0 : Math.min(1, pct / 100);
+        ring.style.strokeDashoffset = RING_CIRCUMFERENCE * (1 - p);
+        ring.setAttribute('class', 'ring-progress ' + cls);
+      }
+    }
+
+    // --- Timer ---
+
+    async function checkTimerVersion() {
+      try {
+        const r = await fetch(`${API_URL}?action=version`);
+        if (!r.ok) { loadTimerData(); return; }
+        const result = await r.json();
+        const v = (result.data || result).version;
+        if (lastKnownVersion === null || v !== lastKnownVersion) {
+          lastKnownVersion = v;
+          loadTimerData();
+        }
+      } catch {
+        loadTimerData();
+      }
+    }
+
+    async function loadTimerData() {
+      try {
+        const r = await fetch(`${API_URL}?action=scoreboard`);
+        if (r.status === 429) return;
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const result = await r.json();
+        const data = result.data || result;
+        const timer = data.timer || {};
+
+        if (timer.lastBagTime) {
+          lastBagTimestamp = new Date(timer.lastBagTime);
+        } else {
+          lastBagTimestamp = null;
+        }
+
+        timerTargetSeconds = typeof timer.targetSeconds === 'number' ? timer.targetSeconds : 90 * 60;
+
+        // Target display
+        const targetEl = document.getElementById('timerTarget');
+        if (targetEl) {
+          const tgt = timerTargetSeconds > 0 ? formatTime(timerTargetSeconds) : '--:--';
+          const trimmers = timer.currentTrimmers || 0;
+          targetEl.innerHTML = 'Target: <span>' + tgt + '</span> \u2022 <span>' + trimmers + '</span> trimmers';
+        }
+
+        // Pause state
+        const pause = data.pause;
+        if (pause && pause.isPaused) {
+          timerIsPaused = true;
+          timerPauseStartTime = pause.pauseStartTime ? new Date(pause.pauseStartTime) : new Date();
+        } else {
+          timerIsPaused = false;
+          timerPauseStartTime = null;
+        }
+
+        updateTimerTick();
+      } catch (e) {
+        console.error('Timer load error:', e);
+      }
+    }
+
+    function updateTimerTick() {
+      const valEl = document.getElementById('timerValue');
+      const lblEl = document.getElementById('timerLabel');
+      if (!valEl) return;
+
+      const brk = getBreakStatus();
+
+      // Paused
+      if (timerIsPaused) {
+        setTimerColor('yellow');
+        if (lastBagTimestamp) {
+          let elapsed = getWorkingSeconds(lastBagTimestamp);
+          if (timerPauseStartTime) {
+            elapsed = Math.max(0, elapsed - Math.floor((new Date() - timerPauseStartTime) / 1000));
+          }
+          valEl.textContent = formatTime(Math.max(0, timerTargetSeconds - elapsed));
+          setTimerRing(Math.min(1, elapsed / timerTargetSeconds));
+        } else {
+          valEl.textContent = '--:--';
+        }
+        lblEl.textContent = 'PAUSED';
+        return;
+      }
+
+      // On break
+      if (brk.onBreak) {
+        setTimerColor('yellow');
+        if (brk.afterHours) {
+          valEl.textContent = '--:--';
+          lblEl.textContent = 'SHIFT ENDED';
+        } else {
+          if (lastBagTimestamp) {
+            const elapsed = getWorkingSeconds(lastBagTimestamp);
+            valEl.textContent = formatTime(Math.max(0, timerTargetSeconds - elapsed));
+          } else {
+            valEl.textContent = '--:--';
+          }
+          lblEl.textContent = 'ON BREAK';
+        }
+        if (lastBagTimestamp) {
+          setTimerRing(Math.min(1, getWorkingSeconds(lastBagTimestamp) / timerTargetSeconds));
+        }
+        return;
+      }
+
+      // Active
+      const ref = lastBagTimestamp || getShiftStart();
+      const isToday = ref.toDateString() === new Date().toDateString();
+      let elapsed = isToday ? getWorkingSecondsInternal(ref) : getWorkingSecondsCarryOver(ref);
+
+      const hasTarget = timerTargetSeconds > 0;
+      const remaining = hasTarget ? timerTargetSeconds - elapsed : 0;
+      const overtime = hasTarget && remaining < 0;
+
+      setTimerColor(overtime ? 'red' : 'green');
+
+      if (hasTarget) {
+        if (!overtime) {
+          valEl.textContent = formatTime(remaining);
+          lblEl.textContent = 'REMAINING';
+        } else {
+          valEl.textContent = '+' + formatTime(Math.abs(remaining));
+          lblEl.textContent = 'OVERTIME';
+        }
+      } else {
+        valEl.textContent = formatTime(elapsed);
+        lblEl.textContent = 'ELAPSED';
+      }
+
+      setTimerRing(hasTarget ? (overtime ? 1 : Math.min(1, elapsed / timerTargetSeconds)) : 0);
+    }
+
+    // --- Timer helpers ---
+
+    function setTimerColor(color) {
+      const valEl = document.getElementById('timerValue');
+      const ring = document.getElementById('timerRing');
+      const panel = document.getElementById('timerPanel');
+
+      if (valEl) { valEl.className = 'ring-value timer-value ' + color; }
+      if (ring) { ring.classList.remove('green', 'yellow', 'red'); ring.classList.add(color); }
+      if (panel) {
+        panel.classList.remove('timer-green', 'timer-yellow', 'timer-red', 'timer-neutral');
+        panel.classList.add('timer-' + color);
+      }
+    }
+
+    function setTimerRing(progress) {
+      const ring = document.getElementById('timerRing');
+      if (ring) ring.style.strokeDashoffset = RING_CIRCUMFERENCE * (1 - progress);
+    }
+
+    function formatTime(secs) {
+      const m = Math.floor(secs / 60);
+      const s = secs % 60;
+      return m + ':' + String(s).padStart(2, '0');
+    }
+
+    function getBreakStatus() {
+      const now = new Date();
+      const mins = now.getHours() * 60 + now.getMinutes();
+      if (mins < WORKDAY_START || mins >= WORKDAY_END) return { onBreak: true, afterHours: true };
+      for (const b of BREAKS) {
+        if (mins >= b[0] * 60 + b[1] && mins < b[2] * 60 + b[3]) return { onBreak: true, afterHours: false };
+      }
+      return { onBreak: false, afterHours: false };
+    }
+
+    function getShiftStart() {
+      const saved = localStorage.getItem('manualShiftStart');
+      const savedDate = localStorage.getItem('shiftStartDate');
+      const today = new Date().toDateString();
+      if (saved && savedDate === today) {
+        const t = new Date(saved);
+        if (t.toDateString() === today) return t;
+      }
+      const d = new Date(); d.setHours(7, 0, 0, 0); return d;
+    }
+
+    function getWorkingSeconds(startTime) {
+      if (!startTime) return 0;
+      if (startTime.toDateString() !== new Date().toDateString()) return getWorkingSecondsCarryOver(startTime);
+      return getWorkingSecondsInternal(startTime);
+    }
+
+    function getWorkingSecondsInternal(startTime) {
+      if (!startTime) return 0;
+      const now = new Date();
+      if (startTime.toDateString() !== now.toDateString()) return 0;
+
+      const nowMins = now.getHours() * 60 + now.getMinutes();
+      let onBreak = false, breakStart = 0;
+      for (const b of BREAKS) {
+        const bs = b[0] * 60 + b[1], be = b[2] * 60 + b[3];
+        if (nowMins >= bs && nowMins < be) { onBreak = true; breakStart = bs; break; }
+      }
+
+      let endTime = onBreak
+        ? new Date(now.getFullYear(), now.getMonth(), now.getDate(), Math.floor(breakStart / 60), breakStart % 60, 0)
+        : now;
+
+      let total = Math.floor((endTime - startTime) / 1000);
+      const sMins = startTime.getHours() * 60 + startTime.getMinutes();
+      const eMins = endTime.getHours() * 60 + endTime.getMinutes();
+
+      for (const b of BREAKS) {
+        const bs = b[0] * 60 + b[1], be = b[2] * 60 + b[3];
+        if (onBreak && bs === breakStart) continue;
+        if (sMins < be && eMins > bs) {
+          total -= (Math.min(eMins, be) - Math.max(sMins, bs)) * 60;
+        }
+      }
+      return Math.max(0, total);
+    }
+
+    function getWorkingSecondsCarryOver(startTime) {
+      if (!startTime) return 0;
+      const startDate = new Date(startTime);
+      const yesterdayEnd = new Date(startDate); yesterdayEnd.setHours(16, 30, 0, 0);
+      let yesterdayRemaining = 0;
+      if (startTime < yesterdayEnd) {
+        const sMins = startDate.getHours() * 60 + startDate.getMinutes();
+        yesterdayRemaining = (WORKDAY_END - sMins) * 60;
+        for (const b of BREAKS) {
+          const bs = b[0] * 60 + b[1], be = b[2] * 60 + b[3];
+          if (sMins < be && WORKDAY_END > bs) {
+            yesterdayRemaining -= (Math.min(WORKDAY_END, be) - Math.max(sMins, bs)) * 60;
+          }
+        }
+      }
+      const todayStart = new Date();
+      todayStart.setHours(Math.floor(WORKDAY_START / 60), WORKDAY_START % 60, 0, 0);
+      return Math.max(0, yesterdayRemaining + getWorkingSecondsInternal(todayStart));
+    }
+
+    // --- Init ---
+
+    loadScaleData();
+    loadTimerData();
+    scaleInterval = setInterval(loadScaleData, 1000);
+    timerDataInterval = setInterval(checkTimerVersion, 3000);
+    timerTickInterval = setInterval(updateTimerTick, 1000);
+
+    window.addEventListener('beforeunload', () => {
+      if (scaleInterval) clearInterval(scaleInterval);
+      if (timerDataInterval) clearInterval(timerDataInterval);
+      if (timerTickInterval) clearInterval(timerTickInterval);
+    });
+  </script>
+</body>
+</html>
