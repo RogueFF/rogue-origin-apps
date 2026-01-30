@@ -48,7 +48,7 @@
   <noscript><link rel="stylesheet" href="../css/scoreboard.css"></noscript>
 </head>
 <body class="idle timer-neutral">
-  <a href="#morningReportContainer" class="skip-link">Skip to main content</a>
+  <a href="#main-panel" class="skip-link">Skip to main content</a>
   <!-- Morning Report View -->
   <div id="morningReportContainer">
     <div class="mr-header">
@@ -104,7 +104,7 @@
   </div>
 
   <!-- Date Picker Input (hidden) -->
-  <input type="date" id="historicalDatePicker" class="date-picker-hidden" onchange="loadHistoricalDate(this.value)">
+  <input type="date" id="historicalDatePicker" class="date-picker-hidden" aria-label="Select historical date to view past production data" onchange="loadHistoricalDate(this.value)">
   <!-- Morning Report Button -->
   <button id="morningReportBtn" onclick="toggleMorningReport()">
     <i class="ph-duotone ph-chart-bar"></i>
@@ -132,7 +132,7 @@
   </div>
   <button class="help-btn" onclick="toggleHelp()">?</button>
 
-  <div class="help-modal" id="helpModal" onclick="if(event.target===this)toggleHelp()">
+  <div class="help-modal" id="helpModal" role="dialog" aria-modal="true" aria-labelledby="helpTitle" onclick="if(event.target===this)toggleHelp()">
     <div class="help-content">
       <div class="help-header">
         <div class="help-title" id="helpTitle"><i class="ph-duotone ph-chart-pie-slice" style="margin-right:8px"></i> Understanding the Scoreboard</div>
@@ -172,7 +172,7 @@
     </div>
   </div>
   
-  <div class="main-panel">
+  <div id="main-panel" class="main-panel">
     <div class="scoreboard">
       <div class="status-badge">
         <span class="status-icon" id="statusIcon"><i class="ph-duotone ph-pause"></i></span>
