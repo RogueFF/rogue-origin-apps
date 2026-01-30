@@ -170,6 +170,42 @@ function parseHumanTimestamp(timestamp) {
   return null;
 }
 
+// ===== EFFECTIVE TARGET RATE =====
+
+// Computes target rate using effective trimmer-hours (adjusted for break multipliers).
+// This avoids double-penalizing breaks: the raw avgRate already reflects lower output
+// during break slots, so applying multipliers again in the goal calculation would
+// undercount the target. Using effective hours gives a true per-full-hour rate.
+async function getEffectiveTargetRate(env, days = 7) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 30);
+  const cutoffStr = formatDatePT(cutoff, 'yyyy-MM-dd');
+
+  const slots = await query(env.DB, `
+    SELECT production_date, time_slot, tops_lbs1, trimmers_line1
+    FROM monthly_production
+    WHERE production_date >= ?
+      AND tops_lbs1 > 0 AND trimmers_line1 > 0
+    ORDER BY production_date
+  `, [cutoffStr]);
+
+  // Take the most recent N dates with production data
+  const dates = [...new Set(slots.map(s => s.production_date))].sort().slice(-days);
+  const dateSet = new Set(dates);
+
+  let totalTops = 0;
+  let totalEffectiveTrimmerHours = 0;
+
+  for (const slot of slots) {
+    if (dateSet.has(slot.production_date)) {
+      totalTops += slot.tops_lbs1;
+      totalEffectiveTrimmerHours += slot.trimmers_line1 * getTimeSlotMultiplier(slot.time_slot);
+    }
+  }
+
+  return totalEffectiveTrimmerHours > 0 ? totalTops / totalEffectiveTrimmerHours : 1.0;
+}
+
 // ===== SCOREBOARD DATA =====
 
 async function getScoreboardData(env, date = null) {
@@ -253,14 +289,8 @@ async function getScoreboardData(env, date = null) {
   }
   result.strain = activeStrain;
 
-  // Get historical rate for target (last 7 days)
-  const dailyData = await getExtendedDailyData(30, env);
-  const last7 = dailyData.slice(-7);
-  const fallbackTargetRate = last7.length > 0
-    ? last7.reduce((sum, d) => sum + (d.avgRate || 0), 0) / last7.length
-    : 1.0;
-
-  const targetRate = fallbackTargetRate || 1.0;
+  // Get historical rate for target (last 7 days) using effective trimmer-hours
+  const targetRate = await getEffectiveTargetRate(env, 7);
   result.targetRate = targetRate;
 
   // Calculate totals
