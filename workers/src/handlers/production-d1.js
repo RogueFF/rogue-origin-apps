@@ -75,6 +75,54 @@ const ALL_TIME_SLOTS = [
   '1:00 PM – 2:00 PM', '2:00 PM – 3:00 PM', '3:00 PM – 4:00 PM', '4:00 PM – 4:30 PM',
 ];
 
+// ===== CONFIG HELPERS =====
+
+// Cache config in memory for the request lifetime
+let _configCache = null;
+
+async function getConfig(env, key) {
+  const row = await env.DB.prepare(
+    'SELECT value, value_type FROM system_config WHERE key = ?'
+  ).bind(key).first();
+  if (!row) return null;
+  return parseConfigValue(row.value, row.value_type);
+}
+
+async function getAllConfig(env, category = null) {
+  let stmt;
+  if (category) {
+    stmt = env.DB.prepare('SELECT key, value, value_type, category, description, updated_at FROM system_config WHERE category = ?').bind(category);
+  } else {
+    stmt = env.DB.prepare('SELECT key, value, value_type, category, description, updated_at FROM system_config');
+  }
+  const { results } = await stmt.all();
+  const config = {};
+  for (const row of results) {
+    config[row.key] = {
+      value: parseConfigValue(row.value, row.value_type),
+      category: row.category,
+      description: row.description,
+      updatedAt: row.updated_at,
+    };
+  }
+  return config;
+}
+
+async function setConfig(env, key, value, updatedBy = 'system') {
+  await env.DB.prepare(
+    `UPDATE system_config SET value = ?, updated_at = datetime('now'), updated_by = ? WHERE key = ?`
+  ).bind(String(value), updatedBy, key).run();
+}
+
+function parseConfigValue(value, type) {
+  switch (type) {
+    case 'number': return parseFloat(value);
+    case 'boolean': return value === 'true';
+    case 'json': try { return JSON.parse(value); } catch { return value; }
+    default: return value;
+  }
+}
+
 // ===== HELPER FUNCTIONS =====
 
 function formatDatePT(date, format = 'yyyy-MM-dd') {
@@ -110,15 +158,16 @@ function formatDatePT(date, format = 'yyyy-MM-dd') {
   return d.toISOString();
 }
 
-function getTimeSlotMultiplier(timeSlot) {
+function getTimeSlotMultiplier(timeSlot, multipliers = null) {
   if (!timeSlot) return 1.0;
+  const table = multipliers || TIME_SLOT_MULTIPLIERS;
   const slot = String(timeSlot).trim();
-  if (TIME_SLOT_MULTIPLIERS[slot]) {
-    return TIME_SLOT_MULTIPLIERS[slot];
+  if (table[slot]) {
+    return table[slot];
   }
   const normalized = slot.replace(/[-–—]/g, '–');
-  if (TIME_SLOT_MULTIPLIERS[normalized]) {
-    return TIME_SLOT_MULTIPLIERS[normalized];
+  if (table[normalized]) {
+    return table[normalized];
   }
   return 1.0;
 }
@@ -176,7 +225,7 @@ function parseHumanTimestamp(timestamp) {
 // This avoids double-penalizing breaks: the raw avgRate already reflects lower output
 // during break slots, so applying multipliers again in the goal calculation would
 // undercount the target. Using effective hours gives a true per-full-hour rate.
-async function getEffectiveTargetRate(env, days = 7) {
+async function getEffectiveTargetRate(env, days = 7, timeSlotMultipliers = null) {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 30);
   const cutoffStr = formatDatePT(cutoff, 'yyyy-MM-dd');
@@ -199,7 +248,7 @@ async function getEffectiveTargetRate(env, days = 7) {
   for (const slot of slots) {
     if (dateSet.has(slot.production_date)) {
       totalTops += slot.tops_lbs1;
-      totalEffectiveTrimmerHours += slot.trimmers_line1 * getTimeSlotMultiplier(slot.time_slot);
+      totalEffectiveTrimmerHours += slot.trimmers_line1 * getTimeSlotMultiplier(slot.time_slot, timeSlotMultipliers);
     }
   }
 
@@ -211,6 +260,12 @@ async function getEffectiveTargetRate(env, days = 7) {
 async function getScoreboardData(env, date = null) {
   // Use provided date or default to today
   const today = date || formatDatePT(new Date(), 'yyyy-MM-dd');
+
+  // Load config with fallbacks to hardcoded defaults
+  const baseWageRate = (await getConfig(env, 'labor.base_wage_rate')) ?? BASE_WAGE_RATE;
+  const employerTaxRate = (await getConfig(env, 'labor.employer_tax_rate')) ?? EMPLOYER_TAX_RATE;
+  const totalLaborCostPerHour = baseWageRate * (1 + employerTaxRate);
+  const timeSlotMultipliers = (await getConfig(env, 'schedule.time_slot_multipliers')) ?? TIME_SLOT_MULTIPLIERS;
 
   const result = {
     lastHourLbs: 0,
@@ -258,7 +313,7 @@ async function getScoreboardData(env, date = null) {
       trimmers: r.trimmers_line1 || 0,
       buckers: r.buckers_line1 || 0,
       strain: r.cultivar1 || '',
-      multiplier: getTimeSlotMultiplier(r.time_slot),
+      multiplier: getTimeSlotMultiplier(r.time_slot, timeSlotMultipliers),
     };
   });
 
@@ -290,7 +345,7 @@ async function getScoreboardData(env, date = null) {
   result.strain = activeStrain;
 
   // Get historical rate for target (last 7 days) using effective trimmer-hours
-  const targetRate = await getEffectiveTargetRate(env, 7);
+  const targetRate = await getEffectiveTargetRate(env, 7, timeSlotMultipliers);
   result.targetRate = targetRate;
 
   // Calculate totals
@@ -389,14 +444,14 @@ async function getScoreboardData(env, date = null) {
   result.streak = streak;
 
   // Daily projection
-  const projection = calculateDailyProjection(rows, lastCompletedHourIndex, currentHourIndex, targetRate, totalLbs);
+  const projection = calculateDailyProjection(rows, lastCompletedHourIndex, currentHourIndex, targetRate, totalLbs, timeSlotMultipliers);
   result.projectedTotal = projection.projectedTotal;
   result.dailyGoal = projection.dailyGoal;
 
   return result;
 }
 
-function calculateDailyProjection(todayRows, lastCompletedHourIndex, currentHourIndex, targetRate, totalLbsSoFar) {
+function calculateDailyProjection(todayRows, lastCompletedHourIndex, currentHourIndex, targetRate, totalLbsSoFar, timeSlotMultipliers = null) {
   let totalLbs = 0;
   let totalTrimmerEffectiveHours = 0;
   let lastKnownTrimmers = 0;
@@ -431,7 +486,7 @@ function calculateDailyProjection(todayRows, lastCompletedHourIndex, currentHour
 
   for (const slot of ALL_TIME_SLOTS) {
     const normalizedSlot = slot.replace(/[-–—]/g, '–');
-    const multiplier = getTimeSlotMultiplier(slot);
+    const multiplier = getTimeSlotMultiplier(slot, timeSlotMultipliers);
     const workedRow = workedSlots[normalizedSlot];
 
     if (workedRow && workedRow.tops > 0 && workedRow.trimmers > 0) {
@@ -1646,6 +1701,9 @@ async function chat(body, env) {
     return errorResponse('No message provided', 'VALIDATION_ERROR', 400);
   }
 
+  // Load AI model from config with fallback
+  const aiModel = (await getConfig(env, 'api.ai_model')) ?? AI_MODEL;
+
   const scoreboardData = await getScoreboardData(env);
   const timerData = await getBagTimerData(env);
 
@@ -1690,7 +1748,7 @@ Be concise and helpful. Support English and Spanish.`;
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: AI_MODEL,
+      model: aiModel,
       max_tokens: 1024,
       system: systemPrompt,
       messages,
@@ -2442,6 +2500,21 @@ export async function handleProductionD1(request, env, ctx) {
         return await getCultivars(env);
       case 'analyzeStrain':
         return await analyzeStrain(params, env);
+      case 'getConfig': {
+        const category = params.category || null;
+        const configData = await getAllConfig(env, category);
+        return successResponse(configData);
+      }
+      case 'setConfig': {
+        if (request.method !== 'POST') {
+          return errorResponse('POST required', 'METHOD_ERROR', 405);
+        }
+        if (!body.key || body.value === undefined) {
+          return errorResponse('key and value required', 'VALIDATION_ERROR', 400);
+        }
+        await setConfig(env, body.key, body.value, body.updatedBy || 'api');
+        return successResponse({ success: true, key: body.key });
+      }
       case 'migrate':
         return await migrateFromSheets(env);
       case 'checkSheet': {
