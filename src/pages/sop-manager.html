@@ -56,7 +56,7 @@
     </header>
     <div class="toolbar">
       <div class="toolbar-left">
-        <div class="search-box"><i class="ph-duotone ph-magnifying-glass"></i><input type="text" id="searchInput" placeholder="Search SOPs..." data-i18n-placeholder="searchPlaceholder" oninput="filterSOPs()"></div>
+        <div class="search-box"><i class="ph-duotone ph-magnifying-glass"></i><input type="text" id="searchInput" placeholder="Search SOPs..." aria-label="Search SOPs" data-i18n-placeholder="searchPlaceholder" oninput="filterSOPs()"></div>
         <select class="filter-select" id="statusFilter" onchange="filterSOPs()"><option value="" data-i18n="allSOPs">All SOPs</option><option value="published" data-i18n="published">Published</option><option value="draft" data-i18n="drafts">Drafts</option></select>
         <select class="filter-select" id="deptFilter" onchange="filterSOPs()"></select>
         <select class="filter-select" id="tagFilter" onchange="filterSOPs()"></select>

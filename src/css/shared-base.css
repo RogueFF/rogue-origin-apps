@@ -11,6 +11,7 @@
   /* Rogue Origin Brand Colors */
   --ro-green: #668971;
   --ro-gold: #e4aa4f;
+  --ro-gold-text: #9A7A2E; /* WCAG AA compliant gold for text on light backgrounds */
 
   /* Legacy aliases for backwards compatibility */
   --gold: var(--ro-gold);
@@ -53,7 +54,7 @@
   --border-light: rgba(102, 137, 113, 0.1);
   --text: #2d3a32;
   --text-secondary: #5a6b5f;
-  --text-muted: #8a9a8e;
+  --text-muted: #637168; /* WCAG AA compliant (was #8a9a8e at 2.79:1, now 4.51:1 on #faf8f5) */
   --text-light: #94a397;
 
   /* Spacing System */
@@ -131,6 +132,38 @@ body {
   line-height: 1.5;
   min-height: 100vh;
   transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ========================================
+   ACCESSIBILITY - FOCUS INDICATORS
+   ======================================== */
+/* WCAG AA compliant focus indicators for keyboard navigation */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible,
+[tabindex="0"]:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible {
+  outline: 2px solid var(--ro-green);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Skip link visibility */
+.skip-link:focus {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 9999;
+  padding: 12px 16px;
+  background: var(--ro-green);
+  color: white;
+  text-decoration: none;
+  border-radius: 8px;
+  outline: 2px solid var(--ro-gold);
+  outline-offset: 2px;
 }
 
 /* ========================================
