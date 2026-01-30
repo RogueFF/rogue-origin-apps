@@ -1341,6 +1341,126 @@ body {
   padding: 12px;
 }
 
+/* ===================
+   SCALE WEIGHT CIRCLE
+   =================== */
+
+.scale-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: 12px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.scale-display {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  flex-shrink: 0;
+}
+
+.scale-ring {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.scale-ring-bg {
+  fill: none;
+  stroke: var(--bg-input);
+  stroke-width: 10;
+}
+
+.scale-ring-progress {
+  fill: none;
+  stroke-width: 10;
+  stroke-linecap: round;
+  stroke-dasharray: 597;
+  stroke-dashoffset: 597;
+  transition: stroke-dashoffset 0.5s ease, stroke 0.3s ease;
+}
+
+.scale-ring-progress.filling {
+  stroke: var(--success);
+}
+
+.scale-ring-progress.near-target {
+  stroke: #9ae6b4;
+}
+
+.scale-ring-progress.at-target {
+  stroke: var(--gold);
+}
+
+.scale-ring-progress.stale {
+  stroke: rgba(255, 255, 255, 0.15);
+}
+
+.scale-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.scale-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.scale-value.filling {
+  color: var(--success);
+}
+
+.scale-value.near-target {
+  color: #9ae6b4;
+}
+
+.scale-value.at-target {
+  color: var(--gold);
+}
+
+.scale-value.stale {
+  color: var(--text-secondary);
+}
+
+.scale-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.scale-status-dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.scale-status-dot.connected {
+  background: var(--success);
+  animation: scalePulse 2s ease-in-out infinite;
+}
+
+.scale-status-dot.stale {
+  background: rgba(255, 255, 255, 0.2);
+  animation: none;
+}
+
+@keyframes scalePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
 /* Circular Timer Ring (matches scoreboard) */
 .timer-ring-container {
   position: relative;
@@ -1504,6 +1624,15 @@ body {
 
   .card-hourly {
     max-height: 60vh;
+  }
+
+  .scale-display {
+    width: 140px;
+    height: 140px;
+  }
+
+  .scale-value {
+    font-size: 22px;
   }
 
   .timer-value {

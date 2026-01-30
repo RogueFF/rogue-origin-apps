@@ -374,6 +374,21 @@
           <h2 class="card-title" data-i18n="bagTimer">Bag Timer</h2>
         </div>
         <div class="card-content">
+          <!-- Scale Weight Display (matches scoreboard) -->
+          <div class="scale-section" id="scaleSection">
+            <div class="scale-display" id="scaleDisplay">
+              <svg class="scale-ring" viewBox="0 0 220 220">
+                <circle class="scale-ring-bg" cx="110" cy="110" r="95"/>
+                <circle class="scale-ring-progress" id="scaleRing" cx="110" cy="110" r="95"
+                        stroke-dasharray="597" stroke-dashoffset="597"/>
+              </svg>
+              <div class="scale-center">
+                <div class="scale-value" id="scaleWeight">—</div>
+                <div class="scale-label" id="scaleWeightLabel">of 5.0 kg</div>
+              </div>
+              <div class="scale-status-dot" id="scaleStatusDot"></div>
+            </div>
+          </div>
           <!-- Circular Timer Display (matches scoreboard) -->
           <div class="timer-ring-container" id="timerPanel">
             <svg class="timer-ring" viewBox="0 0 220 220">
