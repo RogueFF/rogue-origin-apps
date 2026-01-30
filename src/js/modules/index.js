@@ -396,11 +396,12 @@ function updateLastHourWidget(data) {
     if (currentTimeEl) currentTimeEl.textContent = timeSlot;
     if (statusBadgeEl) statusBadgeEl.textContent = 'Last Hour';
     if (currentTopsEl) currentTopsEl.textContent = lbs.toFixed(1);
-    if (currentSmallsEl) currentSmallsEl.textContent = '0'; // Not tracked hourly
+    if (currentSmallsEl) currentSmallsEl.textContent = (lastHour.smalls || 0).toFixed(1);
     if (currentTrimmersEl) currentTrimmersEl.textContent = trimmers;
     if (currentBuckersEl) currentBuckersEl.textContent = '0'; // Not in hourly data
     if (currentRateEl) currentRateEl.textContent = rate.toFixed(2);
-    if (currentTotalEl) currentTotalEl.textContent = lbs.toFixed(1);
+    const smallsLbs = lastHour.smalls || 0;
+    if (currentTotalEl) currentTotalEl.textContent = (lbs + smallsLbs).toFixed(1);
   } else {
     // No data - reset to defaults
     if (currentStrainEl) currentStrainEl.textContent = 'No Data';

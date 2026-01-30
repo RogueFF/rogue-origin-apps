@@ -301,7 +301,7 @@ async function getScoreboardData(env, date = null) {
 
   // Get today's hourly production data from D1
   const todayRows = await query(env.DB, `
-    SELECT time_slot, cultivar1, tops_lbs1, trimmers_line1, buckers_line1
+    SELECT time_slot, cultivar1, tops_lbs1, smalls_lbs1, trimmers_line1, buckers_line1
     FROM monthly_production
     WHERE production_date = ?
   `, [today]);
@@ -315,6 +315,7 @@ async function getScoreboardData(env, date = null) {
     rowsBySlot[slot] = {
       timeSlot: r.time_slot || '',
       tops: r.tops_lbs1 || 0,
+      smalls: r.smalls_lbs1 || 0,
       trimmers: r.trimmers_line1 || 0,
       buckers: r.buckers_line1 || 0,
       strain: r.cultivar1 || '',
@@ -371,6 +372,7 @@ async function getScoreboardData(env, date = null) {
   if (lastCompletedHourIndex >= 0) {
     const lastRow = rows[lastCompletedHourIndex];
     result.lastHourLbs = lastRow.tops;
+    result.lastHourSmalls = lastRow.smalls;
     result.lastHourTrimmers = lastRow.trimmers;
     result.lastHourBuckers = lastRow.buckers || 0;
     result.lastHourMultiplier = lastRow.multiplier;
@@ -430,7 +432,8 @@ async function getScoreboardData(env, date = null) {
         rate,
         target: targetRate,
         trimmers: row.trimmers,
-        lbs: row.tops
+        lbs: row.tops,
+        smalls: row.smalls,
       });
     }
   }
@@ -1323,7 +1326,7 @@ async function dashboard(params, env) {
     trimmers: h.trimmers,
     lbs: h.lbs,
     tops: h.lbs,
-    smalls: 0,
+    smalls: h.smalls || 0,
   }));
 
   // Get strain snapshot (top 5 strains from last 7 days)
