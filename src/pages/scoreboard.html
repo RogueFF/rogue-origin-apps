@@ -32,14 +32,16 @@
   <script defer src="../js/scoreboard/dom.js?v=2"></script>
   <script defer src="../js/scoreboard/i18n.js?v=3"></script>
   <script defer src="../js/scoreboard/api.js?v=3"></script>
-  <script defer src="../js/scoreboard/timer.js?v=9"></script>
+  <script defer src="../js/scoreboard/timer.js?v=10"></script>
   <script defer src="../js/scoreboard/cycle-history.js?v=3"></script>
   <script defer src="../js/scoreboard/chart.js?v=2"></script>
   <script defer src="../js/scoreboard/render.js?v=3"></script>
   <script defer src="../js/scoreboard/shift-start.js?v=2"></script>
   <script defer src="../js/scoreboard/morning-report.js?v=3"></script>
   <script defer src="../js/scoreboard/scale.js?v=3"></script>
-  <script defer src="../js/scoreboard/main.js?v=7"></script>
+  <!-- Debug module: Lazy-loaded on demand (saves ~5KB) - see bottom of page -->
+  <script defer src="../js/scoreboard/events.js?v=1"></script>
+  <script defer src="../js/scoreboard/main.js?v=8"></script>
   <!-- Critical CSS: Loaded synchronously -->
   <link rel="stylesheet" href="../css/shared-base.css">
   
@@ -56,7 +58,7 @@
         <div class="mr-title">MORNING REPORT / REPORTE MATUTINO</div>
         <div class="mr-subtitle" id="mrDate">Loading...</div>
       </div>
-      <button class="mr-back-btn" onclick="toggleMorningReport()">
+      <button class="mr-back-btn">
         <i class="ph-duotone ph-arrow-left"></i>
         Back to Live / Volver en Vivo
       </button>
@@ -71,7 +73,7 @@
       <span class="historical-banner-label">Viewing Historical Data:</span>
       <span id="historicalDateDisplay" class="historical-banner-date">—</span>
     </div>
-    <button class="historical-banner-close" onclick="clearHistoricalDate();" title="Back to live view">
+    <button class="historical-banner-close" title="Back to live view">
       <i class="ph-duotone ph-x"></i>
       Back to Live
     </button>
@@ -91,12 +93,12 @@
   <!-- Time Controls (positioned below time-display) -->
   <div class="time-controls">
     <!-- Start Day Button (appears until shift start is set) -->
-    <button id="startDayBtn" class="start-day-btn pulse-green" onclick="startDayNow()" style="display:none;">
+    <button id="startDayBtn" class="start-day-btn pulse-green" style="display:none;">
       <i class="ph-duotone ph-play-circle"></i>
       Start Day
     </button>
     <!-- Started Badge (appears after shift start is set) -->
-    <div id="startedBadge" class="started-badge" onclick="editStartTime()" style="display:none;">
+    <div id="startedBadge" class="started-badge" style="display:none;">
       <i class="ph-duotone ph-clock"></i>
       Started: <span id="startTimeDisplay">—</span>
       <i id="badgeIcon" class="ph-duotone ph-pencil-simple"></i>
@@ -104,39 +106,39 @@
   </div>
 
   <!-- Date Picker Input (hidden) -->
-  <input type="date" id="historicalDatePicker" class="date-picker-hidden" aria-label="Select historical date to view past production data" onchange="loadHistoricalDate(this.value)">
+  <input type="date" id="historicalDatePicker" class="date-picker-hidden" aria-label="Select historical date to view past production data">
   <!-- Morning Report Button -->
-  <button id="morningReportBtn" onclick="toggleMorningReport()">
+  <button id="morningReportBtn">
     <i class="ph-duotone ph-chart-bar"></i>
     Morning Report / Reporte Matutino
   </button>
 
   <!-- Historical View Button -->
-  <button id="historicalViewBtn" onclick="toggleDatePicker()" class="historical-view-btn">
+  <button id="historicalViewBtn" class="historical-view-btn">
     <i class="ph-duotone ph-clock-counter-clockwise"></i>
     Past Data
   </button>
 
   <!-- Order Queue Toggle Button -->
-  <button id="orderQueueToggleBtn" onclick="toggleOrderQueue()" class="order-queue-toggle-btn" title="Toggle Order Queue / Alternar Cola de Pedidos">
+  <button id="orderQueueToggleBtn" class="order-queue-toggle-btn" title="Toggle Order Queue / Alternar Cola de Pedidos">
     <i class="ph-duotone ph-stack"></i>
     <span id="orderQueueToggleText">Orders</span>
   </button>
 
   <div class="lang-toggle">
-    <button class="lang-btn active" id="btnEn" onclick="setLanguage('en')">EN</button>
-    <button class="lang-btn" id="btnEs" onclick="setLanguage('es')">ES</button>
+    <button class="lang-btn active" id="btnEn">EN</button>
+    <button class="lang-btn" id="btnEs">ES</button>
     <a href="https://docs.google.com/spreadsheets/d/1SyeueGF5NY3AXvUJYLTjuK01v3jCPIpbs9JQbrhrlHk/edit?gid=0#gid=0" target="_blank" class="lang-btn complaints-btn" title="Customer Complaints / Quejas de Clientes">
       <i class="ph-duotone ph-warning-circle"></i>
     </a>
   </div>
-  <button class="help-btn" onclick="toggleHelp()">?</button>
+  <button class="help-btn">?</button>
 
-  <div class="help-modal" id="helpModal" role="dialog" aria-modal="true" aria-labelledby="helpTitle" onclick="if(event.target===this)toggleHelp()">
+  <div class="help-modal" id="helpModal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
     <div class="help-content">
       <div class="help-header">
         <div class="help-title" id="helpTitle"><i class="ph-duotone ph-chart-pie-slice" style="margin-right:8px"></i> Understanding the Scoreboard</div>
-        <button class="help-close" onclick="toggleHelp()">✕</button>
+        <button class="help-close">✕</button>
       </div>
       <div class="help-grid">
         <div class="help-item">
@@ -231,7 +233,7 @@
       <!-- Order Queue Section -->
       <div class="order-queue-section" id="orderQueueSection" style="display:none;">
         <!-- Current Order Pill -->
-        <div class="order-pill" id="currentOrderPill" onclick="window.ScoreboardRender && window.ScoreboardRender.toggleOrderExpand('current')">
+        <div class="order-pill" id="currentOrderPill">
           <div class="order-pill-header">
             <span class="order-icon">🎯</span>
             <span class="order-label" id="currentOrderLabel">WORKING ON</span>
@@ -250,7 +252,7 @@
         </div>
 
         <!-- Next Order Pill -->
-        <div class="order-pill next" id="nextOrderPill" onclick="window.ScoreboardRender && window.ScoreboardRender.toggleOrderExpand('next')">
+        <div class="order-pill next" id="nextOrderPill">
           <div class="order-pill-header">
             <span class="order-icon">⏭</span>
             <span class="order-label" id="nextOrderLabel">UP NEXT</span>
@@ -273,12 +275,12 @@
         <div class="info-divider"></div>
         <div class="info-section"><span class="info-icon"><i class="ph-duotone ph-crosshair"></i></span><span><span id="targetRateLabel">Target:</span> <span id="targetRate">—</span> lbs/hr</span></div>
         <div class="info-divider" id="avgBestDivider"></div>
-        <div id="avgBestContainer" class="avg-best-container" onclick="toggleAvgBest()">
+        <div id="avgBestContainer" class="avg-best-container">
           <div class="stat-group" id="avgGroup"><span class="label" id="avgTargetLabel">AVG</span><span class="value" id="avgPercentage">—</span></div>
           <div class="info-divider" id="bestDivider"></div>
           <div class="stat-group" id="bestGroup"><span class="label" id="bestHourLabel">BEST</span><span class="value" id="bestHour">—</span></div>
         </div>
-        <button class="avg-best-toggle" id="avgBestToggle" onclick="toggleAvgBest()" title="Toggle AVG/BEST">
+        <button class="avg-best-toggle" id="avgBestToggle" title="Toggle AVG/BEST">
           <i class="ph-duotone ph-chart-bar"></i>
         </button>
       </div>
@@ -296,7 +298,7 @@
   <div class="timer-panel neutral" id="timerPanel">
     <div class="drag-handle" id="dragHandle"></div>
     <div class="expand-hint" id="expandHint">◀</div>
-    <button class="fullscreen-toggle" id="fullscreenToggle" onclick="toggleTimerFullscreen()"><i class="ph-duotone ph-arrows-out"></i></button>
+    <button class="fullscreen-toggle" id="fullscreenToggle"><i class="ph-duotone ph-arrows-out"></i></button>
 
     <!-- Scale Weight Display (circular ring like timer) - ABOVE bag timer -->
     <div class="scale-section" id="scaleSection">
@@ -327,8 +329,8 @@
     </div>
     <div class="timer-target">Target: <span id="timerTargetTime">--:--</span> • <span id="timerTrimmers">0</span> trimmers</div>
     <div class="timer-btn-row">
-      <button class="manual-btn" id="manualBtn" onclick="logManualEntry()"><span class="icon"><i class="ph-duotone ph-package"></i></span><span id="manualBtnText">5KG Bag Complete</span></button>
-      <button class="pause-btn" id="pauseBtn" onclick="handlePauseClick()"><i class="ph-duotone ph-pause"></i></button>
+      <button class="manual-btn" id="manualBtn"><span class="icon"><i class="ph-duotone ph-package"></i></span><span id="manualBtnText">5KG Bag Complete</span></button>
+      <button class="pause-btn" id="pauseBtn"><i class="ph-duotone ph-pause"></i></button>
     </div>
     <div class="timer-stats">
       <div class="timer-stat"><span class="timer-stat-label" id="bagsTodayLabel">Bags Today</span><span class="timer-stat-value" id="bagsToday">0</span></div>
@@ -340,10 +342,10 @@
       <div class="cycle-history-header">
         <span class="cycle-history-title" id="cycleHistoryTitle">Today's Cycles</span>
         <div class="cycle-history-nav">
-          <button class="cycle-nav-btn" onclick="prevCycleMode()" title="Previous view">‹</button>
+          <button class="cycle-nav-btn" title="Previous view">‹</button>
           <span class="cycle-mode-label" id="cycleModeLabel">List</span>
-          <button class="cycle-nav-btn" onclick="nextCycleMode()" title="Next view">›</button>
-          <button class="cycle-history-toggle" id="cycleToggle" onclick="toggleCycleHistory()">Hide</button>
+          <button class="cycle-nav-btn" title="Next view">›</button>
+          <button class="cycle-history-toggle" id="cycleToggle">Hide</button>
         </div>
       </div>
       <div class="cycle-content" id="cycleContent"></div>
@@ -359,16 +361,16 @@
       <div class="pause-modal-title"><i class="ph-duotone ph-pause-circle"></i> Pause Timer</div>
       <div class="pause-modal-subtitle">Select or enter the reason for pausing:</div>
       <div class="pause-modal-reasons">
-        <button class="pause-reason-btn" onclick="selectPauseReason(this, 'Equipment issue')">🔧 Equipment issue</button>
-        <button class="pause-reason-btn" onclick="selectPauseReason(this, 'Material shortage')">📦 Material shortage</button>
-        <button class="pause-reason-btn" onclick="selectPauseReason(this, 'Quality check')">🔍 Quality check</button>
-        <button class="pause-reason-btn" onclick="selectPauseReason(this, 'Shift change')">👥 Shift change</button>
-        <button class="pause-reason-btn" onclick="selectPauseReason(this, 'Cleaning')">🧹 Cleaning</button>
+        <button class="pause-reason-btn">🔧 Equipment issue</button>
+        <button class="pause-reason-btn">📦 Material shortage</button>
+        <button class="pause-reason-btn">🔍 Quality check</button>
+        <button class="pause-reason-btn">👥 Shift change</button>
+        <button class="pause-reason-btn">🧹 Cleaning</button>
       </div>
-      <input type="text" class="pause-custom-input" id="pauseCustomReason" placeholder="Or type a custom reason..." oninput="onCustomReasonInput()">
+      <input type="text" class="pause-custom-input" id="pauseCustomReason" placeholder="Or type a custom reason...">
       <div class="pause-modal-buttons">
-        <button class="pause-modal-btn cancel" onclick="closePauseModal()">Cancel</button>
-        <button class="pause-modal-btn confirm" id="pauseConfirmBtn" onclick="confirmPause()" disabled>Pause Timer</button>
+        <button class="pause-modal-btn cancel">Cancel</button>
+        <button class="pause-modal-btn confirm" id="pauseConfirmBtn" disabled>Pause Timer</button>
       </div>
     </div>
   </div>
@@ -384,36 +386,36 @@
   <!-- Debug Panel -->
   <div class="debug-indicator" id="debugIndicator">⚠ Debug Mode Active</div>
   <div class="debug-panel" id="debugPanel">
-    <div class="debug-header">🛠 Timer Debug <button class="debug-close" onclick="toggleDebug()">✕</button></div>
+    <div class="debug-header">🛠 Timer Debug <button class="debug-close">✕</button></div>
     <div class="debug-controls">
       <div class="debug-label">Timer State:</div>
       <div class="debug-buttons">
-        <button onclick="setDebugState('green')">🟢 Green</button>
-        <button onclick="setDebugState('yellow')">🟡 Yellow</button>
-        <button onclick="setDebugState('red')">🔴 Red/Overtime</button>
-        <button onclick="setDebugState('neutral')">⚫ Neutral</button>
+        <button>🟢 Green</button>
+        <button>🟡 Yellow</button>
+        <button>🔴 Red/Overtime</button>
+        <button>⚫ Neutral</button>
       </div>
       <div class="debug-label">Simulate Time:</div>
       <div class="debug-buttons">
-        <button onclick="simulateTime(0)">Just Started</button>
-        <button onclick="simulateTime(50)">50%</button>
-        <button onclick="simulateTime(85)">85% (Yellow)</button>
-        <button onclick="simulateTime(110)">110% (Overtime)</button>
+        <button>Just Started</button>
+        <button>50%</button>
+        <button>85% (Yellow)</button>
+        <button>110% (Overtime)</button>
       </div>
       <div class="debug-label">Break Status:</div>
       <div class="debug-buttons">
-        <button onclick="simulateBreak(false)">Working</button>
-        <button onclick="simulateBreak(true)">On Break</button>
+        <button>Working</button>
+        <button>On Break</button>
       </div>
       <div class="debug-label">Test Celebration:</div>
       <div class="debug-buttons">
-        <button onclick="addCycleToHistory(240, 300)">🎺 Early (Mariachi!)</button>
-        <button onclick="addCycleToHistory(295, 300)">✓ On Time</button>
-        <button onclick="addCycleToHistory(360, 300)">⚠ Overtime</button>
-        <button onclick="playMariachi()" style="background:rgba(34,197,94,0.3);border-color:#22c55e;">🔊 Test Sound</button>
+        <button>🎺 Early (Mariachi!)</button>
+        <button>✓ On Time</button>
+        <button>⚠ Overtime</button>
+        <button style="background:rgba(34,197,94,0.3);border-color:#22c55e;">🔊 Test Sound</button>
       </div>
       <div class="debug-divider"></div>
-      <button class="debug-reset" onclick="resetDebug()">↻ Reset to Live</button>
+      <button class="debug-reset">↻ Reset to Live</button>
     </div>
     <div class="debug-hint">Press <kbd>D</kbd> to toggle this panel</div>
   </div>
@@ -443,11 +445,56 @@
       </div>
 
       <div class="modal-actions">
-        <button onclick="cancelStartTime()" class="btn-secondary">Cancel</button>
-        <button onclick="confirmStartTime()" class="btn-primary">Confirm</button>
+        <button class="btn-secondary">Cancel</button>
+        <button class="btn-primary">Confirm</button>
       </div>
     </div>
   </div>
   <script src="../js/sw-register.js" async></script>
+
+  <!-- Debug Module: Lazy-loaded on first use (saves ~5KB on normal page loads) -->
+  <script>
+    (function() {
+      let debugLoaded = false;
+      let debugLoadPromise = null;
+
+      // Lazy load debug module when 'D' key is pressed
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'd' || e.key === 'D') {
+          // Don't trigger if typing in input field
+          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+            return;
+          }
+
+          // Lazy-load debug module on first use
+          if (!debugLoaded && !debugLoadPromise) {
+            console.log('[Debug] Loading debug module...');
+            debugLoadPromise = new Promise((resolve, reject) => {
+              const script = document.createElement('script');
+              script.src = '../js/scoreboard/debug.js?v=2';
+              script.onload = () => {
+                debugLoaded = true;
+                console.log('[Debug] Module loaded successfully');
+                resolve();
+                // Trigger toggleDebug after load
+                if (window.toggleDebug) {
+                  window.toggleDebug();
+                }
+              };
+              script.onerror = () => {
+                debugLoadPromise = null; // Allow retry
+                reject(new Error('Failed to load debug.js'));
+                console.error('[Debug] Failed to load debug module');
+              };
+              document.head.appendChild(script);
+            });
+          } else if (debugLoaded && window.toggleDebug) {
+            // Module already loaded, just toggle
+            window.toggleDebug();
+          }
+        }
+      });
+    })();
+  </script>
 </body>
 </html>
