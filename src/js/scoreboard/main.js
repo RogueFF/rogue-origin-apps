@@ -518,10 +518,20 @@
 
   // Initialize on DOMContentLoaded
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', function() {
+      init();
+      // Attach all event listeners after initialization
+      if (window.ScoreboardEvents) {
+        window.ScoreboardEvents.attachEventListeners();
+      }
+    });
   } else {
     // DOM already loaded
     init();
+    // Attach all event listeners after initialization
+    if (window.ScoreboardEvents) {
+      window.ScoreboardEvents.attachEventListeners();
+    }
   }
 
 })(window);
