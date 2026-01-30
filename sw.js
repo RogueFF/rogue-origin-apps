@@ -1,7 +1,7 @@
 // Service Worker for Rogue Origin Operations Hub
-// Version 3.13 - Fix SOP onclick handlers (quote IDs)
+// Version 3.14 - Auto-update: no hard refresh needed
 
-const CACHE_VERSION = 'ro-ops-v3.13';
+const CACHE_VERSION = 'ro-ops-v3.14';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
@@ -75,7 +75,7 @@ const CDN_ASSETS = [
 
 // Install event - cache static assets with resilient error handling
 self.addEventListener('install', (event) => {
-  console.log('[SW v3.1] Installing service worker (mobile-optimized PWA)...');
+  console.log('[SW v3.14] Installing service worker...');
 
   event.waitUntil(
     Promise.allSettled([
@@ -109,7 +109,7 @@ self.addEventListener('install', (event) => {
 
 // Activate event - cleanup old caches
 self.addEventListener('activate', (event) => {
-  console.log('[SW v3.1] Activating service worker...');
+  console.log('[SW v3.14] Activating service worker...');
 
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -171,10 +171,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Strategy 4: Cache-First for static assets
+  // Strategy 4: Stale-While-Revalidate for app assets (CSS/JS/HTML)
+  // Serves cached version instantly, fetches fresh copy in background
   if (request.destination === 'style' || request.destination === 'script' ||
       url.pathname.match(/\.(css|js)$/) || STATIC_ASSETS.includes(url.pathname)) {
-    event.respondWith(cacheFirst(request, STATIC_CACHE));
+    event.respondWith(staleWhileRevalidate(request, STATIC_CACHE));
     return;
   }
 
@@ -378,4 +379,4 @@ self.addEventListener('unhandledrejection', (event) => {
   console.error('[SW] Unhandled rejection:', event.reason);
 });
 
-console.log('[SW v3.1] Service Worker loaded - Mobile-optimized PWA ready');
+console.log('[SW v3.14] Service Worker loaded - auto-update enabled');
