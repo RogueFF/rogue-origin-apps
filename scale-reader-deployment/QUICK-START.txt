@@ -1,0 +1,93 @@
+===============================================
+  SCALE READER - QUICK START GUIDE
+  Rogue Origin Operations Hub
+===============================================
+
+STEP 1: Copy this folder to the station PC
+-----------------------------------------------
+Recommended location:
+  C:\RogueOrigin\scale-reader\
+
+
+STEP 2: Install Node.js (if needed)
+-----------------------------------------------
+Download: https://nodejs.org/
+Version: Any LTS version (18+)
+Install with all defaults
+
+
+STEP 3: Open Command Prompt as Administrator
+-----------------------------------------------
+Right-click Start Menu → Terminal (Admin)
+
+
+STEP 4: Navigate to the folder
+-----------------------------------------------
+cd C:\RogueOrigin\scale-reader
+
+
+STEP 5: Install dependencies
+-----------------------------------------------
+npm install
+
+(Takes 30-60 seconds, shows progress)
+
+
+STEP 6: Plug in the scale
+-----------------------------------------------
+- Connect Brecknell GP100 via USB
+- Wait for Windows to install drivers
+- Note: Usually appears as COM3
+
+
+STEP 7: Start the scale reader
+-----------------------------------------------
+start-scale-reader.bat
+
+OR manually:
+node index.js
+
+
+STEP 8: Open the display
+-----------------------------------------------
+Browser: http://localhost:3000
+Press F11 for full-screen
+
+
+===============================================
+THAT'S IT! You're done!
+===============================================
+
+The scale reader is now:
+✓ Reading weight from scale
+✓ Displaying locally (instant)
+✓ Sending to cloud API (every 500ms)
+✓ Updating scoreboard (1 second delay)
+
+
+TROUBLESHOOTING:
+-----------------------------------------------
+Problem: Shows 0.00 kg but scale has weight
+
+Solution 1: Check scale is in right mode
+  - Press and hold TARE for 3 seconds
+  - Configure Port to NCI, Baud to 9600
+
+Solution 2: Check COM port
+  - Find port: powershell -Command "[System.IO.Ports.SerialPort]::GetPortNames()"
+  - Edit config.js to match
+
+
+Problem: "Cannot find module" error
+
+Solution: Run "npm install" again
+
+
+For detailed help, see:
+- INSTALLATION.md (full guide)
+- TROUBLESHOOTING.md (common issues)
+
+
+===============================================
+Contact: IT or developer who set this up
+===============================================
