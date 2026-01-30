@@ -53,6 +53,42 @@ Transform Rogue Origin's operations into a data-driven, AI-assisted system that:
 
 ---
 
+## Scale Reader / Live Weight System
+
+**Objective**: Real-time scale weight display on production floor with cloud sync via D1 for instant visibility into bag filling progress.
+
+### Components Built
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Node.js serial reader | ✅ Done | Brecknell GP100, NCI protocol polling |
+| Express local web display | ✅ Done | Live weight view at `http://localhost:3000` |
+| D1 cloud API endpoints | ✅ Done | `get/set` scale weight with stale detection |
+| Mock mode for testing | ✅ Done | Simulates scale without hardware |
+| Deployment package | ✅ Done | Setup docs in `scale-reader/SETUP.md` |
+
+**Files**:
+- `scale-reader/index.js` - Serial reader + Express server
+- `scale-reader/mock-server.py` - Python mock scale
+- `workers/src/handlers/production-d1.js` - D1 API endpoints (`/scale/get`, `/scale/set`)
+
+### Remaining Work
+
+| Deliverable | Status | Notes |
+|-------------|--------|-------|
+| Scale readings table in D1 | 📋 Pending | Schema deployment to production |
+| Scoreboard integration | 📋 Pending | Show live weight on floor TV |
+| Bag completion auto-detection | 📋 Pending | Weight threshold triggers bag timer |
+| Multi-station support | 📋 Pending | Line1/Line2 separate scales |
+
+**Success Criteria**:
+- Floor TV displays real-time scale weight
+- Bag completion auto-detects when weight crosses threshold
+- System handles network interruptions gracefully
+- Support multiple scales for different production lines
+
+---
+
 ## Phase 1: AI Agent Foundation — ~70% Complete
 
 **Objective**: Create an AI assistant that can answer the boss's top 5 questions.
