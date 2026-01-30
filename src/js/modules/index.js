@@ -442,46 +442,47 @@ function renderHeroSection(data) {
   // Time-aware production calculation
   const trimmers = t.trimmers || 0;
   const todayRate = t.avgRate || 0;
-  const productiveHoursElapsed = getProductiveHoursElapsed();
-  const totalProductiveHours = (data.current && data.current.effectiveHours) || getTotalProductiveHours();
-  const remainingHours = Math.max(0, totalProductiveHours - productiveHoursElapsed);
+  const isHistorical = data.isHistorical || false;
+  const fallback = getFallback();
+  const dailyTarget = (data.targets && data.targets.totalTops) || getDailyTarget();
 
-  // Expected production from backend (uses same calculation as scoreboard)
-  const expectedSoFar = (data.current && data.current.todayTarget) || (data.targets && data.targets.totalTops) || 0;
-
-  // Predicted end-of-day total - use backend projection (same as scoreboard) if available
-  // Backend projection accounts for: late start, actual measured rate, varying crew counts
-  const backendProjection = data.current && data.current.projectedTotal;
-  const localProjection = tops + (trimmers * todayRate * remainingHours);
-  const predictedTops = backendProjection > 0 ? backendProjection : localProjection;
+  let predictedTops = 0;
+  if (isHistorical || (fallback && fallback.active)) {
+    // Historical/fallback: day is complete, actual total IS the final number
+    predictedTops = tops;
+  } else {
+    // Live: project end-of-day using backend or local calculation
+    const productiveHoursElapsed = getProductiveHoursElapsed();
+    const totalProductiveHours = (data.current && data.current.effectiveHours) || getTotalProductiveHours();
+    const remainingHours = Math.max(0, totalProductiveHours - productiveHoursElapsed);
+    const backendProjection = data.current && data.current.projectedTotal;
+    const localProjection = tops + (trimmers * todayRate * remainingHours);
+    predictedTops = backendProjection > 0 ? backendProjection : localProjection;
+  }
 
   // Progress bar
   let progressPercent = 0;
   let progressStatus = '';
-  const fallback = getFallback();
 
-  if (fallback && fallback.active) {
-    // For fallback data, calculate progress against daily target
-    const dailyTarget = (data.targets && data.targets.totalTops) || getDailyTarget();
+  if (isHistorical || (fallback && fallback.active)) {
+    // Historical or fallback: measure against daily target (day is complete)
     if (dailyTarget > 0) {
       progressPercent = (tops / dailyTarget * 100);
-      if (progressPercent >= 100) {
-        progressStatus = 'ahead';
-      } else if (progressPercent >= 90) {
-        progressStatus = 'on-track';
-      } else {
-        progressStatus = 'behind';
-      }
     }
-  } else if (expectedSoFar > 0) {
-    progressPercent = (tops / expectedSoFar * 100);
-    if (progressPercent >= 100) {
-      progressStatus = 'ahead';
-    } else if (progressPercent >= 90) {
-      progressStatus = 'on-track';
-    } else {
-      progressStatus = 'behind';
+  } else {
+    // Live: measure against expected production so far
+    const expectedSoFar = (data.current && data.current.todayTarget) || dailyTarget || 0;
+    if (expectedSoFar > 0) {
+      progressPercent = (tops / expectedSoFar * 100);
     }
+  }
+
+  if (progressPercent >= 100) {
+    progressStatus = 'ahead';
+  } else if (progressPercent >= 90) {
+    progressStatus = 'on-track';
+  } else if (progressPercent > 0) {
+    progressStatus = 'behind';
   }
 
   const elHeroProgressFill = document.getElementById('heroProgressFill');
@@ -491,15 +492,14 @@ function renderHeroSection(data) {
     elHeroProgressFill.className = `hero-progress-fill ${progressStatus}`;
   }
   if (elHeroProgressText) {
-    if (fallback && fallback.active) {
-      // Showing previous day's data - display completion info
-      const dailyTarget = (data.targets && data.targets.totalTops) || getDailyTarget();
+    if (isHistorical || (fallback && fallback.active)) {
       if (dailyTarget > 0) {
-        elHeroProgressText.textContent = `${progressPercent.toFixed(0)}% of daily target`;
+        elHeroProgressText.textContent = `${progressPercent.toFixed(0)}% of daily target (${dailyTarget.toFixed(0)} lbs)`;
       } else {
-        elHeroProgressText.textContent = 'Previous day\'s data';
+        elHeroProgressText.textContent = `Final: ${tops.toFixed(1)} lbs`;
       }
-    } else if (productiveHoursElapsed > 0 && expectedSoFar > 0) {
+    } else if (progressPercent > 0) {
+      const expectedSoFar = (data.current && data.current.todayTarget) || dailyTarget || 0;
       elHeroProgressText.textContent = `${progressPercent.toFixed(0)}% of expected (${expectedSoFar.toFixed(0)} lbs)`;
     } else {
       elHeroProgressText.textContent = 'Shift not started';
@@ -515,11 +515,15 @@ function renderHeroSection(data) {
   if (elHeroRateValue) elHeroRateValue.textContent = todayRate.toFixed(2);
 
   const elHeroTargetValue = document.getElementById('heroTargetValue');
+  const elTargetLabel = document.getElementById('targetLabel');
   if (elHeroTargetValue) {
-    if (predictedTops > 0) {
-      elHeroTargetValue.textContent = `${predictedTops.toFixed(0)} lbs`;
+    if (isHistorical) {
+      // Historical: show actual final total, not a prediction
+      elHeroTargetValue.textContent = tops > 0 ? `${tops.toFixed(0)} lbs` : '--';
+      if (elTargetLabel) elTargetLabel.textContent = 'Final Tops';
     } else {
-      elHeroTargetValue.textContent = '--';
+      elHeroTargetValue.textContent = predictedTops > 0 ? `${predictedTops.toFixed(0)} lbs` : '--';
+      if (elTargetLabel) elTargetLabel.textContent = 'Predicted Tops';
     }
   }
 
