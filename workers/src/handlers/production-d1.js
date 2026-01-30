@@ -81,11 +81,16 @@ const ALL_TIME_SLOTS = [
 let _configCache = null;
 
 async function getConfig(env, key) {
-  const row = await env.DB.prepare(
-    'SELECT value, value_type FROM system_config WHERE key = ?'
-  ).bind(key).first();
-  if (!row) return null;
-  return parseConfigValue(row.value, row.value_type);
+  try {
+    const row = await env.DB.prepare(
+      'SELECT value, value_type FROM system_config WHERE key = ?'
+    ).bind(key).first();
+    if (!row) return null;
+    return parseConfigValue(row.value, row.value_type);
+  } catch {
+    // Table may not exist yet — fall back to null (callers use ?? defaults)
+    return null;
+  }
 }
 
 async function getAllConfig(env, category = null) {
@@ -1181,7 +1186,9 @@ async function dashboard(params, env) {
     }
   }
 
-  const validDays = dailyData.filter((d) => d.totalTops > 0).slice(-7);
+  const validDays = dailyData
+    .filter((d) => d.totalTops > 0 && formatDatePT(d.date, 'yyyy-MM-dd') <= targetDate)
+    .slice(-7);
   const rollingAverage = {
     totalTops: validDays.length > 0 ? validDays.reduce((s, d) => s + d.totalTops, 0) / validDays.length : 0,
     totalSmalls: validDays.length > 0 ? validDays.reduce((s, d) => s + d.totalSmalls, 0) / validDays.length : 0,
@@ -1269,12 +1276,19 @@ async function dashboard(params, env) {
 
   const todayTotalOperatorHours = todayBuckerHours + todayTrimmerHours + todayTZeroHours + todayWaterspiderHours;
 
+  const hoursWithData = todayOperatorData?.hours_with_data || 0;
   const todayData = {
     totalTops: todayTops,
     totalSmalls: todaySmalls,
     totalLbs: todayTotalLbs,
     avgRate: totalTrimmerHours > 0 ? weightedRateSum / totalTrimmerHours : 0,
-    trimmers: scoreboardData.lastHourTrimmers || scoreboardData.currentHourTrimmers || 0,
+    trimmers: isViewingToday
+      ? (scoreboardData.lastHourTrimmers || scoreboardData.currentHourTrimmers || 0)
+      : (hoursWithData > 0 ? Math.round(todayTrimmerHours / hoursWithData) : 0),
+    buckers: isViewingToday
+      ? (scoreboardData.lastHourBuckers || 0)
+      : (hoursWithData > 0 ? Math.round(todayBuckerHours / hoursWithData) : 0),
+    tzero: hoursWithData > 0 ? Math.round(todayTZeroHours / hoursWithData) : 0,
     operatorHours: todayTotalOperatorHours,
     laborCost: todayTotalLaborCost,
     costPerLb: todayBlendedCostPerLb,
@@ -1308,6 +1322,8 @@ async function dashboard(params, env) {
     target: h.target,
     trimmers: h.trimmers,
     lbs: h.lbs,
+    tops: h.lbs,
+    smalls: 0,
   }));
 
   // Get strain snapshot (top 5 strains from last 7 days)
@@ -1321,8 +1337,11 @@ async function dashboard(params, env) {
     hourly,
     rollingAverage,
     strainSnapshot,
+    isHistorical: !isViewingToday,
+    viewingDate: targetDate,
     daily: filteredData.map((d) => ({
       date: formatDatePT(d.date, 'yyyy-MM-dd'),
+      label: formatDatePT(d.date, 'yyyy-MM-dd'),
       totalTops: Math.round(d.totalTops * 10) / 10,
       totalSmalls: Math.round(d.totalSmalls * 10) / 10,
       totalLbs: Math.round(d.totalLbs * 10) / 10,
