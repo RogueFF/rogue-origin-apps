@@ -77,7 +77,7 @@
   </main>
   
   <!-- Edit Modal -->
-  <div id="editModal" class="modal" style="display:none">
+  <div id="editModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" style="display:none">
     <div class="modal-box">
       <div class="modal-head">
         <h2 id="modalTitle">Add Card</h2>
@@ -87,7 +87,7 @@
         <input type="hidden" id="editId">
         <div class="form-group">
           <label class="form-label">Item Name *</label>
-          <input type="text" id="editItem" style="width:100%" placeholder="e.g., Dust Masks">
+          <input type="text" id="editItem" style="width:100%" placeholder="e.g., Dust Masks" aria-required="true">
         </div>
         <div class="form-row">
           <div class="form-group">
