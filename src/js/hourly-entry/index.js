@@ -157,6 +157,8 @@ const LABELS = {
     behind: 'Behind',
     onBreak: 'On Break',
     waiting: 'Waiting',
+    liveScale: 'Live Scale',
+    scaleOf: 'of',
   },
   es: {
     title: 'Entrada por Hora',
@@ -242,6 +244,8 @@ const LABELS = {
     behind: 'Atrasado',
     onBreak: 'En Descanso',
     waiting: 'Esperando',
+    liveScale: 'Báscula en Vivo',
+    scaleOf: 'de',
   },
 };
 
@@ -295,9 +299,10 @@ function cleanupListeners() {
 window.addEventListener('beforeunload', () => {
   cleanupListeners();
   if (saveTimeout) clearTimeout(saveTimeout);
-  // Clear bag timer intervals to prevent memory leaks
+  // Clear bag timer and scale intervals to prevent memory leaks
   if (bagTimerInterval) clearInterval(bagTimerInterval);
   if (bagTimerTickInterval) clearInterval(bagTimerTickInterval);
+  if (scaleInterval) clearInterval(scaleInterval);
 });
 
 // ===================
@@ -2597,6 +2602,7 @@ function escapeHtml(str) {
 
 let bagTimerInterval = null;
 let bagTimerTickInterval = null;
+let scaleInterval = null;
 let lastBagTimestamp = null;
 let timerTargetSeconds = 90 * 60; // Default 90 min target
 let timerAvgSeconds = 0;
@@ -2609,6 +2615,106 @@ let manualShiftStart = null; // Manual shift start time (synced from server)
 
 // SVG constants (matching scoreboard)
 const RING_CIRCUMFERENCE = 2 * Math.PI * 95; // 597
+
+// ===================
+// SCALE WEIGHT (Live scale circle above bag timer)
+// ===================
+
+/**
+ * Initialize scale polling (called from initBagTimer)
+ */
+function initScale() {
+  loadScaleData(); // Initial load
+  scaleInterval = setInterval(loadScaleData, 1000); // 1-second polling
+}
+
+/**
+ * Fetch scale weight from API and render
+ */
+async function loadScaleData() {
+  try {
+    const response = await fetch(`${API_URL}?action=scaleWeight`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const result = await response.json();
+    const data = result.data || result;
+    renderScale(data);
+  } catch (error) {
+    // Show stale state on error
+    renderScale(null);
+  }
+}
+
+/**
+ * Render scale weight display (circular ring)
+ * @param {Object|null} scaleData - Scale data from API
+ */
+function renderScale(scaleData) {
+  const statusDot = document.getElementById('scaleStatusDot');
+  const weightEl = document.getElementById('scaleWeight');
+  const scaleLabel = document.getElementById('scaleWeightLabel');
+  const scaleRing = document.getElementById('scaleRing');
+
+  if (!scaleData) {
+    if (statusDot) {
+      statusDot.classList.remove('connected');
+      statusDot.classList.add('stale');
+    }
+    if (weightEl) {
+      weightEl.textContent = '—';
+      weightEl.className = 'scale-value stale';
+    }
+    if (scaleLabel) {
+      const ofLabel = LABELS[currentLang]?.scaleOf || 'of';
+      scaleLabel.textContent = `${ofLabel} 5.0 kg`;
+    }
+    if (scaleRing) {
+      scaleRing.style.strokeDashoffset = RING_CIRCUMFERENCE;
+      scaleRing.setAttribute('class', 'scale-ring-progress stale');
+    }
+    return;
+  }
+
+  const weight = scaleData.weight || 0;
+  const targetWeight = scaleData.targetWeight || 5.0;
+  const percent = scaleData.percentComplete || 0;
+  const isStale = scaleData.isStale !== false;
+
+  // Determine color state
+  let colorClass = 'filling';
+  if (isStale) {
+    colorClass = 'stale';
+  } else if (percent >= 100) {
+    colorClass = 'at-target';
+  } else if (percent >= 90) {
+    colorClass = 'near-target';
+  }
+
+  // Update status dot
+  if (statusDot) {
+    statusDot.classList.toggle('connected', !isStale);
+    statusDot.classList.toggle('stale', isStale);
+  }
+
+  // Update weight value
+  if (weightEl) {
+    weightEl.textContent = isStale ? '—' : weight.toFixed(2) + ' kg';
+    weightEl.className = 'scale-value ' + colorClass;
+  }
+
+  // Update label
+  if (scaleLabel) {
+    const ofLabel = LABELS[currentLang]?.scaleOf || 'of';
+    scaleLabel.textContent = `${ofLabel} ${targetWeight.toFixed(1)} kg`;
+  }
+
+  // Update circular ring progress
+  if (scaleRing) {
+    const progress = isStale ? 0 : Math.min(1, percent / 100);
+    const offset = RING_CIRCUMFERENCE * (1 - progress);
+    scaleRing.style.strokeDashoffset = offset;
+    scaleRing.setAttribute('class', 'scale-ring-progress ' + colorClass);
+  }
+}
 
 // Break schedule (PST) - must match scoreboard config
 const TIMER_BREAKS = [
@@ -2881,6 +2987,8 @@ function initBagTimer() {
   bagTimerInterval = setInterval(checkBagTimerVersion, 3000);
   // Update countdown every second
   bagTimerTickInterval = setInterval(updateBagTimerTick, 1000);
+  // Start scale polling
+  initScale();
 }
 
 /**
@@ -3199,10 +3307,11 @@ function updateVsTargetStat(avgSeconds, targetSeconds) {
   }
 }
 
-// Cleanup bag timer on page unload
+// Cleanup bag timer and scale on page unload
 window.addEventListener('beforeunload', () => {
   if (bagTimerInterval) clearInterval(bagTimerInterval);
   if (bagTimerTickInterval) clearInterval(bagTimerTickInterval);
+  if (scaleInterval) clearInterval(scaleInterval);
 });
 
 // Initialize barcode and timer after cultivars load
