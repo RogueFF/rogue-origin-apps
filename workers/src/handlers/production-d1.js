@@ -1145,8 +1145,9 @@ async function dashboard(params, env) {
   const today = formatDatePT(new Date(), 'yyyy-MM-dd');
   // Use requested end date if provided, otherwise use today
   const targetDate = end || start || today;
-  const scoreboardData = await getScoreboardData(env);
-  const timerData = await getBagTimerData(env);
+  const isViewingToday = targetDate === today;
+  const scoreboardData = await getScoreboardData(env, isViewingToday ? null : targetDate);
+  const timerData = await getBagTimerData(env, isViewingToday ? null : targetDate);
 
   // Calculate days to fetch based on requested date range
   let daysToFetch = 30; // default
@@ -2500,6 +2501,27 @@ export async function handleProductionD1(request, env, ctx) {
         return await getCultivars(env);
       case 'analyzeStrain':
         return await analyzeStrain(params, env);
+      case 'testConfig': {
+        // Test if system_config table exists and has data
+        try {
+          const count = await env.DB.prepare('SELECT COUNT(*) as count FROM system_config').first();
+          const sample = await env.DB.prepare('SELECT key, value, category FROM system_config LIMIT 3').all();
+          return successResponse({
+            test: 'config endpoints work',
+            timestamp: new Date().toISOString(),
+            tableExists: true,
+            rowCount: count?.count || 0,
+            sampleRows: sample?.results || []
+          });
+        } catch (e) {
+          return successResponse({
+            test: 'config endpoints work',
+            timestamp: new Date().toISOString(),
+            tableExists: false,
+            error: e.message
+          });
+        }
+      }
       case 'getConfig': {
         const category = params.category || null;
         const configData = await getAllConfig(env, category);
