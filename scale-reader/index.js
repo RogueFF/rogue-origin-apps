@@ -130,27 +130,46 @@ function initSerialPort() {
       parity: 'none',
     });
 
-    const parser = serialPort.pipe(new ReadlineParser({ delimiter: '\r\n' }));
+    let buffer = '';
 
     serialPort.on('open', () => {
       console.log(`  Connected to scale on ${comPort}\n`);
       isConnected = true;
+
+      // Poll scale for weight every 500ms (Brecknell/NCI protocol)
+      setInterval(() => {
+        if (serialPort.isOpen) {
+          // Send weight request command (NCI protocol: 'W' or 'P')
+          serialPort.write('W\r\n');
+        }
+      }, 500);
     });
 
-    parser.on('data', (data) => {
-      // Brecknell GP100 format: "  4.72 kg" or similar
-      // Parse the weight value from the response
-      const match = data.match(/([\d.]+)\s*(kg|lb)/i);
-      if (match) {
-        let weight = parseFloat(match[1]);
-        const unit = match[2].toLowerCase();
+    serialPort.on('data', (data) => {
+      // Buffer incoming bytes since scale sends one byte at a time
+      buffer += data.toString('ascii');
 
-        // Convert lbs to kg if needed
-        if (unit === 'lb') {
-          weight = weight * 0.453592;
+      // Process complete lines (ending with \r\n or \n)
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        // Brecknell GP100 format: "  4.72 kg" or "    2.4lb"
+        // Parse the weight value from the response
+        const match = line.match(/([\d.]+)\s*(kg|lb)/i);
+        if (match) {
+          let weight = parseFloat(match[1]);
+          const unit = match[2].toLowerCase();
+
+          // Convert lbs to kg if needed
+          if (unit === 'lb') {
+            weight = weight * 0.453592;
+          }
+
+          currentWeight = Math.max(0, Math.round(weight * 100) / 100);
+          console.log(`  Weight: ${currentWeight.toFixed(2)} kg (${match[1]} ${unit})`);
         }
-
-        currentWeight = Math.max(0, Math.round(weight * 100) / 100);
       }
     });
 
