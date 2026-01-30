@@ -432,6 +432,7 @@ async function getScoreboardData(env, date = null) {
         rate,
         target: targetRate,
         trimmers: row.trimmers,
+        buckers: row.buckers,
         lbs: row.tops,
         smalls: row.smalls,
       });
@@ -1324,6 +1325,7 @@ async function dashboard(params, env) {
     rate: h.rate,
     target: h.target,
     trimmers: h.trimmers,
+    buckers: h.buckers || 0,
     lbs: h.lbs,
     tops: h.lbs,
     smalls: h.smalls || 0,
