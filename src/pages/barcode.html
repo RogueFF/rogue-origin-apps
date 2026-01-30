@@ -428,7 +428,7 @@
         return;
       }
       
-      document.getElementById('cultivarName').innerHTML = '<i class="ph-duotone ph-plant" style="margin-right:6px"></i> ' + selectedCultivar;
+      document.getElementById('cultivarName').innerHTML = '<i class="ph-duotone ph-plant" style="margin-right:6px"></i> ' + escapeHtml(selectedCultivar);
       document.getElementById('currentCultivar').classList.add('show');
       document.getElementById('productSections').style.display = 'grid';
       document.getElementById('noCultivar').style.display = 'none';
