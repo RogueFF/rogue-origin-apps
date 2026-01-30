@@ -1930,8 +1930,8 @@
             '<div class="sop-card-dept"><i class="ph-duotone ph-folder"></i> ' + esc(s.dept) + '</div></div>' +
             '<span class="sop-card-rev ' + (s.status === 'draft' ? 'draft' : '') + '">' + (s.status === 'draft' ? 'Draft' : 'v' + s.revision) + '</span>' +
           '</div>' +
-          '<div class="sop-card-preview">' + 
-            (firstImg ? '<img src="' + firstImg + '" onerror="this.outerHTML=\'<div class=sop-card-preview-empty><i class=ph-duotone\\ ph-image></i>No image</div>\'">' : '<div class="sop-card-preview-empty"><i class="ph-duotone ph-image"></i>No image</div>') +
+          '<div class="sop-card-preview">' +
+            (firstImg ? '<img src="' + esc(firstImg) + '" onerror="this.outerHTML=\'<div class=sop-card-preview-empty><i class=ph-duotone\\ ph-image></i>No image</div>\'">' : '<div class="sop-card-preview-empty"><i class="ph-duotone ph-image"></i>No image</div>') +
           '</div>' +
           '<div class="sop-card-meta">' +
             '<div class="sop-card-steps"><i class="ph-duotone ph-list-numbers"></i> ' + (s.steps ? s.steps.length : 0) + ' steps</div>' +
@@ -2008,18 +2008,18 @@
       const reqDept = document.getElementById('reqDept');
       const tagFilter = document.getElementById('tagFilter');
       
-      deptFilter.innerHTML = '<option value="">All Departments</option>' + settings.departments.map(d => '<option value="' + d.name + '">' + d.name + '</option>').join('');
-      sopDept.innerHTML = '<option value="">Select department...</option>' + settings.departments.map(d => '<option value="' + d.name + '">' + d.name + '</option>').join('');
-      reqDept.innerHTML = '<option value="">Any</option>' + settings.departments.map(d => '<option value="' + d.name + '">' + d.name + '</option>').join('');
-      tagFilter.innerHTML = '<option value="">All Tags</option>' + settings.tags.map(t => '<option value="' + t.name + '">' + t.name.charAt(0).toUpperCase() + t.name.slice(1) + '</option>').join('');
+      deptFilter.innerHTML = '<option value="">All Departments</option>' + settings.departments.map(d => '<option value="' + esc(d.name) + '">' + esc(d.name) + '</option>').join('');
+      sopDept.innerHTML = '<option value="">Select department...</option>' + settings.departments.map(d => '<option value="' + esc(d.name) + '">' + esc(d.name) + '</option>').join('');
+      reqDept.innerHTML = '<option value="">Any</option>' + settings.departments.map(d => '<option value="' + esc(d.name) + '">' + esc(d.name) + '</option>').join('');
+      tagFilter.innerHTML = '<option value="">All Tags</option>' + settings.tags.map(t => '<option value="' + esc(t.name) + '">' + esc(t.name.charAt(0).toUpperCase() + t.name.slice(1)) + '</option>').join('');
       
       renderEditTags();
     }
     
     function renderEditTags() {
       const list = document.getElementById('editTagsList');
-      list.innerHTML = settings.tags.map(t => 
-        '<div class="tag-item"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="tag_' + t.name + '"><span class="sop-tag ' + t.color + '">' + t.name + '</span></label></div>'
+      list.innerHTML = settings.tags.map(t =>
+        '<div class="tag-item"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="tag_' + esc(t.name) + '"><span class="sop-tag ' + esc(t.color) + '">' + esc(t.name) + '</span></label></div>'
       ).join('') + '<button type="button" class="add-tag-btn" onclick="showInlineAdd(\'tag\')"><i class="ph-duotone ph-plus"></i> Add</button>';
       renderInlineTagColors();
     }
@@ -2504,9 +2504,9 @@
         backBtn +
         '<div class="view-sop-header"><div><div class="view-sop-title">' + esc(title) + '</div>' +
         '<div class="view-sop-meta">' +
-          '<div class="view-sop-meta-item"><i class="ph-duotone ph-folder"></i> ' + s.dept + '</div>' +
-          '<div class="view-sop-meta-item"><i class="ph-duotone ph-hash"></i> ' + (s.docNum || 'N/A') + '</div>' +
-          '<div class="view-sop-meta-item"><i class="ph-duotone ph-git-branch"></i> Rev ' + (s.revision || '1.0') + '</div>' +
+          '<div class="view-sop-meta-item"><i class="ph-duotone ph-folder"></i> ' + esc(s.dept) + '</div>' +
+          '<div class="view-sop-meta-item"><i class="ph-duotone ph-hash"></i> ' + esc(s.docNum || 'N/A') + '</div>' +
+          '<div class="view-sop-meta-item"><i class="ph-duotone ph-git-branch"></i> Rev ' + esc(s.revision || '1.0') + '</div>' +
           '<div class="view-sop-meta-item"><i class="ph-duotone ph-calendar"></i> ' + fmtDate(s.updatedAt) + '</div>' +
         '</div>' +
         (desc ? '<p style="margin-top:12px;color:var(--text-muted)">' + esc(desc) + '</p>' : '') +
@@ -2590,7 +2590,7 @@
               '</div>';
             } else {
               mediaPreviewHtml = '<div class="step-media-preview" style="position:relative;width:100%;height:100%;">' +
-                '<video src="' + mediaUrl + '" style="width:100%;height:100%;object-fit:cover;" muted playsinline></video>' +
+                '<video src="' + esc(mediaUrl) + '" style="width:100%;height:100%;object-fit:cover;" muted playsinline></video>' +
                 '<div class="video-play-overlay"><i class="ph-duotone ph-play"></i></div>' +
                 '<span class="media-type-badge"><i class="ph-duotone ph-video-camera"></i></span>' +
               '</div>';
@@ -2598,7 +2598,7 @@
           } else {
             // Check if it's a base64 image (editable) vs URL image (not editable)
             const isBase64Image = mediaUrl.startsWith('data:image');
-            mediaPreviewHtml = '<img src="' + mediaUrl + '">';
+            mediaPreviewHtml = '<img src="' + esc(mediaUrl) + '">';
             if (isBase64Image) {
               mediaPreviewHtml += '<button type="button" class="step-image-edit-btn" onclick="event.stopPropagation(); openAnnotationEditor(' + i + ')" title="Edit Image"><i class="ph-duotone ph-pencil-simple"></i></button>';
             }
@@ -2693,14 +2693,14 @@
     // =====================================================
     
     function renderSettingsDepts() {
-      document.getElementById('settingsDeptList').innerHTML = settings.departments.map(d => 
-        '<div class="settings-item"><i class="ph-duotone ' + (d.icon || 'ph-folder') + '"></i><span>' + d.name + '</span><button class="item-delete" onclick="deleteDepartment(\'' + d.name + '\')"><i class="ph-duotone ph-x"></i></button></div>'
+      document.getElementById('settingsDeptList').innerHTML = settings.departments.map(d =>
+        '<div class="settings-item"><i class="ph-duotone ' + esc(d.icon || 'ph-folder') + '"></i><span>' + esc(d.name) + '</span><button class="item-delete" onclick="deleteDepartment(\'' + esc(d.name) + '\')"><i class="ph-duotone ph-x"></i></button></div>'
       ).join('');
     }
-    
+
     function renderSettingsTags() {
-      document.getElementById('settingsTagList').innerHTML = settings.tags.map(t => 
-        '<div class="settings-item"><span class="sop-tag ' + t.color + '">' + t.name + '</span><button class="item-delete" onclick="deleteTag(\'' + t.name + '\')"><i class="ph-duotone ph-x"></i></button></div>'
+      document.getElementById('settingsTagList').innerHTML = settings.tags.map(t =>
+        '<div class="settings-item"><span class="sop-tag ' + esc(t.color) + '">' + esc(t.name) + '</span><button class="item-delete" onclick="deleteTag(\'' + esc(t.name) + '\')"><i class="ph-duotone ph-x"></i></button></div>'
       ).join('');
     }
     

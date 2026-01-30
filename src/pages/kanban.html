@@ -701,7 +701,7 @@ function updateSuppliers() {
   allCards.forEach(function(c) { if (c.supplier) s[c.supplier] = 1; });
   var sel = document.getElementById('supplierFilter');
   sel.innerHTML = '<option value="">All Suppliers</option>';
-  Object.keys(s).forEach(function(k) { sel.innerHTML += '<option>' + k + '</option>'; });
+  Object.keys(s).forEach(function(k) { sel.innerHTML += '<option>' + esc(k) + '</option>'; });
   document.getElementById('suppliers').textContent = Object.keys(s).length;
 }
 
