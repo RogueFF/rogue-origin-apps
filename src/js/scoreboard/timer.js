@@ -182,7 +182,9 @@
    */
   function getAvailableProductiveHours(shiftStart) {
     var shiftEnd = new Date();
-    shiftEnd.setHours(16, 30, 0, 0);  // 4:30 PM fixed
+    var endHr = (Config && Config.workday && Config.workday.endHour) || 16;
+    var endMn = (Config && Config.workday && Config.workday.endMin) || 30;
+    shiftEnd.setHours(endHr, endMn, 0, 0);
 
     var totalMinutes = (shiftEnd - shiftStart) / 60000;
 
