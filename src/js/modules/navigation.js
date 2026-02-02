@@ -247,5 +247,5 @@ export function initViewportTracking() {
  */
 export function cleanupNavigation() {
   cleanupAllListeners();
-  console.log('[Navigation] Cleanup complete');
+  console.debug('[Navigation] Cleanup complete');
 }

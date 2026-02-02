@@ -41,7 +41,7 @@ export function registerEventListener(target, eventType, handler, options = fals
   // Add the event listener
   target.addEventListener(eventType, handler, options);
 
-  console.log(`[EventCleanup] Registered listener #${listenerId}: ${eventType} on`, target);
+  console.debug(`[EventCleanup] Registered listener #${listenerId}: ${eventType} on`, target);
 
   return listenerId;
 }
@@ -64,7 +64,7 @@ export function unregisterEventListener(listenerId) {
   try {
     target.removeEventListener(eventType, handler, options);
     listenerRegistry.delete(listenerId);
-    console.log(`[EventCleanup] Unregistered listener #${listenerId}: ${eventType}`);
+    console.debug(`[EventCleanup] Unregistered listener #${listenerId}: ${eventType}`);
     return true;
   } catch (error) {
     console.error(`[EventCleanup] Error removing listener #${listenerId}:`, error);
@@ -86,7 +86,7 @@ export function cleanupAllListeners() {
     return 0;
   }
 
-  console.log(`[EventCleanup] Cleaning up ${count} registered listeners...`);
+  console.debug(`[EventCleanup] Cleaning up ${count} registered listeners...`);
 
   // Iterate through all registered listeners
   listenerRegistry.forEach((listener, listenerId) => {
@@ -94,7 +94,7 @@ export function cleanupAllListeners() {
     
     try {
       target.removeEventListener(eventType, handler, options);
-      console.log(`[EventCleanup] Removed listener #${listenerId}: ${eventType}`);
+      console.debug(`[EventCleanup] Removed listener #${listenerId}: ${eventType}`);
     } catch (error) {
       console.warn(`[EventCleanup] Failed to remove listener #${listenerId}:`, error);
     }
@@ -103,7 +103,7 @@ export function cleanupAllListeners() {
   // Clear the registry
   listenerRegistry.clear();
   
-  console.log(`[EventCleanup] Cleanup complete. ${count} listeners removed.`);
+  console.debug(`[EventCleanup] Cleanup complete. ${count} listeners removed.`);
   return count;
 }
 

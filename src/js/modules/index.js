@@ -645,7 +645,7 @@ function setupResizeHandler() {
           try {
             kpiGrid.destroy();
             setGrid('kpi', null);
-            console.log('KPI Muuri destroyed for mobile view');
+            console.debug('KPI Muuri destroyed for mobile view');
           } catch (e) {
             console.warn('Error destroying KPI Muuri:', e);
             setGrid('kpi', null);
@@ -657,7 +657,7 @@ function setupResizeHandler() {
             widgetGrid.destroy();
             setGrid('widgets', null);
             document.body.classList.remove('muuri-active');
-            console.log('Widget Muuri destroyed for mobile view');
+            console.debug('Widget Muuri destroyed for mobile view');
           } catch (e) {
             console.warn('Error destroying widget Muuri:', e);
             setGrid('widgets', null);
@@ -887,7 +887,7 @@ window.explicitSaveLayout = function() {
 };
 
 window.startTutorial = function() {
-  console.log('Tutorial not yet implemented in modular version');
+  console.debug('Tutorial not yet implemented in modular version');
   showToast('Tutorial coming soon', 'info', 2000);
 };
 
@@ -908,7 +908,7 @@ window.dismissWelcome = function() {
 };
 
 window.showWidgetHelp = function(widgetId) {
-  console.log('Widget help not yet implemented:', widgetId);
+  console.debug('Widget help not yet implemented:', widgetId);
   showToast('Help coming soon', 'info', 2000);
 };
 
