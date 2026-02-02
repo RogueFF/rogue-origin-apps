@@ -418,7 +418,7 @@
       if (toggleBtn) toggleBtn.classList.remove('active');
     }
 
-    console.log('Order queue toggled:', newState ? 'visible' : 'hidden');
+    console.debug('Order queue toggled:', newState ? 'visible' : 'hidden');
   }
 
   /**
@@ -467,7 +467,7 @@
       if (divider) divider.classList.remove('hidden');
     }
 
-    console.log('AVG/BEST toggled:', newState ? 'hidden' : 'visible');
+    console.debug('AVG/BEST toggled:', newState ? 'hidden' : 'visible');
   }
 
   /**
