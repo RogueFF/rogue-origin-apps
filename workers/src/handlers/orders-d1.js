@@ -103,7 +103,7 @@ async function validatePassword(params, env) {
     const sessionToken = btoa(`${timestamp}-${random}`).substring(0, 32);
     return successResponse({ success: true, sessionToken, expiresIn: 30 * 24 * 60 * 60 * 1000 });
   }
-  return successResponse({ success: false, error: 'Invalid password' });
+  throw createError('UNAUTHORIZED', 'Invalid password');
 }
 
 // ===== CUSTOMERS =====

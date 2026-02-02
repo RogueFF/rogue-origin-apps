@@ -61,7 +61,7 @@ export async function handleLogin(event) {
     const raw = await response.json();
     const result = raw.data || raw;
 
-    if (result.success) {
+    if (response.ok && result.success) {
       // Correct password - save session token
       const session = {
         sessionToken: result.sessionToken,
@@ -73,7 +73,7 @@ export async function handleLogin(event) {
       unlockPage();
       passwordInput.value = '';
     } else {
-      showLoginError(errorEl, result.error || 'Invalid password');
+      showLoginError(errorEl, result.error || result.message || 'Invalid password');
       passwordInput.value = '';
       passwordInput.focus();
 
