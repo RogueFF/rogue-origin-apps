@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <link rel="icon" type="image/png" href="/rogue-origin-apps/favicon.png">
+  <meta name="theme-color" content="#668971">
+  <title>Consignment - Rogue Origin</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=optional" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/duotone/style.css">
+
+  <link rel="stylesheet" href="../css/shared-base.css">
+  <link rel="stylesheet" href="../css/consignment.css">
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar" role="navigation" aria-label="Main navigation">
+    <div class="sidebar-toggle" onclick="toggleSidebar()" role="button" tabindex="0" aria-label="Collapse sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 19l-7-7 7-7M18 19l-7-7 7-7"/></svg>
+      <span class="sidebar-toggle-label">Collapse</span>
+    </div>
+    <div class="brand">
+      <img src="/rogue-origin-apps/favicon.png" alt="Rogue Origin" width="32" height="32">
+      <h1>Rogue Origin</h1>
+    </div>
+    <nav>
+      <div class="nav-item" onclick="window.location.href='index.html'" role="button" tabindex="0" aria-label="Navigate to Dashboard"><span class="icon"><i class="ph-duotone ph-chart-pie-slice"></i></span><span>Dashboard</span></div>
+      <div class="nav-item" onclick="window.location.href='kanban.html'" role="button" tabindex="0" aria-label="Navigate to Supply Kanban"><span class="icon"><i class="ph-duotone ph-package"></i></span><span>Supply Kanban</span></div>
+      <div class="nav-item" onclick="window.location.href='scoreboard.html'" role="button" tabindex="0" aria-label="Navigate to Scoreboard"><span class="icon"><i class="ph-duotone ph-gauge"></i></span><span>Scoreboard</span></div>
+      <div class="nav-item" onclick="window.location.href='barcode.html'" role="button" tabindex="0" aria-label="Navigate to Barcode Printer"><span class="icon"><i class="ph-duotone ph-barcode"></i></span><span>Barcode Printer</span></div>
+      <div class="nav-item" onclick="window.location.href='sop-manager.html'" role="button" tabindex="0" aria-label="Navigate to SOP Manager"><span class="icon"><i class="ph-duotone ph-book-open-text"></i></span><span>SOP Manager</span></div>
+      <div class="nav-item" onclick="window.location.href='orders.html'" role="button" tabindex="0" aria-label="Navigate to Orders"><span class="icon"><i class="ph-duotone ph-clipboard-text"></i></span><span>Orders</span></div>
+      <div class="nav-item active" aria-current="page"><span class="icon"><i class="ph-duotone ph-handshake"></i></span><span>Consignment</span></div>
+      <div class="nav-item" onclick="window.location.href='hourly-entry.html'" role="button" tabindex="0" aria-label="Navigate to Floor Manager"><span class="icon"><i class="ph-duotone ph-user-gear"></i></span><span>Floor Manager</span></div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar">RO</div>
+        <div>
+          <div style="font-weight:600;font-size:13px;color:white">Rogue Origin</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.5)">Administrator</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main" id="main-content">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <button class="mobile-menu-btn" onclick="toggleSidebar()" aria-label="Open menu">☰</button>
+        <h2 class="page-title">Consignment</h2>
+      </div>
+      <div class="header-right">
+        <button id="btn-dark-mode" class="header-btn">Dark</button>
+        <button id="btn-refresh" class="header-btn"><i class="ph-duotone ph-arrows-clockwise"></i> Refresh</button>
+      </div>
+    </header>
+
+    <!-- Partner Balance Cards -->
+    <section class="section-header">
+      <h3 class="section-title">Partners</h3>
+      <button id="btn-add-partner" class="add-partner-btn"><i class="ph-duotone ph-plus"></i> Add Partner</button>
+    </section>
+    <div id="partner-cards" class="partner-cards">
+      <div class="empty-state"><p>Loading...</p></div>
+    </div>
+
+    <!-- Partner Detail Panel -->
+    <div id="partner-detail" class="partner-detail"></div>
+
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+      <button id="btn-new-intake" class="quick-action-btn intake"><i class="ph-duotone ph-download-simple"></i> New Intake</button>
+      <button id="btn-record-sale" class="quick-action-btn sale"><i class="ph-duotone ph-tag"></i> Record Sale</button>
+      <button id="btn-record-payment" class="quick-action-btn payment"><i class="ph-duotone ph-money"></i> Record Payment</button>
+    </div>
+
+    <!-- Activity Feed -->
+    <section>
+      <div class="section-header">
+        <h3 class="section-title">Activity</h3>
+        <div class="filter-bar">
+          <select id="activity-filter" class="partner-select" aria-label="Filter by partner">
+            <option value="">All Partners</option>
+          </select>
+        </div>
+      </div>
+      <div id="activity-feed" class="activity-feed">
+        <div class="empty-state"><p>Loading...</p></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ═══ MODALS ═══ -->
+
+  <!-- Intake Modal -->
+  <div id="intake-modal" class="modal-overlay" role="dialog" aria-label="New Intake">
+    <div class="modal">
+      <h2><i class="ph-duotone ph-download-simple"></i> New Intake</h2>
+      <button class="modal-close" aria-label="Close">&times;</button>
+      <form id="intake-form">
+        <div class="form-group">
+          <label for="intake-partner">Partner</label>
+          <select id="intake-partner" class="partner-select" required></select>
+        </div>
+        <div class="form-group">
+          <label for="intake-strain">Strain</label>
+          <select id="intake-strain" class="strain-select" required></select>
+        </div>
+        <div class="form-group">
+          <label>Type</label>
+          <div class="toggle-group">
+            <button type="button" class="toggle-option active" data-value="tops">Tops</button>
+            <button type="button" class="toggle-option" data-value="smalls">Smalls</button>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="intake-weight">Weight (lbs)</label>
+            <input type="number" id="intake-weight" step="0.1" min="0.1" required>
+          </div>
+          <div class="form-group">
+            <label for="intake-price">Price per lb ($)</label>
+            <input type="number" id="intake-price" step="0.01" min="0.01" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="intake-date">Date</label>
+          <input type="date" id="intake-date" required>
+        </div>
+        <div class="form-group">
+          <label for="intake-notes">Notes (optional)</label>
+          <textarea id="intake-notes" rows="2"></textarea>
+        </div>
+        <button type="submit" class="submit-btn intake">Record Intake</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Sale Modal -->
+  <div id="sale-modal" class="modal-overlay" role="dialog" aria-label="Record Sale">
+    <div class="modal">
+      <h2><i class="ph-duotone ph-tag"></i> Record Sale</h2>
+      <button class="modal-close" aria-label="Close">&times;</button>
+      <form id="sale-form">
+        <div class="form-group">
+          <label for="sale-partner">Partner</label>
+          <select id="sale-partner" class="partner-select" required></select>
+        </div>
+        <div class="form-group">
+          <label for="sale-strain">Strain</label>
+          <select id="sale-strain" class="strain-select" required></select>
+        </div>
+        <div class="form-group">
+          <label>Type</label>
+          <div class="toggle-group">
+            <button type="button" class="toggle-option active" data-value="tops">Tops</button>
+            <button type="button" class="toggle-option" data-value="smalls">Smalls</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="sale-weight">Weight (lbs)</label>
+          <input type="number" id="sale-weight" step="0.1" min="0.1" required>
+          <span id="sale-available" class="field-hint"></span>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="sale-price">Sale Price per lb ($)</label>
+            <input type="number" id="sale-price" step="0.01" min="0">
+          </div>
+          <div class="form-group">
+            <label for="sale-channel">Channel</label>
+            <select id="sale-channel">
+              <option value="retail">Retail</option>
+              <option value="wholesale">Wholesale</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="sale-date">Date</label>
+          <input type="date" id="sale-date" required>
+        </div>
+        <div class="form-group">
+          <label for="sale-notes">Notes (optional)</label>
+          <textarea id="sale-notes" rows="2"></textarea>
+        </div>
+        <button type="submit" class="submit-btn sale">Record Sale</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Payment Modal -->
+  <div id="payment-modal" class="modal-overlay" role="dialog" aria-label="Record Payment">
+    <div class="modal">
+      <h2><i class="ph-duotone ph-money"></i> Record Payment</h2>
+      <button class="modal-close" aria-label="Close">&times;</button>
+      <form id="payment-form">
+        <div class="form-group">
+          <label for="payment-partner">Partner</label>
+          <select id="payment-partner" class="partner-select" required></select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="payment-amount">Amount ($)</label>
+            <input type="number" id="payment-amount" step="0.01" min="0.01" required>
+          </div>
+          <div class="form-group">
+            <label for="payment-method">Method</label>
+            <select id="payment-method">
+              <option value="check">Check</option>
+              <option value="cash">Cash</option>
+              <option value="transfer">Transfer</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="payment-ref">Reference # (optional)</label>
+          <input type="text" id="payment-ref" placeholder="Check number, etc.">
+        </div>
+        <div class="form-group">
+          <label for="payment-date">Date</label>
+          <input type="date" id="payment-date" required>
+        </div>
+        <div class="form-group">
+          <label for="payment-notes">Notes (optional)</label>
+          <textarea id="payment-notes" rows="2"></textarea>
+        </div>
+        <button type="submit" class="submit-btn payment">Record Payment</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Partner Modal -->
+  <div id="partner-modal" class="modal-overlay" role="dialog" aria-label="Add Partner">
+    <div class="modal">
+      <h2><i class="ph-duotone ph-user-plus"></i> Add Partner</h2>
+      <button class="modal-close" aria-label="Close">&times;</button>
+      <form id="partner-form">
+        <div class="form-group">
+          <label for="partner-name">Farm Name</label>
+          <input type="text" id="partner-name" required placeholder="e.g. Mountain Creek Farm">
+        </div>
+        <div class="form-group">
+          <label for="partner-contact">Contact Name (optional)</label>
+          <input type="text" id="partner-contact">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="partner-email">Email (optional)</label>
+            <input type="email" id="partner-email">
+          </div>
+          <div class="form-group">
+            <label for="partner-phone">Phone (optional)</label>
+            <input type="tel" id="partner-phone">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="partner-notes">Notes (optional)</label>
+          <textarea id="partner-notes" rows="2"></textarea>
+        </div>
+        <button type="submit" class="submit-btn intake">Add Partner</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Sidebar Script -->
+  <script>
+    function toggleSidebar() {
+      const sb = document.getElementById('sidebar');
+      sb.classList.toggle('collapsed');
+      document.querySelector('.main').classList.toggle('sidebar-collapsed');
+    }
+  </script>
+
+  <!-- App -->
+  <script type="module" src="../js/consignment/main.js"></script>
+</body>
+</html>
