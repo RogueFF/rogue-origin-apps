@@ -296,8 +296,8 @@ export function sendAIMessage() {
     typingDiv.remove();
 
     // Debug: log the actual response structure
-    console.log('[AI Chat] Backend response:', response);
-    console.log('[AI Chat] Response keys:', Object.keys(response || {}));
+    console.debug('[AI Chat] Backend response:', response);
+    console.debug('[AI Chat] Response keys:', Object.keys(response || {}));
 
     // Handle error responses from backend
     if (response && response.success === false && response.error) {
@@ -485,7 +485,7 @@ export function submitAIFeedback(button, rating, messageId) {
   if (isAppsScript()) {
     google.script.run
       .withSuccessHandler(function(response) {
-        console.log('Feedback logged:', response);
+        console.debug('Feedback logged:', response);
         // Show brief confirmation
         button.innerHTML = rating === 'up' ? '✓👍' : '✓👎';
         setTimeout(function() {
@@ -511,7 +511,7 @@ export function submitAIFeedback(button, rating, messageId) {
     .then(function(raw) {
       // Handle Vercel response wrapper
       const response = raw.data || raw;
-      console.log('Feedback logged:', response);
+      console.debug('Feedback logged:', response);
       // Show brief confirmation
       button.innerHTML = rating === 'up' ? '✓👍' : '✓👎';
       setTimeout(function() {
