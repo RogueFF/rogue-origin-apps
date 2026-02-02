@@ -304,7 +304,7 @@ export function loadData() {
   // Wrapper to check if response is from latest request
   const onDataLoadedChecked = function(result) {
     if (requestId !== requestCounter) {
-      console.log('Discarding stale API response (request #' + requestId + ', current #' + requestCounter + ')');
+      console.debug('Discarding stale API response (request #' + requestId + ', current #' + requestCounter + ')');
       return;
     }
     onDataLoaded(result);
@@ -333,7 +333,7 @@ export function loadData() {
         function(fetchedData, meta) {
           // Race condition check: discard stale responses
           if (requestId !== requestCounter) {
-            console.log('Discarding stale API response (request #' + requestId + ', current #' + requestCounter + ')');
+            console.debug('Discarding stale API response (request #' + requestId + ', current #' + requestCounter + ')');
             return;
           }
 
@@ -355,7 +355,7 @@ export function loadData() {
       ).catch(function(error) {
         // Ignore AbortError - this is expected when request is cancelled
         if (error.name === 'AbortError') {
-          console.log('Fetch aborted - newer request in progress');
+          console.debug('Fetch aborted - newer request in progress');
 
         }
         // Error already handled by onError callback in fetchDashboardData
@@ -399,7 +399,7 @@ export function loadData() {
       .then(function(result) {
         // Race condition check: discard stale responses
         if (requestId !== requestCounter) {
-          console.log('Discarding stale API response (request #' + requestId + ', current #' + requestCounter + ')');
+          console.debug('Discarding stale API response (request #' + requestId + ', current #' + requestCounter + ')');
           return;
         }
 
@@ -413,7 +413,7 @@ export function loadData() {
       })
       .catch(function(error) {
         if (error.name === 'AbortError') {
-          console.log('Fetch aborted - newer request in progress');
+          console.debug('Fetch aborted - newer request in progress');
           return;
         }
         onError(error);
@@ -555,7 +555,7 @@ export function loadCompareDataFetch(cs, ce, ps, pe) {
     }).catch(function(error) {
       // Ignore AbortError - this is expected when request is cancelled
       if (error.name === 'AbortError') {
-        console.log('Compare fetch aborted - newer request in progress');
+        console.debug('Compare fetch aborted - newer request in progress');
         return;
       }
       onError(error);
@@ -594,7 +594,7 @@ export function loadCompareDataFetch(cs, ce, ps, pe) {
       }
     }).catch(function(error) {
       if (error.name === 'AbortError') {
-        console.log('Compare fetch aborted - newer request in progress');
+        console.debug('Compare fetch aborted - newer request in progress');
         return;
       }
       onError(error);
