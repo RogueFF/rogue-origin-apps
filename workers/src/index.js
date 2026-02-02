@@ -82,7 +82,7 @@ export default {
 
       // Add CORS headers to response
       const headers = new Headers(response.headers);
-      Object.entries(corsHeaders(env)).forEach(([key, value]) => {
+      Object.entries(corsHeaders(env, request)).forEach(([key, value]) => {
         headers.set(key, value);
       });
 
@@ -109,7 +109,7 @@ export default {
 
       // Add CORS headers
       const headers = new Headers(response.headers);
-      Object.entries(corsHeaders(env)).forEach(([key, value]) => {
+      Object.entries(corsHeaders(env, request)).forEach(([key, value]) => {
         headers.set(key, value);
       });
 
