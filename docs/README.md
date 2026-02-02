@@ -2,7 +2,7 @@
 
 > Comprehensive documentation for the Rogue Origin Operations Hub project
 
-**Last Updated**: January 26, 2026
+**Last Updated**: February 2, 2026
 **Version**: 2.1 (ES6 Modular Architecture)
 
 ---
@@ -56,11 +56,15 @@ User and setup guides:
 - [CLAUDE.md](../CLAUDE.md) - AI assistant instructions, architecture, and domain context
 - [ROADMAP.md](../ROADMAP.md) - Product roadmap and development phases
 
-### Recent Updates
-- [CRIT-1-COMPLETION-SUMMARY.md](../CRIT-1-COMPLETION-SUMMARY.md) - Critical bug fixes
-- [PHASE-3.1-COMPLETION-REPORT.md](../PHASE-3.1-COMPLETION-REPORT.md) - Error handling implementation
-- [ACCESSIBILITY_PHASE_5_1.md](../ACCESSIBILITY_PHASE_5_1.md) - WCAG AA compliance
+### Reports & Phase Summaries
+All completion reports, phase summaries, and audit documents are in [`/reports`](./reports/).
+- [CRIT-1-COMPLETION-SUMMARY.md](./reports/CRIT-1-COMPLETION-SUMMARY.md) - Critical bug fixes
+- [PHASE-3.1-COMPLETION-REPORT.md](./reports/PHASE-3.1-COMPLETION-REPORT.md) - Error handling implementation
+- [ACCESSIBILITY_PHASE_5_1.md](./reports/ACCESSIBILITY_PHASE_5_1.md) - WCAG AA compliance
 - [EVENT_CLEANUP_FIX.md](./EVENT_CLEANUP_FIX.md) - Memory leak fixes
+
+### Lighthouse Reports
+Performance benchmarks in [`/reports/lighthouse/`](./reports/lighthouse/).
 
 ---
 
@@ -108,8 +112,8 @@ User and setup guides:
 | **Setup instructions** | `/guides/AUTHENTICATION_SETUP.md` |
 | **Deployment guide** | `/guides/DEPLOYMENT.md` (if exists) or `../README.md` |
 | **Current roadmap** | `../ROADMAP.md` |
-| **Recent changes** | `../PHASE-*.md` or `/sessions/` |
-| **Bug fixes** | `../CRIT-*.md` or `/sessions/` |
+| **Recent changes** | `/reports/PHASE-*.md` or `/sessions/` |
+| **Bug fixes** | `/reports/CRIT-*.md` or `/sessions/` |
 
 ---
 
@@ -145,13 +149,13 @@ User and setup guides:
 
 ### Test Suites
 - **Playwright E2E**: `tests/` directory
-- **Visual Regression**: Screenshots in `test-results/`
+- **Visual Regression**: Screenshots in `tests/`
 - **Accessibility**: WCAG AA compliance tests
-- **Performance**: Lighthouse reports (see `lighthouse-*.html`)
+- **Performance**: Lighthouse reports (see `docs/reports/lighthouse/`)
 
 ### Test Reports
 - See `/sessions/` for detailed test results
-- See `TESTING_REPORT.md` for latest test summary
+- See `reports/TESTING_REPORT.md` for latest test summary
 
 ---
 
