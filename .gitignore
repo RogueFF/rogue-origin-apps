@@ -76,3 +76,4 @@ test-results/
 
 # Git worktrees
 .worktrees/
+.worktrees/
