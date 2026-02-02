@@ -185,10 +185,11 @@
 
     /**
      * Log bag completion
+     * @param {Object} data - Bag data (e.g., { size: '5 kg.' })
      * @param {Function} onSuccess - Success callback
      * @param {Function} onError - Error callback
      */
-    logBag: function(onSuccess, onError) {
+    logBag: function(data, onSuccess, onError) {
       if (this.isAppsScript()) {
         // Running inside Google Apps Script web app
         google.script.run
@@ -207,7 +208,7 @@
         fetch(`${apiUrl}?action=logBag`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ size: '5 kg.' })
+          body: JSON.stringify(data || { size: '5 kg.' })
         })
           .then(function(response) {
             if (!response.ok) {
