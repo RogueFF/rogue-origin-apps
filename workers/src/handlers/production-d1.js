@@ -1720,7 +1720,13 @@ async function chat(body, env) {
   }
 
   const userMessage = body.userMessage || '';
-  const history = body.history || [];
+
+  // Validate message length to prevent abuse
+  const MAX_MESSAGE_LENGTH = 4000;
+  if (typeof userMessage !== 'string' || userMessage.length > MAX_MESSAGE_LENGTH) {
+    return errorResponse(`Message too long (max ${MAX_MESSAGE_LENGTH} characters)`, 'VALIDATION_ERROR', 400);
+  }
+  const history = Array.isArray(body.history) ? body.history.slice(-20) : [];
 
   if (!userMessage) {
     return errorResponse('No message provided', 'VALIDATION_ERROR', 400);
