@@ -687,7 +687,7 @@
       function(result) {
         if (result && result.success) {
           State.pauseId = result.pauseId;
-          console.log('Pause logged:', result);
+          console.debug('Pause logged:', result);
         }
       },
       function(err) {
@@ -714,7 +714,7 @@
     API.logResume(
       { pauseId: State.pauseId, duration: duration },
       function(result) {
-        console.log('Resume logged:', result);
+        console.debug('Resume logged:', result);
         State.pauseId = null;
       },
       function(err) {
@@ -739,7 +739,7 @@
       var localPauseId = State.pauseId ? String(State.pauseId) : null;
 
       if (!State.isPaused || serverPauseId !== localPauseId) {
-        console.log('Syncing pause state from server:', pauseData);
+        console.debug('Syncing pause state from server:', pauseData);
 
         // Apply pause state without re-logging to server
         State.isPaused = true;
@@ -771,7 +771,7 @@
     }
     // If server says not paused but we are locally paused, clear local pause
     else if (!pauseData && State.isPaused) {
-      console.log('Clearing local pause state (server says not paused)');
+      console.debug('Clearing local pause state (server says not paused)');
 
       State.isPaused = false;
       State.pauseId = null;
@@ -831,7 +831,7 @@
       {},
       function(result) {
         if (result && result.success) {
-          console.log('Manual bag logged:', result);
+          console.debug('Manual bag logged:', result);
 
           // Show success state
           btn.classList.remove('loading');

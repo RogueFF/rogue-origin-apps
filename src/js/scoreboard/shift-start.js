@@ -136,7 +136,7 @@
             State.shiftAdjustment = response.shiftAdjustment;
             localStorage.setItem('manualShiftStart', serverTime.toISOString());
             showStartedBadge(serverTime, false);
-            console.log('Shift start saved to API:', response.shiftAdjustment);
+            console.debug('Shift start saved to API:', response.shiftAdjustment);
           }
         },
         function(error) {
@@ -282,7 +282,7 @@
         function(response) {
           if (response.success && response.shiftAdjustment) {
             State.shiftAdjustment = response.shiftAdjustment;
-            console.log('Shift start saved to API:', response.shiftAdjustment);
+            console.debug('Shift start saved to API:', response.shiftAdjustment);
           }
         },
         function(error) {
@@ -342,7 +342,7 @@
       State.shiftStartLocked = true;
       localStorage.setItem('shiftStartLocked', 'true');
       showStartedBadge(State.manualShiftStart, true);
-      console.log('Shift start locked after first bag');
+      console.debug('Shift start locked after first bag');
     }
   }
 
@@ -372,7 +372,7 @@
           localStorage.setItem('manualShiftStart', apiStartTime.toISOString());
           localStorage.setItem('shiftStartDate', today);
           showStartedBadge(apiStartTime, State.shiftStartLocked);
-          console.log('Shift start synced from another device:', apiStartTime);
+          console.debug('Shift start synced from another device:', apiStartTime);
         }
       },
       function(error) {
