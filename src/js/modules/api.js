@@ -192,13 +192,13 @@ export function onError(error, skipAutoRetry = false) {
       const delayText = isRateLimited ? '30 seconds' : '5 seconds';
 
       if (isRateLimited) {
-        console.log(`Rate limited - will retry in ${delayText}...`);
+        console.debug(`Rate limited - will retry in ${delayText}...`);
       } else {
-        console.log(`Auto-retry in ${delayText}...`);
+        console.debug(`Auto-retry in ${delayText}...`);
       }
 
       setTimeout(function() {
-        console.log('Auto-retry after error...');
+        console.debug('Auto-retry after error...');
         showRetrying();
         incrementRetryCount();
         loadData();
