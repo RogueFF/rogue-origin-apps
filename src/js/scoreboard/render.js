@@ -6,6 +6,20 @@
 (function(window) {
   'use strict';
 
+  /**
+   * Safely get a DOM element by ID. Returns null (no throw) if missing.
+   * @param {string} id - Element ID
+   * @returns {HTMLElement|null}
+   */
+  function safeGetEl(id) {
+    var el = document.getElementById(id);
+    if (!el) {
+      console.debug('[render] Missing element: #' + id);
+    }
+    return el;
+  }
+
+
   var ScoreboardRender = {
     /**
      * Main render function - updates all scoreboard UI elements
@@ -75,17 +89,17 @@
       document.body.classList.add(status);
 
       // Update status display
-      document.getElementById('statusIcon').textContent = statusIcon;
-      document.getElementById('statusText').textContent = t(statusKey);
+      var _el = safeGetEl('statusIcon'); if (_el) _el.textContent = statusIcon;
+      var _el = safeGetEl('statusText'); if (_el) _el.textContent = t(statusKey);
 
       // Last hour card
-      document.getElementById('lastHourLbs').textContent = lastHourLbs > 0 ? lastHourLbs.toFixed(1) : '—';
-      document.getElementById('lastHourTarget').textContent = lastHourTarget > 0 ? lastHourTarget.toFixed(1) : '—';
-      document.getElementById('lastHourTimeslot').textContent = lastTimeSlot;
+      var _el = safeGetEl('lastHourLbs'); if (_el) _el.textContent = lastHourLbs > 0 ? lastHourLbs.toFixed(1) : '—';
+      var _el = safeGetEl('lastHourTarget'); if (_el) _el.textContent = lastHourTarget > 0 ? lastHourTarget.toFixed(1) : '—';
+      var _el = safeGetEl('lastHourTimeslot'); if (_el) _el.textContent = lastTimeSlot;
 
       // Show lbs delta instead of percentage
-      const lhp = document.getElementById('lastHourPct');
-      if (lastHourTarget > 0) {
+      const lhp = safeGetEl('lastHourPct');
+      if (lhp && lastHourTarget > 0) {
         const deltaAbs = Math.abs(lastHourDelta).toFixed(1);
         if (lastHourDelta >= 0.05) {
           lhp.textContent = `+${deltaAbs} lbs`;
@@ -105,14 +119,14 @@
       }
 
       // Current hour card
-      const chc = document.getElementById('currentHourCard');
-      if (currentHourTrimmers > 0) {
+      const chc = safeGetEl('currentHourCard');
+      if (chc && currentHourTrimmers > 0) {
         chc.style.display = 'block';
-        document.getElementById('currentHourTrimmers').textContent = currentHourTrimmers;
-        document.getElementById('currentHourTimeslot').textContent = currentTimeSlot;
-        document.getElementById('currentHourTargetLbs').textContent = currentHourTarget > 0 ? currentHourTarget.toFixed(1) : '—';
+        var _el = safeGetEl('currentHourTrimmers'); if (_el) _el.textContent = currentHourTrimmers;
+        var _el = safeGetEl('currentHourTimeslot'); if (_el) _el.textContent = currentTimeSlot;
+        var _el = safeGetEl('currentHourTargetLbs'); if (_el) _el.textContent = currentHourTarget > 0 ? currentHourTarget.toFixed(1) : '—';
       } else {
-        chc.style.display = 'none';
+        if (chc) chc.style.display = 'none';
       }
 
       // Render the hourly chart
@@ -121,12 +135,12 @@
       }
 
       // Daily progress
-      document.getElementById('dailyActual').textContent = todayLbs > 0 ? todayLbs.toFixed(1) : '—';
-      document.getElementById('dailyTarget').textContent = todayTarget > 0 ? todayTarget.toFixed(1) : '—';
+      var _el = safeGetEl('dailyActual'); if (_el) _el.textContent = todayLbs > 0 ? todayLbs.toFixed(1) : '—';
+      var _el = safeGetEl('dailyTarget'); if (_el) _el.textContent = todayTarget > 0 ? todayTarget.toFixed(1) : '—';
 
       const todayDelta = data.todayDelta || 0;
-      const dde = document.getElementById('dailyDelta');
-      if (todayTarget > 0) {
+      const dde = safeGetEl('dailyDelta');
+      if (dde && todayTarget > 0) {
         const da = Math.abs(todayDelta).toFixed(1);
         if (todayDelta >= 0.1) {
           dde.textContent = `↑ ${t('upBy')} ${da}`;
@@ -138,27 +152,27 @@
           dde.textContent = '= On pace';
           dde.className = 'daily-delta neutral';
         }
-      } else {
+      } else if (dde) {
         dde.textContent = '—';
         dde.className = 'daily-delta neutral';
       }
 
       // Progress hours
       const effectiveHours = data.effectiveHours || hoursLogged;
-      document.getElementById('progressHours').textContent = `${effectiveHours.toFixed(1)} ${t('hrs')}`;
-      document.getElementById('progressFill').style.width = `${Math.min(100, todayPct || avgPct || 0)}%`;
+      var _el = safeGetEl('progressHours'); if (_el) _el.textContent = `${effectiveHours.toFixed(1)} ${t('hrs')}`;
+      var _el = safeGetEl('progressFill'); if (_el) _el.style.width = `${Math.min(100, todayPct || avgPct || 0)}%`;
 
       // Projection
       const projectedTotal = data.projectedTotal || 0;
       const dailyGoal = data.dailyGoal || 0;
       const projectedDelta = data.projectedDelta || 0;
 
-      document.getElementById('projectionLabel').textContent = t('endOfDay');
-      document.getElementById('projectionValue').textContent = projectedTotal > 0 ? projectedTotal.toFixed(1) : '—';
-      document.getElementById('projectionGoal').textContent = dailyGoal > 0 ? `/ ${dailyGoal.toFixed(1)} ${t('lbsGoal')}` : '';
+      var _el = safeGetEl('projectionLabel'); if (_el) _el.textContent = t('endOfDay');
+      var _el = safeGetEl('projectionValue'); if (_el) _el.textContent = projectedTotal > 0 ? projectedTotal.toFixed(1) : '—';
+      var _el = safeGetEl('projectionGoal'); if (_el) _el.textContent = dailyGoal > 0 ? `/ ${dailyGoal.toFixed(1)} ${t('lbsGoal')}` : '';
 
-      const pde = document.getElementById('projectionDelta');
-      if (dailyGoal > 0 && projectedTotal > 0) {
+      const pde = safeGetEl('projectionDelta');
+      if (pde && dailyGoal > 0 && projectedTotal > 0) {
         const pda = Math.abs(projectedDelta).toFixed(1);
         if (projectedDelta >= 0.5) {
           pde.textContent = `↑ +${pda}`;
@@ -170,7 +184,7 @@
           pde.textContent = '= On pace';
           pde.className = 'projection-delta neutral';
         }
-      } else {
+      } else if (pde) {
         pde.textContent = '—';
         pde.className = 'projection-delta neutral';
       }
@@ -180,18 +194,18 @@
       this.renderComparison('vs7Day', data.vs7Day);
 
       // Streak pill
-      document.getElementById('streakPill').style.display = streak >= 2 ? 'flex' : 'none';
-      document.getElementById('streakValue').textContent = streak;
+      var _el = safeGetEl('streakPill'); if (_el) _el.style.display = streak >= 2 ? 'flex' : 'none';
+      var _el = safeGetEl('streakValue'); if (_el) _el.textContent = streak;
 
       // Crew and rate info
       const displayTrimmers = currentHourTrimmers > 0 ? currentHourTrimmers : lastHourTrimmers;
-      document.getElementById('crewCount').textContent = displayTrimmers > 0 ? displayTrimmers : '—';
-      document.getElementById('targetRate').textContent = targetRate > 0 ? targetRate.toFixed(2) : '—';
-      document.getElementById('strainName').textContent = strain || '—';
+      var _el = safeGetEl('crewCount'); if (_el) _el.textContent = displayTrimmers > 0 ? displayTrimmers : '—';
+      var _el = safeGetEl('targetRate'); if (_el) _el.textContent = targetRate > 0 ? targetRate.toFixed(2) : '—';
+      var _el = safeGetEl('strainName'); if (_el) _el.textContent = strain || '—';
 
       // Performance deltas
-      const avgEl = document.getElementById('avgPercentage');
-      const bestEl = document.getElementById('bestHour');
+      const avgEl = safeGetEl('avgPercentage');
+      const bestEl = safeGetEl('bestHour');
 
       if (data.avgDelta !== undefined && data.avgDelta !== 0) {
         avgEl.textContent = (data.avgDelta >= 0 ? '+' : '') + data.avgDelta.toFixed(1);
@@ -216,7 +230,7 @@
       }
 
       // Strain rate indicator
-      const sri = document.getElementById('strainRateIndicator');
+      const sri = safeGetEl('strainRateIndicator');
       if (data.usingStrainRate) {
         sri.innerHTML = `<span style="font-size:12px;color:rgba(122,157,135,0.9)">${t('strainRate')}</span>`;
       } else if (strain && strain !== '—') {
@@ -232,8 +246,8 @@
      * @param {Number} value - Percentage comparison value
      */
     renderComparison: function(prefix, value) {
-      const pill = document.getElementById(prefix + 'Pill');
-      const ve = document.getElementById(prefix + 'Value');
+      const pill = safeGetEl(prefix + 'Pill');
+      const ve = safeGetEl(prefix + 'Value');
 
       if (value === null || value === undefined) {
         pill.style.display = 'none';
@@ -253,7 +267,7 @@
      */
     renderOrderQueue: function() {
       const orderQueue = window.ScoreboardState ? window.ScoreboardState.orderQueue : null;
-      const section = document.getElementById('orderQueueSection');
+      const section = safeGetEl('orderQueueSection');
 
       if (!section) return;
 
@@ -284,14 +298,14 @@
         // Fallback: wrap single current item in array for backwards compatibility
         this.renderCurrentItems([orderQueue.current]);
       } else {
-        document.getElementById('currentOrderPill').style.display = 'none';
+        var _el = safeGetEl('currentOrderPill'); if (_el) _el.style.display = 'none';
       }
 
       // Render next order pill (from different shipment)
       if (hasNext) {
         this.renderOrderPill('next', orderQueue.next);
       } else {
-        document.getElementById('nextOrderPill').style.display = 'none';
+        var _el = safeGetEl('nextOrderPill'); if (_el) _el.style.display = 'none';
       }
     },
 
@@ -300,9 +314,9 @@
      * @param {Array} currentItems - Array of order items from the current shipment
      */
     renderCurrentItems: function(currentItems) {
-      const pill = document.getElementById('currentOrderPill');
-      const summary = document.getElementById('currentOrderSummary');
-      const detail = document.getElementById('currentOrderDetail');
+      const pill = safeGetEl('currentOrderPill');
+      const summary = safeGetEl('currentOrderSummary');
+      const detail = safeGetEl('currentOrderDetail');
       const t = window.ScoreboardI18n ? window.ScoreboardI18n.t : function(key) { return key; };
 
       if (!pill || !summary) return;
@@ -313,7 +327,7 @@
       summary.textContent = currentItems[0].customer;
 
       // Hide the default progress bar container - we'll use our custom breakdown
-      const progressContainer = document.getElementById('currentProgressBarContainer');
+      const progressContainer = safeGetEl('currentProgressBarContainer');
       if (progressContainer) {
         progressContainer.style.display = 'none';
       }
@@ -328,7 +342,7 @@
       const totalRemaining = totalQuantity - totalCompleted;
 
       // Create streamlined breakdown focused on what's LEFT to do
-      let breakdownContainer = document.getElementById('currentItemsBreakdown');
+      let breakdownContainer = safeGetEl('currentItemsBreakdown');
       if (!breakdownContainer) {
         breakdownContainer = document.createElement('div');
         breakdownContainer.id = 'currentItemsBreakdown';
@@ -408,9 +422,9 @@
      * @param {Object} orderData - Order data object
      */
     renderOrderPill: function(type, orderData) {
-      const pill = document.getElementById(type + 'OrderPill');
-      const summary = document.getElementById(type + 'OrderSummary');
-      const detail = document.getElementById(type + 'OrderDetail');
+      const pill = safeGetEl(type + 'OrderPill');
+      const summary = safeGetEl(type + 'OrderSummary');
+      const detail = safeGetEl(type + 'OrderDetail');
       const t = window.ScoreboardI18n ? window.ScoreboardI18n.t : function(key) { return key; };
 
       if (!pill || !summary) return;
@@ -423,9 +437,9 @@
 
       // Render progress bar for current order only
       if (type === 'current' && orderData.completedKg !== undefined) {
-        const progressContainer = document.getElementById('currentProgressBarContainer');
-        const progressFill = document.getElementById('currentProgressFill');
-        const progressText = document.getElementById('currentProgressText');
+        const progressContainer = safeGetEl('currentProgressBarContainer');
+        const progressFill = safeGetEl('currentProgressFill');
+        const progressText = safeGetEl('currentProgressText');
 
         if (progressContainer && progressFill && progressText) {
           progressContainer.style.display = 'flex';
@@ -470,8 +484,8 @@
       const state = window.ScoreboardState;
       if (!state) return;
 
-      const pill = document.getElementById(type + 'OrderPill');
-      const detail = document.getElementById(type + 'OrderDetail');
+      const pill = safeGetEl(type + 'OrderPill');
+      const detail = safeGetEl(type + 'OrderDetail');
 
       if (!pill || !detail) return;
 
