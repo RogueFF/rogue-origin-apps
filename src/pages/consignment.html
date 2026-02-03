@@ -51,7 +51,7 @@
 
   <!-- Main Content -->
   <main class="main" id="main-content">
-    <!-- Header -->
+    <!-- Premium Header -->
     <header class="header">
       <div class="header-left">
         <button class="mobile-menu-btn" onclick="toggleSidebar()" aria-label="Open menu">
@@ -62,20 +62,22 @@
           </svg>
         </button>
         <div class="header-brand">
-          <img src="/rogue-origin-apps/favicon.png" alt="Rogue Origin" class="header-logo" width="32" height="32">
-          <span class="header-brand-text">ROGUE ORIGIN</span>
+          <img src="/rogue-origin-apps/favicon.png" alt="Rogue Origin" class="header-logo" width="36" height="36">
+          <span class="header-brand-text">Consignment</span>
         </div>
       </div>
       <div class="header-right">
-        <div class="header-time">
+        <div class="header-time" style="display: none;">
           <div class="time" id="clock">--:--</div>
           <div class="date" id="dateDisplay">Loading...</div>
         </div>
-        <button class="theme-toggle header-btn" id="btn-dark-mode" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle dark mode theme">
+        <button class="theme-toggle" id="btn-dark-mode" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle dark mode theme">
           <span id="themeIcon">🌙</span>
           <span id="themeLabel">Dark</span>
         </button>
-        <button id="btn-refresh" class="header-btn primary"><i class="ph-duotone ph-arrows-clockwise"></i> Refresh</button>
+        <button id="btn-refresh" class="header-btn primary">
+          <i class="ph-duotone ph-arrows-clockwise"></i> Refresh
+        </button>
       </div>
     </header>
 
