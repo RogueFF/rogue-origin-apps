@@ -19,7 +19,12 @@ export function renderPartnerCards(partners, container, onCardClick) {
     card.className = 'partner-card';
     card.dataset.partnerId = p.id;
     card.innerHTML = `
-      <div class="partner-name">${esc(p.name)}</div>
+      <div class="card-top-row">
+        <div class="partner-name">${esc(p.name)}</div>
+        <button class="quick-intake-btn" data-partner-id="${p.id}" title="New intake for ${esc(p.name)}" aria-label="Quick intake">
+          <i class="ph-duotone ph-plus-circle"></i>
+        </button>
+      </div>
       <div class="balance ${balanceClass}">$${fmt(p.balance_owed)}</div>
       <div class="card-label">Balance Owed</div>
       <div class="meta">
@@ -27,6 +32,17 @@ export function renderPartnerCards(partners, container, onCardClick) {
         <span>${p.last_intake_date ? 'Last intake: ' + fmtDate(p.last_intake_date) : 'No intakes'}</span>
       </div>
     `;
+    
+    // Quick-intake button click handler (stops propagation)
+    const quickBtn = card.querySelector('.quick-intake-btn');
+    if (quickBtn) {
+      quickBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // Emit custom event with partner id
+        document.dispatchEvent(new CustomEvent('quickIntake', { detail: { partnerId: p.id } }));
+      });
+    }
+    
     card.addEventListener('click', () => onCardClick(p.id));
     container.appendChild(card);
   });
@@ -68,42 +84,120 @@ export function renderActivityFeed(activities, container) {
 
 export function renderPartnerDetail(detail, container, onClose) {
   const d = detail;
+  const totalIntakeLbs = d.intakes.reduce((s, i) => s + i.weight_lbs, 0);
+  const totalSoldLbs = d.sales.reduce((s, i) => s + i.weight_lbs, 0);
+  const onHandLbs = d.inventory.reduce((s, i) => s + i.on_hand_lbs, 0);
+  
   container.innerHTML = `
     <div class="detail-header">
-      <h2>${esc(d.partner.name)}</h2>
-      <button class="close-detail-btn" aria-label="Close detail">&times;</button>
+      <div>
+        <h2>${esc(d.partner.name)}</h2>
+        ${d.partner.contact_name ? `<div class="detail-contact">${esc(d.partner.contact_name)}</div>` : ''}
+      </div>
+      <button class="close-detail-btn" aria-label="Close">&times;</button>
     </div>
-    <div class="detail-stats">
-      <div class="detail-stat">
-        <div class="stat-value">$${fmt(d.balance_owed)}</div>
-        <div class="stat-label">Balance Owed</div>
+    
+    <div class="detail-body">
+      <div class="detail-stats">
+        <div class="detail-stat">
+          <div class="stat-label">Balance Owed</div>
+          <div class="stat-value ${d.balance_owed > 0 ? 'warning' : ''}">\$${fmt(d.balance_owed)}</div>
+        </div>
+        <div class="detail-stat">
+          <div class="stat-label">Total Paid</div>
+          <div class="stat-value positive">\$${fmt(d.total_paid)}</div>
+        </div>
+        <div class="detail-stat">
+          <div class="stat-label">On Hand</div>
+          <div class="stat-value">${onHandLbs.toFixed(1)} <small>lbs</small></div>
+        </div>
+        <div class="detail-stat">
+          <div class="stat-label">Total Received</div>
+          <div class="stat-value">${totalIntakeLbs.toFixed(1)} <small>lbs</small></div>
+        </div>
       </div>
-      <div class="detail-stat">
-        <div class="stat-value">$${fmt(d.total_paid)}</div>
-        <div class="stat-label">Total Paid</div>
-      </div>
-      <div class="detail-stat">
-        <div class="stat-value">${d.inventory.reduce((s, i) => s + i.on_hand_lbs, 0).toFixed(1)}</div>
-        <div class="stat-label">Lbs On Hand</div>
-      </div>
-    </div>
-    ${d.inventory.length > 0 ? `
+      
+      ${d.inventory.length > 0 ? `
+        <div class="detail-section">
+          <h3><i class="ph-duotone ph-package"></i> Current Inventory</h3>
+          <div class="inv-table">
+            <div class="inv-table-header">
+              <span>Strain</span>
+              <span>Type</span>
+              <span>On Hand</span>
+            </div>
+            ${d.inventory.map(i => `
+              <div class="inv-table-row">
+                <span class="inv-strain">${esc(i.strain)}</span>
+                <span class="inv-type type-${i.type}">${i.type}</span>
+                <span class="inv-lbs">${i.on_hand_lbs.toFixed(1)} lbs</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+      
       <div class="detail-section">
-        <h3>Inventory</h3>
-        ${d.inventory.map(i => `<div class="inv-row"><span>${esc(i.strain)} (${i.type})</span><span class="inv-lbs">${i.on_hand_lbs.toFixed(1)} lbs</span></div>`).join('')}
+        <h3><i class="ph-duotone ph-download-simple"></i> Recent Intakes</h3>
+        ${d.intakes.length > 0 ? `
+          <div class="history-table">
+            ${d.intakes.slice(0, 10).map(i => `
+              <div class="history-table-row">
+                <div class="history-date">${fmtDate(i.date)}</div>
+                <div class="history-main">
+                  <span class="history-strain">${esc(i.strain)}</span>
+                  <span class="history-type type-${i.type}">${i.type}</span>
+                </div>
+                <div class="history-numbers">
+                  <span class="history-weight">${i.weight_lbs} lbs</span>
+                  <span class="history-price">\$${fmt(i.price_per_lb)}/lb</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        ` : '<p class="empty-hint">No intakes recorded</p>'}
       </div>
-    ` : ''}
-    <div class="detail-section">
-      <h3>Recent Intakes</h3>
-      ${d.intakes.slice(0, 10).map(i => `<div class="history-row"><span>${fmtDate(i.date)}</span><span>${i.weight_lbs} lbs ${esc(i.strain)} (${i.type})</span><span>$${fmt(i.price_per_lb)}/lb</span></div>`).join('') || '<p class="muted">None</p>'}
-    </div>
-    <div class="detail-section">
-      <h3>Recent Sales</h3>
-      ${d.sales.slice(0, 10).map(s => `<div class="history-row"><span>${fmtDate(s.date)}</span><span>${s.weight_lbs} lbs ${esc(s.strain)} (${s.type})</span><span>${s.channel || ''}</span></div>`).join('') || '<p class="muted">None</p>'}
-    </div>
-    <div class="detail-section">
-      <h3>Recent Payments</h3>
-      ${d.payments.slice(0, 10).map(p => `<div class="history-row"><span>${fmtDate(p.date)}</span><span>$${fmt(p.amount)}</span><span>${p.method || ''} ${p.reference_number ? '#' + p.reference_number : ''}</span></div>`).join('') || '<p class="muted">None</p>'}
+      
+      <div class="detail-section">
+        <h3><i class="ph-duotone ph-tag"></i> Recent Sales</h3>
+        ${d.sales.length > 0 ? `
+          <div class="history-table">
+            ${d.sales.slice(0, 10).map(s => `
+              <div class="history-table-row">
+                <div class="history-date">${fmtDate(s.date)}</div>
+                <div class="history-main">
+                  <span class="history-strain">${esc(s.strain)}</span>
+                  <span class="history-type type-${s.type}">${s.type}</span>
+                </div>
+                <div class="history-numbers">
+                  <span class="history-weight">${s.weight_lbs} lbs</span>
+                  ${s.channel ? `<span class="history-channel">${esc(s.channel)}</span>` : ''}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        ` : '<p class="empty-hint">No sales recorded</p>'}
+      </div>
+      
+      <div class="detail-section">
+        <h3><i class="ph-duotone ph-money"></i> Recent Payments</h3>
+        ${d.payments.length > 0 ? `
+          <div class="history-table">
+            ${d.payments.slice(0, 10).map(p => `
+              <div class="history-table-row">
+                <div class="history-date">${fmtDate(p.date)}</div>
+                <div class="history-main">
+                  <span class="history-amount">\$${fmt(p.amount)}</span>
+                </div>
+                <div class="history-numbers">
+                  <span class="history-method">${esc(p.method || 'check')}</span>
+                  ${p.reference_number ? `<span class="history-ref">#${esc(p.reference_number)}</span>` : ''}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        ` : '<p class="empty-hint">No payments recorded</p>'}
+      </div>
     </div>
   `;
   container.classList.add('active');
