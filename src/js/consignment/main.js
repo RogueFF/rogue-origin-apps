@@ -3,8 +3,8 @@
  * Init, event listeners, auto-refresh, orchestration
  */
 
-import * as api from './api.js?v=3';
-import * as ui from './ui.js?v=3';
+import * as api from './api.js?v=4';
+import * as ui from './ui.js?v=4';
 
 let partners = [];
 let strains = [];
@@ -243,6 +243,9 @@ function setupEventListeners() {
       partnerSelect.value = partnerId;
     }
   });
+  
+  // Refresh all from delete actions
+  document.addEventListener('refreshAll', () => refreshAll());
 }
 
 // ─── FORM HANDLERS ──────────────────────────────────────
