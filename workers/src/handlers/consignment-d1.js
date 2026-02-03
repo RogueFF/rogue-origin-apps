@@ -52,6 +52,16 @@ export async function handleConsignmentD1(request, env, ctx) {
     case 'getConsignmentActivity':
       return getActivity(db, params);
 
+    // === DELETES ===
+    case 'deleteConsignmentPartner':
+      return deletePartner(db, body);
+    case 'deleteConsignmentIntake':
+      return deleteIntake(db, body);
+    case 'deleteConsignmentSale':
+      return deleteSale(db, body);
+    case 'deleteConsignmentPayment':
+      return deletePayment(db, body);
+
     default:
       throw createError('NOT_FOUND', `Unknown consignment action: ${action}`);
   }
@@ -448,4 +458,40 @@ async function getActivity(db, params) {
   }));
 
   return successResponse({ success: true, data: enriched });
+}
+
+// ─── DELETES ────────────────────────────────────────────
+
+async function deletePartner(db, body) {
+  const { id } = body;
+  if (!id) throw createError('VALIDATION_ERROR', 'Partner ID is required');
+  
+  // Delete all related records first
+  await execute(db, 'DELETE FROM consignment_intakes WHERE partner_id = ?', [id]);
+  await execute(db, 'DELETE FROM consignment_sales WHERE partner_id = ?', [id]);
+  await execute(db, 'DELETE FROM consignment_payments WHERE partner_id = ?', [id]);
+  await execute(db, 'DELETE FROM consignment_partners WHERE id = ?', [id]);
+  
+  return successResponse({ success: true });
+}
+
+async function deleteIntake(db, body) {
+  const { id } = body;
+  if (!id) throw createError('VALIDATION_ERROR', 'Intake ID is required');
+  await execute(db, 'DELETE FROM consignment_intakes WHERE id = ?', [id]);
+  return successResponse({ success: true });
+}
+
+async function deleteSale(db, body) {
+  const { id } = body;
+  if (!id) throw createError('VALIDATION_ERROR', 'Sale ID is required');
+  await execute(db, 'DELETE FROM consignment_sales WHERE id = ?', [id]);
+  return successResponse({ success: true });
+}
+
+async function deletePayment(db, body) {
+  const { id } = body;
+  if (!id) throw createError('VALIDATION_ERROR', 'Payment ID is required');
+  await execute(db, 'DELETE FROM consignment_payments WHERE id = ?', [id]);
+  return successResponse({ success: true });
 }

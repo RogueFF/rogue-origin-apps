@@ -94,3 +94,19 @@ export async function getLastPrice(partnerId, strain, type) {
     return null;
   }
 }
+
+export function deletePartner(id) {
+  return apiPost('deleteConsignmentPartner', { id });
+}
+
+export function deleteIntake(id) {
+  return apiPost('deleteConsignmentIntake', { id });
+}
+
+export function deleteSale(id) {
+  return apiPost('deleteConsignmentSale', { id });
+}
+
+export function deletePayment(id) {
+  return apiPost('deleteConsignmentPayment', { id });
+}
