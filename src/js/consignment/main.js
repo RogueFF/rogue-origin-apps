@@ -10,6 +10,7 @@ let partners = [];
 let strains = [];
 let selectedPartnerId = null;
 let refreshInterval = null;
+let lineItemCount = 0;
 
 // ─── INIT ───────────────────────────────────────────────
 
@@ -70,11 +71,79 @@ async function showPartnerDetail(partnerId) {
   }
 }
 
+// ─── LINE ITEM MANAGEMENT ───────────────────────────────
+
+function addIntakeLine() {
+  const container = el('intake-lines');
+  if (!container) return;
+  lineItemCount++;
+  const lineId = lineItemCount;
+  const row = document.createElement('div');
+  row.className = 'line-item';
+  row.dataset.lineId = lineId;
+  row.innerHTML = `
+    <div class="li-col-strain">
+      <select class="strain-select line-strain" data-line="${lineId}" required></select>
+    </div>
+    <div class="li-col-type">
+      <div class="toggle-group toggle-compact">
+        <button type="button" class="toggle-option active" data-value="tops">T</button>
+        <button type="button" class="toggle-option" data-value="smalls">S</button>
+      </div>
+    </div>
+    <div class="li-col-weight">
+      <input type="number" class="line-weight" step="0.1" min="0.1" required placeholder="0.0">
+    </div>
+    <div class="li-col-price">
+      <input type="number" class="line-price" step="0.01" min="0.01" required placeholder="0.00">
+    </div>
+    <div class="li-col-remove">
+      ${container.children.length > 0 ? '<button type="button" class="remove-line-btn" aria-label="Remove line"><i class="ph-duotone ph-x-circle"></i></button>' : ''}
+    </div>
+  `;
+  container.appendChild(row);
+  
+  // Populate the strain select for this line
+  const strainSel = row.querySelector('.line-strain');
+  if (strainSel) ui.populateStrainDropdown(strains, strainSel);
+  
+  // Toggle click for this line
+  row.querySelectorAll('.toggle-option').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const group = btn.closest('.toggle-group');
+      group.querySelectorAll('.toggle-option').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+  
+  // Remove button
+  const removeBtn = row.querySelector('.remove-line-btn');
+  if (removeBtn) {
+    removeBtn.addEventListener('click', () => row.remove());
+  }
+  
+  // Price auto-fill when strain changes
+  strainSel?.addEventListener('change', () => {
+    const partnerId = el('intake-partner')?.value;
+    const type = row.querySelector('.toggle-option.active')?.dataset.value || 'tops';
+    const priceInput = row.querySelector('.line-price');
+    if (partnerId && strainSel.value) {
+      ui.autoFillPrice(partnerId, strainSel.value, type, priceInput);
+    }
+  });
+}
+
 // ─── EVENT LISTENERS ────────────────────────────────────
 
 function setupEventListeners() {
   // Quick action buttons
-  el('btn-new-intake')?.addEventListener('click', () => ui.openModal('intake-modal'));
+  el('btn-new-intake')?.addEventListener('click', () => {
+    const container = el('intake-lines');
+    if (container && container.children.length === 0) {
+      addIntakeLine();
+    }
+    ui.openModal('intake-modal');
+  });
   el('btn-inventory-count')?.addEventListener('click', () => ui.openModal('count-modal'));
   el('btn-record-payment')?.addEventListener('click', () => ui.openModal('payment-modal'));
   el('btn-add-partner')?.addEventListener('click', () => ui.openModal('partner-modal'));
@@ -114,18 +183,8 @@ function setupEventListeners() {
     });
   });
 
-  // Price auto-fill on intake form
-  const intakePartner = el('intake-partner');
-  const intakeStrain = el('intake-strain');
-  const intakePrice = el('intake-price');
-  if (intakePartner && intakeStrain && intakePrice) {
-    const triggerAutoFill = () => {
-      const type = el('intake-modal')?.querySelector('.toggle-option.active')?.dataset.value || 'tops';
-      ui.autoFillPrice(intakePartner.value, intakeStrain.value, type, intakePrice);
-    };
-    intakePartner.addEventListener('change', triggerAutoFill);
-    intakeStrain.addEventListener('change', triggerAutoFill);
-  }
+  // Add line button
+  el('btn-add-line')?.addEventListener('click', addIntakeLine);
 
   // Count form: show expected inventory
   const countPartner = el('count-partner');
@@ -175,19 +234,32 @@ function setupEventListeners() {
 
 async function handleIntakeSubmit(e) {
   e.preventDefault();
-  const type = el('intake-modal')?.querySelector('.toggle-option.active')?.dataset.value || 'tops';
+  const lines = el('intake-lines')?.querySelectorAll('.line-item');
+  if (!lines || lines.length === 0) {
+    ui.showToast('Add at least one line item', 'error');
+    return;
+  }
+  
+  const items = Array.from(lines).map(row => ({
+    strain: row.querySelector('.line-strain')?.value,
+    type: row.querySelector('.toggle-option.active')?.dataset.value || 'tops',
+    weight_lbs: parseFloat(row.querySelector('.line-weight')?.value),
+    price_per_lb: parseFloat(row.querySelector('.line-price')?.value),
+  }));
+  
   try {
-    await api.saveIntake({
+    await api.saveBatchIntake({
       partner_id: el('intake-partner').value,
       date: el('intake-date').value,
-      strain: el('intake-strain').value,
-      type,
-      weight_lbs: parseFloat(el('intake-weight').value),
-      price_per_lb: parseFloat(el('intake-price').value),
+      items,
       notes: el('intake-notes')?.value || '',
     });
     ui.closeModal('intake-modal');
-    ui.showToast('Intake recorded');
+    // Clear lines for next use
+    const container = el('intake-lines');
+    if (container) container.innerHTML = '';
+    lineItemCount = 0;
+    ui.showToast(`${items.length} intake${items.length > 1 ? 's' : ''} recorded`);
     refreshAll();
   } catch (err) {
     ui.showToast(err.message || 'Failed to save intake', 'error');

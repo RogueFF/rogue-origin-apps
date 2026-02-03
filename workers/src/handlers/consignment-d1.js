@@ -31,6 +31,8 @@ export async function handleConsignmentD1(request, env, ctx) {
     // === INTAKES ===
     case 'saveConsignmentIntake':
       return saveIntake(db, body);
+    case 'saveConsignmentBatchIntake':
+      return saveBatchIntake(db, body);
 
     // === SALES ===
     case 'saveConsignmentSale':
@@ -210,6 +212,32 @@ async function saveIntake(db, body) {
   `, [partner_id, date, strain, type, weight_lbs, price_per_lb, notes || null]);
 
   return successResponse({ success: true, id: result.lastRowId });
+}
+
+async function saveBatchIntake(db, body) {
+  const { partner_id, date, items, notes } = body;
+  
+  if (!partner_id) throw createError('VALIDATION_ERROR', 'Partner is required');
+  if (!date) throw createError('VALIDATION_ERROR', 'Date is required');
+  if (!items || !Array.isArray(items) || items.length === 0) throw createError('VALIDATION_ERROR', 'At least one item is required');
+  
+  const results = [];
+  for (const item of items) {
+    const { strain, type, weight_lbs, price_per_lb } = item;
+    if (!strain) throw createError('VALIDATION_ERROR', 'Strain is required for all items');
+    if (!type || !['tops', 'smalls'].includes(type)) throw createError('VALIDATION_ERROR', 'Type must be tops or smalls');
+    if (!weight_lbs || weight_lbs <= 0) throw createError('VALIDATION_ERROR', 'Weight must be positive');
+    if (!price_per_lb || price_per_lb <= 0) throw createError('VALIDATION_ERROR', 'Price per lb must be positive');
+    
+    const result = await execute(db, `
+      INSERT INTO consignment_intakes (partner_id, date, strain, type, weight_lbs, price_per_lb, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `, [partner_id, date, strain.trim(), type, weight_lbs, price_per_lb, notes || null]);
+    
+    results.push({ id: result.lastRowId, strain, type, weight_lbs });
+  }
+  
+  return successResponse({ success: true, data: { count: results.length, items: results } });
 }
 
 // ─── SALES ──────────────────────────────────────────────

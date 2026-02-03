@@ -52,6 +52,10 @@ export function saveIntake(data) {
   return apiPost('saveConsignmentIntake', data);
 }
 
+export function saveBatchIntake(data) {
+  return apiPost('saveConsignmentBatchIntake', data);
+}
+
 export function saveSale(data) {
   return apiPost('saveConsignmentSale', data);
 }
