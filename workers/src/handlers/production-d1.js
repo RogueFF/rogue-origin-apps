@@ -301,7 +301,8 @@ async function getScoreboardData(env, date = null) {
 
   // Get today's hourly production data from D1
   const todayRows = await query(env.DB, `
-    SELECT time_slot, cultivar1, tops_lbs1, smalls_lbs1, trimmers_line1, buckers_line1
+    SELECT time_slot, cultivar1, tops_lbs1, smalls_lbs1, trimmers_line1, buckers_line1,
+           effective_trimmers_line1
     FROM monthly_production
     WHERE production_date = ?
   `, [today]);
@@ -309,14 +310,18 @@ async function getScoreboardData(env, date = null) {
   if (todayRows.length === 0) return result;
 
   // Transform to working format and sort by TIME_SLOTS order (not alphabetically)
+  // Use effective_trimmers when available (accounts for mid-hour crew changes)
   const rowsBySlot = {};
   todayRows.forEach(r => {
     const slot = (r.time_slot || '').replace(/[-–—]/g, '–');
+    const rawTrimmers = r.trimmers_line1 || 0;
+    const effectiveTrimmers = r.effective_trimmers_line1 != null ? r.effective_trimmers_line1 : rawTrimmers;
     rowsBySlot[slot] = {
       timeSlot: r.time_slot || '',
       tops: r.tops_lbs1 || 0,
       smalls: r.smalls_lbs1 || 0,
-      trimmers: r.trimmers_line1 || 0,
+      trimmers: effectiveTrimmers,
+      rawTrimmers,
       buckers: r.buckers_line1 || 0,
       strain: r.cultivar1 || '',
       multiplier: getTimeSlotMultiplier(r.time_slot, timeSlotMultipliers),
@@ -1922,7 +1927,9 @@ function validateProductionDate(dateStr) {
 async function addProduction(body, env) {
   try {
     const { date, timeSlot, trimmers1, buckers1, tzero1, cultivar1, tops1, smalls1,
-            trimmers2, buckers2, tzero2, cultivar2, tops2, smalls2, qc } = body;
+            trimmers2, buckers2, tzero2, cultivar2, tops2, smalls2,
+            qcNotes, qc: qcLegacy, effectiveTrimmers1, effectiveTrimmers2 } = body;
+    const qc = qcNotes ?? qcLegacy; // Support both field names (frontend sends qcNotes)
 
     // Validate required fields
     const dateValidation = validateProductionDate(date);
@@ -2005,6 +2012,14 @@ async function addProduction(body, env) {
   const safeCultivar2 = sanitizeForSheets(cultivar2 || '').substring(0, 100);
   const safeQc = sanitizeForSheets(qc || '').substring(0, 500);
 
+  // Validate effective trimmers (optional, REAL values)
+  const effTrim1 = (effectiveTrimmers1 !== undefined && effectiveTrimmers1 !== null)
+    ? Math.max(0, Math.min(50, parseFloat(effectiveTrimmers1) || 0))
+    : null;
+  const effTrim2 = (effectiveTrimmers2 !== undefined && effectiveTrimmers2 !== null)
+    ? Math.max(0, Math.min(50, parseFloat(effectiveTrimmers2) || 0))
+    : null;
+
   // Upsert - update if exists, insert if not
   const existing = await queryOne(env.DB,
     'SELECT id FROM monthly_production WHERE production_date = ? AND time_slot = ?',
@@ -2016,12 +2031,12 @@ async function addProduction(body, env) {
       UPDATE monthly_production SET
         trimmers_line1 = ?, buckers_line1 = ?, tzero_line1 = ?, cultivar1 = ?, tops_lbs1 = ?, smalls_lbs1 = ?,
         trimmers_line2 = ?, buckers_line2 = ?, tzero_line2 = ?, cultivar2 = ?, tops_lbs2 = ?, smalls_lbs2 = ?,
-        qc = ?
+        qc = ?, effective_trimmers_line1 = ?, effective_trimmers_line2 = ?
       WHERE id = ?
     `, [
       crew1.trimmers, crew1.buckers, crew1.tzero, safeCultivar1, lbs1.tops, lbs1.smalls,
       crew2.trimmers, crew2.buckers, crew2.tzero, safeCultivar2, lbs2.tops, lbs2.smalls,
-      safeQc, existing.id
+      safeQc, effTrim1, effTrim2, existing.id
     ]);
 
     // Increment version to notify clients of new data
@@ -2045,6 +2060,8 @@ async function addProduction(body, env) {
       tops_lbs2: lbs2.tops,
       smalls_lbs2: lbs2.smalls,
       qc: safeQc,
+      effective_trimmers_line1: effTrim1,
+      effective_trimmers_line2: effTrim2,
     });
 
     // Increment version to notify clients of new data
@@ -2066,6 +2083,9 @@ async function getProduction(params, env) {
     return errorResponse('Invalid date format. Use YYYY-MM-DD', 'VALIDATION_ERROR', 400);
   }
 
+  const timeSlotMultipliers = (await getConfig(env, 'schedule.time_slot_multipliers')) ?? TIME_SLOT_MULTIPLIERS;
+  const targetRate = await getEffectiveTargetRate(env, 7, timeSlotMultipliers);
+
   const rows = await query(env.DB, `
     SELECT * FROM monthly_production
     WHERE production_date = ?
@@ -2075,6 +2095,7 @@ async function getProduction(params, env) {
   return successResponse({
     success: true,
     date,
+    targetRate,
     timeSlots: ALL_TIME_SLOTS,
     production: rows.map(r => ({
       timeSlot: r.time_slot,
@@ -2090,7 +2111,9 @@ async function getProduction(params, env) {
       cultivar2: r.cultivar2 || '',
       tops2: r.tops_lbs2 || 0,
       smalls2: r.smalls_lbs2 || 0,
-      qc: r.qc || '',
+      qcNotes: r.qc || '',
+      effectiveTrimmers1: r.effective_trimmers_line1 || null,
+      effectiveTrimmers2: r.effective_trimmers_line2 || null,
     })),
   });
 }
