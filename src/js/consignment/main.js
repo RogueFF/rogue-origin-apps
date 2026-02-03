@@ -270,13 +270,54 @@ function toggleDarkMode() {
   const next = current === 'dark' ? 'light' : 'dark';
   html.setAttribute('data-theme', next);
   localStorage.setItem('theme', next);
-  const btn = el('btn-dark-mode');
-  if (btn) btn.textContent = next === 'dark' ? 'Light' : 'Dark';
+  updateThemeButton(next);
 }
 
-// Load saved theme
+function updateThemeButton(theme) {
+  const icon = el('themeIcon');
+  const label = el('themeLabel');
+  if (icon) icon.textContent = theme === 'dark' ? '☀️' : '🌙';
+  if (label) label.textContent = theme === 'dark' ? 'Light' : 'Dark';
+}
+
+function updateClock() {
+  const clockEl = el('clock');
+  const dateEl = el('dateDisplay');
+  if (!clockEl || !dateEl) return;
+
+  const now = new Date();
+  const time = now.toLocaleTimeString('en-US', { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    hour12: false 
+  });
+  const date = now.toLocaleDateString('en-US', { 
+    month: 'short', 
+    day: 'numeric',
+    year: 'numeric'
+  });
+
+  clockEl.textContent = time;
+  dateEl.textContent = date;
+  
+  // Show header time once clock is initialized
+  const headerTime = document.querySelector('.header-time');
+  if (headerTime) headerTime.style.display = 'block';
+}
+
+// Load saved theme and initialize theme button
 const savedTheme = localStorage.getItem('theme');
-if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
+if (savedTheme) {
+  document.documentElement.setAttribute('data-theme', savedTheme);
+  updateThemeButton(savedTheme);
+}
+
+// Start clock
+setInterval(updateClock, 1000);
+updateClock();
+
+// Expose toggleTheme to global scope for inline onclick handler
+window.toggleTheme = toggleDarkMode;
 
 // ─── START ──────────────────────────────────────────────
 

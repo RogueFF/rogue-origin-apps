@@ -54,38 +54,80 @@
     <!-- Header -->
     <header class="header">
       <div class="header-left">
-        <button class="mobile-menu-btn" onclick="toggleSidebar()" aria-label="Open menu">☰</button>
-        <h2 class="page-title">Consignment</h2>
+        <button class="mobile-menu-btn" onclick="toggleSidebar()" aria-label="Open menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+        <div class="header-brand">
+          <img src="/rogue-origin-apps/favicon.png" alt="Rogue Origin" class="header-logo" width="32" height="32">
+          <span class="header-brand-text">ROGUE ORIGIN</span>
+        </div>
       </div>
       <div class="header-right">
-        <button id="btn-dark-mode" class="header-btn">Dark</button>
-        <button id="btn-refresh" class="header-btn"><i class="ph-duotone ph-arrows-clockwise"></i> Refresh</button>
+        <div class="header-time">
+          <div class="time" id="clock">--:--</div>
+          <div class="date" id="dateDisplay">Loading...</div>
+        </div>
+        <button class="theme-toggle header-btn" id="btn-dark-mode" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle dark mode theme">
+          <span id="themeIcon">🌙</span>
+          <span id="themeLabel">Dark</span>
+        </button>
+        <button id="btn-refresh" class="header-btn primary"><i class="ph-duotone ph-arrows-clockwise"></i> Refresh</button>
       </div>
     </header>
 
     <!-- Partner Balance Cards -->
-    <section class="section-header">
-      <h3 class="section-title">Partners</h3>
-      <button id="btn-add-partner" class="add-partner-btn"><i class="ph-duotone ph-plus"></i> Add Partner</button>
+    <section class="partners-section card-section">
+      <div class="section-header">
+        <h3 class="section-title">Consignment Partners</h3>
+        <button id="btn-add-partner" class="add-partner-btn"><i class="ph-duotone ph-plus"></i> Add Partner</button>
+      </div>
+      <div id="partner-cards" class="partner-cards">
+        <div class="empty-state">
+          <i class="ph-duotone ph-handshake empty-state-icon"></i>
+          <p class="empty-state-text">Loading partners...</p>
+        </div>
+      </div>
     </section>
-    <div id="partner-cards" class="partner-cards">
-      <div class="empty-state"><p>Loading...</p></div>
-    </div>
 
     <!-- Partner Detail Panel -->
     <div id="partner-detail" class="partner-detail"></div>
 
     <!-- Quick Actions -->
-    <div class="quick-actions">
-      <button id="btn-new-intake" class="quick-action-btn intake"><i class="ph-duotone ph-download-simple"></i> New Intake</button>
-      <button id="btn-record-sale" class="quick-action-btn sale"><i class="ph-duotone ph-tag"></i> Record Sale</button>
-      <button id="btn-record-payment" class="quick-action-btn payment"><i class="ph-duotone ph-money"></i> Record Payment</button>
-    </div>
+    <section class="quick-actions-section card-section">
+      <h3 class="section-title">Quick Actions</h3>
+      <div class="quick-actions">
+        <button id="btn-new-intake" class="quick-action-card intake">
+          <div class="quick-action-icon">
+            <i class="ph-duotone ph-download-simple"></i>
+          </div>
+          <div class="quick-action-label">New Intake</div>
+          <div class="quick-action-hint">Record received product</div>
+        </button>
+        <button id="btn-record-sale" class="quick-action-card sale">
+          <div class="quick-action-icon">
+            <i class="ph-duotone ph-tag"></i>
+          </div>
+          <div class="quick-action-label">Record Sale</div>
+          <div class="quick-action-hint">Log product sold</div>
+        </button>
+        <button id="btn-record-payment" class="quick-action-card payment">
+          <div class="quick-action-icon">
+            <i class="ph-duotone ph-money"></i>
+          </div>
+          <div class="quick-action-label">Record Payment</div>
+          <div class="quick-action-hint">Pay partner balance</div>
+        </button>
+      </div>
+    </section>
 
     <!-- Activity Feed -->
-    <section>
+    <section class="activity-section card-section">
       <div class="section-header">
-        <h3 class="section-title">Activity</h3>
+        <h3 class="section-title">Recent Activity</h3>
         <div class="filter-bar">
           <select id="activity-filter" class="partner-select" aria-label="Filter by partner">
             <option value="">All Partners</option>
@@ -93,7 +135,11 @@
         </div>
       </div>
       <div id="activity-feed" class="activity-feed">
-        <div class="empty-state"><p>Loading...</p></div>
+        <div class="empty-state">
+          <i class="ph-duotone ph-activity empty-state-icon"></i>
+          <p class="empty-state-text">No activity yet</p>
+          <p class="empty-state-hint">Activity will appear here as you record intakes, sales, and payments</p>
+        </div>
       </div>
     </section>
   </main>
