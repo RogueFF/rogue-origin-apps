@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/duotone/style.css">
 
   <link rel="stylesheet" href="../css/shared-base.css">
-  <link rel="stylesheet" href="../css/consignment.css?v=3">
+  <link rel="stylesheet" href="../css/consignment.css?v=4">
 </head>
 <body>
   <a href="#main-content" class="skip-link">Skip to main content</a>
@@ -109,12 +109,12 @@
           <div class="quick-action-label">New Intake</div>
           <div class="quick-action-hint">Record received product</div>
         </button>
-        <button id="btn-record-sale" class="quick-action-card sale">
+        <button id="btn-inventory-count" class="quick-action-card sale">
           <div class="quick-action-icon">
-            <i class="ph-duotone ph-tag"></i>
+            <i class="ph-duotone ph-clipboard-text"></i>
           </div>
-          <div class="quick-action-label">Record Sale</div>
-          <div class="quick-action-hint">Log product sold</div>
+          <div class="quick-action-label">Inventory Count</div>
+          <div class="quick-action-hint">Update what's on the shelf</div>
         </button>
         <button id="btn-record-payment" class="quick-action-card payment">
           <div class="quick-action-icon">
@@ -192,19 +192,19 @@
     </div>
   </div>
 
-  <!-- Sale Modal -->
-  <div id="sale-modal" class="modal-overlay" role="dialog" aria-label="Record Sale">
+  <!-- Inventory Count Modal -->
+  <div id="count-modal" class="modal-overlay" role="dialog" aria-label="Inventory Count">
     <div class="modal">
-      <h2><i class="ph-duotone ph-tag"></i> Record Sale</h2>
+      <h2><i class="ph-duotone ph-clipboard-text"></i> Inventory Count</h2>
       <button class="modal-close" aria-label="Close">&times;</button>
-      <form id="sale-form">
+      <form id="count-form">
         <div class="form-group">
-          <label for="sale-partner">Partner</label>
-          <select id="sale-partner" class="partner-select" required></select>
+          <label for="count-partner">Partner</label>
+          <select id="count-partner" class="partner-select" required></select>
         </div>
         <div class="form-group">
-          <label for="sale-strain">Strain</label>
-          <select id="sale-strain" class="strain-select" required></select>
+          <label for="count-strain">Strain</label>
+          <select id="count-strain" class="strain-select" required></select>
         </div>
         <div class="form-group">
           <label>Type</label>
@@ -213,34 +213,24 @@
             <button type="button" class="toggle-option" data-value="smalls">Smalls</button>
           </div>
         </div>
-        <div class="form-group">
-          <label for="sale-weight">Weight (lbs)</label>
-          <input type="number" id="sale-weight" step="0.1" min="0.1" required>
-          <span id="sale-available" class="field-hint"></span>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="sale-price">Sale Price per lb ($)</label>
-            <input type="number" id="sale-price" step="0.01" min="0">
-          </div>
-          <div class="form-group">
-            <label for="sale-channel">Channel</label>
-            <select id="sale-channel">
-              <option value="retail">Retail</option>
-              <option value="wholesale">Wholesale</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
+        <div id="count-expected-display" class="count-expected" style="display:none;">
+          <div class="count-expected-label">Expected on hand</div>
+          <div class="count-expected-value" id="count-expected-value">—</div>
         </div>
         <div class="form-group">
-          <label for="sale-date">Date</label>
-          <input type="date" id="sale-date" required>
+          <label for="count-weight">Actual weight on shelf (lbs)</label>
+          <input type="number" id="count-weight" step="0.1" min="0" required>
+          <span id="count-diff" class="field-hint"></span>
         </div>
         <div class="form-group">
-          <label for="sale-notes">Notes (optional)</label>
-          <textarea id="sale-notes" rows="2"></textarea>
+          <label for="count-date">Date</label>
+          <input type="date" id="count-date" required>
         </div>
-        <button type="submit" class="submit-btn sale">Record Sale</button>
+        <div class="form-group">
+          <label for="count-notes">Notes (optional)</label>
+          <textarea id="count-notes" rows="2"></textarea>
+        </div>
+        <button type="submit" class="submit-btn sale">Submit Count</button>
       </form>
     </div>
   </div>

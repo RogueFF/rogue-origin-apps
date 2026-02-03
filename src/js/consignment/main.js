@@ -75,7 +75,7 @@ async function showPartnerDetail(partnerId) {
 function setupEventListeners() {
   // Quick action buttons
   el('btn-new-intake')?.addEventListener('click', () => ui.openModal('intake-modal'));
-  el('btn-record-sale')?.addEventListener('click', () => ui.openModal('sale-modal'));
+  el('btn-inventory-count')?.addEventListener('click', () => ui.openModal('count-modal'));
   el('btn-record-payment')?.addEventListener('click', () => ui.openModal('payment-modal'));
   el('btn-add-partner')?.addEventListener('click', () => ui.openModal('partner-modal'));
 
@@ -101,7 +101,7 @@ function setupEventListeners() {
 
   // Form submissions
   el('intake-form')?.addEventListener('submit', handleIntakeSubmit);
-  el('sale-form')?.addEventListener('submit', handleSaleSubmit);
+  el('count-form')?.addEventListener('submit', handleCountSubmit);
   el('payment-form')?.addEventListener('submit', handlePaymentSubmit);
   el('partner-form')?.addEventListener('submit', handlePartnerSubmit);
 
@@ -127,27 +127,36 @@ function setupEventListeners() {
     intakeStrain.addEventListener('change', triggerAutoFill);
   }
 
-  // Sale form: show available inventory
-  const salePartner = el('sale-partner');
-  const saleStrain = el('sale-strain');
-  if (salePartner && saleStrain) {
-    const updateAvailable = async () => {
-      const type = el('sale-modal')?.querySelector('.toggle-option.active')?.dataset.value || 'tops';
-      const hint = el('sale-available');
-      if (!salePartner.value || !saleStrain.value) {
-        if (hint) hint.textContent = '';
+  // Count form: show expected inventory
+  const countPartner = el('count-partner');
+  const countStrain = el('count-strain');
+  if (countPartner && countStrain) {
+    const updateExpected = async () => {
+      const type = el('count-modal')?.querySelector('.toggle-option.active')?.dataset.value || 'tops';
+      const display = el('count-expected-display');
+      const valueEl = el('count-expected-value');
+      const diffEl = el('count-diff');
+      if (!countPartner.value || !countStrain.value) {
+        if (display) display.style.display = 'none';
         return;
       }
       try {
-        const result = await api.getInventory(salePartner.value);
-        const match = (result.data || []).find(i => i.strain === saleStrain.value && i.type === type);
-        if (hint) hint.textContent = match ? `${match.on_hand_lbs.toFixed(1)} lbs available` : 'No inventory';
+        const result = await api.getInventory(countPartner.value);
+        const match = (result.data || []).find(i => i.strain === countStrain.value && i.type === type);
+        const expected = match ? match.on_hand_lbs : 0;
+        if (display) display.style.display = 'block';
+        if (valueEl) valueEl.textContent = expected.toFixed(1) + ' lbs';
       } catch {
-        if (hint) hint.textContent = '';
+        if (display) display.style.display = 'none';
       }
     };
-    salePartner.addEventListener('change', updateAvailable);
-    saleStrain.addEventListener('change', updateAvailable);
+    countPartner.addEventListener('change', updateExpected);
+    countStrain.addEventListener('change', updateExpected);
+    
+    // Also update toggle click for count modal
+    el('count-modal')?.querySelectorAll('.toggle-option').forEach(btn => {
+      btn.addEventListener('click', updateExpected);
+    });
   }
 
   // Activity filter
@@ -185,25 +194,28 @@ async function handleIntakeSubmit(e) {
   }
 }
 
-async function handleSaleSubmit(e) {
+async function handleCountSubmit(e) {
   e.preventDefault();
-  const type = el('sale-modal')?.querySelector('.toggle-option.active')?.dataset.value || 'tops';
+  const type = el('count-modal')?.querySelector('.toggle-option.active')?.dataset.value || 'tops';
   try {
-    await api.saveSale({
-      partner_id: el('sale-partner').value,
-      date: el('sale-date').value,
-      strain: el('sale-strain').value,
+    const result = await api.saveInventoryCount({
+      partner_id: el('count-partner').value,
+      date: el('count-date').value,
+      strain: el('count-strain').value,
       type,
-      weight_lbs: parseFloat(el('sale-weight').value),
-      sale_price_per_lb: el('sale-price')?.value ? parseFloat(el('sale-price').value) : null,
-      channel: el('sale-channel')?.value || 'retail',
-      notes: el('sale-notes')?.value || '',
+      counted_lbs: parseFloat(el('count-weight').value),
+      notes: el('count-notes')?.value || '',
     });
-    ui.closeModal('sale-modal');
-    ui.showToast('Sale recorded');
+    ui.closeModal('count-modal');
+    const data = result.data;
+    if (data.sold_lbs > 0) {
+      ui.showToast(`Count recorded — ${data.sold_lbs.toFixed(1)} lbs sold since last count`);
+    } else {
+      ui.showToast('Count recorded — inventory matches');
+    }
     refreshAll();
   } catch (err) {
-    ui.showToast(err.message || 'Failed to save sale', 'error');
+    ui.showToast(err.message || 'Failed to save count', 'error');
   }
 }
 
