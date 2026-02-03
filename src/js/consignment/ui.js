@@ -47,7 +47,11 @@ export function renderActivityFeed(activities, container) {
     if (a.activity_type === 'intake') {
       detail = `<strong>${esc(a.partner_name)}</strong> — ${a.weight_lbs} lbs ${esc(a.strain)} (${a.type}) @ $${fmt(a.price)}/lb`;
     } else if (a.activity_type === 'sale') {
-      detail = `<strong>${esc(a.partner_name)}</strong> — Sold ${a.weight_lbs} lbs ${esc(a.strain)} (${a.type})${a.price ? ' @ $' + fmt(a.price) + '/lb' : ''}`;
+      if (a.method === 'inventory_count') {
+        detail = `<strong>${esc(a.partner_name)}</strong> — Inventory count: ${a.weight_lbs} lbs ${esc(a.strain)} (${a.type}) sold`;
+      } else {
+        detail = `<strong>${esc(a.partner_name)}</strong> — Sold ${a.weight_lbs} lbs ${esc(a.strain)} (${a.type})${a.price ? ' @ $' + fmt(a.price) + '/lb' : ''}`;
+      }
     } else if (a.activity_type === 'payment') {
       detail = `<strong>${esc(a.partner_name)}</strong> — $${fmt(a.amount)} via ${a.method || 'unknown'}`;
     }
