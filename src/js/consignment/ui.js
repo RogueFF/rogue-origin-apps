@@ -137,6 +137,11 @@ export function closeModal(modalId) {
       const topsBtn = overlay.querySelector('[data-value="tops"]');
       if (topsBtn) topsBtn.classList.add('active');
     }
+    // Clear intake line items
+    if (modalId === 'intake-modal') {
+      const lines = overlay.querySelector('#intake-lines');
+      if (lines) lines.innerHTML = '';
+    }
   }
 }
 

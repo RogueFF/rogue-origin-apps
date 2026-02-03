@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/duotone/style.css">
 
   <link rel="stylesheet" href="../css/shared-base.css">
-  <link rel="stylesheet" href="../css/consignment.css?v=9">
+  <link rel="stylesheet" href="../css/consignment.css?v=10">
 </head>
 <body>
   <a href="#main-content" class="skip-link">Skip to main content</a>
@@ -150,39 +150,37 @@
 
   <!-- Intake Modal -->
   <div id="intake-modal" class="modal-overlay" role="dialog" aria-label="New Intake">
-    <div class="modal">
+    <div class="modal modal-wide">
       <h2><i class="ph-duotone ph-download-simple"></i> New Intake</h2>
       <button class="modal-close" aria-label="Close">&times;</button>
       <form id="intake-form">
-        <div class="form-group">
-          <label for="intake-partner">Partner</label>
-          <select id="intake-partner" class="partner-select" required></select>
-        </div>
-        <div class="form-group">
-          <label for="intake-strain">Strain</label>
-          <select id="intake-strain" class="strain-select" required></select>
-        </div>
-        <div class="form-group">
-          <label>Type</label>
-          <div class="toggle-group">
-            <button type="button" class="toggle-option active" data-value="tops">Tops</button>
-            <button type="button" class="toggle-option" data-value="smalls">Smalls</button>
-          </div>
-        </div>
         <div class="form-row">
-          <div class="form-group">
-            <label for="intake-weight">Weight (lbs)</label>
-            <input type="number" id="intake-weight" step="0.1" min="0.1" required>
+          <div class="form-group flex-1">
+            <label for="intake-partner">Partner</label>
+            <select id="intake-partner" class="partner-select" required></select>
           </div>
           <div class="form-group">
-            <label for="intake-price">Price per lb ($)</label>
-            <input type="number" id="intake-price" step="0.01" min="0.01" required>
+            <label for="intake-date">Date</label>
+            <input type="date" id="intake-date" required>
           </div>
         </div>
-        <div class="form-group">
-          <label for="intake-date">Date</label>
-          <input type="date" id="intake-date" required>
+        
+        <div class="line-items-header">
+          <span class="li-col-strain">Strain</span>
+          <span class="li-col-type">Type</span>
+          <span class="li-col-weight">Weight (lbs)</span>
+          <span class="li-col-price">Price/lb ($)</span>
+          <span class="li-col-remove"></span>
         </div>
+        
+        <div id="intake-lines" class="line-items">
+          <!-- Line items inserted here by JS -->
+        </div>
+        
+        <button type="button" id="btn-add-line" class="add-line-btn">
+          <i class="ph-duotone ph-plus-circle"></i> Add Line
+        </button>
+        
         <div class="form-group">
           <label for="intake-notes">Notes (optional)</label>
           <textarea id="intake-notes" rows="2"></textarea>
