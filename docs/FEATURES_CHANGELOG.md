@@ -4,6 +4,36 @@ Detailed implementation history for major features in the Rogue Origin Operation
 
 ---
 
+## Recent Features (February 2026)
+
+### Hourly Entry Goal Fix & Mid-Hour Crew Changes (2026-02-03)
+
+**Bugs Fixed**:
+1. `getProduction` API was not returning `targetRate` — hourly entry always used hardcoded 0.9 instead of the 7-day rolling average
+2. QC notes never persisted — frontend sent `qcNotes`, backend read `qc` (field name mismatch in both save and load directions)
+3. `copyCrewFromPrevious()` called undefined `handleFieldChange()` — replaced with `scheduleAutoSave()`
+
+**Feature**: Mid-hour crew changes now compute time-weighted effective trimmers for goal calculations.
+
+Previously, changing crew mid-hour would overwrite the trimmer count for the entire hour. Now the system tracks when changes happen and calculates a weighted average:
+- 5 trimmers for 30 min + 3 trimmers for 30 min = 4.0 effective trimmers
+- Goal, predicted, and step guide all use the weighted count
+- Effective trimmers are stored in D1 and used by the scoreboard/daily projections
+
+**Schema Change**: `monthly_production` table gained two columns:
+- `effective_trimmers_line1 REAL`
+- `effective_trimmers_line2 REAL`
+
+**API Changes**:
+- `getProduction` response now includes `targetRate`, `effectiveTrimmers1`, `effectiveTrimmers2`
+- `getProduction` response renamed `qc` to `qcNotes` for consistency with frontend
+- `addProduction` accepts `qcNotes` (with `qc` fallback) and `effectiveTrimmers1/2`
+- `getScoreboardData` uses effective trimmers when available for goal calculations
+
+**Files Changed**: `src/js/hourly-entry/index.js`, `workers/src/handlers/production-d1.js`, `workers/schema.sql`
+
+---
+
 ## Recent Features (January 2026)
 
 ### Shopify Webhook Migration to Cloudflare (2026-01-23)
