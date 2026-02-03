@@ -228,6 +228,21 @@ function setupEventListeners() {
 
   // Dark mode toggle
   el('btn-dark-mode')?.addEventListener('click', toggleDarkMode);
+
+  // Quick intake from partner card
+  document.addEventListener('quickIntake', (e) => {
+    const { partnerId } = e.detail;
+    const container = el('intake-lines');
+    if (container && container.children.length === 0) {
+      addIntakeLine();
+    }
+    ui.openModal('intake-modal');
+    // Pre-select the partner
+    const partnerSelect = el('intake-partner');
+    if (partnerSelect) {
+      partnerSelect.value = partnerId;
+    }
+  });
 }
 
 // ─── FORM HANDLERS ──────────────────────────────────────
