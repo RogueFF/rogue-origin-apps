@@ -3,7 +3,7 @@
  * Handles rendering partner cards, activity feed, modals, and partner detail
  */
 
-import * as api from './api.js';
+import * as api from './api.js?v=4';
 
 // ─── PARTNER CARDS ──────────────────────────────────────
 
@@ -94,7 +94,12 @@ export function renderPartnerDetail(detail, container, onClose) {
         <h2>${esc(d.partner.name)}</h2>
         ${d.partner.contact_name ? `<div class="detail-contact">${esc(d.partner.contact_name)}</div>` : ''}
       </div>
-      <button class="close-detail-btn" aria-label="Close">&times;</button>
+      <div class="detail-header-actions">
+        <button class="delete-partner-btn" data-id="${d.partner.id}" title="Delete partner" aria-label="Delete partner">
+          <i class="ph-duotone ph-trash"></i>
+        </button>
+        <button class="close-detail-btn" aria-label="Close">&times;</button>
+      </div>
     </div>
     
     <div class="detail-body">
@@ -152,6 +157,9 @@ export function renderPartnerDetail(detail, container, onClose) {
                   <span class="history-weight">${i.weight_lbs} lbs</span>
                   <span class="history-price">\$${fmt(i.price_per_lb)}/lb</span>
                 </div>
+                <button class="row-delete-btn delete-intake" data-id="${i.id}" title="Delete intake" aria-label="Delete">
+                  <i class="ph-duotone ph-trash"></i>
+                </button>
               </div>
             `).join('')}
           </div>
@@ -173,6 +181,9 @@ export function renderPartnerDetail(detail, container, onClose) {
                   <span class="history-weight">${s.weight_lbs} lbs</span>
                   ${s.channel ? `<span class="history-channel">${esc(s.channel)}</span>` : ''}
                 </div>
+                <button class="row-delete-btn delete-sale" data-id="${s.id}" title="Delete sale" aria-label="Delete">
+                  <i class="ph-duotone ph-trash"></i>
+                </button>
               </div>
             `).join('')}
           </div>
@@ -193,6 +204,9 @@ export function renderPartnerDetail(detail, container, onClose) {
                   <span class="history-method">${esc(p.method || 'check')}</span>
                   ${p.reference_number ? `<span class="history-ref">#${esc(p.reference_number)}</span>` : ''}
                 </div>
+                <button class="row-delete-btn delete-payment" data-id="${p.id}" title="Delete payment" aria-label="Delete">
+                  <i class="ph-duotone ph-trash"></i>
+                </button>
               </div>
             `).join('')}
           </div>
@@ -204,6 +218,72 @@ export function renderPartnerDetail(detail, container, onClose) {
   container.querySelector('.close-detail-btn').addEventListener('click', () => {
     container.classList.remove('active');
     if (onClose) onClose();
+  });
+  
+  // Delete partner
+  const deletePartnerBtn = container.querySelector('.delete-partner-btn');
+  if (deletePartnerBtn) {
+    deletePartnerBtn.addEventListener('click', async () => {
+      if (confirm(`Delete ${d.partner.name} and all their records?`)) {
+        try {
+          await api.deletePartner(d.partner.id);
+          container.classList.remove('active');
+          if (onClose) onClose();
+          document.dispatchEvent(new CustomEvent('refreshAll'));
+        } catch (err) {
+          alert('Failed to delete partner: ' + err.message);
+        }
+      }
+    });
+  }
+  
+  // Delete intakes
+  container.querySelectorAll('.delete-intake').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (confirm('Delete this intake?')) {
+        try {
+          await api.deleteIntake(btn.dataset.id);
+          // Refresh the detail panel
+          const result = await api.getPartnerDetail(d.partner.id);
+          renderPartnerDetail(result.data, container, onClose);
+          document.dispatchEvent(new CustomEvent('refreshAll'));
+        } catch (err) {
+          alert('Failed to delete: ' + err.message);
+        }
+      }
+    });
+  });
+  
+  // Delete sales
+  container.querySelectorAll('.delete-sale').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (confirm('Delete this sale?')) {
+        try {
+          await api.deleteSale(btn.dataset.id);
+          const result = await api.getPartnerDetail(d.partner.id);
+          renderPartnerDetail(result.data, container, onClose);
+          document.dispatchEvent(new CustomEvent('refreshAll'));
+        } catch (err) {
+          alert('Failed to delete: ' + err.message);
+        }
+      }
+    });
+  });
+  
+  // Delete payments
+  container.querySelectorAll('.delete-payment').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (confirm('Delete this payment?')) {
+        try {
+          await api.deletePayment(btn.dataset.id);
+          const result = await api.getPartnerDetail(d.partner.id);
+          renderPartnerDetail(result.data, container, onClose);
+          document.dispatchEvent(new CustomEvent('refreshAll'));
+        } catch (err) {
+          alert('Failed to delete: ' + err.message);
+        }
+      }
+    });
   });
 }
 
