@@ -263,6 +263,7 @@ let isSaving = false; // Prevent concurrent saves
 let shiftStartTime = null; // Shared shift start time (syncs with scoreboard)
 let isOpeningTimePicker = false; // Track when we're programmatically opening the picker
 let lastTimePickerValue = null; // Track last value to detect real changes
+let crewChangeLog = []; // Track crew changes within current hour: [{minutesMark, trimmers1, trimmers2}]
 
 // Crew fields to track for modifications
 const CREW_FIELDS = ['buckers1', 'trimmers1', 'tzero1', 'qcperson', 'cultivar1', 'buckers2', 'trimmers2', 'tzero2', 'cultivar2'];
@@ -757,9 +758,11 @@ function createSlotElement(slot, currentSlot) {
   // Shorten cultivar name (remove year prefix if present)
   const cultivarShort = cultivar.replace(/^\d{4}\s*/, '');
 
-  // Calculate hourly target (trimmers × rate × slot multiplier)
+  // Calculate hourly target using effective trimmers (accounts for mid-hour crew changes)
   const multiplier = getSlotMultiplier(slot);
-  const hourlyTarget = totalTrimmers * targetRate * multiplier;
+  const effective = getEffectiveTrimmers(slot, data);
+  const effectiveTotal = effective.effectiveTrimmers1 + effective.effectiveTrimmers2;
+  const hourlyTarget = effectiveTotal * targetRate * multiplier;
   const metTarget = totalTops >= hourlyTarget;
 
   const div = document.createElement('div');
@@ -886,6 +889,14 @@ function populateForm(slot) {
     hadProduction: (data.tops1 || 0) + (data.tops2 || 0) > 0,
   };
 
+  // Initialize crew change log with current crew as the baseline entry
+  const initialTrimmers1 = data.trimmers1 || 0;
+  const initialTrimmers2 = data.trimmers2 || 0;
+  const slotStartMin = SLOT_START_MINUTES[slot];
+  crewChangeLog = (initialTrimmers1 > 0 || initialTrimmers2 > 0)
+    ? [{ minutesMark: slotStartMin || getCurrentMinutes(), trimmers1: initialTrimmers1, trimmers2: initialTrimmers2 }]
+    : [];
+
   // Reset modified badge
   updateCrewModifiedBadge();
 
@@ -963,8 +974,7 @@ function copyCrewFromPrevious() {
   }, 1500);
 
   // Trigger save and update UI
-  handleFieldChange();
-  updateStepGuide();
+  scheduleAutoSave();
 }
 
 function isCrewModified() {
@@ -1007,6 +1017,108 @@ function getCrewChanges() {
   return changes;
 }
 
+/**
+ * Get current time as minutes from midnight
+ */
+function getCurrentMinutes() {
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes();
+}
+
+/**
+ * Record a crew change in the log for the current slot.
+ * Called when trimmer count changes during an active hour.
+ */
+function recordCrewChange() {
+  const trimmers1 = parseInt(document.getElementById('trimmers1').value, 10) || 0;
+  const trimmers2 = parseInt(document.getElementById('trimmers2').value, 10) || 0;
+  const minutesMark = getCurrentMinutes();
+
+  // Only record if trimmers actually changed from the last log entry
+  const lastEntry = crewChangeLog[crewChangeLog.length - 1];
+  if (lastEntry && lastEntry.trimmers1 === trimmers1 && lastEntry.trimmers2 === trimmers2) {
+    return; // No trimmer change
+  }
+
+  crewChangeLog.push({ minutesMark, trimmers1, trimmers2 });
+}
+
+/**
+ * Calculate time-weighted effective trimmers for a slot.
+ * If crew changed mid-hour, this returns the weighted average.
+ * For slots with no crew changes (or loaded from saved data), returns raw trimmers.
+ *
+ * @param {string} slot - Time slot string
+ * @param {object} [savedData] - Optional saved data from dayData (for timeline/summary use)
+ * @returns {{ effectiveTrimmers1: number, effectiveTrimmers2: number }}
+ */
+function getEffectiveTrimmers(slot, savedData = null) {
+  // If savedData has pre-computed effective trimmers from the API, use those
+  if (savedData && savedData.effectiveTrimmers1 != null) {
+    return {
+      effectiveTrimmers1: savedData.effectiveTrimmers1,
+      effectiveTrimmers2: savedData.effectiveTrimmers2 || 0,
+    };
+  }
+
+  // For the currently-open editor slot with active crew changes
+  const isCurrentEditorSlot = slot === TIME_SLOTS[currentSlotIndex];
+  if (isCurrentEditorSlot && crewChangeLog.length > 1) {
+    const slotStartMinutes = SLOT_START_MINUTES[slot];
+    if (slotStartMinutes === undefined) {
+      const t1 = parseInt(document.getElementById('trimmers1').value, 10) || 0;
+      const t2 = parseInt(document.getElementById('trimmers2').value, 10) || 0;
+      return { effectiveTrimmers1: t1, effectiveTrimmers2: t2 };
+    }
+
+    const baseMultiplier = (slot === '4:00 PM – 4:30 PM' || slot === '12:30 PM – 1:00 PM') ? 0.5 : 1;
+    const slotDuration = baseMultiplier === 0.5 ? 30 : 60;
+    const slotEndMinutes = slotStartMinutes + slotDuration;
+    const nowMinutes = getCurrentMinutes();
+    // Use current time or slot end, whichever is earlier
+    const endMark = Math.min(nowMinutes, slotEndMinutes);
+
+    let weightedSum1 = 0, weightedSum2 = 0, totalDuration = 0;
+
+    for (let i = 0; i < crewChangeLog.length; i++) {
+      const entry = crewChangeLog[i];
+      const segStart = Math.max(entry.minutesMark, slotStartMinutes);
+      const segEnd = (i + 1 < crewChangeLog.length)
+        ? Math.min(crewChangeLog[i + 1].minutesMark, endMark)
+        : endMark;
+      const duration = Math.max(0, segEnd - segStart);
+
+      weightedSum1 += entry.trimmers1 * duration;
+      weightedSum2 += entry.trimmers2 * duration;
+      totalDuration += duration;
+    }
+
+    if (totalDuration > 0) {
+      return {
+        effectiveTrimmers1: Math.round(weightedSum1 / totalDuration * 10) / 10,
+        effectiveTrimmers2: Math.round(weightedSum2 / totalDuration * 10) / 10,
+      };
+    }
+  }
+
+  // Default: use raw trimmer values from form or saved data
+  if (isCurrentEditorSlot) {
+    const t1 = parseInt(document.getElementById('trimmers1').value, 10) || 0;
+    const t2 = parseInt(document.getElementById('trimmers2').value, 10) || 0;
+    return { effectiveTrimmers1: t1, effectiveTrimmers2: t2 };
+  }
+
+  // From saved data (no effective trimmers stored)
+  if (savedData) {
+    return {
+      effectiveTrimmers1: savedData.trimmers1 || 0,
+      effectiveTrimmers2: savedData.trimmers2 || 0,
+    };
+  }
+
+  return { effectiveTrimmers1: 0, effectiveTrimmers2: 0 };
+}
+
 function updateCrewModifiedBadge() {
   const badge = document.getElementById('crew-modified-badge');
   if (badge) {
@@ -1037,10 +1149,12 @@ function updateStepGuide() {
   const totalTops = tops1 + tops2;  // Only tops count toward target (smalls are byproduct)
   const hasProduction = totalTops > 0;
 
-  // Calculate hourly target
+  // Calculate hourly target using effective (weighted) trimmers if crew changed mid-hour
   const slot = TIME_SLOTS[currentSlotIndex];
   const multiplier = getSlotMultiplier(slot);
-  const hourlyTarget = totalTrimmers * targetRate * multiplier;
+  const effective = getEffectiveTrimmers(slot);
+  const effectiveTotal = effective.effectiveTrimmers1 + effective.effectiveTrimmers2;
+  const hourlyTarget = effectiveTotal * targetRate * multiplier;
   const metTarget = totalTops >= hourlyTarget;
 
   // Check if reason provided for missed target
@@ -1101,6 +1215,10 @@ function updateStepGuide() {
 
 function collectFormData() {
   const slot = TIME_SLOTS[currentSlotIndex];
+
+  // Calculate effective trimmers (weighted average if crew changed mid-hour)
+  const effective = getEffectiveTrimmers(slot);
+
   return {
     date: currentDate,
     timeSlot: slot,
@@ -1118,11 +1236,16 @@ function collectFormData() {
     smalls2: parseFloat(document.getElementById('smalls2').value) || 0,
     qcperson: parseInt(document.getElementById('qcperson').value, 10) || 0,
     qcNotes: document.getElementById('qcNotes').value,
+    effectiveTrimmers1: effective.effectiveTrimmers1,
+    effectiveTrimmers2: effective.effectiveTrimmers2,
   };
 }
 
 function scheduleAutoSave() {
   if (saveTimeout) clearTimeout(saveTimeout);
+
+  // Record crew change if trimmers changed (for weighted goal calculation)
+  recordCrewChange();
 
   // Update UI state immediately
   updateCrewModifiedBadge();
@@ -1233,6 +1356,11 @@ async function saveEntry(retryData = null) {
         hadProduction: (data.tops1 || 0) + (data.tops2 || 0) > 0,
       };
       updateCrewModifiedBadge();
+
+      // Reset crew change log with current crew as new baseline
+      const currentTrimmers1 = parseInt(document.getElementById('trimmers1').value, 10) || 0;
+      const currentTrimmers2 = parseInt(document.getElementById('trimmers2').value, 10) || 0;
+      crewChangeLog = [{ minutesMark: getCurrentMinutes(), trimmers1: currentTrimmers1, trimmers2: currentTrimmers2 }];
     }
 
     // Show success indicator
@@ -1352,10 +1480,12 @@ function updateTimelineSummary() {
       if (slot === currentSlot) {
         return; // Don't add to target - hour not complete
       }
-      // Calculate target based on trimmers
-      const trimmers = (row.trimmers1 || 0) + (row.trimmers2 || 0);
-      const multiplier = getSlotMultiplier(row.timeSlot || slot);
-      totalTarget += trimmers * targetRate * multiplier;
+      // Calculate target using effective trimmers (accounts for mid-hour crew changes)
+      const slotKey = row.timeSlot || slot;
+      const effective = getEffectiveTrimmers(slotKey, row);
+      const effectiveTotal = effective.effectiveTrimmers1 + effective.effectiveTrimmers2;
+      const multiplier = getSlotMultiplier(slotKey);
+      totalTarget += effectiveTotal * targetRate * multiplier;
     }
   });
 
