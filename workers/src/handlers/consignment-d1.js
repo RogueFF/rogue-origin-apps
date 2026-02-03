@@ -35,6 +35,8 @@ export async function handleConsignmentD1(request, env, ctx) {
     // === SALES ===
     case 'saveConsignmentSale':
       return saveSale(db, body);
+    case 'saveConsignmentInventoryCount':
+      return saveInventoryCount(db, body);
 
     // === PAYMENTS ===
     case 'saveConsignmentPayment':
@@ -239,6 +241,56 @@ async function saveSale(db, body) {
   `, [partner_id, date, strain, type, weight_lbs, sale_price_per_lb || null, channel || 'retail', notes || null]);
 
   return successResponse({ success: true, id: result.lastRowId });
+}
+
+// ─── INVENTORY COUNT ────────────────────────────────────
+
+async function saveInventoryCount(db, body) {
+  const { partner_id, date, strain, type, counted_lbs, notes } = body;
+  
+  // Validate
+  if (!partner_id) throw createError('VALIDATION_ERROR', 'Partner is required');
+  if (!date) throw createError('VALIDATION_ERROR', 'Date is required');
+  if (!strain) throw createError('VALIDATION_ERROR', 'Strain is required');
+  if (!type || !['tops', 'smalls'].includes(type)) throw createError('VALIDATION_ERROR', 'Type must be tops or smalls');
+  if (counted_lbs == null || counted_lbs < 0) throw createError('VALIDATION_ERROR', 'Count must be zero or positive');
+  
+  // Calculate expected on hand
+  const inv = await queryOne(db, `
+    SELECT
+      COALESCE((SELECT SUM(weight_lbs) FROM consignment_intakes WHERE partner_id = ? AND strain = ? AND type = ?), 0) -
+      COALESCE((SELECT SUM(weight_lbs) FROM consignment_sales WHERE partner_id = ? AND strain = ? AND type = ?), 0)
+      as expected
+  `, [partner_id, strain, type, partner_id, strain, type]);
+  
+  const expected = inv?.expected || 0;
+  const sold = Math.max(0, expected - counted_lbs);
+  
+  // If there's a difference (stuff was sold), auto-create a sale record
+  if (sold > 0) {
+    // Get the intake price for this strain/type from most recent intake
+    const priceRow = await queryOne(db, `
+      SELECT price_per_lb FROM consignment_intakes 
+      WHERE partner_id = ? AND strain = ? AND type = ?
+      ORDER BY date DESC LIMIT 1
+    `, [partner_id, strain, type]);
+    
+    await execute(db, `
+      INSERT INTO consignment_sales (partner_id, date, strain, type, weight_lbs, sale_price_per_lb, channel, notes)
+      VALUES (?, ?, ?, ?, ?, ?, 'inventory_count', ?)
+    `, [partner_id, date, strain, type, sold, priceRow?.price_per_lb || null, 
+        `Inventory count: ${counted_lbs} lbs on hand (expected ${expected.toFixed(1)} lbs)`]);
+  }
+  
+  return successResponse({ 
+    success: true, 
+    data: {
+      expected_lbs: expected,
+      counted_lbs: counted_lbs,
+      sold_lbs: sold,
+      auto_sale_created: sold > 0
+    }
+  });
 }
 
 // ─── PAYMENTS ───────────────────────────────────────────

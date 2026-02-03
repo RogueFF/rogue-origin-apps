@@ -56,6 +56,16 @@ export function saveSale(data) {
   return apiPost('saveConsignmentSale', data);
 }
 
+export async function saveInventoryCount(data) {
+  const res = await fetch(`${API_BASE}?action=saveConsignmentInventoryCount`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Failed to save inventory count');
+  return res.json();
+}
+
 export function savePayment(data) {
   return apiPost('saveConsignmentPayment', data);
 }
