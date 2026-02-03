@@ -306,8 +306,9 @@ npx wrangler secret put WEBHOOK_SECRET
 ### Cloudflare D1 (Primary)
 - SQLite database on Cloudflare edge
 - 15 tables in `workers/schema.sql`
-- Used by: Barcode, Kanban, SOP, Orders
+- Used by: Barcode, Kanban, SOP, Orders, Production (hourly entry)
 - Query helpers: `workers/src/lib/db.js`
+- `monthly_production` table includes `effective_trimmers_line1/line2` (REAL) for time-weighted crew counts during mid-hour changes
 
 ### Google Sheets (Production Only)
 - Manual hourly data entry workflow

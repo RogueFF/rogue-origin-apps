@@ -299,6 +299,8 @@ CREATE TABLE IF NOT EXISTS monthly_production (
   wage_rate REAL,
   qc TEXT,
   notes TEXT,
+  effective_trimmers_line1 REAL,
+  effective_trimmers_line2 REAL,
   UNIQUE(production_date, time_slot)
 );
 
