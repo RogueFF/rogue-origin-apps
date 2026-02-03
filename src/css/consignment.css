@@ -1186,6 +1186,32 @@ body::before {
   color: var(--text);
 }
 
+/* Inventory Count - Expected Display */
+.count-expected {
+  background: linear-gradient(135deg, rgba(102, 137, 113, 0.08) 0%, rgba(102, 137, 113, 0.03) 100%);
+  border: 1px solid rgba(102, 137, 113, 0.2);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-bottom: var(--space-md);
+  text-align: center;
+}
+
+.count-expected-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.count-expected-value {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--ro-green);
+}
+
 /* Submit Buttons */
 .submit-btn {
   width: 100%;
