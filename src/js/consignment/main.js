@@ -3,8 +3,8 @@
  * Init, event listeners, auto-refresh, orchestration
  */
 
-import * as api from './api.js';
-import * as ui from './ui.js';
+import * as api from './api.js?v=3';
+import * as ui from './ui.js?v=3';
 
 let partners = [];
 let strains = [];
