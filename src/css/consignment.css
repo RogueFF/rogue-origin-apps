@@ -675,33 +675,6 @@ body::before {
   align-items: center;
 }
 
-.partner-select,
-.strain-select {
-  padding: 9px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  font-weight: 500;
-  background: var(--bg);
-  color: var(--text);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.partner-select:hover,
-.strain-select:hover {
-  border-color: var(--ro-green);
-  background: var(--bg-card);
-}
-
-.partner-select:focus,
-.strain-select:focus {
-  outline: none;
-  border-color: var(--ro-green);
-  box-shadow: 0 0 0 3px rgba(102, 137, 113, 0.1);
-}
-
 .activity-feed {
   display: flex;
   flex-direction: column;
@@ -1093,6 +1066,240 @@ body::before {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   PREMIUM SELECT DROPDOWNS
+   ═══════════════════════════════════════════════════════════ */
+
+select,
+.partner-select,
+.strain-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-color: var(--bg);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23668971' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  padding: 10px 40px 10px 14px;
+  border: 1.5px solid rgba(102, 137, 113, 0.2);
+  border-radius: var(--radius-md);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+  line-height: 1.5;
+}
+
+select:hover,
+.partner-select:hover,
+.strain-select:hover {
+  border-color: var(--ro-green);
+  background-color: rgba(102, 137, 113, 0.04);
+}
+
+select:focus,
+.partner-select:focus,
+.strain-select:focus {
+  outline: none;
+  border-color: var(--ro-green);
+  box-shadow: 0 0 0 3px rgba(102, 137, 113, 0.12);
+  background-color: var(--bg-card);
+}
+
+[data-theme="dark"] select,
+[data-theme="dark"] .partner-select,
+[data-theme="dark"] .strain-select {
+  background-color: rgba(30, 38, 30, 0.6);
+  border-color: rgba(255, 255, 255, 0.12);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2388a990' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+}
+
+[data-theme="dark"] select:hover {
+  border-color: var(--ro-green);
+  background-color: rgba(102, 137, 113, 0.1);
+}
+
+[data-theme="dark"] select:focus {
+  border-color: var(--ro-green);
+  box-shadow: 0 0 0 3px rgba(102, 137, 113, 0.15);
+}
+
+select option {
+  background: var(--bg-card);
+  color: var(--text);
+  padding: 8px;
+}
+
+input[type="number"],
+input[type="date"],
+input[type="text"],
+input[type="email"],
+input[type="tel"],
+textarea {
+  appearance: none;
+  background: var(--bg);
+  border: 1.5px solid rgba(102, 137, 113, 0.2);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  transition: all 0.2s ease;
+  width: 100%;
+  line-height: 1.5;
+}
+
+input:hover, textarea:hover {
+  border-color: var(--ro-green);
+}
+
+input:focus, textarea:focus {
+  outline: none;
+  border-color: var(--ro-green);
+  box-shadow: 0 0 0 3px rgba(102, 137, 113, 0.12);
+  background: var(--bg-card);
+}
+
+[data-theme="dark"] input,
+[data-theme="dark"] textarea {
+  background: rgba(30, 38, 30, 0.6);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LINE ITEMS (Multi-line intake)
+   ═══════════════════════════════════════════════════════════ */
+
+.modal-wide {
+  max-width: 720px;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+.line-items-header {
+  display: grid;
+  grid-template-columns: 2fr 80px 100px 100px 40px;
+  gap: 8px;
+  padding: 0 0 8px 0;
+  border-bottom: 1px solid var(--border-light);
+  margin-bottom: 8px;
+}
+
+.line-items-header span {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+}
+
+.line-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: var(--space-sm);
+}
+
+.line-item {
+  display: grid;
+  grid-template-columns: 2fr 80px 100px 100px 40px;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(102, 137, 113, 0.06);
+  animation: fadeSlideIn 0.2s ease;
+}
+
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.line-item select,
+.line-item input {
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.line-item .toggle-compact {
+  gap: 0;
+}
+
+.line-item .toggle-compact .toggle-option {
+  padding: 6px 12px;
+  font-size: 12px;
+  min-width: unset;
+}
+
+.remove-line-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+  font-size: 18px;
+}
+
+.remove-line-btn:hover {
+  color: #e74c3c;
+  background: rgba(231, 76, 60, 0.08);
+}
+
+.add-line-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 1.5px dashed rgba(102, 137, 113, 0.3);
+  border-radius: var(--radius-md);
+  padding: 10px 16px;
+  color: var(--ro-green);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+  justify-content: center;
+  margin-bottom: var(--space-md);
+}
+
+.add-line-btn:hover {
+  border-color: var(--ro-green);
+  background: rgba(102, 137, 113, 0.06);
+}
+
+.add-line-btn i {
+  font-size: 18px;
+}
+
+/* Mobile: stack line items vertically */
+@media (max-width: 640px) {
+  .line-items-header {
+    display: none;
+  }
+  .line-item {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+  }
+  .li-col-strain {
+    grid-column: 1 / -1;
+  }
+  .li-col-remove {
+    grid-column: 2;
+    justify-self: end;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
    FORM ELEMENTS - POLISHED
    ═══════════════════════════════════════════════════════════ */
 
@@ -1107,37 +1314,6 @@ body::before {
   color: var(--text-secondary);
   margin-bottom: 8px;
   letter-spacing: 0.01em;
-}
-
-.form-group input,
-.form-group select,
-.form-group textarea {
-  width: 100%;
-  padding: 11px 16px;
-  border: 2px solid var(--border);
-  border-radius: var(--radius-md);
-  font-family: var(--font-ui);
-  font-size: 14px;
-  background: var(--bg);
-  color: var(--text);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-sizing: border-box;
-}
-
-.form-group input:hover,
-.form-group select:hover,
-.form-group textarea:hover {
-  border-color: var(--ro-green);
-  background: var(--bg-card);
-}
-
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-  outline: none;
-  border-color: var(--ro-green);
-  box-shadow: 0 0 0 4px rgba(102, 137, 113, 0.1);
-  background: var(--bg-card);
 }
 
 .form-group textarea {
