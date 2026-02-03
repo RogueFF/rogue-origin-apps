@@ -353,13 +353,20 @@ body::before {
    ═══════════════════════════════════════════════════════════ */
 
 .card-section {
-  background: var(--bg-card);
-  border: 1px solid var(--border-light);
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(102, 137, 113, 0.18);
   border-radius: var(--radius-lg);
   padding: var(--space-lg);
-  box-shadow: var(--shadow-elevated);
+  box-shadow: none;
   margin: 0 var(--space-lg) var(--space-lg);
   position: relative;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+[data-theme="dark"] .card-section {
+  background: rgba(45, 58, 46, 0.4);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .partners-section {
@@ -426,15 +433,22 @@ body::before {
 }
 
 .partner-card {
-  background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg) 100%);
-  border: 2px solid var(--border-light);
+  background: rgba(255, 255, 255, 0.35);
+  border: 1px solid rgba(102, 137, 113, 0.15);
   border-radius: var(--radius-lg);
   padding: var(--space-md);
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  box-shadow: var(--shadow-elevated);
+  box-shadow: none;
   position: relative;
   overflow: hidden;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+[data-theme="dark"] .partner-card {
+  background: rgba(45, 58, 46, 0.35);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .partner-card::before {
@@ -542,13 +556,13 @@ body::before {
 }
 
 .quick-action-card {
-  background: var(--bg-card);
-  border: 2px solid var(--border-light);
+  background: rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(102, 137, 113, 0.15);
   border-radius: var(--radius-lg);
   padding: var(--space-lg);
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  box-shadow: var(--shadow-elevated);
+  box-shadow: none;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -557,6 +571,13 @@ body::before {
   position: relative;
   overflow: hidden;
   font-family: var(--font-ui);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+[data-theme="dark"] .quick-action-card {
+  background: rgba(45, 58, 46, 0.3);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .quick-action-card::before {
