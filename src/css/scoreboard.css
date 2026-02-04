@@ -851,7 +851,21 @@
     @media (max-width: 1366px) {
       .daily-progress { min-width: 440px; padding: 14px 32px; }
       .hour-card { min-width: 280px; padding: 14px 32px; }
-      .scoreboard { max-width: 1200px; }
+      .scoreboard { max-width: 1200px; gap: 8px; }
+      .main-panel { padding: 15px 25px; }
+      .chart-container { max-width: 750px; }
+      .chart-wrapper { height: 110px; }
+    }
+
+    /* Laptop screens with limited height (< 800px tall) */
+    @media (max-height: 800px) and (min-width: 1025px) {
+      .main-panel { padding: 12px 20px; }
+      .scoreboard { gap: 6px; }
+      .hour-card { padding: 12px 28px; }
+      .daily-progress { padding: 12px 28px; }
+      .actual-lbs { font-size: 56px; }
+      .target-lbs { font-size: 34px; }
+      .chart-wrapper { height: 100px; }
     }
 
     /* Medium screens (< 1200px) - More compact */
