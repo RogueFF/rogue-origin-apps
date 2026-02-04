@@ -1987,6 +1987,7 @@ body:not(.muuri-active) .widget-item[data-size="full"] { flex-basis: calc(100% -
 .integration-icon.scoreboard { background: var(--gold-dim); color: var(--gold); }
 .integration-icon.sop { background: var(--indoor-dim); color: var(--indoor); }
 .integration-icon.bags { background: var(--sungrown-dim); color: var(--sungrown); }
+.integration-icon.pool-inventory { background: var(--green-dim); color: var(--green); }
 .integration-title { font-size: 12px; font-weight: 600; color: var(--text); }
 .integration-stats { display: flex; flex-direction: column; gap: 6px; }
 .integration-stat { display: flex; justify-content: space-between; align-items: center; }

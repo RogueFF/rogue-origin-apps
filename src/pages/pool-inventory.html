@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Pool Inventory | Rogue Origin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/pool-inventory.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1 class="title">Pool Inventory</h1>
+      <button id="lang-toggle" class="lang-btn">ES</button>
+    </header>
+
+    <main class="content">
+      <!-- Pool Type Toggle -->
+      <div class="pool-type-toggle">
+        <button type="button" class="pool-type-btn active" data-pool-type="smalls" data-i18n="smalls">Smalls</button>
+        <button type="button" class="pool-type-btn" data-pool-type="tops" data-i18n="tops">Tops</button>
+      </div>
+
+      <!-- Strain Selector with Current Pool Value -->
+      <div class="barcode-controls">
+        <div class="label-with-refresh">
+          <label class="barcode-label" data-i18n="strain">Strain</label>
+          <button type="button" class="refresh-btn refresh-pool-btn" id="refresh-pool-btn" title="Refresh pool values">↻</button>
+        </div>
+        <!-- Custom dropdown -->
+        <div class="custom-select" id="scanner-strain-dropdown">
+          <button type="button" class="custom-select-trigger" aria-haspopup="listbox" aria-expanded="false">
+            <span class="custom-select-value" data-i18n="selectStrain">Select strain...</span>
+            <svg class="custom-select-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </button>
+          <div class="custom-select-menu" role="listbox">
+            <div class="custom-select-search">
+              <input type="text" class="custom-select-search-input" placeholder="Search strains..." aria-label="Search strains">
+            </div>
+            <div class="custom-select-options">
+              <!-- Options populated by JS -->
+            </div>
+          </div>
+          <input type="hidden" id="scanner-strain" name="scanner-strain">
+        </div>
+
+        <!-- Current Pool Display -->
+        <div class="current-pool-display" id="current-pool-display">
+          <div class="pool-display-row">
+            <span class="pool-label" data-i18n="currentPool">Current Pool:</span>
+            <div class="pool-stale-indicator" id="pool-stale-indicator" style="display: none;" title="Data may be outdated">⚠</div>
+          </div>
+          <div class="pool-values">
+            <div class="pool-value-item">
+              <span class="pool-value" id="current-pool-value-grams">--</span>
+              <span class="pool-unit">g</span>
+            </div>
+            <div class="pool-value-divider">•</div>
+            <div class="pool-value-item">
+              <span class="pool-value" id="current-pool-value-lbs">--</span>
+              <span class="pool-unit">lbs</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pool Update Section -->
+      <div class="pool-update-section">
+        <label class="section-label" data-i18n="updatePool">Update Pool</label>
+
+        <!-- Operation Selector -->
+        <div class="operation-selector">
+          <button type="button" class="operation-btn active" data-operation="add" data-i18n="add">Add</button>
+          <button type="button" class="operation-btn" data-operation="subtract" data-i18n="subtract">Subtract</button>
+          <button type="button" class="operation-btn" data-operation="set" data-i18n="set">Set</button>
+        </div>
+
+        <!-- Amount Input with Unit Toggle -->
+        <div class="pool-input-row">
+          <input type="number" id="pool-amount" class="pool-input" placeholder="0" min="0" step="0.1">
+          <div class="unit-toggle">
+            <button type="button" class="unit-btn active" data-unit="grams">g</button>
+            <button type="button" class="unit-btn" data-unit="lbs">lbs</button>
+          </div>
+        </div>
+
+        <!-- Optional Note -->
+        <input type="text" id="pool-note" class="pool-note-input" placeholder="Optional note..." data-i18n-placeholder="optionalNote">
+
+        <!-- Preview Calculation -->
+        <div class="pool-preview" id="pool-preview" style="display: none;">
+          <div class="preview-label" data-i18n="preview">Preview:</div>
+          <div class="preview-row">
+            <span class="preview-text" data-i18n="current">Current:</span>
+            <span class="preview-value" id="preview-current">0g</span>
+          </div>
+          <div class="preview-row">
+            <span class="preview-text" id="preview-operation-label">Adding:</span>
+            <span class="preview-value" id="preview-change">+0g</span>
+          </div>
+          <div class="preview-row new-value">
+            <span class="preview-text" data-i18n="newValue">New:</span>
+            <span class="preview-value" id="preview-new">0g</span>
+          </div>
+        </div>
+
+        <!-- Update Button -->
+        <button type="button" class="update-btn" id="update-pool-btn" data-i18n="updatePool">Update Pool</button>
+
+        <!-- Update Result -->
+        <div class="pool-update-result" id="pool-update-result" style="display: none;">
+          <div class="result-row">
+            <span data-i18n="previous">Previous:</span>
+            <span id="result-previous">0g</span>
+          </div>
+          <div class="result-row change">
+            <span id="result-change-label">Added:</span>
+            <span id="result-change">+0g</span>
+          </div>
+          <div class="result-row new">
+            <span data-i18n="newValue">New:</span>
+            <span id="result-new">0g</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Changes Log -->
+      <div class="recent-changes-section">
+        <div class="section-header-row">
+          <label class="section-label" data-i18n="recentChanges">Recent Changes</label>
+          <button type="button" class="refresh-btn" id="refresh-history-btn" title="Refresh">↻</button>
+        </div>
+        <div class="recent-changes-list" id="recent-changes-list">
+          <div class="no-changes" data-i18n="noChangesYet">No changes yet</div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="../js/pool-inventory.js"></script>
+</body>
+</html>
