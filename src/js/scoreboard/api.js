@@ -378,8 +378,12 @@
           .handleGetShiftStart({});
       } else {
         const apiUrl = this.getApiUrl();
-        // Let backend determine "today" in its timezone (PST)
-        const url = `${apiUrl}?action=getShiftStart`;
+        // Pass current date to avoid timezone issues (yyyy-MM-dd format)
+        const today = new Date();
+        const dateStr = today.getFullYear() + '-' +
+                       String(today.getMonth() + 1).padStart(2, '0') + '-' +
+                       String(today.getDate()).padStart(2, '0');
+        const url = `${apiUrl}?action=getShiftStart&date=${dateStr}`;
 
         fetch(url)
           .then(function(response) {
