@@ -187,7 +187,7 @@ const LABELS = {
     onTrack: 'On Track',
     behind: 'Behind',
     onBreak: 'On Break',
-    waiting: 'Waiting',
+    waiting: 'Waiting to Start',
     liveScale: 'Live Scale',
     scaleOf: 'of',
   },
@@ -280,7 +280,7 @@ const LABELS = {
     onTrack: 'A Tiempo',
     behind: 'Atrasado',
     onBreak: 'En Descanso',
-    waiting: 'Esperando',
+    waiting: 'Esperando Inicio',
     liveScale: 'Báscula en Vivo',
     scaleOf: 'de',
   },
@@ -3710,8 +3710,21 @@ function updateBagTimerTick() {
     return;
   }
 
+  // Check if shift has started (manual start time is set)
+  const hasShiftStarted = shiftStartTime !== null;
+
   // Calculate elapsed seconds - use lastBagTimestamp if available, otherwise shift start
   let elapsedSeconds = 0;
+
+  // If no bag in progress and shift hasn't been manually started, show waiting state
+  if (!lastBagTimestamp && !hasShiftStarted) {
+    setTimerColor('neutral');
+    timerValue.textContent = '--:--';
+    timerLabel.textContent = LABELS[currentLang].waiting || 'Waiting';
+    setRingProgress(0);
+    return;
+  }
+
   const referenceTime = lastBagTimestamp || getShiftStartTime();
 
   // Check if reference is from today or previous day
