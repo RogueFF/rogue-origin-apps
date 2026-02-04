@@ -678,6 +678,18 @@ body {
 
 .scanner-btn.btn-pool {
   background: linear-gradient(135deg, rgba(102, 137, 113, 0.3), rgba(102, 137, 113, 0.15));
+  transition: all 0.3s ease;
+}
+
+/* Update button changes color based on pool type */
+#tab-scanner[data-pool-type="tops"] .scanner-btn.btn-pool {
+  background: linear-gradient(135deg, rgba(228, 170, 79, 0.3), rgba(228, 170, 79, 0.15));
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+#tab-scanner[data-pool-type="tops"] .scanner-btn.btn-pool:hover {
+  background: rgba(228, 170, 79, 0.4);
 }
 
 .scan-input {
@@ -762,9 +774,18 @@ body {
 }
 
 .pool-type-btn.active {
-  background: var(--green);
   color: white;
-  box-shadow: 0 2px 8px rgba(102, 137, 113, 0.3);
+  font-weight: 700;
+}
+
+.pool-type-btn[data-pool-type="smalls"].active {
+  background: var(--green);
+  box-shadow: 0 2px 8px rgba(102, 137, 113, 0.4);
+}
+
+.pool-type-btn[data-pool-type="tops"].active {
+  background: var(--gold);
+  box-shadow: 0 2px 8px rgba(228, 170, 79, 0.4);
 }
 
 /* Current Pool Display - styles moved to enhanced version below */
@@ -831,6 +852,16 @@ body {
   border: 1px solid var(--green);
   border-radius: 8px;
   margin-top: 8px;
+  transition: all 0.3s ease;
+}
+
+#tab-scanner[data-pool-type="tops"] .pool-update-result {
+  background: rgba(228, 170, 79, 0.1);
+  border-color: var(--gold);
+}
+
+#tab-scanner[data-pool-type="tops"] .pool-update-result .result-row.new span:last-child {
+  color: var(--gold);
 }
 
 .pool-update-result .result-row {
@@ -901,10 +932,21 @@ body {
   flex-direction: column;
   gap: 6px;
   padding: 8px;
-  background: rgba(102, 137, 113, 0.1);
-  border: 1px solid var(--green);
+  background: rgba(102, 137, 113, 0.15);
+  border: 2px solid var(--green);
   border-radius: 6px;
   margin-top: 6px;
+  transition: all 0.3s ease;
+}
+
+/* Pool display colors change based on active pool type */
+#tab-scanner[data-pool-type="tops"] .current-pool-display {
+  background: rgba(228, 170, 79, 0.15);
+  border-color: var(--gold);
+}
+
+#tab-scanner[data-pool-type="tops"] .pool-value {
+  color: var(--gold) !important;
 }
 
 .pool-display-row {
