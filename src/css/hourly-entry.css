@@ -1397,11 +1397,33 @@ body {
   font-size: 16px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
+}
+
+.custom-select-option .option-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.custom-select-option .option-weight {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  flex-shrink: 0;
 }
 
 .custom-select-option:hover {
   background: rgba(228, 170, 79, 0.15);
+}
+
+.custom-select-option:hover .option-weight {
+  color: var(--gold);
+}
+
+.custom-select-option.selected .option-weight {
+  color: var(--gold);
 }
 
 .custom-select-option.selected {
