@@ -1,5 +1,5 @@
 // Service Worker for Rogue Origin Operations Hub
-// Version 3.14 - Auto-update: no hard refresh needed
+// Version 3.15 - Auto-update: no hard refresh needed
 
 const CACHE_VERSION = 'ro-ops-v3.15';
 const STATIC_CACHE = CACHE_VERSION + '-static';
@@ -77,7 +77,7 @@ const CDN_ASSETS = [
 
 // Install event - cache static assets with resilient error handling
 self.addEventListener('install', (event) => {
-  console.log('[SW v3.14] Installing service worker...');
+  console.log('[SW v3.15] Installing service worker...');
 
   event.waitUntil(
     Promise.allSettled([
@@ -111,7 +111,7 @@ self.addEventListener('install', (event) => {
 
 // Activate event - cleanup old caches
 self.addEventListener('activate', (event) => {
-  console.log('[SW v3.14] Activating service worker...');
+  console.log('[SW v3.15] Activating service worker...');
 
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -381,4 +381,4 @@ self.addEventListener('unhandledrejection', (event) => {
   console.error('[SW] Unhandled rejection:', event.reason);
 });
 
-console.log('[SW v3.14] Service Worker loaded - auto-update enabled');
+console.log('[SW v3.15] Service Worker loaded - auto-update enabled');
