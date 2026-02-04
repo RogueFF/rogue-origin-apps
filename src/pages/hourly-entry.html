@@ -9,8 +9,8 @@
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
 
   <!-- Non-critical CSS: Deferred for faster initial render -->
-  <link rel="preload" href="../css/hourly-entry.css?v=42" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link rel="stylesheet" href="../css/hourly-entry.css?v=42"></noscript>
+  <link rel="preload" href="../css/hourly-entry.css?v=43" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/hourly-entry.css?v=43"></noscript>
 </head>
 <body>
   <a href="#timeline-list" class="skip-link">Skip to timeline</a>
@@ -303,14 +303,46 @@
 
             <!-- Strain Selector with Current Pool Value -->
             <div class="barcode-controls">
-              <label class="barcode-label" data-i18n="strain">Strain</label>
-              <select id="scanner-strain" class="barcode-select">
-                <option value="">Select strain...</option>
-              </select>
+              <div class="label-with-refresh">
+                <label class="barcode-label" data-i18n="strain">Strain</label>
+                <button type="button" class="refresh-btn refresh-pool-btn" id="refresh-pool-btn" title="Refresh pool values">↻</button>
+              </div>
+              <!-- Custom dropdown for better styling -->
+              <div class="custom-select" id="scanner-strain-dropdown">
+                <button type="button" class="custom-select-trigger" aria-haspopup="listbox" aria-expanded="false">
+                  <span class="custom-select-value" data-i18n="selectStrain">Select strain...</span>
+                  <svg class="custom-select-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
+                <div class="custom-select-menu" role="listbox">
+                  <div class="custom-select-search">
+                    <input type="text" class="custom-select-search-input" placeholder="Search strains..." aria-label="Search strains">
+                  </div>
+                  <div class="custom-select-options">
+                    <!-- Options populated by JS -->
+                  </div>
+                </div>
+                <input type="hidden" id="scanner-strain" name="scanner-strain">
+              </div>
+
+              <!-- Current Pool Display with Stale Indicator -->
               <div class="current-pool-display" id="current-pool-display">
-                <span class="pool-label" data-i18n="currentPool">Current Pool:</span>
-                <span class="pool-value" id="current-pool-value">--</span>
-                <span class="pool-unit">g</span>
+                <div class="pool-display-row">
+                  <span class="pool-label" data-i18n="currentPool">Current Pool:</span>
+                  <div class="pool-stale-indicator" id="pool-stale-indicator" style="display: none;" title="Data may be outdated">⚠</div>
+                </div>
+                <div class="pool-values">
+                  <div class="pool-value-item">
+                    <span class="pool-value" id="current-pool-value-grams">--</span>
+                    <span class="pool-unit">g</span>
+                  </div>
+                  <div class="pool-value-divider">•</div>
+                  <div class="pool-value-item">
+                    <span class="pool-value" id="current-pool-value-lbs">--</span>
+                    <span class="pool-unit">lbs</span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -325,14 +357,34 @@
                 <button type="button" class="operation-btn" data-operation="set" data-i18n="set">Set</button>
               </div>
 
-              <!-- Amount Input -->
+              <!-- Amount Input with Unit Toggle -->
               <div class="pool-input-row">
-                <input type="number" id="pool-grams" class="pool-input" placeholder="0" min="0" step="0.1">
-                <span class="pool-unit">grams</span>
+                <input type="number" id="pool-amount" class="pool-input" placeholder="0" min="0" step="0.1">
+                <div class="unit-toggle">
+                  <button type="button" class="unit-btn active" data-unit="grams">g</button>
+                  <button type="button" class="unit-btn" data-unit="lbs">lbs</button>
+                </div>
               </div>
 
               <!-- Optional Note -->
               <input type="text" id="pool-note" class="pool-note-input" placeholder="Optional note..." data-i18n-placeholder="optionalNote">
+
+              <!-- Preview Calculation -->
+              <div class="pool-preview" id="pool-preview" style="display: none;">
+                <div class="preview-label" data-i18n="preview">Preview:</div>
+                <div class="preview-row">
+                  <span class="preview-text" data-i18n="current">Current:</span>
+                  <span class="preview-value" id="preview-current">0g</span>
+                </div>
+                <div class="preview-row">
+                  <span class="preview-text" id="preview-operation-label">Adding:</span>
+                  <span class="preview-value" id="preview-change">+0g</span>
+                </div>
+                <div class="preview-row new-value">
+                  <span class="preview-text" data-i18n="newValue">New:</span>
+                  <span class="preview-value" id="preview-new">0g</span>
+                </div>
+              </div>
 
               <!-- Update Button -->
               <button type="button" class="scanner-btn btn-pool" id="update-pool-btn" data-i18n="updatePool">Update Pool</button>
@@ -466,6 +518,6 @@
     <button class="tooltip-close">×</button>
   </div>
 
-  <script type="module" src="../js/hourly-entry/index.js?v=55"></script>
+  <script type="module" src="../js/hourly-entry/index.js?v=56"></script>
 </body>
 </html>
