@@ -2568,9 +2568,13 @@ function initScannerCustomDropdown(dropdown) {
     }
   });
 
-  // Search input
+  // Search input with debounce for better performance
+  let searchTimeout;
   registerListener(searchInput, 'input', () => {
-    renderScannerDropdownOptions(dropdown, customDropdownScannerStrains, hiddenInput.value, searchInput.value);
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      renderScannerDropdownOptions(dropdown, customDropdownScannerStrains, hiddenInput.value, searchInput.value);
+    }, 150); // 150ms debounce for search
   });
 
   // Prevent menu clicks from closing
@@ -2749,8 +2753,13 @@ function initPoolAmountInput() {
   const amountInput = document.getElementById('pool-amount');
   if (!amountInput) return;
 
+  // Debounce preview calculation for smoother performance
+  let previewTimeout;
   registerListener(amountInput, 'input', () => {
-    updatePoolPreview();
+    clearTimeout(previewTimeout);
+    previewTimeout = setTimeout(() => {
+      updatePoolPreview();
+    }, 100); // 100ms debounce
   });
 }
 
