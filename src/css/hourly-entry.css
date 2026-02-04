@@ -892,6 +892,176 @@ body {
   font-size: 18px;
 }
 
+/* Label with Refresh Button */
+.label-with-refresh {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.refresh-pool-btn {
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.refresh-pool-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  transform: rotate(90deg);
+}
+
+.refresh-pool-btn:active {
+  transform: rotate(90deg) scale(0.95);
+}
+
+/* Enhanced Current Pool Display */
+.current-pool-display {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(102, 137, 113, 0.1);
+  border: 1px solid var(--green);
+  border-radius: 8px;
+  margin-top: 8px;
+}
+
+.pool-display-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pool-stale-indicator {
+  font-size: 16px;
+  color: var(--gold);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.pool-values {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.pool-value-item {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.pool-value-divider {
+  color: var(--text-secondary);
+  font-size: 18px;
+}
+
+/* Unit Toggle */
+.unit-toggle {
+  display: flex;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  padding: 2px;
+  margin-left: 8px;
+}
+
+.unit-btn {
+  padding: 6px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.unit-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.unit-btn.active {
+  background: var(--gold);
+  color: var(--bg-dark);
+  box-shadow: 0 1px 4px rgba(228, 170, 79, 0.3);
+}
+
+/* Pool Input Row with Unit Toggle */
+.pool-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+/* Preview Calculation */
+.pool-preview {
+  padding: 12px;
+  background: rgba(228, 170, 79, 0.1);
+  border: 1px solid var(--gold);
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.preview-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gold);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.preview-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 14px;
+}
+
+.preview-row + .preview-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.preview-text {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.preview-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.preview-row.new-value {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 2px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+.preview-row.new-value .preview-value {
+  color: var(--gold);
+  font-size: 16px;
+}
+
 /* Recent Changes Section */
 .recent-changes-section {
   max-height: 300px;

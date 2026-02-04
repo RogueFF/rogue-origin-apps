@@ -140,7 +140,12 @@ const LABELS = {
     set: 'Set',
     optionalNote: 'Optional note...',
     previous: 'Previous',
+    current: 'Current',
     newValue: 'New',
+    preview: 'Preview',
+    adding: 'Adding',
+    subtracting: 'Subtracting',
+    setting: 'Setting to',
     recentChanges: 'Recent Changes',
     noChangesYet: 'No changes yet',
     updating: 'Updating...',
@@ -227,7 +232,12 @@ const LABELS = {
     set: 'Establecer',
     optionalNote: 'Nota opcional...',
     previous: 'Anterior',
+    current: 'Actual',
     newValue: 'Nuevo',
+    preview: 'Vista Previa',
+    adding: 'Agregando',
+    subtracting: 'Restando',
+    setting: 'Estableciendo a',
     recentChanges: 'Cambios Recientes',
     noChangesYet: 'Sin cambios aún',
     updating: 'Actualizando...',
@@ -2030,6 +2040,10 @@ let barcodeProducts = []; // Products loaded from barcode API
 let poolProducts = []; // Products loaded from Pool API
 let currentPoolType = 'smalls'; // Current pool type selection (smalls or tops)
 let currentOperation = 'add'; // Current operation selection (add, subtract, set)
+let currentUnit = 'grams'; // Current unit for input (grams or lbs)
+let poolDataTimestamp = null; // Timestamp of last pool data load
+let customDropdownScannerStrains = []; // Products for scanner dropdown
+const STALE_DATA_THRESHOLD = 5 * 60 * 1000; // 5 minutes
 
 /**
  * Initialize barcode card functionality
@@ -2365,6 +2379,9 @@ async function initScannerTab() {
   initPoolTypeToggle();
   populateScannerStrainSelect();
   initOperationButtons();
+  initUnitToggle();
+  initPoolAmountInput();
+  initRefreshPoolButton();
   initPoolUpdateButton();
   initRecentChanges();
 }
@@ -2384,6 +2401,9 @@ async function loadPoolProducts() {
 
     const result = await response.json();
     poolProducts = result.products || [];
+
+    // Set timestamp for stale data detection
+    poolDataTimestamp = Date.now();
   } catch (error) {
     console.error('Failed to load pool products:', error);
     poolProducts = [];
@@ -2419,54 +2439,314 @@ function initPoolTypeToggle() {
  * Populate the scanner strain dropdown with products from Pool API
  */
 function populateScannerStrainSelect() {
-  const select = document.getElementById('scanner-strain');
-  if (!select) return;
-
-  const currentValue = select.value;
-  select.innerHTML = `<option value="">${LABELS[currentLang].selectStrain || 'Select strain...'}</option>`;
+  const dropdown = document.getElementById('scanner-strain-dropdown');
+  const hiddenInput = document.getElementById('scanner-strain');
+  if (!dropdown || !hiddenInput) return;
 
   // Sort products by title
   const sortedProducts = [...poolProducts].sort((a, b) => a.title.localeCompare(b.title));
 
-  sortedProducts.forEach((product) => {
-    const option = document.createElement('option');
-    option.value = product.id; // Store product ID
-    option.textContent = product.title;
-    option.dataset.poolValue = product.poolValue;
-    select.appendChild(option);
-  });
+  // Store products for dropdown
+  customDropdownScannerStrains = sortedProducts;
 
-  select.value = currentValue;
+  // Save current value
+  const currentValue = hiddenInput.value;
 
-  // Update has-selection class
-  select.classList.toggle('has-selection', !!select.value);
+  // Render options
+  renderScannerDropdownOptions(dropdown, sortedProducts, currentValue);
 
-  // Add change listener
-  if (!select.dataset.listenerAdded) {
-    registerListener(select, 'change', () => {
-      select.classList.toggle('has-selection', !!select.value);
-      updateCurrentPoolDisplay();
-    });
-    select.dataset.listenerAdded = 'true';
+  // Initialize dropdown if not already done
+  if (!dropdown.dataset.initialized) {
+    initScannerCustomDropdown(dropdown);
+    dropdown.dataset.initialized = 'true';
+  }
+
+  // Restore selection if it still exists
+  if (currentValue && sortedProducts.find(p => p.id === currentValue)) {
+    const product = sortedProducts.find(p => p.id === currentValue);
+    selectScannerDropdownValue(dropdown, currentValue, product.title);
   }
 }
 
 /**
- * Update the current pool value display
+ * Render scanner dropdown options
+ */
+function renderScannerDropdownOptions(dropdown, products, selectedValue, filter = '') {
+  const optionsContainer = dropdown.querySelector('.custom-select-options');
+  if (!optionsContainer) return;
+
+  const filterLower = filter.toLowerCase();
+  const filtered = filter
+    ? products.filter((p) => p.title.toLowerCase().includes(filterLower))
+    : products;
+
+  if (filtered.length === 0) {
+    optionsContainer.innerHTML = `<div class="custom-select-no-results">No strains found</div>`;
+    return;
+  }
+
+  optionsContainer.innerHTML = filtered
+    .map(
+      (product) => `
+      <div class="custom-select-option${product.id === selectedValue ? ' selected' : ''}"
+           data-value="${product.id}"
+           data-pool-value="${product.poolValue}"
+           data-title="${product.title}"
+           role="option"
+           aria-selected="${product.id === selectedValue}">
+        ${product.title}
+      </div>
+    `
+    )
+    .join('');
+}
+
+/**
+ * Initialize scanner custom dropdown behavior
+ */
+function initScannerCustomDropdown(dropdown) {
+  const trigger = dropdown.querySelector('.custom-select-trigger');
+  const menu = dropdown.querySelector('.custom-select-menu');
+  const searchInput = dropdown.querySelector('.custom-select-search-input');
+  const optionsContainer = dropdown.querySelector('.custom-select-options');
+  const valueDisplay = dropdown.querySelector('.custom-select-value');
+  const hiddenInput = dropdown.querySelector('input[type="hidden"]');
+
+  // Toggle dropdown on trigger click
+  registerListener(trigger, 'click', (e) => {
+    e.stopPropagation();
+    const isOpen = dropdown.classList.contains('open');
+    closeAllCustomDropdowns();
+    if (!isOpen) {
+      dropdown.classList.add('open');
+      trigger.setAttribute('aria-expanded', 'true');
+      searchInput.value = '';
+      searchInput.focus();
+      renderScannerDropdownOptions(dropdown, customDropdownScannerStrains, hiddenInput.value);
+    }
+  });
+
+  // Search input
+  registerListener(searchInput, 'input', () => {
+    renderScannerDropdownOptions(dropdown, customDropdownScannerStrains, hiddenInput.value, searchInput.value);
+  });
+
+  // Prevent menu clicks from closing
+  registerListener(menu, 'click', (e) => {
+    e.stopPropagation();
+  });
+
+  // Handle option selection
+  registerListener(optionsContainer, 'click', (e) => {
+    const option = e.target.closest('.custom-select-option');
+    if (!option) return;
+
+    const value = option.dataset.value;
+    const title = option.dataset.title;
+    selectScannerDropdownValue(dropdown, value, title);
+    closeAllCustomDropdowns();
+  });
+
+  // Close on outside click
+  registerListener(document, 'click', () => {
+    if (dropdown.classList.contains('open')) {
+      closeAllCustomDropdowns();
+    }
+  });
+
+  // Close on Escape
+  registerListener(document, 'keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeAllCustomDropdowns();
+    }
+  });
+}
+
+/**
+ * Select a value in the scanner custom dropdown
+ */
+function selectScannerDropdownValue(dropdown, value, title) {
+  const valueDisplay = dropdown.querySelector('.custom-select-value');
+  const hiddenInput = dropdown.querySelector('input[type="hidden"]');
+
+  hiddenInput.value = value;
+  valueDisplay.textContent = title || LABELS[currentLang].selectStrain || 'Select strain...';
+  valueDisplay.classList.toggle('placeholder', !value);
+  dropdown.classList.toggle('has-selection', !!value);
+
+  // Update current pool display
+  updateCurrentPoolDisplay();
+
+  // Dispatch change event on hidden input
+  hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+/**
+ * Update the current pool value display with both grams and pounds
  */
 function updateCurrentPoolDisplay() {
-  const select = document.getElementById('scanner-strain');
-  const poolValueEl = document.getElementById('current-pool-value');
+  const hiddenInput = document.getElementById('scanner-strain');
+  const poolValueGramsEl = document.getElementById('current-pool-value-grams');
+  const poolValueLbsEl = document.getElementById('current-pool-value-lbs');
 
-  if (!select || !poolValueEl) return;
+  if (!hiddenInput || !poolValueGramsEl || !poolValueLbsEl) return;
 
-  const selectedOption = select.options[select.selectedIndex];
-  if (selectedOption && selectedOption.dataset.poolValue) {
-    const poolValue = parseFloat(selectedOption.dataset.poolValue);
-    poolValueEl.textContent = poolValue.toLocaleString('en-US', { minimumFractionDigits: 1 });
+  const productId = hiddenInput.value;
+  const product = poolProducts.find(p => p.id === productId);
+
+  if (product && product.poolValue !== undefined) {
+    const grams = parseFloat(product.poolValue);
+    const lbs = grams / 453.592; // Convert grams to pounds
+
+    poolValueGramsEl.textContent = grams.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    poolValueLbsEl.textContent = lbs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    // Check for stale data
+    checkStaleData();
   } else {
-    poolValueEl.textContent = '--';
+    poolValueGramsEl.textContent = '--';
+    poolValueLbsEl.textContent = '--';
   }
+
+  // Update preview if amount is entered
+  updatePoolPreview();
+}
+
+/**
+ * Check if pool data is stale and show indicator
+ */
+function checkStaleData() {
+  const staleIndicator = document.getElementById('pool-stale-indicator');
+  if (!staleIndicator) return;
+
+  if (poolDataTimestamp) {
+    const elapsed = Date.now() - poolDataTimestamp;
+    if (elapsed > STALE_DATA_THRESHOLD) {
+      staleIndicator.style.display = 'block';
+      staleIndicator.title = `Data is ${Math.floor(elapsed / 60000)} minutes old. Click refresh to update.`;
+    } else {
+      staleIndicator.style.display = 'none';
+    }
+  }
+}
+
+/**
+ * Update pool preview calculation
+ */
+function updatePoolPreview() {
+  const previewDiv = document.getElementById('pool-preview');
+  const hiddenInput = document.getElementById('scanner-strain');
+  const amountInput = document.getElementById('pool-amount');
+  const poolValueGramsEl = document.getElementById('current-pool-value-grams');
+  const operationLabel = document.getElementById('preview-operation-label');
+  const previewCurrent = document.getElementById('preview-current');
+  const previewChange = document.getElementById('preview-change');
+  const previewNew = document.getElementById('preview-new');
+
+  if (!previewDiv || !amountInput || !poolValueGramsEl) return;
+
+  const amount = parseFloat(amountInput.value) || 0;
+  const currentValueGrams = parseFloat(poolValueGramsEl.textContent.replace(/,/g, '')) || 0;
+
+  if (amount > 0 && hiddenInput.value) {
+    // Convert amount to grams if needed
+    let amountGrams = amount;
+    if (currentUnit === 'lbs') {
+      amountGrams = amount * 453.592;
+    }
+
+    // Calculate new value
+    let newValue;
+    if (currentOperation === 'add') {
+      newValue = currentValueGrams + amountGrams;
+      operationLabel.textContent = LABELS[currentLang].adding || 'Adding:';
+      previewChange.textContent = `+${amountGrams.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}g`;
+    } else if (currentOperation === 'subtract') {
+      newValue = Math.max(0, currentValueGrams - amountGrams);
+      operationLabel.textContent = LABELS[currentLang].subtracting || 'Subtracting:';
+      previewChange.textContent = `-${amountGrams.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}g`;
+    } else { // set
+      newValue = amountGrams;
+      operationLabel.textContent = LABELS[currentLang].setting || 'Setting to:';
+      previewChange.textContent = `${amountGrams.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}g`;
+    }
+
+    previewCurrent.textContent = `${currentValueGrams.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}g`;
+    previewNew.textContent = `${newValue.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}g`;
+    previewDiv.style.display = 'block';
+  } else {
+    previewDiv.style.display = 'none';
+  }
+}
+
+/**
+ * Initialize unit toggle buttons (grams/lbs)
+ */
+function initUnitToggle() {
+  const unitBtns = document.querySelectorAll('.unit-btn');
+
+  unitBtns.forEach((btn) => {
+    registerListener(btn, 'click', () => {
+      // Update active state
+      unitBtns.forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      // Update current unit
+      currentUnit = btn.dataset.unit;
+
+      // Update preview
+      updatePoolPreview();
+    });
+  });
+}
+
+/**
+ * Initialize pool amount input listener for live preview
+ */
+function initPoolAmountInput() {
+  const amountInput = document.getElementById('pool-amount');
+  if (!amountInput) return;
+
+  registerListener(amountInput, 'input', () => {
+    updatePoolPreview();
+  });
+}
+
+/**
+ * Initialize refresh pool button
+ */
+function initRefreshPoolButton() {
+  const refreshBtn = document.getElementById('refresh-pool-btn');
+  if (!refreshBtn) return;
+
+  registerListener(refreshBtn, 'click', async () => {
+    // Show loading state
+    refreshBtn.style.opacity = '0.5';
+    refreshBtn.style.pointerEvents = 'none';
+
+    try {
+      // Reload pool products
+      await loadPoolProducts();
+
+      // Repopulate dropdown
+      populateScannerStrainSelect();
+
+      // Update display
+      updateCurrentPoolDisplay();
+
+      // Hide stale indicator
+      const staleIndicator = document.getElementById('pool-stale-indicator');
+      if (staleIndicator) {
+        staleIndicator.style.display = 'none';
+      }
+    } catch (error) {
+      console.error('Failed to refresh pool data:', error);
+    } finally {
+      // Restore button state
+      refreshBtn.style.opacity = '1';
+      refreshBtn.style.pointerEvents = 'auto';
+    }
+  });
 }
 
 /**
@@ -2483,6 +2763,9 @@ function initOperationButtons() {
 
       // Update current operation
       currentOperation = btn.dataset.operation;
+
+      // Update preview
+      updatePoolPreview();
     });
   });
 }
@@ -2496,40 +2779,50 @@ function initPoolUpdateButton() {
 
   registerListener(updateBtn, 'click', async () => {
     const strainSelect = document.getElementById('scanner-strain');
-    const gramsInput = document.getElementById('pool-grams');
+    const amountInput = document.getElementById('pool-amount');
     const noteInput = document.getElementById('pool-note');
 
     const productId = strainSelect?.value;
-    const amount = parseFloat(gramsInput?.value) || 0;
+    const amount = parseFloat(amountInput?.value) || 0;
     const note = noteInput?.value.trim() || '';
 
     // Validation
     if (!productId) {
-      strainSelect?.focus();
+      // Focus on dropdown trigger
+      const dropdown = document.getElementById('scanner-strain-dropdown');
+      dropdown?.querySelector('.custom-select-trigger')?.focus();
       return;
     }
 
     if (amount <= 0) {
-      gramsInput?.focus();
+      amountInput?.focus();
       return;
     }
 
+    // Convert amount to grams if needed
+    let amountGrams = amount;
+    if (currentUnit === 'lbs') {
+      amountGrams = amount * 453.592;
+    }
+
     // Get current pool value for optimistic update
-    const poolValueEl = document.getElementById('current-pool-value');
-    const currentValue = parseFloat(poolValueEl.textContent.replace(/,/g, '')) || 0;
+    const poolValueGramsEl = document.getElementById('current-pool-value-grams');
+    const poolValueLbsEl = document.getElementById('current-pool-value-lbs');
+    const currentValue = parseFloat(poolValueGramsEl.textContent.replace(/,/g, '')) || 0;
 
     // Calculate optimistic new value
     let optimisticNewValue;
     if (currentOperation === 'add') {
-      optimisticNewValue = currentValue + amount;
+      optimisticNewValue = currentValue + amountGrams;
     } else if (currentOperation === 'subtract') {
-      optimisticNewValue = Math.max(0, currentValue - amount);
+      optimisticNewValue = Math.max(0, currentValue - amountGrams);
     } else {
-      optimisticNewValue = amount;
+      optimisticNewValue = amountGrams;
     }
 
-    // Update UI instantly (optimistic)
-    poolValueEl.textContent = optimisticNewValue.toLocaleString('en-US', { minimumFractionDigits: 1 });
+    // Update UI instantly (optimistic) - both grams and lbs
+    poolValueGramsEl.textContent = optimisticNewValue.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    poolValueLbsEl.textContent = (optimisticNewValue / 453.592).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     // Update cached product data
     const product = poolProducts.find(p => p.id === productId);
@@ -2540,14 +2833,18 @@ function initPoolUpdateButton() {
     // Show optimistic result immediately
     displayUpdateResult({
       previousValue: currentValue,
-      changeAmount: currentOperation === 'subtract' ? -amount : amount,
+      changeAmount: currentOperation === 'subtract' ? -amountGrams : amountGrams,
       newValue: optimisticNewValue,
       operation: currentOperation
     });
 
     // Clear inputs immediately
-    gramsInput.value = '';
+    amountInput.value = '';
     noteInput.value = '';
+
+    // Hide preview
+    const previewDiv = document.getElementById('pool-preview');
+    if (previewDiv) previewDiv.style.display = 'none';
 
     // Call Pool API to update pool (in background)
     try {
@@ -2560,7 +2857,7 @@ function initPoolUpdateButton() {
         body: JSON.stringify({
           productId,
           operation: currentOperation,
-          amount,
+          amount: amountGrams,
           note,
           poolType: currentPoolType
         })
@@ -2571,7 +2868,8 @@ function initPoolUpdateButton() {
       if (result.success) {
         // Update with actual server value (in case it differs)
         const actualNewValue = result.newValue || result.data?.newValue || optimisticNewValue;
-        poolValueEl.textContent = actualNewValue.toLocaleString('en-US', { minimumFractionDigits: 1 });
+        poolValueGramsEl.textContent = actualNewValue.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+        poolValueLbsEl.textContent = (actualNewValue / 453.592).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
         // Update cached product with actual value
         if (product) {
@@ -2581,7 +2879,7 @@ function initPoolUpdateButton() {
         // Update result display with actual values
         displayUpdateResult({
           previousValue: result.previousValue || result.data?.previousValue || currentValue,
-          changeAmount: result.changeAmount || result.data?.changeAmount || (currentOperation === 'subtract' ? -amount : amount),
+          changeAmount: result.changeAmount || result.data?.changeAmount || (currentOperation === 'subtract' ? -amountGrams : amountGrams),
           newValue: actualNewValue,
           operation: currentOperation
         });
