@@ -5,6 +5,42 @@
 
 const API_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/consignment';
 
+// Offline queue
+const offlineQueue = [];
+let isOnline = navigator.onLine;
+
+window.addEventListener('online', () => {
+  isOnline = true;
+  processOfflineQueue();
+});
+window.addEventListener('offline', () => { isOnline = false; });
+
+async function processOfflineQueue() {
+  while (offlineQueue.length > 0) {
+    const { action, data, resolve, reject } = offlineQueue.shift();
+    try {
+      const result = await apiPost(action, data);
+      resolve(result);
+    } catch (err) {
+      reject(err);
+    }
+  }
+  if (offlineQueue.length === 0) {
+    document.dispatchEvent(new CustomEvent('refreshAll'));
+  }
+}
+
+function queueablePost(action, data) {
+  if (!isOnline) {
+    return new Promise((resolve, reject) => {
+      offlineQueue.push({ action, data, resolve, reject });
+      // Dispatch event so UI can show "queued" toast
+      document.dispatchEvent(new CustomEvent('offlineQueued', { detail: { count: offlineQueue.length } }));
+    });
+  }
+  return apiPost(action, data);
+}
+
 async function apiGet(action, params = {}) {
   const url = new URL(API_BASE);
   url.searchParams.set('action', action);
@@ -41,7 +77,7 @@ export function getPartnerDetail(id) {
 }
 
 export function savePartner(data) {
-  return apiPost('saveConsignmentPartner', data);
+  return queueablePost('saveConsignmentPartner', data);
 }
 
 export function getStrains() {
@@ -49,15 +85,15 @@ export function getStrains() {
 }
 
 export function saveIntake(data) {
-  return apiPost('saveConsignmentIntake', data);
+  return queueablePost('saveConsignmentIntake', data);
 }
 
 export function saveBatchIntake(data) {
-  return apiPost('saveConsignmentBatchIntake', data);
+  return queueablePost('saveConsignmentBatchIntake', data);
 }
 
 export function saveSale(data) {
-  return apiPost('saveConsignmentSale', data);
+  return queueablePost('saveConsignmentSale', data);
 }
 
 export async function saveInventoryCount(data) {
@@ -71,7 +107,7 @@ export async function saveInventoryCount(data) {
 }
 
 export function savePayment(data) {
-  return apiPost('saveConsignmentPayment', data);
+  return queueablePost('saveConsignmentPayment', data);
 }
 
 export function getInventory(partnerId) {
@@ -96,17 +132,17 @@ export async function getLastPrice(partnerId, strain, type) {
 }
 
 export function deletePartner(id) {
-  return apiPost('deleteConsignmentPartner', { id });
+  return queueablePost('deleteConsignmentPartner', { id });
 }
 
 export function deleteIntake(id) {
-  return apiPost('deleteConsignmentIntake', { id });
+  return queueablePost('deleteConsignmentIntake', { id });
 }
 
 export function deleteSale(id) {
-  return apiPost('deleteConsignmentSale', { id });
+  return queueablePost('deleteConsignmentSale', { id });
 }
 
 export function deletePayment(id) {
-  return apiPost('deleteConsignmentPayment', { id });
+  return queueablePost('deleteConsignmentPayment', { id });
 }
