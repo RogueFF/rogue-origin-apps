@@ -292,6 +292,9 @@
     var lastBagIsPreviousDay = State.lastBagTimestamp &&
       State.lastBagTimestamp.toDateString() !== new Date().toDateString();
 
+    // Check if shift has been manually started
+    var hasShiftStarted = State.manualShiftStart !== null && State.manualShiftStart !== undefined;
+
     if (lastBagIsToday && !isManuallyPaused) {
       elapsedSec = getWorkingSecondsSince(State.lastBagTimestamp);
     } else if (lastBagIsToday && isManuallyPaused && State.pauseStartTime) {
@@ -303,8 +306,16 @@
       // Unfinished bag from previous day - carry over the remaining time
       // Calculates: (yesterday's lastBag → yesterday's shift end) + (today's 7AM → now)
       elapsedSec = getWorkingSecondsCarryOver(State.lastBagTimestamp);
+    } else if (!hasShiftStarted && !breakStatus.onBreak && !breakStatus.afterHours) {
+      // No bag in progress and shift hasn't been started - show waiting state
+      // Don't count time until shift is manually started
+      elapsedSec = 0;
+      colorClass = 'neutral';
+      var waitingLabel = Utils.translate('waiting');
+      updateTimerDisplay('--:--', waitingLabel || 'Waiting to Start', colorClass, 0);
+      return;
     } else if (!breakStatus.onBreak && !breakStatus.afterHours) {
-      // No lastBagTimestamp at all - use shift start time as reference
+      // No lastBagTimestamp but shift has started - use shift start time as reference
       elapsedSec = getWorkingSecondsSince(getShiftStartTime());
     }
 
