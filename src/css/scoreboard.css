@@ -1746,18 +1746,20 @@
   display: none !important;
 }
 
-/* Utility Buttons - Compact top-left toolbar */
+/* Utility Buttons - Compact top-left toolbar (UPDATED v3) */
 .historical-view-btn,
 .order-queue-toggle-btn {
-  position: fixed;
-  top: 85px;
+  position: fixed !important;
+  top: 85px !important;
+  bottom: auto !important;
+  right: auto !important;
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.15);
-  padding: 6px 10px;
+  padding: 6px 10px !important;
   border-radius: 8px;
-  font-size: 11px;
+  font-size: 11px !important;
   font-weight: 600;
-  display: flex;
+  display: flex !important;
   align-items: center;
   gap: 6px;
   cursor: pointer;
@@ -1769,12 +1771,12 @@
 }
 
 .historical-view-btn {
-  left: 25px;
+  left: 25px !important;
   color: #93a5ba;
 }
 
 .order-queue-toggle-btn {
-  left: 140px;
+  left: 140px !important;
   color: #e4aa4f;
 }
 
