@@ -2517,7 +2517,16 @@ function renderScannerDropdownOptions(dropdown, products, selectedValue, filter 
       (product) => {
         const displayName = product.displayTitle || product.title;
         const poolValue = parseFloat(product.poolValue) || 0;
-        const poolGrams = poolValue.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+        // Show in lbs if >= 1lb (453.592g), otherwise show in grams
+        let weightDisplay;
+        if (poolValue >= 453.592) {
+          const poolLbs = poolValue / 453.592;
+          weightDisplay = `${poolLbs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}lbs`;
+        } else {
+          weightDisplay = `${poolValue.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}g`;
+        }
+
         return `
       <div class="custom-select-option${product.id === selectedValue ? ' selected' : ''}"
            data-value="${product.id}"
@@ -2526,7 +2535,7 @@ function renderScannerDropdownOptions(dropdown, products, selectedValue, filter 
            role="option"
            aria-selected="${product.id === selectedValue}">
         <span class="option-name">${displayName}</span>
-        <span class="option-weight">${poolGrams}g</span>
+        <span class="option-weight">${weightDisplay}</span>
       </div>
     `;
       }
