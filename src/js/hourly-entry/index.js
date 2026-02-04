@@ -2375,6 +2375,12 @@ function initBarcodeTabs() {
  * Initialize scanner tab functionality
  */
 async function initScannerTab() {
+  // Set initial pool type attribute for styling
+  const scannerTab = document.getElementById('tab-scanner');
+  if (scannerTab) {
+    scannerTab.setAttribute('data-pool-type', currentPoolType);
+  }
+
   await loadPoolProducts();
   initPoolTypeToggle();
   populateScannerStrainSelect();
@@ -2424,6 +2430,12 @@ function initPoolTypeToggle() {
 
       // Update current pool type
       currentPoolType = btn.dataset.poolType;
+
+      // Update scanner tab data attribute for styling
+      const scannerTab = document.getElementById('tab-scanner');
+      if (scannerTab) {
+        scannerTab.setAttribute('data-pool-type', currentPoolType);
+      }
 
       // Reload products for new pool type
       await loadPoolProducts();
