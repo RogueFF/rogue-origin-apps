@@ -225,23 +225,39 @@ import {
 // ===== SKELETON LOADING UI =====
 function showSkeletons(show) {
   setSkeletonsShowing(show);
+  
+  // Force DOM update to complete before hiding skeletons
+  if (!show) {
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        hideSkeletonsNow();
+      });
+    });
+  } else {
+    const kpiCards = document.querySelectorAll('.kpi-card');
+    const widgetCards = document.querySelectorAll('.widget-item');
+    
+    kpiCards.forEach(function(card) {
+      card.classList.add('loading');
+    });
+    
+    widgetCards.forEach(function(widget) {
+      widget.classList.add('loading');
+    });
+  }
+}
+
+// Separate function to actually hide skeletons after DOM paint
+function hideSkeletonsNow() {
   const kpiCards = document.querySelectorAll('.kpi-card');
   const widgetCards = document.querySelectorAll('.widget-item');
 
   kpiCards.forEach(function(card) {
-    if (show) {
-      card.classList.add('loading');
-    } else {
-      card.classList.remove('loading');
-    }
+    card.classList.remove('loading');
   });
 
   widgetCards.forEach(function(widget) {
-    if (show) {
-      widget.classList.add('loading');
-    } else {
-      widget.classList.remove('loading');
-    }
+    widget.classList.remove('loading');
   });
 }
 
@@ -807,6 +823,15 @@ async function init() {
   // Note: Loading overlay is hidden by renderAll() when data arrives
   // or by the 8-second fallback timeout
 
+  // Safety timeout: Force-hide skeletons after 10 seconds if they get stuck
+  setTimeout(function() {
+    if (isSkeletonsShowing()) {
+      console.warn('Force-hiding stuck skeletons after timeout');
+      hideSkeletonsNow();
+      setSkeletonsShowing(false);
+    }
+  }, 10000);
+
   console.log('Dashboard initialization complete');
 }
 
@@ -1168,6 +1193,7 @@ export {
   setupDateChipHandlers,
   setupDocumentClickHandler,
   showSkeletons,
+  hideSkeletonsNow,
   showToast,
   renderAll
 };
