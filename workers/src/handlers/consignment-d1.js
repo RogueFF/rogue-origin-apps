@@ -231,6 +231,9 @@ async function saveBatchIntake(db, body) {
   if (!date) throw createError('VALIDATION_ERROR', 'Date is required');
   if (!items || !Array.isArray(items) || items.length === 0) throw createError('VALIDATION_ERROR', 'At least one item is required');
   
+  // Generate batch ID for grouping multi-line intakes
+  const batchId = `batch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  
   const results = [];
   for (const item of items) {
     const { strain, type, weight_lbs, price_per_lb } = item;
@@ -240,14 +243,14 @@ async function saveBatchIntake(db, body) {
     if (!price_per_lb || price_per_lb <= 0) throw createError('VALIDATION_ERROR', 'Price per lb must be positive');
     
     const result = await execute(db, `
-      INSERT INTO consignment_intakes (partner_id, date, strain, type, weight_lbs, price_per_lb, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `, [partner_id, date, strain.trim(), type, weight_lbs, price_per_lb, notes || null]);
+      INSERT INTO consignment_intakes (partner_id, date, strain, type, weight_lbs, price_per_lb, notes, batch_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `, [partner_id, date, strain.trim(), type, weight_lbs, price_per_lb, notes || null, batchId]);
     
     results.push({ id: result.lastRowId, strain, type, weight_lbs });
   }
   
-  return successResponse({ success: true, data: { count: results.length, items: results } });
+  return successResponse({ success: true, data: { count: results.length, items: results, batch_id: batchId } });
 }
 
 // ─── SALES ──────────────────────────────────────────────
@@ -411,13 +414,13 @@ async function getActivity(db, params) {
   if (partnerId) {
     sql = `
       SELECT * FROM (
-        SELECT 'intake' as activity_type, id, partner_id, date, strain, type, weight_lbs, price_per_lb as price, NULL as amount, NULL as method, notes, created_at
+        SELECT 'intake' as activity_type, id, partner_id, date, strain, type, weight_lbs, price_per_lb as price, NULL as amount, NULL as method, batch_id, notes, created_at
         FROM consignment_intakes WHERE partner_id = ?
         UNION ALL
-        SELECT 'sale' as activity_type, id, partner_id, date, strain, type, weight_lbs, sale_price_per_lb as price, NULL as amount, channel as method, notes, created_at
+        SELECT 'sale' as activity_type, id, partner_id, date, strain, type, weight_lbs, sale_price_per_lb as price, NULL as amount, channel as method, NULL as batch_id, notes, created_at
         FROM consignment_sales WHERE partner_id = ?
         UNION ALL
-        SELECT 'payment' as activity_type, id, partner_id, date, NULL as strain, NULL as type, NULL as weight_lbs, NULL as price, amount, method, notes, created_at
+        SELECT 'payment' as activity_type, id, partner_id, date, NULL as strain, NULL as type, NULL as weight_lbs, NULL as price, amount, method, NULL as batch_id, notes, created_at
         FROM consignment_payments WHERE partner_id = ?
       )
       ORDER BY date DESC, created_at DESC
@@ -427,13 +430,13 @@ async function getActivity(db, params) {
   } else {
     sql = `
       SELECT * FROM (
-        SELECT 'intake' as activity_type, id, partner_id, date, strain, type, weight_lbs, price_per_lb as price, NULL as amount, NULL as method, notes, created_at
+        SELECT 'intake' as activity_type, id, partner_id, date, strain, type, weight_lbs, price_per_lb as price, NULL as amount, NULL as method, batch_id, notes, created_at
         FROM consignment_intakes
         UNION ALL
-        SELECT 'sale' as activity_type, id, partner_id, date, strain, type, weight_lbs, sale_price_per_lb as price, NULL as amount, channel as method, notes, created_at
+        SELECT 'sale' as activity_type, id, partner_id, date, strain, type, weight_lbs, sale_price_per_lb as price, NULL as amount, channel as method, NULL as batch_id, notes, created_at
         FROM consignment_sales
         UNION ALL
-        SELECT 'payment' as activity_type, id, partner_id, date, NULL as strain, NULL as type, NULL as weight_lbs, NULL as price, amount, method, notes, created_at
+        SELECT 'payment' as activity_type, id, partner_id, date, NULL as strain, NULL as type, NULL as weight_lbs, NULL as price, amount, method, NULL as batch_id, notes, created_at
         FROM consignment_payments
       )
       ORDER BY date DESC, created_at DESC
