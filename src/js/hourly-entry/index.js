@@ -2047,6 +2047,13 @@ let poolDataTimestamp = null; // Timestamp of last pool data load
 let customDropdownScannerStrains = []; // Products for scanner dropdown
 const STALE_DATA_THRESHOLD = 5 * 60 * 1000; // 5 minutes
 
+// Cache for pool products by type
+const poolCache = {
+  smalls: { data: null, timestamp: null },
+  tops: { data: null, timestamp: null }
+};
+const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes cache
+
 /**
  * Initialize barcode card functionality
  * Called after cultivars are loaded
@@ -2383,7 +2390,9 @@ async function initScannerTab() {
     scannerTab.setAttribute('data-pool-type', currentPoolType);
   }
 
-  await loadPoolProducts();
+  // Preload all pool types for instant switching
+  await preloadAllPoolTypes();
+
   initPoolTypeToggle();
   populateScannerStrainSelect();
   initOperationButtons();
@@ -2395,9 +2404,19 @@ async function initScannerTab() {
 }
 
 /**
- * Load pool products from Pool Inventory API
+ * Load pool products from Pool Inventory API with caching
  */
-async function loadPoolProducts() {
+async function loadPoolProducts(force = false) {
+  const cache = poolCache[currentPoolType];
+  const now = Date.now();
+
+  // Use cache if available and not expired (unless force refresh)
+  if (!force && cache.data && cache.timestamp && (now - cache.timestamp < CACHE_DURATION)) {
+    poolProducts = cache.data;
+    poolDataTimestamp = cache.timestamp;
+    return;
+  }
+
   try {
     const response = await fetch(`${POOL_API_URL}?action=list_products`, {
       method: 'POST',
@@ -2410,12 +2429,37 @@ async function loadPoolProducts() {
     const result = await response.json();
     poolProducts = result.products || [];
 
+    // Update cache
+    poolCache[currentPoolType] = {
+      data: poolProducts,
+      timestamp: now
+    };
+
     // Set timestamp for stale data detection
-    poolDataTimestamp = Date.now();
+    poolDataTimestamp = now;
   } catch (error) {
     console.error('Failed to load pool products:', error);
     poolProducts = [];
   }
+}
+
+/**
+ * Preload both pool types in background for instant switching
+ */
+async function preloadAllPoolTypes() {
+  const types = ['smalls', 'tops'];
+  const originalType = currentPoolType;
+
+  for (const type of types) {
+    if (type !== originalType) {
+      currentPoolType = type;
+      await loadPoolProducts();
+    }
+  }
+
+  // Restore original type
+  currentPoolType = originalType;
+  await loadPoolProducts();
 }
 
 /**
@@ -2776,8 +2820,8 @@ function initRefreshPoolButton() {
     refreshBtn.style.pointerEvents = 'none';
 
     try {
-      // Reload pool products
-      await loadPoolProducts();
+      // Force reload pool products (bypass cache)
+      await loadPoolProducts(true);
 
       // Repopulate dropdown
       populateScannerStrainSelect();
@@ -2925,6 +2969,11 @@ function initPoolUpdateButton() {
         // Update cached product with actual value
         if (product) {
           product.poolValue = actualNewValue;
+        }
+
+        // Update cache with new value
+        if (poolCache[currentPoolType].data) {
+          poolCache[currentPoolType].timestamp = Date.now();
         }
 
         // Update result display with actual values
