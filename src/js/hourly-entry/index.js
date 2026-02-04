@@ -2448,6 +2448,17 @@ function initPoolTypeToggle() {
 }
 
 /**
+ * Clean product title to show only cultivar name
+ */
+function cleanProductTitle(title) {
+  return title
+    .replace(/^New!\s*/i, '')  // Remove "New!" prefix
+    .replace(/\s*hemp flower\s*/gi, '')  // Remove "hemp flower"
+    .replace(/\s+/g, ' ')  // Normalize whitespace
+    .trim();
+}
+
+/**
  * Populate the scanner strain dropdown with products from Pool API
  */
 function populateScannerStrainSelect() {
@@ -2455,8 +2466,10 @@ function populateScannerStrainSelect() {
   const hiddenInput = document.getElementById('scanner-strain');
   if (!dropdown || !hiddenInput) return;
 
-  // Sort products by title
-  const sortedProducts = [...poolProducts].sort((a, b) => a.title.localeCompare(b.title));
+  // Clean and sort products by title
+  const sortedProducts = [...poolProducts]
+    .map(p => ({ ...p, displayTitle: cleanProductTitle(p.title) }))
+    .sort((a, b) => a.displayTitle.localeCompare(b.displayTitle));
 
   // Store products for dropdown
   customDropdownScannerStrains = sortedProducts;
@@ -2476,7 +2489,7 @@ function populateScannerStrainSelect() {
   // Restore selection if it still exists
   if (currentValue && sortedProducts.find(p => p.id === currentValue)) {
     const product = sortedProducts.find(p => p.id === currentValue);
-    selectScannerDropdownValue(dropdown, currentValue, product.title);
+    selectScannerDropdownValue(dropdown, currentValue, product.displayTitle);
   }
 }
 
@@ -2489,7 +2502,7 @@ function renderScannerDropdownOptions(dropdown, products, selectedValue, filter 
 
   const filterLower = filter.toLowerCase();
   const filtered = filter
-    ? products.filter((p) => p.title.toLowerCase().includes(filterLower))
+    ? products.filter((p) => (p.displayTitle || p.title).toLowerCase().includes(filterLower))
     : products;
 
   if (filtered.length === 0) {
@@ -2499,16 +2512,19 @@ function renderScannerDropdownOptions(dropdown, products, selectedValue, filter 
 
   optionsContainer.innerHTML = filtered
     .map(
-      (product) => `
+      (product) => {
+        const displayName = product.displayTitle || product.title;
+        return `
       <div class="custom-select-option${product.id === selectedValue ? ' selected' : ''}"
            data-value="${product.id}"
            data-pool-value="${product.poolValue}"
-           data-title="${product.title}"
+           data-title="${displayName}"
            role="option"
            aria-selected="${product.id === selectedValue}">
-        ${product.title}
+        ${displayName}
       </div>
-    `
+    `;
+      }
     )
     .join('');
 }
