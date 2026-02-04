@@ -1746,70 +1746,63 @@
   display: none !important;
 }
 
-/* Historical View Button */
-.historical-view-btn {
+/* Utility Buttons - Compact top-left toolbar */
+.historical-view-btn,
+.order-queue-toggle-btn {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
-  background: rgba(98, 117, 141, 0.15);
-  border: 2px solid #62758d;
-  color: #62758d;
-  padding: 12px 20px;
-  border-radius: 12px;
-  font-size: 14px;
+  top: 85px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 11px;
   font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   cursor: pointer;
-  transition: all 0.3s ease;
-  z-index: 100;
+  transition: all 0.2s ease;
+  z-index: 90;
   font-family: 'Outfit', sans-serif;
+  opacity: 0.6;
+  backdrop-filter: blur(8px);
+}
+
+.historical-view-btn {
+  left: 25px;
+  color: #93a5ba;
+}
+
+.order-queue-toggle-btn {
+  left: 140px;
+  color: #e4aa4f;
+}
+
+.historical-view-btn:hover,
+.order-queue-toggle-btn:hover {
+  opacity: 1;
+  transform: translateX(2px);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 .historical-view-btn:hover {
-  background: rgba(98, 117, 141, 0.25);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.historical-view-btn i {
-  font-size: 20px;
-}
-
-/* Order Queue Toggle Button */
-.order-queue-toggle-btn {
-  position: fixed;
-  bottom: 20px;
-  right: 280px;
-  background: rgba(228, 170, 79, 0.15);
-  border: 2px solid #e4aa4f;
-  color: #e4aa4f;
-  padding: 12px 20px;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  z-index: 100;
-  font-family: 'Outfit', sans-serif;
+  background: rgba(98, 117, 141, 0.2);
+  border-color: rgba(98, 117, 141, 0.5);
 }
 
 .order-queue-toggle-btn:hover {
-  background: rgba(228, 170, 79, 0.25);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background: rgba(228, 170, 79, 0.2);
+  border-color: rgba(228, 170, 79, 0.5);
 }
 
+.historical-view-btn i,
 .order-queue-toggle-btn i {
-  font-size: 20px;
+  font-size: 14px;
 }
 
 .order-queue-toggle-btn.active {
-  background: rgba(228, 170, 79, 0.3);
+  opacity: 1;
+  background: rgba(228, 170, 79, 0.25);
   border-color: #e4aa4f;
 }
 
@@ -1826,26 +1819,32 @@
     padding: 6px 12px;
   }
 
-  .historical-view-btn {
-    bottom: 10px;
-    right: 10px;
-    padding: 10px 16px;
-    font-size: 12px;
+  /* Keep utility buttons compact on mobile */
+  .historical-view-btn,
+  .order-queue-toggle-btn,
+  #morningReportBtn {
+    top: 65px;
+    padding: 5px 8px;
+    font-size: 10px;
+    gap: 4px;
   }
 
-  .historical-view-btn i {
-    font-size: 18px;
+  .historical-view-btn {
+    left: 15px;
   }
 
   .order-queue-toggle-btn {
-    bottom: 60px;
-    right: 10px;
-    padding: 10px 16px;
-    font-size: 12px;
+    left: 100px;
   }
 
-  .order-queue-toggle-btn i {
-    font-size: 18px;
+  #morningReportBtn {
+    left: 180px;
+  }
+
+  .historical-view-btn i,
+  .order-queue-toggle-btn i,
+  #morningReportBtn i {
+    font-size: 12px;
   }
 
   .order-queue-toggle-btn span {
@@ -2883,30 +2882,44 @@ body.iframe-embed .current-order-items {
   background: #4a6b54;
 }
 
-/* Morning Report Button */
+/* Morning Report Button - Compact toolbar */
 #morningReportBtn {
-  background: rgba(102, 137, 113, 0.2);
-  border: 1px solid var(--ro-green);
-  color: var(--ro-green);
-  padding: 8px 16px;
+  position: fixed;
+  top: 85px;
+  left: 250px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #7a9a86;
+  padding: 6px 10px;
   border-radius: 8px;
   font-family: 'Outfit', sans-serif;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
   align-items: center;
   gap: 6px;
+  z-index: 90;
+  opacity: 0.6;
+  backdrop-filter: blur(8px);
 }
 
 #morningReportBtn:hover {
-  background: rgba(102, 137, 113, 0.3);
+  opacity: 1;
+  background: rgba(102, 137, 113, 0.2);
+  border-color: rgba(102, 137, 113, 0.5);
+  transform: translateX(2px);
+}
+
+#morningReportBtn i {
+  font-size: 14px;
 }
 
 #morningReportBtn.active {
-  background: var(--ro-green);
-  color: white;
+  opacity: 1;
+  background: rgba(102, 137, 113, 0.25);
+  border-color: var(--ro-green);
 }
 
 /* Responsive */
