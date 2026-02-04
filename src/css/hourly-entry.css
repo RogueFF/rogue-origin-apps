@@ -614,11 +614,11 @@ body {
 .scanner-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px;
+  gap: 6px;
+  padding: 8px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border-color);
-  border-radius: 10px;
+  border-radius: 8px;
 }
 
 .pool-input-row {
@@ -629,9 +629,9 @@ body {
 
 .pool-input {
   flex: 1;
-  padding: 14px 16px;
+  padding: 10px 12px;
   border: 2px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--bg-input);
   color: var(--text-primary);
   font-family: 'JetBrains Mono', monospace;
@@ -734,21 +734,21 @@ body {
 /* Pool Type Toggle */
 .pool-type-toggle {
   display: flex;
-  gap: 6px;
-  padding: 4px;
+  gap: 4px;
+  padding: 3px;
   background: rgba(0, 0, 0, 0.2);
-  border-radius: 10px;
-  margin-bottom: 8px;
+  border-radius: 8px;
+  margin-bottom: 6px;
 }
 
 .pool-type-btn {
   flex: 1;
-  padding: 10px 16px;
+  padding: 8px 12px;
   background: transparent;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   color: var(--text-secondary);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -798,18 +798,18 @@ body {
 /* Operation Selector */
 .operation-selector {
   display: flex;
-  gap: 6px;
-  margin-bottom: 8px;
+  gap: 4px;
+  margin-bottom: 6px;
 }
 
 .operation-btn {
   flex: 1;
-  padding: 12px 16px;
+  padding: 8px 12px;
   background: rgba(255, 255, 255, 0.05);
   border: 2px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: 6px;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -830,12 +830,12 @@ body {
 /* Pool Note Input */
 .pool-note-input {
   width: 100%;
-  padding: 12px 16px;
+  padding: 8px 12px;
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--bg-input);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 13px;
   font-family: 'Outfit', system-ui, sans-serif;
 }
 
@@ -897,7 +897,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .refresh-pool-btn {
@@ -925,12 +925,12 @@ body {
 .current-pool-display {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px;
+  gap: 6px;
+  padding: 8px;
   background: rgba(102, 137, 113, 0.1);
   border: 1px solid var(--green);
-  border-radius: 8px;
-  margin-top: 8px;
+  border-radius: 6px;
+  margin-top: 6px;
 }
 
 .pool-display-row {
@@ -1007,33 +1007,33 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 /* Preview Calculation */
 .pool-preview {
-  padding: 12px;
+  padding: 8px;
   background: rgba(228, 170, 79, 0.1);
   border: 1px solid var(--gold);
-  border-radius: 8px;
-  margin-bottom: 8px;
+  border-radius: 6px;
+  margin-bottom: 6px;
 }
 
 .preview-label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--gold);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .preview-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 4px 0;
-  font-size: 14px;
+  padding: 3px 0;
+  font-size: 13px;
 }
 
 .preview-row + .preview-row {
@@ -1052,8 +1052,8 @@ body {
 }
 
 .preview-row.new-value {
-  margin-top: 4px;
-  padding-top: 8px;
+  margin-top: 3px;
+  padding-top: 6px;
   border-top: 2px solid rgba(255, 255, 255, 0.2) !important;
 }
 
@@ -1064,7 +1064,7 @@ body {
 
 /* Recent Changes Section */
 .recent-changes-section {
-  max-height: 300px;
+  max-height: 200px;
   overflow-y: auto;
 }
 
@@ -1177,7 +1177,7 @@ body {
 .barcode-controls {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .barcode-label {
