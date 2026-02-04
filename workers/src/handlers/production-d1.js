@@ -1286,7 +1286,22 @@ async function dashboard(params, env) {
   const todayTotalOperatorHours = todayBuckerHours + todayTrimmerHours + todayTZeroHours + todayWaterspiderHours;
 
   const hoursWithData = todayOperatorData?.hours_with_data || 0;
-  const todayData = {
+  
+  // When viewing historical data, use data from filteredData instead of SQL query
+  const todayData = (!isViewingToday && filteredData.length > 0) ? {
+    totalTops: filteredData[0].totalTops || 0,
+    totalSmalls: filteredData[0].totalSmalls || 0,
+    totalLbs: filteredData[0].totalLbs || 0,
+    avgRate: filteredData[0].avgRate || 0,
+    trimmers: filteredData[0].trimmerHours ? Math.round(filteredData[0].trimmerHours / 7.5) : 0,
+    buckers: 0,
+    tzero: 0,
+    operatorHours: filteredData[0].operatorHours || 0,
+    laborCost: filteredData[0].laborCost || 0,
+    costPerLb: filteredData[0].costPerLb || 0,
+    topsCostPerLb: filteredData[0].topsCostPerLb || 0,
+    smallsCostPerLb: filteredData[0].smallsCostPerLb || 0,
+  } : {
     totalTops: todayTops,
     totalSmalls: todaySmalls,
     totalLbs: todayTotalLbs,
@@ -1305,27 +1320,40 @@ async function dashboard(params, env) {
     smallsCostPerLb: todaySmallsCostPerLb,
   };
 
-  const current = {
+  // When viewing historical data, clear live-only metrics
+  const current = isViewingToday ? {
     strain: scoreboardData.strain || '',
     todayPercentage: scoreboardData.todayPercentage || 0,
     todayTarget: scoreboardData.todayTarget || 0,
     projectedTotal: scoreboardData.projectedTotal || 0,
     effectiveHours: scoreboardData.effectiveHours || 0,
+  } : {
+    strain: '',
+    todayPercentage: 0,
+    todayTarget: 0,
+    projectedTotal: 0,
+    effectiveHours: 0,
   };
 
-  const targets = {
+  const targets = isViewingToday ? {
     totalTops: scoreboardData.dailyGoal || 66,
+  } : {
+    totalTops: 0,
   };
 
-  const bagTimer = {
+  const bagTimer = isViewingToday ? {
     bagsToday: timerData.bagsToday || 0,
     avgTime: timerData.avgSecondsToday > 0 ? `${Math.round(timerData.avgSecondsToday / 60)} min` : '--',
     vsTarget: timerData.targetSeconds > 0 && timerData.avgSecondsToday > 0
       ? `${timerData.avgSecondsToday < timerData.targetSeconds ? '-' : '+'}${Math.abs(Math.round((timerData.avgSecondsToday - timerData.targetSeconds) / 60))} min`
       : '--',
+  } : {
+    bagsToday: timerData.bagsToday || 0,
+    avgTime: timerData.avgSecondsToday > 0 ? `${Math.round(timerData.avgSecondsToday / 60)} min` : '--',
+    vsTarget: '--',
   };
 
-  const hourly = (scoreboardData.hourlyRates || []).map((h) => ({
+  const hourly = isViewingToday ? (scoreboardData.hourlyRates || []).map((h) => ({
     label: h.timeSlot,
     rate: h.rate,
     target: h.target,
@@ -1334,7 +1362,7 @@ async function dashboard(params, env) {
     lbs: h.lbs,
     tops: h.lbs,
     smalls: h.smalls || 0,
-  }));
+  })) : [];
 
   // Get strain snapshot (top 5 strains from last 7 days)
   const strainSnapshot = await getStrainSummary(env, 7, 5);
