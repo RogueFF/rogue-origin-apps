@@ -3,7 +3,17 @@
  * Handles rendering partner cards, activity feed, modals, and partner detail
  */
 
-import * as api from './api.js?v=4';
+import * as api from './api.js?v=5';
+
+// ─── HELPERS ────────────────────────────────────────────
+
+let refreshTimer = null;
+function debouncedRefresh() {
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(() => {
+    document.dispatchEvent(new CustomEvent('refreshAll'));
+  }, 300);
+}
 
 // ─── PARTNER CARDS ──────────────────────────────────────
 
@@ -220,70 +230,61 @@ export function renderPartnerDetail(detail, container, onClose) {
     if (onClose) onClose();
   });
   
-  // Delete partner
+  // Delete partner — optimistic: close panel immediately, delete in background
   const deletePartnerBtn = container.querySelector('.delete-partner-btn');
   if (deletePartnerBtn) {
-    deletePartnerBtn.addEventListener('click', async () => {
-      if (confirm(`Delete ${d.partner.name} and all their records?`)) {
-        try {
-          await api.deletePartner(d.partner.id);
-          container.classList.remove('active');
-          if (onClose) onClose();
-          document.dispatchEvent(new CustomEvent('refreshAll'));
-        } catch (err) {
-          alert('Failed to delete partner: ' + err.message);
-        }
-      }
+    deletePartnerBtn.addEventListener('click', () => {
+      if (!confirm(`Delete ${d.partner.name} and all their records?`)) return;
+      // Optimistic: close panel immediately
+      container.classList.remove('active');
+      if (onClose) onClose();
+      showToast(`Deleted ${d.partner.name}`);
+      debouncedRefresh();
+      // Background: actual delete
+      api.deletePartner(d.partner.id).catch(err => {
+        showToast('Failed to delete partner — refreshing', 'error');
+        debouncedRefresh();
+      });
     });
   }
   
-  // Delete intakes
+  // Optimistic row delete helper
+  function optimisticRowDelete(btn, apiFn, label) {
+    const row = btn.closest('.history-table-row') || btn.closest('.inv-table-row');
+    if (!row) return;
+    // Optimistic: fade out and remove
+    row.style.transition = 'opacity 0.2s, transform 0.2s';
+    row.style.opacity = '0';
+    row.style.transform = 'translateX(20px)';
+    const parent = row.parentNode;
+    const nextSibling = row.nextSibling;
+    setTimeout(() => row.remove(), 200);
+    // Background: actual delete
+    apiFn(btn.dataset.id).then(() => {
+      debouncedRefresh();
+    }).catch(err => {
+      // Restore row on failure
+      row.style.opacity = '1';
+      row.style.transform = 'translateX(0)';
+      if (nextSibling) parent.insertBefore(row, nextSibling);
+      else parent.appendChild(row);
+      showToast(`Failed to delete ${label}`, 'error');
+    });
+  }
+
+  // Delete intakes — optimistic
   container.querySelectorAll('.delete-intake').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      if (confirm('Delete this intake?')) {
-        try {
-          await api.deleteIntake(btn.dataset.id);
-          // Refresh the detail panel
-          const result = await api.getPartnerDetail(d.partner.id);
-          renderPartnerDetail(result.data, container, onClose);
-          document.dispatchEvent(new CustomEvent('refreshAll'));
-        } catch (err) {
-          alert('Failed to delete: ' + err.message);
-        }
-      }
-    });
+    btn.addEventListener('click', () => optimisticRowDelete(btn, api.deleteIntake, 'intake'));
   });
   
-  // Delete sales
+  // Delete sales — optimistic
   container.querySelectorAll('.delete-sale').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      if (confirm('Delete this sale?')) {
-        try {
-          await api.deleteSale(btn.dataset.id);
-          const result = await api.getPartnerDetail(d.partner.id);
-          renderPartnerDetail(result.data, container, onClose);
-          document.dispatchEvent(new CustomEvent('refreshAll'));
-        } catch (err) {
-          alert('Failed to delete: ' + err.message);
-        }
-      }
-    });
+    btn.addEventListener('click', () => optimisticRowDelete(btn, api.deleteSale, 'sale'));
   });
   
-  // Delete payments
+  // Delete payments — optimistic
   container.querySelectorAll('.delete-payment').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      if (confirm('Delete this payment?')) {
-        try {
-          await api.deletePayment(btn.dataset.id);
-          const result = await api.getPartnerDetail(d.partner.id);
-          renderPartnerDetail(result.data, container, onClose);
-          document.dispatchEvent(new CustomEvent('refreshAll'));
-        } catch (err) {
-          alert('Failed to delete: ' + err.message);
-        }
-      }
-    });
+    btn.addEventListener('click', () => optimisticRowDelete(btn, api.deletePayment, 'payment'));
   });
 }
 
