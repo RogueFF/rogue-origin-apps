@@ -3,14 +3,23 @@
  * Init, event listeners, auto-refresh, orchestration
  */
 
-import * as api from './api.js?v=5';
-import * as ui from './ui.js?v=5';
+import * as api from './api.js?v=6';
+import * as ui from './ui.js?v=6';
 
 let partners = [];
 let strains = [];
 let selectedPartnerId = null;
 let refreshInterval = null;
 let lineItemCount = 0;
+
+// Prefetch cache
+const detailCache = new Map();
+let prefetchTimer = null;
+
+// Smart refresh
+let lastUserAction = Date.now();
+const REFRESH_INTERVAL = 30000;
+const MIN_REFRESH_GAP = 5000; // Don't refresh if user acted < 5s ago
 
 // ─── INIT ───────────────────────────────────────────────
 
@@ -58,13 +67,35 @@ async function loadActivity(partnerId) {
   }
 }
 
+function prefetchPartnerDetail(partnerId) {
+  clearTimeout(prefetchTimer);
+  prefetchTimer = setTimeout(() => {
+    if (!detailCache.has(partnerId)) {
+      api.getPartnerDetail(partnerId).then(result => {
+        detailCache.set(partnerId, { data: result.data, ts: Date.now() });
+      }).catch(() => {}); // silent fail on prefetch
+    }
+  }, 150); // slight delay to avoid prefetching on fast mouse passes
+}
+
 async function showPartnerDetail(partnerId) {
   try {
     selectedPartnerId = partnerId;
+    // Check cache first (valid for 10 seconds)
+    const cached = detailCache.get(partnerId);
+    if (cached && (Date.now() - cached.ts) < 10000) {
+      ui.renderPartnerDetail(cached.data, el('partner-detail'), () => { selectedPartnerId = null; });
+      // Refresh in background for freshness
+      api.getPartnerDetail(partnerId).then(result => {
+        detailCache.set(partnerId, { data: result.data, ts: Date.now() });
+      }).catch(() => {});
+      return;
+    }
+    // Show skeleton while loading
+    ui.showDetailSkeleton(el('partner-detail'));
     const result = await api.getPartnerDetail(partnerId);
-    ui.renderPartnerDetail(result.data, el('partner-detail'), () => {
-      selectedPartnerId = null;
-    });
+    detailCache.set(partnerId, { data: result.data, ts: Date.now() });
+    ui.renderPartnerDetail(result.data, el('partner-detail'), () => { selectedPartnerId = null; });
   } catch (err) {
     console.error('Failed to load partner detail:', err);
     ui.showToast('Failed to load partner details', 'error');
@@ -246,6 +277,14 @@ function setupEventListeners() {
   
   // Refresh all from delete actions
   document.addEventListener('refreshAll', () => refreshAll());
+  
+  // Prefetch partner detail on hover
+  document.addEventListener('prefetchPartner', (e) => prefetchPartnerDetail(e.detail.partnerId));
+  
+  // Offline queue notifications
+  document.addEventListener('offlineQueued', (e) => {
+    ui.showToast(`Saved offline (${e.detail.count} pending)`, 'warning');
+  });
 }
 
 // ─── FORM HANDLERS ──────────────────────────────────────
@@ -258,91 +297,114 @@ async function handleIntakeSubmit(e) {
     return;
   }
   
+  const partnerId = el('intake-partner').value;
+  const date = el('intake-date').value;
   const items = Array.from(lines).map(row => ({
     strain: row.querySelector('.line-strain')?.value,
     type: row.querySelector('.toggle-option.active')?.dataset.value || 'tops',
     weight_lbs: parseFloat(row.querySelector('.line-weight')?.value),
     price_per_lb: parseFloat(row.querySelector('.line-price')?.value),
   }));
+  const notes = el('intake-notes')?.value || '';
   
+  // Optimistic: close modal immediately
+  ui.closeModal('intake-modal');
+  const container = el('intake-lines');
+  if (container) container.innerHTML = '';
+  lineItemCount = 0;
+  ui.showToast(`${items.length} intake${items.length > 1 ? 's' : ''} recorded`);
+  trackUserAction();
+  
+  // Background: actual save
   try {
-    await api.saveBatchIntake({
-      partner_id: el('intake-partner').value,
-      date: el('intake-date').value,
-      items,
-      notes: el('intake-notes')?.value || '',
-    });
-    ui.closeModal('intake-modal');
-    // Clear lines for next use
-    const container = el('intake-lines');
-    if (container) container.innerHTML = '';
-    lineItemCount = 0;
-    ui.showToast(`${items.length} intake${items.length > 1 ? 's' : ''} recorded`);
+    await api.saveBatchIntake({ partner_id: partnerId, date, items, notes });
+    detailCache.delete(parseInt(partnerId));
     refreshAll();
   } catch (err) {
-    ui.showToast(err.message || 'Failed to save intake', 'error');
+    ui.showToast(err.message || 'Failed to save intake — please retry', 'error');
+    refreshAll();
   }
 }
 
 async function handleCountSubmit(e) {
   e.preventDefault();
   const type = el('count-modal')?.querySelector('.toggle-option.active')?.dataset.value || 'tops';
+  const data = {
+    partner_id: el('count-partner').value,
+    date: el('count-date').value,
+    strain: el('count-strain').value,
+    type,
+    counted_lbs: parseFloat(el('count-weight').value),
+    notes: el('count-notes')?.value || '',
+  };
+  
+  ui.closeModal('count-modal');
+  ui.showToast('Count recorded');
+  trackUserAction();
+  
   try {
-    const result = await api.saveInventoryCount({
-      partner_id: el('count-partner').value,
-      date: el('count-date').value,
-      strain: el('count-strain').value,
-      type,
-      counted_lbs: parseFloat(el('count-weight').value),
-      notes: el('count-notes')?.value || '',
-    });
-    ui.closeModal('count-modal');
-    const data = result.data;
-    if (data.sold_lbs > 0) {
-      ui.showToast(`Count recorded — ${data.sold_lbs.toFixed(1)} lbs sold since last count`);
-    } else {
-      ui.showToast('Count recorded — inventory matches');
+    const result = await api.saveInventoryCount(data);
+    const d = result.data;
+    if (d.sold_lbs > 0) {
+      ui.showToast(`${d.sold_lbs.toFixed(1)} lbs sold since last count`);
     }
+    detailCache.delete(parseInt(data.partner_id));
     refreshAll();
   } catch (err) {
-    ui.showToast(err.message || 'Failed to save count', 'error');
+    ui.showToast(err.message || 'Failed to save count — please retry', 'error');
+    refreshAll();
   }
 }
 
 async function handlePaymentSubmit(e) {
   e.preventDefault();
+  const partnerId = el('payment-partner').value;
+  const data = {
+    partner_id: partnerId,
+    date: el('payment-date').value,
+    amount: parseFloat(el('payment-amount').value),
+    method: el('payment-method')?.value || 'check',
+    reference_number: el('payment-ref')?.value || '',
+    notes: el('payment-notes')?.value || '',
+  };
+  
+  // Optimistic: close immediately
+  ui.closeModal('payment-modal');
+  ui.showToast('Payment recorded');
+  trackUserAction();
+  
+  // Background save
   try {
-    await api.savePayment({
-      partner_id: el('payment-partner').value,
-      date: el('payment-date').value,
-      amount: parseFloat(el('payment-amount').value),
-      method: el('payment-method')?.value || 'check',
-      reference_number: el('payment-ref')?.value || '',
-      notes: el('payment-notes')?.value || '',
-    });
-    ui.closeModal('payment-modal');
-    ui.showToast('Payment recorded');
+    await api.savePayment(data);
+    detailCache.delete(parseInt(partnerId));
     refreshAll();
   } catch (err) {
-    ui.showToast(err.message || 'Failed to save payment', 'error');
+    ui.showToast(err.message || 'Failed to save payment — please retry', 'error');
+    refreshAll();
   }
 }
 
 async function handlePartnerSubmit(e) {
   e.preventDefault();
+  const name = el('partner-name').value;
+  const data = {
+    name,
+    contact_name: el('partner-contact')?.value || '',
+    email: el('partner-email')?.value || '',
+    phone: el('partner-phone')?.value || '',
+    notes: el('partner-notes')?.value || '',
+  };
+  
+  ui.closeModal('partner-modal');
+  ui.showToast(`${name} added`);
+  trackUserAction();
+  
   try {
-    await api.savePartner({
-      name: el('partner-name').value,
-      contact_name: el('partner-contact')?.value || '',
-      email: el('partner-email')?.value || '',
-      phone: el('partner-phone')?.value || '',
-      notes: el('partner-notes')?.value || '',
-    });
-    ui.closeModal('partner-modal');
-    ui.showToast('Partner added');
+    await api.savePartner(data);
     refreshAll();
   } catch (err) {
-    ui.showToast(err.message || 'Failed to save partner', 'error');
+    ui.showToast(err.message || 'Failed to save partner — please retry', 'error');
+    refreshAll();
   }
 }
 
@@ -358,12 +420,34 @@ function setDefaultDates() {
 }
 
 async function refreshAll() {
+  detailCache.clear();
+  trackUserAction();
   await Promise.all([loadPartners(), loadActivity(selectedPartnerId)]);
   if (selectedPartnerId) showPartnerDetail(selectedPartnerId);
 }
 
 function setupAutoRefresh() {
-  refreshInterval = setInterval(refreshAll, 30000);
+  // Clear old interval if any
+  if (refreshInterval) clearInterval(refreshInterval);
+  
+  refreshInterval = setInterval(() => {
+    // Skip if tab is hidden
+    if (document.hidden) return;
+    // Skip if user just did something
+    if (Date.now() - lastUserAction < MIN_REFRESH_GAP) return;
+    refreshAll();
+  }, REFRESH_INTERVAL);
+  
+  // Refresh when tab becomes visible (if stale)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && (Date.now() - lastUserAction > REFRESH_INTERVAL)) {
+      refreshAll();
+    }
+  });
+}
+
+function trackUserAction() {
+  lastUserAction = Date.now();
 }
 
 function toggleDarkMode() {
