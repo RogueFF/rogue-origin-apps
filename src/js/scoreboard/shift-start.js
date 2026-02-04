@@ -13,12 +13,14 @@
    * Initialize shift start UI on page load
    */
   function initShiftStartUI() {
+    console.log('[ShiftStart] initShiftStartUI called');
     const today = new Date().toDateString();
     const savedDate = localStorage.getItem('shiftStartDate');
 
     // Check for existing manual start from localStorage
     let savedStart = localStorage.getItem('manualShiftStart');
     let savedLocked = localStorage.getItem('shiftStartLocked') === 'true';
+    console.log('[ShiftStart] localStorage:', {savedStart, savedLocked, savedDate, today});
 
     // Check if saved timestamp is from today
     if (savedStart) {
@@ -84,25 +86,31 @@
    * Show Start Day button (initial state)
    */
   function showStartDayButton() {
+    console.log('[ShiftStart] showStartDayButton called');
     const btn = document.getElementById('startDayBtn');
     const badge = document.getElementById('startedBadge');
     if (btn) btn.style.display = 'flex';
     if (badge) badge.style.display = 'none';
+    console.log('[ShiftStart] Start Day button shown');
   }
 
   /**
    * Show Started badge with time
    */
   function showStartedBadge(startTime, locked) {
+    console.log('[ShiftStart] showStartedBadge called:', startTime, 'locked:', locked);
     const btn = document.getElementById('startDayBtn');
     const badge = document.getElementById('startedBadge');
     const timeDisplay = document.getElementById('startTimeDisplay');
     const badgeIcon = document.getElementById('badgeIcon');
 
+    console.log('[ShiftStart] Elements found:', {btn: !!btn, badge: !!badge, timeDisplay: !!timeDisplay});
+
     if (btn) btn.style.display = 'none';
     if (badge) {
       badge.style.display = 'flex';
       badge.className = locked ? 'started-badge locked' : 'started-badge';
+      console.log('[ShiftStart] Badge shown with display:', badge.style.display);
     }
 
     if (timeDisplay) {
