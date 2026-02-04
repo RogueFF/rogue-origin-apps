@@ -624,11 +624,13 @@ body {
 .pool-input-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  margin-bottom: 6px;
 }
 
 .pool-input {
   flex: 1;
+  min-width: 0;
   padding: 10px 12px;
   border: 2px solid var(--border-color);
   border-radius: 6px;
@@ -965,11 +967,11 @@ body {
   background: rgba(0, 0, 0, 0.2);
   border-radius: 6px;
   padding: 2px;
-  margin-left: 8px;
+  flex-shrink: 0;
 }
 
 .unit-btn {
-  padding: 6px 12px;
+  padding: 6px 10px;
   background: transparent;
   border: none;
   border-radius: 4px;
@@ -978,6 +980,8 @@ body {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
+  min-width: 38px;
+  white-space: nowrap;
 }
 
 .unit-btn:hover {
@@ -989,14 +993,6 @@ body {
   background: var(--gold);
   color: var(--bg-dark);
   box-shadow: 0 1px 4px rgba(228, 170, 79, 0.3);
-}
-
-/* Pool Input Row with Unit Toggle */
-.pool-input-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
 }
 
 /* Preview Calculation */
