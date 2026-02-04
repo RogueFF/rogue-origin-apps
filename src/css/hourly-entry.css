@@ -765,35 +765,7 @@ body {
   box-shadow: 0 2px 8px rgba(102, 137, 113, 0.3);
 }
 
-/* Current Pool Display */
-.current-pool-display {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 12px;
-  background: rgba(102, 137, 113, 0.1);
-  border: 1px solid var(--green);
-  border-radius: 8px;
-  margin-top: 8px;
-}
-
-.current-pool-display .pool-label {
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.current-pool-display .pool-value {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--green-bright);
-}
-
-.current-pool-display .pool-unit {
-  font-size: 14px;
-  color: var(--text-secondary);
-}
+/* Current Pool Display - styles moved to enhanced version below */
 
 /* Operation Selector */
 .operation-selector {
@@ -964,9 +936,26 @@ body {
   gap: 4px;
 }
 
+.pool-value-item .pool-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--green-bright);
+}
+
+.pool-value-item .pool-unit {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.pool-display-row .pool-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
 .pool-value-divider {
   color: var(--text-secondary);
-  font-size: 18px;
+  font-size: 16px;
 }
 
 /* Unit Toggle */
