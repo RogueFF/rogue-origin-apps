@@ -859,13 +859,30 @@
 
     /* Laptop screens with limited height (< 800px tall) */
     @media (max-height: 800px) and (min-width: 1025px) {
-      .main-panel { padding: 12px 20px; }
-      .scoreboard { gap: 6px; }
-      .hour-card { padding: 12px 28px; }
-      .daily-progress { padding: 12px 28px; }
-      .actual-lbs { font-size: 56px; }
-      .target-lbs { font-size: 34px; }
-      .chart-wrapper { height: 100px; }
+      .main-panel { padding: 10px 20px; }
+      .scoreboard { gap: 5px; }
+      .hour-card { padding: 10px 24px; }
+      .daily-progress { padding: 10px 24px; }
+      .actual-lbs { font-size: 52px; }
+      .target-lbs { font-size: 32px; }
+      .separator { font-size: 28px; }
+      .daily-actual { font-size: 34px; }
+      .daily-target { font-size: 24px; }
+      .chart-wrapper { height: 85px; }
+      .chart-container { margin-top: 5px; }
+      .stat-group { padding: 6px 12px; }
+    }
+
+    /* Very limited height screens (standard 768px laptop) */
+    @media (max-height: 768px) and (min-width: 1025px) {
+      .main-panel { padding: 8px 20px; justify-content: flex-start; }
+      .scoreboard { gap: 4px; }
+      .hour-card { padding: 8px 20px; }
+      .daily-progress { padding: 8px 20px; }
+      .actual-lbs { font-size: 48px; }
+      .target-lbs { font-size: 28px; }
+      .daily-actual { font-size: 32px; }
+      .chart-wrapper { height: 75px; }
     }
 
     /* Medium screens (< 1200px) - More compact */
