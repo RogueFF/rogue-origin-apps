@@ -397,25 +397,32 @@ let SLOT_START_MINUTES = {
  */
 async function loadShiftStart() {
   const today = new Date().toDateString();
+  const todayISO = formatDateLocal(new Date()); // yyyy-MM-dd format for API
   const savedDate = localStorage.getItem('shiftStartDate');
 
-  // Reset if different day
-  if (savedDate !== today) {
-    localStorage.removeItem('manualShiftStart');
-    localStorage.removeItem('shiftStartLocked');
-    localStorage.setItem('shiftStartDate', today);
-    shiftStartTime = null;
-  } else {
-    // Load from localStorage first for instant UI
-    const savedStart = localStorage.getItem('manualShiftStart');
-    if (savedStart) {
-      shiftStartTime = new Date(savedStart);
+  // Load from localStorage first for instant UI
+  const savedStart = localStorage.getItem('manualShiftStart');
+  if (savedStart) {
+    const savedTime = new Date(savedStart);
+    // Only use saved time if it's from today
+    if (savedTime.toDateString() === today) {
+      shiftStartTime = savedTime;
+    } else {
+      // Different day, clear old data
+      localStorage.removeItem('manualShiftStart');
+      localStorage.removeItem('shiftStartLocked');
+      shiftStartTime = null;
     }
   }
 
-  // Sync with API (may have been set from scoreboard)
+  // Update saved date
+  if (savedDate !== today) {
+    localStorage.setItem('shiftStartDate', today);
+  }
+
+  // Sync with API (may have been set from scoreboard) - pass current date to avoid timezone issues
   try {
-    const response = await fetch(`${API_URL}?action=getShiftStart`);
+    const response = await fetch(`${API_URL}?action=getShiftStart&date=${todayISO}`);
     const result = await response.json();
     const data = result.data || result;
 
@@ -427,6 +434,7 @@ async function loadShiftStart() {
         // Use API time (more authoritative, may be from scoreboard)
         shiftStartTime = apiStartTime;
         localStorage.setItem('manualShiftStart', apiStartTime.toISOString());
+        localStorage.setItem('shiftStartDate', today);
       }
     }
   } catch (error) {
