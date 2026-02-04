@@ -2514,6 +2514,8 @@ function renderScannerDropdownOptions(dropdown, products, selectedValue, filter 
     .map(
       (product) => {
         const displayName = product.displayTitle || product.title;
+        const poolValue = parseFloat(product.poolValue) || 0;
+        const poolGrams = poolValue.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
         return `
       <div class="custom-select-option${product.id === selectedValue ? ' selected' : ''}"
            data-value="${product.id}"
@@ -2521,7 +2523,8 @@ function renderScannerDropdownOptions(dropdown, products, selectedValue, filter 
            data-title="${displayName}"
            role="option"
            aria-selected="${product.id === selectedValue}">
-        ${displayName}
+        <span class="option-name">${displayName}</span>
+        <span class="option-weight">${poolGrams}g</span>
       </div>
     `;
       }
