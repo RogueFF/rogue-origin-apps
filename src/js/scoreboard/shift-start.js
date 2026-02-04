@@ -13,27 +13,36 @@
    * Initialize shift start UI on page load
    */
   function initShiftStartUI() {
-    // Check for existing manual start from localStorage
-    let savedStart = localStorage.getItem('manualShiftStart');
-    let savedLocked = localStorage.getItem('shiftStartLocked') === 'true';
     const today = new Date().toDateString();
     const savedDate = localStorage.getItem('shiftStartDate');
 
-    // Reset if different day
-    if (savedDate !== today) {
-      localStorage.removeItem('manualShiftStart');
-      localStorage.removeItem('shiftStartLocked');
-      localStorage.setItem('shiftStartDate', today);
-      savedStart = null;
-      savedLocked = false;
-    }
+    // Check for existing manual start from localStorage
+    let savedStart = localStorage.getItem('manualShiftStart');
+    let savedLocked = localStorage.getItem('shiftStartLocked') === 'true';
 
+    // Check if saved timestamp is from today
     if (savedStart) {
-      State.manualShiftStart = new Date(savedStart);
-      State.shiftStartLocked = savedLocked;
-      showStartedBadge(State.manualShiftStart, savedLocked);
+      const savedTime = new Date(savedStart);
+      // Only use saved time if it's from today
+      if (savedTime.toDateString() === today) {
+        State.manualShiftStart = savedTime;
+        State.shiftStartLocked = savedLocked;
+        showStartedBadge(State.manualShiftStart, savedLocked);
+      } else {
+        // Different day, clear old data
+        localStorage.removeItem('manualShiftStart');
+        localStorage.removeItem('shiftStartLocked');
+        savedStart = null;
+        savedLocked = false;
+        showStartDayButton();
+      }
     } else {
       showStartDayButton();
+    }
+
+    // Update saved date
+    if (savedDate !== today) {
+      localStorage.setItem('shiftStartDate', today);
     }
 
     // Sync with API
@@ -43,11 +52,13 @@
           if (response.success && response.shiftAdjustment) {
             const apiStartTime = new Date(response.shiftAdjustment.manualStartTime);
 
-            // Use API time if different from localStorage
-            if (!savedStart || apiStartTime.getTime() !== new Date(savedStart).getTime()) {
+            // Use API time if it's from today and different from localStorage
+            if (apiStartTime.toDateString() === today &&
+                (!savedStart || apiStartTime.getTime() !== new Date(savedStart).getTime())) {
               State.manualShiftStart = apiStartTime;
               State.shiftAdjustment = response.shiftAdjustment;
               localStorage.setItem('manualShiftStart', apiStartTime.toISOString());
+              localStorage.setItem('shiftStartDate', today);
               showStartedBadge(apiStartTime, State.shiftStartLocked);
             }
           }
