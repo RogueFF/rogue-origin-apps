@@ -71,12 +71,41 @@ export function renderActivityFeed(activities, container) {
     container.innerHTML = '<div class="empty-state"><p>No activity yet.</p></div>';
     return;
   }
-  activities.forEach(a => {
+  
+  // Group intakes by batch_id
+  const batches = new Map();
+  const processed = new Set();
+  
+  activities.forEach((a, idx) => {
+    if (a.activity_type === 'intake' && a.batch_id) {
+      if (!batches.has(a.batch_id)) {
+        batches.set(a.batch_id, { items: [], date: a.date, partner_name: a.partner_name, price: a.price });
+      }
+      batches.get(a.batch_id).items.push({ strain: a.strain, type: a.type, weight_lbs: a.weight_lbs });
+      processed.add(idx);
+    }
+  });
+  
+  // Render activities
+  activities.forEach((a, idx) => {
+    if (processed.has(idx)) return; // Skip - already part of a batch
+    
     const item = document.createElement('div');
     item.className = 'activity-item';
     let detail = '';
+    
     if (a.activity_type === 'intake') {
-      detail = `<strong>${esc(a.partner_name)}</strong> — ${a.weight_lbs} lbs ${esc(a.strain)} (${a.type}) @ $${fmt(a.price)}/lb`;
+      // Check if this is the first item of a batch
+      if (a.batch_id && batches.has(a.batch_id)) {
+        const batch = batches.get(a.batch_id);
+        batches.delete(a.batch_id); // Render once
+        const lines = batch.items.map(i => `${i.weight_lbs} lbs ${esc(i.strain)} (${i.type})`).join('<br>');
+        const totalWeight = batch.items.reduce((sum, i) => sum + i.weight_lbs, 0);
+        detail = `<strong>${esc(batch.partner_name)}</strong> — ${totalWeight} lbs total @ $${fmt(batch.price)}/lb<br><span style="font-size: 0.9em; opacity: 0.85;">${lines}</span>`;
+      } else {
+        // Single intake (no batch_id)
+        detail = `<strong>${esc(a.partner_name)}</strong> — ${a.weight_lbs} lbs ${esc(a.strain)} (${a.type}) @ $${fmt(a.price)}/lb`;
+      }
     } else if (a.activity_type === 'sale') {
       if (a.method === 'inventory_count') {
         detail = `<strong>${esc(a.partner_name)}</strong> — Inventory count: ${a.weight_lbs} lbs ${esc(a.strain)} (${a.type}) sold`;
@@ -86,6 +115,7 @@ export function renderActivityFeed(activities, container) {
     } else if (a.activity_type === 'payment') {
       detail = `<strong>${esc(a.partner_name)}</strong> — $${fmt(a.amount)} via ${a.method || 'unknown'}`;
     }
+    
     item.innerHTML = `
       <span class="activity-badge ${a.activity_type}">${a.activity_type}</span>
       <span class="activity-detail">${detail}</span>
