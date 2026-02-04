@@ -3,7 +3,7 @@
  * Handles rendering partner cards, activity feed, modals, and partner detail
  */
 
-import * as api from './api.js?v=5';
+import * as api from './api.js?v=6';
 
 // ─── HELPERS ────────────────────────────────────────────
 
@@ -53,6 +53,11 @@ export function renderPartnerCards(partners, container, onCardClick) {
       });
     }
     
+    // Prefetch on hover
+    card.addEventListener('mouseenter', () => {
+      document.dispatchEvent(new CustomEvent('prefetchPartner', { detail: { partnerId: p.id } }));
+    });
+    
     card.addEventListener('click', () => onCardClick(p.id));
     container.appendChild(card);
   });
@@ -91,6 +96,38 @@ export function renderActivityFeed(activities, container) {
 }
 
 // ─── PARTNER DETAIL ─────────────────────────────────────
+
+export function showDetailSkeleton(container) {
+  container.innerHTML = `
+    <div class="detail-header">
+      <div>
+        <div class="skeleton skeleton-text" style="width:140px;height:24px"></div>
+        <div class="skeleton skeleton-text" style="width:90px;height:14px;margin-top:6px"></div>
+      </div>
+      <div class="detail-header-actions">
+        <div class="skeleton skeleton-circle" style="width:32px;height:32px"></div>
+        <div class="skeleton skeleton-circle" style="width:32px;height:32px"></div>
+      </div>
+    </div>
+    <div class="detail-body">
+      <div class="detail-stats">
+        <div class="detail-stat"><div class="skeleton skeleton-text" style="width:60px;height:12px"></div><div class="skeleton skeleton-text" style="width:80px;height:24px;margin-top:8px"></div></div>
+        <div class="detail-stat"><div class="skeleton skeleton-text" style="width:60px;height:12px"></div><div class="skeleton skeleton-text" style="width:80px;height:24px;margin-top:8px"></div></div>
+        <div class="detail-stat"><div class="skeleton skeleton-text" style="width:60px;height:12px"></div><div class="skeleton skeleton-text" style="width:80px;height:24px;margin-top:8px"></div></div>
+        <div class="detail-stat"><div class="skeleton skeleton-text" style="width:60px;height:12px"></div><div class="skeleton skeleton-text" style="width:80px;height:24px;margin-top:8px"></div></div>
+      </div>
+      <div class="detail-section">
+        <div class="skeleton skeleton-text" style="width:150px;height:18px;margin-bottom:14px"></div>
+        <div class="skeleton skeleton-block" style="height:120px"></div>
+      </div>
+      <div class="detail-section">
+        <div class="skeleton skeleton-text" style="width:130px;height:18px;margin-bottom:14px"></div>
+        <div class="skeleton skeleton-block" style="height:80px"></div>
+      </div>
+    </div>
+  `;
+  container.classList.add('active');
+}
 
 export function renderPartnerDetail(detail, container, onClose) {
   const d = detail;
