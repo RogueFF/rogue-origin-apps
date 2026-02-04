@@ -24,51 +24,76 @@ let TIME_SLOTS = [
  * If shift starts before 8:00 AM, first slot becomes "X:XX AM - 8:00 AM"
  */
 function updateTimeSlots(shiftStart) {
-  // Reset to defaults first
-  TIME_SLOTS = [
-    '7:00 AM – 8:00 AM',
-    '8:00 AM – 9:00 AM',
-    '9:00 AM – 10:00 AM',
-    '10:00 AM – 11:00 AM',
-    '11:00 AM – 12:00 PM',
-    '12:30 PM – 1:00 PM',
-    '1:00 PM – 2:00 PM',
-    '2:00 PM – 3:00 PM',
-    '3:00 PM – 4:00 PM',
-    '4:00 PM – 4:30 PM',
+  // Default slot definitions (hour start -> hour end)
+  const defaultSlots = [
+    { start: 7, end: 8, startMin: 0, endMin: 0 },      // 7:00 AM – 8:00 AM
+    { start: 8, end: 9, startMin: 0, endMin: 0 },      // 8:00 AM – 9:00 AM
+    { start: 9, end: 10, startMin: 0, endMin: 0 },     // 9:00 AM – 10:00 AM
+    { start: 10, end: 11, startMin: 0, endMin: 0 },    // 10:00 AM – 11:00 AM
+    { start: 11, end: 12, startMin: 0, endMin: 0 },    // 11:00 AM – 12:00 PM
+    { start: 12, end: 13, startMin: 30, endMin: 0 },   // 12:30 PM – 1:00 PM
+    { start: 13, end: 14, startMin: 0, endMin: 0 },    // 1:00 PM – 2:00 PM
+    { start: 14, end: 15, startMin: 0, endMin: 0 },    // 2:00 PM – 3:00 PM
+    { start: 15, end: 16, startMin: 0, endMin: 0 },    // 3:00 PM – 4:00 PM
+    { start: 16, end: 16, startMin: 0, endMin: 30 },   // 4:00 PM – 4:30 PM
   ];
 
-  // Reset SLOT_START_MINUTES to defaults
-  SLOT_START_MINUTES = {
-    '7:00 AM – 8:00 AM': 7 * 60,
-    '8:00 AM – 9:00 AM': 8 * 60,
-    '9:00 AM – 10:00 AM': 9 * 60,
-    '10:00 AM – 11:00 AM': 10 * 60,
-    '11:00 AM – 12:00 PM': 11 * 60,
-    '12:30 PM – 1:00 PM': 12 * 60 + 30,
-    '1:00 PM – 2:00 PM': 13 * 60,
-    '2:00 PM – 3:00 PM': 14 * 60,
-    '3:00 PM – 4:00 PM': 15 * 60,
-    '4:00 PM – 4:30 PM': 16 * 60,
+  // Helper to format time string
+  const formatTime = (hour, min) => {
+    const h = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const m = String(min).padStart(2, '0');
+    return min === 0 ? `${h}:00 ${ampm}` : `${h}:${m} ${ampm}`;
   };
 
-  if (!shiftStart) return;
+  // Build slots from defaults
+  TIME_SLOTS = [];
+  SLOT_START_MINUTES = {};
 
-  const hours = shiftStart.getHours();
-  const minutes = shiftStart.getMinutes();
+  defaultSlots.forEach((slot) => {
+    const startTime = formatTime(slot.start, slot.startMin);
+    const endTime = formatTime(slot.end, slot.endMin);
+    const slotLabel = `${startTime} – ${endTime}`;
+    TIME_SLOTS.push(slotLabel);
+    SLOT_START_MINUTES[slotLabel] = slot.start * 60 + slot.startMin;
+  });
 
-  // If shift starts before 8:00 AM, replace first slot
-  if (hours < 8) {
-    const minutesPadded = String(minutes).padStart(2, '0');
-    const timeStr = `${hours}:${minutesPadded} AM`;
-    const newFirstSlot = `${timeStr} – 8:00 AM`;
+  // If custom shift start, adjust the slot that contains it
+  if (shiftStart) {
+    const shiftHour = shiftStart.getHours();
+    const shiftMin = shiftStart.getMinutes();
+    const shiftMinutes = shiftHour * 60 + shiftMin;
 
-    // Remove old first slot from mapping
-    delete SLOT_START_MINUTES['7:00 AM – 8:00 AM'];
+    // Find which slot contains this start time
+    for (let i = 0; i < defaultSlots.length; i++) {
+      const slot = defaultSlots[i];
+      const slotStartMin = slot.start * 60 + slot.startMin;
+      const slotEndMin = slot.end * 60 + slot.endMin;
 
-    // Update TIME_SLOTS and add new mapping
-    TIME_SLOTS[0] = newFirstSlot;
-    SLOT_START_MINUTES[newFirstSlot] = hours * 60 + minutes;
+      // If shift starts within this slot (and not at the exact start)
+      if (shiftMinutes > slotStartMin && shiftMinutes < slotEndMin) {
+        const oldSlotLabel = TIME_SLOTS[i];
+
+        // Create new slot label with custom start time
+        const customStart = formatTime(shiftHour, shiftMin);
+        const slotEnd = formatTime(slot.end, slot.endMin);
+        const newSlotLabel = `${customStart} – ${slotEnd}`;
+
+        // Migrate data from old slot name to new slot name
+        if (dayData[oldSlotLabel] && !dayData[newSlotLabel]) {
+          dayData[newSlotLabel] = dayData[oldSlotLabel];
+          delete dayData[oldSlotLabel];
+        }
+
+        // Remove old slot from mapping
+        delete SLOT_START_MINUTES[oldSlotLabel];
+
+        // Update with new slot
+        TIME_SLOTS[i] = newSlotLabel;
+        SLOT_START_MINUTES[newSlotLabel] = shiftMinutes;
+        break;
+      }
+    }
   }
 }
 
