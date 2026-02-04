@@ -26,32 +26,67 @@
 
     try {
       // 1. Initialize DOM (cache elements)
-      DOM.init();
-      console.log('[Main] DOM initialized');
+      if (DOM && DOM.init) {
+        DOM.init();
+        console.log('[Main] DOM initialized');
+      } else {
+        console.error('[Main] DOM module not available');
+        throw new Error('DOM module failed to load');
+      }
 
       // 2. Initialize State (load saved language)
-      State.init();
-      console.log('[Main] State initialized');
+      if (State && State.init) {
+        State.init();
+        console.log('[Main] State initialized');
+      } else {
+        console.error('[Main] State module not available');
+        throw new Error('State module failed to load');
+      }
 
       // 3. Initialize I18n (apply translations)
-      I18n.init();
-      console.log('[Main] I18n initialized');
+      if (I18n && I18n.init) {
+        I18n.init();
+        console.log('[Main] I18n initialized');
+      } else {
+        console.error('[Main] I18n module not available');
+        throw new Error('I18n module failed to load');
+      }
 
       // 4. Initialize Layout (make header clickable)
-      Layout.init();
-      console.log('[Main] Layout initialized');
+      if (Layout && Layout.init) {
+        Layout.init();
+        console.log('[Main] Layout initialized');
+      } else {
+        console.error('[Main] Layout module not available');
+        throw new Error('Layout module failed to load');
+      }
 
       // 5. Initialize Scale (set up UI)
-      Scale.init();
-      console.log('[Main] Scale initialized');
+      if (Scale && Scale.init) {
+        Scale.init();
+        console.log('[Main] Scale initialized');
+      } else {
+        console.error('[Main] Scale module not available');
+        throw new Error('Scale module failed to load');
+      }
 
       // 6. Initialize Timer (start clock)
-      Timer.init();
-      console.log('[Main] Timer initialized');
+      if (Timer && Timer.init) {
+        Timer.init();
+        console.log('[Main] Timer initialized');
+      } else {
+        console.error('[Main] Timer module not available');
+        throw new Error('Timer module failed to load');
+      }
 
       // 7. Start API polling
-      API.startPolling();
-      console.log('[Main] API polling started');
+      if (API && API.startPolling) {
+        API.startPolling();
+        console.log('[Main] API polling started');
+      } else {
+        console.error('[Main] API module not available');
+        throw new Error('API module failed to load');
+      }
 
       // Hide loading after brief delay
       setTimeout(() => {
@@ -60,11 +95,14 @@
       }, 1000);
 
     } catch (error) {
-      console.error('[Main] Initialization error:', error);
+      console.error('[Main] Initialization failed:', error.message, error);
       hideLoading();
-      // Show error state
-      if (DOM.elements.scaleWeight) {
-        DOM.elements.scaleWeight.textContent = 'ERROR';
+
+      // Show error in UI if possible
+      var scaleWeight = document.getElementById('scaleWeight');
+      if (scaleWeight) {
+        scaleWeight.textContent = 'ERROR';
+        scaleWeight.className = 'scale-value stale';
       }
     }
   }
