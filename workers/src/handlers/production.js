@@ -1268,6 +1268,7 @@ async function scoreboard(env) {
 async function dashboard(params, env) {
   const start = params.start || '';
   const end = params.end || '';
+  const forceSource = params.source || ''; // Debug: 'sheets' or 'd1'
 
   if (start && !validateDate(start)) {
     return errorResponse('Invalid start date', 'VALIDATION_ERROR', 400);
@@ -1277,11 +1278,17 @@ async function dashboard(params, env) {
   }
 
   const today = formatDatePT(new Date(), 'yyyy-MM-dd');
-  const scoreboardData = USE_D1_PRODUCTION
+  const useD1 = forceSource === 'sheets' ? false : (forceSource === 'd1' ? true : USE_D1_PRODUCTION);
+  
+  // Detect if viewing historical data (not today)
+  const isHistorical = (start && start !== today) || (end && end !== today && end < today);
+  const viewingDate = start || end || today;
+  
+  const scoreboardData = useD1
     ? await getScoreboardDataFromD1(env)
     : await getScoreboardData(env);
   const timerData = await getBagTimerData(env);
-  const dailyData = USE_D1_PRODUCTION
+  const dailyData = useD1
     ? await getExtendedDailyDataFromD1(30, env)
     : await getExtendedDailyData(30, env);
 
@@ -1312,58 +1319,92 @@ async function dashboard(params, env) {
     avgRate: validDays.length > 0 ? validDays.reduce((s, d) => s + d.avgRate, 0) / validDays.length : 0,
   };
 
-  // Find today's data from dailyData for smalls
-  const todayDateStr = formatDatePT(new Date(), 'yyyy-MM-dd');
-  const todayDailyData = dailyData.find(d => formatDatePT(d.date, 'yyyy-MM-dd') === todayDateStr);
+  // When viewing historical data, use the historical day's data instead of live scoreboard
+  let todayData, current, targets, bagTimer, hourly;
+  
+  if (isHistorical && filteredData.length > 0) {
+    // Use historical data from the filtered daily array
+    const historicalDay = filteredData[0];
+    
+    todayData = {
+      totalTops: historicalDay.totalTops || 0,
+      totalSmalls: historicalDay.totalSmalls || 0,
+      totalLbs: historicalDay.totalLbs || 0,
+      avgRate: Math.round((historicalDay.avgRate || 0) * 100) / 100,
+      trimmers: historicalDay.trimmerHours ? Math.round(historicalDay.trimmerHours / 7.5) : 0,
+    };
 
-  // Calculate weighted average rate (each hourly rate weighted by trimmer count)
-  const hourlyRates = scoreboardData.hourlyRates || [];
-  let weightedRateSum = 0;
-  let totalTrimmerHours = 0;
+    current = {
+      strain: '',
+      todayPercentage: 0,
+      todayTarget: 0,
+      projectedTotal: 0,
+      effectiveHours: 0,
+    };
 
-  for (const hour of hourlyRates) {
-    if (hour.trimmers && hour.rate != null) {
-      weightedRateSum += hour.rate * hour.trimmers;
-      totalTrimmerHours += hour.trimmers;
+    targets = {
+      totalTops: 0,
+    };
+
+    bagTimer = {
+      bagsToday: 0,
+      avgTime: '--',
+      vsTarget: '--',
+    };
+
+    hourly = [];
+  } else {
+    // Live data (today) - use scoreboard
+    const todayDailyData = dailyData.find(d => formatDatePT(d.date, 'yyyy-MM-dd') === today);
+
+    // Calculate weighted average rate (each hourly rate weighted by trimmer count)
+    const hourlyRates = scoreboardData.hourlyRates || [];
+    let weightedRateSum = 0;
+    let totalTrimmerHours = 0;
+
+    for (const hour of hourlyRates) {
+      if (hour.trimmers && hour.rate != null) {
+        weightedRateSum += hour.rate * hour.trimmers;
+        totalTrimmerHours += hour.trimmers;
+      }
     }
+
+    const avgRate = totalTrimmerHours > 0 ? weightedRateSum / totalTrimmerHours : 0;
+
+    todayData = {
+      totalTops: scoreboardData.todayLbs || 0,
+      totalSmalls: todayDailyData?.totalSmalls || 0,
+      totalLbs: (scoreboardData.todayLbs || 0) + (todayDailyData?.totalSmalls || 0),
+      avgRate: Math.round(avgRate * 100) / 100,
+      trimmers: scoreboardData.lastHourTrimmers || scoreboardData.currentHourTrimmers || 0,
+    };
+
+    current = {
+      strain: scoreboardData.strain || '',
+      todayPercentage: scoreboardData.todayPercentage || 0,
+      todayTarget: scoreboardData.todayTarget || 0,
+      projectedTotal: scoreboardData.projectedTotal || 0,
+      effectiveHours: scoreboardData.effectiveHours || 0,
+    };
+
+    targets = {
+      totalTops: scoreboardData.dailyGoal || 66,
+    };
+
+    bagTimer = {
+      bagsToday: timerData.bagsToday || 0,
+      avgTime: timerData.avgSecondsToday > 0 ? `${Math.round(timerData.avgSecondsToday / 60)} min` : '--',
+      vsTarget: timerData.targetSeconds > 0 && timerData.avgSecondsToday > 0
+        ? `${timerData.avgSecondsToday < timerData.targetSeconds ? '-' : '+'}${Math.abs(Math.round((timerData.avgSecondsToday - timerData.targetSeconds) / 60))} min`
+        : '--',
+    };
+
+    hourly = (scoreboardData.hourlyRates || []).map((h) => ({
+      label: h.timeSlot,
+      rate: h.rate,
+      target: h.target,
+    }));
   }
-
-  const avgRate = totalTrimmerHours > 0 ? weightedRateSum / totalTrimmerHours : 0;
-
-  const todayData = {
-    totalTops: scoreboardData.todayLbs || 0,
-    totalSmalls: todayDailyData?.totalSmalls || 0,
-    totalLbs: (scoreboardData.todayLbs || 0) + (todayDailyData?.totalSmalls || 0),
-    // Weighted average: each hourly rate weighted by trimmer count
-    avgRate: Math.round(avgRate * 100) / 100,
-    trimmers: scoreboardData.lastHourTrimmers || scoreboardData.currentHourTrimmers || 0,
-  };
-
-  const current = {
-    strain: scoreboardData.strain || '',
-    todayPercentage: scoreboardData.todayPercentage || 0,
-    todayTarget: scoreboardData.todayTarget || 0,
-    projectedTotal: scoreboardData.projectedTotal || 0,
-    effectiveHours: scoreboardData.effectiveHours || 0,
-  };
-
-  const targets = {
-    totalTops: scoreboardData.dailyGoal || 66,
-  };
-
-  const bagTimer = {
-    bagsToday: timerData.bagsToday || 0,
-    avgTime: timerData.avgSecondsToday > 0 ? `${Math.round(timerData.avgSecondsToday / 60)} min` : '--',
-    vsTarget: timerData.targetSeconds > 0 && timerData.avgSecondsToday > 0
-      ? `${timerData.avgSecondsToday < timerData.targetSeconds ? '-' : '+'}${Math.abs(Math.round((timerData.avgSecondsToday - timerData.targetSeconds) / 60))} min`
-      : '--',
-  };
-
-  const hourly = (scoreboardData.hourlyRates || []).map((h) => ({
-    label: h.timeSlot,
-    rate: h.rate,
-    target: h.target,
-  }));
 
   return successResponse({
     today: todayData,
@@ -1378,6 +1419,8 @@ async function dashboard(params, env) {
       totalSmalls: Math.round(d.totalSmalls * 10) / 10,
       avgRate: Math.round(d.avgRate * 100) / 100,
     })),
+    isHistorical,
+    viewingDate,
     fallback: showingFallback ? {
       active: true,
       date: fallbackDate,
