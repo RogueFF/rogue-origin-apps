@@ -44,7 +44,10 @@
         container.style.display = 'none';
         return;
       }
-      container.style.display = 'block';
+      // Only show chart if user has explicitly enabled it (default: hidden)
+      var chartVisible = localStorage.getItem('chartVisible') === 'true';
+      container.style.display = chartVisible ? 'block' : 'none';
+      if (!chartVisible) return;
 
       // Lazy load Chart.js if needed
       await loadChartJs();
