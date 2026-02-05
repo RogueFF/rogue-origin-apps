@@ -188,13 +188,17 @@
       margin: 0 auto;
       width: 100%;
       max-width: 850px;
-      display: none !important; /* Hidden by default (saves 300px) */
       border: 1px solid rgba(228,170,79,0.15);
+      transition: opacity 0.3s ease, max-height 0.3s ease;
+      max-height: 0;
+      opacity: 0;
+      overflow: hidden;
     }
 
     /* Show chart when toggled on */
     .chart-container.visible {
-      display: block !important;
+      max-height: 400px;
+      opacity: 1;
     }
     .chart-header {
       font-size: 12px;
