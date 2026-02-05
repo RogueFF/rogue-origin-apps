@@ -1,4 +1,4 @@
-    
+
     /* Scoreboard-specific CSS variables (brand colors inherited from shared-base.css) */
     :root {
       /* Scoreboard Status Colors (not in shared-base.css) */
@@ -10,6 +10,9 @@
       /* Scoreboard-specific brand extension */
       --green-bright: #7a9d87;
     }
+
+    /* Import FAB Menu styles */
+    @import url('fab-menu.css');
     
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; font-family: 'Outfit', system-ui, sans-serif; overflow: hidden; }
@@ -148,7 +151,7 @@
     .timer-panel.red { background: linear-gradient(180deg, rgba(239, 68, 68, 0.3) 0%, rgba(185, 28, 28, 0.2) 100%); }
     .timer-panel.neutral { background: rgba(0,0,0,0.4); }
     
-    .scoreboard { text-align: center; width: 100%; max-width: 1400px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
+    .scoreboard { text-align: center; width: 100%; max-width: 1200px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
     
     /* Status Badge - uses brand gold border */
     .status-badge { display: inline-flex; align-items: center; gap: 16px; padding: 12px 36px; border-radius: 60px; font-size: 28px; font-weight: 700; text-transform: uppercase; letter-spacing: 3px; }
@@ -160,17 +163,17 @@
     
     /* Hour Cards - refined with brand accents */
     .hour-cards { display: flex; justify-content: center; gap: 25px; flex-wrap: wrap; }
-    .hour-card { background: rgba(0,0,0,0.4); border-radius: 20px; padding: 16px 40px; min-width: 320px; border: 2px solid rgba(228,170,79,0.15); }
-    .hour-card.last-hour { border: 3px solid rgba(228,170,79,0.3); }
-    .hour-card.current-hour { border: 3px solid rgba(102, 137, 113, 0.6); background: rgba(102, 137, 113, 0.15); animation: currentHourPulse 2s ease-in-out infinite; }
-    .hour-card-header { font-size: 14px; color: var(--ro-gold); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 6px; }
+    .hour-card { background: rgba(0,0,0,0.3); border-radius: 16px; padding: 14px 32px; min-width: 280px; border: 1px solid rgba(228,170,79,0.1); }
+    .hour-card.last-hour { border: 2px solid rgba(228,170,79,0.25); }
+    .hour-card.current-hour { border: 2px solid rgba(102, 137, 113, 0.5); background: rgba(102, 137, 113, 0.12); animation: currentHourPulse 2s ease-in-out infinite; }
+    .hour-card-header { font-size: 11px; color: rgba(228,170,79,0.8); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 5px; }
     .hour-card.current-hour .hour-card-header { color: var(--green-bright); }
-    .hour-card-timeslot { font-size: 16px; color: rgba(255,255,255,0.4); margin-bottom: 8px; }
-    .lbs-row { display: flex; align-items: baseline; justify-content: center; gap: 10px; margin-bottom: 4px; }
-    .actual-lbs { font-size: 72px; font-weight: 900; line-height: 1; color: #ffffff; text-shadow: 0 4px 20px rgba(0,0,0,0.3); }
-    .hour-card.current-hour .actual-lbs { color: var(--green-bright); font-size: 60px; }
-    .separator { font-size: 42px; font-weight: 300; color: rgba(255,255,255,0.4); }
-    .target-lbs { font-size: 42px; font-weight: 700; color: rgba(255,255,255,0.5); }
+    .hour-card-timeslot { font-size: 13px; color: rgba(255,255,255,0.35); margin-bottom: 6px; }
+    .lbs-row { display: flex; align-items: baseline; justify-content: center; gap: 8px; margin-bottom: 3px; }
+    .actual-lbs { font-size: 56px; font-weight: 800; line-height: 1; color: #ffffff; text-shadow: 0 2px 12px rgba(0,0,0,0.3); }
+    .hour-card.current-hour .actual-lbs { color: var(--green-bright); font-size: 50px; }
+    .separator { font-size: 32px; font-weight: 300; color: rgba(255,255,255,0.35); }
+    .target-lbs { font-size: 32px; font-weight: 600; color: rgba(255,255,255,0.45); }
     .lbs-unit { font-size: 16px; font-weight: 600; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 2px; }
     .percentage-display { margin: 4px 0; }
     .percentage-value { font-size: 36px; font-weight: 900; }
@@ -415,14 +418,14 @@
     .avg-best-toggle:hover { background: rgba(228,170,79,0.3); }
     .avg-best-container.hidden ~ .avg-best-toggle { display: inline-flex; }
 
-    /* Time/Strain Display - brand colors */
-    .time-display { position: fixed; top: 20px; right: 420px; text-align: right; }
-    .time-display .time { font-size: 42px; font-weight: 700; color: rgba(255,255,255,0.9); }
-    .time-display .date { font-size: 16px; color: var(--ro-gold); }
-    .strain-display { position: fixed; top: 20px; left: 25px; }
-    .strain-label { font-size: 12px; color: var(--ro-gold); text-transform: uppercase; letter-spacing: 1px; }
-    .strain-name { font-size: 28px; font-weight: 700; color: rgba(255,255,255,0.9); max-width: 400px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .strain-rate-indicator { margin-top: 3px; }
+    /* Time/Strain Display - Simplified and smaller */
+    .time-display { position: fixed; top: 20px; right: 420px; text-align: right; opacity: 0.7; }
+    .time-display .time { font-size: 28px; font-weight: 600; color: rgba(255,255,255,0.8); }
+    .time-display .date { font-size: 13px; color: rgba(228,170,79,0.7); }
+    .strain-display { position: fixed; top: 20px; left: 25px; opacity: 0.75; }
+    .strain-label { font-size: 10px; color: rgba(228,170,79,0.7); text-transform: uppercase; letter-spacing: 1px; }
+    .strain-name { font-size: 20px; font-weight: 600; color: rgba(255,255,255,0.8); max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .strain-rate-indicator { margin-top: 2px; font-size: 11px; opacity: 0.7; }
     
     /* Language Toggle - brand styling */
     .lang-toggle { position: fixed; bottom: 20px; left: 25px; display: flex; gap: 6px; }
