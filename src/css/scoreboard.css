@@ -3006,26 +3006,182 @@ body.dark-mode input:focus-visible {
   }
 }
 
-/* ========================================
-   4K / LARGE DISPLAY OPTIMIZATION
-   ======================================== */
-/* TV Mode: Applied via ?tv=1 URL parameter */
-/* Use URL: https://rogueff.github.io/rogue-origin-apps/src/pages/scoreboard.html?tv=1 */
-html.tv-mode body {
-  transform: scale(0.65);
-  transform-origin: top left;
-  width: 153.85%; /* 100 / 0.65 */
-  height: 153.85%;
-  overflow-x: hidden;
-}
+/* ===========================================
+   4K / LARGE TV MODE (≥3000px)
+   Optimized for 75" OLED viewed from 10+ feet
+   =========================================== */
+@media (min-width: 3000px) {
 
-/* Auto-detect large fullscreen displays (3000px+ width) */
-@media (min-width: 3000px) and (min-height: 1600px) {
-  body {
-    transform: scale(0.65);
-    transform-origin: top left;
-    width: 153.85%;
-    height: 153.85%;
-    overflow-x: hidden;
+  /* --- Layout: widen timer panel, remove content cap --- */
+  .timer-panel {
+    width: 520px;
+    min-width: 520px;
+    padding: 40px;
+  }
+
+  .main-panel {
+    padding: 30px 50px;
+  }
+
+  .scoreboard {
+    max-width: none;
+  }
+
+  /* --- Fixed elements: reposition for wider timer panel --- */
+  .time-display {
+    right: 560px;
+    font-size: 56px;
+  }
+
+  .time-display .date {
+    font-size: 22px;
+  }
+
+  .help-btn {
+    right: 560px;
+  }
+
+  .strain-display {
+    font-size: 40px;
+  }
+
+  /* --- Hour cards: large for distance reading --- */
+  .hour-card .actual-lbs {
+    font-size: 108px;
+  }
+
+  .hour-card .target-lbs {
+    font-size: 64px;
+  }
+
+  .hour-card .separator {
+    font-size: 56px;
+  }
+
+  .hour-card .percentage-value {
+    font-size: 54px;
+  }
+
+  .hour-card .unit-label {
+    font-size: 22px;
+  }
+
+  .hour-card-header {
+    font-size: 20px;
+  }
+
+  .hour-card-timeslot {
+    font-size: 22px;
+  }
+
+  /* --- Daily progress: large readable numbers --- */
+  .daily-actual {
+    font-size: 72px;
+  }
+
+  .daily-target {
+    font-size: 48px;
+  }
+
+  .daily-sep {
+    font-size: 42px;
+  }
+
+  .daily-unit {
+    font-size: 24px;
+  }
+
+  .daily-delta {
+    font-size: 32px;
+  }
+
+  .projection-value {
+    font-size: 40px;
+  }
+
+  .projection-goal {
+    font-size: 24px;
+  }
+
+  /* --- Status badge --- */
+  .status-badge {
+    font-size: 36px;
+  }
+
+  .status-badge i {
+    font-size: 40px;
+  }
+
+  /* --- Comparison pills --- */
+  .comparison-value,
+  .streak-value {
+    font-size: 32px;
+  }
+
+  .comparison-pill {
+    font-size: 18px;
+    padding: 12px 22px;
+  }
+
+  /* --- Info bar --- */
+  .info-bar {
+    font-size: 24px;
+  }
+
+  .info-section i {
+    font-size: 28px;
+  }
+
+  .stat-value {
+    font-size: 28px;
+  }
+
+  .stat-label {
+    font-size: 14px;
+  }
+
+  /* --- Timer panel: larger rings and text --- */
+  .timer-display {
+    width: 320px;
+    height: 320px;
+  }
+
+  .timer-value {
+    font-size: 80px;
+  }
+
+  .timer-label {
+    font-size: 20px;
+  }
+
+  .timer-target {
+    font-size: 20px;
+  }
+
+  .scale-section .scale-display {
+    width: 320px;
+    height: 320px;
+  }
+
+  .scale-value {
+    font-size: 80px;
+  }
+
+  .scale-label {
+    font-size: 20px;
+  }
+
+  /* --- Cycle history: readable from distance --- */
+  .cycle-history {
+    font-size: 16px;
+  }
+
+  .cycle-item {
+    padding: 8px 12px;
+  }
+
+  /* --- Chart (if visible) --- */
+  .chart-wrapper {
+    height: 180px;
   }
 }
