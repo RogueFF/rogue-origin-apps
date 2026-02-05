@@ -3006,6 +3006,18 @@ body.dark-mode input:focus-visible {
   }
 }
 
+/* ========================================
+   TV MODE — scale down for 4K displays
+   Toggled via TV button (saves to localStorage)
+   ======================================== */
+html.tv-mode body {
+  transform: scale(0.65);
+  transform-origin: top left;
+  width: 153.85%; /* 100 / 0.65 */
+  height: 153.85%;
+  overflow-x: hidden;
+}
+
 /* ===========================================
    4K / LARGE TV MODE (≥3000px)
    Optimized for 75" OLED viewed from 10+ feet
