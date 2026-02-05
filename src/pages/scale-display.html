@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="screen-orientation" content="landscape">
+  <title>Scale Display - Rogue Origin</title>
+
+  <!-- PWA Metadata -->
+  <link rel="manifest" href="/rogue-origin-apps/manifest.json">
+  <meta name="theme-color" content="#1a1a1a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Scale Display">
+  <link rel="apple-touch-icon" href="../assets/icons/icon-192.png">
+  <link rel="icon" type="image/png" href="../assets/icons/icon-192.png">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="../css/shared-base.css">
+  <link rel="preload" href="../css/scale-display.css?v=1" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/scale-display.css?v=1"></noscript>
+
+  <!-- Scoreboard Modules (reused) -->
+  <script defer src="../js/scoreboard/config.js?v=2"></script>
+  <script defer src="../js/scoreboard/state.js?v=2"></script>
+  <script defer src="../js/scoreboard/dom.js?v=2"></script>
+  <script defer src="../js/scoreboard/i18n.js?v=3"></script>
+  <script defer src="../js/scoreboard/api.js?v=3"></script>
+  <script defer src="../js/scoreboard/timer.js?v=10"></script>
+  <script defer src="../js/scoreboard/scale.js?v=3"></script>
+
+  <!-- Scale Display Modules -->
+  <script defer src="../js/scale-display/layout.js?v=1"></script>
+  <script defer src="../js/scale-display/main.js?v=1"></script>
+</head>
+<body class="timer-neutral">
+  <!-- Skip Link for Accessibility -->
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
+  <!-- Header -->
+  <header>
+    <h1 data-i18n="scaleDisplay">Scale Display</h1>
+    <button id="langToggle" aria-label="Toggle language">EN</button>
+  </header>
+
+  <!-- Main Grid -->
+  <main id="main-content">
+    <!-- Scale Panel -->
+    <section id="scale-panel" class="panel">
+      <h2 id="scaleHeader" data-i18n="scaleWeight">Scale Weight</h2>
+      <svg id="scaleRing" viewBox="0 0 220 220" class="ring">
+        <circle cx="110" cy="110" r="95" fill="none" stroke="var(--ring-bg)" stroke-width="8"></circle>
+        <circle cx="110" cy="110" r="95" fill="none" stroke="var(--ring-stroke)" stroke-width="8"
+                stroke-dasharray="565.48" stroke-dashoffset="565.48"
+                transform="rotate(-90 110 110)" stroke-linecap="round"></circle>
+      </svg>
+      <div id="scaleDisplay" class="center">
+        <div id="scaleWeight" class="value">0.00</div>
+        <div id="scaleWeightLabel" class="label" data-i18n="lbs">lbs</div>
+      </div>
+      <div id="scaleStatusDot" class="status-dot"></div>
+    </section>
+
+    <!-- Timer Panel -->
+    <section id="timer-panel" class="panel">
+      <h2 id="timerHeader" data-i18n="bagTimer">Bag Timer</h2>
+      <svg id="timerRing" viewBox="0 0 220 220" class="ring">
+        <circle cx="110" cy="110" r="95" fill="none" stroke="var(--ring-bg)" stroke-width="8"></circle>
+        <circle cx="110" cy="110" r="95" fill="none" stroke="var(--ring-stroke)" stroke-width="8"
+                stroke-dasharray="565.48" stroke-dashoffset="565.48"
+                transform="rotate(-90 110 110)" stroke-linecap="round"></circle>
+      </svg>
+      <div class="center">
+        <div id="bag-timer-value" class="value">00:00</div>
+        <div id="timerLabel" class="label" data-i18n="elapsed">Elapsed</div>
+      </div>
+      <div id="timer-target-info" class="target-info">
+        <span data-i18n="target">Target</span>: <span id="timer-target-time">12:00</span>
+      </div>
+    </section>
+  </main>
+
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" style="display: none;">
+    <div class="spinner"></div>
+    <p data-i18n="loading">Loading...</p>
+  </div>
+</body>
+</html>
