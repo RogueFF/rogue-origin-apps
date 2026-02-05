@@ -1,53 +1,36 @@
 /* Scale Display PWA - Dedicated CSS
  * Purpose: Dark-themed tablet display for live scale weight + bag timer
- * Target: 7-10" Samsung tablets in landscape mode
+ * Target: Samsung Galaxy Tab A7 (10.4", 2000x1200) in landscape mode
  * Layout: 50/50 split with circular progress rings
  */
 
 /* ===== CSS Variables ===== */
 :root {
   /* Layout */
-  --header-height: 50px;
-  --scale-circle-size: clamp(180px, 35vw, 300px);
-  --timer-circle-size: clamp(180px, 35vw, 300px);
+  --header-height: 44px;
+  --circle-size: min(35vh, 35vw);
 
   /* Dark Theme Colors */
   --bg-dark: #1a1a1a;
-  --bg-darker: #0f0f0f;
   --text-light: #f5f5f5;
   --text-muted: #a0a0a0;
-  --text-dim: #606060;
 
-  /* Rogue Origin Brand Colors */
+  /* Rogue Origin Brand */
   --ro-green: #668971;
   --ro-gold: #e4aa4f;
 
   /* Status Colors */
   --color-success: #4caf50;
-  --color-info: #62758d;
-  --color-warning: #e4aa4f;
   --color-danger: #c45c4a;
-  --color-neutral: #808080;
 
-  /* Timer Color States */
-  --timer-green: #4caf50;
-  --timer-blue: #62758d;
-  --timer-red: #c45c4a;
-  --timer-neutral: #808080;
+  /* Ring */
+  --ring-bg: rgba(255, 255, 255, 0.1);
 
   /* Scale Ring States */
   --scale-filling: #62758d;
   --scale-near-target: #e4aa4f;
   --scale-at-target: #4caf50;
   --scale-stale: #808080;
-
-  /* Ring Visual */
-  --ring-bg: rgba(255, 255, 255, 0.1);
-  --ring-stroke: var(--color-info);
-
-  /* Spacing */
-  --grid-gap: 2rem;
-  --panel-padding: 1rem;
 
   /* Typography */
   --font-display: 'JetBrains Mono', monospace;
@@ -58,20 +41,16 @@
   --transition-smooth: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* ===== Global Styles ===== */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
+/* ===== Reset ===== */
+*, *::before, *::after { box-sizing: border-box; }
 
-html,
-body {
+html, body {
   margin: 0;
   padding: 0;
   width: 100%;
   height: 100%;
   overflow: hidden;
+  background: var(--bg-dark);
 }
 
 body {
@@ -81,12 +60,11 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  overflow: hidden;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  transition: background 0.5s ease;
 }
 
-/* Skip Link for Accessibility */
+/* Skip Link */
 .skip-link {
   position: absolute;
   top: -40px;
@@ -97,10 +75,7 @@ body {
   text-decoration: none;
   z-index: 100;
 }
-
-.skip-link:focus {
-  top: 0;
-}
+.skip-link:focus { top: 0; }
 
 /* ===== Header ===== */
 header {
@@ -112,10 +87,11 @@ header {
   background: rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
 }
 
 header h1 {
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   font-weight: 600;
   margin: 0;
   color: var(--ro-gold);
@@ -125,12 +101,12 @@ header h1 {
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: var(--text-light);
-  padding: 0.5rem 1rem;
+  padding: 0.4rem 0.8rem;
   border-radius: 8px;
   cursor: pointer;
   font-family: var(--font-ui);
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   transition: all var(--transition-fast);
   min-width: 44px;
   min-height: 44px;
@@ -141,20 +117,18 @@ header h1 {
   border-color: rgba(255, 255, 255, 0.3);
 }
 
-#langToggle:active {
-  transform: scale(0.95);
-}
-
-/* ===== Main Grid Layout ===== */
+/* ===== Main Grid ===== */
 main {
   flex: 1;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--grid-gap);
-  padding: var(--panel-padding);
+  gap: 1rem;
+  padding: 0.75rem;
   overflow: hidden;
+  min-height: 0;
 }
 
+/* ===== Panels ===== */
 .panel {
   display: flex;
   flex-direction: column;
@@ -163,14 +137,16 @@ main {
   background: rgba(255, 255, 255, 0.03);
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.05);
-  padding: 1.5rem;
+  padding: 1rem;
   position: relative;
+  overflow: hidden;
+  min-height: 0;
 }
 
 .panel h2 {
   position: absolute;
-  top: 1rem;
-  font-size: 1.1rem;
+  top: 0.75rem;
+  font-size: 0.85rem;
   font-weight: 600;
   margin: 0;
   color: var(--text-muted);
@@ -178,19 +154,18 @@ main {
   letter-spacing: 0.05em;
 }
 
-/* ===== Circular Progress Rings ===== */
+/* ============================================================
+   SCALE PANEL (Left Side)
+   ============================================================ */
+
+/* Scale SVG Ring */
 .ring {
-  width: var(--scale-circle-size);
-  height: var(--scale-circle-size);
+  width: var(--circle-size);
+  height: var(--circle-size);
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-}
-
-#timer-panel .ring {
-  width: var(--timer-circle-size);
-  height: var(--timer-circle-size);
 }
 
 .ring circle:first-child {
@@ -198,12 +173,12 @@ main {
 }
 
 .ring circle:last-child {
-  stroke: var(--ring-stroke);
+  stroke: var(--scale-filling);
   transition: stroke-dashoffset var(--transition-smooth),
               stroke var(--transition-smooth);
 }
 
-/* ===== Center Display Values ===== */
+/* Scale Center Text */
 .center {
   display: flex;
   flex-direction: column;
@@ -222,31 +197,27 @@ main {
 }
 
 #scaleWeight {
-  font-size: clamp(2.5rem, 6vw, 4rem);
-}
-
-#bag-timer-value {
-  font-size: clamp(3rem, 7vw, 5rem);
+  font-size: clamp(2rem, 5vw, 3.5rem);
 }
 
 .label {
-  font-size: clamp(0.9rem, 2vw, 1.1rem);
+  font-size: clamp(0.8rem, 1.5vw, 1rem);
   color: var(--text-muted);
-  margin-top: 0.5rem;
+  margin-top: 0.4rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
 }
 
-/* ===== Scale Status Dot ===== */
+/* Scale Status Dot */
 .status-dot {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background-color: var(--color-success);
   position: absolute;
-  bottom: 1rem;
-  right: 1rem;
-  box-shadow: 0 0 10px currentColor;
+  bottom: 0.75rem;
+  right: 0.75rem;
+  box-shadow: 0 0 8px currentColor;
   transition: background-color var(--transition-fast);
 }
 
@@ -256,100 +227,206 @@ main {
 }
 
 @keyframes pulse-red {
-  0%, 100% {
-    opacity: 1;
-    box-shadow: 0 0 10px var(--color-danger);
-  }
-  50% {
-    opacity: 0.5;
-    box-shadow: 0 0 20px var(--color-danger);
-  }
+  0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--color-danger); }
+  50% { opacity: 0.5; box-shadow: 0 0 16px var(--color-danger); }
 }
 
-/* ===== Timer Target Info ===== */
-.target-info {
+/* Scale Ring Color States */
+#scale-panel .ring circle:last-child { stroke: var(--scale-filling); }
+#scale-panel.near-target .ring circle:last-child { stroke: var(--scale-near-target); }
+#scale-panel.at-target .ring circle:last-child { stroke: var(--scale-at-target); }
+#scale-panel.stale .ring circle:last-child { stroke: var(--scale-stale); }
+
+
+/* ============================================================
+   TIMER PANEL (Right Side)
+   - Classes manipulated by scoreboard/timer.js
+   ============================================================ */
+
+/* Timer container - fills parent panel */
+.timer-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 16px;
+  transition: background 0.5s ease, box-shadow 0.5s ease;
+}
+
+/* Timer color state backgrounds */
+.timer-panel.green {
+  background: linear-gradient(180deg, rgba(76, 175, 80, 0.2) 0%, transparent 100%);
+}
+.timer-panel.yellow {
+  background: linear-gradient(180deg, rgba(228, 170, 79, 0.2) 0%, transparent 100%);
+}
+.timer-panel.red {
+  background: linear-gradient(180deg, rgba(196, 92, 74, 0.25) 0%, transparent 100%);
+  animation: timer-panel-pulse-red 1s ease-in-out infinite;
+}
+.timer-panel.neutral {
+  background: transparent;
+}
+
+@keyframes timer-panel-pulse-red {
+  0%, 100% { box-shadow: inset 0 0 30px rgba(196, 92, 74, 0.15); }
+  50% { box-shadow: inset 0 0 60px rgba(196, 92, 74, 0.3); }
+}
+
+/* Timer ring container */
+.timer-display {
+  position: relative;
+  width: var(--circle-size);
+  height: var(--circle-size);
+}
+
+/* Timer SVG ring */
+.timer-ring {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.timer-ring-bg {
+  fill: none;
+  stroke: var(--ring-bg);
+  stroke-width: 10;
+}
+
+.timer-ring-progress {
+  fill: none;
+  stroke-width: 10;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s linear, stroke 0.3s ease;
+}
+
+.timer-ring-progress.green {
+  stroke: #22c55e;
+  filter: drop-shadow(0 0 6px rgba(34, 197, 94, 0.5));
+}
+.timer-ring-progress.yellow {
+  stroke: #facc15;
+  filter: drop-shadow(0 0 6px rgba(250, 204, 21, 0.5));
+}
+.timer-ring-progress.red {
+  stroke: #ef4444;
+  filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.7));
+}
+
+/* Timer center text (overlaid on ring) */
+.timer-center {
   position: absolute;
-  bottom: 1rem;
-  font-size: 0.9rem;
-  color: var(--text-muted);
-  font-family: var(--font-ui);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
 }
 
-#timer-target-time {
+.timer-value {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-weight: 900;
+  color: #fff;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.timer-value.green {
+  color: #4ade80;
+  text-shadow: 0 0 15px rgba(34, 197, 94, 0.4);
+}
+.timer-value.yellow {
+  color: #fde047;
+  text-shadow: 0 0 15px rgba(250, 204, 21, 0.4);
+}
+.timer-value.red {
+  color: #f87171;
+  text-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+  animation: urgentPulse 0.8s ease-in-out infinite;
+}
+
+@keyframes urgentPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.timer-label {
+  font-family: var(--font-ui);
+  font-size: clamp(0.7rem, 1.2vw, 0.9rem);
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 4px;
+  text-transform: uppercase;
+}
+
+/* Overtime glow on ring container */
+.timer-display.overtime {
+  animation: overtimeGlow 0.8s ease-in-out infinite;
+}
+.timer-display.overtime .timer-ring-progress {
+  animation: overtimePulse 0.8s ease-in-out infinite;
+}
+
+@keyframes overtimeGlow {
+  0%, 100% { filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.3)); }
+  50% { filter: drop-shadow(0 0 25px rgba(239, 68, 68, 0.6)); }
+}
+@keyframes overtimePulse {
+  0%, 100% { stroke-width: 10; }
+  50% { stroke-width: 13; }
+}
+
+/* Timer target info line */
+.timer-target {
+  font-family: var(--font-ui);
+  font-size: clamp(0.7rem, 1.2vw, 0.9rem);
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 0.75rem;
+  text-align: center;
+}
+
+.timer-target span {
+  color: var(--ro-gold);
+  font-weight: 600;
+}
+
+#timerTargetTime {
   font-family: var(--font-display);
   font-weight: 600;
   color: var(--text-light);
 }
 
-/* ===== Scale Ring Color States ===== */
-#scale-panel .ring circle:last-child {
-  stroke: var(--scale-filling);
-}
 
-#scale-panel.near-target .ring circle:last-child {
-  stroke: var(--scale-near-target);
-}
+/* ============================================================
+   BODY TIMER STATE (set by timer.js)
+   ============================================================ */
 
-#scale-panel.at-target .ring circle:last-child {
-  stroke: var(--scale-at-target);
-}
-
-#scale-panel.stale .ring circle:last-child {
-  stroke: var(--scale-stale);
-}
-
-/* ===== Timer Color States (Body Classes) ===== */
-body.timer-green #timer-panel .ring circle:last-child {
-  stroke: var(--timer-green);
-}
-
-body.timer-blue #timer-panel .ring circle:last-child {
-  stroke: var(--timer-blue);
-}
-
-body.timer-red #timer-panel .ring circle:last-child {
-  stroke: var(--timer-red);
-}
-
-body.timer-neutral #timer-panel .ring circle:last-child {
-  stroke: var(--timer-neutral);
-}
-
-/* ===== Timer Background Gradients ===== */
 body.timer-green {
-  background: radial-gradient(ellipse at bottom right, rgba(76, 175, 80, 0.15) 0%, var(--bg-dark) 50%);
+  background: var(--bg-dark) radial-gradient(ellipse at bottom right, rgba(76, 175, 80, 0.12) 0%, var(--bg-dark) 50%);
 }
-
-body.timer-blue {
-  background: radial-gradient(ellipse at bottom right, rgba(98, 117, 141, 0.15) 0%, var(--bg-dark) 50%);
+body.timer-yellow {
+  background: var(--bg-dark) radial-gradient(ellipse at bottom right, rgba(228, 170, 79, 0.12) 0%, var(--bg-dark) 50%);
 }
-
 body.timer-red {
-  background: radial-gradient(ellipse at bottom right, rgba(196, 92, 74, 0.15) 0%, var(--bg-dark) 50%);
-  animation: pulse-red-bg 2s ease-in-out infinite;
+  background: var(--bg-dark) radial-gradient(ellipse at bottom right, rgba(196, 92, 74, 0.12) 0%, var(--bg-dark) 50%);
 }
-
 body.timer-neutral {
   background: var(--bg-dark);
 }
 
-@keyframes pulse-red-bg {
-  0%, 100% {
-    background: radial-gradient(ellipse at bottom right, rgba(196, 92, 74, 0.15) 0%, var(--bg-dark) 50%);
-  }
-  50% {
-    background: radial-gradient(ellipse at bottom right, rgba(196, 92, 74, 0.25) 0%, var(--bg-dark) 50%);
-  }
-}
 
-/* ===== Loading Overlay ===== */
+/* ============================================================
+   LOADING OVERLAY
+   ============================================================ */
+
 #loading-overlay {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(0, 0, 0, 0.85);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -358,123 +435,46 @@ body.timer-neutral {
 }
 
 .spinner {
-  width: 60px;
-  height: 60px;
-  border: 4px solid rgba(255, 255, 255, 0.1);
+  width: 48px;
+  height: 48px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
   border-top-color: var(--ro-gold);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 #loading-overlay p {
-  margin-top: 1rem;
+  margin-top: 0.75rem;
   color: var(--text-muted);
-  font-size: 1rem;
+  font-size: 0.9rem;
 }
 
-/* ===== Timer Pulse Animations ===== */
-body.timer-blue #timer-panel {
-  animation: pulse-blue 2s ease-in-out infinite;
-}
 
-body.timer-red #timer-panel {
-  animation: pulse-red-panel 1s ease-in-out infinite;
-}
+/* ============================================================
+   RESPONSIVE — Galaxy Tab A7 Lite (8.7", 1340x800)
+   ============================================================ */
 
-@keyframes pulse-blue {
-  0%, 100% {
-    box-shadow: 0 0 20px rgba(98, 117, 141, 0.3);
-  }
-  50% {
-    box-shadow: 0 0 40px rgba(98, 117, 141, 0.5);
-  }
-}
-
-@keyframes pulse-red-panel {
-  0%, 100% {
-    box-shadow: 0 0 30px rgba(196, 92, 74, 0.4);
-  }
-  50% {
-    box-shadow: 0 0 60px rgba(196, 92, 74, 0.7);
-  }
-}
-
-/* ===== Responsive Breakpoints ===== */
-
-/* Small Tablets (≤800px landscape) */
-@media screen and (max-width: 800px) {
+@media screen and (max-height: 500px) {
   :root {
-    --scale-circle-size: 180px;
-    --timer-circle-size: 180px;
-    --grid-gap: 1rem;
+    --header-height: 36px;
+    --circle-size: min(28vh, 28vw);
   }
 
-  header h1 {
-    font-size: 1rem;
-  }
-
-  .panel h2 {
-    font-size: 0.9rem;
-  }
-
-  #scaleWeight {
-    font-size: 2.5rem;
-  }
-
-  #bag-timer-value {
-    font-size: 3rem;
-  }
-
-  .label {
-    font-size: 0.8rem;
-  }
-
-  .target-info {
-    font-size: 0.8rem;
-  }
+  header h1 { font-size: 0.9rem; }
+  .panel h2 { font-size: 0.75rem; top: 0.5rem; }
+  main { gap: 0.5rem; padding: 0.5rem; }
+  .timer-target { font-size: 0.7rem; margin-top: 0.5rem; }
 }
 
-/* Large Tablets (≥1024px landscape) */
-@media screen and (min-width: 1024px) {
-  :root {
-    --scale-circle-size: 300px;
-    --timer-circle-size: 300px;
-    --grid-gap: 3rem;
-  }
+/* ============================================================
+   PORTRAIT MODE WARNING
+   ============================================================ */
 
-  header h1 {
-    font-size: 1.5rem;
-  }
-
-  .panel h2 {
-    font-size: 1.2rem;
-  }
-
-  #scaleWeight {
-    font-size: 4rem;
-  }
-
-  #bag-timer-value {
-    font-size: 5rem;
-  }
-
-  .label {
-    font-size: 1.1rem;
-  }
-
-  .target-info {
-    font-size: 1rem;
-  }
-}
-
-/* Portrait mode warning (optional) */
 @media screen and (orientation: portrait) {
   body::before {
-    content: "Please rotate device to landscape mode";
+    content: "Please rotate to landscape / Gire a horizontal";
     position: fixed;
     top: 50%;
     left: 50%;
@@ -482,9 +482,10 @@ body.timer-red #timer-panel {
     background: rgba(0, 0, 0, 0.9);
     color: white;
     padding: 2rem;
-    border-radius: 8px;
+    border-radius: 12px;
     text-align: center;
     z-index: 9999;
     font-size: 1.2rem;
+    max-width: 80%;
   }
 }
