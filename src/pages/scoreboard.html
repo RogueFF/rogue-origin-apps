@@ -13,6 +13,16 @@
   <link rel="apple-touch-icon" href="/rogue-origin-apps/assets/icon-apple-touch.png">
   <title>Production Scoreboard</title>
 
+  <!-- TV Mode Detection: Apply before render to prevent flash -->
+  <script>
+    (function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('tv') === '1') {
+        document.documentElement.classList.add('tv-mode');
+      }
+    })();
+  </script>
+
   <!-- Performance: Resource Hints -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -46,8 +56,8 @@
   <link rel="stylesheet" href="../css/shared-base.css">
   
   <!-- Non-critical CSS: Deferred for faster initial render -->
-  <link rel="preload" href="../css/scoreboard.css?v=11" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link rel="stylesheet" href="../css/scoreboard.css?v=11"></noscript>
+  <link rel="preload" href="../css/scoreboard.css?v=12" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/scoreboard.css?v=12"></noscript>
 </head>
 <body class="idle timer-neutral">
   <a href="#main-panel" class="skip-link">Skip to main content</a>
