@@ -10,7 +10,7 @@
   const Config = window.ScaleDisplayConfig;
   const State = window.ScaleDisplayState;
   const DOM = window.ScaleDisplayDOM;
-  const I18n = window.ScaleDisplayI18n;
+  const I18n = window.ScoreboardI18n;
   const API = window.ScaleDisplayAPI;
   const Scale = window.ScaleDisplayScale;
   const Timer = window.ScaleDisplayTimer;
