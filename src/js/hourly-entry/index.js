@@ -3616,8 +3616,37 @@ async function checkProductionVersion() {
         console.log('Production data synced from another computer');
       }
     }
+    
+    // Also check for shift start updates (sync across computers)
+    await syncShiftStartFromAPI();
   } catch (error) {
     // Silent fail - don't spam console or disrupt user
+  }
+}
+
+/**
+ * Sync shift start from API (used by polling to keep all computers in sync)
+ */
+async function syncShiftStartFromAPI() {
+  try {
+    const todayISO = formatDateLocal(new Date());
+    const response = await fetch(`${API_URL}?action=getShiftStart&date=${todayISO}`);
+    const result = await response.json();
+    const data = result.data || result;
+    
+    if (data.shiftAdjustment?.manualStartTime) {
+      const apiStartTime = new Date(data.shiftAdjustment.manualStartTime);
+      
+      // Only update if it changed (avoid unnecessary UI updates)
+      if (!shiftStartTime || shiftStartTime.getTime() !== apiStartTime.getTime()) {
+        shiftStartTime = apiStartTime;
+        localStorage.setItem('manualShiftStart', apiStartTime.toISOString());
+        localStorage.setItem('shiftStartDate', new Date().toDateString());
+        updateStartTimeUI();
+      }
+    }
+  } catch (error) {
+    // Silent fail
   }
 }
 
