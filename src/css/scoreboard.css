@@ -1733,7 +1733,7 @@
 /* Time Controls Container */
 .time-controls {
   position: fixed;
-  top: 130px;
+  top: 90px;
   right: 420px;
   display: flex;
   flex-direction: column;
@@ -1771,12 +1771,12 @@
 }
 
 .historical-view-btn {
-  bottom: 140px !important;
+  bottom: 90px !important;
   color: #93a5ba;
 }
 
 .order-queue-toggle-btn {
-  bottom: 90px !important;
+  bottom: 50px !important;
   color: #e4aa4f;
 }
 
@@ -1840,7 +1840,7 @@
   }
 
   #morningReportBtn {
-    bottom: 105px;
+    bottom: 105px !important;
   }
 
   .historical-view-btn i,
@@ -2892,7 +2892,7 @@ body.iframe-embed .current-order-items {
 /* Morning Report Button - Compact toolbar */
 #morningReportBtn {
   position: fixed;
-  bottom: 190px;
+  bottom: 130px;
   left: 25px;
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -3003,125 +3003,19 @@ body.dark-mode input:focus-visible {
 /* ========================================
    4K / LARGE DISPLAY OPTIMIZATION
    ======================================== */
-/* Optimized for 3840×2160 (4K UHD) and larger screens */
-@media (min-width: 2000px) {
-  /* Scale content to fit 4K viewport at 100% zoom */
+/* Optimized for 3840×2160 (4K UHD) - 75" TV */
+/* Apply proportional scaling to fit everything at 100% browser zoom */
+@media (min-width: 3000px) and (min-height: 1500px) {
   body {
-    font-size: 14px; /* Slightly smaller base */
+    zoom: 0.67; /* Scale entire page to 67% - matches manual browser zoom */
+    transform-origin: top left;
   }
   
-  /* Reduce timer panel width for 4K */
-  .timer-panel {
-    width: 340px;
-    min-width: 340px;
-    padding: 25px;
-  }
-  
-  /* Adjust positioning for narrower timer panel */
-  .time-display {
-    top: 30px;
-    right: 380px; /* 340px panel + 40px margin */
-  }
-  
-  .help-btn {
-    right: 380px;
-  }
-  
-  .time-controls {
-    top: 140px;
-    right: 380px; /* Align with clock */
-  }
-  
-  .start-day-btn,
-  .started-badge {
-    font-size: 15px;
-    padding: 10px 18px;
-  }
-  
-  /* Bottom-left utility buttons - more spacing for 4K */
-  #morningReportBtn {
-    bottom: 220px;
-    left: 40px;
-    font-size: 13px;
-    padding: 8px 12px;
-  }
-  
-  .historical-view-btn {
-    bottom: 170px !important;
-    left: 40px !important;
-    font-size: 13px !important;
-    padding: 8px 12px !important;
-  }
-  
-  .order-queue-toggle-btn {
-    bottom: 120px !important;
-    left: 40px !important;
-    font-size: 13px !important;
-    padding: 8px 12px !important;
-  }
-  
-  .lang-toggle {
-    bottom: 40px;
-    left: 40px;
-  }
-  
-  .lang-btn {
-    font-size: 15px;
-    padding: 8px 16px;
-  }
-  
-  /* Scale down clock slightly */
-  .clock {
-    font-size: 44px;
-  }
-  
-  .date {
-    font-size: 17px;
-  }
-  
-  /* Scale main content for better fit */
-  .actual-lbs {
-    font-size: 80px; /* Down from default larger size */
-  }
-  
-  .daily-actual {
-    font-size: 52px; /* Down from 58px */
-  }
-  
-  .daily-target {
-    font-size: 36px; /* Down from 42px */
-  }
-  
-  .hour-card {
-    padding: 18px 35px;
-    min-width: 300px;
-  }
-  
-  .daily-progress {
-    min-width: 550px;
-    padding: 18px 45px;
-  }
-  
-  /* Timer display sizing for 4K */
-  .timer-display {
-    width: 200px;
-    height: 200px;
-  }
-  
-  .timer-value {
-    font-size: 48px;
-  }
-  
-  .timer-label {
-    font-size: 15px;
-  }
-  
-  .timer-target {
-    font-size: 14px;
-  }
-  
-  .manual-btn {
-    padding: 14px 28px;
-    font-size: 16px;
-  }
+  /* Alternatively, if zoom doesn't work well: */
+  /* body {
+    transform: scale(0.67);
+    transform-origin: top left;
+    width: 149.25%; 
+    height: 149.25%;
+  } */
 }
