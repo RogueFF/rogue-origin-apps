@@ -3025,6 +3025,191 @@ body.dark-mode input:focus-visible {
 }
 
 /* ===================================
+   MOBILE MODE (<768px)
+   Touch-optimized, stacked layout
+   =================================== */
+@media (max-width: 767px) {
+  /* Remove side-by-side layout */
+  body {
+    flex-direction: column;
+    overflow-y: auto; /* Allow scroll on mobile if needed */
+  }
+
+  .main-panel {
+    width: 100%;
+    padding: 10px;
+    height: auto;
+  }
+
+  .timer-panel {
+    width: 100%;
+    min-width: 100%;
+    border-left: none;
+    border-top: 2px solid rgba(228,170,79,0.2);
+    height: auto;
+    padding: 20px 10px;
+  }
+
+  /* Hour cards - stack vertically */
+  .hour-cards {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .hour-card {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .hour-card .actual-lbs {
+    font-size: 56px;
+  }
+
+  .hour-card .target-lbs {
+    font-size: 40px;
+  }
+
+  .hour-card .percentage-value {
+    font-size: 48px;
+  }
+
+  /* Daily progress - compact */
+  .daily-actual {
+    font-size: 64px;
+  }
+
+  .daily-target {
+    font-size: 48px;
+  }
+
+  .daily-delta {
+    font-size: 40px;
+  }
+
+  .projection-value {
+    font-size: 40px;
+  }
+
+  /* Comparison pills - wrap */
+  .comparisons {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .comparison-pill {
+    font-size: 14px;
+  }
+
+  .comparison-value {
+    font-size: 24px;
+  }
+
+  /* Info bar - stack if needed */
+  .info-bar {
+    flex-wrap: wrap;
+    font-size: 16px;
+    padding: 12px 8px;
+    height: auto;
+  }
+
+  /* Timer - smaller on mobile */
+  .timer-display svg,
+  .scale-display svg {
+    width: 200px;
+    height: 200px;
+  }
+
+  .timer-value {
+    font-size: 56px;
+  }
+
+  .scale-value {
+    font-size: 56px;
+  }
+
+  /* Touch targets - minimum 48px */
+  button,
+  .fab-menu-item {
+    min-height: 48px;
+  }
+}
+
+/* ===================================
+   DESKTOP MODE (768px - 1919px)
+   Balanced for arm's length viewing
+   =================================== */
+@media (min-width: 768px) and (max-width: 1919px) {
+  /* Hour cards - medium sizing */
+  .hour-card {
+    max-width: 280px;
+  }
+
+  .hour-card .actual-lbs {
+    font-size: 64px;
+  }
+
+  .hour-card .target-lbs {
+    font-size: 48px;
+  }
+
+  .hour-card .percentage-value {
+    font-size: 56px;
+  }
+
+  /* Daily progress - balanced */
+  .daily-actual {
+    font-size: 72px;
+  }
+
+  .daily-target {
+    font-size: 56px;
+  }
+
+  .daily-delta {
+    font-size: 48px;
+  }
+
+  .projection-value {
+    font-size: 48px;
+  }
+
+  /* Progress bar - standard thickness */
+  .progress-bar {
+    height: 24px;
+  }
+
+  /* Comparison pills - medium */
+  .comparison-value {
+    font-size: 36px;
+  }
+
+  .streak-value {
+    font-size: 36px;
+  }
+
+  /* Info bar - readable */
+  .info-bar {
+    font-size: 20px;
+    height: 60px;
+  }
+
+  /* Timer panel - standard sizing */
+  .timer-display svg,
+  .scale-display svg {
+    width: 220px;
+    height: 220px;
+  }
+
+  .timer-value {
+    font-size: 72px;
+  }
+
+  .scale-value {
+    font-size: 72px;
+  }
+}
+
+/* ===================================
    TV MODE (≥1920px)
    Distance viewing optimization
    =================================== */
