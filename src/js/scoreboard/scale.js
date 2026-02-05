@@ -59,7 +59,8 @@
     var statusDot = DOM ? DOM.get('scaleStatusDot') : document.getElementById('scaleStatusDot');
     var weightEl = DOM ? DOM.get('scaleWeight') : document.getElementById('scaleWeight');
     var scaleLabel = DOM ? DOM.get('scaleWeightLabel') : document.getElementById('scaleWeightLabel');
-    var scaleRing = DOM ? DOM.get('scaleRing') : document.getElementById('scaleRing');
+    var scaleRingSvg = DOM ? DOM.get('scaleRing') : document.getElementById('scaleRing');
+    var scaleRing = scaleRingSvg ? scaleRingSvg.querySelector('circle:last-child') : null; // Get progress circle
     var scaleHeader = DOM ? DOM.get('scaleHeader') : document.getElementById('scaleHeader');
     var scalePanel = document.getElementById('scale-panel');
 
