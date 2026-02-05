@@ -1,4 +1,4 @@
-    
+
     /* Scoreboard-specific CSS variables (brand colors inherited from shared-base.css) */
     :root {
       /* Scoreboard Status Colors (not in shared-base.css) */
@@ -10,6 +10,9 @@
       /* Scoreboard-specific brand extension */
       --green-bright: #7a9d87;
     }
+
+    /* Import FAB Menu styles */
+    @import url('fab-menu.css');
     
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; font-family: 'Outfit', system-ui, sans-serif; overflow: hidden; }
@@ -148,7 +151,7 @@
     .timer-panel.red { background: linear-gradient(180deg, rgba(239, 68, 68, 0.3) 0%, rgba(185, 28, 28, 0.2) 100%); }
     .timer-panel.neutral { background: rgba(0,0,0,0.4); }
     
-    .scoreboard { text-align: center; width: 100%; max-width: 1400px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
+    .scoreboard { text-align: center; width: 100%; max-width: 1200px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
     
     /* Status Badge - uses brand gold border */
     .status-badge { display: inline-flex; align-items: center; gap: 16px; padding: 12px 36px; border-radius: 60px; font-size: 28px; font-weight: 700; text-transform: uppercase; letter-spacing: 3px; }
@@ -159,20 +162,20 @@
     .status-icon { font-size: 32px; display: flex; align-items: center; justify-content: center; }
     
     /* Hour Cards - refined with brand accents */
-    .hour-cards { display: flex; justify-content: center; gap: 25px; flex-wrap: wrap; }
-    .hour-card { background: rgba(0,0,0,0.4); border-radius: 20px; padding: 16px 40px; min-width: 320px; border: 2px solid rgba(228,170,79,0.15); }
-    .hour-card.last-hour { border: 3px solid rgba(228,170,79,0.3); }
-    .hour-card.current-hour { border: 3px solid rgba(102, 137, 113, 0.6); background: rgba(102, 137, 113, 0.15); animation: currentHourPulse 2s ease-in-out infinite; }
-    .hour-card-header { font-size: 14px; color: var(--ro-gold); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 6px; }
+    .hour-cards { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+    .hour-card { background: rgba(0,0,0,0.3); border-radius: 16px; padding: 16px 20px; min-width: 280px; border: 1px solid rgba(228,170,79,0.1); margin: 0 8px; }
+    .hour-card.last-hour { border: 2px solid rgba(228,170,79,0.25); }
+    .hour-card.current-hour { border: 2px solid rgba(102, 137, 113, 0.5); background: rgba(102, 137, 113, 0.12); animation: currentHourPulse 2s ease-in-out infinite; }
+    .hour-card-header { font-size: 11px; color: rgba(228,170,79,0.8); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; }
     .hour-card.current-hour .hour-card-header { color: var(--green-bright); }
-    .hour-card-timeslot { font-size: 16px; color: rgba(255,255,255,0.4); margin-bottom: 8px; }
-    .lbs-row { display: flex; align-items: baseline; justify-content: center; gap: 10px; margin-bottom: 4px; }
-    .actual-lbs { font-size: 72px; font-weight: 900; line-height: 1; color: #ffffff; text-shadow: 0 4px 20px rgba(0,0,0,0.3); }
-    .hour-card.current-hour .actual-lbs { color: var(--green-bright); font-size: 60px; }
-    .separator { font-size: 42px; font-weight: 300; color: rgba(255,255,255,0.4); }
-    .target-lbs { font-size: 42px; font-weight: 700; color: rgba(255,255,255,0.5); }
+    .hour-card-timeslot { font-size: 13px; color: rgba(255,255,255,0.35); margin-bottom: 12px; }
+    .lbs-row { display: flex; align-items: baseline; justify-content: center; gap: 8px; margin: 16px 0; }
+    .actual-lbs { font-size: 56px; font-weight: 800; line-height: 1; color: #ffffff; text-shadow: 0 2px 12px rgba(0,0,0,0.3); }
+    .hour-card.current-hour .actual-lbs { color: var(--green-bright); font-size: 50px; }
+    .separator { font-size: 32px; font-weight: 300; color: rgba(255,255,255,0.35); }
+    .target-lbs { font-size: 32px; font-weight: 600; color: rgba(255,255,255,0.45); }
     .lbs-unit { font-size: 16px; font-weight: 600; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 2px; }
-    .percentage-display { margin: 4px 0; }
+    .percentage-display { margin-top: 12px; }
     .percentage-value { font-size: 36px; font-weight: 900; }
     .hour-card.current-hour .percentage-value { color: var(--green-bright); }
     .percentage-label { font-size: 13px; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 1px; }
@@ -185,8 +188,17 @@
       margin: 0 auto;
       width: 100%;
       max-width: 850px;
-      display: block;
       border: 1px solid rgba(228,170,79,0.15);
+      transition: opacity 0.3s ease, max-height 0.3s ease;
+      max-height: 0;
+      opacity: 0;
+      overflow: hidden;
+    }
+
+    /* Show chart when toggled on */
+    .chart-container.visible {
+      max-height: 400px;
+      opacity: 1;
     }
     .chart-header {
       font-size: 12px;
@@ -234,8 +246,8 @@
     .projection-delta.neutral { background: rgba(228, 170, 79, 0.2); color: var(--gold-light); }
     
     /* Comparison Pills - brand styling */
-    .comparisons { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
-    .comparison-pill { display: flex; align-items: center; gap: 6px; padding: 8px 14px; background: rgba(0,0,0,0.4); border-radius: 20px; font-size: 16px; font-weight: 600; border: 1px solid rgba(228,170,79,0.15); }
+    .comparisons { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+    .comparison-pill { display: flex; align-items: center; gap: 6px; padding: 8px 16px; background: rgba(0,0,0,0.4); border-radius: 20px; font-size: 16px; font-weight: 600; border: 1px solid rgba(228,170,79,0.15); }
     .comparison-label { color: rgba(255,255,255,0.5); }
     .comparison-value { font-weight: 700; padding: 3px 8px; border-radius: 10px; }
     .comparison-value.positive { background: rgba(102, 137, 113, 0.3); color: var(--status-green); }
@@ -415,14 +427,138 @@
     .avg-best-toggle:hover { background: rgba(228,170,79,0.3); }
     .avg-best-container.hidden ~ .avg-best-toggle { display: inline-flex; }
 
-    /* Time/Strain Display - brand colors */
-    .time-display { position: fixed; top: 20px; right: 420px; text-align: right; }
-    .time-display .time { font-size: 42px; font-weight: 700; color: rgba(255,255,255,0.9); }
-    .time-display .date { font-size: 16px; color: var(--ro-gold); }
-    .strain-display { position: fixed; top: 20px; left: 25px; }
-    .strain-label { font-size: 12px; color: var(--ro-gold); text-transform: uppercase; letter-spacing: 1px; }
-    .strain-name { font-size: 28px; font-weight: 700; color: rgba(255,255,255,0.9); max-width: 400px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .strain-rate-indicator { margin-top: 3px; }
+    /* Compact Header Bar (Phase 3: Vertical Space Optimization) */
+    .compact-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background: linear-gradient(135deg, rgba(26, 31, 22, 0.1) 0%, rgba(45, 58, 46, 0.1) 100%);
+      backdrop-filter: blur(10px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 30px;
+      z-index: 500;
+      border-bottom: 1px solid rgba(228, 170, 79, 0.15);
+    }
+
+    .header-left {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+    }
+
+    .strain-label-compact {
+      font-family: 'Outfit', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--ro-gold);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .strain-name-compact {
+      font-family: 'DM Serif Display', serif;
+      font-size: 24px;
+      font-weight: 600;
+      color: #ffffff;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+    }
+
+    .time-compact {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 24px;
+      font-weight: 600;
+      color: #ffffff;
+    }
+
+    .date-compact {
+      font-family: 'Outfit', sans-serif;
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    /* Time controls positioned within header */
+    .time-controls-compact {
+      position: fixed;
+      top: 70px;
+      right: 30px;
+      z-index: 501;
+    }
+
+    /* TV mode - larger header text */
+    @media (min-width: 1920px) {
+      .compact-header {
+        height: 60px;
+      }
+
+      .strain-name-compact {
+        font-size: 48px;
+      }
+
+      .time-compact {
+        font-size: 36px;
+      }
+
+      .date-compact {
+        font-size: 20px;
+      }
+    }
+
+    /* Mobile - stack header */
+    @media (max-width: 767px) {
+      .compact-header {
+        flex-direction: column;
+        height: auto;
+        padding: 12px 16px;
+        align-items: flex-start;
+        gap: 8px;
+      }
+
+      .header-left,
+      .header-right {
+        gap: 8px;
+      }
+
+      .strain-name-compact {
+        font-size: 18px;
+      }
+
+      .time-compact {
+        font-size: 20px;
+      }
+
+      .date-compact {
+        font-size: 12px;
+      }
+
+      .time-controls-compact {
+        top: auto;
+        bottom: 10px;
+        right: 10px;
+      }
+    }
+
+    /* Hide old strain/time displays */
+    .strain-display,
+    .time-display,
+    .time-controls:not(.time-controls-compact) {
+      display: none !important;
+    }
+
+    /* Old Time/Strain Display - kept for backward compatibility but hidden */
+    .time-display .time { font-size: 28px; font-weight: 600; color: rgba(255,255,255,0.8); }
+    .time-display .date { font-size: 13px; color: rgba(228,170,79,0.7); }
+    .strain-label { font-size: 10px; color: rgba(228,170,79,0.7); text-transform: uppercase; letter-spacing: 1px; }
+    .strain-name { font-size: 20px; font-weight: 600; color: rgba(255,255,255,0.8); max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .strain-rate-indicator { margin-top: 2px; font-size: 11px; opacity: 0.7; }
     
     /* Language Toggle - brand styling */
     .lang-toggle { position: fixed; bottom: 20px; left: 25px; display: flex; gap: 6px; }
@@ -2924,6 +3060,32 @@ body.iframe-embed .current-order-items {
   border-color: var(--ro-green);
 }
 
+/* ========================================
+   HIDE ORIGINAL BUTTONS (FAB Menu)
+   Progressive Enhancement - Task 3 of 15
+   ======================================== */
+
+/* Hide original buttons - replaced by FAB menu */
+#morningReportBtn,
+#historicalViewBtn,
+#orderQueueToggleBtn {
+  display: none !important;
+}
+
+/* Keep help button hidden - now in FAB menu */
+.help-btn {
+  display: none !important;
+}
+
+/* Keep EN/ES toggle visible (not in FAB menu) */
+.lang-toggle {
+  /* No changes - stays visible */
+}
+
+.lang-toggle .complaints-btn {
+  display: none !important; /* Now in FAB menu */
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .mr-cards {
@@ -2992,5 +3154,290 @@ body.dark-mode input:focus-visible {
   * {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* ===================================
+   MOBILE MODE (<768px)
+   Touch-optimized, stacked layout
+   =================================== */
+@media (max-width: 767px) {
+  /* Remove side-by-side layout */
+  body {
+    flex-direction: column;
+    overflow-y: auto; /* Allow scroll on mobile if needed */
+  }
+
+  .main-panel {
+    width: 100%;
+    padding: 10px;
+    height: auto;
+  }
+
+  .timer-panel {
+    width: 100%;
+    min-width: 100%;
+    border-left: none;
+    border-top: 2px solid rgba(228,170,79,0.2);
+    height: auto;
+    padding: 20px 10px;
+  }
+
+  /* Hour cards - stack vertically */
+  .hour-cards {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .hour-card {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .hour-card .actual-lbs {
+    font-size: 56px;
+  }
+
+  .hour-card .target-lbs {
+    font-size: 40px;
+  }
+
+  .hour-card .percentage-value {
+    font-size: 48px;
+  }
+
+  /* Daily progress - compact */
+  .daily-actual {
+    font-size: 64px;
+  }
+
+  .daily-target {
+    font-size: 48px;
+  }
+
+  .daily-delta {
+    font-size: 40px;
+  }
+
+  .projection-value {
+    font-size: 40px;
+  }
+
+  /* Comparison pills - wrap */
+  .comparisons {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .comparison-pill {
+    font-size: 14px;
+  }
+
+  .comparison-value {
+    font-size: 24px;
+  }
+
+  /* Info bar - stack if needed */
+  .info-bar {
+    flex-wrap: wrap;
+    font-size: 16px;
+    padding: 12px 8px;
+    height: auto;
+  }
+
+  /* Timer - smaller on mobile */
+  .timer-display svg,
+  .scale-display svg {
+    width: 200px;
+    height: 200px;
+  }
+
+  .timer-value {
+    font-size: 56px;
+  }
+
+  .scale-value {
+    font-size: 56px;
+  }
+
+  /* Touch targets - minimum 48px */
+  button,
+  .fab-menu-item {
+    min-height: 48px;
+  }
+}
+
+/* ===================================
+   DESKTOP MODE (768px - 1919px)
+   Balanced for arm's length viewing
+   =================================== */
+@media (min-width: 768px) and (max-width: 1919px) {
+  /* Hour cards - medium sizing */
+  .hour-card {
+    max-width: 280px;
+  }
+
+  .hour-card .actual-lbs {
+    font-size: 64px;
+  }
+
+  .hour-card .target-lbs {
+    font-size: 48px;
+  }
+
+  .hour-card .percentage-value {
+    font-size: 56px;
+  }
+
+  /* Daily progress - balanced */
+  .daily-actual {
+    font-size: 72px;
+  }
+
+  .daily-target {
+    font-size: 56px;
+  }
+
+  .daily-delta {
+    font-size: 48px;
+  }
+
+  .projection-value {
+    font-size: 48px;
+  }
+
+  /* Progress bar - standard thickness */
+  .progress-bar {
+    height: 24px;
+  }
+
+  /* Comparison pills - medium */
+  .comparison-value {
+    font-size: 36px;
+  }
+
+  .streak-value {
+    font-size: 36px;
+  }
+
+  /* Info bar - readable */
+  .info-bar {
+    font-size: 20px;
+    height: 60px;
+  }
+
+  /* Timer panel - standard sizing */
+  .timer-display svg,
+  .scale-display svg {
+    width: 220px;
+    height: 220px;
+  }
+
+  .timer-value {
+    font-size: 72px;
+  }
+
+  .scale-value {
+    font-size: 72px;
+  }
+}
+
+/* ===================================
+   TV MODE (≥1920px)
+   Distance viewing optimization
+   =================================== */
+@media (min-width: 1920px) {
+  /* Hour cards - extra large for distance viewing */
+  .hour-card .actual-lbs {
+    font-size: 120px !important;
+    line-height: 1;
+  }
+
+  .hour-card .target-lbs {
+    font-size: 80px !important;
+  }
+
+  .hour-card .percentage-value {
+    font-size: 100px !important;
+  }
+
+  /* Daily progress - massive numbers */
+  .daily-actual {
+    font-size: 140px !important;
+  }
+
+  .daily-target {
+    font-size: 100px !important;
+  }
+
+  .daily-delta {
+    font-size: 80px !important;
+  }
+
+  .projection-value {
+    font-size: 80px !important;
+  }
+
+  /* Progress bar - thicker for visibility */
+  .progress-bar {
+    height: 40px !important;
+  }
+
+  /* Comparison pills - large values */
+  .comparison-value {
+    font-size: 60px !important;
+  }
+
+  .streak-value {
+    font-size: 60px !important;
+  }
+
+  /* Info bar - larger text */
+  .info-bar {
+    font-size: 36px !important;
+    height: 50px !important;
+  }
+
+  .info-section span {
+    font-size: 36px !important;
+  }
+
+  /* Timer panel - larger rings and text */
+  .timer-display svg,
+  .scale-display svg {
+    width: 280px !important;
+    height: 280px !important;
+  }
+
+  .timer-value {
+    font-size: 100px !important;
+  }
+
+  .scale-value {
+    font-size: 100px !important;
+  }
+
+  .timer-target,
+  .scale-label {
+    font-size: 40px !important;
+  }
+
+  /* OLED optimization - pure blacks */
+  body.timer-neutral,
+  body.idle {
+    background: #000000 !important;
+  }
+
+  .main-panel {
+    background: #000000;
+  }
+
+  /* High contrast status colors for OLED */
+  body.timer-green {
+    background: linear-gradient(145deg, #052e16 0%, #14532d 50%, #000000 100%) !important;
+  }
+
+  body.timer-red {
+    background: linear-gradient(145deg, #450a0a 0%, #7f1d1d 50%, #000000 100%) !important;
   }
 }
