@@ -65,17 +65,19 @@
     }
 
     // Language Toggle
-    const btnEn = el('btnEn');
-    if (btnEn) {
-      btnEn.addEventListener('click', function() {
-        setLanguage('en');
-      });
-    }
-
-    const btnEs = el('btnEs');
-    if (btnEs) {
-      btnEs.addEventListener('click', function() {
-        setLanguage('es');
+    const langToggleBtn = el('langToggleBtn');
+    if (langToggleBtn) {
+      langToggleBtn.addEventListener('click', function() {
+        // Toggle between EN and ES
+        const currentLang = window.ScoreboardState?.currentLang || 'en';
+        const newLang = currentLang === 'en' ? 'es' : 'en';
+        setLanguage(newLang);
+        
+        // Update button text
+        const langToggleText = el('langToggleText');
+        if (langToggleText) {
+          langToggleText.textContent = newLang.toUpperCase();
+        }
       });
     }
 
