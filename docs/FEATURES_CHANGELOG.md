@@ -6,6 +6,60 @@ Detailed implementation history for major features in the Rogue Origin Operation
 
 ## Recent Features (February 2026)
 
+### Scoreboard Declutter & No-Scroll Layout (2026-02-04)
+
+**Goal:** Eliminate scrolling, reduce clutter, optimize for TV viewing
+
+**Changes:**
+
+**FAB Menu System:**
+- Replaced 8 scattered buttons with single Floating Action Button
+- Menu slides up from bottom-right with 6 items
+- EN/ES toggle remains visible (most-used control)
+- Auto-fade to 20% opacity on TV after 10s idle
+- Keyboard navigation (Tab, Enter, Arrows, Escape)
+
+**Responsive Breakpoints:**
+- TV Mode (≥1920px): Huge text (120-140px), OLED pure blacks, distance-optimized
+- Desktop Mode (768-1919px): Balanced sizing (64-80px), arm's length viewing
+- Mobile Mode (<768px): Stacked layout, touch-friendly (48px targets), may scroll
+
+**Vertical Space Optimization:**
+- Compact header: Merged strain + time into 60px bar (saved 100px)
+- Tightened hour cards: Reduced padding/margins (saved 40px)
+- Chart hidden by default: Toggle via FAB menu (saved 300px)
+- Order queue hidden by default: Toggle via FAB menu (saved 180px)
+- Comparison pills compacted (saved 10px)
+- **Total saved: 630px** (1,250px → 700px)
+
+**Polish:**
+- Smooth transitions with cubic-bezier easing
+- Staggered menu item animations
+- Gear icon rotates 90° on menu open
+- Focus management for accessibility
+- WCAG 2.1 AA compliant
+
+**Impact:**
+
+- **87.5% reduction** in visible chrome (8 buttons → 1 FAB + EN/ES toggle)
+- No scrolling on any device (768px+ height)
+- TV text readable from 10+ feet
+- Touch targets ≥48px on mobile
+- Maintains all existing functionality
+- Cleaner, more professional appearance
+
+**Files Modified:**
+
+- `src/css/fab-menu.css` (new)
+- `src/js/scoreboard/fab-menu.js` (new)
+- `src/css/scoreboard.css` (responsive breakpoints, compact styles)
+- `src/pages/scoreboard.html` (FAB menu HTML, compact header)
+- `src/js/scoreboard/main.js` (compact header updates, order queue default)
+- `src/js/scoreboard/render.js` (compact strain display)
+- `src/js/scoreboard/i18n.js` (FAB menu translations)
+
+---
+
 ### Hourly Entry Goal Fix & Mid-Hour Crew Changes (2026-02-03)
 
 **Bugs Fixed**:
