@@ -239,6 +239,9 @@
     // Initialize order queue visibility from localStorage
     initOrderQueueVisibility();
 
+    // Initialize chart visibility from localStorage
+    initChartVisibility();
+
     // Initialize AVG/BEST visibility from localStorage
     initAvgBestVisibility();
 
@@ -476,6 +479,25 @@
     }
 
     console.debug('AVG/BEST toggled:', newState ? 'hidden' : 'visible');
+  }
+
+  /**
+   * Initialize chart visibility from localStorage
+   */
+  function initChartVisibility() {
+    var chartContainer = document.querySelector('.chart-container');
+    if (!chartContainer) return;
+
+    // Default to HIDDEN if not set (changed from true)
+    var isVisible = localStorage.getItem('chartVisible') === 'true';
+
+    if (isVisible) {
+      chartContainer.classList.add('visible');
+    } else {
+      chartContainer.classList.remove('visible');
+    }
+
+    console.debug('Chart initialized:', isVisible ? 'visible' : 'hidden');
   }
 
   /**

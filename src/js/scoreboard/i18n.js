@@ -96,6 +96,7 @@
       fabComplaints: 'Complaints',
       fabMorningReport: 'Morning Report',
       fabOrderQueue: 'Order Queue',
+      fabChart: 'Hourly Chart',
       fabHelp: 'Help'
     },
 
@@ -189,6 +190,7 @@
       fabComplaints: 'Quejas',
       fabMorningReport: 'Reporte Matutino',
       fabOrderQueue: 'Cola de Pedidos',
+      fabChart: 'Gráfico Por Hora',
       fabHelp: 'Ayuda'
     }
   };
