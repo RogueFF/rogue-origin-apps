@@ -600,7 +600,22 @@ async function getBagTimerData(env, date = null) {
     const bagWeightLbs = 11.0231;
     const teamRateLbsPerHour = result.currentTrimmers * result.targetRate;
     if (teamRateLbsPerHour > 0) {
-      result.targetSeconds = Math.round((bagWeightLbs / teamRateLbsPerHour) * 3600);
+      const baseTargetSeconds = Math.round((bagWeightLbs / teamRateLbsPerHour) * 3600);
+      
+      // Adjust for current hour's break multiplier
+      // Get current time slot and its multiplier (accounts for breaks)
+      const currentTimeSlot = scoreboardData.currentTimeSlot || '';
+      const timeSlotMultipliers = (await getConfig(env, 'schedule.time_slot_multipliers')) ?? TIME_SLOT_MULTIPLIERS;
+      const hourMultiplier = getTimeSlotMultiplier(currentTimeSlot, timeSlotMultipliers);
+      
+      // During break hours (e.g., 0.83 multiplier = 50 min work / 60 min hour):
+      // Target cycle time should be LONGER (more time allowed per bag)
+      // Example: Normal 60-min target → 60 / 0.83 = 72 min during 10-min break hour
+      if (hourMultiplier > 0 && hourMultiplier < 1.0) {
+        result.targetSeconds = Math.round(baseTargetSeconds / hourMultiplier);
+      } else {
+        result.targetSeconds = baseTargetSeconds;
+      }
     }
 
     if (!bags || bags.length === 0) {
