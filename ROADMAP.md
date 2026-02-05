@@ -25,6 +25,7 @@ Transform Rogue Origin's operations into a data-driven, AI-assisted system that:
 | 1.1 | Memory Leak Fixes | ✅ Done | Jan 2026 |
 | 1.2 | Security Hardening | ✅ Done | Jan 2026 |
 | **3.1** | **Error Handling & Loading States** | ✅ Done | **Jan 13, 2026** |
+| **4.1** | **Scoreboard Declutter & No-Scroll** | ✅ Done | **Feb 4, 2026** |
 
 **Phase 3.1 Deliverables**:
 - ✅ Connection status bar with 3 states (connecting, connected, error)
@@ -40,16 +41,29 @@ Transform Rogue Origin's operations into a data-driven, AI-assisted system that:
 - `docs/sessions/2026-01-13-error-handling-implementation.md`
 - `docs/plans/2026-01-13-error-handling-design.md`
 
+**Phase 4.1 Deliverables**:
+- ✅ FAB menu system (8 buttons → 1 floating action button)
+- ✅ Responsive breakpoints (TV/Desktop/Mobile)
+- ✅ Vertical space optimization (1,250px → 700px)
+- ✅ OLED-optimized TV mode
+- ✅ Keyboard navigation and accessibility
+- ✅ Chart/Order Queue hidden by default
+- ✅ Compact header (strain + time merged)
+
+**Documentation**:
+- `docs/plans/2026-02-04-scoreboard-declutter-design.md`
+- `docs/plans/2026-02-04-scoreboard-declutter-implementation.md`
+- `docs/sessions/2026-02-04-scoreboard-declutter-testing.md`
+
 ### Remaining Phases
 
 | Phase | Description | Priority |
 |-------|-------------|----------|
-| 4.1 | Reduce scoreboard.html (414KB → <100KB) | Medium |
 | 5.1 | Accessibility fixes (WCAG AA) | High |
+| 6.3 | CSS consolidation execution | Medium |
 | 4.2-4.3 | Lazy loading optimizations | Medium |
-| 6.1-6.2 | Documentation & CSS cleanup | Low |
 
-**Next Up**: Phase 5.1 (Accessibility) or Phase 4.1 (Scoreboard optimization)
+**Next Up**: Phase 5.1 (Accessibility) or Phase 6.3 (CSS consolidation)
 
 ---
 
