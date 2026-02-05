@@ -3005,17 +3005,16 @@ body.dark-mode input:focus-visible {
    ======================================== */
 /* Optimized for 3840×2160 (4K UHD) - 75" TV */
 /* Apply proportional scaling to fit everything at 100% browser zoom */
-@media (min-width: 3000px) and (min-height: 1500px) {
-  body {
-    zoom: 0.67; /* Scale entire page to 67% - matches manual browser zoom */
-    transform-origin: top left;
+@media (min-width: 2560px) and (min-height: 1440px) {
+  html {
+    font-size: 62.5%; /* Base scale down */
   }
   
-  /* Alternatively, if zoom doesn't work well: */
-  /* body {
-    transform: scale(0.67);
+  body {
+    transform: scale(0.65);
     transform-origin: top left;
-    width: 149.25%; 
-    height: 149.25%;
-  } */
+    width: 153.85%; /* 100 / 0.65 */
+    height: 153.85%;
+    overflow-x: hidden;
+  }
 }
