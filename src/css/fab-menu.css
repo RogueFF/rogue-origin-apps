@@ -67,6 +67,7 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   padding: 8px 0;
   z-index: 999;
+  display: none; /* Hidden by default */
   opacity: 0;
   transform: translateY(20px);
   pointer-events: none;
@@ -75,6 +76,7 @@
 }
 
 .fab-menu.visible {
+  display: block !important; /* Show when open */
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
