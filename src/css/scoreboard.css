@@ -1733,8 +1733,8 @@
 /* Time Controls Container */
 .time-controls {
   position: fixed;
-  top: 130px;
-  right: 20px;
+  bottom: 170px;
+  left: 25px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1746,12 +1746,12 @@
   display: none !important;
 }
 
-/* Utility Buttons - Compact top-left toolbar (UPDATED v3) */
+/* Utility Buttons - Bottom-left stacked layout */
 .historical-view-btn,
 .order-queue-toggle-btn {
   position: fixed !important;
-  top: 85px !important;
-  bottom: auto !important;
+  left: 25px !important;
+  top: auto !important;
   right: auto !important;
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -1771,12 +1771,12 @@
 }
 
 .historical-view-btn {
-  left: 25px !important;
+  bottom: 130px !important;
   color: #93a5ba;
 }
 
 .order-queue-toggle-btn {
-  left: 140px !important;
+  bottom: 90px !important;
   color: #e4aa4f;
 }
 
@@ -1811,8 +1811,8 @@
 /* Responsive Breakpoints */
 @media (max-width: 640px) {
   .time-controls {
-    top: 90px;
-    right: 10px;
+    bottom: 150px;
+    left: 10px;
   }
 
   .start-day-btn,
@@ -1825,28 +1825,33 @@
   .historical-view-btn,
   .order-queue-toggle-btn,
   #morningReportBtn {
-    top: 65px;
     padding: 5px 8px;
     font-size: 10px;
     gap: 4px;
+    left: 10px !important;
   }
 
   .historical-view-btn {
-    left: 15px;
+    bottom: 110px !important;
   }
 
   .order-queue-toggle-btn {
-    left: 100px;
+    bottom: 75px !important;
   }
 
   #morningReportBtn {
-    left: 180px;
+    bottom: 185px;
   }
 
   .historical-view-btn i,
   .order-queue-toggle-btn i,
   #morningReportBtn i {
     font-size: 12px;
+  }
+  
+  .lang-toggle {
+    left: 10px;
+    bottom: 10px;
   }
 
   .order-queue-toggle-btn span {
@@ -2887,8 +2892,8 @@ body.iframe-embed .current-order-items {
 /* Morning Report Button - Compact toolbar */
 #morningReportBtn {
   position: fixed;
-  top: 85px;
-  left: 250px;
+  bottom: 210px;
+  left: 25px;
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: #7a9a86;

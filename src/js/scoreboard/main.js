@@ -173,13 +173,10 @@
       State.currentLang = lang;
     }
 
-    // Update language button states
-    var btnEn = DOM ? DOM.get('btnEn') : document.getElementById('btnEn');
-    var btnEs = DOM ? DOM.get('btnEs') : document.getElementById('btnEs');
-
-    if (btnEn && btnEs) {
-      btnEn.classList.toggle('active', lang === 'en');
-      btnEs.classList.toggle('active', lang === 'es');
+    // Update language toggle button text
+    var langToggleText = DOM ? DOM.get('langToggleText') : document.getElementById('langToggleText');
+    if (langToggleText) {
+      langToggleText.textContent = lang.toUpperCase();
     }
 
     // Re-render with new language
