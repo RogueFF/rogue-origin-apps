@@ -370,9 +370,14 @@
    * Allows other devices to see when shift is started elsewhere
    */
   function syncShiftStart() {
-    // Only sync if we don't have a local shift start yet
+    // Skip if we have a very recent local shift start (within last 10 seconds)
     // (avoids overwriting a click that's still saving)
-    if (State.manualShiftStart) return;
+    if (State.manualShiftStart) {
+      const tenSecondsAgo = Date.now() - 10000;
+      if (State.lastShiftStartUpdate && State.lastShiftStartUpdate > tenSecondsAgo) {
+        return;
+      }
+    }
 
     if (!window.ScoreboardAPI) return;
 

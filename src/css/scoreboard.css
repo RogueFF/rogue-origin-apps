@@ -436,6 +436,12 @@
 
     /* Complaints Button - styled like lang-btn but with warning color */
     .complaints-btn.lang-btn { border-color: rgba(196,92,74,0.5); color: var(--status-red); text-decoration: none; }
+    
+    /* TV Mode Button - styled like lang-btn */
+    #tvModeToggleBtn { border-color: rgba(147,165,186,0.5); color: rgba(255,255,255,0.6); }
+    #tvModeToggleBtn:hover { border-color: rgba(147,165,186,0.8); }
+    #tvModeToggleBtn.active { background: rgba(147,165,186,0.3); border-color: #93a5ba; color: #93a5ba; }
+    #tvModeToggleBtn i { font-size: 18px; }
     .complaints-btn.lang-btn:hover { background: var(--status-red); border-color: var(--status-red); color: #fff; }
     
     /* Help Modal - brand styling */
