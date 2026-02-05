@@ -1733,8 +1733,8 @@
 /* Time Controls Container */
 .time-controls {
   position: fixed;
-  top: 90px;
-  right: 20px;
+  top: 130px;
+  right: 30px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1771,12 +1771,12 @@
 }
 
 .historical-view-btn {
-  bottom: 90px !important;
+  bottom: 140px !important;
   color: #93a5ba;
 }
 
 .order-queue-toggle-btn {
-  bottom: 50px !important;
+  bottom: 90px !important;
   color: #e4aa4f;
 }
 
@@ -2892,7 +2892,7 @@ body.iframe-embed .current-order-items {
 /* Morning Report Button - Compact toolbar */
 #morningReportBtn {
   position: fixed;
-  bottom: 130px;
+  bottom: 190px;
   left: 25px;
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -2997,5 +2997,69 @@ body.dark-mode input:focus-visible {
   * {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* ========================================
+   4K / LARGE DISPLAY OPTIMIZATION
+   ======================================== */
+/* Optimized for 3840×2160 (4K UHD) and larger screens */
+@media (min-width: 2000px) {
+  /* Increase spacing for better readability on large displays */
+  .time-controls {
+    top: 140px;
+    right: 40px;
+  }
+  
+  .start-day-btn,
+  .started-badge {
+    font-size: 16px;
+    padding: 10px 20px;
+  }
+  
+  /* Bottom-left utility buttons - more spacing for 4K */
+  #morningReportBtn {
+    bottom: 220px;
+    left: 40px;
+    font-size: 13px;
+    padding: 8px 12px;
+  }
+  
+  .historical-view-btn {
+    bottom: 170px !important;
+    left: 40px !important;
+    font-size: 13px !important;
+    padding: 8px 12px !important;
+  }
+  
+  .order-queue-toggle-btn {
+    bottom: 120px !important;
+    left: 40px !important;
+    font-size: 13px !important;
+    padding: 8px 12px !important;
+  }
+  
+  .lang-toggle {
+    bottom: 40px;
+    left: 40px;
+  }
+  
+  .lang-btn {
+    font-size: 16px;
+    padding: 8px 16px;
+  }
+  
+  /* Time display positioning for 4K */
+  .time-display {
+    top: 30px;
+    right: 450px;
+  }
+  
+  .clock {
+    font-size: 48px;
+  }
+  
+  .date {
+    font-size: 18px;
   }
 }
