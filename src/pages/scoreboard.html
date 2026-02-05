@@ -42,12 +42,23 @@
   <script defer src="../js/scoreboard/debug.js?v=1"></script>
   <script defer src="../js/scoreboard/events.js?v=1"></script>
   <script defer src="../js/scoreboard/main.js?v=8"></script>
+  <!-- Critical inline styles to hide old buttons immediately -->
+  <style>
+    #morningReportBtn,
+    #historicalViewBtn,
+    #orderQueueToggleBtn,
+    .help-btn,
+    .lang-toggle .complaints-btn {
+      display: none !important;
+    }
+  </style>
+  
   <!-- Critical CSS: Loaded synchronously -->
   <link rel="stylesheet" href="../css/shared-base.css">
   
   <!-- Non-critical CSS: Deferred for faster initial render -->
-  <link rel="preload" href="../css/scoreboard.css?v=4" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link rel="stylesheet" href="../css/scoreboard.css?v=4"></noscript>
+  <link rel="preload" href="../css/scoreboard.css?v=5" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/scoreboard.css?v=5"></noscript>
 </head>
 <body class="idle timer-neutral">
   <a href="#main-panel" class="skip-link">Skip to main content</a>
@@ -136,19 +147,19 @@
   <!-- Date Picker Input (hidden) -->
   <input type="date" id="historicalDatePicker" class="date-picker-hidden" aria-label="Select historical date to view past production data">
   <!-- Morning Report Button -->
-  <button id="morningReportBtn">
+  <button id="morningReportBtn" style="display:none !important;">
     <i class="ph-duotone ph-chart-bar"></i>
     Morning Report / Reporte Matutino
   </button>
 
   <!-- Historical View Button -->
-  <button id="historicalViewBtn" class="historical-view-btn">
+  <button id="historicalViewBtn" class="historical-view-btn" style="display:none !important;">
     <i class="ph-duotone ph-clock-counter-clockwise"></i>
     Past Data
   </button>
 
   <!-- Order Queue Toggle Button -->
-  <button id="orderQueueToggleBtn" class="order-queue-toggle-btn" title="Toggle Order Queue / Alternar Cola de Pedidos">
+  <button id="orderQueueToggleBtn" class="order-queue-toggle-btn" title="Toggle Order Queue / Alternar Cola de Pedidos" style="display:none !important;">
     <i class="ph-duotone ph-stack"></i>
     <span id="orderQueueToggleText">Orders</span>
   </button>
@@ -160,7 +171,7 @@
       <i class="ph-duotone ph-warning-circle"></i>
     </a>
   </div>
-  <button class="help-btn">?</button>
+  <button class="help-btn" style="display:none !important;">?</button>
 
   <div class="help-modal" id="helpModal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
     <div class="help-content">
