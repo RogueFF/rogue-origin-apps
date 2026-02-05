@@ -2927,6 +2927,32 @@ body.iframe-embed .current-order-items {
   border-color: var(--ro-green);
 }
 
+/* ========================================
+   HIDE ORIGINAL BUTTONS (FAB Menu)
+   Progressive Enhancement - Task 3 of 15
+   ======================================== */
+
+/* Hide original buttons - replaced by FAB menu */
+#morningReportBtn,
+#historicalViewBtn,
+#orderQueueToggleBtn {
+  display: none !important;
+}
+
+/* Keep help button hidden - now in FAB menu */
+.help-btn {
+  display: none !important;
+}
+
+/* Keep EN/ES toggle visible (not in FAB menu) */
+.lang-toggle {
+  /* No changes - stays visible */
+}
+
+.lang-toggle .complaints-btn {
+  display: none !important; /* Now in FAB menu */
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .mr-cards {
