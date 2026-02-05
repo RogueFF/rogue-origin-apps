@@ -51,7 +51,8 @@
     if (window.ScoreboardAPI) {
       window.ScoreboardAPI.getShiftStart(
         function(response) {
-          if (response.success && response.shiftAdjustment) {
+          console.log('[ShiftStart] API response:', response);
+          if (response && response.shiftAdjustment && response.shiftAdjustment.manualStartTime) {
             const apiStartTime = new Date(response.shiftAdjustment.manualStartTime);
 
             // Use API time if it's from today and different from localStorage
@@ -62,6 +63,7 @@
               localStorage.setItem('manualShiftStart', apiStartTime.toISOString());
               localStorage.setItem('shiftStartDate', today);
               showStartedBadge(apiStartTime, State.shiftStartLocked);
+              console.log('[ShiftStart] Badge shown from API data:', apiStartTime);
             }
           }
         },
@@ -383,7 +385,7 @@
 
     window.ScoreboardAPI.getShiftStart(
       function(response) {
-        if (response.success && response.shiftAdjustment) {
+        if (response && response.shiftAdjustment && response.shiftAdjustment.manualStartTime) {
           const apiStartTime = new Date(response.shiftAdjustment.manualStartTime);
 
           // Check if this is for today
@@ -396,7 +398,7 @@
           localStorage.setItem('manualShiftStart', apiStartTime.toISOString());
           localStorage.setItem('shiftStartDate', today);
           showStartedBadge(apiStartTime, State.shiftStartLocked);
-          console.debug('Shift start synced from another device:', apiStartTime);
+          console.debug('Shift start synced from API:', apiStartTime);
         }
       },
       function(error) {
