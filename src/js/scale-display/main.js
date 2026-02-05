@@ -6,90 +6,141 @@
 (function() {
   'use strict';
 
-  // Module references
-  const Config = window.ScaleDisplayConfig;
-  const State = window.ScaleDisplayState;
-  const DOM = window.ScaleDisplayDOM;
-  const I18n = window.ScoreboardI18n;
-  const API = window.ScaleDisplayAPI;
-  const Scale = window.ScaleDisplayScale;
-  const Timer = window.ScaleDisplayTimer;
-  const Layout = window.ScaleDisplayLayout;
+  // Module references - reuse scoreboard modules
+  var Config = window.ScoreboardConfig;
+  var State = window.ScoreboardState;
+  var DOM = window.ScoreboardDOM;
+  var I18n = window.ScoreboardI18n;
+  var API = window.ScoreboardAPI;
+  var Scale = window.ScoreboardScale;
+  var Timer = window.ScoreboardTimer;
+  var Layout = window.ScaleDisplayLayout;
 
-  let isInitialized = false;
+  var isInitialized = false;
+  var versionCheckInterval = null;
+  var timerRenderInterval = null;
+
+  /**
+   * Show loading overlay
+   */
+  function showLoading() {
+    var overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+      overlay.style.display = '';
+    }
+  }
+
+  /**
+   * Hide loading overlay
+   */
+  function hideLoading() {
+    var overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+      overlay.style.display = 'none';
+    }
+  }
+
+  /**
+   * Handle scoreboard data loaded from API
+   */
+  function onDataLoaded(response) {
+    if (!response) return;
+
+    // Store data in shared state
+    if (response.scoreboard) {
+      State.data = response.scoreboard;
+    }
+    if (response.timer) {
+      State.timerData = response.timer;
+
+      // Update last bag timestamp
+      if (response.timer.lastBagTime) {
+        State.lastBagTimestamp = new Date(response.timer.lastBagTime);
+      }
+
+      // Apply manual shift start if present
+      if (response.timer.manualShiftStart) {
+        State.manualShiftStart = new Date(response.timer.manualShiftStart);
+      }
+    }
+
+    // Apply pause state if present
+    if (Timer.applyPauseState) {
+      Timer.applyPauseState(response.pause || null);
+    }
+
+    // Render timer with new data
+    Timer.renderTimer();
+  }
+
+  /**
+   * Check for data updates via smart polling
+   */
+  function checkForUpdates() {
+    API.checkVersion(
+      function(changed) {
+        if (changed) {
+          API.loadData(onDataLoaded, function(err) {
+            console.error('[Main] Data load error:', err);
+          });
+        }
+      },
+      function(err) {
+        console.error('[Main] Version check error:', err);
+      }
+    );
+  }
 
   /**
    * Initialize all modules in sequence
    */
-  async function initializeModules() {
+  function initializeModules() {
     console.log('[Main] Initializing modules...');
 
     try {
-      // 1. Initialize DOM (cache elements)
-      if (DOM && DOM.init) {
-        DOM.init();
-        console.log('[Main] DOM initialized');
-      } else {
-        console.error('[Main] DOM module not available');
-        throw new Error('DOM module failed to load');
-      }
+      // Verify required modules are loaded
+      if (!Config) throw new Error('Config module not loaded');
+      if (!State) throw new Error('State module not loaded');
+      if (!DOM) throw new Error('DOM module not loaded');
+      if (!API) throw new Error('API module not loaded');
+      if (!Scale) throw new Error('Scale module not loaded');
+      if (!Timer) throw new Error('Timer module not loaded');
 
-      // 2. Initialize State (load saved language)
-      if (State && State.init) {
-        State.init();
-        console.log('[Main] State initialized');
-      } else {
-        console.error('[Main] State module not available');
-        throw new Error('State module failed to load');
-      }
-
-      // 3. Initialize I18n (apply translations)
-      if (I18n && I18n.init) {
-        I18n.init();
-        console.log('[Main] I18n initialized');
-      } else {
-        console.error('[Main] I18n module not available');
-        throw new Error('I18n module failed to load');
-      }
-
-      // 4. Initialize Layout (make header clickable)
+      // 1. Initialize Layout (language toggle)
       if (Layout && Layout.init) {
         Layout.init();
         console.log('[Main] Layout initialized');
-      } else {
-        console.error('[Main] Layout module not available');
-        throw new Error('Layout module failed to load');
       }
 
-      // 5. Initialize Scale (set up UI)
-      if (Scale && Scale.init) {
-        Scale.init();
-        console.log('[Main] Scale initialized');
-      } else {
-        console.error('[Main] Scale module not available');
-        throw new Error('Scale module failed to load');
-      }
+      // 2. Initialize Scale (starts 1s polling for scale weight)
+      Scale.init();
+      console.log('[Main] Scale initialized');
 
-      // 6. Initialize Timer (start clock)
-      if (Timer && Timer.init) {
-        Timer.init();
-        console.log('[Main] Timer initialized');
-      } else {
-        console.error('[Main] Timer module not available');
-        throw new Error('Timer module failed to load');
-      }
+      // 3. Load initial data from API
+      API.loadData(
+        function(response) {
+          onDataLoaded(response);
+          console.log('[Main] Initial data loaded');
+        },
+        function(err) {
+          console.error('[Main] Initial data load failed:', err);
+        }
+      );
 
-      // 7. Start API polling
-      if (API && API.startPolling) {
-        API.startPolling();
-        console.log('[Main] API polling started');
-      } else {
-        console.error('[Main] API module not available');
-        throw new Error('API module failed to load');
-      }
+      // 4. Start smart polling for data updates
+      var versionInterval = (Config.intervals && Config.intervals.versionCheck) || 3000;
+      versionCheckInterval = State.registerInterval(checkForUpdates, versionInterval);
+      console.log('[Main] Smart polling started (' + versionInterval + 'ms)');
+
+      // 5. Start timer render loop (updates countdown every second)
+      var timerInterval = (Config.intervals && Config.intervals.timerRefresh) || 1000;
+      timerRenderInterval = State.registerInterval(function() {
+        Timer.renderTimer();
+      }, timerInterval);
+      console.log('[Main] Timer render loop started');
 
       // Hide loading after brief delay
-      setTimeout(() => {
+      setTimeout(function() {
         hideLoading();
         console.log('[Main] Initialization complete');
       }, 1000);
@@ -108,24 +159,6 @@
   }
 
   /**
-   * Show loading overlay
-   */
-  function showLoading() {
-    if (DOM.elements.loadingOverlay) {
-      DOM.elements.loadingOverlay.classList.remove('hidden');
-    }
-  }
-
-  /**
-   * Hide loading overlay
-   */
-  function hideLoading() {
-    if (DOM.elements.loadingOverlay) {
-      DOM.elements.loadingOverlay.classList.add('hidden');
-    }
-  }
-
-  /**
    * Handle page visibility change
    * Force refresh when page becomes visible
    */
@@ -138,10 +171,8 @@
         Scale.pollScale();
       }
 
-      // Check for version updates
-      if (API && API.checkVersion) {
-        API.checkVersion();
-      }
+      // Check for data updates
+      checkForUpdates();
     }
   }
 
@@ -154,7 +185,7 @@
       return;
     }
 
-    console.log('[Main] Starting Scale Display PWA...');
+    console.log('[Main] Starting Scale Display...');
     isInitialized = true;
 
     // Show loading overlay
@@ -177,9 +208,9 @@
 
   // Expose public API
   window.ScaleDisplayMain = {
-    init,
-    showLoading,
-    hideLoading
+    init: init,
+    showLoading: showLoading,
+    hideLoading: hideLoading
   };
 
 })();
