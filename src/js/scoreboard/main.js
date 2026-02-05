@@ -441,7 +441,7 @@
 
     if (!section) return;
 
-    // Default to hidden if not set
+    // Default to HIDDEN if not set (changed from true)
     var isVisible = localStorage.getItem('orderQueueVisible') === 'true';
 
     if (isVisible) {
