@@ -44,12 +44,22 @@
   <script defer src="../js/scoreboard/main.js?v=8"></script>
   <!-- Critical inline styles to hide old buttons immediately -->
   <style>
+    /* Hide old buttons */
     #morningReportBtn,
     #historicalViewBtn,
     #orderQueueToggleBtn,
     .help-btn,
     .lang-toggle .complaints-btn {
       display: none !important;
+    }
+    
+    /* Hide FAB menu by default (shown when .visible class added) */
+    .fab-menu {
+      display: none !important;
+    }
+    
+    .fab-menu.visible {
+      display: block !important;
     }
   </style>
   
