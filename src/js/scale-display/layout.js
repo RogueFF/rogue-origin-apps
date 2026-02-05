@@ -21,8 +21,8 @@
     updateLangButton();
 
     // Apply translations via ScoreboardI18n
-    if (window.ScoreboardI18n && window.ScoreboardI18n.setLanguage) {
-      window.ScoreboardI18n.setLanguage(currentLang);
+    if (window.ScoreboardI18n && window.ScoreboardI18n.setLang) {
+      window.ScoreboardI18n.setLang(currentLang);
     }
   }
 
@@ -39,8 +39,8 @@
     updateLangButton();
 
     // Apply translations via ScoreboardI18n
-    if (window.ScoreboardI18n && window.ScoreboardI18n.setLanguage) {
-      window.ScoreboardI18n.setLanguage(currentLang);
+    if (window.ScoreboardI18n && window.ScoreboardI18n.setLang) {
+      window.ScoreboardI18n.setLang(currentLang);
     }
   }
 
