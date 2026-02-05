@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Scale + Timer | Rogue Origin</title>
   <meta name="theme-color" content="#1a1a1a">
-  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="icon" type="image/png" href="/rogue-origin-apps/favicon.png">
@@ -97,7 +96,7 @@
       stroke-linecap: round;
       stroke-dasharray: 597;
       stroke-dashoffset: 597;
-      transition: stroke-dashoffset 0.5s ease, stroke 0.3s ease;
+      transition: stroke-dashoffset 0.15s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.2s ease;
     }
 
     .ring-center {
@@ -113,6 +112,7 @@
       font-weight: 600;
       line-height: 1;
       letter-spacing: 2px;
+      transition: color 0.2s ease;
     }
 
     .ring-label {
@@ -281,8 +281,11 @@
         const r = await fetch(`${API_URL}?action=scaleWeight`);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const result = await r.json();
-        renderScale(result.data || result);
-      } catch {
+        const data = result.data || result;
+        console.log('Scale data:', data); // Debug
+        renderScale(data);
+      } catch (err) {
+        console.error('Scale load error:', err);
         renderScale(null);
       }
     }
@@ -297,13 +300,17 @@
         if (dot) { dot.classList.remove('connected'); }
         if (wEl) { wEl.textContent = '\u2014'; wEl.className = 'ring-value scale-value stale'; }
         if (lbl) { lbl.textContent = 'of 5.0 kg'; }
-        if (ring) { ring.style.strokeDashoffset = RING_CIRCUMFERENCE; ring.setAttribute('class', 'ring-progress stale'); }
+        if (ring) {
+          ring.style.strokeDashoffset = RING_CIRCUMFERENCE;
+          ring.classList.remove('filling', 'near-target', 'at-target', 'stale');
+          ring.classList.add('stale');
+        }
         return;
       }
 
       const weight = data.weight || 0;
       const target = data.targetWeight || 5.0;
-      const pct = data.percentComplete || 0;
+      const pct = data.percentComplete || (target > 0 ? (weight / target) * 100 : 0);
       const stale = data.isStale !== false;
 
       let cls = 'filling';
@@ -311,13 +318,16 @@
       else if (pct >= 100) cls = 'at-target';
       else if (pct >= 90) cls = 'near-target';
 
+      console.log(`Scale render: weight=${weight.toFixed(2)}, pct=${pct.toFixed(1)}%, cls=${cls}, stale=${stale}`);
+
       if (dot) { dot.classList.toggle('connected', !stale); }
       if (wEl) { wEl.textContent = stale ? '\u2014' : weight.toFixed(2) + ' kg'; wEl.className = 'ring-value scale-value ' + cls; }
       if (lbl) { lbl.textContent = 'of ' + target.toFixed(1) + ' kg'; }
       if (ring) {
         const p = stale ? 0 : Math.min(1, pct / 100);
         ring.style.strokeDashoffset = RING_CIRCUMFERENCE * (1 - p);
-        ring.setAttribute('class', 'ring-progress ' + cls);
+        ring.classList.remove('filling', 'near-target', 'at-target', 'stale');
+        ring.classList.add(cls);
       }
     }
 
@@ -558,7 +568,7 @@
 
     loadScaleData();
     loadTimerData();
-    scaleInterval = setInterval(loadScaleData, 1000);
+    scaleInterval = setInterval(loadScaleData, 250); // Poll scale at 250ms for instant feel
     timerDataInterval = setInterval(checkTimerVersion, 3000);
     timerTickInterval = setInterval(updateTimerTick, 1000);
 
