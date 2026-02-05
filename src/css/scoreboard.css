@@ -3023,3 +3023,103 @@ body.dark-mode input:focus-visible {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ===================================
+   TV MODE (≥1920px)
+   Distance viewing optimization
+   =================================== */
+@media (min-width: 1920px) {
+  /* Hour cards - extra large for distance viewing */
+  .hour-card .actual-lbs {
+    font-size: 120px !important;
+    line-height: 1;
+  }
+
+  .hour-card .target-lbs {
+    font-size: 80px !important;
+  }
+
+  .hour-card .percentage-value {
+    font-size: 100px !important;
+  }
+
+  /* Daily progress - massive numbers */
+  .daily-actual {
+    font-size: 140px !important;
+  }
+
+  .daily-target {
+    font-size: 100px !important;
+  }
+
+  .daily-delta {
+    font-size: 80px !important;
+  }
+
+  .projection-value {
+    font-size: 80px !important;
+  }
+
+  /* Progress bar - thicker for visibility */
+  .progress-bar {
+    height: 40px !important;
+  }
+
+  /* Comparison pills - large values */
+  .comparison-value {
+    font-size: 60px !important;
+  }
+
+  .streak-value {
+    font-size: 60px !important;
+  }
+
+  /* Info bar - larger text */
+  .info-bar {
+    font-size: 36px !important;
+    height: 50px !important;
+  }
+
+  .info-section span {
+    font-size: 36px !important;
+  }
+
+  /* Timer panel - larger rings and text */
+  .timer-display svg,
+  .scale-display svg {
+    width: 280px !important;
+    height: 280px !important;
+  }
+
+  .timer-value {
+    font-size: 100px !important;
+  }
+
+  .scale-value {
+    font-size: 100px !important;
+  }
+
+  .timer-target,
+  .scale-label {
+    font-size: 40px !important;
+  }
+
+  /* OLED optimization - pure blacks */
+  body.timer-neutral,
+  body.idle {
+    background: #000000 !important;
+  }
+
+  .main-panel {
+    background: #000000;
+  }
+
+  /* High contrast status colors for OLED */
+  body.timer-green {
+    background: linear-gradient(145deg, #052e16 0%, #14532d 50%, #000000 100%) !important;
+  }
+
+  body.timer-red {
+    background: linear-gradient(145deg, #450a0a 0%, #7f1d1d 50%, #000000 100%) !important;
+  }
+}
