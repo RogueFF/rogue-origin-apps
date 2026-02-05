@@ -88,16 +88,7 @@
       scaleDisplay: 'Scale Display',
       scaleWeight: 'Scale',
       scaleConnected: 'Connected',
-      scaleDisconnected: 'Disconnected',
-
-      // FAB Menu
-      fabStartDay: 'Start Day',
-      fabPastData: 'Past Data',
-      fabComplaints: 'Complaints',
-      fabMorningReport: 'Morning Report',
-      fabOrderQueue: 'Order Queue',
-      fabChart: 'Hourly Chart',
-      fabHelp: 'Help'
+      scaleDisconnected: 'Disconnected'
     },
 
     es: {
@@ -182,16 +173,7 @@
       scaleDisplay: 'Pantalla de Báscula',
       scaleWeight: 'Peso',
       scaleConnected: 'Conectado',
-      scaleDisconnected: 'Desconectado',
-
-      // FAB Menu
-      fabStartDay: 'Iniciar Día',
-      fabPastData: 'Datos Pasados',
-      fabComplaints: 'Quejas',
-      fabMorningReport: 'Reporte Matutino',
-      fabOrderQueue: 'Cola de Pedidos',
-      fabChart: 'Gráfico Por Hora',
-      fabHelp: 'Ayuda'
+      scaleDisconnected: 'Desconectado'
     }
   };
 
