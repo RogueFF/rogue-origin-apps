@@ -16,8 +16,12 @@
   <!-- TV Mode Detection: Apply before render to prevent flash -->
   <script>
     (function() {
+      // Check URL parameter OR localStorage
       const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get('tv') === '1') {
+      const urlTvMode = urlParams.get('tv') === '1';
+      const storedTvMode = localStorage.getItem('tvMode') === 'true';
+      
+      if (urlTvMode || storedTvMode) {
         document.documentElement.classList.add('tv-mode');
       }
     })();
@@ -50,7 +54,7 @@
   <script defer src="../js/scoreboard/morning-report.js?v=3"></script>
   <script defer src="../js/scoreboard/scale.js?v=3"></script>
   <script defer src="../js/scoreboard/debug.js?v=1"></script>
-  <script defer src="../js/scoreboard/events.js?v=2"></script>
+  <script defer src="../js/scoreboard/events.js?v=3"></script>
   <script defer src="../js/scoreboard/main.js?v=9"></script>
   <!-- Critical CSS: Loaded synchronously -->
   <link rel="stylesheet" href="../css/shared-base.css">
@@ -138,6 +142,9 @@
   <div class="lang-toggle">
     <button class="lang-btn active" id="langToggleBtn">
       <span id="langToggleText">EN</span>
+    </button>
+    <button class="lang-btn" id="tvModeToggleBtn" title="TV Mode (65% scale for 4K displays)">
+      <i class="ph-duotone ph-television"></i>
     </button>
     <a href="https://docs.google.com/spreadsheets/d/1SyeueGF5NY3AXvUJYLTjuK01v3jCPIpbs9JQbrhrlHk/edit?gid=0#gid=0" target="_blank" class="lang-btn complaints-btn" title="Customer Complaints / Quejas de Clientes">
       <i class="ph-duotone ph-warning-circle"></i>
