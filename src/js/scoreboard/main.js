@@ -28,17 +28,25 @@
     hours = hours % 12 || 12;
     var timeStr = hours + ':' + String(minutes).padStart(2, '0') + ' ' + ampm;
 
+    // Update both old and compact clock elements (backward compatibility)
     var clockEl = DOM ? DOM.get('clock') : document.getElementById('clock');
+    var clockCompact = document.getElementById('clockCompact');
     if (clockEl) {
       clockEl.textContent = timeStr;
     }
+    if (clockCompact) {
+      clockCompact.textContent = timeStr;
+    }
 
-    // Update date
+    // Update both old and compact date elements
     var dateEl = DOM ? DOM.get('date') : document.getElementById('date');
-    if (dateEl) {
+    var dateCompact = document.getElementById('dateCompact');
+    if (dateEl || dateCompact) {
       var options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
       var lang = (State && State.currentLang) || 'en';
-      dateEl.textContent = now.toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US', options);
+      var dateStr = now.toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US', options);
+      if (dateEl) dateEl.textContent = dateStr;
+      if (dateCompact) dateCompact.textContent = dateStr;
     }
   }
 
@@ -230,6 +238,9 @@
 
     // Initialize order queue visibility from localStorage
     initOrderQueueVisibility();
+
+    // Initialize chart visibility from localStorage
+    initChartVisibility();
 
     // Initialize AVG/BEST visibility from localStorage
     initAvgBestVisibility();
@@ -430,7 +441,7 @@
 
     if (!section) return;
 
-    // Default to hidden if not set
+    // Default to HIDDEN if not set (changed from true)
     var isVisible = localStorage.getItem('orderQueueVisible') === 'true';
 
     if (isVisible) {
@@ -468,6 +479,25 @@
     }
 
     console.debug('AVG/BEST toggled:', newState ? 'hidden' : 'visible');
+  }
+
+  /**
+   * Initialize chart visibility from localStorage
+   */
+  function initChartVisibility() {
+    var chartContainer = document.querySelector('.chart-container');
+    if (!chartContainer) return;
+
+    // Default to HIDDEN if not set (changed from true)
+    var isVisible = localStorage.getItem('chartVisible') === 'true';
+
+    if (isVisible) {
+      chartContainer.classList.add('visible');
+    } else {
+      chartContainer.classList.remove('visible');
+    }
+
+    console.debug('Chart initialized:', isVisible ? 'visible' : 'hidden');
   }
 
   /**
