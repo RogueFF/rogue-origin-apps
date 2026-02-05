@@ -3005,16 +3005,37 @@ body.dark-mode input:focus-visible {
    ======================================== */
 /* Optimized for 3840×2160 (4K UHD) and larger screens */
 @media (min-width: 2000px) {
-  /* Increase spacing for better readability on large displays */
+  /* Scale content to fit 4K viewport at 100% zoom */
+  body {
+    font-size: 14px; /* Slightly smaller base */
+  }
+  
+  /* Reduce timer panel width for 4K */
+  .timer-panel {
+    width: 340px;
+    min-width: 340px;
+    padding: 25px;
+  }
+  
+  /* Adjust positioning for narrower timer panel */
+  .time-display {
+    top: 30px;
+    right: 380px; /* 340px panel + 40px margin */
+  }
+  
+  .help-btn {
+    right: 380px;
+  }
+  
   .time-controls {
     top: 140px;
-    right: 450px;
+    right: 380px; /* Align with clock */
   }
   
   .start-day-btn,
   .started-badge {
-    font-size: 16px;
-    padding: 10px 20px;
+    font-size: 15px;
+    padding: 10px 18px;
   }
   
   /* Bottom-left utility buttons - more spacing for 4K */
@@ -3045,21 +3066,62 @@ body.dark-mode input:focus-visible {
   }
   
   .lang-btn {
-    font-size: 16px;
+    font-size: 15px;
     padding: 8px 16px;
   }
   
-  /* Time display positioning for 4K */
-  .time-display {
-    top: 30px;
-    right: 450px;
-  }
-  
+  /* Scale down clock slightly */
   .clock {
-    font-size: 48px;
+    font-size: 44px;
   }
   
   .date {
-    font-size: 18px;
+    font-size: 17px;
+  }
+  
+  /* Scale main content for better fit */
+  .actual-lbs {
+    font-size: 80px; /* Down from default larger size */
+  }
+  
+  .daily-actual {
+    font-size: 52px; /* Down from 58px */
+  }
+  
+  .daily-target {
+    font-size: 36px; /* Down from 42px */
+  }
+  
+  .hour-card {
+    padding: 18px 35px;
+    min-width: 300px;
+  }
+  
+  .daily-progress {
+    min-width: 550px;
+    padding: 18px 45px;
+  }
+  
+  /* Timer display sizing for 4K */
+  .timer-display {
+    width: 200px;
+    height: 200px;
+  }
+  
+  .timer-value {
+    font-size: 48px;
+  }
+  
+  .timer-label {
+    font-size: 15px;
+  }
+  
+  .timer-target {
+    font-size: 14px;
+  }
+  
+  .manual-btn {
+    padding: 14px 28px;
+    font-size: 16px;
   }
 }
