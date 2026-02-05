@@ -22,6 +22,7 @@ import { handleKanbanD1 } from './handlers/kanban-d1.js';
 import { handleSop } from './handlers/sop.js';
 import { handleSopD1 } from './handlers/sop-d1.js';
 import { handleConsignmentD1 } from './handlers/consignment-d1.js';
+import { handlePoolD1 } from './handlers/pool-d1.js';
 import { handlePoolRequest } from './handlers/pool.js';
 import { corsHeaders, handleCors } from './lib/cors.js';
 import { jsonResponse, errorResponse } from './lib/response.js';
@@ -71,7 +72,8 @@ export default {
       } else if (path.startsWith('/api/consignment')) {
         response = await handleConsignmentD1(request, env, ctx);
       } else if (path.startsWith('/api/pool')) {
-        response = await handlePoolRequest(request, env, ctx);
+        // New pool inventory management API
+        response = await handlePoolD1(request, env, ctx);
       } else if (path === '/' || path === '/api') {
         // Health check
         response = jsonResponse({
