@@ -40,14 +40,14 @@
   <script defer src="../js/scoreboard/morning-report.js?v=3"></script>
   <script defer src="../js/scoreboard/scale.js?v=3"></script>
   <script defer src="../js/scoreboard/debug.js?v=1"></script>
-  <script defer src="../js/scoreboard/events.js?v=1"></script>
-  <script defer src="../js/scoreboard/main.js?v=8"></script>
+  <script defer src="../js/scoreboard/events.js?v=2"></script>
+  <script defer src="../js/scoreboard/main.js?v=9"></script>
   <!-- Critical CSS: Loaded synchronously -->
   <link rel="stylesheet" href="../css/shared-base.css">
   
   <!-- Non-critical CSS: Deferred for faster initial render -->
-  <link rel="preload" href="../css/scoreboard.css?v=4" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link rel="stylesheet" href="../css/scoreboard.css?v=4"></noscript>
+  <link rel="preload" href="../css/scoreboard.css?v=5" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/scoreboard.css?v=5"></noscript>
 </head>
 <body class="idle timer-neutral">
   <a href="#main-panel" class="skip-link">Skip to main content</a>
@@ -126,8 +126,9 @@
   </button>
 
   <div class="lang-toggle">
-    <button class="lang-btn active" id="btnEn">EN</button>
-    <button class="lang-btn" id="btnEs">ES</button>
+    <button class="lang-btn active" id="langToggleBtn">
+      <span id="langToggleText">EN</span>
+    </button>
     <a href="https://docs.google.com/spreadsheets/d/1SyeueGF5NY3AXvUJYLTjuK01v3jCPIpbs9JQbrhrlHk/edit?gid=0#gid=0" target="_blank" class="lang-btn complaints-btn" title="Customer Complaints / Quejas de Clientes">
       <i class="ph-duotone ph-warning-circle"></i>
     </a>
