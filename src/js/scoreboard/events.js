@@ -81,6 +81,35 @@
       });
     }
 
+    // TV Mode Toggle
+    const tvModeToggleBtn = el('tvModeToggleBtn');
+    if (tvModeToggleBtn) {
+      // Set initial state from localStorage
+      const isTvMode = localStorage.getItem('tvMode') === 'true';
+      if (isTvMode) {
+        tvModeToggleBtn.classList.add('active');
+      }
+      
+      tvModeToggleBtn.addEventListener('click', function() {
+        const currentMode = localStorage.getItem('tvMode') === 'true';
+        const newMode = !currentMode;
+        
+        // Save to localStorage
+        localStorage.setItem('tvMode', newMode.toString());
+        
+        // Toggle class on html element
+        if (newMode) {
+          document.documentElement.classList.add('tv-mode');
+          tvModeToggleBtn.classList.add('active');
+        } else {
+          document.documentElement.classList.remove('tv-mode');
+          tvModeToggleBtn.classList.remove('active');
+        }
+        
+        console.log('TV Mode:', newMode ? 'ON' : 'OFF');
+      });
+    }
+
     // Help Modal
     const helpBtn = document.querySelector('.help-btn');
     if (helpBtn) {
