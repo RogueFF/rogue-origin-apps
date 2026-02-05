@@ -203,12 +203,6 @@
       var _el = safeGetEl('targetRate'); if (_el) _el.textContent = targetRate > 0 ? targetRate.toFixed(2) : '—';
       var _el = safeGetEl('strainName'); if (_el) _el.textContent = strain || '—';
 
-      // Update compact strain display (Phase 3 compact header)
-      var strainNameCompact = safeGetEl('strainNameCompact');
-      if (strainNameCompact) {
-        strainNameCompact.textContent = strain || '—';
-      }
-
       // Performance deltas
       const avgEl = safeGetEl('avgPercentage');
       const bestEl = safeGetEl('bestHour');
