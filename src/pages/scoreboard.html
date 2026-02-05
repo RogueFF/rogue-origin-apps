@@ -79,6 +79,34 @@
     </button>
   </div>
 
+  <!-- Compact Header Bar (Strain + Time merged) -->
+  <div class="compact-header">
+    <div class="header-left">
+      <div class="strain-label-compact" id="strainLabelCompact">Line 1</div>
+      <div class="strain-name-compact" id="strainNameCompact">—</div>
+    </div>
+    <div class="header-right">
+      <div class="time-compact" id="clockCompact">--:--</div>
+      <div class="date-compact" id="dateCompact">Loading...</div>
+    </div>
+  </div>
+
+  <!-- Time Controls (positioned inside compact header) -->
+  <div class="time-controls-compact">
+    <!-- Start Day Button (appears until shift start is set) -->
+    <button id="startDayBtn" class="start-day-btn pulse-green" style="display:none;">
+      <i class="ph-duotone ph-play-circle"></i>
+      Start Day
+    </button>
+    <!-- Started Badge (appears after shift start is set) -->
+    <div id="startedBadge" class="started-badge" style="display:none;">
+      <i class="ph-duotone ph-clock"></i>
+      Started: <span id="startTimeDisplay">—</span>
+      <i id="badgeIcon" class="ph-duotone ph-pencil-simple"></i>
+    </div>
+  </div>
+
+  <!-- Old displays (hidden by CSS, kept for backward compatibility) -->
   <div class="strain-display">
     <div class="strain-label" id="strainLabel">Line 1 • Current Strain</div>
     <div class="strain-name" id="strainName">—</div>
@@ -90,7 +118,7 @@
     <div class="date" id="date">Loading...</div>
   </div>
 
-  <!-- Time Controls (positioned below time-display) -->
+  <!-- Old time controls (hidden by CSS) -->
   <div class="time-controls">
     <!-- Start Day Button (appears until shift start is set) -->
     <button id="startDayBtn" class="start-day-btn pulse-green" style="display:none;">
