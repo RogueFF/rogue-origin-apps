@@ -67,20 +67,23 @@
     </section>
 
     <!-- Timer Panel -->
-    <section id="timer-panel" class="panel">
+    <section class="panel">
       <h2 id="timerHeader" data-i18n="bagTimer">Bag Timer</h2>
-      <svg id="timerRing" viewBox="0 0 220 220" class="ring">
-        <circle cx="110" cy="110" r="95" fill="none" stroke="var(--ring-bg)" stroke-width="8"></circle>
-        <circle cx="110" cy="110" r="95" fill="none" stroke="var(--ring-stroke)" stroke-width="8"
-                stroke-dasharray="565.48" stroke-dashoffset="565.48"
-                transform="rotate(-90 110 110)" stroke-linecap="round"></circle>
-      </svg>
-      <div class="center">
-        <div id="bag-timer-value" class="value">00:00</div>
-        <div id="timerLabel" class="label" data-i18n="elapsed">Elapsed</div>
-      </div>
-      <div id="timer-target-info" class="target-info">
-        <span data-i18n="target">Target</span>: <span id="timer-target-time">12:00</span>
+      <div class="timer-panel neutral" id="timerPanel">
+        <div class="timer-display" id="timerDisplay">
+          <svg class="timer-ring" viewBox="0 0 220 220">
+            <circle class="timer-ring-bg" cx="110" cy="110" r="95"/>
+            <circle class="timer-ring-progress green" id="timerRing" cx="110" cy="110" r="95"
+                    stroke-dasharray="597" stroke-dashoffset="0"/>
+          </svg>
+          <div class="timer-center">
+            <div class="timer-value green" id="timerValue">--:--</div>
+            <div class="timer-label" id="timerLabel" data-i18n="remaining">remaining</div>
+          </div>
+        </div>
+        <div class="timer-target">
+          <span data-i18n="target">Target</span>: <span id="timer-target-time">--:--</span> • <span id="timer-trimmers">0</span> <span data-i18n="trimmers">trimmers</span>
+        </div>
       </div>
     </section>
   </main>
