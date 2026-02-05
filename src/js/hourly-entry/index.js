@@ -341,6 +341,7 @@ window.addEventListener('beforeunload', () => {
   if (bagTimerInterval) clearInterval(bagTimerInterval);
   if (bagTimerTickInterval) clearInterval(bagTimerTickInterval);
   if (scaleInterval) clearInterval(scaleInterval);
+  if (productionPollInterval) clearInterval(productionPollInterval);
 });
 
 // ===================
@@ -559,6 +560,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadCultivars();
   await loadDayData(currentDate);
   highlightCurrentTimeSlot();
+  
+  // Start smart polling for production data (syncs across computers)
+  productionPollInterval = setInterval(checkProductionVersion, 10000); // Check every 10 seconds
 });
 
 function initializeUI() {
@@ -3171,7 +3175,9 @@ let timerIsPaused = false;
 let timerPauseReason = '';
 let timerPauseStartTime = null; // When pause started (for freezing timer)
 let timerBagsToday = 0;
-let lastKnownVersion = null; // For smart polling
+let lastKnownVersion = null; // For smart polling (bag timer)
+let lastKnownProductionVersion = null; // For smart polling (production data)
+let productionPollInterval = null; // Production data polling interval
 let manualShiftStart = null; // Manual shift start time (synced from server)
 
 // SVG constants (matching scoreboard)
@@ -3579,6 +3585,39 @@ async function checkBagTimerVersion() {
     console.error('Version check failed, falling back to data load:', error);
     // On error, try full load as fallback
     loadBagTimerData();
+  }
+}
+
+/**
+ * Smart polling for production data: Check version endpoint first, only fetch if changed
+ * Syncs hourly entry data across multiple computers/browsers
+ */
+async function checkProductionVersion() {
+  try {
+    const response = await fetch(`${API_URL}?action=version`);
+    if (!response.ok) {
+      return; // Silently fail, don't disrupt UI
+    }
+
+    const result = await response.json();
+    const data = result.data || result;
+    const currentVersion = data.version;
+
+    // First check or version changed - reload production data
+    if (lastKnownProductionVersion === null || currentVersion !== lastKnownProductionVersion) {
+      lastKnownProductionVersion = currentVersion;
+      
+      // Only reload if we're viewing today (don't interrupt historical views)
+      const viewingDate = document.getElementById('date-picker')?.value;
+      const today = new Date().toISOString().split('T')[0];
+      
+      if (!viewingDate || viewingDate === today) {
+        await loadDayData(today);
+        console.log('Production data synced from another computer');
+      }
+    }
+  } catch (error) {
+    // Silent fail - don't spam console or disrupt user
   }
 }
 
