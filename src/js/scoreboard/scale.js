@@ -11,7 +11,7 @@
   var I18n = window.ScoreboardI18n;
 
   // Scale-specific config
-  var POLL_INTERVAL = 1000; // 1 second polling for scale
+  var POLL_INTERVAL = 250; // 250ms polling for instant scale feel
   var API_URL = (Config && Config.apiUrl) || 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
   var RING_CIRCUMFERENCE = 2 * Math.PI * 95; // ~597, matches timer ring
 
@@ -33,6 +33,7 @@
       .then(function(data) {
         // Handle wrapped or direct response
         var scaleData = data.data || data;
+        console.log('Scale data:', scaleData);
         if (State) {
           State.scaleData = scaleData;
         }
@@ -60,6 +61,7 @@
     var scaleLabel = DOM ? DOM.get('scaleWeightLabel') : document.getElementById('scaleWeightLabel');
     var scaleRing = DOM ? DOM.get('scaleRing') : document.getElementById('scaleRing');
     var scaleHeader = DOM ? DOM.get('scaleHeader') : document.getElementById('scaleHeader');
+    var scalePanel = document.getElementById('scale-panel');
 
     // Update header with i18n
     if (scaleHeader && I18n && I18n.t) {
@@ -81,15 +83,20 @@
       }
       if (scaleRing) {
         scaleRing.style.strokeDashoffset = RING_CIRCUMFERENCE; // Empty ring
-        scaleRing.setAttribute('class', 'scale-ring-progress stale');
+      }
+      if (scalePanel) {
+        scalePanel.classList.remove('filling', 'near-target', 'at-target', 'stale');
+        scalePanel.classList.add('stale');
       }
       return;
     }
 
     var weight = scaleData.weight || 0;
     var targetWeight = scaleData.targetWeight || 5.0;
-    var percent = scaleData.percentComplete || 0;
+    var percent = scaleData.percentComplete || (targetWeight > 0 ? (weight / targetWeight) * 100 : 0);
     var isStale = scaleData.isStale !== false; // Default to stale if not explicitly false
+
+    console.log('Scale render: weight=' + weight.toFixed(2) + ', pct=' + percent.toFixed(1) + '%, cls=' + (isStale ? 'stale' : (percent >= 100 ? 'at-target' : (percent >= 90 ? 'near-target' : 'filling'))) + ', stale=' + isStale);
 
     // Determine color state
     var colorClass = 'filling';
@@ -127,7 +134,12 @@
       var progress = isStale ? 0 : Math.min(1, percent / 100);
       var offset = RING_CIRCUMFERENCE * (1 - progress);
       scaleRing.style.strokeDashoffset = offset;
-      scaleRing.setAttribute('class', 'scale-ring-progress ' + colorClass);
+    }
+
+    // Update panel color class (CSS targets #scale-panel.filling, etc.)
+    if (scalePanel) {
+      scalePanel.classList.remove('filling', 'near-target', 'at-target', 'stale');
+      scalePanel.classList.add(colorClass);
     }
   }
 
