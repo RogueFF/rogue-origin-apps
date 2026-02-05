@@ -3007,20 +3007,99 @@ body.dark-mode input:focus-visible {
 }
 
 /* ========================================
-   TV MODE — scale down for 4K displays
+   TV MODE — compact layout for TV displays
    Toggled via TV button (saves to localStorage)
+   At small viewports (Windows DPI scaling), compacts
+   timer panel to fit without scrolling.
+   At large viewports (no DPI scaling), scales down.
    ======================================== */
-html.tv-mode body {
-  transform: scale(0.65);
-  transform-origin: top left;
-  width: 153.85%; /* 100 / 0.65 */
-  height: 153.85%;
-  overflow-x: hidden;
+
+/* TV mode: compact timer panel to fit viewport height */
+html.tv-mode .timer-panel {
+  justify-content: flex-start;
+  padding: 10px 15px;
+  gap: 6px;
+  overflow: hidden;
+}
+
+html.tv-mode .timer-display {
+  width: 160px;
+  height: 160px;
+}
+
+html.tv-mode .timer-value {
+  font-size: 36px;
+}
+
+html.tv-mode .timer-label {
+  font-size: 10px;
+}
+
+html.tv-mode .timer-target {
+  font-size: 11px;
+}
+
+html.tv-mode .scale-section .scale-display {
+  width: 160px;
+  height: 160px;
+}
+
+html.tv-mode .scale-value {
+  font-size: 36px;
+}
+
+html.tv-mode .scale-label {
+  font-size: 10px;
+}
+
+html.tv-mode .scale-header,
+html.tv-mode .timer-header {
+  font-size: 11px;
+  margin-bottom: 2px;
+}
+
+html.tv-mode .timer-btn-row {
+  gap: 6px;
+}
+
+html.tv-mode .manual-btn {
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+html.tv-mode .pause-btn {
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+html.tv-mode .timer-stats {
+  gap: 4px;
+}
+
+html.tv-mode .timer-stat {
+  padding: 3px 8px;
+}
+
+html.tv-mode .timer-stat-label {
+  font-size: 10px;
+}
+
+html.tv-mode .timer-stat-value {
+  font-size: 13px;
+}
+
+html.tv-mode .cycle-history {
+  display: none;
+}
+
+html.tv-mode .expand-hint {
+  display: none;
 }
 
 /* ===========================================
    4K / LARGE TV MODE (≥3000px)
    Optimized for 75" OLED viewed from 10+ feet
+   Only applies when TV mode (scale) is NOT active
    =========================================== */
 @media (min-width: 3000px) {
 
@@ -3266,5 +3345,20 @@ html.tv-mode body {
   /* --- Chart (if visible) --- */
   .chart-wrapper {
     height: 180px;
+  }
+}
+
+/* ========================================
+   TV MODE + LARGE VIEWPORT (≥3000px)
+   When TV mode is on AND viewport is huge (no DPI scaling),
+   use transform scale to shrink everything to fit
+   ======================================== */
+@media (min-width: 3000px) {
+  html.tv-mode body {
+    transform: scale(0.65);
+    transform-origin: top left;
+    width: 153.85%; /* 100 / 0.65 */
+    height: 153.85%;
+    overflow-x: hidden;
   }
 }
