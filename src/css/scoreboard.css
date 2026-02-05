@@ -3350,15 +3350,68 @@ html.tv-mode .expand-hint {
 
 /* ========================================
    TV MODE + LARGE VIEWPORT (≥3000px)
-   When TV mode is on AND viewport is huge (no DPI scaling),
-   use transform scale to shrink everything to fit
+   At 4K, responsive scaling already fills the screen.
+   Undo TV mode compaction so 4K rules take full effect.
    ======================================== */
 @media (min-width: 3000px) {
-  html.tv-mode body {
-    transform: scale(0.65);
-    transform-origin: top left;
-    width: 153.85%; /* 100 / 0.65 */
-    height: 153.85%;
-    overflow-x: hidden;
+  html.tv-mode .timer-panel {
+    justify-content: flex-start;
+    padding: 40px;
+    gap: 20px;
+    overflow: visible;
+  }
+  html.tv-mode .timer-display {
+    width: 320px;
+    height: 320px;
+  }
+  html.tv-mode .timer-value {
+    font-size: 80px;
+  }
+  html.tv-mode .timer-label {
+    font-size: 20px;
+  }
+  html.tv-mode .timer-target {
+    font-size: 20px;
+  }
+  html.tv-mode .scale-section .scale-display {
+    width: 320px;
+    height: 320px;
+  }
+  html.tv-mode .scale-value {
+    font-size: 80px;
+  }
+  html.tv-mode .scale-label {
+    font-size: 20px;
+  }
+  html.tv-mode .scale-header,
+  html.tv-mode .timer-header {
+    font-size: 16px;
+    margin-bottom: 15px;
+  }
+  html.tv-mode .timer-btn-row {
+    gap: 12px;
+  }
+  html.tv-mode .manual-btn {
+    padding: 16px 24px;
+    font-size: 18px;
+  }
+  html.tv-mode .pause-btn {
+    padding: 16px 20px;
+    font-size: 18px;
+  }
+  html.tv-mode .timer-stats {
+    gap: 8px;
+  }
+  html.tv-mode .timer-stat {
+    padding: 8px 12px;
+  }
+  html.tv-mode .timer-stat-label {
+    font-size: 14px;
+  }
+  html.tv-mode .timer-stat-value {
+    font-size: 18px;
+  }
+  html.tv-mode .cycle-history {
+    display: block;
   }
 }
