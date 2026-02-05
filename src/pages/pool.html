@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pool Inventory | Rogue Origin</title>
+  
+  <!-- Favicon -->
+  <link rel="icon" href="../assets/favicon.ico" type="image/x-icon">
+  
+  <!-- Phosphor Icons -->
+  <link rel="stylesheet" type="text/css" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/duotone/style.css">
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="../css/shared-base.css">
+  <link rel="stylesheet" href="../css/pool.css?v=1">
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-content">
+      <div class="header-left">
+        <a href="../index.html" class="logo-link">
+          <img src="../assets/logo.svg" alt="Rogue Origin" class="logo">
+        </a>
+        <h1 class="page-title">Pool Inventory</h1>
+      </div>
+      <div class="header-right">
+        <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
+          <i class="ph-duotone ph-moon"></i>
+        </button>
+        <button class="refresh-btn" id="refreshBtn" aria-label="Refresh data">
+          <i class="ph-duotone ph-arrows-clockwise"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Dashboard Summary -->
+    <section class="dashboard-summary">
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="ph-duotone ph-package"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value" id="totalBins">--</div>
+          <div class="stat-label">Active Bins</div>
+        </div>
+      </div>
+      
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="ph-duotone ph-scales"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value" id="totalWeight">--</div>
+          <div class="stat-label">Total Weight (lbs)</div>
+        </div>
+      </div>
+      
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="ph-duotone ph-arrow-circle-down"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value" id="totalIntakes">--</div>
+          <div class="stat-label">Total Intakes (lbs)</div>
+        </div>
+      </div>
+      
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="ph-duotone ph-arrow-circle-up"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value" id="totalDispenses">--</div>
+          <div class="stat-label">Total Dispenses (lbs)</div>
+        </div>
+      </div>
+      
+      <div class="stat-card alert" id="lowStockCard">
+        <div class="stat-icon">
+          <i class="ph-duotone ph-warning-circle"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value" id="lowStockCount">--</div>
+          <div class="stat-label">Low Stock Alerts</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Action Bar -->
+    <section class="action-bar">
+      <div class="action-bar-left">
+        <div class="filter-group">
+          <button class="filter-btn active" data-source="all">All</button>
+          <button class="filter-btn" data-source="in-house">In-House</button>
+          <button class="filter-btn" data-source="consignment">Consignment</button>
+        </div>
+        <div class="filter-group">
+          <button class="filter-btn active" data-type="all">All Types</button>
+          <button class="filter-btn" data-type="tops">Tops</button>
+          <button class="filter-btn" data-type="smalls">Smalls</button>
+        </div>
+        <input type="search" id="cultivarSearch" placeholder="Search cultivar..." class="search-input">
+      </div>
+      <div class="action-bar-right">
+        <button class="action-btn" id="recordIntakeBtn">
+          <i class="ph-duotone ph-arrow-circle-down"></i>
+          <span>Record Intake</span>
+        </button>
+        <button class="action-btn" id="recordDispenseBtn">
+          <i class="ph-duotone ph-arrow-circle-up"></i>
+          <span>Record Dispense</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Bin Grid -->
+    <section class="bin-grid" id="binGrid">
+      <!-- Bins populated dynamically -->
+    </section>
+
+    <!-- Recent Activity -->
+    <section class="recent-activity">
+      <h2 class="section-title">
+        <i class="ph-duotone ph-clock-clockwise"></i>
+        Recent Activity
+      </h2>
+      <div class="activity-list" id="activityList">
+        <!-- Activity items populated dynamically -->
+      </div>
+    </section>
+  </main>
+
+  <!-- Modals -->
+  
+  <!-- Record Intake Modal -->
+  <div class="modal" id="intakeModal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">
+          <i class="ph-duotone ph-arrow-circle-down"></i>
+          Record Intake
+        </h2>
+        <button class="modal-close" aria-label="Close">
+          <i class="ph-duotone ph-x"></i>
+        </button>
+      </div>
+      <form class="modal-body" id="intakeForm">
+        <div class="form-group">
+          <label for="intakeBin">Bin</label>
+          <select id="intakeBin" required>
+            <option value="">Select bin...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="intakeWeight">Weight (lbs)</label>
+          <input type="number" id="intakeWeight" step="0.01" min="0" required>
+        </div>
+        <div class="form-group">
+          <label for="intakeSource">Source Reference</label>
+          <input type="text" id="intakeSource" placeholder="Batch ID, intake ID, etc.">
+        </div>
+        <div class="form-group">
+          <label for="intakeNotes">Notes</label>
+          <textarea id="intakeNotes" rows="3" placeholder="Optional notes..."></textarea>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" data-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn-primary">Record Intake</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Record Dispense Modal -->
+  <div class="modal" id="dispenseModal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">
+          <i class="ph-duotone ph-arrow-circle-up"></i>
+          Record Dispense
+        </h2>
+        <button class="modal-close" aria-label="Close">
+          <i class="ph-duotone ph-x"></i>
+        </button>
+      </div>
+      <form class="modal-body" id="dispenseForm">
+        <div class="form-group">
+          <label for="dispenseBin">Bin</label>
+          <select id="dispenseBin" required>
+            <option value="">Select bin...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="dispenseWeight">Weight (lbs)</label>
+          <input type="number" id="dispenseWeight" step="0.01" min="0" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="packageSize">Package Size</label>
+            <select id="packageSize">
+              <option value="">None</option>
+              <option value="1oz">1 oz</option>
+              <option value="1/4lb">1/4 lb</option>
+              <option value="1/2lb">1/2 lb</option>
+              <option value="1lb">1 lb</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="packageCount">Count</label>
+            <input type="number" id="packageCount" min="1">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="dispenseSource">Order ID / Reference</label>
+          <input type="text" id="dispenseSource" placeholder="Optional order reference...">
+        </div>
+        <div class="form-group">
+          <label for="dispenseNotes">Notes</label>
+          <textarea id="dispenseNotes" rows="3" placeholder="Optional notes..."></textarea>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" data-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn-primary">Record Dispense</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Bin Detail Modal -->
+  <div class="modal modal-wide" id="binDetailModal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title" id="binDetailTitle">
+          <i class="ph-duotone ph-package"></i>
+          Bin Details
+        </h2>
+        <button class="modal-close" aria-label="Close">
+          <i class="ph-duotone ph-x"></i>
+        </button>
+      </div>
+      <div class="modal-body" id="binDetailContent">
+        <!-- Populated dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast notifications -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Scripts -->
+  <script type="module" src="../js/pool/main.js?v=1"></script>
+</body>
+</html>
