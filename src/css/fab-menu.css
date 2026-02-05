@@ -1,0 +1,164 @@
+/* FAB Menu System */
+.fab-button {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--ro-gold);
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #1a1f16;
+  font-size: 24px;
+  z-index: 1000;
+  transition: transform 0.3s var(--ease-smooth), opacity 0.3s ease, box-shadow 0.3s ease;
+}
+
+.fab-button:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+
+.fab-button:active {
+  transform: scale(0.95);
+}
+
+/* Pulse animation for idle state */
+.fab-button.idle {
+  animation: fabPulse 2s ease-in-out infinite;
+}
+
+@keyframes fabPulse {
+  0%, 100% {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+  50% {
+    box-shadow: 0 4px 20px rgba(228, 170, 79, 0.6);
+  }
+}
+
+/* Auto-fade for TV mode (≥1920px) */
+@media (min-width: 1920px) {
+  .fab-button.tv-fade {
+    opacity: 0.2;
+    transition: opacity 0.5s ease;
+  }
+
+  .fab-button.tv-fade:hover,
+  .fab-button.tv-fade:focus {
+    opacity: 1;
+  }
+}
+
+/* Menu panel */
+.fab-menu {
+  position: fixed;
+  bottom: 100px;
+  right: 30px;
+  width: 220px;
+  background: rgba(26, 31, 22, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  padding: 8px 0;
+  z-index: 999;
+  opacity: 0;
+  transform: translateY(20px);
+  pointer-events: none;
+  transition: opacity 0.3s var(--ease-smooth), transform 0.3s var(--ease-smooth);
+}
+
+.fab-menu.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* Mobile: full-width menu */
+@media (max-width: 767px) {
+  .fab-menu {
+    bottom: 90px;
+    right: 0;
+    left: 0;
+    width: 100%;
+    margin: 0 10px;
+    width: calc(100% - 20px);
+    border-radius: 12px 12px 0 0;
+  }
+
+  .fab-button {
+    bottom: 20px;
+    right: 20px;
+  }
+}
+
+/* Menu items */
+.fab-menu-item {
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  height: 48px;
+  color: #ffffff;
+  text-decoration: none;
+  font-size: 16px;
+  font-family: 'Outfit', sans-serif;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+}
+
+.fab-menu-item:hover {
+  background: rgba(228, 170, 79, 0.1);
+}
+
+.fab-menu-item i {
+  font-size: 20px;
+  margin-right: 12px;
+  color: var(--ro-gold);
+}
+
+/* Toggle switch for Order Queue item */
+.fab-menu-item .toggle-indicator {
+  margin-left: auto;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.fab-menu-item .toggle-indicator.on {
+  background: rgba(78, 222, 128, 0.2);
+  color: #4ade80;
+}
+
+/* Divider */
+.fab-menu-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 8px 0;
+}
+
+/* Backdrop (click outside to close) */
+.fab-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: transparent;
+  z-index: 998;
+  display: none;
+}
+
+.fab-backdrop.visible {
+  display: block;
+}
