@@ -81,6 +81,9 @@
       elements.fabHelp.addEventListener('click', handleHelp);
     }
 
+    // Keyboard navigation
+    document.addEventListener('keydown', handleKeyboard);
+
     // Start TV fade timer if on TV screen
     if (isTVMode()) {
       startTVFadeTimer();
@@ -130,7 +133,60 @@
     // Remove TV fade class
     elements.fabButton.classList.remove('tv-fade');
 
+    // Focus first visible menu item
+    setTimeout(function() {
+      var firstItem = elements.fabMenu.querySelector('.fab-menu-item:not([style*="display: none"])');
+      if (firstItem) {
+        firstItem.focus();
+      }
+    }, 100);
+
     console.log('[FAB Menu] Opened');
+  }
+
+  /**
+   * Handle keyboard navigation
+   */
+  function handleKeyboard(e) {
+    // Escape key closes menu
+    if (e.key === 'Escape' && state.isOpen) {
+      e.preventDefault();
+      closeMenu();
+      if (elements.fabButton) {
+        elements.fabButton.focus();
+      }
+      return;
+    }
+
+    // Enter/Space on FAB button toggles menu
+    if ((e.key === 'Enter' || e.key === ' ') && document.activeElement === elements.fabButton) {
+      e.preventDefault();
+      toggleMenu();
+      return;
+    }
+
+    // Arrow navigation within menu
+    if (state.isOpen && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+
+      var visibleItems = Array.from(elements.fabMenu.querySelectorAll('.fab-menu-item'))
+        .filter(function(item) {
+          return item.style.display !== 'none' && item.offsetParent !== null;
+        });
+
+      if (visibleItems.length === 0) return;
+
+      var currentIndex = visibleItems.indexOf(document.activeElement);
+      var nextIndex;
+
+      if (e.key === 'ArrowDown') {
+        nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % visibleItems.length;
+      } else {
+        nextIndex = currentIndex <= 0 ? visibleItems.length - 1 : currentIndex - 1;
+      }
+
+      visibleItems[nextIndex].focus();
+    }
   }
 
   /**
