@@ -242,8 +242,8 @@
     .projection-delta.neutral { background: rgba(228, 170, 79, 0.2); color: var(--gold-light); }
     
     /* Comparison Pills - brand styling */
-    .comparisons { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
-    .comparison-pill { display: flex; align-items: center; gap: 6px; padding: 8px 14px; background: rgba(0,0,0,0.4); border-radius: 20px; font-size: 16px; font-weight: 600; border: 1px solid rgba(228,170,79,0.15); }
+    .comparisons { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+    .comparison-pill { display: flex; align-items: center; gap: 6px; padding: 8px 16px; background: rgba(0,0,0,0.4); border-radius: 20px; font-size: 16px; font-weight: 600; border: 1px solid rgba(228,170,79,0.15); }
     .comparison-label { color: rgba(255,255,255,0.5); }
     .comparison-value { font-weight: 700; padding: 3px 8px; border-radius: 10px; }
     .comparison-value.positive { background: rgba(102, 137, 113, 0.3); color: var(--status-green); }
