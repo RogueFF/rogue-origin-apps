@@ -1733,8 +1733,8 @@
 /* Time Controls Container */
 .time-controls {
   position: fixed;
-  bottom: 170px;
-  left: 25px;
+  top: 90px;
+  right: 20px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1771,12 +1771,12 @@
 }
 
 .historical-view-btn {
-  bottom: 130px !important;
+  bottom: 90px !important;
   color: #93a5ba;
 }
 
 .order-queue-toggle-btn {
-  bottom: 90px !important;
+  bottom: 50px !important;
   color: #e4aa4f;
 }
 
@@ -1811,8 +1811,8 @@
 /* Responsive Breakpoints */
 @media (max-width: 640px) {
   .time-controls {
-    bottom: 150px;
-    left: 10px;
+    top: 80px;
+    right: 10px;
   }
 
   .start-day-btn,
@@ -1832,15 +1832,15 @@
   }
 
   .historical-view-btn {
-    bottom: 110px !important;
-  }
-
-  .order-queue-toggle-btn {
     bottom: 75px !important;
   }
 
+  .order-queue-toggle-btn {
+    bottom: 45px !important;
+  }
+
   #morningReportBtn {
-    bottom: 185px;
+    bottom: 105px;
   }
 
   .historical-view-btn i,
@@ -2892,7 +2892,7 @@ body.iframe-embed .current-order-items {
 /* Morning Report Button - Compact toolbar */
 #morningReportBtn {
   position: fixed;
-  bottom: 210px;
+  bottom: 130px;
   left: 25px;
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.15);
