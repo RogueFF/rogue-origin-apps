@@ -85,6 +85,7 @@
       fullOrder: 'Full Order Context',
 
       // Scale
+      scaleDisplay: 'Scale Display',
       scaleWeight: 'Scale',
       scaleConnected: 'Connected',
       scaleDisconnected: 'Disconnected'
@@ -169,6 +170,7 @@
       fullOrder: 'Contexto Completo del Pedido',
 
       // Scale
+      scaleDisplay: 'Pantalla de Báscula',
       scaleWeight: 'Peso',
       scaleConnected: 'Conectado',
       scaleDisconnected: 'Desconectado'
