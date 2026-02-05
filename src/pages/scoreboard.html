@@ -496,5 +496,49 @@
       });
     })();
   </script>
+
+  <!-- FAB Menu System -->
+  <button class="fab-button idle" id="fabButton" aria-label="Open menu" aria-expanded="false">
+    <i class="ph-duotone ph-gear"></i>
+  </button>
+
+  <div class="fab-backdrop" id="fabBackdrop"></div>
+
+  <div class="fab-menu" id="fabMenu" role="menu">
+    <button class="fab-menu-item" id="fabStartDay" role="menuitem" style="display:none;">
+      <i class="ph-duotone ph-play-circle"></i>
+      <span data-i18n="fabStartDay">Start Day</span>
+    </button>
+
+    <button class="fab-menu-item" id="fabPastData" role="menuitem">
+      <i class="ph-duotone ph-clock-counter-clockwise"></i>
+      <span data-i18n="fabPastData">Past Data</span>
+    </button>
+
+    <a class="fab-menu-item" href="https://docs.google.com/spreadsheets/d/1SyeueGF5NY3AXvUJYLTjuK01v3jCPIpbs9JQbrhrlHk/edit?gid=0#gid=0" target="_blank" role="menuitem">
+      <i class="ph-duotone ph-warning-circle"></i>
+      <span data-i18n="fabComplaints">Complaints</span>
+    </a>
+
+    <div class="fab-menu-divider"></div>
+
+    <button class="fab-menu-item" id="fabMorningReport" role="menuitem">
+      <i class="ph-duotone ph-chart-bar"></i>
+      <span data-i18n="fabMorningReport">Morning Report</span>
+    </button>
+
+    <button class="fab-menu-item" id="fabOrderQueue" role="menuitem">
+      <i class="ph-duotone ph-stack"></i>
+      <span data-i18n="fabOrderQueue">Order Queue</span>
+      <span class="toggle-indicator" id="orderQueueIndicator">OFF</span>
+    </button>
+
+    <button class="fab-menu-item" id="fabHelp" role="menuitem">
+      <i class="ph-duotone ph-question"></i>
+      <span data-i18n="fabHelp">Help</span>
+    </button>
+  </div>
+
+  <script src="../js/scoreboard/fab-menu.js?v=1"></script>
 </body>
 </html>
