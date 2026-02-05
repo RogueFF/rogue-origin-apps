@@ -42,12 +42,33 @@
   <script defer src="../js/scoreboard/debug.js?v=1"></script>
   <script defer src="../js/scoreboard/events.js?v=1"></script>
   <script defer src="../js/scoreboard/main.js?v=8"></script>
+  <!-- Critical inline styles to hide old buttons immediately -->
+  <style>
+    /* Hide old buttons */
+    #morningReportBtn,
+    #historicalViewBtn,
+    #orderQueueToggleBtn,
+    .help-btn,
+    .lang-toggle .complaints-btn {
+      display: none !important;
+    }
+    
+    /* Hide FAB menu by default (shown when .visible class added) */
+    .fab-menu {
+      display: none !important;
+    }
+    
+    .fab-menu.visible {
+      display: block !important;
+    }
+  </style>
+  
   <!-- Critical CSS: Loaded synchronously -->
   <link rel="stylesheet" href="../css/shared-base.css">
   
   <!-- Non-critical CSS: Deferred for faster initial render -->
-  <link rel="preload" href="../css/scoreboard.css?v=4" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link rel="stylesheet" href="../css/scoreboard.css?v=4"></noscript>
+  <link rel="preload" href="../css/scoreboard.css?v=5" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/scoreboard.css?v=5"></noscript>
 </head>
 <body class="idle timer-neutral">
   <a href="#main-panel" class="skip-link">Skip to main content</a>
@@ -79,6 +100,34 @@
     </button>
   </div>
 
+  <!-- Compact Header Bar (Strain + Time merged) -->
+  <div class="compact-header">
+    <div class="header-left">
+      <div class="strain-label-compact" id="strainLabelCompact">Line 1</div>
+      <div class="strain-name-compact" id="strainNameCompact">—</div>
+    </div>
+    <div class="header-right">
+      <div class="time-compact" id="clockCompact">--:--</div>
+      <div class="date-compact" id="dateCompact">Loading...</div>
+    </div>
+  </div>
+
+  <!-- Time Controls (positioned inside compact header) -->
+  <div class="time-controls-compact">
+    <!-- Start Day Button (appears until shift start is set) -->
+    <button id="startDayBtn" class="start-day-btn pulse-green" style="display:none;">
+      <i class="ph-duotone ph-play-circle"></i>
+      Start Day
+    </button>
+    <!-- Started Badge (appears after shift start is set) -->
+    <div id="startedBadge" class="started-badge" style="display:none;">
+      <i class="ph-duotone ph-clock"></i>
+      Started: <span id="startTimeDisplay">—</span>
+      <i id="badgeIcon" class="ph-duotone ph-pencil-simple"></i>
+    </div>
+  </div>
+
+  <!-- Old displays (hidden by CSS, kept for backward compatibility) -->
   <div class="strain-display">
     <div class="strain-label" id="strainLabel">Line 1 • Current Strain</div>
     <div class="strain-name" id="strainName">—</div>
@@ -90,7 +139,7 @@
     <div class="date" id="date">Loading...</div>
   </div>
 
-  <!-- Time Controls (positioned below time-display) -->
+  <!-- Old time controls (hidden by CSS) -->
   <div class="time-controls">
     <!-- Start Day Button (appears until shift start is set) -->
     <button id="startDayBtn" class="start-day-btn pulse-green" style="display:none;">
@@ -108,19 +157,19 @@
   <!-- Date Picker Input (hidden) -->
   <input type="date" id="historicalDatePicker" class="date-picker-hidden" aria-label="Select historical date to view past production data">
   <!-- Morning Report Button -->
-  <button id="morningReportBtn">
+  <button id="morningReportBtn" style="display:none !important;">
     <i class="ph-duotone ph-chart-bar"></i>
     Morning Report / Reporte Matutino
   </button>
 
   <!-- Historical View Button -->
-  <button id="historicalViewBtn" class="historical-view-btn">
+  <button id="historicalViewBtn" class="historical-view-btn" style="display:none !important;">
     <i class="ph-duotone ph-clock-counter-clockwise"></i>
     Past Data
   </button>
 
   <!-- Order Queue Toggle Button -->
-  <button id="orderQueueToggleBtn" class="order-queue-toggle-btn" title="Toggle Order Queue / Alternar Cola de Pedidos">
+  <button id="orderQueueToggleBtn" class="order-queue-toggle-btn" title="Toggle Order Queue / Alternar Cola de Pedidos" style="display:none !important;">
     <i class="ph-duotone ph-stack"></i>
     <span id="orderQueueToggleText">Orders</span>
   </button>
@@ -132,7 +181,7 @@
       <i class="ph-duotone ph-warning-circle"></i>
     </a>
   </div>
-  <button class="help-btn">?</button>
+  <button class="help-btn" style="display:none !important;">?</button>
 
   <div class="help-modal" id="helpModal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
     <div class="help-content">
@@ -496,5 +545,55 @@
       });
     })();
   </script>
+
+  <!-- FAB Menu System -->
+  <button class="fab-button idle" id="fabButton" aria-label="Open menu" aria-expanded="false">
+    <i class="ph-duotone ph-gear"></i>
+  </button>
+
+  <div class="fab-backdrop" id="fabBackdrop"></div>
+
+  <div class="fab-menu" id="fabMenu" role="menu">
+    <button class="fab-menu-item" id="fabStartDay" role="menuitem" style="display:none;">
+      <i class="ph-duotone ph-play-circle"></i>
+      <span data-i18n="fabStartDay">Start Day</span>
+    </button>
+
+    <button class="fab-menu-item" id="fabPastData" role="menuitem">
+      <i class="ph-duotone ph-clock-counter-clockwise"></i>
+      <span data-i18n="fabPastData">Past Data</span>
+    </button>
+
+    <a class="fab-menu-item" href="https://docs.google.com/spreadsheets/d/1SyeueGF5NY3AXvUJYLTjuK01v3jCPIpbs9JQbrhrlHk/edit?gid=0#gid=0" target="_blank" role="menuitem">
+      <i class="ph-duotone ph-warning-circle"></i>
+      <span data-i18n="fabComplaints">Complaints</span>
+    </a>
+
+    <div class="fab-menu-divider"></div>
+
+    <button class="fab-menu-item" id="fabMorningReport" role="menuitem">
+      <i class="ph-duotone ph-chart-bar"></i>
+      <span data-i18n="fabMorningReport">Morning Report</span>
+    </button>
+
+    <button class="fab-menu-item" id="fabOrderQueue" role="menuitem">
+      <i class="ph-duotone ph-stack"></i>
+      <span data-i18n="fabOrderQueue">Order Queue</span>
+      <span class="toggle-indicator" id="orderQueueIndicator">OFF</span>
+    </button>
+
+    <button class="fab-menu-item" id="fabChart" role="menuitem">
+      <i class="ph-duotone ph-chart-line"></i>
+      <span data-i18n="fabChart">Hourly Chart</span>
+      <span class="toggle-indicator" id="chartIndicator">OFF</span>
+    </button>
+
+    <button class="fab-menu-item" id="fabHelp" role="menuitem">
+      <i class="ph-duotone ph-question"></i>
+      <span data-i18n="fabHelp">Help</span>
+    </button>
+  </div>
+
+  <script src="../js/scoreboard/fab-menu.js?v=1"></script>
 </body>
 </html>
