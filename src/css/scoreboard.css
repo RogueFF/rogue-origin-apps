@@ -1734,7 +1734,7 @@
 .time-controls {
   position: fixed;
   top: 130px;
-  right: 30px;
+  right: 420px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1812,7 +1812,7 @@
 @media (max-width: 640px) {
   .time-controls {
     top: 80px;
-    right: 10px;
+    right: 10px; /* On mobile, timer panel is at bottom so this is fine */
   }
 
   .start-day-btn,
@@ -3008,7 +3008,7 @@ body.dark-mode input:focus-visible {
   /* Increase spacing for better readability on large displays */
   .time-controls {
     top: 140px;
-    right: 40px;
+    right: 450px;
   }
   
   .start-day-btn,
