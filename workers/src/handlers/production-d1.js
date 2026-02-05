@@ -329,7 +329,11 @@ async function getScoreboardData(env, date = null) {
   });
 
   // Build rows array in chronological order
-  const rows = ALL_TIME_SLOTS
+  // Include ALL time slots from the database (handles dynamic first slots like "7:04 AM – 8:00 AM")
+  const allSlotsFromDB = todayRows.map(r => (r.time_slot || '').replace(/[-–—]/g, '–'));
+  const uniqueSlots = [...new Set([...ALL_TIME_SLOTS.map(s => s.replace(/[-–—]/g, '–')), ...allSlotsFromDB])];
+  
+  const rows = uniqueSlots
     .map(slot => rowsBySlot[slot])
     .filter(r => r !== undefined);
 
