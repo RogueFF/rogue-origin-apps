@@ -24,8 +24,10 @@
     fabPastData: null,
     fabMorningReport: null,
     fabOrderQueue: null,
+    fabChart: null,
     fabHelp: null,
-    orderQueueIndicator: null
+    orderQueueIndicator: null,
+    chartIndicator: null
   };
 
   /**
@@ -40,8 +42,10 @@
     elements.fabPastData = document.getElementById('fabPastData');
     elements.fabMorningReport = document.getElementById('fabMorningReport');
     elements.fabOrderQueue = document.getElementById('fabOrderQueue');
+    elements.fabChart = document.getElementById('fabChart');
     elements.fabHelp = document.getElementById('fabHelp');
     elements.orderQueueIndicator = document.getElementById('orderQueueIndicator');
+    elements.chartIndicator = document.getElementById('chartIndicator');
 
     // Attach event listeners
     if (elements.fabButton) {
@@ -69,6 +73,10 @@
       elements.fabOrderQueue.addEventListener('click', handleOrderQueue);
     }
 
+    if (elements.fabChart) {
+      elements.fabChart.addEventListener('click', handleChartToggle);
+    }
+
     if (elements.fabHelp) {
       elements.fabHelp.addEventListener('click', handleHelp);
     }
@@ -83,6 +91,9 @@
 
     // Update order queue indicator on init
     updateOrderQueueIndicator();
+
+    // Update chart indicator on init
+    updateChartIndicator();
 
     // Check if Start Day should be visible
     checkStartDayVisibility();
@@ -215,6 +226,41 @@
   }
 
   /**
+   * Handle Hourly Chart toggle
+   */
+  function handleChartToggle() {
+    closeMenu();
+
+    // Toggle chart visibility
+    var chartContainer = document.querySelector('.chart-container');
+    if (!chartContainer) return;
+
+    var isVisible = chartContainer.classList.contains('visible');
+
+    if (isVisible) {
+      chartContainer.classList.remove('visible');
+      localStorage.setItem('chartVisible', 'false');
+    } else {
+      chartContainer.classList.add('visible');
+      localStorage.setItem('chartVisible', 'true');
+    }
+
+    // Update indicator after toggle
+    setTimeout(updateChartIndicator, 100);
+  }
+
+  /**
+   * Update chart indicator (ON/OFF)
+   */
+  function updateChartIndicator() {
+    if (!elements.chartIndicator) return;
+
+    var isVisible = localStorage.getItem('chartVisible') === 'true';
+    elements.chartIndicator.textContent = isVisible ? 'ON' : 'OFF';
+    elements.chartIndicator.classList.toggle('on', isVisible);
+  }
+
+  /**
    * Check if Start Day button should be visible
    */
   function checkStartDayVisibility() {
@@ -294,6 +340,7 @@
     openMenu: openMenu,
     closeMenu: closeMenu,
     updateOrderQueueIndicator: updateOrderQueueIndicator,
+    updateChartIndicator: updateChartIndicator,
     checkStartDayVisibility: checkStartDayVisibility
   };
 
