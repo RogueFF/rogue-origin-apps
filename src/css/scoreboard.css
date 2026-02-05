@@ -162,20 +162,20 @@
     .status-icon { font-size: 32px; display: flex; align-items: center; justify-content: center; }
     
     /* Hour Cards - refined with brand accents */
-    .hour-cards { display: flex; justify-content: center; gap: 25px; flex-wrap: wrap; }
-    .hour-card { background: rgba(0,0,0,0.3); border-radius: 16px; padding: 14px 32px; min-width: 280px; border: 1px solid rgba(228,170,79,0.1); }
+    .hour-cards { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+    .hour-card { background: rgba(0,0,0,0.3); border-radius: 16px; padding: 16px 20px; min-width: 280px; border: 1px solid rgba(228,170,79,0.1); margin: 0 8px; }
     .hour-card.last-hour { border: 2px solid rgba(228,170,79,0.25); }
     .hour-card.current-hour { border: 2px solid rgba(102, 137, 113, 0.5); background: rgba(102, 137, 113, 0.12); animation: currentHourPulse 2s ease-in-out infinite; }
-    .hour-card-header { font-size: 11px; color: rgba(228,170,79,0.8); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 5px; }
+    .hour-card-header { font-size: 11px; color: rgba(228,170,79,0.8); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; }
     .hour-card.current-hour .hour-card-header { color: var(--green-bright); }
-    .hour-card-timeslot { font-size: 13px; color: rgba(255,255,255,0.35); margin-bottom: 6px; }
-    .lbs-row { display: flex; align-items: baseline; justify-content: center; gap: 8px; margin-bottom: 3px; }
+    .hour-card-timeslot { font-size: 13px; color: rgba(255,255,255,0.35); margin-bottom: 12px; }
+    .lbs-row { display: flex; align-items: baseline; justify-content: center; gap: 8px; margin: 16px 0; }
     .actual-lbs { font-size: 56px; font-weight: 800; line-height: 1; color: #ffffff; text-shadow: 0 2px 12px rgba(0,0,0,0.3); }
     .hour-card.current-hour .actual-lbs { color: var(--green-bright); font-size: 50px; }
     .separator { font-size: 32px; font-weight: 300; color: rgba(255,255,255,0.35); }
     .target-lbs { font-size: 32px; font-weight: 600; color: rgba(255,255,255,0.45); }
     .lbs-unit { font-size: 16px; font-weight: 600; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 2px; }
-    .percentage-display { margin: 4px 0; }
+    .percentage-display { margin-top: 12px; }
     .percentage-value { font-size: 36px; font-weight: 900; }
     .hour-card.current-hour .percentage-value { color: var(--green-bright); }
     .percentage-label { font-size: 13px; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 1px; }
