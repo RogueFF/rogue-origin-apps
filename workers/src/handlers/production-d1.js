@@ -7,7 +7,8 @@ import { query, queryOne, insert, execute } from '../lib/db.js';
 import { readSheet, appendSheet, getSheetNames } from '../lib/sheets.js';
 import { successResponse, errorResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
 import { createError, formatError } from '../lib/errors.js';
-import { sanitizeForSheets, validateDate } from '../lib/validate.js';
+import { validateDate } from '../lib/validate.js';
+import { requireAuth } from '../lib/auth.js';
 
 const AI_MODEL = 'claude-sonnet-4-20250514';
 const TIMEZONE = 'America/Los_Angeles';
@@ -1551,7 +1552,7 @@ async function logBag(body, env) {
 }
 
 async function logPause(body, env) {
-  const reason = sanitizeForSheets(body.reason || 'No reason provided');
+  const reason = (body.reason || 'No reason provided');
   const now = new Date();
   const pauseId = now.getTime().toString();
 
@@ -1678,23 +1679,23 @@ async function inventoryWebhook(body, env, request) {
   // 1. Write to D1
   try {
     await insert(env.DB, 'inventory_adjustments', {
-      timestamp: sanitizeForSheets(timestamp),
-      sku: sanitizeForSheets(sku),
-      product_name: sanitizeForSheets(productName),
-      variant_title: sanitizeForSheets(variantTitle),
-      strain_name: sanitizeForSheets(strainName),
-      size: sanitizeForSheets(size),
+      timestamp: timestamp,
+      sku: sku,
+      product_name: productName,
+      variant_title: variantTitle,
+      strain_name: strainName,
+      size: size,
       quantity_adjusted: quantityAdjusted,
       new_total_available: newTotalAvailable,
       previous_available: previousAvailable,
-      location: sanitizeForSheets(location),
-      product_type: sanitizeForSheets(productType),
-      barcode: sanitizeForSheets(barcode),
+      location: location,
+      product_type: productType,
+      barcode: barcode,
       price,
-      flow_run_id: sanitizeForSheets(flowRunId),
-      event_type: sanitizeForSheets(eventType),
-      adjustment_source: sanitizeForSheets(adjustmentSource),
-      normalized_strain: sanitizeForSheets(normalizedStrain),
+      flow_run_id: flowRunId,
+      event_type: eventType,
+      adjustment_source: adjustmentSource,
+      normalized_strain: normalizedStrain,
     });
     d1Success = true;
   } catch (err) {
@@ -2055,9 +2056,9 @@ async function addProduction(body, env) {
   }
 
   // Sanitize text fields
-  const safeCultivar1 = sanitizeForSheets(cultivar1 || '').substring(0, 100);
-  const safeCultivar2 = sanitizeForSheets(cultivar2 || '').substring(0, 100);
-  const safeQc = sanitizeForSheets(qc || '').substring(0, 500);
+  const safeCultivar1 = (cultivar1 || '').substring(0, 100);
+  const safeCultivar2 = (cultivar2 || '').substring(0, 100);
+  const safeQc = (qc || '').substring(0, 500);
 
   // Validate effective trimmers (optional, REAL values)
   const effTrim1 = (effectiveTrimmers1 !== undefined && effectiveTrimmers1 !== null)
@@ -2416,8 +2417,8 @@ async function migrateFromSheets(env) {
         start_time: `${row[1]}T${row[2] || '00:00:00'}`,
         end_time: row[3] ? `${row[1]}T${row[3]}` : null,
         duration_min: parseFloat(row[4]) || null,
-        reason: sanitizeForSheets(row[5] || '').substring(0, 200),
-        created_by: sanitizeForSheets(row[6] || '').substring(0, 50),
+        reason: (row[5] || '').substring(0, 200),
+        created_by: (row[6] || '').substring(0, 50),
       });
       pausesMigrated++;
     }
@@ -2590,8 +2591,10 @@ export async function handleProductionD1(request, env, ctx) {
       case 'webhook':
         return await inventoryWebhook(body, env, request);
       case 'chat':
+        requireAuth(request, body, env, 'production-chat');
         return await chat(body, env);
       case 'tts':
+        requireAuth(request, body, env, 'production-tts');
         return await tts(body, env);
       case 'addProduction':
         return await addProduction(body, env);

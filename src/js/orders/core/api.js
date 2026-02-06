@@ -119,7 +119,10 @@ async function fetchCall(action, params, method, timeout, requestId) {
     } else {
       response = await fetch(`${API_URL}?action=${action}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + (localStorage.getItem('ro_api_password') || ''),
+        },
         body: JSON.stringify(params),
         signal: controller.signal
       });
