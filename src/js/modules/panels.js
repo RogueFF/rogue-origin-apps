@@ -338,7 +338,7 @@ export function sendAIMessage() {
 
     const messageText = document.createElement('div');
     messageText.className = 'ai-message-text';
-    messageText.innerHTML = responseText;
+    messageText.textContent = responseText;
     assistantMsg.appendChild(messageText);
 
     // Display task results if available
@@ -423,7 +423,10 @@ export function sendAIMessage() {
   } else {
     fetch(`${API_URL}?action=chat`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + (localStorage.getItem('ro_api_password') || ''),
+      },
       body: JSON.stringify(requestData),
       cache: 'no-store'
     })
