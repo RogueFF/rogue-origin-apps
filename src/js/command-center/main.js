@@ -308,11 +308,11 @@
       elements.timerRing.style.strokeDashoffset = offset;
       
       if (pct < 0.85) {
-        elements.timerRing.className = 'timer-ring-progress';
+        elements.timerRing.setAttribute('class', 'timer-ring-progress');
       } else if (pct < 1.0) {
-        elements.timerRing.className = 'timer-ring-progress warning';
+        elements.timerRing.setAttribute('class', 'timer-ring-progress warning');
       } else {
-        elements.timerRing.className = 'timer-ring-progress danger';
+        elements.timerRing.setAttribute('class', 'timer-ring-progress danger');
       }
     }
     
