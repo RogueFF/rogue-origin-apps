@@ -71,9 +71,12 @@ export default {
           : await handleSop(request, env, ctx);
       } else if (path.startsWith('/api/consignment')) {
         response = await handleConsignmentD1(request, env, ctx);
-      } else if (path.startsWith('/api/pool')) {
-        // New pool inventory management API
+      } else if (path.startsWith('/api/pool-bins')) {
+        // D1 bin-based pool inventory system
         response = await handlePoolD1(request, env, ctx);
+      } else if (path.startsWith('/api/pool')) {
+        // Shopify pool inventory proxy
+        response = await handlePoolRequest(request, env);
       } else if (path === '/' || path === '/api') {
         // Health check
         response = jsonResponse({
