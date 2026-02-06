@@ -1,30 +1,53 @@
 /**
- * Command Center - Real-Time Production Monitoring
- * Premium dashboard with live metrics, predictions, and alerts
+ * Command Center - Main Controller Module
+ * Real-time production monitoring and analytics
+ *
+ * @module CommandCenter
  */
 
-(function() {
-  'use strict';
+// API Configuration
+const API_URL = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
+const POLL_INTERVAL = 30000; // 30 seconds
+const TIMER_TICK_INTERVAL = 1000; // 1 second for timer countdown
+const MAX_RETRY_ATTEMPTS = 3;
 
-  // ===== STATE =====
-  const state = {
-    data: null,
-    alerts: [],
-    lastUpdate: null,
-    shiftStart: null,
-    polling: null
-  };
+// Performance Thresholds
+const THRESHOLDS = {
+  ahead: 105,    // >= 105% = green/ahead
+  onTarget: 90,  // >= 90% = gold/on-target
+  behind: 0      // < 90% = red/behind
+};
 
-  // ===== CONFIG =====
-  const CONFIG = {
-    API_URL: 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production',
-    POLL_INTERVAL: 5000,
-    ALERT_THRESHOLDS: {
-      rateDrop: 0.85,
-      bagLag: 1.2,
-      targetMiss: 0.90
-    }
-  };
+// Work Schedule
+const WORK_START_HOUR = 7;
+const WORK_END_HOUR = 16;
+const WORK_END_MINUTE = 30;
+const EFFECTIVE_WORK_HOURS = 7.5;
+
+// State Management
+let state = {
+  scoreboard: null,
+  timer: null,
+  lastUpdate: null,
+  isConnected: false,
+  consecutiveFailures: 0,
+  alerts: [],
+  pollIntervalId: null,
+  timerIntervalId: null,
+  clockIntervalId: null
+};
+
+// Alert tracking to prevent duplicates
+const alertHistory = new Set();
+
+// ===== CONFIG =====
+const CONFIG = {
+  ALERT_THRESHOLDS: {
+    rateDrop: 0.85,
+    bagLag: 1.2,
+    targetMiss: 0.90
+  }
+};
 
   // ===== DOM ELEMENTS =====
   const elements = {
@@ -85,25 +108,41 @@
     fullscreenBtn: document.getElementById('fullscreenBtn')
   };
 
-  // ===== INITIALIZATION =====
-  function init() {
-    console.log('[Command Center] Initializing...');
-    
-    setupEventListeners();
-    updateClock();
-    setInterval(updateClock, 1000);
-    
-    fetchData();
-    startPolling();
-    
-    console.log('[Command Center] Ready');
+/**
+ * Initialize the Command Center
+ */
+async function init() {
+  console.log('🚀 Command Center initializing...');
+
+  // Initial data fetch
+  await fetchData();
+
+  // Start intervals
+  startPolling();
+  startTimerTick();
+  startClock();
+
+  // Set up event listeners
+  setupEventListeners();
+
+  console.log('✅ Command Center ready');
+}
+
+/**
+ * Set up UI event listeners
+ */
+function setupEventListeners() {
+  const fullscreenBtn = document.getElementById('fullscreenBtn');
+  const clearAlertsBtn = document.getElementById('clearAlerts');
+
+  if (fullscreenBtn) {
+    fullscreenBtn.addEventListener('click', toggleFullscreen);
   }
 
-  // ===== EVENT LISTENERS =====
-  function setupEventListeners() {
-    elements.fullscreenBtn?.addEventListener('click', toggleFullscreen);
-    elements.clearAlerts?.addEventListener('click', clearAllAlerts);
+  if (clearAlertsBtn) {
+    clearAlertsBtn.addEventListener('click', clearAllAlerts);
   }
+}
 
   // ===== CLOCK =====
   function updateClock() {

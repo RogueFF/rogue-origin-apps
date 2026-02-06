@@ -6,6 +6,40 @@ Detailed implementation history for major features in the Rogue Origin Operation
 
 ## Recent Features (February 2026)
 
+### Command Center - Real-Time Production Dashboard (2026-02-06)
+
+**Overview:** Industrial control room aesthetic page for production floor monitoring with real-time metrics, live polling, and performance visualization.
+
+**Features:**
+- Real-time API polling (30s intervals) for production metrics from scoreboard endpoint
+- Circular SVG bag timer with auto-updating cycle time and overtime alerts
+- Daily progress tracking with lbs produced, target achievement percentage, and predictive finish time
+- Crew breakdown cards showing trimmers/buckers per line
+- Hourly performance sparkline chart (last 8 hours)
+- Color-coded performance indicators (green for on-target, gold for above-target, red for below-target)
+- Connection status indicator with live pulse animation
+- Dark mode optimized for production floor visibility (OLED-friendly)
+- Responsive design for tablet and mobile devices
+- Exponential backoff retry on API failures
+
+**Technical:**
+- ES6 module architecture with `main.js` entry point
+- CSS Grid layout with glass morphism panels (semi-transparent + blur)
+- SVG ring animations for bag timer countdown
+- Automatic reconnect with exponential backoff (max 30s retry delay)
+- Performance optimizations for continuous polling
+
+**Files:**
+- `src/pages/command-center.html` - Standalone HTML page
+- `src/css/command-center.css` - Industrial styling with dark theme
+- `src/js/command-center/main.js` - Real-time data polling and rendering
+
+**API Integration:**
+- Endpoint: `/api/production?action=scoreboard`
+- Data structure: `scoreboard` object with daily targets, strain, hourly rates; `timer` object with bag metrics
+
+---
+
 ### Scoreboard Declutter & No-Scroll Layout (2026-02-04)
 
 **Goal:** Eliminate scrolling, reduce clutter, optimize for TV viewing
