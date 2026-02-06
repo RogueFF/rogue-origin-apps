@@ -29,6 +29,11 @@ let isConnected = false;
 let useMock = process.argv.includes('--mock');
 let serialPort = null;
 
+// Weight debouncing - prevents oscillation from noisy serial data
+let lastStableWeight = 0;      // Last non-zero weight we read
+let zeroReadingCount = 0;       // How many consecutive zero readings
+const ZERO_READINGS_THRESHOLD = 5; // Need 5 consecutive zeros to actually go to zero (2.5s at 500ms polling)
+
 // Express app
 const app = express();
 app.use(express.static(path.join(__dirname, 'public')));
@@ -49,6 +54,8 @@ app.get('/api/weight', (req, res) => {
 app.post('/api/weight', (req, res) => {
   if (typeof req.body.weight === 'number') {
     currentWeight = Math.max(0, req.body.weight);
+    lastStableWeight = currentWeight;
+    zeroReadingCount = 0;
     console.log(`Manual weight set: ${currentWeight.toFixed(2)} kg`);
   }
   res.json({ success: true, weight: currentWeight });
@@ -167,8 +174,28 @@ function initSerialPort() {
             weight = weight * 0.453592;
           }
 
-          currentWeight = Math.max(0, Math.round(weight * 100) / 100);
-          console.log(`  Weight: ${currentWeight.toFixed(2)} kg (${match[1]} ${unit})`);
+          let rawWeight = Math.max(0, Math.round(weight * 100) / 100);
+
+          // Debouncing logic to prevent oscillation
+          if (rawWeight === 0 || rawWeight < 0.05) {
+            // Reading zero or near-zero
+            zeroReadingCount++;
+            if (zeroReadingCount >= ZERO_READINGS_THRESHOLD) {
+              // Consistently reading zero - actually set to zero
+              currentWeight = 0;
+              lastStableWeight = 0;
+              console.log(`  Weight: 0.00 kg (bag removed)`);
+            } else {
+              // Still seeing zeros, but not enough yet - keep last stable weight
+              currentWeight = lastStableWeight;
+            }
+          } else {
+            // Valid weight reading
+            zeroReadingCount = 0;
+            lastStableWeight = rawWeight;
+            currentWeight = rawWeight;
+            console.log(`  Weight: ${currentWeight.toFixed(2)} kg (${match[1]} ${unit})`);
+          }
         }
       }
     });
