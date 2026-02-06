@@ -383,7 +383,7 @@ async function getScoreboardData(env, date = null) {
     const lastRow = rows[lastCompletedHourIndex];
     result.lastHourLbs = lastRow.tops;
     result.lastHourSmalls = lastRow.smalls;
-    result.lastHourTrimmers = lastRow.trimmers;
+    result.lastHourTrimmers = lastRow.rawTrimmers; // Use raw (entered) count for display, not time-weighted
     result.lastHourBuckers = lastRow.buckers || 0;
     result.lastHourMultiplier = lastRow.multiplier;
     result.lastHourTarget = lastRow.trimmers * targetRate * lastRow.multiplier;
@@ -393,7 +393,7 @@ async function getScoreboardData(env, date = null) {
   // Current hour
   if (currentHourIndex >= 0) {
     const currentRow = rows[currentHourIndex];
-    result.currentHourTrimmers = currentRow.trimmers;
+    result.currentHourTrimmers = currentRow.rawTrimmers; // Use raw (entered) count for display, not time-weighted
     result.currentHourBuckers = currentRow.buckers || 0;
     result.currentHourMultiplier = currentRow.multiplier;
     result.currentHourTarget = currentRow.trimmers * targetRate * currentRow.multiplier;
@@ -441,7 +441,7 @@ async function getScoreboardData(env, date = null) {
         timeSlot: row.timeSlot,
         rate,
         target: targetRate,
-        trimmers: row.trimmers,
+        trimmers: row.rawTrimmers, // Use raw (entered) count for display
         buckers: row.buckers,
         lbs: row.tops,
         smalls: row.smalls,
