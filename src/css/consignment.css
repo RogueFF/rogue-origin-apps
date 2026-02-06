@@ -980,6 +980,51 @@ body::before {
 .stat-value.positive { color: var(--ro-green); }
 .stat-value.warning { color: var(--ro-gold); }
 
+/* Stock vs Owed Bar */
+.stock-vs-owed-bar {
+  padding: 16px 28px 20px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.bar-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 10px;
+  color: var(--text-secondary);
+}
+
+.bar-label strong {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.bar-track {
+  height: 12px;
+  background: rgba(102, 137, 113, 0.1);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  position: relative;
+}
+
+.bar-fill {
+  height: 100%;
+  transition: width 0.4s ease;
+}
+
+.bar-stock {
+  background: linear-gradient(90deg, var(--ro-green), #7ba886);
+}
+
+.bar-hint {
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-top: 6px;
+  opacity: 0.7;
+  font-style: italic;
+}
+
 .detail-section {
   padding: 20px 28px;
   border-bottom: 1px solid var(--border-light);
