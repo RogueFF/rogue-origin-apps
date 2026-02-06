@@ -7,7 +7,6 @@ import { query, queryOne, insert, update, deleteRows } from '../lib/db.js';
 import { readSheet } from '../lib/sheets.js';
 import { successResponse, parseBody, getAction } from '../lib/response.js';
 import { createError } from '../lib/errors.js';
-import { sanitizeForSheets } from '../lib/validate.js';
 
 const SHEET_NAME = '12.12 Supplies';
 
@@ -59,16 +58,16 @@ async function addCard(body, env) {
   const data = validateCard(body);
 
   const id = await insert(env.DB, 'kanban_cards', {
-    item: sanitizeForSheets(data.item),
-    supplier: sanitizeForSheets(data.supplier || ''),
-    order_qty: sanitizeForSheets(data.orderQty || ''),
-    delivery_time: sanitizeForSheets(data.deliveryTime || ''),
-    price: sanitizeForSheets(data.price || ''),
-    crumbtrail: sanitizeForSheets(data.crumbtrail || ''),
-    url: sanitizeForSheets(data.url || ''),
-    picture: sanitizeForSheets(data.picture || ''),
-    order_when: sanitizeForSheets(data.orderWhen || ''),
-    image_file: sanitizeForSheets(data.imageFile || ''),
+    item: data.item,
+    supplier: (data.supplier || ''),
+    order_qty: (data.orderQty || ''),
+    delivery_time: (data.deliveryTime || ''),
+    price: (data.price || ''),
+    crumbtrail: (data.crumbtrail || ''),
+    url: (data.url || ''),
+    picture: (data.picture || ''),
+    order_when: (data.orderWhen || ''),
+    image_file: (data.imageFile || ''),
   });
 
   return successResponse({ success: true, message: 'Card added successfully', id });
@@ -82,16 +81,16 @@ async function updateCard(body, env) {
   const data = validateCard(body);
 
   const changes = await update(env.DB, 'kanban_cards', {
-    item: sanitizeForSheets(data.item),
-    supplier: sanitizeForSheets(data.supplier || ''),
-    order_qty: sanitizeForSheets(data.orderQty || ''),
-    delivery_time: sanitizeForSheets(data.deliveryTime || ''),
-    price: sanitizeForSheets(data.price || ''),
-    crumbtrail: sanitizeForSheets(data.crumbtrail || ''),
-    url: sanitizeForSheets(data.url || ''),
-    picture: sanitizeForSheets(data.picture || ''),
-    order_when: sanitizeForSheets(data.orderWhen || ''),
-    image_file: sanitizeForSheets(data.imageFile || ''),
+    item: data.item,
+    supplier: (data.supplier || ''),
+    order_qty: (data.orderQty || ''),
+    delivery_time: (data.deliveryTime || ''),
+    price: (data.price || ''),
+    crumbtrail: (data.crumbtrail || ''),
+    url: (data.url || ''),
+    picture: (data.picture || ''),
+    order_when: (data.orderWhen || ''),
+    image_file: (data.imageFile || ''),
   }, 'id = ?', [body.id]);
 
   if (changes === 0) {
@@ -119,6 +118,34 @@ async function deleteCard(body, env) {
  * Fetch product info from URL (auto-fill feature)
  * Same as original - doesn't use database
  */
+function isPrivateHostname(hostname) {
+  // Block localhost variants
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return true;
+  if (hostname.endsWith('.localhost')) return true;
+
+  // Block private IPv4 ranges
+  const parts = hostname.split('.');
+  if (parts.length === 4 && parts.every(p => /^\d+$/.test(p))) {
+    const [a, b] = parts.map(Number);
+    if (a === 10) return true;                          // 10.x.x.x
+    if (a === 172 && b >= 16 && b <= 31) return true;   // 172.16-31.x.x
+    if (a === 192 && b === 168) return true;             // 192.168.x.x
+    if (a === 169 && b === 254) return true;             // 169.254.x.x (link-local)
+    if (a === 127) return true;                          // 127.x.x.x
+    if (a === 0) return true;                            // 0.x.x.x
+  }
+
+  // Block private IPv6
+  if (hostname.startsWith('[')) {
+    const inner = hostname.slice(1, -1).toLowerCase();
+    if (inner === '::1') return true;
+    if (inner.startsWith('fc') || inner.startsWith('fd')) return true;   // ULA
+    if (inner.startsWith('fe80')) return true;                            // link-local
+  }
+
+  return false;
+}
+
 async function fetchProduct(body) {
   if (!body.url || typeof body.url !== 'string') {
     throw createError('VALIDATION_ERROR', 'URL is required');
@@ -136,20 +163,53 @@ async function fetchProduct(body) {
     throw createError('VALIDATION_ERROR', 'Invalid URL format');
   }
 
+  // SSRF protection: block private/internal hostnames
+  if (isPrivateHostname(parsedUrl.hostname)) {
+    throw createError('VALIDATION_ERROR', 'URL points to a private/internal address');
+  }
+
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
     const response = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; KanbanBot/1.0)',
         Accept: 'text/html,application/xhtml+xml',
       },
       redirect: 'follow',
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
+
+    // Check for redirects to private IPs
+    if (response.url && response.url !== url) {
+      try {
+        const redirected = new URL(response.url);
+        if (isPrivateHostname(redirected.hostname)) {
+          throw new Error('Redirected to a private/internal address');
+        }
+      } catch (e) {
+        if (e.message.includes('private')) throw e;
+      }
+    }
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
 
+    // Limit response size to 1MB
+    const contentLength = response.headers.get('content-length');
+    if (contentLength && parseInt(contentLength) > 1024 * 1024) {
+      throw new Error('Response too large');
+    }
+
     const html = await response.text();
+
+    if (html.length > 1024 * 1024) {
+      throw new Error('Response too large');
+    }
 
     const result = {
       success: true,
@@ -279,16 +339,16 @@ async function migrateFromSheets(env) {
     }
 
     await insert(env.DB, 'kanban_cards', {
-      item: sanitizeForSheets(item),
-      supplier: sanitizeForSheets(row[colMap.supplier] ? String(row[colMap.supplier]) : ''),
-      order_qty: sanitizeForSheets(row[colMap.orderQty] ? String(row[colMap.orderQty]) : ''),
-      delivery_time: sanitizeForSheets(row[colMap.deliveryTime] ? String(row[colMap.deliveryTime]) : ''),
-      price: sanitizeForSheets(row[colMap.price] ? String(row[colMap.price]) : ''),
-      crumbtrail: sanitizeForSheets(row[colMap.crumbtrail] ? String(row[colMap.crumbtrail]) : ''),
-      url: sanitizeForSheets(row[colMap.url] ? String(row[colMap.url]) : ''),
-      picture: sanitizeForSheets(row[colMap.picture] ? String(row[colMap.picture]) : ''),
-      order_when: sanitizeForSheets(row[colMap.orderWhen] ? String(row[colMap.orderWhen]) : ''),
-      image_file: sanitizeForSheets(row[colMap.imageFile] ? String(row[colMap.imageFile]) : ''),
+      item: item,
+      supplier: (row[colMap.supplier] ? String(row[colMap.supplier]) : ''),
+      order_qty: (row[colMap.orderQty] ? String(row[colMap.orderQty]) : ''),
+      delivery_time: (row[colMap.deliveryTime] ? String(row[colMap.deliveryTime]) : ''),
+      price: (row[colMap.price] ? String(row[colMap.price]) : ''),
+      crumbtrail: (row[colMap.crumbtrail] ? String(row[colMap.crumbtrail]) : ''),
+      url: (row[colMap.url] ? String(row[colMap.url]) : ''),
+      picture: (row[colMap.picture] ? String(row[colMap.picture]) : ''),
+      order_when: (row[colMap.orderWhen] ? String(row[colMap.orderWhen]) : ''),
+      image_file: (row[colMap.imageFile] ? String(row[colMap.imageFile]) : ''),
     });
     migrated++;
   }

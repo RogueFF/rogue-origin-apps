@@ -2840,7 +2840,10 @@
       try {
         const response = await fetch(API_URL + '?action=anthropic', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + (localStorage.getItem('ro_api_password') || ''),
+          },
           body: JSON.stringify({
             model: 'claude-3-5-haiku-20241022',
             max_tokens: 500,
