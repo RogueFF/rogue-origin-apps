@@ -190,14 +190,27 @@ export function renderPartnerDetail(detail, container, onClose) {
           <div class="stat-value positive">\$${fmt(d.total_paid)}</div>
         </div>
         <div class="detail-stat">
-          <div class="stat-label">On Hand</div>
+          <div class="stat-label">In Stock</div>
           <div class="stat-value">${onHandLbs.toFixed(1)} <small>lbs</small></div>
         </div>
         <div class="detail-stat">
-          <div class="stat-label">Total Received</div>
+          <div class="stat-label">Total Purchased</div>
           <div class="stat-value">${totalIntakeLbs.toFixed(1)} <small>lbs</small></div>
         </div>
       </div>
+      
+      ${d.balance_owed > 0 && onHandLbs > 0 ? `
+        <div class="stock-vs-owed-bar">
+          <div class="bar-label">
+            <span><strong>${onHandLbs.toFixed(1)} lbs</strong> in stock</span>
+            <span><strong>\$${fmt(d.balance_owed)}</strong> owed</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill bar-stock" style="width: ${Math.min(100, (onHandLbs / (onHandLbs + (d.balance_owed / 100))) * 100)}%"></div>
+          </div>
+          <div class="bar-hint">Physical inventory vs financial liability</div>
+        </div>
+      ` : ''}
       
       ${d.inventory.length > 0 ? `
         <div class="detail-section">
