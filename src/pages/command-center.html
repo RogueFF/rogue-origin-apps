@@ -5,295 +5,332 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <link rel="icon" type="image/png" href="/rogue-origin-apps/favicon.png">
   <link rel="manifest" href="/rogue-origin-apps/manifest.json">
-  <meta name="theme-color" content="#1a1f16">
+  <meta name="theme-color" content="#0a0f0a">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Command Center">
   <link rel="apple-touch-icon" href="/rogue-origin-apps/assets/icon-apple-touch.png">
-  <title>Production Command Center</title>
+  <title>Command Center | Rogue Origin</title>
 
+  <!-- Performance: Resource Hints -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://unpkg.com">
 
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- Phosphor Icons -->
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/duotone/style.css">
+
+  <!-- Stylesheets -->
   <link rel="stylesheet" href="../css/shared-base.css">
   <link rel="stylesheet" href="../css/command-center.css">
-
-  <script src="https://unpkg.com/phosphor-icons"></script>
 </head>
-<body class="command-center">
-  <!-- Header -->
-  <header class="cc-header">
+<body class="dark-mode">
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
+  <!-- ============================================
+       HEADER BAR
+       ============================================ -->
+  <header class="cc-header" role="banner">
     <div class="cc-header-left">
-      <div class="cc-brand">
-        <i class="ph-duotone ph-monitor"></i>
-        <h1>COMMAND CENTER</h1>
+      <div class="cc-strain-badge">
+        <i class="ph-duotone ph-plant"></i>
+        <span id="strainName" class="cc-strain-name">Loading...</span>
       </div>
-      <div class="cc-time">
-        <div class="cc-time-value" id="headerTime">--:--</div>
-        <div class="cc-date-value" id="headerDate">Loading...</div>
+      <div class="cc-line-indicator">
+        <span class="cc-line-label">Line 1</span>
       </div>
     </div>
+
+    <div class="cc-header-center">
+      <time class="cc-clock" id="clock" datetime="">--:--:--</time>
+      <div class="cc-date" id="date">Loading...</div>
+    </div>
+
     <div class="cc-header-right">
-      <div class="cc-status-pill" id="systemStatus">
-        <div class="status-dot"></div>
-        <span>LIVE</span>
+      <div class="cc-connection-status" id="connectionStatus" data-status="connecting">
+        <span class="cc-status-dot"></span>
+        <span class="cc-status-text">CONNECTING</span>
       </div>
-      <button class="cc-header-btn" id="fullscreenBtn" title="Toggle Fullscreen">
-        <i class="ph-duotone ph-arrows-out"></i>
+      <button class="cc-refresh-btn" id="refreshBtn" title="Refresh data" aria-label="Refresh data">
+        <i class="ph-duotone ph-arrows-clockwise"></i>
       </button>
-      <a href="index.html" class="cc-header-btn" title="Back to Dashboard">
+      <a href="index.html" class="cc-nav-btn" title="Back to Dashboard" aria-label="Back to Dashboard">
         <i class="ph-duotone ph-house"></i>
       </a>
     </div>
   </header>
 
-  <!-- Main Grid -->
-  <main class="cc-main">
-    <!-- Production Overview - Top Left -->
-    <section class="cc-card cc-production-overview">
-      <div class="cc-card-header">
-        <div class="cc-card-title">
-          <i class="ph-duotone ph-chart-line-up"></i>
-          <h2>Production Status</h2>
-        </div>
-        <div class="cc-card-meta" id="lastUpdate">Updated --:--</div>
-      </div>
+  <!-- ============================================
+       MAIN CONTENT
+       ============================================ -->
+  <main id="main-content" class="cc-main">
 
-      <div class="cc-hero-metric">
-        <div class="hero-label">Current Hour Output</div>
-        <div class="hero-value-row">
-          <span class="hero-value" id="currentHourLbs">0</span>
-          <span class="hero-unit">lbs</span>
-        </div>
-        <div class="hero-progress">
-          <div class="hero-progress-bar">
-            <div class="hero-progress-fill" id="currentHourProgress" style="width: 0%"></div>
-          </div>
-          <div class="hero-progress-label">
-            <span id="currentHourPct">0%</span> of <span id="currentHourTarget">0</span> lbs target
-          </div>
-        </div>
-      </div>
+    <!-- PRIMARY METRICS ROW -->
+    <section class="cc-primary-row" aria-label="Primary metrics">
 
-      <div class="cc-metrics-grid">
-        <div class="cc-metric">
-          <div class="metric-icon green">
-            <i class="ph-duotone ph-calendar-check"></i>
+      <!-- DAILY GOAL PANEL -->
+      <article class="cc-panel cc-panel-daily" aria-labelledby="dailyGoalLabel">
+        <header class="cc-panel-header">
+          <i class="ph-duotone ph-target"></i>
+          <h2 id="dailyGoalLabel">Daily Goal</h2>
+        </header>
+        <div class="cc-panel-body">
+          <div class="cc-metric-large">
+            <span class="cc-metric-actual" id="dailyActual">--</span>
+            <span class="cc-metric-separator">/</span>
+            <span class="cc-metric-target" id="dailyTarget">--</span>
+            <span class="cc-metric-unit">lbs</span>
           </div>
-          <div class="metric-content">
-            <div class="metric-label">Today's Total</div>
-            <div class="metric-value" id="todayLbs">0 lbs</div>
-            <div class="metric-delta" id="todayDelta">—</div>
+          <div class="cc-progress-container">
+            <div class="cc-progress-bar">
+              <div class="cc-progress-fill" id="dailyProgressFill" style="--progress: 0%"></div>
+              <div class="cc-progress-marker" id="timeMarker" style="--position: 0%" title="Expected progress"></div>
+            </div>
+            <div class="cc-progress-labels">
+              <span class="cc-progress-pct" id="dailyPct">0%</span>
+              <span class="cc-progress-hours" id="hoursLogged">0 hrs logged</span>
+            </div>
+          </div>
+          <div class="cc-delta-badge" id="dailyDelta" data-trend="neutral">
+            <i class="ph-duotone ph-minus"></i>
+            <span>On Track</span>
           </div>
         </div>
+      </article>
 
-        <div class="cc-metric">
-          <div class="metric-icon gold">
-            <i class="ph-duotone ph-target"></i>
+      <!-- CURRENT PACE PANEL -->
+      <article class="cc-panel cc-panel-pace" aria-labelledby="paceLabel">
+        <header class="cc-panel-header">
+          <i class="ph-duotone ph-gauge"></i>
+          <h2 id="paceLabel">Current Pace</h2>
+        </header>
+        <div class="cc-panel-body">
+          <div class="cc-metric-hero">
+            <span class="cc-metric-value" id="currentPace">--</span>
+            <span class="cc-metric-unit">lbs/hr</span>
           </div>
-          <div class="metric-content">
-            <div class="metric-label">Daily Target</div>
-            <div class="metric-value" id="todayTarget">0 lbs</div>
-            <div class="metric-delta" id="targetPct">0%</div>
-          </div>
-        </div>
-
-        <div class="cc-metric">
-          <div class="metric-icon blue">
-            <i class="ph-duotone ph-clock-afternoon"></i>
-          </div>
-          <div class="metric-content">
-            <div class="metric-label">Hours Logged</div>
-            <div class="metric-value" id="hoursLogged">0</div>
-            <div class="metric-delta" id="effectiveHours">0 effective</div>
-          </div>
-        </div>
-
-        <div class="cc-metric">
-          <div class="metric-icon purple">
-            <i class="ph-duotone ph-trend-up"></i>
-          </div>
-          <div class="metric-content">
-            <div class="metric-label">Avg Performance</div>
-            <div class="metric-value" id="avgPerformance">0%</div>
-            <div class="metric-delta" id="bestPerformance">Best: 0%</div>
+          <div class="cc-pace-comparison" id="paceComparison">
+            <div class="cc-comparison-item">
+              <span class="cc-comparison-label">vs Target</span>
+              <span class="cc-comparison-value" id="vsTargetPct" data-trend="neutral">--</span>
+            </div>
+            <div class="cc-comparison-item">
+              <span class="cc-comparison-label">Avg Today</span>
+              <span class="cc-comparison-value" id="avgPace">--</span>
+            </div>
           </div>
         </div>
-      </div>
-    </section>
+        <div class="cc-panel-glow"></div>
+      </article>
 
-    <!-- Crew Performance - Top Right -->
-    <section class="cc-card cc-crew-performance">
-      <div class="cc-card-header">
-        <div class="cc-card-title">
-          <i class="ph-duotone ph-users-three"></i>
-          <h2>Crew Performance</h2>
-        </div>
-      </div>
-
-      <div class="cc-crew-stats">
-        <div class="crew-stat-card trimmers">
-          <div class="crew-stat-icon">
-            <i class="ph-duotone ph-scissors"></i>
+      <!-- FINISH TIME PANEL -->
+      <article class="cc-panel cc-panel-finish" aria-labelledby="finishLabel">
+        <header class="cc-panel-header">
+          <i class="ph-duotone ph-flag-checkered"></i>
+          <h2 id="finishLabel">Projected Finish</h2>
+        </header>
+        <div class="cc-panel-body">
+          <div class="cc-metric-hero">
+            <span class="cc-metric-value cc-finish-time" id="finishTime">--:--</span>
+            <span class="cc-metric-suffix" id="finishPeriod">PM</span>
           </div>
-          <div class="crew-stat-content">
-            <div class="crew-stat-value" id="trimmerCount">0</div>
-            <div class="crew-stat-label">Trimmers</div>
-          </div>
-          <div class="crew-stat-rate">
-            <span id="trimmerRate">0</span> lbs/hr
-          </div>
-        </div>
-
-        <div class="crew-stat-card buckers">
-          <div class="crew-stat-icon">
-            <i class="ph-duotone ph-package"></i>
-          </div>
-          <div class="crew-stat-content">
-            <div class="crew-stat-value" id="buckerCount">0</div>
-            <div class="crew-stat-label">Buckers</div>
-          </div>
-          <div class="crew-stat-rate">
-            <span id="buckerRate">0</span> ratio
-          </div>
-        </div>
-      </div>
-
-      <div class="cc-rate-indicator">
-        <div class="rate-label">Current Rate vs Target</div>
-        <div class="rate-meter">
-          <div class="rate-meter-fill" id="rateMeterFill" style="width: 0%"></div>
-          <div class="rate-meter-marker" style="left: 100%"></div>
-        </div>
-        <div class="rate-value-row">
-          <span class="rate-current" id="currentRate">0 lbs/trimmer/hr</span>
-          <span class="rate-target">Target: <span id="targetRate">0</span></span>
-        </div>
-      </div>
-
-      <div class="cc-strain-info">
-        <div class="strain-label">Current Strain</div>
-        <div class="strain-name" id="strainName">—</div>
-        <div class="strain-target">Expected Rate: <span id="strainRate">0</span> lbs/trimmer/hr</div>
-      </div>
-    </section>
-
-    <!-- Bag Timer - Middle Left -->
-    <section class="cc-card cc-bag-timer">
-      <div class="cc-card-header">
-        <div class="cc-card-title">
-          <i class="ph-duotone ph-timer"></i>
-          <h2>Bag Timer</h2>
-        </div>
-      </div>
-
-      <div class="cc-timer-display">
-        <svg class="timer-ring" viewBox="0 0 200 200">
-          <circle class="timer-ring-bg" cx="100" cy="100" r="85"/>
-          <circle class="timer-ring-progress" id="timerRing" cx="100" cy="100" r="85"/>
-        </svg>
-        <div class="timer-center">
-          <div class="timer-value" id="timerValue">--:--</div>
-          <div class="timer-label" id="timerLabel">since last bag</div>
-        </div>
-      </div>
-
-      <div class="cc-timer-stats">
-        <div class="timer-stat">
-          <div class="timer-stat-label">Target Time</div>
-          <div class="timer-stat-value" id="targetTime">--:--</div>
-        </div>
-        <div class="timer-stat">
-          <div class="timer-stat-label">Bags Today</div>
-          <div class="timer-stat-value" id="bagsToday">0</div>
-        </div>
-        <div class="timer-stat">
-          <div class="timer-stat-label">Avg Today</div>
-          <div class="timer-stat-value" id="avgBagTime">--:--</div>
-        </div>
-      </div>
-
-      <div class="cc-timer-status" id="timerStatus">
-        <div class="timer-status-indicator"></div>
-        <span class="timer-status-text">Waiting for data...</span>
-      </div>
-    </section>
-
-    <!-- Predictive Analytics - Middle Right -->
-    <section class="cc-card cc-predictive">
-      <div class="cc-card-header">
-        <div class="cc-card-title">
-          <i class="ph-duotone ph-crystal-ball"></i>
-          <h2>Predictive Analytics</h2>
-        </div>
-      </div>
-
-      <div class="cc-prediction-hero">
-        <div class="prediction-label">Projected End of Day</div>
-        <div class="prediction-value" id="projectedTotal">0 lbs</div>
-        <div class="prediction-delta" id="projectedDelta">—</div>
-      </div>
-
-      <div class="cc-prediction-details">
-        <div class="prediction-detail">
-          <div class="prediction-detail-label">
+          <div class="cc-finish-delta" id="finishDelta" data-trend="neutral">
             <i class="ph-duotone ph-clock"></i>
-            Estimated Finish Time
+            <span id="finishDeltaText">Calculating...</span>
           </div>
-          <div class="prediction-detail-value" id="finishTime">--:--</div>
-        </div>
-
-        <div class="prediction-detail">
-          <div class="prediction-detail-label">
-            <i class="ph-duotone ph-path"></i>
-            Current Pace
+          <div class="cc-finish-projection">
+            <span class="cc-projection-label">End of day:</span>
+            <span class="cc-projection-value" id="projectedTotal">-- lbs</span>
           </div>
-          <div class="prediction-detail-value" id="currentPace">0 lbs/hr</div>
         </div>
-
-        <div class="prediction-detail">
-          <div class="prediction-detail-label">
-            <i class="ph-duotone ph-trending-up"></i>
-            Required Pace
-          </div>
-          <div class="prediction-detail-value" id="requiredPace">0 lbs/hr</div>
-        </div>
-      </div>
-
-      <div class="cc-timeline">
-        <div class="timeline-label">Day Progress</div>
-        <div class="timeline-bar">
-          <div class="timeline-fill" id="dayProgress" style="width: 0%"></div>
-          <div class="timeline-marker" id="targetMarker" style="left: 100%"></div>
-        </div>
-        <div class="timeline-labels">
-          <span>Start</span>
-          <span id="timeRemaining">8h 0m remaining</span>
-        </div>
-      </div>
+      </article>
     </section>
 
-    <!-- Alerts - Bottom -->
-    <section class="cc-card cc-alerts">
-      <div class="cc-card-header">
-        <div class="cc-card-title">
-          <i class="ph-duotone ph-warning"></i>
-          <h2>Active Alerts</h2>
-        </div>
-        <button class="cc-alerts-clear" id="clearAlerts" style="display: none;">Clear All</button>
-      </div>
+    <!-- SECONDARY METRICS ROW -->
+    <section class="cc-secondary-row" aria-label="Secondary metrics">
 
-      <div class="cc-alerts-list" id="alertsList">
-        <div class="cc-no-alerts">
-          <i class="ph-duotone ph-check-circle"></i>
-          <p>All systems nominal</p>
+      <!-- LAST HOUR PANEL -->
+      <article class="cc-panel cc-panel-last-hour" aria-labelledby="lastHourLabel">
+        <header class="cc-panel-header">
+          <i class="ph-duotone ph-clock-countdown"></i>
+          <h2 id="lastHourLabel">Last Hour</h2>
+          <span class="cc-hour-slot" id="lastHourSlot">--:-- - --:--</span>
+        </header>
+        <div class="cc-panel-body cc-last-hour-body">
+          <div class="cc-last-hour-metrics">
+            <div class="cc-metric-stack">
+              <span class="cc-metric-value-lg" id="lastHourLbs">--</span>
+              <span class="cc-metric-target-sm">/ <span id="lastHourTarget">--</span> lbs</span>
+            </div>
+            <div class="cc-pct-ring" id="lastHourRing">
+              <svg viewBox="0 0 100 100" aria-hidden="true">
+                <circle class="cc-ring-bg" cx="50" cy="50" r="42" />
+                <circle class="cc-ring-progress" id="lastHourRingProgress" cx="50" cy="50" r="42"
+                        stroke-dasharray="264" stroke-dashoffset="264" />
+              </svg>
+              <span class="cc-ring-value" id="lastHourPct">--%</span>
+            </div>
+          </div>
+          <div class="cc-crew-badge" id="lastHourCrew">
+            <i class="ph-duotone ph-users-three"></i>
+            <span><span id="lastHourTrimmers">-</span>T</span>
+            <span class="cc-crew-separator"></span>
+            <span><span id="lastHourBuckers">-</span>B</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- BAG TIMER PANEL -->
+      <article class="cc-panel cc-panel-timer" aria-labelledby="timerLabel" data-status="neutral">
+        <header class="cc-panel-header">
+          <i class="ph-duotone ph-timer"></i>
+          <h2 id="timerLabel">5KG Bag Timer</h2>
+          <span class="cc-live-indicator" id="timerLive">
+            <span class="cc-live-dot"></span>
+            LIVE
+          </span>
+        </header>
+        <div class="cc-panel-body cc-timer-body">
+          <div class="cc-timer-ring-container">
+            <svg class="cc-timer-ring" viewBox="0 0 200 200" aria-hidden="true">
+              <defs>
+                <linearGradient id="timerGradientGreen" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style="stop-color:#4ade80" />
+                  <stop offset="100%" style="stop-color:#22c55e" />
+                </linearGradient>
+                <linearGradient id="timerGradientYellow" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style="stop-color:#fde047" />
+                  <stop offset="100%" style="stop-color:#eab308" />
+                </linearGradient>
+                <linearGradient id="timerGradientRed" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style="stop-color:#f87171" />
+                  <stop offset="100%" style="stop-color:#dc2626" />
+                </linearGradient>
+              </defs>
+              <circle class="cc-timer-ring-bg" cx="100" cy="100" r="85" />
+              <circle class="cc-timer-ring-progress" id="timerRingProgress" cx="100" cy="100" r="85"
+                      stroke-dasharray="534" stroke-dashoffset="0" data-status="green" />
+            </svg>
+            <div class="cc-timer-center">
+              <span class="cc-timer-value" id="timerValue" data-status="green">--:--</span>
+              <span class="cc-timer-label" id="timerStatusLabel">remaining</span>
+            </div>
+          </div>
+          <div class="cc-timer-stats">
+            <div class="cc-timer-stat">
+              <span class="cc-stat-value" id="bagsToday">--</span>
+              <span class="cc-stat-label">Bags Today</span>
+            </div>
+            <div class="cc-timer-stat">
+              <span class="cc-stat-value" id="avgCycleTime">--:--</span>
+              <span class="cc-stat-label">Avg Cycle</span>
+            </div>
+            <div class="cc-timer-stat">
+              <span class="cc-stat-value" id="timerTrimmers">--</span>
+              <span class="cc-stat-label">Trimmers</span>
+            </div>
+          </div>
+        </div>
+        <div class="cc-timer-status-glow" id="timerGlow" data-status="neutral"></div>
+      </article>
+    </section>
+
+    <!-- TERTIARY ROW -->
+    <section class="cc-tertiary-row" aria-label="Crew and hourly breakdown">
+
+      <!-- CREW BREAKDOWN -->
+      <article class="cc-panel cc-panel-crew" aria-labelledby="crewLabel">
+        <header class="cc-panel-header">
+          <i class="ph-duotone ph-users-four"></i>
+          <h2 id="crewLabel">Current Crew</h2>
+        </header>
+        <div class="cc-panel-body cc-crew-body">
+          <div class="cc-crew-total">
+            <span class="cc-crew-count" id="totalCrew">--</span>
+            <span class="cc-crew-label">Total</span>
+          </div>
+          <div class="cc-crew-breakdown">
+            <div class="cc-crew-line" id="line1Crew">
+              <span class="cc-line-name">Line 1</span>
+              <div class="cc-line-counts">
+                <span class="cc-trimmer-count"><span id="line1Trimmers">-</span>T</span>
+                <span class="cc-bucker-count"><span id="line1Buckers">-</span>B</span>
+              </div>
+            </div>
+            <div class="cc-crew-line" id="line2Crew">
+              <span class="cc-line-name">Line 2</span>
+              <div class="cc-line-counts">
+                <span class="cc-trimmer-count"><span id="line2Trimmers">-</span>T</span>
+                <span class="cc-bucker-count"><span id="line2Buckers">-</span>B</span>
+              </div>
+            </div>
+          </div>
+          <div class="cc-target-rate">
+            <i class="ph-duotone ph-crosshair"></i>
+            <span>Target: <span id="targetRate">--</span> lbs/hr/trimmer</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- HOURLY CHART -->
+      <article class="cc-panel cc-panel-chart" aria-labelledby="chartLabel">
+        <header class="cc-panel-header">
+          <i class="ph-duotone ph-chart-bar"></i>
+          <h2 id="chartLabel">Hourly Performance</h2>
+          <div class="cc-chart-legend" aria-hidden="true">
+            <span class="cc-legend-item cc-legend-actual">
+              <span class="cc-legend-dot"></span>
+              Actual
+            </span>
+            <span class="cc-legend-item cc-legend-target">
+              <span class="cc-legend-dot"></span>
+              Target
+            </span>
+          </div>
+        </header>
+        <div class="cc-panel-body cc-chart-body">
+          <div class="cc-chart-container" id="hourlyChart" role="img" aria-label="Hourly performance chart">
+            <!-- Chart bars will be injected by JavaScript -->
+            <div class="cc-chart-placeholder">
+              <i class="ph-duotone ph-chart-bar"></i>
+              <span>Loading hourly data...</span>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <!-- ALERTS BAR -->
+    <aside class="cc-alerts-bar" id="alertsBar" role="alert" aria-live="polite">
+      <div class="cc-alerts-icon">
+        <i class="ph-duotone ph-lightning"></i>
+      </div>
+      <div class="cc-alerts-content" id="alertsContent">
+        <div class="cc-alert cc-alert-info">
+          <span>Command Center initializing...</span>
         </div>
       </div>
-    </section>
+    </aside>
+
   </main>
 
-  <script src="../js/command-center/main.js"></script>
+  <!-- Performance Stats Overlay (hidden by default, toggle with keyboard) -->
+  <div class="cc-perf-overlay" id="perfOverlay" hidden aria-hidden="true">
+    <div class="cc-perf-stat">
+      <span class="cc-perf-label">Last Update</span>
+      <span class="cc-perf-value" id="lastUpdateTime">--</span>
+    </div>
+    <div class="cc-perf-stat">
+      <span class="cc-perf-label">Latency</span>
+      <span class="cc-perf-value" id="latency">--ms</span>
+    </div>
+  </div>
+
+  <!-- JavaScript Module -->
+  <script type="module" src="../js/command-center/main.js"></script>
 </body>
 </html>
