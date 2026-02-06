@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <link rel="icon" type="image/png" href="/rogue-origin-apps/favicon.png">
   <link rel="manifest" href="/rogue-origin-apps/manifest.json">
-  <meta name="theme-color" content="#faf9f7">
+  <meta name="theme-color" content="#060a08">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="light">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Command Center v2">
   <link rel="apple-touch-icon" href="/rogue-origin-apps/assets/icon-apple-touch.png">
   <title>Command Center v2 | Rogue Origin</title>
@@ -16,53 +16,51 @@
   <!-- Performance: Resource Hints -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="dns-prefetch" href="https://rogue-origin-api.roguefamilyfarms.workers.dev">
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="preconnect" href="https://rogue-origin-api.roguefamilyfarms.workers.dev">
 
-  <!-- Fonts: Modern Data Observatory Typography -->
-  <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
   <!-- Phosphor Icons -->
-  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/regular/style.css">
-  
-  <!-- Stylesheet -->
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/duotone/style.css">
+
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="../css/shared-base.css">
   <link rel="stylesheet" href="../css/command-center-v2.css">
 </head>
-<body>
-  <a href="#main-content" class="skip-link">Skip to main content</a>
+<body class="dark-mode">
+  <a href="#main-content" class="cc2-skip-link">Skip to main content</a>
 
   <!-- ============================================
-       HEADER
+       HEADER BAR
        ============================================ -->
-  <header class="observatory-header" role="banner">
-    <div class="header-left">
-      <div class="strain-indicator">
-        <i class="ph ph-leaf"></i>
-        <div class="strain-info">
-          <span class="strain-label">Current Strain</span>
-          <span class="strain-name" id="strainName">Loading...</span>
-        </div>
+  <header class="cc2-header" role="banner">
+    <div class="cc2-header-left">
+      <div class="cc2-strain-badge">
+        <i class="ph-duotone ph-plant"></i>
+        <span id="cc2-strainName" class="cc2-strain-name">Loading...</span>
       </div>
-      <div class="line-badge" id="lineIndicator">
-        <span class="line-number">1</span>
-        <span class="line-label">Active Line</span>
+      <div class="cc2-line-indicator">
+        <span class="cc2-line-label">Line 1</span>
       </div>
     </div>
 
-    <div class="header-center">
-      <time class="live-clock" id="liveClock" datetime="">--:--:--</time>
-      <div class="date-display" id="dateDisplay">Loading...</div>
+    <div class="cc2-header-center">
+      <time class="cc2-clock" id="cc2-clock" datetime="">--:--:--</time>
+      <div class="cc2-date" id="cc2-date">Loading...</div>
     </div>
 
-    <div class="header-right">
-      <div class="connection-indicator" id="connectionStatus" data-status="connecting">
-        <span class="status-pulse"></span>
-        <span class="status-text">Connecting</span>
+    <div class="cc2-header-right">
+      <div class="cc2-connection-status" id="cc2-connectionStatus">
+        <span class="status-dot"></span>
+        <span class="status-text">CONNECTING</span>
       </div>
-      <button class="icon-btn" id="refreshBtn" title="Refresh data" aria-label="Refresh data">
-        <i class="ph ph-arrow-clockwise"></i>
+      <button class="cc2-icon-btn" id="cc2-refreshBtn" title="Refresh data" aria-label="Refresh data">
+        <i class="ph-duotone ph-arrows-clockwise"></i>
       </button>
-      <a href="/rogue-origin-apps/index.html" class="icon-btn" title="Back to Dashboard" aria-label="Back to Dashboard">
-        <i class="ph ph-house"></i>
+      <a href="index.html" class="cc2-icon-btn" title="Back to Dashboard" aria-label="Back to Dashboard">
+        <i class="ph-duotone ph-house"></i>
       </a>
     </div>
   </header>
@@ -70,297 +68,223 @@
   <!-- ============================================
        MAIN CONTENT
        ============================================ -->
-  <main id="main-content" class="observatory-main">
-    
-    <!-- PRIMARY METRICS -->
-    <section class="metrics-grid primary-metrics" aria-label="Primary production metrics">
-      
-      <!-- Daily Progress Card -->
-      <article class="metric-card daily-progress-card" aria-labelledby="dailyProgressTitle">
-        <header class="card-header">
-          <div class="header-icon">
-            <i class="ph ph-target"></i>
-          </div>
-          <h2 id="dailyProgressTitle" class="card-title">Daily Progress</h2>
-          <div class="card-badge" id="dailyStatusBadge" data-status="on-track">
-            <span class="badge-text">On Track</span>
-          </div>
+  <main id="main-content" class="cc2-main">
+
+    <!-- PRIMARY METRICS ROW -->
+    <section class="cc2-primary-row" aria-label="Primary metrics">
+
+      <!-- DAILY GOAL PANEL -->
+      <article class="cc2-panel cc2-panel--daily" aria-labelledby="cc2-label-daily">
+        <header class="cc2-panel-header">
+          <i class="ph-duotone ph-target"></i>
+          <h2 id="cc2-label-daily">Daily Goal</h2>
         </header>
-        
-        <div class="card-body">
-          <div class="metric-display">
-            <div class="metric-primary">
-              <span class="metric-value" id="dailyActual">--</span>
-              <span class="metric-separator">/</span>
-              <span class="metric-target" id="dailyTarget">--</span>
-            </div>
-            <span class="metric-unit">lbs today</span>
+        <div class="cc2-panel-body">
+          <div class="cc2-metric-large">
+            <span class="cc2-metric-actual" id="cc2-dailyActual">--</span>
+            <span class="cc2-metric-sep">/</span>
+            <span class="cc2-metric-target" id="cc2-dailyTarget">--</span>
+            <span class="cc2-metric-unit">lbs</span>
           </div>
-
-          <div class="progress-track">
-            <div class="progress-fill" id="dailyProgress" style="--progress: 0%">
-              <span class="progress-label" id="dailyPercentage">0%</span>
+          <div class="cc2-progress-wrap">
+            <div class="cc2-progress-bar">
+              <div class="cc2-progress-fill" id="cc2-dailyProgressFill"></div>
+              <div class="cc2-progress-marker" id="cc2-timeMarker" title="Expected progress"></div>
             </div>
-            <div class="time-marker" id="timeMarker" style="--position: 0%" title="Expected progress by time"></div>
-          </div>
-
-          <div class="metric-footer">
-            <div class="footer-stat">
-              <i class="ph ph-clock"></i>
-              <span id="hoursLogged">0 hrs</span>
-              <span class="stat-label">logged</span>
-            </div>
-            <div class="footer-stat">
-              <i class="ph ph-trend-up"></i>
-              <span id="avgPerformance">0%</span>
-              <span class="stat-label">avg rate</span>
+            <div class="cc2-progress-labels">
+              <span class="cc2-progress-pct" id="cc2-dailyPct">0%</span>
+              <span class="cc2-progress-hours" id="cc2-hoursLogged">0h logged</span>
             </div>
           </div>
+          <div class="cc2-delta" id="cc2-dailyDelta">On Track</div>
         </div>
       </article>
 
-      <!-- Current Pace Card -->
-      <article class="metric-card pace-card" aria-labelledby="paceTitle">
-        <header class="card-header">
-          <div class="header-icon accent-emerald">
-            <i class="ph ph-gauge"></i>
-          </div>
-          <h2 id="paceTitle" class="card-title">Current Pace</h2>
+      <!-- CURRENT PACE PANEL -->
+      <article class="cc2-panel cc2-panel--pace" aria-labelledby="cc2-label-pace">
+        <header class="cc2-panel-header">
+          <i class="ph-duotone ph-gauge"></i>
+          <h2 id="cc2-label-pace">Current Pace</h2>
         </header>
-        
-        <div class="card-body centered">
-          <div class="hero-metric">
-            <span class="hero-value emerald" id="currentPace">--</span>
-            <span class="hero-unit">lbs/hr</span>
+        <div class="cc2-panel-body">
+          <div class="cc2-metric-hero">
+            <span class="cc2-metric-value" id="cc2-currentPace">--</span>
+            <span class="cc2-metric-unit">lbs/hr</span>
           </div>
-
-          <div class="comparison-row">
-            <div class="comparison-item">
-              <span class="comparison-label">vs Target</span>
-              <span class="comparison-value" id="vsTarget" data-trend="neutral">--</span>
+          <div class="cc2-pace-comparison">
+            <div class="cc2-comparison-item">
+              <span class="cc2-comparison-label">vs Target</span>
+              <span class="cc2-vs-target" id="cc2-vsTargetPct">--</span>
             </div>
-            <div class="comparison-item">
-              <span class="comparison-label">Team Average</span>
-              <span class="comparison-value" id="avgPaceValue">--</span>
+            <div class="cc2-comparison-item">
+              <span class="cc2-comparison-label">Avg Today</span>
+              <span class="cc2-comparison-value" id="cc2-avgPace">--</span>
             </div>
           </div>
         </div>
+        <div class="cc2-panel-glow"></div>
       </article>
 
-      <!-- Projected Finish Card -->
-      <article class="metric-card finish-card" aria-labelledby="finishTitle">
-        <header class="card-header">
-          <div class="header-icon accent-blue">
-            <i class="ph ph-flag-checkered"></i>
-          </div>
-          <h2 id="finishTitle" class="card-title">Projected Finish</h2>
+      <!-- FINISH TIME PANEL -->
+      <article class="cc2-panel cc2-panel--finish" aria-labelledby="cc2-label-finish">
+        <header class="cc2-panel-header">
+          <i class="ph-duotone ph-flag-checkered"></i>
+          <h2 id="cc2-label-finish">Projected Finish</h2>
         </header>
-        
-        <div class="card-body centered">
-          <div class="hero-metric">
-            <div class="time-display">
-              <span class="hero-value blue" id="finishTime">--:--</span>
-              <span class="time-period" id="finishPeriod">PM</span>
-            </div>
+        <div class="cc2-panel-body">
+          <div class="cc2-metric-hero">
+            <span class="cc2-metric-value cc2-finish-time" id="cc2-finishTime">--:--</span>
+            <span class="cc2-metric-suffix" id="cc2-finishPeriod">PM</span>
           </div>
-
-          <div class="finish-details">
-            <div class="detail-item" id="finishDelta" data-trend="neutral">
-              <i class="ph ph-clock"></i>
-              <span id="finishDeltaText">Calculating...</span>
-            </div>
-            <div class="detail-item">
-              <span class="detail-label">End of day total:</span>
-              <span class="detail-value" id="projectedTotal">-- lbs</span>
-            </div>
+          <div class="cc2-finish-delta" id="cc2-finishDeltaText">Calculating...</div>
+          <div class="cc2-finish-projection">
+            <span class="cc2-projection-label">End of day:</span>
+            <span class="cc2-projection-value" id="cc2-projectedTotal">-- lbs</span>
           </div>
         </div>
       </article>
     </section>
 
-    <!-- SECONDARY METRICS -->
-    <section class="metrics-grid secondary-metrics" aria-label="Hourly and timer metrics">
-      
-      <!-- Last Hour Performance -->
-      <article class="metric-card hour-card" aria-labelledby="lastHourTitle">
-        <header class="card-header">
-          <div class="header-icon">
-            <i class="ph ph-clock-countdown"></i>
-          </div>
-          <h2 id="lastHourTitle" class="card-title">Last Hour</h2>
-          <div class="time-slot" id="hourTimeSlot">--:-- - --:--</div>
-        </header>
-        
-        <div class="card-body">
-          <div class="hour-metrics">
-            <div class="hour-stats">
-              <div class="stat-large">
-                <span class="stat-value" id="lastHourLbs">--</span>
-                <span class="stat-unit">lbs</span>
-              </div>
-              <div class="stat-target">
-                Target: <span id="lastHourTarget">--</span> lbs
-              </div>
-              <div class="crew-mini" id="lastHourCrew">
-                <i class="ph ph-users"></i>
-                <span><span id="lastHourTrimmers">-</span>T</span>
-                <span class="crew-divider">|</span>
-                <span><span id="lastHourBuckers">-</span>B</span>
-              </div>
-            </div>
+    <!-- SECONDARY METRICS ROW -->
+    <section class="cc2-secondary-row" aria-label="Secondary metrics">
 
-            <div class="ring-chart">
-              <svg class="ring-svg" viewBox="0 0 120 120" aria-hidden="true">
-                <circle class="ring-track" cx="60" cy="60" r="52"/>
-                <circle class="ring-fill" id="hourRingFill" cx="60" cy="60" r="52"
-                        stroke-dasharray="327" stroke-dashoffset="327" data-status="neutral"/>
-              </svg>
-              <div class="ring-center">
-                <span class="ring-value" id="lastHourPercent">--%</span>
-              </div>
+      <!-- LAST HOUR PANEL -->
+      <article class="cc2-panel cc2-panel--last-hour" aria-labelledby="cc2-label-last-hour">
+        <header class="cc2-panel-header">
+          <i class="ph-duotone ph-clock-countdown"></i>
+          <h2 id="cc2-label-last-hour">Last Hour</h2>
+          <span class="cc2-hour-slot" id="cc2-lastHourSlot">--:-- AM</span>
+        </header>
+        <div class="cc2-panel-body cc2-last-hour-body">
+          <div class="cc2-last-hour-metrics">
+            <div class="cc2-metric-stack">
+              <span class="cc2-metric-value-lg" id="cc2-lastHourLbs">--</span>
+              <span class="cc2-metric-target-sm">/ <span id="cc2-lastHourTarget">--</span> lbs</span>
             </div>
+            <div class="cc2-pct-ring">
+              <svg viewBox="0 0 100 100" aria-hidden="true">
+                <circle class="ring-bg" cx="50" cy="50" r="42" />
+                <circle class="ring-progress" id="cc2-lastHourRingProgress" cx="50" cy="50" r="42"
+                        stroke-dasharray="264" stroke-dashoffset="264" />
+              </svg>
+              <span class="cc2-ring-value" id="cc2-lastHourPct">--%</span>
+            </div>
+          </div>
+          <div class="cc2-crew-badge">
+            <i class="ph-duotone ph-users-three"></i>
+            <span><span id="cc2-lastHourTrimmers">-</span>T</span>
+            <span class="cc2-crew-sep"></span>
+            <span><span id="cc2-lastHourBuckers">-</span>B</span>
           </div>
         </div>
       </article>
 
-      <!-- Bag Timer -->
-      <article class="metric-card timer-card" aria-labelledby="timerTitle" data-status="green">
-        <header class="card-header">
-          <div class="header-icon">
-            <i class="ph ph-timer"></i>
-          </div>
-          <h2 id="timerTitle" class="card-title">5KG Bag Timer</h2>
-          <div class="live-badge">
-            <span class="live-pulse"></span>
-            <span>LIVE</span>
-          </div>
+      <!-- BAG TIMER PANEL -->
+      <article class="cc2-panel cc2-panel--timer" aria-labelledby="cc2-label-timer">
+        <header class="cc2-panel-header">
+          <i class="ph-duotone ph-timer"></i>
+          <h2 id="cc2-label-timer">5KG Bag Timer</h2>
+          <span class="cc2-live-badge">
+            <span class="cc2-live-dot"></span>
+            LIVE
+          </span>
         </header>
-        
-        <div class="card-body">
-          <div class="timer-display">
-            <div class="timer-ring">
-              <svg class="timer-svg" viewBox="0 0 200 200" aria-hidden="true">
-                <defs>
-                  <linearGradient id="timerGreen" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="#52b788"/>
-                    <stop offset="100%" stop-color="#40916c"/>
-                  </linearGradient>
-                  <linearGradient id="timerOrange" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="#f4a261"/>
-                    <stop offset="100%" stop-color="#e76f51"/>
-                  </linearGradient>
-                  <linearGradient id="timerRed" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="#d62828"/>
-                    <stop offset="100%" stop-color="#c1121f"/>
-                  </linearGradient>
-                </defs>
-                <circle class="timer-track" cx="100" cy="100" r="85"/>
-                <circle class="timer-progress" id="timerProgress" cx="100" cy="100" r="85"
-                        stroke-dasharray="534" stroke-dashoffset="0" data-status="green"/>
-              </svg>
-              <div class="timer-center">
-                <span class="timer-value" id="timerValue" data-status="green">--:--</span>
-                <span class="timer-label" id="timerLabel">elapsed</span>
-              </div>
+        <div class="cc2-panel-body cc2-timer-body">
+          <div class="cc2-timer-ring-container">
+            <svg class="cc2-timer-ring" viewBox="0 0 200 200" aria-hidden="true">
+              <defs>
+                <linearGradient id="cc2GradGreen" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style="stop-color:#4ade80" />
+                  <stop offset="100%" style="stop-color:#22c55e" />
+                </linearGradient>
+                <linearGradient id="cc2GradYellow" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style="stop-color:#fde047" />
+                  <stop offset="100%" style="stop-color:#eab308" />
+                </linearGradient>
+                <linearGradient id="cc2GradRed" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style="stop-color:#f87171" />
+                  <stop offset="100%" style="stop-color:#dc2626" />
+                </linearGradient>
+              </defs>
+              <circle class="cc2-timer-ring-bg" cx="100" cy="100" r="85" />
+              <circle class="timer-ring-progress" id="cc2-timerRingProgress" cx="100" cy="100" r="85"
+                      stroke-dasharray="534" stroke-dashoffset="0" />
+            </svg>
+            <div class="cc2-timer-center">
+              <span class="cc2-timer-value" id="cc2-timerValue">--:--</span>
+              <span class="cc2-timer-status on-pace" id="cc2-timerStatusLabel">On Pace</span>
             </div>
-
-            <div class="timer-stats">
-              <div class="timer-stat">
-                <span class="stat-number" id="bagsToday">--</span>
-                <span class="stat-text">Bags Today</span>
-              </div>
-              <div class="timer-stat">
-                <span class="stat-number" id="avgCycleTime">--:--</span>
-                <span class="stat-text">Avg Cycle</span>
-              </div>
-              <div class="timer-stat">
-                <span class="stat-number" id="currentTrimmers">--</span>
-                <span class="stat-text">Trimmers</span>
-              </div>
+          </div>
+          <div class="cc2-timer-stats">
+            <div class="cc2-timer-stat">
+              <span class="cc2-stat-value" id="cc2-bagsToday">--</span>
+              <span class="cc2-stat-label">Bags Today</span>
+            </div>
+            <div class="cc2-timer-stat">
+              <span class="cc2-stat-value" id="cc2-avgCycleTime">--:--</span>
+              <span class="cc2-stat-label">Avg Cycle</span>
+            </div>
+            <div class="cc2-timer-stat">
+              <span class="cc2-stat-value" id="cc2-timerTrimmers">--</span>
+              <span class="cc2-stat-label">Trimmers</span>
             </div>
           </div>
         </div>
+        <div class="cc2-timer-glow" id="cc2-timerGlow" data-state="ok"></div>
       </article>
     </section>
 
-    <!-- TERTIARY SECTION -->
-    <section class="metrics-grid tertiary-metrics" aria-label="Team and performance breakdown">
-      
-      <!-- Crew Breakdown -->
-      <article class="metric-card crew-card" aria-labelledby="crewTitle">
-        <header class="card-header">
-          <div class="header-icon">
-            <i class="ph ph-users-four"></i>
-          </div>
-          <h2 id="crewTitle" class="card-title">Active Crew</h2>
+    <!-- TERTIARY ROW -->
+    <section class="cc2-tertiary-row" aria-label="Crew and hourly breakdown">
+
+      <!-- CREW BREAKDOWN -->
+      <article class="cc2-panel cc2-panel--crew" aria-labelledby="cc2-label-crew">
+        <header class="cc2-panel-header">
+          <i class="ph-duotone ph-users-four"></i>
+          <h2 id="cc2-label-crew">Current Crew</h2>
         </header>
-        
-        <div class="card-body">
-          <div class="crew-total">
-            <span class="total-count" id="totalCrew">--</span>
-            <span class="total-label">Total Members</span>
+        <div class="cc2-panel-body cc2-crew-body">
+          <div class="cc2-crew-total">
+            <span class="cc2-crew-count" id="cc2-totalCrew">--</span>
+            <span class="cc2-crew-total-label">Total</span>
           </div>
-
-          <div class="crew-lines">
-            <div class="crew-line">
-              <span class="line-name">Line 1</span>
-              <div class="line-composition">
-                <div class="role-badge trimmers">
-                  <span id="line1Trimmers">-</span>
-                  <span class="role-label">Trimmers</span>
-                </div>
-                <div class="role-badge buckers">
-                  <span id="line1Buckers">-</span>
-                  <span class="role-label">Buckers</span>
-                </div>
+          <div class="cc2-crew-breakdown">
+            <div class="cc2-crew-line">
+              <span class="cc2-line-name">Line 1</span>
+              <div class="cc2-line-counts">
+                <span class="cc2-trimmer-count"><span id="cc2-line1Trimmers">-</span>T</span>
+                <span class="cc2-bucker-count"><span id="cc2-line1Buckers">-</span>B</span>
               </div>
             </div>
-
-            <div class="crew-line">
-              <span class="line-name">Line 2</span>
-              <div class="line-composition">
-                <div class="role-badge trimmers">
-                  <span id="line2Trimmers">-</span>
-                  <span class="role-label">Trimmers</span>
-                </div>
-                <div class="role-badge buckers">
-                  <span id="line2Buckers">-</span>
-                  <span class="role-label">Buckers</span>
-                </div>
+            <div class="cc2-crew-line">
+              <span class="cc2-line-name">Line 2</span>
+              <div class="cc2-line-counts">
+                <span class="cc2-trimmer-count"><span id="cc2-line2Trimmers">-</span>T</span>
+                <span class="cc2-bucker-count"><span id="cc2-line2Buckers">-</span>B</span>
               </div>
             </div>
           </div>
-
-          <div class="target-display">
-            <i class="ph ph-crosshair-simple"></i>
-            <span>Target Rate: <strong id="targetRate">--</strong> lbs/hr/trimmer</span>
+          <div class="cc2-target-rate">
+            <i class="ph-duotone ph-crosshair"></i>
+            <span>Target: <span id="cc2-targetRate">--</span></span>
           </div>
         </div>
       </article>
 
-      <!-- Hourly Performance Chart -->
-      <article class="metric-card chart-card" aria-labelledby="chartTitle">
-        <header class="card-header">
-          <div class="header-icon">
-            <i class="ph ph-chart-bar"></i>
-          </div>
-          <h2 id="chartTitle" class="card-title">Hourly Performance</h2>
-          <div class="chart-legend">
-            <span class="legend-item">
-              <span class="legend-dot actual"></span>
-              Actual
-            </span>
-            <span class="legend-item">
-              <span class="legend-dot target"></span>
-              Target
-            </span>
+      <!-- HOURLY CHART -->
+      <article class="cc2-panel cc2-panel--chart" aria-labelledby="cc2-label-chart">
+        <header class="cc2-panel-header">
+          <i class="ph-duotone ph-chart-bar"></i>
+          <h2 id="cc2-label-chart">Hourly Performance</h2>
+          <div class="cc2-chart-legend" aria-hidden="true">
+            <span class="cc2-legend-item cc2-legend-actual"><span class="cc2-legend-dot"></span> Actual</span>
+            <span class="cc2-legend-item cc2-legend-target"><span class="cc2-legend-dot"></span> Target</span>
           </div>
         </header>
-        
-        <div class="card-body">
-          <div class="chart-container" id="hourlyChart" role="img" aria-label="Hourly performance bar chart">
-            <div class="chart-loading">
-              <i class="ph ph-chart-line"></i>
+        <div class="cc2-panel-body cc2-chart-body">
+          <div class="cc2-chart-container" id="cc2-hourlyChart" role="img" aria-label="Hourly performance chart">
+            <div class="cc2-chart-placeholder">
+              <i class="ph-duotone ph-chart-bar"></i>
               <span>Loading hourly data...</span>
             </div>
           </div>
@@ -368,46 +292,31 @@
       </article>
     </section>
 
-    <!-- ALERTS -->
-    <aside class="alerts-panel" id="alertsPanel" role="alert" aria-live="polite">
-      <div class="alerts-header">
-        <div class="alerts-icon">
-          <i class="ph ph-bell"></i>
-        </div>
-        <h3 class="alerts-title">System Alerts</h3>
-        <button class="text-btn" id="clearAlertsBtn" style="display:none;">Clear All</button>
+    <!-- ALERTS BAR -->
+    <aside class="cc2-alerts-bar" id="cc2-alertsBar" role="alert" aria-live="polite" data-count="0">
+      <div class="cc2-alerts-icon">
+        <i class="ph-duotone ph-lightning"></i>
       </div>
-      <div class="alerts-content" id="alertsContent">
-        <div class="alert-item info">
-          <div class="alert-icon"><i class="ph ph-info"></i></div>
-          <div class="alert-text">
-            <span class="alert-title">System Initializing</span>
-            <span class="alert-message">Connecting to production data...</span>
-          </div>
-          <span class="alert-time">--:--</span>
-        </div>
+      <div class="cc2-alerts-content" id="cc2-alertsContent">
+        <span class="cc2-alerts-clear">Command Center v2 initializing...</span>
       </div>
     </aside>
 
   </main>
 
-  <!-- Performance Debug Overlay (toggle with Ctrl+Shift+P) -->
-  <div class="debug-overlay" id="debugOverlay" hidden aria-hidden="true">
-    <div class="debug-item">
-      <span class="debug-label">Last Update</span>
-      <span class="debug-value" id="debugLastUpdate">--</span>
+  <!-- Performance Stats Overlay -->
+  <div class="cc2-perf-overlay" id="cc2-perfOverlay" aria-hidden="true">
+    <div class="cc2-perf-stat">
+      <span class="cc2-perf-label">Last Update</span>
+      <span class="cc2-perf-value" id="cc2-lastUpdateTime">--</span>
     </div>
-    <div class="debug-item">
-      <span class="debug-label">API Latency</span>
-      <span class="debug-value" id="debugLatency">--ms</span>
-    </div>
-    <div class="debug-item">
-      <span class="debug-label">Render Time</span>
-      <span class="debug-value" id="debugRender">--ms</span>
+    <div class="cc2-perf-stat">
+      <span class="cc2-perf-label">Latency</span>
+      <span class="cc2-perf-value" id="cc2-latency">--ms</span>
     </div>
   </div>
 
-  <!-- JavaScript -->
-  <script src="../js/command-center-v2.js" type="module"></script>
+  <!-- JavaScript Module -->
+  <script type="module" src="../js/command-center-v2/main.js"></script>
 </body>
 </html>
