@@ -96,3 +96,15 @@ export function isAuthenticated(request, body, env) {
     return false;
   }
 }
+
+/**
+ * Require authentication (throws on failure)
+ * @param {Request} request
+ * @param {object} body
+ * @param {object} env
+ * @param {string} label - For logging
+ */
+export function requireAuth(request, body, env, label = 'unknown') {
+  const password = extractPassword(request, body);
+  validatePassword(password, env, label);
+}
