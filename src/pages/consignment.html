@@ -15,8 +15,30 @@
   <link rel="stylesheet" href="../css/shared-base.css">
   <link rel="stylesheet" href="../css/consignment.css?v=14">
 </head>
-<body>
+<body class="auth-required">
   <a href="#main-content" class="skip-link">Skip to main content</a>
+
+  <!-- Authentication Overlay -->
+  <div id="auth-overlay">
+    <div class="login-container">
+      <h2><i class="ph-duotone ph-lock"></i> Consignment</h2>
+      <p>This page requires authentication</p>
+      <form id="login-form">
+        <input
+          type="password"
+          id="password-input"
+          class="login-input"
+          placeholder="Enter password"
+          autocomplete="current-password"
+          required
+        >
+        <button type="submit" class="login-btn" id="login-btn">
+          Unlock
+        </button>
+        <div class="login-error" id="login-error"></div>
+      </form>
+    </div>
+  </div>
 
   <!-- Sidebar -->
   <aside class="sidebar" id="sidebar" role="navigation" aria-label="Main navigation">
@@ -306,6 +328,171 @@
       </form>
     </div>
   </div>
+
+  <style>
+    #auth-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.3s ease;
+    }
+    #auth-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .login-container {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: var(--space-lg);
+      width: 100%;
+      max-width: 400px;
+      box-shadow: var(--shadow-elevated);
+      text-align: center;
+    }
+    .login-container h2 {
+      font-family: var(--font-display);
+      font-size: 28px;
+      margin-bottom: var(--space-sm);
+      color: var(--text);
+    }
+    .login-container p {
+      color: var(--text-muted);
+      margin-bottom: var(--space-lg);
+      font-size: 14px;
+    }
+    .login-input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      font-family: var(--font-ui);
+      font-size: 16px;
+      background: var(--bg);
+      color: var(--text);
+      margin-bottom: var(--space-sm);
+      transition: all 0.2s ease;
+      box-sizing: border-box;
+    }
+    .login-input:focus {
+      outline: none;
+      border-color: var(--ro-green);
+      box-shadow: 0 0 0 3px rgba(102, 137, 113, 0.1);
+    }
+    .login-btn {
+      width: 100%;
+      padding: 12px;
+      background: var(--ro-green);
+      color: white;
+      border: none;
+      border-radius: var(--radius-md);
+      font-family: var(--font-ui);
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .login-btn:hover {
+      background: #4a6b54;
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-md);
+    }
+    .login-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .login-error {
+      color: var(--danger);
+      font-size: 13px;
+      margin-top: var(--space-sm);
+      display: none;
+    }
+    .login-error.visible {
+      display: block;
+    }
+    body.auth-required .sidebar,
+    body.auth-required .main {
+      opacity: 0;
+      pointer-events: none;
+    }
+  </style>
+
+  <!-- Auth Script -->
+  <script>
+    const AUTH_API_URL = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/orders';
+    const AUTH_KEY = 'ro_consignment_auth';
+
+    (function checkAuth() {
+      const session = localStorage.getItem(AUTH_KEY);
+      if (session) {
+        try {
+          const { timestamp, expiresIn } = JSON.parse(session);
+          if (Date.now() - timestamp < expiresIn) {
+            unlockPage();
+            return;
+          }
+        } catch (e) {}
+      }
+      document.getElementById('password-input').focus();
+    })();
+
+    document.getElementById('login-form').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const passwordInput = document.getElementById('password-input');
+      const enteredPassword = passwordInput.value;
+      const errorEl = document.getElementById('login-error');
+      const loginBtn = document.getElementById('login-btn');
+
+      errorEl.classList.remove('visible');
+      if (!enteredPassword) {
+        errorEl.textContent = 'Please enter a password';
+        errorEl.classList.add('visible');
+        return;
+      }
+
+      loginBtn.disabled = true;
+      loginBtn.textContent = 'Validating...';
+
+      try {
+        const url = AUTH_API_URL + '?action=validatePassword&password=' + encodeURIComponent(enteredPassword);
+        const response = await fetch(url);
+        const raw = await response.json();
+        const result = raw.data || raw;
+
+        if (response.ok && result.success) {
+          localStorage.setItem(AUTH_KEY, JSON.stringify({
+            sessionToken: result.sessionToken,
+            timestamp: Date.now(),
+            expiresIn: result.expiresIn
+          }));
+          localStorage.setItem('ro_api_password', enteredPassword);
+          unlockPage();
+          passwordInput.value = '';
+        } else {
+          errorEl.textContent = result.error || result.message || 'Invalid password';
+          errorEl.classList.add('visible');
+          passwordInput.value = '';
+          passwordInput.focus();
+        }
+      } catch (error) {
+        errorEl.textContent = 'Connection error. Please try again.';
+        errorEl.classList.add('visible');
+      } finally {
+        loginBtn.disabled = false;
+        loginBtn.textContent = 'Unlock';
+      }
+    });
+
+    function unlockPage() {
+      document.body.classList.remove('auth-required');
+      document.getElementById('auth-overlay').classList.add('hidden');
+    }
+  </script>
 
   <!-- Sidebar Script -->
   <script>

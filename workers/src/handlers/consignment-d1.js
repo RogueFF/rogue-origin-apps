@@ -6,12 +6,28 @@
 import { query, queryOne, execute } from '../lib/db.js';
 import { successResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
 import { createError } from '../lib/errors.js';
+import { requireAuth } from '../lib/auth.js';
+
+// Write actions that require authentication
+const CONSIGNMENT_WRITE_ACTIONS = new Set([
+  'saveConsignmentPartner', 'saveConsignmentStrain',
+  'saveConsignmentIntake', 'saveConsignmentBatchIntake',
+  'saveConsignmentSale', 'saveConsignmentInventoryCount',
+  'saveConsignmentPayment',
+  'deleteConsignmentPartner', 'deleteConsignmentIntake',
+  'deleteConsignmentSale', 'deleteConsignmentPayment',
+]);
 
 export async function handleConsignmentD1(request, env, ctx) {
   const body = request.method === 'POST' ? await parseBody(request) : {};
   const action = getAction(request, body);
   const params = getQueryParams(request);
   const db = env.DB;
+
+  // Require auth for write actions
+  if (CONSIGNMENT_WRITE_ACTIONS.has(action)) {
+    requireAuth(request, body, env, `consignment-${action}`);
+  }
 
   switch (action) {
     // === PARTNERS ===

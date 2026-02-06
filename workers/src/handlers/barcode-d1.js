@@ -7,7 +7,6 @@ import { query, queryOne, insert, update, deleteRows } from '../lib/db.js';
 import { readSheet } from '../lib/sheets.js';
 import { successResponse, parseBody, getAction } from '../lib/response.js';
 import { createError } from '../lib/errors.js';
-import { sanitizeForSheets } from '../lib/validate.js';
 
 const SHEET_NAME = 'Sheet1';
 
@@ -69,9 +68,9 @@ async function addProduct(body, env) {
   }
 
   await insert(env.DB, 'products', {
-    header: sanitizeForSheets(data.header),
-    sku: sanitizeForSheets(data.sku),
-    barcode: sanitizeForSheets(data.barcode || ''),
+    header: data.header,
+    sku: data.sku,
+    barcode: (data.barcode || ''),
   });
 
   return successResponse({ success: true, message: 'Product added successfully' });
@@ -85,9 +84,9 @@ async function updateProduct(body, env) {
   const data = validateProduct(body);
 
   const changes = await update(env.DB, 'products', {
-    header: sanitizeForSheets(data.header),
-    sku: sanitizeForSheets(data.sku),
-    barcode: sanitizeForSheets(data.barcode || ''),
+    header: data.header,
+    sku: data.sku,
+    barcode: (data.barcode || ''),
   }, 'id = ?', [body.row]);
 
   if (changes === 0) {
@@ -147,9 +146,9 @@ async function importCSV(body, env) {
 
       if (headerRaw && skuRaw && !existingSKUs.has(skuRaw)) {
         await insert(env.DB, 'products', {
-          header: sanitizeForSheets(headerRaw),
-          sku: sanitizeForSheets(skuRaw),
-          barcode: sanitizeForSheets(barcodeRaw),
+          header: headerRaw,
+          sku: skuRaw,
+          barcode: barcodeRaw,
         });
         existingSKUs.add(skuRaw);
         added++;
@@ -212,9 +211,9 @@ async function migrateFromSheets(env) {
     }
 
     await insert(env.DB, 'products', {
-      header: sanitizeForSheets(header),
-      sku: sanitizeForSheets(sku),
-      barcode: sanitizeForSheets(barcode),
+      header: header,
+      sku: sku,
+      barcode: barcode,
     });
     existingSKUs.add(sku);
     migrated++;

@@ -7,7 +7,7 @@ import { query, queryOne, insert, update, deleteRows, execute } from '../lib/db.
 import { readSheet } from '../lib/sheets.js';
 import { successResponse, parseBody, getAction } from '../lib/response.js';
 import { createError } from '../lib/errors.js';
-import { sanitizeForSheets } from '../lib/validate.js';
+import { requireAuth } from '../lib/auth.js';
 
 // Sheet tab names for migration
 const SHEETS = {
@@ -122,14 +122,14 @@ async function createSOP(body, env) {
 
   await insert(env.DB, 'sops', {
     id,
-    title: sanitizeForSheets(sop.title || ''),
-    title_es: sanitizeForSheets(sop.title_es || ''),
-    dept: sanitizeForSheets(sop.dept || ''),
-    doc_num: sanitizeForSheets(sop.docNum || ''),
-    revision: sanitizeForSheets(sop.revision || '1'),
-    status: sanitizeForSheets(sop.status || 'draft'),
-    description: sanitizeForSheets(sop.description || ''),
-    desc_es: sanitizeForSheets(sop.desc_es || ''),
+    title: (sop.title || ''),
+    title_es: (sop.title_es || ''),
+    dept: (sop.dept || ''),
+    doc_num: (sop.docNum || ''),
+    revision: (sop.revision || '1'),
+    status: (sop.status || 'draft'),
+    description: (sop.description || ''),
+    desc_es: (sop.desc_es || ''),
     tags: JSON.stringify(sop.tags || []),
     steps: JSON.stringify(sop.steps || []),
     linked_sops: JSON.stringify(sop.linkedSops || []),
@@ -158,14 +158,14 @@ async function updateSOP(body, env) {
   const now = new Date().toISOString();
 
   await update(env.DB, 'sops', {
-    title: sanitizeForSheets(sop.title || ''),
-    title_es: sanitizeForSheets(sop.title_es || ''),
-    dept: sanitizeForSheets(sop.dept || ''),
-    doc_num: sanitizeForSheets(sop.docNum || ''),
-    revision: sanitizeForSheets(sop.revision || '1'),
-    status: sanitizeForSheets(sop.status || 'draft'),
-    description: sanitizeForSheets(sop.description || ''),
-    desc_es: sanitizeForSheets(sop.desc_es || ''),
+    title: (sop.title || ''),
+    title_es: (sop.title_es || ''),
+    dept: (sop.dept || ''),
+    doc_num: (sop.docNum || ''),
+    revision: (sop.revision || '1'),
+    status: (sop.status || 'draft'),
+    description: (sop.description || ''),
+    desc_es: (sop.desc_es || ''),
     tags: JSON.stringify(sop.tags || []),
     steps: JSON.stringify(sop.steps || []),
     linked_sops: JSON.stringify(sop.linkedSops || []),
@@ -209,12 +209,12 @@ async function createRequest(body, env) {
 
   await insert(env.DB, 'sop_requests', {
     id,
-    title: sanitizeForSheets(request.title || ''),
-    dept: sanitizeForSheets(request.dept || ''),
-    priority: sanitizeForSheets(request.priority || 'medium'),
-    assignee: sanitizeForSheets(request.assignee || ''),
-    due_date: sanitizeForSheets(request.dueDate || ''),
-    notes: sanitizeForSheets(request.notes || ''),
+    title: (request.title || ''),
+    dept: (request.dept || ''),
+    priority: (request.priority || 'medium'),
+    assignee: (request.assignee || ''),
+    due_date: (request.dueDate || ''),
+    notes: (request.notes || ''),
     completed: 0,
     created_at: now,
   });
@@ -238,12 +238,12 @@ async function updateRequest(body, env) {
   }
 
   await update(env.DB, 'sop_requests', {
-    title: sanitizeForSheets(request.title || ''),
-    dept: sanitizeForSheets(request.dept || ''),
-    priority: sanitizeForSheets(request.priority || 'medium'),
-    assignee: sanitizeForSheets(request.assignee || ''),
-    due_date: sanitizeForSheets(request.dueDate || ''),
-    notes: sanitizeForSheets(request.notes || ''),
+    title: (request.title || ''),
+    dept: (request.dept || ''),
+    priority: (request.priority || 'medium'),
+    assignee: (request.assignee || ''),
+    due_date: (request.dueDate || ''),
+    notes: (request.notes || ''),
     completed: request.completed ? 1 : 0,
   }, 'id = ?', [request.id]);
 
@@ -384,14 +384,14 @@ async function migrateFromSheets(env) {
 
         await insert(env.DB, 'sops', {
           id,
-          title: sanitizeForSheets(row[colMap['title']] || ''),
-          title_es: sanitizeForSheets(row[colMap['title_es']] || ''),
-          dept: sanitizeForSheets(row[colMap['dept']] || row[colMap['department']] || ''),
-          doc_num: sanitizeForSheets(row[colMap['docnum']] || row[colMap['doc_num']] || ''),
-          revision: sanitizeForSheets(row[colMap['revision']] || '1'),
-          status: sanitizeForSheets(row[colMap['status']] || 'draft'),
-          description: sanitizeForSheets(row[colMap['description']] || ''),
-          desc_es: sanitizeForSheets(row[colMap['desc_es']] || ''),
+          title: (row[colMap['title']] || ''),
+          title_es: (row[colMap['title_es']] || ''),
+          dept: (row[colMap['dept']] || row[colMap['department']] || ''),
+          doc_num: (row[colMap['docnum']] || row[colMap['doc_num']] || ''),
+          revision: (row[colMap['revision']] || '1'),
+          status: (row[colMap['status']] || 'draft'),
+          description: (row[colMap['description']] || ''),
+          desc_es: (row[colMap['desc_es']] || ''),
           tags: JSON.stringify(tags),
           steps: JSON.stringify(steps),
           created_at: row[colMap['createdat']] || row[colMap['created']] || new Date().toISOString(),
@@ -423,12 +423,12 @@ async function migrateFromSheets(env) {
 
         await insert(env.DB, 'sop_requests', {
           id,
-          title: sanitizeForSheets(row[colMap['title']] || ''),
-          dept: sanitizeForSheets(row[colMap['dept']] || row[colMap['department']] || ''),
-          priority: sanitizeForSheets(row[colMap['priority']] || 'medium'),
-          assignee: sanitizeForSheets(row[colMap['assignee']] || ''),
-          due_date: sanitizeForSheets(row[colMap['duedate']] || row[colMap['due_date']] || ''),
-          notes: sanitizeForSheets(row[colMap['notes']] || ''),
+          title: (row[colMap['title']] || ''),
+          dept: (row[colMap['dept']] || row[colMap['department']] || ''),
+          priority: (row[colMap['priority']] || 'medium'),
+          assignee: (row[colMap['assignee']] || ''),
+          due_date: (row[colMap['duedate']] || row[colMap['due_date']] || ''),
+          notes: (row[colMap['notes']] || ''),
           completed: row[colMap['completed']] === 'true' || row[colMap['completed']] === true ? 1 : 0,
           created_at: row[colMap['createdat']] || row[colMap['created']] || new Date().toISOString(),
         });
@@ -485,7 +485,7 @@ export async function handleSopD1(request, env) {
     updateRequest: () => updateRequest(body, env),
     deleteRequest: () => deleteRequest(body, env),
     saveSettings: () => saveSettings(body, env),
-    anthropic: () => anthropic(body, env),
+    anthropic: () => { requireAuth(request, body, env, 'sop-anthropic'); return anthropic(body, env); },
     migrate: () => migrateFromSheets(env),
   };
 

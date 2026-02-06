@@ -58,7 +58,10 @@ async function apiGet(action, params = {}) {
 async function apiPost(action, data) {
   const res = await fetch(`${API_BASE}?action=${action}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'text/plain' },
+    headers: {
+      'Content-Type': 'text/plain',
+      'Authorization': 'Bearer ' + (localStorage.getItem('ro_api_password') || ''),
+    },
     body: JSON.stringify(data),
   });
   if (!res.ok) {
@@ -99,7 +102,10 @@ export function saveSale(data) {
 export async function saveInventoryCount(data) {
   const res = await fetch(`${API_BASE}?action=saveConsignmentInventoryCount`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + (localStorage.getItem('ro_api_password') || ''),
+    },
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error('Failed to save inventory count');

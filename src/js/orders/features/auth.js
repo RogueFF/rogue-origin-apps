@@ -69,6 +69,7 @@ export async function handleLogin(event) {
         expiresIn: result.expiresIn
       };
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+      localStorage.setItem('ro_api_password', enteredPassword);
 
       unlockPage();
       passwordInput.value = '';
@@ -99,6 +100,7 @@ export async function handleLogin(event) {
 export function handleLogout() {
   if (confirm('Are you sure you want to logout?')) {
     localStorage.removeItem(AUTH_STORAGE_KEY);
+    localStorage.removeItem('ro_api_password');
     document.body.classList.add('auth-required');
     showLoginScreen();
   }

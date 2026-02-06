@@ -7,7 +7,7 @@ import { query, queryOne, insert, update, deleteRows, execute } from '../lib/db.
 import { readSheet } from '../lib/sheets.js';
 import { successResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
 import { createError } from '../lib/errors.js';
-import { sanitizeForSheets } from '../lib/validate.js';
+import { validatePassword as authValidatePassword, requireAuth } from '../lib/auth.js';
 
 const COA_FOLDER_ID = '1vNjWtq701h_hSCA1gvjlD37xOZv6QbfO';
 const DRIVE_API_BASE = 'https://www.googleapis.com/drive/v3';
@@ -93,17 +93,16 @@ function formatDate(value) {
 
 async function validatePassword(params, env) {
   const password = params.password || '';
-  const expectedPassword = env.ORDERS_PASSWORD;
 
-  if (!expectedPassword) throw createError('INTERNAL_ERROR', 'Password not configured');
+  // Use constant-time comparison from auth.js
+  authValidatePassword(password, env, 'orders-validatePassword');
 
-  if (password === expectedPassword) {
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(2, 15);
-    const sessionToken = btoa(`${timestamp}-${random}`).substring(0, 32);
-    return successResponse({ success: true, sessionToken, expiresIn: 30 * 24 * 60 * 60 * 1000 });
-  }
-  throw createError('UNAUTHORIZED', 'Invalid password');
+  // Generate cryptographically secure session token
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  const sessionToken = btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  return successResponse({ success: true, sessionToken, expiresIn: 30 * 24 * 60 * 60 * 1000 });
 }
 
 // ===== CUSTOMERS =====
@@ -139,24 +138,24 @@ async function saveCustomer(body, env) {
 
   if (existing) {
     await update(env.DB, 'customers', {
-      company: sanitizeForSheets(body.companyName || ''),
-      name: sanitizeForSheets(body.contactName || ''),
-      email: sanitizeForSheets(body.email || ''),
-      phone: sanitizeForSheets(body.phone || ''),
-      address: sanitizeForSheets(body.shipToAddress || ''),
-      notes: sanitizeForSheets(body.notes || ''),
+      company: (body.companyName || ''),
+      name: (body.contactName || ''),
+      email: (body.email || ''),
+      phone: (body.phone || ''),
+      address: (body.shipToAddress || ''),
+      notes: (body.notes || ''),
     }, 'id = ?', [body.id]);
   } else {
     const count = await query(env.DB, 'SELECT COUNT(*) as cnt FROM customers');
     const newId = body.id || `CUST-${String((count[0]?.cnt || 0) + 1).padStart(3, '0')}`;
     await insert(env.DB, 'customers', {
       id: newId,
-      company: sanitizeForSheets(body.companyName || ''),
-      name: sanitizeForSheets(body.contactName || ''),
-      email: sanitizeForSheets(body.email || ''),
-      phone: sanitizeForSheets(body.phone || ''),
-      address: sanitizeForSheets(body.shipToAddress || ''),
-      notes: sanitizeForSheets(body.notes || ''),
+      company: (body.companyName || ''),
+      name: (body.contactName || ''),
+      email: (body.email || ''),
+      phone: (body.phone || ''),
+      address: (body.shipToAddress || ''),
+      notes: (body.notes || ''),
     });
     body.id = newId;
   }
@@ -215,13 +214,13 @@ async function saveMasterOrder(body, env) {
   }
 
   const data = {
-    customer_id: sanitizeForSheets(body.customerID || ''),
+    customer_id: (body.customerID || ''),
     order_date: body.createdDate || new Date().toISOString(),
-    status: sanitizeForSheets(body.status || 'pending'),
+    status: (body.status || 'pending'),
     commitment_price: body.commitmentAmount || 0,
-    payment_terms: sanitizeForSheets(body.terms || 'DAP'),
+    payment_terms: (body.terms || 'DAP'),
     ship_date: body.dueDate || '',
-    notes: sanitizeForSheets(body.notes || ''),
+    notes: (body.notes || ''),
     priority: body.priority || null,
     updated_at: new Date().toISOString(),
   };
@@ -325,14 +324,14 @@ async function saveShipment(body, env) {
   }
 
   const data = {
-    order_id: sanitizeForSheets(body.orderID || ''),
+    order_id: (body.orderID || ''),
     invoice_number: body.invoiceNumber,
     ship_date: body.shipmentDate || new Date().toISOString(),
-    status: sanitizeForSheets(body.status || 'pending'),
+    status: (body.status || 'pending'),
     quantity_kg: body.lineItems?.reduce((sum, i) => sum + (parseFloat(i.quantity) || 0), 0) || 0,
     total_value: body.totalAmount || 0,
-    tracking_number: sanitizeForSheets(body.trackingNumber || ''),
-    carrier: sanitizeForSheets(body.carrier || ''),
+    tracking_number: (body.trackingNumber || ''),
+    carrier: (body.carrier || ''),
     notes: JSON.stringify(body.lineItems || []),
     updated_at: new Date().toISOString(),
   };
@@ -400,12 +399,12 @@ async function savePayment(body, env) {
   }
 
   const data = {
-    order_id: sanitizeForSheets(body.orderID || ''),
+    order_id: (body.orderID || ''),
     payment_date: body.paymentDate || new Date().toISOString(),
     amount: body.amount || 0,
-    method: sanitizeForSheets(body.method || ''),
-    reference: sanitizeForSheets(body.reference || ''),
-    notes: sanitizeForSheets(body.notes || ''),
+    method: (body.method || ''),
+    reference: (body.reference || ''),
+    notes: (body.notes || ''),
     updated_at: new Date().toISOString(),
   };
 
@@ -849,12 +848,12 @@ async function migrateFromSheets(env) {
 
       await insert(env.DB, 'customers', {
         id: row[0],
-        company: sanitizeForSheets(row[1] || ''),
-        name: sanitizeForSheets(row[2] || ''),
-        email: sanitizeForSheets(row[3] || ''),
-        phone: sanitizeForSheets(row[4] || ''),
-        address: sanitizeForSheets(row[5] || ''),
-        notes: sanitizeForSheets(row[8] || ''),
+        company: (row[1] || ''),
+        name: (row[2] || ''),
+        email: (row[3] || ''),
+        phone: (row[4] || ''),
+        address: (row[5] || ''),
+        notes: (row[8] || ''),
         created_at: row[9] || new Date().toISOString(),
       });
       customersMigrated++;
@@ -872,12 +871,12 @@ async function migrateFromSheets(env) {
 
       await insert(env.DB, 'orders', {
         id: row[0],
-        customer_id: sanitizeForSheets(row[1] || ''),
-        status: sanitizeForSheets(row[5] || 'pending'),
+        customer_id: (row[1] || ''),
+        status: (row[5] || 'pending'),
         commitment_price: parseFloat(row[3]) || 0,
-        payment_terms: sanitizeForSheets(row[7] || 'DAP'),
+        payment_terms: (row[7] || 'DAP'),
         ship_date: row[9] || '',
-        notes: sanitizeForSheets(row[20] || ''),
+        notes: (row[20] || ''),
         priority: parseInt(row[21]) || null,
         created_at: row[8] || new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -897,14 +896,14 @@ async function migrateFromSheets(env) {
 
       await insert(env.DB, 'shipments', {
         id: row[0],
-        order_id: sanitizeForSheets(row[1] || ''),
+        order_id: (row[1] || ''),
         invoice_number: row[2] || '',
         ship_date: row[3] || new Date().toISOString(),
-        status: sanitizeForSheets(row[5] || 'pending'),
+        status: (row[5] || 'pending'),
         quantity_kg: 0,
         total_value: parseFloat(row[11]) || 0,
-        tracking_number: sanitizeForSheets(row[12] || ''),
-        carrier: sanitizeForSheets(row[13] || ''),
+        tracking_number: (row[12] || ''),
+        carrier: (row[13] || ''),
         notes: row[7] || '[]',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -924,12 +923,12 @@ async function migrateFromSheets(env) {
 
       await insert(env.DB, 'payments', {
         id: row[0],
-        order_id: sanitizeForSheets(row[1] || ''),
+        order_id: (row[1] || ''),
         payment_date: row[2] || new Date().toISOString(),
         amount: parseFloat(row[3]) || 0,
-        method: sanitizeForSheets(row[4] || ''),
-        reference: sanitizeForSheets(row[5] || ''),
-        notes: sanitizeForSheets(row[6] || ''),
+        method: (row[4] || ''),
+        reference: (row[5] || ''),
+        notes: (row[6] || ''),
         created_at: row[8] || new Date().toISOString(),
         updated_at: new Date().toISOString(),
       });
@@ -1178,10 +1177,25 @@ async function getShipmentPaymentStatus(params, env) {
 
 // ===== MAIN HANDLER =====
 
+// Actions that require authentication (write operations)
+const ORDERS_WRITE_ACTIONS = new Set([
+  'saveCustomer', 'deleteCustomer',
+  'saveMasterOrder', 'deleteMasterOrder', 'updateOrderPriority',
+  'saveShipment', 'deleteShipment',
+  'savePayment', 'deletePayment',
+  'syncCOAIndex', 'migrate', 'migratePaymentLinks',
+  'savePaymentLink', 'deletePaymentLink',
+]);
+
 export async function handleOrdersD1(request, env) {
   const action = getAction(request);
   const params = getQueryParams(request);
   const body = request.method === 'POST' ? await parseBody(request) : {};
+
+  // Require auth for write actions
+  if (ORDERS_WRITE_ACTIONS.has(action)) {
+    requireAuth(request, body, env, `orders-${action}`);
+  }
 
   const actions = {
     validatePassword: () => validatePassword(params, env),
