@@ -1699,7 +1699,21 @@
       updateDropdowns();
     }
     
+    function syncStepsFromDOM() {
+      const stepItems = document.querySelectorAll('#stepsList .step-item');
+      stepItems.forEach((item, i) => {
+        if (i >= editingSteps.length) return;
+        const titleInput = item.querySelector('.step-title-input');
+        const descInput = item.querySelector('.step-desc-input');
+        if (titleInput) editingSteps[i].title = titleInput.value;
+        if (descInput) editingSteps[i].description = descInput.value;
+      });
+    }
+
     async function saveSOP(status) {
+      // Sync step inputs from DOM before saving (onchange may not have fired)
+      syncStepsFromDOM();
+
       const title = document.getElementById('sopTitle').value.trim();
       const dept = document.getElementById('sopDept').value;
       
