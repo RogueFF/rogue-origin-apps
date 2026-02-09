@@ -7,8 +7,8 @@
 /* ===== CSS Variables ===== */
 :root {
   /* Layout */
-  --header-height: 44px;
-  --circle-size: min(35vh, 35vw);
+  --header-height: 48px;
+  --circle-size: min(45vh, 45vw);
 
   /* Dark Theme Colors */
   --bg-dark: #1a1a1a;
@@ -91,7 +91,7 @@ header {
 }
 
 header h1 {
-  font-size: 1.1rem;
+  font-size: 1.3rem;
   font-weight: 600;
   margin: 0;
   color: var(--ro-gold);
@@ -147,7 +147,7 @@ main {
   position: absolute;
   top: 0.75rem;
   left: 0.75rem;
-  font-size: 0.85rem;
+  font-size: 1rem;
   font-weight: 600;
   margin: 0;
   color: var(--text-muted);
@@ -223,11 +223,11 @@ main {
 }
 
 #scaleWeight {
-  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-size: clamp(2.5rem, 7vw, 5rem);
 }
 
 .label {
-  font-size: clamp(0.8rem, 1.5vw, 1rem);
+  font-size: clamp(1rem, 2vw, 1.4rem);
   color: var(--text-muted);
   margin-top: 0.4rem;
   text-transform: uppercase;
@@ -352,7 +352,7 @@ main {
 
 .timer-value {
   font-family: var(--font-display);
-  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-size: clamp(2.5rem, 7vw, 5rem);
   font-weight: 900;
   color: #fff;
   line-height: 1;
@@ -380,7 +380,7 @@ main {
 
 .timer-label {
   font-family: var(--font-ui);
-  font-size: clamp(0.7rem, 1.2vw, 0.9rem);
+  font-size: clamp(0.9rem, 1.5vw, 1.2rem);
   color: rgba(255, 255, 255, 0.5);
   margin-top: 4px;
   text-transform: uppercase;
@@ -406,7 +406,7 @@ main {
 /* Timer target info line */
 .timer-target {
   font-family: var(--font-ui);
-  font-size: clamp(0.7rem, 1.2vw, 0.9rem);
+  font-size: clamp(0.9rem, 1.5vw, 1.1rem);
   color: rgba(255, 255, 255, 0.4);
   margin-top: 0.75rem;
   text-align: center;
