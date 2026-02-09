@@ -176,14 +176,13 @@ function initSerialPort() {
     serialPort.on('error', (err) => {
       console.error('  Serial error:', err.message);
       isConnected = false;
+      scheduleReconnect();
     });
 
     serialPort.on('close', () => {
       console.log('  Serial port closed');
       isConnected = false;
-
-      // Try to reconnect after 5 seconds
-      setTimeout(initSerialPort, 5000);
+      scheduleReconnect();
     });
 
   } catch (error) {
@@ -191,6 +190,17 @@ function initSerialPort() {
     console.log('  Run with --mock flag for testing without scale\n');
     isConnected = false;
   }
+}
+
+// Reconnect guard — prevents multiple simultaneous reconnect attempts
+let reconnectTimer = null;
+function scheduleReconnect() {
+  if (reconnectTimer) return;
+  console.log('  Reconnecting in 5 seconds...');
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    initSerialPort();
+  }, 5000);
 }
 
 // Graceful shutdown
