@@ -485,7 +485,7 @@ export async function handleSopD1(request, env) {
     updateRequest: () => updateRequest(body, env),
     deleteRequest: () => deleteRequest(body, env),
     saveSettings: () => saveSettings(body, env),
-    anthropic: () => { requireAuth(request, body, env, 'sop-anthropic'); return anthropic(body, env); },
+    anthropic: () => anthropic(body, env),
     migrate: () => migrateFromSheets(env),
   };
 
