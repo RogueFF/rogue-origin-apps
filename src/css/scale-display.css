@@ -163,15 +163,15 @@ main {
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: var(--ro-gold);
-  padding: 0.3rem 0.6rem;
-  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
   cursor: pointer;
   font-family: var(--font-ui);
   font-weight: 600;
-  font-size: 0.75rem;
+  font-size: 1.1rem;
   transition: all var(--transition-fast);
-  min-width: 44px;
-  min-height: 32px;
+  min-width: 56px;
+  min-height: 44px;
 }
 
 .unit-toggle:hover {
