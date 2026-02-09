@@ -1,54 +1,44 @@
 @echo off
-REM Scale Reader - Windows Startup Script
-REM Starts the scale reader and keeps it running
-
+title Rogue Origin Scale Reader
 echo ========================================
-echo  Rogue Origin - Scale Reader
+echo   Rogue Origin Scale Reader - Auto Start
 echo ========================================
 echo.
 
-REM Change to the script's directory
+:: Navigate to the scale reader directory
 cd /d "%~dp0"
 
-REM Check if Node.js is installed
-where node >nul 2>nul
-if %ERRORLEVEL% NEQ 0 (
-    echo ERROR: Node.js is not installed!
-    echo Please install Node.js from https://nodejs.org/
-    echo.
-    pause
-    exit /b 1
+:: Pull latest from git
+echo Checking for updates...
+git pull 2>nul
+if %errorlevel% equ 0 (
+    echo Updated to latest version.
+) else (
+    echo No git repo or offline - running current version.
 )
+echo.
 
-REM Check if node_modules exists
-if not exist "node_modules\" (
+:: Install/update dependencies if needed
+if not exist node_modules (
     echo Installing dependencies...
-    call npm install
+    npm install
     echo.
 )
 
-REM Create logs directory if it doesn't exist
-if not exist "logs\" mkdir logs
-
-echo Starting Scale Reader...
+:: Start the scale reader
+echo Starting scale reader...
+echo Press Ctrl+C to stop.
 echo.
-echo Local Display: http://localhost:3000
-echo Press Ctrl+C to stop
-echo.
-echo Logs are being written to: logs\scale-reader.log
-echo ========================================
-echo.
+npm start
 
-REM Start the scale reader
-REM Logs both to console and file
-node index.js 2>&1 | tee logs\scale-reader.log
+:: If it crashes, wait and restart
+echo.
+echo Scale reader stopped. Restarting in 10 seconds...
+echo Press Ctrl+C to exit.
+timeout /t 10 /nobreak
+goto :restart
 
-REM If it exits, wait before closing
-if %ERRORLEVEL% NEQ 0 (
-    echo.
-    echo ========================================
-    echo ERROR: Scale Reader stopped unexpectedly
-    echo Check logs\scale-reader.log for details
-    echo ========================================
-    pause
-)
+:restart
+echo Restarting...
+npm start
+goto :restart
