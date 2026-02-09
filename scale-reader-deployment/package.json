@@ -2,13 +2,31 @@
   "name": "scale-reader",
   "version": "1.0.0",
   "description": "Brecknell GP100 scale reader for Rogue Origin",
-  "main": "index.js",
+  "main": "launcher.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "node index.js --mock"
+    "dev": "node index.js --mock",
+    "build": "pkg . --targets node18-win-x64 --output dist/ScaleReader.exe"
   },
   "dependencies": {
     "express": "^4.18.2",
     "serialport": "^12.0.0"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
+  },
+  "pkg": {
+    "scripts": [
+      "index.js"
+    ],
+    "assets": [
+      "public/**/*",
+      "node_modules/serialport/**/*",
+      "node_modules/@serialport/**/*"
+    ],
+    "targets": [
+      "node18-win-x64"
+    ],
+    "outputPath": "dist"
   }
 }
