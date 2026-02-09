@@ -90,6 +90,22 @@ export function safeNumber(value, decimals, defaultValue) {
 // ==================== TIME CALCULATIONS ====================
 
 /**
+ * Get effective shift start time in minutes from midnight.
+ * Uses custom shift start from localStorage if set for today, otherwise default.
+ * @returns {number} Start time in minutes from midnight
+ */
+function getEffectiveShiftStartMin() {
+  const savedStart = localStorage.getItem('manualShiftStart');
+  if (savedStart) {
+    const savedTime = new Date(savedStart);
+    if (savedTime.toDateString() === new Date().toDateString()) {
+      return savedTime.getHours() * 60 + savedTime.getMinutes();
+    }
+  }
+  return workSchedule.startHour * 60 + workSchedule.startMin;
+}
+
+/**
  * Calculate productive minutes elapsed since start of workday
  * Automatically subtracts break periods (morning, lunch, afternoon, cleanup)
  * @returns {number} Productive minutes elapsed (0 if before work starts)
@@ -99,35 +115,24 @@ export function safeNumber(value, decimals, defaultValue) {
  */
 export function getProductiveMinutesElapsed() {
   const now = new Date();
-  const currentHour = now.getHours();
-  const currentMin = now.getMinutes();
-
-  // Convert current time to minutes since midnight
-  const currentTimeInMin = currentHour * 60 + currentMin;
-  const startTimeInMin = workSchedule.startHour * 60 + workSchedule.startMin;
+  const currentTimeInMin = now.getHours() * 60 + now.getMinutes();
+  const startTimeInMin = getEffectiveShiftStartMin();
   const endTimeInMin = workSchedule.endHour * 60 + workSchedule.endMin;
 
-  // Before work starts
   if (currentTimeInMin < startTimeInMin) return 0;
 
-  // After work ends
-  if (currentTimeInMin >= endTimeInMin) return workSchedule.totalProductiveMinutes;
+  const effectiveEnd = Math.min(currentTimeInMin, endTimeInMin);
+  const rawMinutesElapsed = effectiveEnd - startTimeInMin;
 
-  // Calculate raw minutes elapsed since start
-  const rawMinutesElapsed = currentTimeInMin - startTimeInMin;
-
-  // Subtract break time that has passed
+  // Subtract only break portions that overlap [startTimeInMin, effectiveEnd]
   let breakMinutesPassed = 0;
   workSchedule.breaks.forEach(function(b) {
-    const breakStartInMin = b.hour * 60 + b.min;
-    const breakEndInMin = breakStartInMin + b.duration;
-
-    if (currentTimeInMin >= breakEndInMin) {
-      // Break is fully over
-      breakMinutesPassed += b.duration;
-    } else if (currentTimeInMin > breakStartInMin) {
-      // Currently in break
-      breakMinutesPassed += (currentTimeInMin - breakStartInMin);
+    const breakStart = b.hour * 60 + b.min;
+    const breakEnd = breakStart + b.duration;
+    const overlapStart = Math.max(breakStart, startTimeInMin);
+    const overlapEnd = Math.min(breakEnd, effectiveEnd);
+    if (overlapEnd > overlapStart) {
+      breakMinutesPassed += (overlapEnd - overlapStart);
     }
   });
 
@@ -147,7 +152,22 @@ export function getProductiveHoursElapsed() {
  * @returns {number} Total hours (typically 8.5 after subtracting all breaks)
  */
 export function getTotalProductiveHours() {
-  return workSchedule.totalProductiveMinutes / 60; // 8.5 hours
+  const startTimeInMin = getEffectiveShiftStartMin();
+  const endTimeInMin = workSchedule.endHour * 60 + workSchedule.endMin;
+  const totalMinutes = endTimeInMin - startTimeInMin;
+
+  let breakMinutes = 0;
+  workSchedule.breaks.forEach(function(b) {
+    const breakStart = b.hour * 60 + b.min;
+    const breakEnd = breakStart + b.duration;
+    const overlapStart = Math.max(breakStart, startTimeInMin);
+    const overlapEnd = Math.min(breakEnd, endTimeInMin);
+    if (overlapEnd > overlapStart) {
+      breakMinutes += (overlapEnd - overlapStart);
+    }
+  });
+
+  return Math.max(0, (totalMinutes - breakMinutes) / 60);
 }
 
 // ==================== DATE FORMATTING ====================
