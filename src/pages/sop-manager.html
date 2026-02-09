@@ -88,7 +88,12 @@
     <div class="modal-box wide">
       <div class="modal-header">
         <h2 id="modalTitle"><i class="ph-duotone ph-file-text"></i> Create New SOP</h2>
-        <button class="modal-close" onclick="closeModal('editModal')">&times;</button>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button class="tutorial-toggle-btn" id="tutorialToggleBtn" onclick="toggleTutorial()" title="Tutorial Walkthrough">
+            <i class="ph-duotone ph-question"></i>
+          </button>
+          <button class="modal-close" onclick="closeModal('editModal')">&times;</button>
+        </div>
       </div>
       <div class="modal-body">
         <!-- Tutorial Walkthrough Banner -->
@@ -196,6 +201,9 @@
         <button class="header-btn" onclick="saveSOP('draft')"><i class="ph-duotone ph-floppy-disk"></i> Save Draft</button>
         <button class="header-btn primary" onclick="saveSOP('published')"><i class="ph-duotone ph-check-circle"></i> Publish</button>
       </div>
+      <button class="fab-add-step" id="fabAddStep" onclick="fabAddStep()" title="Add Step" style="display: none;">
+        <i class="ph-bold ph-plus"></i>
+      </button>
     </div>
   </div>
 
@@ -1616,6 +1624,17 @@
       tutorialNext();
     }
 
+    function toggleTutorial() {
+      const btn = document.getElementById('tutorialToggleBtn');
+      if (tutorialActive) {
+        endTutorial();
+        btn.classList.remove('active');
+      } else {
+        startTutorial();
+        btn.classList.add('active');
+      }
+    }
+
     function setupTutorialListeners() {
       // No auto-advance - users must click Next/Skip to proceed
       // We only set up observer to track when steps are added for re-highlighting
@@ -2089,6 +2108,13 @@
     
     function openModal(id) {
       document.getElementById(id).classList.add('active');
+      // Show FAB button when edit modal opens
+      if (id === 'editModal') {
+        setTimeout(() => {
+          const fab = document.getElementById('fabAddStep');
+          if (fab) fab.style.display = 'flex';
+        }, 100);
+      }
     }
     
     function closeModal(id) {
@@ -2096,6 +2122,13 @@
       // End tutorial if closing edit modal
       if (id === 'editModal' && tutorialActive) {
         endTutorial();
+      }
+      // Hide FAB button and reset tutorial toggle when closing edit modal
+      if (id === 'editModal') {
+        const fab = document.getElementById('fabAddStep');
+        if (fab) fab.style.display = 'none';
+        const tutorialBtn = document.getElementById('tutorialToggleBtn');
+        if (tutorialBtn) tutorialBtn.classList.remove('active');
       }
       // Reset view stack when closing view modal
       if (id === 'viewModal') {
@@ -2127,8 +2160,11 @@
       renderEditLinkedSops();
       openModal('editModal');
 
-      // Start tutorial walkthrough
-      setTimeout(() => startTutorial(), 300);
+      // Tutorial is now optional - user must click the ? button to start
+      // Check if user has enabled auto-tutorial in localStorage
+      if (localStorage.getItem('sopAutoTutorial') === 'true') {
+        setTimeout(() => startTutorial(), 300);
+      }
     }
     
     function editSOP(id) {
@@ -2670,6 +2706,21 @@
     function addStep() {
       editingSteps.push({ title: '', description: '', image: '', safety: false, quality: false });
       renderSteps();
+    }
+
+    function fabAddStep() {
+      addStep();
+      // Auto-scroll to the new step
+      setTimeout(() => {
+        const stepsList = document.getElementById('stepsList');
+        const lastStep = stepsList.lastElementChild;
+        if (lastStep) {
+          lastStep.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // Focus on the title input of the new step
+          const titleInput = lastStep.querySelector('input[placeholder*="title"]');
+          if (titleInput) titleInput.focus();
+        }
+      }, 100);
     }
     
     function removeStep(i) {
@@ -3410,6 +3461,7 @@
       }
     });
   </script>
+  <script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
   <script src="../js/sw-register.js" async></script>
 </body>
 </html>
