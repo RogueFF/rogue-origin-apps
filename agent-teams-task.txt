@@ -1,0 +1,19 @@
+Build a Real-Time Production Command Center.
+
+Create an agent team with 3 teammates:
+1. Frontend designer - Load frontend-design skill, create premium UI (NOT generic dashboard aesthetics)
+2. Backend engineer - API integration, real-time polling, data management
+3. QA tester - Testing, verification, documentation
+
+Requirements:
+- Poll API: https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production?action=scoreboard
+- Features: real-time metrics, crew rate monitoring, target tracking, predictive finish time, bag timer alerts, crew breakdown
+- Deliverables:
+  * src/pages/command-center-v2.html
+  * src/css/command-center-v2.css
+  * src/js/command-center-v2/main.js
+- Use DIFFERENT filenames (v2) to preserve original for comparison
+- Integrate into dashboard nav as 'Command Center v2'
+- Commit and push when complete
+
+The bar: production-ready, directly comparable to the single-agent version.
