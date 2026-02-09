@@ -3143,7 +3143,7 @@
       if (!s) return;
 
       // Auto-translate to Spanish if needed
-      if (lang === 'es' && !s.title_es) {
+      if (lang === 'es' && (!s.title_es || s.title_es === s.title)) {
         const esBtn = document.querySelector('#viewLangToggle button:last-child');
         esBtn.innerHTML = '<i class="ph-duotone ph-spinner" style="animation:spin 1s linear infinite"></i>';
         esBtn.disabled = true;
@@ -3158,8 +3158,10 @@
           for (let step of (s.steps || [])) {
             const stepSourceTitle = step.title_en || step.title;
             const stepSourceDesc = step.desc_en || step.description;
-            if (stepSourceTitle && !step.title_es) step.title_es = await translateText(stepSourceTitle, 'en', 'es');
-            if (stepSourceDesc && !step.desc_es) step.desc_es = await translateText(stepSourceDesc, 'en', 'es');
+            const needsTitleTranslation = stepSourceTitle && (!step.title_es || step.title_es === stepSourceTitle);
+            const needsDescTranslation = stepSourceDesc && (!step.desc_es || step.desc_es === stepSourceDesc);
+            if (needsTitleTranslation) step.title_es = await translateText(stepSourceTitle, 'en', 'es');
+            if (needsDescTranslation) step.desc_es = await translateText(stepSourceDesc, 'en', 'es');
           }
           showToast('Translation complete!', 'success');
         } catch (e) {
@@ -3205,8 +3207,10 @@
             for (let step of (s.steps || [])) {
               const stepSourceTitle = step.title_es || step.title;
               const stepSourceDesc = step.desc_es || step.description;
-              if (stepSourceTitle && !step.title_en) step.title_en = await translateText(stepSourceTitle, 'es', 'en');
-              if (stepSourceDesc && !step.desc_en) step.desc_en = await translateText(stepSourceDesc, 'es', 'en');
+              const needsTitleTranslation = stepSourceTitle && (!step.title_en || step.title_en === stepSourceTitle);
+              const needsDescTranslation = stepSourceDesc && (!step.desc_en || step.desc_en === stepSourceDesc);
+              if (needsTitleTranslation) step.title_en = await translateText(stepSourceTitle, 'es', 'en');
+              if (needsDescTranslation) step.desc_en = await translateText(stepSourceDesc, 'es', 'en');
             }
             showToast('Translation complete!', 'success');
           } catch (e) {
