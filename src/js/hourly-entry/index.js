@@ -49,6 +49,7 @@ function updateTimeSlots(shiftStart) {
   // Build slots from defaults
   TIME_SLOTS = [];
   SLOT_START_MINUTES = {};
+  SLOT_END_MINUTES = {};
 
   defaultSlots.forEach((slot) => {
     const startTime = formatTime(slot.start, slot.startMin);
@@ -56,6 +57,7 @@ function updateTimeSlots(shiftStart) {
     const slotLabel = `${startTime} – ${endTime}`;
     TIME_SLOTS.push(slotLabel);
     SLOT_START_MINUTES[slotLabel] = slot.start * 60 + slot.startMin;
+    SLOT_END_MINUTES[slotLabel] = slot.end * 60 + slot.endMin;
   });
 
   // If custom shift start, adjust the slot that contains it
@@ -87,10 +89,12 @@ function updateTimeSlots(shiftStart) {
 
         // Remove old slot from mapping
         delete SLOT_START_MINUTES[oldSlotLabel];
+        delete SLOT_END_MINUTES[oldSlotLabel];
 
         // Update with new slot
         TIME_SLOTS[i] = newSlotLabel;
         SLOT_START_MINUTES[newSlotLabel] = shiftMinutes;
+        SLOT_END_MINUTES[newSlotLabel] = slot.end * 60 + slot.endMin;
         break;
       }
     }
@@ -390,6 +394,20 @@ let SLOT_START_MINUTES = {
   '2:00 PM – 3:00 PM': 14 * 60,
   '3:00 PM – 4:00 PM': 15 * 60,
   '4:00 PM – 4:30 PM': 16 * 60,
+};
+
+// Slot end times in minutes from midnight (will be dynamically updated)
+let SLOT_END_MINUTES = {
+  '7:00 AM – 8:00 AM': 8 * 60,
+  '8:00 AM – 9:00 AM': 9 * 60,
+  '9:00 AM – 10:00 AM': 10 * 60,
+  '10:00 AM – 11:00 AM': 11 * 60,
+  '11:00 AM – 12:00 PM': 12 * 60,
+  '12:30 PM – 1:00 PM': 13 * 60,
+  '1:00 PM – 2:00 PM': 14 * 60,
+  '2:00 PM – 3:00 PM': 15 * 60,
+  '3:00 PM – 4:00 PM': 16 * 60,
+  '4:00 PM – 4:30 PM': 16 * 60 + 30,
 };
 
 /**
@@ -1120,9 +1138,8 @@ function getEffectiveTrimmers(slot, savedData = null) {
       return { effectiveTrimmers1: t1, effectiveTrimmers2: t2 };
     }
 
-    const baseMultiplier = (slot === '4:00 PM – 4:30 PM' || slot === '12:30 PM – 1:00 PM') ? 0.5 : 1;
-    const slotDuration = baseMultiplier === 0.5 ? 30 : 60;
-    const slotEndMinutes = slotStartMinutes + slotDuration;
+    const slotEndMinutes = SLOT_END_MINUTES[slot] || (slotStartMinutes + 60);
+    const slotDuration = slotEndMinutes - slotStartMinutes;
     const nowMinutes = getCurrentMinutes();
     // Use current time or slot end, whichever is earlier
     const endMark = Math.min(nowMinutes, slotEndMinutes);
@@ -1553,69 +1570,38 @@ function updateEditorSummary() {
 }
 
 function getSlotMultiplier(slot) {
-  // Base multiplier: half-hour slots get 0.5, full hours get 1.0
-  let baseMultiplier = 1;
-  if (slot === '4:00 PM – 4:30 PM' || slot === '12:30 PM – 1:00 PM') {
-    baseMultiplier = 0.5;
-  }
+  const slotStart = SLOT_START_MINUTES[slot];
+  const slotEnd = SLOT_END_MINUTES[slot];
+  if (slotStart === undefined || slotEnd === undefined) return 1;
 
-  // Adjust for shift start time (only affects today)
+  // Actual fraction of a full hour this slot covers
+  const slotDuration = slotEnd - slotStart;
+  let multiplier = slotDuration / 60;
+
+  // For today with shift start: may need further reduction
   const isToday = currentDate === formatDateLocal(new Date());
-  if (!isToday || !shiftStartTime) {
-    return baseMultiplier;
-  }
+  if (!isToday || !shiftStartTime) return multiplier;
 
-  const slotStartMinutes = SLOT_START_MINUTES[slot];
-  if (slotStartMinutes === undefined) return baseMultiplier;
+  const shiftMin = shiftStartTime.getHours() * 60 + shiftStartTime.getMinutes();
+  if (shiftMin >= slotEnd) return 0;
+  if (shiftMin <= slotStart) return multiplier;
 
-  // Calculate slot end time (in minutes)
-  const slotDuration = baseMultiplier === 0.5 ? 30 : 60;
-  const slotEndMinutes = slotStartMinutes + slotDuration;
-
-  const shiftStartMinutes = shiftStartTime.getHours() * 60 + shiftStartTime.getMinutes();
-
-  // If shift starts after slot ends, multiplier is 0 (slot hidden anyway)
-  if (shiftStartMinutes >= slotEndMinutes) {
-    return 0;
-  }
-
-  // If shift starts before slot begins, use full multiplier
-  if (shiftStartMinutes <= slotStartMinutes) {
-    return baseMultiplier;
-  }
-
-  // Partial slot: calculate fraction of slot that's worked
-  const minutesWorked = slotEndMinutes - shiftStartMinutes;
-  const fractionWorked = minutesWorked / slotDuration;
-
-  return baseMultiplier * fractionWorked;
+  // Shift starts mid-slot
+  return (slotEnd - shiftMin) / 60;
 }
 
 function getCurrentTimeSlot() {
   const now = new Date();
-  const hours = now.getHours();
-  const minutes = now.getMinutes();
-  const totalMinutes = hours * 60 + minutes;
+  const totalMinutes = now.getHours() * 60 + now.getMinutes();
 
-  const slotTimes = [
-    { slot: TIME_SLOTS[0], start: 7 * 60, end: 8 * 60 },
-    { slot: TIME_SLOTS[1], start: 8 * 60, end: 9 * 60 },
-    { slot: TIME_SLOTS[2], start: 9 * 60, end: 10 * 60 },
-    { slot: TIME_SLOTS[3], start: 10 * 60, end: 11 * 60 },
-    { slot: TIME_SLOTS[4], start: 11 * 60, end: 12 * 60 },
-    { slot: TIME_SLOTS[5], start: 12 * 60 + 30, end: 13 * 60 },
-    { slot: TIME_SLOTS[6], start: 13 * 60, end: 14 * 60 },
-    { slot: TIME_SLOTS[7], start: 14 * 60, end: 15 * 60 },
-    { slot: TIME_SLOTS[8], start: 15 * 60, end: 16 * 60 },
-    { slot: TIME_SLOTS[9], start: 16 * 60, end: 16 * 60 + 30 },
-  ];
-
-  for (const st of slotTimes) {
-    if (totalMinutes >= st.start && totalMinutes < st.end) {
-      return st.slot;
+  for (let i = 0; i < TIME_SLOTS.length; i++) {
+    const slot = TIME_SLOTS[i];
+    const start = SLOT_START_MINUTES[slot];
+    const end = SLOT_END_MINUTES[slot];
+    if (start !== undefined && end !== undefined && totalMinutes >= start && totalMinutes < end) {
+      return slot;
     }
   }
-
   return null;
 }
 
