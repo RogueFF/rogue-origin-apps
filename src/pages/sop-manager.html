@@ -2115,6 +2115,18 @@
           if (fab) fab.style.display = 'flex';
         }, 100);
       }
+      // Lazy load jsPDF when PDF modal opens
+      if (id === 'pdfModal' && !window.jspdf) {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+        script.onload = () => {
+          console.log('jsPDF loaded');
+        };
+        script.onerror = () => {
+          showToast('Failed to load PDF library', 'error');
+        };
+        document.head.appendChild(script);
+      }
     }
     
     function closeModal(id) {
@@ -3235,6 +3247,11 @@
       const s = sops.find(x => x.id == currentSopId);
       if (!s) return;
 
+      if (!window.jspdf) {
+        showToast('PDF library still loading, please wait...', 'error');
+        return;
+      }
+
       const btn = document.getElementById('generatePdfBtn');
       btn.disabled = true;
       btn.innerHTML = '<i class="ph-duotone ph-spinner" style="animation:spin 1s linear infinite"></i> Generating...';
@@ -3244,8 +3261,23 @@
 
       const lang = document.querySelector('input[name="pdfLang"]:checked').value;
       const includeQR = document.getElementById('pdfIncludeQR').checked;
-      const title = s['title_' + lang] || s.title;
-      const desc = s['desc_' + lang] || s.description;
+      const bilingual = document.getElementById('pdfBilingual').checked;
+      const layout = document.querySelector('input[name="pdfLayout"]:checked').value;
+      
+      // Note: Grid layouts (2col, 4col) not yet implemented - defaults to text layout
+      if (layout !== 'text') {
+        console.log('Grid layout selected but not yet implemented, using text layout');
+      }
+      
+      let title, desc;
+      if (bilingual) {
+        title = (s.title_en || s.title) + ' / ' + (s.title_es || s.title);
+        desc = ((s.desc_en || s.description || '') + (s.desc_es ? '\n' + s.desc_es : ''));
+      } else {
+        title = s['title_' + lang] || s.title;
+        desc = s['desc_' + lang] || s.description;
+      }
+      
       const sopViewUrl = window.location.origin + window.location.pathname + '?view=' + s.id;
 
       // Fetch main QR code
@@ -3255,7 +3287,7 @@
       }
 
       // Header with title and QR
-      doc.setFontSize(18);
+      doc.setFontSize(bilingual ? 14 : 18);
       doc.setTextColor(45, 58, 46);
       const titleLines = doc.splitTextToSize(title, includeQR && mainQRBase64 ? 140 : 170);
       doc.text(titleLines, 20, 22);
@@ -3300,8 +3332,12 @@
           y = 20;
         }
 
-        const stepTitle = step['title_' + lang] || step.title;
-        const stepDesc = step['desc_' + lang] || step.description;
+        const stepTitle = bilingual ? 
+          ((step.title_en || step.title) + ' / ' + (step.title_es || step.title)) :
+          (step['title_' + lang] || step.title);
+        const stepDesc = bilingual ?
+          ((step.desc_en || step.description || '') + (step.desc_es ? '\n' + step.desc_es : '')) :
+          (step['desc_' + lang] || step.description);
         const mediaUrl = step.media || step.image || '';
         const mediaType = step.mediaType || detectMediaType(mediaUrl);
         const isVideo = mediaType === 'video' || mediaType === 'youtube' || mediaType === 'gdrive' || mediaType === 'vimeo';
