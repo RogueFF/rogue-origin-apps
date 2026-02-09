@@ -70,6 +70,14 @@ const TIME_SLOT_MULTIPLIERS = {
   '3:00 PM – 3:30 PM': 0.5,
 };
 
+// Break schedule: [hour, minute, duration_minutes]
+const BREAKS = [
+  [9, 0, 10],    // 9:00 AM - 10 min
+  [12, 0, 30],   // 12:00 PM - 30 min lunch
+  [14, 30, 10],  // 2:30 PM - 10 min
+  [16, 20, 10],  // 4:20 PM - 10 min cleanup
+];
+
 const ALL_TIME_SLOTS = [
   '7:00 AM – 8:00 AM', '8:00 AM – 9:00 AM', '9:00 AM – 10:00 AM',
   '10:00 AM – 11:00 AM', '11:00 AM – 12:00 PM', '12:30 PM – 1:00 PM',
@@ -164,16 +172,42 @@ function formatDatePT(date, format = 'yyyy-MM-dd') {
   return d.toISOString();
 }
 
+function parseSlotTimeToMinutes(timeStr) {
+  const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return null;
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const ampm = match[3].toUpperCase();
+  if (ampm === 'PM' && hours !== 12) hours += 12;
+  if (ampm === 'AM' && hours === 12) hours = 0;
+  return hours * 60 + minutes;
+}
+
 function getTimeSlotMultiplier(timeSlot, multipliers = null) {
   if (!timeSlot) return 1.0;
   const table = multipliers || TIME_SLOT_MULTIPLIERS;
   const slot = String(timeSlot).trim();
-  if (table[slot]) {
-    return table[slot];
-  }
+  if (table[slot]) return table[slot];
   const normalized = slot.replace(/[-–—]/g, '–');
-  if (table[normalized]) {
-    return table[normalized];
+  if (table[normalized]) return table[normalized];
+
+  // Dynamic: parse slot times for custom slots (e.g., '7:48 AM – 8:00 AM')
+  const parts = normalized.split('–').map(s => s.trim());
+  if (parts.length === 2) {
+    const startMin = parseSlotTimeToMinutes(parts[0]);
+    const endMin = parseSlotTimeToMinutes(parts[1]);
+    if (startMin !== null && endMin !== null && endMin > startMin) {
+      // Subtract any break time within this slot
+      let breakMin = 0;
+      for (const [bHour, bMin, bDur] of BREAKS) {
+        const bStart = bHour * 60 + bMin;
+        const bEnd = bStart + bDur;
+        const overlapStart = Math.max(startMin, bStart);
+        const overlapEnd = Math.min(endMin, bEnd);
+        if (overlapEnd > overlapStart) breakMin += (overlapEnd - overlapStart);
+      }
+      return (endMin - startMin - breakMin) / 60;
+    }
   }
   return 1.0;
 }
@@ -475,6 +509,23 @@ function calculateDailyProjection(todayRows, lastCompletedHourIndex, currentHour
   let totalTrimmerEffectiveHours = 0;
   let lastKnownTrimmers = 0;
 
+  // Build map of actual slot names from data, keyed by end time
+  const dataSlotsByEnd = {};
+  for (const row of todayRows) {
+    if (row.timeSlot) {
+      const norm = String(row.timeSlot).trim().replace(/[-–—]/g, '–');
+      const endPart = norm.split('–')[1]?.trim();
+      if (endPart) dataSlotsByEnd[endPart] = norm;
+    }
+  }
+
+  // Replace standard slots with actual data slots where they exist
+  const allTimeSlots = ALL_TIME_SLOTS.map(std => {
+    const norm = std.replace(/[-–—]/g, '–');
+    const endPart = norm.split('–')[1]?.trim();
+    return (endPart && dataSlotsByEnd[endPart]) ? dataSlotsByEnd[endPart] : std;
+  });
+
   for (let i = 0; i <= lastCompletedHourIndex && i < todayRows.length; i++) {
     const row = todayRows[i];
     if (row.tops > 0 && row.trimmers > 0) {
@@ -503,7 +554,7 @@ function calculateDailyProjection(todayRows, lastCompletedHourIndex, currentHour
   let dailyGoal = 0;
   let projectedFromRemaining = 0;
 
-  for (const slot of ALL_TIME_SLOTS) {
+  for (const slot of allTimeSlots) {
     const normalizedSlot = slot.replace(/[-–—]/g, '–');
     const multiplier = getTimeSlotMultiplier(slot, timeSlotMultipliers);
     const workedRow = workedSlots[normalizedSlot];
