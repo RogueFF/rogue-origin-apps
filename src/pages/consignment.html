@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/duotone/style.css">
 
   <link rel="stylesheet" href="../css/shared-base.css">
-  <link rel="stylesheet" href="../css/consignment.css?v=19">
+  <link rel="stylesheet" href="../css/consignment.css?v=20">
 </head>
 <body class="auth-required">
   <a href="#main-content" class="skip-link">Skip to main content</a>
@@ -168,6 +168,21 @@
         </div>
       </div>
     </section>
+    <!-- Command Palette -->
+    <div id="command-palette" class="cmd-overlay">
+      <div class="cmd-container">
+        <div class="cmd-input-row">
+          <span class="cmd-slash">/</span>
+          <input type="text" id="cmd-input" class="cmd-input" placeholder="intake pedro 10 tops lifter 100" autocomplete="off" spellcheck="false">
+        </div>
+        <div id="cmd-hints" class="cmd-hints">
+          <div class="cmd-hint"><span class="cmd-key">intake</span> <span class="cmd-desc">[partner] [lbs] [tops/smalls] [strain] [price]</span></div>
+          <div class="cmd-hint"><span class="cmd-key">pay</span> <span class="cmd-desc">[partner] [amount] [check/cash/transfer]</span></div>
+          <div class="cmd-hint"><span class="cmd-key">count</span> <span class="cmd-desc">[partner] [strain] [tops/smalls] [lbs]</span></div>
+          <div class="cmd-hint"><span class="cmd-key">partner</span> <span class="cmd-desc">[name] — add new partner</span></div>
+        </div>
+      </div>
+    </div>
   </main>
 
   <!-- ═══ MODALS ═══ -->
@@ -413,6 +428,6 @@
   </script>
 
   <!-- App (handles theme toggle, clock, all functionality) -->
-  <script type="module" src="../js/consignment/main.js?v=11"></script>
+  <script type="module" src="../js/consignment/main.js?v=12"></script>
 </body>
 </html>

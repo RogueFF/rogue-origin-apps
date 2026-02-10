@@ -4,7 +4,7 @@
  */
 
 import * as api from './api.js?v=6';
-import * as ui from './ui.js?v=9';
+import * as ui from './ui.js?v=10';
 
 let partners = [];
 let strains = [];
@@ -26,8 +26,10 @@ const MIN_REFRESH_GAP = 5000; // Don't refresh if user acted < 5s ago
 async function init() {
   await Promise.all([loadPartners(), loadStrains(), loadActivity()]);
   setupEventListeners();
+  initCommandPalette();
   setupAutoRefresh();
   setDefaultDates();
+  loadStrainBreakdowns();
 }
 
 async function loadPartners() {
@@ -507,6 +509,121 @@ updateClock();
 
 // Expose toggleTheme to global scope for inline onclick handler
 window.toggleTheme = toggleDarkMode;
+
+// ─── COMMAND PALETTE ────────────────────────────────────
+
+function initCommandPalette() {
+  const overlay = el('command-palette');
+  const input = el('cmd-input');
+  if (!overlay || !input) return;
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === '/' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) {
+      e.preventDefault();
+      overlay.classList.add('active');
+      input.value = '';
+      input.focus();
+    }
+    if (e.key === 'Escape' && overlay.classList.contains('active')) {
+      overlay.classList.remove('active');
+    }
+  });
+
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.classList.remove('active');
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const raw = input.value.trim().toLowerCase();
+      if (!raw) return;
+      overlay.classList.remove('active');
+      parseCommand(raw);
+    }
+  });
+}
+
+function parseCommand(raw) {
+  const parts = raw.split(/\s+/);
+  const cmd = parts[0];
+
+  if (cmd === 'intake') {
+    const container = el('intake-lines');
+    if (container && container.children.length === 0) addIntakeLine();
+    ui.openModal('intake-modal');
+    setTimeout(() => {
+      const partnerSelect = el('intake-partner');
+      if (partnerSelect && parts[1]) {
+        const match = Array.from(partnerSelect.options).find(o =>
+          o.textContent.toLowerCase().includes(parts[1])
+        );
+        if (match) partnerSelect.value = match.value;
+      }
+    }, 100);
+  } else if (cmd === 'pay' || cmd === 'payment') {
+    ui.openModal('payment-modal');
+    setTimeout(() => {
+      const partnerSelect = el('payment-partner');
+      if (partnerSelect && parts[1]) {
+        const match = Array.from(partnerSelect.options).find(o =>
+          o.textContent.toLowerCase().includes(parts[1])
+        );
+        if (match) partnerSelect.value = match.value;
+      }
+      if (parts[2]) {
+        const amountInput = el('payment-amount');
+        if (amountInput) amountInput.value = parts[2];
+      }
+      if (parts[3]) {
+        const methodSelect = el('payment-method');
+        if (methodSelect) {
+          const m = parts[3];
+          if (m === 'check' || m === 'cash' || m === 'transfer') methodSelect.value = m;
+        }
+      }
+    }, 100);
+  } else if (cmd === 'count') {
+    ui.openModal('count-modal');
+    setTimeout(() => {
+      const partnerSelect = el('count-partner');
+      if (partnerSelect && parts[1]) {
+        const match = Array.from(partnerSelect.options).find(o =>
+          o.textContent.toLowerCase().includes(parts[1])
+        );
+        if (match) {
+          partnerSelect.value = match.value;
+          partnerSelect.dispatchEvent(new Event('change'));
+        }
+      }
+    }, 100);
+  } else if (cmd === 'partner' || cmd === 'add') {
+    ui.openModal('partner-modal');
+    if (parts.length > 1) {
+      setTimeout(() => {
+        const nameInput = el('partner-name');
+        if (nameInput) nameInput.value = parts.slice(1).join(' ');
+      }, 100);
+    }
+  }
+}
+
+// ─── STRAIN BREAKDOWN ──────────────────────────────────
+
+function loadStrainBreakdowns() {
+  partners.filter(p => p.inventory_lbs > 0).forEach(async (p) => {
+    try {
+      const result = await api.getPartnerDetail(p.id);
+      const detail = result.data || result;
+      const strainEl = document.getElementById('strains-' + p.id);
+      if (strainEl && detail.inventory && detail.inventory.length > 0) {
+        strainEl.textContent = detail.inventory
+          .map(i => i.strain + ' ' + i.on_hand_lbs.toFixed(0))
+          .join(' \u00b7 ');
+      }
+    } catch(e) { /* silent fail */ }
+  });
+}
 
 // ─── START ──────────────────────────────────────────────
 
