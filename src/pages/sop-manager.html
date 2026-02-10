@@ -84,7 +84,31 @@
       <div class="sop-list" id="sopList"><div class="sop-table"><table><thead><tr><th data-i18n="sopTitle">Title</th><th data-i18n="department">Department</th><th data-i18n="steps">Steps</th><th data-i18n="status">Status</th><th data-i18n="updated">Updated</th><th data-i18n="actions">Actions</th></tr></thead><tbody id="sopTableBody"></tbody></table></div></div>
       <div class="empty-state" id="emptyState" style="display:none;"><i class="ph-duotone ph-files"></i><h3 data-i18n="noSOPs">No SOPs Found</h3><p data-i18n="createFirst">Create your first SOP to get started.</p><button class="header-btn primary" onclick="openCreateModal()"><i class="ph-duotone ph-plus"></i> <span data-i18n="createSOP">Create SOP</span></button></div>
     </div>
+    <!-- FAB Manager (mobile action menu) -->
+    <div class="fab-manager" id="fabManager">
+      <button class="fab-main" id="fabMainBtn" onclick="toggleFabMenu()" aria-label="Menu">
+        <i class="ph-bold ph-plus"></i>
+      </button>
+      <div class="fab-menu" id="fabMenu" style="display:none;">
+        <button class="fab-item" onclick="openCreateModal();toggleFabMenu()">
+          <i class="ph-duotone ph-plus"></i><span data-i18n="createSOP">New SOP</span>
+        </button>
+        <button class="fab-item" onclick="openRequestsModal();toggleFabMenu()">
+          <i class="ph-duotone ph-clipboard-text"></i><span data-i18n="requests">Requests</span>
+          <span class="request-badge" id="fabRequestBadge" style="display:none;">0</span>
+        </button>
+        <button class="fab-item" onclick="openSettingsModal();toggleFabMenu()">
+          <i class="ph-duotone ph-gear"></i><span>Settings</span>
+        </button>
+      </div>
+    </div>
   </main>
+
+  <!-- Image Zoom Overlay -->
+  <div class="image-zoom-overlay" id="imageZoomOverlay" style="display:none;" onclick="closeImageZoom()">
+    <img id="zoomImage" src="" alt="Zoomed image">
+    <button class="zoom-close" onclick="closeImageZoom()">&times;</button>
+  </div>
 
   <!-- Edit Modal -->
   <div class="modal" id="editModal">
@@ -601,6 +625,10 @@
     let currentRequestTab = 'pending';
     let appLang = 'en';
     let isLoading = false;
+
+    // Wizard mode state
+    let currentWizardStep = 0;
+    let totalWizardSteps = 0;
     
     let settings = {
       departments: [
@@ -736,7 +764,15 @@
         addLink: 'Add Link',
         linkedSops: 'Linked SOPs',
         noLinkedSops: 'No linked SOPs',
-        backTo: 'Back to'
+        backTo: 'Back to',
+        // Wizard navigation
+        prevStep: 'Previous',
+        nextStep: 'Next',
+        stepXofY: 'Step',
+        of: 'of',
+        allDepts: 'All Departments',
+        allTags: 'All Tags',
+        all: 'All'
       },
       es: {
         addMedia: 'Agregar Media',
@@ -817,7 +853,15 @@
         addLink: 'Agregar Vínculo',
         linkedSops: 'SOPs Vinculados',
         noLinkedSops: 'Sin SOPs vinculados',
-        backTo: 'Volver a'
+        backTo: 'Volver a',
+        // Wizard navigation
+        prevStep: 'Anterior',
+        nextStep: 'Siguiente',
+        stepXofY: 'Paso',
+        of: 'de',
+        allDepts: 'Todos los Departamentos',
+        allTags: 'Todas las Etiquetas',
+        all: 'Todos'
       }
     };
 
@@ -3425,6 +3469,165 @@
     }
     
     // =====================================================
+    // FAB Manager Menu
+    // =====================================================
+
+    function toggleFabMenu() {
+      const menu = document.getElementById('fabMenu');
+      const btn = document.getElementById('fabMainBtn');
+      const isOpen = menu.style.display !== 'none';
+      menu.style.display = isOpen ? 'none' : 'flex';
+      btn.classList.toggle('open', !isOpen);
+    }
+
+    // Close FAB menu when clicking outside
+    document.addEventListener('click', function(e) {
+      const fab = document.getElementById('fabManager');
+      if (fab && !fab.contains(e.target)) {
+        const menu = document.getElementById('fabMenu');
+        const btn = document.getElementById('fabMainBtn');
+        if (menu && menu.style.display !== 'none') {
+          menu.style.display = 'none';
+          btn.classList.remove('open');
+        }
+      }
+    });
+
+    // =====================================================
+    // Category Chips (mobile filter alternative)
+    // =====================================================
+
+    function renderCategoryChips() {
+      const container = document.getElementById('categoryChips');
+      if (!container) return;
+
+      let chips = '';
+
+      // "All" chip
+      const statusVal = document.getElementById('statusFilter').value;
+      const deptVal = document.getElementById('deptFilter').value;
+      const tagVal = document.getElementById('tagFilter').value;
+      const isAll = !statusVal && !deptVal && !tagVal;
+
+      chips += '<button class="category-chip' + (isAll ? ' active' : '') + '" onclick="selectChip(\'all\',\'\')">' + t('all') + '</button>';
+
+      // Status chips
+      chips += '<button class="category-chip gold-chip' + (statusVal === 'published' ? ' active' : '') + '" onclick="selectChip(\'status\',\'published\')">' + t('published') + '</button>';
+      chips += '<button class="category-chip gold-chip' + (statusVal === 'draft' ? ' active' : '') + '" onclick="selectChip(\'status\',\'draft\')">' + t('drafts') + '</button>';
+
+      // Department chips
+      settings.departments.forEach(d => {
+        chips += '<button class="category-chip' + (deptVal === d.name ? ' active' : '') + '" onclick="selectChip(\'dept\',\'' + esc(d.name).replace(/'/g, "\\'") + '\')">' + esc(d.name) + '</button>';
+      });
+
+      // Tag chips
+      settings.tags.forEach(tg => {
+        chips += '<button class="category-chip' + (tagVal === tg.name ? ' active' : '') + '" onclick="selectChip(\'tag\',\'' + esc(tg.name).replace(/'/g, "\\'") + '\')">' + esc(tg.name) + '</button>';
+      });
+
+      container.innerHTML = chips;
+    }
+
+    function selectChip(type, value) {
+      if (type === 'all') {
+        document.getElementById('statusFilter').value = '';
+        document.getElementById('deptFilter').value = '';
+        document.getElementById('tagFilter').value = '';
+      } else if (type === 'status') {
+        // Toggle: if already selected, deselect
+        const sel = document.getElementById('statusFilter');
+        sel.value = sel.value === value ? '' : value;
+        document.getElementById('deptFilter').value = '';
+        document.getElementById('tagFilter').value = '';
+      } else if (type === 'dept') {
+        const sel = document.getElementById('deptFilter');
+        sel.value = sel.value === value ? '' : value;
+        document.getElementById('statusFilter').value = '';
+        document.getElementById('tagFilter').value = '';
+      } else if (type === 'tag') {
+        const sel = document.getElementById('tagFilter');
+        sel.value = sel.value === value ? '' : value;
+        document.getElementById('statusFilter').value = '';
+        document.getElementById('deptFilter').value = '';
+      }
+      filterSOPs();
+      renderCategoryChips();
+    }
+
+    // =====================================================
+    // Image Zoom
+    // =====================================================
+
+    function zoomImage(src) {
+      if (!src) return;
+      document.getElementById('zoomImage').src = src;
+      document.getElementById('imageZoomOverlay').style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeImageZoom() {
+      document.getElementById('imageZoomOverlay').style.display = 'none';
+      document.body.style.overflow = '';
+    }
+
+    // =====================================================
+    // Wizard Navigation (View Modal — step-by-step on mobile)
+    // =====================================================
+
+    function isMobileView() {
+      return window.matchMedia('(max-width: 768px)').matches;
+    }
+
+    function wizardNext() {
+      if (currentWizardStep < totalWizardSteps - 1) {
+        wizardGoTo(currentWizardStep + 1);
+      }
+    }
+
+    function wizardPrev() {
+      if (currentWizardStep > 0) {
+        wizardGoTo(currentWizardStep - 1);
+      }
+    }
+
+    function wizardGoTo(n) {
+      currentWizardStep = n;
+      updateWizardUI();
+    }
+
+    function updateWizardUI() {
+      // Show/hide wizard steps
+      const steps = document.querySelectorAll('#viewModalBody .wizard-step');
+      steps.forEach((step, i) => {
+        step.style.display = (i === currentWizardStep) ? 'block' : 'none';
+      });
+
+      // Update progress bar
+      const fill = document.getElementById('wizardProgressFill');
+      if (fill && totalWizardSteps > 0) {
+        fill.style.width = (((currentWizardStep + 1) / totalWizardSteps) * 100) + '%';
+      }
+
+      // Update counter
+      const counter = document.getElementById('wizardCounter');
+      if (counter) {
+        counter.textContent = t('stepXofY') + ' ' + (currentWizardStep + 1) + ' ' + t('of') + ' ' + totalWizardSteps;
+      }
+
+      // Update nav buttons
+      const prevBtn = document.getElementById('wizardPrevBtn');
+      const nextBtn = document.getElementById('wizardNextBtn');
+      if (prevBtn) prevBtn.disabled = currentWizardStep === 0;
+      if (nextBtn) {
+        nextBtn.disabled = currentWizardStep >= totalWizardSteps - 1;
+      }
+
+      // Scroll to top of modal body
+      const body = document.getElementById('viewModalBody');
+      if (body) body.scrollTop = 0;
+    }
+
+    // =====================================================
     // Utilities
     // =====================================================
     
@@ -3481,8 +3684,8 @@
     // =====================================================
     
     document.addEventListener('DOMContentLoaded', function() {
-      // Load preferences
-      if (localStorage.getItem('sopDarkMode') === 'true') {
+      // Load preferences — dark mode is DEFAULT for warehouse environment
+      if (localStorage.getItem('sopDarkMode') !== 'false') {
         document.body.classList.add('dark-mode');
       }
       if (localStorage.getItem('sopAppLang')) {
