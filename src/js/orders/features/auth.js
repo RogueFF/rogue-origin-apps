@@ -132,7 +132,7 @@ function unlockPage() {
  * @private
  */
 function showLoginError(errorEl, message) {
-  errorEl.textContent = `❌ ${message}`;
+  errorEl.textContent = message;
   errorEl.classList.add('visible');
 }
 
