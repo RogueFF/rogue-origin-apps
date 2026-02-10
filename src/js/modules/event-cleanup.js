@@ -82,7 +82,7 @@ export function cleanupAllListeners() {
   const count = listenerRegistry.size;
   
   if (count === 0) {
-    console.log('[EventCleanup] No listeners to clean up');
+    console.debug('[EventCleanup] No listeners to clean up');
     return 0;
   }
 
@@ -139,7 +139,7 @@ export function getListenerStats() {
  */
 export function debugListeners() {
   const stats = getListenerStats();
-  console.log('[EventCleanup] Listener Statistics:', stats);
+  console.debug('[EventCleanup] Listener Statistics:', stats);
   console.table(Array.from(listenerRegistry.entries()).map(([id, listener]) => ({
     ID: id,
     Target: listener.target === window ? 'window' : listener.target === document ? 'document' : listener.target.id || listener.target.tagName,
