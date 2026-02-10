@@ -183,10 +183,10 @@ body {
 }
 
 /* ========================================
-   TOOLBAR
+   TOOLBAR (merged with stats)
    ======================================== */
 .toolbar {
-  padding: 12px 24px;
+  padding: 10px 24px;
   background: rgba(20, 24, 22, 0.7);
   border-bottom: 1px solid var(--kanban-border);
   backdrop-filter: blur(8px);
@@ -201,6 +201,31 @@ body {
   align-items: center;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.stats-inline {
+  display: flex;
+  gap: 16px;
+}
+
+.stats-inline span {
+  color: var(--kanban-text-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.stats-inline strong {
+  color: var(--kanban-green);
+  font-family: var(--font-mono);
+  font-weight: 600;
 }
 
 .filters {
@@ -264,37 +289,6 @@ select option {
 
 .toggle button:hover:not(.on) {
   color: var(--kanban-text-secondary);
-}
-
-/* ========================================
-   STATS BAR
-   ======================================== */
-.stats {
-  padding: 8px 24px;
-  background: rgba(20, 24, 22, 0.5);
-  border-bottom: 1px solid var(--kanban-border);
-  font-size: 12px;
-}
-
-.stats-inner {
-  max-width: 1400px;
-  margin: 0 auto;
-  display: flex;
-  gap: 24px;
-}
-
-.stats span {
-  color: var(--kanban-text-muted);
-  font-family: var(--font-ui);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-}
-
-.stats strong {
-  color: var(--kanban-green);
-  font-family: var(--font-mono);
-  font-weight: 600;
 }
 
 /* ========================================
@@ -973,6 +967,13 @@ td.price {
   padding: 80px 24px;
 }
 
+.empty-icon {
+  font-size: 48px;
+  opacity: 0.3;
+  color: var(--kanban-green);
+  margin-bottom: 16px;
+}
+
 .empty h3 {
   color: var(--kanban-text);
   margin-bottom: 8px;
@@ -1036,6 +1037,13 @@ body.dark-mode .card:hover {
     flex-direction: column;
     gap: 10px;
   }
+
+  .toolbar-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .stats-inline { gap: 12px; }
 
   .filters { width: 100%; }
 
