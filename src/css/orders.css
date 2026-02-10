@@ -753,6 +753,19 @@ body::before {
   flex: 1;
 }
 
+.modal-body h4 {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 16px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.88);
+  margin: 24px 0 12px;
+}
+
+[data-theme="light"] .modal-body h4 {
+  color: var(--text);
+}
+
 .modal-footer {
   padding: 16px 24px;
   border-top: 1px solid rgba(102, 137, 113, 0.1);
@@ -828,6 +841,29 @@ body::before {
   gap: 16px;
 }
 
+.checkbox-row {
+  margin-bottom: 12px;
+}
+
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+[data-theme="light"] .checkbox-label {
+  color: var(--text-secondary);
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #668971;
+}
+
 @media (max-width: 768px) {
   .form-row {
     grid-template-columns: 1fr;
@@ -891,6 +927,16 @@ body::before {
 
 [data-theme="light"] .detail-panel-title {
   color: var(--ro-green);
+}
+
+.detail-customer-name {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 4px;
+}
+
+[data-theme="light"] .detail-customer-name {
+  color: var(--text-muted);
 }
 
 .detail-panel-body {
