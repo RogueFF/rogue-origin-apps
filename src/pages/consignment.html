@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/duotone/style.css">
 
   <link rel="stylesheet" href="../css/shared-base.css">
-  <link rel="stylesheet" href="../css/consignment.css?v=15">
+  <link rel="stylesheet" href="../css/consignment.css?v=16">
 </head>
 <body class="auth-required">
   <a href="#main-content" class="skip-link">Skip to main content</a>
@@ -105,24 +105,7 @@
       </div>
     </header>
 
-    <!-- Partner Balance Cards -->
-    <section class="partners-section card-section">
-      <div class="section-header">
-        <h3 class="section-title">Consignment Partners</h3>
-        <button id="btn-add-partner" class="add-partner-btn"><i class="ph-duotone ph-plus"></i> Add Partner</button>
-      </div>
-      <div id="partner-cards" class="partner-cards">
-        <div class="empty-state">
-          <i class="ph-duotone ph-handshake empty-state-icon"></i>
-          <p class="empty-state-text">Loading partners...</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- Partner Detail Panel -->
-    <div id="partner-detail" class="partner-detail"></div>
-
-    <!-- Quick Actions -->
+    <!-- Quick Actions (Hero Position) -->
     <section class="quick-actions-section card-section">
       <h3 class="section-title">Quick Actions</h3>
       <div class="quick-actions">
@@ -149,6 +132,23 @@
         </button>
       </div>
     </section>
+
+    <!-- Consignment Partners -->
+    <section class="partners-section card-section">
+      <div class="section-header">
+        <h3 class="section-title">Consignment Partners</h3>
+        <button id="btn-add-partner" class="add-partner-btn"><i class="ph-duotone ph-plus"></i> Add Partner</button>
+      </div>
+      <div id="partner-cards" class="partner-cards">
+        <div class="empty-state">
+          <i class="ph-duotone ph-handshake empty-state-icon"></i>
+          <p class="empty-state-text">Loading partners...</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Partner Detail Panel -->
+    <div id="partner-detail" class="partner-detail"></div>
 
     <!-- Activity Feed -->
     <section class="activity-section card-section">
@@ -413,6 +413,6 @@
   </script>
 
   <!-- App -->
-  <script type="module" src="../js/consignment/main.js?v=8"></script>
+  <script type="module" src="../js/consignment/main.js?v=9"></script>
 </body>
 </html>
