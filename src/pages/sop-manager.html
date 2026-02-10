@@ -3692,16 +3692,27 @@
       }
     }
 
+    let wizardDirection = 'next';
     function wizardGoTo(n) {
+      wizardDirection = n > currentWizardStep ? 'next' : 'prev';
       currentWizardStep = n;
       updateWizardUI();
     }
 
     function updateWizardUI() {
-      // Show/hide wizard steps
+      // Show/hide wizard steps with direction-aware animation
       const steps = document.querySelectorAll('#viewModalBody .wizard-step');
       steps.forEach((step, i) => {
-        step.style.display = (i === currentWizardStep) ? 'block' : 'none';
+        if (i === currentWizardStep) {
+          step.style.display = 'block';
+          step.classList.toggle('prev-direction', wizardDirection === 'prev');
+          // Re-trigger animation
+          step.style.animation = 'none';
+          step.offsetHeight; // force reflow
+          step.style.animation = '';
+        } else {
+          step.style.display = 'none';
+        }
       });
 
       // Update progress bar
