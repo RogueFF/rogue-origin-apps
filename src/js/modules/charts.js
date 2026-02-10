@@ -20,11 +20,17 @@ function registerPlugins() {
  * @returns {Object} Theme-aware color configuration
  */
 export function getChartColors() {
-  const theme = document.documentElement.getAttribute('data-theme') || 'light';
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   return {
-    grid: theme === 'dark' ? 'rgba(168, 181, 169, 0.08)' : 'rgba(102, 137, 113, 0.06)',
-    text: theme === 'dark' ? '#a8b5a9' : '#5a6b5f',
-    labelBg: theme === 'dark' ? '#252b22' : '#fff',
+    grid: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+    text: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(45,58,46,0.4)',
+    labelBg: isDark ? '#1a1e1b' : '#fff',
+    tooltip: {
+      bg: isDark ? '#1a1e1b' : '#ffffff',
+      border: isDark ? 'rgba(102,137,113,0.2)' : 'rgba(0,0,0,0.1)',
+      title: isDark ? 'rgba(255,255,255,0.88)' : '#2d3a2e',
+      body: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(45,58,46,0.6)'
+    },
     // Botanical color gradients
     greenGradient: ['#668971', '#8ba896'],
     goldGradient: ['#e4aa4f', '#f0cb60']
@@ -83,13 +89,38 @@ function createLegendConfig() {
     position: 'top',
     align: 'end',
     labels: {
-      boxWidth: 12,
-      boxHeight: 12,
-      padding: 12,
-      font: { size: 12, weight: '500' },
+      boxWidth: 8,
+      boxHeight: 8,
+      padding: 16,
+      font: { size: 12, family: 'Outfit, sans-serif', weight: '500' },
       usePointStyle: true,
-      pointStyle: 'circle'
+      pointStyle: 'circle',
+      color: function() { return getChartColors().text; }
     }
+  };
+}
+
+/**
+ * Create theme-aware tooltip configuration
+ * @returns {Object} Tooltip plugin configuration
+ */
+function createTooltipConfig() {
+  return {
+    enabled: true,
+    backgroundColor: function(ctx) { return getChartColors().tooltip.bg; },
+    borderColor: function(ctx) { return getChartColors().tooltip.border; },
+    borderWidth: 1,
+    cornerRadius: 6,
+    padding: 12,
+    displayColors: true,
+    boxWidth: 8,
+    boxHeight: 8,
+    boxPadding: 4,
+    usePointStyle: true,
+    titleFont: { family: 'Outfit, sans-serif', weight: '600', size: 13 },
+    bodyFont: { family: 'JetBrains Mono, monospace', size: 12 },
+    titleColor: function(ctx) { return getChartColors().tooltip.title; },
+    bodyColor: function(ctx) { return getChartColors().tooltip.body; }
   };
 }
 
@@ -130,6 +161,7 @@ export async function initCharts() {
   // Get common configurations
   const botanicalScale = createBotanicalScale();
   const legendConfig = createLegendConfig();
+  const tooltipConfig = createTooltipConfig();
   const barDataLabels = createBarDataLabels();
   const dailyTarget = getDailyTarget();
 
@@ -151,7 +183,7 @@ export async function initCharts() {
           {
             label: 'Smalls',
             data: [],
-            backgroundColor: brandColors.sungrown,
+            backgroundColor: brandColors.gold,
             borderRadius: 4,
             borderWidth: 0
           }
@@ -162,6 +194,7 @@ export async function initCharts() {
         maintainAspectRatio: false,
         plugins: {
           legend: legendConfig,
+          tooltip: tooltipConfig,
           datalabels: barDataLabels
         },
         scales: {
@@ -190,7 +223,7 @@ export async function initCharts() {
             borderColor: brandColors.green,
             backgroundColor: brandColors.greenLight,
             fill: true,
-            tension: 0.4,
+            tension: 0.3,
             borderWidth: 2,
             pointRadius: 3,
             pointHoverRadius: 5,
@@ -204,8 +237,8 @@ export async function initCharts() {
             borderColor: brandColors.indoor,
             borderDash: [5, 5],
             backgroundColor: 'transparent',
-            tension: 0.4,
-            borderWidth: 2,
+            tension: 0.3,
+            borderWidth: 1,
             pointRadius: 0,
             hidden: true
           }
@@ -216,6 +249,7 @@ export async function initCharts() {
         maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
+          tooltip: tooltipConfig,
           datalabels: { display: false }
         },
         scales: {
@@ -248,21 +282,21 @@ export async function initCharts() {
           {
             label: 'Smalls',
             data: [],
-            backgroundColor: brandColors.sungrown,
+            backgroundColor: brandColors.gold,
             borderRadius: 4,
             borderWidth: 0
           },
           {
             label: `Target (${dailyTarget} lbs)`,
             data: [],
-            borderColor: '#c45c4a',
+            borderColor: 'rgba(196,92,74,0.6)',
             borderDash: [8, 4],
             borderWidth: 2,
             type: 'line',
             fill: false,
             pointRadius: 0,
             order: 0,
-            tension: 0.4,
+            tension: 0,
             datalabels: { display: false }
           }
         ]
@@ -272,6 +306,7 @@ export async function initCharts() {
         maintainAspectRatio: false,
         plugins: {
           legend: legendConfig,
+          tooltip: tooltipConfig,
           datalabels: barDataLabels
         },
         scales: {
@@ -300,7 +335,7 @@ export async function initCharts() {
             borderColor: brandColors.green,
             backgroundColor: brandColors.greenLight,
             fill: true,
-            tension: 0.4,
+            tension: 0.3,
             borderWidth: 2,
             pointRadius: 3,
             pointHoverRadius: 5,
@@ -314,8 +349,8 @@ export async function initCharts() {
             borderColor: brandColors.gold,
             borderDash: [5, 5],
             fill: false,
-            tension: 0.4,
-            borderWidth: 2,
+            tension: 0.3,
+            borderWidth: 1,
             pointRadius: 3,
             pointHoverRadius: 5,
             pointBackgroundColor: brandColors.gold,
@@ -329,6 +364,7 @@ export async function initCharts() {
         maintainAspectRatio: false,
         plugins: {
           legend: legendConfig,
+          tooltip: tooltipConfig,
           datalabels: { display: false }
         },
         scales: {
@@ -378,6 +414,7 @@ export async function initCharts() {
         maintainAspectRatio: false,
         plugins: {
           legend: legendConfig,
+          tooltip: tooltipConfig,
           datalabels: {
             display: function(ctx) {
               return ctx.datasetIndex === 0 && ctx.dataset.data[ctx.dataIndex] > 0;
@@ -395,7 +432,8 @@ export async function initCharts() {
             title: {
               display: true,
               text: 'Trimmers',
-              font: { size: 10, family: 'JetBrains Mono, monospace' }
+              font: { size: 10, family: 'JetBrains Mono, monospace' },
+              color: function() { return getChartColors().text; }
             }
           }, botanicalScale),
           x: {

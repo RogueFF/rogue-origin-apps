@@ -12,19 +12,25 @@ const SUN_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" str
 // Theme color configurations
 const THEME_COLORS = {
   dark: {
-    text: '#a8b5a9',
-    grid: 'rgba(168, 181, 169, 0.1)',
-    tooltipBg: 'rgba(26, 31, 22, 0.95)'
+    text: 'rgba(255,255,255,0.4)',
+    grid: 'rgba(255,255,255,0.06)',
+    tooltipBg: '#1a1e1b',
+    tooltipBorder: 'rgba(102,137,113,0.2)',
+    tooltipTitle: 'rgba(255,255,255,0.88)',
+    tooltipBody: 'rgba(255,255,255,0.6)'
   },
   light: {
-    text: '#5a6b5f',
-    grid: 'rgba(102, 137, 113, 0.08)',
-    tooltipBg: 'rgba(255, 255, 255, 0.95)'
+    text: 'rgba(45,58,46,0.4)',
+    grid: 'rgba(0,0,0,0.06)',
+    tooltipBg: '#ffffff',
+    tooltipBorder: 'rgba(0,0,0,0.1)',
+    tooltipTitle: '#2d3a2e',
+    tooltipBody: 'rgba(45,58,46,0.6)'
   }
 };
 
 /**
- * Update Chart.js default colors based on theme
+ * Update Chart.js default colors based on theme and re-render all active charts
  * @param {string} theme - 'dark' or 'light'
  */
 export function updateChartTheme(theme) {
@@ -58,9 +64,17 @@ export function updateChartTheme(theme) {
   // Update tooltip defaults
   if (Chart.defaults.plugins && Chart.defaults.plugins.tooltip) {
     Chart.defaults.plugins.tooltip.backgroundColor = colors.tooltipBg;
-    Chart.defaults.plugins.tooltip.titleColor = colors.text;
-    Chart.defaults.plugins.tooltip.bodyColor = colors.text;
+    Chart.defaults.plugins.tooltip.borderColor = colors.tooltipBorder;
+    Chart.defaults.plugins.tooltip.titleColor = colors.tooltipTitle;
+    Chart.defaults.plugins.tooltip.bodyColor = colors.tooltipBody;
   }
+
+  // Re-render all active Chart.js instances so theme colors take effect
+  Object.values(Chart.instances || {}).forEach(function(chart) {
+    if (chart && typeof chart.update === 'function') {
+      chart.update('none');
+    }
+  });
 }
 
 /**
