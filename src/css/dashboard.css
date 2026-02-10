@@ -2961,30 +2961,60 @@ body:not(.muuri-active) .widget-item[data-size="full"] { flex-basis: calc(100% -
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinning { animation: spin 1s linear infinite; }
 
-/* Skeleton Loading */
-@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-.skeleton { background: linear-gradient(90deg, var(--border) 25%, #f5f3f0 50%, var(--border) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 4px; }
-.skeleton-icon { width: 32px; height: 32px; border-radius: 8px; }
-.skeleton-text { height: 12px; margin-bottom: 6px; }
-.skeleton-text.sm { width: 60%; }
-.skeleton-text.md { width: 80%; }
-.skeleton-text.lg { width: 100%; }
-.skeleton-value { height: 28px; width: 70%; margin-bottom: 4px; }
-.skeleton-bar { height: 3px; width: 100%; margin-top: 8px; }
-.skeleton-chart { height: 200px; width: 100%; border-radius: 8px; }
+/* ========================================
+   SKELETON LOADING SYSTEM — Pass 9
+   ======================================== */
+.skeleton {
+  background: rgba(255,255,255,0.04);
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.03) 50%, transparent 100%);
+  animation: skeletonShimmer 1.5s ease infinite;
+}
+@keyframes skeletonShimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.skeleton-text { height: 14px; margin-bottom: 8px; }
+.skeleton-text.short { width: 60%; }
+.skeleton-text.medium { width: 80%; }
+.skeleton-number { height: 32px; width: 120px; margin-bottom: 4px; }
+.skeleton-chart { height: 200px; width: 100%; }
+.skeleton-bar { height: 8px; border-radius: 4px; }
 .skeleton-stat { height: 48px; border-radius: 8px; }
-.kpi-card.loading .kpi-value, .kpi-card.loading .kpi-label, .kpi-card.loading .kpi-sub, 
+.skeleton-icon { width: 32px; height: 32px; border-radius: 8px; }
+
+/* Light mode skeletons */
+[data-theme='light'] .skeleton { background: rgba(0,0,0,0.04); }
+[data-theme='light'] .skeleton::after { background: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.03) 50%, transparent 100%); }
+
+/* KPI card loading state */
+.kpi-card.loading .kpi-value, .kpi-card.loading .kpi-label, .kpi-card.loading .kpi-sub,
 .kpi-card.loading .kpi-delta, .kpi-card.loading .kpi-value-compare { display: none; }
 .kpi-card.loading .skeleton-content { display: block; }
 .kpi-card .skeleton-content { display: none; }
 
-/* Responsive */
-@media (max-width: 900px) { 
-  .sidebar { transform: translateX(-100%); }
-  .sidebar.mobile-open { transform: translateX(0); }
-  .main { margin-left: 0 !important; }
+/* Widget card loading state */
+.widget-card .skeleton-placeholder { display: none; }
+.widget-item.loading .skeleton-placeholder { display: block; }
+.widget-item.loading .widget-content { display: none; }
+.widget-item.loading .widget-header { opacity: 0.5; }
+
+/* Loaded transition */
+.widget-item .widget-content { transition: opacity 0.3s ease; }
+.widget-item.loaded .widget-content { opacity: 1; }
+.widget-item.loaded .skeleton-placeholder { display: none; }
+
+/* Responsive — Sidebar drawer at 768px (handled in Pass 8 section below) */
+@media (max-width: 900px) {
   .current-stats { grid-template-columns: repeat(3, 1fr); }
-  .mobile-menu-btn { display: flex !important; }
 }
 @media (max-width: 600px) {
   .kpi-row { grid-template-columns: 1fr 1fr; }
@@ -3020,7 +3050,7 @@ body:not(.muuri-active) .widget-item[data-size="full"] { flex-basis: calc(100% -
   .welcome { font-size: 18px; }
 }
 
-.mobile-menu-btn { display: none; background: none; border: none; color: rgba(255, 255, 255, 0.7); cursor: pointer; padding: 4px; }
+.mobile-menu-btn { display: none; background: none; border: none; color: rgba(255, 255, 255, 0.7); cursor: pointer; padding: 8px; min-width: 44px; min-height: 44px; align-items: center; justify-content: center; }
 /* Light mode mobile-menu-btn — see Light Theme section */
 
 /* Edit/Rearrange Mode */
@@ -4082,3 +4112,600 @@ th {
     max-width: 100%;
   }
 }
+
+/* ========================================
+   PASS 9: EMPTY STATES
+   ======================================== */
+.empty-state-production {
+  text-align: center;
+  padding: 32px 16px;
+}
+.empty-state-production .empty-state-title {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 20px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.empty-state-production .empty-state-sub {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text-light);
+}
+
+/* ========================================
+   PASS 9: LOADING OVERLAY IMPROVEMENTS
+   ======================================== */
+.logo-loader {
+  background: var(--bg, #141816);
+}
+
+/* Topo background on loader */
+.logo-loader::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.025;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='600' viewBox='0 0 600 600'%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='1'%3E%3Cellipse cx='300' cy='300' rx='60' ry='40' transform='rotate(-15 300 300)'/%3E%3Cellipse cx='300' cy='300' rx='110' ry='75' transform='rotate(-12 300 300)'/%3E%3Cellipse cx='300' cy='300' rx='165' ry='115' transform='rotate(-8 300 300)'/%3E%3Cellipse cx='300' cy='300' rx='225' ry='160' transform='rotate(-4 300 300)'/%3E%3Cellipse cx='300' cy='300' rx='290' ry='210' transform='rotate(0 300 300)'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 600px 600px;
+}
+[data-theme='light'] .logo-loader::after {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='600' viewBox='0 0 600 600'%3E%3Cg fill='none' stroke='%232d3a2e' stroke-width='1'%3E%3Cellipse cx='300' cy='300' rx='60' ry='40' transform='rotate(-15 300 300)'/%3E%3Cellipse cx='300' cy='300' rx='110' ry='75' transform='rotate(-12 300 300)'/%3E%3Cellipse cx='300' cy='300' rx='165' ry='115' transform='rotate(-8 300 300)'/%3E%3Cellipse cx='300' cy='300' rx='225' ry='160' transform='rotate(-4 300 300)'/%3E%3Cellipse cx='300' cy='300' rx='290' ry='210' transform='rotate(0 300 300)'/%3E%3C/g%3E%3C/svg%3E");
+  opacity: 0.035;
+}
+
+/* Logo pulse: subtle 1→1.02 */
+.logo-loader img {
+  animation: logoPulseSubtle 1s ease-in-out infinite;
+}
+@keyframes logoPulseSubtle {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+
+/* Smooth progress bar */
+.logo-loader-bar::after {
+  transition: width 0.3s ease;
+  animation: loaderSlideSmooth 1.5s ease-in-out infinite;
+}
+@keyframes loaderSlideSmooth {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+/* ========================================
+   PASS 9: ERROR TOAST REFINEMENT
+   ======================================== */
+.toast-error {
+  background: rgba(20, 24, 22, 0.95) !important;
+  border: 1px solid rgba(196,92,74,0.3);
+  backdrop-filter: blur(8px);
+}
+.toast-error .toast-title { color: #c45c4a; }
+
+/* Toast with title+message structure */
+.toast-title {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+.toast-message {
+  font-weight: 400;
+  font-size: 12px;
+  opacity: 0.8;
+}
+[data-theme='light'] .toast-error {
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: #2d3a2e;
+}
+
+/* ========================================
+   PASS 9: PERFORMANCE — CSS HINTS
+   ======================================== */
+.kpi-card,
+.widget-card,
+.integration-card {
+  will-change: transform;
+  contain: layout style paint;
+}
+
+/* Remove will-change after animations settle (reduced motion) */
+@media (prefers-reduced-motion: reduce) {
+  .kpi-card,
+  .widget-card,
+  .integration-card {
+    will-change: auto;
+  }
+}
+
+/* ========================================
+   PASS 9: SMOOTH DATA UPDATE TRANSITIONS
+   ======================================== */
+.stat-value, .kpi-value, .hero-production-number, .hero-mini-kpi-value,
+.current-stat-value, .integration-stat-value {
+  transition: opacity 0.2s ease;
+}
+.stat-value.updating, .kpi-value.updating, .hero-production-number.updating,
+.hero-mini-kpi-value.updating, .current-stat-value.updating, .integration-stat-value.updating {
+  opacity: 0.5;
+}
+
+/* ========================================
+   PASS 8: MOBILE RESPONSIVE
+   ========================================
+   Breakpoints:
+   - Desktop:  > 1200px (current layout)
+   - Tablet:   768px — 1200px
+   - Mobile:   < 768px
+   ======================================== */
+
+/* --- Sidebar backdrop --- */
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 45;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+body.sidebar-open .sidebar-backdrop {
+  display: block;
+  opacity: 1;
+}
+
+/* ===== TABLET: 768px — 1200px ===== */
+@media (max-width: 1200px) and (min-width: 769px) {
+  /* Hero */
+  .hero-production-number {
+    font-size: 56px;
+  }
+  .hero-right {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+
+  /* KPI: 3 columns */
+  .kpi-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .kpi-grid-item {
+    width: calc(33.333% - 6px) !important;
+  }
+
+  /* Widgets: 2 columns */
+  .widget-item[data-size="small"],
+  .widget-item[data-size="medium"] {
+    width: calc(50% - 8px);
+  }
+  .widget-item[data-size="large"] {
+    width: calc(50% - 8px);
+  }
+  .widget-item[data-size="xl"],
+  .widget-item[data-size="full"] {
+    width: calc(100% - 8px);
+  }
+
+  body:not(.muuri-active) .widget-item[data-size="small"],
+  body:not(.muuri-active) .widget-item[data-size="medium"] {
+    flex-basis: calc(50% - 8px);
+    max-width: calc(50% - 8px);
+  }
+}
+
+/* ===== MOBILE: < 768px ===== */
+@media (max-width: 768px) {
+
+  /* --- 1. Sidebar: slide-out drawer --- */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 260px;
+    height: 100vh;
+    height: 100dvh;
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 50;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .sidebar.collapsed {
+    width: 260px; /* Don't collapse on mobile */
+  }
+  .sidebar.collapsed .brand h1,
+  .sidebar.collapsed .nav-item span:not(.icon),
+  .sidebar.collapsed .nav-section,
+  .sidebar.collapsed .user-details,
+  .sidebar.collapsed .sidebar-toggle-label {
+    display: block; /* Override collapsed hide on mobile */
+  }
+  .sidebar.collapsed .brand { justify-content: flex-start; padding: 24px 16px; }
+  .sidebar.collapsed .nav-item { justify-content: flex-start; padding: 10px 16px; }
+
+  body.sidebar-open .sidebar {
+    transform: translateX(0);
+  }
+
+  /* Sidebar toggle (collapse/expand) hidden on mobile */
+  .sidebar-toggle {
+    display: none;
+  }
+
+  /* Main: no sidebar margin */
+  .main {
+    margin-left: 0 !important;
+  }
+  body.sidebar-collapsed .main {
+    margin-left: 0 !important;
+  }
+
+  /* Hamburger */
+  .mobile-menu-btn {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 8px;
+  }
+
+  /* --- 2. Header: Mobile layout --- */
+  .header {
+    padding: 8px 12px;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .header-left {
+    gap: 8px;
+  }
+  .header-logo {
+    height: 28px;
+  }
+
+  /* Hide clock on mobile */
+  .header-time {
+    display: none;
+  }
+
+  /* Date picker & compare hidden in header on mobile */
+  .date-picker-wrapper,
+  .compare-selector {
+    display: none;
+  }
+
+  /* Header right: only theme, briefing, settings, refresh */
+  .header-right {
+    gap: 6px;
+  }
+  .header-btn {
+    padding: 8px 10px;
+    font-size: 12px;
+    min-height: 44px;
+    min-width: 44px;
+  }
+  /* Hide label text on refresh btn on mobile */
+  #refreshBtn {
+    font-size: 0;
+    padding: 8px;
+  }
+  #refreshBtn svg {
+    width: 16px;
+    height: 16px;
+  }
+  /* Theme toggle: icon only */
+  .theme-toggle {
+    padding: 8px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+  #themeLabel {
+    display: none;
+  }
+
+  /* Briefing button */
+  .briefing-trigger-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Toolbar */
+  .toolbar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* --- 3. Welcome / Hero: Stack vertically --- */
+  .welcome-greeting {
+    font-size: 24px;
+  }
+
+  .hero-section {
+    padding-bottom: 24px;
+    margin-bottom: 24px;
+  }
+  .hero-botanical-frame {
+    padding: 12px 16px 20px;
+  }
+  .hero-production-number {
+    font-size: 48px;
+  }
+  .hero-production-unit {
+    font-size: 16px;
+  }
+  .hero-right {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-top: 16px;
+  }
+  .hero-mini-kpi {
+    padding: 12px;
+  }
+  .hero-mini-kpi-value {
+    font-size: 20px;
+  }
+
+  /* --- 4. KPI Cards: 2 columns --- */
+  .kpi-row {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .kpi-grid-item {
+    width: calc(50% - 6px) !important;
+    min-width: unset !important;
+  }
+  .kpi-card {
+    padding: 12px;
+    min-height: 100px;
+  }
+  .kpi-value {
+    font-size: 24px;
+  }
+  .kpi-card.small .kpi-value {
+    font-size: 20px;
+  }
+  /* Primary KPIs same width as others on mobile */
+  .kpi-grid-item[data-kpi="totalTops"],
+  .kpi-grid-item[data-kpi="avgRate"] {
+    width: calc(50% - 6px) !important;
+  }
+  .kpi-grid-item[data-kpi="totalTops"] .kpi-value,
+  .kpi-grid-item[data-kpi="avgRate"] .kpi-value {
+    font-size: 24px;
+  }
+
+  /* --- 5. Widget Grid: single column --- */
+  .widget-item,
+  .widget-item[data-size="small"],
+  .widget-item[data-size="medium"],
+  .widget-item[data-size="large"],
+  .widget-item[data-size="xl"],
+  .widget-item[data-size="full"] {
+    width: calc(100% - 16px) !important;
+    margin: 8px !important;
+  }
+
+  /* Hide drag handles on mobile */
+  .widget-drag-handle {
+    display: none;
+  }
+  .widget-resize-handle {
+    display: none;
+  }
+  /* Widget header: no grab cursor on mobile */
+  .widget-header {
+    cursor: default;
+  }
+
+  .widget-card {
+    padding: 14px;
+  }
+
+  .chart-container {
+    height: 160px;
+  }
+
+  /* --- 6. Integration Cards: horizontal layout --- */
+  .integration-stats {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .integration-stat {
+    flex: 1;
+    min-width: 80px;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 4px;
+  }
+
+  /* --- 7. Settings Panel: full screen --- */
+  .settings-panel {
+    width: 100%;
+    max-width: 100vw;
+  }
+  .settings-close {
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 24px;
+  }
+
+  /* --- 8. Command Palette: full width, touch friendly --- */
+  .command-palette-overlay {
+    padding: 8px;
+    padding-top: 8vh;
+  }
+  .command-palette-box {
+    max-width: 100%;
+    border-radius: 12px;
+  }
+  .command-palette-input {
+    height: 56px;
+    font-size: 16px; /* Prevents iOS zoom on input focus */
+    padding: 0 16px;
+  }
+  .command-palette-item {
+    padding: 12px;
+    min-height: 48px;
+  }
+
+  /* --- 9. Toast: bottom of screen, full width --- */
+  .toast-container {
+    bottom: 12px;
+    right: 12px;
+    left: 12px;
+    align-items: stretch;
+  }
+  .toast {
+    max-width: 100%;
+    animation: toastSlideUp 0.3s ease;
+  }
+
+  /* Briefing toast: bottom, full width */
+  .briefing-toast-container {
+    top: auto;
+    bottom: 72px;
+    right: 12px;
+    left: 12px;
+    max-width: none;
+  }
+
+  /* --- 10. Touch Targets: 44px minimum --- */
+  .nav-item {
+    padding: 12px 16px;
+    min-height: 44px;
+  }
+  .date-chip {
+    padding: 8px 14px;
+    min-height: 44px;
+  }
+  .compare-close {
+    width: 44px;
+    height: 44px;
+  }
+  .tool-btn {
+    padding: 10px 14px;
+    min-height: 44px;
+  }
+  .widget-collapse,
+  .widget-hide,
+  .widget-help,
+  .widget-resize {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* AI chat FAB */
+  .ai-chat-fab {
+    width: 52px;
+    height: 52px;
+    bottom: 16px;
+    right: 16px;
+  }
+
+  /* AI chat panel: full width */
+  .ai-chat-panel {
+    width: 100%;
+    right: -100%;
+  }
+
+  /* Section numbers */
+  .section-number {
+    margin: 16px 12px 8px;
+  }
+
+  /* Dashboard padding */
+  .dashboard {
+    padding: 12px;
+  }
+
+  /* Compare banner */
+  .compare-banner {
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+
+  /* Current production stats */
+  .current-stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  /* Sparkline metrics */
+  .sparkline-metrics {
+    gap: 12px;
+    justify-content: space-between;
+  }
+}
+
+/* Mobile toast slide-up animation */
+@keyframes toastSlideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* ===== EXTRA SMALL: < 480px ===== */
+@media (max-width: 480px) {
+  /* Hero: even smaller */
+  .hero-production-number {
+    font-size: 40px;
+  }
+  .hero-production-unit {
+    font-size: 14px;
+  }
+  .welcome-greeting {
+    font-size: 20px;
+  }
+
+  /* KPI: still 2 columns but tighter */
+  .kpi-card {
+    padding: 10px;
+  }
+  .kpi-value {
+    font-size: 22px;
+  }
+
+  /* Current stats: 2 col */
+  .current-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Full-width panels */
+  .ai-chat-panel,
+  .settings-panel {
+    width: 100%;
+  }
+
+  /* Sidebar: full width on very small screens */
+  .sidebar {
+    width: 100%;
+  }
+  body.sidebar-open .sidebar {
+    width: 100%;
+  }
+}
+
+/* ===== SAFE AREA INSETS (notched phones) ===== */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  @media (max-width: 768px) {
+    .toast-container {
+      bottom: calc(12px + env(safe-area-inset-bottom));
+    }
+    .ai-chat-fab {
+      bottom: calc(16px + env(safe-area-inset-bottom));
+    }
+    .briefing-toast-container {
+      bottom: calc(72px + env(safe-area-inset-bottom));
+    }
+    .ai-chat-input-area {
+      padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    }
+  }
+}
+
+/* ========================================
+   END PASS 8: MOBILE RESPONSIVE
+   ======================================== */
