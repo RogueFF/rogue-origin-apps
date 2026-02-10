@@ -132,6 +132,7 @@ import {
   openAppNewTab,
   initSidebarState,
   initViewportTracking,
+  initMobileSidebar,
   getViewName
 } from './navigation.js';
 
@@ -228,8 +229,7 @@ import BriefingEngine from './briefing.js';
 // ===== SKELETON LOADING UI =====
 function showSkeletons(show) {
   setSkeletonsShowing(show);
-  
-  // Force DOM update to complete before hiding skeletons
+
   if (!show) {
     requestAnimationFrame(function() {
       requestAnimationFrame(function() {
@@ -238,13 +238,13 @@ function showSkeletons(show) {
     });
   } else {
     const kpiCards = document.querySelectorAll('.kpi-card');
-    const widgetCards = document.querySelectorAll('.widget-item');
-    
+    const widgetItems = document.querySelectorAll('.widget-item');
+
     kpiCards.forEach(function(card) {
       card.classList.add('loading');
     });
-    
-    widgetCards.forEach(function(widget) {
+
+    widgetItems.forEach(function(widget) {
       widget.classList.add('loading');
     });
   }
@@ -253,14 +253,16 @@ function showSkeletons(show) {
 // Separate function to actually hide skeletons after DOM paint
 function hideSkeletonsNow() {
   const kpiCards = document.querySelectorAll('.kpi-card');
-  const widgetCards = document.querySelectorAll('.widget-item');
+  const widgetItems = document.querySelectorAll('.widget-item');
 
   kpiCards.forEach(function(card) {
     card.classList.remove('loading');
+    card.classList.add('loaded');
   });
 
-  widgetCards.forEach(function(widget) {
+  widgetItems.forEach(function(widget) {
     widget.classList.remove('loading');
+    widget.classList.add('loaded');
   });
 }
 
@@ -301,10 +303,26 @@ function showToast(message, type, duration) {
   }, duration);
 }
 
+// Toast convenience methods
+showToast.error = function(message, duration) {
+  showToast(message, 'error', duration || 5000);
+};
+showToast.success = function(message, duration) {
+  showToast(message, 'success', duration || 2000);
+};
+showToast.info = function(message, duration) {
+  showToast(message, 'info', duration || 3000);
+};
+
 // ===== RENDER ALL COMPONENTS =====
 function renderAll() {
   const data = getData();
   if (!data) return;
+
+  // Add updating class for smooth transitions
+  document.querySelectorAll('.kpi-value, .hero-production-number, .hero-mini-kpi-value, .current-stat-value, .integration-stat-value').forEach(function(el) {
+    el.classList.add('updating');
+  });
 
   // Hide loading overlay now that we have data
   hideLoadingOverlay();
@@ -329,6 +347,13 @@ function renderAll() {
 
   // Update hero section
   renderHeroSection(data);
+
+  // Remove updating class after render
+  requestAnimationFrame(function() {
+    document.querySelectorAll('.updating').forEach(function(el) {
+      el.classList.remove('updating');
+    });
+  });
 
   // Update bag timer widget
   const bagsTodayEl = document.getElementById('bagsToday');
@@ -437,6 +462,28 @@ function updateLastHourWidget(data) {
 // ===== HERO SECTION RENDERING =====
 function renderHeroSection(data) {
   const t = data.totals || data.today || {};
+
+  // Empty state: no production data
+  const heroSection = document.getElementById('heroSection');
+  const hasProduction = (t.totalTops || 0) > 0 || (t.totalLbs || 0) > 0;
+
+  // Remove existing empty state if present
+  const existingEmpty = heroSection ? heroSection.querySelector('.empty-state-production') : null;
+  if (existingEmpty) existingEmpty.remove();
+
+  if (!hasProduction && heroSection) {
+    // Check if we should show empty state (no data at all, not just zeros from start of day)
+    const hourly = data.hourly || [];
+    const noHourlyData = hourly.length === 0 || hourly.every(function(h) { return !h.lbs || h.lbs === 0; });
+
+    if (noHourlyData) {
+      const emptyDiv = document.createElement('div');
+      emptyDiv.className = 'empty-state-production';
+      emptyDiv.innerHTML = '<div class="empty-state-title">No production data today</div><div class="empty-state-sub">The line is quiet. Showing last working day data.</div>';
+      const botanicalFrame = heroSection.querySelector('.hero-botanical-frame');
+      if (botanicalFrame) botanicalFrame.appendChild(emptyDiv);
+    }
+  }
 
   // Production number (the star) - TOPS production
   const tops = t.totalTops || 0;
@@ -942,6 +989,9 @@ async function init() {
   // 5. Initialize sidebar state
   initSidebarState();
 
+  // 5.1. Initialize mobile sidebar (backdrop + escape key)
+  initMobileSidebar();
+
   // 5.5. Initialize viewport height tracking (iOS Safari fix)
   initViewportTracking();
 
@@ -1347,6 +1397,7 @@ export {
   closeMobileSidebar,
   openAppNewTab,
   initSidebarState,
+  initMobileSidebar,
   getViewName
 };
 
