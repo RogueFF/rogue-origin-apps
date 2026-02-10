@@ -8,6 +8,7 @@
  * - /api/kanban - Kanban board
  * - /api/sop - Standard operating procedures
  * - /api/consignment - Consignment inventory tracking
+ * - /api/complaints - Customer complaints tracking
  * - /api/pool - Pool inventory proxy
  */
 
@@ -22,6 +23,7 @@ import { handleKanbanD1 } from './handlers/kanban-d1.js';
 import { handleSop } from './handlers/sop.js';
 import { handleSopD1 } from './handlers/sop-d1.js';
 import { handleConsignmentD1 } from './handlers/consignment-d1.js';
+import { handleComplaintsD1 } from './handlers/complaints-d1.js';
 import { handlePoolD1 } from './handlers/pool-d1.js';
 import { handlePoolRequest } from './handlers/pool.js';
 import { corsHeaders, handleCors } from './lib/cors.js';
@@ -69,6 +71,8 @@ export default {
         response = USE_D1_SOP
           ? await handleSopD1(request, env, ctx)
           : await handleSop(request, env, ctx);
+      } else if (path.startsWith('/api/complaints')) {
+        response = await handleComplaintsD1(request, env, ctx);
       } else if (path.startsWith('/api/consignment')) {
         response = await handleConsignmentD1(request, env, ctx);
       } else if (path.startsWith('/api/pool-bins')) {
@@ -83,7 +87,7 @@ export default {
           success: true,
           message: 'Rogue Origin API - Cloudflare Workers',
           version: '1.0.0',
-          endpoints: ['/api/production', '/api/orders', '/api/barcode', '/api/kanban', '/api/sop', '/api/consignment', '/api/pool']
+          endpoints: ['/api/production', '/api/orders', '/api/barcode', '/api/kanban', '/api/sop', '/api/consignment', '/api/complaints', '/api/pool']
         });
       } else {
         response = errorResponse('Not found', 'NOT_FOUND', 404);
