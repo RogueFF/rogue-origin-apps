@@ -618,8 +618,9 @@ function loadStrainBreakdowns() {
       const strainEl = document.getElementById('strains-' + p.id);
       if (strainEl && detail.inventory && detail.inventory.length > 0) {
         strainEl.textContent = detail.inventory
-          .map(i => i.strain + ' ' + i.on_hand_lbs.toFixed(0))
-          .join(' \u00b7 ');
+          .filter(i => i.on_hand_lbs > 0)
+          .map(i => i.strain + ' ' + i.type + ' ' + i.on_hand_lbs.toFixed(0))
+          .join(' · ');
       }
     } catch(e) { /* silent fail */ }
   });
