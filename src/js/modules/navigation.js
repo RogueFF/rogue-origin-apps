@@ -153,20 +153,45 @@ export function toggleSidebar() {
  * Toggle mobile sidebar visibility
  */
 export function toggleMobileSidebar() {
-  const sidebar = safeGetEl('sidebar');
-  if (!sidebar) return;
+  const isOpen = document.body.classList.contains('sidebar-open');
+  if (isOpen) {
+    closeMobileSidebar();
+  } else {
+    openMobileSidebar();
+  }
+}
 
-  sidebar.classList.toggle('mobile-open');
+/**
+ * Open mobile sidebar
+ */
+function openMobileSidebar() {
+  document.body.classList.add('sidebar-open');
+  const btn = document.querySelector('.mobile-menu-btn');
+  if (btn) btn.setAttribute('aria-expanded', 'true');
 }
 
 /**
  * Close mobile sidebar
  */
 export function closeMobileSidebar() {
-  const sidebar = safeGetEl('sidebar');
-  if (sidebar) {
-    sidebar.classList.remove('mobile-open');
+  document.body.classList.remove('sidebar-open');
+  const btn = document.querySelector('.mobile-menu-btn');
+  if (btn) btn.setAttribute('aria-expanded', 'false');
+}
+
+/**
+ * Initialize mobile sidebar: backdrop click + Escape key
+ */
+export function initMobileSidebar() {
+  const backdrop = safeGetEl('sidebarBackdrop');
+  if (backdrop) {
+    backdrop.addEventListener('click', closeMobileSidebar);
   }
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && document.body.classList.contains('sidebar-open')) {
+      closeMobileSidebar();
+    }
+  });
 }
 
 /**
