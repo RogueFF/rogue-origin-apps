@@ -25,39 +25,28 @@ export function renderPartnerCards(partners, container, onCardClick) {
   }
   partners.forEach(p => {
     const balanceClass = p.balance_owed <= 0 ? 'low' : p.balance_owed > 1000 ? 'high' : 'medium';
+    const inventoryDisplay = p.inventory_lbs > 0 ? p.inventory_lbs.toFixed(1) + ' lbs' : '0 lbs';
     const card = document.createElement('div');
     card.className = 'partner-card';
     card.dataset.partnerId = p.id;
     card.innerHTML = `
       <div class="card-top-row">
         <div class="partner-name">${esc(p.name)}</div>
-        <button class="quick-intake-btn" data-partner-id="${p.id}" title="New intake for ${esc(p.name)}" aria-label="Quick intake">
-          <i class="ph-duotone ph-plus-circle"></i>
-        </button>
+        <i class="ph-duotone ph-caret-right card-expand-icon"></i>
       </div>
-      <div class="balance ${balanceClass}">$${fmt(p.balance_owed)}</div>
-      <div class="card-label">Balance Owed</div>
-      <div class="meta">
-        <span>${p.inventory_lbs > 0 ? p.inventory_lbs.toFixed(1) + ' lbs on hand' : 'No inventory'}</span>
+      <div class="card-hero-number">${inventoryDisplay}</div>
+      <div class="card-hero-label">on hand</div>
+      <div class="card-bottom-row">
         <span>${p.last_intake_date ? 'Last intake: ' + fmtDate(p.last_intake_date) : 'No intakes'}</span>
+        <span class="card-balance ${balanceClass}">${p.balance_owed > 0 ? '$' + fmt(p.balance_owed) + ' owed' : 'Settled'}</span>
       </div>
     `;
-    
-    // Quick-intake button click handler (stops propagation)
-    const quickBtn = card.querySelector('.quick-intake-btn');
-    if (quickBtn) {
-      quickBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        // Emit custom event with partner id
-        document.dispatchEvent(new CustomEvent('quickIntake', { detail: { partnerId: p.id } }));
-      });
-    }
-    
+
     // Prefetch on hover
     card.addEventListener('mouseenter', () => {
       document.dispatchEvent(new CustomEvent('prefetchPartner', { detail: { partnerId: p.id } }));
     });
-    
+
     card.addEventListener('click', () => onCardClick(p.id));
     container.appendChild(card);
   });
@@ -89,11 +78,11 @@ export function renderActivityFeed(activities, container) {
   // Render activities
   activities.forEach((a, idx) => {
     if (processed.has(idx)) return; // Skip - already part of a batch
-    
+
     const item = document.createElement('div');
     item.className = 'activity-item';
     let detail = '';
-    
+
     if (a.activity_type === 'intake') {
       // Check if this is the first item of a batch
       if (a.batch_id && batches.has(a.batch_id)) {
@@ -101,23 +90,23 @@ export function renderActivityFeed(activities, container) {
         batches.delete(a.batch_id); // Render once
         const lines = batch.items.map(i => `${i.weight_lbs} lbs ${esc(i.strain)} (${i.type})`).join('<br>');
         const totalWeight = batch.items.reduce((sum, i) => sum + i.weight_lbs, 0);
-        detail = `<strong>${esc(batch.partner_name)}</strong> — ${totalWeight} lbs total @ $${fmt(batch.price)}/lb<br><span style="font-size: 0.9em; opacity: 0.85;">${lines}</span>`;
+        detail = `<strong>${esc(batch.partner_name)}</strong> <span>— ${totalWeight} lbs total @ $${fmt(batch.price)}/lb</span><br><span style="font-size: 0.9em; opacity: 0.85;">${lines}</span>`;
       } else {
         // Single intake (no batch_id)
-        detail = `<strong>${esc(a.partner_name)}</strong> — ${a.weight_lbs} lbs ${esc(a.strain)} (${a.type}) @ $${fmt(a.price)}/lb`;
+        detail = `<strong>${esc(a.partner_name)}</strong> <span>— ${a.weight_lbs} lbs ${esc(a.strain)} (${a.type}) @ $${fmt(a.price)}/lb</span>`;
       }
     } else if (a.activity_type === 'sale') {
       if (a.method === 'inventory_count') {
-        detail = `<strong>${esc(a.partner_name)}</strong> — Inventory count: ${a.weight_lbs} lbs ${esc(a.strain)} (${a.type}) sold`;
+        detail = `<strong>${esc(a.partner_name)}</strong> <span>— Inventory count: ${a.weight_lbs} lbs ${esc(a.strain)} (${a.type}) sold</span>`;
       } else {
-        detail = `<strong>${esc(a.partner_name)}</strong> — Sold ${a.weight_lbs} lbs ${esc(a.strain)} (${a.type})${a.price ? ' @ $' + fmt(a.price) + '/lb' : ''}`;
+        detail = `<strong>${esc(a.partner_name)}</strong> <span>— Sold ${a.weight_lbs} lbs ${esc(a.strain)} (${a.type})${a.price ? ' @ $' + fmt(a.price) + '/lb' : ''}</span>`;
       }
     } else if (a.activity_type === 'payment') {
-      detail = `<strong>${esc(a.partner_name)}</strong> — $${fmt(a.amount)} via ${a.method || 'unknown'}`;
+      detail = `<strong>${esc(a.partner_name)}</strong> <span>— $${fmt(a.amount)} via ${a.method || 'unknown'}</span>`;
     }
-    
+
     item.innerHTML = `
-      <span class="activity-badge ${a.activity_type}">${a.activity_type}</span>
+      <div class="activity-dot ${a.activity_type}"></div>
       <span class="activity-detail">${detail}</span>
       <span class="activity-date">${fmtDate(a.date)}</span>
     `;
