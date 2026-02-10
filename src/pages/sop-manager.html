@@ -1763,6 +1763,7 @@
       renderSOPs();
       updateStats();
       updateDropdowns();
+      renderCategoryChips();
     }
     
     function syncStepsFromDOM() {
@@ -2059,6 +2060,7 @@
     
     function filterSOPs() {
       renderSOPs();
+      renderCategoryChips();
     }
     
     function updateStats() {
@@ -2075,6 +2077,13 @@
         badge.style.display = 'inline';
       } else {
         badge.style.display = 'none';
+      }
+
+      // Sync FAB badge
+      const fabBadge = document.getElementById('fabRequestBadge');
+      if (fabBadge) {
+        fabBadge.textContent = pendingRequests;
+        fabBadge.style.display = pendingRequests > 0 ? 'inline' : 'none';
       }
       
       const thisMonth = new Date();
