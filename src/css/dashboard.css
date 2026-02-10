@@ -991,6 +991,11 @@ body::after {
 #themeIcon svg {
   width: 16px;
   height: 16px;
+  transition: transform 0.3s ease;
+}
+
+.theme-toggle:active #themeIcon svg {
+  transform: rotate(30deg);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -1137,6 +1142,72 @@ main {
 
 .animate-value { animation: countUp 0.4s ease-out forwards; }
 
+/* ========================================
+   PASS 6: MICRO-INTERACTIONS — Entrance Animations
+   ======================================== */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes progressFill {
+  from { width: 0; }
+}
+
+@keyframes productionNumberEntrance {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Staggered entrance: Welcome */
+.welcome-section {
+  animation: fadeIn 0.4s ease both;
+}
+
+/* Staggered entrance: Hero */
+.hero-section {
+  animation: fadeIn 0.5s ease 0.1s both;
+}
+
+/* Staggered entrance: KPI cards */
+.kpi-grid-item:nth-child(1) .kpi-card { animation: fadeInUp 0.4s ease 0.15s both; }
+.kpi-grid-item:nth-child(2) .kpi-card { animation: fadeInUp 0.4s ease 0.21s both; }
+.kpi-grid-item:nth-child(3) .kpi-card { animation: fadeInUp 0.4s ease 0.27s both; }
+.kpi-grid-item:nth-child(4) .kpi-card { animation: fadeInUp 0.4s ease 0.33s both; }
+.kpi-grid-item:nth-child(5) .kpi-card { animation: fadeInUp 0.4s ease 0.39s both; }
+.kpi-grid-item:nth-child(6) .kpi-card { animation: fadeInUp 0.4s ease 0.45s both; }
+.kpi-grid-item:nth-child(7) .kpi-card { animation: fadeInUp 0.4s ease 0.51s both; }
+.kpi-grid-item:nth-child(8) .kpi-card { animation: fadeInUp 0.4s ease 0.57s both; }
+
+/* Staggered entrance: Widget cards */
+.widget-item:nth-child(1) { animation: fadeInUp 0.3s ease 0.3s both; }
+.widget-item:nth-child(2) { animation: fadeInUp 0.3s ease 0.35s both; }
+.widget-item:nth-child(3) { animation: fadeInUp 0.3s ease 0.4s both; }
+.widget-item:nth-child(4) { animation: fadeInUp 0.3s ease 0.45s both; }
+.widget-item:nth-child(5) { animation: fadeInUp 0.3s ease 0.5s both; }
+.widget-item:nth-child(6) { animation: fadeInUp 0.3s ease 0.55s both; }
+.widget-item:nth-child(7) { animation: fadeInUp 0.3s ease 0.6s both; }
+.widget-item:nth-child(8) { animation: fadeInUp 0.3s ease 0.65s both; }
+.widget-item:nth-child(9) { animation: fadeInUp 0.3s ease 0.7s both; }
+.widget-item:nth-child(10) { animation: fadeInUp 0.3s ease 0.75s both; }
+.widget-item:nth-child(11) { animation: fadeInUp 0.3s ease 0.8s both; }
+.widget-item:nth-child(12) { animation: fadeInUp 0.3s ease 0.85s both; }
+
+/* Production number entrance */
+.hero-production-number {
+  animation: productionNumberEntrance 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both;
+}
+
+/* Progress bar fill animation */
+.hero-progress-fill {
+  animation: progressFill 1s ease-out 0.6s both;
+}
+
 /* Apply page load animations */
 body { animation: backgroundFadeIn 800ms ease-out forwards; }
 .header { animation: headerSlideDown 400ms var(--ease-spring) 200ms backwards; }
@@ -1243,6 +1314,11 @@ body.sidebar-collapsed .main { margin-left: var(--sidebar-collapsed); }
 .header-btn.primary:hover { background: #5a7b64; }
 .header-btn.active { background: var(--ro-green); color: #fff; border-color: transparent; }
 .header-btn svg { width: 14px; height: 14px; }
+
+/* Pass 6: Refresh button spin on click */
+.header-btn.primary:active svg {
+  animation: spin 0.6s ease;
+}
 
 /* Header Logo */
 .header-logo { height: 28px; width: auto; }
@@ -1743,7 +1819,7 @@ body.sidebar-collapsed .main { margin-left: var(--sidebar-collapsed); }
   position: relative;
   overflow: hidden;
   box-shadow: none;
-  transition: border-color 0.15s ease, transform 0.15s ease;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.2s ease;
   min-height: 120px;
   display: flex;
   flex-direction: column;
@@ -1752,6 +1828,7 @@ body.sidebar-collapsed .main { margin-left: var(--sidebar-collapsed); }
   box-sizing: border-box;
 }
 .kpi-card:hover { box-shadow: none; border-color: rgba(102, 137, 113, 0.3); transform: translateY(-2px); }
+.kpi-card:active { transform: scale(0.98); }
 .kpi-card.muuri-item-dragging { transition: none !important; }
 .kpi-card.muuri-item-releasing { transition: none !important; }
 /* ===== KPI VISUAL HIERARCHY — Pass 5: Primary KPIs ===== */
@@ -2196,8 +2273,8 @@ body.tutorial-active::before {
   position: relative;
   overflow: hidden;
   transition:
-    transform 0.15s ease,
-    border-color 0.15s ease;
+    transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+    border-color 0.2s ease;
 }
 
 /* Widget Error State - Bottom Accent Strip */
@@ -2242,13 +2319,24 @@ body.tutorial-active::before {
   border-color: rgba(102, 137, 113, 0.3);
 }
 
+.widget-card:active {
+  transform: scale(0.98);
+}
+
 :root[data-theme="dark"] .widget-card:hover {
   box-shadow: none;
   border-color: rgba(102, 137, 113, 0.3);
 }
 
+.widget-card .widget-content {
+  transition: max-height 0.3s ease, opacity 0.2s ease;
+  overflow: hidden;
+}
+
 .widget-card.collapsed .widget-content {
-  display: none;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
 }
 
 .widget-card[data-hidden="true"] { display: none; }
@@ -2562,7 +2650,8 @@ body:not(.muuri-active) .widget-item[data-size="full"] { flex-basis: calc(100% -
 .integration-stat-value.good { color: var(--green); }
 
 /* Integration Card — Pass 5: Bottom-border accents & icon hover */
-.integration-card { transition: transform 0.15s ease, border-color 0.15s ease; }
+.integration-card { transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.2s ease; }
+.integration-card:active { transform: scale(0.98); }
 .integration-card .integration-icon.kanban ~ .integration-title,
 .widget-item[data-widget-id="widget-kanban"] .integration-card { border-bottom: 2px solid rgba(102, 137, 113, 0.3); }
 .widget-item[data-widget-id="widget-scoreboard"] .integration-card { border-bottom: 2px solid rgba(228, 170, 79, 0.3); }
