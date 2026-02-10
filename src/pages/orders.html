@@ -56,7 +56,7 @@
           Unlock
         </button>
         <div class="login-error" id="login-error">
-          ❌ Incorrect password
+          Incorrect password
         </div>
       </form>
     </div>
@@ -836,7 +836,7 @@
       errorEl.classList.remove('visible');
 
       if (!enteredPassword) {
-        errorEl.textContent = '❌ Please enter a password';
+        errorEl.textContent = 'Please enter a password';
         errorEl.classList.add('visible');
         return;
       }
@@ -870,7 +870,7 @@
           passwordInput.value = '';
         } else {
           // Wrong password or error
-          errorEl.textContent = '❌ ' + (result.error || 'Invalid password');
+          errorEl.textContent = result.error || 'Invalid password';
           errorEl.classList.add('visible');
           passwordInput.value = '';
           passwordInput.focus();
@@ -883,7 +883,7 @@
         }
       } catch (error) {
         console.error('Authentication error:', error);
-        errorEl.textContent = '❌ Connection error. Please try again.';
+        errorEl.textContent = 'Connection error. Please try again.';
         errorEl.classList.add('visible');
         passwordInput.focus();
       } finally {
@@ -974,10 +974,10 @@
         });
 
         pdfLibrariesLoaded = true;
-        console.log('✅ PDF libraries loaded successfully');
+        console.log('PDF libraries loaded successfully');
         return true;
       } catch (error) {
-        console.error('❌ Failed to load PDF libraries:', error);
+        console.error('Failed to load PDF libraries:', error);
         showToast('Failed to load PDF generation libraries. Please refresh and try again.', 'error');
         return false;
       }
@@ -1619,7 +1619,7 @@
 
       if (matched.length > 0) {
         html += `<div style="margin-bottom: 24px;">`;
-        html += `<h5 style="color: var(--success); margin-bottom: 12px;">✅ ${matched.length} order(s) matched</h5>`;
+        html += `<h5 style="color: var(--success); margin-bottom: 12px;">${matched.length} order(s) matched</h5>`;
         matched.forEach(({ shopifyOrder, masterOrder }) => {
           html += `
             <div class="list-item" style="margin-bottom: 12px;">
@@ -1638,7 +1638,7 @@
 
       if (unmatched.length > 0) {
         html += `<div>`;
-        html += `<h5 style="color: var(--warning); margin-bottom: 12px;">⚠️ ${unmatched.length} order(s) not matched</h5>`;
+        html += `<h5 style="color: var(--warning); margin-bottom: 12px;">${unmatched.length} order(s) not matched</h5>`;
         html += `<div style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">These customers don't exist in your Master Orders. Add them first to import their shipments.</div>`;
         unmatched.forEach(order => {
           html += `
@@ -1723,7 +1723,7 @@
       closeShopifyImportModal();
 
       if (successCount > 0) {
-        showToast(`✅ Imported ${successCount} shipment(s) from Shopify!`, 'success');
+        showToast(`Imported ${successCount} shipment(s) from Shopify`, 'success');
         // Clear all caches since import may affect multiple orders
         orderCache.clear();
         // Refresh the current order panel if open
@@ -1733,7 +1733,7 @@
       }
 
       if (errorCount > 0) {
-        showToast(`⚠️ ${errorCount} shipment(s) failed to import`, 'warning');
+        showToast(`${errorCount} shipment(s) failed to import`, 'warning');
       }
 
       document.getElementById('import-confirm-btn').disabled = false;
@@ -1965,7 +1965,7 @@
           }).filter(Boolean);
 
           if (progressItems.length > 0) {
-            progressHtml = '<br><span style="font-size: 12px; color: var(--ro-green); font-weight: 500;">📊 ' + progressItems.join(' • ') + '</span>';
+            progressHtml = '<br><span style="font-size: 12px; color: var(--ro-green); font-weight: 500;">' + progressItems.join(' • ') + '</span>';
           }
         }
 
@@ -3305,7 +3305,7 @@
                   const coaPages = await mergedPdf.copyPages(coaPdf, coaPdf.getPageIndices());
                   coaPages.forEach(page => mergedPdf.addPage(page));
                   matchedCount++;
-                  console.log(`✅ Added COA for: ${coa.strain} → ${coa.matchedStrain}`);
+                  console.log(`Added COA for: ${coa.strain} → ${coa.matchedStrain}`);
                 } catch (e) {
                   console.error(`Failed to merge COA for ${coa.strain}:`, e);
                 }
@@ -3318,7 +3318,7 @@
               showToast(`No COA found for: ${unmatchedStrains.join(', ')}`, 'warning');
             }
 
-            console.log(`📄 Merged ${matchedCount} COAs`);
+            console.log(`Merged ${matchedCount} COAs`);
           }
         }
 
