@@ -139,7 +139,7 @@ body::before {
 
 .search-input:focus {
   outline: none;
-  border-color: #668971;
+  border-color: var(--ro-green);
   box-shadow: 0 0 0 2px rgba(102, 137, 113, 0.15);
 }
 
@@ -187,8 +187,8 @@ body::before {
 
 .filter-chip.active {
   background: rgba(102, 137, 113, 0.15);
-  border-color: #668971;
-  color: #668971;
+  border-color: var(--ro-green);
+  color: var(--ro-green);
 }
 
 [data-theme="light"] .filter-chip.active {
@@ -236,7 +236,7 @@ body::before {
 
 .view-btn.active {
   background: rgba(102, 137, 113, 0.15);
-  color: #668971;
+  color: var(--ro-green);
 }
 
 @media (max-width: 768px) {
@@ -351,9 +351,9 @@ body::before {
   color: var(--text);
 }
 
-.stat-value.success { color: #668971; }
-.stat-value.warning { color: #e4aa4f; }
-.stat-value.danger { color: #c45c4a; }
+.stat-value.success { color: var(--ro-green); }
+.stat-value.warning { color: var(--ro-gold); }
+.stat-value.danger { color: var(--danger); }
 
 /* ========================================
    BUTTONS
@@ -373,12 +373,12 @@ body::before {
 }
 
 .btn-primary {
-  background: #668971;
+  background: var(--ro-green);
   color: white;
 }
 
 .btn-primary:hover {
-  background: #4a6b54;
+  background: var(--green-dark);
 }
 
 .btn-secondary {
@@ -402,7 +402,7 @@ body::before {
 }
 
 .btn-gold {
-  background: #e4aa4f;
+  background: var(--ro-gold);
   color: white;
 }
 
@@ -411,7 +411,7 @@ body::before {
 }
 
 .btn-danger {
-  background: #c45c4a;
+  background: var(--danger);
   color: white;
 }
 
@@ -434,7 +434,7 @@ body::before {
 }
 
 .icon-btn.danger:hover {
-  background: #c45c4a;
+  background: var(--danger);
   color: white;
 }
 
@@ -537,7 +537,7 @@ body::before {
 .order-id {
   font-family: var(--font-mono);
   font-weight: 600;
-  color: #668971;
+  color: var(--ro-green);
 }
 
 .order-amount {
@@ -559,17 +559,17 @@ body::before {
 
 .order-status.pending {
   background: rgba(98, 117, 141, 0.15);
-  color: #62758d;
+  color: var(--info);
 }
 
 .order-status.partial {
   background: rgba(228, 170, 79, 0.15);
-  color: #e4aa4f;
+  color: var(--ro-gold);
 }
 
 .order-status.fulfilled {
   background: rgba(102, 137, 113, 0.15);
-  color: #668971;
+  color: var(--ro-green);
 }
 
 /* Status badges (ES6 module table.js) */
@@ -588,22 +588,22 @@ body::before {
 
 .status-open {
   background: rgba(98, 117, 141, 0.15);
-  color: #62758d;
+  color: var(--info);
 }
 
 .status-partial {
   background: rgba(228, 170, 79, 0.15);
-  color: #e4aa4f;
+  color: var(--ro-gold);
 }
 
 .status-fulfilled {
   background: rgba(102, 137, 113, 0.15);
-  color: #668971;
+  color: var(--ro-green);
 }
 
 .status-paid {
   background: rgba(102, 137, 113, 0.2);
-  color: #668971;
+  color: var(--ro-green);
 }
 
 .status-closed {
@@ -688,7 +688,7 @@ body::before {
 
 .progress-mini-fill {
   height: 100%;
-  background: #668971;
+  background: var(--ro-green);
   transition: width 0.3s ease;
 }
 
@@ -712,7 +712,7 @@ body::before {
 }
 
 .modal {
-  background: #1a1e1b;
+  background: var(--bg-card);
   border-radius: 8px;
   border: 1px solid rgba(102, 137, 113, 0.15);
   max-width: 600px;
@@ -847,7 +847,7 @@ body::before {
 .form-select:focus,
 .form-textarea:focus {
   outline: none;
-  border-color: #668971;
+  border-color: var(--ro-green);
   box-shadow: 0 0 0 2px rgba(102, 137, 113, 0.15);
 }
 
@@ -882,7 +882,42 @@ body::before {
 .checkbox-label input[type="checkbox"] {
   width: 16px;
   height: 16px;
-  accent-color: #668971;
+  accent-color: var(--ro-green);
+}
+
+.form-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.input-currency {
+  width: 120px;
+  text-align: right;
+}
+
+.info-callout {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: var(--green-dim);
+  border-bottom: 2px solid var(--ro-green);
+  border-radius: var(--radius-md);
+}
+
+.info-callout p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
+[data-theme="light"] .info-callout {
+  background: var(--green-dim);
+}
+
+.empty-cell {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-muted);
 }
 
 @media (max-width: 768px) {
@@ -900,7 +935,7 @@ body::before {
   top: 0;
   height: 100vh;
   width: 560px;
-  background: #1a1e1b;
+  background: var(--bg-card);
   border-left: 1px solid rgba(102, 137, 113, 0.15);
   box-shadow: -4px 0 16px rgba(0, 0, 0, 0.3);
   transform: translateX(100%);
@@ -941,7 +976,7 @@ body::before {
 .detail-panel-title {
   font-family: var(--font-mono);
   font-size: 18px;
-  color: #668971;
+  color: var(--ro-green);
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -1004,8 +1039,8 @@ body::before {
 }
 
 .tab.active {
-  color: #668971;
-  border-bottom-color: #668971;
+  color: var(--ro-green);
+  border-bottom-color: var(--ro-green);
 }
 
 .tab-content {
@@ -1060,16 +1095,16 @@ body::before {
 
 .progress-bar-fill {
   height: 100%;
-  background: #668971;
+  background: var(--ro-green);
   transition: width 0.3s ease;
 }
 
 .progress-bar-fill.warning {
-  background: #e4aa4f;
+  background: var(--ro-gold);
 }
 
 .progress-bar-fill.danger {
-  background: #c45c4a;
+  background: var(--danger);
 }
 
 /* Lists */
@@ -1097,7 +1132,7 @@ body::before {
 .list-item-title {
   font-weight: 600;
   font-family: var(--font-mono);
-  color: #668971;
+  color: var(--ro-green);
 }
 
 .shopify-badge {
@@ -1110,7 +1145,7 @@ body::before {
   font-size: 11px;
   font-weight: 500;
   background: rgba(149, 117, 205, 0.15);
-  color: #9575cd;
+  color: var(--info);
   font-family: var(--font-ui);
 }
 
@@ -1238,13 +1273,13 @@ body::before {
 }
 
 .payment-amount {
-  color: #668971;
+  color: var(--ro-green);
 }
 
 .shipment-amount {
   font-family: var(--font-mono);
   font-weight: 600;
-  color: #668971;
+  color: var(--ro-green);
 }
 
 .payment-method {
@@ -1377,18 +1412,18 @@ body::before {
 }
 
 .shipment-checkbox-item:hover {
-  border-color: #668971;
+  border-color: var(--ro-green);
 }
 
 .shipment-checkbox-item.selected {
   background: rgba(102, 137, 113, 0.15);
-  border-color: #668971;
+  border-color: var(--ro-green);
 }
 
 .shipment-checkbox-item input[type="checkbox"] {
   width: 18px;
   height: 18px;
-  accent-color: #668971;
+  accent-color: var(--ro-green);
   cursor: pointer;
 }
 
@@ -1411,7 +1446,7 @@ body::before {
 .shipment-checkbox-amount {
   font-family: var(--font-mono);
   font-size: 14px;
-  color: #668971;
+  color: var(--ro-green);
 }
 
 .shipment-checkbox-date {
@@ -1436,17 +1471,17 @@ body::before {
 
 .shipment-payment-status.paid {
   background: rgba(102, 137, 113, 0.15);
-  color: #668971;
+  color: var(--ro-green);
 }
 
 .shipment-payment-status.partial {
   background: rgba(228, 170, 79, 0.15);
-  color: #e4aa4f;
+  color: var(--ro-gold);
 }
 
 .shipment-payment-status.unpaid {
   background: rgba(196, 92, 74, 0.15);
-  color: #c45c4a;
+  color: var(--danger);
 }
 
 /* Linked shipments in payment detail modal */
@@ -1476,7 +1511,7 @@ body::before {
 .linked-shipment-amount {
   font-family: var(--font-mono);
   font-size: 13px;
-  color: #668971;
+  color: var(--ro-green);
 }
 
 /* Shipments list container */
@@ -1542,6 +1577,46 @@ body::before {
   color: var(--text);
 }
 
+.detail-row-stacked {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.detail-value-hero {
+  font-family: var(--font-mono);
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.detail-value-success {
+  color: var(--success);
+}
+
+.detail-value-id {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  color: var(--ro-green);
+}
+
+.detail-value-mono {
+  font-family: var(--font-mono);
+}
+
+.detail-value-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.detail-value-preformatted {
+  margin-top: 8px;
+  white-space: pre-wrap;
+}
+
+.detail-value-full {
+  margin-top: 8px;
+  width: 100%;
+}
+
 /* ========================================
    LINE ITEMS TABLE
    ======================================== */
@@ -1588,7 +1663,7 @@ body::before {
 .line-item-remove {
   background: none;
   border: none;
-  color: #c45c4a;
+  color: var(--danger);
   cursor: pointer;
   padding: 4px;
 }
@@ -1690,7 +1765,7 @@ body::before {
 
 .toast {
   font-family: var(--font-ui);
-  background: #1a1e1b;
+  background: var(--bg-card);
   border: 1px solid rgba(102, 137, 113, 0.15);
   border-radius: 8px;
   padding: 16px 20px;
@@ -1709,19 +1784,19 @@ body::before {
 }
 
 .toast.success {
-  border-left: 4px solid #668971;
+  border-left: 4px solid var(--ro-green);
 }
 
 .toast.error {
-  border-left: 4px solid #c45c4a;
+  border-left: 4px solid var(--danger);
 }
 
 .toast.warning {
-  border-left: 4px solid #e4aa4f;
+  border-left: 4px solid var(--ro-gold);
 }
 
 .toast.info {
-  border-left: 4px solid #62758d;
+  border-left: 4px solid var(--info);
 }
 
 .toast-icon {
@@ -1730,19 +1805,19 @@ body::before {
 }
 
 .toast.success .toast-icon {
-  color: #668971;
+  color: var(--ro-green);
 }
 
 .toast.error .toast-icon {
-  color: #c45c4a;
+  color: var(--danger);
 }
 
 .toast.warning .toast-icon {
-  color: #e4aa4f;
+  color: var(--ro-gold);
 }
 
 .toast.info .toast-icon {
-  color: #62758d;
+  color: var(--info);
 }
 
 .toast-message {
@@ -1815,7 +1890,7 @@ body::before {
 #auth-overlay {
   position: fixed;
   inset: 0;
-  background: #141816;
+  background: var(--bg);
   z-index: 9999;
   display: flex;
   align-items: center;
@@ -1902,14 +1977,14 @@ body::before {
 
 .login-input:focus {
   outline: none;
-  border-color: #668971;
+  border-color: var(--ro-green);
   box-shadow: 0 0 0 2px rgba(102, 137, 113, 0.15);
 }
 
 .login-btn {
   width: 100%;
   padding: 12px;
-  background: #668971;
+  background: var(--ro-green);
   color: white;
   border: none;
   border-radius: 6px;
@@ -1921,7 +1996,7 @@ body::before {
 }
 
 .login-btn:hover {
-  background: #4a6b54;
+  background: var(--green-dark);
 }
 
 .login-btn:disabled {
@@ -1930,7 +2005,7 @@ body::before {
 }
 
 .login-error {
-  color: #c45c4a;
+  color: var(--danger);
   font-size: 13px;
   margin-top: 16px;
   display: none;
@@ -2069,7 +2144,7 @@ body.auth-required .container {
 
 .loading-overlay i {
   font-size: 32px;
-  color: #668971;
+  color: var(--ro-green);
 }
 
 /* Button loading state */
@@ -2090,7 +2165,7 @@ body.auth-required .container {
   position: absolute;
   top: -40px;
   left: 0;
-  background: #668971;
+  background: var(--ro-green);
   color: white;
   padding: 8px 16px;
   z-index: 10000;
@@ -2101,7 +2176,7 @@ body.auth-required .container {
 
 .skip-link:focus {
   top: 0;
-  outline: 3px solid #e4aa4f;
+  outline: 3px solid var(--ro-gold);
   outline-offset: 2px;
 }
 
@@ -2111,7 +2186,7 @@ select:focus-visible,
 input:focus-visible,
 [role="button"]:focus-visible,
 a:focus-visible {
-  outline: 2px solid #668971;
+  outline: 2px solid var(--ro-green);
   outline-offset: 2px;
   box-shadow: 0 0 0 4px rgba(102, 137, 113, 0.2);
 }
@@ -2121,7 +2196,7 @@ body.dark-mode button:focus-visible,
 body.dark-mode input:focus-visible,
 [data-theme="dark"] button:focus-visible,
 [data-theme="dark"] input:focus-visible {
-  outline: 2px solid #e4aa4f;
+  outline: 2px solid var(--ro-gold);
   box-shadow: 0 0 0 4px rgba(228, 170, 79, 0.25);
 }
 
@@ -2240,5 +2315,47 @@ body.dark-mode input:focus-visible,
     max-width: 100%;
     margin: 0;
     border-radius: 0;
+  }
+}
+
+/* ========================================
+   RESPONSIVE (SMALL PHONES)
+   ======================================== */
+@media (max-width: 480px) {
+  .container {
+    padding: 12px;
+  }
+
+  .header h1 {
+    font-size: 24px;
+  }
+
+  .stats-bar {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .stat-value {
+    font-size: 18px;
+  }
+
+  .search-filters {
+    gap: 8px;
+  }
+
+  .filter-chips {
+    gap: 4px;
+  }
+
+  .filter-chip {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+
+  .detail-panel {
+    width: 100vw;
+  }
+
+  .detail-value-hero {
+    font-size: 20px;
   }
 }
