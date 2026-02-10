@@ -4,7 +4,7 @@
  */
 
 import * as api from './api.js?v=6';
-import * as ui from './ui.js?v=7';
+import * as ui from './ui.js?v=8';
 
 let partners = [];
 let strains = [];

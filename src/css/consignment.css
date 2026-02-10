@@ -17,6 +17,17 @@ body::before {
   display: none;
 }
 
+/* Subtle noise grain overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  opacity: 0.03;
+  pointer-events: none;
+  z-index: 9998;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+}
+
 /* Fade-in on load */
 .main {
   animation: pageFadeIn 0.4s ease both;
@@ -403,7 +414,7 @@ nav {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   PARTNER CARDS
+   PARTNER CARDS — Inventory-first layout
    ═══════════════════════════════════════════════════════════ */
 
 .partner-cards {
@@ -413,67 +424,95 @@ nav {
 }
 
 .partner-card {
-  background: rgba(26, 30, 27, 0.85);
-  border: 1px solid rgba(102, 137, 113, 0.15);
+  background: rgba(26, 30, 27, 0.6);
+  border: 1px solid rgba(102, 137, 113, 0.12);
   border-radius: 8px;
-  padding: 16px;
+  padding: 20px;
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: border-color 0.15s ease;
   position: relative;
 }
 
 .partner-card:hover {
-  border-color: rgba(102, 137, 113, 0.35);
-  background: rgba(30, 36, 31, 0.9);
+  border-color: rgba(102, 137, 113, 0.3);
 }
 
 .partner-card.active {
   border-color: var(--ro-green);
 }
 
-.card-label {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: rgba(255, 255, 255, 0.4);
-  margin-bottom: 8px;
-  display: block;
-}
-
 .card-top-row {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-}
-
-.quick-intake-btn {
-  background: none;
-  border: none;
-  color: var(--ro-green);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  font-size: 20px;
-  opacity: 0.4;
-  transition: opacity 0.15s ease;
-  flex-shrink: 0;
-  display: flex;
   align-items: center;
+  margin-bottom: 16px;
 }
 
-.quick-intake-btn:hover {
-  opacity: 1;
-}
-
-.partner-card h3,
 .partner-name {
-  font-family: var(--font-display);
-  font-size: 20px;
-  color: rgba(255, 255, 255, 0.88);
-  margin: 0 0 8px;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(240, 236, 228, 0.88);
+  margin: 0;
 }
 
+.card-expand-icon {
+  color: rgba(240, 236, 228, 0.25);
+  font-size: 18px;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+}
+
+.partner-card:hover .card-expand-icon {
+  color: rgba(240, 236, 228, 0.5);
+}
+
+.card-hero-number {
+  font-family: var(--font-mono);
+  font-size: 32px;
+  font-weight: 700;
+  color: #f0ece4;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.card-hero-label {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 400;
+  color: rgba(240, 236, 228, 0.4);
+  margin-top: 4px;
+}
+
+.card-bottom-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+  color: rgba(240, 236, 228, 0.35);
+}
+
+.card-bottom-row .card-balance {
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+
+.card-balance.high {
+  color: var(--danger);
+}
+
+.card-balance.medium {
+  color: var(--ro-gold);
+}
+
+.card-balance.low {
+  color: rgba(240, 236, 228, 0.4);
+}
+
+/* Legacy classes kept for detail panel compatibility */
 .balance {
   font-family: var(--font-mono);
   font-size: 32px;
@@ -496,6 +535,16 @@ nav {
 .balance.high,
 .balance.negative {
   color: var(--danger);
+}
+
+.card-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 8px;
+  display: block;
 }
 
 .meta {
@@ -521,87 +570,102 @@ nav {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   QUICK ACTIONS — Tab-style, not cards
+   QUICK ACTIONS — Large prominent CTA cards
    ═══════════════════════════════════════════════════════════ */
 
+.quick-actions-section {
+  margin-top: 16px;
+}
+
 .quick-actions {
-  display: flex;
-  gap: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
 }
 
 .quick-action-card {
-  background: transparent;
+  background: rgba(26, 30, 27, 0.6);
   border: none;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  padding: 12px 24px;
+  border-left: 3px solid transparent;
+  border-radius: 8px;
+  padding: 32px 24px;
+  min-height: 160px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, border-left-width 0.15s ease, transform 0.15s ease;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 16px;
   font-family: var(--font-ui);
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(240, 236, 228, 0.7);
   position: relative;
 }
 
 .quick-action-card:hover {
-  color: rgba(255, 255, 255, 0.8);
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(36, 42, 37, 0.7);
+  transform: translateY(-2px);
 }
 
-.quick-action-card.intake:hover,
-.quick-action-card.intake:focus {
-  color: var(--ro-green);
-  border-bottom-color: var(--ro-green);
+.quick-action-card.intake {
+  border-left-color: #668971;
 }
 
-.quick-action-card.sale:hover,
-.quick-action-card.sale:focus {
-  color: var(--ro-gold);
-  border-bottom-color: var(--ro-gold);
+.quick-action-card.intake:hover {
+  border-left-width: 4px;
 }
 
-.quick-action-card.payment:hover,
-.quick-action-card.payment:focus {
-  color: var(--info);
-  border-bottom-color: var(--info);
+.quick-action-card.sale {
+  border-left-color: #e4aa4f;
+}
+
+.quick-action-card.sale:hover {
+  border-left-width: 4px;
+}
+
+.quick-action-card.payment {
+  border-left-color: #62758d;
+}
+
+.quick-action-card.payment:hover {
+  border-left-width: 4px;
 }
 
 .quick-action-icon {
-  width: auto;
-  height: auto;
   display: flex;
   align-items: center;
-  font-size: 20px;
+  justify-content: center;
+  font-size: 40px;
 }
 
 .quick-action-card.intake .quick-action-icon {
-  color: inherit;
+  color: #668971;
 }
 
 .quick-action-card.sale .quick-action-icon {
-  color: inherit;
+  color: #e4aa4f;
 }
 
 .quick-action-card.payment .quick-action-icon {
-  color: inherit;
+  color: #62758d;
 }
 
 .quick-action-label {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
-  color: inherit;
+  color: #f0ece4;
   line-height: 1;
 }
 
 .quick-action-hint {
-  display: none;
+  display: block;
+  font-size: 13px;
+  color: rgba(240, 236, 228, 0.35);
+  line-height: 1.3;
 }
 
 /* ═══════════════════════════════════════════════════════════
-   ACTIVITY FEED — Table rows, not cards
+   ACTIVITY FEED — Timeline with colored dots
    ═══════════════════════════════════════════════════════════ */
 
 .filter-bar {
@@ -616,6 +680,8 @@ nav {
   gap: 0;
   max-height: 560px;
   overflow-y: auto;
+  position: relative;
+  padding-left: 24px;
 }
 
 .activity-feed::-webkit-scrollbar {
@@ -631,54 +697,65 @@ nav {
   border-radius: 2px;
 }
 
+/* Vertical timeline line */
+.activity-feed::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
 .activity-item {
   background: transparent;
   border: none;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   border-radius: 0;
-  padding: 10px 0;
+  padding: 12px 0;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 16px;
   transition: background 0.15s ease;
+  position: relative;
 }
 
-.activity-item:nth-child(even) {
-  background: rgba(255, 255, 255, 0.015);
+.activity-item:last-child {
+  border-bottom: none;
 }
 
 .activity-item:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.02);
 }
 
-.activity-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px 8px;
-  border-radius: 4px;
+/* Timeline dot */
+.activity-dot {
+  position: absolute;
+  left: -20px;
+  top: 16px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
   flex-shrink: 0;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  width: auto;
-  height: auto;
+  border: 2px solid #141816;
 }
 
-.activity-badge.intake {
-  background: rgba(102, 137, 113, 0.12);
-  color: var(--ro-green);
+.activity-dot.intake {
+  background: #668971;
 }
 
-.activity-badge.sale {
-  background: rgba(228, 170, 79, 0.12);
-  color: var(--ro-gold);
+.activity-dot.sale {
+  background: #e4aa4f;
 }
 
-.activity-badge.payment {
-  background: rgba(98, 117, 141, 0.12);
-  color: var(--info);
+.activity-dot.payment {
+  background: #62758d;
+}
+
+/* Hide the old badge — replaced by dot */
+.activity-badge {
+  display: none;
 }
 
 .activity-detail {
@@ -689,14 +766,19 @@ nav {
 .activity-detail strong {
   font-size: 13px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.88);
-  display: block;
-  margin-bottom: 2px;
+  color: rgba(240, 236, 228, 0.88);
+  display: inline;
+}
+
+.activity-detail span {
+  font-size: 13px;
+  font-weight: 400;
+  color: rgba(240, 236, 228, 0.55);
 }
 
 .activity-detail p {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(240, 236, 228, 0.4);
   margin: 0;
   line-height: 1.4;
 }
@@ -704,15 +786,16 @@ nav {
 .activity-detail .mono {
   font-family: var(--font-mono);
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.88);
+  color: rgba(240, 236, 228, 0.88);
 }
 
 .activity-date {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(240, 236, 228, 0.3);
   font-family: var(--font-mono);
   flex-shrink: 0;
   text-align: right;
+  padding-top: 2px;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1698,7 +1781,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   position: fixed;
   inset: 0;
   background: #141816;
-  z-index: 9999;
+  z-index: 10000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1873,12 +1956,11 @@ body.auth-required .main {
   }
 
   .quick-actions {
-    flex-direction: column;
-    border-bottom: none;
+    grid-template-columns: 1fr;
   }
 
   .quick-action-card {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    min-height: 120px;
   }
 
   .form-row {
@@ -1894,6 +1976,10 @@ body.auth-required .main {
   }
 
   .balance {
+    font-size: 28px;
+  }
+
+  .card-hero-number {
     font-size: 28px;
   }
 
