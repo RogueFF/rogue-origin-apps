@@ -311,9 +311,9 @@
   function updateChartIndicator() {
     if (!elements.chartIndicator) return;
 
-    var isVisible = localStorage.getItem('chartVisible') === 'true';
-    elements.chartIndicator.textContent = isVisible ? 'ON' : 'OFF';
-    elements.chartIndicator.classList.toggle('on', isVisible);
+    var isHidden = localStorage.getItem('chartVisible') === 'false';
+    elements.chartIndicator.textContent = isHidden ? 'OFF' : 'ON';
+    elements.chartIndicator.classList.toggle('on', !isHidden);
   }
 
   /**
