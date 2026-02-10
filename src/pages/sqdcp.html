@@ -368,6 +368,22 @@
       }
     }
 
+    // Linear regression — returns {slope, intercept, startY, endY} for the dataset
+    function linearRegression(values) {
+      const n = values.length;
+      if (n < 2) return null;
+      let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+      for (let i = 0; i < n; i++) {
+        sumX += i;
+        sumY += values[i];
+        sumXY += i * values[i];
+        sumX2 += i * i;
+      }
+      const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+      const intercept = (sumY - slope * sumX) / n;
+      return { slope, intercept, startY: intercept, endY: slope * (n - 1) + intercept };
+    }
+
     // Chart drawing function
     function drawBarChart(canvas, data, options = {}) {
       const ctx = canvas.getContext('2d');
@@ -464,22 +480,27 @@
         ctx.fillText(`Target: ${options.targetLine.toFixed(1)}`, padding.left + chartWidth + 10, targetY + 4);
       }
 
-      // Draw average line
-      const avgY = padding.top + chartHeight - (avgValue / yMax) * chartHeight;
-      ctx.strokeStyle = avgColor;
-      ctx.lineWidth = 2;
-      ctx.setLineDash([8, 4]);
-      ctx.beginPath();
-      ctx.moveTo(padding.left, avgY);
-      ctx.lineTo(padding.left + chartWidth, avgY);
-      ctx.stroke();
-      ctx.setLineDash([]);
+      // Draw trend line (linear regression)
+      const trend = linearRegression(values);
+      if (trend) {
+        const trendStartY = padding.top + chartHeight - (trend.startY / yMax) * chartHeight;
+        const trendEndY = padding.top + chartHeight - (trend.endY / yMax) * chartHeight;
+        ctx.strokeStyle = avgColor;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([8, 4]);
+        ctx.beginPath();
+        ctx.moveTo(padding.left + barSpacing / 2, trendStartY);
+        ctx.lineTo(padding.left + chartWidth - barSpacing / 2, trendEndY);
+        ctx.stroke();
+        ctx.setLineDash([]);
 
-      // Average label
-      ctx.fillStyle = avgColor;
-      ctx.font = 'bold 11px var(--font-mono)';
-      ctx.textAlign = 'left';
-      ctx.fillText(`Avg: ${avgValue.toFixed(1)}`, padding.left + chartWidth + 10, avgY + 4);
+        // Trend label with direction
+        const direction = trend.slope > 0.01 ? '▲' : trend.slope < -0.01 ? '▼' : '—';
+        ctx.fillStyle = avgColor;
+        ctx.font = 'bold 11px var(--font-mono)';
+        ctx.textAlign = 'left';
+        ctx.fillText(`${direction} ${avgValue.toFixed(1)} avg`, padding.left + chartWidth + 6, trendEndY + 4);
+      }
 
       // Draw X-axis labels (dates)
       ctx.fillStyle = textColor;
@@ -573,22 +594,30 @@
         }
       });
 
-      // Average lines
-      [{ avg: avg1, color: avg1Color, label: 'Tops' }, { avg: avg2, color: avg2Color, label: 'Smalls' }].forEach(({ avg, color, label }, i) => {
-        const y = padding.top + chartHeight - (avg / yMax) * chartHeight;
+      // Trend lines (linear regression)
+      const vals1 = data.map(d => d.value1).filter(v => v != null);
+      const vals2 = data.map(d => d.value2).filter(v => v != null);
+      const trend1 = linearRegression(vals1);
+      const trend2 = linearRegression(vals2);
+
+      [{ trend: trend1, avg: avg1, color: avg1Color, label: 'Tops' }, { trend: trend2, avg: avg2, color: avg2Color, label: 'Smalls' }].forEach(({ trend, avg, color, label }) => {
+        if (!trend) return;
+        const startY = padding.top + chartHeight - (trend.startY / yMax) * chartHeight;
+        const endY = padding.top + chartHeight - (trend.endY / yMax) * chartHeight;
         ctx.strokeStyle = color;
         ctx.lineWidth = 2;
         ctx.setLineDash([8, 4]);
         ctx.beginPath();
-        ctx.moveTo(padding.left, y);
-        ctx.lineTo(padding.left + chartWidth, y);
+        ctx.moveTo(padding.left + groupWidth / 2, startY);
+        ctx.lineTo(padding.left + chartWidth - groupWidth / 2, endY);
         ctx.stroke();
         ctx.setLineDash([]);
 
+        const direction = trend.slope > 0.01 ? '▲' : trend.slope < -0.01 ? '▼' : '—';
         ctx.fillStyle = color;
         ctx.font = 'bold 11px var(--font-mono)';
         ctx.textAlign = 'left';
-        ctx.fillText(`${label}: ${avg.toFixed(1)}`, padding.left + chartWidth + 6, y + 4);
+        ctx.fillText(`${direction} ${label}: ${avg.toFixed(1)}`, padding.left + chartWidth + 6, endY + 4);
       });
 
       // Legend
