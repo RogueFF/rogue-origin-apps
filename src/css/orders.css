@@ -51,6 +51,24 @@ body::before {
   gap: 8px;
 }
 
+.header-title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.section-number {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(102, 137, 113, 0.5);
+  letter-spacing: 0.05em;
+}
+
+[data-theme="light"] .section-number {
+  color: rgba(102, 137, 113, 0.6);
+}
+
 .header h1 {
   font-family: var(--font-display);
   font-style: italic;
@@ -68,6 +86,173 @@ body::before {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+/* ========================================
+   SEARCH & FILTERS
+   ======================================== */
+.search-filters {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.search-bar {
+  flex: 1;
+  min-width: 240px;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-bar i {
+  position: absolute;
+  left: 14px;
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 16px;
+  pointer-events: none;
+}
+
+[data-theme="light"] .search-bar i {
+  color: var(--text-muted);
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px 14px 10px 40px;
+  background: rgba(26, 30, 27, 0.6);
+  border: 1px solid rgba(102, 137, 113, 0.15);
+  border-radius: 6px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.88);
+  transition: border-color 0.2s ease;
+}
+
+[data-theme="light"] .search-input {
+  background: var(--bg-card);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #668971;
+  box-shadow: 0 0 0 2px rgba(102, 137, 113, 0.15);
+}
+
+.search-input::placeholder {
+  color: rgba(255, 255, 255, 0.25);
+}
+
+[data-theme="light"] .search-input::placeholder {
+  color: var(--text-light);
+}
+
+.filter-chips {
+  display: flex;
+  gap: 6px;
+}
+
+.filter-chip {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 4px;
+  border: 1px solid rgba(102, 137, 113, 0.15);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+[data-theme="light"] .filter-chip {
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+
+.filter-chip:hover {
+  border-color: rgba(102, 137, 113, 0.3);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+[data-theme="light"] .filter-chip:hover {
+  border-color: var(--ro-green);
+  color: var(--text);
+}
+
+.filter-chip.active {
+  background: rgba(102, 137, 113, 0.15);
+  border-color: #668971;
+  color: #668971;
+}
+
+[data-theme="light"] .filter-chip.active {
+  background: rgba(102, 137, 113, 0.1);
+  border-color: var(--ro-green);
+  color: var(--ro-green);
+}
+
+.view-toggle {
+  display: flex;
+  gap: 2px;
+  background: rgba(26, 30, 27, 0.6);
+  border-radius: 6px;
+  padding: 2px;
+  border: 1px solid rgba(102, 137, 113, 0.1);
+}
+
+[data-theme="light"] .view-toggle {
+  background: var(--bg-warm);
+  border-color: var(--border-light);
+}
+
+.view-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 16px;
+}
+
+[data-theme="light"] .view-btn {
+  color: var(--text-muted);
+}
+
+.view-btn:hover {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.view-btn.active {
+  background: rgba(102, 137, 113, 0.15);
+  color: #668971;
+}
+
+@media (max-width: 768px) {
+  .search-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-bar {
+    min-width: 100%;
+  }
+
+  .filter-chips {
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
 }
 
 /* ========================================
@@ -343,6 +528,103 @@ body::before {
 .order-status.fulfilled {
   background: rgba(102, 137, 113, 0.15);
   color: #668971;
+}
+
+/* Status badges (ES6 module table.js) */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: var(--font-mono);
+}
+
+.status-open {
+  background: rgba(98, 117, 141, 0.15);
+  color: #62758d;
+}
+
+.status-partial {
+  background: rgba(228, 170, 79, 0.15);
+  color: #e4aa4f;
+}
+
+.status-fulfilled {
+  background: rgba(102, 137, 113, 0.15);
+  color: #668971;
+}
+
+.status-paid {
+  background: rgba(102, 137, 113, 0.2);
+  color: #668971;
+}
+
+.status-closed {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.35);
+}
+
+[data-theme="light"] .status-closed {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-muted);
+}
+
+/* Card View Mode */
+.orders-table-container.card-view .orders-table thead {
+  display: none;
+}
+
+.orders-table-container.card-view .orders-table tbody {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+  padding: 16px;
+}
+
+.orders-table-container.card-view .orders-table tr {
+  display: flex;
+  flex-direction: column;
+  background: rgba(26, 30, 27, 0.6);
+  border: 1px solid rgba(102, 137, 113, 0.1);
+  border-radius: 8px;
+  padding: 16px;
+  gap: 8px;
+  transition: border-color 0.15s ease;
+}
+
+[data-theme="light"] .orders-table-container.card-view .orders-table tr {
+  background: var(--bg-card);
+  border-color: var(--border-light);
+}
+
+.orders-table-container.card-view .orders-table tr:hover {
+  border-color: rgba(102, 137, 113, 0.3);
+}
+
+.orders-table-container.card-view .orders-table td {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  border: none;
+}
+
+.orders-table-container.card-view .orders-table td::before {
+  content: attr(data-label);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+[data-theme="light"] .orders-table-container.card-view .orders-table td::before {
+  color: var(--text-muted);
 }
 
 /* Progress bar in table */
