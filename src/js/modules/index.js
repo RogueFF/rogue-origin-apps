@@ -1121,16 +1121,19 @@ function hideLoadingOverlay() {
 
 // ===== SAFETY LAYOUT REFRESH ON FULL PAGE LOAD =====
 window.addEventListener('load', function() {
-  setTimeout(function() {
-    const widgetGrid = getGrid('widgets');
-    const kpiGrid = getGrid('kpi');
-    if (widgetGrid && !widgetGrid._isDestroyed) {
-      widgetGrid.refreshItems().layout();
-    }
-    if (kpiGrid && !kpiGrid._isDestroyed) {
-      kpiGrid.refreshItems().layout();
-    }
-  }, 500);
+  // Refresh Muuri layout at multiple intervals to catch late-settling DOM changes
+  [200, 500, 1000, 2000].forEach(function(delay) {
+    setTimeout(function() {
+      var widgetGrid = getGrid('widgets');
+      var kpiGrid = getGrid('kpi');
+      if (widgetGrid && !widgetGrid._isDestroyed) {
+        widgetGrid.refreshItems().layout();
+      }
+      if (kpiGrid && !kpiGrid._isDestroyed) {
+        kpiGrid.refreshItems().layout();
+      }
+    }, delay);
+  });
 });
 
 // ===== DOM CONTENT LOADED LISTENER =====
