@@ -157,6 +157,8 @@
       var progress = isStale ? 0 : Math.min(1, percent / 100);
       var offset = RING_CIRCUMFERENCE * (1 - progress);
       scaleRing.style.strokeDashoffset = offset;
+      scaleRing.classList.remove('filling', 'near-target', 'at-target', 'stale');
+      scaleRing.classList.add(colorClass);
     }
 
     // Update panel color class (CSS targets #scale-panel.filling, etc.)
