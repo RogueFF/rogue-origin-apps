@@ -2782,4 +2782,642 @@ body.debug-active .debug-indicator {
   display: block;
 }
 
-/* Pass 2 Complete - All components styled with dark industrial aesthetic */
+/* ========================================
+   RESPONSIVE - TABLET (1024px - 1400px)
+   ======================================== */
+@media (max-width: 1400px) {
+  .time-display,
+  .help-btn,
+  .time-controls {
+    right: 380px;
+  }
+  
+  .historical-view-btn,
+  #morningReportBtn,
+  .order-queue-toggle-btn {
+    right: 380px;
+  }
+  
+  .actual-lbs {
+    font-size: 60px;
+  }
+  
+  .hour-card {
+    padding: 14px 30px;
+    min-width: 280px;
+  }
+  
+  .daily-progress {
+    min-width: 450px;
+    padding: 14px 30px;
+  }
+  
+  .daily-actual {
+    font-size: 42px;
+  }
+  
+  .strain-name {
+    font-size: 24px;
+    max-width: 300px;
+  }
+  
+  .time-display .time {
+    font-size: 36px;
+  }
+  
+  .chart-container {
+    max-width: 700px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .timer-display,
+  .scale-display {
+    width: 180px;
+    height: 180px;
+  }
+  
+  .timer-value,
+  .scale-value {
+    font-size: 40px;
+  }
+  
+  .status-badge {
+    font-size: 24px;
+    padding: 10px 30px;
+  }
+  
+  .status-icon {
+    font-size: 28px;
+  }
+}
+
+/* ========================================
+   RESPONSIVE - MOBILE/TABLET (< 1024px)
+   ======================================== */
+@media (max-width: 1024px) {
+  .time-display,
+  .help-btn {
+    right: 20px;
+  }
+  
+  .time-controls,
+  .historical-view-btn,
+  #morningReportBtn,
+  .order-queue-toggle-btn {
+    position: relative;
+    right: auto;
+    bottom: auto;
+    margin: 8px auto;
+  }
+  
+  .hour-cards {
+    gap: 15px;
+  }
+  
+  .hour-card {
+    min-width: 250px;
+  }
+  
+  .daily-progress {
+    min-width: 400px;
+  }
+  
+  .comparisons {
+    gap: 8px;
+  }
+  
+  .info-bar {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+
+/* ========================================
+   RESPONSIVE - MOBILE (< 768px)
+   ======================================== */
+@media (max-width: 768px) {
+  .timer-display,
+  .scale-display {
+    width: 160px;
+    height: 160px;
+  }
+  
+  .timer-value,
+  .scale-value {
+    font-size: 36px;
+  }
+  
+  .scale-header,
+  .timer-header {
+    display: none;
+  }
+  
+  .time-display .time {
+    font-size: 28px;
+  }
+  
+  .time-display .date {
+    font-size: 14px;
+  }
+  
+  .strain-name {
+    font-size: 20px;
+  }
+  
+  .status-badge {
+    font-size: 20px;
+    padding: 8px 24px;
+    gap: 12px;
+  }
+  
+  .status-icon {
+    font-size: 24px;
+  }
+  
+  .hour-card {
+    min-width: 100%;
+    padding: 12px 24px;
+  }
+  
+  .actual-lbs {
+    font-size: 52px;
+  }
+  
+  .hour-card.current-hour .actual-lbs {
+    font-size: 48px;
+  }
+  
+  .daily-progress {
+    min-width: 100%;
+    padding: 12px 24px;
+  }
+  
+  .daily-actual {
+    font-size: 36px;
+  }
+  
+  .help-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .help-colors {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .modal-content {
+    padding: 24px;
+  }
+  
+  .modal-title {
+    font-size: 24px;
+  }
+  
+  .pause-modal {
+    padding: 20px;
+    max-width: 95%;
+  }
+  
+  .pause-modal-title {
+    font-size: 20px;
+  }
+  
+  .pause-modal-subtitle {
+    font-size: 13px;
+  }
+  
+  .pause-modal-reasons {
+    gap: 6px;
+  }
+  
+  .pause-reason-btn {
+    padding: 12px 14px;
+    font-size: 14px;
+  }
+  
+  .pause-custom-input {
+    padding: 12px 14px;
+    font-size: 14px;
+  }
+  
+  .pause-modal-btn {
+    padding: 12px 16px;
+    font-size: 15px;
+  }
+  
+  .pause-banner {
+    padding: 10px 15px;
+    gap: 10px;
+    font-size: 14px;
+    flex-wrap: wrap;
+  }
+  
+  .pause-banner-time {
+    font-size: 20px;
+  }
+  
+  .pause-banner-reason {
+    font-size: 12px;
+    width: 100%;
+    text-align: center;
+    margin-top: -5px;
+  }
+}
+
+/* ========================================
+   RESPONSIVE - SMALL MOBILE (< 480px)
+   ======================================== */
+@media (max-width: 480px) {
+  .timer-display,
+  .scale-display {
+    width: 140px;
+    height: 140px;
+  }
+  
+  .timer-value,
+  .scale-value {
+    font-size: 32px;
+  }
+  
+  .timer-btn-row {
+    max-width: 280px;
+    gap: 8px;
+  }
+  
+  .manual-btn {
+    font-size: 16px;
+    padding: 14px 20px;
+  }
+  
+  .pause-btn {
+    padding: 14px 16px;
+  }
+  
+  .status-badge {
+    font-size: 18px;
+    padding: 6px 20px;
+  }
+  
+  .hour-card {
+    padding: 10px 20px;
+  }
+  
+  .daily-progress {
+    padding: 10px 20px;
+  }
+}
+
+/* ========================================
+   RESPONSIVE - TINY (< 400px)
+   ======================================== */
+@media (max-width: 400px) {
+  .timer-display,
+  .scale-display {
+    width: 120px;
+    height: 120px;
+  }
+  
+  .timer-value,
+  .scale-value {
+    font-size: 28px;
+  }
+}
+
+/* ========================================
+   TV MODE (65% scaling for 4K displays)
+   ======================================== */
+.tv-mode {
+  zoom: 0.65;
+}
+
+/* ========================================
+   TOUCH TARGET IMPROVEMENTS (Mobile)
+   ======================================== */
+@media (max-width: 1024px) {
+  .lang-btn,
+  .help-btn,
+  .cycle-nav-btn,
+  .cycle-history-toggle,
+  .fullscreen-toggle,
+  .historical-banner-close,
+  .help-close,
+  .pause-modal-btn,
+  .btn-primary,
+  .btn-secondary {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* ========================================
+   ENHANCED HOVER STATES
+   ======================================== */
+.hour-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.daily-progress:hover {
+  border-color: rgba(228, 170, 79, 0.3);
+}
+
+.comparison-pill:hover {
+  transform: translateY(-2px);
+  border-color: rgba(228, 170, 79, 0.3);
+}
+
+.chart-container:hover {
+  border-color: rgba(228, 170, 79, 0.25);
+}
+
+.timer-stat:hover {
+  background: rgba(0, 0, 0, 0.4);
+  border-color: rgba(228, 170, 79, 0.2);
+}
+
+/* Disable hover effects on touch devices */
+@media (hover: none) {
+  .hour-card:hover,
+  .daily-progress:hover,
+  .comparison-pill:hover,
+  .chart-container:hover,
+  .timer-stat:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: inherit;
+  }
+}
+
+/* ========================================
+   FOCUS STATES (Accessibility)
+   ======================================== */
+button:focus-visible,
+input:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--ro-gold);
+  outline-offset: 2px;
+}
+
+.skip-link:focus {
+  outline: 3px solid var(--ro-gold);
+}
+
+/* ========================================
+   LOADING STATES
+   ======================================== */
+.loading {
+  opacity: 0.6;
+  pointer-events: none;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* ========================================
+   TRANSITION REFINEMENTS
+   ======================================== */
+.hour-card,
+.daily-progress,
+.comparison-pill,
+.info-bar,
+.chart-container,
+.order-pill,
+.cycle-card,
+.cycle-item,
+.timer-stat {
+  transition: all var(--transition-normal);
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ========================================
+   PRINT STYLES
+   ======================================== */
+@media print {
+  body::before,
+  .timer-panel,
+  .lang-toggle,
+  .help-btn,
+  .fullscreen-toggle,
+  .drag-handle,
+  .expand-hint,
+  .time-controls,
+  .historical-view-btn,
+  #morningReportBtn,
+  .order-queue-toggle-btn,
+  .debug-panel,
+  .debug-indicator,
+  .pause-banner,
+  .celebration {
+    display: none !important;
+  }
+  
+  body {
+    background: white !important;
+  }
+  
+  .main-panel {
+    height: auto !important;
+  }
+  
+  .scoreboard {
+    color: black;
+  }
+  
+  .hour-card,
+  .daily-progress,
+  .comparison-pill,
+  .info-bar,
+  .chart-container {
+    border: 1px solid #333;
+    page-break-inside: avoid;
+  }
+}
+
+/* ========================================
+   DARK MODE OVERRIDES (if theme toggle added)
+   ======================================== */
+[data-theme="light"] {
+  /* Light theme would go here if needed in future */
+  /* Currently scoreboard is dark-only by design */
+}
+
+/* ========================================
+   UTILITY CLASSES
+   ======================================== */
+.hidden {
+  display: none !important;
+}
+
+.visible {
+  display: block !important;
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-in;
+}
+
+.fade-out {
+  animation: fadeOut 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* ========================================
+   SCROLLBAR STYLING
+   ======================================== */
+.cycle-list::-webkit-scrollbar,
+.help-content::-webkit-scrollbar,
+#morningReportContainer::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.cycle-list::-webkit-scrollbar-track,
+.help-content::-webkit-scrollbar-track,
+#morningReportContainer::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.cycle-list::-webkit-scrollbar-thumb,
+.help-content::-webkit-scrollbar-thumb,
+#morningReportContainer::-webkit-scrollbar-thumb {
+  background: rgba(228, 170, 79, 0.4);
+  border-radius: 4px;
+}
+
+.cycle-list::-webkit-scrollbar-thumb:hover,
+.help-content::-webkit-scrollbar-thumb:hover,
+#morningReportContainer::-webkit-scrollbar-thumb:hover {
+  background: var(--ro-gold);
+}
+
+/* Firefox scrollbar */
+.cycle-list,
+.help-content,
+#morningReportContainer {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(228, 170, 79, 0.4) rgba(255, 255, 255, 0.05);
+}
+
+/* ========================================
+   PERFORMANCE OPTIMIZATIONS
+   ======================================== */
+.timer-ring,
+.scale-ring,
+.progress-fill,
+.order-progress-fill {
+  will-change: stroke-dashoffset, width;
+}
+
+.confetti,
+.celebration-text {
+  will-change: transform, opacity;
+}
+
+/* ========================================
+   GLASS MORPHISM ENHANCEMENTS
+   ======================================== */
+@supports (backdrop-filter: blur(10px)) {
+  .hour-card,
+  .daily-progress,
+  .comparison-pill,
+  .info-bar,
+  .chart-container,
+  .order-pill,
+  .lang-btn,
+  .help-btn {
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+}
+
+/* Fallback for browsers without backdrop-filter */
+@supports not (backdrop-filter: blur(10px)) {
+  .hour-card,
+  .daily-progress,
+  .comparison-pill,
+  .info-bar,
+  .chart-container,
+  .order-pill {
+    background: rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* ========================================
+   ACCESSIBILITY - HIGH CONTRAST MODE
+   ======================================== */
+@media (prefers-contrast: high) {
+  .hour-card,
+  .daily-progress,
+  .comparison-pill,
+  .info-bar,
+  .chart-container,
+  .order-pill {
+    border-width: 3px;
+  }
+  
+  .status-badge {
+    border-width: 4px;
+  }
+  
+  button,
+  .lang-btn {
+    border-width: 3px;
+  }
+}
+
+/* ========================================
+   CUSTOM PROPERTIES FOR JS MANIPULATION
+   ======================================== */
+:root {
+  --timer-ring-circumference: 597;
+  --scale-ring-circumference: 597;
+}
+
+/* Pass 3 Complete - Interactions, animations, responsive polish, accessibility enhancements */
