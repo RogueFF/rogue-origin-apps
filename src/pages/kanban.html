@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <link rel="icon" type="image/png" href="/rogue-origin-apps/favicon.png">
   <link rel="manifest" href="/rogue-origin-apps/manifest.json">
-  <meta name="theme-color" content="#668971">
+  <meta name="theme-color" content="#141816">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -38,40 +38,47 @@
         <div><h1>Kanban Card Manager</h1><p>Supply Closet Inventory System</p></div>
       </div>
       <div class="btns">
-        <button class="btn btn-outline" onclick="openHelp()" aria-label="Help"><i class="ph-duotone ph-question"></i> Help</button>
-        <button class="btn btn-indoor" onclick="refresh()" aria-label="Refresh"><i class="ph-duotone ph-arrows-clockwise"></i> Refresh</button>
-        <button class="btn btn-sungrown" onclick="openPrint()" aria-label="Print cards"><i class="ph-duotone ph-printer" style="margin-right:6px"></i> Print Cards</button>
-        <button class="btn btn-green" onclick="openAdd()" aria-label="Add card"><i class="ph-duotone ph-plus" style="margin-right:6px"></i> Add Card</button>
-        <button id="langBtn" class="btn btn-outline" onclick="toggleLang()" aria-label="Toggle language"><i class="ph-duotone ph-translate"></i> Español</button>
+        <button class="btn btn-green" onclick="openAdd()" aria-label="Add card"><i class="ph-duotone ph-plus"></i> Add Card</button>
+        <button class="btn btn-sungrown" onclick="openPrint()" aria-label="Print cards"><i class="ph-duotone ph-printer"></i> Print</button>
+        <button class="btn btn-indoor" onclick="refresh()" aria-label="Refresh"><i class="ph-duotone ph-arrows-clockwise"></i></button>
+        <button class="btn btn-outline" onclick="openHelp()" aria-label="Help"><i class="ph-duotone ph-question"></i></button>
+        <button id="langBtn" class="btn btn-outline" onclick="toggleLang()" aria-label="Toggle language"><i class="ph-duotone ph-translate"></i></button>
         <button id="darkModeBtn" class="btn btn-outline" onclick="toggleDarkMode()" aria-label="Toggle dark mode"><i class="ph-duotone ph-moon"></i></button>
       </div>
     </div>
   </header>
-  
+
   <div class="toolbar">
     <div class="toolbar-inner">
       <div class="filters">
-        <input type="text" id="search" placeholder="Search..." oninput="filter()" style="width:200px">
+        <input type="text" id="search" placeholder="Search items..." oninput="filter()" style="width:240px">
         <select id="supplierFilter" onchange="filter()"><option value="">All Suppliers</option></select>
       </div>
-      <div class="toggle">
-        <button id="gridBtn" class="on" onclick="setView('grid')">Grid</button>
-        <button id="listBtn" onclick="setView('list')">List</button>
+      <div class="toolbar-right">
+        <div class="stats-inline">
+          <span><span id="totalLabel">Total</span>: <strong id="total">0</strong></span>
+          <span><span id="showingLabel">Showing</span>: <strong id="showing">0</strong></span>
+          <span><span id="suppliersLabel">Suppliers</span>: <strong id="suppliers">0</strong></span>
+        </div>
+        <div class="toggle">
+          <button id="gridBtn" class="on" onclick="setView('grid')">Grid</button>
+          <button id="listBtn" onclick="setView('list')">List</button>
+        </div>
       </div>
     </div>
   </div>
-  
-  <div class="stats">
-    <div class="stats-inner">
-      <span><span id="totalLabel">Total</span>: <strong id="total">0</strong></span>
-      <span><span id="showingLabel">Showing</span>: <strong id="showing">0</strong></span>
-      <span><span id="suppliersLabel">Suppliers</span>: <strong id="suppliers">0</strong></span>
+
+  <main class="main" id="supply-closet">
+    <div id="loading" class="loading">
+      <div class="loading-icon"><i class="ph-duotone ph-spinner"></i></div>
+      <p>Loading inventory...</p>
     </div>
-  </div>
-  
-  <main class="main">
-    <div id="loading" class="loading"><div class="loading-icon"><i class="ph-duotone ph-spinner"></i></div><p>Loading from Google Sheet...</p></div>
-    <div id="empty" class="empty" style="display:none"><div style="font-size:48px;opacity:0.5"><i class="ph-duotone ph-package"></i></div><h3>No cards found</h3><p>Add your first kanban card to get started.</p><button class="btn btn-green" onclick="openAdd()"><i class="ph-duotone ph-plus" style="margin-right:6px"></i> Add First Card</button></div>
+    <div id="empty" class="empty" style="display:none">
+      <div class="empty-icon"><i class="ph-duotone ph-package"></i></div>
+      <h3>No cards found</h3>
+      <p>Add your first kanban card to get started.</p>
+      <button class="btn btn-green" onclick="openAdd()"><i class="ph-duotone ph-plus"></i> Add First Card</button>
+    </div>
     <div id="gridView" class="grid" style="display:none"></div>
     <div id="listView" class="table" style="display:none"></div>
   </main>
