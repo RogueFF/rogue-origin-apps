@@ -44,6 +44,7 @@ export function renderPartnerCards(partners, container, onCardClick) {
       </div>
       <div class="card-hero-number">${inventoryDisplay}</div>
       <div class="card-hero-label">on hand</div>
+      <div class="card-strains" id="strains-${p.id}"></div>
       <div class="inventory-bar"><div class="inventory-bar-fill" style="width: ${pct}%"></div></div>
       <div class="card-bottom-row">
         <span>${p.last_intake_date ? 'Last intake: ' + fmtDate(p.last_intake_date) : 'No intakes'}</span>
