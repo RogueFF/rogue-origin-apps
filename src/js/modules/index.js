@@ -979,7 +979,7 @@ function setupDocumentClickHandler() {
 
 // ===== MAIN INITIALIZATION =====
 async function init() {
-  console.log('Initializing Rogue Origin Dashboard...');
+  console.debug('Initializing Rogue Origin Dashboard...');
 
   // 1. Set up cleanup for page unload (registered for tracking)
   const beforeUnloadHandler = () => {
@@ -1035,10 +1035,10 @@ async function init() {
   // Delay initialization to ensure DOM layout is complete and charts are rendered
   if (window.innerWidth >= 600) {
     setTimeout(async function() {
-      console.log('Initializing Muuri grids...');
+      console.debug('Initializing Muuri grids...');
       const kpiGrid = await initMuuriKPI();
       const widgetGrid = await initMuuriGrid();
-      console.log('Muuri initialization complete:', {
+      console.debug('Muuri initialization complete:', {
         kpiGrid: !!kpiGrid,
         widgetGrid: !!widgetGrid
       });
@@ -1100,7 +1100,7 @@ async function init() {
     }
   }, 10000);
 
-  console.log('Dashboard initialization complete');
+  console.debug('Dashboard initialization complete');
 }
 
 /**

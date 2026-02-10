@@ -100,7 +100,7 @@ export async function initMuuriGrid() {
       layoutOnResize: 150
     });
 
-    console.log('Muuri grid initialized with', grid.getItems().length, 'items');
+    console.debug('Muuri grid initialized with', grid.getItems().length, 'items');
 
     // Save layout on drag end
     grid.on('dragEnd', function() {
@@ -189,7 +189,7 @@ export async function initMuuriKPI() {
       layoutOnResize: 150
     });
 
-    console.log('Muuri KPI grid initialized with', grid.getItems().length, 'items');
+    console.debug('Muuri KPI grid initialized with', grid.getItems().length, 'items');
 
     // Save order on drag end
     grid.on('dragEnd', function() {
