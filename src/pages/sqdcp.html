@@ -303,16 +303,10 @@
             <canvas id="trimmerChart" class="chart-canvas"></canvas>
           </div>
 
-          <!-- Tops per Day -->
-          <div class="chart-container">
-            <div class="chart-title">Tops per Day</div>
-            <canvas id="topsChart" class="chart-canvas"></canvas>
-          </div>
-
-          <!-- Smalls per Day -->
-          <div class="chart-container">
-            <div class="chart-title">Smalls per Day</div>
-            <canvas id="smallsChart" class="chart-canvas"></canvas>
+          <!-- Tops & Smalls per Day -->
+          <div class="chart-container full-width">
+            <div class="chart-title">Tops & Smalls per Day</div>
+            <canvas id="topsSmallsChart" class="chart-canvas"></canvas>
           </div>
         </div>
       </div>
@@ -502,6 +496,124 @@
       });
     }
 
+    // Grouped bar chart (two series side by side)
+    function drawGroupedBarChart(canvas, data, options = {}) {
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+
+      const width = rect.width;
+      const height = rect.height;
+      const padding = { top: 30, right: 80, bottom: 40, left: 60 };
+      const chartWidth = width - padding.left - padding.right;
+      const chartHeight = height - padding.top - padding.bottom;
+
+      ctx.clearRect(0, 0, width, height);
+
+      if (!data || data.length === 0) return;
+
+      const isPrint = window.matchMedia('print').matches;
+      const color1 = isPrint ? '#333' : '#668971';
+      const color2 = isPrint ? '#999' : '#e4aa4f';
+      const gridColor = isPrint ? '#ddd' : 'rgba(255, 255, 255, 0.05)';
+      const textColor = isPrint ? '#000' : 'rgba(255, 255, 255, 0.7)';
+      const avg1Color = isPrint ? '#555' : '#668971';
+      const avg2Color = isPrint ? '#888' : '#e4aa4f';
+
+      const allVals = data.flatMap(d => [d.value1, d.value2]).filter(v => v != null && !isNaN(v));
+      const yMax = Math.max(...allVals) * 1.15;
+      const avg1 = data.map(d => d.value1).filter(v => v != null).reduce((a, b) => a + b, 0) / data.filter(d => d.value1 != null).length;
+      const avg2 = data.map(d => d.value2).filter(v => v != null).reduce((a, b) => a + b, 0) / data.filter(d => d.value2 != null).length;
+
+      // Grid
+      ctx.strokeStyle = gridColor;
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 5; i++) {
+        const y = padding.top + (chartHeight / 5) * i;
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(padding.left + chartWidth, y);
+        ctx.stroke();
+      }
+
+      // Y-axis labels
+      ctx.fillStyle = textColor;
+      ctx.font = '11px var(--font-mono)';
+      ctx.textAlign = 'right';
+      for (let i = 0; i <= 5; i++) {
+        const value = yMax - (yMax / 5) * i;
+        const y = padding.top + (chartHeight / 5) * i;
+        ctx.fillText(value.toFixed(0), padding.left - 10, y + 4);
+      }
+
+      // Bars
+      const groupWidth = chartWidth / data.length;
+      const barWidth = groupWidth * 0.35;
+      const gap = groupWidth * 0.05;
+
+      data.forEach((item, index) => {
+        const groupX = padding.left + index * groupWidth;
+
+        // Bar 1 (Tops)
+        if (item.value1 != null && !isNaN(item.value1)) {
+          const h = (item.value1 / yMax) * chartHeight;
+          ctx.fillStyle = color1;
+          ctx.fillRect(groupX + gap, padding.top + chartHeight - h, barWidth, h);
+        }
+
+        // Bar 2 (Smalls)
+        if (item.value2 != null && !isNaN(item.value2)) {
+          const h = (item.value2 / yMax) * chartHeight;
+          ctx.fillStyle = color2;
+          ctx.fillRect(groupX + barWidth + gap * 2, padding.top + chartHeight - h, barWidth, h);
+        }
+      });
+
+      // Average lines
+      [{ avg: avg1, color: avg1Color, label: 'Tops' }, { avg: avg2, color: avg2Color, label: 'Smalls' }].forEach(({ avg, color, label }, i) => {
+        const y = padding.top + chartHeight - (avg / yMax) * chartHeight;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([8, 4]);
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(padding.left + chartWidth, y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = color;
+        ctx.font = 'bold 11px var(--font-mono)';
+        ctx.textAlign = 'left';
+        ctx.fillText(`${label}: ${avg.toFixed(1)}`, padding.left + chartWidth + 6, y + 4);
+      });
+
+      // Legend
+      ctx.font = '11px var(--font-ui)';
+      ctx.textAlign = 'left';
+      ctx.fillStyle = color1;
+      ctx.fillRect(padding.left, padding.top - 20, 12, 12);
+      ctx.fillText('Tops', padding.left + 16, padding.top - 10);
+      ctx.fillStyle = color2;
+      ctx.fillRect(padding.left + 70, padding.top - 20, 12, 12);
+      ctx.fillText('Smalls', padding.left + 86, padding.top - 10);
+
+      // X-axis
+      ctx.fillStyle = textColor;
+      ctx.font = '10px var(--font-mono)';
+      ctx.textAlign = 'center';
+      data.forEach((item, index) => {
+        if (index % 3 === 0 || index === data.length - 1) {
+          const x = padding.left + index * groupWidth + groupWidth / 2;
+          const dateStr = new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          ctx.fillText(dateStr, x, height - padding.bottom + 20);
+        }
+      });
+    }
+
     // Render all charts
     async function renderCharts() {
       try {
@@ -535,16 +647,10 @@
           }))
         );
 
-        // 4. Tops per Day
-        drawBarChart(
-          document.getElementById('topsChart'),
-          data.daily.map(d => ({ date: d.date, value: d.totalTops }))
-        );
-
-        // 5. Smalls per Day
-        drawBarChart(
-          document.getElementById('smallsChart'),
-          data.daily.map(d => ({ date: d.date, value: d.totalSmalls }))
+        // 4. Tops & Smalls per Day (grouped)
+        drawGroupedBarChart(
+          document.getElementById('topsSmallsChart'),
+          data.daily.map(d => ({ date: d.date, value1: d.totalTops, value2: d.totalSmalls }))
         );
 
       } catch (error) {
