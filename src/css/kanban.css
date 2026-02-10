@@ -36,12 +36,28 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Force dark mode variables for elements using shared-base vars */
 body {
   font-family: var(--font-ui);
   background: var(--kanban-bg);
   background-image: var(--topo-bg);
   color: var(--kanban-text);
   min-height: 100vh;
+  /* Override shared-base light defaults to dark */
+  --bg: #141816;
+  --bg-card: rgba(26, 30, 27, 0.85);
+  --border: rgba(102, 137, 113, 0.15);
+  --text: #e8ece9;
+  --text-muted: #6b7c6f;
+  --green: #668971;
+  --gold: #e4aa4f;
+  --gold-dim: rgba(228, 170, 79, 0.12);
+  --green-dim: rgba(102, 137, 113, 0.12);
+  --sungrown-dim: rgba(191, 142, 78, 0.12);
+  --gold-light: #f0cb60;
+  --sungrown: #bf8e4e;
+  --indoor: #62758d;
+  --sidebar-bg: #0d0f0c;
 }
 
 /* ========================================
@@ -759,6 +775,52 @@ td.price {
   gap: 12px;
 }
 
+/* Price input composite */
+.price-input-group {
+  display: flex;
+  align-items: center;
+  background: rgba(26, 30, 27, 0.6);
+  border: 1px solid var(--kanban-border);
+  border-radius: var(--kanban-radius-sm);
+  overflow: hidden;
+}
+
+.price-input-group:focus-within {
+  border-color: var(--kanban-green);
+  box-shadow: 0 0 0 3px rgba(102, 137, 113, 0.15);
+}
+
+.price-prefix, .price-suffix {
+  padding: 8px 10px;
+  color: var(--kanban-gold);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  background: rgba(20, 24, 22, 0.5);
+  border: none;
+  flex-shrink: 0;
+}
+
+.price-prefix {
+  border-right: 1px solid var(--kanban-border);
+}
+
+.price-suffix {
+  border-left: 1px solid var(--kanban-border);
+}
+
+.price-input-group input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 8px 10px;
+  min-width: 0;
+}
+
+.price-input-group input:focus {
+  box-shadow: none;
+}
+
 .modal-foot {
   display: flex;
   justify-content: flex-end;
@@ -823,15 +885,21 @@ td.price {
   position: fixed;
   bottom: 20px;
   right: 20px;
-  padding: 14px 20px;
+  padding: 12px 20px;
   border-radius: var(--kanban-radius-sm);
   color: #fff;
-  font-size: 14px;
+  font-size: 13px;
   z-index: 200;
   font-family: var(--font-ui);
   border: 1px solid rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  animation: toast-in 0.25s ease;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .toast.ok {

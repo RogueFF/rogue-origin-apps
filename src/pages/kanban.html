@@ -126,10 +126,10 @@
           </div>
           <div class="form-group">
             <label class="form-label">Price</label>
-            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden">
-              <span style="padding:8px 10px;color:var(--gold);background:var(--bg-card);border-right:1px solid var(--border)">$</span>
-              <input type="text" id="editPrice" style="flex:1;border:none;background:transparent;padding:8px 10px" placeholder="0.00">
-              <span style="padding:8px 10px;color:var(--gold);background:var(--bg-card);border-left:1px solid var(--border)">/Pc</span>
+            <div class="price-input-group">
+              <span class="price-prefix">$</span>
+              <input type="text" id="editPrice" placeholder="0.00">
+              <span class="price-suffix">/Pc</span>
             </div>
           </div>
         </div>
@@ -143,7 +143,7 @@
             <input type="text" id="editUrl" style="flex:1" placeholder="https://amazon.com/...">
             <button type="button" id="autofillBtn" class="btn btn-gold" onclick="autoFillFromUrl()"><i class="ph-duotone ph-sparkle"></i> Auto-fill</button>
           </div>
-          <p style="font-size:10px;color:var(--text-muted);margin-top:4px">Paste a product URL and click Auto-fill to fetch title, price & image</p>
+          <p style="font-size:10px;color:var(--kanban-text-muted, var(--text-muted));margin-top:4px">Paste a product URL and click Auto-fill to fetch title, price & image</p>
         </div>
         <div class="form-group">
           <label class="form-label">Picture URL</label>
@@ -151,7 +151,7 @@
             <input type="text" id="editPic" style="width:100%" placeholder="https://...image.jpg or drag image here">
             <div class="drop-zone-preview" id="imagePreview"></div>
           </div>
-          <div style="font-size:10px;color:var(--text-muted);margin-top:4px"><i class="ph-duotone ph-lightbulb"></i> Drag an image from any website and drop it here</div>
+          <div style="font-size:10px;color:var(--kanban-text-muted, var(--text-muted));margin-top:4px"><i class="ph-duotone ph-lightbulb"></i> Drag an image from any website and drop it here</div>
         </div>
         <div class="modal-foot">
           <button class="btn btn-outline" onclick="closeEdit()">Cancel</button>
