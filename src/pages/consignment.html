@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <link rel="icon" type="image/png" href="/rogue-origin-apps/favicon.png">
-  <meta name="theme-color" content="#668971">
+  <meta name="theme-color" content="#141816">
   <title>Consignment - Rogue Origin</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/duotone/style.css">
 
   <link rel="stylesheet" href="../css/shared-base.css">
-  <link rel="stylesheet" href="../css/consignment.css?v=14">
+  <link rel="stylesheet" href="../css/consignment.css?v=15">
 </head>
 <body class="auth-required">
   <a href="#main-content" class="skip-link">Skip to main content</a>
@@ -21,8 +21,10 @@
   <!-- Authentication Overlay -->
   <div id="auth-overlay">
     <div class="login-container">
-      <h2><i class="ph-duotone ph-lock"></i> Consignment</h2>
-      <p>This page requires authentication</p>
+      <i class="ph-duotone ph-lock login-lock-icon"></i>
+      <span class="login-eyebrow">Consignment</span>
+      <h2>Welcome Back</h2>
+      <p>Enter your password to continue</p>
       <form id="login-form">
         <input
           type="password"
@@ -64,8 +66,8 @@
       <div class="user-info">
         <div class="user-avatar">RO</div>
         <div>
-          <div style="font-weight:600;font-size:13px;color:white">Rogue Origin</div>
-          <div style="font-size:11px;color:rgba(255,255,255,.5)">Administrator</div>
+          <div class="user-name">Rogue Origin</div>
+          <div class="user-role">Administrator</div>
         </div>
       </div>
     </div>
@@ -328,99 +330,6 @@
       </form>
     </div>
   </div>
-
-  <style>
-    #auth-overlay {
-      position: fixed;
-      inset: 0;
-      background: var(--bg);
-      z-index: 9999;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: opacity 0.3s ease;
-    }
-    #auth-overlay.hidden {
-      opacity: 0;
-      pointer-events: none;
-    }
-    .login-container {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-xl);
-      padding: var(--space-lg);
-      width: 100%;
-      max-width: 400px;
-      box-shadow: var(--shadow-elevated);
-      text-align: center;
-    }
-    .login-container h2 {
-      font-family: var(--font-display);
-      font-size: 28px;
-      margin-bottom: var(--space-sm);
-      color: var(--text);
-    }
-    .login-container p {
-      color: var(--text-muted);
-      margin-bottom: var(--space-lg);
-      font-size: 14px;
-    }
-    .login-input {
-      width: 100%;
-      padding: 12px 16px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      font-family: var(--font-ui);
-      font-size: 16px;
-      background: var(--bg);
-      color: var(--text);
-      margin-bottom: var(--space-sm);
-      transition: all 0.2s ease;
-      box-sizing: border-box;
-    }
-    .login-input:focus {
-      outline: none;
-      border-color: var(--ro-green);
-      box-shadow: 0 0 0 3px rgba(102, 137, 113, 0.1);
-    }
-    .login-btn {
-      width: 100%;
-      padding: 12px;
-      background: var(--ro-green);
-      color: white;
-      border: none;
-      border-radius: var(--radius-md);
-      font-family: var(--font-ui);
-      font-size: 16px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-    .login-btn:hover {
-      background: #4a6b54;
-      transform: translateY(-1px);
-      box-shadow: var(--shadow-md);
-    }
-    .login-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      transform: none;
-    }
-    .login-error {
-      color: var(--danger);
-      font-size: 13px;
-      margin-top: var(--space-sm);
-      display: none;
-    }
-    .login-error.visible {
-      display: block;
-    }
-    body.auth-required .sidebar,
-    body.auth-required .main {
-      opacity: 0;
-      pointer-events: none;
-    }
-  </style>
 
   <!-- Auth Script -->
   <script>
