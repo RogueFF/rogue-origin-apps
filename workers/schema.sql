@@ -452,3 +452,26 @@ INSERT OR IGNORE INTO consignment_strains (name) VALUES
   ('Sour Suver Haze'),
   ('Super Sour Space Candy'),
   ('White CBG');
+
+-- ============================================
+-- CUSTOMER COMPLAINTS
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS complaints (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  complaint_date TEXT NOT NULL,
+  customer TEXT NOT NULL,
+  invoice_number TEXT,
+  complaint TEXT NOT NULL,
+  resolution TEXT DEFAULT '',
+  status TEXT DEFAULT 'Open' CHECK(status IN ('Open','Resolved','In Progress')),
+  reported_by TEXT DEFAULT '',
+  resolved_date TEXT,
+  notes TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_complaints_date ON complaints(complaint_date);
+CREATE INDEX IF NOT EXISTS idx_complaints_status ON complaints(status);
+CREATE INDEX IF NOT EXISTS idx_complaints_customer ON complaints(customer);
