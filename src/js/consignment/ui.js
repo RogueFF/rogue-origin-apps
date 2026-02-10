@@ -23,11 +23,19 @@ export function renderPartnerCards(partners, container, onCardClick) {
     container.innerHTML = '<div class="empty-state"><p>No partners yet. Add one to get started.</p></div>';
     return;
   }
-  partners.forEach(p => {
+
+  // Sort by inventory descending — highest inventory first
+  const sorted = [...partners].sort((a, b) => (b.inventory_lbs || 0) - (a.inventory_lbs || 0));
+  const maxInventory = sorted[0]?.inventory_lbs || 1;
+
+  sorted.forEach((p, idx) => {
     const balanceClass = p.balance_owed <= 0 ? 'low' : p.balance_owed > 1000 ? 'high' : 'medium';
     const inventoryDisplay = p.inventory_lbs > 0 ? p.inventory_lbs.toFixed(1) + ' lbs' : '0 lbs';
+    const isDominant = idx === 0 && sorted.length > 1;
+    const pct = Math.min(100, ((p.inventory_lbs || 0) / maxInventory) * 100);
+
     const card = document.createElement('div');
-    card.className = 'partner-card';
+    card.className = 'partner-card' + (isDominant ? ' partner-card--dominant' : '');
     card.dataset.partnerId = p.id;
     card.innerHTML = `
       <div class="card-top-row">
@@ -36,6 +44,7 @@ export function renderPartnerCards(partners, container, onCardClick) {
       </div>
       <div class="card-hero-number">${inventoryDisplay}</div>
       <div class="card-hero-label">on hand</div>
+      <div class="inventory-bar"><div class="inventory-bar-fill" style="width: ${pct}%"></div></div>
       <div class="card-bottom-row">
         <span>${p.last_intake_date ? 'Last intake: ' + fmtDate(p.last_intake_date) : 'No intakes'}</span>
         <span class="card-balance ${balanceClass}">${p.balance_owed > 0 ? '$' + fmt(p.balance_owed) + ' owed' : 'Settled'}</span>
@@ -76,6 +85,7 @@ export function renderActivityFeed(activities, container) {
   });
   
   // Render activities
+  let renderIdx = 0;
   activities.forEach((a, idx) => {
     if (processed.has(idx)) return; // Skip - already part of a batch
 
@@ -110,6 +120,12 @@ export function renderActivityFeed(activities, container) {
       <span class="activity-detail">${detail}</span>
       <span class="activity-date">${fmtDate(a.date)}</span>
     `;
+
+    // Staggered entrance animation
+    item.style.animationDelay = `${renderIdx * 60}ms`;
+    item.classList.add('activity-enter');
+    renderIdx++;
+
     container.appendChild(item);
   });
 }
