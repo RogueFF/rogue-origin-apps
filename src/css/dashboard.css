@@ -3055,224 +3055,6 @@ body:not(.muuri-active) .widget-item[data-size="full"] { flex-basis: calc(100% -
 @keyframes toastSlideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 @keyframes toastSlideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
 
-/* ========================================
-   BRIEFING TOAST — Rich multi-segment toasts
-   ======================================== */
-.briefing-toast-container {
-  position: fixed;
-  top: 72px;
-  right: 24px;
-  z-index: 950;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-width: 420px;
-  pointer-events: none;
-}
-
-.briefing-toast {
-  pointer-events: all;
-  background: rgba(26, 30, 27, 0.95);
-  border: 1px solid rgba(102, 137, 113, 0.2);
-  border-radius: var(--radius-sm, 8px);
-  padding: 16px 20px;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  animation: briefingToastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  font-family: var(--font-ui);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-}
-
-.briefing-toast.dismissing {
-  animation: briefingToastOut 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-.briefing-toast-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.briefing-toast-title {
-  font-family: var(--font-display);
-  font-style: italic;
-  font-size: 16px;
-  color: rgba(255, 255, 255, 0.88);
-  flex: 1;
-}
-
-.briefing-toast-time {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.3);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.briefing-toast-close {
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.3);
-  cursor: pointer;
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  transition: color 0.15s ease;
-}
-.briefing-toast-close:hover {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-/* Progress dots */
-.briefing-toast-dots {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 10px;
-}
-
-.briefing-toast-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.15);
-  transition: all 0.2s ease;
-}
-.briefing-toast-dot.active {
-  background: var(--ro-green);
-  box-shadow: 0 0 6px rgba(102, 137, 113, 0.4);
-}
-.briefing-toast-dot.done {
-  background: rgba(102, 137, 113, 0.4);
-}
-
-/* Body */
-.briefing-toast-body {
-  margin-bottom: 4px;
-}
-
-.briefing-toast-seg-title {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--ro-green);
-  margin-bottom: 6px;
-}
-
-.briefing-toast-seg-content {
-  font-size: 13px;
-  line-height: 1.5;
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.briefing-toast-seg-content .briefing-value {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  color: var(--ro-green);
-}
-
-/* Controls */
-.briefing-toast-controls {
-  display: flex;
-  gap: 8px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(102, 137, 113, 0.1);
-}
-
-.briefing-toast-btn {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
-  padding: 6px 12px;
-  color: rgba(255, 255, 255, 0.5);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.briefing-toast-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.8);
-}
-.briefing-toast-btn.active {
-  color: var(--ro-green);
-  border-color: rgba(102, 137, 113, 0.3);
-}
-
-/* Light mode */
-[data-theme='light'] .briefing-toast {
-  background: rgba(255, 255, 255, 0.95);
-  border-color: rgba(0, 0, 0, 0.1);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-}
-[data-theme='light'] .briefing-toast-title { color: #2d3a2e; }
-[data-theme='light'] .briefing-toast-time { color: rgba(45, 58, 46, 0.4); }
-[data-theme='light'] .briefing-toast-close { color: rgba(45, 58, 46, 0.3); }
-[data-theme='light'] .briefing-toast-close:hover { color: rgba(45, 58, 46, 0.7); }
-[data-theme='light'] .briefing-toast-dot { background: rgba(0, 0, 0, 0.1); }
-[data-theme='light'] .briefing-toast-dot.done { background: rgba(102, 137, 113, 0.3); }
-[data-theme='light'] .briefing-toast-seg-content { color: rgba(45, 58, 46, 0.6); }
-[data-theme='light'] .briefing-toast-btn {
-  background: rgba(0, 0, 0, 0.03);
-  border-color: rgba(0, 0, 0, 0.08);
-  color: rgba(45, 58, 46, 0.5);
-}
-[data-theme='light'] .briefing-toast-btn:hover {
-  background: rgba(0, 0, 0, 0.06);
-  color: rgba(45, 58, 46, 0.8);
-}
-[data-theme='light'] .briefing-toast-controls {
-  border-top-color: rgba(0, 0, 0, 0.06);
-}
-
-/* Briefing header button */
-.briefing-trigger-btn {
-  position: relative;
-}
-.briefing-trigger-btn svg {
-  transition: color 0.15s ease;
-}
-.briefing-trigger-btn.speaking svg {
-  color: var(--ro-green);
-  animation: briefingPulse 1.5s ease-in-out infinite;
-}
-
-@keyframes briefingToastIn {
-  from { opacity: 0; transform: translateX(24px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-
-@keyframes briefingToastOut {
-  from { opacity: 1; transform: translateX(0); }
-  to { opacity: 0; transform: translateX(24px); }
-}
-
-@keyframes briefingPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-/* Mobile adjustments */
-@media (max-width: 768px) {
-  .briefing-toast-container {
-    top: auto;
-    bottom: 80px;
-    right: 12px;
-    left: 12px;
-    max-width: none;
-  }
-  .briefing-toast {
-    padding: 14px 16px;
-  }
-}
 
 /* ===== MOBILE ENHANCEMENTS ===== */
 /* Ensure 44px minimum touch targets per MOBILE_DESIGN.md specifications */
@@ -4351,7 +4133,7 @@ body.sidebar-open .sidebar-backdrop {
     display: none;
   }
 
-  /* Header right: only theme, briefing, settings, refresh */
+  /* Header right: only theme, settings, refresh */
   .header-right {
     gap: 6px;
   }
@@ -4378,12 +4160,6 @@ body.sidebar-open .sidebar-backdrop {
   }
   #themeLabel {
     display: none;
-  }
-
-  /* Briefing button */
-  .briefing-trigger-btn {
-    min-width: 44px;
-    min-height: 44px;
   }
 
   /* Toolbar */
@@ -4539,14 +4315,6 @@ body.sidebar-open .sidebar-backdrop {
     animation: toastSlideUp 0.3s ease;
   }
 
-  /* Briefing toast: bottom, full width */
-  .briefing-toast-container {
-    top: auto;
-    bottom: 72px;
-    right: 12px;
-    left: 12px;
-    max-width: none;
-  }
 
   /* --- 10. Touch Targets: 44px minimum --- */
   .nav-item {
@@ -4672,9 +4440,6 @@ body.sidebar-open .sidebar-backdrop {
     }
     .ai-chat-fab {
       bottom: calc(16px + env(safe-area-inset-bottom));
-    }
-    .briefing-toast-container {
-      bottom: calc(72px + env(safe-area-inset-bottom));
     }
     .ai-chat-input-area {
       padding-bottom: calc(16px + env(safe-area-inset-bottom));

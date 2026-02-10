@@ -108,29 +108,6 @@
         <i class="ph ph-lightbulb" style="margin-right: 6px;" aria-hidden="true"></i> Start Tour
       </button>
     </div>
-    <div class="settings-section">
-      <div class="settings-section-title">Briefings</div>
-      <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">Auto briefings with production updates and weather.</p>
-      <div class="widget-toggle" style="margin-bottom: 8px;">
-        <div style="display:flex;align-items:center;gap:8px;flex:1;">
-          <span class="widget-toggle-name">Enable Briefings</span>
-        </div>
-        <label class="toggle-switch">
-          <input type="checkbox" id="briefingEnabledToggle" onchange="toggleBriefingEnabled(this.checked)" aria-label="Enable scheduled briefings">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="widget-toggle" style="margin-bottom: 8px;">
-        <div style="display:flex;align-items:center;gap:8px;flex:1;">
-          <span class="widget-toggle-name">Audio (TTS)</span>
-        </div>
-        <label class="toggle-switch">
-          <input type="checkbox" id="briefingAudioToggle" onchange="toggleBriefingAudio(this.checked)" aria-label="Enable briefing audio">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <p style="font-size: 10px; color: var(--text-light); margin-top: 4px; font-family: var(--font-mono); letter-spacing: 0.02em;">Schedule: 7:00 AM / 12:00 PM / 4:30 PM</p>
-    </div>
   </div>
 
   <div class="sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
@@ -213,7 +190,7 @@
           <span id="themeLabel">Dark</span>
         </button>
         <button class="header-btn" onclick="openSettings()" aria-label="Open dashboard settings"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
-        <button class="header-btn briefing-trigger-btn" id="briefingBtn" onclick="triggerBriefing()" title="Play Briefing" aria-label="Play Briefing"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M2 8c0-3.3 2.7-6 6-6"/><path d="M22 8c0-3.3-2.7-6-6-6"/></svg></button>
+
         <button class="header-btn primary" id="refreshBtn" onclick="refreshData()" aria-label="Refresh dashboard data"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Refresh</button>
       </div>
     </header>
@@ -712,9 +689,6 @@
   </main>
 
 <!-- ========================================== -->
-
-<!-- Briefing Toast Container -->
-<div class="briefing-toast-container" id="briefingToastContainer" aria-live="polite"></div>
 
 <div class="ai-chat-widget">
   <div class="ai-chat-panel" id="aiChatPanel">
