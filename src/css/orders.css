@@ -303,6 +303,27 @@ body::before {
 [data-theme="light"] .stat-card {
   background: var(--bg-card);
   border-color: var(--border-light);
+  border-bottom: 2px solid rgba(102, 137, 113, 0.1);
+}
+
+[data-theme="light"] .stat-card:nth-child(1) {
+  border-bottom-color: rgba(45, 58, 50, 0.15);
+}
+
+[data-theme="light"] .stat-card:nth-child(2) {
+  border-bottom-color: rgba(102, 137, 113, 0.35);
+}
+
+[data-theme="light"] .stat-card:nth-child(3) {
+  border-bottom-color: rgba(102, 137, 113, 0.35);
+}
+
+[data-theme="light"] .stat-card:nth-child(4) {
+  border-bottom-color: rgba(228, 170, 79, 0.35);
+}
+
+[data-theme="light"] .stat-card:nth-child(5) {
+  border-bottom-color: rgba(196, 92, 74, 0.35);
 }
 
 .stat-label {
