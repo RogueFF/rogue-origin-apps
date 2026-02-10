@@ -374,6 +374,11 @@ body.dark-mode .dark-mode-toggle { background: var(--gold-dim); border-color: va
   overflow: hidden;
   transition: all 0.15s;
   cursor: pointer;
+  animation: cardFadeIn 0.3s ease backwards;
+}
+@keyframes cardFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 .sop-card:hover {
   transform: translateY(-2px);
