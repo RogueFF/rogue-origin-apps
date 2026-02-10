@@ -200,6 +200,9 @@ export async function initMuuriKPI() {
     setGrid('kpi', grid);
     setFlag('muuriKPIReady', true);
 
+    // Add muuri class to kpi-row so CSS switches from grid to block layout
+    container.classList.add('muuri');
+
     // Load saved order after a short delay
     setTimeout(function() {
       loadKPIOrder();

@@ -264,6 +264,18 @@ function hideSkeletonsNow() {
     widget.classList.remove('loading');
     widget.classList.add('loaded');
   });
+
+  // Skeleton hide changes card dimensions — tell Muuri to re-layout
+  setTimeout(function() {
+    const widgetGrid = getGrid('widgets');
+    const kpiGrid = getGrid('kpi');
+    if (widgetGrid && !widgetGrid._isDestroyed) {
+      widgetGrid.refreshItems().layout();
+    }
+    if (kpiGrid && !kpiGrid._isDestroyed) {
+      kpiGrid.refreshItems().layout();
+    }
+  }, 100);
 }
 
 // ===== TOAST NOTIFICATION SYSTEM =====
@@ -904,10 +916,15 @@ function setupResizeHandler() {
           try {
             kpiGrid.destroy();
             setGrid('kpi', null);
+            // Remove muuri class so CSS grid takes over
+            const kpiRow = document.querySelector('.kpi-row');
+            if (kpiRow) kpiRow.classList.remove('muuri');
             console.debug('KPI Muuri destroyed for mobile view');
           } catch (e) {
             console.warn('Error destroying KPI Muuri:', e);
             setGrid('kpi', null);
+            const kpiRow = document.querySelector('.kpi-row');
+            if (kpiRow) kpiRow.classList.remove('muuri');
           }
         }
 
@@ -1106,6 +1123,20 @@ function hideLoadingOverlay() {
     }, 300);
   }
 }
+
+// ===== SAFETY LAYOUT REFRESH ON FULL PAGE LOAD =====
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    const widgetGrid = getGrid('widgets');
+    const kpiGrid = getGrid('kpi');
+    if (widgetGrid && !widgetGrid._isDestroyed) {
+      widgetGrid.refreshItems().layout();
+    }
+    if (kpiGrid && !kpiGrid._isDestroyed) {
+      kpiGrid.refreshItems().layout();
+    }
+  }, 500);
+});
 
 // ===== DOM CONTENT LOADED LISTENER =====
 document.addEventListener('DOMContentLoaded', function() {
