@@ -1580,8 +1580,8 @@ body {
 
 .scale-display {
   position: relative;
-  width: 180px;
-  height: 180px;
+  width: 220px;
+  height: 220px;
   flex-shrink: 0;
 }
 
@@ -1688,8 +1688,8 @@ body {
 /* Circular Timer Ring (matches scoreboard) */
 .timer-ring-container {
   position: relative;
-  width: 260px;
-  height: 260px;
+  width: 220px;
+  height: 220px;
   flex-shrink: 0;
 }
 
