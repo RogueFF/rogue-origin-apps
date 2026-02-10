@@ -105,9 +105,9 @@
   </main>
 
   <!-- Image Zoom Overlay -->
-  <div class="image-zoom-overlay" id="imageZoomOverlay" style="display:none;" onclick="closeImageZoom()">
+  <div class="image-zoom-overlay" id="imageZoomOverlay" style="display:none;" onclick="closeImageZoom()" role="dialog" aria-label="Image zoom" aria-modal="true">
     <img id="zoomImage" src="" alt="Zoomed image">
-    <button class="zoom-close" onclick="closeImageZoom()">&times;</button>
+    <button class="zoom-close" onclick="closeImageZoom()" aria-label="Close zoom">&times;</button>
   </div>
 
   <!-- Edit Modal -->
@@ -2590,7 +2590,7 @@
               mediaHtml = '<div class="view-step-video"><video src="' + mediaUrl + '" controls playsinline></video></div>';
             }
           } else {
-            mediaHtml = '<div class="view-step-image" onclick="zoomImage(\'' + esc(mediaUrl).replace(/'/g, "\\'") + '\')"><img src="' + mediaUrl + '"></div>';
+            mediaHtml = '<div class="view-step-image" onclick="zoomImage(\'' + esc(mediaUrl).replace(/'/g, "\\'") + '\')" role="button" tabindex="0" aria-label="Tap to zoom image" onkeydown="if(event.key===\'Enter\')zoomImage(\'' + esc(mediaUrl).replace(/'/g, "\\'") + '\')"><img src="' + mediaUrl + '"></div>';
           }
         }
 
@@ -2614,8 +2614,8 @@
 
         // Safety warning banner for safety steps
         const safetyBanner = st.safety ?
-          '<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--danger-dim);border:2px solid var(--danger);border-radius:10px;margin-bottom:10px;font-weight:600;color:var(--danger);">' +
-            '<i class="ph-duotone ph-warning" style="font-size:24px;"></i> ' +
+          '<div class="safety-warning-banner">' +
+            '<i class="ph-duotone ph-warning"></i> ' +
             (appLang === 'es' ? 'ADVERTENCIA DE SEGURIDAD' : 'SAFETY WARNING') +
           '</div>' : '';
 
@@ -2645,13 +2645,13 @@
       let wizardNavHtml = '';
       if (useMobileWizard) {
         wizardHeaderHtml =
-          '<div class="wizard-progress"><div class="wizard-progress-fill" id="wizardProgressFill" style="width:' + ((1 / stepCount) * 100) + '%;"></div></div>' +
-          '<div class="wizard-counter" id="wizardCounter">' + t('stepXofY') + ' 1 ' + t('of') + ' ' + stepCount + '</div>';
+          '<div class="wizard-progress" role="progressbar" aria-valuenow="1" aria-valuemin="1" aria-valuemax="' + stepCount + '"><div class="wizard-progress-fill" id="wizardProgressFill" style="width:' + ((1 / stepCount) * 100) + '%;"></div></div>' +
+          '<div class="wizard-counter" id="wizardCounter" aria-live="polite">' + t('stepXofY') + ' 1 ' + t('of') + ' ' + stepCount + '</div>';
 
         wizardNavHtml =
           '<div class="wizard-nav">' +
-            '<button class="wizard-btn" id="wizardPrevBtn" onclick="wizardPrev()" disabled><i class="ph-bold ph-caret-left"></i> ' + t('prevStep') + '</button>' +
-            '<button class="wizard-btn primary" id="wizardNextBtn" onclick="wizardNext()">' + t('nextStep') + ' <i class="ph-bold ph-caret-right"></i></button>' +
+            '<button class="wizard-btn" id="wizardPrevBtn" onclick="wizardPrev()" disabled aria-label="' + t('prevStep') + '"><i class="ph-bold ph-caret-left"></i> ' + t('prevStep') + '</button>' +
+            '<button class="wizard-btn primary" id="wizardNextBtn" onclick="wizardNext()" aria-label="' + t('nextStep') + '">' + t('nextStep') + ' <i class="ph-bold ph-caret-right"></i></button>' +
           '</div>';
       }
 
@@ -3525,6 +3525,7 @@
       const btn = document.getElementById('fabMainBtn');
       const isOpen = menu.style.display !== 'none';
       menu.style.display = isOpen ? 'none' : 'flex';
+      menu.classList.toggle('open', !isOpen);
       btn.classList.toggle('open', !isOpen);
     }
 
@@ -3536,10 +3537,63 @@
         const btn = document.getElementById('fabMainBtn');
         if (menu && menu.style.display !== 'none') {
           menu.style.display = 'none';
+          menu.classList.remove('open');
           btn.classList.remove('open');
         }
       }
     });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        // Close image zoom first
+        const zoom = document.getElementById('imageZoomOverlay');
+        if (zoom && zoom.style.display !== 'none') {
+          closeImageZoom();
+          return;
+        }
+        // Close FAB menu
+        const menu = document.getElementById('fabMenu');
+        if (menu && menu.style.display !== 'none') {
+          toggleFabMenu();
+          return;
+        }
+      }
+      // Arrow keys for wizard navigation (when view modal is open)
+      if (isMobileView() && totalWizardSteps > 0) {
+        const viewModal = document.getElementById('viewModal');
+        if (viewModal && viewModal.classList.contains('active')) {
+          if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { wizardNext(); e.preventDefault(); }
+          if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { wizardPrev(); e.preventDefault(); }
+        }
+      }
+    });
+
+    // Touch swipe for wizard navigation
+    (function() {
+      let touchStartX = 0;
+      let touchStartY = 0;
+      const MIN_SWIPE = 50;
+
+      document.addEventListener('touchstart', function(e) {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+      }, { passive: true });
+
+      document.addEventListener('touchend', function(e) {
+        if (!isMobileView() || totalWizardSteps === 0) return;
+        const viewModal = document.getElementById('viewModal');
+        if (!viewModal || !viewModal.classList.contains('active')) return;
+
+        const dx = e.changedTouches[0].clientX - touchStartX;
+        const dy = e.changedTouches[0].clientY - touchStartY;
+        // Only register horizontal swipes (dx > dy)
+        if (Math.abs(dx) > MIN_SWIPE && Math.abs(dx) > Math.abs(dy) * 1.5) {
+          if (dx < 0) wizardNext();  // Swipe left = next
+          else wizardPrev();          // Swipe right = prev
+        }
+      }, { passive: true });
+    })();
 
     // =====================================================
     // Category Chips (mobile filter alternative)
@@ -3654,6 +3708,8 @@
       const fill = document.getElementById('wizardProgressFill');
       if (fill && totalWizardSteps > 0) {
         fill.style.width = (((currentWizardStep + 1) / totalWizardSteps) * 100) + '%';
+        const progressBar = fill.parentElement;
+        if (progressBar) progressBar.setAttribute('aria-valuenow', currentWizardStep + 1);
       }
 
       // Update counter
@@ -3667,7 +3723,13 @@
       const nextBtn = document.getElementById('wizardNextBtn');
       if (prevBtn) prevBtn.disabled = currentWizardStep === 0;
       if (nextBtn) {
-        nextBtn.disabled = currentWizardStep >= totalWizardSteps - 1;
+        const isLast = currentWizardStep >= totalWizardSteps - 1;
+        nextBtn.disabled = isLast;
+        if (isLast) {
+          nextBtn.innerHTML = '<i class="ph-bold ph-check"></i> ' + (appLang === 'es' ? 'Completo' : 'Done');
+        } else {
+          nextBtn.innerHTML = t('nextStep') + ' <i class="ph-bold ph-caret-right"></i>';
+        }
       }
 
       // Scroll to top of modal body

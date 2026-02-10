@@ -1050,6 +1050,15 @@ body.dark-mode .view-step.safety-step {
   to { opacity: 1; transform: translateX(0); }
 }
 
+/* Reverse direction when going back */
+.wizard-step.prev-direction {
+  animation-name: wizardFadeInReverse;
+}
+@keyframes wizardFadeInReverse {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
 .wizard-nav {
   display: flex;
   gap: 10px;
