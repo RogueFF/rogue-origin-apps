@@ -1580,8 +1580,8 @@ body {
 
 .scale-display {
   position: relative;
-  width: 220px;
-  height: 220px;
+  width: 300px;
+  height: 300px;
   flex-shrink: 0;
 }
 
@@ -1632,7 +1632,7 @@ body {
 
 .scale-value {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 28px;
+  font-size: 36px;
   font-weight: 600;
   color: var(--text-primary);
   line-height: 1;
@@ -1655,7 +1655,7 @@ body {
 }
 
 .scale-label {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--text-secondary);
   margin-top: 4px;
 }
@@ -1688,8 +1688,8 @@ body {
 /* Circular Timer Ring (matches scoreboard) */
 .timer-ring-container {
   position: relative;
-  width: 220px;
-  height: 220px;
+  width: 300px;
+  height: 300px;
   flex-shrink: 0;
 }
 
