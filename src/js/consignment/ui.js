@@ -29,7 +29,7 @@ export function renderPartnerCards(partners, container, onCardClick) {
   const maxInventory = sorted[0]?.inventory_lbs || 1;
 
   sorted.forEach((p, idx) => {
-    const balanceClass = p.balance_owed <= 0 ? 'low' : p.balance_owed > 1000 ? 'high' : 'medium';
+    const balanceClass = p.balance_owed <= 0 ? 'low' : p.balance_owed > 5000 ? 'high' : p.balance_owed > 1000 ? 'medium' : 'low';
     const inventoryDisplay = p.inventory_lbs > 0 ? p.inventory_lbs.toFixed(1) + ' lbs' : '0 lbs';
     const isDominant = idx === 0 && sorted.length > 1;
     const pct = Math.min(100, ((p.inventory_lbs || 0) / maxInventory) * 100);
