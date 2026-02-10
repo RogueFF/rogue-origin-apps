@@ -306,10 +306,19 @@ select option {
   color: var(--kanban-text-muted);
 }
 
+.loading p {
+  margin-top: 16px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
 .loading-icon {
-  font-size: 32px;
+  font-size: 28px;
   animation: spin 1s linear infinite;
   color: var(--kanban-green);
+  opacity: 0.7;
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -323,6 +332,12 @@ select option {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 16px;
+  animation: grid-fade-in 0.3s ease;
+}
+
+@keyframes grid-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* ========================================
@@ -598,6 +613,7 @@ select option {
   border-radius: var(--kanban-radius);
   border: 1px solid var(--kanban-border);
   overflow: auto;
+  animation: grid-fade-in 0.3s ease;
 }
 
 table {
@@ -671,6 +687,12 @@ td.price {
   max-height: 90vh;
   overflow: auto;
   border: 1px solid var(--kanban-border);
+  animation: modal-in 0.2s ease;
+}
+
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .modal-head {
@@ -679,6 +701,18 @@ td.price {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  position: relative;
+}
+
+.modal-head::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 24px;
+  width: 48px;
+  height: 2px;
+  background: var(--kanban-green);
+  border-radius: 1px;
 }
 
 .modal-head h2 {
