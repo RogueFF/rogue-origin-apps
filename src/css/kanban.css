@@ -332,13 +332,16 @@ select option {
   background: var(--kanban-bg-card);
   border-radius: var(--kanban-radius);
   border: 1px solid var(--kanban-border);
+  border-bottom: 2px solid var(--kanban-green);
   overflow: hidden;
   transition: border-color 0.15s ease, transform 0.15s ease;
+  position: relative;
 }
 
 .card:hover {
   border-color: var(--kanban-border-hover);
-  transform: translateY(-2px);
+  border-bottom-color: var(--kanban-gold);
+  transform: translateY(-3px);
   cursor: grab;
 }
 
@@ -349,10 +352,15 @@ select option {
 
 /* Card preview (mini kanban card visual) */
 .card-preview {
-  height: 170px;
+  height: 164px;
   position: relative;
   background: var(--kanban-green);
   cursor: pointer;
+  transition: filter 0.15s ease;
+}
+
+.card:hover .card-preview {
+  filter: brightness(1.05);
 }
 
 .card-preview-border {
@@ -491,9 +499,8 @@ select option {
 /* Card action bar */
 .card-actions {
   display: flex;
-  background: rgba(20, 24, 22, 0.95);
+  background: rgba(14, 18, 16, 0.9);
   border-top: 1px solid var(--kanban-border);
-  border-radius: 0 0 var(--kanban-radius) var(--kanban-radius);
   overflow: hidden;
 }
 
@@ -501,53 +508,86 @@ select option {
   flex: 1;
   background: transparent;
   border: none;
-  border-right: 1px solid var(--kanban-border);
-  padding: 10px;
+  border-right: 1px solid rgba(102, 137, 113, 0.08);
+  padding: 9px;
   cursor: pointer;
-  font-size: 15px;
+  font-size: 14px;
   transition: all 0.15s ease;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--kanban-text-muted);
+  position: relative;
 }
 
 .card-actions button:last-child { border-right: none; }
+
+.card-actions button::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 25%;
+  right: 25%;
+  height: 2px;
+  border-radius: 1px;
+  background: transparent;
+  transition: background 0.15s ease;
+}
 
 .card-actions button:hover {
   color: var(--kanban-text);
 }
 
 .card-actions button.reorder {
-  color: var(--kanban-gold);
+  color: rgba(228, 170, 79, 0.7);
 }
 
 .card-actions button.reorder:hover {
+  color: var(--kanban-gold);
   background: var(--kanban-gold-dim);
 }
 
+.card-actions button.reorder:hover::after {
+  background: var(--kanban-gold);
+}
+
 .card-actions button.preview-btn {
-  color: var(--kanban-green);
+  color: rgba(102, 137, 113, 0.7);
 }
 
 .card-actions button.preview-btn:hover {
+  color: var(--kanban-green);
   background: var(--kanban-green-dim);
 }
 
+.card-actions button.preview-btn:hover::after {
+  background: var(--kanban-green);
+}
+
 .card-actions button.edit-btn {
-  color: var(--kanban-blue);
+  color: rgba(98, 117, 141, 0.7);
 }
 
 .card-actions button.edit-btn:hover {
+  color: var(--kanban-blue);
   background: var(--kanban-blue-dim);
 }
 
+.card-actions button.edit-btn:hover::after {
+  background: var(--kanban-blue);
+}
+
 .card-actions button.del {
-  color: var(--kanban-danger);
+  color: rgba(196, 92, 74, 0.5);
 }
 
 .card-actions button.del:hover {
+  color: var(--kanban-danger);
   background: var(--kanban-danger-dim);
+}
+
+.card-actions button.del:hover::after {
+  background: var(--kanban-danger);
 }
 
 /* ========================================
