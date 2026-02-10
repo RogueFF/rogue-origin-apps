@@ -36,7 +36,8 @@
       if (window.ScoreboardState && window.ScoreboardState.shiftAdjustment) {
         var adjustment = window.ScoreboardState.shiftAdjustment;
         data.dailyGoal = adjustment.adjustedDailyGoal || data.dailyGoal;
-        data.effectiveHours = adjustment.availableHours || data.effectiveHours || 8.5;
+        // Don't override effectiveHours — API value tracks actual hours worked
+        // adjustment.availableHours is total available hours, not hours worked
 
         // Apply scale factor to the ORIGINAL target, not the already-scaled one
         var scaleFactor = adjustment.scaleFactor || 1;
