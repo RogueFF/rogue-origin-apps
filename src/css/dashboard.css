@@ -1162,18 +1162,18 @@ main {
 .kpi-grid-item:nth-child(8) .kpi-card { animation: fadeInUp 0.4s ease 0.57s both; }
 
 /* Staggered entrance: Widget cards */
-.widget-item:nth-child(1) { animation: fadeInUp 0.3s ease 0.3s both; }
-.widget-item:nth-child(2) { animation: fadeInUp 0.3s ease 0.35s both; }
-.widget-item:nth-child(3) { animation: fadeInUp 0.3s ease 0.4s both; }
-.widget-item:nth-child(4) { animation: fadeInUp 0.3s ease 0.45s both; }
-.widget-item:nth-child(5) { animation: fadeInUp 0.3s ease 0.5s both; }
-.widget-item:nth-child(6) { animation: fadeInUp 0.3s ease 0.55s both; }
-.widget-item:nth-child(7) { animation: fadeInUp 0.3s ease 0.6s both; }
-.widget-item:nth-child(8) { animation: fadeInUp 0.3s ease 0.65s both; }
-.widget-item:nth-child(9) { animation: fadeInUp 0.3s ease 0.7s both; }
-.widget-item:nth-child(10) { animation: fadeInUp 0.3s ease 0.75s both; }
-.widget-item:nth-child(11) { animation: fadeInUp 0.3s ease 0.8s both; }
-.widget-item:nth-child(12) { animation: fadeInUp 0.3s ease 0.85s both; }
+
+
+
+
+
+
+
+
+
+
+
+
 
 /* Production number entrance */
 .hero-production-number {
@@ -2150,7 +2150,7 @@ body.tutorial-active::before {
   margin: 4px;
   z-index: 1;
   transition: all var(--transition-normal);
-  animation: popIn 0.4s var(--spring) backwards;
+  
 }
 
 /* Widget Size Classes - 12 Column Grid System (uses data-size attribute) */
@@ -4479,3 +4479,12 @@ body.sidebar-open .sidebar-backdrop {
 /* ========================================
    END PASS 8: MOBILE RESPONSIVE
    ======================================== */
+
+/* Widget entrance — opacity only (transform conflicts with Muuri positioning) */
+.widget-item {
+  animation: widgetFadeIn 0.3s ease both;
+}
+@keyframes widgetFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
