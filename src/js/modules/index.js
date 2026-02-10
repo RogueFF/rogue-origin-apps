@@ -223,8 +223,6 @@ import {
   initStatusBar
 } from './status.js';
 
-// ===== BRIEFING IMPORTS =====
-import BriefingEngine from './briefing.js';
 
 // ===== SKELETON LOADING UI =====
 function showSkeletons(show) {
@@ -1089,9 +1087,6 @@ async function init() {
   // 21. Initialize widget resize handles
   initWidgetResizeHandles();
 
-  // 22. Initialize briefing system (scheduler + TTS + content modules)
-  BriefingEngine.init();
-  initBriefingSettingsUI();
 
   // Note: Loading overlay is hidden by renderAll() when data arrives
   // or by the 8-second fallback timeout
@@ -1195,35 +1190,6 @@ window.closeCommandPalette = closeCommandPalette;
 window.setCommandPaletteActive = setCommandPaletteActive;
 window.executeCommandPaletteItem = executeCommandPaletteItem;
 
-// ===== BRIEFING SYSTEM GLOBALS =====
-window.triggerBriefing = function() {
-  const slot = BriefingEngine.getCurrentSlot();
-  BriefingEngine.triggerBriefing(slot);
-};
-
-window.toggleBriefingEnabled = function(checked) {
-  BriefingEngine.setEnabled(checked);
-  showToast(checked ? 'Briefings enabled' : 'Briefings disabled', 'info', 2000);
-};
-
-window.toggleBriefingAudio = function(checked) {
-  BriefingEngine.toggleMute();
-  // The toggle flips the mute state; if checked = true, we want audio ON (muted = false)
-  if (checked && BriefingEngine.muted) BriefingEngine.toggleMute();
-  if (!checked && !BriefingEngine.muted) BriefingEngine.toggleMute();
-  showToast(checked ? 'Briefing audio on' : 'Briefing audio muted', 'info', 2000);
-};
-
-/**
- * Sync briefing settings toggles with current state
- */
-function initBriefingSettingsUI() {
-  const enabledToggle = document.getElementById('briefingEnabledToggle');
-  const audioToggle = document.getElementById('briefingAudioToggle');
-
-  if (enabledToggle) enabledToggle.checked = BriefingEngine.isEnabled();
-  if (audioToggle) audioToggle.checked = !BriefingEngine.muted;
-}
 
 // ===== STUB FUNCTIONS FOR UNIMPLEMENTED FEATURES =====
 // These are placeholders for features that need to be migrated/implemented
@@ -1524,8 +1490,6 @@ export {
   setupSettingsFocusTrap
 };
 
-// Briefing
-export { BriefingEngine };
 
 // Event cleanup functions
 export {
