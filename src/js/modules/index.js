@@ -222,6 +222,9 @@ import {
   initStatusBar
 } from './status.js';
 
+// ===== BRIEFING IMPORTS =====
+import BriefingEngine from './briefing.js';
+
 // ===== SKELETON LOADING UI =====
 function showSkeletons(show) {
   setSkeletonsShowing(show);
@@ -593,11 +596,199 @@ function setupAutoRefresh() {
   setInterval_('autoRefresh', intervalId);
 }
 
+// ===== COMMAND PALETTE =====
+const commandPaletteItems = [
+  { label: 'Dashboard', action: () => switchView('dashboard'), icon: 'grid', shortcut: '' },
+  { label: 'Supply Kanban', action: () => switchView('kanban'), icon: 'columns', shortcut: '' },
+  { label: 'Scoreboard', action: () => switchView('scoreboard'), icon: 'chart', shortcut: '' },
+  { label: 'Command Center', action: () => { window.location.href = 'command-center.html'; }, icon: 'terminal', shortcut: '' },
+  { label: 'Command Center v2', action: () => { window.location.href = 'command-center-v2.html'; }, icon: 'terminal', shortcut: '' },
+  { label: 'Barcode Printer', action: () => switchView('barcode'), icon: 'barcode', shortcut: '' },
+  { label: 'SOP Manager', action: () => switchView('sop'), icon: 'clipboard', shortcut: '' },
+  { label: 'Orders', action: () => switchView('orders'), icon: 'bag', shortcut: '' },
+  { label: 'Consignment', action: () => { window.location.href = 'consignment.html'; }, icon: 'exchange', shortcut: '' },
+  { label: 'Pool Inventory', action: () => { window.location.href = 'pool.html'; }, icon: 'layers', shortcut: '' },
+  { label: 'Floor Manager', action: () => { window.location.href = 'hourly-entry.html'; }, icon: 'floor', shortcut: '' },
+  { label: 'Scale Display', action: () => { window.location.href = 'scale-display.html'; }, icon: 'scale', shortcut: '' },
+  { label: 'Refresh Data', action: () => { closeCommandPalette(); refreshData(); }, icon: 'refresh', shortcut: 'Ctrl+R' },
+  { label: 'Toggle Theme', action: () => { closeCommandPalette(); toggleTheme(); }, icon: 'theme', shortcut: '' },
+  { label: 'Open Settings', action: () => { closeCommandPalette(); openSettings(); }, icon: 'settings', shortcut: 'Ctrl+K' },
+  { label: 'AI Assistant', action: () => { closeCommandPalette(); toggleAIChat(); }, icon: 'chat', shortcut: 'Ctrl+/' },
+];
+
+let commandPaletteActiveIndex = 0;
+
+function openCommandPalette() {
+  const overlay = document.getElementById('commandPalette');
+  const input = document.getElementById('commandPaletteInput');
+  if (!overlay) return;
+  overlay.classList.add('open');
+  if (input) {
+    input.value = '';
+    input.focus();
+  }
+  commandPaletteActiveIndex = 0;
+  renderCommandPaletteResults('');
+}
+
+function closeCommandPalette() {
+  const overlay = document.getElementById('commandPalette');
+  if (overlay) overlay.classList.remove('open');
+}
+
+function renderCommandPaletteResults(query) {
+  const container = document.getElementById('commandPaletteResults');
+  if (!container) return;
+
+  const filtered = query
+    ? commandPaletteItems.filter(item => item.label.toLowerCase().includes(query.toLowerCase()))
+    : commandPaletteItems;
+
+  if (commandPaletteActiveIndex >= filtered.length) {
+    commandPaletteActiveIndex = Math.max(0, filtered.length - 1);
+  }
+
+  container.innerHTML = filtered.map((item, i) => `
+    <div class="command-palette-item${i === commandPaletteActiveIndex ? ' active' : ''}"
+         role="option" data-index="${i}"
+         onmouseenter="setCommandPaletteActive(${i})"
+         onclick="executeCommandPaletteItem(${i})">
+      <span class="cp-icon" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          ${getCommandPaletteIcon(item.icon)}
+        </svg>
+      </span>
+      <span class="cp-label">${item.label}</span>
+      ${item.shortcut ? `<span class="cp-shortcut">${item.shortcut}</span>` : ''}
+    </div>
+  `).join('');
+}
+
+function getCommandPaletteIcon(type) {
+  const icons = {
+    grid: '<rect x="3" y="3" width="6" height="6" rx="1"/><rect x="11" y="3" width="6" height="6" rx="1"/><rect x="3" y="11" width="6" height="6" rx="1"/><rect x="11" y="11" width="6" height="6" rx="1"/>',
+    columns: '<rect x="2" y="3" width="4.5" height="14" rx="1"/><rect x="7.75" y="3" width="4.5" height="14" rx="1"/><rect x="13.5" y="3" width="4.5" height="14" rx="1"/>',
+    chart: '<path d="M4 16V10"/><path d="M8 16V7"/><path d="M12 16V4"/><path d="M16 16V9"/>',
+    terminal: '<path d="M4 5h12"/><path d="M5 8l2 2-2 2"/><path d="M10 12h4"/><rect x="2" y="2" width="16" height="13" rx="2"/>',
+    barcode: '<path d="M3 4v12"/><path d="M6 4v12"/><path d="M9 4v12"/><path d="M11 4v12"/><path d="M14 4v12"/><path d="M17 4v12"/>',
+    clipboard: '<rect x="4" y="3" width="12" height="15" rx="2"/><path d="M7 2.5h6"/><path d="M7 9l2 2 4-4"/>',
+    bag: '<path d="M4 6h12l-1 12H5z"/><path d="M7 6V4a3 3 0 0 1 6 0v2"/>',
+    exchange: '<path d="M2 10h4l3-3 2 2 3-3h4"/><path d="M7 13l2 2 4-4"/>',
+    layers: '<path d="M3 7l7-4 7 4v6l-7 4-7-4z"/><path d="M3 7l7 4 7-4"/><path d="M10 11v7"/>',
+    floor: '<rect x="3" y="3" width="14" height="14" rx="1"/><path d="M3 8h14"/><path d="M8 8v9"/>',
+    scale: '<path d="M10 3v14"/><path d="M4 6h12"/><path d="M3 11l1-5h4l1 5"/><path d="M11 11l1-5h4l1 5"/>',
+    refresh: '<path d="M3 10a7 7 0 1 0 7-7 7.75 7.75 0 0 0-5.3 2.2L3 7"/><path d="M3 3v4h4"/>',
+    theme: '<path d="M13.5 8.5a5.5 5.5 0 1 1-5-7 4.5 4.5 0 0 0 5 7z"/>',
+    settings: '<circle cx="10" cy="10" r="3"/><path d="M10 2v2m0 12v2M2 10h2m12 0h2M4.2 4.2l1.4 1.4m8.8 8.8l1.4 1.4M15.8 4.2l-1.4 1.4M4.2 15.8l1.4-1.4"/>',
+    chat: '<path d="M18 10.5a6.5 6.5 0 0 1-1 3.5l1 3.5-3.5-1a6.5 6.5 0 1 1 3.5-6z"/>',
+  };
+  return icons[type] || '';
+}
+
+function setCommandPaletteActive(index) {
+  commandPaletteActiveIndex = index;
+  const items = document.querySelectorAll('.command-palette-item');
+  items.forEach((el, i) => {
+    el.classList.toggle('active', i === index);
+  });
+}
+
+function executeCommandPaletteItem(index) {
+  const input = document.getElementById('commandPaletteInput');
+  const query = input ? input.value : '';
+  const filtered = query
+    ? commandPaletteItems.filter(item => item.label.toLowerCase().includes(query.toLowerCase()))
+    : commandPaletteItems;
+
+  if (filtered[index]) {
+    closeCommandPalette();
+    filtered[index].action();
+  }
+}
+
+function setupCommandPalette() {
+  const input = document.getElementById('commandPaletteInput');
+  if (!input) return;
+
+  registerEventListener(input, 'input', function() {
+    commandPaletteActiveIndex = 0;
+    renderCommandPaletteResults(this.value);
+  });
+
+  registerEventListener(input, 'keydown', function(e) {
+    const items = document.querySelectorAll('.command-palette-item');
+    const count = items.length;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      commandPaletteActiveIndex = (commandPaletteActiveIndex + 1) % count;
+      setCommandPaletteActive(commandPaletteActiveIndex);
+      // Scroll active item into view
+      if (items[commandPaletteActiveIndex]) {
+        items[commandPaletteActiveIndex].scrollIntoView({ block: 'nearest' });
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      commandPaletteActiveIndex = (commandPaletteActiveIndex - 1 + count) % count;
+      setCommandPaletteActive(commandPaletteActiveIndex);
+      if (items[commandPaletteActiveIndex]) {
+        items[commandPaletteActiveIndex].scrollIntoView({ block: 'nearest' });
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      executeCommandPaletteItem(commandPaletteActiveIndex);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeCommandPalette();
+    }
+  });
+}
+
+// ===== FOCUS TRAP FOR SETTINGS PANEL =====
+function setupSettingsFocusTrap() {
+  const settingsPanel = document.getElementById('settingsPanel');
+  if (!settingsPanel) return;
+
+  registerEventListener(settingsPanel, 'keydown', function(e) {
+    if (e.key !== 'Tab') return;
+    if (!settingsPanel.classList.contains('open')) return;
+
+    const focusableSelectors = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+    const focusableElements = settingsPanel.querySelectorAll(focusableSelectors);
+    if (focusableElements.length === 0) return;
+
+    const first = focusableElements[0];
+    const last = focusableElements[focusableElements.length - 1];
+
+    if (e.shiftKey) {
+      // Shift+Tab: if focus is on first element, wrap to last
+      if (document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else {
+      // Tab: if focus is on last element, wrap to first
+      if (document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  });
+}
+
 // ===== KEYBOARD SHORTCUTS =====
 function setupKeyboardShortcuts() {
   const keydownHandler = function(e) {
-    // Don't trigger shortcuts when typing in inputs
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    // Don't trigger shortcuts when typing in inputs (except command palette)
+    const isCommandPaletteInput = e.target.id === 'commandPaletteInput';
+    if ((e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') && !isCommandPaletteInput) return;
+
+    // '/' key opens command palette (only when not in an input)
+    if (e.key === '/' && !isCommandPaletteInput && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault();
+      openCommandPalette();
+      return;
+    }
 
     // Ctrl/Cmd + R: Refresh data
     if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
@@ -613,13 +804,19 @@ function setupKeyboardShortcuts() {
       return;
     }
 
-    // Escape: Close panels
+    // Escape: Close overlays in priority order
     if (e.key === 'Escape') {
+      const commandPalette = document.getElementById('commandPalette');
       const settingsPanel = document.getElementById('settingsPanel');
       const aiChatPanel = document.getElementById('aiChatPanel');
 
-      if (settingsPanel && settingsPanel.classList.contains('open')) {
-        toggleSettings();
+      if (commandPalette && commandPalette.classList.contains('open')) {
+        closeCommandPalette();
+      } else if (settingsPanel && settingsPanel.classList.contains('open')) {
+        closeSettings();
+        // Return focus to the settings trigger button
+        const settingsBtn = document.querySelector('.header-btn[onclick*="openSettings"]');
+        if (settingsBtn) settingsBtn.focus();
       } else if (aiChatPanel && aiChatPanel.classList.contains('open')) {
         toggleAIChat();
       }
@@ -630,7 +827,6 @@ function setupKeyboardShortcuts() {
     if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
       e.preventDefault();
       toggleSettings();
-
     }
   };
 
@@ -811,14 +1007,24 @@ async function init() {
   // 18. Set up auto-refresh interval (30s for today view)
   setupAutoRefresh();
 
+  // 18.5. Set up command palette
+  setupCommandPalette();
+
   // 19. Set up keyboard shortcuts
   setupKeyboardShortcuts();
+
+  // 19.5. Set up settings panel focus trap
+  setupSettingsFocusTrap();
 
   // 20. Set up resize handler
   setupResizeHandler();
 
   // 21. Initialize widget resize handles
   initWidgetResizeHandles();
+
+  // 22. Initialize briefing system (scheduler + TTS + content modules)
+  BriefingEngine.init();
+  initBriefingSettingsUI();
 
   // Note: Loading overlay is hidden by renderAll() when data arrives
   // or by the 8-second fallback timeout
@@ -903,6 +1109,40 @@ window.toggleWidgetCollapse = toggleWidgetCollapse;
 window.hideWidget = hideWidget;
 window.showWidget = showWidget;
 window.openAppNewTab = openAppNewTab;
+window.openCommandPalette = openCommandPalette;
+window.closeCommandPalette = closeCommandPalette;
+window.setCommandPaletteActive = setCommandPaletteActive;
+window.executeCommandPaletteItem = executeCommandPaletteItem;
+
+// ===== BRIEFING SYSTEM GLOBALS =====
+window.triggerBriefing = function() {
+  const slot = BriefingEngine.getCurrentSlot();
+  BriefingEngine.triggerBriefing(slot);
+};
+
+window.toggleBriefingEnabled = function(checked) {
+  BriefingEngine.setEnabled(checked);
+  showToast(checked ? 'Briefings enabled' : 'Briefings disabled', 'info', 2000);
+};
+
+window.toggleBriefingAudio = function(checked) {
+  BriefingEngine.toggleMute();
+  // The toggle flips the mute state; if checked = true, we want audio ON (muted = false)
+  if (checked && BriefingEngine.muted) BriefingEngine.toggleMute();
+  if (!checked && !BriefingEngine.muted) BriefingEngine.toggleMute();
+  showToast(checked ? 'Briefing audio on' : 'Briefing audio muted', 'info', 2000);
+};
+
+/**
+ * Sync briefing settings toggles with current state
+ */
+function initBriefingSettingsUI() {
+  const enabledToggle = document.getElementById('briefingEnabledToggle');
+  const audioToggle = document.getElementById('briefingAudioToggle');
+
+  if (enabledToggle) enabledToggle.checked = BriefingEngine.isEnabled();
+  if (audioToggle) audioToggle.checked = !BriefingEngine.muted;
+}
 
 // ===== STUB FUNCTIONS FOR UNIMPLEMENTED FEATURES =====
 // These are placeholders for features that need to be migrated/implemented
@@ -1195,8 +1435,15 @@ export {
   showSkeletons,
   hideSkeletonsNow,
   showToast,
-  renderAll
+  renderAll,
+  openCommandPalette,
+  closeCommandPalette,
+  setupCommandPalette,
+  setupSettingsFocusTrap
 };
+
+// Briefing
+export { BriefingEngine };
 
 // Event cleanup functions
 export {
