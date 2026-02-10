@@ -32,15 +32,21 @@
       const currentLang = (window.ScoreboardState && window.ScoreboardState.currentLang) || 'en';
       const t = window.ScoreboardI18n ? window.ScoreboardI18n.t : function(key) { return key; };
 
-      // Apply shift adjustment if exists
+      // Apply shift adjustment if exists (use raw API target, don't compound)
       if (window.ScoreboardState && window.ScoreboardState.shiftAdjustment) {
         var adjustment = window.ScoreboardState.shiftAdjustment;
         data.dailyGoal = adjustment.adjustedDailyGoal || data.dailyGoal;
         data.effectiveHours = adjustment.availableHours || data.effectiveHours || 8.5;
 
-        // Recalculate todayTarget proportionally
+        // Apply scale factor to the ORIGINAL target, not the already-scaled one
         var scaleFactor = adjustment.scaleFactor || 1;
-        data.todayTarget = (data.todayTarget || 0) * scaleFactor;
+        var rawTarget = window.ScoreboardState._rawTodayTarget;
+        if (rawTarget === undefined || rawTarget === null) {
+          // First time: store the raw API value before scaling
+          rawTarget = data.todayTarget || 0;
+          window.ScoreboardState._rawTodayTarget = rawTarget;
+        }
+        data.todayTarget = rawTarget * scaleFactor;
       }
 
       // Extract data values
