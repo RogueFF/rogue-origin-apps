@@ -233,6 +233,19 @@ body.dark-mode .dark-mode-toggle { background: var(--gold-dim); border-color: va
   border-bottom: 1px solid var(--border);
   overflow: hidden;
   display: none; /* Shown on mobile via media query */
+  position: relative;
+}
+/* Scroll fade indicators */
+.category-chips-wrapper::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 40px;
+  background: linear-gradient(to right, transparent, var(--bg-card));
+  pointer-events: none;
+  z-index: 1;
 }
 
 .category-chips {
@@ -976,6 +989,22 @@ body.dark-mode .view-step.safety-step {
   background: var(--danger);
 }
 
+/* Safety Warning Banner (inside view steps) */
+.safety-warning-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--danger-dim);
+  border: 2px solid var(--danger);
+  border-radius: 10px;
+  margin-bottom: 10px;
+  font-weight: 600;
+  color: var(--danger);
+  font-size: 14px;
+}
+.safety-warning-banner i { font-size: 24px; flex-shrink: 0; }
+
 /* =====================================================
    WIZARD MODE (View Modal — mobile step-by-step)
    ===================================================== */
@@ -1156,6 +1185,16 @@ body.dark-mode .view-step.safety-step {
 .fab-item:active { transform: scale(0.96); }
 .fab-item i { font-size: 20px; color: var(--green); }
 .fab-item .request-badge { margin-left: 4px; }
+
+/* FAB menu entrance animation */
+.fab-menu.open .fab-item { animation: fabItemIn 0.2s ease backwards; }
+.fab-menu.open .fab-item:nth-child(1) { animation-delay: 0s; }
+.fab-menu.open .fab-item:nth-child(2) { animation-delay: 0.05s; }
+.fab-menu.open .fab-item:nth-child(3) { animation-delay: 0.1s; }
+@keyframes fabItemIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.9); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 
 /* =====================================================
    SETTINGS
