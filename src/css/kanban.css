@@ -1215,7 +1215,10 @@ body.dark-mode .card:hover {
 
   .main { padding: 16px; }
 
-  .stats { padding: 8px 16px; }
+  .stats-inline {
+    flex-wrap: wrap;
+    font-size: 10px;
+  }
 }
 
 @media (max-width: 400px) {

@@ -1013,6 +1013,12 @@ body.dark-mode .view-step.safety-step {
 
 .wizard-step {
   flex: 1;
+  animation: wizardFadeIn 0.25s ease;
+}
+
+@keyframes wizardFadeIn {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
 .wizard-nav {
