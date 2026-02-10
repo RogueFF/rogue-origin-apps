@@ -4,7 +4,7 @@
  */
 
 import * as api from './api.js?v=6';
-import * as ui from './ui.js?v=8';
+import * as ui from './ui.js?v=9';
 
 let partners = [];
 let strains = [];
@@ -459,11 +459,13 @@ function toggleDarkMode() {
   updateThemeButton(next);
 }
 
+const MOON_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8.5a5.5 5.5 0 1 1-5-7 4.5 4.5 0 0 0 5 7z"/></svg>';
+const SUN_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="3"/><line x1="8" y1="1" x2="8" y2="3"/><line x1="8" y1="13" x2="8" y2="15"/><line x1="1" y1="8" x2="3" y2="8"/><line x1="13" y1="8" x2="15" y2="8"/><line x1="3.05" y1="3.05" x2="4.46" y2="4.46"/><line x1="11.54" y1="11.54" x2="12.95" y2="12.95"/><line x1="3.05" y1="12.95" x2="4.46" y2="11.54"/><line x1="11.54" y1="4.46" x2="12.95" y2="3.05"/></svg>';
+
 function updateThemeButton(theme) {
   const icon = el('themeIcon');
   const label = el('themeLabel');
-  // Show current state (not the action)
-  if (icon) icon.textContent = theme === 'dark' ? '🌙' : '☀️';
+  if (icon) icon.innerHTML = theme === 'dark' ? MOON_SVG : SUN_SVG;
   if (label) label.textContent = theme === 'dark' ? 'Dark' : 'Light';
 }
 
