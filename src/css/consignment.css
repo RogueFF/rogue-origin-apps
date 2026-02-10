@@ -758,10 +758,10 @@ nav {
 /* Timeline dot */
 .activity-dot {
   position: absolute;
-  left: -20px;
+  left: -22px;
   top: 16px;
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
   border: 2px solid #141816;
@@ -2086,7 +2086,7 @@ html[data-theme='light'] .brand h1 {
 }
 
 html[data-theme='light'] .nav-item {
-  color: rgba(45, 58, 46, 0.5);
+  color: #2d3a2e;
 }
 
 html[data-theme='light'] .nav-item:hover {
@@ -2113,7 +2113,7 @@ html[data-theme='light'] .user-role {
 
 /* Header */
 html[data-theme='light'] .header {
-  background: rgba(255, 255, 255, 0.9);
+  background: #ffffff;
   color: #2d3a2e;
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
 }
@@ -2137,7 +2137,7 @@ html[data-theme='light'] .header-time .time {
 }
 
 html[data-theme='light'] .header-time .date {
-  color: rgba(45, 58, 46, 0.4);
+  color: #2d3a2e;
 }
 
 html[data-theme='light'] .header-time {
@@ -2204,7 +2204,7 @@ html[data-theme='light'] .quick-action-label {
 }
 
 html[data-theme='light'] .quick-action-hint {
-  color: rgba(45, 58, 46, 0.45);
+  color: rgba(45, 58, 46, 0.5);
 }
 
 /* Partner Cards */
