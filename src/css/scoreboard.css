@@ -2221,7 +2221,8 @@ body.iframe-embed .percentage-value {
 }
 
 /* Compact timer panel in iframe */
-body.iframe-embed .timer-display {
+body.iframe-embed .timer-display,
+body.iframe-embed .scale-section .scale-display {
   width: 180px;
   height: 180px;
   margin-bottom: 10px;
@@ -2305,12 +2306,14 @@ body.iframe-embed .current-order-items {
     padding: 15px;
   }
 
-  body.iframe-embed .timer-display {
+  body.iframe-embed .timer-display,
+  body.iframe-embed .scale-section .scale-display {
     width: 150px;
     height: 150px;
   }
 
-  body.iframe-embed .timer-value {
+  body.iframe-embed .timer-value,
+  body.iframe-embed .scale-value {
     font-size: 34px;
   }
 
