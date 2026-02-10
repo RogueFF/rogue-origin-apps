@@ -65,7 +65,7 @@ export async function loadChartJs() {
       Chart.register(ChartDataLabels);
     }
     
-    console.log('✅ Chart.js loaded lazily');
+    console.debug('✅ Chart.js loaded lazily');
     return Promise.resolve();
   } catch (error) {
     console.error('Failed to load Chart.js:', error);
@@ -84,7 +84,7 @@ export async function loadMuuri() {
 
   try {
     await loadScript('https://cdn.jsdelivr.net/npm/muuri@0.9.5/dist/muuri.min.js', 'muuri');
-    console.log('✅ Muuri.js loaded lazily');
+    console.debug('✅ Muuri.js loaded lazily');
     return Promise.resolve();
   } catch (error) {
     console.error('Failed to load Muuri.js:', error);
@@ -103,7 +103,7 @@ export async function loadPhosphor() {
 
   try {
     await loadScript('https://unpkg.com/@phosphor-icons/web', 'phosphor');
-    console.log('✅ Phosphor Icons loaded lazily');
+    console.debug('✅ Phosphor Icons loaded lazily');
     return Promise.resolve();
   } catch (error) {
     console.error('Failed to load Phosphor Icons:', error);

@@ -77,10 +77,10 @@
   <div class="settings-overlay" id="settingsOverlay" onclick="closeSettings()" role="presentation"></div><div class="settings-panel" id="settingsPanel" role="dialog" aria-modal="true" aria-labelledby="settingsPanelTitle"><div class="settings-header"><span class="settings-title" id="settingsPanelTitle">Customize Dashboard</span><button class="settings-close" onclick="closeSettings()" aria-label="Close settings panel">&times;</button></div>
     <div class="settings-section">
       <div class="settings-section-title" id="targetInputLabel">Production Target</div>
-      <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;" id="targetInputDesc">Daily target shown as line on charts</p>
-      <div style="display: flex; align-items: center; gap: 8px;">
-        <input type="number" id="targetInput" value="200" min="50" max="500" step="10" style="flex: 1; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: var(--bg); color: var(--text);" aria-labelledby="targetInputLabel" aria-describedby="targetInputDesc">
-        <span style="color: var(--text-muted); font-size: 12px;" aria-hidden="true">lbs/day</span>
+      <p class="settings-desc" id="targetInputDesc">Daily target shown as line on charts</p>
+      <div class="settings-input-row">
+        <input type="number" id="targetInput" value="200" min="50" max="500" step="10" aria-labelledby="targetInputLabel" aria-describedby="targetInputDesc">
+        <span class="settings-input-unit" aria-hidden="true">lbs/day</span>
       </div>
     </div>
     <div class="settings-section">
@@ -93,19 +93,19 @@
     </div>
     <div class="settings-section">
       <div class="settings-section-title">Layout</div>
-      <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">Drag widgets and KPI cards to customize your dashboard.</p>
-      <button class="tool-btn" onclick="explicitSaveLayout()" style="width: 100%; justify-content: center; margin-bottom: 8px; background: var(--ro-green); color: white;" aria-label="Save current dashboard layout">
-        <i class="ph ph-floppy-disk" style="margin-right: 6px;" aria-hidden="true"></i> Save Layout
+      <p class="settings-desc-lg">Drag widgets and KPI cards to customize your dashboard.</p>
+      <button class="tool-btn settings-btn-full save" onclick="explicitSaveLayout()" aria-label="Save current dashboard layout">
+        <i class="ph ph-floppy-disk icon-mr" aria-hidden="true"></i> Save Layout
       </button>
-      <button class="tool-btn" onclick="resetLayout()" style="width: 100%; justify-content: center;" aria-label="Reset dashboard to default layout">
-        <i class="ph ph-arrow-counter-clockwise" style="margin-right: 6px;" aria-hidden="true"></i> Reset to Default
+      <button class="tool-btn settings-btn-full" onclick="resetLayout()" aria-label="Reset dashboard to default layout">
+        <i class="ph ph-arrow-counter-clockwise icon-mr" aria-hidden="true"></i> Reset to Default
       </button>
     </div>
     <div class="settings-section">
       <div class="settings-section-title">Help</div>
-      <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">Learn how to use the dashboard features.</p>
-      <button class="tool-btn" onclick="closeSettings(); startTutorial();" style="width: 100%; justify-content: center; background: var(--gold); color: #1a1f16;" aria-label="Start interactive dashboard tour">
-        <i class="ph ph-lightbulb" style="margin-right: 6px;" aria-hidden="true"></i> Start Tour
+      <p class="settings-desc-lg">Learn how to use the dashboard features.</p>
+      <button class="tool-btn settings-btn-full tour" onclick="closeSettings(); startTutorial();" aria-label="Start interactive dashboard tour">
+        <i class="ph ph-lightbulb icon-mr" aria-hidden="true"></i> Start Tour
       </button>
     </div>
   </div>
@@ -168,7 +168,7 @@
               <div class="date-custom-label" id="customRangeLabel">Custom Range</div>
               <div class="date-inputs">
                 <input type="date" class="date-input" id="startDate" aria-label="Start date">
-                <span style="color: var(--text-light);" aria-hidden="true">→</span>
+                <span class="date-arrow" aria-hidden="true">→</span>
                 <input type="date" class="date-input" id="endDate" aria-label="End date">
               </div>
               <button class="date-apply-btn" onclick="applyCustomRange()" aria-label="Apply custom date range">Apply</button>
@@ -210,9 +210,9 @@
         <div class="compare-banner-left">
           <span class="compare-badge">Comparing</span>
           <div class="compare-periods">
-            <div style="display:flex;align-items:center;gap:4px;"><div class="compare-dot current"></div><span id="compareCurrent">Today</span></div>
-            <span style="opacity: 0.5;">vs</span>
-            <div style="display:flex;align-items:center;gap:4px;"><div class="compare-dot previous"></div><span id="comparePrevious">Yesterday</span></div>
+            <div class="compare-period"><div class="compare-dot current"></div><span id="compareCurrent">Today</span></div>
+            <span class="compare-vs">vs</span>
+            <div class="compare-period"><div class="compare-dot previous"></div><span id="comparePrevious">Yesterday</span></div>
           </div>
         </div>
         <button class="compare-close" onclick="clearCompare()" aria-label="Clear comparison">&times;</button>
@@ -275,9 +275,9 @@
 
         <!-- Integration Widgets (Medium Size) -->
         <div class="widget-item" data-widget-id="widget-kanban" data-size="medium">
-          <div class="widget-card integration-card" onclick="switchView('kanban')" style="cursor:pointer;" role="button" tabindex="0" aria-label="Open Supply Kanban view" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('kanban')">
+          <div class="widget-card integration-card" onclick="switchView('kanban')" role="button" tabindex="0" aria-label="Open Supply Kanban view" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('kanban')">
             <div class="widget-header integration-header">
-              <div style="display:flex;align-items:center;gap:8px;">
+              <div class="widget-header-left">
                 <div class="integration-icon kanban" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="4.5" height="14" rx="1"/><rect x="7.75" y="3" width="4.5" height="14" rx="1"/><rect x="13.5" y="3" width="4.5" height="14" rx="1"/></svg></div>
                 <div class="integration-title widget-title">Supply Kanban</div>
               </div>
@@ -303,9 +303,9 @@
         </div>
 
         <div class="widget-item" data-widget-id="widget-scoreboard" data-size="medium">
-          <div class="widget-card integration-card" onclick="switchView('scoreboard')" style="cursor:pointer;" role="button" tabindex="0" aria-label="Open Live Scoreboard view" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('scoreboard')">
+          <div class="widget-card integration-card" onclick="switchView('scoreboard')" role="button" tabindex="0" aria-label="Open Live Scoreboard view" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('scoreboard')">
             <div class="widget-header integration-header">
-              <div style="display:flex;align-items:center;gap:8px;">
+              <div class="widget-header-left">
                 <div class="integration-icon scoreboard"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16V10"/><path d="M8 16V7"/><path d="M12 16V4"/><path d="M16 16V9"/></svg></div>
                 <div class="integration-title widget-title">Live Scoreboard</div>
               </div>
@@ -332,7 +332,7 @@
         <div class="widget-item" data-widget-id="widget-bags" data-size="medium">
           <div class="widget-card integration-card">
             <div class="widget-header integration-header">
-              <div style="display:flex;align-items:center;gap:8px;">
+              <div class="widget-header-left">
                 <div class="integration-icon bags"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M8 2h4"/><circle cx="10" cy="11" r="7"/><path d="M10 8v3.5l2.5 1.5"/></svg></div>
                 <div class="integration-title widget-title">5KG Bag Timer</div>
               </div>
@@ -357,9 +357,9 @@
         </div>
 
         <div class="widget-item" data-widget-id="widget-sop" data-size="medium">
-          <div class="widget-card integration-card" onclick="switchView('sop')" style="cursor:pointer;" role="button" tabindex="0" aria-label="Open SOP Manager view" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('sop')">
+          <div class="widget-card integration-card" onclick="switchView('sop')" role="button" tabindex="0" aria-label="Open SOP Manager view" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('sop')">
             <div class="widget-header integration-header">
-              <div style="display:flex;align-items:center;gap:8px;">
+              <div class="widget-header-left">
                 <div class="integration-icon sop" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="12" height="15" rx="2"/><path d="M7 2.5h6"/><path d="M7 9l2 2 4-4"/></svg></div>
                 <div class="integration-title widget-title">SOP Manager</div>
               </div>
@@ -388,7 +388,7 @@
           <div class="widget-card current-card">
             <div class="widget-header current-header">
               <div><div class="current-strain" id="currentStrain">No Data</div><div class="current-time" id="currentTime">—</div></div>
-              <div style="display:flex;align-items:center;gap:8px;">
+              <div class="widget-header-left">
                 <div class="status-badge idle" id="statusBadge">Last Hour</div>
                 <div class="widget-actions">
                   <button class="widget-resize" onclick="cycleWidgetSize(this)" title="Resize" aria-label="Resize widget">
@@ -410,7 +410,7 @@
               </div>
             </div>
             <div class="widget-content current-stats">
-              <div class="skeleton-placeholder" style="padding:16px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+              <div class="skeleton-placeholder skeleton-grid-3col">
                 <div><div class="skeleton skeleton-number"></div><div class="skeleton skeleton-text short"></div></div>
                 <div><div class="skeleton skeleton-number"></div><div class="skeleton skeleton-text short"></div></div>
                 <div><div class="skeleton skeleton-number"></div><div class="skeleton skeleton-text short"></div></div>
@@ -545,9 +545,9 @@
               </div>
             </div>
             <div class="widget-content">
-              <div class="skeleton-placeholder" style="padding:16px;">
-                <div style="display:flex;gap:24px;margin-bottom:16px;"><div class="skeleton skeleton-number" style="width:80px;"></div><div class="skeleton skeleton-number" style="width:80px;"></div><div class="skeleton skeleton-number" style="width:80px;"></div></div>
-                <div class="skeleton skeleton-chart" style="height:60px;"></div>
+              <div class="skeleton-placeholder skeleton-productivity">
+                <div class="skeleton-productivity-row"><div class="skeleton skeleton-number"></div><div class="skeleton skeleton-number"></div><div class="skeleton skeleton-number"></div></div>
+                <div class="skeleton skeleton-chart skeleton-chart-sm"></div>
               </div>
               <div class="sparkline-metrics">
                 <div class="sparkline-metric"><div class="sparkline-metric-value current" id="sparkCurrent">—</div><div class="sparkline-metric-label">Last Hour</div></div>
@@ -574,7 +574,7 @@
                 </button>
               </div>
             </div>
-            <div class="widget-content strain-list" id="strainList"><div style="color:#8a9a8e;text-align:center;padding:16px;">No data</div></div>
+            <div class="widget-content strain-list" id="strainList"><div class="strain-list-empty">No data</div></div>
           </div>
         </div>
         <div class="widget-item" data-widget-id="widget-performance" data-size="medium">
