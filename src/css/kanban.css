@@ -1,47 +1,998 @@
+/* ============================================
+   KANBAN CARD MANAGER — Rogue Origin Design System
+   Dark industrial aesthetic, editorial typography
+   ============================================ */
+
 /* Google Fonts Import */
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap');
 
+/* ========================================
+   THEME OVERRIDES — Force dark mode always
+   ======================================== */
 :root {
-  /* Rogue Origin Brand Colors - Light Theme */
-  --ro-green: #668971;
-  --ro-gold: #e4aa4f;
-  --gold: #e4aa4f;
-  --gold-light: #f0cb60;
-  --gold-dim: rgba(228,170,79,0.15);
-  --green: #668971;
-  --green-dim: rgba(102,137,113,0.15);
-  --sungrown: #bf8e4e;
-  --sungrown-dim: rgba(191,142,78,0.15);
-  --greenhouse: #8f9263;
-  --indoor: #62758d;
-  --bg: #faf8f5;
-  --bg-card: #ffffff;
-  --border: #e8e4de;
-  --text: #2d3a2e;
-  --text-muted: #8a9a8e;
-  --sidebar-bg: #1a1f16;
+  --kanban-bg: #141816;
+  --kanban-bg-warm: #1a1f16;
+  --kanban-bg-card: rgba(26, 30, 27, 0.85);
+  --kanban-bg-surface: rgba(26, 30, 27, 0.65);
+  --kanban-border: rgba(102, 137, 113, 0.15);
+  --kanban-border-hover: rgba(102, 137, 113, 0.35);
+  --kanban-text: #e8ece9;
+  --kanban-text-secondary: #a3b0a6;
+  --kanban-text-muted: #6b7c6f;
+  --kanban-green: #668971;
+  --kanban-gold: #e4aa4f;
+  --kanban-blue: #62758d;
+  --kanban-danger: #c45c4a;
+  --kanban-danger-dim: rgba(196, 92, 74, 0.12);
+  --kanban-green-dim: rgba(102, 137, 113, 0.12);
+  --kanban-gold-dim: rgba(228, 170, 79, 0.12);
+  --kanban-blue-dim: rgba(98, 117, 141, 0.12);
+  --kanban-radius: 8px;
+  --kanban-radius-sm: 6px;
 
-  /* Typography */
-  --font-display: 'DM Serif Display', serif;
-  --font-mono: 'JetBrains Mono', monospace;
-  --font-ui: 'Outfit', 'Inter', sans-serif;
+  /* Topo contour background */
+  --topo-bg: url("data:image/svg+xml,%3Csvg width='400' height='400' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='topo' width='200' height='200' patternUnits='userSpaceOnUse'%3E%3Cpath d='M100 20c30 0 55 25 55 55s-25 55-55 55S45 105 45 75 70 20 100 20z' fill='none' stroke='%23668971' stroke-width='0.5' opacity='0.06'/%3E%3Cpath d='M100 40c20 0 35 15 35 35s-15 35-35 35S65 95 65 75 80 40 100 40z' fill='none' stroke='%23668971' stroke-width='0.5' opacity='0.04'/%3E%3Cpath d='M100 60c8 0 15 7 15 15s-7 15-15 15-15-7-15-15 7-15 15-15z' fill='none' stroke='%23668971' stroke-width='0.5' opacity='0.03'/%3E%3Cpath d='M30 120c25 0 45 20 45 45s-20 45-45 45-45-20-45-45 20-45 45-45z' fill='none' stroke='%23668971' stroke-width='0.5' opacity='0.05'/%3E%3Cpath d='M170 140c20 0 36 16 36 36s-16 36-36 36-36-16-36-36 16-36 36-36z' fill='none' stroke='%23668971' stroke-width='0.5' opacity='0.04'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='400' height='400' fill='url(%23topo)'/%3E%3C/svg%3E");
 }
 
-/* Dark Mode */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-ui);
+  background: var(--kanban-bg);
+  background-image: var(--topo-bg);
+  color: var(--kanban-text);
+  min-height: 100vh;
+}
+
+/* ========================================
+   HEADER
+   ======================================== */
+.header {
+  background: rgba(20, 24, 22, 0.95);
+  border-bottom: 1px solid var(--kanban-border);
+  padding: 16px 24px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.header-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--kanban-border);
+}
+
+.brand h1 {
+  color: var(--kanban-text);
+  font-size: 20px;
+  font-weight: 400;
+  font-family: var(--font-display);
+  font-style: italic;
+  letter-spacing: 0.02em;
+}
+
+.brand p {
+  color: var(--kanban-text-muted);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+}
+
+/* Buttons */
+.btns {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  padding: 10px 16px;
+  border: 1px solid var(--kanban-border);
+  border-radius: var(--kanban-radius-sm);
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.15s ease;
+  font-family: var(--font-ui);
+  background: transparent;
+  color: var(--kanban-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn:hover {
+  border-color: var(--kanban-border-hover);
+  background: rgba(102, 137, 113, 0.08);
+  color: var(--kanban-text);
+}
+
+.btn-green {
+  background: var(--kanban-green);
+  color: #fff;
+  border-color: var(--kanban-green);
+}
+
+.btn-green:hover {
+  background: #5a7a63;
+  border-color: #5a7a63;
+}
+
+.btn-gold {
+  background: var(--kanban-gold);
+  color: #1a1f16;
+  border-color: var(--kanban-gold);
+  font-weight: 600;
+}
+
+.btn-gold:hover {
+  background: #d99a3f;
+  border-color: #d99a3f;
+}
+
+.btn-sungrown {
+  background: transparent;
+  color: var(--kanban-gold);
+  border-color: rgba(228, 170, 79, 0.3);
+}
+
+.btn-sungrown:hover {
+  background: rgba(228, 170, 79, 0.12);
+  border-color: var(--kanban-gold);
+}
+
+.btn-indoor {
+  background: transparent;
+  color: var(--kanban-blue);
+  border-color: rgba(98, 117, 141, 0.3);
+}
+
+.btn-indoor:hover {
+  background: rgba(98, 117, 141, 0.12);
+  border-color: var(--kanban-blue);
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--kanban-border);
+  color: var(--kanban-text-secondary);
+}
+
+.btn-outline:hover {
+  background: rgba(102, 137, 113, 0.08);
+  border-color: var(--kanban-border-hover);
+  color: var(--kanban-text);
+}
+
+/* ========================================
+   TOOLBAR
+   ======================================== */
+.toolbar {
+  padding: 12px 24px;
+  background: rgba(20, 24, 22, 0.7);
+  border-bottom: 1px solid var(--kanban-border);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.toolbar-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.filters {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+input, select {
+  background: rgba(26, 30, 27, 0.6);
+  border: 1px solid var(--kanban-border);
+  border-radius: var(--kanban-radius-sm);
+  padding: 10px 12px;
+  color: var(--kanban-text);
+  font-size: 14px;
+  font-family: var(--font-ui);
+  transition: border-color 0.15s ease;
+}
+
+input:focus, select:focus {
+  outline: none;
+  border-color: var(--kanban-green);
+  box-shadow: 0 0 0 3px rgba(102, 137, 113, 0.15);
+}
+
+input::placeholder {
+  color: var(--kanban-text-muted);
+}
+
+select option {
+  background: #1a1f16;
+  color: var(--kanban-text);
+}
+
+/* View toggle */
+.toggle {
+  display: flex;
+  background: rgba(26, 30, 27, 0.6);
+  border-radius: var(--kanban-radius-sm);
+  padding: 3px;
+  border: 1px solid var(--kanban-border);
+}
+
+.toggle button {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--kanban-text-muted);
+  transition: all 0.15s ease;
+  font-family: var(--font-ui);
+  font-weight: 500;
+}
+
+.toggle button.on {
+  background: var(--kanban-green);
+  color: #fff;
+}
+
+.toggle button:hover:not(.on) {
+  color: var(--kanban-text-secondary);
+}
+
+/* ========================================
+   STATS BAR
+   ======================================== */
+.stats {
+  padding: 8px 24px;
+  background: rgba(20, 24, 22, 0.5);
+  border-bottom: 1px solid var(--kanban-border);
+  font-size: 12px;
+}
+
+.stats-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  gap: 24px;
+}
+
+.stats span {
+  color: var(--kanban-text-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.stats strong {
+  color: var(--kanban-green);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+/* ========================================
+   MAIN CONTENT
+   ======================================== */
+.main {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.loading, .empty {
+  text-align: center;
+  padding: 80px 24px;
+  color: var(--kanban-text-muted);
+}
+
+.loading-icon {
+  font-size: 32px;
+  animation: spin 1s linear infinite;
+  color: var(--kanban-green);
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ========================================
+   GRID VIEW — CSS Grid
+   ======================================== */
+.grid { display: block; }
+
+.grid-inner {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+/* ========================================
+   CARD — Dark industrial card design
+   ======================================== */
+.card {
+  background: var(--kanban-bg-card);
+  border-radius: var(--kanban-radius);
+  border: 1px solid var(--kanban-border);
+  overflow: hidden;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.card:hover {
+  border-color: var(--kanban-border-hover);
+  transform: translateY(-2px);
+  cursor: grab;
+}
+
+.card:active {
+  cursor: grabbing;
+  transform: translateY(0);
+}
+
+/* Card preview (mini kanban card visual) */
+.card-preview {
+  height: 170px;
+  position: relative;
+  background: var(--kanban-green);
+  cursor: pointer;
+}
+
+.card-preview-border {
+  position: absolute;
+  inset: 0;
+  border: 3px solid var(--kanban-gold);
+  border-radius: var(--kanban-radius) var(--kanban-radius) 0 0;
+  pointer-events: none;
+}
+
+.card-preview-inner {
+  position: absolute;
+  top: 6px; left: 6px; right: 6px; bottom: 6px;
+  border: 2px solid var(--kanban-gold);
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+.card-preview-content {
+  position: absolute;
+  inset: 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+.card-preview-header {
+  border-bottom: 2px solid #1a1f16;
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+}
+
+.card-preview-header h3 {
+  font-size: 13px;
+  color: #1a1f16;
+  text-transform: uppercase;
+  font-weight: 700;
+  margin: 0;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-ui);
+  letter-spacing: 0.5px;
+}
+
+.card-preview-loc {
+  font-size: 9px;
+  color: #1a1f16;
+  opacity: 0.7;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+}
+
+.card-preview-body {
+  flex: 1;
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.card-preview-left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.card-preview-field { line-height: 1.2; }
+
+.card-preview-field small {
+  font-size: 8px;
+  color: #1a1f16;
+  text-transform: uppercase;
+  opacity: 0.6;
+  display: block;
+  font-family: var(--font-mono);
+  letter-spacing: 0.5px;
+}
+
+.card-preview-field span {
+  font-size: 12px;
+  color: #1a1f16;
+  font-weight: 700;
+  font-family: var(--font-ui);
+}
+
+.card-preview-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.card-preview-img {
+  width: 65px;
+  height: 48px;
+  background: #fff;
+  border-radius: 4px;
+  border: 2px solid var(--kanban-gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-size: 16px;
+}
+
+.card-preview-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.card-preview-price {
+  margin-top: 6px;
+  background: var(--kanban-gold);
+  padding: 3px 8px;
+  border-radius: var(--kanban-radius-sm);
+  font-size: 11px;
+  font-weight: 700;
+  color: #1a1f16;
+  font-family: var(--font-mono);
+}
+
+.card-preview-logo {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+
+/* Card action bar */
+.card-actions {
+  display: flex;
+  background: rgba(20, 24, 22, 0.95);
+  border-top: 1px solid var(--kanban-border);
+  border-radius: 0 0 var(--kanban-radius) var(--kanban-radius);
+  overflow: hidden;
+}
+
+.card-actions button {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--kanban-border);
+  padding: 10px;
+  cursor: pointer;
+  font-size: 15px;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--kanban-text-muted);
+}
+
+.card-actions button:last-child { border-right: none; }
+
+.card-actions button:hover {
+  color: var(--kanban-text);
+}
+
+.card-actions button.reorder {
+  color: var(--kanban-gold);
+}
+
+.card-actions button.reorder:hover {
+  background: var(--kanban-gold-dim);
+}
+
+.card-actions button.preview-btn {
+  color: var(--kanban-green);
+}
+
+.card-actions button.preview-btn:hover {
+  background: var(--kanban-green-dim);
+}
+
+.card-actions button.edit-btn {
+  color: var(--kanban-blue);
+}
+
+.card-actions button.edit-btn:hover {
+  background: var(--kanban-blue-dim);
+}
+
+.card-actions button.del {
+  color: var(--kanban-danger);
+}
+
+.card-actions button.del:hover {
+  background: var(--kanban-danger-dim);
+}
+
+/* ========================================
+   TABLE VIEW
+   ======================================== */
+.table {
+  background: var(--kanban-bg-card);
+  border-radius: var(--kanban-radius);
+  border: 1px solid var(--kanban-border);
+  overflow: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  min-width: 700px;
+  font-family: var(--font-ui);
+}
+
+th {
+  text-align: left;
+  padding: 14px 16px;
+  background: rgba(20, 24, 22, 0.6);
+  color: var(--kanban-text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  font-weight: 600;
+  border-bottom: 1px solid var(--kanban-border);
+  font-family: var(--font-mono);
+  letter-spacing: 1px;
+}
+
+th:hover {
+  cursor: pointer;
+  color: var(--kanban-green);
+}
+
+td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--kanban-border);
+  color: var(--kanban-text-secondary);
+}
+
+tr:hover {
+  background: rgba(102, 137, 113, 0.04);
+}
+
+td.name {
+  color: var(--kanban-green);
+  font-weight: 600;
+}
+
+td.price {
+  color: var(--kanban-gold);
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+/* ========================================
+   MODALS
+   ======================================== */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 100;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.modal-box {
+  background: #1a1f16;
+  border-radius: var(--kanban-radius);
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow: auto;
+  border: 1px solid var(--kanban-border);
+}
+
+.modal-head {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--kanban-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-head h2 {
+  color: var(--kanban-text);
+  font-size: 18px;
+  font-weight: 400;
+  font-family: var(--font-display);
+  font-style: italic;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--kanban-text-muted);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  transition: color 0.15s ease;
+}
+
+.modal-close:hover {
+  color: var(--kanban-text);
+}
+
+.modal-body { padding: 24px; }
+
+.form-group { margin-bottom: 16px; }
+
+.form-label {
+  display: block;
+  font-size: 10px;
+  color: var(--kanban-text-muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 1px;
+  font-family: var(--font-mono);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--kanban-border);
+  margin-top: 8px;
+}
+
+/* ========================================
+   DROP ZONE (image upload)
+   ======================================== */
+.drop-zone {
+  position: relative;
+  border: 2px dashed var(--kanban-border);
+  border-radius: var(--kanban-radius-sm);
+  padding: 4px;
+  transition: all 0.15s ease;
+}
+
+.drop-zone.drag-over {
+  border-color: var(--kanban-gold);
+  background: rgba(228, 170, 79, 0.08);
+}
+
+.drop-zone input {
+  border: none !important;
+  background: transparent;
+}
+
+.drop-zone-preview { display: none; margin-top: 8px; }
+
+.drop-zone-preview.has-image {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.drop-zone-preview img {
+  width: 60px;
+  height: 45px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 2px solid var(--kanban-gold);
+}
+
+.drop-zone-preview button {
+  background: var(--kanban-danger);
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: var(--font-ui);
+}
+
+/* ========================================
+   TOAST NOTIFICATIONS
+   ======================================== */
+.toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  padding: 14px 20px;
+  border-radius: var(--kanban-radius-sm);
+  color: #fff;
+  font-size: 14px;
+  z-index: 200;
+  font-family: var(--font-ui);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.toast.ok {
+  background: rgba(102, 137, 113, 0.9);
+}
+
+.toast.err {
+  background: rgba(196, 92, 74, 0.9);
+}
+
+/* ========================================
+   PRINT PREVIEW — Kanban card rendering
+   ======================================== */
+.print-preview {
+  background: rgba(20, 24, 22, 0.6);
+  padding: 16px;
+  border-radius: var(--kanban-radius);
+  margin-top: 12px;
+  border: 1px solid var(--kanban-border);
+}
+
+.kanban {
+  width: 100%;
+  max-width: 420px;
+  aspect-ratio: 6/4;
+  border-radius: var(--kanban-radius);
+  position: relative;
+  padding: 14px;
+  margin: 0 auto;
+}
+
+.kanban.green { background: var(--kanban-green); color: #1a1f16; }
+.kanban.red { background: #bd4a28; color: var(--gold-light); }
+
+.kanban-border {
+  position: absolute;
+  inset: 0;
+  border: 5px solid var(--kanban-gold);
+  border-radius: var(--kanban-radius);
+  pointer-events: none;
+}
+
+.kanban-inner {
+  position: absolute;
+  inset: 14px;
+  border: 4px solid var(--kanban-gold);
+  border-radius: var(--kanban-radius);
+  pointer-events: none;
+}
+
+.kanban-content {
+  height: 100%;
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+}
+
+.kanban-header {
+  border-bottom: 3px solid currentColor;
+  padding-bottom: 5px;
+  margin-bottom: 3px;
+}
+
+.kanban-header h3 {
+  font-size: 20px;
+  text-transform: uppercase;
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: 1px;
+  font-family: var(--font-ui);
+}
+
+.kanban-loc {
+  text-align: right;
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 3px;
+  font-family: var(--font-mono);
+}
+
+.kanban-body {
+  flex: 1;
+  display: flex;
+  gap: 12px;
+}
+
+.kanban-left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  max-height: 85px;
+}
+
+.kanban-field { margin-bottom: 6px; }
+
+.kanban-field small {
+  font-size: 8px;
+  text-transform: uppercase;
+  opacity: 0.8;
+  display: block;
+  margin-bottom: 1px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  letter-spacing: 0.5px;
+}
+
+.kanban-field span {
+  font-size: 14px;
+  font-weight: 700;
+  font-family: var(--font-ui);
+}
+
+.kanban-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.kanban-img {
+  width: 110px;
+  height: 80px;
+  background: #fff;
+  border-radius: var(--kanban-radius-sm);
+  border: 3px solid var(--kanban-gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.kanban-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.kanban-price {
+  margin-top: 10px;
+  background: var(--kanban-gold);
+  padding: 6px 22px;
+  border-radius: var(--kanban-radius-sm);
+  font-size: 15px;
+  font-weight: 700;
+  color: #1a1f16;
+  font-family: var(--font-mono);
+}
+
+.kanban-logo {
+  position: absolute;
+  bottom: 18px;
+  left: 18px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+.kanban-back {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.kanban-back h3 {
+  font-size: 24px;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  font-family: var(--font-ui);
+}
+
+.kanban-qr {
+  width: 120px;
+  height: 120px;
+  background: #fff;
+  border-radius: var(--kanban-radius);
+  border: 3px solid var(--kanban-gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.kanban-qr img {
+  width: 92%;
+  height: 92%;
+}
+
+.preview-btns {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+/* ========================================
+   EMPTY STATE
+   ======================================== */
+.empty {
+  background: var(--kanban-bg-card);
+  border-radius: var(--kanban-radius);
+  border: 1px solid var(--kanban-border);
+  margin-top: 24px;
+  padding: 80px 24px;
+}
+
+.empty h3 {
+  color: var(--kanban-text);
+  margin-bottom: 8px;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 24px;
+}
+
+.empty p {
+  color: var(--kanban-text-muted);
+  margin-bottom: 16px;
+  font-family: var(--font-ui);
+}
+
+/* ========================================
+   DARK MODE OVERRIDES — Already dark, minimal changes
+   ======================================== */
 body.dark-mode {
-  --bg: #1a1a1a;
-  --bg-card: #2d2d2d;
-  --border: #444444;
-  --text: #e0e0e0;
-  --text-muted: #888888;
-  --sidebar-bg: #0d0f0c;
-  --gold-dim: rgba(228,170,79,0.2);
-  --green-dim: rgba(102,137,113,0.2);
-  --sungrown-dim: rgba(191,142,78,0.2);
-}
-
-body.dark-mode .logo {
-  filter: brightness(0.9);
+  /* Already dark theme — no changes needed */
 }
 
 body.dark-mode .kanban.green {
@@ -53,207 +1004,73 @@ body.dark-mode .kanban.red {
 }
 
 body.dark-mode .card {
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  box-shadow: none;
 }
 
 body.dark-mode .card:hover {
-  box-shadow: 0 8px 25px rgba(0,0,0,0.5);
+  box-shadow: none;
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: var(--font-ui); background: var(--bg); color: var(--text); min-height: 100vh; }
-
-/* Header */
-.header { background: var(--bg-card); border-bottom: 1px solid var(--border); padding: 16px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-.header-inner { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
-.brand { display: flex; align-items: center; gap: 12px; }
-.logo { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; }
-.brand h1 { color: var(--text); font-size: 18px; font-weight: 600; font-family: var(--font-ui); }
-.brand p { color: var(--green); font-size: 11px; font-family: var(--font-ui); }
-.btns { display: flex; gap: 8px; flex-wrap: wrap; }
-.btn { padding: 10px 16px; border: none; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 500; transition: all 0.15s; font-family: var(--font-ui); }
-.btn-green { background: var(--green); color: #fff; }
-.btn-green:hover { background: #5a7a63; box-shadow: 0 2px 8px rgba(102,137,113,0.3); }
-.btn-gold { background: var(--gold); color: #fff; }
-.btn-gold:hover { background: #d99a3f; box-shadow: 0 2px 8px rgba(228,170,79,0.3); }
-.btn-sungrown { background: var(--sungrown); color: #fff; }
-.btn-sungrown:hover { background: #a97d42; }
-.btn-indoor { background: var(--indoor); color: #fff; }
-.btn-indoor:hover { background: #56687d; }
-.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
-.btn-outline:hover { background: var(--bg); border-color: var(--green); }
-
-/* Toolbar */
-.toolbar { padding: 12px 20px; background: var(--bg-card); border-bottom: 1px solid var(--border); }
-.toolbar-inner { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
-.filters { display: flex; gap: 10px; flex-wrap: wrap; }
-input, select { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; color: var(--text); font-size: 14px; font-family: var(--font-ui); }
-input:focus, select:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px rgba(102,137,113,0.1); }
-input::placeholder { color: var(--text-muted); }
-.toggle { display: flex; background: var(--bg); border-radius: 8px; padding: 3px; border: 1px solid var(--border); }
-.toggle button { padding: 6px 14px; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; background: transparent; color: var(--text-muted); transition: all 0.15s; font-family: var(--font-ui); }
-.toggle button.on { background: var(--green); color: #fff; }
-
-/* Stats */
-.stats { padding: 8px 20px; background: var(--bg); border-bottom: 1px solid var(--border); font-size: 12px; }
-.stats-inner { max-width: 1400px; margin: 0 auto; display: flex; gap: 20px; }
-.stats span { color: var(--text-muted); font-family: var(--font-ui); }
-.stats strong { color: var(--green); font-family: var(--font-mono); }
-
-/* Main */
-.main { padding: 20px; max-width: 1400px; margin: 0 auto; }
-.loading, .empty { text-align: center; padding: 60px; color: var(--text-muted); }
-.loading-icon { font-size: 48px; animation: spin 1s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* Grid - UPDATED TO CSS GRID */
-.grid { display: block; }
-.grid-inner {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 16px;
-}
-
-/* Card - NO MORE FLOAT */
-.card {
-  background: var(--bg-card);
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  overflow: hidden;
-  transition: all 0.2s;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-}
-.card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 25px rgba(0,0,0,0.08);
-  border-color: var(--green);
-}
-
-/* Mini card preview */
-.card-preview { height: 170px; position: relative; background: var(--green); cursor: pointer; }
-.card-preview-border { position: absolute; inset: 0; border: 3px solid var(--gold); border-radius: 12px 12px 0 0; pointer-events: none; }
-.card-preview-inner { position: absolute; top: 6px; left: 6px; right: 6px; bottom: 6px; border: 2px solid var(--gold); border-radius: 8px; pointer-events: none; }
-
-.card-preview-content { position: absolute; inset: 12px; display: flex; flex-direction: column; }
-.card-preview-header { border-bottom: 2px solid #1a1f16; padding-bottom: 4px; margin-bottom: 4px; }
-.card-preview-header h3 { font-size: 13px; color: #1a1f16; text-transform: uppercase; font-weight: 700; margin: 0; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--font-ui); }
-.card-preview-loc { font-size: 9px; color: #1a1f16; opacity: 0.7; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--font-mono); }
-
-.card-preview-body { flex: 1; display: flex; gap: 10px; margin-top: 4px; }
-.card-preview-left { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.card-preview-field { line-height: 1.2; }
-.card-preview-field small { font-size: 8px; color: #1a1f16; text-transform: uppercase; opacity: 0.6; display: block; font-family: var(--font-ui); }
-.card-preview-field span { font-size: 12px; color: #1a1f16; font-weight: 700; font-family: var(--font-ui); }
-.card-preview-right { display: flex; flex-direction: column; align-items: flex-end; }
-.card-preview-img { width: 65px; height: 48px; background: #fff; border-radius: 4px; border: 2px solid var(--gold); display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 16px; }
-.card-preview-img img { width: 100%; height: 100%; object-fit: cover; }
-.card-preview-price { margin-top: 6px; background: var(--gold); padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; color: #1a1f16; font-family: var(--font-mono); }
-.card-preview-logo { position: absolute; bottom: 12px; left: 12px; width: 20px; height: 20px; border-radius: 50%; }
-
-/* Card actions */
-.card-actions { display: flex; background: var(--bg); border-top: 1px solid var(--border); border-radius: 0 0 12px 12px; overflow: hidden; }
-.card-actions button { flex: 1; background: transparent; border: none; border-right: 1px solid var(--border); padding: 12px; cursor: pointer; font-size: 16px; transition: all 0.15s; display: flex; align-items: center; justify-content: center; }
-.card-actions button:last-child { border-right: none; }
-.card-actions button.reorder { background: var(--gold-dim); color: var(--gold); }
-.card-actions button.reorder:hover { background: var(--gold); color: #fff; }
-.card-actions button.preview-btn { background: var(--green-dim); color: var(--green); }
-.card-actions button.preview-btn:hover { background: var(--green); color: #fff; }
-.card-actions button.edit-btn { background: var(--sungrown-dim); color: var(--sungrown); }
-.card-actions button.edit-btn:hover { background: var(--sungrown); color: #fff; }
-.card-actions button.del { background: rgba(201,85,61,0.12); color: #c9553d; }
-.card-actions button.del:hover { background: #c9553d; color: #fff; }
-
-/* Table */
-.table { background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border); overflow: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 700px; font-family: var(--font-ui); }
-th { text-align: left; padding: 14px; background: var(--bg); color: var(--text); font-size: 11px; text-transform: uppercase; font-weight: 600; border-bottom: 1px solid var(--border); }
-th:hover { cursor: pointer; color: var(--green); }
-td { padding: 14px; border-bottom: 1px solid var(--border); }
-tr:hover { background: var(--bg); }
-td.name { color: var(--green); font-weight: 600; }
-td.price { color: var(--gold); font-weight: 600; font-family: var(--font-mono); }
-
-/* Modals */
-.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 100; backdrop-filter: blur(2px); }
-.modal-box { background: var(--bg-card); border-radius: 16px; width: 100%; max-width: 500px; max-height: 90vh; overflow: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
-.modal-head { padding: 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-.modal-head h2 { color: var(--text); font-size: 18px; font-weight: 600; font-family: var(--font-ui); }
-.modal-close { background: none; border: none; color: var(--text-muted); font-size: 28px; cursor: pointer; padding: 0; line-height: 1; }
-.modal-close:hover { color: var(--text); }
-.modal-body { padding: 20px; }
-.form-group { margin-bottom: 16px; }
-.form-label { display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; font-family: var(--font-ui); }
-.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding-top: 16px; border-top: 1px solid var(--border); margin-top: 8px; }
-
-/* Drop zone */
-.drop-zone { position: relative; border: 2px dashed var(--border); border-radius: 8px; padding: 4px; transition: all 0.2s; }
-.drop-zone.drag-over { border-color: var(--gold); background: rgba(228,170,79,0.1); }
-.drop-zone input { border: none !important; background: transparent; }
-.drop-zone-preview { display: none; margin-top: 8px; }
-.drop-zone-preview.has-image { display: flex; align-items: center; gap: 8px; }
-.drop-zone-preview img { width: 60px; height: 45px; object-fit: cover; border-radius: 4px; border: 2px solid var(--gold); }
-.drop-zone-preview button { background: #c9553d; border: none; padding: 4px 8px; border-radius: 4px; color: #fff; cursor: pointer; font-size: 11px; font-family: var(--font-ui); }
-
-/* Toast */
-.toast { position: fixed; bottom: 20px; right: 20px; padding: 14px 20px; border-radius: 10px; color: #fff; font-size: 14px; z-index: 200; box-shadow: 0 4px 12px rgba(0,0,0,0.15); font-family: var(--font-ui); }
-.toast.ok { background: var(--green); }
-.toast.err { background: #c9553d; }
-
-/* Print preview */
-.print-preview { background: var(--bg); padding: 16px; border-radius: 12px; margin-top: 12px; border: 1px solid var(--border); }
-.kanban { width: 100%; max-width: 420px; aspect-ratio: 6/4; border-radius: 10px; position: relative; padding: 14px; margin: 0 auto; }
-.kanban.green { background: var(--green); color: #1a1f16; }
-.kanban.red { background: #bd4a28; color: var(--gold-light); }
-.kanban-border { position: absolute; inset: 0; border: 5px solid var(--gold); border-radius: 10px; pointer-events: none; }
-.kanban-inner { position: absolute; inset: 14px; border: 4px solid var(--gold); border-radius: 8px; pointer-events: none; }
-.kanban-content { height: 100%; padding: 14px 18px; display: flex; flex-direction: column; }
-.kanban-header { border-bottom: 3px solid currentColor; padding-bottom: 5px; margin-bottom: 3px; }
-.kanban-header h3 { font-size: 20px; text-transform: uppercase; margin: 0; font-weight: 700; letter-spacing: 1px; font-family: var(--font-ui); }
-.kanban-loc { text-align: right; font-size: 11px; font-weight: 700; margin-bottom: 3px; font-family: var(--font-mono); }
-.kanban-body { flex: 1; display: flex; gap: 12px; }
-.kanban-left { flex: 1; display: flex; flex-direction: column; justify-content: flex-start; max-height: 85px; }
-.kanban-field { margin-bottom: 6px; }
-.kanban-field small { font-size: 8px; text-transform: uppercase; opacity: 0.8; display: block; margin-bottom: 1px; font-weight: 600; font-family: var(--font-ui); }
-.kanban-field span { font-size: 14px; font-weight: 700; font-family: var(--font-ui); }
-.kanban-right { display: flex; flex-direction: column; align-items: flex-end; justify-content: center; }
-.kanban-img { width: 110px; height: 80px; background: #fff; border-radius: 6px; border: 3px solid var(--gold); display: flex; align-items: center; justify-content: center; overflow: hidden; }
-.kanban-img img { width: 100%; height: 100%; object-fit: cover; }
-.kanban-price { margin-top: 10px; background: var(--gold); padding: 6px 22px; border-radius: 16px; font-size: 15px; font-weight: 700; color: #1a1f16; font-family: var(--font-mono); }
-.kanban-logo { position: absolute; bottom: 18px; left: 18px; width: 40px; height: 40px; border-radius: 50%; }
-.kanban-back { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.kanban-back h3 { font-size: 24px; text-transform: uppercase; margin-bottom: 14px; font-weight: 700; letter-spacing: 1px; font-family: var(--font-ui); }
-.kanban-qr { width: 120px; height: 120px; background: #fff; border-radius: 8px; border: 3px solid var(--gold); display: flex; align-items: center; justify-content: center; }
-.kanban-qr img { width: 92%; height: 92%; }
-
-.preview-btns { display: flex; justify-content: center; gap: 10px; margin-bottom: 12px; }
-
-/* Empty state */
-.empty { background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border); margin-top: 20px; }
-.empty h3 { color: var(--text); margin-bottom: 8px; font-family: var(--font-ui); }
-.empty p { color: var(--text-muted); margin-bottom: 16px; font-family: var(--font-ui); }
-
-/* Mobile improvements */
+/* ========================================
+   MOBILE
+   ======================================== */
 @media (max-width: 600px) {
-  .header-inner { flex-direction: column; gap: 12px; align-items: stretch; }
+  .header { padding: 12px 16px; }
+
+  .header-inner {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+
   .brand { justify-content: center; }
-  .btns { justify-content: center; flex-wrap: wrap; }
-  .toolbar { flex-direction: column; gap: 10px; }
-  .search { width: 100%; }
+
+  .btns {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .toolbar { padding: 12px 16px; }
+
+  .toolbar-inner {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .filters { width: 100%; }
+
+  #search { width: 100% !important; }
+
   .form-row { grid-template-columns: 1fr; }
-  .btn { min-height: 44px; padding: 12px 16px; }
-  .input, select { min-height: 44px; font-size: 16px; }
-  .modal-btns { flex-direction: column; }
-  .modal-btns .btn { width: 100%; }
+
+  .btn {
+    min-height: 44px;
+    padding: 12px 16px;
+  }
+
+  input, select {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .modal-foot {
+    flex-direction: column;
+  }
+
+  .modal-foot .btn { width: 100%; }
+
   .grid-inner {
     grid-template-columns: 1fr;
   }
+
+  .main { padding: 16px; }
+
+  .stats { padding: 8px 16px; }
 }
 
 @media (max-width: 400px) {
   .brand h1 { font-size: 18px; }
-  .brand p { font-size: 12px; }
-  .card { padding: 12px; }
+  .brand p { font-size: 10px; }
   .kanban-img { width: 80px; height: 60px; }
 }
 
@@ -266,43 +1083,39 @@ td.price { color: var(--gold); font-weight: 600; font-family: var(--font-mono); 
   position: fixed;
   bottom: 24px;
   right: 24px;
-  background: var(--gold);
-  color: #fff;
+  background: var(--kanban-gold);
+  color: #1a1f16;
   border: none;
   border-radius: 50%;
-  width: 64px;
-  height: 64px;
+  width: 56px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
+  font-size: 24px;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(228, 170, 79, 0.4);
-  transition: all 0.2s;
+  transition: all 0.15s ease;
   z-index: 1000;
+  border: 2px solid rgba(228, 170, 79, 0.4);
 }
 
 .tutorial-start-btn:hover {
-  transform: scale(1.1);
-  box-shadow: 0 6px 20px rgba(228, 170, 79, 0.6);
+  background: #d99a3f;
+  border-color: var(--kanban-gold);
 }
 
 .tutorial-start-btn:active {
   transform: scale(0.95);
 }
 
-/* Tutorial Overlay - Fullscreen backdrop */
+/* Tutorial Overlay */
 .tutorial-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  top: 0; left: 0; right: 0; bottom: 0;
   z-index: 9998;
   pointer-events: none;
 }
 
-/* Tutorial Backdrop - Dimmed background */
 .tutorial-backdrop {
   position: fixed;
   inset: 0;
@@ -311,54 +1124,47 @@ td.price { color: var(--gold); font-weight: 600; font-family: var(--font-mono); 
   pointer-events: auto;
 }
 
-/* Tutorial Spotlight - Highlights target element */
 .tutorial-spotlight {
   position: fixed;
-  border: 3px solid var(--gold);
-  border-radius: 12px;
+  border: 3px solid var(--kanban-gold);
+  border-radius: var(--kanban-radius);
   z-index: 9999;
   pointer-events: none;
   box-shadow:
     0 0 0 9999px rgba(0, 0, 0, 0.7),
-    0 0 20px var(--gold),
+    0 0 20px var(--kanban-gold),
     inset 0 0 20px rgba(228, 170, 79, 0.2);
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Tutorial Tooltip - Information box */
 .tutorial-tooltip {
   position: fixed;
-  background: var(--bg-card);
-  border-radius: 16px;
+  background: #1a1f16;
+  border-radius: var(--kanban-radius);
   padding: 24px;
   max-width: 420px;
   width: calc(100vw - 40px);
-  box-shadow:
-    0 20px 60px rgba(0, 0, 0, 0.3),
-    0 0 0 1px var(--border);
+  border: 1px solid var(--kanban-border);
   z-index: 10000;
-  pointer-events: none; /* Don't block spotlight targets */
+  pointer-events: none;
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Re-enable pointer events on interactive elements inside tooltip */
 .tutorial-tooltip button,
 .tutorial-tooltip a {
   pointer-events: auto;
 }
 
-/* Tooltip arrow indicators */
 .tutorial-tooltip.arrow-top::before {
   content: '';
   position: absolute;
   top: -10px;
   left: 50%;
   transform: translateX(-50%);
-  width: 0;
-  height: 0;
+  width: 0; height: 0;
   border-left: 10px solid transparent;
   border-right: 10px solid transparent;
-  border-bottom: 10px solid var(--bg-card);
+  border-bottom: 10px solid #1a1f16;
 }
 
 .tutorial-tooltip.arrow-bottom::after {
@@ -367,27 +1173,24 @@ td.price { color: var(--gold); font-weight: 600; font-family: var(--font-mono); 
   bottom: -10px;
   left: 50%;
   transform: translateX(-50%);
-  width: 0;
-  height: 0;
+  width: 0; height: 0;
   border-left: 10px solid transparent;
   border-right: 10px solid transparent;
-  border-top: 10px solid var(--bg-card);
+  border-top: 10px solid #1a1f16;
 }
 
-/* Tutorial centered (for welcome/finish screens) */
 .tutorial-tooltip.centered {
   top: 50% !important;
   left: 50% !important;
   transform: translate(-50%, -50%) !important;
 }
 
-/* Step badge */
 .tutorial-step-badge {
   display: inline-block;
-  background: var(--gold-dim);
-  color: var(--gold);
+  background: var(--kanban-gold-dim);
+  color: var(--kanban-gold);
   padding: 4px 12px;
-  border-radius: 20px;
+  border-radius: var(--kanban-radius-sm);
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -396,45 +1199,42 @@ td.price { color: var(--gold); font-weight: 600; font-family: var(--font-mono); 
   font-family: var(--font-mono);
 }
 
-/* Tutorial title */
 .tutorial-title {
   font-size: 20px;
-  font-weight: 700;
-  color: var(--text);
+  font-weight: 400;
+  color: var(--kanban-text);
   margin-bottom: 12px;
   font-family: var(--font-display);
+  font-style: italic;
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
 .tutorial-title i {
-  color: var(--gold);
+  color: var(--kanban-gold);
   font-size: 24px;
 }
 
-/* Tutorial text */
 .tutorial-text {
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.6;
-  color: var(--text);
+  color: var(--kanban-text-secondary);
   margin-bottom: 12px;
   font-family: var(--font-ui);
 }
 
-/* Tutorial tip */
 .tutorial-tip {
-  background: var(--green-dim);
-  border-left: 3px solid var(--green);
+  background: var(--kanban-green-dim);
+  border-left: 3px solid var(--kanban-green);
   padding: 10px 14px;
-  border-radius: 6px;
+  border-radius: 0 var(--kanban-radius-sm) var(--kanban-radius-sm) 0;
   font-size: 13px;
-  color: var(--text);
+  color: var(--kanban-text-secondary);
   margin-bottom: 16px;
   font-family: var(--font-ui);
 }
 
-/* Tutorial progress dots */
 .tutorial-progress {
   display: flex;
   gap: 6px;
@@ -447,20 +1247,19 @@ td.price { color: var(--gold); font-weight: 600; font-family: var(--font-mono); 
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--border);
-  transition: all 0.2s;
+  background: rgba(102, 137, 113, 0.2);
+  transition: all 0.2s ease;
 }
 
 .tutorial-progress-dot.active {
-  background: var(--gold);
+  background: var(--kanban-gold);
   transform: scale(1.3);
 }
 
 .tutorial-progress-dot.completed {
-  background: var(--green);
+  background: var(--kanban-green);
 }
 
-/* Tutorial buttons container */
 .tutorial-buttons {
   display: flex;
   justify-content: space-between;
@@ -468,15 +1267,14 @@ td.price { color: var(--gold); font-weight: 600; font-family: var(--font-mono); 
   gap: 12px;
 }
 
-/* Tutorial button base */
 .tutorial-btn {
-  padding: 12px 20px;
+  padding: 10px 18px;
   border: none;
-  border-radius: 10px;
-  font-size: 14px;
+  border-radius: var(--kanban-radius-sm);
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s ease;
   font-family: var(--font-ui);
   display: flex;
   align-items: center;
@@ -485,8 +1283,7 @@ td.price { color: var(--gold); font-weight: 600; font-family: var(--font-mono); 
 }
 
 .tutorial-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
 }
 
 .tutorial-btn:active {
@@ -494,60 +1291,61 @@ td.price { color: var(--gold); font-weight: 600; font-family: var(--font-mono); 
 }
 
 .tutorial-btn:focus {
-  outline: 3px solid var(--gold-dim);
+  outline: 2px solid var(--kanban-gold);
   outline-offset: 2px;
 }
 
-/* Tutorial button variants */
 .tutorial-btn-skip {
   background: transparent;
-  color: var(--text-muted);
-  border: 1px solid var(--border);
+  color: var(--kanban-text-muted);
+  border: 1px solid var(--kanban-border);
 }
 
 .tutorial-btn-skip:hover {
-  background: var(--bg);
-  color: var(--text);
-  border-color: var(--text-muted);
+  background: rgba(102, 137, 113, 0.08);
+  color: var(--kanban-text-secondary);
+  border-color: var(--kanban-border-hover);
 }
 
 .tutorial-btn-back {
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--border);
+  background: rgba(26, 30, 27, 0.6);
+  color: var(--kanban-text-secondary);
+  border: 1px solid var(--kanban-border);
 }
 
 .tutorial-btn-back:hover {
-  background: var(--text);
-  color: var(--bg-card);
+  background: rgba(102, 137, 113, 0.12);
+  color: var(--kanban-text);
 }
 
 .tutorial-btn-next {
-  background: var(--green);
+  background: var(--kanban-green);
   color: #fff;
 }
 
 .tutorial-btn-next:hover {
   background: #5a7a63;
-  box-shadow: 0 4px 12px rgba(102, 137, 113, 0.4);
 }
 
-/* Pulse hint for save button during waitForSave */
+.tutorial-btn-finish {
+  background: var(--kanban-gold);
+  color: #1a1f16;
+}
+
+.tutorial-btn-finish:hover {
+  background: #d99a3f;
+}
+
+/* Tutorial pulse hint */
 .tutorial-pulse-hint {
   animation: tutorial-pulse 1.5s ease-in-out infinite;
-  box-shadow: 0 0 0 0 rgba(102, 137, 113, 0.7) !important;
 }
 
 @keyframes tutorial-pulse {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(102, 137, 113, 0.7);
-  }
-  50% {
-    box-shadow: 0 0 0 15px rgba(102, 137, 113, 0);
-  }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(102, 137, 113, 0.7); }
+  50% { box-shadow: 0 0 0 12px rgba(102, 137, 113, 0); }
 }
 
-/* Tutorial button animation (on page load) */
 #tutorialBtn.pulse {
   animation: tutorial-button-pulse 2s ease-in-out infinite;
 }
@@ -555,15 +1353,15 @@ td.price { color: var(--gold); font-weight: 600; font-family: var(--font-mono); 
 @keyframes tutorial-button-pulse {
   0%, 100% {
     transform: scale(1);
-    box-shadow: 0 2px 8px rgba(228, 170, 79, 0.3);
+    box-shadow: 0 0 0 0 rgba(228, 170, 79, 0.4);
   }
   50% {
     transform: scale(1.05);
-    box-shadow: 0 4px 16px rgba(228, 170, 79, 0.6);
+    box-shadow: 0 0 0 8px rgba(228, 170, 79, 0);
   }
 }
 
-/* Mobile responsiveness */
+/* Mobile tutorial */
 @media (max-width: 600px) {
   .tutorial-tooltip {
     max-width: calc(100vw - 32px);
@@ -571,13 +1369,8 @@ td.price { color: var(--gold); font-weight: 600; font-family: var(--font-mono); 
     padding: 20px;
   }
 
-  .tutorial-title {
-    font-size: 18px;
-  }
-
-  .tutorial-text {
-    font-size: 14px;
-  }
+  .tutorial-title { font-size: 18px; }
+  .tutorial-text { font-size: 13px; }
 
   .tutorial-buttons {
     flex-direction: column;
@@ -589,76 +1382,70 @@ td.price { color: var(--gold); font-weight: 600; font-family: var(--font-mono); 
     justify-content: center;
   }
 
-  .tutorial-btn-skip {
-    order: 2;
-  }
-}
-
-/* High contrast mode support */
-@media (prefers-contrast: high) {
-  .tutorial-spotlight {
-    border-width: 4px;
-  }
-
-  .tutorial-tooltip {
-    border: 2px solid var(--text);
-  }
-}
-
-/* Reduced motion support */
-@media (prefers-reduced-motion: reduce) {
-  .tutorial-spotlight,
-  .tutorial-tooltip {
-    transition: none;
-  }
-
-  .tutorial-pulse-hint,
-  #tutorialBtn.pulse {
-    animation: none;
-  }
-
-  .tutorial-btn:hover {
-    transform: none;
-  }
+  .tutorial-btn-skip { order: 2; }
 }
 
 /* ========================================
-   ACCESSIBILITY ENHANCEMENTS (WCAG AA)
+   ACCESSIBILITY
    ======================================== */
-/* Skip link for keyboard users */
 .skip-link {
   position: absolute;
   top: -40px;
   left: 0;
-  background: var(--ro-green, #668971);
+  background: var(--kanban-green);
   color: white;
   padding: 8px 16px;
   z-index: 10000;
   text-decoration: none;
   font-weight: 600;
-  border-radius: 0 0 8px 0;
+  border-radius: 0 0 var(--kanban-radius-sm) 0;
 }
+
 .skip-link:focus {
   top: 0;
-  outline: 3px solid var(--gold, #e4aa4f);
+  outline: 3px solid var(--kanban-gold);
   outline-offset: 2px;
 }
 
-/* Focus indicators for keyboard navigation */
 button:focus-visible,
 select:focus-visible,
 input:focus-visible,
 [role="button"]:focus-visible,
 a:focus-visible {
-  outline: 2px solid var(--ro-green, #668971);
+  outline: 2px solid var(--kanban-gold);
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px rgba(102, 137, 113, 0.2);
+  box-shadow: 0 0 0 4px rgba(228, 170, 79, 0.15);
 }
 
-/* Enhanced focus for dark mode */
-body.dark-mode button:focus-visible,
-body.dark-mode input:focus-visible {
-  outline: 2px solid var(--gold, #e4aa4f);
-  box-shadow: 0 0 0 4px rgba(228, 170, 79, 0.25);
+@media (prefers-contrast: high) {
+  .tutorial-spotlight { border-width: 4px; }
+  .tutorial-tooltip { border: 2px solid var(--kanban-text); }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .tutorial-spotlight,
+  .tutorial-tooltip { transition: none; }
+
+  .tutorial-pulse-hint,
+  #tutorialBtn.pulse { animation: none; }
+
+  .tutorial-btn:hover { transform: none; }
+
+  .card:hover { transform: none; }
+}
+
+/* Confetti */
+.confetti {
+  position: fixed;
+  top: -10px;
+  width: 10px;
+  height: 10px;
+  z-index: 10001;
+  animation: confetti-fall 3s ease-in-out forwards;
+  pointer-events: none;
+}
+
+@keyframes confetti-fall {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+}
