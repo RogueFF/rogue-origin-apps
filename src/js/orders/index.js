@@ -182,6 +182,65 @@ window.generateDocumentBundle = generateDocumentBundle;
 // Toast (for inline error handlers)
 window.showToast = showToast;
 
+// Search, Filter, View Toggle
+window.filterOrders = filterOrders;
+window.setFilter = setFilter;
+window.setView = setView;
+
+// ============================================
+// Search, Filter & View Toggle
+// ============================================
+
+let currentFilter = 'all';
+let currentView = 'table';
+
+/**
+ * Filter orders by search text and status
+ */
+function filterOrders() {
+  const searchText = (document.getElementById('orders-search')?.value || '').toLowerCase();
+  const rows = document.querySelectorAll('#orders-table-body tr');
+
+  rows.forEach(row => {
+    const text = row.textContent.toLowerCase();
+    const statusBadge = row.querySelector('.status-badge');
+    const status = statusBadge ? statusBadge.textContent.trim().toLowerCase() : '';
+
+    const matchesSearch = !searchText || text.includes(searchText);
+    const matchesFilter = currentFilter === 'all' ||
+      (currentFilter === 'pending' && (status === 'open' || status === 'pending')) ||
+      (currentFilter === 'partial' && status === 'partial') ||
+      (currentFilter === 'fulfilled' && (status === 'fulfilled' || status === 'paid' || status === 'closed'));
+
+    row.style.display = (matchesSearch && matchesFilter) ? '' : 'none';
+  });
+}
+
+/**
+ * Set active status filter
+ */
+function setFilter(filter) {
+  currentFilter = filter;
+  document.querySelectorAll('.filter-chip').forEach(chip => {
+    chip.classList.toggle('active', chip.dataset.filter === filter);
+  });
+  filterOrders();
+}
+
+/**
+ * Toggle between table and card view
+ */
+function setView(view) {
+  currentView = view;
+  const container = document.querySelector('.orders-table-container');
+  if (container) {
+    container.classList.toggle('card-view', view === 'cards');
+  }
+  document.querySelectorAll('.view-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === view);
+  });
+}
+
 // ============================================
 // Initialization
 // ============================================
