@@ -19,8 +19,11 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link rel="preconnect" href="https://unpkg.com">
   <link rel="dns-prefetch" href="https://script.google.com">
+  <link rel="preconnect" href="https://rogue-origin-api.roguefamilyfarms.workers.dev">
+  <link rel="dns-prefetch" href="https://rogue-origin-api.roguefamilyfarms.workers.dev">
 
   <!-- Fonts: DM Serif Display, JetBrains Mono, Outfit -->
+  <link rel="preload" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=optional" as="style">
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=optional" rel="stylesheet">
 
   <!-- Performance: Preload critical images -->
@@ -50,8 +53,9 @@
 .header{position:sticky;top:0;background:rgba(15,18,16,0.9);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid rgba(102,137,113,0.1);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;z-index:100}
 .header-left{display:flex;align-items:center;gap:16px}
 .header-logo{height:32px;width:auto}
-.mobile-menu-btn{display:none;background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.7)}
-@media(max-width:768px){.mobile-menu-btn{display:block}.sidebar{transform:translateX(-100%)}}
+.mobile-menu-btn{display:none;background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.7);padding:8px}
+.sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:45}
+@media(max-width:768px){.mobile-menu-btn{display:flex;align-items:center;justify-content:center;min-width:44px;min-height:44px}.sidebar{transform:translateX(-100%);width:260px;transition:transform .3s cubic-bezier(0.16,1,0.3,1)}.main{margin-left:0!important}body.sidebar-open .sidebar{transform:translateX(0)}body.sidebar-open .sidebar-backdrop{display:block}}
   </style>
 
   <!-- Critical CSS: Loaded synchronously -->
@@ -129,6 +133,7 @@
     </div>
   </div>
 
+  <div class="sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
   <aside class="sidebar" id="sidebar" role="navigation" aria-label="Main navigation">
     <div class="sidebar-toggle" onclick="toggleSidebar()" role="button" tabindex="0" aria-label="Collapse sidebar" onkeydown="if(event.key==='Enter'||event.key===' ')toggleSidebar()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 19l-7-7 7-7M18 19l-7-7 7-7"/></svg>
@@ -428,6 +433,14 @@
               </div>
             </div>
             <div class="widget-content current-stats">
+              <div class="skeleton-placeholder" style="padding:16px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+                <div><div class="skeleton skeleton-number"></div><div class="skeleton skeleton-text short"></div></div>
+                <div><div class="skeleton skeleton-number"></div><div class="skeleton skeleton-text short"></div></div>
+                <div><div class="skeleton skeleton-number"></div><div class="skeleton skeleton-text short"></div></div>
+                <div><div class="skeleton skeleton-number"></div><div class="skeleton skeleton-text short"></div></div>
+                <div><div class="skeleton skeleton-number"></div><div class="skeleton skeleton-text short"></div></div>
+                <div><div class="skeleton skeleton-number"></div><div class="skeleton skeleton-text short"></div></div>
+              </div>
               <div class="current-stat"><div class="current-stat-value highlight" id="currentTops">0</div><div class="current-stat-label">Tops (lbs)</div></div>
               <div class="current-stat"><div class="current-stat-value" id="currentSmalls">0</div><div class="current-stat-label">Smalls (lbs)</div></div>
               <div class="current-stat"><div class="current-stat-value" id="currentTrimmers">0</div><div class="current-stat-label">Trimmers</div></div>
@@ -455,7 +468,7 @@
                 </button>
               </div>
             </div>
-            <div class="widget-content chart-container"><canvas id="hourlyChart"></canvas></div>
+            <div class="widget-content chart-container"><div class="skeleton-placeholder"><div class="skeleton skeleton-chart"></div></div><canvas id="hourlyChart"></canvas></div>
           </div>
         </div>
         <div class="widget-item" data-widget-id="widget-rateChart" data-size="large">
@@ -474,7 +487,7 @@
                 </button>
               </div>
             </div>
-            <div class="widget-content chart-container"><canvas id="rateChart"></canvas></div>
+            <div class="widget-content chart-container"><div class="skeleton-placeholder"><div class="skeleton skeleton-chart"></div></div><canvas id="rateChart"></canvas></div>
           </div>
         </div>
         <div class="widget-item" data-widget-id="widget-dailyChart" data-size="large">
@@ -493,7 +506,7 @@
                 </button>
               </div>
             </div>
-            <div class="widget-content chart-container"><canvas id="dailyChart"></canvas></div>
+            <div class="widget-content chart-container"><div class="skeleton-placeholder"><div class="skeleton skeleton-chart"></div></div><canvas id="dailyChart"></canvas></div>
           </div>
         </div>
         <div class="widget-item" data-widget-id="widget-dailyRateChart" data-size="large">
@@ -512,7 +525,7 @@
                 </button>
               </div>
             </div>
-            <div class="widget-content chart-container"><canvas id="dailyRateChart"></canvas></div>
+            <div class="widget-content chart-container"><div class="skeleton-placeholder"><div class="skeleton skeleton-chart"></div></div><canvas id="dailyRateChart"></canvas></div>
           </div>
         </div>
 
@@ -533,7 +546,7 @@
                 </button>
               </div>
             </div>
-            <div class="widget-content chart-container"><canvas id="trimmersChart"></canvas></div>
+            <div class="widget-content chart-container"><div class="skeleton-placeholder"><div class="skeleton skeleton-chart"></div></div><canvas id="trimmersChart"></canvas></div>
           </div>
         </div>
 
@@ -555,6 +568,10 @@
               </div>
             </div>
             <div class="widget-content">
+              <div class="skeleton-placeholder" style="padding:16px;">
+                <div style="display:flex;gap:24px;margin-bottom:16px;"><div class="skeleton skeleton-number" style="width:80px;"></div><div class="skeleton skeleton-number" style="width:80px;"></div><div class="skeleton skeleton-number" style="width:80px;"></div></div>
+                <div class="skeleton skeleton-chart" style="height:60px;"></div>
+              </div>
               <div class="sparkline-metrics">
                 <div class="sparkline-metric"><div class="sparkline-metric-value current" id="sparkCurrent">—</div><div class="sparkline-metric-label">Last Hour</div></div>
                 <div class="sparkline-metric"><div class="sparkline-metric-value best" id="sparkBest">—</div><div class="sparkline-metric-label">Best Hour</div></div>
