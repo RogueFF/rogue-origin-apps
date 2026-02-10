@@ -936,9 +936,11 @@
       .strain-display { top: 15px; }
       .strain-name { font-size: 20px; max-width: 200px; }
       .time-display .time { font-size: 28px; }
+      .scale-section { width: 100%; flex-basis: 100%; }
+      .scale-display { width: 180px; height: 180px; margin: 0 auto; }
       .timer-header { display: none; }
       .timer-panel.fullscreen .timer-header { display: block; }
-      .timer-display { width: 160px; height: 160px; margin-bottom: 0; }
+      .timer-display { width: 180px; height: 180px; margin-bottom: 0; }
       .timer-value { font-size: 36px; }
       .timer-target { margin-bottom: 0; }
       .manual-btn { width: auto; padding: 14px 30px; margin-bottom: 0; }
