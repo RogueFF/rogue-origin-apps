@@ -412,51 +412,7 @@
     }
   </script>
 
-  <!-- Theme Toggle -->
-  <script>
-    (function() {
-      var THEME_KEY = 'consignment-theme';
-      var html = document.documentElement;
-
-      // Read saved theme on load
-      var saved = localStorage.getItem(THEME_KEY) || 'dark';
-      html.setAttribute('data-theme', saved);
-      // Also sync to 'theme' key so module doesn't override
-      localStorage.setItem('theme', saved);
-
-      function applyThemeUI(theme) {
-        var icon = document.getElementById('themeIcon');
-        var label = document.getElementById('themeLabel');
-        if (icon) icon.textContent = theme === 'light' ? '☀️' : '🌙';
-        if (label) label.textContent = theme === 'light' ? 'Light' : 'Dark';
-      }
-
-      // Set initial button state
-      applyThemeUI(saved);
-
-      // After module loads, replace its click handler and fix UI
-      // Modules execute after DOMContentLoaded, so use a short delay
-      setTimeout(function() {
-        var btn = document.getElementById('btn-dark-mode');
-        if (!btn) return;
-        // Clone to remove module's listener
-        var clone = btn.cloneNode(true);
-        btn.parentNode.replaceChild(clone, btn);
-        clone.addEventListener('click', function() {
-          var current = html.getAttribute('data-theme');
-          var next = current === 'dark' ? 'light' : 'dark';
-          html.setAttribute('data-theme', next);
-          localStorage.setItem(THEME_KEY, next);
-          localStorage.setItem('theme', next);
-          applyThemeUI(next);
-        });
-        // Re-apply correct UI (module may have overridden)
-        applyThemeUI(html.getAttribute('data-theme'));
-      }, 100);
-    })();
-  </script>
-
-  <!-- App -->
-  <script type="module" src="../js/consignment/main.js?v=9"></script>
+  <!-- App (handles theme toggle, clock, all functionality) -->
+  <script type="module" src="../js/consignment/main.js?v=10"></script>
 </body>
 </html>
