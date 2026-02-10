@@ -2559,6 +2559,11 @@
         ? '<button class="view-back-btn" onclick="goBackSop()"><i class="ph-duotone ph-arrow-left"></i> ' + t('backTo') + ' "' + esc(getSopById(sopViewStack[sopViewStack.length-1].sopId)?.title || 'Previous') + '"</button>'
         : '';
 
+      const stepCount = (s.steps || []).length;
+      const useMobileWizard = isMobileView() && stepCount > 0;
+      totalWizardSteps = stepCount;
+      currentWizardStep = 0;
+
       const stepsHtml = (s.steps || []).map((st, i) => {
         const stepTitle = st['title_' + lang] || st.title;
         const stepDesc = st['desc_' + lang] || st.description;
@@ -2576,7 +2581,7 @@
               mediaHtml = '<div class="view-step-video"><video src="' + mediaUrl + '" controls playsinline></video></div>';
             }
           } else {
-            mediaHtml = '<div class="view-step-image"><img src="' + mediaUrl + '"></div>';
+            mediaHtml = '<div class="view-step-image" onclick="zoomImage(\'' + esc(mediaUrl).replace(/'/g, "\\'") + '\')"><img src="' + mediaUrl + '"></div>';
           }
         }
 
@@ -2595,9 +2600,20 @@
           '</div>';
         }
 
-        return '<div class="view-step">' +
+        // Safety step class for prominent callout styling
+        const stepClasses = 'view-step' + (st.safety ? ' safety-step' : '');
+
+        // Safety warning banner for safety steps
+        const safetyBanner = st.safety ?
+          '<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--danger-dim);border:2px solid var(--danger);border-radius:10px;margin-bottom:10px;font-weight:600;color:var(--danger);">' +
+            '<i class="ph-duotone ph-warning" style="font-size:24px;"></i> ' +
+            (appLang === 'es' ? 'ADVERTENCIA DE SEGURIDAD' : 'SAFETY WARNING') +
+          '</div>' : '';
+
+        const stepHtml = '<div class="' + stepClasses + '">' +
           '<div class="view-step-number">' + (i + 1) + '</div>' +
           '<div class="view-step-content">' +
+            safetyBanner +
             '<div class="view-step-title">' + esc(stepTitle) +
               (st.safety ? ' <i class="ph-duotone ph-warning icon safety"></i>' : '') +
               (st.quality ? ' <i class="ph-duotone ph-seal-check icon quality"></i>' : '') +
@@ -2607,7 +2623,28 @@
           '</div>' +
           mediaHtml +
         '</div>';
+
+        // Wrap in wizard step container if mobile
+        if (useMobileWizard) {
+          return '<div class="wizard-step" data-step-index="' + i + '"' + (i > 0 ? ' style="display:none;"' : '') + '>' + stepHtml + '</div>';
+        }
+        return stepHtml;
       }).join('');
+
+      // Wizard progress bar and navigation (mobile only)
+      let wizardHeaderHtml = '';
+      let wizardNavHtml = '';
+      if (useMobileWizard) {
+        wizardHeaderHtml =
+          '<div class="wizard-progress"><div class="wizard-progress-fill" id="wizardProgressFill" style="width:' + ((1 / stepCount) * 100) + '%;"></div></div>' +
+          '<div class="wizard-counter" id="wizardCounter">' + t('stepXofY') + ' 1 ' + t('of') + ' ' + stepCount + '</div>';
+
+        wizardNavHtml =
+          '<div class="wizard-nav">' +
+            '<button class="wizard-btn" id="wizardPrevBtn" onclick="wizardPrev()" disabled><i class="ph-bold ph-caret-left"></i> ' + t('prevStep') + '</button>' +
+            '<button class="wizard-btn primary" id="wizardNextBtn" onclick="wizardNext()">' + t('nextStep') + ' <i class="ph-bold ph-caret-right"></i></button>' +
+          '</div>';
+      }
 
       document.getElementById('viewModalBody').innerHTML =
         backBtn +
@@ -2622,7 +2659,9 @@
         linkedHtml +
         '</div>' +
         '<div class="view-sop-qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=78x78&data=' + encodeURIComponent(u) + '" width="78" height="78"></div></div>' +
-        stepsHtml;
+        wizardHeaderHtml +
+        stepsHtml +
+        wizardNavHtml;
     }
     
     function showQR(id) {
