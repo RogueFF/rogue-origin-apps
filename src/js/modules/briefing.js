@@ -68,7 +68,7 @@ async function present(briefing) {
  * Trigger briefing for a specific slot
  */
 async function triggerBriefing(slot) {
-  console.log(`Briefing: triggering ${slot} briefing`);
+  console.debug(`Briefing: triggering ${slot} briefing`);
   const briefing = await generate(slot);
   await present(briefing);
 }
@@ -191,7 +191,7 @@ function init() {
     startScheduler();
   }
 
-  console.log('Briefing system initialized', { enabled, muted: TTS.muted });
+  console.debug('Briefing system initialized', { enabled, muted: TTS.muted });
 }
 
 // ===== EXPORTS =====

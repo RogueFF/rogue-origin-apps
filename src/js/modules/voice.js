@@ -22,7 +22,7 @@ export function initVoiceRecognition() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
   if (!SpeechRecognition) {
-    console.log('[Voice] Speech recognition not supported');
+    console.debug('[Voice] Speech recognition not supported');
     return false;
   }
 
@@ -33,7 +33,7 @@ export function initVoiceRecognition() {
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
 
-    console.log('[Voice] Recognition initialized');
+    console.debug('[Voice] Recognition initialized');
     return true;
 
   } catch (error) {
@@ -57,7 +57,7 @@ export function startListening() {
     }
 
     if (isListening) {
-      console.log('[Voice] Already listening');
+      console.debug('[Voice] Already listening');
       reject(new Error('Already listening'));
       return;
     }
@@ -67,7 +67,7 @@ export function startListening() {
     // Set up event handlers
     recognition.onresult = function(event) {
       const transcript = event.results[0][0].transcript;
-      console.log('[Voice] Recognized:', transcript);
+      console.debug('[Voice] Recognized:', transcript);
       isListening = false;
       resolve(transcript);
     };
@@ -96,14 +96,14 @@ export function startListening() {
     };
 
     recognition.onend = function() {
-      console.log('[Voice] Recognition ended');
+      console.debug('[Voice] Recognition ended');
       isListening = false;
     };
 
     // Start recognition
     try {
       recognition.start();
-      console.log('[Voice] Started listening');
+      console.debug('[Voice] Started listening');
     } catch (error) {
       isListening = false;
       reject(error);
@@ -119,7 +119,7 @@ export function stopListening() {
     try {
       recognition.stop();
       isListening = false;
-      console.log('[Voice] Stopped listening');
+      console.debug('[Voice] Stopped listening');
     } catch (error) {
       console.error('[Voice] Stop error:', error);
     }
@@ -177,19 +177,19 @@ function base64ToAudioBlob(base64Audio) {
 export function speak(text) {
   return new Promise((resolve, reject) => {
     if (!isVoiceEnabled) {
-      console.log('[Voice] Voice mode disabled, skipping TTS');
+      console.debug('[Voice] Voice mode disabled, skipping TTS');
       resolve();
       return;
     }
 
     if (isSpeaking) {
-      console.log('[Voice] Already speaking, stopping current');
+      console.debug('[Voice] Already speaking, stopping current');
       stopSpeaking();
     }
 
     // Get speakable version (smart mode)
     const speakableText = getSpeakableText(text);
-    console.log('[Voice] Speaking:', `${speakableText.substring(0, 50)}...`);
+    console.debug('[Voice] Speaking:', `${speakableText.substring(0, 50)}...`);
 
     isSpeaking = true;
     showSpeakingIndicator(true);
@@ -262,7 +262,7 @@ function playAudio(response, resolve, reject) {
     currentAudio = new Audio(audioUrl);
 
     currentAudio.onended = function() {
-      console.log('[Voice] Playback complete');
+      console.debug('[Voice] Playback complete');
       isSpeaking = false;
       showSpeakingIndicator(false);
       URL.revokeObjectURL(audioUrl);
@@ -304,7 +304,7 @@ export function stopSpeaking() {
   }
   isSpeaking = false;
   showSpeakingIndicator(false);
-  console.log('[Voice] Stopped speaking');
+  console.debug('[Voice] Stopped speaking');
 }
 
 /**
@@ -329,7 +329,7 @@ function showSpeakingIndicator(show) {
  */
 export function toggleVoice() {
   isVoiceEnabled = !isVoiceEnabled;
-  console.log('[Voice] Voice mode:', isVoiceEnabled ? 'enabled' : 'disabled');
+  console.debug('[Voice] Voice mode:', isVoiceEnabled ? 'enabled' : 'disabled');
 
   // Stop any current speech when disabling
   if (!isVoiceEnabled && isSpeaking) {
@@ -364,4 +364,4 @@ export function isListeningNow() {
 }
 
 // Initialize on module load
-console.log('[Voice] Module loaded');
+console.debug('[Voice] Module loaded');

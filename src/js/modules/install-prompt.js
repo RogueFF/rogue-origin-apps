@@ -13,7 +13,7 @@ export function initInstallPrompt() {
 
   // Listen for beforeinstallprompt event (not supported on iOS)
   window.addEventListener('beforeinstallprompt', (e) => {
-    console.log('📱 PWA install prompt available');
+    console.debug('📱 PWA install prompt available');
 
     // Prevent the mini-infobar from appearing on mobile
     e.preventDefault();
@@ -32,7 +32,7 @@ export function initInstallPrompt() {
   if (installBtn) {
     installBtn.addEventListener('click', async () => {
       if (!deferredPrompt) {
-        console.log('⚠️ No install prompt available');
+        console.debug('⚠️ No install prompt available');
         return;
       }
 
@@ -41,7 +41,7 @@ export function initInstallPrompt() {
 
       // Wait for the user's response
       const { outcome } = await deferredPrompt.userChoice;
-      console.log(`📊 User response to install prompt: ${outcome}`);
+      console.debug(`📊 User response to install prompt: ${outcome}`);
 
       // Clear the deferred prompt
       deferredPrompt = null;
@@ -54,7 +54,7 @@ export function initInstallPrompt() {
 
   // Track successful installation
   window.addEventListener('appinstalled', () => {
-    console.log('✅ PWA installed successfully!');
+    console.debug('✅ PWA installed successfully!');
 
     // Hide the install button
     if (installBtn) {
@@ -71,7 +71,7 @@ export function initInstallPrompt() {
 
   // Check if already installed (display-mode: standalone)
   if (window.matchMedia('(display-mode: standalone)').matches) {
-    console.log('✅ App is running in standalone mode (installed)');
+    console.debug('✅ App is running in standalone mode (installed)');
 
     // Hide install button since app is already installed
     if (installBtn) {

@@ -1,3 +1,12 @@
+/*
+ * Rogue Origin Operations Hub — Dashboard
+ * Design: Timber mill control room aesthetic
+ * Typography: DM Serif Display (titles), JetBrains Mono (data), Outfit (UI)
+ * Colors: Green #668971, Gold #e4aa4f, Blue #62758d
+ * Grid: 8px spacing, 8px card radius, 6px input radius
+ * Redesigned: February 2026
+ */
+
 /* ========================================
    Z-INDEX HIERARCHY (Standardized)
    ========================================
@@ -137,6 +146,7 @@
   --text-secondary: #5a6b5f;
   --text-muted: #5a6b5f;
   --text-light: #8a9a8e;
+  --text-emphasis: #2d3a32;
 
   /* ===== LAYOUT ===== */
   --sidebar-width: 240px;
@@ -279,6 +289,7 @@
   --text-secondary: rgba(255, 255, 255, 0.6);
   --text-muted: rgba(255, 255, 255, 0.4);
   --text-light: rgba(255, 255, 255, 0.3);
+  --text-emphasis: #f0ece4;
 
   /* Adjusted Colors */
   --gold: #e8b05d;
@@ -383,7 +394,7 @@
 
 /* Sidebar */
 :root[data-theme="dark"] .sidebar {
-  background: #0f1210;
+  background: var(--sidebar-bg);
   border-right-color: rgba(102, 137, 113, 0.1);
 }
 
@@ -991,7 +1002,6 @@ body::after {
 .theme-toggle:active #themeIcon svg {
   transform: rotate(30deg);
 }
-* { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   font-family: var(--font-ui);
   background: var(--bg);
@@ -1120,17 +1130,8 @@ main {
 
 /* ========================================
    PASS 6: MICRO-INTERACTIONS — Entrance Animations
+   (fadeIn, fadeInUp, spin defined in shared-base.css)
    ======================================== */
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
 @keyframes progressFill {
   from { width: 0; }
 }
@@ -1192,7 +1193,7 @@ body { animation: backgroundFadeIn 800ms ease-out forwards; }
 /* Sidebar */
 .sidebar {
   width: var(--sidebar-width);
-  background: #0f1210;
+  background: var(--sidebar-bg);
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -1241,7 +1242,7 @@ body { animation: backgroundFadeIn 800ms ease-out forwards; }
 .nav-item.disabled { opacity: 0.4; pointer-events: none; }
 .sidebar-footer { margin-top: auto; padding: 14px 8px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
 .user-info { display: flex; align-items: center; gap: 10px; padding: 0 8px; }
-.user-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--gold); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; color: #0f1210; flex-shrink: 0; }
+.user-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--gold); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; color: var(--sidebar-bg); flex-shrink: 0; }
 .user-details h4 { font-size: 13px; color: rgba(255, 255, 255, 0.9); font-weight: 500; }
 .user-details p { font-size: 11px; color: rgba(255, 255, 255, 0.4); }
 
@@ -1288,7 +1289,7 @@ body.sidebar-collapsed .main { margin-left: var(--sidebar-collapsed); }
 }
 .header-btn:hover { background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.9); }
 .header-btn.primary { background: var(--ro-green); color: white; border-color: transparent; font-weight: 600; }
-.header-btn.primary:hover { background: #5a7b64; }
+.header-btn.primary:hover { background: var(--green-600); }
 .header-btn.active { background: var(--ro-green); color: #fff; border-color: transparent; }
 .header-btn svg { width: 14px; height: 14px; }
 
@@ -1346,11 +1347,6 @@ body.sidebar-collapsed .main { margin-left: var(--sidebar-collapsed); }
 
 .connection-status-icon .ph-spin {
   animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
 }
 
 .connection-status-text {
@@ -1540,7 +1536,7 @@ body.sidebar-collapsed .main { margin-left: var(--sidebar-collapsed); }
   font-family: var(--font-mono);
   font-size: 24px;
   font-weight: 700;
-  color: #f0ece4;
+  color: var(--text-emphasis);
   line-height: 1;
 }
 
@@ -1851,7 +1847,7 @@ body.sidebar-collapsed .main { margin-left: var(--sidebar-collapsed); }
   font-family: var(--font-mono);
   font-size: 28px;
   font-weight: 700;
-  color: #f0ece4;
+  color: var(--text-emphasis);
   line-height: var(--leading-tight);
   letter-spacing: -0.01em;
 }
@@ -2686,6 +2682,40 @@ body:not(.muuri-active) .widget-item[data-size="full"] { flex-basis: calc(100% -
 .toggle-switch input:checked + .toggle-slider { background: var(--ro-green); }
 .toggle-switch input:checked + .toggle-slider:before { transform: translateX(16px); }
 
+/* Settings panel utility styles */
+.settings-desc { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
+.settings-desc-lg { font-size: 11px; color: var(--text-muted); margin-bottom: 10px; }
+.settings-input-row { display: flex; align-items: center; gap: 8px; }
+.settings-input-row input { flex: 1; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: var(--bg); color: var(--text); }
+.settings-input-unit { color: var(--text-muted); font-size: 12px; }
+.settings-btn-full { width: 100%; justify-content: center; }
+.settings-btn-full.save { margin-bottom: 8px; background: var(--ro-green); color: white; }
+.settings-btn-full.tour { background: var(--gold); color: var(--green-900); }
+.icon-mr { margin-right: 6px; }
+
+/* Widget header layout helpers */
+.widget-header-left { display: flex; align-items: center; gap: 8px; }
+
+/* Compare banner helpers */
+.compare-period { display: flex; align-items: center; gap: 4px; }
+.compare-vs { opacity: 0.5; }
+
+/* Date inputs arrow separator */
+.date-arrow { color: var(--text-light); }
+
+/* Clickable integration cards */
+.integration-card[onclick] { cursor: pointer; }
+
+/* Strain list empty state */
+.strain-list-empty { color: var(--text-light); text-align: center; padding: 16px; }
+
+/* Skeleton grid layouts */
+.skeleton-grid-3col { padding: 16px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.skeleton-productivity { padding: 16px; }
+.skeleton-productivity-row { display: flex; gap: 24px; margin-bottom: 16px; }
+.skeleton-productivity-row .skeleton-number { width: 80px; }
+.skeleton-chart-sm { height: 60px; }
+
 /* ========================================
    FLOATING ACTION BUTTONS (FABs)
    ======================================== */
@@ -2934,7 +2964,6 @@ body:not(.muuri-active) .widget-item[data-size="full"] { flex-basis: calc(100% -
 @keyframes logoPulse { 0%, 100% { opacity: 0.35; filter: drop-shadow(0 0 0 transparent); transform: scale(0.98); } 50% { opacity: 1; filter: drop-shadow(0 0 25px rgba(201, 166, 90, 0.5)) drop-shadow(0 0 50px rgba(201, 166, 90, 0.25)); transform: scale(1); } }
 .logo-loader-bar { width: 80px; height: 2px; background: var(--ro-green); border-radius: 2px; opacity: 0.3; animation: barPulse 1.6s ease-in-out infinite; }
 @keyframes barPulse { 0%, 100% { width: 80px; opacity: 0.3; } 50% { width: 130px; opacity: 0.7; } }
-@keyframes spin { to { transform: rotate(360deg); } }
 .spinning { animation: spin 1s linear infinite; }
 
 /* ========================================
@@ -3940,7 +3969,7 @@ th {
   border: 1px solid rgba(196,92,74,0.3);
   backdrop-filter: blur(8px);
 }
-.toast-error .toast-title { color: #c45c4a; }
+.toast-error .toast-title { color: var(--danger); }
 
 /* Toast with title+message structure */
 .toast-title {
