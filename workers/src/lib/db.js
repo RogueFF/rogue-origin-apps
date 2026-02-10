@@ -14,6 +14,8 @@ const VALID_TABLES = new Set([
   // Consignment module tables
   'consignment_partners', 'consignment_strains', 'consignment_intakes',
   'consignment_sales', 'consignment_payments',
+  // Complaints module
+  'complaints',
 ]);
 
 /**
