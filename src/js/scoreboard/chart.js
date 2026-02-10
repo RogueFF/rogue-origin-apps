@@ -52,13 +52,31 @@
       // Lazy load Chart.js if needed
       await loadChartJs();
 
-      // Shorten time slot labels: "9:00 AM – 10:00 AM" -> "9-10"
+      // Sort hourly rates chronologically by start time
+      function timeSlotTo24h(timeSlot) {
+        var match = timeSlot.match(/(\d+):(\d+)\s*(AM|PM)/i);
+        if (!match) return 0;
+        var h = parseInt(match[1]);
+        var m = parseInt(match[2]);
+        var ampm = match[3].toUpperCase();
+        if (ampm === 'PM' && h !== 12) h += 12;
+        if (ampm === 'AM' && h === 12) h = 0;
+        return h * 60 + m;
+      }
+      hourlyRates = hourlyRates.slice().sort(function(a, b) {
+        return timeSlotTo24h(a.timeSlot) - timeSlotTo24h(b.timeSlot);
+      });
+
+      // Show actual start time: "7:48 AM – 8:00 AM" -> "7:48a"
       const labels = hourlyRates.map(h => {
-        const match = h.timeSlot.match(/(\d+):\d+\s*(AM|PM)\s*[–-]\s*(\d+):\d+/i);
+        const match = h.timeSlot.match(/(\d+):(\d+)\s*(AM|PM)/i);
         if (match) {
-          let start = parseInt(match[1]);
-          let end = parseInt(match[3]);
-          return `${start}-${end}`;
+          var hr = parseInt(match[1]);
+          var min = match[2];
+          var suffix = match[3].toLowerCase().charAt(0);
+          // Only show minutes if not :00
+          if (min === '00') return hr + suffix;
+          return hr + ':' + min + suffix;
         }
         return h.timeSlot;
       });
