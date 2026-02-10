@@ -4,7 +4,7 @@
  */
 
 const THEME_STORAGE_KEY = 'theme';
-const DEFAULT_THEME = 'light';
+const DEFAULT_THEME = 'dark';
 
 /**
  * Initialize theme from localStorage or default
