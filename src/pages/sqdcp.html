@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/png" href="/rogue-origin-apps/favicon.png">
+  <meta name="theme-color" content="#141816">
+  <title>SQDCP Board - Rogue Origin</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=optional" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/duotone/style.css">
+  <link rel="stylesheet" href="../css/shared-base.css">
+
+  <style>
+    :root {
+      --bg: #141816;
+      --surface: #1a1f1d;
+      --border: rgba(102, 137, 113, 0.15);
+      --text: rgba(255, 255, 255, 0.9);
+      --text-dim: rgba(255, 255, 255, 0.5);
+      --accent: #668971;
+      --font-ui: 'Outfit', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --font-display: 'DM Serif Display', serif;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: var(--font-ui);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .header-section {
+      text-align: center;
+      margin-bottom: 32px;
+      page-break-after: avoid;
+    }
+
+    .company-name {
+      font-family: var(--font-display);
+      font-size: 32px;
+      letter-spacing: 2px;
+      margin-bottom: 4px;
+      color: var(--text);
+    }
+
+    .board-title {
+      font-size: 18px;
+      font-weight: 500;
+      letter-spacing: 4px;
+      color: var(--text-dim);
+      margin-bottom: 16px;
+    }
+
+    .date-display {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    .chart-container {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      page-break-inside: avoid;
+    }
+
+    .chart-container.full-width {
+      grid-column: 1 / -1;
+    }
+
+    .chart-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: var(--text);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .chart-canvas {
+      width: 100%;
+      height: 200px;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 48px;
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+    }
+
+    .error {
+      background: rgba(220, 38, 38, 0.1);
+      border: 1px solid rgba(220, 38, 38, 0.3);
+      color: #fca5a5;
+      padding: 16px;
+      border-radius: 8px;
+      margin: 24px 0;
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 14px;
+    }
+
+    .print-btn {
+      position: fixed;
+      top: 24px;
+      right: 24px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-family: var(--font-ui);
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+      z-index: 1000;
+    }
+
+    .print-btn:hover {
+      background: #557a60;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 137, 113, 0.3);
+    }
+
+    @media print {
+      @page {
+        size: landscape;
+        margin: 0.5in;
+      }
+
+      body {
+        background: white;
+        color: black;
+      }
+
+      .sidebar,
+      .print-btn {
+        display: none !important;
+      }
+
+      .main {
+        margin-left: 0 !important;
+      }
+
+      .container {
+        max-width: 100%;
+        padding: 0;
+      }
+
+      .header-section {
+        margin-bottom: 20px;
+      }
+
+      .company-name {
+        color: black;
+        font-size: 28px;
+      }
+
+      .board-title {
+        color: #666;
+        font-size: 16px;
+      }
+
+      .date-display {
+        color: #333;
+      }
+
+      .charts-grid {
+        gap: 16px;
+      }
+
+      .chart-container {
+        background: white;
+        border: 1px solid #ddd;
+        padding: 16px;
+        page-break-inside: avoid;
+      }
+
+      .chart-title {
+        color: black;
+        font-size: 12px;
+      }
+
+      .chart-canvas {
+        height: 180px;
+      }
+    }
+
+    @media screen and (max-width: 1024px) {
+      .charts-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .chart-container.full-width {
+        grid-column: 1;
+      }
+    }
+  </style>
+</head>
+<body class="auth-required">
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar" role="navigation" aria-label="Main navigation">
+    <div class="sidebar-toggle" onclick="toggleSidebar()" role="button" tabindex="0" aria-label="Collapse sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 19l-7-7 7-7M18 19l-7-7 7-7"/></svg>
+      <span class="sidebar-toggle-label">Collapse</span>
+    </div>
+    <div class="brand">
+      <img src="/rogue-origin-apps/favicon.png" alt="Rogue Origin" width="32" height="32">
+      <h1>Rogue Origin</h1>
+    </div>
+    <nav>
+      <div class="nav-item" onclick="window.location.href='index.html'" role="button" tabindex="0"><span class="icon"><i class="ph-duotone ph-chart-pie-slice"></i></span><span>Dashboard</span></div>
+      <div class="nav-item" onclick="window.location.href='kanban.html'" role="button" tabindex="0"><span class="icon"><i class="ph-duotone ph-package"></i></span><span>Supply Kanban</span></div>
+      <div class="nav-item" onclick="window.location.href='scoreboard.html'" role="button" tabindex="0"><span class="icon"><i class="ph-duotone ph-gauge"></i></span><span>Scoreboard</span></div>
+      <div class="nav-item" onclick="window.location.href='barcode.html'" role="button" tabindex="0"><span class="icon"><i class="ph-duotone ph-barcode"></i></span><span>Barcode Printer</span></div>
+      <div class="nav-item" onclick="window.location.href='sop-manager.html'" role="button" tabindex="0"><span class="icon"><i class="ph-duotone ph-book-open-text"></i></span><span>SOP Manager</span></div>
+      <div class="nav-item" onclick="window.location.href='orders.html'" role="button" tabindex="0"><span class="icon"><i class="ph-duotone ph-clipboard-text"></i></span><span>Orders</span></div>
+      <div class="nav-item" onclick="window.location.href='consignment.html'" role="button" tabindex="0"><span class="icon"><i class="ph-duotone ph-handshake"></i></span><span>Consignment</span></div>
+      <div class="nav-item" onclick="window.location.href='hourly-entry.html'" role="button" tabindex="0"><span class="icon"><i class="ph-duotone ph-user-gear"></i></span><span>Floor Manager</span></div>
+      <div class="nav-item active" aria-current="page"><span class="icon"><i class="ph-duotone ph-chart-bar"></i></span><span>SQDCP Board</span></div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar">RO</div>
+        <div>
+          <div class="user-name">Rogue Origin</div>
+          <div class="user-role">Administrator</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main" id="main-content">
+    <button class="print-btn" onclick="window.print()">
+      <i class="ph-duotone ph-printer"></i>
+      Print Board
+    </button>
+
+    <div class="container">
+      <div class="header-section">
+        <div class="company-name">ROGUE ORIGIN</div>
+        <div class="board-title">SQDCP BOARD</div>
+        <div class="date-display" id="currentDate">Loading...</div>
+      </div>
+
+      <div id="loading" class="loading">
+        <i class="ph-duotone ph-spinner" style="font-size: 32px; animation: spin 1s linear infinite;"></i>
+        <div>Loading production data...</div>
+      </div>
+
+      <div id="error" class="error" style="display: none;"></div>
+
+      <div id="chartsContainer" style="display: none;">
+        <div class="charts-grid">
+          <!-- Target vs Actual -->
+          <div class="chart-container full-width">
+            <div class="chart-title">Target vs Actual (lbs/day)</div>
+            <canvas id="targetActualChart" class="chart-canvas"></canvas>
+          </div>
+
+          <!-- Units per Operator per Hour -->
+          <div class="chart-container">
+            <div class="chart-title">Units per Operator per Hour</div>
+            <canvas id="operatorChart" class="chart-canvas"></canvas>
+          </div>
+
+          <!-- Units per Trimmer per Hour -->
+          <div class="chart-container">
+            <div class="chart-title">Units per Trimmer per Hour</div>
+            <canvas id="trimmerChart" class="chart-canvas"></canvas>
+          </div>
+
+          <!-- Tops per Day -->
+          <div class="chart-container">
+            <div class="chart-title">Tops per Day</div>
+            <canvas id="topsChart" class="chart-canvas"></canvas>
+          </div>
+
+          <!-- Smalls per Day -->
+          <div class="chart-container">
+            <div class="chart-title">Smalls per Day</div>
+            <canvas id="smallsChart" class="chart-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="../js/shared-base.js"></script>
+  <script>
+    // Display current date
+    const now = new Date();
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    document.getElementById('currentDate').textContent = now.toLocaleDateString('en-US', options);
+
+    // Calculate date range (last 30 days)
+    function getDateRange() {
+      const end = new Date();
+      const start = new Date();
+      start.setDate(end.getDate() - 30);
+      
+      const formatDate = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+
+      return { start: formatDate(start), end: formatDate(end) };
+    }
+
+    // Fetch production data
+    async function fetchProductionData() {
+      try {
+        const { start, end } = getDateRange();
+        const url = `https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production?action=dashboard&start=${start}&end=${end}`;
+        
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        // Filter out days with no production
+        const productionDays = (data.daily || []).filter(day => 
+          day.totalLbs > 0 || day.totalTops > 0 || day.totalSmalls > 0
+        );
+        
+        if (productionDays.length === 0) {
+          throw new Error('No production data available for the last 30 days');
+        }
+
+        return {
+          daily: productionDays,
+          target: data.targets?.totalTops || 66
+        };
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        throw error;
+      }
+    }
+
+    // Chart drawing function
+    function drawBarChart(canvas, data, options = {}) {
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+
+      const width = rect.width;
+      const height = rect.height;
+      const padding = { top: 30, right: 60, bottom: 40, left: 60 };
+      const chartWidth = width - padding.left - padding.right;
+      const chartHeight = height - padding.top - padding.bottom;
+
+      // Clear canvas
+      ctx.clearRect(0, 0, width, height);
+
+      if (!data || data.length === 0) {
+        ctx.fillStyle = '#666';
+        ctx.font = '14px var(--font-ui)';
+        ctx.textAlign = 'center';
+        ctx.fillText('No data available', width / 2, height / 2);
+        return;
+      }
+
+      // Calculate max value and average
+      const values = data.map(d => d.value).filter(v => v != null && !isNaN(v));
+      const maxValue = Math.max(...values, options.targetLine || 0);
+      const avgValue = values.reduce((a, b) => a + b, 0) / values.length;
+      const yMax = maxValue * 1.15; // Add 15% headroom
+
+      // Colors
+      const isPrint = window.matchMedia('print').matches;
+      const barColor = isPrint ? '#333' : '#668971';
+      const targetColor = isPrint ? '#999' : '#dc2626';
+      const avgColor = isPrint ? '#666' : '#3b82f6';
+      const gridColor = isPrint ? '#ddd' : 'rgba(255, 255, 255, 0.05)';
+      const textColor = isPrint ? '#000' : 'rgba(255, 255, 255, 0.7)';
+
+      // Draw grid lines
+      ctx.strokeStyle = gridColor;
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 5; i++) {
+        const y = padding.top + (chartHeight / 5) * i;
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(padding.left + chartWidth, y);
+        ctx.stroke();
+      }
+
+      // Draw Y-axis labels
+      ctx.fillStyle = textColor;
+      ctx.font = '11px var(--font-mono)';
+      ctx.textAlign = 'right';
+      for (let i = 0; i <= 5; i++) {
+        const value = yMax - (yMax / 5) * i;
+        const y = padding.top + (chartHeight / 5) * i;
+        ctx.fillText(value.toFixed(0), padding.left - 10, y + 4);
+      }
+
+      // Draw bars
+      const barWidth = chartWidth / data.length * 0.7;
+      const barSpacing = chartWidth / data.length;
+
+      data.forEach((item, index) => {
+        if (item.value == null || isNaN(item.value)) return;
+
+        const barHeight = (item.value / yMax) * chartHeight;
+        const x = padding.left + index * barSpacing + (barSpacing - barWidth) / 2;
+        const y = padding.top + chartHeight - barHeight;
+
+        ctx.fillStyle = barColor;
+        ctx.fillRect(x, y, barWidth, barHeight);
+      });
+
+      // Draw target line if specified
+      if (options.targetLine != null) {
+        const targetY = padding.top + chartHeight - (options.targetLine / yMax) * chartHeight;
+        ctx.strokeStyle = targetColor;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(padding.left, targetY);
+        ctx.lineTo(padding.left + chartWidth, targetY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Target label
+        ctx.fillStyle = targetColor;
+        ctx.font = 'bold 11px var(--font-mono)';
+        ctx.textAlign = 'left';
+        ctx.fillText(`Target: ${options.targetLine.toFixed(1)}`, padding.left + chartWidth + 10, targetY + 4);
+      }
+
+      // Draw average line
+      const avgY = padding.top + chartHeight - (avgValue / yMax) * chartHeight;
+      ctx.strokeStyle = avgColor;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([8, 4]);
+      ctx.beginPath();
+      ctx.moveTo(padding.left, avgY);
+      ctx.lineTo(padding.left + chartWidth, avgY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Average label
+      ctx.fillStyle = avgColor;
+      ctx.font = 'bold 11px var(--font-mono)';
+      ctx.textAlign = 'left';
+      ctx.fillText(`Avg: ${avgValue.toFixed(1)}`, padding.left + chartWidth + 10, avgY + 4);
+
+      // Draw X-axis labels (dates)
+      ctx.fillStyle = textColor;
+      ctx.font = '10px var(--font-mono)';
+      ctx.textAlign = 'center';
+      
+      // Show every 3rd date to avoid crowding
+      data.forEach((item, index) => {
+        if (index % 3 === 0 || index === data.length - 1) {
+          const x = padding.left + index * barSpacing + barSpacing / 2;
+          const dateStr = new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          ctx.fillText(dateStr, x, height - padding.bottom + 20);
+        }
+      });
+    }
+
+    // Render all charts
+    async function renderCharts() {
+      try {
+        const data = await fetchProductionData();
+        
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('chartsContainer').style.display = 'block';
+
+        // 1. Target vs Actual
+        drawBarChart(
+          document.getElementById('targetActualChart'),
+          data.daily.map(d => ({ date: d.date, value: d.totalTops })),
+          { targetLine: data.target }
+        );
+
+        // 2. Units per Operator per Hour
+        drawBarChart(
+          document.getElementById('operatorChart'),
+          data.daily.map(d => ({
+            date: d.date,
+            value: d.operatorHours > 0 ? d.totalLbs / d.operatorHours : 0
+          }))
+        );
+
+        // 3. Units per Trimmer per Hour
+        drawBarChart(
+          document.getElementById('trimmerChart'),
+          data.daily.map(d => ({
+            date: d.date,
+            value: d.trimmerHours > 0 ? d.totalLbs / d.trimmerHours : 0
+          }))
+        );
+
+        // 4. Tops per Day
+        drawBarChart(
+          document.getElementById('topsChart'),
+          data.daily.map(d => ({ date: d.date, value: d.totalTops }))
+        );
+
+        // 5. Smalls per Day
+        drawBarChart(
+          document.getElementById('smallsChart'),
+          data.daily.map(d => ({ date: d.date, value: d.totalSmalls }))
+        );
+
+      } catch (error) {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('error').textContent = `Error loading data: ${error.message}`;
+      }
+    }
+
+    // Redraw charts on window resize
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(renderCharts, 250);
+    });
+
+    // Initial render
+    renderCharts();
+
+    // Spinner animation
+    const style = document.createElement('style');
+    style.textContent = '@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }';
+    document.head.appendChild(style);
+  </script>
+</body>
+</html>
