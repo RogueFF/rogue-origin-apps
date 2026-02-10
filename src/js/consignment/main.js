@@ -462,8 +462,9 @@ function toggleDarkMode() {
 function updateThemeButton(theme) {
   const icon = el('themeIcon');
   const label = el('themeLabel');
-  if (icon) icon.textContent = theme === 'dark' ? '☀️' : '🌙';
-  if (label) label.textContent = theme === 'dark' ? 'Light' : 'Dark';
+  // Show current state (not the action)
+  if (icon) icon.textContent = theme === 'dark' ? '🌙' : '☀️';
+  if (label) label.textContent = theme === 'dark' ? 'Dark' : 'Light';
 }
 
 function updateClock() {
