@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -109,6 +109,28 @@
       <div class="stat-card">
         <div class="stat-label">Balance Due</div>
         <div class="stat-value danger" id="stat-balance">$0</div>
+      </div>
+    </div>
+
+    <!-- Search & Filters -->
+    <div class="search-filters">
+      <div class="search-bar">
+        <i class="ph ph-magnifying-glass"></i>
+        <input type="text" id="orders-search" class="search-input" placeholder="Search orders, customers, IDs..." oninput="filterOrders()">
+      </div>
+      <div class="filter-chips">
+        <button class="filter-chip active" data-filter="all" onclick="setFilter('all')">All</button>
+        <button class="filter-chip" data-filter="pending" onclick="setFilter('pending')">New</button>
+        <button class="filter-chip" data-filter="partial" onclick="setFilter('partial')">In Progress</button>
+        <button class="filter-chip" data-filter="fulfilled" onclick="setFilter('fulfilled')">Fulfilled</button>
+      </div>
+      <div class="view-toggle">
+        <button class="view-btn active" data-view="table" onclick="setView('table')" title="Table view">
+          <i class="ph ph-list"></i>
+        </button>
+        <button class="view-btn" data-view="cards" onclick="setView('cards')" title="Card view">
+          <i class="ph ph-squares-four"></i>
+        </button>
       </div>
     </div>
 
