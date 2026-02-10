@@ -5,6 +5,10 @@
 
 import { isDarkMode, setDarkMode } from './state.js';
 
+// SVG Icons for theme toggle
+const MOON_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8.5a5.5 5.5 0 1 1-5-7 4.5 4.5 0 0 0 5 7z"/></svg>';
+const SUN_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="3"/><line x1="8" y1="1" x2="8" y2="3"/><line x1="8" y1="13" x2="8" y2="15"/><line x1="1" y1="8" x2="3" y2="8"/><line x1="13" y1="8" x2="15" y2="8"/><line x1="3.05" y1="3.05" x2="4.46" y2="4.46"/><line x1="11.54" y1="11.54" x2="12.95" y2="12.95"/><line x1="3.05" y1="12.95" x2="4.46" y2="11.54"/><line x1="11.54" y1="4.46" x2="12.95" y2="3.05"/></svg>';
+
 // Theme color configurations
 const THEME_COLORS = {
   dark: {
@@ -29,7 +33,7 @@ export function updateChartTheme(theme) {
     return;
   }
 
-  const colors = THEME_COLORS[theme] || THEME_COLORS.light;
+  const colors = THEME_COLORS[theme] || THEME_COLORS.dark;
 
   // Update Chart.js defaults
   Chart.defaults.color = colors.text;
@@ -60,6 +64,21 @@ export function updateChartTheme(theme) {
 }
 
 /**
+ * Update theme toggle button icon and label
+ * @param {string} theme - 'dark' or 'light'
+ */
+function updateToggleButton(theme) {
+  const themeIcon = document.getElementById('themeIcon');
+  const themeLabel = document.getElementById('themeLabel');
+  if (themeIcon) {
+    themeIcon.innerHTML = theme === 'dark' ? MOON_SVG : SUN_SVG;
+  }
+  if (themeLabel) {
+    themeLabel.textContent = theme === 'dark' ? 'Dark' : 'Light';
+  }
+}
+
+/**
  * Update theme UI elements
  * @param {string} theme - 'dark' or 'light'
  */
@@ -67,19 +86,13 @@ export function updateThemeUI(theme) {
   // Set data-theme attribute on document root
   document.documentElement.setAttribute('data-theme', theme);
 
-  // Update theme toggle button if it exists
-  const themeToggle = document.getElementById('theme-toggle');
-  if (themeToggle) {
-    const icon = themeToggle.querySelector('i');
-    if (icon) {
-      icon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
-    }
-  }
+  // Update toggle button icon/label
+  updateToggleButton(theme);
 
-  // Update any theme toggle text if present
-  const themeText = document.querySelector('.theme-toggle-text');
-  if (themeText) {
-    themeText.textContent = theme === 'dark' ? 'Light Mode' : 'Dark Mode';
+  // Update meta theme-color for mobile browsers
+  const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+  if (metaThemeColor) {
+    metaThemeColor.setAttribute('content', theme === 'dark' ? '#0f1210' : '#668971');
   }
 }
 
@@ -107,20 +120,14 @@ export function toggleTheme() {
 }
 
 /**
- * Initialize theme based on saved preference or system preference
+ * Initialize theme based on saved preference, defaulting to dark
  */
 export function initTheme() {
   // Check localStorage first
   const savedTheme = localStorage.getItem('theme');
 
-  let theme;
-  if (savedTheme) {
-    theme = savedTheme;
-  } else {
-    // Fall back to system preference
-    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    theme = prefersDark ? 'dark' : 'light';
-  }
+  // Default to dark if no preference saved
+  const theme = savedTheme || 'dark';
 
   // Update state
   setDarkMode(theme === 'dark');
