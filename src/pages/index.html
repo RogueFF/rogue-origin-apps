@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -32,10 +32,10 @@
   <!-- Critical CSS: Inline for fastest render -->
   <style>
 /* Critical CSS for above-the-fold content */
-.logo-loader{position:fixed;inset:0;background:var(--bg,#faf8f5);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1100;transition:opacity .3s,visibility .3s}
+.logo-loader{position:fixed;inset:0;background:var(--bg,#141816);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1100;transition:opacity .3s,visibility .3s}
 .logo-loader img{width:120px;height:auto;margin-bottom:24px;animation:logoFadeIn .6s ease-out}
-.logo-loader-bar{width:120px;height:3px;background:var(--border-light,rgba(102,137,113,0.1));border-radius:2px;overflow:hidden;position:relative}
-.logo-loader-bar::after{content:"";position:absolute;top:0;left:0;height:100%;width:50%;background:var(--green,#668971);animation:loaderSlide 1.5s ease-in-out infinite}
+.logo-loader-bar{width:120px;height:3px;background:rgba(102,137,113,0.15);border-radius:2px;overflow:hidden;position:relative}
+.logo-loader-bar::after{content:"";position:absolute;top:0;left:0;height:100%;width:50%;background:#668971;animation:loaderSlide 1.5s ease-in-out infinite}
 @keyframes logoFadeIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
 @keyframes loaderSlide{0%,100%{transform:translateX(-100%)}50%{transform:translateX(200%)}}
 .sidebar{position:fixed;top:0;left:0;width:var(--sidebar-width,240px);height:100vh;background:#0f1210;display:flex;flex-direction:column;z-index:50;transition:width .3s ease;border-right:1px solid rgba(102,137,113,0.1)}
@@ -46,7 +46,7 @@
 .nav-item:hover{background:rgba(255,255,255,.05);color:rgba(255,255,255,.8)}
 .nav-item.active{background:rgba(102,137,113,0.15);color:#668971}
 .nav-item .icon{font-size:20px;display:flex;align-items:center}
-.main{margin-left:var(--sidebar-width,240px);min-height:100vh;background:var(--bg,#faf8f5);transition:margin-left .3s ease}
+.main{margin-left:var(--sidebar-width,240px);min-height:100vh;background:var(--bg,#141816);transition:margin-left .3s ease}
 .header{position:sticky;top:0;background:rgba(15,18,16,0.9);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid rgba(102,137,113,0.1);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;z-index:100}
 .header-left{display:flex;align-items:center;gap:16px}
 .header-logo{height:32px;width:auto}

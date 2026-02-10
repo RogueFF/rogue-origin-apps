@@ -92,19 +92,19 @@
    ======================================== */
 body.dark-mode,
 [data-theme="dark"] {
-  --bg: #1a1a1a;
-  --bg-warm: #22291e;
-  --bg-card: #2d2d2d;
-  --bg-dark: #12160f;
-  --glass: rgba(45, 45, 45, 0.6);
-  --glass-border: rgba(102, 137, 113, 0.25);
-  --border: rgba(255, 255, 255, 0.2);
-  --border-strong: rgba(255, 255, 255, 0.2);
-  --border-light: rgba(255, 255, 255, 0.1);
-  --text: #e0e0e0;
-  --text-secondary: #b8b8b8;
-  --text-muted: #888888;
-  --text-light: #6b7a6f;
+  --bg: #141816;
+  --bg-warm: #1a1f16;
+  --bg-card: rgba(26, 30, 27, 0.85);
+  --bg-dark: #0f1210;
+  --glass: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(102, 137, 113, 0.15);
+  --border: rgba(102, 137, 113, 0.15);
+  --border-strong: rgba(102, 137, 113, 0.2);
+  --border-light: rgba(102, 137, 113, 0.1);
+  --text: rgba(255, 255, 255, 0.88);
+  --text-secondary: rgba(255, 255, 255, 0.6);
+  --text-muted: rgba(255, 255, 255, 0.4);
+  --text-light: rgba(255, 255, 255, 0.3);
   --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.5);
@@ -113,7 +113,7 @@ body.dark-mode,
   --sungrown-dim: rgba(191, 142, 78, 0.18);
   --greenhouse-dim: rgba(143, 146, 99, 0.18);
   --indoor-dim: rgba(98, 117, 141, 0.18);
-  --header-bg: #12160f;
+  --header-bg: #0f1210;
 }
 
 /* ========================================
