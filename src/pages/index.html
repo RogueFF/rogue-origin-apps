@@ -20,8 +20,8 @@
   <link rel="preconnect" href="https://unpkg.com">
   <link rel="dns-prefetch" href="https://script.google.com">
 
-  <!-- Fonts: Inter (existing) + DM Serif Display, JetBrains Mono, Outfit -->
-  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=optional" rel="stylesheet">
+  <!-- Fonts: DM Serif Display, JetBrains Mono, Outfit -->
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=optional" rel="stylesheet">
 
   <!-- Performance: Preload critical images -->
   <link rel="preload" href="../assets/ro-logo-square.png" as="image">
@@ -38,19 +38,19 @@
 .logo-loader-bar::after{content:"";position:absolute;top:0;left:0;height:100%;width:50%;background:var(--green,#668971);animation:loaderSlide 1.5s ease-in-out infinite}
 @keyframes logoFadeIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
 @keyframes loaderSlide{0%,100%{transform:translateX(-100%)}50%{transform:translateX(200%)}}
-.sidebar{position:fixed;top:0;left:0;width:var(--sidebar-width,240px);height:100vh;background:var(--sidebar-bg,#1a1f16);display:flex;flex-direction:column;z-index:50;transition:width .3s ease}
-.brand{padding:24px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(255,255,255,.1)}
+.sidebar{position:fixed;top:0;left:0;width:var(--sidebar-width,240px);height:100vh;background:#0f1210;display:flex;flex-direction:column;z-index:50;transition:width .3s ease;border-right:1px solid rgba(102,137,113,0.1)}
+.brand{padding:24px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(255,255,255,.06)}
 .brand img{width:32px;height:32px;border-radius:8px}
-.brand h1{font-size:18px;font-weight:600;color:white;margin:0;font-family:var(--font-ui,"Inter",sans-serif)}
-.nav-item{padding:10px 16px;margin:4px 12px;color:rgba(255,255,255,.7);cursor:pointer;display:flex;align-items:center;gap:12px;border-radius:8px;transition:all .2s;font-size:14px}
-.nav-item:hover{background:rgba(255,255,255,.1);color:white}
-.nav-item.active{background:var(--green,#668971);color:white}
+.brand h1{font-size:16px;font-weight:600;color:rgba(255,255,255,0.9);margin:0;font-family:var(--font-ui,'Outfit',sans-serif)}
+.nav-item{padding:10px 16px;margin:2px 8px;color:rgba(255,255,255,.5);cursor:pointer;display:flex;align-items:center;gap:12px;border-radius:6px;transition:all .15s ease;font-size:14px}
+.nav-item:hover{background:rgba(255,255,255,.05);color:rgba(255,255,255,.8)}
+.nav-item.active{background:rgba(102,137,113,0.15);color:#668971}
 .nav-item .icon{font-size:20px;display:flex;align-items:center}
 .main{margin-left:var(--sidebar-width,240px);min-height:100vh;background:var(--bg,#faf8f5);transition:margin-left .3s ease}
-.header{position:sticky;top:0;background:var(--bg-card,#ffffff);border-bottom:1px solid var(--border-light,rgba(102,137,113,0.1));padding:12px 24px;display:flex;align-items:center;justify-content:space-between;z-index:60;box-shadow:var(--shadow-sm,0 2px 4px rgba(0,0,0,0.06))}
+.header{position:sticky;top:0;background:rgba(15,18,16,0.9);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid rgba(102,137,113,0.1);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;z-index:100}
 .header-left{display:flex;align-items:center;gap:16px}
 .header-logo{height:32px;width:auto}
-.mobile-menu-btn{display:none;background:none;border:none;cursor:pointer;color:var(--text,#2d3a32)}
+.mobile-menu-btn{display:none;background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.7)}
 @media(max-width:768px){.mobile-menu-btn{display:block}.sidebar{transform:translateX(-100%)}}
   </style>
 
@@ -181,7 +181,7 @@
           </div>
         </div>
         <div class="header-time"><div class="time" id="clock">--:--</div><div class="date" id="dateDisplay">Loading...</div></div>
-        <button class="theme-toggle header-btn" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle dark mode theme"><span id="themeIcon" aria-hidden="true">🌙</span>
+        <button class="theme-toggle header-btn" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle dark mode theme"><span id="themeIcon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8.5a5.5 5.5 0 1 1-5-7 4.5 4.5 0 0 0 5 7z"/></svg></span>
           <span id="themeLabel">Dark</span>
         </button>
         <button class="header-btn" onclick="openSettings()" aria-label="Open dashboard settings"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
