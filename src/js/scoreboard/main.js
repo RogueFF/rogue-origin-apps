@@ -82,9 +82,11 @@
         if (State) {
           if (response.scoreboard) {
             State.data = response.scoreboard;
+            State._rawTodayTarget = response.scoreboard.todayTarget;
           } else if (response && !response.scoreboard) {
             // Handle case where response is the scoreboard data directly
             State.data = response;
+            State._rawTodayTarget = response.todayTarget;
           }
 
           if (response.timer) {
