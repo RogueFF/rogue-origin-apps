@@ -54,9 +54,11 @@ export const brandColors = {
   green: '#668971',
   greenLight: 'rgba(102,137,113,0.2)',
   gold: '#e4aa4f',
+  goldLight: 'rgba(228,170,79,0.2)',
   sungrown: '#bf8e4e',
   indoor: '#62758d',
-  indoorLight: 'rgba(98,117,141,0.3)'
+  indoorLight: 'rgba(98,117,141,0.3)',
+  danger: 'rgba(196,92,74,0.6)'
 };
 
 // API Configuration
