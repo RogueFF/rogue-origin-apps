@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('atlas', {
   setConfig: (config) => ipcRenderer.invoke('set-config', config),
   checkAtlasStatus: () => ipcRenderer.invoke('check-atlas-status'),
   closePanel: () => ipcRenderer.invoke('close-panel'),
+  getUnreadCount: () => ipcRenderer.invoke('get-unread-count'),
   onNewNotification: (callback) => {
     ipcRenderer.on('new-notification', (_event, notif) => callback(notif));
   },

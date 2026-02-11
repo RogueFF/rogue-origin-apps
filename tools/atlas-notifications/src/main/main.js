@@ -14,26 +14,82 @@ const store = new Store({
     autoStart: true,
     atlasHost: '100.64.0.1', // Tailscale IP — configurable
     notifications: [],
-    maxHistory: 50
+    maxHistory: 50,
+    soundEnabled: true
   }
 });
 
 let tray = null;
 let panel = null;
 let apiServer = null;
+let trayIconNormal = null;
+let trayIconBadge = null;
 
 // ─── Tray Icon ──────────────────────────────────────────────────────
-function createTrayIcon() {
-  // 16x16 gold leaf icon (PNG buffer)
+function buildTrayIcons() {
   const iconPath = path.join(__dirname, '..', 'assets', 'tray-icon.png');
-  const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
+  trayIconNormal = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
 
-  tray = new Tray(icon);
+  // Create badge icon — draw a gold dot overlay on the tray icon
+  // We'll composite a small dot onto the icon for the badge variant
+  trayIconBadge = createBadgeIcon(trayIconNormal);
+}
+
+function createBadgeIcon(baseIcon) {
+  // Create a 16x16 canvas with a red notification dot in bottom-right
+  // Since we can't use canvas in main process without dependencies,
+  // we'll use a simple NativeImage overlay approach
+  const size = { width: 16, height: 16 };
+  const base = baseIcon.resize(size);
+  const bitmap = base.toBitmap();
+  const buf = Buffer.from(bitmap);
+
+  // Draw a 5x5 red dot at position (11,11) in BGRA format
+  const dotColor = { b: 79, g: 170, r: 228, a: 255 }; // Gold #e4aa4f in BGRA
+  for (let dy = 0; dy < 5; dy++) {
+    for (let dx = 0; dx < 5; dx++) {
+      const px = 11 + dx;
+      const py = 11 + dy;
+      // Circular dot — skip corners
+      const cx = dx - 2, cy = dy - 2;
+      if (cx * cx + cy * cy > 6) continue;
+      if (px < 16 && py < 16) {
+        const offset = (py * 16 + px) * 4;
+        buf[offset] = dotColor.b;
+        buf[offset + 1] = dotColor.g;
+        buf[offset + 2] = dotColor.r;
+        buf[offset + 3] = dotColor.a;
+      }
+    }
+  }
+
+  return nativeImage.createFromBitmap(buf, size);
+}
+
+function updateTrayBadge() {
+  if (!tray || !trayIconNormal || !trayIconBadge) return;
+  const notifs = getNotifications();
+  const unread = notifs.filter(n => !n.read).length;
+  tray.setImage(unread > 0 ? trayIconBadge : trayIconNormal);
+  tray.setToolTip(unread > 0 ? `Atlas — ${unread} unread` : 'Atlas Notifications');
+}
+
+function createTrayIcon() {
+  buildTrayIcons();
+  tray = new Tray(trayIconNormal);
   tray.setToolTip('Atlas Notifications');
 
   const contextMenu = Menu.buildFromTemplate([
     { label: 'Open Panel', click: () => showPanel() },
     { type: 'separator' },
+    {
+      label: 'Notification Sound',
+      type: 'checkbox',
+      checked: store.get('soundEnabled'),
+      click: (item) => {
+        store.set('soundEnabled', item.checked);
+      }
+    },
     {
       label: 'Auto-start with Windows',
       type: 'checkbox',
@@ -53,6 +109,8 @@ function createTrayIcon() {
 
   tray.setContextMenu(contextMenu);
   tray.on('click', () => showPanel());
+
+  updateTrayBadge();
 }
 
 // ─── Briefing Panel Window ──────────────────────────────────────────
@@ -132,23 +190,41 @@ function addNotification(payload) {
 function handleIncomingNotification(payload) {
   const notif = addNotification(payload);
 
-  // Show native toast
-  if (Notification.isSupported()) {
+  // Show native toast for toast/alert/production-card types (not briefings — those go to panel only)
+  if (Notification.isSupported() && notif.type !== 'briefing') {
+    const toastTitle = notif.title;
+    let toastBody = notif.body;
+
+    // For production cards, create a summary toast
+    if (notif.type === 'production-card' && notif.data) {
+      const d = notif.data;
+      const status = d.paceStatus === 'ahead' ? 'Ahead' : d.paceStatus === 'behind' ? 'Behind' : 'On Pace';
+      toastBody = `${d.dailyTotal} lbs (${d.percentOfTarget}% of target) — ${status}`;
+    }
+
     const toast = new Notification({
-      title: notif.title,
-      body: notif.body,
+      title: toastTitle,
+      body: toastBody,
       icon: path.join(__dirname, '..', 'assets', 'icon.png'),
       urgency: notif.priority === 'high' ? 'critical' : 'normal',
-      silent: notif.priority === 'low'
+      silent: !store.get('soundEnabled')
     });
     toast.on('click', () => showPanel());
     toast.show();
+
+    // Auto-dismiss toast after 8 seconds
+    setTimeout(() => {
+      toast.close();
+    }, 8000);
   }
 
   // Forward to panel if open
   if (panel && !panel.isDestroyed() && panel.isVisible()) {
     panel.webContents.send('new-notification', notif);
   }
+
+  // Update tray badge
+  updateTrayBadge();
 
   return notif;
 }
@@ -162,6 +238,7 @@ function setupIPC() {
     const n = notifs.find(n => n.id === id);
     if (n) n.read = true;
     store.set('notifications', notifs);
+    updateTrayBadge();
     return true;
   });
 
@@ -169,18 +246,21 @@ function setupIPC() {
     const notifs = getNotifications();
     notifs.forEach(n => n.read = true);
     store.set('notifications', notifs);
+    updateTrayBadge();
     return true;
   });
 
   ipcMain.handle('clear-all', () => {
     store.set('notifications', []);
+    updateTrayBadge();
     return true;
   });
 
   ipcMain.handle('get-config', () => ({
     port: store.get('port'),
     autoStart: store.get('autoStart'),
-    atlasHost: store.get('atlasHost')
+    atlasHost: store.get('atlasHost'),
+    soundEnabled: store.get('soundEnabled')
   }));
 
   ipcMain.handle('set-config', (_, config) => {
@@ -190,6 +270,7 @@ function setupIPC() {
       app.setLoginItemSettings({ openAtLogin: config.autoStart });
     }
     if (config.atlasHost) store.set('atlasHost', config.atlasHost);
+    if (config.soundEnabled !== undefined) store.set('soundEnabled', config.soundEnabled);
     return true;
   });
 
@@ -209,6 +290,11 @@ function setupIPC() {
 
   ipcMain.handle('close-panel', () => {
     if (panel && !panel.isDestroyed()) panel.hide();
+  });
+
+  ipcMain.handle('get-unread-count', () => {
+    const notifs = getNotifications();
+    return notifs.filter(n => !n.read).length;
   });
 }
 

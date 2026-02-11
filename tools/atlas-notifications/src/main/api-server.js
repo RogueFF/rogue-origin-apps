@@ -29,7 +29,7 @@ function createApiServer(port, onNotification, apiToken) {
       return res.status(400).json({ error: 'Missing required field: title' });
     }
 
-    const validTypes = ['toast', 'briefing', 'alert'];
+    const validTypes = ['toast', 'briefing', 'alert', 'production-card'];
     if (payload.type && !validTypes.includes(payload.type)) {
       return res.status(400).json({ error: `Invalid type. Must be one of: ${validTypes.join(', ')}` });
     }
