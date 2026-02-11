@@ -3524,7 +3524,7 @@ html.tv-mode .daily-actual {
   display: flex;
   align-items: stretch;
   width: 100%;
-  height: 40px;
+  height: 56px;
   gap: 2px;
   border-radius: var(--r-sm);
   overflow: hidden;
@@ -3541,9 +3541,18 @@ html.tv-mode .daily-actual {
 }
 
 .cycle-timeline-block:hover { opacity: 0.8; }
-.cycle-timeline-block.green { background: var(--green); }
-.cycle-timeline-block.gold { background: var(--gold); }
-.cycle-timeline-block.red { background: var(--red); }
+.cycle-timeline-block.green {
+  background: linear-gradient(180deg, var(--green), rgba(74, 158, 107, 0.7));
+  box-shadow: inset 0 1px 1px rgba(255,255,255,0.12);
+}
+.cycle-timeline-block.gold {
+  background: linear-gradient(180deg, var(--gold), rgba(212, 168, 67, 0.7));
+  box-shadow: inset 0 1px 1px rgba(255,255,255,0.12);
+}
+.cycle-timeline-block.red {
+  background: linear-gradient(180deg, var(--red), rgba(196, 92, 74, 0.7));
+  box-shadow: inset 0 1px 1px rgba(255,255,255,0.12);
+}
 
 .cycle-timeline-block .cycle-sparkline-tooltip {
   display: none;
@@ -3565,15 +3574,28 @@ html.tv-mode .daily-actual {
 .cycle-timeline-block:hover .cycle-sparkline-tooltip { display: block; }
 
 .cycle-timeline-break {
-  width: 4px;
+  width: 8px;
   background: rgba(255, 255, 255, 0.08);
   border-radius: 2px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cycle-timeline-break-label {
+  font-family: var(--font-ui);
+  font-size: 7px;
+  color: var(--cream-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  writing-mode: vertical-rl;
+  opacity: 0.6;
 }
 
 .cycle-timeline-labels {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   margin-top: 4px;
   font-family: var(--font-data);
   font-size: 11px;
@@ -3581,49 +3603,86 @@ html.tv-mode .daily-actual {
 }
 
 /* ========================================
-   PASS 7: STACKED RINGS VIEW (cycle history)
+   PASS 7: PACE CHART VIEW (cycle history)
    ======================================== */
-.cycle-rings {
+.cycle-pace {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  gap: 3px;
   width: 100%;
-  height: 140px;
   position: relative;
+  padding: 4px 0;
 }
 
-.cycle-rings svg {
-  width: 140px;
-  height: 140px;
-}
-
-.cycle-rings-center {
+.cycle-pace-target {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  text-align: center;
+  top: 0;
+  bottom: 0;
+  border-left: 2px dashed var(--gold);
+  opacity: 0.6;
+  z-index: 1;
   pointer-events: none;
 }
 
-.cycle-rings-count {
-  font-family: var(--font-hero);
-  font-size: 32px;
-  color: var(--cream);
-  line-height: 1;
+.cycle-pace-target-label {
+  position: absolute;
+  top: -14px;
+  left: 4px;
+  font-family: var(--font-data);
+  font-size: 9px;
+  color: var(--gold);
+  white-space: nowrap;
 }
 
-.cycle-rings-label {
-  font-family: var(--font-ui);
-  font-size: 11px;
+.cycle-pace-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cycle-pace-label {
+  font-family: var(--font-data);
+  font-size: 10px;
   color: var(--cream-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  width: 28px;
+  text-align: right;
+  flex-shrink: 0;
 }
 
-html.tv-mode .cycle-rings { height: 200px; }
-html.tv-mode .cycle-rings svg { width: 200px; height: 200px; }
-html.tv-mode .cycle-rings-count { font-size: 44px; }
+.cycle-pace-track {
+  flex: 1;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+
+.cycle-pace-bar {
+  height: 100%;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 4px;
+  transition: width var(--t-normal) var(--ease-spring);
+}
+
+.cycle-pace-bar.green { background: var(--green); }
+.cycle-pace-bar.gold { background: var(--gold); }
+.cycle-pace-bar.red { background: var(--red); }
+
+.cycle-pace-time {
+  font-family: var(--font-data);
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
+}
+
+html.tv-mode .cycle-pace-track { height: 20px; }
+html.tv-mode .cycle-pace-label { font-size: 13px; width: 36px; }
+html.tv-mode .cycle-pace-time { font-size: 12px; }
+html.tv-mode .cycle-pace-target-label { font-size: 11px; }
 
 /* ========================================
    PASS 7: BAR RACE VIEW (cycle history)
@@ -3644,14 +3703,24 @@ html.tv-mode .cycle-rings-count { font-size: 44px; }
   left: 0;
   right: 0;
   border-top: 2px dashed var(--gold);
-  opacity: 0.5;
+  opacity: 0.6;
   pointer-events: none;
   z-index: 1;
 }
 
+.cycle-bars-target-label {
+  position: absolute;
+  right: 0;
+  top: -14px;
+  font-family: var(--font-data);
+  font-size: 9px;
+  color: var(--gold);
+  letter-spacing: 0.05em;
+}
+
 .cycle-bar {
   flex: 1;
-  min-width: 8px;
+  min-width: 12px;
   max-width: 40px;
   border-radius: 3px 3px 0 0;
   position: relative;
@@ -3662,13 +3731,30 @@ html.tv-mode .cycle-rings-count { font-size: 44px; }
 .cycle-bar.red { background: var(--red); }
 
 .cycle-bar.active {
-  animation: bar-pulse 1.5s ease-in-out infinite;
+  box-shadow: 0 0 8px 2px rgba(228, 170, 79, 0.35);
+}
+.cycle-bar.active.green {
+  box-shadow: 0 0 8px 2px rgba(74, 158, 107, 0.4);
+}
+.cycle-bar.active.red {
+  box-shadow: 0 0 8px 2px rgba(196, 92, 74, 0.4);
 }
 
-@keyframes bar-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+.cycle-bar-value {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-data);
+  font-size: 8px;
+  color: var(--cream-muted);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity var(--t-fast) var(--ease-out);
 }
+
+.cycle-bar:hover .cycle-bar-value,
+.cycle-bar.active .cycle-bar-value { opacity: 1; }
 
 .cycle-bar-label {
   position: absolute;
@@ -3683,6 +3769,8 @@ html.tv-mode .cycle-rings-count { font-size: 44px; }
 
 html.tv-mode .cycle-bars { height: 150px; }
 html.tv-mode .cycle-bar-label { font-size: 11px; }
+html.tv-mode .cycle-bar-value { font-size: 10px; }
+html.tv-mode .cycle-bars-target-label { font-size: 11px; }
 
 @media print {
   body { background: #fff; color: #000; }
