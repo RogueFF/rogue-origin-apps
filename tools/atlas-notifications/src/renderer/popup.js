@@ -28,8 +28,13 @@ window.atlas.onShowPopup((data) => {
   // Render the card
   container.innerHTML = renderCard(notification);
 
-  // Start auto-dismiss countdown
-  startCountdown();
+  // Speak if TTS enabled
+  speakNotification(notification);
+
+  // Start auto-dismiss countdown (unless TTS paused it)
+  if (!notification.tts && !notification.data?.tts) {
+    startCountdown();
+  }
 });
 
 // ─── Auto-dismiss countdown with progress bar ───────────────────────
@@ -95,6 +100,33 @@ container.addEventListener('click', (e) => {
   window.atlas.popupClicked(notification.id);
   dismiss();
 });
+
+// ─── TTS via Web Speech API ─────────────────────────────────────────
+
+function speakNotification(notif) {
+  if (!notif.tts && !notif.data?.tts) return;
+  if (!window.speechSynthesis) return;
+
+  // Build speech text from segments or body
+  let text = '';
+  if (notif.data?.segments?.length) {
+    text = notif.data.segments.map(s => `${s.label}. ${s.text}`).join('. ');
+  } else {
+    text = notif.body || notif.title || '';
+  }
+  if (!text) return;
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 1.0;
+  utterance.volume = 0.9;
+  
+  // Extend popup duration for speech
+  resetCountdown();
+  utterance.onend = () => startCountdown();
+  utterance.onerror = () => startCountdown();
+  
+  window.speechSynthesis.speak(utterance);
+}
 
 // ─── Pause countdown on hover ───────────────────────────────────────
 
