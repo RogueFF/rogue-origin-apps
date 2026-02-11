@@ -7,7 +7,7 @@ const { createApiServer } = require('./api-server');
 function safeSend(win, channel, ...args) {
   try {
     if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
-      safeSend(win, channel, ...args);
+      win.webContents.send(channel, ...args);
     }
   } catch (e) {
     // Window destroyed mid-send — ignore
