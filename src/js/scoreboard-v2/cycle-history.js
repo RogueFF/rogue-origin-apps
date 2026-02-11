@@ -298,7 +298,7 @@
           this.renderCycleTimeline(container);
           break;
         case 6:
-          this.renderCycleRings(container);
+          this.renderCyclePace(container);
           break;
         case 7:
           this.renderCycleBars(container);
@@ -649,13 +649,8 @@
       const wrapper = document.createElement('div');
       wrapper.className = 'cycle-timeline';
 
-      // Break times in minutes from midnight (for gap detection)
-      var breakMins = [];
-      if (ScoreboardConfig && ScoreboardConfig.workday && ScoreboardConfig.workday.breaks) {
-        ScoreboardConfig.workday.breaks.forEach(function(b) {
-          breakMins.push(b[0] * 60 + b[1]);
-        });
-      }
+      // Precompute max time once
+      var maxTime = Math.max.apply(null, cycles.map(function(c) { return c.time; }).concat([1]));
 
       cycles.forEach(function(cycle, i) {
         // Determine color based on pace vs target
@@ -668,6 +663,7 @@
           if (gap > 15 * 60 * 1000) {
             var spacer = document.createElement('div');
             spacer.className = 'cycle-timeline-break';
+            spacer.innerHTML = '<span class="cycle-timeline-break-label">break</span>';
             wrapper.appendChild(spacer);
           }
         }
@@ -676,13 +672,15 @@
         block.className = 'cycle-timeline-block ' + colorClass;
 
         // Width proportional to duration (relative to longest)
-        var maxTime = Math.max.apply(null, cycles.map(function(c) { return c.time; }));
         block.style.flex = (cycle.time / maxTime).toFixed(3);
 
-        // Tooltip
+        // Tooltip: "Bag #N · 4:32 (target 5:00) · 110%"
         var tooltip = document.createElement('div');
         tooltip.className = 'cycle-sparkline-tooltip';
-        tooltip.textContent = ScoreboardTimer.formatTime(cycle.time) + ' · ' + Math.round(pct) + '%';
+        tooltip.textContent = 'Bag #' + (i + 1) + ' \u00B7 ' +
+          ScoreboardTimer.formatTime(cycle.time) +
+          ' (target ' + ScoreboardTimer.formatTime(cycle.target) + ') \u00B7 ' +
+          Math.round(pct) + '%';
         block.appendChild(tooltip);
 
         wrapper.appendChild(block);
@@ -690,7 +688,7 @@
 
       container.appendChild(wrapper);
 
-      // Labels
+      // Labels with total count
       var labels = document.createElement('div');
       labels.className = 'cycle-timeline-labels';
       if (cycles.length > 0) {
@@ -702,80 +700,83 @@
           var ap = d.getHours() >= 12 ? 'PM' : 'AM';
           return h + ':' + m + ' ' + ap;
         };
-        labels.innerHTML = '<span>' + fmt(firstTime) + '</span><span>' + fmt(lastTime) + '</span>';
+        labels.innerHTML = '<span>' + cycles.length + ' bags \u00B7 ' + fmt(firstTime) + ' \u2192 ' + fmt(lastTime) + '</span>';
       }
       container.appendChild(labels);
     },
 
     // ========================================
-    // Mode 6: Stacked Rings
+    // Mode 6: Pace Chart
     // ========================================
 
     /**
-     * Render concentric rings — most recent = outermost
-     * Each ring fill = % of target achieved
+     * Render horizontal pace comparison chart
+     * Each cycle = horizontal bar, target = vertical dashed line
+     * Green = fast (under target), Red = slow (over target), Gold = on pace (within 5%)
      * @param {HTMLElement} container - Container element
      */
-    renderCycleRings: function(container) {
+    renderCyclePace: function(container) {
       var cycles = ScoreboardState.cycleHistory;
-      var recent = cycles.slice(-8); // Show up to 8 rings
+      var recent = cycles.slice(-12);
       var total = cycles.length;
 
       var wrapper = document.createElement('div');
-      wrapper.className = 'cycle-rings';
+      wrapper.className = 'cycle-pace';
 
-      var size = 140;
-      var centerXY = size / 2;
-      var maxR = (size / 2) - 6;
-      var minR = 16;
-      var ringCount = recent.length;
-      var ringWidth = ringCount > 0 ? Math.min(10, (maxR - minR) / ringCount - 1) : 8;
+      // Find max time for scaling
+      var maxTime = Math.max.apply(null, recent.map(function(c) { return c.time; }).concat([1]));
+      var targetTime = recent.length > 0 ? recent[0].target : 0;
 
-      var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.setAttribute('viewBox', '0 0 ' + size + ' ' + size);
-      svg.setAttribute('width', size);
-      svg.setAttribute('height', size);
+      // Target line (vertical dashed line)
+      if (targetTime > 0) {
+        var targetPct = (targetTime / maxTime) * 100;
+        var targetLine = document.createElement('div');
+        targetLine.className = 'cycle-pace-target';
+        targetLine.style.left = targetPct + '%';
 
-      recent.forEach(function(cycle, i) {
-        var r = minR + (i + 1) * ((maxR - minR) / ringCount);
-        var circumference = 2 * Math.PI * r;
-        var pct = cycle.target > 0 ? Math.min((cycle.target / cycle.time) * 100, 100) : 0;
-        var fillLength = (pct / 100) * circumference;
-        var color = pct >= 105 ? '#4a9e6b' : pct >= 90 ? '#d4a843' : '#c45c4a';
+        var targetLabel = document.createElement('span');
+        targetLabel.className = 'cycle-pace-target-label';
+        targetLabel.textContent = ScoreboardTimer.formatTime(targetTime);
+        targetLine.appendChild(targetLabel);
 
-        // Background ring
-        var bgRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        bgRing.setAttribute('cx', centerXY);
-        bgRing.setAttribute('cy', centerXY);
-        bgRing.setAttribute('r', r);
-        bgRing.setAttribute('fill', 'none');
-        bgRing.setAttribute('stroke', 'rgba(255,255,255,0.06)');
-        bgRing.setAttribute('stroke-width', ringWidth);
-        svg.appendChild(bgRing);
+        wrapper.appendChild(targetLine);
+      }
 
-        // Progress ring
-        var ring = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        ring.setAttribute('cx', centerXY);
-        ring.setAttribute('cy', centerXY);
-        ring.setAttribute('r', r);
-        ring.setAttribute('fill', 'none');
-        ring.setAttribute('stroke', color);
-        ring.setAttribute('stroke-width', ringWidth);
-        ring.setAttribute('stroke-dasharray', fillLength + ' ' + (circumference - fillLength));
-        ring.setAttribute('stroke-dashoffset', String(circumference * 0.25)); // Start at top
-        ring.setAttribute('stroke-linecap', 'round');
-        ring.setAttribute('opacity', '0.85');
-        svg.appendChild(ring);
+      // Render rows (most recent at top)
+      var rows = recent.slice().reverse();
+      rows.forEach(function(cycle, i) {
+        var row = document.createElement('div');
+        row.className = 'cycle-pace-row';
+
+        // Cycle number label
+        var label = document.createElement('div');
+        label.className = 'cycle-pace-label';
+        label.textContent = '#' + (total - i);
+        row.appendChild(label);
+
+        // Bar
+        var barTrack = document.createElement('div');
+        barTrack.className = 'cycle-pace-track';
+
+        var bar = document.createElement('div');
+        var widthPct = (cycle.time / maxTime) * 100;
+
+        // Color: green = fast, red = slow, gold = on pace (within 5%)
+        var ratio = cycle.target > 0 ? cycle.time / cycle.target : 1;
+        var colorClass = ratio <= 0.95 ? 'green' : ratio <= 1.05 ? 'gold' : 'red';
+        bar.className = 'cycle-pace-bar ' + colorClass;
+        bar.style.width = widthPct + '%';
+
+        // Time label inside bar
+        var timeLabel = document.createElement('span');
+        timeLabel.className = 'cycle-pace-time';
+        timeLabel.textContent = ScoreboardTimer.formatTime(cycle.time);
+        bar.appendChild(timeLabel);
+
+        barTrack.appendChild(bar);
+        row.appendChild(barTrack);
+        wrapper.appendChild(row);
       });
-
-      wrapper.appendChild(svg);
-
-      // Center text
-      var center = document.createElement('div');
-      center.className = 'cycle-rings-center';
-      center.innerHTML = '<div class="cycle-rings-count">' + total + '</div>' +
-                          '<div class="cycle-rings-label">cycles</div>';
-      wrapper.appendChild(center);
 
       container.appendChild(wrapper);
     },
@@ -805,7 +806,13 @@
         var targetPct = (targetTime / maxTime) * 100;
         var targetLine = document.createElement('div');
         targetLine.className = 'cycle-bars-target-line';
-        targetLine.style.bottom = 'calc(' + targetPct + '% + 18px)'; // account for label padding
+        targetLine.style.bottom = 'calc(' + targetPct + '% + 18px)';
+
+        var targetLabel = document.createElement('span');
+        targetLabel.className = 'cycle-bars-target-label';
+        targetLabel.textContent = 'TARGET';
+        targetLine.appendChild(targetLabel);
+
         wrapper.appendChild(targetLine);
       }
 
@@ -821,7 +828,13 @@
         bar.className = 'cycle-bar ' + colorClass + (isLast ? ' active' : '');
         bar.style.height = heightPct + '%';
 
-        // Label
+        // Value label on top of bar
+        var valueLabel = document.createElement('div');
+        valueLabel.className = 'cycle-bar-value';
+        valueLabel.textContent = ScoreboardTimer.formatTime(cycle.time);
+        bar.appendChild(valueLabel);
+
+        // Number label below bar
         var label = document.createElement('div');
         label.className = 'cycle-bar-label';
         label.textContent = '#' + (total - recent.length + i + 1);
