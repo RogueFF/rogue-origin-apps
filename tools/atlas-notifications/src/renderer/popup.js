@@ -63,6 +63,7 @@ function resetCountdown() {
 
 function dismiss() {
   resetCountdown();
+  stopTTS();
   document.body.classList.add('popup-dismissing');
 
   // Wait for slide-out animation to finish
@@ -101,31 +102,50 @@ container.addEventListener('click', (e) => {
   dismiss();
 });
 
-// ─── TTS via Web Speech API ─────────────────────────────────────────
+// ─── TTS — ElevenLabs audio_url or Web Speech fallback ──────────────
+
+let ttsAudio = null;
 
 function speakNotification(notif) {
   if (!notif.tts && !notif.data?.tts) return;
-  if (!window.speechSynthesis) return;
 
-  // Build speech text from segments or body
+  // Prefer pre-generated audio URL (ElevenLabs)
+  if (notif.audio_url) {
+    resetCountdown();
+    ttsAudio = new Audio(notif.audio_url);
+    ttsAudio.volume = 0.9;
+    ttsAudio.onended = () => { ttsAudio = null; startCountdown(); };
+    ttsAudio.onerror = () => { ttsAudio = null; fallbackSpeech(notif); };
+    ttsAudio.play().catch(() => fallbackSpeech(notif));
+    return;
+  }
+
+  fallbackSpeech(notif);
+}
+
+function fallbackSpeech(notif) {
+  if (!window.speechSynthesis) { startCountdown(); return; }
+
   let text = '';
   if (notif.data?.segments?.length) {
     text = notif.data.segments.map(s => `${s.label}. ${s.text}`).join('. ');
   } else {
     text = notif.body || notif.title || '';
   }
-  if (!text) return;
+  if (!text) { startCountdown(); return; }
 
+  resetCountdown();
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.rate = 1.0;
   utterance.volume = 0.9;
-  
-  // Extend popup duration for speech
-  resetCountdown();
   utterance.onend = () => startCountdown();
   utterance.onerror = () => startCountdown();
-  
   window.speechSynthesis.speak(utterance);
+}
+
+function stopTTS() {
+  if (ttsAudio) { ttsAudio.pause(); ttsAudio = null; }
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
 }
 
 // ─── Pause countdown on hover ───────────────────────────────────────
