@@ -200,6 +200,13 @@
       // Clear container
       container.innerHTML = '';
 
+      // Always update mode label (even when empty)
+      var modeLabelEl = ScoreboardDOM ? ScoreboardDOM.get('cycleModeLabel') : document.getElementById('cycleModeLabel');
+      var allModes = (ScoreboardConfig && ScoreboardConfig.cycleModes) || ['Donut', 'Bars', 'Grid', 'Cards', 'List'];
+      if (modeLabelEl) {
+        modeLabelEl.textContent = allModes[ScoreboardState.cycleDisplayMode] || 'List';
+      }
+
       if (ScoreboardState.cycleHistory.length === 0) {
         container.innerHTML = '<div class="cycle-empty">No cycles yet</div>';
         // Auto-collapse when empty
