@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <link rel="icon" type="image/png" href="/rogue-origin-apps/favicon.png">
   <link rel="manifest" href="/rogue-origin-apps/manifest.json">
-  <meta name="theme-color" content="#668971">
+  <meta name="theme-color" content="#0d0f0e">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -16,11 +16,9 @@
   <!-- TV Mode Detection: Apply before render to prevent flash -->
   <script>
     (function() {
-      // Check URL parameter OR localStorage
-      const urlParams = new URLSearchParams(window.location.search);
-      const urlTvMode = urlParams.get('tv') === '1';
-      const storedTvMode = localStorage.getItem('tvMode') === 'true';
-      
+      var urlParams = new URLSearchParams(window.location.search);
+      var urlTvMode = urlParams.get('tv') === '1';
+      var storedTvMode = localStorage.getItem('tvMode') === 'true';
       if (urlTvMode || storedTvMode) {
         document.documentElement.classList.add('tv-mode');
       }
@@ -34,8 +32,8 @@
   <link rel="preconnect" href="https://unpkg.com">
   <link rel="dns-prefetch" href="https://script.google.com">
 
-  <!-- Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@400;600;700;900&display=optional" rel="stylesheet">
+  <!-- Fonts: Luxury Instrument Panel -->
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=optional" rel="stylesheet">
 
   <!-- Scripts: Lazy loaded by modules when needed -->
   <!-- Chart.js and Phosphor Icons are loaded on-demand by lazy-loader.js -->
@@ -57,16 +55,20 @@
   <script defer src="../js/scoreboard-v2/events.js?v=3"></script>
   <script defer src="../js/scoreboard-v2/fab-menu.js?v=1"></script>
   <script defer src="../js/scoreboard-v2/main.js?v=10"></script>
+
   <!-- Critical CSS: Loaded synchronously -->
   <link rel="stylesheet" href="../css/shared-base.css">
-  
+
   <!-- Non-critical CSS: Deferred for faster initial render -->
-  <link rel="preload" href="../css/scoreboard-v2.css?v=2" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link rel="stylesheet" href="../css/scoreboard-v2.css?v=2"></noscript>
+  <link rel="preload" href="../css/scoreboard-v2.css?v=3" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/scoreboard-v2.css?v=3"></noscript>
 </head>
 <body class="idle timer-neutral">
   <a href="#main-panel" class="skip-link">Skip to main content</a>
-  <!-- Morning Report View -->
+
+  <!-- ============================================
+       MORNING REPORT (full-screen overlay)
+       ============================================ -->
   <div id="morningReportContainer">
     <div class="mr-header">
       <div>
@@ -81,7 +83,9 @@
     <div id="morningReportContent"></div>
   </div>
 
-  <!-- Historical Date Banner (shows when viewing past data) -->
+  <!-- ============================================
+       HISTORICAL DATE BANNER
+       ============================================ -->
   <div id="historicalDateBanner" class="historical-date-banner" style="display:none;">
     <div class="historical-banner-content">
       <i class="ph-duotone ph-calendar-blank"></i>
@@ -94,8 +98,12 @@
     </button>
   </div>
 
+  <!-- ============================================
+       HEADER: Strain (top-left) + Clock (top-right)
+       Asymmetric — strain anchored left, clock floats right of main panel
+       ============================================ -->
   <div class="strain-display">
-    <div class="strain-label" id="strainLabel">Line 1 • Current Strain</div>
+    <div class="strain-label" id="strainLabel">Line 1 · Current Strain</div>
     <div class="strain-name" id="strainName">—</div>
     <div class="strain-rate-indicator" id="strainRateIndicator"></div>
   </div>
@@ -105,14 +113,12 @@
     <div class="date" id="date">Loading...</div>
   </div>
 
-  <!-- Time Controls (positioned below time-display) -->
+  <!-- Time Controls -->
   <div class="time-controls">
-    <!-- Start Day Button (appears until shift start is set) -->
     <button id="startDayBtn" class="start-day-btn pulse-green" style="display:none;">
       <i class="ph-duotone ph-play-circle"></i>
       Start Day
     </button>
-    <!-- Started Badge (appears after shift start is set) -->
     <div id="startedBadge" class="started-badge" style="display:none;">
       <i class="ph-duotone ph-clock"></i>
       Started: <span id="startTimeDisplay">—</span>
@@ -122,24 +128,26 @@
 
   <!-- Date Picker Input (hidden) -->
   <input type="date" id="historicalDatePicker" class="date-picker-hidden" aria-label="Select historical date to view past production data">
-  <!-- Morning Report Button -->
+
+  <!-- Morning Report Button (hidden — moved to FAB) -->
   <button id="morningReportBtn">
     <i class="ph-duotone ph-chart-bar"></i>
     Morning Report / Reporte Matutino
   </button>
 
-  <!-- Historical View Button -->
+  <!-- Historical View Button (hidden — moved to FAB) -->
   <button id="historicalViewBtn" class="historical-view-btn">
     <i class="ph-duotone ph-clock-counter-clockwise"></i>
     Past Data
   </button>
 
-  <!-- Order Queue Toggle Button -->
+  <!-- Order Queue Toggle Button (hidden — moved to FAB) -->
   <button id="orderQueueToggleBtn" class="order-queue-toggle-btn" title="Toggle Order Queue / Alternar Cola de Pedidos">
     <i class="ph-duotone ph-stack"></i>
     <span id="orderQueueToggleText">Orders</span>
   </button>
 
+  <!-- Lang / TV / Complaints toggles -->
   <div class="lang-toggle">
     <button class="lang-btn active" id="langToggleBtn">
       <span id="langToggleText">EN</span>
@@ -151,8 +159,12 @@
       <i class="ph-duotone ph-warning-circle"></i>
     </a>
   </div>
+
   <button class="help-btn">?</button>
 
+  <!-- ============================================
+       HELP MODAL
+       ============================================ -->
   <div class="help-modal" id="helpModal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
     <div class="help-content">
       <div class="help-header">
@@ -192,13 +204,21 @@
       </div>
     </div>
   </div>
-  
+
+  <!-- ============================================
+       MAIN PANEL — Left ~70%
+       Production data, daily progress, chart
+       ============================================ -->
   <div id="main-panel" class="main-panel">
     <div class="scoreboard">
+
+      <!-- Status Badge -->
       <div class="status-badge">
         <span class="status-icon" id="statusIcon"><i class="ph-duotone ph-pause"></i></span>
         <span id="statusText">WAITING</span>
       </div>
+
+      <!-- Hour Cards -->
       <div class="hour-cards">
         <div class="hour-card last-hour">
           <div class="hour-card-header" id="lastHourHeader">Last Hour</div>
@@ -214,12 +234,13 @@
             <div class="percentage-label" id="ofTargetLabel">of target</div>
           </div>
         </div>
+
         <div class="hour-card current-hour" id="currentHourCard" style="display:none;">
           <div class="hour-card-header" id="currentHourHeader"><i class="ph-duotone ph-timer" style="margin-right:6px"></i> Current Hour</div>
           <div class="hour-card-timeslot" id="currentHourTimeslot">—</div>
           <div class="lbs-row">
             <span class="actual-lbs" id="currentHourTrimmers">—</span>
-            <span class="lbs-unit" style="font-size:18px;margin-left:10px" id="trimmersSmallLabel">trimmers</span>
+            <span class="lbs-unit" style="font-size:14px;margin-left:8px" id="trimmersSmallLabel">trimmers</span>
           </div>
           <div class="percentage-display">
             <div class="percentage-value" id="currentHourTargetLbs">—</div>
@@ -227,7 +248,8 @@
           </div>
         </div>
       </div>
-      
+
+      <!-- Daily Progress -->
       <div class="daily-progress">
         <div class="daily-header" id="dailyHeader">Line 1 Today</div>
         <div class="daily-numbers">
@@ -251,7 +273,6 @@
 
       <!-- Order Queue Section -->
       <div class="order-queue-section" id="orderQueueSection" style="display:none;">
-        <!-- Current Order Pill -->
         <div class="order-pill" id="currentOrderPill">
           <div class="order-pill-header">
             <span class="order-icon">🎯</span>
@@ -265,12 +286,8 @@
             </div>
             <span class="order-progress-text" id="currentProgressText">0 / 0 kg</span>
           </div>
-
-          <!-- Expanded Content (hidden by default) -->
           <div class="order-detail" id="currentOrderDetail"></div>
         </div>
-
-        <!-- Next Order Pill -->
         <div class="order-pill next" id="nextOrderPill">
           <div class="order-pill-header">
             <span class="order-icon">⏭</span>
@@ -278,17 +295,18 @@
             <span class="order-summary" id="nextOrderSummary">—</span>
             <span class="expand-icon">▼</span>
           </div>
-
-          <!-- Expanded Content (hidden by default) -->
           <div class="order-detail" id="nextOrderDetail"></div>
         </div>
       </div>
 
+      <!-- Comparisons -->
       <div class="comparisons">
         <div class="comparison-pill" id="vsYesterdayPill" style="display:none"><span class="comparison-label" id="vsYesterdayLabel">vs Yesterday</span><span class="comparison-value" id="vsYesterdayValue">—</span></div>
         <div class="comparison-pill" id="vs7DayPill" style="display:none"><span class="comparison-label" id="vs7DayLabel">vs 7-Day Avg</span><span class="comparison-value" id="vs7DayValue">—</span></div>
         <div class="comparison-pill streak-pill" id="streakPill" style="display:none"><span class="streak-icon"><i class="ph-duotone ph-fire"></i></span><span class="streak-value" id="streakValue">0</span><span class="comparison-label" id="streakLabel">hr streak</span></div>
       </div>
+
+      <!-- Info Bar -->
       <div class="info-bar">
         <div class="info-section"><span class="info-icon"><i class="ph-duotone ph-users-three"></i></span><span><span id="crewCount">—</span> <span id="trimmersLabel">Trimmers</span></span></div>
         <div class="info-divider"></div>
@@ -303,23 +321,28 @@
           <i class="ph-duotone ph-chart-bar"></i>
         </button>
       </div>
-      
-      <!-- Hourly Rate Chart - Bottom -->
+
+      <!-- Hourly Rate Chart -->
       <div class="chart-container" id="chartContainer" style="display:none;">
         <div class="chart-header" id="chartHeader">Hourly Performance (lbs/trimmer)</div>
         <div class="chart-wrapper">
           <canvas id="hourlyChart"></canvas>
         </div>
       </div>
+
     </div>
   </div>
-  
+
+  <!-- ============================================
+       INSTRUMENT PANEL — Right ~30%
+       Scale ring, bag timer ring, cycle stats
+       ============================================ -->
   <div class="timer-panel neutral" id="timerPanel">
     <div class="drag-handle" id="dragHandle"></div>
     <div class="expand-hint" id="expandHint">◀</div>
     <button class="fullscreen-toggle" id="fullscreenToggle"><i class="ph-duotone ph-arrows-out"></i></button>
 
-    <!-- Scale Weight Display (circular ring like timer) - ABOVE bag timer -->
+    <!-- Scale Ring -->
     <div class="scale-section" id="scaleSection">
       <div class="scale-header" id="scaleHeader">Live Scale</div>
       <div class="scale-display" id="scaleDisplay">
@@ -335,6 +358,7 @@
       </div>
     </div>
 
+    <!-- Bag Timer Ring -->
     <div class="timer-header" id="timerHeader">5KG Bag Timer</div>
     <div class="timer-display" id="timerDisplay">
       <svg class="timer-ring" viewBox="0 0 220 220">
@@ -346,17 +370,23 @@
         <div class="timer-label" id="timerLabel">remaining</div>
       </div>
     </div>
-    <div class="timer-target">Target: <span id="timerTargetTime">--:--</span> • <span id="timerTrimmers">0</span> trimmers</div>
+
+    <div class="timer-target">Target: <span id="timerTargetTime">--:--</span> · <span id="timerTrimmers">0</span> trimmers</div>
+
+    <!-- Button Row -->
     <div class="timer-btn-row">
       <button class="manual-btn" id="manualBtn"><span class="icon"><i class="ph-duotone ph-package"></i></span><span id="manualBtnText">5KG Bag Complete</span></button>
       <button class="pause-btn" id="pauseBtn"><i class="ph-duotone ph-pause"></i></button>
     </div>
+
+    <!-- Timer Stats -->
     <div class="timer-stats">
       <div class="timer-stat"><span class="timer-stat-label" id="bagsTodayLabel">Bags Today</span><span class="timer-stat-value" id="bagsToday">0</span></div>
       <div class="timer-stat"><span class="timer-stat-label" id="avgTodayLabel">Avg Today</span><span class="timer-stat-value" id="avgToday">--:--</span></div>
       <div class="timer-stat"><span class="timer-stat-label" id="vsTargetLabel">vs Target</span><span class="timer-stat-value" id="vsTarget">—</span></div>
     </div>
 
+    <!-- Cycle History -->
     <div class="cycle-history" id="cycleHistory">
       <div class="cycle-history-header">
         <span class="cycle-history-title" id="cycleHistoryTitle">Today's Cycles</span>
@@ -370,11 +400,15 @@
       <div class="cycle-content" id="cycleContent"></div>
     </div>
   </div>
-  
-  <!-- Celebration container -->
+
+  <!-- ============================================
+       CELEBRATION
+       ============================================ -->
   <div class="celebration" id="celebration"></div>
-  
-  <!-- Pause Modal -->
+
+  <!-- ============================================
+       PAUSE MODAL
+       ============================================ -->
   <div class="pause-modal-overlay" id="pauseModal">
     <div class="pause-modal">
       <div class="pause-modal-title"><i class="ph-duotone ph-pause-circle"></i> Pause Timer</div>
@@ -393,7 +427,7 @@
       </div>
     </div>
   </div>
-  
+
   <!-- Pause Banner -->
   <div class="pause-banner" id="pauseBanner">
     <i class="ph-duotone ph-pause-circle" style="font-size:24px;"></i>
@@ -402,7 +436,9 @@
     <span class="pause-banner-reason" id="pauseReasonDisplay">—</span>
   </div>
 
-  <!-- Debug Panel -->
+  <!-- ============================================
+       DEBUG PANEL
+       ============================================ -->
   <div class="debug-indicator" id="debugIndicator">⚠ Debug Mode Active</div>
   <div class="debug-panel" id="debugPanel">
     <div class="debug-header">🛠 Timer Debug <button class="debug-close">✕</button></div>
@@ -439,7 +475,9 @@
     <div class="debug-hint">Press <kbd>D</kbd> to toggle this panel</div>
   </div>
 
-  <!-- Start Day Modal -->
+  <!-- ============================================
+       START DAY MODAL
+       ============================================ -->
   <div id="startDayModal" class="modal-overlay" style="display:none;">
     <div class="modal-content start-day-modal">
       <h3 class="modal-title">
@@ -469,46 +507,36 @@
       </div>
     </div>
   </div>
+
   <script src="../js/sw-register.js" async></script>
 
-  <!-- Debug Module: Lazy-loaded on first use (saves ~5KB on normal page loads) -->
+  <!-- Debug Module: Lazy-loaded on first use -->
   <script>
     (function() {
-      let debugLoaded = false;
-      let debugLoadPromise = null;
-
-      // Lazy load debug module when 'D' key is pressed
+      var debugLoaded = false;
+      var debugLoadPromise = null;
       document.addEventListener('keydown', function(e) {
         if (e.key === 'd' || e.key === 'D') {
-          // Don't trigger if typing in input field
-          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-            return;
-          }
-
-          // Lazy-load debug module on first use
+          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
           if (!debugLoaded && !debugLoadPromise) {
             console.log('[Debug] Loading debug module...');
-            debugLoadPromise = new Promise((resolve, reject) => {
-              const script = document.createElement('script');
+            debugLoadPromise = new Promise(function(resolve, reject) {
+              var script = document.createElement('script');
               script.src = '../js/scoreboard-v2/debug.js?v=2';
-              script.onload = () => {
+              script.onload = function() {
                 debugLoaded = true;
                 console.log('[Debug] Module loaded successfully');
                 resolve();
-                // Trigger toggleDebug after load
-                if (window.toggleDebug) {
-                  window.toggleDebug();
-                }
+                if (window.toggleDebug) window.toggleDebug();
               };
-              script.onerror = () => {
-                debugLoadPromise = null; // Allow retry
+              script.onerror = function() {
+                debugLoadPromise = null;
                 reject(new Error('Failed to load debug.js'));
                 console.error('[Debug] Failed to load debug module');
               };
               document.head.appendChild(script);
             });
           } else if (debugLoaded && window.toggleDebug) {
-            // Module already loaded, just toggle
             window.toggleDebug();
           }
         }
@@ -516,7 +544,9 @@
     })();
   </script>
 
-  <!-- FAB Menu -->
+  <!-- ============================================
+       FAB MENU
+       ============================================ -->
   <div class="fab-backdrop" id="fabBackdrop"></div>
   <div class="fab-container">
     <div class="fab-menu" id="fabMenu" role="menu">
