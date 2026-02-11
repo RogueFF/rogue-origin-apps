@@ -475,6 +475,19 @@
 }
 
 /* ============================================
+   VIEW CONTENT (TAB PANELS)
+   ============================================ */
+
+.view-content {
+  display: none;
+  flex: 1;
+}
+
+.view-content.active {
+  display: block;
+}
+
+/* ============================================
    DASHBOARD VIEW
    ============================================ */
 
@@ -1102,6 +1115,69 @@
 
 .form-textarea::placeholder {
   color: var(--text-muted);
+}
+
+[data-theme="light"] .form-input,
+[data-theme="light"] .form-select,
+[data-theme="light"] .form-textarea {
+  background: #ffffff;
+  border-color: #e5e7eb;
+  color: #111827;
+}
+
+[data-theme="light"] .form-input:focus,
+[data-theme="light"] .form-select:focus,
+[data-theme="light"] .form-textarea:focus {
+  border-color: var(--ro-gold);
+  box-shadow: 0 0 0 3px rgba(228, 170, 79, 0.1);
+  background: #ffffff;
+}
+
+[data-theme="light"] .form-select option {
+  background: #ffffff;
+  color: #111827;
+}
+
+[data-theme="light"] .auth-input {
+  background: #ffffff;
+  border-color: #e5e7eb;
+  color: #111827;
+}
+
+[data-theme="light"] .search-input {
+  background: #ffffff;
+  border-color: #e5e7eb;
+  color: #111827;
+}
+
+[data-theme="light"] .detail-value {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+}
+
+[data-theme="light"] .recent-item {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+}
+
+[data-theme="light"] .stat-card,
+[data-theme="light"] .chart-card,
+[data-theme="light"] .recent-list,
+[data-theme="light"] .complaint-card,
+[data-theme="light"] .complaint-form {
+  background: #ffffff;
+  border-color: #e5e7eb;
+  backdrop-filter: none;
+}
+
+[data-theme="light"] .modal-content,
+[data-theme="light"] .import-modal {
+  background: #ffffff;
+  border-color: #e5e7eb;
+}
+
+[data-theme="light"] .chart-area {
+  background: #f9fafb;
 }
 
 .form-actions {
