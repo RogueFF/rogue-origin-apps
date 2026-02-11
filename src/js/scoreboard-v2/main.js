@@ -83,29 +83,39 @@
           var scoreData = response.scoreboard || response;
           
           // If no shift started today (all zeros), load yesterday's data as fallback
-          if (scoreData && scoreData.todayLbs === 0 && scoreData.hoursLogged === 0 && !State._yesterdayLoaded && !State._historicalDate) {
-            var yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
-            var yStr = yesterday.toISOString().split('T')[0];
-            State._yesterdayLoaded = true;
-            
-            API.loadData(function(yResponse) {
-              var yData = yResponse.scoreboard || yResponse;
-              if (yData && yData.todayLbs > 0) {
-                State.data = yData;
-                State._rawTodayTarget = yData.todayTarget;
-                State._showingYesterday = true;
-                // Show a banner indicating this is yesterday's data
-                var banner = document.getElementById('historicalDateBanner');
-                if (banner) {
-                  banner.style.display = 'flex';
-                  banner.textContent = 'Showing yesterday\'s results (' + yStr + ')';
+          if (scoreData && scoreData.todayLbs === 0 && scoreData.hoursLogged === 0 && !State._historicalDate) {
+            if (!State._yesterdayLoaded) {
+              var yesterday = new Date();
+              yesterday.setDate(yesterday.getDate() - 1);
+              var yStr = yesterday.toISOString().split('T')[0];
+              State._yesterdayLoaded = true;
+              
+              API.loadData(function(yResponse) {
+                var yData = yResponse.scoreboard || yResponse;
+                if (yData && yData.todayLbs > 0) {
+                  State.data = yData;
+                  State._rawTodayTarget = yData.todayTarget;
+                  State._showingYesterday = true;
+                  var banner = document.getElementById('historicalDateBanner');
+                  if (banner) {
+                    banner.style.display = 'flex';
+                    banner.textContent = 'Showing yesterday\'s results (' + yStr + ')';
+                  }
+                  if (Render) Render.renderScoreboard();
+                  if (Chart) Chart.updateChart(yData.hourlyRates || []);
                 }
-                if (Render) Render.renderScoreboard();
-                if (Chart) Chart.updateChart(yData.hourlyRates || []);
-              }
-            }, null, yStr);
+              }, null, yStr);
+            }
+            // Either way, don't overwrite with today's zeros while showing yesterday
             return;
+          }
+          
+          // Today has data — clear yesterday flag if it was set
+          if (State._showingYesterday) {
+            State._showingYesterday = false;
+            State._yesterdayLoaded = false;
+            var banner = document.getElementById('historicalDateBanner');
+            if (banner) banner.style.display = 'none';
           }
 
           if (response.scoreboard) {
