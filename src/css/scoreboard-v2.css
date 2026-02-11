@@ -3462,6 +3462,225 @@ a:focus:not(:focus-visible) {
   }
 }
 
+/* ========================================
+   PASS 7: MOMENTUM ARROW
+   ======================================== */
+.momentum-arrow {
+  font-family: var(--font-data);
+  font-size: 18px;
+  font-weight: 700;
+  margin-left: 6px;
+  display: inline-block;
+  transition: color var(--t-normal) var(--ease-out);
+}
+
+html.tv-mode .momentum-arrow { font-size: 24px; }
+
+/* ========================================
+   PASS 7: RACE MODE OVERLAY
+   ======================================== */
+body.race-mode::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 40px,
+    rgba(196, 92, 74, 0.03) 40px,
+    rgba(196, 92, 74, 0.03) 80px
+  );
+  pointer-events: none;
+  z-index: 1;
+  animation: race-drift 4s linear infinite;
+}
+
+@keyframes race-drift {
+  from { transform: translateX(0); }
+  to { transform: translateX(113px); }
+}
+
+/* ========================================
+   PASS 7: DENSITY TIGHTENING
+   ======================================== */
+
+/* Tighten hour card padding */
+.hour-card { padding: var(--sp-3) var(--sp-4); }
+.info-bar { padding: var(--sp-2) var(--sp-4); gap: var(--sp-3); }
+.bottom-strip { gap: var(--sp-3); }
+
+/* Push hero number bigger in TV mode */
+html.tv-mode .daily-actual {
+  font-size: clamp(280px, 30vw, 560px);
+}
+
+/* ========================================
+   PASS 7: TIMELINE VIEW (cycle history)
+   ======================================== */
+.cycle-timeline {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  height: 40px;
+  gap: 2px;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  position: relative;
+}
+
+.cycle-timeline-block {
+  flex: 1;
+  min-width: 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  position: relative;
+  transition: opacity var(--t-fast) var(--ease-out);
+}
+
+.cycle-timeline-block:hover { opacity: 0.8; }
+.cycle-timeline-block.green { background: var(--green); }
+.cycle-timeline-block.gold { background: var(--gold); }
+.cycle-timeline-block.red { background: var(--red); }
+
+.cycle-timeline-block .cycle-sparkline-tooltip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.9);
+  color: var(--cream);
+  font-family: var(--font-data);
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  white-space: nowrap;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.cycle-timeline-block:hover .cycle-sparkline-tooltip { display: block; }
+
+.cycle-timeline-break {
+  width: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.cycle-timeline-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-family: var(--font-data);
+  font-size: 11px;
+  color: var(--cream-muted);
+}
+
+/* ========================================
+   PASS 7: STACKED RINGS VIEW (cycle history)
+   ======================================== */
+.cycle-rings {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 140px;
+  position: relative;
+}
+
+.cycle-rings svg {
+  width: 140px;
+  height: 140px;
+}
+
+.cycle-rings-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
+}
+
+.cycle-rings-count {
+  font-family: var(--font-hero);
+  font-size: 32px;
+  color: var(--cream);
+  line-height: 1;
+}
+
+.cycle-rings-label {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--cream-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+html.tv-mode .cycle-rings { height: 200px; }
+html.tv-mode .cycle-rings svg { width: 200px; height: 200px; }
+html.tv-mode .cycle-rings-count { font-size: 44px; }
+
+/* ========================================
+   PASS 7: BAR RACE VIEW (cycle history)
+   ======================================== */
+.cycle-bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  height: 100px;
+  position: relative;
+  padding-bottom: 18px;
+}
+
+.cycle-bars-target-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 2px dashed var(--gold);
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.cycle-bar {
+  flex: 1;
+  min-width: 8px;
+  max-width: 40px;
+  border-radius: 3px 3px 0 0;
+  position: relative;
+  transition: height var(--t-normal) var(--ease-spring);
+}
+
+.cycle-bar.green { background: var(--green); }
+.cycle-bar.red { background: var(--red); }
+
+.cycle-bar.active {
+  animation: bar-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes bar-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.cycle-bar-label {
+  position: absolute;
+  bottom: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-data);
+  font-size: 9px;
+  color: var(--cream-muted);
+  white-space: nowrap;
+}
+
+html.tv-mode .cycle-bars { height: 150px; }
+html.tv-mode .cycle-bar-label { font-size: 11px; }
+
 @media print {
   body { background: #fff; color: #000; }
   .noise-overlay,

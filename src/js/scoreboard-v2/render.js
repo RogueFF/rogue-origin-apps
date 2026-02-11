@@ -236,6 +236,37 @@
         bestEl.style.color = 'rgba(255,255,255,0.9)';
       }
 
+      // Momentum arrow — compare current cycle rate vs rolling average
+      const momentumEl = safeGetEl('momentumArrow');
+      if (momentumEl) {
+        const cycles = window.ScoreboardState ? window.ScoreboardState.cycleHistory : [];
+        const completedCycles = cycles.filter(function(c) { return c.time > 0 && c.target > 0; });
+        if (completedCycles.length >= 2) {
+          const avgTime = completedCycles.reduce(function(sum, c) { return sum + c.time; }, 0) / completedCycles.length;
+          const lastCycle = completedCycles[completedCycles.length - 1];
+          // Lower time = faster = accelerating
+          if (lastCycle.time < avgTime * 0.95) {
+            momentumEl.textContent = '\u2197'; // ↗ accelerating
+          } else if (lastCycle.time > avgTime * 1.05) {
+            momentumEl.textContent = '\u2198'; // ↘ decelerating
+          } else {
+            momentumEl.textContent = '\u2192'; // → steady
+          }
+          // Inherit ambient color
+          momentumEl.style.color = '';
+        } else {
+          momentumEl.textContent = '';
+        }
+      }
+
+      // Race mode — behind target overlay
+      const dailyPct = todayPct || avgPct || 0;
+      if (dailyPct > 0 && dailyPct < 90 && (todayLbs > 0 || lastHourLbs > 0)) {
+        document.body.classList.add('race-mode');
+      } else {
+        document.body.classList.remove('race-mode');
+      }
+
       // Strain rate indicator
       const sri = safeGetEl('strainRateIndicator');
       if (data.usingStrainRate) {
