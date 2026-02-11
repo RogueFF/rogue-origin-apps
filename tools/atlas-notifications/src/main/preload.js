@@ -34,5 +34,16 @@ contextBridge.exposeInMainWorld('atlas', {
   },
   onRefresh: (callback) => {
     ipcRenderer.on('refresh-notifications', (_event, notifs) => callback(notifs));
-  }
+  },
+
+  // Popup channels
+  onShowPopup: (callback) => {
+    ipcRenderer.once('show-popup', (_event, data) => callback(data));
+  },
+  onDismissPopup: (callback) => {
+    ipcRenderer.on('dismiss-popup', () => callback());
+  },
+  popupClicked: (notifId) => ipcRenderer.send('popup-clicked', notifId),
+  popupDismiss: () => ipcRenderer.send('popup-dismiss'),
+  popupAcknowledge: (notifId) => ipcRenderer.send('popup-acknowledge', notifId)
 });
