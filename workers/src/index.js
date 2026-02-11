@@ -38,6 +38,24 @@ const USE_D1_ORDERS = true;
 const USE_D1_PRODUCTION = true; // Now using D1 for hourly entry reads/writes
 
 export default {
+  // Cron Trigger — runs daily at 6 AM PST (14:00 UTC)
+  async scheduled(event, env, ctx) {
+    const { handleComplaintsD1 } = await import('./handlers/complaints-d1.js');
+    const db = env.DB;
+    try {
+      // Build a fake request for the sync handler
+      const request = new Request('https://internal/api/complaints?action=sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const result = await handleComplaintsD1(request, env, ctx);
+      const data = await result.json();
+      console.log(`[Cron] Complaints sync: imported=${data.imported}, skipped=${data.skipped}`);
+    } catch (e) {
+      console.error(`[Cron] Complaints sync failed: ${e.message}`);
+    }
+  },
+
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;

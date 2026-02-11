@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <link rel="icon" type="image/png" href="/rogue-origin-apps/favicon.png">
   <link rel="manifest" href="/rogue-origin-apps/manifest.json">
-  <meta name="theme-color" content="#080a09">
+  <meta name="theme-color" content="#0a0c0b">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -33,7 +33,7 @@
   <link rel="dns-prefetch" href="https://script.google.com">
 
   <!-- Fonts: Playfair Display (hero), JetBrains Mono (data), Manrope (UI) -->
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=JetBrains+Mono:wght@400;500;700&family=Manrope:wght@400;500;600;700;800&display=optional" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=JetBrains+Mono:wght@400;500;700&family=Manrope:wght@300;400;500;600;700;800&display=optional" rel="stylesheet">
 
   <!-- Scripts: Lazy loaded by modules when needed -->
   <!-- Chart.js and Phosphor Icons are loaded on-demand by lazy-loader.js -->
@@ -60,17 +60,38 @@
   <link rel="stylesheet" href="../css/shared-base.css">
 
   <!-- Non-critical CSS: Deferred for faster initial render -->
-  <link rel="preload" href="../css/scoreboard-v2.css?v=7" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link rel="stylesheet" href="../css/scoreboard-v2.css?v=7"></noscript>
+  <link rel="preload" href="../css/scoreboard-v2.css?v=8" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/scoreboard-v2.css?v=8"></noscript>
+
+  <!-- SVG Noise Filter Definition -->
+  <style>
+    /* Inline critical: prevent FOUC on dark background */
+    html, body { background: #0a0c0b; color: #e8e4dc; margin: 0; padding: 0; overflow: hidden; height: 100%; }
+  </style>
 </head>
 <body class="idle timer-neutral">
   <a href="#main-panel" class="skip-link">Skip to main content</a>
+
+  <!-- ============================================
+       SVG DEFS — Noise filter, shared gradients
+       ============================================ -->
+  <svg class="svg-defs" aria-hidden="true" style="position:absolute;width:0;height:0">
+    <defs>
+      <filter id="noiseFilter">
+        <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="4" stitchTiles="stitch"/>
+        <feColorMatrix type="saturate" values="0"/>
+      </filter>
+    </defs>
+  </svg>
 
   <!-- ============================================
        AMBIENT EFFECTS LAYER
        ============================================ -->
   <div class="ambient-layer" id="ambientLayer"></div>
   <canvas id="ambientParticles" class="ambient-particles"></canvas>
+
+  <!-- Noise grain overlay -->
+  <div class="noise-overlay" aria-hidden="true"></div>
 
   <!-- ============================================
        EDGE GLOW ELEMENTS
@@ -113,7 +134,7 @@
   </div>
 
   <!-- ============================================
-       CINEMATIC HEADER — Floating strain + clock
+       TOP BAR — 60px, strain left, clock right, status center
        ============================================ -->
   <header class="hud-header">
     <div class="strain-display">
@@ -123,7 +144,6 @@
     </div>
 
     <div class="hud-center-marker">
-      <!-- Status Badge -->
       <div class="status-badge">
         <span class="status-icon" id="statusIcon"><i class="ph-duotone ph-pause"></i></span>
         <span id="statusText">WAITING</span>
@@ -229,36 +249,56 @@
   </div>
 
   <!-- ============================================
-       MAIN STAGE — Cinematic split layout
+       COCKPIT — The main stage
        ============================================ -->
-  <div id="main-panel" class="main-panel">
-    <div class="scoreboard">
+  <div id="main-panel" class="cockpit">
 
-      <!-- ====== HERO: DAILY TOTAL — Massive, unmissable ====== -->
+    <!-- ====== CENTER STAGE — Hero number dominates ====== -->
+    <div class="center-stage">
+      <!-- Radial spotlight behind hero -->
+      <div class="hero-spotlight" aria-hidden="true"></div>
+
+      <!-- Status badge floats ABOVE the hero number -->
+      <div class="hero-status-float">
+        <div class="daily-delta" id="dailyDelta">—</div>
+      </div>
+
+      <!-- THE HERO NUMBER -->
       <div class="hero-daily">
-        <div class="daily-progress">
-          <div class="daily-header" id="dailyHeader">Line 1 Today</div>
-          <div class="daily-numbers">
-            <span class="daily-actual" id="dailyActual">—</span>
-            <span class="daily-sep">/</span>
-            <span class="daily-target" id="dailyTarget">—</span>
-            <span class="daily-unit">lbs</span>
-            <span class="daily-delta" id="dailyDelta">—</span>
-          </div>
-          <div class="progress-bar-container">
-            <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
-            <span class="progress-hours" id="progressHours">0 hrs</span>
-          </div>
-          <div class="daily-projection">
-            <span class="projection-label" id="projectionLabel">End of day:</span>
-            <span class="projection-value" id="projectionValue">—</span>
-            <span class="projection-goal" id="projectionGoal"></span>
-            <span class="projection-delta" id="projectionDelta">—</span>
-          </div>
+        <div class="daily-actual" id="dailyActual">—</div>
+      </div>
+
+      <!-- Goal + Progress below hero -->
+      <div class="hero-sub">
+        <div class="hero-goal">
+          <span class="daily-sep">/</span>
+          <span class="daily-target" id="dailyTarget">—</span>
+          <span class="daily-unit">lbs goal</span>
+        </div>
+        <div class="progress-bar-container">
+          <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+          <span class="progress-hours" id="progressHours">0 hrs</span>
         </div>
       </div>
 
-      <!-- ====== HOUR CARDS — Staggered, overlapping ====== -->
+      <!-- Projection row -->
+      <div class="daily-projection">
+        <span class="projection-label" id="projectionLabel">End of day:</span>
+        <span class="projection-value" id="projectionValue">—</span>
+        <span class="projection-goal" id="projectionGoal"></span>
+        <span class="projection-delta" id="projectionDelta">—</span>
+      </div>
+
+      <!-- Hidden: daily-header and daily-progress wrappers for JS compatibility -->
+      <div class="daily-header" id="dailyHeader" style="display:none">Line 1 Today</div>
+      <div class="daily-numbers" style="display:none">
+        <span class="daily-sep">/</span>
+      </div>
+    </div>
+
+    <!-- ====== LEFT INSTRUMENT — Hour cards + Info bar ====== -->
+    <div class="left-instrument">
+      <!-- Hour Cards -->
       <div class="hour-cards">
         <div class="hour-card last-hour">
           <div class="hour-card-header" id="lastHourHeader">Last Hour</div>
@@ -289,6 +329,29 @@
         </div>
       </div>
 
+      <!-- Info Bar -->
+      <div class="info-bar">
+        <div class="info-section"><span class="info-icon"><i class="ph-duotone ph-users-three"></i></span><span><span id="crewCount">—</span> <span id="trimmersLabel">Trimmers</span></span></div>
+        <div class="info-divider"></div>
+        <div class="info-section"><span class="info-icon"><i class="ph-duotone ph-crosshair"></i></span><span><span id="targetRateLabel">Target:</span> <span id="targetRate">—</span> lbs/hr</span></div>
+        <div class="info-divider" id="avgBestDivider"></div>
+        <div id="avgBestContainer" class="avg-best-container">
+          <div class="stat-group" id="avgGroup"><span class="label" id="avgTargetLabel">AVG</span><span class="value" id="avgPercentage">—</span></div>
+          <div class="info-divider" id="bestDivider"></div>
+          <div class="stat-group" id="bestGroup"><span class="label" id="bestHourLabel">BEST</span><span class="value" id="bestHour">—</span></div>
+        </div>
+        <button class="avg-best-toggle" id="avgBestToggle" title="Toggle AVG/BEST">
+          <i class="ph-duotone ph-chart-bar"></i>
+        </button>
+      </div>
+
+      <!-- Comparisons -->
+      <div class="comparisons">
+        <div class="comparison-pill" id="vsYesterdayPill" style="display:none"><span class="comparison-label" id="vsYesterdayLabel">vs Yesterday</span><span class="comparison-value" id="vsYesterdayValue">—</span></div>
+        <div class="comparison-pill" id="vs7DayPill" style="display:none"><span class="comparison-label" id="vs7DayLabel">vs 7-Day Avg</span><span class="comparison-value" id="vs7DayValue">—</span></div>
+        <div class="comparison-pill streak-pill" id="streakPill" style="display:none"><span class="streak-icon"><i class="ph-duotone ph-fire"></i></span><span class="streak-value" id="streakValue">0</span><span class="comparison-label" id="streakLabel">hr streak</span></div>
+      </div>
+
       <!-- Order Queue Section -->
       <div class="order-queue-section" id="orderQueueSection" style="display:none;">
         <div class="order-pill" id="currentOrderPill">
@@ -316,31 +379,210 @@
           <div class="order-detail" id="nextOrderDetail"></div>
         </div>
       </div>
+    </div>
 
-      <!-- Comparisons -->
-      <div class="comparisons">
-        <div class="comparison-pill" id="vsYesterdayPill" style="display:none"><span class="comparison-label" id="vsYesterdayLabel">vs Yesterday</span><span class="comparison-value" id="vsYesterdayValue">—</span></div>
-        <div class="comparison-pill" id="vs7DayPill" style="display:none"><span class="comparison-label" id="vs7DayLabel">vs 7-Day Avg</span><span class="comparison-value" id="vs7DayValue">—</span></div>
-        <div class="comparison-pill streak-pill" id="streakPill" style="display:none"><span class="streak-icon"><i class="ph-duotone ph-fire"></i></span><span class="streak-value" id="streakValue">0</span><span class="comparison-label" id="streakLabel">hr streak</span></div>
-      </div>
+    <!-- ====== RIGHT INSTRUMENT CLUSTER — Scale, Timer, Stats ====== -->
+    <div class="timer-panel neutral" id="timerPanel">
+      <div class="drag-handle" id="dragHandle"></div>
+      <div class="expand-hint" id="expandHint">◀</div>
+      <button class="fullscreen-toggle" id="fullscreenToggle"><i class="ph-duotone ph-arrows-out"></i></button>
 
-      <!-- Info Bar -->
-      <div class="info-bar">
-        <div class="info-section"><span class="info-icon"><i class="ph-duotone ph-users-three"></i></span><span><span id="crewCount">—</span> <span id="trimmersLabel">Trimmers</span></span></div>
-        <div class="info-divider"></div>
-        <div class="info-section"><span class="info-icon"><i class="ph-duotone ph-crosshair"></i></span><span><span id="targetRateLabel">Target:</span> <span id="targetRate">—</span> lbs/hr</span></div>
-        <div class="info-divider" id="avgBestDivider"></div>
-        <div id="avgBestContainer" class="avg-best-container">
-          <div class="stat-group" id="avgGroup"><span class="label" id="avgTargetLabel">AVG</span><span class="value" id="avgPercentage">—</span></div>
-          <div class="info-divider" id="bestDivider"></div>
-          <div class="stat-group" id="bestGroup"><span class="label" id="bestHourLabel">BEST</span><span class="value" id="bestHour">—</span></div>
+      <!-- Scale Ring -->
+      <div class="scale-section" id="scaleSection">
+        <div class="scale-header" id="scaleHeader">Live Scale</div>
+        <div class="scale-display" id="scaleDisplay">
+          <svg class="scale-ring" viewBox="0 0 220 220">
+            <defs>
+              <filter id="scaleGlow">
+                <feGaussianBlur stdDeviation="4" result="blur"/>
+                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+              <filter id="scaleGlowIntense">
+                <feGaussianBlur stdDeviation="8" result="blur"/>
+                <feMerge>
+                  <feMergeNode in="blur"/>
+                  <feMergeNode in="blur"/>
+                  <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+              </filter>
+              <linearGradient id="scaleMetallic" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="rgba(240,235,224,0.08)"/>
+                <stop offset="40%" stop-color="rgba(240,235,224,0.02)"/>
+                <stop offset="60%" stop-color="rgba(240,235,224,0.06)"/>
+                <stop offset="100%" stop-color="rgba(240,235,224,0.03)"/>
+              </linearGradient>
+              <linearGradient id="scaleGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="var(--scale-color-primary, #62758d)"/>
+                <stop offset="100%" stop-color="var(--scale-color-light, #8a9cb5)"/>
+              </linearGradient>
+              <linearGradient id="scaleBevel" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="rgba(255,255,255,0.08)"/>
+                <stop offset="50%" stop-color="rgba(255,255,255,0.02)"/>
+                <stop offset="100%" stop-color="rgba(0,0,0,0.1)"/>
+              </linearGradient>
+            </defs>
+            <!-- Outer bezel ring with metallic gradient -->
+            <circle cx="110" cy="110" r="108" fill="none" stroke="url(#scaleBevel)" stroke-width="3"/>
+            <circle cx="110" cy="110" r="100" fill="none" stroke="rgba(228,170,79,0.06)" stroke-width="0.5"/>
+            <!-- Inner bezel ring -->
+            <circle cx="110" cy="110" r="82" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="0.5"/>
+            <!-- 36 tick marks -->
+            <g class="ring-ticks" transform="translate(110,110)">
+              <line class="major" x1="0" y1="-98" x2="0" y2="-84" stroke="rgba(228,170,79,0.3)" stroke-width="2" transform="rotate(0)"/>
+              <line class="major" x1="0" y1="-98" x2="0" y2="-84" stroke="rgba(228,170,79,0.3)" stroke-width="2" transform="rotate(90)"/>
+              <line class="major" x1="0" y1="-98" x2="0" y2="-84" stroke="rgba(228,170,79,0.3)" stroke-width="2" transform="rotate(180)"/>
+              <line class="major" x1="0" y1="-98" x2="0" y2="-84" stroke="rgba(228,170,79,0.3)" stroke-width="2" transform="rotate(270)"/>
+              <line x1="0" y1="-96" x2="0" y2="-86" stroke="rgba(240,235,224,0.15)" stroke-width="1.2" transform="rotate(30)"/>
+              <line x1="0" y1="-96" x2="0" y2="-86" stroke="rgba(240,235,224,0.15)" stroke-width="1.2" transform="rotate(60)"/>
+              <line x1="0" y1="-96" x2="0" y2="-86" stroke="rgba(240,235,224,0.15)" stroke-width="1.2" transform="rotate(120)"/>
+              <line x1="0" y1="-96" x2="0" y2="-86" stroke="rgba(240,235,224,0.15)" stroke-width="1.2" transform="rotate(150)"/>
+              <line x1="0" y1="-96" x2="0" y2="-86" stroke="rgba(240,235,224,0.15)" stroke-width="1.2" transform="rotate(210)"/>
+              <line x1="0" y1="-96" x2="0" y2="-86" stroke="rgba(240,235,224,0.15)" stroke-width="1.2" transform="rotate(240)"/>
+              <line x1="0" y1="-96" x2="0" y2="-86" stroke="rgba(240,235,224,0.15)" stroke-width="1.2" transform="rotate(300)"/>
+              <line x1="0" y1="-96" x2="0" y2="-86" stroke="rgba(240,235,224,0.15)" stroke-width="1.2" transform="rotate(330)"/>
+              <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(10)"/>
+              <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(20)"/>
+              <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(40)"/>
+              <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(50)"/>
+              <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(70)"/>
+              <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(80)"/>
+              <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(100)"/>
+              <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(110)"/>
+              <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(130)"/>
+              <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(140)"/>
+              <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(160)"/>
+              <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(170)"/>
+              <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(190)"/>
+              <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(200)"/>
+              <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(220)"/>
+              <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(230)"/>
+              <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(250)"/>
+              <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(260)"/>
+              <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(280)"/>
+              <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(290)"/>
+              <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(310)"/>
+              <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(320)"/>
+              <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(340)"/>
+              <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(350)"/>
+            </g>
+            <circle class="scale-ring-bg" cx="110" cy="110" r="95" stroke="url(#scaleMetallic)"/>
+            <circle class="scale-ring-glow" cx="110" cy="110" r="95" stroke="url(#scaleGradient)" stroke-width="12" fill="none" opacity="0.3" filter="url(#scaleGlowIntense)" stroke-dasharray="597" stroke-dashoffset="597"/>
+            <circle class="scale-ring-progress" id="scaleRing" cx="110" cy="110" r="95" stroke-dasharray="597" stroke-dashoffset="597" filter="url(#scaleGlow)"/>
+          </svg>
+          <div class="scale-center">
+            <div class="scale-value" id="scaleWeight">—</div>
+            <div class="scale-label" id="scaleWeightLabel">of 5.0 kg</div>
+          </div>
+          <div class="scale-status-dot" id="scaleStatusDot"></div>
         </div>
-        <button class="avg-best-toggle" id="avgBestToggle" title="Toggle AVG/BEST">
-          <i class="ph-duotone ph-chart-bar"></i>
-        </button>
       </div>
 
-      <!-- Hourly Rate Chart -->
+      <!-- Bag Timer Ring -->
+      <div class="timer-header" id="timerHeader">5KG Bag Timer</div>
+      <div class="timer-display" id="timerDisplay">
+        <svg class="timer-ring" viewBox="0 0 240 240">
+          <defs>
+            <filter id="timerGlow">
+              <feGaussianBlur stdDeviation="5" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <filter id="timerGlowIntense">
+              <feGaussianBlur stdDeviation="10" result="blur"/>
+              <feMerge>
+                <feMergeNode in="blur"/>
+                <feMergeNode in="blur"/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
+            <linearGradient id="timerMetallic" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="rgba(240,235,224,0.08)"/>
+              <stop offset="40%" stop-color="rgba(240,235,224,0.02)"/>
+              <stop offset="60%" stop-color="rgba(240,235,224,0.06)"/>
+              <stop offset="100%" stop-color="rgba(240,235,224,0.03)"/>
+            </linearGradient>
+            <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="var(--timer-color-primary, #4a9e6b)"/>
+              <stop offset="100%" stop-color="var(--timer-color-light, #6bc48e)"/>
+            </linearGradient>
+            <linearGradient id="timerBevel" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="rgba(255,255,255,0.08)"/>
+              <stop offset="50%" stop-color="rgba(255,255,255,0.02)"/>
+              <stop offset="100%" stop-color="rgba(0,0,0,0.1)"/>
+            </linearGradient>
+          </defs>
+          <!-- Outer metallic bezel -->
+          <circle cx="120" cy="120" r="118" fill="none" stroke="url(#timerBevel)" stroke-width="3"/>
+          <circle cx="120" cy="120" r="110" fill="none" stroke="rgba(228,170,79,0.06)" stroke-width="0.5"/>
+          <!-- Inner bezel -->
+          <circle cx="120" cy="120" r="90" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="0.5"/>
+          <!-- 36 tick marks -->
+          <g class="ring-ticks" transform="translate(120,120)">
+            <line class="major" x1="0" y1="-108" x2="0" y2="-92" stroke="rgba(228,170,79,0.3)" stroke-width="2" transform="rotate(0)"/>
+            <line class="major" x1="0" y1="-108" x2="0" y2="-92" stroke="rgba(228,170,79,0.3)" stroke-width="2" transform="rotate(90)"/>
+            <line class="major" x1="0" y1="-108" x2="0" y2="-92" stroke="rgba(228,170,79,0.3)" stroke-width="2" transform="rotate(180)"/>
+            <line class="major" x1="0" y1="-108" x2="0" y2="-92" stroke="rgba(228,170,79,0.3)" stroke-width="2" transform="rotate(270)"/>
+            <line x1="0" y1="-106" x2="0" y2="-94" stroke="rgba(240,235,224,0.15)" stroke-width="1.2" transform="rotate(30)"/>
+            <line x1="0" y1="-106" x2="0" y2="-94" stroke="rgba(240,235,224,0.15)" stroke-width="1.2" transform="rotate(60)"/>
+            <line x1="0" y1="-106" x2="0" y2="-94" stroke="rgba(240,235,224,0.15)" stroke-width="1.2" transform="rotate(120)"/>
+            <line x1="0" y1="-106" x2="0" y2="-94" stroke="rgba(240,235,224,0.15)" stroke-width="1.2" transform="rotate(150)"/>
+            <line x1="0" y1="-106" x2="0" y2="-94" stroke="rgba(240,235,224,0.15)" stroke-width="1.2" transform="rotate(210)"/>
+            <line x1="0" y1="-106" x2="0" y2="-94" stroke="rgba(240,235,224,0.15)" stroke-width="1.2" transform="rotate(240)"/>
+            <line x1="0" y1="-106" x2="0" y2="-94" stroke="rgba(240,235,224,0.15)" stroke-width="1.2" transform="rotate(300)"/>
+            <line x1="0" y1="-106" x2="0" y2="-94" stroke="rgba(240,235,224,0.15)" stroke-width="1.2" transform="rotate(330)"/>
+            <line class="minor" x1="0" y1="-105" x2="0" y2="-98" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(10)"/>
+            <line class="minor" x1="0" y1="-105" x2="0" y2="-98" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(20)"/>
+            <line class="minor" x1="0" y1="-105" x2="0" y2="-98" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(40)"/>
+            <line class="minor" x1="0" y1="-105" x2="0" y2="-98" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(50)"/>
+            <line class="minor" x1="0" y1="-105" x2="0" y2="-98" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(70)"/>
+            <line class="minor" x1="0" y1="-105" x2="0" y2="-98" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(80)"/>
+            <line class="minor" x1="0" y1="-105" x2="0" y2="-98" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(100)"/>
+            <line class="minor" x1="0" y1="-105" x2="0" y2="-98" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(110)"/>
+            <line class="minor" x1="0" y1="-105" x2="0" y2="-98" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(130)"/>
+            <line class="minor" x1="0" y1="-105" x2="0" y2="-98" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(140)"/>
+            <line class="minor" x1="0" y1="-105" x2="0" y2="-98" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(160)"/>
+            <line class="minor" x1="0" y1="-105" x2="0" y2="-98" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(170)"/>
+            <line class="minor" x1="0" y1="-105" x2="0" y2="-98" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(190)"/>
+            <line class="minor" x1="0" y1="-105" x2="0" y2="-98" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(200)"/>
+            <line class="minor" x1="0" y1="-105" x2="0" y2="-98" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(220)"/>
+            <line class="minor" x1="0" y1="-105" x2="0" y2="-98" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(230)"/>
+            <line class="minor" x1="0" y1="-105" x2="0" y2="-98" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(250)"/>
+            <line class="minor" x1="0" y1="-105" x2="0" y2="-98" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(260)"/>
+            <line class="minor" x1="0" y1="-105" x2="0" y2="-98" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(280)"/>
+            <line class="minor" x1="0" y1="-105" x2="0" y2="-98" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(290)"/>
+            <line class="minor" x1="0" y1="-105" x2="0" y2="-98" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(310)"/>
+            <line class="minor" x1="0" y1="-105" x2="0" y2="-98" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(320)"/>
+            <line class="minor" x1="0" y1="-105" x2="0" y2="-98" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(340)"/>
+            <line class="minor" x1="0" y1="-105" x2="0" y2="-98" stroke="rgba(240,235,224,0.06)" stroke-width="0.5" transform="rotate(350)"/>
+          </g>
+          <circle class="timer-ring-bg" cx="120" cy="120" r="103" stroke="url(#timerMetallic)"/>
+          <circle class="timer-ring-glow" cx="120" cy="120" r="103" stroke="url(#timerGradient)" stroke-width="14" fill="none" opacity="0.3" filter="url(#timerGlowIntense)" stroke-dasharray="647" stroke-dashoffset="0"/>
+          <circle class="timer-ring-progress green" id="timerRing" cx="120" cy="120" r="103" stroke-dasharray="647" stroke-dashoffset="0" filter="url(#timerGlow)"/>
+        </svg>
+        <div class="timer-center">
+          <div class="timer-value green" id="timerValue">--:--</div>
+          <div class="timer-label" id="timerLabel">remaining</div>
+        </div>
+      </div>
+
+      <div class="timer-target">Target: <span id="timerTargetTime">--:--</span> · <span id="timerTrimmers">0</span> trimmers</div>
+
+      <!-- Bag Stats Row -->
+      <div class="timer-stats">
+        <div class="timer-stat"><span class="timer-stat-label" id="bagsTodayLabel">Bags Today</span><span class="timer-stat-value" id="bagsToday">0</span></div>
+        <div class="timer-stat"><span class="timer-stat-label" id="avgTodayLabel">Avg Today</span><span class="timer-stat-value" id="avgToday">--:--</span></div>
+        <div class="timer-stat"><span class="timer-stat-label" id="vsTargetLabel">vs Target</span><span class="timer-stat-value" id="vsTarget">—</span></div>
+      </div>
+
+      <!-- Button Row -->
+      <div class="timer-btn-row">
+        <button class="manual-btn" id="manualBtn"><span class="icon"><i class="ph-duotone ph-package"></i></span><span id="manualBtnText">5KG Bag Complete</span></button>
+        <button class="pause-btn" id="pauseBtn"><i class="ph-duotone ph-pause"></i></button>
+      </div>
+    </div>
+
+    <!-- ====== BOTTOM STRIP — Chart + Cycle History ====== -->
+    <div class="bottom-strip">
+      <!-- Left: Hourly Chart -->
       <div class="chart-container" id="chartContainer" style="display:none;">
         <div class="chart-header" id="chartHeader">Hourly Performance (lbs/trimmer)</div>
         <div class="chart-wrapper">
@@ -348,217 +590,21 @@
         </div>
       </div>
 
-    </div>
-  </div>
-
-  <!-- ============================================
-       INSTRUMENT PANEL — Right side
-       Integrated cockpit feel
-       ============================================ -->
-  <div class="timer-panel neutral" id="timerPanel">
-    <div class="drag-handle" id="dragHandle"></div>
-    <div class="expand-hint" id="expandHint">◀</div>
-    <button class="fullscreen-toggle" id="fullscreenToggle"><i class="ph-duotone ph-arrows-out"></i></button>
-
-    <!-- Scale Ring -->
-    <div class="scale-section" id="scaleSection">
-      <div class="scale-header" id="scaleHeader">Live Scale</div>
-      <div class="scale-display" id="scaleDisplay">
-        <svg class="scale-ring" viewBox="0 0 220 220">
-          <defs>
-            <filter id="scaleGlow">
-              <feGaussianBlur stdDeviation="4" result="blur"/>
-              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-            </filter>
-            <filter id="scaleGlowIntense">
-              <feGaussianBlur stdDeviation="8" result="blur"/>
-              <feMerge>
-                <feMergeNode in="blur"/>
-                <feMergeNode in="blur"/>
-                <feMergeNode in="SourceGraphic"/>
-              </feMerge>
-            </filter>
-            <linearGradient id="scaleMetallic" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stop-color="rgba(240,235,224,0.06)"/>
-              <stop offset="50%" stop-color="rgba(240,235,224,0.02)"/>
-              <stop offset="100%" stop-color="rgba(240,235,224,0.05)"/>
-            </linearGradient>
-            <linearGradient id="scaleGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="var(--scale-color-primary, #62758d)"/>
-              <stop offset="100%" stop-color="var(--scale-color-light, #8a9cb5)"/>
-            </linearGradient>
-          </defs>
-          <!-- Outer bezel ring -->
-          <circle cx="110" cy="110" r="100" fill="none" stroke="rgba(228,170,79,0.04)" stroke-width="0.5"/>
-          <!-- Inner bezel ring -->
-          <circle cx="110" cy="110" r="82" fill="none" stroke="rgba(255,255,255,0.02)" stroke-width="0.5"/>
-          <!-- Major + minor tick marks for chronograph precision -->
-          <g class="ring-ticks" transform="translate(110,110)">
-            <!-- Major ticks every 90° -->
-            <line class="major" x1="0" y1="-98" x2="0" y2="-84" stroke="rgba(228,170,79,0.25)" stroke-width="1.5" transform="rotate(0)"/>
-            <line class="major" x1="0" y1="-98" x2="0" y2="-84" stroke="rgba(228,170,79,0.25)" stroke-width="1.5" transform="rotate(90)"/>
-            <line class="major" x1="0" y1="-98" x2="0" y2="-84" stroke="rgba(228,170,79,0.25)" stroke-width="1.5" transform="rotate(180)"/>
-            <line class="major" x1="0" y1="-98" x2="0" y2="-84" stroke="rgba(228,170,79,0.25)" stroke-width="1.5" transform="rotate(270)"/>
-            <!-- Medium ticks every 30° -->
-            <line x1="0" y1="-96" x2="0" y2="-86" stroke="rgba(240,235,224,0.12)" stroke-width="1" transform="rotate(30)"/>
-            <line x1="0" y1="-96" x2="0" y2="-86" stroke="rgba(240,235,224,0.12)" stroke-width="1" transform="rotate(60)"/>
-            <line x1="0" y1="-96" x2="0" y2="-86" stroke="rgba(240,235,224,0.12)" stroke-width="1" transform="rotate(120)"/>
-            <line x1="0" y1="-96" x2="0" y2="-86" stroke="rgba(240,235,224,0.12)" stroke-width="1" transform="rotate(150)"/>
-            <line x1="0" y1="-96" x2="0" y2="-86" stroke="rgba(240,235,224,0.12)" stroke-width="1" transform="rotate(210)"/>
-            <line x1="0" y1="-96" x2="0" y2="-86" stroke="rgba(240,235,224,0.12)" stroke-width="1" transform="rotate(240)"/>
-            <line x1="0" y1="-96" x2="0" y2="-86" stroke="rgba(240,235,224,0.12)" stroke-width="1" transform="rotate(300)"/>
-            <line x1="0" y1="-96" x2="0" y2="-86" stroke="rgba(240,235,224,0.12)" stroke-width="1" transform="rotate(330)"/>
-            <!-- Minor ticks every 10° -->
-            <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(10)"/>
-            <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(20)"/>
-            <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(40)"/>
-            <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(50)"/>
-            <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(70)"/>
-            <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(80)"/>
-            <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(100)"/>
-            <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(110)"/>
-            <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(130)"/>
-            <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(140)"/>
-            <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(160)"/>
-            <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(170)"/>
-            <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(190)"/>
-            <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(200)"/>
-            <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(220)"/>
-            <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(230)"/>
-            <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(250)"/>
-            <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(260)"/>
-            <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(280)"/>
-            <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(290)"/>
-            <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(310)"/>
-            <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(320)"/>
-            <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(340)"/>
-            <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(350)"/>
-          </g>
-          <circle class="scale-ring-bg" cx="110" cy="110" r="95" stroke="url(#scaleMetallic)"/>
-          <!-- Glow layer behind progress -->
-          <circle class="scale-ring-glow" cx="110" cy="110" r="95" stroke="url(#scaleGradient)" stroke-width="12" fill="none" opacity="0.3" filter="url(#scaleGlowIntense)" stroke-dasharray="597" stroke-dashoffset="597"/>
-          <circle class="scale-ring-progress" id="scaleRing" cx="110" cy="110" r="95" stroke-dasharray="597" stroke-dashoffset="597" filter="url(#scaleGlow)"/>
-        </svg>
-        <div class="scale-center">
-          <div class="scale-value" id="scaleWeight">—</div>
-          <div class="scale-label" id="scaleWeightLabel">of 5.0 kg</div>
+      <!-- Right: Cycle History -->
+      <div class="cycle-history" id="cycleHistory">
+        <div class="cycle-history-header">
+          <span class="cycle-history-title" id="cycleHistoryTitle">Today's Cycles</span>
+          <div class="cycle-history-nav">
+            <button class="cycle-nav-btn" title="Previous view">‹</button>
+            <span class="cycle-mode-label" id="cycleModeLabel">List</span>
+            <button class="cycle-nav-btn" title="Next view">›</button>
+            <button class="cycle-history-toggle" id="cycleToggle">Hide</button>
+          </div>
         </div>
-        <div class="scale-status-dot" id="scaleStatusDot"></div>
+        <div class="cycle-content" id="cycleContent"></div>
       </div>
     </div>
 
-    <!-- Bag Timer Ring -->
-    <div class="timer-header" id="timerHeader">5KG Bag Timer</div>
-    <div class="timer-display" id="timerDisplay">
-      <svg class="timer-ring" viewBox="0 0 220 220">
-        <defs>
-          <filter id="timerGlow">
-            <feGaussianBlur stdDeviation="5" result="blur"/>
-            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-          </filter>
-          <filter id="timerGlowIntense">
-            <feGaussianBlur stdDeviation="8" result="blur"/>
-            <feMerge>
-              <feMergeNode in="blur"/>
-              <feMergeNode in="blur"/>
-              <feMergeNode in="SourceGraphic"/>
-            </feMerge>
-          </filter>
-          <linearGradient id="timerMetallic" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stop-color="rgba(240,235,224,0.06)"/>
-            <stop offset="50%" stop-color="rgba(240,235,224,0.02)"/>
-            <stop offset="100%" stop-color="rgba(240,235,224,0.05)"/>
-          </linearGradient>
-          <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="var(--timer-color-primary, #22c55e)"/>
-            <stop offset="100%" stop-color="var(--timer-color-light, #4ade80)"/>
-          </linearGradient>
-        </defs>
-        <!-- Outer bezel -->
-        <circle cx="110" cy="110" r="100" fill="none" stroke="rgba(228,170,79,0.04)" stroke-width="0.5"/>
-        <!-- Inner bezel -->
-        <circle cx="110" cy="110" r="82" fill="none" stroke="rgba(255,255,255,0.02)" stroke-width="0.5"/>
-        <!-- Precision tick marks — 12 major (clock hours) + minor every 6° -->
-        <g class="ring-ticks" transform="translate(110,110)">
-          <!-- Major ticks every 90° (cardinal) -->
-          <line class="major" x1="0" y1="-98" x2="0" y2="-84" stroke="rgba(228,170,79,0.25)" stroke-width="1.5" transform="rotate(0)"/>
-          <line class="major" x1="0" y1="-98" x2="0" y2="-84" stroke="rgba(228,170,79,0.25)" stroke-width="1.5" transform="rotate(90)"/>
-          <line class="major" x1="0" y1="-98" x2="0" y2="-84" stroke="rgba(228,170,79,0.25)" stroke-width="1.5" transform="rotate(180)"/>
-          <line class="major" x1="0" y1="-98" x2="0" y2="-84" stroke="rgba(228,170,79,0.25)" stroke-width="1.5" transform="rotate(270)"/>
-          <!-- Medium ticks every 30° -->
-          <line x1="0" y1="-96" x2="0" y2="-86" stroke="rgba(240,235,224,0.12)" stroke-width="1" transform="rotate(30)"/>
-          <line x1="0" y1="-96" x2="0" y2="-86" stroke="rgba(240,235,224,0.12)" stroke-width="1" transform="rotate(60)"/>
-          <line x1="0" y1="-96" x2="0" y2="-86" stroke="rgba(240,235,224,0.12)" stroke-width="1" transform="rotate(120)"/>
-          <line x1="0" y1="-96" x2="0" y2="-86" stroke="rgba(240,235,224,0.12)" stroke-width="1" transform="rotate(150)"/>
-          <line x1="0" y1="-96" x2="0" y2="-86" stroke="rgba(240,235,224,0.12)" stroke-width="1" transform="rotate(210)"/>
-          <line x1="0" y1="-96" x2="0" y2="-86" stroke="rgba(240,235,224,0.12)" stroke-width="1" transform="rotate(240)"/>
-          <line x1="0" y1="-96" x2="0" y2="-86" stroke="rgba(240,235,224,0.12)" stroke-width="1" transform="rotate(300)"/>
-          <line x1="0" y1="-96" x2="0" y2="-86" stroke="rgba(240,235,224,0.12)" stroke-width="1" transform="rotate(330)"/>
-          <!-- Minor ticks every 10° -->
-          <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(10)"/>
-          <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(20)"/>
-          <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(40)"/>
-          <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(50)"/>
-          <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(70)"/>
-          <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(80)"/>
-          <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(100)"/>
-          <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(110)"/>
-          <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(130)"/>
-          <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(140)"/>
-          <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(160)"/>
-          <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(170)"/>
-          <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(190)"/>
-          <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(200)"/>
-          <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(220)"/>
-          <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(230)"/>
-          <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(250)"/>
-          <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(260)"/>
-          <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(280)"/>
-          <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(290)"/>
-          <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(310)"/>
-          <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(320)"/>
-          <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(340)"/>
-          <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(350)"/>
-        </g>
-        <circle class="timer-ring-bg" cx="110" cy="110" r="95" stroke="url(#timerMetallic)"/>
-        <!-- Glow layer behind progress -->
-        <circle class="timer-ring-glow" cx="110" cy="110" r="95" stroke="url(#timerGradient)" stroke-width="12" fill="none" opacity="0.3" filter="url(#timerGlowIntense)" stroke-dasharray="597" stroke-dashoffset="0"/>
-        <circle class="timer-ring-progress green" id="timerRing" cx="110" cy="110" r="95" stroke-dasharray="597" stroke-dashoffset="0" filter="url(#timerGlow)"/>
-      </svg>
-      <div class="timer-center">
-        <div class="timer-value green" id="timerValue">--:--</div>
-        <div class="timer-label" id="timerLabel">remaining</div>
-      </div>
-    </div>
-
-    <div class="timer-target">Target: <span id="timerTargetTime">--:--</span> · <span id="timerTrimmers">0</span> trimmers</div>
-
-    <!-- Button Row -->
-    <div class="timer-btn-row">
-      <button class="manual-btn" id="manualBtn"><span class="icon"><i class="ph-duotone ph-package"></i></span><span id="manualBtnText">5KG Bag Complete</span></button>
-      <button class="pause-btn" id="pauseBtn"><i class="ph-duotone ph-pause"></i></button>
-    </div>
-
-    <!-- Timer Stats -->
-    <div class="timer-stats">
-      <div class="timer-stat"><span class="timer-stat-label" id="bagsTodayLabel">Bags Today</span><span class="timer-stat-value" id="bagsToday">0</span></div>
-      <div class="timer-stat"><span class="timer-stat-label" id="avgTodayLabel">Avg Today</span><span class="timer-stat-value" id="avgToday">--:--</span></div>
-      <div class="timer-stat"><span class="timer-stat-label" id="vsTargetLabel">vs Target</span><span class="timer-stat-value" id="vsTarget">—</span></div>
-    </div>
-
-    <!-- Cycle History -->
-    <div class="cycle-history" id="cycleHistory">
-      <div class="cycle-history-header">
-        <span class="cycle-history-title" id="cycleHistoryTitle">Today's Cycles</span>
-        <div class="cycle-history-nav">
-          <button class="cycle-nav-btn" title="Previous view">‹</button>
-          <span class="cycle-mode-label" id="cycleModeLabel">List</span>
-          <button class="cycle-nav-btn" title="Next view">›</button>
-          <button class="cycle-history-toggle" id="cycleToggle">Hide</button>
-        </div>
-      </div>
-      <div class="cycle-content" id="cycleContent"></div>
-    </div>
   </div>
 
   <!-- ============================================
