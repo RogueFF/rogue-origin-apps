@@ -13,8 +13,11 @@ const SHEET_ID = '1SyeueGF5NY3AXvUJYLTjuK01v3jCPIpbs9JQbrhrlHk';
 
 // Write actions that require authentication
 const WRITE_ACTIONS = new Set([
-  'save', 'delete',
+  'save', 'delete', 'sync',
 ]);
+
+// Valid complaint types
+const COMPLAINT_TYPES = ['Quality', 'Shipping', 'Service', 'Billing', 'Other'];
 
 export async function handleComplaintsD1(request, env, ctx) {
   const body = request.method === 'POST' ? await parseBody(request) : {};
@@ -40,6 +43,8 @@ export async function handleComplaintsD1(request, env, ctx) {
       return getStats(db);
     case 'sync':
       return syncFromSheets(db, env);
+    case 'recent':
+      return getRecent(db);
     case 'test':
       return successResponse({ success: true, message: 'Complaints API operational' });
     default:
@@ -50,7 +55,7 @@ export async function handleComplaintsD1(request, env, ctx) {
 // ─── LIST ──────────────────────────────────────────────
 
 async function getComplaints(db, params) {
-  const { status, search, limit: rawLimit, offset: rawOffset } = params;
+  const { status, complaint_type, search, limit: rawLimit, offset: rawOffset } = params;
   const limit = Math.min(parseInt(rawLimit) || 100, 500);
   const offset = parseInt(rawOffset) || 0;
 
@@ -61,6 +66,11 @@ async function getComplaints(db, params) {
   if (status) {
     conditions.push('status = ?');
     binds.push(status);
+  }
+
+  if (complaint_type && COMPLAINT_TYPES.includes(complaint_type)) {
+    conditions.push('complaint_type = ?');
+    binds.push(complaint_type);
   }
 
   if (search) {
@@ -92,10 +102,23 @@ async function getComplaint(db, params) {
   return successResponse({ success: true, data: row });
 }
 
+// ─── RECENT ────────────────────────────────────────────
+
+async function getRecent(db) {
+  const rows = await query(db,
+    'SELECT * FROM complaints ORDER BY created_at DESC LIMIT 5',
+    []
+  );
+  return successResponse({ success: true, data: rows });
+}
+
 // ─── SAVE (CREATE/UPDATE) ──────────────────────────────
 
 async function saveComplaint(db, body, env, ctx) {
-  const { id, complaint_date, customer, invoice_number, complaint, resolution, status, reported_by, resolved_date, notes } = body;
+  const {
+    id, complaint_date, customer, invoice_number, complaint,
+    resolution, status, reported_by, resolved_date, notes, complaint_type
+  } = body;
 
   if (!complaint_date) throw createError('VALIDATION_ERROR', 'Date is required');
   if (!customer || !customer.trim()) throw createError('VALIDATION_ERROR', 'Customer is required');
@@ -103,6 +126,8 @@ async function saveComplaint(db, body, env, ctx) {
 
   const validStatuses = ['Open', 'In Progress', 'Resolved'];
   const safeStatus = validStatuses.includes(status) ? status : 'Open';
+
+  const safeType = COMPLAINT_TYPES.includes(complaint_type) ? complaint_type : 'Other';
 
   // Auto-set resolved_date when status changes to Resolved
   const effectiveResolvedDate = safeStatus === 'Resolved' && !resolved_date
@@ -117,22 +142,23 @@ async function saveComplaint(db, body, env, ctx) {
       UPDATE complaints SET
         complaint_date = ?, customer = ?, invoice_number = ?, complaint = ?,
         resolution = ?, status = ?, reported_by = ?, resolved_date = ?, notes = ?,
-        updated_at = datetime('now')
+        complaint_type = ?, updated_at = datetime('now')
       WHERE id = ?
     `, [
       complaint_date, customer.trim(), invoice_number || null, complaint.trim(),
       resolution || '', safeStatus, reported_by || '', effectiveResolvedDate, notes || '',
-      id
+      safeType, id
     ]);
     resultId = id;
   } else {
     // Insert
     const result = await execute(db, `
-      INSERT INTO complaints (complaint_date, customer, invoice_number, complaint, resolution, status, reported_by, resolved_date, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO complaints (complaint_date, customer, invoice_number, complaint, resolution, status, reported_by, resolved_date, notes, complaint_type)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       complaint_date, customer.trim(), invoice_number || null, complaint.trim(),
-      resolution || '', safeStatus, reported_by || '', effectiveResolvedDate, notes || ''
+      resolution || '', safeStatus, reported_by || '', effectiveResolvedDate, notes || '',
+      safeType
     ]);
     resultId = result.lastRowId;
   }
@@ -141,7 +167,7 @@ async function saveComplaint(db, body, env, ctx) {
   if (env.GOOGLE_SHEETS_API_KEY || env.GOOGLE_SERVICE_ACCOUNT) {
     ctx.waitUntil(syncRowToSheet(env, {
       complaint_date, customer: customer.trim(), invoice_number: invoice_number || '',
-      complaint: complaint.trim(), resolution: resolution || ''
+      complaint: complaint.trim(), resolution: resolution || '', complaint_type: safeType
     }).catch(err => console.error('[Complaints] Sheet sync error:', err)));
   }
 
@@ -154,6 +180,12 @@ async function deleteComplaint(db, body) {
   const { id } = body;
   if (!id) throw createError('VALIDATION_ERROR', 'Complaint ID is required');
 
+  // Verify the complaint exists before attempting delete
+  const existing = await queryOne(db, 'SELECT id FROM complaints WHERE id = ?', [id]);
+  if (!existing) {
+    throw createError('NOT_FOUND', 'Complaint not found');
+  }
+
   await execute(db, 'DELETE FROM complaints WHERE id = ?', [id]);
   return successResponse({ success: true });
 }
@@ -161,10 +193,40 @@ async function deleteComplaint(db, body) {
 // ─── STATS ─────────────────────────────────────────────
 
 async function getStats(db) {
+  // Basic counts
   const total = await queryOne(db, 'SELECT COUNT(*) as count FROM complaints');
   const open = await queryOne(db, "SELECT COUNT(*) as count FROM complaints WHERE status = 'Open'");
   const inProgress = await queryOne(db, "SELECT COUNT(*) as count FROM complaints WHERE status = 'In Progress'");
   const resolved = await queryOne(db, "SELECT COUNT(*) as count FROM complaints WHERE status = 'Resolved'");
+
+  // Monthly trend (last 6 months)
+  const monthlyTrend = await query(db, `
+    SELECT
+      strftime('%Y-%m', complaint_date) as month,
+      COUNT(*) as count
+    FROM complaints
+    WHERE complaint_date >= date('now', '-6 months')
+    GROUP BY month
+    ORDER BY month DESC
+  `, []);
+
+  // Breakdown by type
+  const byType = await query(db, `
+    SELECT
+      complaint_type,
+      COUNT(*) as count
+    FROM complaints
+    GROUP BY complaint_type
+    ORDER BY count DESC
+  `, []);
+
+  // Average resolution time (in days)
+  const avgResolution = await queryOne(db, `
+    SELECT
+      AVG(JULIANDAY(resolved_date) - JULIANDAY(complaint_date)) as avg_days
+    FROM complaints
+    WHERE status = 'Resolved' AND resolved_date IS NOT NULL
+  `);
 
   return successResponse({
     success: true,
@@ -173,6 +235,9 @@ async function getStats(db) {
       open: open?.count || 0,
       in_progress: inProgress?.count || 0,
       resolved: resolved?.count || 0,
+      monthly_trend: monthlyTrend,
+      by_type: byType,
+      avg_resolution_days: avgResolution?.avg_days ? Math.round(avgResolution.avg_days * 10) / 10 : null,
     }
   });
 }
@@ -181,13 +246,13 @@ async function getStats(db) {
 
 async function syncRowToSheet(env, row) {
   // Append row to Google Sheet via Sheets API v4
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Sheet1!A:E:append?valueInputOption=USER_ENTERED&key=${env.GOOGLE_SHEETS_API_KEY}`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Sheet1!A:F:append?valueInputOption=USER_ENTERED&key=${env.GOOGLE_SHEETS_API_KEY}`;
 
   await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      values: [[row.complaint_date, row.customer, row.invoice_number, row.complaint, row.resolution]]
+      values: [[row.complaint_date, row.customer, row.invoice_number, row.complaint, row.resolution, row.complaint_type]]
     })
   });
 }
@@ -197,6 +262,16 @@ async function syncFromSheets(db, env) {
   const apiKey = env.GOOGLE_SHEETS_API_KEY;
   if (!apiKey) {
     return successResponse({ success: false, error: 'GOOGLE_SHEETS_API_KEY not configured' });
+  }
+
+  // Check if complaint_type column exists, add it if not
+  const tableInfo = await query(db, "PRAGMA table_info(complaints)", []);
+  const hasComplaintType = tableInfo.some(col => col.name === 'complaint_type');
+
+  if (!hasComplaintType) {
+    await execute(db, `
+      ALTER TABLE complaints ADD COLUMN complaint_type TEXT DEFAULT 'Other' CHECK(complaint_type IN ('Quality','Shipping','Service','Billing','Other'))
+    `, []);
   }
 
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Sheet1?key=${apiKey}`;
@@ -214,42 +289,69 @@ async function syncFromSheets(db, env) {
   }
 
   // First row is headers, rest is data
-  // Expected columns: Date, Customer, Invoice #, Complaint, Resolution
+  // Expected columns: Date, Customer, Invoice #, Complaint, Resolution, [Type]
   let imported = 0;
   let skipped = 0;
+  const errors = [];
 
   for (let i = 1; i < rows.length; i++) {
-    const [date, customer, invoice, complaint, resolution] = rows[i];
+    const [date, customer, invoice, complaint, resolution, type] = rows[i];
 
     if (!date || !customer || !complaint) {
       skipped++;
       continue;
     }
 
-    // Check for dupe by customer + date + invoice combo
-    const existing = await queryOne(db,
-      'SELECT id FROM complaints WHERE customer = ? AND complaint_date = ? AND (invoice_number = ? OR (invoice_number IS NULL AND ? IS NULL))',
-      [customer.trim(), date.trim(), invoice?.trim() || null, invoice?.trim() || null]
-    );
+    try {
+      // Fixed dupe check - handle NULL invoice_number properly
+      const invoiceValue = invoice?.trim() || null;
 
-    if (existing) {
+      let existing;
+      if (invoiceValue === null) {
+        // When invoice is NULL, use separate query
+        existing = await queryOne(db,
+          'SELECT id FROM complaints WHERE customer = ? AND complaint_date = ? AND invoice_number IS NULL',
+          [customer.trim(), date.trim()]
+        );
+      } else {
+        // When invoice has value, check normally
+        existing = await queryOne(db,
+          'SELECT id FROM complaints WHERE customer = ? AND complaint_date = ? AND invoice_number = ?',
+          [customer.trim(), date.trim(), invoiceValue]
+        );
+      }
+
+      if (existing) {
+        skipped++;
+        continue;
+      }
+
+      const complaintType = COMPLAINT_TYPES.includes(type?.trim()) ? type.trim() : 'Other';
+
+      await execute(db, `
+        INSERT INTO complaints (complaint_date, customer, invoice_number, complaint, resolution, status, complaint_type)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `, [
+        date.trim(),
+        customer.trim(),
+        invoiceValue,
+        complaint.trim(),
+        resolution?.trim() || '',
+        resolution?.trim() ? 'Resolved' : 'Open',
+        complaintType
+      ]);
+      imported++;
+    } catch (err) {
+      errors.push({ row: i + 1, error: err.message });
       skipped++;
-      continue;
     }
-
-    await execute(db, `
-      INSERT INTO complaints (complaint_date, customer, invoice_number, complaint, resolution, status)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `, [
-      date.trim(),
-      customer.trim(),
-      invoice?.trim() || null,
-      complaint.trim(),
-      resolution?.trim() || '',
-      resolution?.trim() ? 'Resolved' : 'Open'
-    ]);
-    imported++;
   }
 
-  return successResponse({ success: true, imported, skipped, total_rows: rows.length - 1 });
+  return successResponse({
+    success: true,
+    imported,
+    skipped,
+    total_rows: rows.length - 1,
+    errors: errors.length > 0 ? errors : undefined
+  });
 }
