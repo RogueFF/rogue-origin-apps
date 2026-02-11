@@ -115,7 +115,7 @@ function renderBriefingCard(n) {
       ${n.data.segments.map(seg => `
         <div class="briefing-segment">
           <div class="briefing-segment-header">
-            <span class="briefing-segment-icon">${seg.icon || '📌'}</span>
+            <span class="briefing-segment-icon">${seg.icon || '\uD83D\uDCCC'}</span>
             <span class="briefing-segment-label">${escapeHtml(seg.label || seg.category || 'Update')}</span>
           </div>
           <div class="briefing-segment-text">${escapeHtml(seg.text || seg.summary || '')}</div>
@@ -131,7 +131,7 @@ function renderBriefingCard(n) {
   const audioHtml = n.audio_url ? `
     <div class="briefing-audio-controls">
       <button class="btn-audio${isPlaying ? ' playing' : ''}" data-audio="${escapeHtml(n.audio_url)}" data-notif-id="${n.id}">
-        ${isPlaying ? renderSoundWave() : '🔊'} ${isPlaying ? 'Playing' : 'Replay'}
+        ${isPlaying ? renderSoundWave() : '\uD83D\uDD0A'} ${isPlaying ? 'Playing' : 'Replay'}
       </button>
     </div>
   ` : '';
@@ -170,7 +170,7 @@ function renderAlertCard(n) {
     <div class="notif-card card-enter${unread}${acked}" data-id="${n.id}" data-type="alert">
       <div class="notif-header">
         <div class="notif-header-left">
-          <span class="notif-icon">⚠️</span>
+          <span class="notif-icon">\u26A0\uFE0F</span>
           <span class="notif-title">${escapeHtml(n.title)}</span>
         </div>
         <span class="notif-time">${time}</span>
@@ -193,10 +193,10 @@ function renderProductionCard(n) {
   const pct = d.percentOfTarget || 0;
 
   // Stats
-  const lbs = d.dailyTotal != null ? d.dailyTotal.toFixed(1) : '—';
-  const target = pct ? pct + '%' : '—';
-  const crew = d.trimmers || d.crew || '—';
-  const rate = d.rate ? d.rate.toFixed(2) : '—';
+  const lbs = d.dailyTotal != null ? d.dailyTotal.toFixed(1) : '\u2014';
+  const target = pct ? pct + '%' : '\u2014';
+  const crew = d.trimmers || d.crew || '\u2014';
+  const rate = d.rate ? d.rate.toFixed(2) : '\u2014';
 
   // Sparkline from hourly data
   let sparkHtml = '';
@@ -275,7 +275,7 @@ function renderAudioButtons() {
     const nid = btn.dataset.notifId;
     const isPlaying = playingAudioId === nid;
     btn.classList.toggle('playing', isPlaying);
-    btn.innerHTML = isPlaying ? `${renderSoundWave()} Playing` : '🔊 Replay';
+    btn.innerHTML = isPlaying ? `${renderSoundWave()} Playing` : '\uD83D\uDD0A Replay';
   });
 }
 

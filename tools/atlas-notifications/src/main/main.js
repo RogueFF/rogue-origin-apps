@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, nativeImage, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, screen } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
 const { createApiServer } = require('./api-server');
@@ -25,32 +25,45 @@ let apiServer = null;
 let trayIconNormal = null;
 let trayIconBadge = null;
 
+// ─── Popup State ────────────────────────────────────────────────────
+
+const activePopups = [];  // { win, notifId, slot, height, dismissing }
+const MAX_POPUPS = 5;
+const POPUP_WIDTH = 380;
+const POPUP_GAP = 6;
+const POPUP_MARGIN_RIGHT = 12;
+const POPUP_MARGIN_BOTTOM = 12;
+const POPUP_PADDING = 16; // body padding (8px each side) for shadow room
+
+// Heights per notification type (content height)
+const POPUP_HEIGHTS = {
+  toast: 120,
+  briefing: 180,
+  alert: 150,
+  'production-card': 300
+};
+
 // ─── Tray Icon ──────────────────────────────────────────────────────
 function buildTrayIcons() {
   const iconPath = path.join(__dirname, '..', 'assets', 'tray-icon.png');
   trayIconNormal = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
 
   // Create badge icon — draw a gold dot overlay on the tray icon
-  // We'll composite a small dot onto the icon for the badge variant
   trayIconBadge = createBadgeIcon(trayIconNormal);
 }
 
 function createBadgeIcon(baseIcon) {
-  // Create a 16x16 canvas with a red notification dot in bottom-right
-  // Since we can't use canvas in main process without dependencies,
-  // we'll use a simple NativeImage overlay approach
   const size = { width: 16, height: 16 };
   const base = baseIcon.resize(size);
   const bitmap = base.toBitmap();
   const buf = Buffer.from(bitmap);
 
-  // Draw a 5x5 red dot at position (11,11) in BGRA format
+  // Draw a 5x5 gold dot at position (11,11) in BGRA format
   const dotColor = { b: 79, g: 170, r: 228, a: 255 }; // Gold #e4aa4f in BGRA
   for (let dy = 0; dy < 5; dy++) {
     for (let dx = 0; dx < 5; dx++) {
       const px = 11 + dx;
       const py = 11 + dy;
-      // Circular dot — skip corners
       const cx = dx - 2, cy = dy - 2;
       if (cx * cx + cy * cy > 6) continue;
       if (px < 16 && py < 16) {
@@ -151,7 +164,6 @@ function showPanel() {
   if (!panel || panel.isDestroyed()) createPanel();
 
   // Position near tray (bottom-right on Windows)
-  const { screen } = require('electron');
   const display = screen.getPrimaryDisplay();
   const { width: sw, height: sh } = display.workAreaSize;
   panel.setPosition(sw - 430, sh - 630);
@@ -159,6 +171,108 @@ function showPanel() {
   panel.show();
   panel.focus();
   panel.webContents.send('refresh-notifications', getNotifications());
+}
+
+// ─── Popup Management ───────────────────────────────────────────────
+
+function createPopup(notif) {
+  // Enforce max popups — force-dismiss oldest if exceeded
+  while (activePopups.length >= MAX_POPUPS) {
+    forceDestroyPopup(activePopups[0]);
+  }
+
+  const height = POPUP_HEIGHTS[notif.type] || POPUP_HEIGHTS.toast;
+  const totalHeight = height + POPUP_PADDING;
+
+  const display = screen.getPrimaryDisplay();
+  const { width: sw, height: sh } = display.workAreaSize;
+
+  const slot = findNextSlot(totalHeight);
+
+  const win = new BrowserWindow({
+    width: POPUP_WIDTH,
+    height: totalHeight,
+    x: sw - POPUP_WIDTH - POPUP_MARGIN_RIGHT,
+    y: sh - slot.bottom,
+    show: false,
+    frame: false,
+    resizable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    transparent: true,
+    focusable: false,
+    hasShadow: false,
+    webPreferences: {
+      preload: path.join(__dirname, '..', 'main', 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  });
+
+  win.loadFile(path.join(__dirname, '..', 'renderer', 'popup.html'));
+
+  const entry = { win, notifId: notif.id, height: totalHeight, bottom: slot.bottom, dismissing: false };
+  activePopups.push(entry);
+
+  win.webContents.once('did-finish-load', () => {
+    win.webContents.send('show-popup', { notification: notif });
+    win.showInactive();
+  });
+
+  win.on('closed', () => {
+    const idx = activePopups.findIndex(p => p.win === win);
+    if (idx !== -1) activePopups.splice(idx, 1);
+    repositionPopups();
+  });
+}
+
+function findNextSlot(height) {
+  let bottom = POPUP_MARGIN_BOTTOM + height;
+  for (const popup of activePopups) {
+    bottom += popup.height + POPUP_GAP;
+  }
+  return { bottom };
+}
+
+function forceDestroyPopup(entry) {
+  // Synchronously remove from array and destroy — used for eviction
+  const idx = activePopups.indexOf(entry);
+  if (idx !== -1) activePopups.splice(idx, 1);
+  if (!entry.win.isDestroyed()) entry.win.destroy();
+}
+
+function dismissPopup(win) {
+  if (!win || win.isDestroyed()) return;
+  const entry = activePopups.find(p => p.win === win);
+  if (!entry || entry.dismissing) return;
+  entry.dismissing = true;
+
+  win.webContents.send('dismiss-popup');
+
+  setTimeout(() => {
+    if (!win.isDestroyed()) win.destroy();
+  }, 300);
+}
+
+function repositionPopups() {
+  const display = screen.getPrimaryDisplay();
+  const { width: sw, height: sh } = display.workAreaSize;
+
+  let currentBottom = POPUP_MARGIN_BOTTOM;
+
+  for (const popup of activePopups) {
+    currentBottom += popup.height;
+    popup.bottom = currentBottom;
+
+    if (!popup.win.isDestroyed()) {
+      const x = sw - POPUP_WIDTH - POPUP_MARGIN_RIGHT;
+      const y = sh - currentBottom;
+      popup.win.setPosition(x, y, true);
+    }
+
+    currentBottom += POPUP_GAP;
+  }
 }
 
 // ─── Notification Management ────────────────────────────────────────
@@ -190,33 +304,8 @@ function addNotification(payload) {
 function handleIncomingNotification(payload) {
   const notif = addNotification(payload);
 
-  // Show native toast for toast/alert/production-card types (not briefings — those go to panel only)
-  if (Notification.isSupported() && notif.type !== 'briefing') {
-    const toastTitle = notif.title;
-    let toastBody = notif.body;
-
-    // For production cards, create a summary toast
-    if (notif.type === 'production-card' && notif.data) {
-      const d = notif.data;
-      const status = d.paceStatus === 'ahead' ? 'Ahead' : d.paceStatus === 'behind' ? 'Behind' : 'On Pace';
-      toastBody = `${d.dailyTotal} lbs (${d.percentOfTarget}% of target) — ${status}`;
-    }
-
-    const toast = new Notification({
-      title: toastTitle,
-      body: toastBody,
-      icon: path.join(__dirname, '..', 'assets', 'icon.png'),
-      urgency: notif.priority === 'high' ? 'critical' : 'normal',
-      silent: !store.get('soundEnabled')
-    });
-    toast.on('click', () => showPanel());
-    toast.show();
-
-    // Auto-dismiss toast after 8 seconds
-    setTimeout(() => {
-      toast.close();
-    }, 8000);
-  }
+  // Show rich popup notification
+  createPopup(notif);
 
   // Forward to panel if open
   if (panel && !panel.isDestroyed() && panel.isVisible()) {
@@ -353,18 +442,58 @@ function setupIPC() {
     }
     return true;
   });
+
+  // ─── Popup IPC ──────────────────────────────────────────────────
+
+  ipcMain.on('popup-clicked', (event, notifId) => {
+    showPanel();
+
+    const notifs = getNotifications();
+    const n = notifs.find(n => n.id === notifId);
+    if (n) {
+      n.read = true;
+      store.set('notifications', notifs);
+      updateTrayBadge();
+    }
+
+    const popup = activePopups.find(p => p.notifId === notifId);
+    if (popup) dismissPopup(popup.win);
+  });
+
+  ipcMain.on('popup-dismiss', (event) => {
+    const popup = activePopups.find(p =>
+      !p.win.isDestroyed() && p.win.webContents === event.sender
+    );
+    if (popup && !popup.win.isDestroyed() && !popup.dismissing) {
+      popup.win.destroy();
+    }
+  });
+
+  ipcMain.on('popup-acknowledge', (event, notifId) => {
+    const notifs = getNotifications();
+    const n = notifs.find(n => n.id === notifId);
+    if (n) {
+      n.read = true;
+      if (n.data) n.data.acknowledged = true;
+      n.acknowledged = true;
+      store.set('notifications', notifs);
+      updateTrayBadge();
+    }
+
+    if (panel && !panel.isDestroyed() && panel.isVisible()) {
+      panel.webContents.send('refresh-notifications', getNotifications());
+    }
+  });
 }
 
 // ─── App Lifecycle ──────────────────────────────────────────────────
 app.on('ready', () => {
-  // Set auto-start
   app.setLoginItemSettings({ openAtLogin: store.get('autoStart') });
 
   createTrayIcon();
   createPanel();
   setupIPC();
 
-  // Start API server
   const port = store.get('port');
   apiServer = createApiServer(port, handleIncomingNotification);
 
@@ -372,7 +501,6 @@ app.on('ready', () => {
 });
 
 app.on('window-all-closed', (e) => {
-  // Don't quit on window close — keep tray running
   e.preventDefault?.();
 });
 
@@ -382,4 +510,9 @@ app.on('second-instance', () => {
 
 app.on('before-quit', () => {
   app.isQuitting = true;
+
+  for (const popup of [...activePopups]) {
+    if (!popup.win.isDestroyed()) popup.win.destroy();
+  }
+  activePopups.length = 0;
 });

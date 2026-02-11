@@ -1,0 +1,95 @@
+/* ─── Popup Window ───────────────────────────────────────────────── */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: transparent;
+  font-family: var(--font-body);
+  overflow: hidden;
+  padding: 8px;
+}
+
+#popup-container {
+  animation: popupSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+/* Override card styles for popup context */
+#popup-container .notif-card {
+  margin-bottom: 0;
+  cursor: pointer;
+  border-radius: var(--radius);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    0 0 1px rgba(228, 170, 79, 0.15);
+  animation: none;
+}
+
+#popup-container .notif-card:hover {
+  background: var(--card-hover);
+}
+
+/* ─── Progress Bar ──────────────────────────────────────────────── */
+
+#popup-progress {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 0 0 var(--radius) var(--radius);
+  overflow: hidden;
+}
+
+#popup-progress-bar {
+  height: 100%;
+  background: var(--gold);
+  opacity: 0.6;
+  width: 100%;
+  transform-origin: left;
+  transition: transform 0.1s linear;
+}
+
+/* ─── Slide In Animation ────────────────────────────────────────── */
+
+@keyframes popupSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(80px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ─── Slide Out Animation ───────────────────────────────────────── */
+
+.popup-dismissing #popup-container {
+  animation: popupSlideOut 0.25s cubic-bezier(0.55, 0, 1, 0.45) forwards;
+}
+
+@keyframes popupSlideOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(80px);
+  }
+}
+
+/* ─── Popup-specific alert ack feedback ─────────────────────────── */
+
+.alert-acked {
+  margin-top: 6px;
+  font-size: 10px;
+  color: var(--green);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
