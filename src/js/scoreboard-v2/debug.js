@@ -220,6 +220,127 @@
     }
   }
 
+  /**
+   * Inject mock cycle history for testing all cycle view modes
+   * Generates realistic-looking production cycles
+   */
+  function injectMockCycles() {
+    if (!State || !Cycle) {
+      console.warn('[Debug] State or Cycle module not available');
+      return;
+    }
+
+    // Clear existing
+    State.cycleHistory = [];
+
+    // Generate 9 mock cycles (typical full day)
+    var targetSec = 300; // 5 min target
+    var mockCycles = [
+      { time: 280, target: targetSec, timestamp: Date.now() - 8 * 3600000 },  // 7a - fast (green)
+      { time: 310, target: targetSec, timestamp: Date.now() - 7 * 3600000 },  // 8a - slightly slow (gold)
+      { time: 260, target: targetSec, timestamp: Date.now() - 6 * 3600000 },  // 9a - fast (green)
+      { time: 350, target: targetSec, timestamp: Date.now() - 4.5 * 3600000 }, // 10a - slow (red, post-break)
+      { time: 270, target: targetSec, timestamp: Date.now() - 4 * 3600000 },  // 11a - fast (green)
+      { time: 290, target: targetSec, timestamp: Date.now() - 3 * 3600000 },  // 12p - on pace (gold)
+      { time: 380, target: targetSec, timestamp: Date.now() - 1.5 * 3600000 }, // 1p - slow (red, post-lunch)
+      { time: 250, target: targetSec, timestamp: Date.now() - 1 * 3600000 },  // 2p - very fast (green)
+      { time: 295, target: targetSec, timestamp: Date.now() - 0.5 * 3600000 }, // 3p - on pace (gold)
+    ];
+
+    mockCycles.forEach(function(mc) {
+      State.cycleHistory.push({
+        time: mc.time,
+        target: mc.target,
+        timestamp: mc.timestamp,
+        isEarly: mc.time < mc.target
+      });
+    });
+
+    // Re-render
+    if (Cycle.renderCycleHistory) {
+      Cycle.renderCycleHistory();
+    }
+
+    console.log('[Debug] Injected', mockCycles.length, 'mock cycles. Use ‹ › to cycle through views.');
+  }
+
+  /**
+   * Inject mock scoreboard data for testing all UI states
+   * @param {string} scenario - 'ahead', 'behind', 'on-pace', 'early-shift'
+   */
+  function injectMockScoreboard(scenario) {
+    if (!State) return;
+    scenario = scenario || 'ahead';
+
+    var mockData = {
+      'ahead': {
+        todayLbs: 75.6, todayTarget: 65.0, todayPercentage: 116.3,
+        lastHourLbs: 12.4, lastHourTarget: 9.7, lastHourTrimmers: 10,
+        currentHourTrimmers: 10, currentHourTarget: 9.7,
+        targetRate: 0.97, hoursLogged: 7, effectiveHours: 6.5,
+        avgPercentage: 118.2, bestPercentage: 142.0, streak: 5,
+        strain: '2025 - Lifter / Sungrown',
+        hourlyRates: [
+          {timeSlot:'7a-8a',rate:1.1,target:0.97,trimmers:10,lbs:11.0},
+          {timeSlot:'8a-9a',rate:0.95,target:0.97,trimmers:10,lbs:9.5},
+          {timeSlot:'9a-10a',rate:1.2,target:0.97,trimmers:10,lbs:12.0},
+          {timeSlot:'10a-11a',rate:0.88,target:0.97,trimmers:10,lbs:8.8},
+          {timeSlot:'11a-12p',rate:1.05,target:0.97,trimmers:10,lbs:10.5},
+          {timeSlot:'12:30p-1p',rate:0.96,target:0.97,trimmers:10,lbs:4.8},
+          {timeSlot:'1p-2p',rate:1.1,target:0.97,trimmers:10,lbs:11.0}
+        ]
+      },
+      'behind': {
+        todayLbs: 42.3, todayTarget: 55.0, todayPercentage: 76.9,
+        lastHourLbs: 6.1, lastHourTarget: 9.7, lastHourTrimmers: 10,
+        currentHourTrimmers: 10, currentHourTarget: 9.7,
+        targetRate: 0.97, hoursLogged: 6, effectiveHours: 5.5,
+        avgPercentage: 78.5, bestPercentage: 95.0, streak: 0,
+        strain: '2025 - Lifter / Sungrown',
+        hourlyRates: [
+          {timeSlot:'7a-8a',rate:0.82,target:0.97,trimmers:10,lbs:8.2},
+          {timeSlot:'8a-9a',rate:0.75,target:0.97,trimmers:10,lbs:7.5},
+          {timeSlot:'9a-10a',rate:0.68,target:0.97,trimmers:10,lbs:6.8},
+          {timeSlot:'10a-11a',rate:0.71,target:0.97,trimmers:10,lbs:7.1},
+          {timeSlot:'11a-12p',rate:0.65,target:0.97,trimmers:10,lbs:6.5}
+        ]
+      },
+      'on-pace': {
+        todayLbs: 58.2, todayTarget: 60.0, todayPercentage: 97.0,
+        lastHourLbs: 9.5, lastHourTarget: 9.7, lastHourTrimmers: 10,
+        currentHourTrimmers: 10, currentHourTarget: 9.7,
+        targetRate: 0.97, hoursLogged: 6, effectiveHours: 5.5,
+        avgPercentage: 98.0, bestPercentage: 110.0, streak: 3,
+        strain: '2025 - Lifter / Sungrown',
+        hourlyRates: [
+          {timeSlot:'7a-8a',rate:0.98,target:0.97,trimmers:10,lbs:9.8},
+          {timeSlot:'8a-9a',rate:0.95,target:0.97,trimmers:10,lbs:9.5},
+          {timeSlot:'9a-10a',rate:1.01,target:0.97,trimmers:10,lbs:10.1},
+          {timeSlot:'10a-11a',rate:0.93,target:0.97,trimmers:10,lbs:9.3},
+          {timeSlot:'11a-12p',rate:0.99,target:0.97,trimmers:10,lbs:9.9}
+        ]
+      }
+    };
+
+    var data = mockData[scenario] || mockData['ahead'];
+    State.data = data;
+    State.debugMode = true;
+    document.body.classList.add('debug-active');
+
+    // Render with mock data
+    if (window.ScoreboardRender && window.ScoreboardRender.renderScoreboard) {
+      window.ScoreboardRender.renderScoreboard();
+    }
+    if (window.ScoreboardChart && window.ScoreboardChart.updateChart) {
+      window.ScoreboardChart.updateChart(data.hourlyRates || []);
+    }
+
+    console.log('[Debug] Injected mock scoreboard:', scenario);
+    if (scenario === 'behind') {
+      console.log('[Debug] Race mode should activate (pace < 90%)');
+    }
+  }
+
   // Note: Keyboard shortcut (D key) is handled by lazy-loader in scoreboard.html
   // This module is only loaded when the shortcut is first triggered
 
@@ -231,7 +352,9 @@
     simulateBreak: simulateBreak,
     resetDebug: resetDebug,
     playMariachi: playMariachi,
-    addCycleToHistory: addCycleToHistory
+    addCycleToHistory: addCycleToHistory,
+    injectMockCycles: injectMockCycles,
+    injectMockScoreboard: injectMockScoreboard
   };
 
   // Expose global functions for inline handlers and event listeners
@@ -242,5 +365,7 @@
   window.resetDebug = resetDebug;
   window.playMariachi = playMariachi;
   window.addCycleToHistory = addCycleToHistory;
+  window.injectMockCycles = injectMockCycles;
+  window.injectMockScoreboard = injectMockScoreboard;
 
 })(window);

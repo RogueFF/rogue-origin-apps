@@ -101,6 +101,20 @@
                     banner.style.display = 'flex';
                     banner.textContent = 'Showing yesterday\'s results (' + yStr + ')';
                   }
+
+                  // Load yesterday's cycle history + timer data
+                  if (yResponse.timer) {
+                    if (yResponse.timer.cycleHistory && Cycle) {
+                      var defaultTarget = (yResponse.timer.targetSeconds) ||
+                        ((Config && Config.timer && Config.timer.defaultTargetSeconds) || 300);
+                      Cycle.loadCycleHistoryFromAPI(yResponse.timer.cycleHistory, defaultTarget);
+                    }
+                    // Update timer stats display
+                    if (Timer && Timer.updateFromResponse) {
+                      Timer.updateFromResponse(yResponse.timer);
+                    }
+                  }
+
                   if (Render) Render.renderScoreboard();
                   if (Chart) Chart.updateChart(yData.hourlyRates || []);
                 }
