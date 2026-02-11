@@ -52,7 +52,7 @@
     },
 
     // Cycle history display modes
-    cycleModes: ['Donut', 'Bars', 'Grid', 'Cards', 'List', 'Timeline', 'Rings', 'Race'],
+    cycleModes: ['Donut', 'Bars', 'Grid', 'Cards', 'List', 'Timeline', 'Pace', 'Race'],
 
     // LocalStorage keys
     storage: {
