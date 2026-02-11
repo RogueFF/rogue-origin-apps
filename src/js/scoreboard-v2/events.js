@@ -181,17 +181,20 @@
       pauseBtn.addEventListener('click', handlePauseClick);
     }
 
-    // Cycle History Controls
-    const cycleModeNavBtns = document.querySelectorAll('.cycle-nav-btn');
-    if (cycleModeNavBtns.length >= 2) {
-      cycleModeNavBtns[0].addEventListener('click', function() { if (window.prevCycleMode) window.prevCycleMode(); });
-      cycleModeNavBtns[1].addEventListener('click', function() { if (window.nextCycleMode) window.nextCycleMode(); });
-    }
-
-    const cycleToggle = el('cycleToggle');
-    if (cycleToggle) {
-      cycleToggle.addEventListener('click', function() { if (window.toggleCycleHistory) window.toggleCycleHistory(); });
-    }
+    // Cycle History Controls — use event delegation for reliability
+    document.addEventListener('click', function(e) {
+      var btn = e.target.closest('.cycle-nav-btn');
+      if (btn) {
+        var navBtns = document.querySelectorAll('.cycle-nav-btn');
+        if (btn === navBtns[0] && window.prevCycleMode) window.prevCycleMode();
+        if (btn === navBtns[1] && window.nextCycleMode) window.nextCycleMode();
+        return;
+      }
+      var toggle = e.target.closest('#cycleToggle, .cycle-history-toggle');
+      if (toggle && window.toggleCycleHistory) {
+        window.toggleCycleHistory();
+      }
+    });
 
     // Pause Modal
     const pauseReasonBtns = document.querySelectorAll('.pause-reason-btn');
