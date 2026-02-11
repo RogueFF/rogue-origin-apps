@@ -3,55 +3,143 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; media-src https: http:; img-src 'self' data:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.elevenlabs.io; media-src https: http:; img-src 'self' data:;">
   <title>Atlas Notifications</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;500;600&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="panel.css">
 </head>
 <body>
+  <!-- Atmospheric background layers -->
+  <div class="atmosphere-noise"></div>
+  <div class="atmosphere-gradient"></div>
+
   <!-- Titlebar -->
   <header class="titlebar" id="titlebar">
     <div class="titlebar-left">
-      <span class="titlebar-icon">🌿</span>
-      <span class="titlebar-title">Atlas</span>
+      <span class="titlebar-accent"></span>
+      <span class="titlebar-title">ATLAS</span>
     </div>
     <div class="titlebar-right">
       <div class="status-indicator" id="status-indicator" title="Atlas connection status">
         <span class="status-dot" id="status-dot"></span>
         <span class="status-text" id="status-text">Checking...</span>
       </div>
+      <button class="btn-icon" id="btn-settings" title="Settings">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
       <button class="btn-icon" id="btn-close" title="Close panel">&times;</button>
     </div>
   </header>
 
   <!-- Tab bar -->
-  <nav class="tabs">
+  <nav class="tabs" id="tabs">
     <button class="tab active" data-tab="all">All</button>
-    <button class="tab" data-tab="production-card">Production</button>
     <button class="tab" data-tab="briefing">Briefings</button>
     <button class="tab" data-tab="alert">Alerts</button>
+    <button class="tab" data-tab="production-card">Prod</button>
     <button class="tab" data-tab="toast">Updates</button>
+    <div class="tab-indicator" id="tab-indicator"></div>
   </nav>
-
-  <!-- Actions bar -->
-  <div class="actions-bar">
-    <span class="notif-count" id="notif-count">0 notifications</span>
-    <div class="actions-right">
-      <button class="btn-text" id="btn-mark-all">Mark all read</button>
-      <button class="btn-text btn-danger" id="btn-clear">Clear All</button>
-    </div>
-  </div>
 
   <!-- Notification list -->
   <main class="notification-list" id="notification-list">
     <div class="empty-state" id="empty-state">
-      <div class="empty-icon">🌿</div>
-      <p>No notifications yet</p>
+      <div class="empty-glyph">⬡</div>
+      <p class="empty-title">No signals</p>
       <p class="empty-sub">Atlas will send briefings and alerts here</p>
     </div>
   </main>
+
+  <!-- Bottom bar -->
+  <footer class="bottom-bar">
+    <button class="btn-ghost btn-danger" id="btn-clear">Clear All</button>
+    <span class="notif-count" id="notif-count">0 notifications</span>
+  </footer>
+
+  <!-- Settings overlay -->
+  <div class="settings-overlay" id="settings-overlay">
+    <div class="settings-panel" id="settings-panel">
+      <div class="settings-header">
+        <button class="settings-back" id="settings-back">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          Settings
+        </button>
+      </div>
+
+      <div class="settings-body">
+        <div class="settings-section">
+          <div class="settings-section-label">Connection</div>
+          <div class="settings-group">
+            <label class="settings-field">
+              <span class="settings-field-label">Atlas Host</span>
+              <input type="text" class="settings-input" id="set-host" placeholder="100.117.199.40">
+            </label>
+            <label class="settings-field">
+              <span class="settings-field-label">Port</span>
+              <input type="number" class="settings-input" id="set-port" placeholder="9400">
+            </label>
+            <label class="settings-field">
+              <span class="settings-field-label">API Token</span>
+              <input type="password" class="settings-input" id="set-token" placeholder="Optional">
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-label">Text-to-Speech</div>
+          <div class="settings-group">
+            <label class="settings-field">
+              <span class="settings-field-label">ElevenLabs Key</span>
+              <input type="password" class="settings-input" id="set-elevenlabs-key" placeholder="sk-...">
+            </label>
+            <label class="settings-field">
+              <span class="settings-field-label">Voice</span>
+              <select class="settings-select" id="set-voice">
+                <option value="">Select voice...</option>
+              </select>
+            </label>
+            <label class="settings-field settings-field-row">
+              <span class="settings-field-label">Volume</span>
+              <div class="settings-slider-wrap">
+                <input type="range" class="settings-slider" id="set-volume" min="0" max="100" value="80">
+                <span class="settings-slider-value" id="set-volume-value">80%</span>
+              </div>
+            </label>
+            <label class="settings-field settings-field-row">
+              <span class="settings-field-label">TTS Enabled</span>
+              <button class="settings-toggle" id="set-tts-enabled" data-on="true">
+                <span class="settings-toggle-thumb"></span>
+              </button>
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-label">Notifications</div>
+          <div class="settings-group">
+            <label class="settings-field settings-field-row">
+              <span class="settings-field-label">Sound</span>
+              <button class="settings-toggle" id="set-sound" data-on="true">
+                <span class="settings-toggle-thumb"></span>
+              </button>
+            </label>
+            <label class="settings-field settings-field-row">
+              <span class="settings-field-label">Auto-start</span>
+              <button class="settings-toggle" id="set-autostart" data-on="true">
+                <span class="settings-toggle-thumb"></span>
+              </button>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-footer">
+        <button class="btn-save" id="btn-save-settings">Save & Close</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Audio player (hidden) -->
   <audio id="audio-player" style="display:none;"></audio>
