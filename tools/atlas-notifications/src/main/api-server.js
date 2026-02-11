@@ -53,7 +53,7 @@ function createApiServer(port, onNotification, apiToken) {
     res.json({ status: 'ok', message: 'Use the panel to view notifications' });
   });
 
-  const server = app.listen(port, '127.0.0.1', () => {
+  const server = app.listen(port, '0.0.0.0', () => {
     console.log(`Atlas Notifications API listening on port ${port}`);
   });
 
