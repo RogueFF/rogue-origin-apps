@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <link rel="icon" type="image/png" href="/rogue-origin-apps/favicon.png">
   <link rel="manifest" href="/rogue-origin-apps/manifest.json">
-  <meta name="theme-color" content="#0d0f0e">
+  <meta name="theme-color" content="#0a0c0b">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -32,8 +32,8 @@
   <link rel="preconnect" href="https://unpkg.com">
   <link rel="dns-prefetch" href="https://script.google.com">
 
-  <!-- Fonts: Luxury Instrument Panel -->
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=optional" rel="stylesheet">
+  <!-- Fonts: Cinematic Instrument Panel -->
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700;800;900&display=optional" rel="stylesheet">
 
   <!-- Scripts: Lazy loaded by modules when needed -->
   <!-- Chart.js and Phosphor Icons are loaded on-demand by lazy-loader.js -->
@@ -60,8 +60,8 @@
   <link rel="stylesheet" href="../css/shared-base.css">
 
   <!-- Non-critical CSS: Deferred for faster initial render -->
-  <link rel="preload" href="../css/scoreboard-v2.css?v=3" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link rel="stylesheet" href="../css/scoreboard-v2.css?v=3"></noscript>
+  <link rel="preload" href="../css/scoreboard-v2.css?v=4" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/scoreboard-v2.css?v=4"></noscript>
 </head>
 <body class="idle timer-neutral">
   <a href="#main-panel" class="skip-link">Skip to main content</a>
@@ -99,19 +99,28 @@
   </div>
 
   <!-- ============================================
-       HEADER: Strain (top-left) + Clock (top-right)
-       Asymmetric — strain anchored left, clock floats right of main panel
+       CINEMATIC HEADER — Floating strain + clock
        ============================================ -->
-  <div class="strain-display">
-    <div class="strain-label" id="strainLabel">Line 1 · Current Strain</div>
-    <div class="strain-name" id="strainName">—</div>
-    <div class="strain-rate-indicator" id="strainRateIndicator"></div>
-  </div>
+  <header class="hud-header">
+    <div class="strain-display">
+      <div class="strain-label" id="strainLabel">Line 1 · Current Strain</div>
+      <div class="strain-name" id="strainName">—</div>
+      <div class="strain-rate-indicator" id="strainRateIndicator"></div>
+    </div>
 
-  <div class="time-display">
-    <div class="time" id="clock">--:--</div>
-    <div class="date" id="date">Loading...</div>
-  </div>
+    <div class="hud-center-marker">
+      <!-- Status Badge -->
+      <div class="status-badge">
+        <span class="status-icon" id="statusIcon"><i class="ph-duotone ph-pause"></i></span>
+        <span id="statusText">WAITING</span>
+      </div>
+    </div>
+
+    <div class="time-display">
+      <div class="time" id="clock">--:--</div>
+      <div class="date" id="date">Loading...</div>
+    </div>
+  </header>
 
   <!-- Time Controls -->
   <div class="time-controls">
@@ -206,19 +215,36 @@
   </div>
 
   <!-- ============================================
-       MAIN PANEL — Left ~70%
-       Production data, daily progress, chart
+       MAIN STAGE — Cinematic split layout
        ============================================ -->
   <div id="main-panel" class="main-panel">
     <div class="scoreboard">
 
-      <!-- Status Badge -->
-      <div class="status-badge">
-        <span class="status-icon" id="statusIcon"><i class="ph-duotone ph-pause"></i></span>
-        <span id="statusText">WAITING</span>
+      <!-- ====== HERO: DAILY TOTAL — Massive, unmissable ====== -->
+      <div class="hero-daily">
+        <div class="daily-progress">
+          <div class="daily-header" id="dailyHeader">Line 1 Today</div>
+          <div class="daily-numbers">
+            <span class="daily-actual" id="dailyActual">—</span>
+            <span class="daily-sep">/</span>
+            <span class="daily-target" id="dailyTarget">—</span>
+            <span class="daily-unit">lbs</span>
+            <span class="daily-delta" id="dailyDelta">—</span>
+          </div>
+          <div class="progress-bar-container">
+            <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+            <span class="progress-hours" id="progressHours">0 hrs</span>
+          </div>
+          <div class="daily-projection">
+            <span class="projection-label" id="projectionLabel">End of day:</span>
+            <span class="projection-value" id="projectionValue">—</span>
+            <span class="projection-goal" id="projectionGoal"></span>
+            <span class="projection-delta" id="projectionDelta">—</span>
+          </div>
+        </div>
       </div>
 
-      <!-- Hour Cards -->
+      <!-- ====== HOUR CARDS — Staggered, overlapping ====== -->
       <div class="hour-cards">
         <div class="hour-card last-hour">
           <div class="hour-card-header" id="lastHourHeader">Last Hour</div>
@@ -246,28 +272,6 @@
             <div class="percentage-value" id="currentHourTargetLbs">—</div>
             <div class="percentage-label" id="lbsTargetLabel">lbs target</div>
           </div>
-        </div>
-      </div>
-
-      <!-- Daily Progress -->
-      <div class="daily-progress">
-        <div class="daily-header" id="dailyHeader">Line 1 Today</div>
-        <div class="daily-numbers">
-          <span class="daily-actual" id="dailyActual">—</span>
-          <span class="daily-sep">/</span>
-          <span class="daily-target" id="dailyTarget">—</span>
-          <span class="daily-unit">lbs</span>
-          <span class="daily-delta" id="dailyDelta">—</span>
-        </div>
-        <div class="progress-bar-container">
-          <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
-          <span class="progress-hours" id="progressHours">0 hrs</span>
-        </div>
-        <div class="daily-projection">
-          <span class="projection-label" id="projectionLabel">End of day:</span>
-          <span class="projection-value" id="projectionValue">—</span>
-          <span class="projection-goal" id="projectionGoal"></span>
-          <span class="projection-delta" id="projectionDelta">—</span>
         </div>
       </div>
 
@@ -334,8 +338,8 @@
   </div>
 
   <!-- ============================================
-       INSTRUMENT PANEL — Right ~30%
-       Scale ring, bag timer ring, cycle stats
+       INSTRUMENT PANEL — Right side
+       Integrated cockpit feel
        ============================================ -->
   <div class="timer-panel neutral" id="timerPanel">
     <div class="drag-handle" id="dragHandle"></div>
@@ -347,8 +351,27 @@
       <div class="scale-header" id="scaleHeader">Live Scale</div>
       <div class="scale-display" id="scaleDisplay">
         <svg class="scale-ring" viewBox="0 0 220 220">
+          <defs>
+            <filter id="scaleGlow">
+              <feGaussianBlur stdDeviation="3" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+          <!-- Tick marks for chronograph feel -->
+          <g class="ring-ticks" transform="translate(110,110)">
+            <line x1="0" y1="-92" x2="0" y2="-85" stroke="rgba(240,235,224,0.08)" stroke-width="1" transform="rotate(0)"/>
+            <line x1="0" y1="-92" x2="0" y2="-85" stroke="rgba(240,235,224,0.08)" stroke-width="1" transform="rotate(36)"/>
+            <line x1="0" y1="-92" x2="0" y2="-85" stroke="rgba(240,235,224,0.08)" stroke-width="1" transform="rotate(72)"/>
+            <line x1="0" y1="-92" x2="0" y2="-85" stroke="rgba(240,235,224,0.08)" stroke-width="1" transform="rotate(108)"/>
+            <line x1="0" y1="-92" x2="0" y2="-85" stroke="rgba(240,235,224,0.08)" stroke-width="1" transform="rotate(144)"/>
+            <line x1="0" y1="-92" x2="0" y2="-85" stroke="rgba(240,235,224,0.08)" stroke-width="1" transform="rotate(180)"/>
+            <line x1="0" y1="-92" x2="0" y2="-85" stroke="rgba(240,235,224,0.08)" stroke-width="1" transform="rotate(216)"/>
+            <line x1="0" y1="-92" x2="0" y2="-85" stroke="rgba(240,235,224,0.08)" stroke-width="1" transform="rotate(252)"/>
+            <line x1="0" y1="-92" x2="0" y2="-85" stroke="rgba(240,235,224,0.08)" stroke-width="1" transform="rotate(288)"/>
+            <line x1="0" y1="-92" x2="0" y2="-85" stroke="rgba(240,235,224,0.08)" stroke-width="1" transform="rotate(324)"/>
+          </g>
           <circle class="scale-ring-bg" cx="110" cy="110" r="95"/>
-          <circle class="scale-ring-progress" id="scaleRing" cx="110" cy="110" r="95" stroke-dasharray="597" stroke-dashoffset="597"/>
+          <circle class="scale-ring-progress" id="scaleRing" cx="110" cy="110" r="95" stroke-dasharray="597" stroke-dashoffset="597" filter="url(#scaleGlow)"/>
         </svg>
         <div class="scale-center">
           <div class="scale-value" id="scaleWeight">—</div>
@@ -362,8 +385,29 @@
     <div class="timer-header" id="timerHeader">5KG Bag Timer</div>
     <div class="timer-display" id="timerDisplay">
       <svg class="timer-ring" viewBox="0 0 220 220">
+        <defs>
+          <filter id="timerGlow">
+            <feGaussianBlur stdDeviation="4" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <!-- Tick marks -->
+        <g class="ring-ticks" transform="translate(110,110)">
+          <line x1="0" y1="-92" x2="0" y2="-85" stroke="rgba(240,235,224,0.08)" stroke-width="1" transform="rotate(0)"/>
+          <line x1="0" y1="-92" x2="0" y2="-85" stroke="rgba(240,235,224,0.08)" stroke-width="1" transform="rotate(30)"/>
+          <line x1="0" y1="-92" x2="0" y2="-85" stroke="rgba(240,235,224,0.08)" stroke-width="1" transform="rotate(60)"/>
+          <line x1="0" y1="-92" x2="0" y2="-85" stroke="rgba(240,235,224,0.08)" stroke-width="1" transform="rotate(90)"/>
+          <line x1="0" y1="-92" x2="0" y2="-85" stroke="rgba(240,235,224,0.08)" stroke-width="1" transform="rotate(120)"/>
+          <line x1="0" y1="-92" x2="0" y2="-85" stroke="rgba(240,235,224,0.08)" stroke-width="1" transform="rotate(150)"/>
+          <line x1="0" y1="-92" x2="0" y2="-85" stroke="rgba(240,235,224,0.08)" stroke-width="1" transform="rotate(180)"/>
+          <line x1="0" y1="-92" x2="0" y2="-85" stroke="rgba(240,235,224,0.08)" stroke-width="1" transform="rotate(210)"/>
+          <line x1="0" y1="-92" x2="0" y2="-85" stroke="rgba(240,235,224,0.08)" stroke-width="1" transform="rotate(240)"/>
+          <line x1="0" y1="-92" x2="0" y2="-85" stroke="rgba(240,235,224,0.08)" stroke-width="1" transform="rotate(270)"/>
+          <line x1="0" y1="-92" x2="0" y2="-85" stroke="rgba(240,235,224,0.08)" stroke-width="1" transform="rotate(300)"/>
+          <line x1="0" y1="-92" x2="0" y2="-85" stroke="rgba(240,235,224,0.08)" stroke-width="1" transform="rotate(330)"/>
+        </g>
         <circle class="timer-ring-bg" cx="110" cy="110" r="95"/>
-        <circle class="timer-ring-progress green" id="timerRing" cx="110" cy="110" r="95" stroke-dasharray="597" stroke-dashoffset="0"/>
+        <circle class="timer-ring-progress green" id="timerRing" cx="110" cy="110" r="95" stroke-dasharray="597" stroke-dashoffset="0" filter="url(#timerGlow)"/>
       </svg>
       <div class="timer-center">
         <div class="timer-value green" id="timerValue">--:--</div>
