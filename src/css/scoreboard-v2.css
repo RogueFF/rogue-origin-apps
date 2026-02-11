@@ -2187,6 +2187,319 @@ body.idle .progress-fill {
   color: #f87171;
 }
 
+/* --- Cycle Stats Bar --- */
+.cycle-stats-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  border-left: 3px solid var(--ro-gold, #e4aa4f);
+}
+
+.cycle-stat {
+  flex: 1;
+  text-align: center;
+}
+
+.cycle-stat-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.cycle-stat-label {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.cycle-content {
+  min-height: 120px;
+}
+
+.cycle-content.collapsed {
+  max-height: 0;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* --- Cycle List Mode --- */
+.cycle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* --- Cycle Donut Mode --- */
+.cycle-donut {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.cycle-donut-ring {
+  position: relative;
+  width: 90px;
+  height: 90px;
+  flex-shrink: 0;
+}
+
+.cycle-donut-ring canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.cycle-donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.cycle-donut-count {
+  font-size: 28px;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1;
+}
+
+.cycle-donut-label {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+}
+
+.cycle-donut-stats {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cycle-donut-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cycle-donut-stat-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.cycle-donut-stat-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.cycle-donut-stat-value {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.cycle-donut-latest {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.cycle-donut-latest-label {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.cycle-donut-latest-items {
+  display: flex;
+  gap: 8px;
+}
+
+.cycle-donut-latest-item {
+  flex: 1;
+  padding: 8px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.cycle-donut-latest-time {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.cycle-donut-latest-num {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* --- Cycle Sparkline Mode --- */
+.cycle-sparkline {
+  display: flex;
+  flex-direction: column;
+}
+
+.cycle-sparkline-bars {
+  position: relative;
+  height: 80px;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  padding-bottom: 2px;
+}
+
+.cycle-sparkline-bar {
+  flex: 1;
+  min-width: 6px;
+  max-width: 20px;
+  border-radius: 3px 3px 0 0;
+  transition: opacity 0.2s;
+  cursor: default;
+  position: relative;
+}
+
+.cycle-sparkline-bar:hover {
+  opacity: 0.8;
+}
+
+.cycle-sparkline-bar.early {
+  background: #22c55e;
+}
+
+.cycle-sparkline-bar.on-time {
+  background: #facc15;
+}
+
+.cycle-sparkline-bar.overtime {
+  background: #ef4444;
+}
+
+.cycle-sparkline-target {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 2px dashed rgba(255, 255, 255, 0.4);
+  pointer-events: none;
+}
+
+.cycle-sparkline-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 4px;
+}
+
+.cycle-sparkline-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.9);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 10;
+}
+
+.cycle-sparkline-bar:hover .cycle-sparkline-tooltip {
+  opacity: 1;
+}
+
+/* --- Cycle Chips Mode --- */
+.cycle-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cycle-chip {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(0, 0, 0, 0.6);
+  cursor: default;
+  transition: transform 0.2s;
+  position: relative;
+}
+
+.cycle-chip:hover {
+  transform: scale(1.1);
+}
+
+.cycle-chip.early {
+  background: #22c55e;
+}
+
+.cycle-chip.on-time {
+  background: #facc15;
+}
+
+.cycle-chip.overtime {
+  background: #ef4444;
+}
+
+.cycle-chip-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.9);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+  color: #fff;
+  margin-bottom: 4px;
+  z-index: 10;
+}
+
+.cycle-chip:hover .cycle-chip-tooltip {
+  opacity: 1;
+}
+
+.cycle-chips-legend {
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+  font-size: 11px;
+}
+
+.cycle-chips-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.cycle-chips-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
 /* ========================================
    ORDER QUEUE
    ======================================== */
