@@ -20,6 +20,9 @@ body {
   margin-bottom: 0;
   cursor: pointer;
   border-radius: var(--radius);
+  background: #111413;
+  border: 1px solid rgba(228, 170, 79, 0.12);
+  color: #e8e4dc;
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.5),
     0 2px 8px rgba(0, 0, 0, 0.3),

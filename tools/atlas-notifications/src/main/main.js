@@ -216,8 +216,7 @@ function createPopup(notif) {
     webPreferences: {
       preload: path.join(__dirname, '..', 'main', 'preload.js'),
       contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true
+      nodeIntegration: false
     }
   });
 
