@@ -1,15 +1,34 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('atlas', {
+  // Notifications
   getNotifications: () => ipcRenderer.invoke('get-notifications'),
   markRead: (id) => ipcRenderer.invoke('mark-read', id),
   markAllRead: () => ipcRenderer.invoke('mark-all-read'),
   clearAll: () => ipcRenderer.invoke('clear-all'),
+  getUnreadCount: () => ipcRenderer.invoke('get-unread-count'),
+  closePanel: () => ipcRenderer.invoke('close-panel'),
+
+  // Settings
+  getSettings: () => ipcRenderer.invoke('get-settings'),
+  setSettings: (settings) => ipcRenderer.invoke('set-settings', settings),
+
+  // TTS
+  getTtsConfig: () => ipcRenderer.invoke('get-tts-config'),
+  setTtsConfig: (config) => ipcRenderer.invoke('set-tts-config', config),
+  getVoices: () => ipcRenderer.invoke('get-voices'),
+
+  // Alerts
+  acknowledgeAlert: (id) => ipcRenderer.invoke('acknowledge-alert', id),
+
+  // Status
+  checkAtlasStatus: () => ipcRenderer.invoke('check-atlas-status'),
+
+  // Legacy (kept for compatibility)
   getConfig: () => ipcRenderer.invoke('get-config'),
   setConfig: (config) => ipcRenderer.invoke('set-config', config),
-  checkAtlasStatus: () => ipcRenderer.invoke('check-atlas-status'),
-  closePanel: () => ipcRenderer.invoke('close-panel'),
-  getUnreadCount: () => ipcRenderer.invoke('get-unread-count'),
+
+  // Events
   onNewNotification: (callback) => {
     ipcRenderer.on('new-notification', (_event, notif) => callback(notif));
   },
