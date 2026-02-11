@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; media-src https: http:; img-src 'self' data:;">
+  <title>Atlas Notifications</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <!-- Titlebar -->
+  <header class="titlebar" id="titlebar">
+    <div class="titlebar-left">
+      <span class="titlebar-icon">🌿</span>
+      <span class="titlebar-title">Atlas</span>
+    </div>
+    <div class="titlebar-right">
+      <div class="status-indicator" id="status-indicator" title="Atlas connection status">
+        <span class="status-dot" id="status-dot"></span>
+        <span class="status-text" id="status-text">Checking...</span>
+      </div>
+      <button class="btn-icon" id="btn-close" title="Close panel">&times;</button>
+    </div>
+  </header>
+
+  <!-- Tab bar -->
+  <nav class="tabs">
+    <button class="tab active" data-tab="all">All</button>
+    <button class="tab" data-tab="briefing">Briefings</button>
+    <button class="tab" data-tab="alert">Alerts</button>
+    <button class="tab" data-tab="toast">Updates</button>
+  </nav>
+
+  <!-- Actions bar -->
+  <div class="actions-bar">
+    <span class="notif-count" id="notif-count">0 notifications</span>
+    <div class="actions-right">
+      <button class="btn-text" id="btn-mark-all">Mark all read</button>
+      <button class="btn-text btn-danger" id="btn-clear">Clear</button>
+    </div>
+  </div>
+
+  <!-- Notification list -->
+  <main class="notification-list" id="notification-list">
+    <div class="empty-state" id="empty-state">
+      <div class="empty-icon">🌿</div>
+      <p>No notifications yet</p>
+      <p class="empty-sub">Atlas will send briefings and alerts here</p>
+    </div>
+  </main>
+
+  <!-- Audio player (hidden) -->
+  <audio id="audio-player" style="display:none;"></audio>
+
+  <script src="panel.js"></script>
+</body>
+</html>
