@@ -430,7 +430,14 @@
 
       recent.forEach(function(cycle) {
         const bar = document.createElement('div');
-        const statusClass = cycle.isEarly ? 'early' : 'overtime';
+        var statusClass;
+        if (cycle.time <= cycle.target) {
+          statusClass = 'early';
+        } else if (cycle.time <= cycle.target * 1.15) {
+          statusClass = 'on-time';
+        } else {
+          statusClass = 'overtime';
+        }
         bar.className = `cycle-sparkline-bar ${statusClass}`;
 
         const pct = Math.min(cycle.time / maxTime * 100, 100);
