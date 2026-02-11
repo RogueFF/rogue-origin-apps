@@ -55,6 +55,7 @@
   <script defer src="../js/scoreboard-v2/scale.js?v=3"></script>
   <script defer src="../js/scoreboard-v2/debug.js?v=1"></script>
   <script defer src="../js/scoreboard-v2/events.js?v=3"></script>
+  <script defer src="../js/scoreboard-v2/fab-menu.js?v=1"></script>
   <script defer src="../js/scoreboard-v2/main.js?v=10"></script>
   <!-- Critical CSS: Loaded synchronously -->
   <link rel="stylesheet" href="../css/shared-base.css">
@@ -514,5 +515,41 @@
       });
     })();
   </script>
+
+  <!-- FAB Menu -->
+  <div class="fab-backdrop" id="fabBackdrop"></div>
+  <div class="fab-container">
+    <div class="fab-menu" id="fabMenu" role="menu">
+      <button class="fab-menu-item" id="fabStartDay" role="menuitem" style="display:none">
+        <i class="ph-duotone ph-play"></i>
+        <span>Start Day</span>
+      </button>
+      <button class="fab-menu-item" id="fabMorningReport" role="menuitem">
+        <i class="ph-duotone ph-newspaper"></i>
+        <span>Morning Report</span>
+      </button>
+      <button class="fab-menu-item" id="fabPastData" role="menuitem">
+        <i class="ph-duotone ph-calendar"></i>
+        <span>Past Data</span>
+      </button>
+      <button class="fab-menu-item" id="fabOrderQueue" role="menuitem">
+        <i class="ph-duotone ph-package"></i>
+        <span>Order Queue</span>
+        <span class="fab-indicator" id="orderQueueIndicator">OFF</span>
+      </button>
+      <button class="fab-menu-item" id="fabChart" role="menuitem">
+        <i class="ph-duotone ph-chart-bar"></i>
+        <span>Hourly Chart</span>
+        <span class="fab-indicator" id="chartIndicator">ON</span>
+      </button>
+      <button class="fab-menu-item" id="fabHelp" role="menuitem">
+        <i class="ph-duotone ph-question"></i>
+        <span>Help</span>
+      </button>
+    </div>
+    <button class="fab-button" id="fabButton" aria-label="Menu" aria-expanded="false" aria-haspopup="true">
+      <i class="ph-duotone ph-dots-three-outline-vertical"></i>
+    </button>
+  </div>
 </body>
 </html>
