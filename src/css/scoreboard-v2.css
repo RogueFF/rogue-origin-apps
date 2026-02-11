@@ -3938,6 +3938,589 @@ body.iframe-embed .scoreboard { gap: var(--sp-3); }
 
 
 /* ========================================
+   PASS 4: AMBIENT COLOR SYSTEM
+   Full-body mood shift driven by timer state.
+   JS toggles body.timer-green / .timer-yellow / .timer-red
+   ======================================== */
+
+/* --- Ambient CSS Custom Properties per state --- */
+body.timer-green {
+  --ambient-color: 124, 184, 136;
+  --ambient-intensity: 0.06;
+  --ambient-pulse-speed: 6s;
+  --ambient-glow: rgba(124, 184, 136, 0.04);
+}
+
+body.timer-yellow {
+  --ambient-color: 228, 195, 79;
+  --ambient-intensity: 0.09;
+  --ambient-pulse-speed: 3.5s;
+  --ambient-glow: rgba(228, 195, 79, 0.05);
+}
+
+body.timer-red {
+  --ambient-color: 217, 107, 94;
+  --ambient-intensity: 0.14;
+  --ambient-pulse-speed: 1.2s;
+  --ambient-glow: rgba(217, 107, 94, 0.07);
+}
+
+body.timer-neutral {
+  --ambient-color: 240, 235, 224;
+  --ambient-intensity: 0.02;
+  --ambient-pulse-speed: 8s;
+  --ambient-glow: transparent;
+}
+
+/* Ambient background gradient — radiates from center-right (timer panel side) */
+body.timer-green,
+body.timer-yellow,
+body.timer-red {
+  background-image:
+    radial-gradient(ellipse 70% 80% at 80% 50%, rgba(var(--ambient-color), var(--ambient-intensity)) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 50% at 20% 70%, rgba(var(--ambient-color), calc(var(--ambient-intensity) * 0.4)) 0%, transparent 60%),
+    radial-gradient(ellipse 90% 60% at 50% 100%, rgba(var(--ambient-color), calc(var(--ambient-intensity) * 0.25)) 0%, transparent 50%);
+}
+
+/* Ambient breathing animation — whole body breathes with the timer state */
+@keyframes ambientBreathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.88; }
+}
+
+@keyframes ambientBreatheUrgent {
+  0%, 100% { opacity: 1; }
+  30% { opacity: 0.82; }
+  60% { opacity: 0.95; }
+}
+
+body.timer-green {
+  animation: ambientBreathe 6s ease-in-out infinite;
+}
+
+body.timer-yellow {
+  animation: ambientBreathe 3.5s ease-in-out infinite;
+}
+
+body.timer-red {
+  animation: ambientBreatheUrgent 1.2s ease-in-out infinite;
+}
+
+/* --- Status badge picks up ambient color --- */
+body.timer-green .status-badge {
+  background: rgba(124, 184, 136, 0.08);
+  color: var(--lux-green);
+  border-color: rgba(124, 184, 136, 0.18);
+  box-shadow: 0 0 24px rgba(124, 184, 136, 0.06);
+}
+
+body.timer-yellow .status-badge {
+  background: rgba(228, 195, 79, 0.08);
+  color: var(--lux-yellow);
+  border-color: rgba(228, 195, 79, 0.18);
+  box-shadow: 0 0 24px rgba(228, 195, 79, 0.06);
+}
+
+body.timer-red .status-badge {
+  background: rgba(217, 107, 94, 0.1);
+  color: var(--lux-red);
+  border-color: rgba(217, 107, 94, 0.2);
+  box-shadow: 0 0 30px rgba(217, 107, 94, 0.08);
+  animation: statusPulse 1.2s ease-in-out infinite;
+}
+
+/* --- Header accent line picks up ambient color --- */
+body.timer-green .hud-header::after {
+  background: linear-gradient(90deg, transparent, rgba(124, 184, 136, 0.1), rgba(124, 184, 136, 0.3), rgba(124, 184, 136, 0.1), transparent);
+}
+
+body.timer-yellow .hud-header::after {
+  background: linear-gradient(90deg, transparent, rgba(228, 195, 79, 0.1), rgba(228, 195, 79, 0.35), rgba(228, 195, 79, 0.1), transparent);
+}
+
+body.timer-red .hud-header::after {
+  background: linear-gradient(90deg, transparent, rgba(217, 107, 94, 0.15), rgba(217, 107, 94, 0.5), rgba(217, 107, 94, 0.15), transparent);
+  opacity: 0.8;
+}
+
+/* --- Edge glows pick up ambient color --- */
+body.timer-green .edge-glow {
+  background: rgba(124, 184, 136, 0.03);
+  box-shadow: inset 0 0 60px rgba(124, 184, 136, 0.04);
+}
+
+body.timer-yellow .edge-glow {
+  background: rgba(228, 195, 79, 0.03);
+  box-shadow: inset 0 0 60px rgba(228, 195, 79, 0.05);
+}
+
+body.timer-red .edge-glow {
+  background: rgba(217, 107, 94, 0.04);
+  box-shadow: inset 0 0 80px rgba(217, 107, 94, 0.06);
+}
+
+/* --- Daily progress card border picks up ambient color --- */
+body.timer-green .daily-progress {
+  border-color: rgba(124, 184, 136, 0.08);
+}
+
+body.timer-yellow .daily-progress {
+  border-color: rgba(228, 195, 79, 0.08);
+}
+
+body.timer-red .daily-progress {
+  border-color: rgba(217, 107, 94, 0.12);
+  box-shadow: 0 0 40px rgba(217, 107, 94, 0.04);
+}
+
+
+/* ========================================
+   PASS 4: TIMER RING ANIMATIONS
+   State-driven glow/pulse on the timer ring.
+   Green = calm, Yellow = tension, Red = URGENT
+   ======================================== */
+
+/* --- Green: calm, smooth, zen breathing --- */
+@keyframes timerGlowGreen {
+  0%, 100% {
+    filter: drop-shadow(0 0 4px rgba(124, 184, 136, 0.3)) drop-shadow(0 0 8px rgba(124, 184, 136, 0.15));
+  }
+  50% {
+    filter: drop-shadow(0 0 8px rgba(124, 184, 136, 0.45)) drop-shadow(0 0 16px rgba(124, 184, 136, 0.2));
+  }
+}
+
+.timer-ring-progress.green {
+  filter: drop-shadow(0 0 4px rgba(124, 184, 136, 0.3));
+  animation: timerGlowGreen 4s ease-in-out infinite;
+}
+
+.timer-ring-glow {
+  transition: opacity var(--t-smooth), stroke var(--t-smooth);
+}
+
+body.timer-green .timer-ring-glow {
+  opacity: 0.25;
+}
+
+body.timer-green .timer-display {
+  box-shadow:
+    0 0 0 1px rgba(124, 184, 136, 0.04),
+    0 0 0 3px rgba(124, 184, 136, 0.03),
+    0 0 40px rgba(124, 184, 136, 0.06);
+}
+
+/* --- Yellow: pulsing, tension building, warning --- */
+@keyframes timerGlowYellow {
+  0%, 100% {
+    filter: drop-shadow(0 0 6px rgba(228, 195, 79, 0.35)) drop-shadow(0 0 14px rgba(228, 195, 79, 0.15));
+  }
+  40% {
+    filter: drop-shadow(0 0 12px rgba(228, 195, 79, 0.55)) drop-shadow(0 0 28px rgba(228, 195, 79, 0.25));
+  }
+  70% {
+    filter: drop-shadow(0 0 8px rgba(228, 195, 79, 0.4)) drop-shadow(0 0 18px rgba(228, 195, 79, 0.18));
+  }
+}
+
+.timer-ring-progress.yellow {
+  animation: timerGlowYellow 2.5s ease-in-out infinite;
+}
+
+body.timer-yellow .timer-ring-glow {
+  opacity: 0.35;
+}
+
+body.timer-yellow .timer-display {
+  box-shadow:
+    0 0 0 1px rgba(228, 195, 79, 0.06),
+    0 0 0 3px rgba(228, 195, 79, 0.04),
+    0 0 50px rgba(228, 195, 79, 0.08);
+}
+
+/* --- Red: URGENT, thick hammering pulse, impossible to ignore --- */
+@keyframes timerGlowRed {
+  0% {
+    filter: drop-shadow(0 0 8px rgba(217, 107, 94, 0.5)) drop-shadow(0 0 20px rgba(217, 107, 94, 0.25));
+    stroke-width: 3;
+  }
+  25% {
+    filter: drop-shadow(0 0 18px rgba(217, 107, 94, 0.8)) drop-shadow(0 0 40px rgba(217, 107, 94, 0.4)) drop-shadow(0 0 60px rgba(217, 107, 94, 0.15));
+    stroke-width: 5;
+  }
+  50% {
+    filter: drop-shadow(0 0 10px rgba(217, 107, 94, 0.55)) drop-shadow(0 0 24px rgba(217, 107, 94, 0.3));
+    stroke-width: 3.5;
+  }
+  75% {
+    filter: drop-shadow(0 0 16px rgba(217, 107, 94, 0.7)) drop-shadow(0 0 36px rgba(217, 107, 94, 0.35));
+    stroke-width: 4.5;
+  }
+  100% {
+    filter: drop-shadow(0 0 8px rgba(217, 107, 94, 0.5)) drop-shadow(0 0 20px rgba(217, 107, 94, 0.25));
+    stroke-width: 3;
+  }
+}
+
+.timer-ring-progress.red {
+  animation: timerGlowRed 1.2s ease-in-out infinite;
+}
+
+body.timer-red .timer-ring-glow {
+  opacity: 0.5;
+}
+
+body.timer-red .timer-display {
+  box-shadow:
+    0 0 0 1px rgba(217, 107, 94, 0.08),
+    0 0 0 3px rgba(217, 107, 94, 0.06),
+    0 0 60px rgba(217, 107, 94, 0.12),
+    0 0 100px rgba(217, 107, 94, 0.05);
+}
+
+/* Red state: timer value itself throbs */
+@keyframes timerValueThrob {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+
+body.timer-red .timer-value {
+  animation: timerValueThrob 1.2s ease-in-out infinite;
+}
+
+/* Red state: the tick marks on the ring light up */
+body.timer-red .timer-display .ring-ticks line.major {
+  stroke: rgba(217, 107, 94, 0.4) !important;
+  stroke-opacity: 0.6;
+}
+
+body.timer-red .timer-display .ring-ticks line {
+  stroke-opacity: 0.25;
+}
+
+/* Yellow state: tick marks warm up */
+body.timer-yellow .timer-display .ring-ticks line.major {
+  stroke: rgba(228, 195, 79, 0.3) !important;
+  stroke-opacity: 0.4;
+}
+
+/* Green state: tick marks stay calm */
+body.timer-green .timer-display .ring-ticks line.major {
+  stroke: rgba(124, 184, 136, 0.2) !important;
+  stroke-opacity: 0.3;
+}
+
+
+/* ========================================
+   PASS 4: SCALE RING — Precision Instrument
+   Enhanced tick marks for chronograph feel.
+   Outer bezel glow, crisp major ticks, subtle dial texture.
+   ======================================== */
+
+/* Tick marks enhanced visibility on hover */
+.scale-display:hover .ring-ticks line.major {
+  stroke-opacity: 0.5;
+  stroke: rgba(228, 170, 79, 0.4);
+}
+
+.scale-display:hover .ring-ticks line {
+  stroke-opacity: 0.2;
+}
+
+/* Outer bezel — very faint concentric rings for instrument depth */
+.scale-display::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(228, 170, 79, 0.02) 0deg,
+    transparent 10deg,
+    rgba(228, 170, 79, 0.015) 30deg,
+    transparent 40deg,
+    rgba(228, 170, 79, 0.02) 90deg,
+    transparent 100deg,
+    rgba(228, 170, 79, 0.015) 120deg,
+    transparent 130deg,
+    rgba(228, 170, 79, 0.02) 180deg,
+    transparent 190deg,
+    rgba(228, 170, 79, 0.015) 210deg,
+    transparent 220deg,
+    rgba(228, 170, 79, 0.02) 270deg,
+    transparent 280deg,
+    rgba(228, 170, 79, 0.015) 300deg,
+    transparent 310deg,
+    rgba(228, 170, 79, 0.02) 360deg
+  );
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Timer display also gets the bezel treatment */
+.timer-display::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(228, 170, 79, 0.02) 0deg,
+    transparent 10deg,
+    rgba(228, 170, 79, 0.015) 30deg,
+    transparent 40deg,
+    rgba(228, 170, 79, 0.02) 90deg,
+    transparent 100deg,
+    rgba(228, 170, 79, 0.015) 120deg,
+    transparent 130deg,
+    rgba(228, 170, 79, 0.02) 180deg,
+    transparent 190deg,
+    rgba(228, 170, 79, 0.015) 210deg,
+    transparent 220deg,
+    rgba(228, 170, 79, 0.02) 270deg,
+    transparent 280deg,
+    rgba(228, 170, 79, 0.015) 300deg,
+    transparent 310deg,
+    rgba(228, 170, 79, 0.02) 360deg
+  );
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Scale ring at-target state: ticks glow gold */
+.scale-display.at-target .ring-ticks line.major {
+  stroke: rgba(124, 184, 136, 0.35);
+  stroke-opacity: 0.5;
+}
+
+/* Scale ring near-target state: ticks warm up */
+.scale-display.near-target .ring-ticks line.major {
+  stroke: rgba(228, 195, 79, 0.3);
+  stroke-opacity: 0.4;
+}
+
+
+/* ========================================
+   PASS 4: TV MODE BOOST
+   For body.tv-mode on 4K TVs at 15+ feet.
+   Everything bigger, bolder, higher contrast.
+   Remove clutter, maximize signal.
+   ======================================== */
+
+/* Hero number: push it even harder */
+html.tv-mode .daily-actual {
+  text-shadow:
+    0 0 100px rgba(240, 235, 224, 0.12),
+    0 0 200px rgba(228, 170, 79, 0.06);
+}
+
+/* Timer value: extra large with glow for distance */
+html.tv-mode .timer-value {
+  text-shadow: 0 0 30px currentColor;
+}
+
+/* Scale value: same treatment */
+html.tv-mode .scale-value {
+  text-shadow: 0 0 20px rgba(240, 235, 224, 0.15);
+}
+
+/* Bigger delta pill */
+html.tv-mode .daily-delta {
+  font-size: 24px;
+  padding: 8px 20px;
+}
+
+/* Percentage values bigger */
+html.tv-mode .percentage-value {
+  font-size: 30px;
+}
+
+/* Last hour actual — bigger */
+html.tv-mode .actual-lbs {
+  text-shadow: 0 0 20px rgba(240, 235, 224, 0.08);
+}
+
+/* Target/separator bigger */
+html.tv-mode .daily-target,
+html.tv-mode .daily-sep {
+  font-size: 64px;
+}
+
+/* Progress bar thicker for TV */
+html.tv-mode .progress-bar {
+  height: 5px;
+}
+
+html.tv-mode .progress-fill::after {
+  width: 16px;
+  top: -6px;
+  bottom: -6px;
+}
+
+/* Projection row bigger */
+html.tv-mode .projection-value {
+  font-size: 22px;
+}
+
+html.tv-mode .projection-delta {
+  font-size: 18px;
+}
+
+/* Info bar bigger */
+html.tv-mode .info-section {
+  font-size: 15px;
+}
+
+html.tv-mode .info-icon {
+  font-size: 18px;
+}
+
+/* Comparison pills bigger */
+html.tv-mode .comparison-pill {
+  font-size: 14px;
+  padding: 8px 20px;
+}
+
+html.tv-mode .comparison-value {
+  font-size: 16px;
+}
+
+/* Streak value bigger */
+html.tv-mode .streak-value {
+  font-size: 18px;
+}
+
+/* Hour card header bigger */
+html.tv-mode .hour-card-header {
+  font-size: 12px;
+}
+
+/* Daily header bigger */
+html.tv-mode .daily-header {
+  font-size: 13px;
+}
+
+/* Status badge bigger for TV */
+html.tv-mode .status-badge {
+  font-size: 13px;
+  padding: 8px 28px;
+  letter-spacing: 0.2em;
+}
+
+/* Strain label/name boosted */
+html.tv-mode .strain-label {
+  font-size: 12px;
+}
+
+/* Date display bigger */
+html.tv-mode .time-display .date {
+  font-size: 13px;
+}
+
+/* Remove clutter that doesn't read at distance */
+html.tv-mode .lbs-unit {
+  font-size: 12px;
+}
+
+html.tv-mode .daily-unit {
+  font-size: 13px;
+}
+
+/* Timer ring glow extra intense for TV distance */
+html.tv-mode .timer-ring-progress.green {
+  stroke-width: 4;
+}
+
+html.tv-mode .timer-ring-progress.yellow {
+  stroke-width: 4;
+}
+
+html.tv-mode .timer-ring-progress.red {
+  stroke-width: 5;
+}
+
+/* Ambient effects more dramatic on TV */
+html.tv-mode body.timer-red .timer-display {
+  box-shadow:
+    0 0 0 2px rgba(217, 107, 94, 0.1),
+    0 0 0 4px rgba(217, 107, 94, 0.06),
+    0 0 80px rgba(217, 107, 94, 0.15),
+    0 0 140px rgba(217, 107, 94, 0.06);
+}
+
+/* Timer panel accent line thicker */
+html.tv-mode .timer-panel::before {
+  width: 2px;
+}
+
+/* Hour cards bigger padding */
+html.tv-mode .hour-card {
+  padding: var(--sp-6) var(--sp-7);
+}
+
+/* Timer target text bigger */
+html.tv-mode .timer-target {
+  font-size: 13px;
+}
+
+
+/* ========================================
+   PASS 4: BACKGROUND DEPTH
+   Subtle noise/grain overlay + centered radial gradient.
+   Adds dimensionality without distracting.
+   ======================================== */
+
+/* Enhanced film grain — slightly stronger for cinematic depth */
+body::before {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  opacity: 0.035;
+}
+
+/* Center stage spotlight — very gentle radial light from the hero area */
+body::after {
+  background:
+    radial-gradient(ellipse 60% 50% at 35% 45%, rgba(240, 235, 224, 0.012) 0%, transparent 60%),
+    radial-gradient(ellipse 80% 70% at 35% 50%, transparent 0%, rgba(0, 0, 0, 0.45) 100%);
+}
+
+/* Ambient layer — inherits timer color for cinematic wash */
+.ambient-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity var(--t-dramatic) var(--ease-cinematic);
+}
+
+body.timer-green .ambient-layer {
+  opacity: 1;
+  background: radial-gradient(ellipse 100% 80% at 75% 50%, rgba(124, 184, 136, 0.025) 0%, transparent 70%);
+}
+
+body.timer-yellow .ambient-layer {
+  opacity: 1;
+  background: radial-gradient(ellipse 100% 80% at 75% 50%, rgba(228, 195, 79, 0.03) 0%, transparent 70%);
+}
+
+body.timer-red .ambient-layer {
+  opacity: 1;
+  background:
+    radial-gradient(ellipse 100% 80% at 75% 50%, rgba(217, 107, 94, 0.04) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 40% at 50% 50%, rgba(217, 107, 94, 0.02) 0%, transparent 60%);
+}
+
+/* Ambient particles canvas — positioned behind everything */
+.ambient-particles {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.3;
+}
+
+
+/* ========================================
    TRANSITION REFINEMENTS
    Shared transitions for interactive elements
    ======================================== */
@@ -3977,7 +4560,9 @@ body.iframe-embed .scoreboard { gap: var(--sp-3); }
   .status-badge,
   .progress-fill::after,
   .fab-button.idle,
-  .scale-status-dot.connected {
+  .scale-status-dot.connected,
+  .timer-ring-progress,
+  .timer-value {
     animation: none !important;
   }
 
@@ -3987,7 +4572,8 @@ body.iframe-embed .scoreboard { gap: var(--sp-3); }
   }
 
   body.timer-red,
-  body.timer-yellow {
+  body.timer-yellow,
+  body.timer-green {
     animation: none !important;
   }
 }
