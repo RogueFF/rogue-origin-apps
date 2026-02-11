@@ -78,6 +78,45 @@ const BREAKS = [
   [16, 20, 10],  // 4:20 PM - 10 min cleanup
 ];
 
+/**
+ * Calculate total break minutes that fall within a time window.
+ * Break times are in PST (America/Los_Angeles).
+ */
+function getBreakMinutesInWindow(startTime, endTime) {
+  let breakMinutes = 0;
+  const pstDateStr = endTime.toLocaleDateString('en-CA', { timeZone: TIMEZONE });
+
+  for (const [breakHour, breakMin, duration] of BREAKS) {
+    const breakTimeStr = `${pstDateStr}T${String(breakHour).padStart(2, '0')}:${String(breakMin).padStart(2, '0')}:00`;
+
+    const pstFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: TIMEZONE,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    });
+
+    const testDate = new Date(pstDateStr + 'T12:00:00Z');
+    const pstParts = pstFormatter.formatToParts(testDate);
+    const pstHour = parseInt(pstParts.find(p => p.type === 'hour').value);
+    const offsetHours = 12 - pstHour;
+
+    const breakStartUTC = new Date(breakTimeStr + 'Z');
+    breakStartUTC.setUTCHours(breakStartUTC.getUTCHours() + offsetHours);
+    const breakEndUTC = new Date(breakStartUTC.getTime() + duration * 60000);
+
+    if (breakEndUTC > startTime && breakStartUTC < endTime) {
+      const overlapStart = Math.max(startTime.getTime(), breakStartUTC.getTime());
+      const overlapEnd = Math.min(endTime.getTime(), breakEndUTC.getTime());
+      const overlapMinutes = (overlapEnd - overlapStart) / 60000;
+      if (overlapMinutes > 0) {
+        breakMinutes += overlapMinutes;
+      }
+    }
+  }
+
+  return Math.round(breakMinutes);
+}
+
 const ALL_TIME_SLOTS = [
   '7:00 AM – 8:00 AM', '8:00 AM – 9:00 AM', '9:00 AM – 10:00 AM',
   '10:00 AM – 11:00 AM', '11:00 AM – 12:00 PM', '12:30 PM – 1:00 PM',
@@ -738,7 +777,9 @@ async function getBagTimerData(env, date = null) {
       todayBags.sort((a, b) => a - b);
       const cycleTimes = [];
       for (let i = 1; i < todayBags.length; i++) {
-        const diffSec = Math.floor((todayBags[i] - todayBags[i - 1]) / 1000);
+        const rawDiffSec = Math.floor((todayBags[i] - todayBags[i - 1]) / 1000);
+        const breakMins = getBreakMinutesInWindow(todayBags[i - 1], todayBags[i]);
+        const diffSec = rawDiffSec - (breakMins * 60);
         if (diffSec >= 300 && diffSec <= 14400) {
           cycleTimes.push(diffSec);
         }
@@ -751,7 +792,9 @@ async function getBagTimerData(env, date = null) {
     if (todayBags.length > 1) {
       todayBags.sort((a, b) => b - a);
       for (let i = 0; i < Math.min(todayBags.length - 1, 20); i++) {
-        const cycleSec = Math.floor((todayBags[i] - todayBags[i + 1]) / 1000);
+        const rawCycleSec = Math.floor((todayBags[i] - todayBags[i + 1]) / 1000);
+        const breakMins = getBreakMinutesInWindow(todayBags[i + 1], todayBags[i]);
+        const cycleSec = rawCycleSec - (breakMins * 60);
         if (cycleSec >= 300 && cycleSec <= 14400) {
           result.cycleHistory.push({
             timestamp: todayBags[i].toISOString(),
