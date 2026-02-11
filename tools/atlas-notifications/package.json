@@ -1,0 +1,41 @@
+{
+  "name": "atlas-notifications",
+  "version": "1.0.0",
+  "description": "Atlas Notifications — desktop tray app for Rogue Origin operations briefings and alerts",
+  "main": "src/main/main.js",
+  "author": "Rogue Origin",
+  "license": "PRIVATE",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win",
+    "build:dir": "electron-builder --win --dir"
+  },
+  "dependencies": {
+    "electron-store": "^8.2.0",
+    "express": "^4.21.0"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.rogueorigin.atlas-notifications",
+    "productName": "Atlas Notifications",
+    "win": {
+      "target": "nsis",
+      "icon": "src/assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false
+    },
+    "files": [
+      "src/**/*",
+      "!src/**/*.map"
+    ],
+    "directories": {
+      "output": "dist"
+    }
+  }
+}
