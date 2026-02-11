@@ -124,7 +124,7 @@ function createPanel() {
     skipTaskbar: true,
     alwaysOnTop: true,
     transparent: false,
-    backgroundColor: '#0f0f0f',
+    backgroundColor: '#060807',
     webPreferences: {
       preload: path.join(__dirname, '..', 'main', 'preload.js'),
       contextIsolation: true,
@@ -295,6 +295,63 @@ function setupIPC() {
   ipcMain.handle('get-unread-count', () => {
     const notifs = getNotifications();
     return notifs.filter(n => !n.read).length;
+  });
+
+  // ─── Settings ───────────────────────────────────────────────────
+  ipcMain.handle('get-settings', () => ({
+    atlasHost: store.get('atlasHost'),
+    port: store.get('port'),
+    apiToken: store.get('apiToken', ''),
+    soundEnabled: store.get('soundEnabled'),
+    autoStart: store.get('autoStart')
+  }));
+
+  ipcMain.handle('set-settings', (_, settings) => {
+    Object.entries(settings).forEach(([k, v]) => store.set(k, v));
+    if (settings.autoStart !== undefined) {
+      app.setLoginItemSettings({ openAtLogin: settings.autoStart });
+    }
+    return true;
+  });
+
+  // ─── TTS Config ─────────────────────────────────────────────────
+  ipcMain.handle('get-tts-config', () => ({
+    elevenLabsKey: store.get('elevenLabsKey', ''),
+    elevenLabsVoice: store.get('elevenLabsVoice', ''),
+    ttsEnabled: store.get('ttsEnabled', true),
+    ttsVolume: store.get('ttsVolume', 0.8)
+  }));
+
+  ipcMain.handle('set-tts-config', (_, config) => {
+    Object.entries(config).forEach(([k, v]) => store.set(k, v));
+    return true;
+  });
+
+  ipcMain.handle('get-voices', async () => {
+    const key = store.get('elevenLabsKey', '');
+    if (!key) return [];
+    try {
+      const resp = await fetch('https://api.elevenlabs.io/v1/voices', {
+        headers: { 'xi-api-key': key }
+      });
+      const data = await resp.json();
+      return data.voices || [];
+    } catch {
+      return [];
+    }
+  });
+
+  // ─── Acknowledge Alert ──────────────────────────────────────────
+  ipcMain.handle('acknowledge-alert', (_, id) => {
+    const notifs = store.get('notifications', []);
+    const idx = notifs.findIndex(n => n.id === id);
+    if (idx >= 0) {
+      notifs[idx].acknowledged = true;
+      notifs[idx].read = true;
+      store.set('notifications', notifs);
+      updateTrayBadge();
+    }
+    return true;
   });
 }
 

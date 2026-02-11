@@ -1,17 +1,21 @@
-// ─── Atlas Notifications Panel ─────────────────────────────────────
+// ─── Atlas Notifications Panel — Command Bridge ─────────────────────
 
 let notifications = [];
 let activeTab = 'all';
 let audioPlayer = null;
+let playingAudioId = null;
 
 // ─── DOM References ─────────────────────────────────────────────────
 
 const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => document.querySelectorAll(sel);
+
 const list = $('#notification-list');
 const emptyState = $('#empty-state');
 const countEl = $('#notif-count');
 const statusDot = $('#status-dot');
 const statusText = $('#status-text');
+const tabIndicator = $('#tab-indicator');
 
 // ─── Init ───────────────────────────────────────────────────────────
 
@@ -21,6 +25,24 @@ async function init() {
   render();
   checkStatus();
   setInterval(checkStatus, 30000);
+  updateTabIndicator();
+
+  // Audio ended handler
+  audioPlayer.addEventListener('ended', () => {
+    playingAudioId = null;
+    renderAudioButtons();
+  });
+}
+
+// ─── Tab Indicator ──────────────────────────────────────────────────
+
+function updateTabIndicator() {
+  const activeEl = $('.tab.active');
+  if (!activeEl || !tabIndicator) return;
+  const tabsRect = $('#tabs').getBoundingClientRect();
+  const rect = activeEl.getBoundingClientRect();
+  tabIndicator.style.left = (rect.left - tabsRect.left) + 'px';
+  tabIndicator.style.width = rect.width + 'px';
 }
 
 // ─── Render ─────────────────────────────────────────────────────────
@@ -36,195 +58,243 @@ function render() {
 
   if (filtered.length === 0) {
     emptyState.style.display = 'flex';
-    // Remove all cards but keep empty state
     list.querySelectorAll('.notif-card').forEach(el => el.remove());
     return;
   }
 
   emptyState.style.display = 'none';
 
-  const html = filtered.map(n => {
-    const time = formatTime(n.timestamp);
-    const classes = [
-      'notif-card',
-      n.read ? '' : 'unread',
-      n.priority === 'high' ? 'priority-high' : ''
-    ].filter(Boolean).join(' ');
+  const html = filtered.map(n => renderCard(n)).join('');
 
-    // Production card — render rich mini-dashboard
-    if (n.type === 'production-card' && n.data) {
-      return renderProductionCard(n, classes, time);
-    }
-
-    // Standard notification card
-    const audioBtn = n.audio_url
-      ? `<div class="notif-audio" data-audio="${escapeHtml(n.audio_url)}">
-           <span class="audio-icon">▶</span> Play briefing audio
-         </div>`
-      : '';
-
-    return `
-      <div class="${classes}" data-id="${n.id}">
-        <div class="notif-header">
-          <span class="notif-type ${n.type}">${n.type}</span>
-          <span class="notif-time">${time}</span>
-        </div>
-        <div class="notif-title">${escapeHtml(n.title)}</div>
-        <div class="notif-body">${escapeHtml(n.body)}</div>
-        ${audioBtn}
-      </div>
-    `;
-  }).join('');
-
-  // Preserve scroll position
   const scrollTop = list.scrollTop;
-  list.innerHTML = html;
+  // Keep empty state in DOM but hidden
+  const emptyEl = emptyState.outerHTML;
+  list.innerHTML = emptyEl + html;
   list.scrollTop = scrollTop;
 }
 
-// ─── Production Card Renderer ───────────────────────────────────────
+// ─── Card Router ────────────────────────────────────────────────────
 
-function renderProductionCard(n, classes, time) {
-  const d = n.data;
-  const pace = d.paceStatus || 'on-pace';
-  const paceLabel = pace === 'ahead' ? 'Ahead of Pace'
-    : pace === 'behind' ? 'Behind Pace'
-    : 'On Pace';
-  const paceClass = pace === 'ahead' ? 'ahead'
-    : pace === 'behind' ? 'behind'
-    : 'on-pace';
+function renderCard(n) {
+  switch (n.type) {
+    case 'briefing': return renderBriefingCard(n);
+    case 'alert': return renderAlertCard(n);
+    case 'production-card': return renderProductionCard(n);
+    default: return renderToastCard(n);
+  }
+}
 
-  // Clamp progress bar at 100% visual width but show real percentage in label
-  const pct = d.percentOfTarget || 0;
-  const barWidth = Math.min(pct, 100);
+// ─── Toast Card ─────────────────────────────────────────────────────
 
-  // Build hourly chart
-  const chartHtml = renderHourlyChart(d.hourly, d.targetRate);
-
-  // Build stats grid
-  const stats = [
-    { label: 'Trimmers', value: d.trimmers || '—', unit: '' },
-    { label: 'Rate', value: d.rate ? d.rate.toFixed(2) : '—', unit: ' lbs/hr' },
-    { label: 'Bags', value: d.bags || '—', unit: '' },
-    { label: 'Avg Cycle', value: d.avgCycle || '—', unit: '' }
-  ];
-
-  const statsHtml = stats.map(s =>
-    `<div class="prod-stat">
-      <div class="prod-stat-label">${s.label}</div>
-      <div class="prod-stat-value">${s.value}<span class="unit">${s.unit}</span></div>
-    </div>`
-  ).join('');
-
-  // Best hour
-  const bestHourHtml = d.bestHour
-    ? `<div class="prod-best-hour">
-        <span class="prod-best-hour-label">Best Hour: ${escapeHtml(d.bestHour.label)}</span>
-        <span class="prod-best-hour-value">${d.bestHour.rate.toFixed(2)} lbs/hr</span>
-      </div>`
-    : '';
-
+function renderToastCard(n) {
+  const time = formatTime(n.timestamp);
+  const unread = n.read ? '' : ' unread';
   return `
-    <div class="${classes}" data-id="${n.id}">
+    <div class="notif-card card-enter${unread}" data-id="${n.id}" data-type="toast">
       <div class="notif-header">
-        <span class="notif-type production-card">production</span>
+        <div class="notif-header-left">
+          <span class="notif-title">${escapeHtml(n.title)}</span>
+        </div>
         <span class="notif-time">${time}</span>
       </div>
-      <div class="prod-card collapsed" data-prod-card="${n.id}">
-        <div class="prod-hero">
-          <span class="prod-hero-number">${d.dailyTotal != null ? d.dailyTotal.toFixed(1) : '—'}</span>
-          <span class="prod-hero-unit">lbs today</span>
-        </div>
-        ${d.strain ? `<div class="prod-hero-strain">${escapeHtml(d.strain)}</div>` : ''}
+      <div class="notif-body">${escapeHtml(n.body)}</div>
+    </div>
+  `;
+}
 
-        <span class="prod-status ${paceClass}">${paceLabel}</span>
+// ─── Briefing Card ──────────────────────────────────────────────────
 
-        <div class="prod-progress">
-          <div class="prod-progress-bar">
-            <div class="prod-progress-fill ${paceClass}" style="width: ${barWidth}%"></div>
+function renderBriefingCard(n) {
+  const time = formatTime(n.timestamp);
+  const unread = n.read ? '' : ' unread';
+
+  // Parse segments from data or body
+  let segmentsHtml = '';
+  if (n.data && n.data.segments && n.data.segments.length > 0) {
+    segmentsHtml = `<div class="briefing-segments">
+      ${n.data.segments.map(seg => `
+        <div class="briefing-segment">
+          <div class="briefing-segment-header">
+            <span class="briefing-segment-icon">${seg.icon || '📌'}</span>
+            <span class="briefing-segment-label">${escapeHtml(seg.label || seg.category || 'Update')}</span>
           </div>
-          <div class="prod-progress-labels">
-            <span class="prod-progress-label">Target: ${d.dailyTarget != null ? d.dailyTarget.toFixed(1) : '—'} lbs</span>
-            <span class="prod-progress-pct ${paceClass}">${pct}%</span>
-          </div>
+          <div class="briefing-segment-text">${escapeHtml(seg.text || seg.summary || '')}</div>
         </div>
+      `).join('')}
+    </div>`;
+  } else if (n.body) {
+    segmentsHtml = `<div class="notif-body">${escapeHtml(n.body)}</div>`;
+  }
 
-        <div class="prod-stats">
-          ${statsHtml}
+  // Audio controls
+  const isPlaying = playingAudioId === n.id;
+  const audioHtml = n.audio_url ? `
+    <div class="briefing-audio-controls">
+      <button class="btn-audio${isPlaying ? ' playing' : ''}" data-audio="${escapeHtml(n.audio_url)}" data-notif-id="${n.id}">
+        ${isPlaying ? renderSoundWave() : '🔊'} ${isPlaying ? 'Playing' : 'Replay'}
+      </button>
+    </div>
+  ` : '';
+
+  return `
+    <div class="notif-card card-enter${unread}" data-id="${n.id}" data-type="briefing">
+      <div class="notif-header">
+        <div class="notif-header-left">
+          <span class="notif-title">${escapeHtml(n.title)}</span>
         </div>
+        <span class="notif-time">${time}</span>
+      </div>
+      ${segmentsHtml}
+      ${audioHtml}
+    </div>
+  `;
+}
 
-        <div class="prod-chart">
-          <div class="prod-chart-title">Hourly Performance</div>
-          ${chartHtml}
+function renderSoundWave() {
+  return `<span class="sound-wave"><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>`;
+}
+
+// ─── Alert Card ─────────────────────────────────────────────────────
+
+function renderAlertCard(n) {
+  const time = formatTime(n.timestamp);
+  const unread = n.read ? '' : ' unread';
+  const acked = n.acknowledged ? ' acknowledged' : '';
+  const ackBtn = n.acknowledged ? '' : `
+    <div class="alert-footer">
+      <button class="btn-acknowledge" data-ack-id="${n.id}">Acknowledge</button>
+    </div>
+  `;
+
+  return `
+    <div class="notif-card card-enter${unread}${acked}" data-id="${n.id}" data-type="alert">
+      <div class="notif-header">
+        <div class="notif-header-left">
+          <span class="notif-icon">⚠️</span>
+          <span class="notif-title">${escapeHtml(n.title)}</span>
         </div>
+        <span class="notif-time">${time}</span>
+      </div>
+      <div class="notif-body">${escapeHtml(n.body)}</div>
+      ${ackBtn}
+    </div>
+  `;
+}
 
-        ${bestHourHtml}
+// ─── Production Card ────────────────────────────────────────────────
 
-        <div class="prod-expand-hint">tap to expand</div>
+function renderProductionCard(n) {
+  const time = formatTime(n.timestamp);
+  const unread = n.read ? '' : ' unread';
+  const d = n.data || {};
+  const pace = d.paceStatus || 'on-pace';
+  const paceClass = pace === 'ahead' ? 'ahead' : pace === 'behind' ? 'behind' : 'on-pace';
+  const paceLabel = pace === 'ahead' ? 'ahead' : pace === 'behind' ? 'behind' : 'on pace';
+  const pct = d.percentOfTarget || 0;
+
+  // Stats
+  const lbs = d.dailyTotal != null ? d.dailyTotal.toFixed(1) : '—';
+  const target = pct ? pct + '%' : '—';
+  const crew = d.trimmers || d.crew || '—';
+  const rate = d.rate ? d.rate.toFixed(2) : '—';
+
+  // Sparkline from hourly data
+  let sparkHtml = '';
+  if (d.hourly && d.hourly.length > 0) {
+    const maxVal = Math.max(...d.hourly.map(h => h.actual || 0), 1);
+    sparkHtml = `<div class="prod-sparkline">
+      ${d.hourly.map(h => {
+        const height = Math.max(((h.actual || 0) / maxVal) * 100, 5);
+        const barPace = (h.actual || 0) >= (h.target || d.targetRate || 0) ? 'ahead' : 'behind';
+        return `<div class="prod-sparkline-bar ${barPace}" style="height:${height}%"></div>`;
+      }).join('')}
+    </div>`;
+  }
+
+  return `
+    <div class="notif-card card-enter${unread} pace-${paceClass}" data-id="${n.id}" data-type="production-card">
+      <div class="notif-header">
+        <div class="notif-header-left">
+          <span class="notif-title">Hourly Production</span>
+        </div>
+        <span class="notif-time">${time}</span>
+      </div>
+      <div class="prod-stats-grid">
+        <div class="prod-stat">
+          <div class="prod-stat-value">${lbs}</div>
+          <div class="prod-stat-label">lbs</div>
+        </div>
+        <div class="prod-stat">
+          <div class="prod-stat-value">${target}</div>
+          <div class="prod-stat-label">target</div>
+        </div>
+        <div class="prod-stat">
+          <div class="prod-stat-value">${crew}</div>
+          <div class="prod-stat-label">crew</div>
+        </div>
+        <div class="prod-stat">
+          <div class="prod-stat-value">${rate}</div>
+          <div class="prod-stat-label">rate</div>
+        </div>
+      </div>
+      ${sparkHtml}
+      <div class="prod-pace">
+        <span class="prod-pace-text ${paceClass}">${paceLabel}</span>
+        <span class="prod-pace-pct ${paceClass}">${pct}%</span>
       </div>
     </div>
   `;
 }
 
-// ─── Hourly Mini Bar Chart ──────────────────────────────────────────
+// ─── Audio ──────────────────────────────────────────────────────────
 
-function renderHourlyChart(hourly, targetRate) {
-  if (!hourly || hourly.length === 0) {
-    return '<div style="font-size:10px;color:var(--text-muted);text-align:center;padding:8px 0;">No hourly data</div>';
+function playAudio(url, notifId) {
+  if (!audioPlayer) return;
+
+  // Toggle if same
+  if (playingAudioId === notifId && !audioPlayer.paused) {
+    audioPlayer.pause();
+    playingAudioId = null;
+    renderAudioButtons();
+    return;
   }
 
-  // Find max value for scaling
-  const maxVal = Math.max(...hourly.map(h => Math.max(h.actual || 0, h.target || targetRate || 0)));
-  if (maxVal === 0) return '';
+  audioPlayer.src = url;
+  audioPlayer.play().then(() => {
+    playingAudioId = notifId;
+    renderAudioButtons();
+  }).catch(() => {
+    playingAudioId = null;
+    renderAudioButtons();
+  });
+}
 
-  // Target line position (as percentage from bottom)
-  const targetVal = hourly[0]?.target || targetRate || 0;
-  const targetPct = (targetVal / maxVal) * 100;
-
-  const barsHtml = hourly.map(h => {
-    const actual = h.actual || 0;
-    const heightPct = (actual / maxVal) * 100;
-    const isAbove = actual >= (h.target || targetRate || 0);
-    const barClass = isAbove ? 'above-target' : 'below-target';
-
-    return `
-      <div class="prod-chart-bar-group">
-        <div class="prod-chart-bar actual ${barClass}" style="height: ${heightPct}%"
-             title="${h.hour}: ${actual.toFixed(2)} lbs/hr"></div>
-        <span class="prod-chart-bar-label">${h.hour}</span>
-      </div>
-    `;
-  }).join('');
-
-  return `
-    <div class="prod-chart-bars" style="position: relative;">
-      <div class="prod-chart-target-line" style="bottom: ${targetPct}%"></div>
-      ${barsHtml}
-    </div>
-  `;
+function renderAudioButtons() {
+  // Re-render just the audio button states without full re-render
+  $$('.btn-audio').forEach(btn => {
+    const nid = btn.dataset.notifId;
+    const isPlaying = playingAudioId === nid;
+    btn.classList.toggle('playing', isPlaying);
+    btn.innerHTML = isPlaying ? `${renderSoundWave()} Playing` : '🔊 Replay';
+  });
 }
 
 // ─── Event Listeners ────────────────────────────────────────────────
 
 // Tabs
-document.querySelectorAll('.tab').forEach(tab => {
+$$('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    $$('.tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
     activeTab = tab.dataset.tab;
     render();
+    // Defer indicator update to next frame so layout has settled
+    requestAnimationFrame(updateTabIndicator);
   });
 });
 
 // Close
 $('#btn-close').addEventListener('click', () => window.atlas.closePanel());
-
-// Mark all read
-$('#btn-mark-all').addEventListener('click', async () => {
-  await window.atlas.markAllRead();
-  notifications.forEach(n => n.read = true);
-  render();
-});
 
 // Clear all
 $('#btn-clear').addEventListener('click', async () => {
@@ -233,21 +303,29 @@ $('#btn-clear').addEventListener('click', async () => {
   render();
 });
 
-// Card clicks (mark read + play audio + expand production cards)
+// Card clicks
 list.addEventListener('click', async (e) => {
   // Audio play
-  const audioEl = e.target.closest('.notif-audio');
-  if (audioEl) {
-    const url = audioEl.dataset.audio;
-    if (url) playAudio(url, audioEl);
+  const audioBtn = e.target.closest('.btn-audio');
+  if (audioBtn) {
+    const url = audioBtn.dataset.audio;
+    const nid = audioBtn.dataset.notifId;
+    if (url) playAudio(url, nid);
     return;
   }
 
-  // Production card expand/collapse
-  const prodCard = e.target.closest('.prod-card');
-  if (prodCard) {
-    prodCard.classList.toggle('collapsed');
-    prodCard.classList.toggle('expanded');
+  // Acknowledge alert
+  const ackBtn = e.target.closest('.btn-acknowledge');
+  if (ackBtn) {
+    const id = ackBtn.dataset.ackId;
+    await window.atlas.acknowledgeAlert(id);
+    const notif = notifications.find(n => n.id === id);
+    if (notif) {
+      notif.acknowledged = true;
+      notif.read = true;
+    }
+    render();
+    return;
   }
 
   // Mark read
@@ -264,31 +342,104 @@ list.addEventListener('click', async (e) => {
   }
 });
 
-// ─── Audio ──────────────────────────────────────────────────────────
+// ─── Settings Panel ─────────────────────────────────────────────────
 
-function playAudio(url, buttonEl) {
-  if (!audioPlayer) return;
+const settingsOverlay = $('#settings-overlay');
 
-  // Toggle if same URL
-  if (audioPlayer.src === url && !audioPlayer.paused) {
-    audioPlayer.pause();
-    buttonEl.querySelector('.audio-icon').textContent = '▶';
-    return;
-  }
+$('#btn-settings').addEventListener('click', () => openSettings());
+$('#settings-back').addEventListener('click', () => closeSettings());
+$('#btn-save-settings').addEventListener('click', () => saveSettings());
 
-  // Reset all icons
-  list.querySelectorAll('.notif-audio .audio-icon').forEach(el => el.textContent = '▶');
-
-  audioPlayer.src = url;
-  audioPlayer.play().then(() => {
-    buttonEl.querySelector('.audio-icon').textContent = '⏸';
-  }).catch(() => {
-    buttonEl.querySelector('.audio-icon').textContent = '⚠';
+// Toggle switches
+$$('.settings-toggle').forEach(toggle => {
+  toggle.addEventListener('click', () => {
+    const isOn = toggle.dataset.on === 'true';
+    toggle.dataset.on = isOn ? 'false' : 'true';
   });
+});
 
-  audioPlayer.onended = () => {
-    buttonEl.querySelector('.audio-icon').textContent = '▶';
-  };
+// Volume slider
+const volumeSlider = $('#set-volume');
+const volumeValue = $('#set-volume-value');
+if (volumeSlider) {
+  volumeSlider.addEventListener('input', () => {
+    volumeValue.textContent = volumeSlider.value + '%';
+  });
+}
+
+// Voice loading on ElevenLabs key blur
+const elKeyInput = $('#set-elevenlabs-key');
+if (elKeyInput) {
+  elKeyInput.addEventListener('blur', () => loadVoices());
+}
+
+async function openSettings() {
+  // Load current values
+  try {
+    const settings = await window.atlas.getSettings();
+    $('#set-host').value = settings.atlasHost || '';
+    $('#set-port').value = settings.port || 9400;
+    $('#set-token').value = settings.apiToken || '';
+    $('#set-sound').dataset.on = settings.soundEnabled !== false ? 'true' : 'false';
+    $('#set-autostart').dataset.on = settings.autoStart !== false ? 'true' : 'false';
+  } catch (e) { /* use defaults */ }
+
+  try {
+    const tts = await window.atlas.getTtsConfig();
+    $('#set-elevenlabs-key').value = tts.elevenLabsKey || '';
+    $('#set-tts-enabled').dataset.on = tts.ttsEnabled !== false ? 'true' : 'false';
+    const vol = Math.round((tts.ttsVolume || 0.8) * 100);
+    $('#set-volume').value = vol;
+    $('#set-volume-value').textContent = vol + '%';
+
+    if (tts.elevenLabsKey) {
+      loadVoices(tts.elevenLabsVoice);
+    }
+  } catch (e) { /* use defaults */ }
+
+  settingsOverlay.classList.add('open');
+}
+
+function closeSettings() {
+  settingsOverlay.classList.remove('open');
+}
+
+async function loadVoices(selectedId) {
+  const select = $('#set-voice');
+  try {
+    const voices = await window.atlas.getVoices();
+    select.innerHTML = '<option value="">Select voice...</option>';
+    voices.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.voice_id;
+      opt.textContent = v.name;
+      if (v.voice_id === selectedId) opt.selected = true;
+      select.appendChild(opt);
+    });
+  } catch (e) {
+    select.innerHTML = '<option value="">No voices found</option>';
+  }
+}
+
+async function saveSettings() {
+  try {
+    await window.atlas.setSettings({
+      atlasHost: $('#set-host').value,
+      port: parseInt($('#set-port').value) || 9400,
+      apiToken: $('#set-token').value,
+      soundEnabled: $('#set-sound').dataset.on === 'true',
+      autoStart: $('#set-autostart').dataset.on === 'true'
+    });
+
+    await window.atlas.setTtsConfig({
+      elevenLabsKey: $('#set-elevenlabs-key').value,
+      elevenLabsVoice: $('#set-voice').value,
+      ttsEnabled: $('#set-tts-enabled').dataset.on === 'true',
+      ttsVolume: parseInt($('#set-volume').value) / 100
+    });
+  } catch (e) { /* silent fail */ }
+
+  closeSettings();
 }
 
 // ─── IPC Listeners ──────────────────────────────────────────────────
@@ -299,7 +450,7 @@ window.atlas.onNewNotification((notif) => {
 
   // Auto-play audio for briefings
   if (notif.audio_url && notif.type === 'briefing') {
-    setTimeout(() => playAudio(notif.audio_url, list.querySelector(`[data-id="${notif.id}"] .notif-audio`)), 500);
+    setTimeout(() => playAudio(notif.audio_url, notif.id), 500);
   }
 });
 
@@ -314,10 +465,10 @@ async function checkStatus() {
   try {
     const result = await window.atlas.checkAtlasStatus();
     statusDot.className = 'status-dot ' + (result.online ? 'online' : 'offline');
-    statusText.textContent = result.online ? 'Connected' : 'Offline';
+    statusText.textContent = result.online ? 'connected' : 'offline';
   } catch {
     statusDot.className = 'status-dot offline';
-    statusText.textContent = 'Error';
+    statusText.textContent = 'error';
   }
 }
 
