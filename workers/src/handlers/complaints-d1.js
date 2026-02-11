@@ -13,7 +13,7 @@ const SHEET_ID = '1SyeueGF5NY3AXvUJYLTjuK01v3jCPIpbs9JQbrhrlHk';
 
 // Write actions that require authentication
 const WRITE_ACTIONS = new Set([
-  'save', 'delete', 'sync',
+  'save', 'delete',
 ]);
 
 // Valid complaint types
@@ -258,11 +258,7 @@ async function syncRowToSheet(env, row) {
 }
 
 async function syncFromSheets(db, env) {
-  // One-time import from Google Sheets into D1
-  const apiKey = env.GOOGLE_SHEETS_API_KEY;
-  if (!apiKey) {
-    return successResponse({ success: false, error: 'GOOGLE_SHEETS_API_KEY not configured' });
-  }
+  // Import from Google Sheets via public CSV export (no API key needed)
 
   // Check if complaint_type column exists, add it if not
   const tableInfo = await query(db, "PRAGMA table_info(complaints)", []);
@@ -274,28 +270,59 @@ async function syncFromSheets(db, env) {
     `, []);
   }
 
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Sheet1?key=${apiKey}`;
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=0`;
   const resp = await fetch(url);
   if (!resp.ok) {
     const text = await resp.text();
-    throw createError('INTERNAL_ERROR', `Sheets API error: ${text}`);
+    throw createError('INTERNAL_ERROR', `Google Sheets CSV export error: ${text}`);
   }
 
-  const data = await resp.json();
-  const rows = data.values || [];
+  const csv = await resp.text();
+  const lines = csv.split('\n').filter(l => l.trim());
 
-  if (rows.length < 2) {
+  if (lines.length < 2) {
     return successResponse({ success: true, imported: 0, message: 'No data rows found' });
   }
 
-  // First row is headers, rest is data
+  // Parse CSV (handle quoted fields with commas)
+  function parseCSVLine(line) {
+    const fields = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') { inQuotes = !inQuotes; continue; }
+      if (ch === ',' && !inQuotes) { fields.push(current.trim()); current = ''; continue; }
+      current += ch;
+    }
+    fields.push(current.trim());
+    return fields;
+  }
+
+  const rows = lines.map(parseCSVLine);
+
+  // First row is headers — map by name for flexibility
+  const headers = rows[0].map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
+  const dateIdx = headers.findIndex(h => h.includes('date'));
+  const custIdx = headers.findIndex(h => h.includes('customer'));
+  const invIdx = headers.findIndex(h => h.includes('inv'));
+  const compIdx = headers.findIndex(h => h.includes('complaint'));
+  const resIdx = headers.findIndex(h => h.includes('resolution'));
+  const typeIdx = headers.findIndex(h => h.includes('type'));
+
   // Expected columns: Date, Customer, Invoice #, Complaint, Resolution, [Type]
   let imported = 0;
   let skipped = 0;
   const errors = [];
 
   for (let i = 1; i < rows.length; i++) {
-    const [date, customer, invoice, complaint, resolution, type] = rows[i];
+    const row = rows[i];
+    const date = dateIdx >= 0 ? row[dateIdx] : row[0];
+    const customer = custIdx >= 0 ? row[custIdx] : row[1];
+    const invoice = invIdx >= 0 ? row[invIdx] : row[2];
+    const complaint = compIdx >= 0 ? row[compIdx] : row[3];
+    const resolution = resIdx >= 0 ? row[resIdx] : row[4];
+    const type = typeIdx >= 0 ? row[typeIdx] : row[5];
 
     if (!date || !customer || !complaint) {
       skipped++;
