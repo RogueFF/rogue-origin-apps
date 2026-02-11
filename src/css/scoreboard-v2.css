@@ -1,7 +1,7 @@
 /*
  * Rogue Origin — Scoreboard V2: Cockpit
  * Aesthetic: Fighter jet HUD × luxury chronograph × mission control × ambient theater
- * Typography: Playfair Display 900 (hero), JetBrains Mono 500 (data), Manrope 300 (labels)
+ * Typography: Bebas Neue (hero), JetBrains Mono 500 (data), Manrope 300 (labels)
  * Palette: Near-black green undertone, warm cream, living gold, ambient status colors
  * Layout: COCKPIT — hero center stage, left instrument, right cluster, bottom strip
  * Written: February 2026 — Pass 5 radical redesign
@@ -70,7 +70,7 @@
   --status-gray: #6b7370;
 
   /* --- Typography --- */
-  --font-hero: 'Playfair Display', 'Georgia', serif;
+  --font-hero: 'Bebas Neue', 'Impact', 'Arial Black', sans-serif;
   --font-data: 'JetBrains Mono', 'Space Mono', 'Courier New', monospace;
   --font-ui: 'Manrope', 'Inter', system-ui, sans-serif;
 
@@ -103,7 +103,7 @@
 
   /* --- Layout --- */
   --header-height: 60px;
-  --bottom-height: 25vh;
+  --bottom-height: 28vh;
   --scale-size: 200px;
   --timer-size: 220px;
 }
@@ -123,23 +123,23 @@
 }
 
 @keyframes glowBreatheYellow {
-  0%, 100% { opacity: 0.5; }
-  50% { opacity: 0.9; }
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 0.92; }
 }
 
 @keyframes urgentPulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.88; }
+  50% { opacity: 0.9; }
 }
 
 @keyframes timerPulseRed {
-  0%, 100% { filter: drop-shadow(0 0 8px rgba(196, 92, 74, 0.5)) drop-shadow(0 0 20px rgba(196, 92, 74, 0.3)); }
-  50% { filter: drop-shadow(0 0 16px rgba(196, 92, 74, 0.8)) drop-shadow(0 0 40px rgba(196, 92, 74, 0.5)); }
+  0%, 100% { filter: drop-shadow(0 0 8px rgba(196, 92, 74, 0.4)) drop-shadow(0 0 20px rgba(196, 92, 74, 0.2)); }
+  50% { filter: drop-shadow(0 0 14px rgba(196, 92, 74, 0.65)) drop-shadow(0 0 32px rgba(196, 92, 74, 0.35)); }
 }
 
 @keyframes timerPulseYellow {
-  0%, 100% { filter: drop-shadow(0 0 6px rgba(212, 168, 67, 0.4)); }
-  50% { filter: drop-shadow(0 0 12px rgba(212, 168, 67, 0.7)); }
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(212, 168, 67, 0.3)); }
+  50% { filter: drop-shadow(0 0 10px rgba(212, 168, 67, 0.55)); }
 }
 
 @keyframes ringPulse {
@@ -323,7 +323,7 @@ body.timer-green {
 
 body.timer-yellow {
   background: radial-gradient(ellipse 55% 55% at 50% 45%, rgba(212, 168, 67, 0.06) 0%, var(--bg) 65%);
-  animation: glowBreatheYellow 2s ease-in-out infinite;
+  animation: glowBreatheYellow 4s ease-in-out infinite;
 }
 
 body.timer-red {
@@ -331,7 +331,7 @@ body.timer-red {
     radial-gradient(ellipse 60% 55% at 50% 45%, rgba(196, 92, 74, 0.08) 0%, transparent 50%),
     radial-gradient(ellipse 80% 70% at 50% 50%, transparent 40%, rgba(196, 92, 74, 0.04) 100%),
     var(--bg);
-  animation: urgentPulse 0.8s ease-in-out infinite;
+  animation: urgentPulse 1.5s ease-in-out infinite;
 }
 
 body.timer-neutral {
@@ -541,15 +541,16 @@ body.timer-neutral {
 
 .strain-name {
   font-family: var(--font-hero);
-  font-size: 22px;
-  font-weight: 700;
+  font-size: 24px;
+  font-weight: 400;
   color: var(--cream);
-  letter-spacing: -0.02em;
+  letter-spacing: 0.04em;
   line-height: 1.1;
   max-width: 400px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-transform: uppercase;
 }
 
 .strain-rate-indicator {
@@ -602,11 +603,11 @@ body.timer-neutral {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
-  padding: 5px 20px;
+  padding: 8px 28px;
   border-radius: 100px;
   font-family: var(--font-ui);
-  font-size: 10px;
-  font-weight: 300;
+  font-size: 14px;
+  font-weight: 600;
   letter-spacing: 0.15em;
   text-transform: uppercase;
   background: rgba(228, 170, 79, 0.06);
@@ -619,33 +620,33 @@ body.timer-neutral {
 }
 
 .status-icon {
-  font-size: 12px;
+  font-size: 16px;
   display: flex;
   align-items: center;
 }
 
 .status-badge.ahead,
 body.ahead .status-badge {
-  background: rgba(74, 158, 107, 0.08);
+  background: rgba(74, 158, 107, 0.12);
   color: var(--green);
-  border-color: rgba(74, 158, 107, 0.15);
-  box-shadow: 0 0 24px rgba(74, 158, 107, 0.08);
+  border-color: rgba(74, 158, 107, 0.25);
+  box-shadow: 0 0 32px rgba(74, 158, 107, 0.15), 0 0 60px rgba(74, 158, 107, 0.06);
 }
 
 .status-badge.behind,
 body.behind .status-badge {
-  background: rgba(196, 92, 74, 0.08);
+  background: rgba(196, 92, 74, 0.12);
   color: var(--red);
-  border-color: rgba(196, 92, 74, 0.15);
-  box-shadow: 0 0 24px rgba(196, 92, 74, 0.08);
+  border-color: rgba(196, 92, 74, 0.25);
+  box-shadow: 0 0 32px rgba(196, 92, 74, 0.15), 0 0 60px rgba(196, 92, 74, 0.06);
 }
 
 .status-badge.on-target,
 body.on-target .status-badge {
-  background: rgba(212, 168, 67, 0.08);
+  background: rgba(212, 168, 67, 0.12);
   color: var(--yellow);
-  border-color: rgba(212, 168, 67, 0.15);
-  box-shadow: 0 0 24px rgba(212, 168, 67, 0.08);
+  border-color: rgba(212, 168, 67, 0.25);
+  box-shadow: 0 0 32px rgba(212, 168, 67, 0.15), 0 0 60px rgba(212, 168, 67, 0.06);
 }
 
 
@@ -709,14 +710,9 @@ body.on-target .status-badge {
   display: none !important;
 }
 
-/* Lang / TV toggle */
+/* Lang / TV toggle — moved to FAB menu */
 .lang-toggle {
-  position: fixed;
-  top: var(--sp-2);
-  right: var(--sp-2);
-  z-index: 300;
-  display: flex;
-  gap: 2px;
+  display: none !important;
 }
 
 .lang-btn {
@@ -796,14 +792,14 @@ body.on-target .status-badge {
 
 /* Status float ABOVE hero */
 .hero-status-float {
-  margin-bottom: var(--sp-3);
+  margin-bottom: var(--sp-2);
 }
 
 .daily-delta {
   font-family: var(--font-data);
-  font-size: 18px;
-  font-weight: 500;
-  padding: 5px 18px;
+  font-size: 22px;
+  font-weight: 700;
+  padding: 8px 24px;
   border-radius: 100px;
   letter-spacing: 0.05em;
   transition: all var(--t-normal) var(--ease-out);
@@ -812,13 +808,13 @@ body.on-target .status-badge {
 .daily-delta.positive {
   color: var(--green);
   background: var(--green-dim);
-  box-shadow: 0 0 20px rgba(74, 158, 107, 0.1);
+  box-shadow: 0 0 32px rgba(74, 158, 107, 0.18), 0 0 60px rgba(74, 158, 107, 0.06);
 }
 
 .daily-delta.negative {
   color: var(--red);
   background: var(--red-dim);
-  box-shadow: 0 0 20px rgba(196, 92, 74, 0.1);
+  box-shadow: 0 0 32px rgba(196, 92, 74, 0.18), 0 0 60px rgba(196, 92, 74, 0.06);
 }
 
 .daily-delta.neutral {
@@ -836,10 +832,10 @@ body.on-target .status-badge {
 .daily-actual {
   font-family: var(--font-hero);
   font-size: clamp(180px, 20vw, 350px);
-  font-weight: 900;
+  font-weight: 400;
   color: var(--cream);
-  line-height: 0.82;
-  letter-spacing: -0.06em;
+  line-height: 0.9;
+  letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
   text-shadow:
     0 0 80px rgba(232, 228, 220, 0.06),
@@ -871,8 +867,8 @@ body.timer-red .daily-actual {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-top: var(--sp-3);
-  gap: var(--sp-3);
+  margin-top: var(--sp-2);
+  gap: var(--sp-2);
 }
 
 .hero-goal {
@@ -882,26 +878,26 @@ body.timer-red .daily-actual {
 }
 
 .daily-sep {
-  font-family: var(--font-hero);
+  font-family: var(--font-data);
   font-size: 28px;
   color: var(--muted);
-  font-weight: 300;
+  font-weight: 400;
 }
 
 .daily-target {
   font-family: var(--font-data);
-  font-size: 22px;
+  font-size: 26px;
   color: var(--cream-muted);
   font-weight: 500;
 }
 
 .daily-unit {
   font-family: var(--font-ui);
-  font-size: 11px;
-  font-weight: 300;
+  font-size: 14px;
+  font-weight: 400;
   text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--muted);
+  letter-spacing: 0.12em;
+  color: var(--cream-muted);
 }
 
 /* Progress bar — 60% width, centered */
@@ -963,28 +959,28 @@ body.timer-red .daily-actual {
 }
 
 .projection-label {
-  color: var(--muted);
+  color: var(--cream-muted);
   font-family: var(--font-ui);
-  font-size: 10px;
-  font-weight: 300;
+  font-size: 13px;
+  font-weight: 400;
   text-transform: uppercase;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.12em;
 }
 
 .projection-value {
   color: var(--cream);
-  font-weight: 500;
-  font-size: 16px;
+  font-weight: 700;
+  font-size: 20px;
 }
 
 .projection-goal {
   color: var(--cream-muted);
-  font-size: 12px;
+  font-size: 15px;
 }
 
 .projection-delta {
-  font-weight: 500;
-  font-size: 14px;
+  font-weight: 700;
+  font-size: 18px;
 }
 
 .projection-delta.positive { color: var(--green); }
@@ -1053,11 +1049,11 @@ body.timer-red .daily-actual {
 
 .hour-card-header {
   font-family: var(--font-ui);
-  font-size: 9px;
-  font-weight: 300;
+  font-size: 12px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.15em;
-  color: var(--muted);
+  color: var(--cream-muted);
   margin-bottom: var(--sp-1);
   display: flex;
   align-items: center;
@@ -1071,7 +1067,7 @@ body.timer-red .daily-actual {
 
 .hour-card-timeslot {
   font-family: var(--font-data);
-  font-size: 10px;
+  font-size: 13px;
   color: var(--cream-muted);
   margin-bottom: var(--sp-3);
   letter-spacing: 0.08em;
@@ -1085,33 +1081,33 @@ body.timer-red .daily-actual {
 
 .actual-lbs {
   font-family: var(--font-hero);
-  font-size: 52px;
-  font-weight: 900;
+  font-size: 56px;
+  font-weight: 400;
   color: var(--cream);
   line-height: 1;
-  letter-spacing: -0.03em;
+  letter-spacing: 0.01em;
   font-variant-numeric: tabular-nums;
 }
 
 .separator {
-  font-family: var(--font-hero);
-  font-size: 24px;
+  font-family: var(--font-data);
+  font-size: 26px;
   color: var(--muted);
-  font-weight: 300;
+  font-weight: 400;
 }
 
 .target-lbs {
-  font-family: var(--font-hero);
-  font-size: 24px;
+  font-family: var(--font-data);
+  font-size: 28px;
   color: var(--cream-muted);
-  font-weight: 400;
+  font-weight: 500;
   letter-spacing: -0.02em;
 }
 
 .lbs-unit {
   font-family: var(--font-ui);
-  font-size: 9px;
-  font-weight: 300;
+  font-size: 12px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.15em;
   color: var(--muted);
@@ -1124,8 +1120,8 @@ body.timer-red .daily-actual {
 
 .percentage-value {
   font-family: var(--font-data);
-  font-size: 20px;
-  font-weight: 500;
+  font-size: 24px;
+  font-weight: 700;
   color: var(--cream);
 }
 
@@ -1136,11 +1132,11 @@ body.timer-red .daily-actual {
 
 .percentage-label {
   font-family: var(--font-ui);
-  font-size: 9px;
-  font-weight: 300;
+  font-size: 12px;
+  font-weight: 400;
   text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--muted);
+  letter-spacing: 0.12em;
+  color: var(--cream-muted);
   margin-top: 2px;
 }
 
@@ -1158,10 +1154,10 @@ body.timer-red .daily-actual {
 .info-bar {
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
-  padding: var(--sp-2) var(--sp-4);
-  background: rgba(255, 255, 255, 0.015);
-  border: 1px solid var(--border-subtle);
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-5);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-accent);
   border-radius: var(--r-md);
   flex-wrap: wrap;
 }
@@ -1171,14 +1167,14 @@ body.timer-red .daily-actual {
   align-items: center;
   gap: var(--sp-2);
   font-family: var(--font-data);
-  font-size: 11px;
+  font-size: 16px;
   font-weight: 500;
   color: var(--cream-soft);
 }
 
 .info-icon {
-  color: var(--muted);
-  font-size: 14px;
+  color: var(--gold);
+  font-size: 18px;
   display: flex;
 }
 
@@ -1204,18 +1200,18 @@ body.timer-red .daily-actual {
 
 .stat-group .label {
   font-family: var(--font-ui);
-  font-size: 8px;
-  font-weight: 300;
+  font-size: 11px;
+  font-weight: 400;
   text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--muted);
+  letter-spacing: 0.12em;
+  color: var(--cream-muted);
 }
 
 .stat-group .value {
   font-family: var(--font-data);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--cream);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--gold);
 }
 
 .avg-best-toggle {
@@ -1441,7 +1437,7 @@ body.timer-red .daily-actual {
   width: 2px;
   background: linear-gradient(180deg, transparent, rgba(196, 92, 74, 0.3), transparent);
   pointer-events: none;
-  animation: panelPulse 0.8s ease-in-out infinite;
+  animation: panelPulse 1.5s ease-in-out infinite;
 }
 
 .timer-panel.neutral::before {
@@ -1482,11 +1478,11 @@ body.timer-red .daily-actual {
 .scale-header,
 .timer-header {
   font-family: var(--font-ui);
-  font-size: 9px;
-  font-weight: 300;
+  font-size: 12px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.15em;
-  color: var(--muted);
+  color: var(--cream-muted);
   margin-bottom: var(--sp-2);
 }
 
@@ -1559,12 +1555,12 @@ body.timer-red .daily-actual {
 
 .timer-ring-progress.yellow {
   stroke: var(--yellow);
-  animation: timerPulseYellow 2s ease-in-out infinite;
+  animation: timerPulseYellow 4s ease-in-out infinite;
 }
 
 .timer-ring-progress.red {
   stroke: var(--red);
-  animation: timerPulseRed 0.8s ease-in-out infinite;
+  animation: timerPulseRed 1.5s ease-in-out infinite;
 }
 
 .timer-ring-progress.neutral {
@@ -1579,8 +1575,8 @@ body.timer-red .daily-actual {
 }
 
 body.timer-green .timer-ring-glow { opacity: 0.3; }
-body.timer-yellow .timer-ring-glow { opacity: 0.5; animation: glowBreatheYellow 2s ease-in-out infinite; }
-body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 0.8s ease-in-out infinite; }
+body.timer-yellow .timer-ring-glow { opacity: 0.5; animation: glowBreatheYellow 4s ease-in-out infinite; }
+body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 1.5s ease-in-out infinite; }
 
 /* Center readout */
 .scale-center,
@@ -1595,20 +1591,20 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 0.8s ease
 
 .scale-value {
   font-family: var(--font-hero);
-  font-size: 40px;
-  font-weight: 900;
+  font-size: 44px;
+  font-weight: 400;
   color: var(--cream);
   line-height: 1;
-  letter-spacing: -0.03em;
+  letter-spacing: 0.02em;
 }
 
 .timer-value {
   font-family: var(--font-hero);
-  font-size: 48px;
-  font-weight: 900;
+  font-size: 52px;
+  font-weight: 400;
   color: var(--cream);
   line-height: 1;
-  letter-spacing: -0.03em;
+  letter-spacing: 0.02em;
 }
 
 .timer-value.green { color: var(--green); }
@@ -1619,11 +1615,11 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 0.8s ease
 .scale-label,
 .timer-label {
   font-family: var(--font-ui);
-  font-size: 9px;
-  font-weight: 300;
+  font-size: 11px;
+  font-weight: 400;
   text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--muted);
+  letter-spacing: 0.12em;
+  color: var(--cream-muted);
   margin-top: 4px;
 }
 
@@ -1652,7 +1648,7 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 0.8s ease
 
 .timer-target {
   font-family: var(--font-data);
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--cream-muted);
   text-align: center;
@@ -1688,18 +1684,18 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 0.8s ease
 
 .timer-stat-label {
   font-family: var(--font-ui);
-  font-size: 8px;
-  font-weight: 300;
+  font-size: 11px;
+  font-weight: 400;
   text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--muted);
+  letter-spacing: 0.12em;
+  color: var(--cream-muted);
   margin-bottom: 3px;
 }
 
 .timer-stat-value {
   font-family: var(--font-data);
-  font-size: 15px;
-  font-weight: 500;
+  font-size: 20px;
+  font-weight: 700;
   color: var(--cream);
   font-variant-numeric: tabular-nums;
 }
@@ -1805,11 +1801,11 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 0.8s ease
 
 .chart-header {
   font-family: var(--font-ui);
-  font-size: 9px;
-  font-weight: 300;
+  font-size: 12px;
+  font-weight: 400;
   text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--muted);
+  letter-spacing: 0.12em;
+  color: var(--cream-muted);
   margin-bottom: var(--sp-3);
 }
 
@@ -1842,11 +1838,11 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 0.8s ease
 
 .cycle-history-title {
   font-family: var(--font-ui);
-  font-size: 9px;
-  font-weight: 300;
+  font-size: 12px;
+  font-weight: 400;
   text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--muted);
+  letter-spacing: 0.12em;
+  color: var(--cream-muted);
 }
 
 .cycle-history-nav {
@@ -1927,8 +1923,8 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 0.8s ease
 
 .cycle-stat-value {
   font-family: var(--font-data);
-  font-size: 15px;
-  font-weight: 500;
+  font-size: 18px;
+  font-weight: 700;
   color: var(--cream);
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -1936,11 +1932,11 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 0.8s ease
 
 .cycle-stat-label {
   font-family: var(--font-ui);
-  font-size: 8px;
-  font-weight: 300;
+  font-size: 11px;
+  font-weight: 400;
   text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--muted);
+  letter-spacing: 0.12em;
+  color: var(--cream-muted);
 }
 
 
@@ -1975,8 +1971,8 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 0.8s ease
 
 .cycle-donut-count {
   font-family: var(--font-hero);
-  font-size: 32px;
-  font-weight: 900;
+  font-size: 36px;
+  font-weight: 400;
   color: var(--cream);
   line-height: 1;
 }
@@ -2088,8 +2084,8 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 0.8s ease
   flex: 1;
   min-width: 5px;
   max-width: 18px;
-  border-radius: 2px 2px 0 0;
-  transition: opacity var(--t-fast);
+  border-radius: 4px 4px 0 0;
+  transition: opacity var(--t-fast), transform var(--t-fast);
   cursor: default;
   position: relative;
 }
@@ -2146,14 +2142,15 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 0.8s ease
 }
 
 .cycle-chip {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--r-sm);
+  padding: 4px 10px;
+  min-width: 36px;
+  height: 28px;
+  border-radius: 100px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: var(--font-data);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
   cursor: default;
   transition: transform var(--t-fast);
@@ -2239,16 +2236,18 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 0.8s ease
 .cycle-cards::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.06); border-radius: 2px; }
 
 .cycle-card {
-  min-width: 68px;
-  padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.015);
+  min-width: 74px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.02);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-md);
   text-align: center;
   flex-shrink: 0;
   transition: all var(--t-fast);
   position: relative;
   overflow: hidden;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .cycle-card:hover { border-color: var(--border-accent); }
@@ -2287,8 +2286,8 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 0.8s ease
 .cycle-card .cycle-card-time,
 .cycle-card-time {
   font-family: var(--font-data);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 700;
   margin-top: 2px;
 }
 
@@ -2379,12 +2378,12 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 0.8s ease
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 5px 10px;
+  padding: 6px 12px;
   border-radius: var(--r-sm);
   background: rgba(255, 255, 255, 0.015);
   border: 1px solid transparent;
   font-family: var(--font-data);
-  font-size: 12px;
+  font-size: 14px;
   color: var(--cream-soft);
   transition: all var(--t-fast);
 }
@@ -2463,7 +2462,7 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 0.8s ease
   transform: translate(-50%, -50%);
   font-family: var(--font-hero);
   font-size: 72px;
-  font-weight: 900;
+  font-weight: 400;
   color: var(--green);
   text-shadow:
     0 0 60px rgba(74, 158, 107, 0.6),
@@ -2512,7 +2511,7 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 0.8s ease
 .pause-modal-overlay.visible .pause-modal { transform: scale(1); }
 
 .pause-modal-title {
-  font-family: var(--font-hero);
+  font-family: var(--font-ui);
   font-size: 28px;
   font-weight: 700;
   color: var(--gold);
@@ -2652,7 +2651,7 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 0.8s ease
 }
 
 .modal-title {
-  font-family: var(--font-hero);
+  font-family: var(--font-ui);
   font-size: 28px;
   font-weight: 700;
   color: var(--cream);
@@ -3163,35 +3162,50 @@ html.tv-mode {
 }
 
 html.tv-mode .daily-actual {
-  font-size: clamp(220px, 24vw, 420px);
+  font-size: clamp(240px, 26vw, 480px);
 }
 
 html.tv-mode .timer-display {
-  --timer-size: 260px;
+  --timer-size: 280px;
 }
 
 html.tv-mode .scale-display {
-  --scale-size: 240px;
+  --scale-size: 260px;
 }
 
-html.tv-mode .timer-value { font-size: 58px; }
-html.tv-mode .scale-value { font-size: 48px; }
+html.tv-mode .timer-value { font-size: 64px; }
+html.tv-mode .scale-value { font-size: 52px; }
 html.tv-mode .timer-label,
-html.tv-mode .scale-label { font-size: 11px; }
+html.tv-mode .scale-label { font-size: 14px; }
 html.tv-mode .scale-header,
-html.tv-mode .timer-header { font-size: 11px; }
-html.tv-mode .timer-btn-row { max-width: 380px; }
-html.tv-mode .manual-btn { font-size: 15px; padding: 14px var(--sp-5); }
-html.tv-mode .pause-btn { width: 50px; height: 50px; font-size: 18px; }
-html.tv-mode .timer-stats { max-width: 380px; }
-html.tv-mode .timer-stat { padding: var(--sp-3) var(--sp-2); }
-html.tv-mode .timer-stat-label { font-size: 9px; }
-html.tv-mode .timer-stat-value { font-size: 17px; }
-html.tv-mode .actual-lbs { font-size: 64px; }
-html.tv-mode .strain-name { font-size: 28px; }
-html.tv-mode .time-display .time { font-size: 36px; }
+html.tv-mode .timer-header { font-size: 14px; }
+html.tv-mode .timer-btn-row { max-width: 400px; }
+html.tv-mode .manual-btn { font-size: 17px; padding: 16px var(--sp-5); }
+html.tv-mode .pause-btn { width: 54px; height: 54px; font-size: 20px; }
+html.tv-mode .timer-stats { max-width: 400px; }
+html.tv-mode .timer-stat { padding: var(--sp-3) var(--sp-3); }
+html.tv-mode .timer-stat-label { font-size: 13px; }
+html.tv-mode .timer-stat-value { font-size: 24px; }
+html.tv-mode .actual-lbs { font-size: 72px; }
+html.tv-mode .target-lbs { font-size: 34px; }
+html.tv-mode .strain-name { font-size: 32px; }
+html.tv-mode .time-display .time { font-size: 40px; }
 html.tv-mode .expand-hint { display: none; }
-html.tv-mode .cycle-donut-ring { width: 160px; height: 160px; }
+html.tv-mode .cycle-donut-ring { width: 170px; height: 170px; }
+html.tv-mode .daily-delta { font-size: 26px; padding: 10px 32px; }
+html.tv-mode .status-badge { font-size: 16px; padding: 10px 32px; }
+html.tv-mode .info-section { font-size: 18px; }
+html.tv-mode .stat-group .value { font-size: 22px; }
+html.tv-mode .stat-group .label { font-size: 13px; }
+html.tv-mode .percentage-value { font-size: 28px; }
+html.tv-mode .projection-value { font-size: 24px; }
+html.tv-mode .projection-delta { font-size: 22px; }
+html.tv-mode .hour-card-header { font-size: 14px; }
+html.tv-mode .timer-target { font-size: 16px; }
+html.tv-mode .daily-target { font-size: 30px; }
+html.tv-mode .daily-unit { font-size: 16px; }
+html.tv-mode .cycle-stat-value { font-size: 22px; }
+html.tv-mode .cycle-stat-label { font-size: 12px; }
 
 
 /* ========================================
