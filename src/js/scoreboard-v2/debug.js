@@ -331,8 +331,8 @@
     if (window.ScoreboardRender && window.ScoreboardRender.renderScoreboard) {
       window.ScoreboardRender.renderScoreboard();
     }
-    if (window.ScoreboardChart && window.ScoreboardChart.updateChart) {
-      window.ScoreboardChart.updateChart(data.hourlyRates || []);
+    if (window.ScoreboardChart && window.ScoreboardChart.renderHourlyChart) {
+      window.ScoreboardChart.renderHourlyChart(data.hourlyRates || []);
     }
 
     console.log('[Debug] Injected mock scoreboard:', scenario);

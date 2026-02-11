@@ -116,7 +116,7 @@
                   }
 
                   if (Render) Render.renderScoreboard();
-                  if (Chart) Chart.updateChart(yData.hourlyRates || []);
+                  if (Chart && Chart.renderHourlyChart) Chart.renderHourlyChart(yData.hourlyRates || []);
                 }
               }, null, yStr);
             }
