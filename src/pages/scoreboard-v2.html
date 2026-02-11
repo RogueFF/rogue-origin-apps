@@ -60,11 +60,25 @@
   <link rel="stylesheet" href="../css/shared-base.css">
 
   <!-- Non-critical CSS: Deferred for faster initial render -->
-  <link rel="preload" href="../css/scoreboard-v2.css?v=5" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link rel="stylesheet" href="../css/scoreboard-v2.css?v=5"></noscript>
+  <link rel="preload" href="../css/scoreboard-v2.css?v=6" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/scoreboard-v2.css?v=6"></noscript>
 </head>
 <body class="idle timer-neutral">
   <a href="#main-panel" class="skip-link">Skip to main content</a>
+
+  <!-- ============================================
+       AMBIENT EFFECTS LAYER
+       ============================================ -->
+  <div class="ambient-layer" id="ambientLayer"></div>
+  <canvas id="ambientParticles" class="ambient-particles"></canvas>
+
+  <!-- ============================================
+       EDGE GLOW ELEMENTS
+       ============================================ -->
+  <div class="edge-glow edge-glow-top" aria-hidden="true"></div>
+  <div class="edge-glow edge-glow-right" aria-hidden="true"></div>
+  <div class="edge-glow edge-glow-bottom" aria-hidden="true"></div>
+  <div class="edge-glow edge-glow-left" aria-hidden="true"></div>
 
   <!-- ============================================
        MORNING REPORT (full-screen overlay)
@@ -356,10 +370,22 @@
               <feGaussianBlur stdDeviation="4" result="blur"/>
               <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
             </filter>
+            <filter id="scaleGlowIntense">
+              <feGaussianBlur stdDeviation="8" result="blur"/>
+              <feMerge>
+                <feMergeNode in="blur"/>
+                <feMergeNode in="blur"/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
             <linearGradient id="scaleMetallic" x1="0" y1="0" x2="1" y2="1">
               <stop offset="0%" stop-color="rgba(240,235,224,0.06)"/>
               <stop offset="50%" stop-color="rgba(240,235,224,0.02)"/>
               <stop offset="100%" stop-color="rgba(240,235,224,0.05)"/>
+            </linearGradient>
+            <linearGradient id="scaleGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="var(--scale-color-primary, #62758d)"/>
+              <stop offset="100%" stop-color="var(--scale-color-light, #8a9cb5)"/>
             </linearGradient>
           </defs>
           <!-- Outer bezel ring -->
@@ -409,6 +435,8 @@
             <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(350)"/>
           </g>
           <circle class="scale-ring-bg" cx="110" cy="110" r="95" stroke="url(#scaleMetallic)"/>
+          <!-- Glow layer behind progress -->
+          <circle class="scale-ring-glow" cx="110" cy="110" r="95" stroke="url(#scaleGradient)" stroke-width="12" fill="none" opacity="0.3" filter="url(#scaleGlowIntense)" stroke-dasharray="597" stroke-dashoffset="597"/>
           <circle class="scale-ring-progress" id="scaleRing" cx="110" cy="110" r="95" stroke-dasharray="597" stroke-dashoffset="597" filter="url(#scaleGlow)"/>
         </svg>
         <div class="scale-center">
@@ -428,10 +456,22 @@
             <feGaussianBlur stdDeviation="5" result="blur"/>
             <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
           </filter>
+          <filter id="timerGlowIntense">
+            <feGaussianBlur stdDeviation="8" result="blur"/>
+            <feMerge>
+              <feMergeNode in="blur"/>
+              <feMergeNode in="blur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
           <linearGradient id="timerMetallic" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0%" stop-color="rgba(240,235,224,0.06)"/>
             <stop offset="50%" stop-color="rgba(240,235,224,0.02)"/>
             <stop offset="100%" stop-color="rgba(240,235,224,0.05)"/>
+          </linearGradient>
+          <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="var(--timer-color-primary, #22c55e)"/>
+            <stop offset="100%" stop-color="var(--timer-color-light, #4ade80)"/>
           </linearGradient>
         </defs>
         <!-- Outer bezel -->
@@ -481,6 +521,8 @@
           <line class="minor" x1="0" y1="-95" x2="0" y2="-90" stroke="rgba(240,235,224,0.05)" stroke-width="0.5" transform="rotate(350)"/>
         </g>
         <circle class="timer-ring-bg" cx="110" cy="110" r="95" stroke="url(#timerMetallic)"/>
+        <!-- Glow layer behind progress -->
+        <circle class="timer-ring-glow" cx="110" cy="110" r="95" stroke="url(#timerGradient)" stroke-width="12" fill="none" opacity="0.3" filter="url(#timerGlowIntense)" stroke-dasharray="597" stroke-dashoffset="0"/>
         <circle class="timer-ring-progress green" id="timerRing" cx="110" cy="110" r="95" stroke-dasharray="597" stroke-dashoffset="0" filter="url(#timerGlow)"/>
       </svg>
       <div class="timer-center">

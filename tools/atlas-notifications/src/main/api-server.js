@@ -1,17 +1,28 @@
 const express = require('express');
 
-function createApiServer(port, onNotification) {
+function createApiServer(port, onNotification, apiToken) {
   const app = express();
 
   app.use(express.json({ limit: '1mb' }));
 
-  // Health check
+  // Auth middleware — require bearer token on all POST routes
+  function requireToken(req, res, next) {
+    if (!apiToken) return next(); // no token configured = open (dev mode)
+    const auth = req.headers.authorization || '';
+    const token = auth.startsWith('Bearer ') ? auth.slice(7) : req.query.token;
+    if (token !== apiToken) {
+      return res.status(401).json({ error: 'Unauthorized — invalid or missing token' });
+    }
+    next();
+  }
+
+  // Health check (no auth needed)
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', app: 'atlas-notifications', uptime: process.uptime() });
   });
 
   // Receive notification from Atlas
-  app.post('/notify', (req, res) => {
+  app.post('/notify', requireToken, (req, res) => {
     const payload = req.body;
 
     if (!payload || !payload.title) {
@@ -42,7 +53,7 @@ function createApiServer(port, onNotification) {
     res.json({ status: 'ok', message: 'Use the panel to view notifications' });
   });
 
-  const server = app.listen(port, '0.0.0.0', () => {
+  const server = app.listen(port, '127.0.0.1', () => {
     console.log(`Atlas Notifications API listening on port ${port}`);
   });
 
