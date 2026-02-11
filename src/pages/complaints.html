@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <link rel="icon" type="image/png" href="/rogue-origin-apps/favicon.png">
-  <meta name="theme-color" content="#668971">
-  <title>Complaints - Rogue Origin</title>
+  <meta name="theme-color" content="#141816">
+  <title>Quality Management - Rogue Origin</title>
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,27 +14,19 @@
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/duotone/style.css">
   <!-- Styles -->
   <link rel="stylesheet" href="../css/shared-base.css">
-  <link rel="stylesheet" href="../css/complaints.css?v=1">
+  <link rel="stylesheet" href="../css/complaints.css?v=2">
 </head>
-<body class="auth-required">
+<body class="auth-required dark-mode">
   <a href="#main-content" class="skip-link">Skip to main content</a>
 
   <!-- Auth Overlay -->
   <div id="auth-overlay" class="auth-overlay">
     <div class="auth-box">
       <img src="/rogue-origin-apps/favicon.png" alt="Rogue Origin" class="auth-logo">
-      <h1 class="auth-title" data-i18n="auth_title">Complaints Access</h1>
+      <h1 class="auth-title" data-i18n="auth_title">Quality Management</h1>
       <form id="auth-form" class="auth-form">
-        <input
-          type="password"
-          id="password-input"
-          class="auth-input"
-          placeholder="Password"
-          required
-          autocomplete="current-password"
-        >
+        <input type="password" id="password-input" class="auth-input" placeholder="Password" required autocomplete="current-password">
         <button type="submit" class="auth-button" data-i18n="auth_unlock">Unlock</button>
-        <div id="auth-error" class="auth-error"></div>
       </form>
     </div>
   </div>
@@ -87,8 +79,8 @@
       <div class="sidebar-footer">
         <div class="sidebar-avatar" style="width:36px;height:36px;background:var(--ro-green);border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:600;font-size:12px;flex-shrink:0">RO</div>
         <div class="sidebar-user">
-          <div class="sidebar-user-name">Rogue Origin</div>
-          <div class="sidebar-user-role">Operations Hub</div>
+          <strong>Rogue Origin</strong>
+          <small>Operations Hub</small>
         </div>
       </div>
     </aside>
@@ -102,14 +94,17 @@
         </button>
         <div class="header-brand">
           <img src="/rogue-origin-apps/favicon.png" alt="Rogue Origin" class="header-logo">
-          <h1 class="header-title" data-i18n="page_title">Complaints</h1>
+          <h1 class="header-title" data-i18n="page_title">Quality Management</h1>
         </div>
         <div class="header-actions">
+          <button id="import-btn" class="icon-btn" aria-label="Import from Sheets" title="Import from Google Sheets">
+            <i class="ph-duotone ph-cloud-arrow-down"></i>
+          </button>
           <button id="lang-toggle" class="icon-btn" aria-label="Toggle language" title="EN / ES">
             <i class="ph-duotone ph-translate"></i>
           </button>
           <button id="dark-mode-toggle" class="icon-btn" aria-label="Toggle dark mode">
-            <i class="ph-duotone ph-moon"></i>
+            <i class="ph-duotone ph-sun"></i>
           </button>
           <button id="refresh-btn" class="icon-btn primary" aria-label="Refresh">
             <i class="ph-duotone ph-arrows-clockwise"></i>
@@ -117,21 +112,115 @@
         </div>
       </header>
 
-      <!-- Tabs -->
-      <div class="tabs">
-        <button class="tab" data-tab="new">
-          <i class="ph-duotone ph-plus"></i>
-          <span data-i18n="tab_new">New</span>
+      <!-- View Navigation -->
+      <div class="view-nav">
+        <button class="view-nav-btn active" data-view="dashboard">
+          <i class="ph-duotone ph-chart-line-up"></i>
+          <span data-i18n="view_dashboard">Dashboard</span>
         </button>
-        <button class="tab active" data-tab="history">
-          <i class="ph-duotone ph-clock-counter-clockwise"></i>
-          <span data-i18n="tab_history">History</span>
+        <button class="view-nav-btn" data-view="list">
+          <i class="ph-duotone ph-list-dashes"></i>
+          <span data-i18n="view_list">Complaints</span>
+        </button>
+        <button class="view-nav-btn" data-view="new">
+          <i class="ph-duotone ph-plus-circle"></i>
+          <span data-i18n="view_new">New</span>
         </button>
       </div>
 
-      <!-- New Complaint Tab -->
-      <div id="tab-new" class="tab-content">
+      <!-- Dashboard View -->
+      <div id="view-dashboard" class="view-content active">
+        <!-- Stats Row -->
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-icon danger">
+              <i class="ph-duotone ph-warning-circle"></i>
+            </div>
+            <div class="stat-content">
+              <div class="stat-value" id="stat-open">0</div>
+              <div class="stat-label" data-i18n="stat_open">Open</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon gold">
+              <i class="ph-duotone ph-hourglass-medium"></i>
+            </div>
+            <div class="stat-content">
+              <div class="stat-value" id="stat-progress">0</div>
+              <div class="stat-label" data-i18n="stat_progress">In Progress</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green">
+              <i class="ph-duotone ph-check-circle"></i>
+            </div>
+            <div class="stat-content">
+              <div class="stat-value" id="stat-resolved">0</div>
+              <div class="stat-label" data-i18n="stat_resolved">Resolved</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon info">
+              <i class="ph-duotone ph-timer"></i>
+            </div>
+            <div class="stat-content">
+              <div class="stat-value" id="stat-avg-days">&mdash;</div>
+              <div class="stat-label" data-i18n="stat_avg_resolution">Avg Resolution</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dashboard Grid -->
+        <div class="dashboard-grid">
+          <!-- Trend Chart -->
+          <div class="chart-card">
+            <div class="chart-header">
+              <h3 data-i18n="chart_title">Monthly Trend</h3>
+            </div>
+            <div class="chart-area" id="trend-chart">
+              <div class="loading"><i class="ph-duotone ph-spinner"></i></div>
+            </div>
+          </div>
+
+          <!-- Recent Complaints -->
+          <div class="recent-list">
+            <h3 class="recent-header" data-i18n="recent_title">Recent Complaints</h3>
+            <div id="recent-items">
+              <div class="loading"><i class="ph-duotone ph-spinner"></i></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- List View -->
+      <div id="view-list" class="view-content">
+        <!-- Controls -->
+        <div class="controls">
+          <div class="search-box">
+            <i class="ph-duotone ph-magnifying-glass search-icon"></i>
+            <input type="text" id="search-input" class="search-input" placeholder="Search complaints..." aria-label="Search complaints">
+          </div>
+          <div class="filter-group">
+            <button class="filter-chip active" data-filter="" data-i18n="filter_all">All</button>
+            <button class="filter-chip" data-filter="Open" data-i18n="filter_open">Open</button>
+            <button class="filter-chip" data-filter="In Progress" data-i18n="filter_progress">In Progress</button>
+            <button class="filter-chip" data-filter="Resolved" data-i18n="filter_resolved">Resolved</button>
+          </div>
+        </div>
+
+        <!-- Complaints List -->
+        <div id="complaints-list" class="complaints-list">
+          <div class="loading"><i class="ph-duotone ph-spinner"></i></div>
+        </div>
+      </div>
+
+      <!-- New/Edit Form View -->
+      <div id="view-new" class="view-content">
         <form id="complaint-form" class="complaint-form">
+          <input type="hidden" id="form-complaint-id">
+
+          <div class="form-section-title" data-i18n="section_details">Complaint Details</div>
+
           <div class="form-row">
             <div class="form-group">
               <label for="complaint-date" class="form-label" data-i18n="form_date">Date</label>
@@ -139,13 +228,24 @@
             </div>
             <div class="form-group">
               <label for="complaint-customer" class="form-label" data-i18n="form_customer">Customer</label>
-              <input type="text" id="complaint-customer" class="form-input" required>
+              <input type="text" id="complaint-customer" class="form-input" required placeholder="Customer name">
             </div>
           </div>
-          <div class="form-row">
+
+          <div class="form-row triple">
             <div class="form-group">
               <label for="complaint-invoice" class="form-label" data-i18n="form_invoice">Invoice #</label>
-              <input type="text" id="complaint-invoice" class="form-input">
+              <input type="text" id="complaint-invoice" class="form-input" placeholder="Optional">
+            </div>
+            <div class="form-group">
+              <label for="complaint-type" class="form-label" data-i18n="form_type">Type</label>
+              <select id="complaint-type" class="form-select">
+                <option value="Quality" data-i18n="type_quality">Quality</option>
+                <option value="Shipping" data-i18n="type_shipping">Shipping</option>
+                <option value="Service" data-i18n="type_service">Service</option>
+                <option value="Billing" data-i18n="type_billing">Billing</option>
+                <option value="Other" data-i18n="type_other">Other</option>
+              </select>
             </div>
             <div class="form-group">
               <label for="complaint-status" class="form-label" data-i18n="form_status">Status</label>
@@ -156,79 +256,42 @@
               </select>
             </div>
           </div>
+
           <div class="form-row full">
             <div class="form-group">
-              <label for="complaint-text" class="form-label" data-i18n="form_complaint">Complaint</label>
-              <textarea id="complaint-text" class="form-textarea" rows="3" required></textarea>
+              <label for="complaint-text" class="form-label" data-i18n="form_complaint">Complaint Description</label>
+              <textarea id="complaint-text" class="form-textarea" rows="4" required placeholder="Describe the complaint..."></textarea>
             </div>
           </div>
+
+          <div class="form-section-title" data-i18n="section_resolution">Resolution & Notes</div>
+
           <div class="form-row full">
             <div class="form-group">
               <label for="complaint-resolution" class="form-label" data-i18n="form_resolution">Resolution</label>
-              <textarea id="complaint-resolution" class="form-textarea" rows="2"></textarea>
+              <textarea id="complaint-resolution" class="form-textarea" rows="3" placeholder="How was this resolved?"></textarea>
             </div>
           </div>
+
           <div class="form-row">
             <div class="form-group">
               <label for="complaint-reporter" class="form-label" data-i18n="form_reporter">Reported By</label>
-              <input type="text" id="complaint-reporter" class="form-input">
+              <input type="text" id="complaint-reporter" class="form-input" placeholder="Name">
             </div>
             <div class="form-group">
-              <label for="complaint-notes" class="form-label" data-i18n="form_notes">Notes</label>
-              <input type="text" id="complaint-notes" class="form-input">
+              <label for="complaint-notes" class="form-label" data-i18n="form_notes">Internal Notes</label>
+              <input type="text" id="complaint-notes" class="form-input" placeholder="Optional">
             </div>
           </div>
-          <button type="submit" class="form-submit">
-            <i class="ph-duotone ph-floppy-disk"></i>
-            <span data-i18n="btn_save">Save Complaint</span>
-          </button>
+
+          <div class="form-actions">
+            <button type="button" class="form-cancel" id="form-cancel-btn" data-i18n="btn_cancel">Cancel</button>
+            <button type="submit" class="form-submit" id="form-submit-btn">
+              <i class="ph-duotone ph-floppy-disk"></i>
+              <span data-i18n="btn_save">Save Complaint</span>
+            </button>
+          </div>
         </form>
-      </div>
-
-      <!-- History Tab -->
-      <div id="tab-history" class="tab-content active">
-        <!-- Stats -->
-        <div class="stats">
-          <div class="stat-card">
-            <div class="stat-label" data-i18n="stat_total">Total</div>
-            <div class="stat-value" id="stat-total">0</div>
-          </div>
-          <div class="stat-card status-open">
-            <div class="stat-label" data-i18n="stat_open">Open</div>
-            <div class="stat-value" id="stat-open">0</div>
-          </div>
-          <div class="stat-card status-resolved">
-            <div class="stat-label" data-i18n="stat_resolved">Resolved</div>
-            <div class="stat-value" id="stat-resolved">0</div>
-          </div>
-        </div>
-
-        <!-- Controls -->
-        <div class="controls">
-          <div class="search-box">
-            <i class="ph-duotone ph-magnifying-glass search-icon"></i>
-            <input
-              type="text"
-              id="search-input"
-              class="search-input"
-              placeholder="Search..."
-              aria-label="Search complaints"
-            >
-          </div>
-          <div class="filter-buttons">
-            <button class="filter-btn active" data-filter="" data-i18n="filter_all">All</button>
-            <button class="filter-btn" data-filter="Open" data-i18n="filter_open">Open</button>
-            <button class="filter-btn" data-filter="In Progress" data-i18n="filter_progress">In Progress</button>
-            <button class="filter-btn" data-filter="Resolved" data-i18n="filter_resolved">Resolved</button>
-          </div>
-        </div>
-
-        <!-- Complaints List -->
-        <div id="complaints-list" class="complaints-list">
-          <div class="loading">
-            <i class="ph-duotone ph-spinner"></i>
-          </div>
-        </div>
       </div>
     </main>
   </div>
@@ -236,28 +299,53 @@
   <!-- Detail Modal -->
   <div id="detail-modal" class="modal-overlay" role="dialog" aria-label="Complaint details">
     <div class="modal-content">
-      <button class="modal-close" onclick="closeModal()" aria-label="Close">
+      <button class="modal-close" id="modal-close-btn" aria-label="Close">
         <i class="ph-duotone ph-x"></i>
       </button>
       <div class="modal-header">
-        <h2 class="modal-title" id="modal-customer">Customer Name</h2>
-        <div class="modal-subtitle" id="modal-date">Date</div>
+        <div>
+          <h2 class="modal-title" id="modal-customer">Customer Name</h2>
+          <div class="modal-subtitle" id="modal-date">Date</div>
+        </div>
+        <span class="modal-badge" id="modal-badge">Open</span>
       </div>
-      <div class="detail-grid" id="detail-content">
-        <!-- Populated dynamically -->
-      </div>
+      <div class="detail-grid" id="detail-content"></div>
       <div class="modal-actions">
-        <button class="btn btn-primary" onclick="editComplaint()" id="edit-btn">
+        <button class="btn btn-primary" id="edit-btn">
           <i class="ph-duotone ph-pencil"></i>
           <span data-i18n="btn_edit">Edit</span>
         </button>
-        <button class="btn btn-danger" onclick="confirmDelete()" id="delete-btn">
+        <button class="btn btn-danger" id="delete-btn">
           <i class="ph-duotone ph-trash"></i>
           <span data-i18n="btn_delete">Delete</span>
         </button>
-        <button class="btn btn-secondary" onclick="closeModal()">
+        <button class="btn btn-secondary" id="close-detail-btn">
           <i class="ph-duotone ph-x"></i>
           <span data-i18n="btn_close">Close</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import Modal -->
+  <div id="import-modal" class="import-overlay" role="dialog" aria-label="Import from Google Sheets">
+    <div class="import-modal">
+      <div class="import-header">
+        <h2 data-i18n="import_title">Import from Google Sheets</h2>
+      </div>
+      <div class="import-body">
+        <p style="color:var(--text-secondary);margin-bottom:var(--space-md);font-size:0.9375rem;line-height:1.6;" data-i18n="import_desc">
+          Import existing complaint data from the linked Google Sheet. Duplicates will be skipped automatically.
+        </p>
+        <div id="import-result" class="import-result" style="display:none;"></div>
+      </div>
+      <div class="import-actions">
+        <button class="btn btn-secondary" id="import-cancel-btn">
+          <span data-i18n="btn_cancel">Cancel</span>
+        </button>
+        <button class="btn btn-gold" id="import-run-btn">
+          <i class="ph-duotone ph-cloud-arrow-down"></i>
+          <span data-i18n="btn_import">Import Now</span>
         </button>
       </div>
     </div>
@@ -270,20 +358,28 @@
   </div>
 
   <script>
-    // Constants & State
+    // ═══════════════════════════════════════════════════
+    // CONSTANTS & STATE
+    // ═══════════════════════════════════════════════════
+
     const API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/complaints';
     let complaints = [];
+    let stats = {};
     let currentFilter = '';
     let currentSearch = '';
     let lang = localStorage.getItem('ro-lang') || 'en';
     let currentComplaint = null;
+    let editingId = null;
 
-    // Translations
+    // ═══════════════════════════════════════════════════
+    // TRANSLATIONS
+    // ═══════════════════════════════════════════════════
+
     const labels = {
       en: {
-        auth_title: 'Complaints Access',
+        auth_title: 'Quality Management',
         auth_unlock: 'Unlock',
-        page_title: 'Complaints',
+        page_title: 'Quality Management',
         nav_dashboard: 'Dashboard',
         nav_kanban: 'Supply Kanban',
         nav_scoreboard: 'Scoreboard',
@@ -293,42 +389,66 @@
         nav_consignment: 'Consignment',
         nav_complaints: 'Complaints',
         nav_floor: 'Floor Manager',
-        tab_new: 'New',
-        tab_history: 'History',
+        view_dashboard: 'Dashboard',
+        view_list: 'Complaints',
+        view_new: 'New',
+        section_details: 'Complaint Details',
+        section_resolution: 'Resolution & Notes',
         form_date: 'Date',
         form_customer: 'Customer',
         form_invoice: 'Invoice #',
+        form_type: 'Type',
         form_status: 'Status',
-        form_complaint: 'Complaint',
+        form_complaint: 'Complaint Description',
         form_resolution: 'Resolution',
         form_reporter: 'Reported By',
-        form_notes: 'Notes',
+        form_notes: 'Internal Notes',
+        type_quality: 'Quality',
+        type_shipping: 'Shipping',
+        type_service: 'Service',
+        type_billing: 'Billing',
+        type_other: 'Other',
         status_open: 'Open',
         status_progress: 'In Progress',
         status_resolved: 'Resolved',
         btn_save: 'Save Complaint',
+        btn_update: 'Update Complaint',
         btn_edit: 'Edit',
         btn_delete: 'Delete',
         btn_close: 'Close',
         btn_cancel: 'Cancel',
-        stat_total: 'Total',
+        btn_import: 'Import Now',
         stat_open: 'Open',
+        stat_progress: 'In Progress',
         stat_resolved: 'Resolved',
+        stat_avg_resolution: 'Avg Resolution',
+        stat_days: 'd',
+        chart_title: 'Monthly Trend',
+        recent_title: 'Recent Complaints',
         filter_all: 'All',
         filter_open: 'Open',
         filter_progress: 'In Progress',
         filter_resolved: 'Resolved',
-        search_placeholder: 'Search...',
-        toast_saved: 'Complaint saved successfully',
+        search_placeholder: 'Search complaints...',
+        toast_saved: 'Complaint saved',
+        toast_updated: 'Complaint updated',
         toast_deleted: 'Complaint deleted',
+        toast_imported: 'Import complete',
         toast_error: 'Error: ',
-        empty_state: 'No complaints yet',
-        confirm_delete: 'Delete this complaint?'
+        empty_state: 'No complaints found',
+        empty_dashboard: 'No data yet',
+        confirm_delete: 'Delete this complaint permanently?',
+        import_title: 'Import from Google Sheets',
+        import_desc: 'Import existing complaint data from the linked Google Sheet. Duplicates will be skipped automatically.',
+        import_running: 'Importing...',
+        detail_resolved_date: 'Resolved Date',
+        detail_created: 'Created',
+        no_months: 'No data'
       },
       es: {
-        auth_title: 'Acceso a Quejas',
+        auth_title: 'Gestión de Calidad',
         auth_unlock: 'Desbloquear',
-        page_title: 'Quejas',
+        page_title: 'Gestión de Calidad',
         nav_dashboard: 'Panel',
         nav_kanban: 'Kanban',
         nav_scoreboard: 'Marcador',
@@ -338,43 +458,70 @@
         nav_consignment: 'Consignación',
         nav_complaints: 'Quejas',
         nav_floor: 'Gestor de Piso',
-        tab_new: 'Nuevo',
-        tab_history: 'Historial',
+        view_dashboard: 'Panel',
+        view_list: 'Quejas',
+        view_new: 'Nuevo',
+        section_details: 'Detalles de la Queja',
+        section_resolution: 'Resolución y Notas',
         form_date: 'Fecha',
         form_customer: 'Cliente',
         form_invoice: 'Factura #',
+        form_type: 'Tipo',
         form_status: 'Estado',
-        form_complaint: 'Queja',
+        form_complaint: 'Descripción de la Queja',
         form_resolution: 'Resolución',
         form_reporter: 'Reportado Por',
-        form_notes: 'Notas',
+        form_notes: 'Notas Internas',
+        type_quality: 'Calidad',
+        type_shipping: 'Envío',
+        type_service: 'Servicio',
+        type_billing: 'Facturación',
+        type_other: 'Otro',
         status_open: 'Abierto',
         status_progress: 'En Progreso',
         status_resolved: 'Resuelto',
         btn_save: 'Guardar Queja',
+        btn_update: 'Actualizar Queja',
         btn_edit: 'Editar',
         btn_delete: 'Eliminar',
         btn_close: 'Cerrar',
         btn_cancel: 'Cancelar',
-        stat_total: 'Total',
+        btn_import: 'Importar Ahora',
         stat_open: 'Abiertos',
+        stat_progress: 'En Progreso',
         stat_resolved: 'Resueltos',
+        stat_avg_resolution: 'Prom. Resolución',
+        stat_days: 'd',
+        chart_title: 'Tendencia Mensual',
+        recent_title: 'Quejas Recientes',
         filter_all: 'Todos',
         filter_open: 'Abierto',
         filter_progress: 'En Progreso',
         filter_resolved: 'Resuelto',
-        search_placeholder: 'Buscar...',
-        toast_saved: 'Queja guardada exitosamente',
+        search_placeholder: 'Buscar quejas...',
+        toast_saved: 'Queja guardada',
+        toast_updated: 'Queja actualizada',
         toast_deleted: 'Queja eliminada',
+        toast_imported: 'Importación completa',
         toast_error: 'Error: ',
-        empty_state: 'Sin quejas aún',
-        confirm_delete: '¿Eliminar esta queja?'
+        empty_state: 'No se encontraron quejas',
+        empty_dashboard: 'Sin datos aún',
+        confirm_delete: '¿Eliminar esta queja permanentemente?',
+        import_title: 'Importar de Google Sheets',
+        import_desc: 'Importar datos de quejas existentes desde la hoja de Google vinculada. Los duplicados se omitirán automáticamente.',
+        import_running: 'Importando...',
+        detail_resolved_date: 'Fecha de Resolución',
+        detail_created: 'Creado',
+        no_months: 'Sin datos'
       }
     };
 
-    const t = (key) => labels[lang][key] || key;
+    const t = (key) => labels[lang]?.[key] || key;
 
-    // Utility Functions
+    // ═══════════════════════════════════════════════════
+    // UTILITIES
+    // ═══════════════════════════════════════════════════
+
     function escapeHtml(text) {
       if (!text) return '';
       const div = document.createElement('div');
@@ -386,16 +533,48 @@
       return localStorage.getItem('ro-auth-token') || '';
     }
 
-    // API Functions
+    function formatDate(dateStr) {
+      if (!dateStr) return '\u2014';
+      try {
+        const [y, m, d] = dateStr.split('-');
+        return `${m}/${d}/${y}`;
+      } catch {
+        return dateStr;
+      }
+    }
+
+    function monthLabel(ym) {
+      const [y, m] = ym.split('-');
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return months[parseInt(m) - 1] || m;
+    }
+
+    function statusClass(status) {
+      if (status === 'Open') return 'status-open';
+      if (status === 'Resolved') return 'status-resolved';
+      return 'status-progress';
+    }
+
+    function statusText(status) {
+      if (status === 'Open') return t('status_open');
+      if (status === 'Resolved') return t('status_resolved');
+      return t('status_progress');
+    }
+
+    // ═══════════════════════════════════════════════════
+    // API FUNCTIONS
+    // ═══════════════════════════════════════════════════
+
     async function apiGet(action, params = {}) {
       const qs = new URLSearchParams({ action, ...params });
       const res = await fetch(`${API}?${qs}`);
       const raw = await res.json();
+      if (raw.success === false) throw new Error(raw.error || 'Request failed');
       return raw.data || raw;
     }
 
     async function apiPost(action, data) {
-      const res = await fetch(`${API}?action=${action}`, {
+      const res = await fetch(`${API}?action=${encodeURIComponent(action)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({ ...data, password: getPassword() })
@@ -405,7 +584,10 @@
       return raw;
     }
 
-    // Core Functions
+    // ═══════════════════════════════════════════════════
+    // DATA LOADING
+    // ═══════════════════════════════════════════════════
+
     async function loadComplaints() {
       try {
         const data = await apiGet('complaints');
@@ -419,32 +601,113 @@
 
     async function loadStats() {
       try {
-        const stats = await apiGet('stats');
-        document.getElementById('stat-total').textContent = stats.total || 0;
-        document.getElementById('stat-open').textContent = stats.open || 0;
-        document.getElementById('stat-resolved').textContent = stats.resolved || 0;
+        stats = await apiGet('stats');
+        renderStats();
+        renderChart();
       } catch (err) {
         console.error('Stats error:', err);
       }
     }
 
+    async function loadRecent() {
+      try {
+        const data = await apiGet('recent');
+        const recent = Array.isArray(data) ? data : [];
+        renderRecent(recent);
+      } catch (err) {
+        console.error('Recent error:', err);
+      }
+    }
+
+    async function refreshAll() {
+      await Promise.all([loadComplaints(), loadStats(), loadRecent()]);
+    }
+
+    // ═══════════════════════════════════════════════════
+    // RENDER: STATS
+    // ═══════════════════════════════════════════════════
+
+    function renderStats() {
+      document.getElementById('stat-open').textContent = stats.open || 0;
+      document.getElementById('stat-progress').textContent = stats.in_progress || 0;
+      document.getElementById('stat-resolved').textContent = stats.resolved || 0;
+
+      const avgEl = document.getElementById('stat-avg-days');
+      if (stats.avg_resolution_days !== null && stats.avg_resolution_days !== undefined) {
+        avgEl.textContent = stats.avg_resolution_days + t('stat_days');
+      } else {
+        avgEl.innerHTML = '&mdash;';
+      }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // RENDER: CHART
+    // ═══════════════════════════════════════════════════
+
+    function renderChart() {
+      const container = document.getElementById('trend-chart');
+      const trend = stats.monthly_trend || [];
+
+      if (trend.length === 0) {
+        container.innerHTML = `<div class="empty-state"><p>${t('no_months')}</p></div>`;
+        return;
+      }
+
+      // Reverse so oldest is on left
+      const sorted = [...trend].reverse();
+      const maxCount = Math.max(...sorted.map(m => m.count), 1);
+
+      container.innerHTML = sorted.map(m => {
+        const pct = Math.max((m.count / maxCount) * 100, 8);
+        return `
+          <div class="chart-bar" style="height:${pct}%" title="${monthLabel(m.month)}: ${m.count}">
+            <span class="chart-bar-label">${monthLabel(m.month)}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ═══════════════════════════════════════════════════
+    // RENDER: RECENT
+    // ═══════════════════════════════════════════════════
+
+    function renderRecent(recent) {
+      const container = document.getElementById('recent-items');
+
+      if (recent.length === 0) {
+        container.innerHTML = `<div class="empty-state"><i class="ph-duotone ph-warning-diamond"></i><p>${t('empty_dashboard')}</p></div>`;
+        return;
+      }
+
+      container.innerHTML = recent.map(c => `
+        <div class="recent-item" onclick="openDetail(${c.id})" role="button" tabindex="0" onkeydown="if(event.key==='Enter') openDetail(${c.id})">
+          <div class="recent-item-header">
+            <span class="recent-item-customer">${escapeHtml(c.customer)}</span>
+            <span class="recent-badge ${statusClass(c.status)}">${statusText(c.status)}</span>
+          </div>
+          <div class="recent-item-preview">${escapeHtml(c.complaint || '').substring(0, 80)}</div>
+        </div>
+      `).join('');
+    }
+
+    // ═══════════════════════════════════════════════════
+    // RENDER: COMPLAINTS LIST
+    // ═══════════════════════════════════════════════════
+
     function renderComplaints() {
       const container = document.getElementById('complaints-list');
-
       let filtered = complaints;
 
-      // Apply status filter
       if (currentFilter) {
         filtered = filtered.filter(c => c.status === currentFilter);
       }
-
-      // Apply search
       if (currentSearch) {
         const term = currentSearch.toLowerCase();
         filtered = filtered.filter(c =>
           (c.customer && c.customer.toLowerCase().includes(term)) ||
           (c.complaint && c.complaint.toLowerCase().includes(term)) ||
-          (c.invoice_number && c.invoice_number.toLowerCase().includes(term))
+          (c.invoice_number && c.invoice_number.toLowerCase().includes(term)) ||
+          (c.complaint_type && c.complaint_type.toLowerCase().includes(term))
         );
       }
 
@@ -458,40 +721,119 @@
         return;
       }
 
-      container.innerHTML = filtered.map(renderCard).join('');
+      container.innerHTML = filtered.map(c => {
+        const sc = statusClass(c.status);
+        return `
+          <div class="complaint-card ${sc}" onclick="openDetail(${c.id})" role="button" tabindex="0" onkeydown="if(event.key==='Enter') openDetail(${c.id})">
+            <div class="card-header">
+              <div>
+                <div class="card-customer">${escapeHtml(c.customer)}</div>
+              </div>
+              <span class="card-badge ${sc}">${statusText(c.status)}</span>
+            </div>
+            <div class="card-meta">
+              <span><i class="ph-duotone ph-calendar"></i> ${formatDate(c.complaint_date)}</span>
+              ${c.invoice_number ? `<span><i class="ph-duotone ph-hash"></i> ${escapeHtml(c.invoice_number)}</span>` : ''}
+              ${c.complaint_type ? `<span><i class="ph-duotone ph-tag"></i> ${escapeHtml(c.complaint_type)}</span>` : ''}
+            </div>
+            <div class="card-complaint">${escapeHtml(c.complaint || '').substring(0, 150)}${(c.complaint || '').length > 150 ? '...' : ''}</div>
+          </div>
+        `;
+      }).join('');
     }
 
-    function renderCard(c) {
-      const statusClass = c.status === 'Open' ? 'status-open' :
-                         c.status === 'Resolved' ? 'status-resolved' :
-                         'status-progress';
-      const statusText = t('status_' + c.status.toLowerCase().replace(' ', '_'));
+    // ═══════════════════════════════════════════════════
+    // DETAIL MODAL
+    // ═══════════════════════════════════════════════════
 
-      return `
-        <div class="complaint-card ${statusClass}"
-             onclick="openDetail(${c.id})"
-             onkeydown="if(event.key==='Enter') openDetail(${c.id})"
-             role="button"
-             tabindex="0">
-          <div class="card-header">
-            <span class="card-customer">${escapeHtml(c.customer)}</span>
-            <span class="card-badge ${statusClass}">${statusText}</span>
+    function openDetail(id) {
+      const c = complaints.find(x => x.id === id);
+      if (!c) return;
+      currentComplaint = c;
+
+      document.getElementById('modal-customer').textContent = c.customer;
+      document.getElementById('modal-date').textContent = formatDate(c.complaint_date);
+
+      const badge = document.getElementById('modal-badge');
+      badge.textContent = statusText(c.status);
+      badge.className = `modal-badge ${statusClass(c.status)}`;
+
+      document.getElementById('detail-content').innerHTML = `
+        <div class="detail-field">
+          <div class="detail-label">${t('form_invoice')}</div>
+          <div class="detail-value">${escapeHtml(c.invoice_number) || '\u2014'}</div>
+        </div>
+        <div class="detail-field">
+          <div class="detail-label">${t('form_type')}</div>
+          <div class="detail-value">${escapeHtml(c.complaint_type) || 'Other'}</div>
+        </div>
+        <div class="detail-field full">
+          <div class="detail-label">${t('form_complaint')}</div>
+          <div class="detail-value large">${escapeHtml(c.complaint)}</div>
+        </div>
+        <div class="detail-field full">
+          <div class="detail-label">${t('form_resolution')}</div>
+          <div class="detail-value large">${escapeHtml(c.resolution) || '\u2014'}</div>
+        </div>
+        <div class="detail-field">
+          <div class="detail-label">${t('form_reporter')}</div>
+          <div class="detail-value">${escapeHtml(c.reported_by) || '\u2014'}</div>
+        </div>
+        <div class="detail-field">
+          <div class="detail-label">${t('form_notes')}</div>
+          <div class="detail-value">${escapeHtml(c.notes) || '\u2014'}</div>
+        </div>
+        ${c.resolved_date ? `
+          <div class="detail-field">
+            <div class="detail-label">${t('detail_resolved_date')}</div>
+            <div class="detail-value">${formatDate(c.resolved_date)}</div>
           </div>
-          <div class="card-meta">
-            <span class="card-date">
-              <i class="ph-duotone ph-calendar"></i> ${c.complaint_date}
-            </span>
-            ${c.invoice_number ? `
-              <span class="card-invoice">
-                <i class="ph-duotone ph-hash"></i> ${escapeHtml(c.invoice_number)}
-              </span>
-            ` : ''}
-          </div>
-          <div class="card-complaint">
-            ${escapeHtml(c.complaint).substring(0, 120)}${c.complaint.length > 120 ? '...' : ''}
-          </div>
+        ` : ''}
+        <div class="detail-field">
+          <div class="detail-label">${t('detail_created')}</div>
+          <div class="detail-value" style="font-family:var(--font-mono);font-size:0.8125rem;">${c.created_at || '\u2014'}</div>
         </div>
       `;
+
+      document.getElementById('detail-modal').classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('detail-modal').classList.remove('active');
+      currentComplaint = null;
+    }
+
+    // ═══════════════════════════════════════════════════
+    // FORM: CREATE / EDIT
+    // ═══════════════════════════════════════════════════
+
+    function resetForm() {
+      editingId = null;
+      document.getElementById('form-complaint-id').value = '';
+      document.getElementById('complaint-form').reset();
+      document.getElementById('complaint-date').valueAsDate = new Date();
+      document.getElementById('form-submit-btn').querySelector('span').textContent = t('btn_save');
+    }
+
+    function editComplaint() {
+      if (!currentComplaint) return;
+      editingId = currentComplaint.id;
+
+      document.getElementById('form-complaint-id').value = currentComplaint.id;
+      document.getElementById('complaint-date').value = currentComplaint.complaint_date;
+      document.getElementById('complaint-customer').value = currentComplaint.customer;
+      document.getElementById('complaint-invoice').value = currentComplaint.invoice_number || '';
+      document.getElementById('complaint-type').value = currentComplaint.complaint_type || 'Other';
+      document.getElementById('complaint-status').value = currentComplaint.status;
+      document.getElementById('complaint-text').value = currentComplaint.complaint;
+      document.getElementById('complaint-resolution').value = currentComplaint.resolution || '';
+      document.getElementById('complaint-reporter').value = currentComplaint.reported_by || '';
+      document.getElementById('complaint-notes').value = currentComplaint.notes || '';
+
+      document.getElementById('form-submit-btn').querySelector('span').textContent = t('btn_update');
+
+      closeModal();
+      switchView('new');
     }
 
     async function saveComplaint(e) {
@@ -501,6 +843,7 @@
         complaint_date: document.getElementById('complaint-date').value,
         customer: document.getElementById('complaint-customer').value,
         invoice_number: document.getElementById('complaint-invoice').value,
+        complaint_type: document.getElementById('complaint-type').value,
         status: document.getElementById('complaint-status').value,
         complaint: document.getElementById('complaint-text').value,
         resolution: document.getElementById('complaint-resolution').value,
@@ -508,185 +851,126 @@
         notes: document.getElementById('complaint-notes').value
       };
 
+      if (editingId) {
+        data.id = editingId;
+      }
+
       try {
         await apiPost('save', data);
-        showToast(t('toast_saved'), 'success');
-        document.getElementById('complaint-form').reset();
-        document.getElementById('complaint-date').valueAsDate = new Date();
-        await Promise.all([loadComplaints(), loadStats()]);
-        switchTab('history');
+        showToast(editingId ? t('toast_updated') : t('toast_saved'), 'success');
+        resetForm();
+        await refreshAll();
+        switchView('list');
       } catch (err) {
         console.error('Save error:', err);
         showToast(t('toast_error') + err.message, 'error');
       }
     }
 
-    async function deleteComplaint(id) {
+    async function deleteComplaint() {
+      if (!currentComplaint) return;
+      if (!confirm(t('confirm_delete'))) return;
+
       try {
-        await apiPost('delete', { id });
+        await apiPost('delete', { id: currentComplaint.id });
         showToast(t('toast_deleted'), 'success');
         closeModal();
-        await Promise.all([loadComplaints(), loadStats()]);
+        await refreshAll();
       } catch (err) {
         console.error('Delete error:', err);
         showToast(t('toast_error') + err.message, 'error');
       }
     }
 
-    function openDetail(id) {
-      const complaint = complaints.find(c => c.id === id);
-      if (!complaint) return;
+    // ═══════════════════════════════════════════════════
+    // IMPORT FROM SHEETS
+    // ═══════════════════════════════════════════════════
 
-      currentComplaint = complaint;
-
-      document.getElementById('modal-customer').textContent = complaint.customer;
-      document.getElementById('modal-date').textContent = complaint.complaint_date;
-
-      const statusText = t('status_' + complaint.status.toLowerCase().replace(' ', '_'));
-
-      document.getElementById('detail-content').innerHTML = `
-        <div class="detail-field">
-          <div class="detail-label">${t('form_invoice')}</div>
-          <div class="detail-value">${escapeHtml(complaint.invoice_number) || '\u2014'}</div>
-        </div>
-        <div class="detail-field">
-          <div class="detail-label">${t('form_status')}</div>
-          <div class="detail-value">${statusText}</div>
-        </div>
-        <div class="detail-field">
-          <div class="detail-label">${t('form_complaint')}</div>
-          <div class="detail-value">${escapeHtml(complaint.complaint)}</div>
-        </div>
-        <div class="detail-field">
-          <div class="detail-label">${t('form_resolution')}</div>
-          <div class="detail-value">${escapeHtml(complaint.resolution) || '\u2014'}</div>
-        </div>
-        <div class="detail-field">
-          <div class="detail-label">${t('form_reporter')}</div>
-          <div class="detail-value">${escapeHtml(complaint.reported_by) || '\u2014'}</div>
-        </div>
-        <div class="detail-field">
-          <div class="detail-label">${t('form_notes')}</div>
-          <div class="detail-value">${escapeHtml(complaint.notes) || '\u2014'}</div>
-        </div>
-        ${complaint.resolved_date ? `
-          <div class="detail-field">
-            <div class="detail-label">Resolved Date</div>
-            <div class="detail-value">${complaint.resolved_date}</div>
-          </div>
-        ` : ''}
-      `;
-
-      document.getElementById('detail-modal').classList.add('active');
+    function openImportModal() {
+      document.getElementById('import-result').style.display = 'none';
+      document.getElementById('import-result').textContent = '';
+      document.getElementById('import-run-btn').disabled = false;
+      document.getElementById('import-modal').classList.add('active');
     }
 
-    function editComplaint() {
-      if (!currentComplaint) return;
+    function closeImportModal() {
+      document.getElementById('import-modal').classList.remove('active');
+    }
 
-      // Switch to new tab and populate form
-      document.getElementById('complaint-date').value = currentComplaint.complaint_date;
-      document.getElementById('complaint-customer').value = currentComplaint.customer;
-      document.getElementById('complaint-invoice').value = currentComplaint.invoice_number || '';
-      document.getElementById('complaint-status').value = currentComplaint.status;
-      document.getElementById('complaint-text').value = currentComplaint.complaint;
-      document.getElementById('complaint-resolution').value = currentComplaint.resolution || '';
-      document.getElementById('complaint-reporter').value = currentComplaint.reported_by || '';
-      document.getElementById('complaint-notes').value = currentComplaint.notes || '';
+    async function runImport() {
+      const resultEl = document.getElementById('import-result');
+      const btn = document.getElementById('import-run-btn');
 
-      // Update form to edit mode
-      document.getElementById('complaint-form').onsubmit = async (e) => {
-        e.preventDefault();
+      btn.disabled = true;
+      btn.querySelector('span').textContent = t('import_running');
+      resultEl.style.display = 'block';
+      resultEl.textContent = t('import_running');
 
-        const data = {
-          id: currentComplaint.id,
-          complaint_date: document.getElementById('complaint-date').value,
-          customer: document.getElementById('complaint-customer').value,
-          invoice_number: document.getElementById('complaint-invoice').value,
-          status: document.getElementById('complaint-status').value,
-          complaint: document.getElementById('complaint-text').value,
-          resolution: document.getElementById('complaint-resolution').value,
-          reported_by: document.getElementById('complaint-reporter').value,
-          notes: document.getElementById('complaint-notes').value
-        };
-
-        try {
-          await apiPost('save', data);
-          showToast(t('toast_saved'), 'success');
-          document.getElementById('complaint-form').reset();
-          document.getElementById('complaint-form').onsubmit = saveComplaint;
-          document.getElementById('complaint-date').valueAsDate = new Date();
-          await Promise.all([loadComplaints(), loadStats()]);
-          switchTab('history');
-        } catch (err) {
-          console.error('Update error:', err);
-          showToast(t('toast_error') + err.message, 'error');
+      try {
+        const result = await apiPost('sync', {});
+        const lines = [];
+        lines.push(`Imported: ${result.imported || 0}`);
+        lines.push(`Skipped: ${result.skipped || 0}`);
+        lines.push(`Total rows: ${result.total_rows || 0}`);
+        if (result.errors && result.errors.length > 0) {
+          lines.push('');
+          lines.push('Errors:');
+          result.errors.forEach(e => lines.push(`  Row ${e.row}: ${e.error}`));
         }
-      };
-
-      closeModal();
-      switchTab('new');
-    }
-
-    function confirmDelete() {
-      if (!currentComplaint) return;
-      if (confirm(t('confirm_delete'))) {
-        deleteComplaint(currentComplaint.id);
+        resultEl.textContent = lines.join('\n');
+        showToast(t('toast_imported') + ` (${result.imported || 0} new)`, 'success');
+        await refreshAll();
+      } catch (err) {
+        resultEl.textContent = 'Error: ' + err.message;
+        showToast(t('toast_error') + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.querySelector('span').textContent = t('btn_import');
       }
     }
 
-    function closeModal() {
-      document.getElementById('detail-modal').classList.remove('active');
-      currentComplaint = null;
-    }
+    // ═══════════════════════════════════════════════════
+    // UI UTILITIES
+    // ═══════════════════════════════════════════════════
 
     function showToast(msg, type = 'success') {
       const toast = document.getElementById('toast');
       const icon = toast.querySelector('i');
-
       toast.className = `toast ${type}`;
       icon.className = type === 'success' ? 'ph-duotone ph-check-circle' : 'ph-duotone ph-x-circle';
       document.getElementById('toast-message').textContent = msg;
-
       toast.classList.add('show');
-      setTimeout(() => toast.classList.remove('show'), 3000);
+      setTimeout(() => toast.classList.remove('show'), 3500);
     }
 
-    function switchTab(tab) {
-      document.querySelectorAll('.tab').forEach(t => {
-        t.classList.toggle('active', t.dataset.tab === tab);
+    function switchView(view) {
+      document.querySelectorAll('.view-nav-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.view === view);
       });
-      document.querySelectorAll('.tab-content').forEach(tc => {
-        tc.classList.toggle('active', tc.id === `tab-${tab}`);
+      document.querySelectorAll('.view-content').forEach(vc => {
+        vc.classList.toggle('active', vc.id === `view-${view}`);
       });
+      if (view === 'new' && !editingId) {
+        resetForm();
+      }
     }
 
     function filterByStatus(status) {
       currentFilter = status;
-      document.querySelectorAll('.filter-btn').forEach(btn => {
+      document.querySelectorAll('.filter-chip').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.filter === status);
       });
-      renderComplaints();
-    }
-
-    function searchComplaints(term) {
-      currentSearch = term;
       renderComplaints();
     }
 
     function updateUI() {
       document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.getAttribute('data-i18n');
-        if (el.tagName === 'OPTION') {
-          el.textContent = t(key);
-        } else {
-          el.textContent = t(key);
-        }
+        const text = t(key);
+        if (text !== key) el.textContent = text;
       });
-
       const searchInput = document.getElementById('search-input');
-      if (searchInput) {
-        searchInput.placeholder = t('search_placeholder');
-      }
+      if (searchInput) searchInput.placeholder = t('search_placeholder');
     }
 
     function toggleLang() {
@@ -694,6 +978,7 @@
       localStorage.setItem('ro-lang', lang);
       updateUI();
       renderComplaints();
+      if (stats.monthly_trend) renderChart();
     }
 
     function toggleDarkMode() {
@@ -715,10 +1000,13 @@
     }
 
     function toggleSidebar() {
-      document.getElementById('sidebar').classList.toggle('active');
+      document.getElementById('sidebar').classList.toggle('open');
     }
 
-    // Auth Functions
+    // ═══════════════════════════════════════════════════
+    // AUTH
+    // ═══════════════════════════════════════════════════
+
     function checkAuth() {
       const token = getPassword();
       if (token) {
@@ -735,67 +1023,89 @@
       init();
     }
 
-    // Init
+    // ═══════════════════════════════════════════════════
+    // INIT
+    // ═══════════════════════════════════════════════════
+
     async function init() {
       // Restore theme
       const savedTheme = localStorage.getItem('ro-theme');
-      if (savedTheme === 'dark') {
-        document.documentElement.setAttribute('data-theme', 'dark');
-        document.body.classList.add('dark-mode');
-        document.querySelector('#dark-mode-toggle i').className = 'ph-duotone ph-sun';
+      if (savedTheme === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+        document.body.classList.remove('dark-mode');
+        document.querySelector('#dark-mode-toggle i').className = 'ph-duotone ph-moon';
       }
 
       updateUI();
-      await Promise.all([loadComplaints(), loadStats()]);
-
-      // Set today's date on form
-      document.getElementById('complaint-date').valueAsDate = new Date();
+      await refreshAll();
     }
 
-    // Event Listeners
+    // ═══════════════════════════════════════════════════
+    // EVENT LISTENERS
+    // ═══════════════════════════════════════════════════
+
     document.addEventListener('DOMContentLoaded', () => {
       checkAuth();
 
-      // Auth form
+      // Auth
       document.getElementById('auth-form').addEventListener('submit', handleLogin);
 
-      // Tab switching
-      document.querySelectorAll('.tab').forEach(tab => {
-        tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+      // View nav
+      document.querySelectorAll('.view-nav-btn').forEach(btn => {
+        btn.addEventListener('click', () => switchView(btn.dataset.view));
       });
 
-      // Form submit
+      // Form
       document.getElementById('complaint-form').addEventListener('submit', saveComplaint);
+      document.getElementById('form-cancel-btn').addEventListener('click', () => {
+        resetForm();
+        switchView('list');
+      });
 
       // Search with debounce
       let searchTimeout;
       document.getElementById('search-input').addEventListener('input', (e) => {
         clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => searchComplaints(e.target.value), 300);
+        searchTimeout = setTimeout(() => {
+          currentSearch = e.target.value;
+          renderComplaints();
+        }, 300);
       });
 
-      // Filter buttons
-      document.querySelectorAll('.filter-btn').forEach(btn => {
+      // Filter chips
+      document.querySelectorAll('.filter-chip').forEach(btn => {
         btn.addEventListener('click', () => filterByStatus(btn.dataset.filter));
       });
 
       // Header buttons
       document.getElementById('lang-toggle').addEventListener('click', toggleLang);
       document.getElementById('dark-mode-toggle').addEventListener('click', toggleDarkMode);
-      document.getElementById('refresh-btn').addEventListener('click', () => {
-        loadComplaints();
-        loadStats();
-      });
+      document.getElementById('refresh-btn').addEventListener('click', refreshAll);
       document.getElementById('menu-btn').addEventListener('click', toggleSidebar);
 
-      // Modal close on overlay click
+      // Import
+      document.getElementById('import-btn').addEventListener('click', openImportModal);
+      document.getElementById('import-cancel-btn').addEventListener('click', closeImportModal);
+      document.getElementById('import-run-btn').addEventListener('click', runImport);
+      document.getElementById('import-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'import-modal') closeImportModal();
+      });
+
+      // Detail modal
+      document.getElementById('edit-btn').addEventListener('click', editComplaint);
+      document.getElementById('delete-btn').addEventListener('click', deleteComplaint);
+      document.getElementById('close-detail-btn').addEventListener('click', closeModal);
+      document.getElementById('modal-close-btn').addEventListener('click', closeModal);
       document.getElementById('detail-modal').addEventListener('click', (e) => {
         if (e.target.id === 'detail-modal') closeModal();
       });
 
-      // Modal close on escape
+      // Keyboard
       document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeModal();
+        if (e.key === 'Escape') {
+          closeModal();
+          closeImportModal();
+        }
       });
     });
   </script>
