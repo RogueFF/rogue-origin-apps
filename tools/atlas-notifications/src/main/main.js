@@ -3,6 +3,17 @@ const path = require('path');
 const Store = require('electron-store');
 const { createApiServer } = require('./api-server');
 
+// Safe IPC send — guards against destroyed windows / broken pipes
+function safeSend(win, channel, ...args) {
+  try {
+    if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
+      safeSend(win, channel, ...args);
+    }
+  } catch (e) {
+    // Window destroyed mid-send — ignore
+  }
+}
+
 // Single instance lock
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) { app.quit(); }
@@ -170,7 +181,7 @@ function showPanel() {
 
   panel.show();
   panel.focus();
-  panel.webContents.send('refresh-notifications', getNotifications());
+  safeSend(panel, 'refresh-notifications', getNotifications());
 }
 
 // ─── Popup Management ───────────────────────────────────────────────
@@ -216,7 +227,7 @@ function createPopup(notif) {
   activePopups.push(entry);
 
   win.webContents.once('did-finish-load', () => {
-    win.webContents.send('show-popup', { notification: notif });
+    safeSend(win, 'show-popup', { notification: notif });
     win.showInactive();
   });
 
@@ -248,7 +259,7 @@ function dismissPopup(win) {
   if (!entry || entry.dismissing) return;
   entry.dismissing = true;
 
-  win.webContents.send('dismiss-popup');
+  safeSend(win, 'dismiss-popup');
 
   setTimeout(() => {
     if (!win.isDestroyed()) win.destroy();
@@ -309,7 +320,7 @@ function handleIncomingNotification(payload) {
 
   // Forward to panel if open
   if (panel && !panel.isDestroyed() && panel.isVisible()) {
-    panel.webContents.send('new-notification', notif);
+    safeSend(panel, 'new-notification', notif);
   }
 
   // Update tray badge
@@ -481,7 +492,7 @@ function setupIPC() {
     }
 
     if (panel && !panel.isDestroyed() && panel.isVisible()) {
-      panel.webContents.send('refresh-notifications', getNotifications());
+      safeSend(panel, 'refresh-notifications', getNotifications());
     }
   });
 }
