@@ -184,13 +184,13 @@
     // Cycle History Controls
     const cycleModeNavBtns = document.querySelectorAll('.cycle-nav-btn');
     if (cycleModeNavBtns.length >= 2) {
-      cycleModeNavBtns[0].addEventListener('click', prevCycleMode);
-      cycleModeNavBtns[1].addEventListener('click', nextCycleMode);
+      cycleModeNavBtns[0].addEventListener('click', function() { if (window.prevCycleMode) window.prevCycleMode(); });
+      cycleModeNavBtns[1].addEventListener('click', function() { if (window.nextCycleMode) window.nextCycleMode(); });
     }
 
     const cycleToggle = el('cycleToggle');
     if (cycleToggle) {
-      cycleToggle.addEventListener('click', toggleCycleHistory);
+      cycleToggle.addEventListener('click', function() { if (window.toggleCycleHistory) window.toggleCycleHistory(); });
     }
 
     // Pause Modal
