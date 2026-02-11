@@ -298,6 +298,7 @@ function addNotification(payload) {
     title: payload.title || 'Atlas',
     body: payload.body || '',
     audio_url: payload.audio_url || null,
+    tts: payload.tts || false,
     priority: payload.priority || 'normal',
     data: payload.data || {},
     timestamp: new Date().toISOString(),
