@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="../css/shared-base.css">
   <link rel="stylesheet" href="../css/complaints.css?v=2">
 </head>
-<body class="auth-required dark-mode">
+<body class="dark-mode">
   <a href="#main-content" class="skip-link">Skip to main content</a>
 
   <!-- Auth Overlay -->
@@ -1008,11 +1008,8 @@
     // ═══════════════════════════════════════════════════
 
     function checkAuth() {
-      const token = getPassword();
-      if (token) {
-        document.getElementById('auth-overlay').style.display = 'none';
-        init();
-      }
+      document.getElementById('auth-overlay').style.display = 'none';
+      init();
     }
 
     function handleLogin(e) {
