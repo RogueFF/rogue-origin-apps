@@ -287,6 +287,15 @@
         case 4:
           this.renderCycleList(container);
           break;
+        case 5:
+          this.renderCycleTimeline(container);
+          break;
+        case 6:
+          this.renderCycleRings(container);
+          break;
+        case 7:
+          this.renderCycleBars(container);
+          break;
       }
     },
 
@@ -617,6 +626,204 @@
       });
 
       container.appendChild(list);
+    },
+
+    // ========================================
+    // Mode 5: Timeline Strip
+    // ========================================
+
+    /**
+     * Render horizontal timeline strip — each cycle = colored block
+     * Green >105%, gold 90-105%, red <90% of target
+     * @param {HTMLElement} container - Container element
+     */
+    renderCycleTimeline: function(container) {
+      const cycles = ScoreboardState.cycleHistory;
+      const wrapper = document.createElement('div');
+      wrapper.className = 'cycle-timeline';
+
+      // Break times in minutes from midnight (for gap detection)
+      var breakMins = [];
+      if (ScoreboardConfig && ScoreboardConfig.workday && ScoreboardConfig.workday.breaks) {
+        ScoreboardConfig.workday.breaks.forEach(function(b) {
+          breakMins.push(b[0] * 60 + b[1]);
+        });
+      }
+
+      cycles.forEach(function(cycle, i) {
+        // Determine color based on pace vs target
+        var pct = cycle.target > 0 ? (cycle.target / cycle.time) * 100 : 100;
+        var colorClass = pct >= 105 ? 'green' : pct >= 90 ? 'gold' : 'red';
+
+        // Check for break gap (>15 min gap between cycles)
+        if (i > 0) {
+          var gap = cycle.timestamp - cycles[i - 1].timestamp;
+          if (gap > 15 * 60 * 1000) {
+            var spacer = document.createElement('div');
+            spacer.className = 'cycle-timeline-break';
+            wrapper.appendChild(spacer);
+          }
+        }
+
+        var block = document.createElement('div');
+        block.className = 'cycle-timeline-block ' + colorClass;
+
+        // Width proportional to duration (relative to longest)
+        var maxTime = Math.max.apply(null, cycles.map(function(c) { return c.time; }));
+        block.style.flex = (cycle.time / maxTime).toFixed(3);
+
+        // Tooltip
+        var tooltip = document.createElement('div');
+        tooltip.className = 'cycle-sparkline-tooltip';
+        tooltip.textContent = ScoreboardTimer.formatTime(cycle.time) + ' · ' + Math.round(pct) + '%';
+        block.appendChild(tooltip);
+
+        wrapper.appendChild(block);
+      });
+
+      container.appendChild(wrapper);
+
+      // Labels
+      var labels = document.createElement('div');
+      labels.className = 'cycle-timeline-labels';
+      if (cycles.length > 0) {
+        var firstTime = new Date(cycles[0].timestamp);
+        var lastTime = new Date(cycles[cycles.length - 1].timestamp);
+        var fmt = function(d) {
+          var h = d.getHours() % 12 || 12;
+          var m = d.getMinutes().toString().padStart(2, '0');
+          var ap = d.getHours() >= 12 ? 'PM' : 'AM';
+          return h + ':' + m + ' ' + ap;
+        };
+        labels.innerHTML = '<span>' + fmt(firstTime) + '</span><span>' + fmt(lastTime) + '</span>';
+      }
+      container.appendChild(labels);
+    },
+
+    // ========================================
+    // Mode 6: Stacked Rings
+    // ========================================
+
+    /**
+     * Render concentric rings — most recent = outermost
+     * Each ring fill = % of target achieved
+     * @param {HTMLElement} container - Container element
+     */
+    renderCycleRings: function(container) {
+      var cycles = ScoreboardState.cycleHistory;
+      var recent = cycles.slice(-8); // Show up to 8 rings
+      var total = cycles.length;
+
+      var wrapper = document.createElement('div');
+      wrapper.className = 'cycle-rings';
+
+      var size = 140;
+      var centerXY = size / 2;
+      var maxR = (size / 2) - 6;
+      var minR = 16;
+      var ringCount = recent.length;
+      var ringWidth = ringCount > 0 ? Math.min(10, (maxR - minR) / ringCount - 1) : 8;
+
+      var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 ' + size + ' ' + size);
+      svg.setAttribute('width', size);
+      svg.setAttribute('height', size);
+
+      recent.forEach(function(cycle, i) {
+        var r = minR + (i + 1) * ((maxR - minR) / ringCount);
+        var circumference = 2 * Math.PI * r;
+        var pct = cycle.target > 0 ? Math.min((cycle.target / cycle.time) * 100, 100) : 0;
+        var fillLength = (pct / 100) * circumference;
+        var color = pct >= 105 ? '#4a9e6b' : pct >= 90 ? '#d4a843' : '#c45c4a';
+
+        // Background ring
+        var bgRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        bgRing.setAttribute('cx', centerXY);
+        bgRing.setAttribute('cy', centerXY);
+        bgRing.setAttribute('r', r);
+        bgRing.setAttribute('fill', 'none');
+        bgRing.setAttribute('stroke', 'rgba(255,255,255,0.06)');
+        bgRing.setAttribute('stroke-width', ringWidth);
+        svg.appendChild(bgRing);
+
+        // Progress ring
+        var ring = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        ring.setAttribute('cx', centerXY);
+        ring.setAttribute('cy', centerXY);
+        ring.setAttribute('r', r);
+        ring.setAttribute('fill', 'none');
+        ring.setAttribute('stroke', color);
+        ring.setAttribute('stroke-width', ringWidth);
+        ring.setAttribute('stroke-dasharray', fillLength + ' ' + (circumference - fillLength));
+        ring.setAttribute('stroke-dashoffset', String(circumference * 0.25)); // Start at top
+        ring.setAttribute('stroke-linecap', 'round');
+        ring.setAttribute('opacity', '0.85');
+        svg.appendChild(ring);
+      });
+
+      wrapper.appendChild(svg);
+
+      // Center text
+      var center = document.createElement('div');
+      center.className = 'cycle-rings-center';
+      center.innerHTML = '<div class="cycle-rings-count">' + total + '</div>' +
+                          '<div class="cycle-rings-label">cycles</div>';
+      wrapper.appendChild(center);
+
+      container.appendChild(wrapper);
+    },
+
+    // ========================================
+    // Mode 7: Bar Race
+    // ========================================
+
+    /**
+     * Render vertical bars — one per cycle, height = lbs produced
+     * Target line drawn across, bars colored green/red
+     * @param {HTMLElement} container - Container element
+     */
+    renderCycleBars: function(container) {
+      var cycles = ScoreboardState.cycleHistory;
+      var recent = cycles.slice(-20);
+
+      var wrapper = document.createElement('div');
+      wrapper.className = 'cycle-bars';
+
+      // Find max time for scaling
+      var maxTime = Math.max.apply(null, recent.map(function(c) { return c.time; }).concat([1]));
+      var targetTime = recent.length > 0 ? recent[0].target : 0;
+
+      // Target line position (% from bottom)
+      if (targetTime > 0) {
+        var targetPct = (targetTime / maxTime) * 100;
+        var targetLine = document.createElement('div');
+        targetLine.className = 'cycle-bars-target-line';
+        targetLine.style.bottom = 'calc(' + targetPct + '% + 18px)'; // account for label padding
+        wrapper.appendChild(targetLine);
+      }
+
+      var total = cycles.length;
+
+      recent.forEach(function(cycle, i) {
+        var heightPct = (cycle.time / maxTime) * 100;
+        // Under target time = good (green), over = bad (red)
+        var colorClass = cycle.time <= cycle.target ? 'green' : 'red';
+        var isLast = (i === recent.length - 1);
+
+        var bar = document.createElement('div');
+        bar.className = 'cycle-bar ' + colorClass + (isLast ? ' active' : '');
+        bar.style.height = heightPct + '%';
+
+        // Label
+        var label = document.createElement('div');
+        label.className = 'cycle-bar-label';
+        label.textContent = '#' + (total - recent.length + i + 1);
+        bar.appendChild(label);
+
+        wrapper.appendChild(bar);
+      });
+
+      container.appendChild(wrapper);
     },
 
     // ========================================
