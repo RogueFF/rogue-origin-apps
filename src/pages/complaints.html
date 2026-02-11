@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <link rel="icon" type="image/png" href="/rogue-origin-apps/favicon.png">
-  <meta name="theme-color" content="#141816">
+  <meta name="theme-color" content="#0a0c0b">
   <title>Quality Management - Rogue Origin</title>
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -14,22 +14,10 @@
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/duotone/style.css">
   <!-- Styles -->
   <link rel="stylesheet" href="../css/shared-base.css">
-  <link rel="stylesheet" href="../css/complaints.css?v=2">
+  <link rel="stylesheet" href="../css/complaints.css?v=3">
 </head>
 <body class="dark-mode">
   <a href="#main-content" class="skip-link">Skip to main content</a>
-
-  <!-- Auth Overlay -->
-  <div id="auth-overlay" class="auth-overlay">
-    <div class="auth-box">
-      <img src="/rogue-origin-apps/favicon.png" alt="Rogue Origin" class="auth-logo">
-      <h1 class="auth-title" data-i18n="auth_title">Quality Management</h1>
-      <form id="auth-form" class="auth-form">
-        <input type="password" id="password-input" class="auth-input" placeholder="Password" required autocomplete="current-password">
-        <button type="submit" class="auth-button" data-i18n="auth_unlock">Unlock</button>
-      </form>
-    </div>
-  </div>
 
   <div class="app-container">
     <!-- Sidebar -->
@@ -97,7 +85,6 @@
           <h1 class="header-title" data-i18n="page_title">Quality Management</h1>
         </div>
         <div class="header-actions">
-          <!-- Import button removed — auto-syncs daily at 6 AM PST -->
           <button id="lang-toggle" class="icon-btn" aria-label="Toggle language" title="EN / ES">
             <i class="ph-duotone ph-translate"></i>
           </button>
@@ -180,6 +167,26 @@
             </div>
           </div>
 
+          <!-- Status Breakdown (donut) -->
+          <div class="chart-card">
+            <div class="chart-header">
+              <h3 data-i18n="chart_status_title">Status Breakdown</h3>
+            </div>
+            <div class="donut-area" id="status-donut">
+              <div class="loading"><i class="ph-duotone ph-spinner"></i></div>
+            </div>
+          </div>
+
+          <!-- Type Breakdown -->
+          <div class="chart-card">
+            <div class="chart-header">
+              <h3 data-i18n="chart_type_title">By Category</h3>
+            </div>
+            <div class="type-breakdown" id="type-breakdown">
+              <div class="loading"><i class="ph-duotone ph-spinner"></i></div>
+            </div>
+          </div>
+
           <!-- Recent Complaints -->
           <div class="recent-list">
             <h3 class="recent-header" data-i18n="recent_title">Recent Complaints</h3>
@@ -226,7 +233,7 @@
             </div>
             <div class="form-group">
               <label for="complaint-customer" class="form-label" data-i18n="form_customer">Customer</label>
-              <input type="text" id="complaint-customer" class="form-input" required placeholder="Customer name">
+              <input type="text" id="complaint-customer" class="form-input" required placeholder="Customer name" maxlength="500">
             </div>
           </div>
 
@@ -258,7 +265,7 @@
           <div class="form-row full">
             <div class="form-group">
               <label for="complaint-text" class="form-label" data-i18n="form_complaint">Complaint Description</label>
-              <textarea id="complaint-text" class="form-textarea" rows="4" required placeholder="Describe the complaint..."></textarea>
+              <textarea id="complaint-text" class="form-textarea" rows="4" required placeholder="Describe the complaint..." maxlength="5000"></textarea>
             </div>
           </div>
 
@@ -325,30 +332,6 @@
     </div>
   </div>
 
-  <!-- Import Modal -->
-  <div id="import-modal" class="import-overlay" role="dialog" aria-label="Import from Google Sheets">
-    <div class="import-modal">
-      <div class="import-header">
-        <h2 data-i18n="import_title">Import from Google Sheets</h2>
-      </div>
-      <div class="import-body">
-        <p style="color:var(--text-secondary);margin-bottom:var(--space-md);font-size:0.9375rem;line-height:1.6;" data-i18n="import_desc">
-          Import existing complaint data from the linked Google Sheet. Duplicates will be skipped automatically.
-        </p>
-        <div id="import-result" class="import-result" style="display:none;"></div>
-      </div>
-      <div class="import-actions">
-        <button class="btn btn-secondary" id="import-cancel-btn">
-          <span data-i18n="btn_cancel">Cancel</span>
-        </button>
-        <button class="btn btn-gold" id="import-run-btn">
-          <i class="ph-duotone ph-cloud-arrow-down"></i>
-          <span data-i18n="btn_import">Import Now</span>
-        </button>
-      </div>
-    </div>
-  </div>
-
   <!-- Toast -->
   <div id="toast" class="toast">
     <i class="ph-duotone ph-check-circle"></i>
@@ -375,8 +358,6 @@
 
     const labels = {
       en: {
-        auth_title: 'Quality Management',
-        auth_unlock: 'Unlock',
         page_title: 'Quality Management',
         nav_dashboard: 'Dashboard',
         nav_kanban: 'Supply Kanban',
@@ -415,13 +396,14 @@
         btn_delete: 'Delete',
         btn_close: 'Close',
         btn_cancel: 'Cancel',
-        btn_import: 'Import Now',
         stat_open: 'Open',
         stat_progress: 'In Progress',
         stat_resolved: 'Resolved',
         stat_avg_resolution: 'Avg Resolution',
         stat_days: 'd',
         chart_title: 'Monthly Trend',
+        chart_status_title: 'Status Breakdown',
+        chart_type_title: 'By Category',
         recent_title: 'Recent Complaints',
         filter_all: 'All',
         filter_open: 'Open',
@@ -431,21 +413,16 @@
         toast_saved: 'Complaint saved',
         toast_updated: 'Complaint updated',
         toast_deleted: 'Complaint deleted',
-        toast_imported: 'Import complete',
         toast_error: 'Error: ',
         empty_state: 'No complaints found',
         empty_dashboard: 'No data yet',
         confirm_delete: 'Delete this complaint permanently?',
-        import_title: 'Import from Google Sheets',
-        import_desc: 'Import existing complaint data from the linked Google Sheet. Duplicates will be skipped automatically.',
-        import_running: 'Importing...',
         detail_resolved_date: 'Resolved Date',
         detail_created: 'Created',
-        no_months: 'No data'
+        no_months: 'No data',
+        no_types: 'No data'
       },
       es: {
-        auth_title: 'Gestión de Calidad',
-        auth_unlock: 'Desbloquear',
         page_title: 'Gestión de Calidad',
         nav_dashboard: 'Panel',
         nav_kanban: 'Kanban',
@@ -484,13 +461,14 @@
         btn_delete: 'Eliminar',
         btn_close: 'Cerrar',
         btn_cancel: 'Cancelar',
-        btn_import: 'Importar Ahora',
         stat_open: 'Abiertos',
         stat_progress: 'En Progreso',
         stat_resolved: 'Resueltos',
         stat_avg_resolution: 'Prom. Resolución',
         stat_days: 'd',
         chart_title: 'Tendencia Mensual',
+        chart_status_title: 'Desglose por Estado',
+        chart_type_title: 'Por Categoría',
         recent_title: 'Quejas Recientes',
         filter_all: 'Todos',
         filter_open: 'Abierto',
@@ -500,17 +478,14 @@
         toast_saved: 'Queja guardada',
         toast_updated: 'Queja actualizada',
         toast_deleted: 'Queja eliminada',
-        toast_imported: 'Importación completa',
         toast_error: 'Error: ',
         empty_state: 'No se encontraron quejas',
         empty_dashboard: 'Sin datos aún',
         confirm_delete: '¿Eliminar esta queja permanentemente?',
-        import_title: 'Importar de Google Sheets',
-        import_desc: 'Importar datos de quejas existentes desde la hoja de Google vinculada. Los duplicados se omitirán automáticamente.',
-        import_running: 'Importando...',
         detail_resolved_date: 'Fecha de Resolución',
         detail_created: 'Creado',
-        no_months: 'Sin datos'
+        no_months: 'Sin datos',
+        no_types: 'Sin datos'
       }
     };
 
@@ -559,6 +534,14 @@
       return t('status_progress');
     }
 
+    const TYPE_COLORS = {
+      Quality:  { bg: 'rgba(196, 92, 74, 0.18)', color: '#c45c4a', border: 'rgba(196, 92, 74, 0.35)' },
+      Shipping: { bg: 'rgba(98, 117, 141, 0.18)', color: '#62758d', border: 'rgba(98, 117, 141, 0.35)' },
+      Service:  { bg: 'rgba(228, 170, 79, 0.18)', color: '#e4aa4f', border: 'rgba(228, 170, 79, 0.35)' },
+      Billing:  { bg: 'rgba(143, 146, 99, 0.18)', color: '#8f9263', border: 'rgba(143, 146, 99, 0.35)' },
+      Other:    { bg: 'rgba(255, 255, 255, 0.08)', color: 'rgba(255,255,255,0.5)', border: 'rgba(255,255,255,0.15)' }
+    };
+
     // ═══════════════════════════════════════════════════
     // API FUNCTIONS
     // ═══════════════════════════════════════════════════
@@ -602,6 +585,8 @@
         stats = await apiGet('stats');
         renderStats();
         renderChart();
+        renderStatusDonut();
+        renderTypeBreakdown();
       } catch (err) {
         console.error('Stats error:', err);
       }
@@ -618,7 +603,10 @@
     }
 
     async function refreshAll() {
+      const btn = document.getElementById('refresh-btn');
+      btn?.classList.add('spinning');
       await Promise.all([loadComplaints(), loadStats(), loadRecent()]);
+      setTimeout(() => btn?.classList.remove('spinning'), 500);
     }
 
     // ═══════════════════════════════════════════════════
@@ -639,7 +627,7 @@
     }
 
     // ═══════════════════════════════════════════════════
-    // RENDER: CHART
+    // RENDER: TREND CHART (CSS bars)
     // ═══════════════════════════════════════════════════
 
     function renderChart() {
@@ -651,15 +639,103 @@
         return;
       }
 
-      // Reverse so oldest is on left
       const sorted = [...trend].reverse();
       const maxCount = Math.max(...sorted.map(m => m.count), 1);
 
-      container.innerHTML = sorted.map(m => {
-        const pct = Math.max((m.count / maxCount) * 100, 8);
+      container.innerHTML = `<div class="chart-bars">${sorted.map(m => {
+        const pct = Math.max((m.count / maxCount) * 100, 6);
         return `
-          <div class="chart-bar" style="height:${pct}%" title="${monthLabel(m.month)}: ${m.count}">
-            <span class="chart-bar-label">${monthLabel(m.month)}</span>
+          <div class="chart-col">
+            <div class="chart-bar-value">${m.count}</div>
+            <div class="chart-bar" style="height:${pct}%">
+              <div class="chart-bar-fill"></div>
+            </div>
+            <div class="chart-bar-label">${monthLabel(m.month)}</div>
+          </div>
+        `;
+      }).join('')}</div>`;
+    }
+
+    // ═══════════════════════════════════════════════════
+    // RENDER: STATUS DONUT (pure CSS conic-gradient)
+    // ═══════════════════════════════════════════════════
+
+    function renderStatusDonut() {
+      const container = document.getElementById('status-donut');
+      const total = (stats.open || 0) + (stats.in_progress || 0) + (stats.resolved || 0);
+
+      if (total === 0) {
+        container.innerHTML = `<div class="empty-state"><p>${t('empty_dashboard')}</p></div>`;
+        return;
+      }
+
+      const openPct = ((stats.open || 0) / total * 100);
+      const progressPct = ((stats.in_progress || 0) / total * 100);
+      const resolvedPct = ((stats.resolved || 0) / total * 100);
+
+      const seg1 = openPct;
+      const seg2 = seg1 + progressPct;
+
+      container.innerHTML = `
+        <div class="donut-chart-wrapper">
+          <div class="donut-ring" style="background: conic-gradient(
+            #c45c4a 0% ${seg1}%,
+            #e4aa4f ${seg1}% ${seg2}%,
+            #668971 ${seg2}% 100%
+          );">
+            <div class="donut-hole">
+              <span class="donut-total">${total}</span>
+              <span class="donut-total-label">Total</span>
+            </div>
+          </div>
+          <div class="donut-legend">
+            <div class="legend-item">
+              <span class="legend-dot" style="background:#c45c4a"></span>
+              <span class="legend-text">${t('status_open')}</span>
+              <span class="legend-count">${stats.open || 0}</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-dot" style="background:#e4aa4f"></span>
+              <span class="legend-text">${t('status_progress')}</span>
+              <span class="legend-count">${stats.in_progress || 0}</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-dot" style="background:#668971"></span>
+              <span class="legend-text">${t('status_resolved')}</span>
+              <span class="legend-count">${stats.resolved || 0}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // ═══════════════════════════════════════════════════
+    // RENDER: TYPE BREAKDOWN (horizontal bars)
+    // ═══════════════════════════════════════════════════
+
+    function renderTypeBreakdown() {
+      const container = document.getElementById('type-breakdown');
+      const byType = stats.by_type || [];
+
+      if (byType.length === 0) {
+        container.innerHTML = `<div class="empty-state"><p>${t('no_types')}</p></div>`;
+        return;
+      }
+
+      const maxCount = Math.max(...byType.map(t => t.count), 1);
+
+      container.innerHTML = byType.map(item => {
+        const pct = (item.count / maxCount) * 100;
+        const colors = TYPE_COLORS[item.complaint_type] || TYPE_COLORS.Other;
+        return `
+          <div class="type-row">
+            <div class="type-label">
+              <span class="type-pill" style="background:${colors.bg};color:${colors.color};border:1px solid ${colors.border}">${escapeHtml(item.complaint_type)}</span>
+            </div>
+            <div class="type-bar-track">
+              <div class="type-bar-fill" style="width:${pct}%;background:${colors.color}"></div>
+            </div>
+            <span class="type-count">${item.count}</span>
           </div>
         `;
       }).join('');
@@ -721,6 +797,7 @@
 
       container.innerHTML = filtered.map(c => {
         const sc = statusClass(c.status);
+        const typeColors = TYPE_COLORS[c.complaint_type] || TYPE_COLORS.Other;
         return `
           <div class="complaint-card ${sc}" onclick="openDetail(${c.id})" role="button" tabindex="0" onkeydown="if(event.key==='Enter') openDetail(${c.id})">
             <div class="card-header">
@@ -732,7 +809,7 @@
             <div class="card-meta">
               <span><i class="ph-duotone ph-calendar"></i> ${formatDate(c.complaint_date)}</span>
               ${c.invoice_number ? `<span><i class="ph-duotone ph-hash"></i> ${escapeHtml(c.invoice_number)}</span>` : ''}
-              ${c.complaint_type ? `<span><i class="ph-duotone ph-tag"></i> ${escapeHtml(c.complaint_type)}</span>` : ''}
+              ${c.complaint_type ? `<span class="card-type-pill" style="background:${typeColors.bg};color:${typeColors.color};border:1px solid ${typeColors.border}"><i class="ph-duotone ph-tag"></i> ${escapeHtml(c.complaint_type)}</span>` : ''}
             </div>
             <div class="card-complaint">${escapeHtml(c.complaint || '').substring(0, 150)}${(c.complaint || '').length > 150 ? '...' : ''}</div>
           </div>
@@ -794,10 +871,12 @@
       `;
 
       document.getElementById('detail-modal').classList.add('active');
+      document.body.style.overflow = 'hidden';
     }
 
     function closeModal() {
       document.getElementById('detail-modal').classList.remove('active');
+      document.body.style.overflow = '';
       currentComplaint = null;
     }
 
@@ -837,6 +916,9 @@
     async function saveComplaint(e) {
       e.preventDefault();
 
+      const btn = document.getElementById('form-submit-btn');
+      btn.disabled = true;
+
       const data = {
         complaint_date: document.getElementById('complaint-date').value,
         customer: document.getElementById('complaint-customer').value,
@@ -862,6 +944,8 @@
       } catch (err) {
         console.error('Save error:', err);
         showToast(t('toast_error') + err.message, 'error');
+      } finally {
+        btn.disabled = false;
       }
     }
 
@@ -877,53 +961,6 @@
       } catch (err) {
         console.error('Delete error:', err);
         showToast(t('toast_error') + err.message, 'error');
-      }
-    }
-
-    // ═══════════════════════════════════════════════════
-    // IMPORT FROM SHEETS
-    // ═══════════════════════════════════════════════════
-
-    function openImportModal() {
-      document.getElementById('import-result').style.display = 'none';
-      document.getElementById('import-result').textContent = '';
-      document.getElementById('import-run-btn').disabled = false;
-      document.getElementById('import-modal').classList.add('active');
-    }
-
-    function closeImportModal() {
-      document.getElementById('import-modal').classList.remove('active');
-    }
-
-    async function runImport() {
-      const resultEl = document.getElementById('import-result');
-      const btn = document.getElementById('import-run-btn');
-
-      btn.disabled = true;
-      btn.querySelector('span').textContent = t('import_running');
-      resultEl.style.display = 'block';
-      resultEl.textContent = t('import_running');
-
-      try {
-        const result = await apiPost('sync', {});
-        const lines = [];
-        lines.push(`Imported: ${result.imported || 0}`);
-        lines.push(`Skipped: ${result.skipped || 0}`);
-        lines.push(`Total rows: ${result.total_rows || 0}`);
-        if (result.errors && result.errors.length > 0) {
-          lines.push('');
-          lines.push('Errors:');
-          result.errors.forEach(e => lines.push(`  Row ${e.row}: ${e.error}`));
-        }
-        resultEl.textContent = lines.join('\n');
-        showToast(t('toast_imported') + ` (${result.imported || 0} new)`, 'success');
-        await refreshAll();
-      } catch (err) {
-        resultEl.textContent = 'Error: ' + err.message;
-        showToast(t('toast_error') + err.message, 'error');
-      } finally {
-        btn.disabled = false;
-        btn.querySelector('span').textContent = t('btn_import');
       }
     }
 
@@ -976,7 +1013,11 @@
       localStorage.setItem('ro-lang', lang);
       updateUI();
       renderComplaints();
-      if (stats.monthly_trend) renderChart();
+      if (stats.monthly_trend) {
+        renderChart();
+        renderStatusDonut();
+        renderTypeBreakdown();
+      }
     }
 
     function toggleDarkMode() {
@@ -998,24 +1039,8 @@
     }
 
     function toggleSidebar() {
-      document.getElementById('sidebar').classList.toggle('open');
-    }
-
-    // ═══════════════════════════════════════════════════
-    // AUTH
-    // ═══════════════════════════════════════════════════
-
-    function checkAuth() {
-      document.getElementById('auth-overlay').style.display = 'none';
-      init();
-    }
-
-    function handleLogin(e) {
-      e.preventDefault();
-      const pw = document.getElementById('password-input').value;
-      localStorage.setItem('ro-auth-token', pw);
-      document.getElementById('auth-overlay').style.display = 'none';
-      init();
+      const sidebar = document.getElementById('sidebar');
+      sidebar.classList.toggle('open');
     }
 
     // ═══════════════════════════════════════════════════
@@ -1023,7 +1048,6 @@
     // ═══════════════════════════════════════════════════
 
     async function init() {
-      // Restore theme
       const savedTheme = localStorage.getItem('ro-theme');
       if (savedTheme === 'light') {
         document.documentElement.setAttribute('data-theme', 'light');
@@ -1040,10 +1064,7 @@
     // ═══════════════════════════════════════════════════
 
     document.addEventListener('DOMContentLoaded', () => {
-      checkAuth();
-
-      // Auth
-      document.getElementById('auth-form').addEventListener('submit', handleLogin);
+      init();
 
       // View nav
       document.querySelectorAll('.view-nav-btn').forEach(btn => {
@@ -1078,14 +1099,6 @@
       document.getElementById('refresh-btn').addEventListener('click', refreshAll);
       document.getElementById('menu-btn').addEventListener('click', toggleSidebar);
 
-      // Import
-      document.getElementById('import-btn').addEventListener('click', openImportModal);
-      document.getElementById('import-cancel-btn').addEventListener('click', closeImportModal);
-      document.getElementById('import-run-btn').addEventListener('click', runImport);
-      document.getElementById('import-modal').addEventListener('click', (e) => {
-        if (e.target.id === 'import-modal') closeImportModal();
-      });
-
       // Detail modal
       document.getElementById('edit-btn').addEventListener('click', editComplaint);
       document.getElementById('delete-btn').addEventListener('click', deleteComplaint);
@@ -1095,11 +1108,19 @@
         if (e.target.id === 'detail-modal') closeModal();
       });
 
+      // Close sidebar on outside click (mobile)
+      document.addEventListener('click', (e) => {
+        const sidebar = document.getElementById('sidebar');
+        const menuBtn = document.getElementById('menu-btn');
+        if (sidebar.classList.contains('open') && !sidebar.contains(e.target) && !menuBtn.contains(e.target)) {
+          sidebar.classList.remove('open');
+        }
+      });
+
       // Keyboard
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
           closeModal();
-          closeImportModal();
         }
       });
     });
