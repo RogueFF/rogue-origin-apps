@@ -7,6 +7,8 @@ let dismissTimeout = null;
 let progressInterval = null;
 let startTime = null;
 let duration = 8000;
+let audioContext = null;
+let soundEnabled = true;
 
 const container = document.getElementById('popup-container');
 const progressBar = document.getElementById('popup-progress-bar');
@@ -19,11 +21,91 @@ const DURATIONS = {
   'production-card': 10000
 };
 
+// ─── Web Audio Context Initialization ───────────────────────────────
+
+function getAudioContext() {
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  return audioContext;
+}
+
+// ─── Notification Sound Generator ───────────────────────────────────
+
+function playNotificationSound(type) {
+  if (!soundEnabled) return;
+
+  try {
+    const ctx = getAudioContext();
+    
+    switch (type) {
+      case 'toast':
+        // Soft click: short sine wave, 800Hz, 50ms
+        playSineWave(ctx, 800, 0.05, 0.15);
+        break;
+      
+      case 'briefing':
+        // Warm chime: two notes, C5 (523Hz) + E5 (659Hz), 100ms each
+        playSineWave(ctx, 523.25, 0.1, 0.2);
+        setTimeout(() => playSineWave(ctx, 659.25, 0.1, 0.2), 120);
+        break;
+      
+      case 'alert':
+        // Urgent double-ping: two short 1200Hz pings, 60ms gap
+        playSineWave(ctx, 1200, 0.06, 0.3);
+        setTimeout(() => playSineWave(ctx, 1200, 0.06, 0.3), 80);
+        break;
+      
+      case 'production-card':
+        // Low hum: 200Hz, 150ms, gentle fade
+        playSineWave(ctx, 200, 0.15, 0.15);
+        break;
+      
+      default:
+        playSineWave(ctx, 800, 0.05, 0.15);
+    }
+  } catch (e) {
+    console.warn('Audio playback failed:', e);
+  }
+}
+
+function playSineWave(ctx, frequency, duration, volume = 0.2) {
+  const oscillator = ctx.createOscillator();
+  const gainNode = ctx.createGain();
+  
+  oscillator.type = 'sine';
+  oscillator.frequency.setValueAtTime(frequency, ctx.currentTime);
+  
+  // Envelope: quick attack, gentle release
+  gainNode.gain.setValueAtTime(0, ctx.currentTime);
+  gainNode.gain.linearRampToValueAtTime(volume, ctx.currentTime + 0.01);
+  gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
+  
+  oscillator.connect(gainNode);
+  gainNode.connect(ctx.destination);
+  
+  oscillator.start(ctx.currentTime);
+  oscillator.stop(ctx.currentTime + duration);
+}
+
 // ─── IPC: Receive notification to display ───────────────────────────
 
-window.atlas.onShowPopup((data) => {
+window.atlas.onShowPopup(async (data) => {
   notification = data.notification;
   duration = DURATIONS[notification.type] || 8000;
+
+  // Check sound setting
+  try {
+    const settings = await window.atlas.getSettings();
+    soundEnabled = settings.soundEnabled !== false;
+  } catch (e) {
+    soundEnabled = true;
+  }
+
+  // Play notification sound
+  if (soundEnabled) {
+    playNotificationSound(notification.type);
+  }
 
   // Render the card
   container.innerHTML = renderCard(notification);
@@ -69,7 +151,7 @@ function dismiss() {
   // Wait for slide-out animation to finish
   setTimeout(() => {
     window.atlas.popupDismiss();
-  }, 250);
+  }, 300);
 }
 
 // ─── IPC: Main process can force-dismiss ────────────────────────────
