@@ -1,7 +1,9 @@
-// ─── Atlas Popup Renderer — Glass Console Pass 2 ──────────────────────
+// ─── Atlas Popup Renderer — Hologram Glitch Pass 3 ──────────────────────
 // Receives a notification via IPC, renders the rich card, handles
 // click-to-open-panel, dismiss, acknowledge, auto-dismiss countdown,
 // and client-side ElevenLabs TTS with Web Speech fallback.
+// Pass 3: upgraded sounds with static crackle, tts_text support,
+// updated popup heights.
 
 let notification = null;
 let dismissTimeout = null;
@@ -35,14 +37,50 @@ function getAudioContext() {
   return audioContext;
 }
 
+// ─── Static Crackle Layer ───────────────────────────────────────────
+// White noise burst — very short, very quiet. Layered under each sound.
+
+function playStaticCrackle(ctx, volume) {
+  const bufferSize = ctx.sampleRate * 0.04; // 40ms of noise
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    data[i] = (Math.random() * 2 - 1) * 0.3;
+  }
+
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+
+  const gainNode = ctx.createGain();
+  const crackleVol = (volume || 0.02);
+  gainNode.gain.setValueAtTime(crackleVol, ctx.currentTime);
+  gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
+
+  // Bandpass filter for that radio static feel
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.setValueAtTime(3000, ctx.currentTime);
+  filter.Q.setValueAtTime(0.5, ctx.currentTime);
+
+  source.connect(filter);
+  filter.connect(gainNode);
+  gainNode.connect(ctx.destination);
+
+  source.start(ctx.currentTime);
+  source.stop(ctx.currentTime + 0.05);
+}
+
 // ─── Premium Notification Sound Generator ───────────────────────────
-// Layered tones for premium feel, not single-frequency beeps.
+// Layered tones with static crackle undertone.
 
 function playNotificationSound(type) {
   if (!soundEnabled) return;
 
   try {
     const ctx = getAudioContext();
+
+    // Always play static crackle under every sound
+    playStaticCrackle(ctx, 0.02);
 
     switch (type) {
       case 'toast':
@@ -52,25 +90,34 @@ function playNotificationSound(type) {
         break;
 
       case 'briefing':
-        // Elegant chime: C5 → E5 → G5 arpeggio, each with a harmonic layer
-        playTone(ctx, 523.25, 0.12, 0.18, 'sine');
-        playTone(ctx, 1046.5, 0.08, 0.06, 'sine', 0.01); // octave harmonic
+        // "Connection established" beep-boop before the chime
+        playTone(ctx, 400, 0.06, 0.08, 'square');
+        playTone(ctx, 600, 0.06, 0.08, 'square', 0.07);
+        // Elegant chime: C5 → E5 → G5 arpeggio with harmonics
+        setTimeout(() => {
+          playStaticCrackle(ctx, 0.015);
+          playTone(ctx, 523.25, 0.12, 0.18, 'sine');
+          playTone(ctx, 1046.5, 0.08, 0.06, 'sine', 0.01);
+        }, 160);
         setTimeout(() => {
           playTone(ctx, 659.25, 0.12, 0.18, 'sine');
           playTone(ctx, 1318.5, 0.06, 0.04, 'sine', 0.01);
-        }, 100);
+        }, 260);
         setTimeout(() => {
           playTone(ctx, 783.99, 0.15, 0.14, 'sine');
-        }, 200);
+        }, 360);
         break;
 
       case 'alert':
-        // Urgent: two sharp pings with harmonics, feels genuinely urgent
+        // Urgent pings with low rumble undertone (60Hz sine)
+        playTone(ctx, 60, 0.5, 0.06, 'sine'); // Low rumble
+        playStaticCrackle(ctx, 0.03);
         playTone(ctx, 1200, 0.06, 0.28, 'sine');
         playTone(ctx, 1800, 0.04, 0.10, 'triangle', 0.005);
         setTimeout(() => {
           playTone(ctx, 1200, 0.06, 0.28, 'sine');
           playTone(ctx, 1800, 0.04, 0.10, 'triangle', 0.005);
+          playStaticCrackle(ctx, 0.025);
         }, 100);
         setTimeout(() => {
           playTone(ctx, 1400, 0.08, 0.22, 'sine');
@@ -211,8 +258,11 @@ container.addEventListener('click', (e) => {
     const id = ackBtn.dataset.ackId;
     window.atlas.popupAcknowledge(id);
 
-    // Update UI to show acknowledged
-    ackBtn.closest('.alert-footer').innerHTML = '<div class="alert-acked">Acknowledged</div>';
+    // Flash and change to CONFIRMED
+    ackBtn.textContent = '[ CONFIRMED ]';
+    ackBtn.style.color = 'var(--holo-green)';
+    ackBtn.style.borderColor = 'var(--holo-green)';
+    ackBtn.style.textShadow = '0 0 8px rgba(0, 255, 136, 0.3)';
 
     // Dismiss after short delay so user sees the ack state
     resetCountdown();
@@ -230,7 +280,12 @@ container.addEventListener('click', (e) => {
 let ttsAudio = null;
 
 async function speakNotification(notif) {
-  // 1. Prefer pre-generated audio_url (server-side ElevenLabs)
+  // 1. Prefer tts_text field if present
+  // 2. Then pre-generated audio_url (server-side ElevenLabs)
+  // 3. Then client-side ElevenLabs with segment stitching
+  // 4. Then body text
+  // 5. Fallback: Web Speech
+
   if (notif.audio_url) {
     resetCountdown();
     ttsAudio = new Audio(notif.audio_url);
@@ -268,7 +323,7 @@ async function tryClientElevenLabs(notif) {
       return;
     }
 
-    // Build TTS text from segments or body
+    // Build TTS text — prefer tts_text field
     const text = buildTTSText(notif);
     if (!text) {
       startCountdown();
@@ -328,6 +383,9 @@ async function tryClientElevenLabs(notif) {
 }
 
 function buildTTSText(notif) {
+  // Fallback chain: tts_text → audio_url (handled above) → segment stitching → body text
+  if (notif.tts_text) return notif.tts_text;
+  if (notif.data?.tts_text) return notif.data.tts_text;
   if (notif.data?.segments?.length) {
     return notif.data.segments.map(s => `${s.label}. ${s.text}`).join('. ');
   }
