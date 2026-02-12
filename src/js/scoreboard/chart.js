@@ -144,6 +144,8 @@
               borderWidth: 1,
               cornerRadius: 8,
               padding: 12,
+              position: 'nearest',
+              yAlign: 'bottom',
               titleFont: { size: 13, weight: '600', family: 'JetBrains Mono, monospace' },
               titleColor: 'rgba(255,255,255,0.9)',
               bodyFont: { size: 12, family: 'JetBrains Mono, monospace' },
@@ -184,7 +186,8 @@
 
                   // Notes line — only if notes exist for this hour
                   if (h.notes) {
-                    lines.push('📝 ' + h.notes);
+                    var noteText = h.notes.length > 40 ? h.notes.substring(0, 40) + '…' : h.notes;
+                    lines.push('📝 ' + noteText);
                   }
 
                   return lines;
