@@ -52,7 +52,8 @@ const POPUP_HEIGHTS = {
   toast: 120,
   briefing: 180,
   alert: 150,
-  'production-card': 300
+  'production-card': 300,
+  weather: 200
 };
 
 // ─── Tray Icon ──────────────────────────────────────────────────────

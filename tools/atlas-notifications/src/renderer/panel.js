@@ -447,6 +447,70 @@ list.addEventListener('click', async (e) => {
     return;
   }
 
+  // Weather dropdown toggle
+  const weatherSelect = e.target.closest('.weather-location-select');
+  if (weatherSelect) {
+    e.stopPropagation();
+    const cardId = weatherSelect.dataset.cardId;
+    const dropdown = list.querySelector(`.weather-dropdown[data-card-id="${cardId}"]`);
+    if (dropdown) {
+      dropdown.classList.toggle('open');
+    }
+    return;
+  }
+
+  // Weather dropdown item click
+  const weatherItem = e.target.closest('.weather-dropdown-item');
+  if (weatherItem) {
+    e.stopPropagation();
+    const location = weatherItem.dataset.location;
+    const dropdown = weatherItem.closest('.weather-dropdown');
+    const card = dropdown ? dropdown.closest('.weather-card') : null;
+    
+    if (card) {
+      try {
+        const locationsData = JSON.parse(card.dataset.locations);
+        const locData = locationsData[location];
+        
+        if (locData) {
+          // Update card data
+          card.dataset.currentLocation = location;
+          
+          // Update displayed location name
+          const locationName = card.querySelector('.weather-location-name');
+          if (locationName) locationName.textContent = location;
+          
+          // Update weather data
+          const tempEl = card.querySelector('.weather-temp-large');
+          const condEl = card.querySelector('.weather-conditions');
+          const statsRows = card.querySelectorAll('.weather-stat-row');
+          
+          if (tempEl) tempEl.textContent = locData.temp || '--°F';
+          if (condEl) condEl.textContent = locData.conditions || 'Unknown';
+          
+          if (statsRows[0]) {
+            const stats = statsRows[0].querySelectorAll('.weather-stat .holo-number');
+            if (stats[0]) stats[0].textContent = locData.high || '--';
+            if (stats[1]) stats[1].textContent = locData.low || '--';
+            if (stats[2]) stats[2].textContent = locData.precip || '--';
+          }
+          
+          if (statsRows[1]) {
+            const windHumid = statsRows[1].querySelectorAll('.weather-stat');
+            if (windHumid[0]) windHumid[0].innerHTML = `Wind: ${escapeHtml(locData.wind || '--')}`;
+            if (windHumid[1]) windHumid[1].innerHTML = `Humidity: ${escapeHtml(locData.humidity || '--')}`;
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to parse weather locations:', err);
+      }
+      
+      // Close dropdown
+      dropdown.classList.remove('open');
+    }
+    return;
+  }
+
   const expandToggle = e.target.closest('.card-expand-toggle');
   const card = e.target.closest('.notif-card');
   if (card && card.classList.contains('card-collapsible')) {
@@ -463,6 +527,13 @@ list.addEventListener('click', async (e) => {
       card.classList.remove('unread');
       render();
     }
+  }
+});
+
+// Close weather dropdowns when clicking outside
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.weather-location-select') && !e.target.closest('.weather-dropdown')) {
+    $$('.weather-dropdown.open').forEach(dd => dd.classList.remove('open'));
   }
 });
 
