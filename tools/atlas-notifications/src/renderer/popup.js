@@ -1,9 +1,10 @@
-// ─── Atlas Popup Renderer — Pass 4: Alive ────────────────────────────────
+// ─── Atlas Popup Renderer — Pass 5: Dual Theme ────────────────────────────
 // Receives a notification via IPC, renders the rich card, handles
 // click-to-open-panel, dismiss, acknowledge, auto-dismiss countdown,
 // and client-side ElevenLabs TTS with Web Speech fallback.
 // Pass 4: layered notification sounds with reverb, ghost trail dismiss,
 // compact briefing rendering, upgraded sound design.
+// Pass 5: Theme-aware rendering — loads saved theme on init.
 
 let notification = null;
 let dismissTimeout = null;
@@ -12,6 +13,7 @@ let startTime = null;
 let duration = 10000;
 let audioContext = null;
 let soundEnabled = true;
+let currentTheme = 'relay';
 
 const container = document.getElementById('popup-container');
 const progressBar = document.getElementById('popup-progress-bar');
@@ -24,13 +26,23 @@ const DURATIONS = {
   'production-card': 12000
 };
 
+// ─── Theme Init ─────────────────────────────────────────────────────
+
+async function initPopupTheme() {
+  try {
+    currentTheme = await window.atlas.getTheme();
+  } catch (e) {
+    currentTheme = 'relay';
+  }
+  document.body.dataset.theme = currentTheme;
+}
+
 // ─── Web Audio Context ──────────────────────────────────────────────
 
 function getAudioContext() {
   if (!audioContext) {
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
   }
-  // Resume if suspended (autoplay policy)
   if (audioContext.state === 'suspended') {
     audioContext.resume();
   }
@@ -38,10 +50,9 @@ function getAudioContext() {
 }
 
 // ─── Static Crackle Layer ───────────────────────────────────────────
-// White noise burst — very short, very quiet. Layered under each sound.
 
 function playStaticCrackle(ctx, volume) {
-  const bufferSize = ctx.sampleRate * 0.04; // 40ms of noise
+  const bufferSize = ctx.sampleRate * 0.04;
   const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
   const data = buffer.getChannelData(0);
   for (let i = 0; i < bufferSize; i++) {
@@ -56,7 +67,6 @@ function playStaticCrackle(ctx, volume) {
   gainNode.gain.setValueAtTime(crackleVol, ctx.currentTime);
   gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
 
-  // Bandpass filter for that radio static feel
   const filter = ctx.createBiquadFilter();
   filter.type = 'bandpass';
   filter.frequency.setValueAtTime(3000, ctx.currentTime);
@@ -71,7 +81,6 @@ function playStaticCrackle(ctx, volume) {
 }
 
 // ─── Simple Reverb via Delay Node ───────────────────────────────────
-// Creates a short reverb tail using a feedback delay
 
 function createReverb(ctx, delayTime, feedback) {
   const delay = ctx.createDelay();
@@ -88,12 +97,10 @@ function createReverb(ctx, delayTime, feedback) {
   feedbackGain.connect(filter);
   filter.connect(delay);
 
-  // Return input node and output node
   return { input: delay, output: filter };
 }
 
 // ─── Premium Notification Sound Generator ───────────────────────────
-// Pass 4: Layered sounds with reverb tails and richer textures.
 
 async function playNotificationSound(type) {
   if (!soundEnabled) return;
@@ -109,69 +116,54 @@ async function playNotificationSound(type) {
 
     switch (type) {
       case 'toast':
-        // Pass 4: Short sine click (800Hz, 30ms) + high harmonic (1600Hz, 20ms) + noise burst
         playTone(ctx, 800, 0.03, 0.14, 'sine');
         playTone(ctx, 1600, 0.02, 0.06, 'sine', 0.005);
-        // Tiny noise burst (10ms)
         playNoiseBurst(ctx, 0.01, 0.04);
         break;
 
       case 'briefing':
-        // Pass 4: Two-note ascending (C5→E5) with reverb tail
-        // "Connection established" beep-boop
         playTone(ctx, 400, 0.06, 0.08, 'square');
         playTone(ctx, 600, 0.06, 0.08, 'square', 0.07);
 
-        // C5 with reverb
         setTimeout(() => {
           playStaticCrackle(ctx, 0.015);
           playToneWithReverb(ctx, 523.25, 0.15, 0.16, 'sine', 0, 0.1, 0.3);
-          playTone(ctx, 1046.5, 0.08, 0.05, 'sine', 0.01); // Harmonic
+          playTone(ctx, 1046.5, 0.08, 0.05, 'sine', 0.01);
         }, 160);
 
-        // E5 with reverb
         setTimeout(() => {
           playToneWithReverb(ctx, 659.25, 0.15, 0.16, 'sine', 0, 0.1, 0.3);
-          playTone(ctx, 1318.5, 0.06, 0.04, 'sine', 0.01); // Harmonic
+          playTone(ctx, 1318.5, 0.06, 0.04, 'sine', 0.01);
         }, 300);
 
-        // G5 resolution
         setTimeout(() => {
           playToneWithReverb(ctx, 783.99, 0.2, 0.12, 'sine', 0, 0.12, 0.25);
         }, 440);
         break;
 
       case 'alert':
-        // Pass 4: Triangle wave pings (harsher), low 80Hz undertone, layered urgency
-        // Low undertone — 80Hz, 200ms
         playTone(ctx, 80, 0.2, 0.08, 'sine');
         playStaticCrackle(ctx, 0.035);
 
-        // Ping 1 — triangle waves
         playTone(ctx, 1200, 0.06, 0.26, 'triangle');
         playTone(ctx, 1800, 0.04, 0.10, 'triangle', 0.005);
 
-        // Ping 2
         setTimeout(() => {
           playTone(ctx, 1200, 0.06, 0.26, 'triangle');
           playTone(ctx, 1800, 0.04, 0.10, 'triangle', 0.005);
           playStaticCrackle(ctx, 0.03);
         }, 100);
 
-        // Ping 3 — higher
         setTimeout(() => {
           playTone(ctx, 1400, 0.08, 0.20, 'triangle');
-          playTone(ctx, 80, 0.15, 0.05, 'sine'); // Second rumble
+          playTone(ctx, 80, 0.15, 0.05, 'sine');
         }, 220);
         break;
 
       case 'production-card':
-        // Pass 4: Warm chord — 200Hz + 250Hz + 300Hz, each at 1/3 volume, 200ms
-        // Like a system coming online
         playTone(ctx, 200, 0.2, 0.06, 'sine');
         playTone(ctx, 250, 0.2, 0.06, 'sine', 0.01);
         playTone(ctx, 300, 0.2, 0.06, 'sine', 0.02);
-        // Gentle overtone
         playTone(ctx, 400, 0.15, 0.02, 'triangle', 0.03);
         break;
 
@@ -193,7 +185,6 @@ function playTone(ctx, frequency, duration, volume, type, delay) {
   oscillator.type = type || 'sine';
   oscillator.frequency.setValueAtTime(frequency, startAt);
 
-  // Envelope: quick attack, smooth exponential release
   gainNode.gain.setValueAtTime(0, startAt);
   gainNode.gain.linearRampToValueAtTime(volume, startAt + 0.008);
   gainNode.gain.exponentialRampToValueAtTime(0.001, startAt + duration);
@@ -217,11 +208,9 @@ function playToneWithReverb(ctx, frequency, duration, volume, type, delay, rever
   gainNode.gain.linearRampToValueAtTime(volume, startAt + 0.008);
   gainNode.gain.exponentialRampToValueAtTime(0.001, startAt + duration);
 
-  // Direct path
   oscillator.connect(gainNode);
   gainNode.connect(ctx.destination);
 
-  // Reverb path via delay feedback loop
   const reverb = createReverb(ctx, reverbDelay || 0.1, reverbFeedback || 0.3);
   const reverbGain = ctx.createGain();
   reverbGain.gain.setValueAtTime(volume * 0.4, startAt);
@@ -231,7 +220,7 @@ function playToneWithReverb(ctx, frequency, duration, volume, type, delay, rever
   reverb.output.connect(ctx.destination);
 
   oscillator.start(startAt);
-  oscillator.stop(startAt + duration + 0.5); // Extra time for reverb tail
+  oscillator.stop(startAt + duration + 0.5);
 }
 
 function playNoiseBurst(ctx, duration, volume) {
@@ -264,6 +253,9 @@ function playNoiseBurst(ctx, duration, volume) {
 // ─── IPC: Receive notification to display ───────────────────────────
 
 window.atlas.onShowPopup(async (data) => {
+  // Init theme before rendering
+  await initPopupTheme();
+
   notification = data.notification;
   duration = DURATIONS[notification.type] || 10000;
 
@@ -275,18 +267,18 @@ window.atlas.onShowPopup(async (data) => {
     soundEnabled = true;
   }
 
-  // Play notification sound
+  // Play notification sound (same for both themes)
   if (soundEnabled) {
     playNotificationSound(notification.type);
   }
 
-  // Pass 4: Render card — popup mode for compact briefings
-  container.innerHTML = renderCard(notification, { popup: true });
+  // Render card with theme awareness
+  container.innerHTML = renderCard(notification, { popup: true, theme: currentTheme });
 
   // Resize popup for content
   resizeForContent();
 
-  // Speak if TTS enabled on the notification
+  // Speak if TTS enabled
   if (notification.tts || notification.data?.tts) {
     await speakNotification(notification);
   } else {
@@ -327,17 +319,18 @@ function resetCountdown() {
   progressBar.style.transform = 'scaleX(1)';
 }
 
-// ─── Dismiss — Pass 4: Ghost Trail Effect ───────────────────────────
+// ─── Dismiss ─────────────────────────────────────────────────────────
 
 function dismiss() {
   resetCountdown();
   stopTTS();
   document.body.classList.add('popup-dismissing');
 
-  // Wait for ghost trail animation to finish (0.5s for afterimage)
+  // Wait for animation to finish
+  const delay = currentTheme === 'terrain' ? 300 : 500;
   setTimeout(() => {
     window.atlas.popupDismiss();
-  }, 500);
+  }, delay);
 }
 
 // ─── IPC: Main process can force-dismiss ────────────────────────────
@@ -349,26 +342,24 @@ window.atlas.onDismissPopup(() => {
 // ─── Click handling ─────────────────────────────────────────────────
 
 container.addEventListener('click', (e) => {
-  // Alert acknowledge button
   const ackBtn = e.target.closest('.btn-acknowledge');
   if (ackBtn) {
     e.stopPropagation();
     const id = ackBtn.dataset.ackId;
     window.atlas.popupAcknowledge(id);
 
-    // Flash and change to CONFIRMED
-    ackBtn.textContent = '[ CONFIRMED ]';
+    ackBtn.textContent = currentTheme === 'terrain' ? '[ ACKNOWLEDGED ]' : '[ CONFIRMED ]';
     ackBtn.style.color = 'var(--holo-green)';
     ackBtn.style.borderColor = 'var(--holo-green)';
-    ackBtn.style.textShadow = '0 0 8px rgba(0, 255, 136, 0.3)';
+    if (currentTheme === 'relay') {
+      ackBtn.style.textShadow = '0 0 8px rgba(0, 255, 136, 0.3)';
+    }
 
-    // Dismiss after short delay so user sees the ack state
     resetCountdown();
     dismissTimeout = setTimeout(() => dismiss(), 2000);
     return;
   }
 
-  // Click anywhere else on the card → open panel + dismiss
   window.atlas.popupClicked(notification.id);
   dismiss();
 });
@@ -515,7 +506,6 @@ container.addEventListener('mouseenter', () => {
 container.addEventListener('mouseleave', () => {
   if (!startTime) return;
 
-  // Resume with remaining time
   const elapsed = Date.now() - startTime;
   const remaining = Math.max(1000, duration - elapsed);
 
