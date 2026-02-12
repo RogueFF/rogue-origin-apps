@@ -136,10 +136,54 @@
           plugins: {
             legend: { display: false },
             tooltip: {
+              // Use external/custom tooltip for richer display
+              enabled: true,
+              displayColors: false,
+              backgroundColor: 'rgba(20, 25, 24, 0.95)',
+              borderColor: 'rgba(228,170,79,0.3)',
+              borderWidth: 1,
+              cornerRadius: 8,
+              padding: 12,
+              titleFont: { size: 13, weight: '600', family: 'JetBrains Mono, monospace' },
+              titleColor: 'rgba(255,255,255,0.9)',
+              bodyFont: { size: 12, family: 'JetBrains Mono, monospace' },
+              bodyColor: 'rgba(255,255,255,0.75)',
+              bodySpacing: 6,
               callbacks: {
+                title: function(items) {
+                  if (!items.length) return '';
+                  var idx = items[0].dataIndex;
+                  var h = hourlyRates[idx];
+                  return h ? h.timeSlot : '';
+                },
                 label: function(context) {
-                  return context.dataset.label + ': ' + context.parsed.y + ' lbs/hr';
-                }
+                  // Only show tooltip for the bar dataset (skip target line)
+                  if (context.datasetIndex !== 0) return null;
+                  var idx = context.dataIndex;
+                  var h = hourlyRates[idx];
+                  if (!h) return context.parsed.y + ' lbs/hr';
+
+                  var pct = h.target > 0 ? ((h.rate / h.target) * 100) : 0;
+                  var pctStr = Math.round(pct) + '% of target';
+                  var lines = [];
+                  lines.push(h.lbs.toFixed(1) + ' lbs  →  ' + pctStr);
+
+                  // Crew line
+                  var crew = h.trimmers + ' trimmer' + (h.trimmers !== 1 ? 's' : '');
+                  if (h.buckers && h.buckers > 0) {
+                    crew += ' · ' + h.buckers + ' bucker' + (h.buckers !== 1 ? 's' : '');
+                  }
+                  lines.push(crew);
+
+                  // Break line — check if this hour had a break
+                  if (h.multiplier && h.multiplier < 1) {
+                    var breakMin = Math.round((1 - h.multiplier) * 60);
+                    lines.push(breakMin + ' min break (' + Math.round(h.multiplier * 100) + '% hour)');
+                  }
+
+                  return lines;
+                },
+                afterLabel: function() { return ''; }
               }
             }
           },

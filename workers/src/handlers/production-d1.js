@@ -529,6 +529,7 @@ async function getScoreboardData(env, date = null) {
         buckers: row.buckers,
         lbs: row.tops,
         smalls: row.smalls,
+        multiplier: row.multiplier, // Break-adjusted hour fraction (e.g. 0.83 = 10 min break)
       });
     }
   }
