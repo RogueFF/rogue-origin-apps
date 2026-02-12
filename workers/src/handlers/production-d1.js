@@ -527,6 +527,7 @@ async function getScoreboardData(env, date = null) {
         rate,
         target: targetRate,
         trimmers: row.rawTrimmers, // Use raw (entered) count for display
+        effectiveTrimmers: row.trimmers, // Time-weighted trimmers (for bag timer targets)
         buckers: row.buckers,
         lbs: row.tops,
         smalls: row.smalls,
@@ -699,7 +700,17 @@ async function getBagTimerData(env, date = null) {
     `, [today]);
 
     const scoreboardData = await getScoreboardData(env, today);
+    // Use effective (time-weighted) trimmers for target calculation
+    // Falls back to raw trimmers if effective not available
     result.currentTrimmers = scoreboardData.currentHourTrimmers || scoreboardData.lastHourTrimmers || 0;
+    // Check if effective trimmers available for current/last hour
+    const currentHourRates = (scoreboardData.hourlyRates || []);
+    if (currentHourRates.length > 0) {
+      const lastRate = currentHourRates[currentHourRates.length - 1];
+      if (lastRate.effectiveTrimmers) {
+        result.currentTrimmers = lastRate.effectiveTrimmers;
+      }
+    }
     result.targetRate = scoreboardData.targetRate || 1.0;
 
     const bagWeightLbs = 11.0231;
@@ -807,15 +818,17 @@ async function getBagTimerData(env, date = null) {
     // Maps PST hour ranges to trimmer counts for per-cycle target calculation
     const hourlyTrimmerMap = [];
     for (const h of (scoreboardData.hourlyRates || [])) {
-      if (!h.timeSlot || !h.trimmers) continue;
+      if (!h.timeSlot) continue;
       const parts = String(h.timeSlot).replace(/[-–—]/g, '–').split('–').map(s => s.trim());
       if (parts.length === 2) {
         const startMin = parseSlotTimeToMinutes(parts[0]);
         const endMin = parseSlotTimeToMinutes(parts[1]);
         if (startMin !== null && endMin !== null) {
+          // Use effectiveTrimmers (time-weighted for mid-hour changes) when available
+          const trimmers = h.effectiveTrimmers || h.trimmers || 0;
           hourlyTrimmerMap.push({
             startMin, endMin,
-            trimmers: h.trimmers,
+            trimmers,
             multiplier: h.multiplier || getTimeSlotMultiplier(h.timeSlot, timeSlotMultipliers),
           });
         }
