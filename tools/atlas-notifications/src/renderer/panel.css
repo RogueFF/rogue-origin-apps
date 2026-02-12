@@ -1239,6 +1239,164 @@ body {
   color: var(--text-primary);
 }
 
+/* ─── Weather Card ──────────────────────────────────────────────── */
+
+.weather-card {
+  position: relative;
+}
+
+.weather-card-body {
+  padding: 16px;
+  text-align: center;
+}
+
+.weather-temp-large {
+  font-family: var(--font-data);
+  font-size: 48px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--cream);
+  margin-bottom: 8px;
+}
+
+[data-theme="relay"] .weather-temp-large {
+  text-shadow: 0 0 16px var(--gold-glow);
+}
+
+[data-theme="terrain"] .weather-temp-large {
+  font-family: var(--font-display);
+  color: var(--accent-primary);
+}
+
+.weather-conditions {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--cream-secondary);
+  margin-bottom: 16px;
+}
+
+.weather-stat-row {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 8px;
+  font-family: var(--font-data);
+  font-size: 12px;
+  color: var(--cream-secondary);
+}
+
+.weather-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.weather-location-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background 0.15s;
+  position: relative;
+}
+
+.weather-location-select:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="terrain"] .weather-location-select:hover {
+  background: rgba(196, 164, 106, 0.08);
+}
+
+.weather-location-name {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cream);
+}
+
+[data-theme="relay"] .weather-location-name {
+  text-shadow: 0 0 8px var(--gold-glow);
+}
+
+.weather-chevron {
+  display: inline-flex;
+  opacity: 0.6;
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+.weather-location-select:hover .weather-chevron {
+  opacity: 1;
+}
+
+.weather-dropdown.open ~ .weather-location-select .weather-chevron {
+  transform: rotate(180deg);
+}
+
+.weather-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 180px;
+  background: var(--bg-elevated);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 0.2s, transform 0.2s;
+  z-index: 50;
+  overflow: hidden;
+}
+
+[data-theme="terrain"] .weather-dropdown {
+  backdrop-filter: none;
+  background: var(--bg-card);
+}
+
+.weather-dropdown.open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.weather-dropdown-item {
+  padding: 8px 12px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--cream-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  border-bottom: 1px solid var(--border);
+}
+
+.weather-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.weather-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--cream);
+}
+
+[data-theme="terrain"] .weather-dropdown-item:hover {
+  background: rgba(196, 164, 106, 0.12);
+}
+
+.weather-dropdown-item.active {
+  background: rgba(228, 170, 79, 0.1);
+  color: var(--gold);
+}
+
+[data-theme="terrain"] .weather-dropdown-item.active {
+  background: rgba(196, 164, 106, 0.15);
+  color: var(--accent-primary);
+}
+
 /* ─── Titlebar ───────────────────────────────────────────────────── */
 
 .titlebar {
