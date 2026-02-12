@@ -1,4 +1,4 @@
-/* ─── Atlas Notifications Panel — Glass Console ─────────────────── */
+/* ─── Atlas Notifications Panel — Glass Console Pass 2 ────────────── */
 
 :root {
   --bg-void: #030504;
@@ -60,6 +60,20 @@ body {
   background: radial-gradient(ellipse at 50% 40%, rgba(61, 214, 140, 0.04) 0%, transparent 70%);
 }
 
+.scanline {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(255, 255, 255, 0.008) 2px,
+    rgba(255, 255, 255, 0.008) 4px
+  );
+}
+
 /* ─── Titlebar ───────────────────────────────────────────────────── */
 
 .titlebar {
@@ -83,12 +97,16 @@ body {
   gap: 10px;
 }
 
-.titlebar-accent {
-  width: 3px;
-  height: 16px;
-  background: var(--gold);
-  border-radius: 2px;
-  box-shadow: 0 0 8px var(--gold-glow);
+.titlebar-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.titlebar-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 
 .titlebar-title {
@@ -97,6 +115,17 @@ body {
   font-weight: 800;
   color: var(--cream);
   letter-spacing: 3px;
+  line-height: 1;
+}
+
+.titlebar-sub {
+  font-family: var(--font-data);
+  font-size: 8px;
+  font-weight: 400;
+  color: var(--cream-muted);
+  letter-spacing: 2px;
+  line-height: 1;
+  margin-top: 2px;
 }
 
 .titlebar-right {
@@ -216,6 +245,18 @@ body {
   user-select: none;
 }
 
+.mc-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mc-label-line {
+  width: 16px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
 .mc-title {
   font-family: var(--font-display);
   font-size: 11px;
@@ -273,7 +314,14 @@ body {
 }
 
 .widget-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin-bottom: 8px;
+}
+
+.widget-icon {
+  flex-shrink: 0;
 }
 
 .widget-title {
@@ -306,7 +354,71 @@ body {
   font-size: 13px;
   font-weight: 500;
   color: var(--cream);
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
+
+.widget-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cream-muted);
+  transition: all 0.3s;
+}
+.widget-dot.online {
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+}
+.widget-dot.offline {
+  background: var(--red);
+}
+
+.widget-placeholder {
+  color: var(--cream-muted);
+  font-style: italic;
+  font-size: 11px;
+}
+
+/* Production HUD Widget */
+.widget-hud-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.hud-cell {
+  text-align: center;
+}
+.hud-cell-wide {
+  grid-column: 1 / -1;
+}
+.hud-value {
+  font-family: var(--font-data);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--cream);
+  line-height: 1.2;
+}
+.hud-label {
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--cream-muted);
+}
+.hud-pace {
+  font-family: var(--font-data);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  padding: 3px 8px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.hud-pace.ahead { color: var(--green); }
+.hud-pace.behind { color: var(--red); }
+.hud-pace.on-pace { color: var(--gold); }
 
 /* ─── Notification List ──────────────────────────────────────────── */
 
@@ -392,27 +504,27 @@ body {
 }
 
 /* Type-specific accent bars with glow */
-.notif-card[data-type="toast"]::before { 
+.notif-card[data-type="toast"]::before {
   background: var(--gold);
   box-shadow: 0 0 8px var(--gold-glow);
 }
-.notif-card[data-type="briefing"]::before { 
+.notif-card[data-type="briefing"]::before {
   background: var(--green);
   box-shadow: 0 0 8px var(--green-glow);
 }
-.notif-card[data-type="alert"]::before { 
+.notif-card[data-type="alert"]::before {
   background: var(--red);
   box-shadow: 0 0 8px var(--red-glow);
 }
-.notif-card[data-type="production-card"]::before { 
+.notif-card[data-type="production-card"]::before {
   background: var(--gold);
   box-shadow: 0 0 8px var(--gold-glow);
 }
-.notif-card[data-type="production-card"].pace-ahead::before { 
+.notif-card[data-type="production-card"].pace-ahead::before {
   background: var(--green);
   box-shadow: 0 0 8px var(--green-glow);
 }
-.notif-card[data-type="production-card"].pace-behind::before { 
+.notif-card[data-type="production-card"].pace-behind::before {
   background: var(--red);
   box-shadow: 0 0 8px var(--red-glow);
 }
@@ -434,8 +546,22 @@ body {
 }
 
 .notif-icon {
-  font-size: 14px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notif-icon-svg {
+  color: var(--cream-muted);
+}
+
+.notif-icon-svg svg {
+  display: block;
+}
+
+.notif-icon-alert {
+  color: var(--red);
 }
 
 .notif-title {
@@ -470,42 +596,94 @@ body {
   word-break: break-word;
 }
 
-/* ─── Toast Card (simple) ────────────────────────────────────────── */
+/* ─── Intel Brief — Premium Briefing Card ────────────────────────── */
 
-/* Uses common card structure — no extras needed */
-
-/* ─── Briefing Card ──────────────────────────────────────────────── */
-
-.briefing-segments {
-  margin-top: 8px;
+.intel-timeline {
+  margin-top: 10px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0;
 }
 
-.briefing-segment {
-  padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.02);
+.intel-segment {
+  display: flex;
+  gap: 10px;
+  min-height: 0;
+  animation: intelFadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes intelFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Timeline vertical connector */
+.intel-timeline-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 12px;
+  flex-shrink: 0;
+  padding-top: 5px;
+}
+
+.intel-node-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 6px var(--gold-glow);
+  flex-shrink: 0;
+}
+
+.intel-node-line {
+  width: 1px;
+  flex: 1;
+  background: linear-gradient(to bottom, var(--gold-dim), rgba(255, 255, 255, 0.06));
+  margin-top: 4px;
+}
+
+/* Segment mini-card */
+.intel-segment-card {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: var(--radius-sm);
-  border-left: 2px solid rgba(228, 170, 79, 0.15);
-  animation: segmentPulse 0.6s ease-out;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  transition: background 0.15s, border-color 0.15s;
 }
 
-@keyframes segmentPulse {
-  0% { border-left-color: rgba(228, 170, 79, 0.6); }
-  100% { border-left-color: rgba(228, 170, 79, 0.15); }
+.intel-segment-card:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
-.briefing-segment-header {
+.intel-segment-header {
   display: flex;
   align-items: center;
   gap: 6px;
   margin-bottom: 4px;
 }
 
-.briefing-segment-icon { font-size: 14px; }
+.intel-segment-icon {
+  color: var(--gold);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
 
-.briefing-segment-label {
+.intel-segment-icon svg {
+  display: block;
+}
+
+.intel-segment-label {
   font-family: var(--font-display);
   font-size: 10px;
   font-weight: 600;
@@ -514,21 +692,25 @@ body {
   color: var(--gold);
 }
 
-.briefing-segment-text {
+.intel-hero-stat {
+  font-family: var(--font-data);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--cream);
+  line-height: 1.2;
+  margin-bottom: 2px;
+  letter-spacing: -0.5px;
+}
+
+.intel-segment-body {
   font-family: var(--font-ui);
   font-size: 12px;
   font-weight: 400;
   color: var(--cream-secondary);
   line-height: 1.45;
-  animation: typewriter 0.8s steps(60) forwards;
-  overflow: hidden;
 }
 
-@keyframes typewriter {
-  from { max-height: 0; }
-  to { max-height: 500px; }
-}
-
+/* Audio controls */
 .briefing-audio-controls {
   display: flex;
   align-items: center;
@@ -539,7 +721,7 @@ body {
 .btn-audio {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   padding: 4px 10px;
   background: none;
   border: 1px solid var(--border);
@@ -550,6 +732,10 @@ body {
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s;
+}
+.btn-audio svg {
+  display: block;
+  flex-shrink: 0;
 }
 .btn-audio:hover {
   border-color: var(--border-hover);
@@ -651,6 +837,12 @@ body {
   position: relative;
 }
 
+/* Overflow glow when exceeding 100% */
+.prod-stat.gauge-overflow {
+  background: rgba(61, 214, 140, 0.03);
+  box-shadow: inset 0 0 12px rgba(61, 214, 140, 0.06);
+}
+
 /* SVG Circular Gauge */
 .prod-gauge {
   width: 60px;
@@ -679,7 +871,7 @@ body {
 
 .prod-gauge-value {
   font-family: var(--font-data);
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   fill: var(--cream);
 }
@@ -693,10 +885,11 @@ body {
   color: var(--cream-muted);
 }
 
+/* Sparkline — tightened gaps */
 .prod-sparkline {
   display: flex;
   align-items: flex-end;
-  gap: 2px;
+  gap: 1px;
   height: 8px;
   margin-top: 10px;
 }
@@ -785,7 +978,6 @@ body {
 }
 
 .empty-glyph {
-  font-size: 36px;
   color: var(--cream-muted);
   opacity: 0.3;
   margin-bottom: 16px;
