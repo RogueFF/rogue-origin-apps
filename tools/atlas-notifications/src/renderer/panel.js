@@ -1,4 +1,4 @@
-// ─── Atlas Notifications Panel — Glass Console Pass 2 ─────────────────
+// ─── Atlas Notifications Panel — Hologram Glitch Pass 3 ─────────────────
 
 let notifications = [];
 let activeTab = 'all';
@@ -58,7 +58,7 @@ async function updateMissionControl() {
     const widgetDot = $('#widget-dot');
     if (connText && widgetDot) {
       connText.textContent = result.online ? 'Online' : 'Offline';
-      connText.style.color = result.online ? 'var(--green)' : 'var(--red)';
+      connText.style.color = result.online ? 'var(--holo-green)' : 'var(--signal-red)';
       widgetDot.className = 'widget-dot ' + (result.online ? 'online' : 'offline');
     }
 
@@ -263,7 +263,11 @@ list.addEventListener('click', async (e) => {
       notif.acknowledged = true;
       notif.read = true;
     }
-    render();
+    // Flash the button before re-render
+    ackBtn.textContent = '[ CONFIRMED ]';
+    ackBtn.style.color = 'var(--holo-green)';
+    ackBtn.style.borderColor = 'var(--holo-green)';
+    setTimeout(() => render(), 400);
     return;
   }
 
