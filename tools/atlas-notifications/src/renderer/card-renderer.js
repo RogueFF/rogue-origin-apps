@@ -1,10 +1,17 @@
-// ─── Shared Card Renderer — Pass 4: Alive ─────────────────────────────
+// ─── Shared Card Renderer — Pass 5: Dual Theme ─────────────────────────
 // Used by both popup.js and panel.js to render notification cards.
-// All emoji replaced with inline SVG icons. Hologram glitch aesthetic:
-// production → pulse monitor area chart, briefing → decoded transmission,
-// alert → red alert VHS glitch, toast → signal.
-// Pass 4: compact/expandable cards, segment summary extraction,
-// toast scanner beam, breathing card support.
+// Supports two themes via document.body.dataset.theme:
+//   'relay'   — Glass Console / Hologram Glitch (cyan/gold, transmission aesthetic)
+//   'terrain' — Topographic / Land Survey (earth tones, cartographic aesthetic)
+//
+// Relay cards:  pulse monitor, decoded transmission, red alert VHS, signal toast
+// Terrain cards: terrain cross-section, field report, warning post, trail marker
+
+// ─── Theme Helper ─────────────────────────────────────────────────────
+
+function getTheme() {
+  return document.body.dataset.theme || 'relay';
+}
 
 // ─── SVG Icon Library ───────────────────────────────────────────────
 // Monoline 16px icons, use currentColor or explicit accent color.
@@ -55,6 +62,9 @@ const SVG_ICONS = {
 
   // Chevron down — for expand/collapse
   chevronDown: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`,
+
+  // Mountain — terrain production icon
+  mountain: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21l4-10 4 10"/><path d="M2 21l6-14 4 8"/><path d="M14 15l4-8 4 14"/><line x1="2" y1="21" x2="22" y2="21"/></svg>`,
 };
 
 // Set up aliases
@@ -187,9 +197,14 @@ function getSegmentEmoji(iconKey, label) {
   return '\u{1F4E1}';
 }
 
-// ─── Toast Card — "Signal" ──────────────────────────────────────────
 
-function renderToastCard(n) {
+// ═══════════════════════════════════════════════════════════════════════
+//  TOAST CARD
+// ═══════════════════════════════════════════════════════════════════════
+
+// ─── Toast: Relay — "Signal" ─────────────────────────────────────────
+
+function renderToastRelay(n) {
   const time = formatTime(n.timestamp);
   const ts = formatTimestamp(n.timestamp);
   const unread = n.read ? '' : ' unread';
@@ -212,11 +227,39 @@ function renderToastCard(n) {
   `;
 }
 
-// ─── Briefing Card — "Decoded Transmission" ─────────────────────────
-// Pass 4: Two render modes — compact (for popup + panel collapsed) and
-// full expanded (panel on click).
+// ─── Toast: Terrain — "Trail Marker" ─────────────────────────────────
 
-function renderBriefingCard(n, options) {
+function renderToastTerrain(n) {
+  const time = formatTime(n.timestamp);
+  const ts = formatTimestamp(n.timestamp);
+  const unread = n.read ? '' : ' unread';
+  return `
+    <div class="notif-card card-enter${unread}" data-id="${n.id}" data-type="toast">
+      <div class="notif-header">
+        <div class="notif-header-left">
+          <span class="terrain-trail-dot"></span>
+          <span class="notif-title">${escapeHtml(n.title)}</span>
+        </div>
+        <span class="notif-time">${time}</span>
+      </div>
+      <div class="notif-body">${escapeHtml(n.body)}</div>
+      <div class="card-timestamp">MARKER &bull; ${ts}</div>
+    </div>
+  `;
+}
+
+function renderToastCard(n) {
+  return getTheme() === 'terrain' ? renderToastTerrain(n) : renderToastRelay(n);
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+//  BRIEFING CARD
+// ═══════════════════════════════════════════════════════════════════════
+
+// ─── Briefing: Relay — "Decoded Transmission" ────────────────────────
+
+function renderBriefingRelay(n, options) {
   const time = formatTime(n.timestamp);
   const ts = formatTimestamp(n.timestamp);
   const unread = n.read ? '' : ' unread';
@@ -231,8 +274,6 @@ function renderBriefingCard(n, options) {
     segCount = segments.length;
 
     if (isPopup) {
-      // ─── COMPACT VIEW (popup) ─────────────
-      // One line per segment: icon + label + summary
       const compactLines = segments.map((seg, i) => {
         const emoji = getSegmentEmoji(seg.icon, seg.label);
         const label = escapeHtml(seg.label || seg.category || 'Update');
@@ -247,13 +288,10 @@ function renderBriefingCard(n, options) {
       }).join('');
       contentHtml = `<div class="compact-transmission">${compactLines}</div>`;
     } else {
-      // ─── PANEL VIEW: compact header + expandable detail ─────────────
       const compactLines = segments.map((seg, i) => {
         const emoji = getSegmentEmoji(seg.icon, seg.label);
         const label = escapeHtml(seg.label || seg.category || 'Update');
         const summary = extractSegmentSummary(seg.text || seg.summary || '');
-        const icon = getIcon(seg.icon);
-        const bodyHtml = highlightNumbers(seg.text || seg.summary || '');
         return `
           <div class="compact-segment" style="animation-delay: ${i * 60}ms">
             <span class="compact-segment-emoji">${emoji}</span>
@@ -263,7 +301,6 @@ function renderBriefingCard(n, options) {
         `;
       }).join('');
 
-      // Full decoded view (hidden by default in panel, shown on expand)
       const segmentBlocks = segments.map((seg, i) => {
         const icon = getIcon(seg.icon);
         const label = escapeHtml(seg.label || seg.category || 'Update');
@@ -294,7 +331,6 @@ function renderBriefingCard(n, options) {
     segCount = 1;
   }
 
-  // Audio controls for panel view
   const audioHtml = n.audio_url ? `
     <div class="briefing-audio-controls">
       <button class="btn-audio" data-audio="${escapeHtml(n.audio_url)}" data-notif-id="${n.id}">
@@ -303,10 +339,6 @@ function renderBriefingCard(n, options) {
     </div>
   ` : '';
 
-  // Format date for compact panel header
-  const dateStr = new Date(n.timestamp || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-
-  // For panel: compact card header shows title + segment count + date
   const expandToggle = isPanel ? `
     <div class="card-expand-toggle" title="Expand">
       <span class="expand-chevron">${SVG_ICONS.chevronDown}</span>
@@ -334,9 +366,122 @@ function renderBriefingCard(n, options) {
   `;
 }
 
-// ─── Alert Card — "Red Alert" ───────────────────────────────────────
+// ─── Briefing: Terrain — "Field Report" ──────────────────────────────
 
-function renderAlertCard(n) {
+function renderBriefingTerrain(n, options) {
+  const time = formatTime(n.timestamp);
+  const ts = formatTimestamp(n.timestamp);
+  const unread = n.read ? '' : ' unread';
+  const isPopup = options && options.popup;
+  const isPanel = options && options.panel;
+
+  let contentHtml = '';
+  let segCount = 0;
+
+  if (n.data && n.data.segments && n.data.segments.length > 0) {
+    const segments = n.data.segments;
+    segCount = segments.length;
+
+    if (isPopup) {
+      // Compact view for popup — report entries with left margin line
+      const compactLines = segments.map((seg, i) => {
+        const label = escapeHtml(seg.label || seg.category || 'Update');
+        const summary = extractSegmentSummary(seg.text || seg.summary || '');
+        return `
+          <div class="terrain-report-entry compact-segment" style="animation-delay: ${i * 60}ms">
+            <span class="terrain-report-label">${label}</span>
+            <span class="terrain-report-summary">${highlightNumbers(summary)}</span>
+          </div>
+        `;
+      }).join('');
+      contentHtml = `<div class="terrain-report-entries">${compactLines}</div>`;
+    } else {
+      // Panel compact view
+      const compactLines = segments.map((seg, i) => {
+        const label = escapeHtml(seg.label || seg.category || 'Update');
+        const summary = extractSegmentSummary(seg.text || seg.summary || '');
+        return `
+          <div class="terrain-report-entry compact-segment" style="animation-delay: ${i * 60}ms">
+            <span class="terrain-report-label">${label}</span>
+            <span class="terrain-report-summary">${highlightNumbers(summary)}</span>
+          </div>
+        `;
+      }).join('');
+
+      // Full expanded view
+      const segmentBlocks = segments.map((seg, i) => {
+        const icon = getIcon(seg.icon);
+        const label = escapeHtml(seg.label || seg.category || 'Update');
+        const text = seg.text || seg.summary || '';
+        const bodyHtml = highlightNumbers(text);
+        const delay = i * 120;
+        return `
+          <div class="decoded-segment terrain-report-segment" style="animation-delay: ${delay}ms">
+            <div class="decoded-segment-header">
+              <span class="decoded-segment-icon">${icon}</span>
+              <span class="decoded-segment-label">${label}</span>
+            </div>
+            <div class="decoded-segment-body" style="animation-delay: ${delay + 80}ms">${bodyHtml}</div>
+          </div>
+          ${i < segments.length - 1 ? '<div class="decoded-separator"></div>' : ''}
+        `;
+      }).join('');
+
+      contentHtml = `
+        <div class="terrain-report-entries card-compact-content">${compactLines}</div>
+        <div class="decoded-transmission card-expanded-content">
+          ${segmentBlocks}
+        </div>
+      `;
+    }
+  } else if (n.body) {
+    contentHtml = `<div class="notif-body">${escapeHtml(n.body)}</div>`;
+    segCount = 1;
+  }
+
+  const audioHtml = n.audio_url ? `
+    <div class="briefing-audio-controls">
+      <button class="btn-audio" data-audio="${escapeHtml(n.audio_url)}" data-notif-id="${n.id}">
+        ${SVG_ICONS.speaker} <span class="btn-audio-label">Replay</span>
+      </button>
+    </div>
+  ` : '';
+
+  const expandToggle = isPanel ? `
+    <div class="card-expand-toggle" title="Expand">
+      <span class="expand-chevron">${SVG_ICONS.chevronDown}</span>
+    </div>
+  ` : '';
+
+  return `
+    <div class="notif-card card-enter${unread}${isPanel ? ' card-collapsible' : ''}" data-id="${n.id}" data-type="briefing">
+      <div class="notif-header decoded-header">
+        <div class="notif-header-left">
+          <span class="decoded-incoming">\u{1F4CB} FIELD REPORT</span>
+        </div>
+        <span class="notif-time">${time}</span>
+      </div>
+      <div class="decoded-title">${escapeHtml(n.title)}</div>
+      ${contentHtml}
+      ${audioHtml}
+      <div class="card-timestamp">END OF REPORT &bull; ${segCount} ENTR${segCount !== 1 ? 'IES' : 'Y'}</div>
+      ${expandToggle}
+    </div>
+  `;
+}
+
+function renderBriefingCard(n, options) {
+  return getTheme() === 'terrain' ? renderBriefingTerrain(n, options) : renderBriefingRelay(n, options);
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+//  ALERT CARD
+// ═══════════════════════════════════════════════════════════════════════
+
+// ─── Alert: Relay — "Red Alert" ──────────────────────────────────────
+
+function renderAlertRelay(n) {
   const time = formatTime(n.timestamp);
   const ts = formatTimestamp(n.timestamp);
   const unread = n.read ? '' : ' unread';
@@ -367,10 +512,47 @@ function renderAlertCard(n) {
   `;
 }
 
-// ─── Production Card — "Pulse Monitor" ──────────────────────────────
-// Pass 4: renders both compact and full views for panel collapsible.
+// ─── Alert: Terrain — "Warning Post" ─────────────────────────────────
 
-function renderProductionCard(n, options) {
+function renderAlertTerrain(n) {
+  const time = formatTime(n.timestamp);
+  const ts = formatTimestamp(n.timestamp);
+  const unread = n.read ? '' : ' unread';
+  const acked = n.acknowledged ? ' acknowledged' : '';
+  const ackBtn = n.acknowledged
+    ? '<div class="alert-footer"><div class="alert-acked-inline">[ ACKNOWLEDGED ]</div></div>'
+    : `<div class="alert-footer">
+        <button class="btn-acknowledge" data-ack-id="${n.id}">[ ACKNOWLEDGED ]</button>
+      </div>`;
+
+  return `
+    <div class="notif-card card-enter${unread}${acked}" data-id="${n.id}" data-type="alert">
+      <div class="notif-header">
+        <div class="notif-header-left">
+          <span class="notif-icon notif-icon-svg notif-icon-alert">${SVG_ICONS.alert}</span>
+          <span class="notif-title terrain-warning-title">\u26A1 WARNING</span>
+        </div>
+        <span class="notif-time">${time}</span>
+      </div>
+      <div class="alert-body-text">${escapeHtml(n.title)}</div>
+      <div class="notif-body">${escapeHtml(n.body)}</div>
+      ${ackBtn}
+    </div>
+  `;
+}
+
+function renderAlertCard(n) {
+  return getTheme() === 'terrain' ? renderAlertTerrain(n) : renderAlertRelay(n);
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+//  PRODUCTION CARD
+// ═══════════════════════════════════════════════════════════════════════
+
+// ─── Production: Relay — "Pulse Monitor" ─────────────────────────────
+
+function renderProductionRelay(n, options) {
   const time = formatTime(n.timestamp);
   const ts = formatTimestamp(n.timestamp);
   const unread = n.read ? '' : ' unread';
@@ -379,17 +561,14 @@ function renderProductionCard(n, options) {
   const paceClass = pace === 'ahead' ? 'ahead' : pace === 'behind' ? 'behind' : 'on-pace';
   const isPanel = options && options.panel;
 
-  // Stats
   const lbs = d.dailyTotal != null ? d.dailyTotal.toFixed(1) : '0.0';
   const pct = d.percentOfTarget || 0;
   const crew = d.trimmers || d.crew || 0;
   const rate = d.rate ? d.rate.toFixed(2) : '0.00';
   const paceLabel = pace === 'ahead' ? 'ahead' : pace === 'behind' ? 'behind' : 'on pace';
 
-  // Build SVG area chart from hourly data
   const chartHtml = renderPulseChart(d, paceClass);
 
-  // Compact one-liner for collapsed panel state
   const compactLine = `
     <div class="compact-production card-compact-content">
       <span class="compact-prod-lbs holo-number">${lbs} lbs</span>
@@ -410,7 +589,6 @@ function renderProductionCard(n, options) {
     </div>
   ` : '';
 
-  // Full chart view
   const fullChart = `
     <div class="pulse-monitor card-expanded-content${isPanel ? '' : ' expanded'}">
       <div class="pulse-chart-area">
@@ -455,13 +633,99 @@ function renderProductionCard(n, options) {
   `;
 }
 
-// ─── Pulse Monitor SVG Area Chart ───────────────────────────────────
+// ─── Production: Terrain — "Terrain Survey" ──────────────────────────
+
+function renderProductionTerrain(n, options) {
+  const time = formatTime(n.timestamp);
+  const ts = formatTimestamp(n.timestamp);
+  const unread = n.read ? '' : ' unread';
+  const d = n.data || {};
+  const pace = d.paceStatus || 'on-pace';
+  const paceClass = pace === 'ahead' ? 'ahead' : pace === 'behind' ? 'behind' : 'on-pace';
+  const isPanel = options && options.panel;
+
+  const lbs = d.dailyTotal != null ? d.dailyTotal.toFixed(1) : '0.0';
+  const pct = d.percentOfTarget || 0;
+  const crew = d.trimmers || d.crew || 0;
+  const rate = d.rate ? d.rate.toFixed(2) : '0.00';
+  const paceLabel = pace === 'ahead' ? 'ahead' : pace === 'behind' ? 'behind' : 'on pace';
+
+  const chartHtml = renderTerrainChart(d, paceClass);
+
+  const compactLine = `
+    <div class="compact-production card-compact-content">
+      <span class="compact-prod-lbs holo-number">${lbs} lbs</span>
+      <span class="compact-prod-sep">&bull;</span>
+      <span class="compact-prod-pct ${paceClass}">${pct}%</span>
+      <span class="compact-prod-sep">&bull;</span>
+      <span class="compact-prod-detail">${crew} crew</span>
+      <span class="compact-prod-sep">&bull;</span>
+      <span class="compact-prod-detail">${rate} rate</span>
+      <span class="compact-prod-sep">&mdash;</span>
+      <span class="compact-prod-pace ${paceClass}">${paceLabel}</span>
+    </div>
+  `;
+
+  const expandToggle = isPanel ? `
+    <div class="card-expand-toggle" title="Expand">
+      <span class="expand-chevron">${SVG_ICONS.chevronDown}</span>
+    </div>
+  ` : '';
+
+  const fullChart = `
+    <div class="pulse-monitor card-expanded-content${isPanel ? '' : ' expanded'}">
+      <div class="pulse-chart-area">
+        ${chartHtml}
+        <div class="pulse-stat pulse-stat-lbs">
+          <span class="pulse-stat-value">${lbs}</span>
+          <span class="pulse-stat-unit">ELEVATION</span>
+        </div>
+        <div class="pulse-stat pulse-stat-pct">
+          <span class="pulse-stat-value ${paceClass}">${pct}%</span>
+          <span class="pulse-stat-unit">SUMMIT</span>
+        </div>
+        <div class="pulse-stat pulse-stat-crew">
+          <span class="pulse-stat-value">${crew}</span>
+          <span class="pulse-stat-unit">PARTY</span>
+        </div>
+        <div class="pulse-stat pulse-stat-rate">
+          <span class="pulse-stat-value">${rate}</span>
+          <span class="pulse-stat-unit">PACE</span>
+        </div>
+      </div>
+    </div>
+  `;
+
+  return `
+    <div class="notif-card card-enter${unread} pace-${paceClass}${isPanel ? ' card-collapsible' : ''}" data-id="${n.id}" data-type="production-card">
+      <div class="notif-header">
+        <div class="notif-header-left">
+          <span class="notif-icon notif-icon-svg" style="color:var(--accent-blue)">${SVG_ICONS.mountain}</span>
+          <span class="notif-title">Terrain Survey</span>
+        </div>
+        <span class="notif-time">${time}</span>
+      </div>
+      ${isPanel ? compactLine : ''}
+      ${fullChart}
+      <div class="card-timestamp">SURVEY COMPLETE &bull; ${ts}</div>
+      ${expandToggle}
+    </div>
+  `;
+}
+
+function renderProductionCard(n, options) {
+  return getTheme() === 'terrain' ? renderProductionTerrain(n, options) : renderProductionRelay(n, options);
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+//  PULSE MONITOR SVG — Relay
+// ═══════════════════════════════════════════════════════════════════════
 
 function renderPulseChart(d, paceClass) {
   const hourly = d.hourly || [];
   const targetRate = d.targetRate || 0;
 
-  // If no hourly data, render a flat line
   if (hourly.length === 0) {
     return `
       <svg class="pulse-chart-svg" viewBox="0 0 360 160" preserveAspectRatio="none">
@@ -477,11 +741,9 @@ function renderPulseChart(d, paceClass) {
   const padBottom = 10;
   const chartH = height - padTop - padBottom;
 
-  // Find max for scaling
   const maxActual = Math.max(...hourly.map(h => h.actual || 0), targetRate, 1);
   const scale = chartH / (maxActual * 1.15);
 
-  // Build path points
   const stepW = width / Math.max(hourly.length - 1, 1);
   const points = hourly.map((h, i) => {
     const x = i * stepW;
@@ -489,15 +751,11 @@ function renderPulseChart(d, paceClass) {
     return { x, y, actual: h.actual || 0, target: h.target || targetRate };
   });
 
-  // Smooth curve through points using cardinal spline
   const linePath = buildSmoothPath(points);
-  // Area path (close to bottom)
   const areaPath = linePath + ` L ${points[points.length - 1].x},${height} L ${points[0].x},${height} Z`;
 
-  // Target line Y
   const targetY = padTop + chartH - targetRate * scale;
 
-  // Per-bar coloring segments for the area
   let areaSegments = '';
   for (let i = 0; i < points.length - 1; i++) {
     const p1 = points[i];
@@ -556,6 +814,110 @@ function renderPulseChart(d, paceClass) {
   `;
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════
+//  TERRAIN CROSS-SECTION SVG — Terrain
+// ═══════════════════════════════════════════════════════════════════════
+
+function renderTerrainChart(d, paceClass) {
+  const hourly = d.hourly || [];
+  const targetRate = d.targetRate || 0;
+
+  if (hourly.length === 0) {
+    return `
+      <svg class="pulse-chart-svg" viewBox="0 0 360 160" preserveAspectRatio="none">
+        <line x1="0" y1="80" x2="360" y2="80" stroke="rgba(196,164,106,0.15)" stroke-width="1" stroke-dasharray="4 4"/>
+        <text x="180" y="90" text-anchor="middle" fill="rgba(196,164,106,0.25)" font-size="12" font-family="'IBM Plex Mono', monospace">AWAITING SURVEY</text>
+      </svg>
+    `;
+  }
+
+  const width = 360;
+  const height = 160;
+  const padTop = 10;
+  const padBottom = 10;
+  const chartH = height - padTop - padBottom;
+
+  const maxActual = Math.max(...hourly.map(h => h.actual || 0), targetRate, 1);
+  const scale = chartH / (maxActual * 1.15);
+
+  const stepW = width / Math.max(hourly.length - 1, 1);
+  const points = hourly.map((h, i) => {
+    const x = i * stepW;
+    const y = padTop + chartH - (h.actual || 0) * scale;
+    return { x, y, actual: h.actual || 0, target: h.target || targetRate };
+  });
+
+  const linePath = buildSmoothPath(points);
+  const areaPath = linePath + ` L ${points[points.length - 1].x},${height} L ${points[0].x},${height} Z`;
+  const targetY = padTop + chartH - targetRate * scale;
+
+  // Terrain elevation bands: earth (below target), green (at target), gold (above)
+  // We create layered gradients clipped to the terrain shape
+  // Contour lines at regular intervals
+  const contourInterval = 2; // every 2 lbs
+  const contourLines = [];
+  if (maxActual > 0) {
+    for (let v = contourInterval; v <= maxActual * 1.15; v += contourInterval) {
+      const cy = padTop + chartH - v * scale;
+      if (cy > padTop && cy < height - padBottom) {
+        contourLines.push(cy);
+      }
+    }
+  }
+
+  // Earth tone colors
+  const belowColor = '#5a4a32';    // brown/earth
+  const atColor = '#6b9e5a';       // forest green
+  const aboveColor = '#c4a46a';    // gold/summit
+
+  return `
+    <svg class="pulse-chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+      <defs>
+        <!-- Terrain elevation gradient — earth to green to gold -->
+        <linearGradient id="terrainGrad" x1="0" y1="1" x2="0" y2="0">
+          <stop offset="0%" stop-color="${belowColor}" stop-opacity="0.5"/>
+          <stop offset="${Math.min((targetRate / (maxActual * 1.15)) * 100, 100).toFixed(0)}%" stop-color="${atColor}" stop-opacity="0.45"/>
+          <stop offset="100%" stop-color="${aboveColor}" stop-opacity="0.35"/>
+        </linearGradient>
+        <clipPath id="terrainClip">
+          <path d="${areaPath}"/>
+        </clipPath>
+      </defs>
+
+      <!-- Terrain fill — elevation bands clipped to terrain shape -->
+      <g clip-path="url(#terrainClip)">
+        <rect x="0" y="0" width="${width}" height="${height}" fill="url(#terrainGrad)"/>
+      </g>
+
+      <!-- Contour lines overlaid on terrain -->
+      ${contourLines.map(cy => `
+        <line x1="0" y1="${cy}" x2="${width}" y2="${cy}"
+          stroke="rgba(196,164,106,0.12)" stroke-width="0.5"
+          clip-path="url(#terrainClip)"/>
+      `).join('')}
+
+      <!-- Target: dashed "trail" line -->
+      <line x1="0" y1="${targetY}" x2="${width}" y2="${targetY}"
+        stroke="rgba(196,164,106,0.5)" stroke-width="1.5" stroke-dasharray="8 4" stroke-linecap="round"/>
+
+      <!-- Terrain ridge line -->
+      <path d="${linePath}" fill="none" stroke="${paceClass === 'behind' ? '#c45a3e' : '#6b9e5a'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+
+      <!-- Survey marker dots -->
+      ${points.map(p => {
+        const dotColor = p.actual >= p.target ? '#6b9e5a' : '#c45a3e';
+        return `<circle cx="${p.x}" cy="${p.y}" r="2.5" fill="${dotColor}" stroke="rgba(42,39,32,0.6)" stroke-width="1"/>`;
+      }).join('')}
+    </svg>
+  `;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+//  SHARED SVG PATH BUILDER
+// ═══════════════════════════════════════════════════════════════════════
+
 /**
  * Build a smooth SVG path through a set of points.
  * Uses Catmull-Rom to Bezier conversion for smooth curves.
@@ -585,13 +947,17 @@ function buildSmoothPath(points) {
   return path;
 }
 
+
 // ─── Sound Wave Animation (for audio buttons) ──────────────────────
 
 function renderSoundWave() {
   return `<span class="sound-wave"><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>`;
 }
 
-// ─── Main Dispatcher ────────────────────────────────────────────────
+
+// ═══════════════════════════════════════════════════════════════════════
+//  MAIN DISPATCHER
+// ═══════════════════════════════════════════════════════════════════════
 
 function renderCard(n, options) {
   switch (n.type) {
