@@ -1,9 +1,9 @@
-// ─── Atlas Popup Renderer — Hologram Glitch Pass 3 ──────────────────────
+// ─── Atlas Popup Renderer — Pass 4: Alive ────────────────────────────────
 // Receives a notification via IPC, renders the rich card, handles
 // click-to-open-panel, dismiss, acknowledge, auto-dismiss countdown,
 // and client-side ElevenLabs TTS with Web Speech fallback.
-// Pass 3: upgraded sounds with static crackle, tts_text support,
-// updated popup heights.
+// Pass 4: layered notification sounds with reverb, ghost trail dismiss,
+// compact briefing rendering, upgraded sound design.
 
 let notification = null;
 let dismissTimeout = null;
@@ -70,8 +70,30 @@ function playStaticCrackle(ctx, volume) {
   source.stop(ctx.currentTime + 0.05);
 }
 
+// ─── Simple Reverb via Delay Node ───────────────────────────────────
+// Creates a short reverb tail using a feedback delay
+
+function createReverb(ctx, delayTime, feedback) {
+  const delay = ctx.createDelay();
+  delay.delayTime.setValueAtTime(delayTime || 0.1, ctx.currentTime);
+
+  const feedbackGain = ctx.createGain();
+  feedbackGain.gain.setValueAtTime(feedback || 0.3, ctx.currentTime);
+
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(2000, ctx.currentTime);
+
+  delay.connect(feedbackGain);
+  feedbackGain.connect(filter);
+  filter.connect(delay);
+
+  // Return input node and output node
+  return { input: delay, output: filter };
+}
+
 // ─── Premium Notification Sound Generator ───────────────────────────
-// Layered tones with static crackle undertone.
+// Pass 4: Layered sounds with reverb tails and richer textures.
 
 function playNotificationSound(type) {
   if (!soundEnabled) return;
@@ -84,60 +106,81 @@ function playNotificationSound(type) {
 
     switch (type) {
       case 'toast':
-        // Warm click: layered soft tones
-        playTone(ctx, 880, 0.04, 0.12, 'sine');
-        playTone(ctx, 1320, 0.03, 0.06, 'sine', 0.01);
+        // Pass 4: Short sine click (800Hz, 30ms) + high harmonic (1600Hz, 20ms) + noise burst
+        playTone(ctx, 800, 0.03, 0.14, 'sine');
+        playTone(ctx, 1600, 0.02, 0.06, 'sine', 0.005);
+        // Tiny noise burst (10ms)
+        playNoiseBurst(ctx, 0.01, 0.04);
         break;
 
       case 'briefing':
-        // "Connection established" beep-boop before the chime
+        // Pass 4: Two-note ascending (C5→E5) with reverb tail
+        // "Connection established" beep-boop
         playTone(ctx, 400, 0.06, 0.08, 'square');
         playTone(ctx, 600, 0.06, 0.08, 'square', 0.07);
-        // Elegant chime: C5 → E5 → G5 arpeggio with harmonics
+
+        // C5 with reverb
         setTimeout(() => {
           playStaticCrackle(ctx, 0.015);
-          playTone(ctx, 523.25, 0.12, 0.18, 'sine');
-          playTone(ctx, 1046.5, 0.08, 0.06, 'sine', 0.01);
+          playToneWithReverb(ctx, 523.25, 0.15, 0.16, 'sine', 0, 0.1, 0.3);
+          playTone(ctx, 1046.5, 0.08, 0.05, 'sine', 0.01); // Harmonic
         }, 160);
+
+        // E5 with reverb
         setTimeout(() => {
-          playTone(ctx, 659.25, 0.12, 0.18, 'sine');
-          playTone(ctx, 1318.5, 0.06, 0.04, 'sine', 0.01);
-        }, 260);
+          playToneWithReverb(ctx, 659.25, 0.15, 0.16, 'sine', 0, 0.1, 0.3);
+          playTone(ctx, 1318.5, 0.06, 0.04, 'sine', 0.01); // Harmonic
+        }, 300);
+
+        // G5 resolution
         setTimeout(() => {
-          playTone(ctx, 783.99, 0.15, 0.14, 'sine');
-        }, 360);
+          playToneWithReverb(ctx, 783.99, 0.2, 0.12, 'sine', 0, 0.12, 0.25);
+        }, 440);
         break;
 
       case 'alert':
-        // Urgent pings with low rumble undertone (60Hz sine)
-        playTone(ctx, 60, 0.5, 0.06, 'sine'); // Low rumble
-        playStaticCrackle(ctx, 0.03);
-        playTone(ctx, 1200, 0.06, 0.28, 'sine');
+        // Pass 4: Triangle wave pings (harsher), low 80Hz undertone, layered urgency
+        // Low undertone — 80Hz, 200ms
+        playTone(ctx, 80, 0.2, 0.08, 'sine');
+        playStaticCrackle(ctx, 0.035);
+
+        // Ping 1 — triangle waves
+        playTone(ctx, 1200, 0.06, 0.26, 'triangle');
         playTone(ctx, 1800, 0.04, 0.10, 'triangle', 0.005);
+
+        // Ping 2
         setTimeout(() => {
-          playTone(ctx, 1200, 0.06, 0.28, 'sine');
+          playTone(ctx, 1200, 0.06, 0.26, 'triangle');
           playTone(ctx, 1800, 0.04, 0.10, 'triangle', 0.005);
-          playStaticCrackle(ctx, 0.025);
+          playStaticCrackle(ctx, 0.03);
         }, 100);
+
+        // Ping 3 — higher
         setTimeout(() => {
-          playTone(ctx, 1400, 0.08, 0.22, 'sine');
+          playTone(ctx, 1400, 0.08, 0.20, 'triangle');
+          playTone(ctx, 80, 0.15, 0.05, 'sine'); // Second rumble
         }, 220);
         break;
 
       case 'production-card':
-        // Low warm hum with subtle overtone
-        playTone(ctx, 220, 0.18, 0.14, 'sine');
-        playTone(ctx, 330, 0.12, 0.06, 'sine', 0.02);
-        playTone(ctx, 440, 0.08, 0.03, 'triangle', 0.04);
+        // Pass 4: Warm chord — 200Hz + 250Hz + 300Hz, each at 1/3 volume, 200ms
+        // Like a system coming online
+        playTone(ctx, 200, 0.2, 0.06, 'sine');
+        playTone(ctx, 250, 0.2, 0.06, 'sine', 0.01);
+        playTone(ctx, 300, 0.2, 0.06, 'sine', 0.02);
+        // Gentle overtone
+        playTone(ctx, 400, 0.15, 0.02, 'triangle', 0.03);
         break;
 
       default:
-        playTone(ctx, 880, 0.04, 0.12, 'sine');
+        playTone(ctx, 800, 0.03, 0.12, 'sine');
     }
   } catch (e) {
     console.warn('Audio playback failed:', e);
   }
 }
+
+// ─── Core Audio Helpers ─────────────────────────────────────────────
 
 function playTone(ctx, frequency, duration, volume, type, delay) {
   const startAt = ctx.currentTime + (delay || 0);
@@ -159,6 +202,62 @@ function playTone(ctx, frequency, duration, volume, type, delay) {
   oscillator.stop(startAt + duration + 0.01);
 }
 
+function playToneWithReverb(ctx, frequency, duration, volume, type, delay, reverbDelay, reverbFeedback) {
+  const startAt = ctx.currentTime + (delay || 0);
+  const oscillator = ctx.createOscillator();
+  const gainNode = ctx.createGain();
+
+  oscillator.type = type || 'sine';
+  oscillator.frequency.setValueAtTime(frequency, startAt);
+
+  gainNode.gain.setValueAtTime(0, startAt);
+  gainNode.gain.linearRampToValueAtTime(volume, startAt + 0.008);
+  gainNode.gain.exponentialRampToValueAtTime(0.001, startAt + duration);
+
+  // Direct path
+  oscillator.connect(gainNode);
+  gainNode.connect(ctx.destination);
+
+  // Reverb path via delay feedback loop
+  const reverb = createReverb(ctx, reverbDelay || 0.1, reverbFeedback || 0.3);
+  const reverbGain = ctx.createGain();
+  reverbGain.gain.setValueAtTime(volume * 0.4, startAt);
+
+  oscillator.connect(reverbGain);
+  reverbGain.connect(reverb.input);
+  reverb.output.connect(ctx.destination);
+
+  oscillator.start(startAt);
+  oscillator.stop(startAt + duration + 0.5); // Extra time for reverb tail
+}
+
+function playNoiseBurst(ctx, duration, volume) {
+  const bufferSize = Math.floor(ctx.sampleRate * duration);
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    data[i] = (Math.random() * 2 - 1);
+  }
+
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+
+  const gainNode = ctx.createGain();
+  gainNode.gain.setValueAtTime(volume, ctx.currentTime);
+  gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'highpass';
+  filter.frequency.setValueAtTime(4000, ctx.currentTime);
+
+  source.connect(filter);
+  filter.connect(gainNode);
+  gainNode.connect(ctx.destination);
+
+  source.start(ctx.currentTime);
+  source.stop(ctx.currentTime + duration + 0.01);
+}
+
 // ─── IPC: Receive notification to display ───────────────────────────
 
 window.atlas.onShowPopup(async (data) => {
@@ -178,10 +277,10 @@ window.atlas.onShowPopup(async (data) => {
     playNotificationSound(notification.type);
   }
 
-  // Render the card using shared renderer
-  container.innerHTML = renderCard(notification);
+  // Pass 4: Render card — popup mode for compact briefings
+  container.innerHTML = renderCard(notification, { popup: true });
 
-  // Resize popup for briefing cards with segments
+  // Resize popup for content
   resizeForContent();
 
   // Speak if TTS enabled on the notification
@@ -195,14 +294,10 @@ window.atlas.onShowPopup(async (data) => {
 // ─── Dynamic Popup Resize ───────────────────────────────────────────
 
 function resizeForContent() {
-  // Let the browser lay out the content, then request resize via IPC
   requestAnimationFrame(() => {
     const card = container.querySelector('.notif-card');
     if (!card) return;
-    // The height is set by main process based on notification type,
-    // but we can signal if we need more space
-    const contentHeight = card.scrollHeight + 24; // 24px for body padding
-    // Store for potential IPC resize call if main process supports it
+    const contentHeight = card.scrollHeight + 24;
     container.dataset.contentHeight = contentHeight;
   });
 }
@@ -229,17 +324,17 @@ function resetCountdown() {
   progressBar.style.transform = 'scaleX(1)';
 }
 
-// ─── Dismiss ────────────────────────────────────────────────────────
+// ─── Dismiss — Pass 4: Ghost Trail Effect ───────────────────────────
 
 function dismiss() {
   resetCountdown();
   stopTTS();
   document.body.classList.add('popup-dismissing');
 
-  // Wait for slide-out animation to finish
+  // Wait for ghost trail animation to finish (0.5s for afterimage)
   setTimeout(() => {
     window.atlas.popupDismiss();
-  }, 300);
+  }, 500);
 }
 
 // ─── IPC: Main process can force-dismiss ────────────────────────────
@@ -280,12 +375,6 @@ container.addEventListener('click', (e) => {
 let ttsAudio = null;
 
 async function speakNotification(notif) {
-  // 1. Prefer tts_text field if present
-  // 2. Then pre-generated audio_url (server-side ElevenLabs)
-  // 3. Then client-side ElevenLabs with segment stitching
-  // 4. Then body text
-  // 5. Fallback: Web Speech
-
   if (notif.audio_url) {
     resetCountdown();
     ttsAudio = new Audio(notif.audio_url);
@@ -301,7 +390,6 @@ async function speakNotification(notif) {
     return;
   }
 
-  // 2. Try client-side ElevenLabs
   await tryClientElevenLabs(notif);
 }
 
@@ -318,12 +406,10 @@ async function tryClientElevenLabs(notif) {
     const voiceId = ttsConfig.elevenLabsVoice;
 
     if (!apiKey || !voiceId) {
-      // No ElevenLabs configured, fall back to Web Speech
       fallbackSpeech(notif);
       return;
     }
 
-    // Build TTS text — prefer tts_text field
     const text = buildTTSText(notif);
     if (!text) {
       startCountdown();
@@ -331,8 +417,6 @@ async function tryClientElevenLabs(notif) {
     }
 
     resetCountdown();
-
-    // Call ElevenLabs API directly from renderer
     const volume = ttsConfig.ttsVolume || 0.8;
 
     const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
@@ -360,7 +444,6 @@ async function tryClientElevenLabs(notif) {
       return;
     }
 
-    // Response is audio/mpeg — create Blob URL and play
     const audioBlob = await response.blob();
     const blobUrl = URL.createObjectURL(audioBlob);
 
@@ -385,7 +468,6 @@ async function tryClientElevenLabs(notif) {
 }
 
 function buildTTSText(notif) {
-  // Fallback chain: tts_text → audio_url (handled above) → segment stitching → body text
   if (notif.tts_text) return notif.tts_text;
   if (notif.data?.tts_text) return notif.data.tts_text;
   if (notif.data?.segments?.length) {
@@ -412,7 +494,6 @@ function fallbackSpeech(notif) {
 function stopTTS() {
   if (ttsAudio) {
     ttsAudio.pause();
-    // Revoke blob URL if it exists
     if (ttsAudio.src && ttsAudio.src.startsWith('blob:')) {
       URL.revokeObjectURL(ttsAudio.src);
     }
