@@ -956,6 +956,163 @@ function renderSoundWave() {
 
 
 // ═══════════════════════════════════════════════════════════════════════
+//  WEATHER CARD
+// ═══════════════════════════════════════════════════════════════════════
+
+// ─── Weather: Relay — "Atmospheric Scanner" ──────────────────────────
+
+function renderWeatherRelay(n, options) {
+  const time = formatTime(n.timestamp);
+  const ts = formatTimestamp(n.timestamp);
+  const unread = n.read ? '' : ' unread';
+  const isPanel = options && options.panel;
+
+  const d = n.data || {};
+  const locations = d.locations || {};
+  const defaultLoc = d.defaultLocation || Object.keys(locations)[0] || 'Unknown';
+  const locData = locations[defaultLoc] || {};
+
+  const temp = locData.temp || '--°F';
+  const conditions = locData.conditions || 'Unknown';
+  const high = locData.high || '--';
+  const low = locData.low || '--';
+  const precip = locData.precip || '--';
+  const wind = locData.wind || '--';
+  const humidity = locData.humidity || '--';
+
+  // Encode locations as JSON in data attribute for JS access
+  const locationsJson = escapeHtml(JSON.stringify(locations));
+
+  const locationKeys = Object.keys(locations);
+  const hasMultipleLocations = locationKeys.length > 1;
+
+  const dropdownHtml = hasMultipleLocations ? `
+    <div class="weather-dropdown" data-card-id="${n.id}">
+      ${locationKeys.map(loc => `
+        <div class="weather-dropdown-item" data-location="${escapeHtml(loc)}">${escapeHtml(loc)}</div>
+      `).join('')}
+    </div>
+  ` : '';
+
+  const chevronHtml = hasMultipleLocations ? `<span class="weather-chevron">${SVG_ICONS.chevronDown}</span>` : '';
+
+  return `
+    <div class="notif-card card-enter${unread} weather-card${isPanel ? ' card-collapsible' : ''}" 
+         data-id="${n.id}" 
+         data-type="weather"
+         data-locations="${locationsJson}"
+         data-current-location="${escapeHtml(defaultLoc)}">
+      <div class="card-scanlines"></div>
+      <div class="card-vignette"></div>
+      <div class="card-noise-line"></div>
+      <div class="toast-scanner-beam"></div>
+      <div class="notif-header">
+        <div class="notif-header-left">
+          <span class="notif-icon notif-icon-svg">${SVG_ICONS.weather}</span>
+          <span class="weather-location-select" data-card-id="${n.id}">
+            <span class="weather-location-name">${escapeHtml(defaultLoc)}</span>
+            ${chevronHtml}
+          </span>
+          ${dropdownHtml}
+        </div>
+        <span class="notif-time">${time}</span>
+      </div>
+      <div class="weather-card-body">
+        <div class="weather-temp-large holo-number">${escapeHtml(temp)}</div>
+        <div class="weather-conditions">${escapeHtml(conditions)}</div>
+        <div class="weather-stat-row">
+          <span class="weather-stat">H: <span class="holo-number">${escapeHtml(high)}</span></span>
+          <span class="weather-stat">L: <span class="holo-number">${escapeHtml(low)}</span></span>
+          <span class="weather-stat">💧 <span class="holo-number">${escapeHtml(precip)}</span></span>
+        </div>
+        <div class="weather-stat-row">
+          <span class="weather-stat">Wind: ${escapeHtml(wind)}</span>
+          <span class="weather-stat">Humidity: ${escapeHtml(humidity)}</span>
+        </div>
+      </div>
+      <div class="card-timestamp">SCAN LOCKED &bull; ${ts}</div>
+    </div>
+  `;
+}
+
+// ─── Weather: Terrain — "Weather Station" ────────────────────────────
+
+function renderWeatherTerrain(n, options) {
+  const time = formatTime(n.timestamp);
+  const ts = formatTimestamp(n.timestamp);
+  const unread = n.read ? '' : ' unread';
+  const isPanel = options && options.panel;
+
+  const d = n.data || {};
+  const locations = d.locations || {};
+  const defaultLoc = d.defaultLocation || Object.keys(locations)[0] || 'Unknown';
+  const locData = locations[defaultLoc] || {};
+
+  const temp = locData.temp || '--°F';
+  const conditions = locData.conditions || 'Unknown';
+  const high = locData.high || '--';
+  const low = locData.low || '--';
+  const precip = locData.precip || '--';
+  const wind = locData.wind || '--';
+  const humidity = locData.humidity || '--';
+
+  const locationsJson = escapeHtml(JSON.stringify(locations));
+
+  const locationKeys = Object.keys(locations);
+  const hasMultipleLocations = locationKeys.length > 1;
+
+  const dropdownHtml = hasMultipleLocations ? `
+    <div class="weather-dropdown" data-card-id="${n.id}">
+      ${locationKeys.map(loc => `
+        <div class="weather-dropdown-item" data-location="${escapeHtml(loc)}">${escapeHtml(loc)}</div>
+      `).join('')}
+    </div>
+  ` : '';
+
+  const chevronHtml = hasMultipleLocations ? `<span class="weather-chevron">${SVG_ICONS.chevronDown}</span>` : '';
+
+  return `
+    <div class="notif-card card-enter${unread} weather-card${isPanel ? ' card-collapsible' : ''}" 
+         data-id="${n.id}" 
+         data-type="weather"
+         data-locations="${locationsJson}"
+         data-current-location="${escapeHtml(defaultLoc)}">
+      <div class="notif-header">
+        <div class="notif-header-left">
+          <span class="notif-icon notif-icon-svg">⛰</span>
+          <span class="notif-title">WEATHER STATION</span>
+          <span class="weather-location-select" data-card-id="${n.id}">
+            <span class="weather-location-name">${escapeHtml(defaultLoc)}</span>
+            ${chevronHtml}
+          </span>
+          ${dropdownHtml}
+        </div>
+        <span class="notif-time">${time}</span>
+      </div>
+      <div class="weather-card-body">
+        <div class="weather-temp-large">${escapeHtml(temp)}</div>
+        <div class="weather-conditions">${escapeHtml(conditions)}</div>
+        <div class="weather-stat-row">
+          <span class="weather-stat">H: ${escapeHtml(high)}</span>
+          <span class="weather-stat">L: ${escapeHtml(low)}</span>
+          <span class="weather-stat">💧 ${escapeHtml(precip)}</span>
+        </div>
+        <div class="weather-stat-row">
+          <span class="weather-stat">Wind: ${escapeHtml(wind)}</span>
+          <span class="weather-stat">Humidity: ${escapeHtml(humidity)}</span>
+        </div>
+      </div>
+      <div class="card-timestamp">OBSERVATION &bull; ${ts}</div>
+    </div>
+  `;
+}
+
+function renderWeatherCard(n, options) {
+  return getTheme() === 'terrain' ? renderWeatherTerrain(n, options) : renderWeatherRelay(n, options);
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
 //  MAIN DISPATCHER
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -964,6 +1121,7 @@ function renderCard(n, options) {
     case 'briefing': return renderBriefingCard(n, options);
     case 'alert': return renderAlertCard(n);
     case 'production-card': return renderProductionCard(n, options);
+    case 'weather': return renderWeatherCard(n, options);
     default: return renderToastCard(n);
   }
 }

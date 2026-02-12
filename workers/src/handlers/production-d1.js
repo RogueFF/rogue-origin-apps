@@ -376,7 +376,7 @@ async function getScoreboardData(env, date = null) {
   // Get today's hourly production data from D1
   const todayRows = await query(env.DB, `
     SELECT time_slot, cultivar1, tops_lbs1, smalls_lbs1, trimmers_line1, buckers_line1,
-           effective_trimmers_line1
+           effective_trimmers_line1, qc
     FROM monthly_production
     WHERE production_date = ?
   `, [today]);
@@ -399,6 +399,7 @@ async function getScoreboardData(env, date = null) {
       buckers: r.buckers_line1 || 0,
       strain: r.cultivar1 || '',
       multiplier: getTimeSlotMultiplier(r.time_slot, timeSlotMultipliers),
+      notes: r.qc || '',
     };
   });
 
@@ -530,6 +531,7 @@ async function getScoreboardData(env, date = null) {
         lbs: row.tops,
         smalls: row.smalls,
         multiplier: row.multiplier, // Break-adjusted hour fraction (e.g. 0.83 = 10 min break)
+        notes: row.notes || '',
       });
     }
   }

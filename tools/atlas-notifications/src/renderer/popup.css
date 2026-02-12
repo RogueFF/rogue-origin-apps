@@ -392,3 +392,28 @@ body {
   max-height: none;
   opacity: 1;
 }
+
+/* ─── Weather card in popup ───────────────────────────────────── */
+
+#popup-container .notif-card[data-type="weather"]::before {
+  background: var(--cyan);
+  box-shadow: 0 0 12px var(--cyan-glow);
+}
+
+[data-theme="terrain"] #popup-container .notif-card[data-type="weather"]::before {
+  box-shadow: none;
+  background: var(--accent-blue);
+}
+
+#popup-container .weather-card-body {
+  padding: 12px 16px;
+}
+
+#popup-container .weather-temp-large {
+  font-size: 42px;
+}
+
+#popup-container .weather-stat-row {
+  font-size: 11px;
+  gap: 12px;
+}
