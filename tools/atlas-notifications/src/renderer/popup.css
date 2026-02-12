@@ -1,4 +1,4 @@
-/* ─── Popup Window — Glass Console ───────────────────────────────── */
+/* ─── Popup Window — Glass Console Pass 2 ────────────────────────── */
 
 :root {
   --bg-void: #030504;
@@ -126,7 +126,7 @@ body {
 /* Alert shake on arrival */
 #popup-container .notif-card[data-type="alert"]:not(.acknowledged) {
   background: rgba(239, 68, 68, 0.06);
-  animation: alertShake 0.4s ease-out, alertPulse 2s infinite 0.5s;
+  animation: alertShake 0.4s ease-out, alertPopupPulse 2s infinite 0.5s;
 }
 
 @keyframes alertShake {
@@ -137,15 +137,15 @@ body {
   80% { transform: translateX(2px); }
 }
 
-@keyframes alertPulse {
-  0%, 100% { 
-    box-shadow: 
+@keyframes alertPopupPulse {
+  0%, 100% {
+    box-shadow:
       0 8px 32px rgba(0, 0, 0, 0.6),
       0 2px 8px rgba(0, 0, 0, 0.4),
       inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
-  50% { 
-    box-shadow: 
+  50% {
+    box-shadow:
       0 8px 32px rgba(0, 0, 0, 0.6),
       0 2px 8px rgba(0, 0, 0, 0.4),
       inset 0 1px 0 rgba(255, 255, 255, 0.08),
@@ -194,7 +194,7 @@ body {
   }
 }
 
-/* ─── Popup-specific alert ack feedback ─────────────────────────── */
+/* ─── Popup-specific ack feedback ─────────────────────────────────── */
 
 .alert-acked {
   margin-top: 6px;
@@ -212,7 +212,7 @@ body {
   font-weight: 600;
 }
 
-#popup-container .briefing-segment-label {
+#popup-container .intel-segment-label {
   font-family: var(--font-display);
 }
 
@@ -248,7 +248,18 @@ body {
 
 #popup-container .prod-gauge-value {
   font-family: var(--font-data);
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   fill: var(--cream);
+}
+
+/* ─── Intel Brief timeline in popup — slightly larger hero stats ── */
+
+#popup-container .intel-hero-stat {
+  font-size: 22px;
+}
+
+#popup-container .intel-segment-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.06);
 }
