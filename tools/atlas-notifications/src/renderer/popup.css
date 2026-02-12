@@ -1,4 +1,29 @@
-/* ─── Popup Window ───────────────────────────────────────────────── */
+/* ─── Popup Window — Glass Console ───────────────────────────────── */
+
+:root {
+  --bg-void: #030504;
+  --bg-card: rgba(255, 255, 255, 0.04);
+  --card-hover: rgba(255, 255, 255, 0.07);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.12);
+  --cream: #f0ece4;
+  --cream-secondary: #a8a49c;
+  --cream-muted: #7a776f;
+  --gold: #e4aa4f;
+  --gold-dim: rgba(228, 170, 79, 0.6);
+  --gold-glow: rgba(228, 170, 79, 0.3);
+  --green: #3dd68c;
+  --green-glow: rgba(61, 214, 140, 0.3);
+  --red: #ef4444;
+  --red-glow: rgba(239, 68, 68, 0.3);
+  --font-display: 'Outfit', sans-serif;
+  --font-data: 'JetBrains Mono', monospace;
+  --font-ui: 'Manrope', sans-serif;
+  --font-body: var(--font-ui);
+  --font-mono: var(--font-data);
+  --radius: 12px;
+  --radius-sm: 8px;
+}
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -6,13 +31,34 @@ body {
   background: transparent;
   font-family: var(--font-body);
   overflow: hidden;
-  padding: 8px;
+  padding: 10px;
+  width: 400px;
 }
 
 #popup-container {
-  animation: popupSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: popupMaterialize 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   border-radius: var(--radius);
   overflow: hidden;
+  position: relative;
+}
+
+/* Dramatic materialize with glow burst */
+@keyframes popupMaterialize {
+  0% {
+    opacity: 0;
+    filter: blur(20px);
+    transform: scale(0.9) translateY(20px);
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow: 0 0 40px var(--gold-glow);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1) translateY(0);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  }
 }
 
 /* Override card styles for popup context */
@@ -20,69 +66,131 @@ body {
   margin-bottom: 0;
   cursor: pointer;
   border-radius: var(--radius);
-  background: #111413;
-  border: 1px solid rgba(228, 170, 79, 0.12);
-  color: #e8e4dc;
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--cream);
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.5),
-    0 2px 8px rgba(0, 0, 0, 0.3),
-    0 0 1px rgba(228, 170, 79, 0.15);
+    0 8px 32px rgba(0, 0, 0, 0.6),
+    0 2px 8px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
   animation: none;
 }
 
 #popup-container .notif-card:hover {
   background: var(--card-hover);
+  border-color: var(--border-hover);
 }
 
-/* ─── Progress Bar ──────────────────────────────────────────────── */
+/* Left accent bar with stronger glow for popup */
+#popup-container .notif-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+
+#popup-container .notif-card[data-type="toast"]::before {
+  background: var(--gold);
+  box-shadow: 0 0 12px var(--gold-glow);
+}
+
+#popup-container .notif-card[data-type="briefing"]::before {
+  background: var(--green);
+  box-shadow: 0 0 12px var(--green-glow);
+}
+
+#popup-container .notif-card[data-type="alert"]::before {
+  background: var(--red);
+  box-shadow: 0 0 12px var(--red-glow);
+}
+
+#popup-container .notif-card[data-type="production-card"]::before {
+  background: var(--gold);
+  box-shadow: 0 0 12px var(--gold-glow);
+}
+
+#popup-container .notif-card[data-type="production-card"].pace-ahead::before {
+  background: var(--green);
+  box-shadow: 0 0 12px var(--green-glow);
+}
+
+#popup-container .notif-card[data-type="production-card"].pace-behind::before {
+  background: var(--red);
+  box-shadow: 0 0 12px var(--red-glow);
+}
+
+/* Alert shake on arrival */
+#popup-container .notif-card[data-type="alert"]:not(.acknowledged) {
+  background: rgba(239, 68, 68, 0.06);
+  animation: alertShake 0.4s ease-out, alertPulse 2s infinite 0.5s;
+}
+
+@keyframes alertShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-2px); }
+  40% { transform: translateX(2px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+
+@keyframes alertPulse {
+  0%, 100% { 
+    box-shadow: 
+      0 8px 32px rgba(0, 0, 0, 0.6),
+      0 2px 8px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+  50% { 
+    box-shadow: 
+      0 8px 32px rgba(0, 0, 0, 0.6),
+      0 2px 8px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 0 20px var(--red-glow);
+  }
+}
+
+/* ─── Progress Bar — Glowing Bottom Edge ────────────────────────── */
 
 #popup-progress {
   position: absolute;
-  bottom: 8px;
-  left: 8px;
-  right: 8px;
-  height: 3px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 0 0 var(--radius) var(--radius);
-  overflow: hidden;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: transparent;
+  overflow: visible;
+  pointer-events: none;
 }
 
 #popup-progress-bar {
   height: 100%;
-  background: var(--gold);
-  opacity: 0.6;
+  background: linear-gradient(to right, var(--gold) 0%, transparent 100%);
+  box-shadow: 0 0 8px var(--gold-glow);
   width: 100%;
   transform-origin: left;
   transition: transform 0.1s linear;
 }
 
-/* ─── Slide In Animation ────────────────────────────────────────── */
-
-@keyframes popupSlideIn {
-  from {
-    opacity: 0;
-    transform: translateX(80px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
 /* ─── Slide Out Animation ───────────────────────────────────────── */
 
 .popup-dismissing #popup-container {
-  animation: popupSlideOut 0.25s cubic-bezier(0.55, 0, 1, 0.45) forwards;
+  animation: popupSlideOut 0.3s cubic-bezier(0.55, 0, 1, 0.45) forwards;
 }
 
 @keyframes popupSlideOut {
   from {
     opacity: 1;
-    transform: translateX(0);
+    filter: blur(0);
+    transform: scale(1) translateX(0);
   }
   to {
     opacity: 0;
-    transform: translateX(80px);
+    filter: blur(8px);
+    transform: scale(0.95) translateX(80px);
   }
 }
 
@@ -95,4 +203,52 @@ body {
   font-family: var(--font-mono);
   text-transform: uppercase;
   letter-spacing: 0.6px;
+}
+
+/* ─── Typography overrides for popup ────────────────────────────── */
+
+#popup-container .notif-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+#popup-container .briefing-segment-label {
+  font-family: var(--font-display);
+}
+
+#popup-container .prod-stat-label {
+  font-family: var(--font-display);
+}
+
+/* ─── Production card gauge styles for popup ────────────────────── */
+
+#popup-container .prod-gauge {
+  width: 60px;
+  height: 60px;
+}
+
+#popup-container .prod-gauge-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.05);
+  stroke-width: 3;
+}
+
+#popup-container .prod-gauge-fill {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  transform-origin: center;
+  transform: rotate(-90deg);
+  transition: stroke-dashoffset 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#popup-container .prod-gauge-fill.gold { stroke: var(--gold); }
+#popup-container .prod-gauge-fill.green { stroke: var(--green); }
+#popup-container .prod-gauge-fill.red { stroke: var(--red); }
+
+#popup-container .prod-gauge-value {
+  font-family: var(--font-data);
+  font-size: 16px;
+  font-weight: 600;
+  fill: var(--cream);
 }
