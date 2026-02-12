@@ -344,10 +344,12 @@ async function tryClientElevenLabs(notif) {
       },
       body: JSON.stringify({
         text: text,
-        model_id: 'eleven_turbo_v2',
+        model_id: 'eleven_multilingual_v2',
         voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75
+          stability: 0.3,
+          similarity_boost: 0.85,
+          style: 0.4,
+          use_speaker_boost: true
         }
       })
     });
