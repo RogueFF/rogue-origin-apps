@@ -407,6 +407,17 @@ async function getScoreboardData(env, date = null) {
   const allSlotsFromDB = todayRows.map(r => (r.time_slot || '').replace(/[-–—]/g, '–'));
   const uniqueSlots = [...new Set([...ALL_TIME_SLOTS.map(s => s.replace(/[-–—]/g, '–')), ...allSlotsFromDB])];
   
+  // Sort chronologically — dynamic first slots (e.g. "7:44 AM") must land in correct position
+  const parseSlotStart = (ts) => {
+    const m = (ts || '').match(/^(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+    if (!m) return 9999;
+    let h = parseInt(m[1]), min = parseInt(m[2]);
+    if (m[3].toUpperCase() === 'PM' && h !== 12) h += 12;
+    if (m[3].toUpperCase() === 'AM' && h === 12) h = 0;
+    return h * 60 + min;
+  };
+  uniqueSlots.sort((a, b) => parseSlotStart(a) - parseSlotStart(b));
+
   const rows = uniqueSlots
     .map(slot => rowsBySlot[slot])
     .filter(r => r !== undefined);
