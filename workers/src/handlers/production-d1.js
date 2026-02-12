@@ -803,6 +803,44 @@ async function getBagTimerData(env, date = null) {
       }
     }
 
+    // Build per-hour trimmer lookup from scoreboard hourly data
+    // Maps PST hour ranges to trimmer counts for per-cycle target calculation
+    const hourlyTrimmerMap = [];
+    for (const h of (scoreboardData.hourlyRates || [])) {
+      if (!h.timeSlot || !h.trimmers) continue;
+      const parts = String(h.timeSlot).replace(/[-–—]/g, '–').split('–').map(s => s.trim());
+      if (parts.length === 2) {
+        const startMin = parseSlotTimeToMinutes(parts[0]);
+        const endMin = parseSlotTimeToMinutes(parts[1]);
+        if (startMin !== null && endMin !== null) {
+          hourlyTrimmerMap.push({
+            startMin, endMin,
+            trimmers: h.trimmers,
+            multiplier: h.multiplier || getTimeSlotMultiplier(h.timeSlot, timeSlotMultipliers),
+          });
+        }
+      }
+    }
+
+    // Helper: get trimmers for a given PST minute-of-day
+    function getTrimmersAtMinute(pstMinute) {
+      for (const slot of hourlyTrimmerMap) {
+        if (pstMinute >= slot.startMin && pstMinute < slot.endMin) {
+          return { trimmers: slot.trimmers, multiplier: slot.multiplier };
+        }
+      }
+      // Fallback to current trimmers
+      return { trimmers: result.currentTrimmers, multiplier: 1.0 };
+    }
+
+    // Helper: calculate target seconds for a given trimmer count and multiplier
+    function calcTargetSeconds(trimmers, multiplier) {
+      const teamRate = trimmers * result.targetRate;
+      if (teamRate <= 0) return result.targetSeconds;
+      const base = Math.round((bagWeightLbs / teamRate) * 3600);
+      return (multiplier > 0 && multiplier < 1.0) ? Math.round(base / multiplier) : base;
+    }
+
     if (todayBags.length > 1) {
       todayBags.sort((a, b) => b - a);
       for (let i = 0; i < Math.min(todayBags.length - 1, 20); i++) {
@@ -810,9 +848,19 @@ async function getBagTimerData(env, date = null) {
         const breakMins = getBreakMinutesInWindow(todayBags[i + 1], todayBags[i]);
         const cycleSec = rawCycleSec - (breakMins * 60);
         if (cycleSec >= 300 && cycleSec <= 14400) {
+          // Determine per-cycle target based on trimmers at the midpoint of this cycle
+          const midpoint = new Date((todayBags[i].getTime() + todayBags[i + 1].getTime()) / 2);
+          const midpointPST = formatDatePT(midpoint, 'HH:mm:ss');
+          const [mH, mM] = midpointPST.split(':').map(Number);
+          const midMin = mH * 60 + mM;
+          const { trimmers: cycleTrimmers, multiplier: cycleMult } = getTrimmersAtMinute(midMin);
+          const cycleTarget = calcTargetSeconds(cycleTrimmers, cycleMult);
+
           result.cycleHistory.push({
             timestamp: todayBags[i].toISOString(),
             time: cycleSec,
+            target: cycleTarget,
+            trimmers: cycleTrimmers,
             cycleSeconds: cycleSec,
             cycleMinutes: Math.round(cycleSec / 60),
           });
