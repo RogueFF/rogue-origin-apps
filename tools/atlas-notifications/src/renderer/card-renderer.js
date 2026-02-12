@@ -1,6 +1,8 @@
-// ─── Shared Card Renderer — Glass Console Pass 2 ────────────────────
+// ─── Shared Card Renderer — Hologram Glitch Pass 3 ───────────────────
 // Used by both popup.js and panel.js to render notification cards.
-// All emoji replaced with inline SVG icons. Premium briefing redesign.
+// All emoji replaced with inline SVG icons. Hologram glitch aesthetic:
+// production → pulse monitor area chart, briefing → decoded transmission,
+// alert → red alert VHS glitch, toast → signal.
 
 // ─── SVG Icon Library ───────────────────────────────────────────────
 // Monoline 16px icons, use currentColor or explicit accent color.
@@ -42,6 +44,12 @@ const SVG_ICONS = {
 
   // Mission control / command
   command: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/></svg>`,
+
+  // Pulse / signal — activity line
+  pulse: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`,
+
+  // Signal / radio
+  signal: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1"/></svg>`,
 };
 
 // Set up aliases
@@ -83,104 +91,83 @@ function formatTime(iso) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-/**
- * Extract a hero stat from segment text.
- * Looks for patterns like "93.3 lbs", "$4,200", "12 trimmers", "78°F", "108.6%", etc.
- */
-function extractHeroStat(text) {
-  if (!text) return null;
-  // Match numbers with optional decimals, commas, dollar signs, percent, degree, unit suffixes
-  const patterns = [
-    /(\$[\d,]+(?:\.\d+)?)/,                           // $4,200
-    /([\d,]+(?:\.\d+)?\s*%)/,                          // 108.6%
-    /([\d,]+(?:\.\d+)?°[FC]?)/,                        // 78°F
-    /([\d,]+(?:\.\d+)?\s*(?:lbs?|kg|oz|tons?))\b/i,    // 93.3 lbs
-    /([\d,]+(?:\.\d+)?\s*(?:bags?|boxes|units?))\b/i,  // 12 bags
-    /([\d,]+(?:\.\d+)?\s*(?:trimmers?|crew))\b/i,      // 12 trimmers
-    /([\d,]+(?:\.\d+)?\s*(?:mph|km\/h))\b/i,           // 15 mph
-  ];
-
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (match) return match[1].trim();
-  }
-
-  // Fallback: first standalone number with optional decimal
-  const numMatch = text.match(/\b(\d+(?:\.\d+)?)\b/);
-  return numMatch ? numMatch[1] : null;
+function formatTimestamp(iso) {
+  const d = new Date(iso || Date.now());
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }).toUpperCase();
 }
 
-// ─── Toast Card ─────────────────────────────────────────────────────
+/**
+ * Highlight numbers in text with gold glow span.
+ */
+function highlightNumbers(text) {
+  if (!text) return '';
+  const escaped = escapeHtml(text);
+  return escaped.replace(
+    /(\$?[\d,]+(?:\.\d+)?(?:\s*(?:%|lbs?|kg|oz|bags?|trimmers?|crew|mph|°[FC]?))?)\b/gi,
+    '<span class="holo-number">$1</span>'
+  );
+}
+
+// ─── Toast Card — "Signal" ──────────────────────────────────────────
 
 function renderToastCard(n) {
   const time = formatTime(n.timestamp);
+  const ts = formatTimestamp(n.timestamp);
   const unread = n.read ? '' : ' unread';
   return `
     <div class="notif-card card-enter${unread}" data-id="${n.id}" data-type="toast">
+      <div class="card-scanlines"></div>
+      <div class="card-vignette"></div>
+      <div class="card-noise-line"></div>
       <div class="notif-header">
         <div class="notif-header-left">
-          <span class="notif-icon notif-icon-svg">${SVG_ICONS.toast}</span>
-          <span class="notif-title">${escapeHtml(n.title)}</span>
+          <span class="notif-icon notif-icon-svg">${SVG_ICONS.signal}</span>
+          <span class="notif-title holo-flicker">${escapeHtml(n.title)}</span>
         </div>
         <span class="notif-time">${time}</span>
       </div>
       <div class="notif-body">${escapeHtml(n.body)}</div>
+      <div class="card-timestamp">SIGNAL &bull; ${ts}</div>
     </div>
   `;
 }
 
-// ─── Premium Briefing Card — Intel Brief Design ─────────────────────
+// ─── Briefing Card — "Decoded Transmission" ─────────────────────────
 
 function renderBriefingCard(n) {
   const time = formatTime(n.timestamp);
+  const ts = formatTimestamp(n.timestamp);
   const unread = n.read ? '' : ' unread';
 
   let contentHtml = '';
+  let segCount = 0;
   if (n.data && n.data.segments && n.data.segments.length > 0) {
     const segments = n.data.segments;
+    segCount = segments.length;
 
-    // Build the timeline layout with hero stat extraction
-    const segmentCards = segments.map((seg, i) => {
+    const segmentBlocks = segments.map((seg, i) => {
       const icon = getIcon(seg.icon);
       const label = escapeHtml(seg.label || seg.category || 'Update');
       const text = seg.text || seg.summary || '';
-      const heroStat = extractHeroStat(text);
-
-      // Remove the hero stat from the body text to avoid duplication
-      let bodyText = text;
-      if (heroStat) {
-        bodyText = text.replace(heroStat, '').replace(/^\s*[,.\-—:]+\s*/, '').trim();
-        // If removing the stat left us with nothing meaningful, show original
-        if (bodyText.length < 5) bodyText = text;
-      }
-
-      const heroHtml = heroStat
-        ? `<div class="intel-hero-stat">${escapeHtml(heroStat)}</div>`
-        : '';
-
-      const delay = i * 80;
+      const bodyHtml = highlightNumbers(text);
+      const delay = i * 120;
 
       return `
-        <div class="intel-segment" style="animation-delay: ${delay}ms">
-          <div class="intel-timeline-node">
-            <div class="intel-node-dot"></div>
-            ${i < segments.length - 1 ? '<div class="intel-node-line"></div>' : ''}
+        <div class="decoded-segment" style="animation-delay: ${delay}ms">
+          <div class="decoded-segment-header">
+            <span class="decoded-segment-icon">${icon}</span>
+            <span class="decoded-segment-label">${label}</span>
           </div>
-          <div class="intel-segment-card">
-            <div class="intel-segment-header">
-              <span class="intel-segment-icon">${icon}</span>
-              <span class="intel-segment-label">${label}</span>
-            </div>
-            ${heroHtml}
-            <div class="intel-segment-body">${escapeHtml(bodyText)}</div>
-          </div>
+          <div class="decoded-segment-body holo-typewriter" style="animation-delay: ${delay + 80}ms">${bodyHtml}</div>
         </div>
+        ${i < segments.length - 1 ? '<div class="decoded-separator">\u2013 \u2013 \u2013 \u2013 \u2013 \u2013 \u2013 \u2013</div>' : ''}
       `;
     }).join('');
 
-    contentHtml = `<div class="intel-timeline">${segmentCards}</div>`;
+    contentHtml = `<div class="decoded-transmission">${segmentBlocks}</div>`;
   } else if (n.body) {
     contentHtml = `<div class="notif-body">${escapeHtml(n.body)}</div>`;
+    segCount = 1;
   }
 
   // Audio controls for panel view
@@ -194,147 +181,241 @@ function renderBriefingCard(n) {
 
   return `
     <div class="notif-card card-enter${unread}" data-id="${n.id}" data-type="briefing">
-      <div class="notif-header">
+      <div class="card-scanlines"></div>
+      <div class="card-vignette"></div>
+      <div class="card-noise-line"></div>
+      <div class="notif-header decoded-header">
         <div class="notif-header-left">
-          <span class="notif-icon notif-icon-svg">${SVG_ICONS.briefing}</span>
-          <span class="notif-title">${escapeHtml(n.title)}</span>
+          <span class="decoded-pulse-dot"></span>
+          <span class="decoded-incoming holo-chromatic">&#9654; INCOMING BRIEFING</span>
         </div>
         <span class="notif-time">${time}</span>
       </div>
+      <div class="decoded-title holo-flicker">${escapeHtml(n.title)}</div>
       ${contentHtml}
       ${audioHtml}
+      <div class="card-timestamp">TRANSMISSION COMPLETE &bull; ${segCount} SEGMENT${segCount !== 1 ? 'S' : ''}</div>
     </div>
   `;
 }
 
-// ─── Alert Card ─────────────────────────────────────────────────────
+// ─── Alert Card — "Red Alert" ───────────────────────────────────────
 
 function renderAlertCard(n) {
   const time = formatTime(n.timestamp);
+  const ts = formatTimestamp(n.timestamp);
   const unread = n.read ? '' : ' unread';
   const acked = n.acknowledged ? ' acknowledged' : '';
-  const ackBtn = n.acknowledged ? '' : `
-    <div class="alert-footer">
-      <button class="btn-acknowledge" data-ack-id="${n.id}">Acknowledge</button>
-    </div>
-  `;
+  const ackBtn = n.acknowledged
+    ? '<div class="alert-footer"><div class="alert-acked-inline">[ CONFIRMED ]</div></div>'
+    : `<div class="alert-footer">
+        <button class="btn-acknowledge" data-ack-id="${n.id}">[ ACKNOWLEDGE ]</button>
+      </div>`;
 
   return `
     <div class="notif-card card-enter${unread}${acked}" data-id="${n.id}" data-type="alert">
+      <div class="card-scanlines"></div>
+      <div class="card-vignette"></div>
+      <div class="card-noise-line"></div>
+      ${!n.acknowledged ? '<div class="alert-glitch-overlay"></div>' : ''}
       <div class="notif-header">
         <div class="notif-header-left">
-          <span class="notif-icon notif-icon-svg notif-icon-alert">${SVG_ICONS.alert}</span>
-          <span class="notif-title">${escapeHtml(n.title)}</span>
+          <span class="notif-icon notif-icon-svg notif-icon-alert holo-chromatic-strong">${SVG_ICONS.alert}</span>
+          <span class="notif-title holo-chromatic-strong holo-flicker">\u26A0 ALERT</span>
         </div>
         <span class="notif-time">${time}</span>
       </div>
+      <div class="alert-body-text">${escapeHtml(n.title)}</div>
       <div class="notif-body">${escapeHtml(n.body)}</div>
       ${ackBtn}
     </div>
   `;
 }
 
-// ─── Production Card with Fixed SVG Gauges ──────────────────────────
+// ─── Production Card — "Pulse Monitor" ──────────────────────────────
 
 function renderProductionCard(n) {
   const time = formatTime(n.timestamp);
+  const ts = formatTimestamp(n.timestamp);
   const unread = n.read ? '' : ' unread';
   const d = n.data || {};
   const pace = d.paceStatus || 'on-pace';
   const paceClass = pace === 'ahead' ? 'ahead' : pace === 'behind' ? 'behind' : 'on-pace';
-  const paceLabel = pace === 'ahead' ? 'ahead' : pace === 'behind' ? 'behind' : 'on pace';
-  const pct = d.percentOfTarget || 0;
 
   // Stats
-  const lbs = d.dailyTotal != null ? d.dailyTotal.toFixed(1) : '—';
-  const target = pct || 0;
+  const lbs = d.dailyTotal != null ? d.dailyTotal.toFixed(1) : '0.0';
+  const pct = d.percentOfTarget || 0;
   const crew = d.trimmers || d.crew || 0;
-  const rate = d.rate ? d.rate.toFixed(2) : '0';
+  const rate = d.rate ? d.rate.toFixed(2) : '0.00';
 
-  // Color based on pace
-  const gaugeColor = paceClass === 'ahead' ? 'green' : paceClass === 'behind' ? 'red' : 'gold';
-
-  // ─── FIXED GAUGE FILL MATH ──────────────────────
-  // LBS: fill based on percent of target. If target is known, lbs/expectedLbs.
-  //       Use percentOfTarget as proxy: if 108.6% of target → 108.6% fill (capped at visual max 120%)
-  const lbsFill = Math.min(pct, 120);
-
-  // TARGET: the percentage itself. 100% = full ring. >100% shows overflow glow.
-  const targetFill = Math.min(target, 120);
-
-  // RATE: max baseline ~2.0 lbs/person/hr. So fill = (rate / 2.0) * 100
-  const rateNum = parseFloat(rate) || 0;
-  const rateFill = Math.min((rateNum / 2.0) * 100, 120);
-
-  // CREW: max baseline ~20. So fill = (crew / 20) * 100
-  const crewFill = Math.min((crew / 20) * 100, 100);
-
-  // Sparkline from hourly data
-  let sparkHtml = '';
-  if (d.hourly && d.hourly.length > 0) {
-    const maxVal = Math.max(...d.hourly.map(h => h.actual || 0), 1);
-    sparkHtml = `<div class="prod-sparkline">
-      ${d.hourly.map(h => {
-        const height = Math.max(((h.actual || 0) / maxVal) * 100, 5);
-        const barPace = (h.actual || 0) >= (h.target || d.targetRate || 0) ? 'ahead' : 'behind';
-        return `<div class="prod-sparkline-bar ${barPace}" style="height:${height}%"></div>`;
-      }).join('')}
-    </div>`;
-  }
+  // Build SVG area chart from hourly data
+  const chartHtml = renderPulseChart(d, paceClass);
 
   return `
     <div class="notif-card card-enter${unread} pace-${paceClass}" data-id="${n.id}" data-type="production-card">
-      <div class="notif-header">
-        <div class="notif-header-left">
-          <span class="notif-icon notif-icon-svg">${SVG_ICONS.chart}</span>
-          <span class="notif-title">${escapeHtml(n.title || 'Hourly Production')}</span>
+      <div class="card-scanlines"></div>
+      <div class="card-vignette"></div>
+      <div class="card-noise-line"></div>
+      <div class="pulse-monitor">
+        <div class="pulse-chart-area">
+          ${chartHtml}
+          <div class="pulse-stat pulse-stat-lbs holo-flicker">
+            <span class="pulse-stat-value holo-chromatic">${lbs}</span>
+            <span class="pulse-stat-unit">LBS</span>
+          </div>
+          <div class="pulse-stat pulse-stat-pct">
+            <span class="pulse-stat-value ${paceClass}">${pct}%</span>
+          </div>
+          <div class="pulse-stat pulse-stat-crew">
+            <span class="pulse-stat-value">${crew}</span>
+            <span class="pulse-stat-unit">CREW</span>
+          </div>
+          <div class="pulse-stat pulse-stat-rate">
+            <span class="pulse-stat-value">${rate}</span>
+            <span class="pulse-stat-unit">RATE</span>
+          </div>
         </div>
-        <span class="notif-time">${time}</span>
       </div>
-      <div class="prod-stats-grid">
-        ${renderGaugeStat(lbs, 'LBS', gaugeColor, lbsFill, target > 100)}
-        ${renderGaugeStat(target + '%', 'TARGET', gaugeColor, targetFill, target > 100)}
-        ${renderGaugeStat(crew, 'CREW', gaugeColor, crewFill, false)}
-        ${renderGaugeStat(rate, 'RATE', gaugeColor, rateFill, false)}
-      </div>
-      ${sparkHtml}
-      <div class="prod-pace">
-        <span class="prod-pace-text ${paceClass}">${paceLabel}</span>
-        <span class="prod-pace-pct ${paceClass}">${pct}%</span>
-      </div>
+      <div class="card-timestamp">SIGNAL LOCKED &bull; ${ts}</div>
     </div>
   `;
 }
 
-// ─── SVG Circular Gauge with Overflow Glow ──────────────────────────
+// ─── Pulse Monitor SVG Area Chart ───────────────────────────────────
 
-function renderGaugeStat(value, label, color, percent, overflow) {
-  const radius = 26;
-  const circumference = 2 * Math.PI * radius;
-  // Clamp visual fill at 100% for the ring, overflow gets a glow effect
-  const visualPercent = Math.min(percent, 100);
-  const offset = circumference - (visualPercent / 100) * circumference;
+function renderPulseChart(d, paceClass) {
+  const hourly = d.hourly || [];
+  const targetRate = d.targetRate || 0;
 
-  // Overflow glow class when exceeding 100%
-  const overflowClass = overflow ? ' gauge-overflow' : '';
-  const glowFilter = overflow
-    ? `<filter id="glow-${label}"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`
-    : '';
-  const filterAttr = overflow ? ` filter="url(#glow-${label})"` : '';
+  // If no hourly data, render a flat line
+  if (hourly.length === 0) {
+    return `
+      <svg class="pulse-chart-svg" viewBox="0 0 360 160" preserveAspectRatio="none">
+        <line x1="0" y1="80" x2="360" y2="80" stroke="rgba(255,255,255,0.1)" stroke-width="1" stroke-dasharray="4 4"/>
+        <text x="180" y="90" text-anchor="middle" fill="rgba(255,255,255,0.2)" font-size="12" font-family="'Space Mono', monospace">AWAITING DATA</text>
+      </svg>
+    `;
+  }
+
+  const width = 360;
+  const height = 160;
+  const padTop = 10;
+  const padBottom = 10;
+  const chartH = height - padTop - padBottom;
+
+  // Find max for scaling
+  const maxActual = Math.max(...hourly.map(h => h.actual || 0), targetRate, 1);
+  const scale = chartH / (maxActual * 1.15);
+
+  // Build path points
+  const stepW = width / Math.max(hourly.length - 1, 1);
+  const points = hourly.map((h, i) => {
+    const x = i * stepW;
+    const y = padTop + chartH - (h.actual || 0) * scale;
+    return { x, y, actual: h.actual || 0, target: h.target || targetRate };
+  });
+
+  // Smooth curve through points using cardinal spline
+  const linePath = buildSmoothPath(points);
+  // Area path (close to bottom)
+  const areaPath = linePath + ` L ${points[points.length - 1].x},${height} L ${points[0].x},${height} Z`;
+
+  // Target line Y
+  const targetY = padTop + chartH - targetRate * scale;
+
+  // Gradient ID based on pace
+  const gradId = paceClass === 'behind' ? 'pulseGradRed' : 'pulseGradGreen';
+  const lineColor = paceClass === 'behind' ? '#ff3344' : '#00ff88';
+
+  // Per-bar coloring segments for the area
+  let areaSegments = '';
+  for (let i = 0; i < points.length - 1; i++) {
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const aboveTarget = p1.actual >= p1.target && p2.actual >= p2.target;
+    const segColor = aboveTarget ? '#00ff88' : '#ff3344';
+    areaSegments += `
+      <rect x="${p1.x}" y="0" width="${stepW}" height="${height}" fill="url(#${aboveTarget ? 'pulseGradGreen' : 'pulseGradRed'})" opacity="0.6"/>
+    `;
+  }
 
   return `
-    <div class="prod-stat${overflowClass}">
-      <svg class="prod-gauge" viewBox="0 0 60 60">
-        <defs>${glowFilter}</defs>
-        <circle class="prod-gauge-bg" cx="30" cy="30" r="${radius}"></circle>
-        <circle class="prod-gauge-fill ${color}" cx="30" cy="30" r="${radius}"
-          stroke-dasharray="${circumference}"
-          stroke-dashoffset="${offset}"${filterAttr}></circle>
-        <text class="prod-gauge-value" x="30" y="34" text-anchor="middle" dominant-baseline="central">${value}</text>
-      </svg>
-      <div class="prod-stat-label">${label}</div>
-    </div>
+    <svg class="pulse-chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="pulseGradGreen" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#00ff88" stop-opacity="0.35"/>
+          <stop offset="100%" stop-color="#00ff88" stop-opacity="0.02"/>
+        </linearGradient>
+        <linearGradient id="pulseGradRed" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#ff3344" stop-opacity="0.3"/>
+          <stop offset="100%" stop-color="#ff3344" stop-opacity="0.02"/>
+        </linearGradient>
+        <clipPath id="areaClip">
+          <path d="${areaPath}"/>
+        </clipPath>
+      </defs>
+
+      <!-- Area fill clipped to the chart shape -->
+      <g clip-path="url(#areaClip)">
+        ${areaSegments}
+      </g>
+
+      <!-- Target line -->
+      <line x1="0" y1="${targetY}" x2="${width}" y2="${targetY}"
+        stroke="rgba(228,170,79,0.4)" stroke-width="1" stroke-dasharray="6 4"/>
+
+      <!-- Main line with glow -->
+      <path d="${linePath}" fill="none" stroke="${lineColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+        filter="url(#lineGlow)"/>
+      <path d="${linePath}" fill="none" stroke="${lineColor}" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
+
+      <!-- Data point dots -->
+      ${points.map(p => {
+        const dotColor = p.actual >= p.target ? '#00ff88' : '#ff3344';
+        return `<circle cx="${p.x}" cy="${p.y}" r="2.5" fill="${dotColor}" opacity="0.8"/>`;
+      }).join('')}
+
+      <!-- Glow filter -->
+      <defs>
+        <filter id="lineGlow">
+          <feGaussianBlur stdDeviation="3" result="blur"/>
+          <feMerge>
+            <feMergeNode in="blur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+      </defs>
+    </svg>
   `;
+}
+
+/**
+ * Build a smooth SVG path through a set of points.
+ * Uses Catmull-Rom to Bezier conversion for smooth curves.
+ */
+function buildSmoothPath(points) {
+  if (points.length === 0) return '';
+  if (points.length === 1) return `M ${points[0].x},${points[0].y}`;
+  if (points.length === 2) return `M ${points[0].x},${points[0].y} L ${points[1].x},${points[1].y}`;
+
+  let path = `M ${points[0].x},${points[0].y}`;
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[Math.max(i - 1, 0)];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[Math.min(i + 2, points.length - 1)];
+
+    const tension = 0.3;
+    const cp1x = p1.x + (p2.x - p0.x) * tension;
+    const cp1y = p1.y + (p2.y - p0.y) * tension;
+    const cp2x = p2.x - (p3.x - p1.x) * tension;
+    const cp2y = p2.y - (p3.y - p1.y) * tension;
+
+    path += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
+  }
+
+  return path;
 }
 
 // ─── Sound Wave Animation (for audio buttons) ──────────────────────
