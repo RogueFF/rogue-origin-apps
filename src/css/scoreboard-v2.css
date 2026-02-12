@@ -1896,6 +1896,7 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 1.5s ease
 .chart-wrapper {
   position: relative;
   height: calc(var(--bottom-height) - 70px);
+  overflow: visible;
 }
 
 .chart-wrapper canvas {
