@@ -1536,22 +1536,26 @@ async function setShiftStart(params, env) {
     return errorResponse('Can only set start time for today', 'VALIDATION_ERROR', 400);
   }
 
-  const shiftEnd = new Date(timestamp);
-  shiftEnd.setHours(16, 30, 0, 0);
-  const totalMinutes = (shiftEnd - timestamp) / 60000;
+  // Convert to PST minutes-since-midnight for all calculations
+  // This avoids UTC vs PST bugs (setHours operates in UTC on Workers)
+  const pstTimeStr = formatDatePT(timestamp, 'HH:mm:ss');
+  const [startH, startM] = pstTimeStr.split(':').map(Number);
+  const startMinutes = startH * 60 + startM;
+  const endMinutes = 16 * 60 + 30; // 4:30 PM PST
+  const totalMinutes = endMinutes - startMinutes;
 
+  // Breaks in PST: [startHour, startMin, endHour, endMin]
   const breaks = [[9, 0, 9, 10], [12, 0, 12, 30], [14, 30, 14, 40], [16, 20, 16, 30]];
   let breakMinutes = 0;
   for (const brk of breaks) {
-    const breakStart = new Date(timestamp);
-    breakStart.setHours(brk[0], brk[1], 0, 0);
-    const breakEnd = new Date(timestamp);
-    breakEnd.setHours(brk[2], brk[3], 0, 0);
+    const brkStart = brk[0] * 60 + brk[1];
+    const brkEnd = brk[2] * 60 + brk[3];
 
-    if (timestamp < breakEnd && breakStart < shiftEnd) {
-      const overlapStart = Math.max(timestamp.getTime(), breakStart.getTime());
-      const overlapEnd = Math.min(shiftEnd.getTime(), breakEnd.getTime());
-      breakMinutes += (overlapEnd - overlapStart) / 60000;
+    // Only count break time that falls within the shift window
+    if (startMinutes < brkEnd && brkStart < endMinutes) {
+      const overlapStart = Math.max(startMinutes, brkStart);
+      const overlapEnd = Math.min(endMinutes, brkEnd);
+      breakMinutes += overlapEnd - overlapStart;
     }
   }
 
