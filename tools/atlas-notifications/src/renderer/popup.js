@@ -95,11 +95,14 @@ function createReverb(ctx, delayTime, feedback) {
 // ─── Premium Notification Sound Generator ───────────────────────────
 // Pass 4: Layered sounds with reverb tails and richer textures.
 
-function playNotificationSound(type) {
+async function playNotificationSound(type) {
   if (!soundEnabled) return;
 
   try {
     const ctx = getAudioContext();
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
 
     // Always play static crackle under every sound
     playStaticCrackle(ctx, 0.02);
