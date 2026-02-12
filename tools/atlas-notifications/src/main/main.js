@@ -315,6 +315,17 @@ function addNotification(payload) {
 }
 
 function handleIncomingNotification(payload) {
+  // production-live: replace previous production card instead of stacking
+  if (payload.type === 'production-live') {
+    payload.type = 'production-card';
+    const history = getNotifications();
+    const prevIdx = history.findIndex(n => n.type === 'production-card');
+    if (prevIdx >= 0) {
+      history.splice(prevIdx, 1);
+      store.set('notifications', history);
+    }
+  }
+
   const notif = addNotification(payload);
 
   // Show rich popup notification
