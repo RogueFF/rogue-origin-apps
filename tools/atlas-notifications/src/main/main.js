@@ -298,6 +298,7 @@ function addNotification(payload) {
     body: payload.body || '',
     audio_url: payload.audio_url || null,
     tts: payload.tts || false,
+    tts_text: payload.tts_text || null,
     priority: payload.priority || 'normal',
     data: payload.data || {},
     timestamp: new Date().toISOString(),
