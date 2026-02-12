@@ -197,8 +197,9 @@
       text-align: left;
     }
     .chart-wrapper {
-      height: 120px;
+      height: 160px;
       position: relative;
+      overflow: visible;
     }
     
     /* Daily Progress - brand accent */
