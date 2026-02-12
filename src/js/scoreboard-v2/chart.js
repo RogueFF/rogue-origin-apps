@@ -167,6 +167,7 @@
                   var pctStr = Math.round(pct) + '% of target';
                   var lines = [];
                   lines.push(h.lbs.toFixed(1) + ' lbs  →  ' + pctStr);
+                  lines.push(h.rate.toFixed(2) + ' lbs/trimmer/hr');
 
                   // Crew line
                   var crew = h.trimmers + ' trimmer' + (h.trimmers !== 1 ? 's' : '');
@@ -179,6 +180,11 @@
                   if (h.multiplier && h.multiplier < 1) {
                     var breakMin = Math.round((1 - h.multiplier) * 60);
                     lines.push(breakMin + ' min break (' + Math.round(h.multiplier * 100) + '% hour)');
+                  }
+
+                  // Notes line — only if notes exist for this hour
+                  if (h.notes) {
+                    lines.push('📝 ' + h.notes);
                   }
 
                   return lines;
