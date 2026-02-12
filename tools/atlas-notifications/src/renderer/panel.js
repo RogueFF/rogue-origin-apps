@@ -1,4 +1,4 @@
-// ─── Atlas Notifications Panel — Hologram Glitch Pass 3 ─────────────────
+// ─── Atlas Notifications Panel — Pass 4: Alive ───────────────────────────
 
 let notifications = [];
 let activeTab = 'all';
@@ -7,6 +7,13 @@ let playingAudioId = null;
 let missionControlCollapsed = false;
 let atlasUptime = null;
 let lastMessageTime = null;
+
+// ─── Pass 4: Ambient Sound State ────────────────────────────────────
+let ambientCtx = null;
+let ambientGain = null;
+let ambientOsc = null;
+let ambientNoise = null;
+let ambientActive = false;
 
 // ─── DOM References ─────────────────────────────────────────────────
 
@@ -39,6 +46,134 @@ async function init() {
       playingAudioId = null;
       renderAudioButtons();
     });
+  }
+
+  // Pass 4: Generate particle dust
+  generateParticles();
+
+  // Pass 4: Start ambient sound (panel is visible on init)
+  startAmbientSound();
+}
+
+// ─── Pass 4: Particle Dust Generation ───────────────────────────────
+// 18 tiny floating dots, different speeds, drifting upward
+
+function generateParticles() {
+  const field = $('#particle-field');
+  if (!field) return;
+
+  const count = 18;
+  for (let i = 0; i < count; i++) {
+    const particle = document.createElement('span');
+    particle.className = 'particle';
+
+    // Random horizontal position
+    particle.style.left = Math.random() * 100 + '%';
+    // Start scattered vertically
+    particle.style.bottom = -(Math.random() * 20) + '%';
+
+    // Random animation duration (15-30s)
+    const duration = 15 + Math.random() * 15;
+    particle.style.animationDuration = duration + 's';
+
+    // Random delay so they don't all start at once
+    particle.style.animationDelay = -(Math.random() * duration) + 's';
+
+    // Size/brightness variants
+    if (i % 5 === 0) particle.classList.add('p-lg');
+    if (i % 7 === 0) particle.classList.add('p-bright');
+
+    field.appendChild(particle);
+  }
+}
+
+// ─── Pass 4: Ambient Sound — Ship Bridge Hum ───────────────────────
+// Low sine wave (55Hz) + filtered white noise, combined volume ~0.02
+// Fades in over 1s, fades out over 0.5s
+
+async function startAmbientSound() {
+  if (ambientActive) return;
+
+  // Check if sound is enabled
+  try {
+    const settings = await window.atlas.getSettings();
+    if (settings.soundEnabled === false) return;
+  } catch (e) { /* default to enabled */ }
+
+  try {
+    if (!ambientCtx) {
+      ambientCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (ambientCtx.state === 'suspended') {
+      await ambientCtx.resume();
+    }
+
+    // Master gain — starts at 0, fades in
+    ambientGain = ambientCtx.createGain();
+    ambientGain.gain.setValueAtTime(0, ambientCtx.currentTime);
+    ambientGain.gain.linearRampToValueAtTime(0.02, ambientCtx.currentTime + 1.0);
+    ambientGain.connect(ambientCtx.destination);
+
+    // Low sine hum at 55Hz
+    ambientOsc = ambientCtx.createOscillator();
+    ambientOsc.type = 'sine';
+    ambientOsc.frequency.setValueAtTime(55, ambientCtx.currentTime);
+    const oscGain = ambientCtx.createGain();
+    oscGain.gain.setValueAtTime(0.6, ambientCtx.currentTime);
+    ambientOsc.connect(oscGain);
+    oscGain.connect(ambientGain);
+    ambientOsc.start();
+
+    // Filtered white noise for texture
+    const bufferSize = ambientCtx.sampleRate * 2;
+    const noiseBuffer = ambientCtx.createBuffer(1, bufferSize, ambientCtx.sampleRate);
+    const noiseData = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      noiseData[i] = Math.random() * 2 - 1;
+    }
+
+    ambientNoise = ambientCtx.createBufferSource();
+    ambientNoise.buffer = noiseBuffer;
+    ambientNoise.loop = true;
+
+    // Lowpass filter to soften the noise
+    const noiseFilter = ambientCtx.createBiquadFilter();
+    noiseFilter.type = 'lowpass';
+    noiseFilter.frequency.setValueAtTime(200, ambientCtx.currentTime);
+    noiseFilter.Q.setValueAtTime(1, ambientCtx.currentTime);
+
+    const noiseGain = ambientCtx.createGain();
+    noiseGain.gain.setValueAtTime(0.4, ambientCtx.currentTime);
+
+    ambientNoise.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(ambientGain);
+    ambientNoise.start();
+
+    ambientActive = true;
+  } catch (e) {
+    // Silent fail — ambient sound is non-critical
+  }
+}
+
+function stopAmbientSound() {
+  if (!ambientActive || !ambientCtx || !ambientGain) return;
+
+  try {
+    // Fade out over 0.5s
+    ambientGain.gain.linearRampToValueAtTime(0, ambientCtx.currentTime + 0.5);
+
+    // Stop sources after fade
+    setTimeout(() => {
+      try {
+        if (ambientOsc) { ambientOsc.stop(); ambientOsc = null; }
+        if (ambientNoise) { ambientNoise.stop(); ambientNoise = null; }
+        ambientGain = null;
+        ambientActive = false;
+      } catch (e) { /* already stopped */ }
+    }, 600);
+  } catch (e) {
+    ambientActive = false;
   }
 }
 
@@ -171,12 +306,15 @@ function render() {
 
   emptyState.style.display = 'none';
 
-  const html = filtered.map(n => renderCard(n)).join('');
+  // Pass 4: Render cards with panel options for compact/expandable
+  const html = filtered.map(n => renderCard(n, { panel: true })).join('');
 
   const scrollTop = list.scrollTop;
-  // Keep empty state in DOM but hidden
+  // Keep particle field and empty state in DOM
+  const particleField = $('#particle-field');
+  const particleHtml = particleField ? particleField.outerHTML : '';
   const emptyEl = emptyState.outerHTML;
-  list.innerHTML = emptyEl + html;
+  list.innerHTML = particleHtml + emptyEl + html;
   list.scrollTop = scrollTop;
 }
 
@@ -209,7 +347,6 @@ function renderAudioButtons() {
     const nid = btn.dataset.notifId;
     const isPlaying = playingAudioId === nid;
     btn.classList.toggle('playing', isPlaying);
-    const labelEl = btn.querySelector('.btn-audio-label');
     if (isPlaying) {
       btn.innerHTML = `${renderSoundWave()} <span class="btn-audio-label">Playing</span>`;
     } else {
@@ -232,8 +369,11 @@ $$('.tab').forEach(tab => {
   });
 });
 
-// Close
-$('#btn-close').addEventListener('click', () => window.atlas.closePanel());
+// Close — stop ambient sound
+$('#btn-close').addEventListener('click', () => {
+  stopAmbientSound();
+  window.atlas.closePanel();
+});
 
 // Clear all
 $('#btn-clear').addEventListener('click', async () => {
@@ -242,7 +382,7 @@ $('#btn-clear').addEventListener('click', async () => {
   render();
 });
 
-// Card clicks
+// Card clicks — including expand/collapse toggle
 list.addEventListener('click', async (e) => {
   // Audio play
   const audioBtn = e.target.closest('.btn-audio');
@@ -271,8 +411,16 @@ list.addEventListener('click', async (e) => {
     return;
   }
 
-  // Mark read
+  // Pass 4: Expand/collapse toggle for collapsible cards
+  const expandToggle = e.target.closest('.card-expand-toggle');
   const card = e.target.closest('.notif-card');
+  if (card && card.classList.contains('card-collapsible')) {
+    // Toggle expanded state
+    card.classList.toggle('expanded');
+    return;
+  }
+
+  // Mark read
   if (card) {
     const id = card.dataset.id;
     const notif = notifications.find(n => n.id === id);

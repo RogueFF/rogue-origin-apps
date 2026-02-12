@@ -1,4 +1,4 @@
-/* ─── Popup Window — Hologram Glitch Pass 3 ───────────────────────── */
+/* ─── Popup Window — Pass 4: Alive ─────────────────────────────────── */
 
 :root {
   --bg-void: #030504;
@@ -106,6 +106,7 @@ body {
     0 8px 32px rgba(0, 0, 0, 0.6),
     0 2px 8px rgba(0, 0, 0, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  /* Override panel breathing with popup-specific entrance */
   animation: none;
 }
 
@@ -230,22 +231,62 @@ body {
   border-radius: inherit;
 }
 
-/* ─── Slide Out Animation ───────────────────────────────────────── */
+/* ─── Pass 4: Ghost Trail Dismiss ────────────────────────────────── */
+/* Hologram power-down: drop to 30% opacity, blur, then afterimage fades */
 
 .popup-dismissing #popup-container {
-  animation: popupSlideOut 0.3s cubic-bezier(0.55, 0, 1, 0.45) forwards;
+  animation: ghostDismiss 0.35s cubic-bezier(0.55, 0, 1, 0.45) forwards;
 }
 
-@keyframes popupSlideOut {
-  from {
+@keyframes ghostDismiss {
+  0% {
     opacity: 1;
     filter: blur(0);
     transform: scale(1) translateX(0);
   }
-  to {
+  40% {
+    opacity: 0.3;
+    filter: blur(2px);
+    transform: scale(1) translateX(20px);
+  }
+  70% {
+    opacity: 0.15;
+    filter: blur(6px);
+    transform: scale(0.98) translateX(50px);
+  }
+  100% {
     opacity: 0;
-    filter: blur(8px);
+    filter: blur(12px);
     transform: scale(0.95) translateX(80px);
+  }
+}
+
+/* Ghost afterimage via pseudo-element */
+.popup-dismissing #popup-container::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: inherit;
+  backdrop-filter: blur(20px);
+  opacity: 0;
+  animation: ghostAfterimage 0.5s ease-out 0.1s forwards;
+  pointer-events: none;
+  z-index: 10;
+}
+
+@keyframes ghostAfterimage {
+  0% {
+    opacity: 0.15;
+    filter: blur(4px);
+    transform: translateX(-5px);
+    box-shadow: 0 0 20px var(--cyan-glow);
+  }
+  100% {
+    opacity: 0;
+    filter: blur(16px);
+    transform: translateX(-10px);
+    box-shadow: 0 0 0 transparent;
   }
 }
 
@@ -272,10 +313,19 @@ body {
   font-family: var(--font-stat);
 }
 
-/* ─── Decoded transmission in popup — slightly larger ─────────── */
+/* ─── Decoded transmission in popup — compact mode ───────────────── */
 
 #popup-container .decoded-title {
   font-size: 15px;
+  margin-bottom: 6px;
+}
+
+#popup-container .compact-segment {
+  font-size: 12px;
+}
+
+#popup-container .compact-segment-label {
+  font-size: 9px;
 }
 
 #popup-container .decoded-segment-body {
@@ -295,4 +345,14 @@ body {
 
 #popup-container .pulse-stat-lbs .pulse-stat-value {
   font-size: 24px;
+}
+
+/* ─── Compact production in popup (not used but safe) ─────────── */
+#popup-container .compact-production {
+  display: none;
+}
+
+#popup-container .pulse-monitor {
+  max-height: none;
+  opacity: 1;
 }

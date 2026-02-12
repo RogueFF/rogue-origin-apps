@@ -1,8 +1,10 @@
-// ─── Shared Card Renderer — Hologram Glitch Pass 3 ───────────────────
+// ─── Shared Card Renderer — Pass 4: Alive ─────────────────────────────
 // Used by both popup.js and panel.js to render notification cards.
 // All emoji replaced with inline SVG icons. Hologram glitch aesthetic:
 // production → pulse monitor area chart, briefing → decoded transmission,
 // alert → red alert VHS glitch, toast → signal.
+// Pass 4: compact/expandable cards, segment summary extraction,
+// toast scanner beam, breathing card support.
 
 // ─── SVG Icon Library ───────────────────────────────────────────────
 // Monoline 16px icons, use currentColor or explicit accent color.
@@ -50,6 +52,9 @@ const SVG_ICONS = {
 
   // Signal / radio
   signal: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1"/></svg>`,
+
+  // Chevron down — for expand/collapse
+  chevronDown: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`,
 };
 
 // Set up aliases
@@ -108,6 +113,80 @@ function highlightNumbers(text) {
   );
 }
 
+/**
+ * Extract a compact one-line summary from segment text.
+ * Pulls key numbers, percentages, temperatures, locations.
+ */
+function extractSegmentSummary(text) {
+  if (!text) return '';
+
+  // Try to find meaningful condensed data
+  const parts = [];
+
+  // Temperatures: "45°F" patterns
+  const tempMatch = text.match(/([\d.]+)\s*°\s*[FC]/i);
+
+  // Percentages: "108.6%"
+  const pctMatch = text.match(/([\d.]+)\s*%/);
+
+  // Pounds: "93.3 lbs"
+  const lbsMatch = text.match(/([\d.]+)\s*lbs?/i);
+
+  // Weather conditions: common words after temperature
+  const condMatch = text.match(/(?:clear|cloudy|rain|snow|overcast|sunny|partly|fog|storm|wind|haze|drizzle|showers)\s*(?:skies?)?/i);
+
+  // Location arrows: city names near "→" or "to" or "ETA"
+  const routeMatch = text.match(/(?:in\s+)?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*(?:→|to|\.?\s*ETA)\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/);
+  const etaMatch = text.match(/ETA\s+(?:\w+\s+)?(\w+\s+\d+)/i);
+
+  // Rate patterns: "1.25 rate" or "rate of 1.25"
+  const rateMatch = text.match(/([\d.]+)\s*rate/i);
+
+  // If we have lbs AND pct, it's likely production
+  if (lbsMatch && pctMatch) {
+    parts.push(`${lbsMatch[0].trim()}, ${pctMatch[0].trim()}`);
+    if (rateMatch) parts[0] += `, ${rateMatch[1]} rate`;
+  }
+  // Temperature + conditions = weather
+  else if (tempMatch) {
+    parts.push(tempMatch[0].trim());
+    if (condMatch) parts.push(condMatch[0].trim());
+  }
+  // Route/shipment info
+  else if (routeMatch) {
+    let route = `${routeMatch[1]} \u2192 ${routeMatch[2]}`;
+    if (etaMatch) route += `, ${etaMatch[1]}`;
+    parts.push(route);
+  }
+  // Fallback: just extract first number with context
+  else {
+    const numMatch = text.match(/([\d,]+(?:\.\d+)?(?:\s*(?:%|lbs?|kg|bags?|°[FC]?))?)/i);
+    if (numMatch) {
+      parts.push(numMatch[0].trim());
+    }
+  }
+
+  if (parts.length === 0) {
+    // Ultra-fallback: first 40 chars
+    return text.length > 40 ? text.substring(0, 40) + '\u2026' : text;
+  }
+
+  return parts.join(', ');
+}
+
+/**
+ * Pick a segment icon character for compact view.
+ */
+function getSegmentEmoji(iconKey, label) {
+  const key = (iconKey || label || '').toLowerCase();
+  if (key.includes('product') || key.includes('chart')) return '\u{1F4CA}';
+  if (key.includes('weather') || key.includes('sun') || key.includes('cloud')) return '\u{1F324}';
+  if (key.includes('ship') || key.includes('truck') || key.includes('route')) return '\u{1F69A}';
+  if (key.includes('alert') || key.includes('warn')) return '\u{26A0}';
+  if (key.includes('brief') || key.includes('report')) return '\u{1F4CB}';
+  return '\u{1F4E1}';
+}
+
 // ─── Toast Card — "Signal" ──────────────────────────────────────────
 
 function renderToastCard(n) {
@@ -119,6 +198,7 @@ function renderToastCard(n) {
       <div class="card-scanlines"></div>
       <div class="card-vignette"></div>
       <div class="card-noise-line"></div>
+      <div class="toast-scanner-beam"></div>
       <div class="notif-header">
         <div class="notif-header-left">
           <span class="notif-icon notif-icon-svg">${SVG_ICONS.signal}</span>
@@ -133,38 +213,82 @@ function renderToastCard(n) {
 }
 
 // ─── Briefing Card — "Decoded Transmission" ─────────────────────────
+// Pass 4: Two render modes — compact (for popup + panel collapsed) and
+// full expanded (panel on click).
 
-function renderBriefingCard(n) {
+function renderBriefingCard(n, options) {
   const time = formatTime(n.timestamp);
   const ts = formatTimestamp(n.timestamp);
   const unread = n.read ? '' : ' unread';
+  const isPopup = options && options.popup;
+  const isPanel = options && options.panel;
 
   let contentHtml = '';
   let segCount = 0;
+
   if (n.data && n.data.segments && n.data.segments.length > 0) {
     const segments = n.data.segments;
     segCount = segments.length;
 
-    const segmentBlocks = segments.map((seg, i) => {
-      const icon = getIcon(seg.icon);
-      const label = escapeHtml(seg.label || seg.category || 'Update');
-      const text = seg.text || seg.summary || '';
-      const bodyHtml = highlightNumbers(text);
-      const delay = i * 120;
-
-      return `
-        <div class="decoded-segment" style="animation-delay: ${delay}ms">
-          <div class="decoded-segment-header">
-            <span class="decoded-segment-icon">${icon}</span>
-            <span class="decoded-segment-label">${label}</span>
+    if (isPopup) {
+      // ─── COMPACT VIEW (popup) ─────────────
+      // One line per segment: icon + label + summary
+      const compactLines = segments.map((seg, i) => {
+        const emoji = getSegmentEmoji(seg.icon, seg.label);
+        const label = escapeHtml(seg.label || seg.category || 'Update');
+        const summary = extractSegmentSummary(seg.text || seg.summary || '');
+        return `
+          <div class="compact-segment" style="animation-delay: ${i * 60}ms">
+            <span class="compact-segment-emoji">${emoji}</span>
+            <span class="compact-segment-label">${label}:</span>
+            <span class="compact-segment-summary">${highlightNumbers(summary)}</span>
           </div>
-          <div class="decoded-segment-body holo-typewriter" style="animation-delay: ${delay + 80}ms">${bodyHtml}</div>
-        </div>
-        ${i < segments.length - 1 ? '<div class="decoded-separator">\u2013 \u2013 \u2013 \u2013 \u2013 \u2013 \u2013 \u2013</div>' : ''}
-      `;
-    }).join('');
+        `;
+      }).join('');
+      contentHtml = `<div class="compact-transmission">${compactLines}</div>`;
+    } else {
+      // ─── PANEL VIEW: compact header + expandable detail ─────────────
+      const compactLines = segments.map((seg, i) => {
+        const emoji = getSegmentEmoji(seg.icon, seg.label);
+        const label = escapeHtml(seg.label || seg.category || 'Update');
+        const summary = extractSegmentSummary(seg.text || seg.summary || '');
+        const icon = getIcon(seg.icon);
+        const bodyHtml = highlightNumbers(seg.text || seg.summary || '');
+        return `
+          <div class="compact-segment" style="animation-delay: ${i * 60}ms">
+            <span class="compact-segment-emoji">${emoji}</span>
+            <span class="compact-segment-label">${label}:</span>
+            <span class="compact-segment-summary">${highlightNumbers(summary)}</span>
+          </div>
+        `;
+      }).join('');
 
-    contentHtml = `<div class="decoded-transmission">${segmentBlocks}</div>`;
+      // Full decoded view (hidden by default in panel, shown on expand)
+      const segmentBlocks = segments.map((seg, i) => {
+        const icon = getIcon(seg.icon);
+        const label = escapeHtml(seg.label || seg.category || 'Update');
+        const text = seg.text || seg.summary || '';
+        const bodyHtml = highlightNumbers(text);
+        const delay = i * 120;
+        return `
+          <div class="decoded-segment" style="animation-delay: ${delay}ms">
+            <div class="decoded-segment-header">
+              <span class="decoded-segment-icon">${icon}</span>
+              <span class="decoded-segment-label">${label}</span>
+            </div>
+            <div class="decoded-segment-body holo-typewriter" style="animation-delay: ${delay + 80}ms">${bodyHtml}</div>
+          </div>
+          ${i < segments.length - 1 ? '<div class="decoded-separator">\u2013 \u2013 \u2013 \u2013 \u2013 \u2013 \u2013 \u2013</div>' : ''}
+        `;
+      }).join('');
+
+      contentHtml = `
+        <div class="compact-transmission card-compact-content">${compactLines}</div>
+        <div class="decoded-transmission card-expanded-content">
+          ${segmentBlocks}
+        </div>
+      `;
+    }
   } else if (n.body) {
     contentHtml = `<div class="notif-body">${escapeHtml(n.body)}</div>`;
     segCount = 1;
@@ -179,8 +303,18 @@ function renderBriefingCard(n) {
     </div>
   ` : '';
 
+  // Format date for compact panel header
+  const dateStr = new Date(n.timestamp || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+  // For panel: compact card header shows title + segment count + date
+  const expandToggle = isPanel ? `
+    <div class="card-expand-toggle" title="Expand">
+      <span class="expand-chevron">${SVG_ICONS.chevronDown}</span>
+    </div>
+  ` : '';
+
   return `
-    <div class="notif-card card-enter${unread}" data-id="${n.id}" data-type="briefing">
+    <div class="notif-card card-enter${unread}${isPanel ? ' card-collapsible' : ''}" data-id="${n.id}" data-type="briefing">
       <div class="card-scanlines"></div>
       <div class="card-vignette"></div>
       <div class="card-noise-line"></div>
@@ -195,6 +329,7 @@ function renderBriefingCard(n) {
       ${contentHtml}
       ${audioHtml}
       <div class="card-timestamp">TRANSMISSION COMPLETE &bull; ${segCount} SEGMENT${segCount !== 1 ? 'S' : ''}</div>
+      ${expandToggle}
     </div>
   `;
 }
@@ -233,50 +368,89 @@ function renderAlertCard(n) {
 }
 
 // ─── Production Card — "Pulse Monitor" ──────────────────────────────
+// Pass 4: renders both compact and full views for panel collapsible.
 
-function renderProductionCard(n) {
+function renderProductionCard(n, options) {
   const time = formatTime(n.timestamp);
   const ts = formatTimestamp(n.timestamp);
   const unread = n.read ? '' : ' unread';
   const d = n.data || {};
   const pace = d.paceStatus || 'on-pace';
   const paceClass = pace === 'ahead' ? 'ahead' : pace === 'behind' ? 'behind' : 'on-pace';
+  const isPanel = options && options.panel;
 
   // Stats
   const lbs = d.dailyTotal != null ? d.dailyTotal.toFixed(1) : '0.0';
   const pct = d.percentOfTarget || 0;
   const crew = d.trimmers || d.crew || 0;
   const rate = d.rate ? d.rate.toFixed(2) : '0.00';
+  const paceLabel = pace === 'ahead' ? 'ahead' : pace === 'behind' ? 'behind' : 'on pace';
 
   // Build SVG area chart from hourly data
   const chartHtml = renderPulseChart(d, paceClass);
 
+  // Compact one-liner for collapsed panel state
+  const compactLine = `
+    <div class="compact-production card-compact-content">
+      <span class="compact-prod-lbs holo-number">${lbs} lbs</span>
+      <span class="compact-prod-sep">&bull;</span>
+      <span class="compact-prod-pct ${paceClass}">${pct}%</span>
+      <span class="compact-prod-sep">&bull;</span>
+      <span class="compact-prod-detail">${crew} crew</span>
+      <span class="compact-prod-sep">&bull;</span>
+      <span class="compact-prod-detail">${rate} rate</span>
+      <span class="compact-prod-sep">&mdash;</span>
+      <span class="compact-prod-pace ${paceClass}">${paceLabel}</span>
+    </div>
+  `;
+
+  const expandToggle = isPanel ? `
+    <div class="card-expand-toggle" title="Expand">
+      <span class="expand-chevron">${SVG_ICONS.chevronDown}</span>
+    </div>
+  ` : '';
+
+  // Full chart view
+  const fullChart = `
+    <div class="pulse-monitor card-expanded-content${isPanel ? '' : ' expanded'}">
+      <div class="pulse-chart-area">
+        ${chartHtml}
+        <div class="pulse-stat pulse-stat-lbs holo-flicker">
+          <span class="pulse-stat-value holo-chromatic">${lbs}</span>
+          <span class="pulse-stat-unit">LBS</span>
+        </div>
+        <div class="pulse-stat pulse-stat-pct">
+          <span class="pulse-stat-value ${paceClass}">${pct}%</span>
+        </div>
+        <div class="pulse-stat pulse-stat-crew">
+          <span class="pulse-stat-value">${crew}</span>
+          <span class="pulse-stat-unit">CREW</span>
+        </div>
+        <div class="pulse-stat pulse-stat-rate">
+          <span class="pulse-stat-value">${rate}</span>
+          <span class="pulse-stat-unit">RATE</span>
+        </div>
+      </div>
+    </div>
+  `;
+
   return `
-    <div class="notif-card card-enter${unread} pace-${paceClass}" data-id="${n.id}" data-type="production-card">
+    <div class="notif-card card-enter${unread} pace-${paceClass}${isPanel ? ' card-collapsible' : ''}" data-id="${n.id}" data-type="production-card">
       <div class="card-scanlines"></div>
       <div class="card-vignette"></div>
       <div class="card-noise-line"></div>
-      <div class="pulse-monitor">
-        <div class="pulse-chart-area">
-          ${chartHtml}
-          <div class="pulse-stat pulse-stat-lbs holo-flicker">
-            <span class="pulse-stat-value holo-chromatic">${lbs}</span>
-            <span class="pulse-stat-unit">LBS</span>
-          </div>
-          <div class="pulse-stat pulse-stat-pct">
-            <span class="pulse-stat-value ${paceClass}">${pct}%</span>
-          </div>
-          <div class="pulse-stat pulse-stat-crew">
-            <span class="pulse-stat-value">${crew}</span>
-            <span class="pulse-stat-unit">CREW</span>
-          </div>
-          <div class="pulse-stat pulse-stat-rate">
-            <span class="pulse-stat-value">${rate}</span>
-            <span class="pulse-stat-unit">RATE</span>
-          </div>
+      <div class="toast-scanner-beam"></div>
+      <div class="notif-header">
+        <div class="notif-header-left">
+          <span class="notif-icon notif-icon-svg" style="color:var(--gold)">${SVG_ICONS.pulse}</span>
+          <span class="notif-title holo-flicker">Pulse Monitor</span>
         </div>
+        <span class="notif-time">${time}</span>
       </div>
+      ${isPanel ? compactLine : ''}
+      ${fullChart}
       <div class="card-timestamp">SIGNAL LOCKED &bull; ${ts}</div>
+      ${expandToggle}
     </div>
   `;
 }
@@ -323,21 +497,18 @@ function renderPulseChart(d, paceClass) {
   // Target line Y
   const targetY = padTop + chartH - targetRate * scale;
 
-  // Gradient ID based on pace
-  const gradId = paceClass === 'behind' ? 'pulseGradRed' : 'pulseGradGreen';
-  const lineColor = paceClass === 'behind' ? '#ff3344' : '#00ff88';
-
   // Per-bar coloring segments for the area
   let areaSegments = '';
   for (let i = 0; i < points.length - 1; i++) {
     const p1 = points[i];
     const p2 = points[i + 1];
     const aboveTarget = p1.actual >= p1.target && p2.actual >= p2.target;
-    const segColor = aboveTarget ? '#00ff88' : '#ff3344';
     areaSegments += `
       <rect x="${p1.x}" y="0" width="${stepW}" height="${height}" fill="url(#${aboveTarget ? 'pulseGradGreen' : 'pulseGradRed'})" opacity="0.6"/>
     `;
   }
+
+  const lineColor = paceClass === 'behind' ? '#ff3344' : '#00ff88';
 
   return `
     <svg class="pulse-chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
@@ -353,6 +524,13 @@ function renderPulseChart(d, paceClass) {
         <clipPath id="areaClip">
           <path d="${areaPath}"/>
         </clipPath>
+        <filter id="lineGlow">
+          <feGaussianBlur stdDeviation="3" result="blur"/>
+          <feMerge>
+            <feMergeNode in="blur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
       </defs>
 
       <!-- Area fill clipped to the chart shape -->
@@ -374,17 +552,6 @@ function renderPulseChart(d, paceClass) {
         const dotColor = p.actual >= p.target ? '#00ff88' : '#ff3344';
         return `<circle cx="${p.x}" cy="${p.y}" r="2.5" fill="${dotColor}" opacity="0.8"/>`;
       }).join('')}
-
-      <!-- Glow filter -->
-      <defs>
-        <filter id="lineGlow">
-          <feGaussianBlur stdDeviation="3" result="blur"/>
-          <feMerge>
-            <feMergeNode in="blur"/>
-            <feMergeNode in="SourceGraphic"/>
-          </feMerge>
-        </filter>
-      </defs>
     </svg>
   `;
 }
@@ -426,11 +593,11 @@ function renderSoundWave() {
 
 // ─── Main Dispatcher ────────────────────────────────────────────────
 
-function renderCard(n) {
+function renderCard(n, options) {
   switch (n.type) {
-    case 'briefing': return renderBriefingCard(n);
+    case 'briefing': return renderBriefingCard(n, options);
     case 'alert': return renderAlertCard(n);
-    case 'production-card': return renderProductionCard(n);
+    case 'production-card': return renderProductionCard(n, options);
     default: return renderToastCard(n);
   }
 }
