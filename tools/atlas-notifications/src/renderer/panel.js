@@ -4,6 +4,8 @@ let notifications = [];
 let activeTab = 'all';
 let audioPlayer = null;
 let playingAudioId = null;
+let missionControlCollapsed = false;
+let atlasUptime = null;
 
 // ─── DOM References ─────────────────────────────────────────────────
 
@@ -24,7 +26,9 @@ async function init() {
   notifications = await window.atlas.getNotifications();
   render();
   checkStatus();
+  updateMissionControl();
   setInterval(checkStatus, 30000);
+  setInterval(updateMissionControl, 10000);
   updateTabIndicator();
 
   // Audio ended handler
@@ -32,6 +36,43 @@ async function init() {
     playingAudioId = null;
     renderAudioButtons();
   });
+}
+
+// ─── Mission Control Widget Management ──────────────────────────────
+
+$('#mc-header').addEventListener('click', () => {
+  missionControlCollapsed = !missionControlCollapsed;
+  $('#mission-control').classList.toggle('collapsed', missionControlCollapsed);
+});
+
+async function updateMissionControl() {
+  const result = await window.atlas.checkAtlasStatus();
+  
+  // Connection widget
+  const connEl = $('#widget-connection');
+  if (connEl) {
+    connEl.textContent = result.online ? 'Online' : 'Offline';
+    connEl.style.color = result.online ? 'var(--green)' : 'var(--red)';
+  }
+
+  // Uptime widget
+  const uptimeEl = $('#widget-uptime');
+  if (uptimeEl && result.online) {
+    if (!atlasUptime) atlasUptime = Date.now();
+    const uptime = Math.floor((Date.now() - atlasUptime) / 1000);
+    uptimeEl.textContent = formatUptime(uptime);
+  } else if (uptimeEl) {
+    atlasUptime = null;
+    uptimeEl.textContent = '—';
+  }
+}
+
+function formatUptime(seconds) {
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  if (hrs > 0) return `${hrs}h ${mins}m`;
+  if (mins > 0) return `${mins}m`;
+  return `${seconds}s`;
 }
 
 // ─── Tab Indicator ──────────────────────────────────────────────────
@@ -181,7 +222,7 @@ function renderAlertCard(n) {
   `;
 }
 
-// ─── Production Card ────────────────────────────────────────────────
+// ─── Production Card with SVG Gauges ────────────────────────────────
 
 function renderProductionCard(n) {
   const time = formatTime(n.timestamp);
@@ -192,11 +233,14 @@ function renderProductionCard(n) {
   const paceLabel = pace === 'ahead' ? 'ahead' : pace === 'behind' ? 'behind' : 'on pace';
   const pct = d.percentOfTarget || 0;
 
-  // Stats
-  const lbs = d.dailyTotal != null ? d.dailyTotal.toFixed(1) : '\u2014';
-  const target = pct ? pct + '%' : '\u2014';
-  const crew = d.trimmers || d.crew || '\u2014';
-  const rate = d.rate ? d.rate.toFixed(2) : '\u2014';
+  // Stats with circular gauges
+  const lbs = d.dailyTotal != null ? d.dailyTotal.toFixed(1) : '—';
+  const target = pct || 0;
+  const crew = d.trimmers || d.crew || 0;
+  const rate = d.rate ? d.rate.toFixed(2) : 0;
+
+  // Color based on pace
+  const gaugeColor = paceClass === 'ahead' ? 'green' : paceClass === 'behind' ? 'red' : 'gold';
 
   // Sparkline from hourly data
   let sparkHtml = '';
@@ -220,28 +264,35 @@ function renderProductionCard(n) {
         <span class="notif-time">${time}</span>
       </div>
       <div class="prod-stats-grid">
-        <div class="prod-stat">
-          <div class="prod-stat-value">${lbs}</div>
-          <div class="prod-stat-label">lbs</div>
-        </div>
-        <div class="prod-stat">
-          <div class="prod-stat-value">${target}</div>
-          <div class="prod-stat-label">target</div>
-        </div>
-        <div class="prod-stat">
-          <div class="prod-stat-value">${crew}</div>
-          <div class="prod-stat-label">crew</div>
-        </div>
-        <div class="prod-stat">
-          <div class="prod-stat-value">${rate}</div>
-          <div class="prod-stat-label">rate</div>
-        </div>
+        ${renderGaugeStat(lbs, 'lbs', gaugeColor, Math.min(target, 100))}
+        ${renderGaugeStat(target + '%', 'target', gaugeColor, target)}
+        ${renderGaugeStat(crew, 'crew', gaugeColor, Math.min((crew / 10) * 100, 100))}
+        ${renderGaugeStat(rate, 'rate', gaugeColor, Math.min((rate / 5) * 100, 100))}
       </div>
       ${sparkHtml}
       <div class="prod-pace">
         <span class="prod-pace-text ${paceClass}">${paceLabel}</span>
         <span class="prod-pace-pct ${paceClass}">${pct}%</span>
       </div>
+    </div>
+  `;
+}
+
+function renderGaugeStat(value, label, color, percent) {
+  const radius = 26;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (percent / 100) * circumference;
+
+  return `
+    <div class="prod-stat">
+      <svg class="prod-gauge" viewBox="0 0 60 60">
+        <circle class="prod-gauge-bg" cx="30" cy="30" r="${radius}"></circle>
+        <circle class="prod-gauge-fill ${color}" cx="30" cy="30" r="${radius}"
+          stroke-dasharray="${circumference}"
+          stroke-dashoffset="${offset}"></circle>
+        <text class="prod-gauge-value" x="30" y="35" text-anchor="middle">${value}</text>
+      </svg>
+      <div class="prod-stat-label">${label}</div>
     </div>
   `;
 }

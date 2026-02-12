@@ -7,19 +7,29 @@
   <title>Atlas Notifications</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;500;600&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="panel.css">
 </head>
 <body>
   <!-- Atmospheric background layers -->
   <div class="atmosphere-noise"></div>
   <div class="atmosphere-gradient"></div>
+  <div class="scanline"></div>
 
   <!-- Titlebar -->
   <header class="titlebar" id="titlebar">
     <div class="titlebar-left">
-      <span class="titlebar-accent"></span>
-      <span class="titlebar-title">ATLAS</span>
+      <div class="titlebar-logo">
+        <svg class="logo-hex" width="18" height="20" viewBox="0 0 18 20" fill="none">
+          <path d="M9 0L17.6603 5V15L9 20L0.339746 15V5L9 0Z" fill="url(#logoGrad)" opacity="0.8"/>
+          <path d="M9 4L13.3301 6.5V11.5L9 14L4.66987 11.5V6.5L9 4Z" fill="none" stroke="var(--gold)" stroke-width="0.5" opacity="0.6"/>
+          <defs><linearGradient id="logoGrad" x1="0" y1="0" x2="18" y2="20"><stop stop-color="var(--gold)" stop-opacity="0.3"/><stop offset="1" stop-color="var(--green)" stop-opacity="0.1"/></linearGradient></defs>
+        </svg>
+      </div>
+      <div class="titlebar-brand">
+        <span class="titlebar-title">ATLAS</span>
+        <span class="titlebar-sub">COMMAND</span>
+      </div>
     </div>
     <div class="titlebar-right">
       <div class="status-indicator" id="status-indicator" title="Atlas connection status">
@@ -43,10 +53,111 @@
     <div class="tab-indicator" id="tab-indicator"></div>
   </nav>
 
+  <!-- Mission Control Widget Area -->
+  <section class="mission-control" id="mission-control">
+    <div class="mission-control-header" id="mc-header">
+      <div class="mc-header-left">
+        <span class="mc-label-line"></span>
+        <span class="mc-title">MISSION CONTROL</span>
+        <span class="mc-label-line"></span>
+      </div>
+      <button class="mc-toggle" id="mc-toggle" title="Toggle Mission Control">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="18 15 12 9 6 15"></polyline>
+        </svg>
+      </button>
+    </div>
+    <div class="mission-control-body" id="mc-body">
+      <div class="widget-grid">
+
+        <!-- Atlas Status Widget -->
+        <div class="widget widget-status" data-widget="atlas-status">
+          <div class="widget-header">
+            <svg class="widget-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            <span class="widget-title">Atlas Link</span>
+          </div>
+          <div class="widget-body">
+            <div class="widget-stat">
+              <div class="widget-stat-label">STATUS</div>
+              <div class="widget-stat-value" id="widget-connection">
+                <span class="widget-dot" id="widget-dot"></span>
+                <span id="widget-conn-text">&mdash;</span>
+              </div>
+            </div>
+            <div class="widget-stat">
+              <div class="widget-stat-label">UPTIME</div>
+              <div class="widget-stat-value" id="widget-uptime">&mdash;</div>
+            </div>
+            <div class="widget-stat">
+              <div class="widget-stat-label">LAST MSG</div>
+              <div class="widget-stat-value" id="widget-lastmsg">&mdash;</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Production HUD Widget -->
+        <div class="widget widget-production" data-widget="production-hud">
+          <div class="widget-header">
+            <svg class="widget-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="10"/></svg>
+            <span class="widget-title">Production</span>
+          </div>
+          <div class="widget-body widget-hud-grid">
+            <div class="hud-cell">
+              <div class="hud-value" id="hud-lbs">&mdash;</div>
+              <div class="hud-label">LBS</div>
+            </div>
+            <div class="hud-cell">
+              <div class="hud-value" id="hud-rate">&mdash;</div>
+              <div class="hud-label">RATE</div>
+            </div>
+            <div class="hud-cell hud-cell-wide">
+              <div class="hud-pace" id="hud-pace">&mdash;</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Weather Widget -->
+        <div class="widget widget-weather" data-widget="weather">
+          <div class="widget-header">
+            <svg class="widget-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--cream-muted)" stroke-width="2"><path d="M17 18a5 5 0 0 0-5-5 5 5 0 0 0-5 5"/><circle cx="12" cy="9" r="4"/></svg>
+            <span class="widget-title">Weather</span>
+          </div>
+          <div class="widget-body">
+            <div class="widget-stat">
+              <div class="widget-stat-label">CONDITIONS</div>
+              <div class="widget-stat-value widget-placeholder" id="widget-weather">Awaiting data</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Shipment Tracker Widget -->
+        <div class="widget widget-shipment" data-widget="shipment">
+          <div class="widget-header">
+            <svg class="widget-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--cream-muted)" stroke-width="2"><rect x="1" y="6" width="22" height="12" rx="2"/><path d="M1 10h22"/></svg>
+            <span class="widget-title">Shipments</span>
+          </div>
+          <div class="widget-body">
+            <div class="widget-stat">
+              <div class="widget-stat-label">STATUS</div>
+              <div class="widget-stat-value widget-placeholder" id="widget-shipment">No active shipments</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
   <!-- Notification list -->
   <main class="notification-list" id="notification-list">
     <div class="empty-state" id="empty-state">
-      <div class="empty-glyph">⬡</div>
+      <div class="empty-glyph">
+        <svg width="48" height="52" viewBox="0 0 48 52" fill="none">
+          <path d="M24 0L47.3205 13V39L24 52L0.679491 39V13L24 0Z" stroke="var(--cream-muted)" stroke-width="0.5" opacity="0.2"/>
+          <path d="M24 8L39.3205 17V35L24 44L8.67949 35V17L24 8Z" stroke="var(--cream-muted)" stroke-width="0.5" opacity="0.15"/>
+          <path d="M24 16L31.3205 20V28L24 32L16.6795 28V20L24 16Z" stroke="var(--gold)" stroke-width="0.5" opacity="0.3"/>
+        </svg>
+      </div>
       <p class="empty-title">No signals</p>
       <p class="empty-sub">Atlas will send briefings and alerts here</p>
     </div>
