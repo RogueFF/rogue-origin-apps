@@ -1,4 +1,4 @@
-// ─── Atlas Notifications Panel — Pass 4: Alive ───────────────────────────
+// ─── Atlas Notifications Panel — Pass 5: Dual Theme ───────────────────────
 
 let notifications = [];
 let activeTab = 'all';
@@ -7,8 +7,9 @@ let playingAudioId = null;
 let missionControlCollapsed = false;
 let atlasUptime = null;
 let lastMessageTime = null;
+let currentTheme = 'relay';
 
-// ─── Pass 4: Ambient Sound State ────────────────────────────────────
+// ─── Ambient Sound State ────────────────────────────────────────────
 let ambientCtx = null;
 let ambientGain = null;
 let ambientOsc = null;
@@ -27,10 +28,65 @@ const statusDot = $('#status-dot');
 const statusText = $('#status-text');
 const tabIndicator = $('#tab-indicator');
 
+// ─── Theme Management ────────────────────────────────────────────────
+
+async function initTheme() {
+  try {
+    currentTheme = await window.atlas.getTheme();
+  } catch (e) {
+    currentTheme = 'relay';
+  }
+  applyTheme(currentTheme);
+}
+
+function applyTheme(theme) {
+  currentTheme = theme;
+  document.body.dataset.theme = theme;
+
+  // Update titlebar subtitle
+  const sub = $('#titlebar-sub');
+  if (sub) sub.textContent = theme === 'terrain' ? 'SURVEY' : 'RELAY';
+
+  // Update mission control title
+  const mcTitle = $('#mc-title');
+  if (mcTitle) mcTitle.textContent = theme === 'terrain' ? 'BASE CAMP' : 'MISSION CONTROL';
+
+  // Update widget titles that differ per theme
+  $$('[data-relay-text]').forEach(el => {
+    const attr = theme === 'terrain' ? 'data-terrain-text' : 'data-relay-text';
+    el.textContent = el.getAttribute(attr) || el.textContent;
+  });
+
+  // Update empty state text
+  const emptyTitle = $('#empty-title');
+  const emptySub = $('#empty-sub');
+  if (emptyTitle) emptyTitle.textContent = theme === 'terrain' ? 'No markers' : 'No signals';
+  if (emptySub) emptySub.textContent = theme === 'terrain'
+    ? 'Atlas Survey will capture field reports and alerts here'
+    : 'Atlas Relay will intercept briefings and alerts here';
+
+  // Update theme switcher buttons
+  $$('.theme-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.themeChoice === theme);
+  });
+
+  // Particles only in relay
+  if (theme === 'terrain') {
+    const field = $('#particle-field');
+    if (field) field.innerHTML = '';
+  } else {
+    generateParticles();
+  }
+}
+
 // ─── Init ───────────────────────────────────────────────────────────
 
 async function init() {
   audioPlayer = $('#audio-player');
+
+  // Init theme first so rendering respects it
+  await initTheme();
+
   notifications = await window.atlas.getNotifications();
   render();
   checkStatus();
@@ -48,38 +104,40 @@ async function init() {
     });
   }
 
-  // Pass 4: Generate particle dust
-  generateParticles();
+  // Generate particles (only if relay theme)
+  if (currentTheme === 'relay') {
+    generateParticles();
+  }
 
-  // Pass 4: Start ambient sound (panel is visible on init)
-  startAmbientSound();
+  // Start ambient sound (panel is visible on init, relay only)
+  if (currentTheme === 'relay') {
+    startAmbientSound();
+  }
 }
 
-// ─── Pass 4: Particle Dust Generation ───────────────────────────────
-// 18 tiny floating dots, different speeds, drifting upward
+// ─── Particle Dust Generation (Relay only) ──────────────────────────
 
 function generateParticles() {
   const field = $('#particle-field');
   if (!field) return;
+
+  // Clear any existing
+  field.innerHTML = '';
+
+  if (currentTheme !== 'relay') return;
 
   const count = 18;
   for (let i = 0; i < count; i++) {
     const particle = document.createElement('span');
     particle.className = 'particle';
 
-    // Random horizontal position
     particle.style.left = Math.random() * 100 + '%';
-    // Start scattered vertically
     particle.style.bottom = -(Math.random() * 20) + '%';
 
-    // Random animation duration (15-30s)
     const duration = 15 + Math.random() * 15;
     particle.style.animationDuration = duration + 's';
-
-    // Random delay so they don't all start at once
     particle.style.animationDelay = -(Math.random() * duration) + 's';
 
-    // Size/brightness variants
     if (i % 5 === 0) particle.classList.add('p-lg');
     if (i % 7 === 0) particle.classList.add('p-bright');
 
@@ -87,14 +145,12 @@ function generateParticles() {
   }
 }
 
-// ─── Pass 4: Ambient Sound — Ship Bridge Hum ───────────────────────
-// Low sine wave (55Hz) + filtered white noise, combined volume ~0.02
-// Fades in over 1s, fades out over 0.5s
+// ─── Ambient Sound — Ship Bridge Hum (Relay only) ───────────────────
 
 async function startAmbientSound() {
   if (ambientActive) return;
+  if (currentTheme !== 'relay') return;
 
-  // Check if sound is enabled
   try {
     const settings = await window.atlas.getSettings();
     if (settings.soundEnabled === false) return;
@@ -108,13 +164,11 @@ async function startAmbientSound() {
       await ambientCtx.resume();
     }
 
-    // Master gain — starts at 0, fades in
     ambientGain = ambientCtx.createGain();
     ambientGain.gain.setValueAtTime(0, ambientCtx.currentTime);
     ambientGain.gain.linearRampToValueAtTime(0.02, ambientCtx.currentTime + 1.0);
     ambientGain.connect(ambientCtx.destination);
 
-    // Low sine hum at 55Hz
     ambientOsc = ambientCtx.createOscillator();
     ambientOsc.type = 'sine';
     ambientOsc.frequency.setValueAtTime(55, ambientCtx.currentTime);
@@ -124,7 +178,6 @@ async function startAmbientSound() {
     oscGain.connect(ambientGain);
     ambientOsc.start();
 
-    // Filtered white noise for texture
     const bufferSize = ambientCtx.sampleRate * 2;
     const noiseBuffer = ambientCtx.createBuffer(1, bufferSize, ambientCtx.sampleRate);
     const noiseData = noiseBuffer.getChannelData(0);
@@ -136,7 +189,6 @@ async function startAmbientSound() {
     ambientNoise.buffer = noiseBuffer;
     ambientNoise.loop = true;
 
-    // Lowpass filter to soften the noise
     const noiseFilter = ambientCtx.createBiquadFilter();
     noiseFilter.type = 'lowpass';
     noiseFilter.frequency.setValueAtTime(200, ambientCtx.currentTime);
@@ -152,7 +204,7 @@ async function startAmbientSound() {
 
     ambientActive = true;
   } catch (e) {
-    // Silent fail — ambient sound is non-critical
+    // Silent fail
   }
 }
 
@@ -160,10 +212,8 @@ function stopAmbientSound() {
   if (!ambientActive || !ambientCtx || !ambientGain) return;
 
   try {
-    // Fade out over 0.5s
     ambientGain.gain.linearRampToValueAtTime(0, ambientCtx.currentTime + 0.5);
 
-    // Stop sources after fade
     setTimeout(() => {
       try {
         if (ambientOsc) { ambientOsc.stop(); ambientOsc = null; }
@@ -188,7 +238,6 @@ async function updateMissionControl() {
   try {
     const result = await window.atlas.checkAtlasStatus();
 
-    // Atlas Status widget — connection
     const connText = $('#widget-conn-text');
     const widgetDot = $('#widget-dot');
     if (connText && widgetDot) {
@@ -197,7 +246,6 @@ async function updateMissionControl() {
       widgetDot.className = 'widget-dot ' + (result.online ? 'online' : 'offline');
     }
 
-    // Uptime tracking
     const uptimeEl = $('#widget-uptime');
     if (uptimeEl) {
       if (result.online) {
@@ -210,13 +258,10 @@ async function updateMissionControl() {
       }
     }
 
-    // Last message time
     updateLastMessageDisplay();
-
-    // Production HUD — pull from latest production-card notification
     updateProductionHUD();
   } catch (e) {
-    // Silent fail — widget just shows stale data
+    // Silent fail
   }
 }
 
@@ -259,7 +304,6 @@ function updateLastMessageDisplay() {
       lastMsgEl.textContent = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
     }
   } else if (notifications.length > 0) {
-    // Use most recent notification timestamp
     const latest = notifications[0];
     if (latest.timestamp) {
       lastMessageTime = new Date(latest.timestamp).getTime();
@@ -306,11 +350,9 @@ function render() {
 
   emptyState.style.display = 'none';
 
-  // Pass 4: Render cards with panel options for compact/expandable
-  const html = filtered.map(n => renderCard(n, { panel: true })).join('');
+  const html = filtered.map(n => renderCard(n, { panel: true, theme: currentTheme })).join('');
 
   const scrollTop = list.scrollTop;
-  // Keep particle field and empty state in DOM
   const particleField = $('#particle-field');
   const particleHtml = particleField ? particleField.outerHTML : '';
   const emptyEl = emptyState.outerHTML;
@@ -323,7 +365,6 @@ function render() {
 function playAudio(url, notifId) {
   if (!audioPlayer) return;
 
-  // Toggle if same
   if (playingAudioId === notifId && !audioPlayer.paused) {
     audioPlayer.pause();
     playingAudioId = null;
@@ -342,7 +383,6 @@ function playAudio(url, notifId) {
 }
 
 function renderAudioButtons() {
-  // Re-render just the audio button states without full re-render
   $$('.btn-audio').forEach(btn => {
     const nid = btn.dataset.notifId;
     const isPlaying = playingAudioId === nid;
@@ -364,12 +404,11 @@ $$('.tab').forEach(tab => {
     tab.classList.add('active');
     activeTab = tab.dataset.tab;
     render();
-    // Defer indicator update to next frame so layout has settled
     requestAnimationFrame(updateTabIndicator);
   });
 });
 
-// Close — stop ambient sound
+// Close
 $('#btn-close').addEventListener('click', () => {
   stopAmbientSound();
   window.atlas.closePanel();
@@ -382,9 +421,8 @@ $('#btn-clear').addEventListener('click', async () => {
   render();
 });
 
-// Card clicks — including expand/collapse toggle
+// Card clicks
 list.addEventListener('click', async (e) => {
-  // Audio play
   const audioBtn = e.target.closest('.btn-audio');
   if (audioBtn) {
     const url = audioBtn.dataset.audio;
@@ -393,7 +431,6 @@ list.addEventListener('click', async (e) => {
     return;
   }
 
-  // Acknowledge alert
   const ackBtn = e.target.closest('.btn-acknowledge');
   if (ackBtn) {
     const id = ackBtn.dataset.ackId;
@@ -403,24 +440,20 @@ list.addEventListener('click', async (e) => {
       notif.acknowledged = true;
       notif.read = true;
     }
-    // Flash the button before re-render
-    ackBtn.textContent = '[ CONFIRMED ]';
+    ackBtn.textContent = currentTheme === 'terrain' ? '[ ACKNOWLEDGED ]' : '[ CONFIRMED ]';
     ackBtn.style.color = 'var(--holo-green)';
     ackBtn.style.borderColor = 'var(--holo-green)';
     setTimeout(() => render(), 400);
     return;
   }
 
-  // Pass 4: Expand/collapse toggle for collapsible cards
   const expandToggle = e.target.closest('.card-expand-toggle');
   const card = e.target.closest('.notif-card');
   if (card && card.classList.contains('card-collapsible')) {
-    // Toggle expanded state
     card.classList.toggle('expanded');
     return;
   }
 
-  // Mark read
   if (card) {
     const id = card.dataset.id;
     const notif = notifications.find(n => n.id === id);
@@ -449,6 +482,15 @@ $$('.settings-toggle').forEach(toggle => {
   });
 });
 
+// Theme switcher — instant preview
+$$('.theme-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const theme = btn.dataset.themeChoice;
+    applyTheme(theme);
+    render(); // Re-render cards for new theme
+  });
+});
+
 // Volume slider
 const volumeSlider = $('#set-volume');
 const volumeValue = $('#set-volume-value');
@@ -458,14 +500,13 @@ if (volumeSlider) {
   });
 }
 
-// Voice loading on ElevenLabs key blur
+// Voice loading
 const elKeyInput = $('#set-elevenlabs-key');
 if (elKeyInput) {
   elKeyInput.addEventListener('blur', () => loadVoices());
 }
 
 async function openSettings() {
-  // Load current values
   try {
     const settings = await window.atlas.getSettings();
     $('#set-host').value = settings.atlasHost || '';
@@ -487,6 +528,11 @@ async function openSettings() {
       loadVoices(tts.elevenLabsVoice);
     }
   } catch (e) { /* use defaults */ }
+
+  // Set theme switcher to current theme
+  $$('.theme-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.themeChoice === currentTheme);
+  });
 
   settingsOverlay.classList.add('open');
 }
@@ -528,6 +574,9 @@ async function saveSettings() {
       ttsEnabled: $('#set-tts-enabled').dataset.on === 'true',
       ttsVolume: parseInt($('#set-volume').value) / 100
     });
+
+    // Save theme preference
+    await window.atlas.setTheme(currentTheme);
   } catch (e) { /* silent fail */ }
 
   closeSettings();
@@ -541,7 +590,6 @@ window.atlas.onNewNotification((notif) => {
   render();
   updateMissionControl();
 
-  // Auto-play audio for briefings
   if (notif.audio_url && notif.type === 'briefing') {
     setTimeout(() => playAudio(notif.audio_url, notif.id), 500);
   }
