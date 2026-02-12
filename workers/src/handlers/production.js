@@ -659,6 +659,19 @@ async function getScoreboardDataFromD1(env) {
       };
     });
 
+    // Sort chronologically (ORDER BY time_slot is alphabetical, breaks with "10:" vs "7:")
+    todayRows.sort((a, b) => {
+      const parseStart = (ts) => {
+        const m = ts.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+        if (!m) return 0;
+        let h = parseInt(m[1]), min = parseInt(m[2]);
+        if (m[3].toUpperCase() === 'PM' && h !== 12) h += 12;
+        if (m[3].toUpperCase() === 'AM' && h === 12) h = 0;
+        return h * 60 + min;
+      };
+      return parseStart(a.timeSlot) - parseStart(b.timeSlot);
+    });
+
     // Find last completed and current hour
     let lastCompletedHourIndex = -1;
     let currentHourIndex = -1;
