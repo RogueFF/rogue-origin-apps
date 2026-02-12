@@ -26,7 +26,8 @@ const store = new Store({
     atlasHost: '100.64.0.1', // Tailscale IP — configurable
     notifications: [],
     maxHistory: 50,
-    soundEnabled: true
+    soundEnabled: true,
+    theme: 'relay'
   }
 });
 
@@ -411,6 +412,19 @@ function setupIPC() {
     Object.entries(settings).forEach(([k, v]) => store.set(k, v));
     if (settings.autoStart !== undefined) {
       app.setLoginItemSettings({ openAtLogin: settings.autoStart });
+    }
+    return true;
+  });
+
+  // ─── Theme ────────────────────────────────────────────────────
+  ipcMain.handle('get-theme', () => {
+    return store.get('theme', 'relay');
+  });
+
+  ipcMain.handle('set-theme', (_, theme) => {
+    const valid = ['relay', 'terrain'];
+    if (valid.includes(theme)) {
+      store.set('theme', theme);
     }
     return true;
   });
