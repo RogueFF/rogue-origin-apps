@@ -133,6 +133,9 @@
           responsive: true,
           maintainAspectRatio: false,
           animation: false,
+          layout: {
+            padding: { bottom: 10, top: 10 }
+          },
           plugins: {
             legend: { display: false },
             tooltip: {
