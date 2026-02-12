@@ -7,28 +7,42 @@
   <title>Atlas Notifications</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Relay theme fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&family=Manrope:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <!-- Terrain theme fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Sans+3:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="panel.css">
 </head>
-<body>
-  <!-- Atmospheric background layers -->
+<body data-theme="relay">
+  <!-- Atmospheric background layers (Relay theme) -->
   <div class="atmosphere-noise"></div>
   <div class="atmosphere-gradient"></div>
   <div class="scanline"></div>
+
+  <!-- Topo background (Terrain theme) -->
+  <div class="topo-background"></div>
 
   <!-- Titlebar -->
   <header class="titlebar" id="titlebar">
     <div class="titlebar-left">
       <div class="titlebar-logo">
-        <svg class="logo-hex" width="18" height="20" viewBox="0 0 18 20" fill="none">
+        <!-- Relay logo: hexagon -->
+        <svg class="logo-hex logo-relay" width="18" height="20" viewBox="0 0 18 20" fill="none">
           <path d="M9 0L17.6603 5V15L9 20L0.339746 15V5L9 0Z" fill="url(#logoGrad)" opacity="0.8"/>
           <path d="M9 4L13.3301 6.5V11.5L9 14L4.66987 11.5V6.5L9 4Z" fill="none" stroke="var(--gold)" stroke-width="0.5" opacity="0.6"/>
           <defs><linearGradient id="logoGrad" x1="0" y1="0" x2="18" y2="20"><stop stop-color="var(--gold)" stop-opacity="0.3"/><stop offset="1" stop-color="var(--green)" stop-opacity="0.1"/></linearGradient></defs>
         </svg>
+        <!-- Terrain logo: mountain -->
+        <svg class="logo-terrain" width="20" height="18" viewBox="0 0 20 18" fill="none">
+          <path d="M10 1L19 17H1L10 1Z" fill="none" stroke="var(--accent-primary)" stroke-width="1" opacity="0.6"/>
+          <path d="M10 5L15 14H5L10 5Z" fill="none" stroke="var(--accent-primary)" stroke-width="0.5" opacity="0.4"/>
+          <path d="M10 9L12.5 13H7.5L10 9Z" fill="var(--accent-primary)" opacity="0.15"/>
+          <line x1="1" y1="17" x2="19" y2="17" stroke="var(--accent-primary)" stroke-width="0.5" opacity="0.3"/>
+        </svg>
       </div>
       <div class="titlebar-brand">
         <span class="titlebar-title">ATLAS</span>
-        <span class="titlebar-sub">RELAY</span>
+        <span class="titlebar-sub" id="titlebar-sub">RELAY</span>
       </div>
     </div>
     <div class="titlebar-right">
@@ -61,7 +75,7 @@
       <div class="mc-header-left">
         <span class="mc-label-line"></span>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--cream-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/></svg>
-        <span class="mc-title">MISSION CONTROL</span>
+        <span class="mc-title" id="mc-title">MISSION CONTROL</span>
         <span class="mc-label-line"></span>
       </div>
       <button class="mc-toggle" id="mc-toggle" title="Toggle Mission Control">
@@ -77,7 +91,7 @@
         <div class="widget widget-status" data-widget="atlas-status">
           <div class="widget-header">
             <svg class="widget-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--holo-green)" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-            <span class="widget-title">Atlas Link</span>
+            <span class="widget-title" data-relay-text="Atlas Link" data-terrain-text="Comms Link">Atlas Link</span>
           </div>
           <div class="widget-body">
             <div class="widget-stat">
@@ -102,7 +116,7 @@
         <div class="widget widget-production" data-widget="production-hud">
           <div class="widget-header">
             <svg class="widget-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-            <span class="widget-title">Production</span>
+            <span class="widget-title" data-relay-text="Production" data-terrain-text="Yield Monitor">Production</span>
           </div>
           <div class="widget-body widget-hud-grid">
             <div class="hud-cell">
@@ -123,7 +137,7 @@
         <div class="widget widget-weather" data-widget="weather">
           <div class="widget-header">
             <svg class="widget-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--cream-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-            <span class="widget-title">Weather</span>
+            <span class="widget-title" data-relay-text="Weather" data-terrain-text="Conditions">Weather</span>
           </div>
           <div class="widget-body">
             <div class="widget-stat">
@@ -137,7 +151,7 @@
         <div class="widget widget-shipment" data-widget="shipment">
           <div class="widget-header">
             <svg class="widget-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--cream-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-            <span class="widget-title">Shipments</span>
+            <span class="widget-title" data-relay-text="Shipments" data-terrain-text="Supply Chain">Shipments</span>
           </div>
           <div class="widget-body">
             <div class="widget-stat">
@@ -157,14 +171,20 @@
     <div class="particle-field" id="particle-field"></div>
     <div class="empty-state" id="empty-state">
       <div class="empty-glyph">
-        <svg width="48" height="52" viewBox="0 0 48 52" fill="none">
+        <svg class="empty-glyph-relay" width="48" height="52" viewBox="0 0 48 52" fill="none">
           <path d="M24 0L47.3205 13V39L24 52L0.679491 39V13L24 0Z" stroke="var(--cream-muted)" stroke-width="0.5" opacity="0.2"/>
           <path d="M24 8L39.3205 17V35L24 44L8.67949 35V17L24 8Z" stroke="var(--cream-muted)" stroke-width="0.5" opacity="0.15"/>
           <path d="M24 16L31.3205 20V28L24 32L16.6795 28V20L24 16Z" stroke="var(--gold)" stroke-width="0.5" opacity="0.3"/>
         </svg>
+        <svg class="empty-glyph-terrain" width="48" height="48" viewBox="0 0 48 48" fill="none">
+          <ellipse cx="24" cy="24" rx="22" ry="22" stroke="var(--accent-primary)" stroke-width="0.5" opacity="0.15"/>
+          <ellipse cx="24" cy="24" rx="16" ry="16" stroke="var(--accent-primary)" stroke-width="0.5" opacity="0.12"/>
+          <ellipse cx="24" cy="24" rx="10" ry="10" stroke="var(--accent-primary)" stroke-width="0.5" opacity="0.1"/>
+          <ellipse cx="24" cy="24" rx="4" ry="4" stroke="var(--accent-primary)" stroke-width="0.5" opacity="0.2"/>
+        </svg>
       </div>
-      <p class="empty-title">No signals</p>
-      <p class="empty-sub">Atlas Relay will intercept briefings and alerts here</p>
+      <p class="empty-title" id="empty-title">No signals</p>
+      <p class="empty-sub" id="empty-sub">Atlas Relay will intercept briefings and alerts here</p>
     </div>
   </main>
 
@@ -185,6 +205,26 @@
       </div>
 
       <div class="settings-body">
+        <!-- Theme Switcher — at the top -->
+        <div class="settings-section">
+          <div class="settings-section-label">Appearance</div>
+          <div class="settings-group">
+            <div class="settings-field settings-field-row">
+              <span class="settings-field-label">Theme</span>
+              <div class="theme-switcher" id="theme-switcher">
+                <button class="theme-btn active" data-theme-choice="relay">
+                  <span class="theme-btn-dot"></span>
+                  Relay
+                </button>
+                <button class="theme-btn" data-theme-choice="terrain">
+                  <span class="theme-btn-dot"></span>
+                  Terrain
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="settings-section">
           <div class="settings-section-label">Connection</div>
           <div class="settings-group">

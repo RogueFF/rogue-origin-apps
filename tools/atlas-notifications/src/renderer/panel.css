@@ -1,4 +1,8 @@
-/* ─── Atlas Notifications Panel — Pass 4: Alive ─────────────────────── */
+/* ─── Atlas Notifications Panel — Pass 5: Dual Theme ─────────────────── */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   RELAY THEME (default) — Glass Console / Hologram Glitch
+   ═══════════════════════════════════════════════════════════════════════ */
 
 :root {
   --bg-void: #030504;
@@ -18,7 +22,7 @@
   --green-glow: rgba(61, 214, 140, 0.2);
   --red: #ef4444;
   --red-glow: rgba(239, 68, 68, 0.2);
-  /* Pass 3 — Hologram palette */
+  /* Hologram palette */
   --cyan: #00f0ff;
   --cyan-glow: rgba(0, 240, 255, 0.2);
   --cyan-dim: rgba(0, 240, 255, 0.6);
@@ -26,13 +30,68 @@
   --holo-green-glow: rgba(0, 255, 136, 0.2);
   --signal-red: #ff3344;
   --signal-red-glow: rgba(255, 51, 68, 0.2);
+  /* Terrain aliased variables (defaults to relay) */
+  --accent-primary: #e4aa4f;
+  --accent-green: #3dd68c;
+  --accent-red: #ef4444;
+  --accent-blue: #00f0ff;
+  --text-primary: #f0ece4;
+  --text-secondary: #a8a49c;
+  --text-muted: #7a776f;
+  --topo-line: rgba(228, 170, 79, 0.08);
+  /* Fonts */
   --font-display: 'Outfit', sans-serif;
   --font-data: 'JetBrains Mono', monospace;
   --font-stat: 'Space Mono', monospace;
   --font-ui: 'Manrope', sans-serif;
+  /* Radii */
   --radius: 12px;
   --radius-sm: 8px;
   --radius-xs: 4px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   TERRAIN THEME — Topographic / Land Survey
+   ═══════════════════════════════════════════════════════════════════════ */
+
+[data-theme="terrain"] {
+  --bg-void: #1a1812;
+  --bg-primary: #211f17;
+  --bg-card: #2a2720;
+  --bg-card-hover: #332f26;
+  --bg-elevated: #3a352b;
+  --border: rgba(196, 164, 106, 0.12);
+  --border-hover: rgba(196, 164, 106, 0.25);
+  --cream: #e8dcc8;
+  --cream-secondary: #b8a88c;
+  --cream-muted: #7a6e58;
+  --gold: #c4a46a;
+  --gold-dim: rgba(196, 164, 106, 0.6);
+  --gold-glow: rgba(196, 164, 106, 0.2);
+  --green: #6b9e5a;
+  --green-glow: rgba(107, 158, 90, 0.2);
+  --red: #c45a3e;
+  --red-glow: rgba(196, 90, 62, 0.2);
+  --cyan: #5a8a9e;
+  --cyan-glow: rgba(90, 138, 158, 0.2);
+  --cyan-dim: rgba(90, 138, 158, 0.7);
+  --holo-green: #6b9e5a;
+  --holo-green-glow: rgba(107, 158, 90, 0.2);
+  --signal-red: #c45a3e;
+  --signal-red-glow: rgba(196, 90, 62, 0.2);
+  --accent-primary: #c4a46a;
+  --accent-green: #6b9e5a;
+  --accent-red: #c45a3e;
+  --accent-blue: #5a8a9e;
+  --text-primary: #e8dcc8;
+  --text-secondary: #b8a88c;
+  --text-muted: #7a6e58;
+  --topo-line: rgba(196, 164, 106, 0.08);
+  /* Terrain fonts */
+  --font-display: 'DM Serif Display', serif;
+  --font-data: 'IBM Plex Mono', monospace;
+  --font-stat: 'IBM Plex Mono', monospace;
+  --font-ui: 'Source Sans 3', sans-serif;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -49,7 +108,7 @@ body {
   flex-direction: column;
 }
 
-/* ─── Atmospheric Layers ─────────────────────────────────────────── */
+/* ─── Atmospheric Layers (Relay only) ───────────────────────────────── */
 
 .atmosphere-noise {
   position: fixed;
@@ -69,8 +128,77 @@ body {
   background: radial-gradient(ellipse at 50% 40%, rgba(0, 240, 255, 0.03) 0%, transparent 70%);
 }
 
-/* ─── Pass 4: Animated Scan Lines — CRT scroll ────────────────────── */
-/* Thicker lines (2px every 4px), scrolling upward on 20s loop */
+/* Hide relay atmosphere in terrain theme */
+[data-theme="terrain"] .atmosphere-noise,
+[data-theme="terrain"] .atmosphere-gradient,
+[data-theme="terrain"] .scanline {
+  display: none;
+}
+
+/* ─── Topo Background (Terrain only) ────────────────────────────────── */
+
+.topo-background {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  display: none;
+}
+
+[data-theme="terrain"] .topo-background {
+  display: block;
+  background:
+    /* Concentric contour lines — radial gradients overlaid */
+    radial-gradient(ellipse at 30% 60%,
+      transparent 80px,
+      var(--topo-line) 81px,
+      transparent 82px,
+      transparent 120px,
+      var(--topo-line) 121px,
+      transparent 122px,
+      transparent 170px,
+      var(--topo-line) 171px,
+      transparent 172px,
+      transparent 230px,
+      var(--topo-line) 231px,
+      transparent 232px,
+      transparent 300px,
+      var(--topo-line) 301px,
+      transparent 302px
+    ),
+    radial-gradient(ellipse at 75% 30%,
+      transparent 50px,
+      var(--topo-line) 51px,
+      transparent 52px,
+      transparent 100px,
+      var(--topo-line) 101px,
+      transparent 102px,
+      transparent 160px,
+      var(--topo-line) 161px,
+      transparent 162px,
+      transparent 230px,
+      var(--topo-line) 231px,
+      transparent 232px
+    ),
+    radial-gradient(ellipse at 50% 90%,
+      transparent 60px,
+      var(--topo-line) 61px,
+      transparent 62px,
+      transparent 130px,
+      var(--topo-line) 131px,
+      transparent 132px,
+      transparent 210px,
+      var(--topo-line) 211px,
+      transparent 212px
+    ),
+    /* Subtle warm vignette */
+    radial-gradient(ellipse at 50% 50%,
+      transparent 40%,
+      rgba(26, 24, 18, 0.4) 100%
+    );
+}
+
+/* ─── Scan Lines (Relay) ────────────────────────────────────────────── */
 
 .scanline {
   display: none;
@@ -83,7 +211,6 @@ body {
 
 /* ─── Hologram Glitch — Shared FX Classes ────────────────────────── */
 
-/* Card scan lines overlay */
 .card-scanlines {
   position: absolute;
   inset: 0;
@@ -93,7 +220,6 @@ body {
   display: none;
 }
 
-/* Card vignette — subtle edge darkening */
 .card-vignette {
   position: absolute;
   inset: 0;
@@ -103,7 +229,11 @@ body {
   background: radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, 0.25) 100%);
 }
 
-/* Transmission noise — thin bright horizontal sweep on load */
+/* Hide vignette in terrain — cleaner cards */
+[data-theme="terrain"] .card-vignette {
+  display: none;
+}
+
 .card-noise-line {
   position: absolute;
   left: 0;
@@ -116,14 +246,23 @@ body {
   opacity: 0;
 }
 
+/* Hide noise line in terrain */
+[data-theme="terrain"] .card-noise-line {
+  display: none;
+}
+
 @keyframes noiseSweep {
   0% { top: 0; opacity: 1; }
   100% { top: 100%; opacity: 0; }
 }
 
-/* Flicker-in effect — signal locking on */
 .holo-flicker {
   animation: flickerIn 0.3s steps(1) forwards;
+}
+
+/* No flicker in terrain */
+[data-theme="terrain"] .holo-flicker {
+  animation: none;
 }
 
 @keyframes flickerIn {
@@ -137,26 +276,32 @@ body {
   100% { opacity: 1; }
 }
 
-/* Chromatic aberration — subtle red/cyan text-shadow */
 .holo-chromatic {
   text-shadow:
     0.5px 0 rgba(255, 51, 68, 0.3),
     -0.5px 0 rgba(0, 240, 255, 0.3);
 }
 
-/* Cranked up chromatic aberration for alerts */
+/* No chromatic in terrain */
+[data-theme="terrain"] .holo-chromatic,
+[data-theme="terrain"] .holo-chromatic-strong {
+  text-shadow: none;
+}
+
 .holo-chromatic-strong {
   text-shadow:
     1.5px 0 rgba(255, 51, 68, 0.5),
     -1.5px 0 rgba(0, 240, 255, 0.5);
 }
 
-/* CRT glow — text emits its own light */
 .holo-crt-glow {
   text-shadow: 0 0 8px currentColor;
 }
 
-/* Typewriter reveal for decoded transmission segments */
+[data-theme="terrain"] .holo-crt-glow {
+  text-shadow: none;
+}
+
 .holo-typewriter {
   animation: typewriterReveal 0.6s steps(20) both;
   overflow: hidden;
@@ -180,7 +325,11 @@ body {
   font-weight: 600;
 }
 
-/* Card timestamp — signal locked / transmission complete */
+[data-theme="terrain"] .holo-number {
+  text-shadow: none;
+}
+
+/* Card timestamp */
 .card-timestamp {
   font-family: var(--font-data);
   font-size: 9px;
@@ -192,8 +341,11 @@ body {
   opacity: 0.7;
 }
 
-/* ─── Pass 4: Toast Scanner Beam ─────────────────────────────────── */
-/* Horizontal gradient sweep left-to-right on load, 0.5s */
+[data-theme="terrain"] .card-timestamp {
+  color: var(--text-muted);
+}
+
+/* ─── Toast Scanner Beam (Relay only) ─────────────────────────────── */
 
 .toast-scanner-beam {
   position: absolute;
@@ -217,6 +369,10 @@ body {
   opacity: 0;
 }
 
+[data-theme="terrain"] .toast-scanner-beam {
+  display: none;
+}
+
 @keyframes scannerBeamSweep {
   0% {
     background-position: -100% 0;
@@ -228,8 +384,7 @@ body {
   }
 }
 
-/* ─── Pass 4: Toast Left-Border Arrival Pulse ────────────────────── */
-/* Gold pulse on the left accent bar that fades over 2s */
+/* ─── Toast Left-Border Arrival Pulse (Relay only) ──────────────── */
 
 .notif-card[data-type="toast"].card-enter::after {
   content: '';
@@ -245,6 +400,10 @@ body {
   animation: toastBorderPulse 2s ease-out forwards;
 }
 
+[data-theme="terrain"] .notif-card[data-type="toast"].card-enter::after {
+  display: none;
+}
+
 @keyframes toastBorderPulse {
   0% {
     opacity: 1;
@@ -256,14 +415,13 @@ body {
   }
 }
 
-/* ─── Pass 4: Breathing Cards ────────────────────────────────────── */
-/* Subtle inner glow opacity oscillation — barely perceptible */
+/* ─── Cards ─────────────────────────────────────────────────────────── */
 
 .notif-card {
   position: relative;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-card);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 12px 14px 12px 17px;
   margin-bottom: 6px;
@@ -272,6 +430,13 @@ body {
   overflow: hidden;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   animation: cardBreathe 8s ease-in-out infinite;
+}
+
+/* No breathing in terrain */
+[data-theme="terrain"] .notif-card {
+  animation: none;
+  backdrop-filter: none;
+  box-shadow: none;
 }
 
 @keyframes cardBreathe {
@@ -283,7 +448,7 @@ body {
   }
 }
 
-/* Left accent bar with glow */
+/* Left accent bar */
 .notif-card::before {
   content: '';
   position: absolute;
@@ -296,18 +461,32 @@ body {
   z-index: 3;
 }
 
+/* Terrain: thicker accent bar, no glow */
+[data-theme="terrain"] .notif-card::before {
+  width: 4px;
+}
+
 .notif-card:hover {
-  background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: var(--bg-card-hover);
+  border-color: var(--border-hover);
 }
 
 .notif-card.unread {
   background: rgba(255, 255, 255, 0.05);
 }
 
-/* Materialize animation — overrides breathing during entrance */
+[data-theme="terrain"] .notif-card.unread {
+  background: var(--bg-card);
+}
+
+/* Materialize animation (Relay) */
 .notif-card.card-enter {
   animation: materialize 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards, cardBreathe 8s ease-in-out 0.5s infinite;
+}
+
+/* Simple fade for terrain */
+[data-theme="terrain"] .notif-card.card-enter {
+  animation: terrainFadeIn 0.3s ease-out forwards;
 }
 
 @keyframes materialize {
@@ -323,6 +502,11 @@ body {
   }
 }
 
+@keyframes terrainFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 .notif-card.card-exit {
   animation: cardSlideOut 0.2s ease-in forwards;
 }
@@ -332,7 +516,7 @@ body {
   to { opacity: 0; transform: translateX(-20px); }
 }
 
-/* Type-specific accent bars with glow */
+/* Type-specific accent bars */
 .notif-card[data-type="toast"]::before {
   background: var(--gold);
   box-shadow: 0 0 8px var(--gold-glow);
@@ -357,6 +541,14 @@ body {
   background: var(--signal-red);
   box-shadow: 0 0 8px var(--signal-red-glow);
 }
+
+/* Terrain: no glow on accent bars */
+[data-theme="terrain"] .notif-card[data-type="toast"]::before { box-shadow: none; background: var(--accent-primary); }
+[data-theme="terrain"] .notif-card[data-type="briefing"]::before { box-shadow: none; background: var(--accent-green); }
+[data-theme="terrain"] .notif-card[data-type="alert"]::before { box-shadow: none; background: var(--accent-red); }
+[data-theme="terrain"] .notif-card[data-type="production-card"]::before { box-shadow: none; background: var(--accent-blue); }
+[data-theme="terrain"] .notif-card[data-type="production-card"].pace-ahead::before { box-shadow: none; background: var(--accent-green); }
+[data-theme="terrain"] .notif-card[data-type="production-card"].pace-behind::before { box-shadow: none; background: var(--accent-red); }
 
 /* ─── Card Header ────────────────────────────────────────────────── */
 
@@ -410,6 +602,10 @@ body {
     0 0 6px rgba(240, 236, 228, 0.15);
 }
 
+[data-theme="terrain"] .notif-title {
+  text-shadow: none;
+}
+
 .notif-time {
   font-size: 11px;
   color: var(--cyan-dim);
@@ -417,6 +613,10 @@ body {
   font-weight: 400;
   flex-shrink: 0;
   margin-left: 8px;
+}
+
+[data-theme="terrain"] .notif-time {
+  color: var(--text-muted);
 }
 
 /* ─── Card Body ──────────────────────────────────────────────────── */
@@ -433,8 +633,7 @@ body {
   z-index: 3;
 }
 
-/* ─── Pass 4: Compact/Expandable Cards ───────────────────────────── */
-/* Cards start collapsed. Click toggles expansion. */
+/* ─── Compact/Expandable Cards ───────────────────────────────────── */
 
 .card-collapsible .card-compact-content {
   position: relative;
@@ -457,7 +656,6 @@ body {
   display: none;
 }
 
-/* Expand toggle chevron */
 .card-expand-toggle {
   position: absolute;
   bottom: 4px;
@@ -477,6 +675,10 @@ body {
   align-items: center;
   color: var(--cyan-dim);
   transition: transform 0.25s ease;
+}
+
+[data-theme="terrain"] .expand-chevron {
+  color: var(--text-muted);
 }
 
 .card-collapsible.expanded .expand-chevron {
@@ -518,6 +720,12 @@ body {
   letter-spacing: 0.5px;
   color: var(--cyan);
   flex-shrink: 0;
+}
+
+[data-theme="terrain"] .compact-segment-label {
+  color: var(--accent-primary);
+  font-variant: small-caps;
+  letter-spacing: 0.3px;
 }
 
 .compact-segment-summary {
@@ -590,6 +798,11 @@ body {
   flex-shrink: 0;
 }
 
+/* Terrain: no pulse dot, no glow */
+[data-theme="terrain"] .decoded-pulse-dot {
+  display: none;
+}
+
 @keyframes pulseDot {
   0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--signal-red); }
   50% { opacity: 0.4; box-shadow: 0 0 2px var(--signal-red); }
@@ -614,6 +827,10 @@ body {
   text-shadow: 0 0 8px rgba(240, 236, 228, 0.15);
 }
 
+[data-theme="terrain"] .decoded-title {
+  text-shadow: none;
+}
+
 .decoded-transmission {
   display: flex;
   flex-direction: column;
@@ -628,11 +845,19 @@ body {
   border-top: 2px solid transparent;
 }
 
-/* Segment top border in type color */
+/* Relay: alternating color borders */
 .decoded-segment:first-child { border-top-color: var(--gold); }
 .decoded-segment:nth-child(3) { border-top-color: var(--holo-green); }
 .decoded-segment:nth-child(5) { border-top-color: var(--cyan); }
 .decoded-segment:nth-child(7) { border-top-color: var(--gold); }
+
+/* Terrain: left margin line like lined notebook */
+[data-theme="terrain"] .decoded-segment {
+  border-top: none;
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+  margin-left: 4px;
+}
 
 @keyframes decodedFadeIn {
   from { opacity: 0; transform: translateX(-6px); }
@@ -653,6 +878,10 @@ body {
   flex-shrink: 0;
 }
 
+[data-theme="terrain"] .decoded-segment-icon {
+  color: var(--accent-primary);
+}
+
 .decoded-segment-icon svg {
   display: block;
 }
@@ -664,6 +893,12 @@ body {
   text-transform: uppercase;
   letter-spacing: 1px;
   color: var(--cyan);
+}
+
+[data-theme="terrain"] .decoded-segment-label {
+  color: var(--accent-primary);
+  font-variant: small-caps;
+  letter-spacing: 0.5px;
 }
 
 .decoded-segment-body {
@@ -682,6 +917,16 @@ body {
   text-align: center;
   padding: 2px 0;
   user-select: none;
+}
+
+/* Terrain: thin horizontal rule instead of dashed morse */
+[data-theme="terrain"] .decoded-separator {
+  font-size: 0;
+  letter-spacing: 0;
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0 4px 16px;
+  padding: 0;
 }
 
 /* Audio controls */
@@ -754,6 +999,13 @@ body {
   animation: alertBorderPulse 3s infinite, cardBreathe 8s ease-in-out infinite;
 }
 
+/* Terrain: calm alert — no pulse animation */
+[data-theme="terrain"] .notif-card[data-type="alert"]:not(.acknowledged) {
+  background: rgba(196, 90, 62, 0.06);
+  border-color: rgba(196, 90, 62, 0.2);
+  animation: none;
+}
+
 @keyframes alertBorderPulse {
   0%, 100% {
     border-color: rgba(255, 51, 68, 0.15);
@@ -765,13 +1017,17 @@ body {
   }
 }
 
-/* VHS tracking glitch overlay on alert arrival */
+/* VHS glitch overlay (Relay only) */
 .alert-glitch-overlay {
   position: absolute;
   inset: 0;
   z-index: 4;
   pointer-events: none;
   animation: vhsGlitch 0.4s ease-out forwards;
+}
+
+[data-theme="terrain"] .alert-glitch-overlay {
+  display: none;
 }
 
 @keyframes vhsGlitch {
@@ -787,6 +1043,10 @@ body {
 .notif-card[data-type="alert"].acknowledged {
   opacity: 0.6;
   border-color: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="terrain"] .notif-card[data-type="alert"].acknowledged {
+  border-color: var(--border);
 }
 
 .alert-body-text {
@@ -821,10 +1081,25 @@ body {
   letter-spacing: 1px;
   text-transform: uppercase;
 }
+
+/* Terrain: warm gold outlined button */
+[data-theme="terrain"] .btn-acknowledge {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  font-family: var(--font-display);
+  border-radius: var(--radius-xs);
+}
+
 .btn-acknowledge:hover {
   background: rgba(255, 51, 68, 0.1);
   box-shadow: 0 0 12px var(--signal-red-glow);
 }
+
+[data-theme="terrain"] .btn-acknowledge:hover {
+  background: rgba(196, 164, 106, 0.1);
+  box-shadow: none;
+}
+
 .btn-acknowledge:active {
   animation: ackFlash 0.15s ease-out;
 }
@@ -843,7 +1118,11 @@ body {
   text-shadow: 0 0 8px var(--holo-green-glow);
 }
 
-/* ─── Production Card — Pulse Monitor ────────────────────────────── */
+[data-theme="terrain"] .alert-acked-inline {
+  text-shadow: none;
+}
+
+/* ─── Production Card — Pulse Monitor / Terrain View ─────────────── */
 
 .pulse-monitor {
   position: relative;
@@ -858,13 +1137,17 @@ body {
   background: rgba(0, 0, 0, 0.2);
 }
 
+[data-theme="terrain"] .pulse-chart-area {
+  background: rgba(0, 0, 0, 0.15);
+}
+
 .pulse-chart-svg {
   display: block;
   width: 100%;
   height: auto;
 }
 
-/* Floating stat overlays on the chart */
+/* Floating stat overlays */
 .pulse-stat {
   position: absolute;
   display: flex;
@@ -887,7 +1170,7 @@ body {
   text-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
 }
 
-/* Top-left: LBS — large hero number */
+/* Top-left: LBS */
 .pulse-stat-lbs {
   top: 8px;
   left: 10px;
@@ -900,7 +1183,15 @@ body {
   color: var(--cyan-dim);
 }
 
-/* Top-right: percent of target */
+/* Terrain: serif display for stat labels */
+[data-theme="terrain"] .pulse-stat-unit {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+/* Top-right: percent */
 .pulse-stat-pct {
   top: 8px;
   right: 10px;
@@ -911,6 +1202,8 @@ body {
 .pulse-stat-pct .pulse-stat-value.ahead { color: var(--holo-green); text-shadow: 0 0 8px var(--holo-green-glow); }
 .pulse-stat-pct .pulse-stat-value.behind { color: var(--signal-red); text-shadow: 0 0 8px var(--signal-red-glow); }
 .pulse-stat-pct .pulse-stat-value.on-pace { color: var(--gold); text-shadow: 0 0 8px var(--gold-glow); }
+
+[data-theme="terrain"] .pulse-stat-pct .pulse-stat-value { text-shadow: 0 0 8px rgba(0, 0, 0, 0.6); }
 
 /* Bottom-left: crew */
 .pulse-stat-crew {
@@ -925,6 +1218,10 @@ body {
   color: var(--cyan-dim);
 }
 
+[data-theme="terrain"] .pulse-stat-crew .pulse-stat-value {
+  color: var(--text-primary);
+}
+
 /* Bottom-right: rate */
 .pulse-stat-rate {
   bottom: 8px;
@@ -936,6 +1233,10 @@ body {
 }
 .pulse-stat-rate .pulse-stat-unit {
   color: var(--cyan-dim);
+}
+
+[data-theme="terrain"] .pulse-stat-rate .pulse-stat-value {
+  color: var(--text-primary);
 }
 
 /* ─── Titlebar ───────────────────────────────────────────────────── */
@@ -955,6 +1256,11 @@ body {
   flex-shrink: 0;
 }
 
+[data-theme="terrain"] .titlebar {
+  background: var(--bg-primary);
+  backdrop-filter: none;
+}
+
 .titlebar-left {
   display: flex;
   align-items: center;
@@ -966,6 +1272,13 @@ body {
   align-items: center;
   justify-content: center;
 }
+
+/* Logo switching between themes */
+.logo-terrain { display: none; }
+.logo-relay { display: block; }
+
+[data-theme="terrain"] .logo-terrain { display: block; }
+[data-theme="terrain"] .logo-relay { display: none; }
 
 .titlebar-brand {
   display: flex;
@@ -985,6 +1298,12 @@ body {
     -0.5px 0 rgba(0, 240, 255, 0.2);
 }
 
+[data-theme="terrain"] .titlebar-title {
+  text-shadow: none;
+  letter-spacing: 2px;
+  font-weight: 400;
+}
+
 .titlebar-sub {
   font-family: var(--font-data);
   font-size: 8px;
@@ -993,6 +1312,10 @@ body {
   letter-spacing: 2px;
   line-height: 1;
   margin-top: 2px;
+}
+
+[data-theme="terrain"] .titlebar-sub {
+  color: var(--text-muted);
 }
 
 .titlebar-right {
@@ -1028,6 +1351,11 @@ body {
 }
 .status-dot.offline { background: var(--signal-red); }
 
+/* Terrain: no glow on status dot */
+[data-theme="terrain"] .status-dot.online {
+  box-shadow: none;
+}
+
 .status-text { font-size: 10px; }
 
 .btn-icon {
@@ -1058,6 +1386,10 @@ body {
   background: rgba(255, 255, 255, 0.02);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+}
+
+[data-theme="terrain"] .tabs {
+  background: var(--bg-primary);
 }
 
 .tab {
@@ -1093,6 +1425,11 @@ body {
   box-shadow: 0 0 12px var(--gold-glow);
 }
 
+[data-theme="terrain"] .tab-indicator {
+  box-shadow: none;
+  background: var(--accent-primary);
+}
+
 /* ─── Mission Control ────────────────────────────────────────────── */
 
 .mission-control {
@@ -1101,6 +1438,10 @@ body {
   background: rgba(255, 255, 255, 0.02);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+}
+
+[data-theme="terrain"] .mission-control {
+  background: var(--bg-primary);
 }
 
 .mission-control-header {
@@ -1124,6 +1465,10 @@ body {
   background: rgba(255, 255, 255, 0.1);
 }
 
+[data-theme="terrain"] .mc-label-line {
+  background: var(--border);
+}
+
 .mc-title {
   font-family: var(--font-display);
   font-size: 11px;
@@ -1131,6 +1476,11 @@ body {
   text-transform: uppercase;
   letter-spacing: 1.5px;
   color: var(--cream-muted);
+}
+
+[data-theme="terrain"] .mc-title {
+  font-weight: 400;
+  letter-spacing: 1px;
 }
 
 .mc-toggle {
@@ -1172,7 +1522,7 @@ body {
 /* ─── Widgets ────────────────────────────────────────────────────── */
 
 .widget {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-card);
   backdrop-filter: blur(20px);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1182,7 +1532,12 @@ body {
   overflow: hidden;
 }
 
-/* Widget scan lines */
+[data-theme="terrain"] .widget {
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+/* Widget scan lines (Relay only) */
 .widget::before {
   content: '';
   position: absolute;
@@ -1197,6 +1552,10 @@ body {
     rgba(255, 255, 255, 0.015) 4px
   );
   z-index: 1;
+}
+
+[data-theme="terrain"] .widget::before {
+  display: none;
 }
 
 .widget-header {
@@ -1215,6 +1574,10 @@ body {
   font-size: 12px;
   font-weight: 600;
   color: var(--cream);
+}
+
+[data-theme="terrain"] .widget-title {
+  font-weight: 400;
 }
 
 .widget-body {
@@ -1260,6 +1623,10 @@ body {
   background: var(--signal-red);
 }
 
+[data-theme="terrain"] .widget-dot.online {
+  box-shadow: none;
+}
+
 .widget-placeholder {
   color: var(--cream-muted);
   font-style: italic;
@@ -1289,6 +1656,12 @@ body {
     -0.5px 0 rgba(0, 240, 255, 0.2);
   animation: flickerIn 0.3s steps(1) forwards;
 }
+
+[data-theme="terrain"] .hud-value {
+  text-shadow: none;
+  animation: none;
+}
+
 .hud-label {
   font-family: var(--font-display);
   font-size: 9px;
@@ -1297,6 +1670,12 @@ body {
   letter-spacing: 0.8px;
   color: var(--cyan-dim);
 }
+
+[data-theme="terrain"] .hud-label {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
 .hud-pace {
   font-family: var(--font-stat);
   font-size: 11px;
@@ -1329,8 +1708,7 @@ body {
 }
 .notification-list::-webkit-scrollbar-thumb:hover { background: var(--gold); }
 
-/* ─── Pass 4: Particle Dust Background ───────────────────────────── */
-/* Floating particles behind notification list — depth/space feel */
+/* ─── Particle Dust Background (Relay only) ──────────────────────── */
 
 .particle-field {
   position: absolute;
@@ -1338,6 +1716,10 @@ body {
   z-index: 0;
   pointer-events: none;
   overflow: hidden;
+}
+
+[data-theme="terrain"] .particle-field {
+  display: none;
 }
 
 .particle {
@@ -1367,7 +1749,6 @@ body {
   }
 }
 
-/* Particle size variants */
 .particle.p-lg {
   width: 2px;
   height: 2px;
@@ -1391,6 +1772,10 @@ body {
   background: rgba(255, 255, 255, 0.02);
   border-top: 1px solid var(--border);
   flex-shrink: 0;
+}
+
+[data-theme="terrain"] .bottom-bar {
+  background: var(--bg-primary);
 }
 
 .notif-count {
@@ -1431,6 +1816,13 @@ body {
   opacity: 0.3;
   margin-bottom: 16px;
 }
+
+/* Show correct glyph per theme */
+.empty-glyph-terrain { display: none; }
+.empty-glyph-relay { display: block; }
+
+[data-theme="terrain"] .empty-glyph-terrain { display: block; }
+[data-theme="terrain"] .empty-glyph-relay { display: none; }
 
 .empty-title {
   font-family: var(--font-display);
@@ -1489,6 +1881,10 @@ body {
   background: rgba(255, 255, 255, 0.02);
 }
 
+[data-theme="terrain"] .settings-header {
+  background: var(--bg-primary);
+}
+
 .settings-back {
   display: flex;
   align-items: center;
@@ -1530,11 +1926,19 @@ body {
   margin-bottom: 10px;
 }
 
+[data-theme="terrain"] .settings-section-label {
+  font-weight: 400;
+}
+
 .settings-group {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
+}
+
+[data-theme="terrain"] .settings-group {
+  background: var(--bg-card);
 }
 
 .settings-field {
@@ -1577,6 +1981,10 @@ body {
 }
 .settings-input::placeholder { color: var(--cream-muted); opacity: 0.5; }
 
+[data-theme="terrain"] .settings-input {
+  background: var(--bg-elevated);
+}
+
 .settings-select {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border);
@@ -1592,6 +2000,10 @@ body {
   transition: border-color 0.15s;
 }
 .settings-select:focus { border-color: var(--gold-dim); }
+
+[data-theme="terrain"] .settings-select {
+  background: var(--bg-elevated);
+}
 
 /* Toggle switch */
 .settings-toggle {
@@ -1653,6 +2065,10 @@ body {
   box-shadow: 0 0 6px var(--gold-glow);
 }
 
+[data-theme="terrain"] .settings-slider::-webkit-slider-thumb {
+  box-shadow: none;
+}
+
 .settings-slider-value {
   font-family: var(--font-data);
   font-size: 11px;
@@ -1667,6 +2083,10 @@ body {
   border-top: 1px solid var(--border);
   flex-shrink: 0;
   background: rgba(255, 255, 255, 0.02);
+}
+
+[data-theme="terrain"] .settings-footer {
+  background: var(--bg-primary);
 }
 
 .btn-save {
@@ -1686,4 +2106,74 @@ body {
 .btn-save:hover {
   background: #d49a3f;
   box-shadow: 0 0 16px var(--gold-glow);
+}
+
+[data-theme="terrain"] .btn-save:hover {
+  box-shadow: none;
+  background: #b8954e;
+}
+
+/* ─── Theme Switcher ────────────────────────────────────────────── */
+
+.theme-switcher {
+  display: flex;
+  gap: 6px;
+}
+
+.theme-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--cream-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.theme-btn:hover {
+  border-color: var(--border-hover);
+  color: var(--cream-secondary);
+}
+
+.theme-btn.active {
+  border-color: var(--gold);
+  color: var(--cream);
+  background: rgba(228, 170, 79, 0.08);
+}
+
+[data-theme="terrain"] .theme-btn.active {
+  background: rgba(196, 164, 106, 0.1);
+}
+
+.theme-btn-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid var(--cream-muted);
+  transition: all 0.2s;
+}
+
+.theme-btn.active .theme-btn-dot {
+  border-color: var(--gold);
+  background: var(--gold);
+}
+
+/* ─── Terrain Briefing: Field Report Styling ─────────────────────── */
+
+[data-theme="terrain"] .decoded-incoming {
+  font-family: var(--font-display);
+  letter-spacing: 0.5px;
+  color: var(--accent-primary);
+}
+
+/* ─── Terrain: Trail Marker dot for toast ────────────────────────── */
+
+[data-theme="terrain"] .notif-card[data-type="toast"] .notif-icon-svg {
+  color: var(--accent-primary);
 }

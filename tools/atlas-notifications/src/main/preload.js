@@ -13,6 +13,10 @@ contextBridge.exposeInMainWorld('atlas', {
   getSettings: () => ipcRenderer.invoke('get-settings'),
   setSettings: (settings) => ipcRenderer.invoke('set-settings', settings),
 
+  // Theme
+  getTheme: () => ipcRenderer.invoke('get-theme'),
+  setTheme: (theme) => ipcRenderer.invoke('set-theme', theme),
+
   // TTS
   getTtsConfig: () => ipcRenderer.invoke('get-tts-config'),
   setTtsConfig: (config) => ipcRenderer.invoke('set-tts-config', config),
