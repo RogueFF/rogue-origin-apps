@@ -1423,10 +1423,17 @@ async function saveEntry(retryData = null) {
       };
       updateCrewModifiedBadge();
 
-      // Reset crew change log with current crew as new baseline
-      const currentTrimmers1 = parseInt(document.getElementById('trimmers1').value, 10) || 0;
-      const currentTrimmers2 = parseInt(document.getElementById('trimmers2').value, 10) || 0;
-      crewChangeLog = [{ minutesMark: getCurrentMinutes(), trimmers1: currentTrimmers1, trimmers2: currentTrimmers2 }];
+      // NOTE: Do NOT reset crewChangeLog here — it must persist for the entire
+      // editor session on a slot so that effective_trimmers (time-weighted average)
+      // remains accurate across subsequent autosaves. The log resets in populateForm()
+      // when opening a different slot.
+    }
+
+    // Always update hadProduction flag after any successful save (even if crew wasn't modified)
+    // This fixes the stale flag bug where: enter crew → save → enter production → save → change crew
+    // would not log a note because hadProduction was still false from the first crew-only save.
+    if (originalCrewData) {
+      originalCrewData.hadProduction = (data.tops1 || 0) + (data.tops2 || 0) > 0;
     }
 
     // Show success indicator
