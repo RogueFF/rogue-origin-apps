@@ -73,19 +73,7 @@ body {
 /* Thicker lines (2px every 4px), scrolling upward on 20s loop */
 
 .scanline {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  pointer-events: none;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 4px,
-    rgba(255, 255, 255, 0.025) 4px,
-    rgba(255, 255, 255, 0.025) 6px
-  );
-  background-size: 100% 6px;
-  animation: scanlineScroll 20s linear infinite;
+  display: none;
 }
 
 @keyframes scanlineScroll {
@@ -102,13 +90,7 @@ body {
   z-index: 1;
   pointer-events: none;
   border-radius: inherit;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 4px,
-    rgba(255, 255, 255, 0.035) 4px,
-    rgba(255, 255, 255, 0.035) 6px
-  );
+  display: none;
 }
 
 /* Card vignette — subtle edge darkening */
