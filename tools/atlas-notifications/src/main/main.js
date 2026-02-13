@@ -468,6 +468,23 @@ function setupIPC() {
     }
   });
 
+  // ─── Request Update from Atlas ───────────────────────────────────
+  ipcMain.handle('request-update', async (_, type) => {
+    const atlasHost = store.get('atlasHost', '100.65.60.42');
+    const url = `http://${atlasHost}:9401/request`;
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type })
+      });
+      const data = await resp.json();
+      return data;
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  });
+
   // ─── Acknowledge Alert ──────────────────────────────────────────
   ipcMain.handle('acknowledge-alert', (_, id) => {
     const notifs = store.get('notifications', []);
