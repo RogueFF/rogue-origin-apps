@@ -3687,6 +3687,133 @@ input {
   font-size: 12px;
 }
 
+/* ─── PERFORMANCE STATS ROW ─── */
+.portfolio-perf-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--sp-8);
+}
+
+.portfolio-perf-stats .portfolio-stat {
+  padding: var(--sp-8);
+}
+
+.portfolio-perf-stats .portfolio-stat-value {
+  font-size: 14px;
+}
+
+/* ─── EQUITY BAR ─── */
+.equity-bar-container {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+}
+
+.equity-bar-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--os-text-muted);
+  flex-shrink: 0;
+}
+
+.equity-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--os-border);
+  display: flex;
+  overflow: hidden;
+}
+
+.equity-bar-segment {
+  height: 100%;
+}
+
+.equity-bar-green {
+  background: var(--sig-green, #22c55e);
+}
+
+.equity-bar-red {
+  background: var(--sig-red, #ef4444);
+}
+
+.equity-bar-gray {
+  background: var(--os-text-muted);
+}
+
+/* ─── CLOSED TRADES ─── */
+.portfolio-closed-trades {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-8);
+}
+
+.closed-trades-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
+
+.closed-trade-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-8) var(--sp-12);
+  border-radius: var(--r-md);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--os-border);
+}
+
+.closed-trade-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+}
+
+.closed-trade-ticker {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--os-text);
+}
+
+.closed-trade-vehicle {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--os-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.closed-trade-date {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--os-text-secondary);
+  margin-left: auto;
+}
+
+.closed-trade-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-12);
+}
+
+.closed-trade-pnl {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.closed-trade-reason {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--os-text-muted);
+  font-style: italic;
+}
+
 
 /* ═══════════════════════════════════════════════════
    ENHANCED MOBILE — iPhone card layout
@@ -3760,6 +3887,10 @@ input {
 
   .portfolio-stats {
     grid-template-columns: 1fr;
+  }
+
+  .portfolio-perf-stats {
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .position-levels {

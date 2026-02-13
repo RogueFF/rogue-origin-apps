@@ -319,14 +319,15 @@ async function fetchInbox() {
 }
 
 async function fetchTradingData() {
-  const [regime, plays, portfolio] = await Promise.all([
+  const [regime, plays, portfolio, closed] = await Promise.all([
     apiFetch('/regime'),
     apiFetch('/plays'),
     apiFetch('/portfolio'),
+    apiFetch('/positions?status=closed'),
   ]);
-  
+
   if (regime || plays || portfolio) {
-    renderTradingDesk(regime, plays, portfolio);
+    renderTradingDesk(regime, plays, portfolio, closed);
   }
 }
 
@@ -1312,7 +1313,7 @@ document.addEventListener('click', (e) => {
 /* ═══════════════════════════════════════════════════
    TRADING DESK
    ═══════════════════════════════════════════════════ */
-function renderTradingDesk(regime, plays, portfolio) {
+function renderTradingDesk(regime, plays, portfolio, closed) {
   const container = document.getElementById('tradingMain');
   if (!container) return;
 
@@ -1320,6 +1321,8 @@ function renderTradingDesk(regime, plays, portfolio) {
   const liveIndicator = marketOpen
     ? '<span class="live-dot"></span> LIVE'
     : 'CLOSED';
+
+  const closedTrades = Array.isArray(closed) ? closed : [];
 
   // Build the three-card layout
   const html = `
@@ -1330,7 +1333,7 @@ function renderTradingDesk(regime, plays, portfolio) {
     <div class="trading-grid">
       ${buildRegimeCard(regime)}
       ${buildPlaysCard(plays)}
-      ${buildPortfolioCard(portfolio)}
+      ${buildPortfolioCard(portfolio, closedTrades)}
     </div>
   `;
 
@@ -1462,7 +1465,7 @@ function buildPlaysCard(data) {
   `;
 }
 
-function buildPortfolioCard(data) {
+function buildPortfolioCard(data, closedTrades) {
   if (!data) {
     return `
       <div class="trading-card portfolio-card">
@@ -1482,9 +1485,61 @@ function buildPortfolioCard(data) {
   const totalPnl = unrealizedPnl + realizedPnl;
   const winRate = data.win_rate || 0;
   const positions = Array.isArray(data.positions) ? data.positions : (Array.isArray(data.open_positions) ? data.open_positions : []);
+  const closed = Array.isArray(closedTrades) ? closedTrades : [];
 
   const pnlClass = totalPnl >= 0 ? 'positive' : 'negative';
   const pnlSign = totalPnl >= 0 ? '+' : '';
+
+  // Performance stats
+  const expectancy = data.expectancy || 0;
+  const avgWin = data.avg_winner || 0;
+  const avgLoss = data.avg_loser || 0;
+  const openExposure = data.open_exposure || 0;
+  const exposurePct = bankroll > 0 ? ((openExposure / bankroll) * 100).toFixed(1) : '0.0';
+
+  // Equity bar segments
+  const startingBankroll = data.starting_bankroll || bankroll;
+  const realizedGains = Math.max(0, realizedPnl);
+  const realizedLosses = Math.abs(Math.min(0, realizedPnl));
+  const absUnrealized = Math.abs(unrealizedPnl);
+  const equityTotal = realizedGains + realizedLosses + absUnrealized || 1;
+  const greenPct = ((realizedGains / equityTotal) * 100).toFixed(1);
+  const redPct = ((realizedLosses / equityTotal) * 100).toFixed(1);
+  const grayPct = ((absUnrealized / equityTotal) * 100).toFixed(1);
+
+  // Build closed trades HTML
+  const closedTradesHtml = closed.length > 0 ? `
+    <div class="portfolio-closed-trades">
+      <div class="portfolio-positions-title">Closed Trades</div>
+      <div class="closed-trades-list">
+        ${closed.map(trade => {
+          const ticker = trade.ticker || '—';
+          const vehicle = trade.vehicle || trade.type || '';
+          const pnl = trade.pnl || 0;
+          const pnlColor = pnl > 0 ? 'var(--sig-green, #22c55e)' : pnl < 0 ? 'var(--sig-red, #ef4444)' : 'var(--os-text-muted)';
+          const pnlPrefix = pnl > 0 ? '+' : '';
+          const closedAt = trade.closed_at || trade.updated_at || '';
+          const closeDate = closedAt ? new Date(closedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+          const notes = trade.notes || '';
+          // Extract close reason — use first phrase from notes or 'closed'
+          const reason = notes ? notes.split(/[.;,]/)[0].trim() : '';
+          return `
+            <div class="closed-trade-item">
+              <div class="closed-trade-header">
+                <span class="closed-trade-ticker">${escapeHtml(ticker)}</span>
+                <span class="closed-trade-vehicle">${escapeHtml(vehicle)}</span>
+                <span class="closed-trade-date">Closed ${escapeHtml(closeDate)}</span>
+              </div>
+              <div class="closed-trade-footer">
+                <span class="closed-trade-pnl" style="color: ${pnlColor}">P&L: ${pnlPrefix}${formatCurrency(pnl)}</span>
+                ${reason ? `<span class="closed-trade-reason">${escapeHtml(reason)}</span>` : ''}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  ` : '';
 
   return `
     <div class="trading-card portfolio-card">
@@ -1504,6 +1559,32 @@ function buildPortfolioCard(data) {
           <div class="portfolio-stat">
             <span class="portfolio-stat-label">Win Rate</span>
             <span class="portfolio-stat-value">${winRate}%</span>
+          </div>
+        </div>
+        <div class="portfolio-perf-stats">
+          <div class="portfolio-stat">
+            <span class="portfolio-stat-label">Expectancy</span>
+            <span class="portfolio-stat-value">${formatCurrency(expectancy)}</span>
+          </div>
+          <div class="portfolio-stat">
+            <span class="portfolio-stat-label">Avg Win</span>
+            <span class="portfolio-stat-value positive">${formatCurrency(avgWin)}</span>
+          </div>
+          <div class="portfolio-stat">
+            <span class="portfolio-stat-label">Avg Loss</span>
+            <span class="portfolio-stat-value negative">${formatCurrency(avgLoss)}</span>
+          </div>
+          <div class="portfolio-stat">
+            <span class="portfolio-stat-label">Exposure</span>
+            <span class="portfolio-stat-value">${exposurePct}%</span>
+          </div>
+        </div>
+        <div class="equity-bar-container">
+          <div class="equity-bar-label">Equity</div>
+          <div class="equity-bar">
+            <div class="equity-bar-segment equity-bar-green" style="width: ${greenPct}%"></div>
+            <div class="equity-bar-segment equity-bar-red" style="width: ${redPct}%"></div>
+            <div class="equity-bar-segment equity-bar-gray" style="width: ${grayPct}%"></div>
           </div>
         </div>
         ${positions.length > 0 ? `
@@ -1546,6 +1627,7 @@ function buildPortfolioCard(data) {
             </div>
           </div>
         ` : ''}
+        ${closedTradesHtml}
       </div>
     </div>
   `;
