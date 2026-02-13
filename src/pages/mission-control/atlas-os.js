@@ -5,6 +5,19 @@
 
 const API_BASE = 'https://mission-control-api.roguefamilyfarms.workers.dev/api';
 const POLL_INTERVAL = 30000;
+const TRADING_POLL_INTERVAL = 60000; // 60s during market hours
+const TRADING_IDLE_INTERVAL = 300000; // 5m outside market hours
+
+function isMarketHours() {
+  const now = new Date();
+  const et = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const day = et.getDay();
+  const hour = et.getHours();
+  const min = et.getMinutes();
+  const timeVal = hour * 60 + min;
+  // M-F, 9:30 AM - 4:00 PM ET
+  return day >= 1 && day <= 5 && timeVal >= 570 && timeVal <= 960;
+}
 
 // ─── Agent glyphs — refined emoji, sharp + intentional ───
 const GLYPH_MAP = {
@@ -219,6 +232,21 @@ function initDesktop() {
 
   // Start polling
   setInterval(pollData, POLL_INTERVAL);
+
+  // Trading desk auto-refresh — faster during market hours
+  let tradingTimer = null;
+  function scheduleTradingPoll() {
+    if (tradingTimer) clearInterval(tradingTimer);
+    const interval = isMarketHours() ? TRADING_POLL_INTERVAL : TRADING_IDLE_INTERVAL;
+    tradingTimer = setInterval(async () => {
+      if (state.windows.has('trading')) {
+        await fetchTradingData();
+      }
+    }, interval);
+  }
+  scheduleTradingPoll();
+  // Re-check interval every 5 min (catches market open/close transitions)
+  setInterval(scheduleTradingPoll, 300000);
 
   // Resize listener
   window.addEventListener('resize', () => {
@@ -1288,8 +1316,17 @@ function renderTradingDesk(regime, plays, portfolio) {
   const container = document.getElementById('tradingMain');
   if (!container) return;
 
+  const marketOpen = isMarketHours();
+  const liveIndicator = marketOpen
+    ? '<span class="live-dot"></span> LIVE'
+    : 'CLOSED';
+
   // Build the three-card layout
   const html = `
+    <div class="trading-status-bar">
+      <span class="trading-market-status ${marketOpen ? 'market-open' : 'market-closed'}">${liveIndicator}</span>
+      <span class="trading-refresh-rate">${marketOpen ? 'Refreshing every 60s' : 'Refreshing every 5m'}</span>
+    </div>
     <div class="trading-grid">
       ${buildRegimeCard(regime)}
       ${buildPlaysCard(plays)}
