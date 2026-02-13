@@ -536,6 +536,7 @@ function openWindow(id) {
   if (id === 'atlas-chat') initChat();
   if (id === 'tasks') initTasksWindow();
   if (id === 'trading') fetchTradingData();
+  if (id === 'work') fetchWorkData();
 }
 
 function closeWindow(id) {
@@ -1444,13 +1445,23 @@ function renderTradingDesk(regime, plays, portfolio, closed) {
 
 function buildProductionCard(data) {
   if (!data) {
+    const shiftActive = isShiftHours();
+    const shiftIndicator = shiftActive
+      ? '<span class="live-dot production-live-dot"></span> ON SHIFT'
+      : 'OFF SHIFT';
+    const shiftClass = shiftActive ? 'shift-active' : 'shift-closed';
     return `
       <div class="trading-card production-card">
         <div class="trading-card-header">
           <span class="trading-card-title">Production</span>
+          <span class="production-shift-status ${shiftClass}">${shiftIndicator}</span>
         </div>
         <div class="trading-card-body">
-          <div class="production-empty">No production data</div>
+          <div class="production-off-shift">
+            <div class="empty-glyph">◻</div>
+            <p>No active production session.</p>
+            <p class="production-off-shift-sub">${shiftActive ? 'Waiting for data...' : 'Floor is closed. Check back during shift hours.'}</p>
+          </div>
         </div>
       </div>
     `;
@@ -1581,10 +1592,11 @@ function buildRegimeCard(data) {
   const signalColor = signal === 'GREEN' ? '#22c55e' : signal === 'YELLOW' ? '#eab308' : '#ef4444';
   const timestamp = data.created_at ? formatTime(data.created_at) : 'Unknown';
   const mktData = data.data || {};
-  const spy = mktData.spy_price || '—';
-  const vix = mktData.vix || mktData.vix_level || '—';
-  const trend = mktData.spy_trend || '—';
-  const reasoning = Array.isArray(data.reasoning) ? data.reasoning : [];
+  const spy = mktData.spy_price || data.spy_price || '—';
+  const vix = mktData.vix || mktData.vix_level || data.vix_level || data.vix || '—';
+  const trend = mktData.spy_trend || mktData.trend || data.trend || '—';
+  const factors = Array.isArray(mktData.factors) ? mktData.factors : (Array.isArray(data.factors) ? data.factors : []);
+  const reasoning = factors.length > 0 ? factors : (Array.isArray(data.reasoning) ? data.reasoning : []);
   const strategyObj = data.strategy || {};
   const strategy = typeof strategyObj === 'string' ? strategyObj : (strategyObj.position_sizing ? [
     strategyObj.position_sizing,
@@ -1713,7 +1725,8 @@ function buildPortfolioCard(data, closedTrades) {
   const pnlClass = totalPnl >= 0 ? 'positive' : 'negative';
   const pnlSign = totalPnl >= 0 ? '+' : '';
 
-  // Performance stats
+  // Performance stats — show dashes when no closed trades
+  const hasClosedTrades = closed.length > 0 || winRate > 0;
   const expectancy = data.expectancy || 0;
   const avgWin = data.avg_winner || 0;
   const avgLoss = data.avg_loser || 0;
@@ -1781,21 +1794,21 @@ function buildPortfolioCard(data, closedTrades) {
           </div>
           <div class="portfolio-stat">
             <span class="portfolio-stat-label">Win Rate</span>
-            <span class="portfolio-stat-value">${winRate}%</span>
+            <span class="portfolio-stat-value">${hasClosedTrades ? winRate + '%' : '—'}</span>
           </div>
         </div>
         <div class="portfolio-perf-stats">
           <div class="portfolio-stat">
             <span class="portfolio-stat-label">Expectancy</span>
-            <span class="portfolio-stat-value">${formatCurrency(expectancy)}</span>
+            <span class="portfolio-stat-value">${hasClosedTrades ? formatCurrency(expectancy) : '—'}</span>
           </div>
           <div class="portfolio-stat">
             <span class="portfolio-stat-label">Avg Win</span>
-            <span class="portfolio-stat-value positive">${formatCurrency(avgWin)}</span>
+            <span class="portfolio-stat-value positive">${hasClosedTrades ? formatCurrency(avgWin) : '—'}</span>
           </div>
           <div class="portfolio-stat">
             <span class="portfolio-stat-label">Avg Loss</span>
-            <span class="portfolio-stat-value negative">${formatCurrency(avgLoss)}</span>
+            <span class="portfolio-stat-value negative">${hasClosedTrades ? formatCurrency(avgLoss) : '—'}</span>
           </div>
           <div class="portfolio-stat">
             <span class="portfolio-stat-label">Exposure</span>
