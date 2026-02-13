@@ -75,6 +75,10 @@
         <div class="desktop-icon-glyph">🧠</div>
         <span class="desktop-icon-label">Tasks</span>
       </button>
+      <button class="desktop-icon" data-window="trading" title="Trading Desk">
+        <div class="desktop-icon-glyph">📊</div>
+        <span class="desktop-icon-label">Trading</span>
+      </button>
     </div>
 
     <!-- Window container -->
@@ -121,6 +125,10 @@
         <button class="mobile-nav-btn" data-window="tasks">
           <span class="mobile-nav-icon">🧠</span>
           <span class="mobile-nav-label">Tasks</span>
+        </button>
+        <button class="mobile-nav-btn" data-window="trading">
+          <span class="mobile-nav-icon">📊</span>
+          <span class="mobile-nav-label">Trading</span>
         </button>
       </div>
 
@@ -276,17 +284,32 @@
     </div>
   </template>
 
+  <!-- Trading Desk Window -->
+  <template id="tmpl-trading">
+    <div class="window-body trading-window">
+      <div class="trading-main" id="tradingMain">
+        <div class="trading-loading">
+          <div class="loading-spinner"></div>
+          <span>Loading market data...</span>
+        </div>
+      </div>
+    </div>
+  </template>
+
   <!-- Tasks Window — Dual view: Board (default) + Neural Map (toggle) -->
   <template id="tmpl-tasks">
     <div class="window-body tasks-window">
       <div class="tasks-toolbar">
         <div class="tasks-toolbar-left">
           <span class="tasks-title-glyph">◉</span>
-          <span class="tasks-title-text">TASK BOARD</span>
+          <span class="tasks-title-text">TASK LIST</span>
         </div>
         <div class="tasks-toolbar-right">
           <div class="tasks-view-toggle">
-            <button class="tasks-view-btn active" data-view="board" title="Board view">
+            <button class="tasks-view-btn active" data-view="list" title="List view">
+              <svg viewBox="0 0 16 16" width="14" height="14"><rect x="1" y="2" width="14" height="2" rx="0.5" fill="currentColor" opacity="0.7"/><rect x="1" y="7" width="14" height="2" rx="0.5" fill="currentColor" opacity="0.5"/><rect x="1" y="12" width="14" height="2" rx="0.5" fill="currentColor" opacity="0.3"/></svg>
+            </button>
+            <button class="tasks-view-btn" data-view="board" title="Board view">
               <svg viewBox="0 0 16 16" width="14" height="14"><rect x="1" y="1" width="4" height="14" rx="1" fill="currentColor" opacity="0.7"/><rect x="6" y="1" width="4" height="10" rx="1" fill="currentColor" opacity="0.5"/><rect x="11" y="1" width="4" height="7" rx="1" fill="currentColor" opacity="0.3"/></svg>
             </button>
             <button class="tasks-view-btn" data-view="neural" title="Neural map">
@@ -301,8 +324,13 @@
         </div>
       </div>
 
-      <!-- Board View (default) -->
-      <div class="tasks-board-view" id="tasksBoardView">
+      <!-- List View (default) -->
+      <div class="tasks-list-view" id="tasksListView">
+        <div class="tasks-list" id="tasksList"></div>
+      </div>
+
+      <!-- Board View -->
+      <div class="tasks-board-view" id="tasksBoardView" style="display:none;">
         <div class="tasks-board" id="tasksBoard">
           <div class="tasks-column" data-status="backlog">
             <div class="tasks-column-header">

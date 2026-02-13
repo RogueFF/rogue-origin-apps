@@ -108,3 +108,33 @@ CREATE INDEX IF NOT EXISTS idx_comms_to ON comms(to_agent);
 CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
 CREATE INDEX IF NOT EXISTS idx_positions_ticker ON positions(ticker);
 CREATE INDEX IF NOT EXISTS idx_positions_entry_date ON positions(entry_date DESC);
+
+-- Regime signals — market health snapshots
+CREATE TABLE IF NOT EXISTS regime_signals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  signal TEXT NOT NULL,            -- 'GREEN' | 'YELLOW' | 'RED'
+  label TEXT,                      -- 'Risk On' | 'Caution' | 'Risk Off'
+  data TEXT,                       -- JSON: {spy_price, spy_trend, vix, yield_10y, ...}
+  scores TEXT,                     -- JSON: {green: N, yellow: N, red: N}
+  reasoning TEXT,                  -- JSON array of reasoning strings
+  strategy TEXT,                   -- JSON: {position_sizing, strategies, stops, new_entries}
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_regime_created ON regime_signals(created_at DESC);
+
+-- Trade plays — structured trade setups from Strategist
+CREATE TABLE IF NOT EXISTS trade_plays (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticker TEXT NOT NULL,
+  direction TEXT DEFAULT 'long',   -- 'long' | 'short'
+  vehicle TEXT DEFAULT 'shares',   -- 'shares' | 'calls' | 'puts' | 'spread' | 'straddle'
+  thesis TEXT,
+  setup TEXT,                      -- JSON: {entry, target, stop, size, greeks, etc}
+  risk_level TEXT DEFAULT 'normal', -- 'normal' | 'degen' | 'conservative'
+  source_agent TEXT DEFAULT 'strategist',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_plays_created ON trade_plays(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_plays_ticker ON trade_plays(ticker);
