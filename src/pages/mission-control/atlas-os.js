@@ -2114,7 +2114,14 @@ function loadWindowSize(id) {
    ═══════════════════════════════════════════════════ */
 function formatTime(dateStr) {
   if (!dateStr) return '';
-  const d = new Date(dateStr);
+  // Normalize "YYYY-MM-DD HH:MM:SS" → ISO with T and Z (API returns UTC without markers)
+  let normalized = dateStr;
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(dateStr)) {
+    normalized = dateStr.replace(' ', 'T') + 'Z';
+  } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(dateStr)) {
+    normalized = dateStr + 'Z';
+  }
+  const d = new Date(normalized);
   if (isNaN(d)) return '';
   const now = new Date();
   const diffMs = now - d;
