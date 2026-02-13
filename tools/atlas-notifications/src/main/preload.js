@@ -28,6 +28,9 @@ contextBridge.exposeInMainWorld('atlas', {
   // Status
   checkAtlasStatus: () => ipcRenderer.invoke('check-atlas-status'),
 
+  // Request updates from Atlas
+  requestUpdate: (type) => ipcRenderer.invoke('request-update', type),
+
   // Legacy (kept for compatibility)
   getConfig: () => ipcRenderer.invoke('get-config'),
   setConfig: (config) => ipcRenderer.invoke('set-config', config),
