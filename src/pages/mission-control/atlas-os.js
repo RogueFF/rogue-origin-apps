@@ -1323,7 +1323,12 @@ function buildRegimeCard(data) {
   const trend = mktData.spy_trend || '—';
   const reasoning = Array.isArray(data.reasoning) ? data.reasoning : [];
   const strategyObj = data.strategy || {};
-  const strategy = typeof strategyObj === 'string' ? strategyObj : (strategyObj.position_sizing ? `${strategyObj.position_sizing}. ${strategyObj.strategies || ''}` : '');
+  const strategy = typeof strategyObj === 'string' ? strategyObj : (strategyObj.position_sizing ? [
+    strategyObj.position_sizing,
+    strategyObj.strategies,
+    strategyObj.stops,
+    strategyObj.new_entries
+  ].filter(Boolean).join(' · ') : '');
 
   return `
     <div class="trading-card regime-card">
@@ -1334,6 +1339,7 @@ function buildRegimeCard(data) {
       <div class="trading-card-body">
         <div class="regime-signal" style="--signal-color: ${signalColor}">
           <div class="regime-signal-indicator">${escapeHtml(signal)}</div>
+          ${data.label ? `<div class="regime-signal-label">${escapeHtml(data.label)}</div>` : ''}
         </div>
         <div class="regime-data">
           <div class="regime-data-row">
@@ -1467,16 +1473,17 @@ function buildPortfolioCard(data) {
             <div class="positions-list">
               ${positions.map(pos => {
                 const ticker = pos.ticker || '—';
-                const entry = pos.entry || 0;
+                const entry = pos.entry_price || pos.entry || 0;
                 const stop = pos.stop || 0;
                 const target = pos.target || 0;
-                const size = pos.size || 0;
+                const size = pos.quantity || pos.size || 0;
+                const vehicle = pos.vehicle || pos.type || 'shares';
 
                 return `
                   <div class="position-item">
                     <div class="position-header">
                       <span class="position-ticker">${escapeHtml(ticker)}</span>
-                      <span class="position-size">${size} shares</span>
+                      <span class="position-size">${formatCurrency(size)} ${escapeHtml(vehicle)}</span>
                     </div>
                     <div class="position-levels">
                       <span class="position-level">Entry: ${formatCurrency(entry)}</span>
