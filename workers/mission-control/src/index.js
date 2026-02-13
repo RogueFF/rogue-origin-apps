@@ -1,30 +1,37 @@
 /**
  * Mission Control API — Atlas Squad System
  *
- * Endpoints:
- * GET  /api/health              Health check
- * GET  /api/agents              List all agents
- * GET  /api/agents/:name        Get agent detail
- * PATCH /api/agents/:name       Update agent status/task
- * GET  /api/activity            Activity feed (paginated)
- * POST /api/activity            Post new activity
- * GET  /api/inbox               Koa's inbox (pending items)
- * POST /api/inbox               Create inbox item
- * POST /api/inbox/:id/action    Approve/reject/snooze
- * GET  /api/comms               Recent inter-agent comms
- * POST /api/comms               Post a comm
- * GET  /api/briefs              Briefs list
- * GET  /api/briefs/latest       Most recent brief
- * POST /api/briefs              Create a brief
- * GET  /api/positions           List positions (filter: status=open|closed)
- * POST /api/positions           Open a new position
- * PATCH /api/positions/:id      Update/close a position
- * GET  /api/portfolio           Portfolio summary (P&L, win rate, exposure, bankroll)
- * GET  /api/tasks               List tasks (filter: status, agent, domain, priority)
- * POST /api/tasks               Create task
- * PATCH /api/tasks/:id          Update task (status, assignment, priority)
- * DELETE /api/tasks/:id         Remove task
- * GET  /api/tasks/stats         Task counts by status, agent, domain
+ * Endpoints (30):
+ * GET  /api/health                       Health check
+ * GET  /api/agents                       List all agents
+ * GET  /api/agents/:name                 Get agent detail
+ * PATCH /api/agents/:name                Update agent status/task
+ * GET  /api/agents/:name/files           List agent files
+ * GET  /api/agents/:name/files/:filename Get agent file content
+ * PUT  /api/agents/:name/files/:filename Create/update agent file
+ * GET  /api/activity                     Activity feed (paginated)
+ * POST /api/activity                     Post new activity
+ * GET  /api/inbox                        Koa's inbox (pending items)
+ * POST /api/inbox                        Create inbox item
+ * POST /api/inbox/:id/action             Approve/reject/snooze
+ * GET  /api/comms                        Recent inter-agent comms
+ * POST /api/comms                        Post a comm
+ * GET  /api/briefs                       Briefs list
+ * GET  /api/briefs/latest                Most recent brief
+ * POST /api/briefs                       Create a brief
+ * GET  /api/positions                    List positions (filter: status=open|closed)
+ * POST /api/positions                    Open a new position
+ * PATCH /api/positions/:id               Update/close a position
+ * GET  /api/portfolio                    Portfolio summary (P&L, win rate, exposure, bankroll)
+ * GET  /api/regime                       Get current market regime signal
+ * POST /api/regime                       Update regime signal
+ * GET  /api/plays                        Get today's trade setups
+ * POST /api/plays                        Create a trade setup/play
+ * GET  /api/tasks                        List tasks (filter: status, agent, domain, priority)
+ * POST /api/tasks                        Create task
+ * PATCH /api/tasks/:id                   Update task (status, assignment, priority)
+ * DELETE /api/tasks/:id                  Remove task
+ * GET  /api/tasks/stats                  Task counts by status, agent, domain
  */
 
 // ── CORS ────────────────────────────────────────────────────────────
