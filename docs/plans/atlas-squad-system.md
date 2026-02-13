@@ -154,50 +154,110 @@ He makes decisions. The agents execute. He goes to work with clarity, not chaos.
 
 ## Mission Control — The Dashboard
 
-**Custom-built web app. Cloudflare Pages. Koa's wide Envy screen is the primary display.**
+**Two experiences, one brain:**
+1. **Atlas OS** — desktop OS-style interface for the wide Envy screen at work. Feels like a custom operating system. Draggable windows, taskbar, app icons, the works.
+2. **Mission Control Web** — clean responsive website version accessible from iPhone, Legion, or anywhere with a browser.
 
-### Layout (Wide Screen Optimized)
+Both pull from the same backend. Same data, same agents, different UX.
+
+### Atlas OS (Desktop — Wide Screen)
+
+Inspired by Muddy OS. A full desktop environment in the browser:
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│  MISSION CONTROL                              [Work] [Trading] [Life] │
-├──────────────────────┬──────────────────────┬───────────────────────┤
-│                      │                      │                       │
-│   AGENT ACTIVITY     │   DOMAIN PANEL       │   YOUR INBOX          │
-│   FEED               │                      │                       │
-│                      │   (changes based on  │   Decisions needed    │
-│   Real-time stream   │    selected domain)  │   Alerts              │
-│   of what every      │                      │   Recommendations     │
-│   agent is doing     │   Work: production   │                       │
-│                      │   stats, tasks       │   Each item has:      │
-│   Color-coded by     │                      │   [Approve] [Reject]  │
-│   domain             │   Trading: market    │   [Discuss] [Snooze]  │
-│                      │   brief, positions,  │                       │
-│                      │   alerts             │                       │
-│                      │                      │                       │
-│                      │   Life: goals,       │                       │
-│                      │   opportunities,     │                       │
-│                      │   travel             │                       │
-│                      │                      │                       │
-├──────────────────────┴──────────────────────┴───────────────────────┤
-│  AGENT STATUS BAR: [Friday ✓] [Radar ●] [Viper ✓] [Wire ●] ...    │
-└─────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│  ☰ Atlas OS                                        🔔 3  ⚡ 11 agents  │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│   ┌─────────────────────┐  ┌──────────────────────────────────────┐    │
+│   │ 📊 Trading Brief    │  │ 🏭 Production                       │    │
+│   │                     │  │                                      │    │
+│   │ Market: 🟢 GREEN    │  │  Today: 142.3 lbs | 0.87 rate       │    │
+│   │ SPY +0.8% pre-mkt   │  │  Target: 165 lbs | 86% pace        │    │
+│   │                     │  │  ██████████░░░░ 86%                 │    │
+│   │ Top Plays:          │  │                                      │    │
+│   │ • $NVDA earnings    │  │  [Hour-by-Hour] [Cycle Times]       │    │
+│   │ • $AMD momentum     │  │                                      │    │
+│   │ • $COIN crypto run  │  └──────────────────────────────────────┘    │
+│   │                     │                                               │
+│   │ Reddit Buzz: 🔥     │  ┌──────────────────────────────────────┐    │
+│   │ WSB hot on $GME     │  │ 📋 Inbox (3 items)                  │    │
+│   └─────────────────────┘  │                                      │    │
+│                             │ ⚡ Viper: $COIN unusual call vol    │    │
+│   ┌─────────────────────┐  │   [View] [Approve] [Dismiss]        │    │
+│   │ 💬 Agent Standup    │  │                                      │    │
+│   │                     │  │ 🏭 Dispatch: 2 war room tasks       │    │
+│   │ Morning standup     │  │   overdue                            │    │
+│   │ complete. 4 action  │  │   [View] [Reassign] [Snooze]        │    │
+│   │ items generated.    │  │                                      │    │
+│   │                     │  │ 🌱 Scout: Side hustle brief ready   │    │
+│   │ 🔊 Listen (2:34)   │  │   [Read] [Save] [Dismiss]           │    │
+│   │ 📝 Read Transcript  │  │                                      │    │
+│   └─────────────────────┘  └──────────────────────────────────────┘    │
+│                                                                         │
+├─────────────────────────────────────────────────────────────────────────┤
+│ 📊Trade │ 🏭Work │ 🌍Life │ 💬Chat │ 📈Portfolio │ 📋Tasks │ ⚙️Config │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Features
-- **Domain tabs** — switch between Work, Trading, Life, or see All
+- **Draggable/resizable windows** — arrange however you want on the wide screen
+- **Taskbar** with app icons — each domain is an "app" you can open
+- **System tray** — notification count, active agent count, cost tracker
+- **Desktop icons** for quick access — Standup, Portfolio, Production, Chat with Atlas
+- **Window snapping** for the wide screen — tile two or three windows side by side
+- **Dark theme** — easy on the eyes, premium feel
+
+### Mission Control Web (Mobile / Anywhere)
+
+Clean, card-based responsive layout for iPhone:
+
+- **Dashboard cards** — swipeable domain summaries
+- **Inbox feed** — tap to expand, swipe to approve/dismiss
+- **Quick actions** — "Start standup", "Check portfolio", "Ask Atlas"
+- **Agent status** — simple online/offline indicators
+- **Push notifications** via PWA (works like a native app on iPhone)
+
+### Shared Features (Both Versions)
 - **Agent activity feed** — real-time log of everything happening
-- **Inbox** — items that need Koa's input, sorted by priority
-- **Agent status bar** — who's active, idle, or working
-- **Mobile responsive** — same data on iPhone when Koa's on the floor
-- **Nicole mode** — simplified view she can access with trading explainers
+- **Inbox** — items needing Koa's decision, sorted by priority
+- **Standup viewer** — transcript + audio playback + action items
+- **Nicole mode** — simplified view with trading explainers
+- **Portfolio view** — positions, P&L, win rate
+- **Deliverables library** — every doc/report/spec agents have produced
+- **Goal tracker** — high-level objectives with progress bars
+
+### Agent Standups (New Feature)
+
+Inspired by Clear Mud. Agents hold autonomous discussions:
+
+- **Morning Trading Standup (7:00 AM):** Regime, Viper, and Wire discuss market conditions. Produce a brief + action items. Atlas synthesizes into morning brief.
+- **RO Daily Standup (8:30 AM):** Radar and Dispatch review production status, pending tasks, any flags. Produce action items for the day.
+- **Weekly Strategy Standup:** All agents contribute to a weekly review — what worked, what didn't, what to focus on next week.
+
+**Flow:**
+1. Agents discuss autonomously (using shared context)
+2. Transcript saved to Mission Control
+3. Action items extracted automatically
+4. Audio summary generated via open-source TTS (Microsoft model, free)
+5. Koa gets a Telegram ping: "Morning standup complete. 🔊 Listen (2:34) or 📝 Read"
+6. Koa reviews, approves/modifies action items
+7. Agents execute approved items
+
+### Audio Briefings
+
+- Open-source TTS (Microsoft SpeechT5 or similar) — zero cost
+- Morning trading brief as audio: listen while driving to work
+- Standup summaries as audio: absorb info without reading
+- Stored in Mission Control for replay
 
 ### Tech Stack
-- Frontend: HTML/CSS/JS (no framework needed, keep it fast)
+- Frontend: HTML/CSS/JS (vanilla for speed, no framework bloat)
 - Backend: Cloudflare Worker API
 - Data: D1 database + JSON files for agent state
 - Hosting: Cloudflare Pages (free tier)
 - Real-time: polling every 30s (WebSocket later if needed)
+- TTS: open-source model running on Zephyrus
+- PWA: for iPhone "app-like" experience
 
 ---
 
