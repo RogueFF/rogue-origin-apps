@@ -149,14 +149,14 @@
       const dde = safeGetEl('dailyDelta');
       if (dde && todayTarget > 0) {
         const da = Math.abs(todayDelta).toFixed(1);
-        if (todayDelta >= 0.1) {
-          dde.textContent = `↑ ${t('upBy')} ${da}`;
+        if (todayDelta >= 0.05) {
+          dde.textContent = `↑ +${da} lbs`;
           dde.className = 'daily-delta positive';
-        } else if (todayDelta <= -0.1) {
-          dde.textContent = `↓ ${t('downBy')} ${da}`;
+        } else if (todayDelta <= -0.05) {
+          dde.textContent = `↓ -${da} lbs`;
           dde.className = 'daily-delta negative';
         } else {
-          dde.textContent = '= On pace';
+          dde.textContent = `= 0.0 lbs`;
           dde.className = 'daily-delta neutral';
         }
       } else if (dde) {
