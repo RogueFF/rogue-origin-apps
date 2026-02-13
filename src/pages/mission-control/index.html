@@ -11,7 +11,7 @@
   <!-- Fonts: distinctive, not generic -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@300;400;500;600&family=Orbitron:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="atlas-os.css">
 </head>
@@ -71,6 +71,10 @@
         <div class="desktop-icon-glyph">🔮</div>
         <span class="desktop-icon-label">Atlas</span>
       </button>
+      <button class="desktop-icon" data-window="tasks" title="Neural Tasks">
+        <div class="desktop-icon-glyph">🧠</div>
+        <span class="desktop-icon-label">Tasks</span>
+      </button>
     </div>
 
     <!-- Window container -->
@@ -113,6 +117,10 @@
         <button class="mobile-nav-btn" data-window="atlas-chat">
           <span class="mobile-nav-icon">🔮</span>
           <span class="mobile-nav-label">Atlas</span>
+        </button>
+        <button class="mobile-nav-btn" data-window="tasks">
+          <span class="mobile-nav-icon">🧠</span>
+          <span class="mobile-nav-label">Tasks</span>
         </button>
       </div>
 
@@ -263,6 +271,68 @@
         <div class="agent-detail-history">
           <div class="agent-detail-section-title">Work History</div>
           <div class="agent-detail-timeline"></div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- Neural Tasks Window -->
+  <template id="tmpl-tasks">
+    <div class="window-body tasks-window">
+      <div class="tasks-toolbar">
+        <div class="tasks-toolbar-left">
+          <span class="tasks-title-glyph">◉</span>
+          <span class="tasks-title-text">NEURAL MAP</span>
+        </div>
+        <div class="tasks-toolbar-right">
+          <div class="tasks-legend">
+            <span class="legend-item" data-status="backlog"><span class="legend-dot legend-backlog"></span>Backlog</span>
+            <span class="legend-item" data-status="active"><span class="legend-dot legend-active"></span>Active</span>
+            <span class="legend-item" data-status="review"><span class="legend-dot legend-review"></span>Review</span>
+            <span class="legend-item" data-status="done"><span class="legend-dot legend-done"></span>Done</span>
+          </div>
+          <div class="tasks-stats">
+            <span class="tasks-stat" id="tasksActiveCount">0 firing</span>
+            <span class="tasks-stat-divider">·</span>
+            <span class="tasks-stat" id="tasksTotalCount">0 nodes</span>
+          </div>
+        </div>
+      </div>
+      <div class="tasks-canvas-wrap">
+        <canvas id="neuralCanvas"></canvas>
+        <!-- Task detail overlay (appears on node click) -->
+        <div class="task-detail-overlay" id="taskDetailOverlay" style="display:none;">
+          <div class="task-detail-panel">
+            <div class="task-detail-close" id="taskDetailClose">×</div>
+            <div class="task-detail-status-bar"></div>
+            <div class="task-detail-title-row">
+              <span class="task-detail-priority-gem"></span>
+              <span class="task-detail-title-text"></span>
+            </div>
+            <div class="task-detail-description"></div>
+            <div class="task-detail-meta-grid">
+              <div class="task-meta-cell">
+                <span class="task-meta-label">STATUS</span>
+                <span class="task-meta-value task-detail-status"></span>
+              </div>
+              <div class="task-meta-cell">
+                <span class="task-meta-label">OWNER</span>
+                <span class="task-meta-value task-detail-owner"></span>
+              </div>
+              <div class="task-meta-cell">
+                <span class="task-meta-label">PRIORITY</span>
+                <span class="task-meta-value task-detail-priority"></span>
+              </div>
+              <div class="task-meta-cell">
+                <span class="task-meta-label">CREATED</span>
+                <span class="task-meta-value task-detail-created"></span>
+              </div>
+            </div>
+            <div class="task-detail-deps">
+              <span class="task-meta-label">CONNECTIONS</span>
+              <div class="task-detail-dep-list"></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

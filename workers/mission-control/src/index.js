@@ -148,7 +148,7 @@ const handlers = {
     const agent = await db.prepare('SELECT * FROM agents WHERE name = ?').bind(name).first();
     if (!agent) return err('Agent not found', 'NOT_FOUND', 404);
 
-    const allowed = ['status', 'current_task', 'last_active'];
+    const allowed = ['status', 'current_task', 'last_active', 'model_tier'];
     const sets = [];
     const vals = [];
     for (const key of allowed) {
