@@ -9,9 +9,17 @@ import { successResponse, errorResponse, parseBody, getAction, getQueryParams } 
 import { createError, formatError } from '../lib/errors.js';
 import { validateDate } from '../lib/validate.js';
 import { requireAuth } from '../lib/auth.js';
+import {
+  ALL_TIME_SLOTS,
+  TIME_SLOT_MULTIPLIERS,
+  BREAKS,
+  TIMEZONE,
+  parseSlotTimeToMinutes,
+  getTimeSlotMultiplier,
+  calculateDailyProjection,
+} from '../lib/production-helpers.js';
 
 const AI_MODEL = 'claude-sonnet-4-20250514';
-const TIMEZONE = 'America/Los_Angeles';
 
 // Sheet tab names
 const SHEETS = {
@@ -54,29 +62,7 @@ const BASE_WAGE_RATE = 23.00; // $/hour before taxes
 const EMPLOYER_TAX_RATE = 0.14; // Oregon employer taxes: FICA 7.65%, FUTA 0.6%, SUI 2.4%, Workers' Comp 3%
 const TOTAL_LABOR_COST_PER_HOUR = BASE_WAGE_RATE * (1 + EMPLOYER_TAX_RATE); // $26.22/hour
 
-// Time slot multipliers for break adjustments
-const TIME_SLOT_MULTIPLIERS = {
-  '7:00 AM – 8:00 AM': 1.0,
-  '8:00 AM – 9:00 AM': 1.0,
-  '9:00 AM – 10:00 AM': 0.83,
-  '10:00 AM – 11:00 AM': 1.0,
-  '11:00 AM – 12:00 PM': 1.0,
-  '12:30 PM – 1:00 PM': 0.5,
-  '1:00 PM – 2:00 PM': 1.0,
-  '2:00 PM – 3:00 PM': 1.0,
-  '2:30 PM – 3:00 PM': 0.5,
-  '3:00 PM – 4:00 PM': 0.83,
-  '4:00 PM – 4:30 PM': 0.33,
-  '3:00 PM – 3:30 PM': 0.5,
-};
-
-// Break schedule: [hour, minute, duration_minutes]
-const BREAKS = [
-  [9, 0, 10],    // 9:00 AM - 10 min
-  [12, 0, 30],   // 12:00 PM - 30 min lunch
-  [14, 30, 10],  // 2:30 PM - 10 min
-  [16, 20, 10],  // 4:20 PM - 10 min cleanup
-];
+// TIME_SLOT_MULTIPLIERS, BREAKS imported from production-helpers.js
 
 /**
  * Calculate total break minutes that fall within a time window.
@@ -117,11 +103,7 @@ function getBreakMinutesInWindow(startTime, endTime) {
   return Math.round(breakMinutes);
 }
 
-const ALL_TIME_SLOTS = [
-  '7:00 AM – 8:00 AM', '8:00 AM – 9:00 AM', '9:00 AM – 10:00 AM',
-  '10:00 AM – 11:00 AM', '11:00 AM – 12:00 PM', '12:30 PM – 1:00 PM',
-  '1:00 PM – 2:00 PM', '2:00 PM – 3:00 PM', '3:00 PM – 4:00 PM', '4:00 PM – 4:30 PM',
-];
+// ALL_TIME_SLOTS imported from production-helpers.js
 
 // ===== CONFIG HELPERS =====
 
@@ -211,45 +193,7 @@ function formatDatePT(date, format = 'yyyy-MM-dd') {
   return d.toISOString();
 }
 
-function parseSlotTimeToMinutes(timeStr) {
-  const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-  if (!match) return null;
-  let hours = parseInt(match[1], 10);
-  const minutes = parseInt(match[2], 10);
-  const ampm = match[3].toUpperCase();
-  if (ampm === 'PM' && hours !== 12) hours += 12;
-  if (ampm === 'AM' && hours === 12) hours = 0;
-  return hours * 60 + minutes;
-}
-
-function getTimeSlotMultiplier(timeSlot, multipliers = null) {
-  if (!timeSlot) return 1.0;
-  const table = multipliers || TIME_SLOT_MULTIPLIERS;
-  const slot = String(timeSlot).trim();
-  if (table[slot]) return table[slot];
-  const normalized = slot.replace(/[-–—]/g, '–');
-  if (table[normalized]) return table[normalized];
-
-  // Dynamic: parse slot times for custom slots (e.g., '7:48 AM – 8:00 AM')
-  const parts = normalized.split('–').map(s => s.trim());
-  if (parts.length === 2) {
-    const startMin = parseSlotTimeToMinutes(parts[0]);
-    const endMin = parseSlotTimeToMinutes(parts[1]);
-    if (startMin !== null && endMin !== null && endMin > startMin) {
-      // Subtract any break time within this slot
-      let breakMin = 0;
-      for (const [bHour, bMin, bDur] of BREAKS) {
-        const bStart = bHour * 60 + bMin;
-        const bEnd = bStart + bDur;
-        const overlapStart = Math.max(startMin, bStart);
-        const overlapEnd = Math.min(endMin, bEnd);
-        if (overlapEnd > overlapStart) breakMin += (overlapEnd - overlapStart);
-      }
-      return (endMin - startMin - breakMin) / 60;
-    }
-  }
-  return 1.0;
-}
+// parseSlotTimeToMinutes, getTimeSlotMultiplier imported from production-helpers.js
 
 function is5kgBag(size) {
   const s = String(size || '').toLowerCase().replace(/\s+/g, '');
@@ -558,77 +502,7 @@ async function getScoreboardData(env, date = null) {
   return result;
 }
 
-function calculateDailyProjection(todayRows, lastCompletedHourIndex, currentHourIndex, targetRate, totalLbsSoFar, timeSlotMultipliers = null) {
-  let totalLbs = 0;
-  let totalTrimmerEffectiveHours = 0;
-  let lastKnownTrimmers = 0;
-
-  // Build map of actual slot names from data, keyed by end time
-  const dataSlotsByEnd = {};
-  for (const row of todayRows) {
-    if (row.timeSlot) {
-      const norm = String(row.timeSlot).trim().replace(/[-–—]/g, '–');
-      const endPart = norm.split('–')[1]?.trim();
-      if (endPart) dataSlotsByEnd[endPart] = norm;
-    }
-  }
-
-  // Replace standard slots with actual data slots where they exist
-  const allTimeSlots = ALL_TIME_SLOTS.map(std => {
-    const norm = std.replace(/[-–—]/g, '–');
-    const endPart = norm.split('–')[1]?.trim();
-    return (endPart && dataSlotsByEnd[endPart]) ? dataSlotsByEnd[endPart] : std;
-  });
-
-  for (let i = 0; i <= lastCompletedHourIndex && i < todayRows.length; i++) {
-    const row = todayRows[i];
-    if (row.tops > 0 && row.trimmers > 0) {
-      totalLbs += row.tops;
-      totalTrimmerEffectiveHours += row.trimmers * row.multiplier;
-      lastKnownTrimmers = row.trimmers;
-    }
-  }
-
-  if (currentHourIndex >= 0 && todayRows[currentHourIndex].trimmers > 0) {
-    lastKnownTrimmers = todayRows[currentHourIndex].trimmers;
-  }
-
-  const currentRate = totalTrimmerEffectiveHours > 0
-    ? totalLbs / totalTrimmerEffectiveHours
-    : targetRate;
-
-  const workedSlots = {};
-  for (let i = 0; i < todayRows.length; i++) {
-    if (todayRows[i].timeSlot) {
-      const normalizedSlot = String(todayRows[i].timeSlot).trim().replace(/[-–—]/g, '–');
-      workedSlots[normalizedSlot] = todayRows[i];
-    }
-  }
-
-  let dailyGoal = 0;
-  let projectedFromRemaining = 0;
-
-  for (const slot of allTimeSlots) {
-    const normalizedSlot = slot.replace(/[-–—]/g, '–');
-    const multiplier = getTimeSlotMultiplier(slot, timeSlotMultipliers);
-    const workedRow = workedSlots[normalizedSlot];
-
-    if (workedRow && workedRow.tops > 0 && workedRow.trimmers > 0) {
-      dailyGoal += workedRow.trimmers * targetRate * multiplier;
-    } else if (workedRow && workedRow.trimmers > 0 && workedRow.tops === 0) {
-      dailyGoal += workedRow.trimmers * targetRate * multiplier;
-      projectedFromRemaining += workedRow.trimmers * currentRate * multiplier;
-    } else {
-      dailyGoal += lastKnownTrimmers * targetRate * multiplier;
-      projectedFromRemaining += lastKnownTrimmers * currentRate * multiplier;
-    }
-  }
-
-  return {
-    projectedTotal: totalLbsSoFar + projectedFromRemaining,
-    dailyGoal,
-  };
-}
+// calculateDailyProjection imported from production-helpers.js
 
 // ===== VERSION TRACKING FOR SMART POLLING =====
 
