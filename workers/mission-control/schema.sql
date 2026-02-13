@@ -75,6 +75,25 @@ CREATE TABLE IF NOT EXISTS agent_files (
   FOREIGN KEY (agent_name) REFERENCES agents(name)
 );
 
+-- Positions — Ledger portfolio tracking
+CREATE TABLE IF NOT EXISTS positions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticker TEXT NOT NULL,
+  direction TEXT NOT NULL,            -- 'long' | 'short'
+  vehicle TEXT NOT NULL,              -- 'calls' | 'puts' | 'shares' | 'spread' | 'crypto'
+  strike REAL,                        -- option strike price (null for shares/crypto)
+  expiry TEXT,                        -- option expiry date (null for shares/crypto)
+  entry_price REAL NOT NULL,
+  quantity REAL NOT NULL,             -- contracts, shares, or units
+  entry_date DATETIME NOT NULL,
+  status TEXT DEFAULT 'open',         -- 'open' | 'closed'
+  exit_price REAL,
+  exit_date DATETIME,
+  pnl REAL,                           -- realized P&L (set on close)
+  notes TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indexes for common queries
 CREATE INDEX IF NOT EXISTS idx_activity_created ON activity(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_activity_agent ON activity(agent_name);
@@ -86,3 +105,6 @@ CREATE INDEX IF NOT EXISTS idx_briefs_created ON briefs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_comms_created ON comms(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_comms_from ON comms(from_agent);
 CREATE INDEX IF NOT EXISTS idx_comms_to ON comms(to_agent);
+CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
+CREATE INDEX IF NOT EXISTS idx_positions_ticker ON positions(ticker);
+CREATE INDEX IF NOT EXISTS idx_positions_entry_date ON positions(entry_date DESC);
