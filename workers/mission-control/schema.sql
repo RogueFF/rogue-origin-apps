@@ -65,6 +65,16 @@ CREATE TABLE IF NOT EXISTS comms (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Agent files — AGENT.md, SOUL.md, SKILLS.md, CONTEXT.md content
+CREATE TABLE IF NOT EXISTS agent_files (
+  agent_name TEXT NOT NULL,
+  file_name TEXT NOT NULL,            -- 'AGENT.md' | 'SOUL.md' | 'SKILLS.md' | 'CONTEXT.md'
+  content TEXT NOT NULL,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (agent_name, file_name),
+  FOREIGN KEY (agent_name) REFERENCES agents(name)
+);
+
 -- Indexes for common queries
 CREATE INDEX IF NOT EXISTS idx_activity_created ON activity(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_activity_agent ON activity(agent_name);

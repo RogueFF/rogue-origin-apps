@@ -222,6 +222,52 @@
     </div>
   </template>
 
+  <!-- Agent Detail Window (dynamic — one per agent) -->
+  <template id="tmpl-agent-detail">
+    <div class="window-body agent-detail-window">
+      <!-- Header: agent identity -->
+      <div class="agent-detail-header">
+        <div class="agent-detail-identity">
+          <div class="agent-detail-glyph"></div>
+          <div class="agent-detail-info">
+            <div class="agent-detail-name"></div>
+            <div class="agent-detail-meta">
+              <span class="agent-detail-domain"></span>
+              <span class="agent-detail-tier"></span>
+            </div>
+          </div>
+        </div>
+        <div class="agent-detail-status">
+          <span class="agent-detail-status-dot"></span>
+          <span class="agent-detail-status-text"></span>
+        </div>
+      </div>
+      <div class="agent-detail-task" style="display:none;"></div>
+
+      <!-- Sections: Files + Work History -->
+      <div class="agent-detail-sections">
+        <!-- File tabs -->
+        <div class="agent-detail-files">
+          <div class="agent-detail-file-tabs">
+            <button class="agent-file-tab active" data-file="AGENT.md">AGENT</button>
+            <button class="agent-file-tab" data-file="SOUL.md">SOUL</button>
+            <button class="agent-file-tab" data-file="SKILLS.md">SKILLS</button>
+            <button class="agent-file-tab" data-file="CONTEXT.md">CONTEXT</button>
+          </div>
+          <div class="agent-detail-file-content">
+            <div class="agent-file-loading">Loading...</div>
+          </div>
+        </div>
+
+        <!-- Work History -->
+        <div class="agent-detail-history">
+          <div class="agent-detail-section-title">Work History</div>
+          <div class="agent-detail-timeline"></div>
+        </div>
+      </div>
+    </div>
+  </template>
+
   <script src="atlas-os.js"></script>
 </body>
 </html>
