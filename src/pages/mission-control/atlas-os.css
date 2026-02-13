@@ -3227,6 +3227,57 @@ input {
 
 .trading-refresh-rate { color: var(--os-text-muted); }
 
+/* App Launcher Menu */
+.app-launcher {
+  position: fixed;
+  bottom: 52px;
+  left: 8px;
+  background: var(--os-surface, #141419);
+  border: 1px solid var(--os-border, rgba(255,255,255,0.06));
+  border-radius: var(--r-lg, 12px);
+  padding: var(--sp-8, 8px);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-4, 4px);
+  z-index: 10000;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  min-width: 280px;
+}
+
+.app-launcher-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-4, 4px);
+  padding: var(--sp-12, 12px) var(--sp-8, 8px);
+  border: none;
+  background: transparent;
+  border-radius: var(--r-md, 8px);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.app-launcher-btn:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+.app-launcher-btn.launcher-open {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.launcher-icon {
+  font-size: 24px;
+}
+
+.launcher-label {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  color: var(--os-text-secondary, rgba(255,255,255,0.6));
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 .work-grid {
   display: grid;
   grid-template-columns: 1fr;
