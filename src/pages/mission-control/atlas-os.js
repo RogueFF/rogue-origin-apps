@@ -7,6 +7,9 @@ const API_BASE = 'https://mission-control-api.roguefamilyfarms.workers.dev/api';
 const POLL_INTERVAL = 30000;
 const TRADING_POLL_INTERVAL = 60000; // 60s during market hours
 const TRADING_IDLE_INTERVAL = 300000; // 5m outside market hours
+const PRODUCTION_POLL_INTERVAL = 60000; // 60s during shift
+const PRODUCTION_IDLE_INTERVAL = 300000; // 5m outside shift
+const PRODUCTION_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production?action=scoreboard';
 
 function isMarketHours() {
   const now = new Date();
@@ -17,6 +20,16 @@ function isMarketHours() {
   const timeVal = hour * 60 + min;
   // M-F, 9:30 AM - 4:00 PM ET
   return day >= 1 && day <= 5 && timeVal >= 570 && timeVal <= 960;
+}
+
+function isShiftHours() {
+  const now = new Date();
+  const pst = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+  const day = pst.getDay();
+  const hour = pst.getHours();
+  const min = pst.getMinutes();
+  const timeVal = hour * 60 + min;
+  return day >= 1 && day <= 5 && timeVal >= 420 && timeVal <= 990; // 7:00 AM - 4:30 PM
 }
 
 // ─── Agent glyphs — refined emoji, sharp + intentional ───
@@ -327,7 +340,20 @@ async function fetchTradingData() {
   ]);
 
   if (regime || plays || portfolio) {
-    renderTradingDesk(regime, plays, portfolio, closed);
+    const production = await fetchProductionData();
+    renderTradingDesk(regime, plays, portfolio, closed, production);
+  }
+}
+
+async function fetchProductionData() {
+  try {
+    const res = await fetch(PRODUCTION_API);
+    if (!res.ok) throw new Error(`Production API ${res.status}`);
+    const json = await res.json();
+    return json.scoreboard || null;
+  } catch (err) {
+    console.warn('[Atlas OS] Production API error:', err);
+    return null;
   }
 }
 
@@ -1313,7 +1339,7 @@ document.addEventListener('click', (e) => {
 /* ═══════════════════════════════════════════════════
    TRADING DESK
    ═══════════════════════════════════════════════════ */
-function renderTradingDesk(regime, plays, portfolio, closed) {
+function renderTradingDesk(regime, plays, portfolio, closed, production) {
   const container = document.getElementById('tradingMain');
   if (!container) return;
 
@@ -1324,13 +1350,13 @@ function renderTradingDesk(regime, plays, portfolio, closed) {
 
   const closedTrades = Array.isArray(closed) ? closed : [];
 
-  // Build the three-card layout
   const html = `
     <div class="trading-status-bar">
       <span class="trading-market-status ${marketOpen ? 'market-open' : 'market-closed'}">${liveIndicator}</span>
       <span class="trading-refresh-rate">${marketOpen ? 'Refreshing every 60s' : 'Refreshing every 5m'}</span>
     </div>
     <div class="trading-grid">
+      ${buildProductionCard(production)}
       ${buildRegimeCard(regime)}
       ${buildPlaysCard(plays)}
       ${buildPortfolioCard(portfolio, closedTrades)}
@@ -1338,6 +1364,127 @@ function renderTradingDesk(regime, plays, portfolio, closed) {
   `;
 
   container.innerHTML = html;
+}
+
+function buildProductionCard(data) {
+  if (!data) {
+    return `
+      <div class="trading-card production-card">
+        <div class="trading-card-header">
+          <span class="trading-card-title">Production</span>
+        </div>
+        <div class="trading-card-body">
+          <div class="production-empty">No production data</div>
+        </div>
+      </div>
+    `;
+  }
+
+  const shiftActive = isShiftHours();
+  const shiftIndicator = shiftActive
+    ? '<span class="live-dot production-live-dot"></span> LIVE'
+    : 'CLOSED';
+  const shiftClass = shiftActive ? 'shift-active' : 'shift-closed';
+
+  const todayLbs = data.todayLbs || 0;
+  const todayTarget = data.todayTarget || 0;
+  const todayPct = data.todayPercentage || 0;
+  const strain = data.strain || '';
+  const targetRate = data.targetRate || 0;
+  const streak = data.streak || 0;
+  const lastHourTrimmers = data.lastHourTrimmers || 0;
+  const lastHourBuckers = data.lastHourBuckers || 0;
+  const lastHourLbs = data.lastHourLbs || 0;
+  const lastTimeSlot = data.lastTimeSlot || '';
+  const hourlyRates = Array.isArray(data.hourlyRates) ? data.hourlyRates : [];
+
+  // Percentage color
+  const pctColor = todayPct >= 100 ? 'var(--sig-green, #22c55e)' : todayPct >= 80 ? '#eab308' : 'var(--sig-red, #ef4444)';
+  const pctClass = todayPct >= 100 ? 'prod-green' : todayPct >= 80 ? 'prod-yellow' : 'prod-red';
+
+  // Progress bar (can exceed 100%)
+  const barPct = Math.min(todayPct, 150); // cap visual at 150%
+  const barWidth = (barPct / 150 * 100).toFixed(1);
+
+  // Hourly breakdown rows
+  const hourlyHtml = hourlyRates.map(h => {
+    const slotShort = (h.timeSlot || '').replace(/ (AM|PM)/g, '$1').replace(' – ', '–');
+    const hPct = h.target > 0 ? ((h.rate / h.target) * 100) : 0;
+    const hColor = hPct >= 100 ? 'var(--sig-green, #22c55e)' : 'var(--sig-red, #ef4444)';
+    const hBarW = Math.min(hPct, 150);
+    const hBarWidth = (hBarW / 150 * 100).toFixed(1);
+    return `
+      <div class="prod-hourly-row">
+        <span class="prod-hourly-slot">${escapeHtml(slotShort)}</span>
+        <span class="prod-hourly-lbs">${h.totalLbs.toFixed(1)}</span>
+        <span class="prod-hourly-crew">${h.trimmers}T/${h.buckers}B</span>
+        <div class="prod-hourly-bar-wrap">
+          <div class="prod-hourly-bar" style="width:${hBarWidth}%;background:${hColor}"></div>
+        </div>
+        <span class="prod-hourly-pct" style="color:${hColor}">${hPct.toFixed(0)}%</span>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="trading-card production-card">
+      <div class="trading-card-header">
+        <span class="trading-card-title">Production</span>
+        <div class="production-header-right">
+          <span class="production-shift-status ${shiftClass}">${shiftIndicator}</span>
+          ${strain ? `<span class="production-strain">${escapeHtml(strain)}</span>` : ''}
+        </div>
+      </div>
+      <div class="trading-card-body">
+        <div class="production-stats">
+          <div class="portfolio-stat production-hero-stat">
+            <span class="portfolio-stat-label">Today</span>
+            <span class="portfolio-stat-value production-hero-value">${todayLbs.toFixed(1)} lbs</span>
+          </div>
+          <div class="portfolio-stat">
+            <span class="portfolio-stat-label">Target</span>
+            <span class="portfolio-stat-value">${todayTarget.toFixed(1)} lbs</span>
+          </div>
+          <div class="portfolio-stat">
+            <span class="portfolio-stat-label">Percentage</span>
+            <span class="portfolio-stat-value" style="color:${pctColor}">${todayPct.toFixed(1)}%</span>
+          </div>
+        </div>
+
+        <div class="production-progress-wrap">
+          <div class="production-progress-bar">
+            <div class="production-progress-fill ${pctClass}" style="width:${barWidth}%"></div>
+          </div>
+          <span class="production-progress-label" style="color:${pctColor}">${todayPct.toFixed(1)}%</span>
+        </div>
+
+        <div class="production-crew-stats">
+          <div class="production-crew-row">
+            <span class="production-crew-label">Last Hour</span>
+            <span class="production-crew-value">${lastHourTrimmers}T / ${lastHourBuckers}B · ${lastHourLbs.toFixed(1)} lbs</span>
+            ${lastTimeSlot ? `<span class="production-crew-slot">${escapeHtml(lastTimeSlot)}</span>` : ''}
+          </div>
+          <div class="production-crew-row">
+            <span class="production-crew-label">Rate</span>
+            <span class="production-crew-value">${targetRate.toFixed(2)} lbs/hr per trimmer</span>
+          </div>
+          <div class="production-crew-row">
+            <span class="production-crew-label">Streak</span>
+            <span class="production-crew-value">${streak} day${streak !== 1 ? 's' : ''} above target</span>
+          </div>
+        </div>
+
+        ${hourlyRates.length > 0 ? `
+          <div class="production-hourly">
+            <div class="production-hourly-title">Hourly Breakdown</div>
+            <div class="production-hourly-list">
+              ${hourlyHtml}
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
 }
 
 function buildRegimeCard(data) {

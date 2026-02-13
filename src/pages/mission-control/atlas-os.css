@@ -3744,6 +3744,206 @@ input {
   background: var(--os-text-muted);
 }
 
+/* ─── PRODUCTION CARD ─── */
+.production-card {
+  border-left: 3px solid #3b82f6;
+  grid-column: 1 / -1;
+}
+
+.production-card .trading-card-header {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%);
+}
+
+.production-header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-12);
+}
+
+.production-shift-status {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.production-shift-status.shift-active { color: var(--sig-green, #22c55e); }
+.production-shift-status.shift-closed { color: var(--os-text-muted); }
+
+.production-live-dot {
+  background: var(--sig-green, #22c55e);
+}
+
+.production-strain {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--os-text-secondary);
+  letter-spacing: 0.3px;
+}
+
+.production-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-12);
+}
+
+.production-hero-value {
+  font-size: 24px;
+}
+
+.production-empty {
+  text-align: center;
+  padding: var(--sp-24);
+  color: var(--os-text-muted);
+  font-size: 12px;
+}
+
+/* Progress bar */
+.production-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+}
+
+.production-progress-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--os-border);
+  overflow: hidden;
+}
+
+.production-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s var(--ease-out);
+}
+
+.production-progress-fill.prod-green { background: var(--sig-green, #22c55e); }
+.production-progress-fill.prod-yellow { background: #eab308; }
+.production-progress-fill.prod-red { background: var(--sig-red, #ef4444); }
+
+.production-progress-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+  min-width: 48px;
+  text-align: right;
+}
+
+/* Crew stats */
+.production-crew-stats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
+
+.production-crew-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.production-crew-label {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--os-text-muted);
+  font-size: 10px;
+  min-width: 64px;
+}
+
+.production-crew-value {
+  color: var(--os-text);
+}
+
+.production-crew-slot {
+  color: var(--os-text-secondary);
+  font-size: 10px;
+}
+
+/* Hourly breakdown */
+.production-hourly {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-8);
+}
+
+.production-hourly-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--os-text-muted);
+}
+
+.production-hourly-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.prod-hourly-row {
+  display: grid;
+  grid-template-columns: 120px 52px 48px 1fr 40px;
+  align-items: center;
+  gap: var(--sp-6);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: var(--sp-4) var(--sp-6);
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.prod-hourly-row:nth-child(even) {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.prod-hourly-slot {
+  color: var(--os-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.prod-hourly-lbs {
+  color: var(--os-text);
+  font-weight: 700;
+  text-align: right;
+}
+
+.prod-hourly-crew {
+  color: var(--os-text-muted);
+  text-align: center;
+}
+
+.prod-hourly-bar-wrap {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--os-border);
+  overflow: hidden;
+}
+
+.prod-hourly-bar {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s var(--ease-out);
+}
+
+.prod-hourly-pct {
+  font-weight: 700;
+  text-align: right;
+  font-size: 10px;
+}
+
 /* ─── CLOSED TRADES ─── */
 .portfolio-closed-trades {
   display: flex;
@@ -3896,5 +4096,14 @@ input {
   .position-levels {
     flex-direction: column;
     gap: var(--sp-4);
+  }
+
+  .production-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .prod-hourly-row {
+    grid-template-columns: 90px 44px 40px 1fr 36px;
+    font-size: 10px;
   }
 }
