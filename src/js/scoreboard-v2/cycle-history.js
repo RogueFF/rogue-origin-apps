@@ -22,6 +22,9 @@
         if (mode >= 0 && mode < modes.length) {
           ScoreboardState.cycleDisplayMode = mode;
         }
+      } else {
+        // Default to sparkline (mode 1) if nothing is saved
+        ScoreboardState.cycleDisplayMode = 1;
       }
     },
 
