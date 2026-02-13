@@ -6,6 +6,25 @@
 const API_BASE = 'https://mission-control-api.roguefamilyfarms.workers.dev/api';
 const POLL_INTERVAL = 30000;
 
+// ─── Glyph overrides — technical, minimal, no stock emoji ───
+const GLYPH_MAP = {
+  atlas:      '◎',   // target/command
+  darwin:     '◬',   // triangle with dot — evolution
+  viper:      '⧖',   // hourglass — time-critical scanner
+  analyst:    '◇',   // diamond — precision
+  ledger:     '▦',   // grid — data/ledger
+  regime:     '◈',   // diamond with dot — regime detection
+  strategist: '⊹',   // star operator — strategy
+  wire:       '▮',   // vertical bar — wire/signal
+  dispatch:   '⊞',   // boxed plus — dispatch
+  friday:     '⬡',   // hexagon — utility
+  grower:     '△',   // delta — growth
+  radar:      '◉',   // circled dot — radar
+  guide:      '▿',   // inverted triangle — guide/compass
+  scout:      '⊙',   // circled dot — discovery
+  sensei:     '◯',   // large circle — zen/mastery
+};
+
 // ─── State ───
 const state = {
   agents: [],
@@ -22,36 +41,51 @@ const state = {
 };
 
 // ─── Window Definitions ───
+// Default positions/sizes are computed dynamically to fill viewport
 const WINDOW_DEFS = {
   activity: {
     title: 'Activity Feed',
     icon: '◉',
     template: 'tmpl-activity',
-    defaultPos: { x: 140, y: 30 },
-    defaultSize: { w: 460, h: 520 },
   },
   agents: {
     title: 'Agent Fleet',
     icon: '⬡',
     template: 'tmpl-agents',
-    defaultPos: { x: 620, y: 30 },
-    defaultSize: { w: 560, h: 520 },
   },
   inbox: {
     title: 'Inbox',
     icon: '▣',
     template: 'tmpl-inbox',
-    defaultPos: { x: 340, y: 80 },
-    defaultSize: { w: 480, h: 440 },
   },
   'atlas-chat': {
     title: 'Atlas Chat',
     icon: '◎',
     template: 'tmpl-atlas-chat',
-    defaultPos: { x: 200, y: 100 },
-    defaultSize: { w: 400, h: 400 },
   },
 };
+
+// Compute tiled layout that fills the viewport
+function getDefaultLayout(id) {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const taskbarH = 48;
+  const pad = 12;
+  const usableH = vh - taskbarH - pad * 2;
+  const usableW = vw - pad * 3; // left pad + gap + right pad
+
+  const halfW = Math.floor(usableW / 2);
+  const fullH = usableH;
+
+  const layouts = {
+    activity: { x: pad, y: pad, w: halfW, h: fullH },
+    agents:   { x: pad * 2 + halfW, y: pad, w: halfW, h: fullH },
+    inbox:    { x: pad, y: pad, w: halfW, h: fullH },
+    'atlas-chat': { x: pad * 2 + halfW, y: pad, w: halfW, h: fullH },
+  };
+
+  return layouts[id] || { x: 100, y: 50, w: 500, h: 500 };
+}
 
 
 /* ═══════════════════════════════════════════════════
@@ -138,6 +172,16 @@ document.addEventListener('DOMContentLoaded', async () => {
    DESKTOP INITIALIZATION
    ═══════════════════════════════════════════════════ */
 function initDesktop() {
+  // Clear stale saved positions from old layout
+  const layoutVersion = 'v2-tiled';
+  if (localStorage.getItem('atlas-os-layout-ver') !== layoutVersion) {
+    ['activity', 'agents', 'inbox', 'atlas-chat'].forEach(id => {
+      localStorage.removeItem(`atlas-os-pos-${id}`);
+      localStorage.removeItem(`atlas-os-size-${id}`);
+    });
+    localStorage.setItem('atlas-os-layout-ver', layoutVersion);
+  }
+
   initClock();
   initBgCanvas();
   initDesktopIcons();
@@ -304,9 +348,10 @@ function openWindow(id) {
   resizeHandles.forEach(h => win.appendChild(h));
   container.appendChild(win);
 
-  // Position & size
-  const pos = loadWindowPos(id) || def.defaultPos;
-  const size = loadWindowSize(id) || def.defaultSize;
+  // Position & size — use saved or compute tiled layout
+  const layout = getDefaultLayout(id);
+  const pos = loadWindowPos(id) || { x: layout.x, y: layout.y };
+  const size = loadWindowSize(id) || { w: layout.w, h: layout.h };
 
   if (!state.isMobile) {
     win.style.left = pos.x + 'px';
@@ -757,8 +802,10 @@ function renderAgents() {
 
     const domainLabel = agent.domain.toUpperCase();
 
+    const agentGlyph = GLYPH_MAP[agent.name] || '●';
+
     card.innerHTML = `
-      <div class="agent-glyph">${agent.signature_glyph || '●'}</div>
+      <div class="agent-glyph">${agentGlyph}</div>
       <div class="agent-name">${escapeHtml(agent.name)}</div>
       <div class="agent-domain">${domainLabel}</div>
       <div class="agent-status">
@@ -778,6 +825,31 @@ function renderAgents() {
   setEl('fleetActive', active);
   setEl('fleetIdle', idle);
   setEl('fleetTotal', state.agents.length);
+}
+
+
+/* ─── Parse activity body (may be JSON or plain text) ─── */
+function parseActivityBody(body) {
+  if (!body) return '';
+  // Try to parse as JSON and extract readable fields
+  try {
+    const parsed = JSON.parse(body);
+    if (typeof parsed === 'object' && parsed !== null) {
+      // Prefer summary, then description, then flatten top-level string values
+      if (parsed.summary) return parsed.summary;
+      if (parsed.description) return parsed.description;
+      if (parsed.message) return parsed.message;
+      if (parsed.text) return parsed.text;
+      // Fallback: join all string values
+      const parts = Object.entries(parsed)
+        .filter(([, v]) => typeof v === 'string')
+        .map(([, v]) => v);
+      return parts.join(' — ') || body;
+    }
+  } catch {
+    // Not JSON — return as-is
+  }
+  return body;
 }
 
 
@@ -807,7 +879,7 @@ function renderActivity(filter = 'all') {
   items.forEach((item, i) => {
     const agent = state.agents.find(a => a.name === item.agent_name);
     const color = agent?.signature_color || 'var(--os-text-muted)';
-    const glyph = agent?.signature_glyph || '●';
+    const glyph = GLYPH_MAP[item.agent_name] || '●';
     const time = formatTime(item.created_at);
 
     const el = document.createElement('div');
@@ -816,11 +888,13 @@ function renderActivity(filter = 'all') {
     el.style.animationDelay = (i * 50) + 'ms';
     if (item.priority) el.dataset.priority = item.priority;
 
+    const bodyText = parseActivityBody(item.body);
+
     el.innerHTML = `
       <div class="activity-item-glyph">${glyph}</div>
       <div class="activity-item-content">
         <div class="activity-item-title">${escapeHtml(item.title)}</div>
-        ${item.body ? `<div class="activity-item-body">${escapeHtml(item.body)}</div>` : ''}
+        ${bodyText ? `<div class="activity-item-body">${escapeHtml(bodyText)}</div>` : ''}
         <div class="activity-item-meta">
           <span class="activity-item-agent">${escapeHtml(item.agent_name)}</span>
           <span class="activity-item-time">${time}</span>
@@ -870,7 +944,7 @@ function renderInbox(statusFilter = 'pending') {
   list.innerHTML = '';
   items.forEach((item, i) => {
     const agent = state.agents.find(a => a.name === item.agent_name);
-    const glyph = agent?.signature_glyph || '●';
+    const glyph = GLYPH_MAP[item.agent_name] || '●';
     const time = formatTime(item.created_at);
     let actions = [];
     try { actions = JSON.parse(item.actions || '[]'); } catch { actions = []; }
