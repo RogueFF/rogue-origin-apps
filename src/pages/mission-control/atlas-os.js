@@ -1440,7 +1440,9 @@ function buildPortfolioCard(data) {
   }
 
   const bankroll = data.portfolio_value || data.bankroll || 0;
-  const totalPnl = data.realized_pnl || data.total_pnl || 0;
+  const unrealizedPnl = data.unrealized_pnl || 0;
+  const realizedPnl = data.realized_pnl || 0;
+  const totalPnl = unrealizedPnl + realizedPnl;
   const winRate = data.win_rate || 0;
   const positions = Array.isArray(data.positions) ? data.positions : (Array.isArray(data.open_positions) ? data.open_positions : []);
 
@@ -1474,20 +1476,31 @@ function buildPortfolioCard(data) {
               ${positions.map(pos => {
                 const ticker = pos.ticker || '—';
                 const entry = pos.entry_price || pos.entry || 0;
-                const stop = pos.stop || 0;
-                const target = pos.target || 0;
+                const target = pos.target_price || pos.target || 0;
+                const currentPrice = pos.current_price || entry;
+                const pnl = pos.current_pnl || 0;
                 const size = pos.quantity || pos.size || 0;
                 const vehicle = pos.vehicle || pos.type || 'shares';
+                const direction = pos.direction || '';
+                const notes = pos.notes || '';
+                const isDegen = notes.includes('⭐');
+                const pnlColor = pnl > 0 ? 'var(--sig-green, #22c55e)' : pnl < 0 ? 'var(--sig-red, #ef4444)' : 'var(--os-text-muted)';
+                const pnlSign = pnl > 0 ? '+' : '';
+                const strike = pos.strike || '';
+                const expiry = pos.expiry || '';
 
                 return `
-                  <div class="position-item">
+                  <div class="position-item${isDegen ? ' position-degen' : ''}">
                     <div class="position-header">
-                      <span class="position-ticker">${escapeHtml(ticker)}</span>
-                      <span class="position-size">${formatCurrency(size)} ${escapeHtml(vehicle)}</span>
+                      <span class="position-ticker">${isDegen ? '⭐ ' : ''}${escapeHtml(ticker)}</span>
+                      <span class="position-pnl" style="color: ${pnlColor}">${pnlSign}${formatCurrency(pnl)}</span>
+                    </div>
+                    <div class="position-meta">
+                      <span>${escapeHtml(direction)} ${size}x ${escapeHtml(vehicle)}${strike ? ' $' + strike : ''}${expiry ? ' · ' + escapeHtml(expiry) : ''}</span>
                     </div>
                     <div class="position-levels">
                       <span class="position-level">Entry: ${formatCurrency(entry)}</span>
-                      <span class="position-level">Stop: ${formatCurrency(stop)}</span>
+                      <span class="position-level">Now: <strong style="color: ${pnlColor}">${formatCurrency(currentPrice)}</strong></span>
                       <span class="position-level">Target: ${formatCurrency(target)}</span>
                     </div>
                   </div>
