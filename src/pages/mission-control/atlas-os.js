@@ -99,6 +99,11 @@ const WINDOW_DEFS = {
     icon: '📊',
     template: 'tmpl-trading',
   },
+  work: {
+    title: 'Production',
+    icon: '🏭',
+    template: 'tmpl-work',
+  },
 };
 
 // Compute tiled layout that fills the viewport
@@ -247,19 +252,29 @@ function initDesktop() {
   setInterval(pollData, POLL_INTERVAL);
 
   // Trading desk auto-refresh — faster during market hours
+  // Trading auto-refresh — faster during market hours
   let tradingTimer = null;
   function scheduleTradingPoll() {
     if (tradingTimer) clearInterval(tradingTimer);
     const interval = isMarketHours() ? TRADING_POLL_INTERVAL : TRADING_IDLE_INTERVAL;
     tradingTimer = setInterval(async () => {
-      if (state.windows.has('trading')) {
-        await fetchTradingData();
-      }
+      if (state.windows.has('trading')) await fetchTradingData();
     }, interval);
   }
   scheduleTradingPoll();
-  // Re-check interval every 5 min (catches market open/close transitions)
   setInterval(scheduleTradingPoll, 300000);
+
+  // Work/production auto-refresh — faster during shift hours
+  let workTimer = null;
+  function scheduleWorkPoll() {
+    if (workTimer) clearInterval(workTimer);
+    const interval = isShiftHours() ? PRODUCTION_POLL_INTERVAL : PRODUCTION_IDLE_INTERVAL;
+    workTimer = setInterval(async () => {
+      if (state.windows.has('work')) await fetchWorkData();
+    }, interval);
+  }
+  scheduleWorkPoll();
+  setInterval(scheduleWorkPoll, 300000);
 
   // Resize listener
   window.addEventListener('resize', () => {
@@ -340,9 +355,33 @@ async function fetchTradingData() {
   ]);
 
   if (regime || plays || portfolio) {
-    const production = await fetchProductionData();
-    renderTradingDesk(regime, plays, portfolio, closed, production);
+    renderTradingDesk(regime, plays, portfolio, closed);
   }
+}
+
+async function fetchWorkData() {
+  const production = await fetchProductionData();
+  renderWorkPanel(production);
+}
+
+function renderWorkPanel(production) {
+  const container = document.getElementById('workMain');
+  if (!container) return;
+
+  const shiftActive = isShiftHours();
+  const shiftIndicator = shiftActive
+    ? '<span class="live-dot"></span> ON SHIFT'
+    : 'OFF SHIFT';
+
+  container.innerHTML = `
+    <div class="trading-status-bar">
+      <span class="trading-market-status ${shiftActive ? 'market-open' : 'market-closed'}">${shiftIndicator}</span>
+      <span class="trading-refresh-rate">${shiftActive ? 'Refreshing every 60s' : 'Refreshing every 5m'}</span>
+    </div>
+    <div class="work-grid">
+      ${buildProductionCard(production)}
+    </div>
+  `;
 }
 
 async function fetchProductionData() {
@@ -362,6 +401,10 @@ async function pollData() {
   // Poll trading data if trading window is open
   if (state.windows.has('trading')) {
     await fetchTradingData();
+  }
+  // Poll work data if work window is open
+  if (state.windows.has('work')) {
+    await fetchWorkData();
   }
 }
 
@@ -1339,7 +1382,7 @@ document.addEventListener('click', (e) => {
 /* ═══════════════════════════════════════════════════
    TRADING DESK
    ═══════════════════════════════════════════════════ */
-function renderTradingDesk(regime, plays, portfolio, closed, production) {
+function renderTradingDesk(regime, plays, portfolio, closed) {
   const container = document.getElementById('tradingMain');
   if (!container) return;
 
@@ -1356,7 +1399,6 @@ function renderTradingDesk(regime, plays, portfolio, closed, production) {
       <span class="trading-refresh-rate">${marketOpen ? 'Refreshing every 60s' : 'Refreshing every 5m'}</span>
     </div>
     <div class="trading-grid">
-      ${buildProductionCard(production)}
       ${buildRegimeCard(regime)}
       ${buildPlaysCard(plays)}
       ${buildPortfolioCard(portfolio, closedTrades)}

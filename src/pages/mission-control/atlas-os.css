@@ -3227,6 +3227,12 @@ input {
 
 .trading-refresh-rate { color: var(--os-text-muted); }
 
+.work-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sp-12);
+}
+
 .trading-grid {
   display: grid;
   grid-template-columns: 1fr;
