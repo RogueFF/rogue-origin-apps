@@ -2,25 +2,21 @@
  * Rogue Origin API - Cloudflare Workers
  *
  * Routes:
- * - /api/production - Production tracking
- * - /api/orders - Wholesale orders
- * - /api/barcode - Barcode/label management
- * - /api/kanban - Kanban board
- * - /api/sop - Standard operating procedures
- * - /api/consignment - Consignment inventory tracking
- * - /api/complaints - Customer complaints tracking
- * - /api/pool - Pool inventory proxy
+ * - /api/production - Production tracking (D1)
+ * - /api/orders - Wholesale orders (D1)
+ * - /api/barcode - Barcode/label management (D1)
+ * - /api/kanban - Kanban board (D1)
+ * - /api/sop - Standard operating procedures (D1)
+ * - /api/consignment - Consignment inventory tracking (D1)
+ * - /api/complaints - Customer complaints tracking (D1)
+ * - /api/pool-bins - Pool bin inventory (D1)
+ * - /api/pool - Shopify pool inventory proxy
  */
 
-import { handleProduction } from './handlers/production.js';
 import { handleProductionD1 } from './handlers/production-d1.js';
-import { handleOrders } from './handlers/orders.js';
 import { handleOrdersD1 } from './handlers/orders-d1.js';
-import { handleBarcode } from './handlers/barcode.js';
 import { handleBarcodeD1 } from './handlers/barcode-d1.js';
-import { handleKanban } from './handlers/kanban.js';
 import { handleKanbanD1 } from './handlers/kanban-d1.js';
-import { handleSop } from './handlers/sop.js';
 import { handleSopD1 } from './handlers/sop-d1.js';
 import { handleConsignmentD1 } from './handlers/consignment-d1.js';
 import { handleComplaintsD1 } from './handlers/complaints-d1.js';
@@ -29,13 +25,6 @@ import { handlePoolRequest } from './handlers/pool.js';
 import { corsHeaders, handleCors } from './lib/cors.js';
 import { jsonResponse, errorResponse } from './lib/response.js';
 import { ApiError } from './lib/errors.js';
-
-// Feature flags for D1 migration (set to true to use D1 instead of Google Sheets)
-const USE_D1_BARCODE = true;
-const USE_D1_KANBAN = true;
-const USE_D1_SOP = true;
-const USE_D1_ORDERS = true;
-const USE_D1_PRODUCTION = true; // Now using D1 for hourly entry reads/writes
 
 export default {
   // Cron Trigger — runs daily at 6 AM PST (14:00 UTC)
@@ -70,31 +59,20 @@ export default {
       let response;
 
       if (path.startsWith('/api/production')) {
-        response = USE_D1_PRODUCTION
-          ? await handleProductionD1(request, env, ctx)
-          : await handleProduction(request, env, ctx);
+        response = await handleProductionD1(request, env, ctx);
       } else if (path.startsWith('/api/orders')) {
-        response = USE_D1_ORDERS
-          ? await handleOrdersD1(request, env, ctx)
-          : await handleOrders(request, env, ctx);
+        response = await handleOrdersD1(request, env, ctx);
       } else if (path.startsWith('/api/barcode')) {
-        response = USE_D1_BARCODE
-          ? await handleBarcodeD1(request, env, ctx)
-          : await handleBarcode(request, env, ctx);
+        response = await handleBarcodeD1(request, env, ctx);
       } else if (path.startsWith('/api/kanban')) {
-        response = USE_D1_KANBAN
-          ? await handleKanbanD1(request, env, ctx)
-          : await handleKanban(request, env, ctx);
+        response = await handleKanbanD1(request, env, ctx);
       } else if (path.startsWith('/api/sop')) {
-        response = USE_D1_SOP
-          ? await handleSopD1(request, env, ctx)
-          : await handleSop(request, env, ctx);
+        response = await handleSopD1(request, env, ctx);
       } else if (path.startsWith('/api/complaints')) {
         response = await handleComplaintsD1(request, env, ctx);
       } else if (path.startsWith('/api/consignment')) {
         response = await handleConsignmentD1(request, env, ctx);
       } else if (path.startsWith('/api/pool-bins')) {
-        // D1 bin-based pool inventory system
         response = await handlePoolD1(request, env, ctx);
       } else if (path.startsWith('/api/pool')) {
         // Shopify pool inventory proxy
