@@ -663,7 +663,7 @@ const handlers = {
   async playsGet(_req, env) {
     const db = env.DB;
     const rows = await db.prepare(
-      `SELECT * FROM trade_plays WHERE date(created_at) = date('now') ORDER BY created_at DESC`
+      `SELECT * FROM trade_plays WHERE created_at >= datetime('now', '-24 hours') ORDER BY created_at DESC`
     ).all();
     const plays = (rows.results || []).map(r => {
       try { r.setup = JSON.parse(r.setup || '{}'); } catch { r.setup = {}; }
