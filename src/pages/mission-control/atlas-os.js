@@ -68,6 +68,11 @@ const WINDOW_DEFS = {
     icon: '🧠',
     template: 'tmpl-tasks',
   },
+  trading: {
+    title: 'Trading Desk',
+    icon: '📊',
+    template: 'tmpl-trading',
+  },
 };
 
 // Compute tiled layout that fills the viewport
@@ -179,7 +184,7 @@ document.addEventListener('DOMContentLoaded', async () => {
    ═══════════════════════════════════════════════════ */
 function initDesktop() {
   // Clear stale saved positions from old layout
-  const layoutVersion = 'v4-board';
+  const layoutVersion = 'v5-list';
   if (localStorage.getItem('atlas-os-layout-ver') !== layoutVersion) {
     ['activity', 'agents', 'inbox', 'atlas-chat', 'tasks'].forEach(id => {
       localStorage.removeItem(`atlas-os-pos-${id}`);
@@ -285,8 +290,24 @@ async function fetchInbox() {
   }
 }
 
+async function fetchTradingData() {
+  const [regime, plays, portfolio] = await Promise.all([
+    apiFetch('/regime'),
+    apiFetch('/plays'),
+    apiFetch('/portfolio'),
+  ]);
+  
+  if (regime || plays || portfolio) {
+    renderTradingDesk(regime, plays, portfolio);
+  }
+}
+
 async function pollData() {
   await Promise.all([fetchAgents(), fetchActivity(), fetchInbox()]);
+  // Poll trading data if trading window is open
+  if (state.windows.has('trading')) {
+    await fetchTradingData();
+  }
 }
 
 async function postInboxAction(itemId, action) {
@@ -414,6 +435,7 @@ function openWindow(id) {
   if (id === 'inbox') renderInbox();
   if (id === 'atlas-chat') initChat();
   if (id === 'tasks') initTasksWindow();
+  if (id === 'trading') fetchTradingData();
 }
 
 function closeWindow(id) {
@@ -691,9 +713,13 @@ function initKeyboard() {
       const idx = parseInt(e.key) - 1;
       if (ids[idx]) openWindow(ids[idx]);
     }
-    // Escape to close focused window
-    if (e.key === 'Escape' && state.focusedWindow) {
-      closeWindow(state.focusedWindow);
+    // Escape: dismiss overlays first, then close focused window
+    if (e.key === 'Escape') {
+      // Task detail overlay takes priority
+      const taskOverlay = document.getElementById('taskDetailOverlay');
+      if (taskOverlay && taskOverlay.style.display !== 'none') return; // handled by initTaskDetailClose
+      // Then close focused window
+      if (state.focusedWindow) closeWindow(state.focusedWindow);
     }
   });
 }
@@ -1256,6 +1282,226 @@ document.addEventListener('click', (e) => {
 
 
 /* ═══════════════════════════════════════════════════
+   TRADING DESK
+   ═══════════════════════════════════════════════════ */
+function renderTradingDesk(regime, plays, portfolio) {
+  const container = document.getElementById('tradingMain');
+  if (!container) return;
+
+  // Build the three-card layout
+  const html = `
+    <div class="trading-grid">
+      ${buildRegimeCard(regime)}
+      ${buildPlaysCard(plays)}
+      ${buildPortfolioCard(portfolio)}
+    </div>
+  `;
+
+  container.innerHTML = html;
+}
+
+function buildRegimeCard(data) {
+  if (!data) {
+    return `
+      <div class="trading-card regime-card">
+        <div class="trading-card-header">
+          <span class="trading-card-title">Market Regime</span>
+        </div>
+        <div class="trading-card-body">
+          <div class="regime-error">Data unavailable</div>
+        </div>
+      </div>
+    `;
+  }
+
+  const signal = (data.signal || 'NEUTRAL').toUpperCase();
+  const signalColor = signal === 'GREEN' ? '#22c55e' : signal === 'YELLOW' ? '#eab308' : '#ef4444';
+  const timestamp = data.created_at ? formatTime(data.created_at) : 'Unknown';
+  const mktData = data.data || {};
+  const spy = mktData.spy_price || '—';
+  const vix = mktData.vix || mktData.vix_level || '—';
+  const trend = mktData.spy_trend || '—';
+  const reasoning = Array.isArray(data.reasoning) ? data.reasoning : [];
+  const strategyObj = data.strategy || {};
+  const strategy = typeof strategyObj === 'string' ? strategyObj : (strategyObj.position_sizing ? `${strategyObj.position_sizing}. ${strategyObj.strategies || ''}` : '');
+
+  return `
+    <div class="trading-card regime-card">
+      <div class="trading-card-header">
+        <span class="trading-card-title">Market Regime</span>
+        <span class="regime-timestamp">${escapeHtml(timestamp)}</span>
+      </div>
+      <div class="trading-card-body">
+        <div class="regime-signal" style="--signal-color: ${signalColor}">
+          <div class="regime-signal-indicator">${escapeHtml(signal)}</div>
+        </div>
+        <div class="regime-data">
+          <div class="regime-data-row">
+            <span class="regime-data-label">SPY</span>
+            <span class="regime-data-value">${escapeHtml(String(spy))}</span>
+          </div>
+          <div class="regime-data-row">
+            <span class="regime-data-label">VIX</span>
+            <span class="regime-data-value">${escapeHtml(String(vix))}</span>
+          </div>
+          <div class="regime-data-row">
+            <span class="regime-data-label">Trend</span>
+            <span class="regime-data-value">${escapeHtml(String(trend))}</span>
+          </div>
+        </div>
+        ${reasoning.length > 0 ? `
+          <div class="regime-reasoning">
+            <div class="regime-reasoning-title">Analysis</div>
+            <ul class="regime-reasoning-list">
+              ${reasoning.map(r => `<li>${escapeHtml(r)}</li>`).join('')}
+            </ul>
+          </div>
+        ` : ''}
+        ${strategy ? `
+          <div class="regime-strategy">
+            <div class="regime-strategy-title">Strategy</div>
+            <div class="regime-strategy-text">${escapeHtml(strategy)}</div>
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function buildPlaysCard(data) {
+  const plays = Array.isArray(data) ? data : (data?.plays || []);
+
+  if (plays.length === 0) {
+    return `
+      <div class="trading-card plays-card">
+        <div class="trading-card-header">
+          <span class="trading-card-title">Today's Plays</span>
+          <span class="plays-count">0 setups</span>
+        </div>
+        <div class="trading-card-body">
+          <div class="plays-empty">No plays structured today</div>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="trading-card plays-card">
+      <div class="trading-card-header">
+        <span class="trading-card-title">Today's Plays</span>
+        <span class="plays-count">${plays.length} setup${plays.length !== 1 ? 's' : ''}</span>
+      </div>
+      <div class="trading-card-body">
+        <div class="plays-list">
+          ${plays.map(play => {
+            const ticker = play.ticker || '—';
+            const direction = play.direction || 'LONG';
+            const vehicle = play.vehicle || '—';
+            const thesis = play.thesis || '';
+            const risk = play.risk_level || 'MEDIUM';
+            const riskClass = risk.toLowerCase();
+
+            return `
+              <div class="play-item">
+                <div class="play-header">
+                  <span class="play-ticker">${escapeHtml(ticker)}</span>
+                  <span class="play-direction ${direction.toLowerCase()}">${escapeHtml(direction)}</span>
+                  <span class="play-risk ${riskClass}">${escapeHtml(risk)}</span>
+                </div>
+                <div class="play-vehicle">${escapeHtml(vehicle)}</div>
+                ${thesis ? `<div class="play-thesis">${escapeHtml(thesis)}</div>` : ''}
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function buildPortfolioCard(data) {
+  if (!data) {
+    return `
+      <div class="trading-card portfolio-card">
+        <div class="trading-card-header">
+          <span class="trading-card-title">Portfolio</span>
+        </div>
+        <div class="trading-card-body">
+          <div class="portfolio-error">Data unavailable</div>
+        </div>
+      </div>
+    `;
+  }
+
+  const bankroll = data.portfolio_value || data.bankroll || 0;
+  const totalPnl = data.realized_pnl || data.total_pnl || 0;
+  const winRate = data.win_rate || 0;
+  const positions = Array.isArray(data.positions) ? data.positions : (Array.isArray(data.open_positions) ? data.open_positions : []);
+
+  const pnlClass = totalPnl >= 0 ? 'positive' : 'negative';
+  const pnlSign = totalPnl >= 0 ? '+' : '';
+
+  return `
+    <div class="trading-card portfolio-card">
+      <div class="trading-card-header">
+        <span class="trading-card-title">Portfolio</span>
+      </div>
+      <div class="trading-card-body">
+        <div class="portfolio-stats">
+          <div class="portfolio-stat">
+            <span class="portfolio-stat-label">Bankroll</span>
+            <span class="portfolio-stat-value">${formatCurrency(bankroll)}</span>
+          </div>
+          <div class="portfolio-stat">
+            <span class="portfolio-stat-label">Total P&L</span>
+            <span class="portfolio-stat-value ${pnlClass}">${pnlSign}${formatCurrency(totalPnl)}</span>
+          </div>
+          <div class="portfolio-stat">
+            <span class="portfolio-stat-label">Win Rate</span>
+            <span class="portfolio-stat-value">${winRate}%</span>
+          </div>
+        </div>
+        ${positions.length > 0 ? `
+          <div class="portfolio-positions">
+            <div class="portfolio-positions-title">Open Positions</div>
+            <div class="positions-list">
+              ${positions.map(pos => {
+                const ticker = pos.ticker || '—';
+                const entry = pos.entry || 0;
+                const stop = pos.stop || 0;
+                const target = pos.target || 0;
+                const size = pos.size || 0;
+
+                return `
+                  <div class="position-item">
+                    <div class="position-header">
+                      <span class="position-ticker">${escapeHtml(ticker)}</span>
+                      <span class="position-size">${size} shares</span>
+                    </div>
+                    <div class="position-levels">
+                      <span class="position-level">Entry: ${formatCurrency(entry)}</span>
+                      <span class="position-level">Stop: ${formatCurrency(stop)}</span>
+                      <span class="position-level">Target: ${formatCurrency(target)}</span>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function formatCurrency(val) {
+  const num = parseFloat(val);
+  if (isNaN(num)) return '$0.00';
+  return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+
+/* ═══════════════════════════════════════════════════
    CHAT
    ═══════════════════════════════════════════════════ */
 function initChat() {
@@ -1814,10 +2060,17 @@ function formatTime(dateStr) {
   const d = new Date(dateStr);
   if (isNaN(d)) return '';
   const now = new Date();
-  const diff = now - d;
-  if (diff < 60000) return 'just now';
-  if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
-  if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+  const diffMs = now - d;
+  if (diffMs < 0) return 'just now';
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 60) return 'just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return diffMin + 'm ago';
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return diffHr + 'h ago';
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay === 1) return 'yesterday';
+  if (diffDay < 7) return diffDay + 'd ago';
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
@@ -1920,13 +2173,32 @@ const MOCK_TASKS = [
 
 // ─── Task view state ───
 let neuralState = null;
-let currentTaskView = 'board'; // 'board' or 'neural'
+let currentTaskView = 'list'; // 'list', 'board', or 'neural'
 
 /* ═══ Task board + neural toggle ═══ */
 function initTasksWindow() {
+  renderTaskList();
   renderTaskBoard();
   updateTaskStats();
   initTaskViewToggle();
+  initTaskDetailClose();
+}
+
+function initTaskDetailClose() {
+  const overlay = document.getElementById('taskDetailOverlay');
+  const closeBtn = document.getElementById('taskDetailClose');
+  if (!overlay) return;
+
+  function hideDetail() { overlay.style.display = 'none'; }
+
+  if (closeBtn) closeBtn.addEventListener('click', hideDetail);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) hideDetail(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && overlay.style.display !== 'none') {
+      e.stopPropagation();
+      hideDetail();
+    }
+  });
 }
 
 function initTaskViewToggle() {
@@ -1939,23 +2211,83 @@ function initTaskViewToggle() {
       document.querySelectorAll('.tasks-view-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
 
+      const listView = document.getElementById('tasksListView');
       const boardView = document.getElementById('tasksBoardView');
       const neuralView = document.getElementById('tasksNeuralView');
       const titleText = document.querySelector('.tasks-title-text');
 
-      if (view === 'board') {
+      listView.style.display = 'none';
+      boardView.style.display = 'none';
+      neuralView.style.display = 'none';
+
+      if (view === 'list') {
+        listView.style.display = '';
+        if (titleText) titleText.textContent = 'TASK LIST';
+      } else if (view === 'board') {
         boardView.style.display = '';
-        neuralView.style.display = 'none';
         if (titleText) titleText.textContent = 'TASK BOARD';
       } else {
-        boardView.style.display = 'none';
         neuralView.style.display = '';
         if (titleText) titleText.textContent = 'NEURAL MAP';
-        // Lazy-init neural view
         if (!neuralState) initNeuralTasks();
       }
       soundClick();
     });
+  });
+}
+
+/* ═══ List View (default — scannable) ═══ */
+function renderTaskList() {
+  const container = document.getElementById('tasksList');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const groups = [
+    { key: 'active',  label: 'Active' },
+    { key: 'review',  label: 'Review' },
+    { key: 'backlog', label: 'Backlog' },
+    { key: 'done',    label: 'Done' },
+  ];
+
+  const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
+
+  groups.forEach(group => {
+    const tasks = MOCK_TASKS
+      .filter(t => t.status === group.key)
+      .sort((a, b) => (priorityOrder[a.priority] || 2) - (priorityOrder[b.priority] || 2));
+    if (tasks.length === 0) return;
+
+    const section = document.createElement('div');
+    section.className = 'tl-group';
+
+    const dotColor = NEURAL_COLORS[group.key]?.fill || '#4a5568';
+    section.innerHTML = `<div class="tl-group-header">
+      <span class="tl-group-dot" style="background:${dotColor};${group.key === 'active' || group.key === 'review' ? 'box-shadow:0 0 6px ' + dotColor : ''}"></span>
+      <span class="tl-group-label">${group.label}</span>
+      <span class="tl-group-count">${tasks.length}</span>
+    </div>`;
+
+    tasks.forEach((task, i) => {
+      const ownerAgent = task.owner ? state.agents.find(a => a.name === task.owner) : null;
+      const ownerColor = ownerAgent?.signature_color || 'var(--os-text-muted)';
+      const ownerGlyph = task.owner ? (GLYPH_MAP[task.owner] || '●') : '';
+      const priClass = task.priority === 'urgent' ? 'tl-pri-urgent' :
+                        task.priority === 'high' ? 'tl-pri-high' :
+                        task.priority === 'low' ? 'tl-pri-low' : 'tl-pri-normal';
+
+      const row = document.createElement('div');
+      row.className = 'tl-row' + (group.key === 'done' ? ' tl-row-done' : '');
+      row.innerHTML = `
+        <span class="tl-pri ${priClass}"></span>
+        <span class="tl-title">${escapeHtml(task.title)}</span>
+        ${task.owner ? `<span class="tl-owner" style="color:${ownerColor}">${ownerGlyph} ${escapeHtml(task.owner)}</span>` : '<span class="tl-owner tl-owner-none">—</span>'}
+        <span class="tl-domain">${escapeHtml(task.domain)}</span>
+      `;
+      row.addEventListener('click', () => { showTaskDetail(task); soundClick(); });
+      section.appendChild(row);
+    });
+
+    container.appendChild(section);
   });
 }
 
@@ -2113,20 +2445,6 @@ function initNeuralTasks() {
       soundClick();
     }
   });
-
-  // Close detail overlay
-  const closeBtn = document.getElementById('taskDetailClose');
-  const overlay = document.getElementById('taskDetailOverlay');
-  if (closeBtn) {
-    closeBtn.addEventListener('click', () => {
-      overlay.style.display = 'none';
-    });
-  }
-  if (overlay) {
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) overlay.style.display = 'none';
-    });
-  }
 
   // Resize observer
   const resizeObserver = new ResizeObserver(() => {
