@@ -20,6 +20,11 @@
  * POST /api/positions           Open a new position
  * PATCH /api/positions/:id      Update/close a position
  * GET  /api/portfolio           Portfolio summary (P&L, win rate, exposure, bankroll)
+ * GET  /api/tasks               List tasks (filter: status, agent, domain, priority)
+ * POST /api/tasks               Create task
+ * PATCH /api/tasks/:id          Update task (status, assignment, priority)
+ * DELETE /api/tasks/:id         Remove task
+ * GET  /api/tasks/stats         Task counts by status, agent, domain
  */
 
 // ── CORS ────────────────────────────────────────────────────────────
@@ -98,6 +103,15 @@ function matchRoute(method, path) {
     ['POST', /^\/api\/positions$/,                'positionsCreate'],
     ['PATCH',/^\/api\/positions\/(\d+)$/,         'positionsUpdate'],
     ['GET',  /^\/api\/portfolio$/,                'portfolio'],
+    ['GET',  /^\/api\/tasks\/stats$/,               'tasksStats'],
+    ['GET',  /^\/api\/tasks$/,                      'tasksList'],
+    ['POST', /^\/api\/tasks$/,                      'tasksCreate'],
+    ['PATCH',/^\/api\/tasks\/(\d+)$/,               'tasksUpdate'],
+    ['DELETE',/^\/api\/tasks\/(\d+)$/,              'tasksDelete'],
+    ['GET',  /^\/api\/regime$/,                       'regimeGet'],
+    ['POST', /^\/api\/regime$/,                      'regimeUpdate'],
+    ['GET',  /^\/api\/plays$/,                       'playsGet'],
+    ['POST', /^\/api\/plays$/,                       'playsCreate'],
     ['GET',  /^\/api\/agents\/([a-z-]+)\/files$/,   'agentFilesList'],
     ['GET',  /^\/api\/agents\/([a-z-]+)\/files\/(.+)$/, 'agentFileGet'],
     ['PUT',  /^\/api\/agents\/([a-z-]+)\/files\/(.+)$/, 'agentFilePut'],
@@ -612,6 +626,72 @@ const handlers = {
     });
   },
 
+  // GET /api/regime — current market regime signal
+  async regimeGet(_req, env) {
+    const db = env.DB;
+    const row = await db.prepare(
+      `SELECT * FROM regime_signals ORDER BY created_at DESC LIMIT 1`
+    ).first();
+    if (!row) return json({ success: true, data: null });
+    try { row.data = JSON.parse(row.data || '{}'); } catch { row.data = {}; }
+    try { row.scores = JSON.parse(row.scores || '{}'); } catch { row.scores = {}; }
+    try { row.reasoning = JSON.parse(row.reasoning || '[]'); } catch { row.reasoning = []; }
+    try { row.strategy = JSON.parse(row.strategy || '{}'); } catch { row.strategy = {}; }
+    return json({ success: true, data: row });
+  },
+
+  // POST /api/regime — update regime signal
+  async regimeUpdate(req, env) {
+    const db = env.DB;
+    const body = await parseBody(req);
+    if (!body.signal) return err('Missing required field: signal', 'VALIDATION_ERROR', 400);
+    await db.prepare(
+      `INSERT INTO regime_signals (signal, label, data, scores, reasoning, strategy, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`
+    ).bind(
+      body.signal,
+      body.label || '',
+      JSON.stringify(body.data || {}),
+      JSON.stringify(body.scores || {}),
+      JSON.stringify(body.reasoning || []),
+      JSON.stringify(body.strategy || {})
+    ).run();
+    return json({ success: true, data: { signal: body.signal } }, 201);
+  },
+
+  // GET /api/plays — today's trade setups
+  async playsGet(_req, env) {
+    const db = env.DB;
+    const rows = await db.prepare(
+      `SELECT * FROM trade_plays WHERE date(created_at) = date('now') ORDER BY created_at DESC`
+    ).all();
+    const plays = (rows.results || []).map(r => {
+      try { r.setup = JSON.parse(r.setup || '{}'); } catch { r.setup = {}; }
+      return r;
+    });
+    return json({ success: true, data: plays });
+  },
+
+  // POST /api/plays — create a trade setup/play
+  async playsCreate(req, env) {
+    const db = env.DB;
+    const body = await parseBody(req);
+    if (!body.ticker) return err('Missing required field: ticker', 'VALIDATION_ERROR', 400);
+    await db.prepare(
+      `INSERT INTO trade_plays (ticker, direction, vehicle, thesis, setup, risk_level, source_agent, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+    ).bind(
+      body.ticker,
+      body.direction || 'long',
+      body.vehicle || 'shares',
+      body.thesis || '',
+      JSON.stringify(body.setup || {}),
+      body.risk_level || 'normal',
+      body.source_agent || 'strategist'
+    ).run();
+    return json({ success: true, data: { ticker: body.ticker } }, 201);
+  },
+
   // GET /api/agents/:name/files — list all files for an agent
   async agentFilesList(_req, env, params) {
     const db = env.DB;
@@ -632,6 +712,179 @@ const handlers = {
     ).bind(name, fileName).first();
     if (!file) return err('File not found', 'NOT_FOUND', 404);
     return json({ success: true, data: file });
+  },
+
+  // ── Tasks (Dispatch) ───────────────────────────────────────────────
+
+  // GET /api/tasks — list tasks with filters
+  async tasksList(req, env) {
+    const db = env.DB;
+    const url = new URL(req.url);
+    const limit = Math.min(parseInt(url.searchParams.get('limit') || '100'), 500);
+    const offset = parseInt(url.searchParams.get('offset') || '0');
+    const status = url.searchParams.get('status');
+    const agent = url.searchParams.get('agent');
+    const domain = url.searchParams.get('domain');
+    const priority = url.searchParams.get('priority');
+    const parent_id = url.searchParams.get('parent_id');
+
+    let sql = 'SELECT * FROM tasks';
+    const conditions = [];
+    const params = [];
+
+    if (status) { conditions.push('status = ?'); params.push(status); }
+    if (agent) { conditions.push('assigned_agent = ?'); params.push(agent); }
+    if (domain) { conditions.push('domain = ?'); params.push(domain); }
+    if (priority) { conditions.push('priority = ?'); params.push(priority); }
+    if (parent_id) { conditions.push('parent_id = ?'); params.push(parseInt(parent_id)); }
+
+    if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ');
+    sql += ' ORDER BY CASE priority WHEN \'critical\' THEN 0 WHEN \'high\' THEN 1 WHEN \'medium\' THEN 2 ELSE 3 END, created_at DESC LIMIT ? OFFSET ?';
+    params.push(limit, offset);
+
+    const results = await db.prepare(sql).bind(...params).all();
+
+    let countSql = 'SELECT COUNT(*) as total FROM tasks';
+    if (conditions.length) countSql += ' WHERE ' + conditions.join(' AND ');
+    const countParams = params.slice(0, -2);
+    const countResult = countParams.length > 0
+      ? await db.prepare(countSql).bind(...countParams).first()
+      : await db.prepare(countSql).first();
+
+    return json({
+      success: true,
+      data: results.results,
+      pagination: { total: countResult.total, limit, offset },
+    });
+  },
+
+  // POST /api/tasks — create task
+  async tasksCreate(req, env) {
+    const db = env.DB;
+    const body = await parseBody(req);
+
+    if (!body.title) return err('Missing required field: title', 'VALIDATION_ERROR', 400);
+
+    const validStatuses = ['backlog', 'active', 'review', 'done', 'blocked'];
+    const validPriorities = ['critical', 'high', 'medium', 'low'];
+
+    if (body.status && !validStatuses.includes(body.status)) {
+      return err(`Invalid status. Must be: ${validStatuses.join(', ')}`, 'VALIDATION_ERROR', 400);
+    }
+    if (body.priority && !validPriorities.includes(body.priority)) {
+      return err(`Invalid priority. Must be: ${validPriorities.join(', ')}`, 'VALIDATION_ERROR', 400);
+    }
+
+    const now = new Date().toISOString();
+    const result = await db.prepare(
+      `INSERT INTO tasks (title, description, status, priority, assigned_agent, domain, created_at, updated_at, parent_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      body.title,
+      body.description || null,
+      body.status || 'backlog',
+      body.priority || 'medium',
+      body.assigned_agent || null,
+      body.domain || null,
+      now,
+      now,
+      body.parent_id || null
+    ).run();
+
+    const task = await db.prepare('SELECT * FROM tasks WHERE id = ?')
+      .bind(result.meta.last_row_id).first();
+    return json({ success: true, data: task }, 201);
+  },
+
+  // PATCH /api/tasks/:id — update task
+  async tasksUpdate(req, env, params) {
+    const db = env.DB;
+    const id = parseInt(params[0]);
+    const body = await parseBody(req);
+
+    const task = await db.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first();
+    if (!task) return err('Task not found', 'NOT_FOUND', 404);
+
+    const validStatuses = ['backlog', 'active', 'review', 'done', 'blocked'];
+    const validPriorities = ['critical', 'high', 'medium', 'low'];
+
+    if (body.status && !validStatuses.includes(body.status)) {
+      return err(`Invalid status. Must be: ${validStatuses.join(', ')}`, 'VALIDATION_ERROR', 400);
+    }
+    if (body.priority && !validPriorities.includes(body.priority)) {
+      return err(`Invalid priority. Must be: ${validPriorities.join(', ')}`, 'VALIDATION_ERROR', 400);
+    }
+
+    const allowed = ['title', 'description', 'status', 'priority', 'assigned_agent', 'domain', 'parent_id'];
+    const sets = [];
+    const vals = [];
+    for (const key of allowed) {
+      if (body[key] !== undefined) {
+        sets.push(`${key} = ?`);
+        vals.push(body[key]);
+      }
+    }
+
+    // Always update updated_at
+    sets.push('updated_at = ?');
+    vals.push(new Date().toISOString());
+
+    // Auto-set completed_at when status changes to 'done'
+    if (body.status === 'done' && !task.completed_at) {
+      sets.push('completed_at = ?');
+      vals.push(new Date().toISOString());
+    }
+    // Clear completed_at if task is moved back from done
+    if (body.status && body.status !== 'done' && task.completed_at) {
+      sets.push('completed_at = ?');
+      vals.push(null);
+    }
+
+    if (sets.length <= 1) return err('No valid fields to update', 'VALIDATION_ERROR', 400);
+
+    vals.push(id);
+    await db.prepare(`UPDATE tasks SET ${sets.join(', ')} WHERE id = ?`).bind(...vals).run();
+
+    const updated = await db.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first();
+    return json({ success: true, data: updated });
+  },
+
+  // DELETE /api/tasks/:id — remove task
+  async tasksDelete(_req, env, params) {
+    const db = env.DB;
+    const id = parseInt(params[0]);
+
+    const task = await db.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first();
+    if (!task) return err('Task not found', 'NOT_FOUND', 404);
+
+    await db.prepare('DELETE FROM tasks WHERE id = ?').bind(id).run();
+    return json({ success: true, data: { id, deleted: true } });
+  },
+
+  // GET /api/tasks/stats — task counts by status, agent, domain
+  async tasksStats(_req, env) {
+    const db = env.DB;
+
+    const byStatus = await db.prepare(
+      'SELECT status, COUNT(*) as count FROM tasks GROUP BY status'
+    ).all();
+    const byAgent = await db.prepare(
+      'SELECT assigned_agent, COUNT(*) as count FROM tasks WHERE assigned_agent IS NOT NULL GROUP BY assigned_agent'
+    ).all();
+    const byDomain = await db.prepare(
+      'SELECT domain, COUNT(*) as count FROM tasks WHERE domain IS NOT NULL GROUP BY domain'
+    ).all();
+    const total = await db.prepare('SELECT COUNT(*) as total FROM tasks').first();
+
+    return json({
+      success: true,
+      data: {
+        total: total.total,
+        by_status: Object.fromEntries(byStatus.results.map(r => [r.status, r.count])),
+        by_agent: Object.fromEntries(byAgent.results.map(r => [r.assigned_agent, r.count])),
+        by_domain: Object.fromEntries(byDomain.results.map(r => [r.domain, r.count])),
+      },
+    });
   },
 
   // PUT /api/agents/:name/files/:filename — create or update file
