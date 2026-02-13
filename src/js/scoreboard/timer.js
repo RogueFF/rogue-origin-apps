@@ -376,11 +376,9 @@
       tv.className = 'timer-value yellow';
       tl.textContent = currentLang === 'es' ? 'PAUSADO' : 'PAUSED';
     } else if (breakStatus.onBreak && !State.debugMode) {
-      tv.textContent = breakStatus.afterHours ? '--:--' : formatTime(displaySec);
+      tv.textContent = breakStatus.afterHours ? formatTime(State.totalPausedSeconds || 0) : formatTime(displaySec);
       tv.className = 'timer-value yellow';
-      tl.textContent = breakStatus.afterHours ?
-        (t[currentLang] && t[currentLang].shiftEnded) :
-        (t[currentLang] && t[currentLang].onBreak);
+      tl.textContent = breakStatus.afterHours ? ((currentLang === 'es' ? 'PAUSADO TOTAL' : 'TOTAL PAUSED') + ' · ' + (t[currentLang] && t[currentLang].shiftEnded)) : (t[currentLang] && t[currentLang].onBreak);
     } else {
       var showTime = State.debugMode || effectiveTarget > 0 || elapsedSec > 0;
       tv.textContent = showTime ? formatTime(displaySec) : '--:--';
@@ -652,6 +650,8 @@
   function resumeTimer() {
     var pauseDuration = State.pauseStartTime ?
       Math.floor((new Date() - State.pauseStartTime) / 1000) : 0;
+
+    State.totalPausedSeconds = (State.totalPausedSeconds || 0) + pauseDuration;
 
     State.isPaused = false;
 

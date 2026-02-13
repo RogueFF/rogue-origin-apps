@@ -182,13 +182,13 @@
       if (pde && dailyGoal > 0 && projectedTotal > 0) {
         const pda = Math.abs(projectedDelta).toFixed(1);
         if (projectedDelta >= 0.5) {
-          pde.textContent = `↑ +${pda}`;
+          pde.textContent = `↑ +${pda} lbs`;
           pde.className = 'projection-delta positive';
         } else if (projectedDelta <= -0.5) {
-          pde.textContent = `↓ -${pda}`;
+          pde.textContent = `↓ -${pda} lbs`;
           pde.className = 'projection-delta negative';
         } else {
-          pde.textContent = '= On pace';
+          pde.textContent = `= 0.0 lbs`;
           pde.className = 'projection-delta neutral';
         }
       } else if (pde) {
