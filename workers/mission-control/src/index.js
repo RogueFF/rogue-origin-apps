@@ -492,8 +492,8 @@ const handlers = {
     }
 
     const result = await db.prepare(
-      `INSERT INTO positions (ticker, direction, vehicle, strike, expiry, entry_price, quantity, entry_date, status, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?)`
+      `INSERT INTO positions (ticker, direction, vehicle, strike, expiry, entry_price, quantity, entry_date, status, notes, target_price, stop_loss)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?)`
     ).bind(
       body.ticker.toUpperCase(),
       body.direction,
@@ -503,7 +503,9 @@ const handlers = {
       body.entry_price,
       body.quantity,
       body.entry_date,
-      body.notes || null
+      body.notes || null,
+      body.target_price || 0,
+      body.stop_loss || 0
     ).run();
 
     const position = await db.prepare('SELECT * FROM positions WHERE id = ?')
@@ -521,7 +523,7 @@ const handlers = {
     const position = await db.prepare('SELECT * FROM positions WHERE id = ?').bind(id).first();
     if (!position) return err('Position not found', 'NOT_FOUND', 404);
 
-    const allowed = ['exit_price', 'exit_date', 'status', 'pnl', 'notes'];
+    const allowed = ['exit_price', 'exit_date', 'status', 'pnl', 'notes', 'target_price', 'stop_loss', 'current_price', 'current_pnl'];
     const sets = [];
     const vals = [];
     for (const key of allowed) {
@@ -592,8 +594,11 @@ const handlers = {
       return sum + (p.entry_price * p.quantity * multiplier);
     }, 0);
 
+    // Unrealized P&L from open positions
+    const unrealizedPnl = openPositions.reduce((sum, p) => sum + (p.current_pnl || 0), 0);
+
     // Portfolio value & bankroll
-    const portfolioValue = Math.round((STARTING_BANKROLL + realizedPnl) * 100) / 100;
+    const portfolioValue = Math.round((STARTING_BANKROLL + realizedPnl + unrealizedPnl) * 100) / 100;
     const availableBankroll = Math.round((portfolioValue - openExposure) * 100) / 100;
 
     // Bankroll rule checks
@@ -609,6 +614,7 @@ const handlers = {
         starting_bankroll: STARTING_BANKROLL,
         portfolio_value: portfolioValue,
         realized_pnl: Math.round(realizedPnl * 100) / 100,
+        unrealized_pnl: Math.round(unrealizedPnl * 100) / 100,
         open_exposure: Math.round(openExposure * 100) / 100,
         available_bankroll: availableBankroll,
         open_positions: openPositions.length,
