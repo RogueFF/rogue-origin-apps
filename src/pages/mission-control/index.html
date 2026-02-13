@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0c0f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Atlas OS — Mission Control</title>
+
+  <!-- Fonts: distinctive, not generic -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="atlas-os.css">
+</head>
+<body>
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- ATLAS OS — Desktop Environment                      -->
+  <!-- ═══════════════════════════════════════════════════ -->
+
+  <!-- Boot screen -->
+  <div id="bootScreen" class="boot-screen">
+    <div class="boot-content">
+      <div class="boot-logo">
+        <svg class="boot-compass" viewBox="0 0 80 80" width="80" height="80">
+          <circle cx="40" cy="40" r="36" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3"/>
+          <circle cx="40" cy="40" r="24" fill="none" stroke="currentColor" stroke-width="0.8" opacity="0.2"/>
+          <path d="M40 8 L44 36 L40 40 L36 36 Z" fill="currentColor" opacity="0.9"/>
+          <path d="M40 72 L36 44 L40 40 L44 44 Z" fill="currentColor" opacity="0.4"/>
+          <path d="M8 40 L36 36 L40 40 L36 44 Z" fill="currentColor" opacity="0.4"/>
+          <path d="M72 40 L44 44 L40 40 L44 36 Z" fill="currentColor" opacity="0.6"/>
+          <circle cx="40" cy="40" r="3" fill="currentColor"/>
+        </svg>
+      </div>
+      <div class="boot-text">
+        <span class="boot-title">ATLAS OS</span>
+        <span class="boot-version">v0.1.0</span>
+      </div>
+      <div class="boot-progress">
+        <div class="boot-progress-bar"></div>
+      </div>
+      <div class="boot-status">Initializing agent network...</div>
+    </div>
+  </div>
+
+  <!-- Desktop -->
+  <div id="desktop" class="desktop" style="display:none;">
+
+    <!-- Background layer with subtle grid -->
+    <div class="desktop-bg">
+      <canvas id="bgCanvas"></canvas>
+    </div>
+
+    <!-- Desktop icons -->
+    <div class="desktop-icons" id="desktopIcons">
+      <button class="desktop-icon" data-window="activity" title="Activity Feed">
+        <div class="desktop-icon-glyph">◉</div>
+        <span class="desktop-icon-label">Activity</span>
+      </button>
+      <button class="desktop-icon" data-window="agents" title="Agent Fleet">
+        <div class="desktop-icon-glyph">⬡</div>
+        <span class="desktop-icon-label">Fleet</span>
+      </button>
+      <button class="desktop-icon" data-window="inbox" title="Inbox">
+        <div class="desktop-icon-glyph">▣</div>
+        <span class="desktop-icon-label">Inbox</span>
+      </button>
+      <button class="desktop-icon" data-window="atlas-chat" title="Chat with Atlas">
+        <div class="desktop-icon-glyph">◎</div>
+        <span class="desktop-icon-label">Atlas</span>
+      </button>
+    </div>
+
+    <!-- Window container -->
+    <div class="window-container" id="windowContainer"></div>
+
+    <!-- ═══ TASKBAR ═══ -->
+    <div class="taskbar" id="taskbar">
+      <div class="taskbar-start">
+        <button class="taskbar-menu-btn" id="menuBtn" title="Atlas Menu">
+          <svg viewBox="0 0 24 24" width="18" height="18">
+            <path d="M12 2 L14 10 L12 12 L10 10 Z" fill="currentColor" opacity="0.9"/>
+            <path d="M12 22 L10 14 L12 12 L14 14 Z" fill="currentColor" opacity="0.5"/>
+            <path d="M2 12 L10 10 L12 12 L10 14 Z" fill="currentColor" opacity="0.5"/>
+            <path d="M22 12 L14 14 L12 12 L14 10 Z" fill="currentColor" opacity="0.7"/>
+            <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+          </svg>
+          <span class="taskbar-menu-label">Atlas</span>
+        </button>
+      </div>
+
+      <div class="taskbar-windows" id="taskbarWindows">
+        <!-- Dynamic: running window tabs appear here -->
+      </div>
+
+      <!-- Mobile bottom nav (hidden on desktop) -->
+      <div class="mobile-nav" id="mobileNav">
+        <button class="mobile-nav-btn" data-window="activity">
+          <span class="mobile-nav-icon">◉</span>
+          <span class="mobile-nav-label">Feed</span>
+        </button>
+        <button class="mobile-nav-btn" data-window="agents">
+          <span class="mobile-nav-icon">⬡</span>
+          <span class="mobile-nav-label">Fleet</span>
+        </button>
+        <button class="mobile-nav-btn" data-window="inbox">
+          <span class="mobile-nav-icon">▣</span>
+          <span class="mobile-nav-label">Inbox</span>
+          <span class="mobile-nav-badge" id="mobileInboxBadge" style="display:none;">0</span>
+        </button>
+        <button class="mobile-nav-btn" data-window="atlas-chat">
+          <span class="mobile-nav-icon">◎</span>
+          <span class="mobile-nav-label">Atlas</span>
+        </button>
+      </div>
+
+      <!-- Desktop tray -->
+      <div class="taskbar-tray" id="taskbarTray">
+        <div class="tray-item tray-agents" id="trayAgents" title="Agent Fleet Status">
+          <span class="tray-indicator"></span>
+          <span class="tray-count" id="agentCount">0</span>
+          <span class="tray-label">agents</span>
+        </div>
+        <div class="tray-divider"></div>
+        <div class="tray-item tray-notifications" id="trayNotifications" title="Notifications">
+          <span class="tray-bell">●</span>
+          <span class="tray-count" id="notifCount">0</span>
+        </div>
+        <div class="tray-divider"></div>
+        <div class="tray-item tray-clock" id="trayClock">
+          <span class="tray-time" id="clockTime">--:--</span>
+          <span class="tray-date" id="clockDate">---</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ WINDOW TEMPLATES (hidden) ═══ -->
+
+  <!-- Activity Feed Window -->
+  <template id="tmpl-activity">
+    <div class="window-body activity-window">
+      <div class="activity-toolbar">
+        <div class="activity-filters">
+          <button class="filter-btn active" data-filter="all">All</button>
+          <button class="filter-btn" data-filter="work">Work</button>
+          <button class="filter-btn" data-filter="trading">Trading</button>
+          <button class="filter-btn" data-filter="life">Life</button>
+          <button class="filter-btn" data-filter="system">System</button>
+        </div>
+        <div class="activity-meta">
+          <span class="activity-live-dot"></span>
+          <span>Live</span>
+        </div>
+      </div>
+      <div class="activity-feed" id="activityFeed">
+        <div class="activity-empty">
+          <div class="empty-glyph">◌</div>
+          <p>No activity yet. Agents are standing by.</p>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- Agent Fleet Window -->
+  <template id="tmpl-agents">
+    <div class="window-body agents-window">
+      <div class="agents-grid" id="agentsGrid">
+        <!-- Populated by JS -->
+      </div>
+      <div class="agents-footer">
+        <div class="fleet-stat">
+          <span class="fleet-stat-value" id="fleetActive">0</span>
+          <span class="fleet-stat-label">active</span>
+        </div>
+        <div class="fleet-stat">
+          <span class="fleet-stat-value" id="fleetIdle">0</span>
+          <span class="fleet-stat-label">idle</span>
+        </div>
+        <div class="fleet-stat">
+          <span class="fleet-stat-value" id="fleetTotal">0</span>
+          <span class="fleet-stat-label">total</span>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- Inbox Window -->
+  <template id="tmpl-inbox">
+    <div class="window-body inbox-window">
+      <div class="inbox-header">
+        <div class="inbox-tabs">
+          <button class="inbox-tab active" data-status="pending">Pending</button>
+          <button class="inbox-tab" data-status="all">All</button>
+        </div>
+        <span class="inbox-count" id="inboxPendingCount">0 items</span>
+      </div>
+      <div class="inbox-list" id="inboxList">
+        <div class="inbox-empty">
+          <div class="empty-glyph">◻</div>
+          <p>Inbox clear. No decisions needed.</p>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- Atlas Chat Window -->
+  <template id="tmpl-atlas-chat">
+    <div class="window-body chat-window">
+      <div class="chat-messages" id="chatMessages">
+        <div class="chat-system-msg">
+          <span class="chat-system-icon">◎</span>
+          <span>Atlas OS initialized. What do you need?</span>
+        </div>
+      </div>
+      <div class="chat-input-area">
+        <input type="text" class="chat-input" id="chatInput" placeholder="Talk to Atlas..." autocomplete="off">
+        <button class="chat-send-btn" id="chatSendBtn">↵</button>
+      </div>
+    </div>
+  </template>
+
+  <script src="atlas-os.js"></script>
+</body>
+</html>
