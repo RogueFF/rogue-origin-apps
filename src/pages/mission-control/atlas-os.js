@@ -417,6 +417,8 @@ function closeWindow(id) {
   setTimeout(() => {
     win.el.remove();
     state.windows.delete(id);
+    // Clean up dynamic window defs (agent detail panels)
+    if (id.startsWith('agent-detail-')) delete WINDOW_DEFS[id];
     if (state.focusedWindow === id) state.focusedWindow = null;
     updateTaskbarWindows();
     saveWindowState();
@@ -815,6 +817,7 @@ function renderAgents() {
       ${agent.current_task ? `<div class="agent-task" title="${escapeHtml(agent.current_task)}">${escapeHtml(agent.current_task)}</div>` : ''}
     `;
 
+    card.addEventListener('click', () => openAgentDetail(agent.name));
     grid.appendChild(card);
   });
 
@@ -850,6 +853,198 @@ function parseActivityBody(body) {
     // Not JSON — return as-is
   }
   return body;
+}
+
+/* ─── Try to parse body as structured JSON ─── */
+function tryParseJSON(body) {
+  if (!body) return null;
+  try {
+    const parsed = JSON.parse(body);
+    if (typeof parsed === 'object' && parsed !== null) return parsed;
+  } catch {}
+  return null;
+}
+
+/* ─── Format full timestamp for expanded view ─── */
+function formatTimeFull(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d)) return '';
+  return d.toLocaleString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  });
+}
+
+/* ─── Render Viper scan findings ─── */
+function renderViperFindings(data) {
+  const tickers = data.tickers || data.findings || data.results || [];
+  if (!Array.isArray(tickers) || tickers.length === 0) return '';
+
+  const items = tickers.map(t => {
+    const ticker = t.ticker || t.symbol || '';
+    const sentiment = (t.sentiment || 'neutral').toLowerCase();
+    const sentimentClass = sentiment.includes('bull') ? 'bullish' : sentiment.includes('bear') ? 'bearish' : 'neutral';
+    const mentions = t.mentions || t.mention_count || '';
+    const take = t.viper_take || t.take || t.analysis || '';
+    const ddLink = t.top_dd_link || t.dd_link || t.link || '';
+
+    return `
+      <div class="viper-finding">
+        <div class="viper-finding-header">
+          <span class="viper-ticker">${escapeHtml(ticker)}</span>
+          <span class="viper-sentiment ${sentimentClass}">${escapeHtml(sentiment)}</span>
+          ${mentions ? `<span class="viper-mentions">${escapeHtml(String(mentions))} mentions</span>` : ''}
+        </div>
+        ${take ? `<div class="viper-take">${escapeHtml(take)}</div>` : ''}
+        ${ddLink ? `<a class="viper-dd-link" href="${escapeHtml(ddLink)}" target="_blank" rel="noopener">Top DD ↗</a>` : ''}
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="activity-detail-section">
+      <div class="activity-detail-section-title">Ticker Findings</div>
+      ${items}
+    </div>
+  `;
+}
+
+/* ─── Render task completion details ─── */
+function renderTaskDetails(data) {
+  const rows = [];
+
+  if (data.changed || data.what_changed || data.changes) {
+    rows.push(`<div class="task-detail-row">
+      <span class="task-detail-label">Changed</span>
+      <span class="task-detail-value">${escapeHtml(data.changed || data.what_changed || data.changes)}</span>
+    </div>`);
+  }
+
+  if (data.files || data.files_touched) {
+    const files = data.files || data.files_touched;
+    const fileList = Array.isArray(files) ? files : [files];
+    rows.push(`<div class="task-detail-row">
+      <span class="task-detail-label">Files</span>
+      <div class="task-detail-files">${fileList.map(f => `<span class="task-detail-file">${escapeHtml(f)}</span>`).join('')}</div>
+    </div>`);
+  }
+
+  if (data.commit || data.commit_sha || data.commit_hash) {
+    const sha = data.commit || data.commit_sha || data.commit_hash;
+    rows.push(`<div class="task-detail-row">
+      <span class="task-detail-label">Commit</span>
+      <span class="task-detail-value" style="font-family:var(--font-mono);font-size:11px;">${escapeHtml(sha)}</span>
+    </div>`);
+  }
+
+  if (data.commit_message || data.message) {
+    rows.push(`<div class="task-detail-row">
+      <span class="task-detail-label">Msg</span>
+      <span class="task-detail-value">${escapeHtml(data.commit_message || data.message)}</span>
+    </div>`);
+  }
+
+  if (data.result || data.outcome) {
+    rows.push(`<div class="task-detail-row">
+      <span class="task-detail-label">Result</span>
+      <span class="task-detail-value">${escapeHtml(data.result || data.outcome)}</span>
+    </div>`);
+  }
+
+  if (rows.length === 0) return '';
+  return `<div class="activity-detail-section">
+    <div class="activity-detail-section-title">Task Details</div>
+    ${rows.join('')}
+  </div>`;
+}
+
+/* ─── Render generic key-value pairs from structured JSON ─── */
+function renderGenericKV(data, excludeKeys) {
+  const exclude = new Set(excludeKeys || [
+    'summary', 'description', 'message', 'text',
+    'tickers', 'findings', 'results',
+    'changed', 'what_changed', 'changes',
+    'files', 'files_touched',
+    'commit', 'commit_sha', 'commit_hash', 'commit_message',
+    'result', 'outcome',
+  ]);
+
+  const entries = Object.entries(data).filter(([k, v]) => {
+    if (exclude.has(k)) return false;
+    if (v === null || v === undefined) return false;
+    if (typeof v === 'object') return false; // skip nested objects in KV view
+    return true;
+  });
+
+  if (entries.length === 0) return '';
+
+  const rows = entries.map(([k, v]) => {
+    const label = k.replace(/_/g, ' ');
+    return `<span class="activity-detail-kv-key">${escapeHtml(label)}</span>
+            <span class="activity-detail-kv-value">${escapeHtml(String(v))}</span>`;
+  }).join('');
+
+  return `<div class="activity-detail-kv">${rows}</div>`;
+}
+
+/* ─── Build expanded detail HTML for an activity item ─── */
+function buildActivityDetail(item) {
+  const agent = state.agents.find(a => a.name === item.agent_name);
+  const color = agent?.signature_color || 'var(--os-text-muted)';
+  const fullTime = formatTimeFull(item.created_at);
+  const parsed = tryParseJSON(item.body);
+
+  // Type badge
+  const typeBadge = `<span class="activity-detail-badge" data-type="${escapeHtml(item.type || '')}">${escapeHtml(item.type || 'activity')}</span>`;
+  const agentLabel = `<span class="activity-detail-agent" style="color:${color}">${escapeHtml(item.agent_name)}</span>`;
+  const domainLabel = `<span class="activity-detail-domain">${escapeHtml(item.domain || '')}</span>`;
+  const timeLabel = `<span class="activity-detail-time">${escapeHtml(fullTime)}</span>`;
+
+  let detailSections = '';
+
+  // Full body (untruncated) — show if it's plain text
+  if (item.body && !parsed) {
+    detailSections += `<div class="activity-detail-body">${escapeHtml(item.body)}</div>`;
+  }
+
+  // Structured data rendering
+  if (parsed) {
+    // Show summary/description if present, as full body
+    const textContent = parsed.summary || parsed.description || parsed.message || parsed.text || '';
+    if (textContent) {
+      detailSections += `<div class="activity-detail-body">${escapeHtml(textContent)}</div>`;
+    }
+
+    // Viper scan findings
+    const isViperScan = item.type === 'scan' || item.agent_name === 'viper' ||
+      parsed.tickers || parsed.findings;
+    if (isViperScan) {
+      detailSections += renderViperFindings(parsed);
+    }
+
+    // Task completion details
+    const isTaskComplete = item.type === 'task_complete' || parsed.files || parsed.commit || parsed.changed;
+    if (isTaskComplete) {
+      detailSections += renderTaskDetails(parsed);
+    }
+
+    // Any remaining key-value pairs
+    detailSections += renderGenericKV(parsed);
+  }
+
+  return `
+    <div class="activity-detail-content">
+      <div class="activity-detail-header">
+        ${typeBadge}
+        ${agentLabel}
+        ${domainLabel}
+        ${timeLabel}
+      </div>
+      ${detailSections}
+    </div>
+  `;
 }
 
 
@@ -899,8 +1094,33 @@ function renderActivity(filter = 'all') {
           <span class="activity-item-agent">${escapeHtml(item.agent_name)}</span>
           <span class="activity-item-time">${time}</span>
         </div>
+        <div class="activity-item-detail">
+          <div class="activity-item-detail-inner"></div>
+        </div>
       </div>
+      <div class="activity-item-expand-icon">▸</div>
     `;
+
+    // Click to expand/collapse
+    el.addEventListener('click', (e) => {
+      // Don't toggle if user is selecting text or clicking a link
+      if (e.target.closest('a')) return;
+      if (window.getSelection().toString().length > 0) return;
+
+      const isExpanded = el.classList.contains('expanded');
+      if (isExpanded) {
+        el.classList.remove('expanded');
+      } else {
+        // Lazy-render detail content on first expand
+        const inner = el.querySelector('.activity-item-detail-inner');
+        if (!inner.dataset.rendered) {
+          inner.innerHTML = buildActivityDetail(item);
+          inner.dataset.rendered = '1';
+        }
+        el.classList.add('expanded');
+      }
+      soundClick();
+    });
 
     feed.appendChild(el);
   });
@@ -1197,6 +1417,245 @@ function initBgCanvas() {
   }
 
   draw();
+}
+
+
+/* ═══════════════════════════════════════════════════
+   AGENT DETAIL PANEL
+   ═══════════════════════════════════════════════════ */
+function openAgentDetail(agentName) {
+  const windowId = `agent-detail-${agentName}`;
+
+  // If already open, focus it
+  if (state.windows.has(windowId)) {
+    const win = state.windows.get(windowId);
+    if (win.el.classList.contains('window-minimized')) {
+      win.el.classList.remove('window-minimized');
+    }
+    focusWindow(windowId);
+    return;
+  }
+
+  const agent = state.agents.find(a => a.name === agentName);
+  if (!agent) return;
+
+  const glyph = GLYPH_MAP[agentName] || '●';
+  const color = agent.signature_color || 'var(--sig-atlas)';
+
+  // Register dynamic window def
+  WINDOW_DEFS[windowId] = {
+    title: `${agentName.toUpperCase()} — Detail`,
+    icon: glyph,
+    template: 'tmpl-agent-detail',
+  };
+
+  // Open window (uses standard window manager)
+  const container = document.getElementById('windowContainer');
+  const tmpl = document.getElementById('tmpl-agent-detail');
+  if (!tmpl) return;
+
+  const win = document.createElement('div');
+  win.className = 'window';
+  win.dataset.windowId = windowId;
+  win.style.setProperty('--agent-accent', color);
+
+  const titlebar = document.createElement('div');
+  titlebar.className = 'window-titlebar';
+  titlebar.innerHTML = `
+    <span class="window-titlebar-icon">${glyph}</span>
+    <span class="window-titlebar-text">${agentName.toUpperCase()} — Personnel File</span>
+    <div class="window-controls">
+      <button class="window-ctrl window-ctrl-minimize" title="Minimize"></button>
+      <button class="window-ctrl window-ctrl-maximize" title="Maximize"></button>
+      <button class="window-ctrl window-ctrl-close" title="Close"></button>
+    </div>
+  `;
+
+  const body = tmpl.content.cloneNode(true);
+
+  const resizeHandles = ['n','s','e','w','ne','nw','se','sw'].map(dir => {
+    const handle = document.createElement('div');
+    handle.className = `window-resize window-resize-${dir}`;
+    handle.dataset.resizeDir = dir;
+    return handle;
+  });
+
+  win.appendChild(titlebar);
+  win.appendChild(body);
+  resizeHandles.forEach(h => win.appendChild(h));
+  container.appendChild(win);
+
+  // Position: offset from center, slightly random to avoid exact overlap
+  if (!state.isMobile) {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const w = Math.min(520, vw - 80);
+    const h = Math.min(600, vh - 120);
+    const x = Math.floor((vw - w) / 2) + (Math.random() * 40 - 20);
+    const y = Math.floor((vh - h - 48) / 2) + (Math.random() * 30 - 15);
+    win.style.left = x + 'px';
+    win.style.top = Math.max(0, y) + 'px';
+    win.style.width = w + 'px';
+    win.style.height = h + 'px';
+  }
+
+  state.windows.set(windowId, {
+    el: win,
+    config: WINDOW_DEFS[windowId],
+    maximized: false,
+    preMaxBounds: null,
+  });
+
+  requestAnimationFrame(() => win.classList.add('window-visible'));
+
+  // Drag
+  titlebar.addEventListener('mousedown', (e) => {
+    if (e.target.closest('.window-controls')) return;
+    startDrag(e, windowId);
+  });
+  titlebar.addEventListener('touchstart', (e) => {
+    if (e.target.closest('.window-controls')) return;
+    startDrag(e, windowId);
+  }, { passive: false });
+  titlebar.addEventListener('dblclick', (e) => {
+    if (e.target.closest('.window-controls')) return;
+    maximizeWindow(windowId);
+  });
+
+  win.querySelector('.window-ctrl-minimize').addEventListener('click', () => minimizeWindow(windowId));
+  win.querySelector('.window-ctrl-maximize').addEventListener('click', () => maximizeWindow(windowId));
+  win.querySelector('.window-ctrl-close').addEventListener('click', () => closeWindow(windowId));
+
+  resizeHandles.forEach(h => {
+    h.addEventListener('mousedown', (e) => startResize(e, windowId, h.dataset.resizeDir));
+  });
+
+  win.addEventListener('mousedown', () => focusWindow(windowId));
+  focusWindow(windowId);
+  updateTaskbarWindows();
+  soundOpen();
+
+  // ─── Populate header ───
+  const headerEl = win.querySelector('.agent-detail-header');
+  headerEl.querySelector('.agent-detail-glyph').textContent = glyph;
+  headerEl.querySelector('.agent-detail-name').textContent = agentName.toUpperCase();
+  headerEl.querySelector('.agent-detail-domain').textContent = agent.domain.toUpperCase();
+  headerEl.querySelector('.agent-detail-tier').textContent = agent.model_tier;
+
+  const statusDot = headerEl.querySelector('.agent-detail-status-dot');
+  statusDot.classList.add(`status-${agent.status || 'idle'}`);
+  headerEl.querySelector('.agent-detail-status-text').textContent = agent.status || 'idle';
+
+  // Current task
+  if (agent.current_task) {
+    const taskEl = win.querySelector('.agent-detail-task');
+    taskEl.textContent = agent.current_task;
+    taskEl.style.display = '';
+  }
+
+  // ─── File tabs ───
+  const fileCache = {};
+  const fileContentEl = win.querySelector('.agent-detail-file-content');
+  const fileTabs = win.querySelectorAll('.agent-file-tab');
+
+  async function loadFile(fileName) {
+    if (fileCache[fileName] !== undefined) {
+      renderFileContent(fileCache[fileName], fileContentEl);
+      return;
+    }
+
+    fileContentEl.innerHTML = '<div class="agent-file-loading">Loading...</div>';
+
+    const data = await apiFetch(`/agents/${agentName}/files/${encodeURIComponent(fileName)}`);
+    if (data && data.content) {
+      fileCache[fileName] = data.content;
+      renderFileContent(data.content, fileContentEl);
+    } else {
+      fileCache[fileName] = null;
+      fileContentEl.innerHTML = '<div class="agent-file-empty">No file data. Seed with PUT /api/agents/' + escapeHtml(agentName) + '/files/' + escapeHtml(fileName) + '</div>';
+    }
+  }
+
+  fileTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      fileTabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      loadFile(tab.dataset.file);
+    });
+  });
+
+  // Load default tab
+  loadFile('AGENT.md');
+
+  // ─── Work History ───
+  loadAgentHistory(agentName, win.querySelector('.agent-detail-timeline'), color);
+}
+
+function renderFileContent(content, container) {
+  if (!content) {
+    container.innerHTML = '<div class="agent-file-empty">No content available.</div>';
+    return;
+  }
+
+  // Light markdown rendering: headings, bold, code blocks
+  const lines = content.split('\n');
+  let html = '';
+  let inCode = false;
+
+  for (const line of lines) {
+    if (line.startsWith('```')) {
+      inCode = !inCode;
+      continue;
+    }
+    if (inCode) {
+      html += escapeHtml(line) + '\n';
+      continue;
+    }
+    if (line.startsWith('# ')) {
+      html += `<div class="file-heading">${escapeHtml(line.slice(2))}</div>`;
+    } else if (line.startsWith('## ')) {
+      html += `<div class="file-heading" style="font-size:13px;opacity:0.85;">${escapeHtml(line.slice(3))}</div>`;
+    } else if (line.startsWith('### ')) {
+      html += `<div class="file-heading" style="font-size:12px;opacity:0.7;">${escapeHtml(line.slice(4))}</div>`;
+    } else {
+      html += escapeHtml(line) + '\n';
+    }
+  }
+
+  container.innerHTML = `<div class="agent-file-text">${html}</div>`;
+}
+
+async function loadAgentHistory(agentName, timelineEl, color) {
+  timelineEl.innerHTML = '<div class="agent-file-loading">Loading history...</div>';
+
+  const data = await apiFetch(`/activity?agent=${encodeURIComponent(agentName)}&limit=20`);
+  const items = Array.isArray(data) ? data : (data || []);
+
+  if (items.length === 0) {
+    timelineEl.innerHTML = '<div class="timeline-empty">No recorded activity yet.</div>';
+    return;
+  }
+
+  timelineEl.innerHTML = '';
+  items.forEach((item, i) => {
+    const time = formatTime(item.created_at);
+    const bodyText = parseActivityBody(item.body);
+
+    const el = document.createElement('div');
+    el.className = 'timeline-item';
+    el.style.animationDelay = (i * 40) + 'ms';
+
+    el.innerHTML = `
+      <div class="timeline-item-dot"></div>
+      <div class="timeline-item-content">
+        <div class="timeline-item-title">${escapeHtml(item.title)}</div>
+        ${bodyText ? `<div class="timeline-item-body">${escapeHtml(bodyText)}</div>` : ''}
+      </div>
+      <div class="timeline-item-time">${time}</div>
+    `;
+
+    timelineEl.appendChild(el);
+  });
 }
 
 
