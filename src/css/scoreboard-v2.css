@@ -22,14 +22,14 @@
   --border-accent: rgba(228, 170, 79, 0.3);
 
   /* --- Core Palette --- */
-  --gold: #f5c36d;
+  --gold: #f7cc7a;
   --gold-dim: rgba(245, 195, 109, 0.15);
   --gold-glow: rgba(245, 195, 109, 0.12);
   --cream: #f2efe8;
   --cream-soft: rgba(242, 239, 232, 0.85);
   --cream-muted: rgba(242, 239, 232, 0.5);
   --cream-whisper: rgba(242, 239, 232, 0.22);
-  --muted: #6b6860;
+  --muted: #8a8578;
 
   /* --- Signal Colors (TV-readable) --- */
   --green: #5fbd84;
@@ -300,15 +300,15 @@ body::after {
 
 /* --- Production status backgrounds --- */
 body.ahead {
-  background: radial-gradient(ellipse 60% 50% at 50% 45%, rgba(74, 158, 107, 0.06) 0%, var(--bg) 70%);
+  background: radial-gradient(ellipse 70% 60% at 50% 40%, rgba(74, 158, 107, 0.14) 0%, var(--bg) 70%);
 }
 
 body.on-target {
-  background: radial-gradient(ellipse 60% 50% at 50% 45%, rgba(212, 168, 67, 0.04) 0%, var(--bg) 70%);
+  background: radial-gradient(ellipse 70% 60% at 50% 40%, rgba(212, 168, 67, 0.10) 0%, var(--bg) 70%);
 }
 
 body.behind {
-  background: radial-gradient(ellipse 60% 50% at 50% 45%, rgba(196, 92, 74, 0.05) 0%, var(--bg) 70%);
+  background: radial-gradient(ellipse 70% 60% at 50% 40%, rgba(196, 92, 74, 0.12) 0%, var(--bg) 70%);
 }
 
 body.idle {
@@ -318,18 +318,18 @@ body.idle {
 
 /* --- Timer-derived ambient --- */
 body.timer-green {
-  background: radial-gradient(ellipse 50% 50% at 50% 45%, rgba(74, 158, 107, 0.05) 0%, var(--bg) 65%);
+  background: radial-gradient(ellipse 60% 55% at 50% 42%, rgba(74, 158, 107, 0.12) 0%, var(--bg) 65%);
 }
 
 body.timer-yellow {
-  background: radial-gradient(ellipse 55% 55% at 50% 45%, rgba(212, 168, 67, 0.06) 0%, var(--bg) 65%);
+  background: radial-gradient(ellipse 65% 60% at 50% 42%, rgba(212, 168, 67, 0.14) 0%, var(--bg) 65%);
   animation: glowBreatheYellow 4s ease-in-out infinite;
 }
 
 body.timer-red {
   background:
-    radial-gradient(ellipse 60% 55% at 50% 45%, rgba(196, 92, 74, 0.08) 0%, transparent 50%),
-    radial-gradient(ellipse 80% 70% at 50% 50%, transparent 40%, rgba(196, 92, 74, 0.04) 100%),
+    radial-gradient(ellipse 70% 60% at 50% 42%, rgba(196, 92, 74, 0.16) 0%, transparent 50%),
+    radial-gradient(ellipse 90% 80% at 50% 50%, transparent 40%, rgba(196, 92, 74, 0.08) 100%),
     var(--bg);
   animation: urgentPulse 1.5s ease-in-out infinite;
 }
@@ -514,15 +514,28 @@ body.timer-neutral {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
 }
 
-/* Subtle gold scanline on header bottom */
+/* Status color strip on header bottom */
 .hud-header::after {
   content: '';
   position: absolute;
   bottom: 0;
-  left: 15%;
-  right: 15%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--gold-dim), rgba(228, 170, 79, 0.2), var(--gold-dim), transparent);
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 5%, var(--gold-dim) 20%, rgba(228, 170, 79, 0.25) 50%, var(--gold-dim) 80%, transparent 95%);
+  transition: background var(--t-smooth) var(--ease-cinematic);
+}
+
+body.ahead .hud-header::after {
+  background: linear-gradient(90deg, transparent 5%, rgba(95, 189, 132, 0.15) 20%, rgba(95, 189, 132, 0.5) 50%, rgba(95, 189, 132, 0.15) 80%, transparent 95%);
+}
+
+body.behind .hud-header::after {
+  background: linear-gradient(90deg, transparent 5%, rgba(217, 116, 101, 0.15) 20%, rgba(217, 116, 101, 0.5) 50%, rgba(217, 116, 101, 0.15) 80%, transparent 95%);
+}
+
+body.on-target .hud-header::after {
+  background: linear-gradient(90deg, transparent 5%, rgba(229, 188, 85, 0.15) 20%, rgba(229, 188, 85, 0.5) 50%, rgba(229, 188, 85, 0.15) 80%, transparent 95%);
 }
 
 .strain-display {
@@ -532,7 +545,7 @@ body.timer-neutral {
 
 .strain-label {
   font-family: var(--font-ui);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 300;
   text-transform: uppercase;
   letter-spacing: 0.15em;
@@ -793,11 +806,24 @@ body.on-target .status-badge {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -55%);
-  width: 70vw;
-  height: 50vh;
-  background: radial-gradient(ellipse at center, rgba(228, 170, 79, 0.025) 0%, transparent 60%);
+  width: 80vw;
+  height: 60vh;
+  background: radial-gradient(ellipse at center, rgba(228, 170, 79, 0.06) 0%, rgba(228, 170, 79, 0.02) 30%, transparent 60%);
   pointer-events: none;
   z-index: -1;
+  transition: background var(--t-dramatic) var(--ease-cinematic);
+}
+
+body.ahead .hero-spotlight {
+  background: radial-gradient(ellipse at center, rgba(95, 189, 132, 0.08) 0%, rgba(95, 189, 132, 0.02) 30%, transparent 60%);
+}
+
+body.behind .hero-spotlight {
+  background: radial-gradient(ellipse at center, rgba(217, 116, 101, 0.08) 0%, rgba(217, 116, 101, 0.02) 30%, transparent 60%);
+}
+
+body.on-target .hero-spotlight {
+  background: radial-gradient(ellipse at center, rgba(229, 188, 85, 0.07) 0%, rgba(229, 188, 85, 0.02) 30%, transparent 60%);
 }
 
 /* Status float ABOVE hero */
@@ -807,9 +833,9 @@ body.on-target .status-badge {
 
 .daily-delta {
   font-family: var(--font-data);
-  font-size: 22px;
+  font-size: 28px;
   font-weight: 700;
-  padding: 8px 24px;
+  padding: 10px 32px;
   border-radius: 100px;
   letter-spacing: 0.05em;
   transition: all var(--t-normal) var(--ease-out);
@@ -847,36 +873,42 @@ body.on-target .status-badge {
 
 .daily-actual {
   font-family: var(--font-hero);
-  font-size: clamp(180px, 20vw, 350px);
+  font-size: clamp(180px, 22vw, 380px);
   font-weight: 400;
   color: var(--cream);
   line-height: 0.9;
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
   text-shadow:
-    0 0 40px rgba(245, 195, 109, 0.15),
-    0 0 80px rgba(245, 195, 109, 0.08),
-    0 0 160px rgba(242, 239, 232, 0.06);
+    0 0 60px rgba(245, 195, 109, 0.22),
+    0 0 120px rgba(245, 195, 109, 0.12),
+    0 0 200px rgba(242, 239, 232, 0.08);
   transition: text-shadow var(--t-dramatic) var(--ease-cinematic);
 }
 
 /* Ambient color bleeds into hero text-shadow */
-body.timer-green .daily-actual {
+body.timer-green .daily-actual,
+body.ahead .daily-actual {
   text-shadow:
-    0 0 80px rgba(74, 158, 107, 0.06),
-    0 0 160px rgba(74, 158, 107, 0.03);
+    0 0 60px rgba(95, 189, 132, 0.15),
+    0 0 120px rgba(95, 189, 132, 0.08),
+    0 0 200px rgba(95, 189, 132, 0.04);
 }
 
-body.timer-yellow .daily-actual {
+body.timer-yellow .daily-actual,
+body.on-target .daily-actual {
   text-shadow:
-    0 0 80px rgba(212, 168, 67, 0.08),
-    0 0 160px rgba(212, 168, 67, 0.04);
+    0 0 60px rgba(229, 188, 85, 0.15),
+    0 0 120px rgba(229, 188, 85, 0.08),
+    0 0 200px rgba(229, 188, 85, 0.04);
 }
 
-body.timer-red .daily-actual {
+body.timer-red .daily-actual,
+body.behind .daily-actual {
   text-shadow:
-    0 0 80px rgba(196, 92, 74, 0.08),
-    0 0 160px rgba(196, 92, 74, 0.04);
+    0 0 60px rgba(217, 116, 101, 0.15),
+    0 0 120px rgba(217, 116, 101, 0.08),
+    0 0 200px rgba(217, 116, 101, 0.04);
 }
 
 /* Goal + progress below hero */
@@ -927,9 +959,9 @@ body.timer-red .daily-actual {
 
 .progress-bar {
   flex: 1;
-  height: 3px;
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 2px;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 5px;
   overflow: hidden;
   position: relative;
 }
@@ -937,28 +969,42 @@ body.timer-red .daily-actual {
 .progress-fill {
   height: 100%;
   background: linear-gradient(90deg, var(--gold), var(--green));
-  border-radius: 2px;
+  border-radius: 5px;
   transition: width var(--t-smooth) var(--ease-out);
   position: relative;
+  box-shadow: 0 0 12px rgba(245, 195, 109, 0.3);
+}
+
+body.ahead .progress-fill {
+  background: linear-gradient(90deg, var(--green), #7dd9a3);
+  box-shadow: 0 0 12px rgba(95, 189, 132, 0.35);
+}
+
+body.behind .progress-fill {
+  background: linear-gradient(90deg, var(--red), #e89485);
+  box-shadow: 0 0 12px rgba(217, 116, 101, 0.35);
 }
 
 .progress-fill::after {
   content: '';
   position: absolute;
-  right: -2px;
-  top: -4px;
-  bottom: -4px;
-  width: 12px;
+  right: -1px;
+  top: -3px;
+  bottom: -3px;
+  width: 16px;
   background: var(--gold);
-  border-radius: 6px;
+  border-radius: 8px;
   animation: progressGlow 2s ease-in-out infinite;
 }
 
+body.ahead .progress-fill::after { background: var(--green); }
+body.behind .progress-fill::after { background: var(--red); }
+
 .progress-hours {
   font-family: var(--font-data);
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 500;
-  color: var(--muted);
+  color: var(--cream-muted);
   white-space: nowrap;
   flex-shrink: 0;
   letter-spacing: 0.05em;
@@ -978,7 +1024,7 @@ body.timer-red .daily-actual {
 .projection-label {
   color: var(--cream-muted);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.12em;
@@ -987,19 +1033,19 @@ body.timer-red .daily-actual {
 .projection-value {
   color: var(--cream);
   font-weight: 700;
-  font-size: 20px;
+  font-size: 26px;
   text-shadow: 
-    0 0 12px rgba(242, 239, 232, 0.08);
+    0 0 16px rgba(242, 239, 232, 0.1);
 }
 
 .projection-goal {
   color: var(--cream-muted);
-  font-size: 15px;
+  font-size: 18px;
 }
 
 .projection-delta {
   font-weight: 700;
-  font-size: 18px;
+  font-size: 24px;
 }
 
 .projection-delta.positive { color: var(--green); }
@@ -1106,15 +1152,15 @@ body.timer-red .daily-actual {
 
 .actual-lbs {
   font-family: var(--font-hero);
-  font-size: 56px;
+  font-size: 72px;
   font-weight: 400;
   color: var(--cream);
   line-height: 1;
   letter-spacing: 0.01em;
   font-variant-numeric: tabular-nums;
   text-shadow: 
-    0 0 20px rgba(242, 239, 232, 0.08),
-    0 0 40px rgba(245, 195, 109, 0.04);
+    0 0 24px rgba(242, 239, 232, 0.1),
+    0 0 48px rgba(245, 195, 109, 0.06);
 }
 
 .separator {
@@ -1126,7 +1172,7 @@ body.timer-red .daily-actual {
 
 .target-lbs {
   font-family: var(--font-data);
-  font-size: 28px;
+  font-size: 32px;
   color: var(--cream-muted);
   font-weight: 500;
   letter-spacing: -0.02em;
@@ -1134,12 +1180,13 @@ body.timer-red .daily-actual {
 
 .lbs-unit {
   font-family: var(--font-ui);
-  font-size: 12px;
-  font-weight: 400;
+  font-size: 11px;
+  font-weight: 300;
   text-transform: uppercase;
   letter-spacing: 0.15em;
   color: var(--muted);
-  margin-top: var(--sp-1);
+  margin-top: 0;
+  opacity: 0.6;
 }
 
 .percentage-display {
@@ -1148,11 +1195,11 @@ body.timer-red .daily-actual {
 
 .percentage-value {
   font-family: var(--font-data);
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 700;
   color: var(--cream);
   text-shadow: 
-    0 0 12px rgba(242, 239, 232, 0.06);
+    0 0 14px rgba(242, 239, 232, 0.08);
 }
 
 .percentage-value.positive,
@@ -1170,7 +1217,7 @@ body.timer-red .daily-actual {
 
 .percentage-label {
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.12em;
@@ -1208,7 +1255,7 @@ body.timer-red .daily-actual {
   align-items: center;
   gap: var(--sp-2);
   font-family: var(--font-data);
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 500;
   color: var(--cream-soft);
 }
@@ -3357,13 +3404,33 @@ body.iframe-embed .time-controls { display: none; }
 .edge-glow {
   position: fixed;
   pointer-events: none;
-  z-index: -1;
+  z-index: 50;
+  opacity: 0;
+  transition: opacity var(--t-smooth) var(--ease-cinematic), box-shadow var(--t-smooth);
 }
 
-.edge-glow-top { top: 0; left: 0; right: 0; height: 2px; }
-.edge-glow-right { top: 0; right: 0; bottom: 0; width: 2px; }
-.edge-glow-bottom { bottom: 0; left: 0; right: 0; height: 2px; }
-.edge-glow-left { top: 0; left: 0; bottom: 0; width: 2px; }
+.edge-glow-top { top: 0; left: 0; right: 0; height: 3px; }
+.edge-glow-right { top: 0; right: 0; bottom: 0; width: 3px; }
+.edge-glow-bottom { bottom: 0; left: 0; right: 0; height: 3px; }
+.edge-glow-left { top: 0; left: 0; bottom: 0; width: 3px; }
+
+body.ahead .edge-glow { opacity: 1; }
+body.ahead .edge-glow-top { box-shadow: 0 0 30px 8px rgba(95, 189, 132, 0.15), 0 0 60px 15px rgba(95, 189, 132, 0.06); background: rgba(95, 189, 132, 0.2); }
+body.ahead .edge-glow-bottom { box-shadow: 0 0 30px 8px rgba(95, 189, 132, 0.15), 0 0 60px 15px rgba(95, 189, 132, 0.06); background: rgba(95, 189, 132, 0.2); }
+body.ahead .edge-glow-left { box-shadow: 0 0 30px 8px rgba(95, 189, 132, 0.1), 0 0 60px 15px rgba(95, 189, 132, 0.04); background: rgba(95, 189, 132, 0.12); }
+body.ahead .edge-glow-right { box-shadow: 0 0 30px 8px rgba(95, 189, 132, 0.1), 0 0 60px 15px rgba(95, 189, 132, 0.04); background: rgba(95, 189, 132, 0.12); }
+
+body.behind .edge-glow { opacity: 1; }
+body.behind .edge-glow-top { box-shadow: 0 0 30px 8px rgba(217, 116, 101, 0.18), 0 0 60px 15px rgba(217, 116, 101, 0.08); background: rgba(217, 116, 101, 0.25); }
+body.behind .edge-glow-bottom { box-shadow: 0 0 30px 8px rgba(217, 116, 101, 0.18), 0 0 60px 15px rgba(217, 116, 101, 0.08); background: rgba(217, 116, 101, 0.25); }
+body.behind .edge-glow-left { box-shadow: 0 0 30px 8px rgba(217, 116, 101, 0.12), 0 0 60px 15px rgba(217, 116, 101, 0.05); background: rgba(217, 116, 101, 0.15); }
+body.behind .edge-glow-right { box-shadow: 0 0 30px 8px rgba(217, 116, 101, 0.12), 0 0 60px 15px rgba(217, 116, 101, 0.05); background: rgba(217, 116, 101, 0.15); }
+
+body.on-target .edge-glow { opacity: 1; }
+body.on-target .edge-glow-top { box-shadow: 0 0 25px 6px rgba(229, 188, 85, 0.12), 0 0 50px 12px rgba(229, 188, 85, 0.05); background: rgba(229, 188, 85, 0.15); }
+body.on-target .edge-glow-bottom { box-shadow: 0 0 25px 6px rgba(229, 188, 85, 0.12), 0 0 50px 12px rgba(229, 188, 85, 0.05); background: rgba(229, 188, 85, 0.15); }
+body.on-target .edge-glow-left { box-shadow: 0 0 25px 6px rgba(229, 188, 85, 0.08); background: rgba(229, 188, 85, 0.1); }
+body.on-target .edge-glow-right { box-shadow: 0 0 25px 6px rgba(229, 188, 85, 0.08); background: rgba(229, 188, 85, 0.1); }
 
 /* Topo compat */
 .topo-bg,
