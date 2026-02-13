@@ -6,23 +6,23 @@
 const API_BASE = 'https://mission-control-api.roguefamilyfarms.workers.dev/api';
 const POLL_INTERVAL = 30000;
 
-// ─── Glyph overrides — technical, minimal, no stock emoji ───
+// ─── Agent glyphs — refined emoji, sharp + intentional ───
 const GLYPH_MAP = {
-  atlas:      '◎',   // target/command
-  darwin:     '◬',   // triangle with dot — evolution
-  viper:      '⧖',   // hourglass — time-critical scanner
-  analyst:    '◇',   // diamond — precision
-  ledger:     '▦',   // grid — data/ledger
-  regime:     '◈',   // diamond with dot — regime detection
-  strategist: '⊹',   // star operator — strategy
-  wire:       '▮',   // vertical bar — wire/signal
-  dispatch:   '⊞',   // boxed plus — dispatch
-  friday:     '⬡',   // hexagon — utility
-  grower:     '△',   // delta — growth
-  radar:      '◉',   // circled dot — radar
-  guide:      '▿',   // inverted triangle — guide/compass
-  scout:      '⊙',   // circled dot — discovery
-  sensei:     '◯',   // large circle — zen/mastery
+  atlas:      '🔮',   // foresight, command
+  darwin:     '🧬',   // evolution, DNA
+  viper:      '⚡',   // speed, electricity
+  analyst:    '💎',   // precision, clarity
+  ledger:     '📊',   // data, metrics
+  regime:     '🛡️',   // defense, protection
+  strategist: '♟️',   // strategy, chess
+  wire:       '🔗',   // connection, signal
+  dispatch:   '📡',   // broadcast, dispatch
+  friday:     '🔧',   // utility, tools
+  grower:     '🌱',   // growth, cultivation
+  radar:      '🎯',   // targeting, precision
+  guide:      '🧭',   // navigation, compass
+  scout:      '🔭',   // discovery, observation
+  sensei:     '☯️',    // mastery, balance
 };
 
 // ─── State ───
@@ -45,22 +45,22 @@ const state = {
 const WINDOW_DEFS = {
   activity: {
     title: 'Activity Feed',
-    icon: '◉',
+    icon: '📡',
     template: 'tmpl-activity',
   },
   agents: {
     title: 'Agent Fleet',
-    icon: '⬡',
+    icon: '⚡',
     template: 'tmpl-agents',
   },
   inbox: {
     title: 'Inbox',
-    icon: '▣',
+    icon: '📨',
     template: 'tmpl-inbox',
   },
   'atlas-chat': {
     title: 'Atlas Chat',
-    icon: '◎',
+    icon: '🔮',
     template: 'tmpl-atlas-chat',
   },
 };
