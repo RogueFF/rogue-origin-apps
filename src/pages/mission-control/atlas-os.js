@@ -245,6 +245,8 @@ function initDesktop() {
     } else {
       openWindow('activity');
       openWindow('agents');
+      openWindow('trading');
+      openWindow('work');
     }
   }
 
@@ -827,8 +829,40 @@ function initKeyboard() {
    TASKBAR
    ═══════════════════════════════════════════════════ */
 function initTaskbar() {
-  document.getElementById('menuBtn').addEventListener('click', () => {
-    openWindow('activity');
+  document.getElementById('menuBtn').addEventListener('click', (e) => {
+    // Toggle launcher menu
+    let launcher = document.getElementById('appLauncher');
+    if (launcher) {
+      launcher.remove();
+      return;
+    }
+    launcher = document.createElement('div');
+    launcher.id = 'appLauncher';
+    launcher.className = 'app-launcher';
+    launcher.innerHTML = Object.entries(WINDOW_DEFS).map(([id, def]) => {
+      const isOpen = state.windows.has(id);
+      return `<button class="app-launcher-btn${isOpen ? ' launcher-open' : ''}" data-launch="${id}">
+        <span class="launcher-icon">${def.icon}</span>
+        <span class="launcher-label">${def.title}</span>
+      </button>`;
+    }).join('');
+    document.body.appendChild(launcher);
+    launcher.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('[data-launch]');
+      if (btn) {
+        openWindow(btn.dataset.launch);
+        launcher.remove();
+      }
+    });
+    // Close on click outside
+    setTimeout(() => {
+      document.addEventListener('click', function close(ev) {
+        if (!launcher.contains(ev.target) && ev.target !== e.target.closest('.taskbar-menu-btn')) {
+          launcher.remove();
+          document.removeEventListener('click', close);
+        }
+      });
+    }, 10);
   });
 
   // Sound toggle on agent tray click
