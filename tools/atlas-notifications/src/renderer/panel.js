@@ -537,6 +537,44 @@ document.addEventListener('click', (e) => {
   }
 });
 
+// ─── Request Update Buttons ─────────────────────────────────────────
+
+$$('.request-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const type = btn.dataset.request;
+    if (btn.classList.contains('loading')) return;
+
+    const label = btn.querySelector('.request-btn-label');
+    const originalText = label.textContent;
+
+    btn.classList.add('loading');
+    label.textContent = '...';
+
+    try {
+      const result = await window.atlas.requestUpdate(type);
+      if (result && result.success) {
+        btn.classList.remove('loading');
+        btn.classList.add('success');
+        label.textContent = '✓';
+        setTimeout(() => {
+          btn.classList.remove('success');
+          label.textContent = originalText;
+        }, 2000);
+      } else {
+        throw new Error(result?.error || 'Request failed');
+      }
+    } catch (e) {
+      btn.classList.remove('loading');
+      btn.classList.add('error');
+      label.textContent = '✗';
+      setTimeout(() => {
+        btn.classList.remove('error');
+        label.textContent = originalText;
+      }, 2000);
+    }
+  });
+});
+
 // ─── Settings Panel ─────────────────────────────────────────────────
 
 const settingsOverlay = $('#settings-overlay');
