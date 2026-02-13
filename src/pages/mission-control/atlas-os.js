@@ -63,6 +63,11 @@ const WINDOW_DEFS = {
     icon: '🔮',
     template: 'tmpl-atlas-chat',
   },
+  tasks: {
+    title: 'Neural Tasks',
+    icon: '🧠',
+    template: 'tmpl-tasks',
+  },
 };
 
 // Compute tiled layout that fills the viewport
@@ -82,6 +87,7 @@ function getDefaultLayout(id) {
     agents:   { x: pad * 2 + halfW, y: pad, w: halfW, h: fullH },
     inbox:    { x: pad, y: pad, w: halfW, h: fullH },
     'atlas-chat': { x: pad * 2 + halfW, y: pad, w: halfW, h: fullH },
+    tasks:    { x: pad, y: pad, w: halfW + pad + halfW, h: fullH },
   };
 
   return layouts[id] || { x: 100, y: 50, w: 500, h: 500 };
@@ -173,9 +179,9 @@ document.addEventListener('DOMContentLoaded', async () => {
    ═══════════════════════════════════════════════════ */
 function initDesktop() {
   // Clear stale saved positions from old layout
-  const layoutVersion = 'v2-tiled';
+  const layoutVersion = 'v3-neural';
   if (localStorage.getItem('atlas-os-layout-ver') !== layoutVersion) {
-    ['activity', 'agents', 'inbox', 'atlas-chat'].forEach(id => {
+    ['activity', 'agents', 'inbox', 'atlas-chat', 'tasks'].forEach(id => {
       localStorage.removeItem(`atlas-os-pos-${id}`);
       localStorage.removeItem(`atlas-os-size-${id}`);
     });
@@ -407,6 +413,7 @@ function openWindow(id) {
   if (id === 'activity') renderActivity();
   if (id === 'inbox') renderInbox();
   if (id === 'atlas-chat') initChat();
+  if (id === 'tasks') initNeuralTasks();
 }
 
 function closeWindow(id) {
@@ -676,10 +683,10 @@ function startResize(e, windowId, dir) {
    ═══════════════════════════════════════════════════ */
 function initKeyboard() {
   document.addEventListener('keydown', (e) => {
-    // Ctrl+1-4 to open/focus windows
-    if (e.ctrlKey && e.key >= '1' && e.key <= '4') {
+    // Ctrl+1-5 to open/focus windows
+    if (e.ctrlKey && e.key >= '1' && e.key <= '5') {
       e.preventDefault();
-      const ids = ['activity', 'agents', 'inbox', 'atlas-chat'];
+      const ids = ['activity', 'agents', 'inbox', 'atlas-chat', 'tasks'];
       const idx = parseInt(e.key) - 1;
       if (ids[idx]) openWindow(ids[idx]);
     }
@@ -1708,4 +1715,621 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+
+/* ═══════════════════════════════════════════════════
+   NEURAL TASKS — Synaptic network visualization
+   Tasks as nodes in a living neural network.
+   ═══════════════════════════════════════════════════ */
+
+// Neural color mapping
+const NEURAL_COLORS = {
+  backlog: { fill: '#4a5568', glow: 'rgba(74, 85, 104, 0.2)', pulse: false },
+  active:  { fill: '#22d3ee', glow: 'rgba(34, 211, 238, 0.35)', pulse: true },
+  review:  { fill: '#fbbf24', glow: 'rgba(251, 191, 36, 0.3)', pulse: true },
+  done:    { fill: '#34d399', glow: 'rgba(52, 211, 153, 0.15)', pulse: false },
+};
+
+const PRIORITY_SIZES = { urgent: 1.5, high: 1.25, normal: 1.0, low: 0.8 };
+
+// Mock task data — will be replaced by API when endpoint exists
+const MOCK_TASKS = [
+  {
+    id: 1, title: 'Error handling & loading states', description: 'Phase 3.1 — Add comprehensive error handling and loading states across all modules.',
+    status: 'active', priority: 'high', owner: 'friday',
+    deps: [3], domain: 'work', created_at: '2026-02-10T08:00:00Z',
+  },
+  {
+    id: 2, title: 'WCAG AA accessibility audit', description: 'Phase 5.1 — Audit and fix accessibility issues. Contrast ratios, focus indicators, ARIA labels.',
+    status: 'active', priority: 'high', owner: 'friday',
+    deps: [], domain: 'work', created_at: '2026-02-10T09:00:00Z',
+  },
+  {
+    id: 3, title: 'CSS consolidation', description: 'Phase 6.3 — Consolidate duplicate CSS, reduce bundle size, enforce shared-base.css as single source.',
+    status: 'review', priority: 'normal', owner: 'friday',
+    deps: [], domain: 'work', created_at: '2026-02-08T10:00:00Z',
+  },
+  {
+    id: 4, title: 'Scoreboard optimization', description: 'Phase 4.1 — Optimize scoreboard rendering for floor TV. Reduce repaints, smooth animations.',
+    status: 'backlog', priority: 'normal', owner: null,
+    deps: [1], domain: 'work', created_at: '2026-02-07T10:00:00Z',
+  },
+  {
+    id: 5, title: 'Morning trading brief — audio pipeline', description: 'Build TTS pipeline for morning briefs. Text-to-speech with Eleven Labs, auto-post to Telegram.',
+    status: 'active', priority: 'urgent', owner: 'atlas',
+    deps: [], domain: 'trading', created_at: '2026-02-12T06:00:00Z',
+  },
+  {
+    id: 6, title: 'Viper scanner — sentiment v2', description: 'Upgrade sentiment analysis model. Better sarcasm detection, meme stock filtering.',
+    status: 'backlog', priority: 'high', owner: 'viper',
+    deps: [5], domain: 'trading', created_at: '2026-02-11T14:00:00Z',
+  },
+  {
+    id: 7, title: 'Neural Tasks view', description: 'Build the neural network task visualization for Atlas OS Mission Control.',
+    status: 'active', priority: 'urgent', owner: 'friday',
+    deps: [], domain: 'system', created_at: '2026-02-13T00:00:00Z',
+  },
+  {
+    id: 8, title: 'Agent SOUL.md authoring', description: 'Write personality and soul files for each agent. Voice, tone, decision-making style.',
+    status: 'done', priority: 'normal', owner: 'atlas',
+    deps: [], domain: 'system', created_at: '2026-02-05T10:00:00Z',
+  },
+  {
+    id: 9, title: 'D1 migration — production hourly', description: 'Migrate production hourly entry from Google Sheets to D1. Complex — needs offline support.',
+    status: 'backlog', priority: 'normal', owner: null,
+    deps: [1, 3], domain: 'work', created_at: '2026-02-06T10:00:00Z',
+  },
+  {
+    id: 10, title: 'Webhook security hardening', description: 'Add HMAC signature verification to all Shopify webhook handlers.',
+    status: 'done', priority: 'high', owner: 'friday',
+    deps: [], domain: 'work', created_at: '2026-02-04T10:00:00Z',
+  },
+  {
+    id: 11, title: 'Darwin portfolio rebalance algo', description: 'Evolutionary algorithm for portfolio rebalancing. Multi-objective: risk, return, correlation.',
+    status: 'review', priority: 'high', owner: 'darwin',
+    deps: [6], domain: 'trading', created_at: '2026-02-09T10:00:00Z',
+  },
+  {
+    id: 12, title: 'Agent fleet monitoring dashboard', description: 'Real-time health metrics for all agents. CPU, memory, error rates, task throughput.',
+    status: 'backlog', priority: 'low', owner: null,
+    deps: [7], domain: 'system', created_at: '2026-02-11T10:00:00Z',
+  },
+  {
+    id: 13, title: 'Barcode label template v2', description: 'New label format with QR code, batch info, and COA link. Supports Grove Bag sizing.',
+    status: 'done', priority: 'normal', owner: 'friday',
+    deps: [], domain: 'work', created_at: '2026-02-03T10:00:00Z',
+  },
+  {
+    id: 14, title: 'Telegram bot — Koa commands', description: 'Build Telegram bot for Koa to issue commands, check status, approve inbox items from phone.',
+    status: 'backlog', priority: 'high', owner: 'wire',
+    deps: [5], domain: 'system', created_at: '2026-02-12T10:00:00Z',
+  },
+];
+
+// ─── Neural network state ───
+let neuralState = null;
+
+function initNeuralTasks() {
+  const canvas = document.getElementById('neuralCanvas');
+  if (!canvas) return;
+
+  const ctx = canvas.getContext('2d');
+  const wrap = canvas.closest('.tasks-canvas-wrap');
+
+  // Size canvas to container
+  function resize() {
+    const rect = wrap.getBoundingClientRect();
+    canvas.width = rect.width * window.devicePixelRatio;
+    canvas.height = rect.height * window.devicePixelRatio;
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    if (neuralState) {
+      neuralState.w = rect.width;
+      neuralState.h = rect.height;
+      layoutNodes(neuralState);
+    }
+  }
+
+  // Build node graph from tasks
+  const nodes = MOCK_TASKS.map((task, i) => {
+    const sizeMultiplier = PRIORITY_SIZES[task.priority] || 1.0;
+    const baseRadius = 18;
+    return {
+      id: task.id,
+      task,
+      x: 0, y: 0,
+      targetX: 0, targetY: 0,
+      vx: 0, vy: 0,
+      radius: baseRadius * sizeMultiplier,
+      color: NEURAL_COLORS[task.status] || NEURAL_COLORS.backlog,
+      phase: Math.random() * Math.PI * 2,   // animation phase offset
+      pulsePhase: Math.random() * Math.PI * 2,
+      hovered: false,
+    };
+  });
+
+  // Build synapse connections from deps
+  const synapses = [];
+  MOCK_TASKS.forEach(task => {
+    (task.deps || []).forEach(depId => {
+      const fromNode = nodes.find(n => n.id === depId);
+      const toNode = nodes.find(n => n.id === task.id);
+      if (fromNode && toNode) {
+        synapses.push({
+          from: fromNode,
+          to: toNode,
+          pulseOffset: Math.random(),
+          active: task.status === 'active' || task.status === 'review',
+        });
+      }
+    });
+  });
+
+  const rect = wrap.getBoundingClientRect();
+  neuralState = {
+    ctx, canvas, wrap,
+    nodes, synapses,
+    w: rect.width,
+    h: rect.height,
+    frame: 0,
+    hoveredNode: null,
+    mouse: { x: -1000, y: -1000 },
+    animId: null,
+  };
+
+  resize();
+  layoutNodes(neuralState);
+
+  // Initial position — start at target
+  nodes.forEach(n => { n.x = n.targetX; n.y = n.targetY; });
+
+  // Start render loop
+  neuralState.animId = requestAnimationFrame(() => renderNeuralFrame(neuralState));
+
+  // Mouse interaction
+  canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    neuralState.mouse.x = e.clientX - rect.left;
+    neuralState.mouse.y = e.clientY - rect.top;
+    updateHover(neuralState);
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    neuralState.mouse.x = -1000;
+    neuralState.mouse.y = -1000;
+    neuralState.hoveredNode = null;
+    canvas.style.cursor = 'default';
+    neuralState.nodes.forEach(n => n.hovered = false);
+  });
+
+  canvas.addEventListener('click', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const clicked = findNodeAt(neuralState, mx, my);
+    if (clicked) {
+      showTaskDetail(clicked.task);
+      soundClick();
+    }
+  });
+
+  // Close detail overlay
+  const closeBtn = document.getElementById('taskDetailClose');
+  const overlay = document.getElementById('taskDetailOverlay');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      overlay.style.display = 'none';
+    });
+  }
+  if (overlay) {
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.style.display = 'none';
+    });
+  }
+
+  // Resize observer
+  const resizeObserver = new ResizeObserver(() => {
+    // Reset scale before resize
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    resize();
+  });
+  resizeObserver.observe(wrap);
+
+  // Update stats
+  updateTaskStats();
+}
+
+// ─── Layout: organic cluster by status ───
+function layoutNodes(ns) {
+  const w = ns.w;
+  const h = ns.h;
+  const cx = w / 2;
+  const cy = h / 2;
+  const pad = 50;
+
+  // Status zones — radial from center
+  // Done = outer ring (settled), Active = inner core (firing), Backlog = mid ring, Review = near-inner
+  const statusZones = {
+    active:  { radiusMin: 0,   radiusMax: 0.25 },
+    review:  { radiusMin: 0.2, radiusMax: 0.4 },
+    backlog: { radiusMin: 0.35, radiusMax: 0.65 },
+    done:    { radiusMin: 0.55, radiusMax: 0.85 },
+  };
+
+  // Group nodes by status
+  const groups = {};
+  ns.nodes.forEach(n => {
+    const s = n.task.status;
+    if (!groups[s]) groups[s] = [];
+    groups[s].push(n);
+  });
+
+  const maxR = Math.min(w, h) / 2 - pad;
+
+  Object.entries(groups).forEach(([status, groupNodes]) => {
+    const zone = statusZones[status] || statusZones.backlog;
+    const count = groupNodes.length;
+
+    groupNodes.forEach((node, i) => {
+      // Distribute around a ring within the zone
+      const angle = (i / count) * Math.PI * 2 + (status === 'done' ? 0.3 : status === 'backlog' ? 0.8 : 0);
+      const ringR = maxR * (zone.radiusMin + (zone.radiusMax - zone.radiusMin) * 0.5);
+      // Add slight variation
+      const rVariation = maxR * (zone.radiusMax - zone.radiusMin) * 0.3 * (Math.sin(node.id * 2.7) * 0.5 + 0.5);
+      const r = ringR + rVariation;
+
+      node.targetX = cx + Math.cos(angle) * r;
+      node.targetY = cy + Math.sin(angle) * r;
+
+      // Clamp to visible area
+      node.targetX = Math.max(pad, Math.min(w - pad, node.targetX));
+      node.targetY = Math.max(pad, Math.min(h - pad, node.targetY));
+    });
+  });
+}
+
+// ─── Find node under cursor ───
+function findNodeAt(ns, mx, my) {
+  // Check in reverse order (top-drawn nodes first)
+  for (let i = ns.nodes.length - 1; i >= 0; i--) {
+    const n = ns.nodes[i];
+    const dx = mx - n.x;
+    const dy = my - n.y;
+    const hitR = n.radius + 6; // generous hit area
+    if (dx * dx + dy * dy < hitR * hitR) return n;
+  }
+  return null;
+}
+
+// ─── Update hover state ───
+function updateHover(ns) {
+  const prev = ns.hoveredNode;
+  ns.hoveredNode = findNodeAt(ns, ns.mouse.x, ns.mouse.y);
+  ns.canvas.style.cursor = ns.hoveredNode ? 'pointer' : 'default';
+
+  ns.nodes.forEach(n => {
+    n.hovered = (n === ns.hoveredNode);
+  });
+}
+
+// ─── Render frame ───
+function renderNeuralFrame(ns) {
+  ns.frame++;
+  const { ctx, w, h, nodes, synapses, frame } = ns;
+
+  // Clear
+  ctx.clearRect(0, 0, w, h);
+
+  // ─── Ambient grid (very subtle) ───
+  const gridSpacing = 60;
+  ctx.strokeStyle = 'rgba(34, 211, 238, 0.015)';
+  ctx.lineWidth = 0.5;
+  for (let x = gridSpacing; x < w; x += gridSpacing) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+  }
+  for (let y = gridSpacing; y < h; y += gridSpacing) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+  }
+
+  // ─── Physics: gentle spring toward target ───
+  const springK = 0.03;
+  const damping = 0.88;
+  const drift = 0.15; // gentle organic drift
+
+  nodes.forEach(n => {
+    // Spring force toward target
+    const dx = n.targetX - n.x;
+    const dy = n.targetY - n.y;
+    n.vx += dx * springK;
+    n.vy += dy * springK;
+
+    // Organic drift (breathing movement)
+    const driftX = Math.sin(frame * 0.008 + n.phase) * drift;
+    const driftY = Math.cos(frame * 0.006 + n.phase * 1.3) * drift;
+    n.vx += driftX;
+    n.vy += driftY;
+
+    // Damping
+    n.vx *= damping;
+    n.vy *= damping;
+
+    // Apply
+    n.x += n.vx;
+    n.y += n.vy;
+  });
+
+  // ─── Draw synapses (connections) ───
+  synapses.forEach(syn => {
+    const from = syn.from;
+    const to = syn.to;
+
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+
+    // Curved connection
+    const midX = (from.x + to.x) / 2;
+    const midY = (from.y + to.y) / 2;
+    const perpX = -(to.y - from.y) * 0.15;
+    const perpY = (to.x - from.x) * 0.15;
+    ctx.quadraticCurveTo(midX + perpX, midY + perpY, to.x, to.y);
+
+    // Base line
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // ─── Pulse along synapse (if active) ───
+    if (syn.active) {
+      const pulseT = ((frame * 0.012 + syn.pulseOffset) % 1);
+
+      // Calculate point along curve
+      const t = pulseT;
+      const t2 = 1 - t;
+      const px = t2 * t2 * from.x + 2 * t2 * t * (midX + perpX) + t * t * to.x;
+      const py = t2 * t2 * from.y + 2 * t2 * t * (midY + perpY) + t * t * to.y;
+
+      // Pulse glow
+      const pulseColor = to.color.fill;
+      const gradient = ctx.createRadialGradient(px, py, 0, px, py, 12);
+      gradient.addColorStop(0, pulseColor);
+      gradient.addColorStop(1, 'transparent');
+      ctx.fillStyle = gradient;
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.arc(px, py, 12, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Pulse dot
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = pulseColor;
+      ctx.beginPath();
+      ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      // Brighter line
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.quadraticCurveTo(midX + perpX, midY + perpY, to.x, to.y);
+      ctx.strokeStyle = `rgba(${hexToRgb(pulseColor)}, 0.08)`;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+  });
+
+  // ─── Draw nodes ───
+  nodes.forEach(n => {
+    const { x, y, radius, color, task, hovered } = n;
+    const isActive = task.status === 'active';
+    const isReview = task.status === 'review';
+    const isDone = task.status === 'done';
+
+    // Outer glow (for active/review)
+    if (color.pulse || hovered) {
+      const breathe = Math.sin(frame * 0.04 + n.pulsePhase) * 0.5 + 0.5;
+      const glowR = radius + 12 + (hovered ? 8 : 0) + breathe * 8;
+      const gradient = ctx.createRadialGradient(x, y, radius * 0.5, x, y, glowR);
+      gradient.addColorStop(0, color.glow);
+      gradient.addColorStop(1, 'transparent');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(x, y, glowR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // ─── Agent ownership ring ───
+    if (task.owner) {
+      const ownerAgent = state.agents.find(a => a.name === task.owner);
+      const ringColor = ownerAgent?.signature_color || 'rgba(255,255,255,0.2)';
+      ctx.beginPath();
+      ctx.arc(x, y, radius + 4, 0, Math.PI * 2);
+      ctx.strokeStyle = ringColor;
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = hovered ? 0.8 : 0.35;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      // Orbiting dot (agent marker)
+      if (isActive) {
+        const orbitAngle = frame * 0.025 + n.phase;
+        const ox = x + Math.cos(orbitAngle) * (radius + 4);
+        const oy = y + Math.sin(orbitAngle) * (radius + 4);
+        ctx.fillStyle = ringColor;
+        ctx.globalAlpha = 0.9;
+        ctx.beginPath();
+        ctx.arc(ox, oy, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // ─── Node body ───
+    const nodeAlpha = isDone ? 0.4 : 1;
+    ctx.globalAlpha = nodeAlpha;
+
+    // Fill
+    const nodeGrad = ctx.createRadialGradient(x - radius * 0.3, y - radius * 0.3, 0, x, y, radius);
+    nodeGrad.addColorStop(0, lightenColor(color.fill, 30));
+    nodeGrad.addColorStop(0.7, color.fill);
+    nodeGrad.addColorStop(1, darkenColor(color.fill, 20));
+    ctx.fillStyle = nodeGrad;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Border
+    ctx.strokeStyle = hovered ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.1)';
+    ctx.lineWidth = hovered ? 2 : 1;
+    ctx.stroke();
+
+    ctx.globalAlpha = 1;
+
+    // ─── Priority indicator (inner diamond for urgent/high) ───
+    if (task.priority === 'urgent') {
+      ctx.fillStyle = '#f87171';
+      ctx.globalAlpha = 0.9;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(Math.PI / 4);
+      const ds = 4;
+      ctx.fillRect(-ds, -ds, ds * 2, ds * 2);
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    } else if (task.priority === 'high') {
+      ctx.fillStyle = '#f97316';
+      ctx.globalAlpha = 0.7;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(Math.PI / 4);
+      const ds = 3;
+      ctx.fillRect(-ds, -ds, ds * 2, ds * 2);
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
+
+    // ─── Label ───
+    const labelAlpha = isDone ? 0.3 : hovered ? 1 : 0.7;
+    ctx.globalAlpha = labelAlpha;
+    ctx.font = hovered ? 'bold 11px "IBM Plex Sans", sans-serif' : '10px "IBM Plex Sans", sans-serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+
+    // Truncate title
+    const maxLabelW = 90;
+    let label = task.title;
+    if (ctx.measureText(label).width > maxLabelW) {
+      while (label.length > 3 && ctx.measureText(label + '...').width > maxLabelW) {
+        label = label.slice(0, -1);
+      }
+      label += '...';
+    }
+    ctx.fillText(label, x, y + radius + 6);
+
+    // Owner label (small, below title)
+    if (task.owner) {
+      ctx.font = '600 8px "Space Mono", monospace';
+      ctx.fillStyle = (state.agents.find(a => a.name === task.owner)?.signature_color) || 'rgba(255,255,255,0.4)';
+      ctx.globalAlpha = labelAlpha * 0.7;
+      ctx.fillText(task.owner.toUpperCase(), x, y + radius + 19);
+    }
+
+    ctx.globalAlpha = 1;
+  });
+
+  // ─── Center label — "NEURAL MAP" watermark ───
+  ctx.save();
+  ctx.globalAlpha = 0.03;
+  ctx.font = '900 60px "Orbitron", monospace';
+  ctx.fillStyle = '#22d3ee';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('NEURAL', w / 2, h / 2 - 20);
+  ctx.font = '400 20px "Orbitron", monospace';
+  ctx.fillText('T A S K   M A P', w / 2, h / 2 + 25);
+  ctx.restore();
+
+  // Continue
+  ns.animId = requestAnimationFrame(() => renderNeuralFrame(ns));
+}
+
+// ─── Show task detail panel ───
+function showTaskDetail(task) {
+  const overlay = document.getElementById('taskDetailOverlay');
+  if (!overlay) return;
+
+  const panel = overlay.querySelector('.task-detail-panel');
+  panel.dataset.status = task.status;
+
+  panel.querySelector('.task-detail-title-text').textContent = task.title;
+  panel.querySelector('.task-detail-description').textContent = task.description || '';
+
+  // Meta
+  panel.querySelector('.task-detail-status').textContent = task.status.toUpperCase();
+  panel.querySelector('.task-detail-status').style.color = NEURAL_COLORS[task.status]?.fill || '';
+  panel.querySelector('.task-detail-owner').textContent = task.owner ? task.owner.toUpperCase() : 'UNASSIGNED';
+  panel.querySelector('.task-detail-priority').textContent = task.priority.toUpperCase();
+  panel.querySelector('.task-detail-priority').style.color =
+    task.priority === 'urgent' ? '#f87171' :
+    task.priority === 'high' ? '#f97316' : '';
+  panel.querySelector('.task-detail-created').textContent = formatTimeFull(task.created_at);
+
+  // Connections
+  const depList = panel.querySelector('.task-detail-dep-list');
+  depList.innerHTML = '';
+  const relatedTasks = MOCK_TASKS.filter(t =>
+    (task.deps || []).includes(t.id) ||
+    (t.deps || []).includes(task.id)
+  );
+  if (relatedTasks.length > 0) {
+    relatedTasks.forEach(t => {
+      const tag = document.createElement('span');
+      tag.className = 'task-dep-tag';
+      const arrow = (task.deps || []).includes(t.id) ? '← ' : '→ ';
+      tag.textContent = arrow + t.title;
+      tag.style.borderColor = NEURAL_COLORS[t.status]?.fill || '';
+      depList.appendChild(tag);
+    });
+    panel.querySelector('.task-detail-deps').style.display = '';
+  } else {
+    panel.querySelector('.task-detail-deps').style.display = 'none';
+  }
+
+  overlay.style.display = 'flex';
+}
+
+// ─── Update task stats in toolbar ───
+function updateTaskStats() {
+  const activeCount = MOCK_TASKS.filter(t => t.status === 'active').length;
+  const totalCount = MOCK_TASKS.length;
+  const el1 = document.getElementById('tasksActiveCount');
+  const el2 = document.getElementById('tasksTotalCount');
+  if (el1) el1.textContent = activeCount + ' firing';
+  if (el2) el2.textContent = totalCount + ' nodes';
+}
+
+// ─── Color utilities for neural rendering ───
+function hexToRgb(hex) {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '255, 255, 255';
+}
+
+function lightenColor(hex, percent) {
+  const num = parseInt(hex.replace('#', ''), 16);
+  const amt = Math.round(2.55 * percent);
+  const R = Math.min(255, (num >> 16) + amt);
+  const G = Math.min(255, ((num >> 8) & 0x00FF) + amt);
+  const B = Math.min(255, (num & 0x0000FF) + amt);
+  return `rgb(${R}, ${G}, ${B})`;
+}
+
+function darkenColor(hex, percent) {
+  const num = parseInt(hex.replace('#', ''), 16);
+  const amt = Math.round(2.55 * percent);
+  const R = Math.max(0, (num >> 16) - amt);
+  const G = Math.max(0, ((num >> 8) & 0x00FF) - amt);
+  const B = Math.max(0, (num & 0x0000FF) - amt);
+  return `rgb(${R}, ${G}, ${B})`;
 }
