@@ -179,7 +179,7 @@ document.addEventListener('DOMContentLoaded', async () => {
    ═══════════════════════════════════════════════════ */
 function initDesktop() {
   // Clear stale saved positions from old layout
-  const layoutVersion = 'v3-neural';
+  const layoutVersion = 'v4-board';
   if (localStorage.getItem('atlas-os-layout-ver') !== layoutVersion) {
     ['activity', 'agents', 'inbox', 'atlas-chat', 'tasks'].forEach(id => {
       localStorage.removeItem(`atlas-os-pos-${id}`);
@@ -413,13 +413,14 @@ function openWindow(id) {
   if (id === 'activity') renderActivity();
   if (id === 'inbox') renderInbox();
   if (id === 'atlas-chat') initChat();
-  if (id === 'tasks') initNeuralTasks();
+  if (id === 'tasks') initTasksWindow();
 }
 
 function closeWindow(id) {
   const win = state.windows.get(id);
   if (!win) return;
   soundClose();
+  win.el.classList.add('window-closing');
   win.el.classList.remove('window-visible');
   setTimeout(() => {
     win.el.remove();
@@ -804,25 +805,39 @@ function renderAgents() {
   });
 
   sorted.forEach((agent, i) => {
-    const card = document.createElement('div');
-    card.className = 'agent-card';
-    card.style.setProperty('--agent-color', agent.signature_color);
-    card.style.setProperty('--card-delay', (i * 50) + 'ms');
-
-    const domainLabel = agent.domain.toUpperCase();
-
     const agentGlyph = GLYPH_MAP[agent.name] || '●';
 
-    card.innerHTML = `
-      <div class="agent-glyph">${agentGlyph}</div>
-      <div class="agent-name">${escapeHtml(agent.name)}</div>
-      <div class="agent-domain">${domainLabel}</div>
-      <div class="agent-status">
-        <span class="agent-status-dot status-${agent.status || 'idle'}"></span>
-        <span>${agent.status || 'idle'}</span>
-      </div>
-      ${agent.current_task ? `<div class="agent-task" title="${escapeHtml(agent.current_task)}">${escapeHtml(agent.current_task)}</div>` : ''}
-    `;
+    // Use row layout for density — glyph, name, status, task, domain
+    const card = document.createElement('div');
+    card.className = state.isMobile ? 'agent-card' : 'agent-card-row';
+    card.style.setProperty('--agent-color', agent.signature_color);
+    card.style.setProperty('--card-delay', (i * 40) + 'ms');
+
+    if (state.isMobile) {
+      // Grid card layout for mobile
+      card.innerHTML = `
+        <div class="agent-glyph">${agentGlyph}</div>
+        <div class="agent-name">${escapeHtml(agent.name)}</div>
+        <div class="agent-domain">${agent.domain.toUpperCase()}</div>
+        <div class="agent-status">
+          <span class="agent-status-dot status-${agent.status || 'idle'}"></span>
+          <span>${agent.status || 'idle'}</span>
+        </div>
+        ${agent.current_task ? `<div class="agent-task" title="${escapeHtml(agent.current_task)}">${escapeHtml(agent.current_task)}</div>` : ''}
+      `;
+    } else {
+      // Dense row layout for desktop
+      card.innerHTML = `
+        <div class="agent-glyph">${agentGlyph}</div>
+        <div class="agent-name">${escapeHtml(agent.name)}</div>
+        <div class="agent-status">
+          <span class="agent-status-dot status-${agent.status || 'idle'}"></span>
+          <span>${agent.status || 'idle'}</span>
+        </div>
+        ${agent.current_task ? `<div class="agent-task" title="${escapeHtml(agent.current_task)}">${escapeHtml(agent.current_task)}</div>` : '<div class="agent-task">—</div>'}
+        <div class="agent-domain">${agent.domain.toUpperCase()}</div>
+      `;
+    }
 
     card.addEventListener('click', () => openAgentDetail(agent.name));
     grid.appendChild(card);
@@ -1604,32 +1619,128 @@ function renderFileContent(content, container) {
     return;
   }
 
-  // Light markdown rendering: headings, bold, code blocks
-  const lines = content.split('\n');
+  container.innerHTML = `<div class="md-rendered">${renderMarkdown(content)}</div>`;
+}
+
+/* ─── Markdown renderer — handles headings, bold, italic, code, lists, tables, blockquotes, hr ─── */
+function renderMarkdown(md) {
+  const lines = md.split('\n');
   let html = '';
   let inCode = false;
+  let codeBlock = '';
+  let inList = false;
+  let listType = 'ul'; // 'ul' or 'ol'
+  let inTable = false;
+  let tableRows = [];
 
-  for (const line of lines) {
-    if (line.startsWith('```')) {
-      inCode = !inCode;
-      continue;
-    }
-    if (inCode) {
-      html += escapeHtml(line) + '\n';
-      continue;
-    }
-    if (line.startsWith('# ')) {
-      html += `<div class="file-heading">${escapeHtml(line.slice(2))}</div>`;
-    } else if (line.startsWith('## ')) {
-      html += `<div class="file-heading" style="font-size:13px;opacity:0.85;">${escapeHtml(line.slice(3))}</div>`;
-    } else if (line.startsWith('### ')) {
-      html += `<div class="file-heading" style="font-size:12px;opacity:0.7;">${escapeHtml(line.slice(4))}</div>`;
-    } else {
-      html += escapeHtml(line) + '\n';
+  function flushList() {
+    if (inList) { html += `</${listType}>`; inList = false; }
+  }
+  function flushTable() {
+    if (inTable && tableRows.length > 0) {
+      html += '<table>';
+      tableRows.forEach((row, ri) => {
+        const tag = ri === 0 ? 'th' : 'td';
+        const cells = row.split('|').filter(c => c.trim() !== '');
+        html += '<tr>' + cells.map(c => `<${tag}>${inlineMarkdown(c.trim())}</${tag}>`).join('') + '</tr>';
+      });
+      html += '</table>';
+      tableRows = [];
+      inTable = false;
     }
   }
 
-  container.innerHTML = `<div class="agent-file-text">${html}</div>`;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Code blocks
+    if (line.startsWith('```')) {
+      if (inCode) {
+        html += `<pre><code>${escapeHtml(codeBlock)}</code></pre>`;
+        codeBlock = '';
+        inCode = false;
+      } else {
+        flushList();
+        flushTable();
+        inCode = true;
+      }
+      continue;
+    }
+    if (inCode) {
+      codeBlock += (codeBlock ? '\n' : '') + line;
+      continue;
+    }
+
+    // Table rows (pipe-separated)
+    if (line.includes('|') && line.trim().startsWith('|')) {
+      flushList();
+      // Skip separator row (|---|---|)
+      if (/^\|[\s\-:|]+\|$/.test(line.trim())) continue;
+      if (!inTable) inTable = true;
+      tableRows.push(line.trim());
+      continue;
+    } else {
+      flushTable();
+    }
+
+    // Horizontal rule
+    if (/^(\-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+      flushList();
+      html += '<hr>';
+      continue;
+    }
+
+    // Headings
+    if (line.startsWith('### ')) { flushList(); html += `<h3>${inlineMarkdown(line.slice(4))}</h3>`; continue; }
+    if (line.startsWith('## '))  { flushList(); html += `<h2>${inlineMarkdown(line.slice(3))}</h2>`; continue; }
+    if (line.startsWith('# '))   { flushList(); html += `<h1>${inlineMarkdown(line.slice(2))}</h1>`; continue; }
+
+    // Blockquote
+    if (line.startsWith('> ')) { flushList(); html += `<blockquote>${inlineMarkdown(line.slice(2))}</blockquote>`; continue; }
+
+    // Unordered list
+    if (/^[\s]*[-*+]\s/.test(line)) {
+      if (!inList || listType !== 'ul') { flushList(); html += '<ul>'; inList = true; listType = 'ul'; }
+      html += `<li>${inlineMarkdown(line.replace(/^[\s]*[-*+]\s/, ''))}</li>`;
+      continue;
+    }
+
+    // Ordered list
+    if (/^[\s]*\d+\.\s/.test(line)) {
+      if (!inList || listType !== 'ol') { flushList(); html += '<ol>'; inList = true; listType = 'ol'; }
+      html += `<li>${inlineMarkdown(line.replace(/^[\s]*\d+\.\s/, ''))}</li>`;
+      continue;
+    }
+
+    flushList();
+
+    // Empty line
+    if (line.trim() === '') { continue; }
+
+    // Paragraph
+    html += `<p>${inlineMarkdown(line)}</p>`;
+  }
+
+  // Close any open blocks
+  if (inCode) html += `<pre><code>${escapeHtml(codeBlock)}</code></pre>`;
+  flushList();
+  flushTable();
+
+  return html;
+}
+
+/* ─── Inline markdown: bold, italic, code, links ─── */
+function inlineMarkdown(text) {
+  let s = escapeHtml(text);
+  // Code (backtick) — must be first to prevent further processing inside code
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Bold + italic
+  s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  // Bold
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  // Italic
+  s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  return s;
 }
 
 async function loadAgentHistory(agentName, timelineEl, color) {
@@ -1807,9 +1918,97 @@ const MOCK_TASKS = [
   },
 ];
 
-// ─── Neural network state ───
+// ─── Task view state ───
 let neuralState = null;
+let currentTaskView = 'board'; // 'board' or 'neural'
 
+/* ═══ Task board + neural toggle ═══ */
+function initTasksWindow() {
+  renderTaskBoard();
+  updateTaskStats();
+  initTaskViewToggle();
+}
+
+function initTaskViewToggle() {
+  document.querySelectorAll('.tasks-view-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const view = btn.dataset.view;
+      if (view === currentTaskView) return;
+      currentTaskView = view;
+
+      document.querySelectorAll('.tasks-view-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      const boardView = document.getElementById('tasksBoardView');
+      const neuralView = document.getElementById('tasksNeuralView');
+      const titleText = document.querySelector('.tasks-title-text');
+
+      if (view === 'board') {
+        boardView.style.display = '';
+        neuralView.style.display = 'none';
+        if (titleText) titleText.textContent = 'TASK BOARD';
+      } else {
+        boardView.style.display = 'none';
+        neuralView.style.display = '';
+        if (titleText) titleText.textContent = 'NEURAL MAP';
+        // Lazy-init neural view
+        if (!neuralState) initNeuralTasks();
+      }
+      soundClick();
+    });
+  });
+}
+
+/* ═══ Board View ═══ */
+function renderTaskBoard() {
+  const statuses = ['backlog', 'active', 'review', 'done'];
+  statuses.forEach(status => {
+    const container = document.querySelector(`.tasks-column-cards[data-status="${status}"]`);
+    if (!container) return;
+    container.innerHTML = '';
+
+    const tasks = MOCK_TASKS.filter(t => t.status === status);
+
+    // Sort: urgent first, then high, then by created date
+    const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
+    tasks.sort((a, b) => (priorityOrder[a.priority] || 2) - (priorityOrder[b.priority] || 2));
+
+    tasks.forEach((task, i) => {
+      const card = document.createElement('div');
+      card.className = 'task-card';
+      card.dataset.priority = task.priority;
+      card.style.setProperty('--card-delay', (i * 60) + 'ms');
+
+      const ownerAgent = task.owner ? state.agents.find(a => a.name === task.owner) : null;
+      const ownerColor = ownerAgent?.signature_color || 'var(--os-text-muted)';
+      const ownerGlyph = task.owner ? (GLYPH_MAP[task.owner] || '●') : '';
+
+      const showPriority = task.priority === 'urgent' || task.priority === 'high';
+
+      card.innerHTML = `
+        <div class="task-card-title">${escapeHtml(task.title)}</div>
+        <div class="task-card-footer">
+          ${task.owner ? `<span class="task-card-owner"><span class="task-card-owner-dot" style="background:${ownerColor}"></span>${escapeHtml(task.owner)}</span>` : '<span class="task-card-owner" style="opacity:0.3">unassigned</span>'}
+          ${showPriority ? `<span class="task-card-priority-badge" data-priority="${task.priority}">${task.priority}</span>` : ''}
+          <span class="task-card-domain">${escapeHtml(task.domain)}</span>
+        </div>
+      `;
+
+      card.addEventListener('click', () => {
+        showTaskDetail(task);
+        soundClick();
+      });
+
+      container.appendChild(card);
+    });
+
+    // Update column count
+    const countEl = document.querySelector(`.tasks-column-count[data-count="${status}"]`);
+    if (countEl) countEl.textContent = tasks.length;
+  });
+}
+
+/* ═══ Neural Map (lazy init) ═══ */
 function initNeuralTasks() {
   const canvas = document.getElementById('neuralCanvas');
   if (!canvas) return;
@@ -2306,8 +2505,8 @@ function updateTaskStats() {
   const totalCount = MOCK_TASKS.length;
   const el1 = document.getElementById('tasksActiveCount');
   const el2 = document.getElementById('tasksTotalCount');
-  if (el1) el1.textContent = activeCount + ' firing';
-  if (el2) el2.textContent = totalCount + ' nodes';
+  if (el1) el1.textContent = activeCount + ' active';
+  if (el2) el2.textContent = totalCount + ' total';
 }
 
 // ─── Color utilities for neural rendering ───
