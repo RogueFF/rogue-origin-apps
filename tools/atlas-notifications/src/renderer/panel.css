@@ -2335,3 +2335,67 @@ body {
 [data-theme="terrain"] .notif-card[data-type="toast"] .notif-icon-svg {
   color: var(--accent-primary);
 }
+
+/* ─── Request Actions Bar ─────────────────────────────────────────── */
+
+.request-actions {
+  display: flex;
+  gap: 6px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.request-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--cream-secondary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.request-btn:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-hover);
+  color: var(--cream);
+}
+
+.request-btn:active { transform: scale(0.97); }
+
+.request-btn.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.request-btn.success {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.request-btn.error {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.request-btn-icon { font-size: 12px; }
+.request-btn-label { font-size: 10px; }
+
+[data-theme="terrain"] .request-btn:hover {
+  background: rgba(196, 164, 106, 0.08);
+  border-color: rgba(196, 164, 106, 0.2);
+}
+
+[data-theme="terrain"] .request-btn.success {
+  border-color: var(--accent-green, #6b9e5a);
+  color: var(--accent-green, #6b9e5a);
+}
