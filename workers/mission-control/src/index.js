@@ -16,6 +16,10 @@
  * GET  /api/briefs              Briefs list
  * GET  /api/briefs/latest       Most recent brief
  * POST /api/briefs              Create a brief
+ * GET  /api/positions           List positions (filter: status=open|closed)
+ * POST /api/positions           Open a new position
+ * PATCH /api/positions/:id      Update/close a position
+ * GET  /api/portfolio           Portfolio summary (P&L, win rate, exposure, bankroll)
  */
 
 // ── CORS ────────────────────────────────────────────────────────────
@@ -90,6 +94,10 @@ function matchRoute(method, path) {
     ['GET',  /^\/api\/briefs\/latest$/,          'briefsLatest'],
     ['GET',  /^\/api\/briefs$/,                  'briefsList'],
     ['POST', /^\/api\/briefs$/,                  'briefsCreate'],
+    ['GET',  /^\/api\/positions$/,                'positionsList'],
+    ['POST', /^\/api\/positions$/,                'positionsCreate'],
+    ['PATCH',/^\/api\/positions\/(\d+)$/,         'positionsUpdate'],
+    ['GET',  /^\/api\/portfolio$/,                'portfolio'],
     ['GET',  /^\/api\/agents\/([a-z-]+)\/files$/,   'agentFilesList'],
     ['GET',  /^\/api\/agents\/([a-z-]+)\/files\/(.+)$/, 'agentFileGet'],
     ['PUT',  /^\/api\/agents\/([a-z-]+)\/files\/(.+)$/, 'agentFilePut'],
@@ -415,6 +423,193 @@ const handlers = {
       success: true,
       data: { id: result.meta.last_row_id },
     }, 201);
+  },
+
+  // GET /api/positions — list positions (filter by status)
+  async positionsList(req, env) {
+    const db = env.DB;
+    const url = new URL(req.url);
+    const status = url.searchParams.get('status');
+    const ticker = url.searchParams.get('ticker');
+    const limit = Math.min(parseInt(url.searchParams.get('limit') || '100'), 500);
+
+    let sql = 'SELECT * FROM positions';
+    const conditions = [];
+    const params = [];
+
+    if (status) { conditions.push('status = ?'); params.push(status); }
+    if (ticker) { conditions.push('ticker = ?'); params.push(ticker.toUpperCase()); }
+
+    if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ');
+    sql += ' ORDER BY entry_date DESC LIMIT ?';
+    params.push(limit);
+
+    const results = await db.prepare(sql).bind(...params).all();
+    return json({ success: true, data: results.results });
+  },
+
+  // POST /api/positions — open a new position
+  async positionsCreate(req, env) {
+    const db = env.DB;
+    const body = await parseBody(req);
+
+    const required = ['ticker', 'direction', 'vehicle', 'entry_price', 'quantity', 'entry_date'];
+    for (const field of required) {
+      if (body[field] === undefined || body[field] === null || body[field] === '') {
+        return err(`Missing required field: ${field}`, 'VALIDATION_ERROR', 400);
+      }
+    }
+
+    const validDirections = ['long', 'short'];
+    if (!validDirections.includes(body.direction)) {
+      return err('Invalid direction. Must be: long, short', 'VALIDATION_ERROR', 400);
+    }
+
+    const validVehicles = ['calls', 'puts', 'shares', 'spread', 'crypto'];
+    if (!validVehicles.includes(body.vehicle)) {
+      return err(`Invalid vehicle. Must be: ${validVehicles.join(', ')}`, 'VALIDATION_ERROR', 400);
+    }
+
+    const result = await db.prepare(
+      `INSERT INTO positions (ticker, direction, vehicle, strike, expiry, entry_price, quantity, entry_date, status, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?)`
+    ).bind(
+      body.ticker.toUpperCase(),
+      body.direction,
+      body.vehicle,
+      body.strike || null,
+      body.expiry || null,
+      body.entry_price,
+      body.quantity,
+      body.entry_date,
+      body.notes || null
+    ).run();
+
+    const position = await db.prepare('SELECT * FROM positions WHERE id = ?')
+      .bind(result.meta.last_row_id).first();
+
+    return json({ success: true, data: position }, 201);
+  },
+
+  // PATCH /api/positions/:id — update or close a position
+  async positionsUpdate(req, env, params) {
+    const db = env.DB;
+    const id = parseInt(params[0]);
+    const body = await parseBody(req);
+
+    const position = await db.prepare('SELECT * FROM positions WHERE id = ?').bind(id).first();
+    if (!position) return err('Position not found', 'NOT_FOUND', 404);
+
+    const allowed = ['exit_price', 'exit_date', 'status', 'pnl', 'notes'];
+    const sets = [];
+    const vals = [];
+    for (const key of allowed) {
+      if (body[key] !== undefined) {
+        sets.push(`${key} = ?`);
+        vals.push(body[key]);
+      }
+    }
+
+    // Auto-calculate P&L when closing with an exit_price
+    if (body.status === 'closed' && body.exit_price !== undefined && body.pnl === undefined) {
+      const multiplier = position.vehicle === 'shares' ? 1 : 100; // options = 100x
+      const direction = position.direction === 'long' ? 1 : -1;
+      const calculatedPnl = direction * (body.exit_price - position.entry_price) * position.quantity * multiplier;
+      sets.push('pnl = ?');
+      vals.push(Math.round(calculatedPnl * 100) / 100);
+    }
+
+    // Auto-set exit_date when closing without one
+    if (body.status === 'closed' && !body.exit_date && !position.exit_date) {
+      sets.push('exit_date = ?');
+      vals.push(new Date().toISOString());
+    }
+
+    if (sets.length === 0) return err('No valid fields to update', 'VALIDATION_ERROR', 400);
+
+    vals.push(id);
+    await db.prepare(`UPDATE positions SET ${sets.join(', ')} WHERE id = ?`).bind(...vals).run();
+
+    const updated = await db.prepare('SELECT * FROM positions WHERE id = ?').bind(id).first();
+    return json({ success: true, data: updated });
+  },
+
+  // GET /api/portfolio — portfolio summary
+  async portfolio(_req, env) {
+    const db = env.DB;
+    const STARTING_BANKROLL = 3000;
+
+    // Get all positions
+    const open = await db.prepare(
+      'SELECT * FROM positions WHERE status = ? ORDER BY entry_date DESC'
+    ).bind('open').all();
+    const closed = await db.prepare(
+      'SELECT * FROM positions WHERE status = ? ORDER BY exit_date DESC'
+    ).bind('closed').all();
+
+    const openPositions = open.results;
+    const closedTrades = closed.results;
+
+    // Calculate realized P&L from closed trades
+    const realizedPnl = closedTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
+
+    // Win/loss stats
+    const wins = closedTrades.filter(t => (t.pnl || 0) > 0);
+    const losses = closedTrades.filter(t => (t.pnl || 0) < 0);
+    const totalClosed = closedTrades.length;
+    const winRate = totalClosed > 0 ? Math.round((wins.length / totalClosed) * 10000) / 100 : 0;
+    const avgWinner = wins.length > 0
+      ? Math.round(wins.reduce((s, t) => s + t.pnl, 0) / wins.length * 100) / 100
+      : 0;
+    const avgLoser = losses.length > 0
+      ? Math.round(losses.reduce((s, t) => s + t.pnl, 0) / losses.length * 100) / 100
+      : 0;
+
+    // Open exposure (sum of entry_price * quantity * multiplier)
+    const openExposure = openPositions.reduce((sum, p) => {
+      const multiplier = p.vehicle === 'shares' ? 1 : 100;
+      return sum + (p.entry_price * p.quantity * multiplier);
+    }, 0);
+
+    // Portfolio value & bankroll
+    const portfolioValue = Math.round((STARTING_BANKROLL + realizedPnl) * 100) / 100;
+    const availableBankroll = Math.round((portfolioValue - openExposure) * 100) / 100;
+
+    // Bankroll rule checks
+    const maxSinglePosition = Math.round(portfolioValue * 0.20 * 100) / 100;
+    const maxExposure = Math.round(portfolioValue * 0.80 * 100) / 100;
+    const cashMinimum = Math.round(portfolioValue * 0.20 * 100) / 100;
+    const exposureCompliant = openExposure <= maxExposure;
+    const cashCompliant = availableBankroll >= cashMinimum;
+
+    return json({
+      success: true,
+      data: {
+        starting_bankroll: STARTING_BANKROLL,
+        portfolio_value: portfolioValue,
+        realized_pnl: Math.round(realizedPnl * 100) / 100,
+        open_exposure: Math.round(openExposure * 100) / 100,
+        available_bankroll: availableBankroll,
+        open_positions: openPositions.length,
+        closed_trades: totalClosed,
+        win_rate: winRate,
+        wins: wins.length,
+        losses: losses.length,
+        avg_winner: avgWinner,
+        avg_loser: avgLoser,
+        expectancy: totalClosed > 0
+          ? Math.round(((winRate / 100 * avgWinner) + ((1 - winRate / 100) * avgLoser)) * 100) / 100
+          : 0,
+        rules: {
+          max_single_position: maxSinglePosition,
+          max_exposure: maxExposure,
+          cash_minimum: cashMinimum,
+          exposure_compliant: exposureCompliant,
+          cash_compliant: cashCompliant,
+        },
+        positions: openPositions,
+      },
+    });
   },
 
   // GET /api/agents/:name/files — list all files for an agent
