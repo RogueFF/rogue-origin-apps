@@ -44,7 +44,7 @@ function corsHeaders(env, request) {
   const allowed = getAllowedOrigin(origin, env);
   return {
     'Access-Control-Allow-Origin': allowed || '*',
-    'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key',
     'Access-Control-Max-Age': '86400',
     ...(allowed && allowed !== '*' ? { Vary: 'Origin' } : {}),
@@ -90,6 +90,9 @@ function matchRoute(method, path) {
     ['GET',  /^\/api\/briefs\/latest$/,          'briefsLatest'],
     ['GET',  /^\/api\/briefs$/,                  'briefsList'],
     ['POST', /^\/api\/briefs$/,                  'briefsCreate'],
+    ['GET',  /^\/api\/agents\/([a-z-]+)\/files$/,   'agentFilesList'],
+    ['GET',  /^\/api\/agents\/([a-z-]+)\/files\/(.+)$/, 'agentFileGet'],
+    ['PUT',  /^\/api\/agents\/([a-z-]+)\/files\/(.+)$/, 'agentFilePut'],
   ];
 
   for (const [m, re, handler] of routes) {
@@ -412,6 +415,46 @@ const handlers = {
       success: true,
       data: { id: result.meta.last_row_id },
     }, 201);
+  },
+
+  // GET /api/agents/:name/files — list all files for an agent
+  async agentFilesList(_req, env, params) {
+    const db = env.DB;
+    const name = params[0];
+    const results = await db.prepare(
+      'SELECT agent_name, file_name, updated_at FROM agent_files WHERE agent_name = ? ORDER BY file_name'
+    ).bind(name).all();
+    return json({ success: true, data: results.results });
+  },
+
+  // GET /api/agents/:name/files/:filename — get file content
+  async agentFileGet(_req, env, params) {
+    const db = env.DB;
+    const name = params[0];
+    const fileName = decodeURIComponent(params[1]);
+    const file = await db.prepare(
+      'SELECT * FROM agent_files WHERE agent_name = ? AND file_name = ?'
+    ).bind(name, fileName).first();
+    if (!file) return err('File not found', 'NOT_FOUND', 404);
+    return json({ success: true, data: file });
+  },
+
+  // PUT /api/agents/:name/files/:filename — create or update file
+  async agentFilePut(req, env, params) {
+    const db = env.DB;
+    const name = params[0];
+    const fileName = decodeURIComponent(params[1]);
+    const body = await parseBody(req);
+
+    if (!body.content) return err('Missing required field: content', 'VALIDATION_ERROR', 400);
+
+    await db.prepare(
+      `INSERT INTO agent_files (agent_name, file_name, content, updated_at)
+       VALUES (?, ?, ?, datetime('now'))
+       ON CONFLICT(agent_name, file_name) DO UPDATE SET content = excluded.content, updated_at = datetime('now')`
+    ).bind(name, fileName, body.content).run();
+
+    return json({ success: true, data: { agent_name: name, file_name: fileName } });
   },
 };
 
