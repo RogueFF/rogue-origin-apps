@@ -1496,15 +1496,20 @@ function buildProductionCard(data) {
   // Hourly breakdown rows
   const hourlyHtml = hourlyRates.map(h => {
     const slotShort = (h.timeSlot || '').replace(/ (AM|PM)/g, '$1').replace(' – ', '–');
-    const hPct = h.target > 0 ? ((h.rate / h.target) * 100) : 0;
+    const totalLbs = h.totalLbs || 0;
+    const rate = h.rate || 0;
+    const target = h.target || 0;
+    const trimmers = h.trimmers || 0;
+    const buckers = h.buckers || 0;
+    const hPct = target > 0 ? ((rate / target) * 100) : 0;
     const hColor = hPct >= 100 ? 'var(--sig-green, #22c55e)' : 'var(--sig-red, #ef4444)';
     const hBarW = Math.min(hPct, 150);
     const hBarWidth = (hBarW / 150 * 100).toFixed(1);
     return `
       <div class="prod-hourly-row">
         <span class="prod-hourly-slot">${escapeHtml(slotShort)}</span>
-        <span class="prod-hourly-lbs">${h.totalLbs.toFixed(1)}</span>
-        <span class="prod-hourly-crew">${h.trimmers}T/${h.buckers}B</span>
+        <span class="prod-hourly-lbs">${totalLbs.toFixed(1)}</span>
+        <span class="prod-hourly-crew">${trimmers}T/${buckers}B</span>
         <div class="prod-hourly-bar-wrap">
           <div class="prod-hourly-bar" style="width:${hBarWidth}%;background:${hColor}"></div>
         </div>
