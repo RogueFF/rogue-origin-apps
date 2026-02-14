@@ -1,0 +1,97 @@
+{
+  "timestamp": "2026-02-14T00:28:08.850Z",
+  "trades": [
+    {
+      "id": 4,
+      "ticker": "NFLX",
+      "strategy": "bear_put_spread",
+      "direction": "short",
+      "vehicle": "spread",
+      "regime_at_entry": null,
+      "entry_price": 0.23,
+      "exit_price": 0.23,
+      "quantity": 3,
+      "cost_basis": 69,
+      "realized_pnl": 0,
+      "return_pct": 0,
+      "hold_days": 1,
+      "is_win": false,
+      "hit_target": false,
+      "hit_stop": false,
+      "exit_reason": "unknown",
+      "entry_date": "2026-02-13",
+      "exit_date": "2026-02-13T21:37:36.407Z",
+      "expiry": "2026-02-20",
+      "notes": "Bear put 74/72.5 Feb20. Bearish sentiment."
+    }
+  ],
+  "metrics": {
+    "trade_count": 1,
+    "wins": 0,
+    "losses": 1,
+    "win_rate": 0,
+    "expectancy": 0,
+    "total_pnl": 0,
+    "avg_pnl": 0,
+    "avg_return_pct": 0,
+    "avg_win": 0,
+    "avg_loss": 0,
+    "sharpe_ratio": 0,
+    "max_drawdown": 0,
+    "avg_hold_days": 1,
+    "by_regime": {
+      "UNKNOWN": {
+        "trades": 1,
+        "wins": 0,
+        "pnl": 0,
+        "win_rate": 0
+      }
+    },
+    "by_setup": {
+      "bear_put_spread": {
+        "trades": 1,
+        "wins": 0,
+        "pnl": 0,
+        "win_rate": 0
+      }
+    },
+    "by_direction": {
+      "short": {
+        "trades": 1,
+        "wins": 0,
+        "pnl": 0,
+        "win_rate": 0
+      }
+    },
+    "best_trade": {
+      "ticker": "NFLX",
+      "pnl": 0,
+      "return_pct": 0
+    },
+    "worst_trade": {
+      "ticker": "NFLX",
+      "pnl": 0,
+      "return_pct": 0
+    }
+  },
+  "baseline": {
+    "trials": 50,
+    "tradesPerTrial": 1,
+    "mean": 0.05304695381422668,
+    "stdev": 0.2803097494011419,
+    "percentiles": {
+      "p5": -0.40943136887570597,
+      "p25": -0.11046109555527438,
+      "p50": 0.09253901748384123,
+      "p75": 0.2535102106310357,
+      "p95": 0.463741896207542
+    }
+  },
+  "significance": {
+    "sigma": -0.189,
+    "pValue": 0.6,
+    "percentile": 40,
+    "interpretation": "UNDERPERFORMING — Worse than random chance"
+  },
+  "portfolio_return_pct": 0
+}
