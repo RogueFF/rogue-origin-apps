@@ -39,7 +39,7 @@
   },
   "homepage": "https://github.com/rogueff/rogue-origin-apps#readme",
   "devDependencies": {
-    "@playwright/test": "^1.49.0",
+    "@playwright/test": "^1.58.2",
     "eslint": "^9.39.2"
   }
 }
