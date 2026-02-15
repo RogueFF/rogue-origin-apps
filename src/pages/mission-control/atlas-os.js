@@ -109,6 +109,11 @@ const WINDOW_DEFS = {
     icon: '🐙',
     template: 'tmpl-github',
   },
+  analytics: {
+    title: 'Analytics',
+    icon: '📈',
+    template: 'tmpl-analytics',
+  },
 };
 
 // Compute tiled layout that fills the viewport
@@ -136,6 +141,7 @@ function getDefaultLayout(id) {
     tasks:    { x: pad, y: pad, w: halfW + pad + halfW, h: fullH },
     work:     { x: pad, y: pad, w: tradingW, h: fullH },
     github:   { x: pad * 2 + halfW, y: pad, w: halfW, h: fullH },
+    analytics: { x: pad, y: pad, w: tradingW, h: fullH },
   };
 
   return layouts[id] || { x: 100, y: 50, w: 500, h: 500 };
@@ -576,6 +582,306 @@ function escapeHTML(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+// ─── Analytics Dashboard ───
+async function fetchAnalyticsData() {
+  const today = new Date();
+  const sixtyDaysAgo = new Date();
+  sixtyDaysAgo.setDate(today.getDate() - 60);
+
+  const formatDate = (d) => d.toISOString().split('T')[0];
+  const start = formatDate(sixtyDaysAgo);
+  const end = formatDate(today);
+
+  try {
+    const url = `https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production?action=dashboard&start=${start}&end=${end}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Analytics API ${res.status}`);
+    const json = await res.json();
+    const daily = json.daily || [];
+
+    // Filter to active production days only
+    const activeDays = daily.filter(d => d.totalLbs > 0);
+
+    renderAnalytics(activeDays);
+  } catch (err) {
+    console.warn('[Atlas OS] Analytics API error:', err);
+    const container = document.getElementById('analyticsMain');
+    if (container) {
+      container.innerHTML = '<div class="analytics-error">Failed to load analytics data</div>';
+    }
+  }
+}
+
+function renderAnalytics(days) {
+  const container = document.getElementById('analyticsMain');
+  if (!container || !days || days.length === 0) {
+    if (container) {
+      container.innerHTML = '<div class="analytics-empty">No production data available</div>';
+    }
+    return;
+  }
+
+  // Calculate summary stats
+  const totalLbs = days.reduce((sum, d) => sum + d.totalLbs, 0);
+  const productionDays = days.length;
+  const dailyAvg = totalLbs / productionDays;
+  const bestDay = days.reduce((best, d) => d.totalLbs > best.totalLbs ? d : best, days[0]);
+  const bestRate = days.reduce((best, d) => d.avgRate > best.avgRate ? d : best, days[0]);
+
+  // Weighted avg cost/lb
+  const totalCost = days.reduce((sum, d) => sum + (d.costPerLb * d.totalLbs), 0);
+  const avgCost = totalCost / totalLbs;
+
+  // Day of week analysis
+  const dowData = {};
+  const dowNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  days.forEach(d => {
+    const date = new Date(d.date + 'T12:00:00');
+    const dow = dowNames[date.getDay()];
+    if (!dowData[dow]) dowData[dow] = { totalLbs: 0, totalRate: 0, count: 0 };
+    dowData[dow].totalLbs += d.totalLbs;
+    dowData[dow].totalRate += d.avgRate;
+    dowData[dow].count++;
+  });
+
+  const dowStats = Object.entries(dowData).map(([dow, data]) => ({
+    dow,
+    avgLbs: data.totalLbs / data.count,
+    avgRate: data.totalRate / data.count,
+    count: data.count,
+  })).sort((a, b) => b.avgLbs - a.avgLbs);
+
+  // Tops vs Smalls breakdown
+  const totalTops = days.reduce((sum, d) => sum + d.totalTops, 0);
+  const totalSmalls = days.reduce((sum, d) => sum + d.totalSmalls, 0);
+  const topsPercent = (totalTops / totalLbs * 100).toFixed(1);
+  const smallsPercent = (totalSmalls / totalLbs * 100).toFixed(1);
+
+  container.innerHTML = `
+    <div class="analytics-scroll">
+      <div class="analytics-summary-cards">
+        <div class="portfolio-stat">
+          <span class="portfolio-stat-label">TOTAL OUTPUT</span>
+          <span class="portfolio-stat-value">${totalLbs.toFixed(1)} lbs</span>
+        </div>
+        <div class="portfolio-stat">
+          <span class="portfolio-stat-label">PRODUCTION DAYS</span>
+          <span class="portfolio-stat-value">${productionDays}</span>
+        </div>
+        <div class="portfolio-stat">
+          <span class="portfolio-stat-label">DAILY AVERAGE</span>
+          <span class="portfolio-stat-value">${dailyAvg.toFixed(1)} lbs</span>
+        </div>
+        <div class="portfolio-stat">
+          <span class="portfolio-stat-label">BEST DAY</span>
+          <span class="portfolio-stat-value">${bestDay.totalLbs.toFixed(1)} lbs</span>
+          <span class="portfolio-stat-meta">${formatShortDate(bestDay.date)}</span>
+        </div>
+        <div class="portfolio-stat">
+          <span class="portfolio-stat-label">BEST RATE</span>
+          <span class="portfolio-stat-value">${bestRate.avgRate.toFixed(2)} lb/hr</span>
+          <span class="portfolio-stat-meta">${formatShortDate(bestRate.date)}</span>
+        </div>
+        <div class="portfolio-stat">
+          <span class="portfolio-stat-label">AVG COST/LB</span>
+          <span class="portfolio-stat-value">$${avgCost.toFixed(2)}</span>
+        </div>
+      </div>
+
+      <div class="analytics-section">
+        <div class="analytics-section-header">DAILY OUTPUT</div>
+        <div class="analytics-chart-container">
+          ${buildOutputChart(days, dailyAvg)}
+        </div>
+      </div>
+
+      <div class="analytics-section">
+        <div class="analytics-section-header">EFFICIENCY TREND</div>
+        <div class="analytics-chart-container">
+          ${buildEfficiencyChart(days)}
+        </div>
+      </div>
+
+      <div class="analytics-section">
+        <div class="analytics-section-header">COST PER LB</div>
+        <div class="analytics-chart-container">
+          ${buildCostChart(days)}
+        </div>
+      </div>
+
+      <div class="analytics-section">
+        <div class="analytics-section-header">DAY OF WEEK PERFORMANCE</div>
+        <div class="analytics-dow-grid">
+          ${dowStats.map(d => `
+            <div class="analytics-dow-card">
+              <div class="analytics-dow-name">${d.dow}</div>
+              <div class="analytics-dow-stat">${d.avgLbs.toFixed(1)} <span class="analytics-dow-unit">lbs</span></div>
+              <div class="analytics-dow-stat">${d.avgRate.toFixed(2)} <span class="analytics-dow-unit">lb/hr</span></div>
+              <div class="analytics-dow-count">${d.count} days</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="analytics-section">
+        <div class="analytics-section-header">TOPS VS SMALLS</div>
+        <div class="analytics-breakdown">
+          <div class="analytics-breakdown-bar">
+            <div class="analytics-breakdown-segment analytics-breakdown-tops" style="width: ${topsPercent}%">
+              <span class="analytics-breakdown-label">Tops: ${topsPercent}%</span>
+            </div>
+            <div class="analytics-breakdown-segment analytics-breakdown-smalls" style="width: ${smallsPercent}%">
+              <span class="analytics-breakdown-label">Smalls: ${smallsPercent}%</span>
+            </div>
+          </div>
+          <div class="analytics-breakdown-legend">
+            <div class="analytics-breakdown-legend-item">
+              <span class="analytics-breakdown-dot analytics-breakdown-dot-tops"></span>
+              <span>Tops: ${totalTops.toFixed(1)} lbs</span>
+            </div>
+            <div class="analytics-breakdown-legend-item">
+              <span class="analytics-breakdown-dot analytics-breakdown-dot-smalls"></span>
+              <span>Smalls: ${totalSmalls.toFixed(1)} lbs</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function formatShortDate(dateStr) {
+  const date = new Date(dateStr + 'T12:00:00');
+  const mon = date.toLocaleString('en-US', { month: 'short' });
+  const day = date.getDate();
+  return `${mon} ${day}`;
+}
+
+function buildOutputChart(days, avgLine) {
+  if (days.length === 0) return '<div class="analytics-chart-empty">No data</div>';
+
+  const maxLbs = Math.max(...days.map(d => d.totalLbs));
+  const chartH = 300;
+  const chartW = 100; // percentage
+  const barW = Math.max(3, Math.min(20, 80 / days.length));
+  const gap = Math.max(1, barW * 0.2);
+
+  const bars = days.map((d, i) => {
+    const h = (d.totalLbs / maxLbs) * (chartH - 60);
+    const x = (i / days.length) * chartW + (barW / 2);
+    const color = d.totalLbs >= 150 ? '#4CAF50'
+                : d.totalLbs >= 100 ? '#FF9800'
+                : '#f44336';
+
+    return `
+      <rect x="${x}%" y="${chartH - h - 40}" width="${barW}%" height="${h}"
+            fill="${color}" opacity="0.8" rx="1">
+        <title>${formatShortDate(d.date)}: ${d.totalLbs.toFixed(1)} lbs</title>
+      </rect>
+    `;
+  }).join('');
+
+  const avgY = chartH - ((avgLine / maxLbs) * (chartH - 60)) - 40;
+
+  const xLabels = days.filter((_, i) => i % Math.ceil(days.length / 8) === 0).map(d => {
+    const idx = days.indexOf(d);
+    const x = (idx / days.length) * chartW + (barW / 2);
+    return `<text x="${x}%" y="${chartH - 10}" fill="rgba(255,255,255,0.5)" font-size="10" text-anchor="middle" font-family="Geist Mono">${formatShortDate(d.date)}</text>`;
+  }).join('');
+
+  return `
+    <svg viewBox="0 0 100 ${chartH}" class="analytics-chart">
+      <line x1="0" y1="${avgY}" x2="100" y2="${avgY}" stroke="rgba(255,255,255,0.3)" stroke-width="0.3" stroke-dasharray="2,2" />
+      <text x="2" y="${avgY - 5}" fill="rgba(255,255,255,0.5)" font-size="9" font-family="Geist Mono">avg: ${avgLine.toFixed(1)}</text>
+      ${bars}
+      ${xLabels}
+    </svg>
+  `;
+}
+
+function buildEfficiencyChart(days) {
+  if (days.length === 0) return '<div class="analytics-chart-empty">No data</div>';
+
+  const maxRate = Math.max(...days.map(d => d.avgRate));
+  const minRate = Math.min(...days.map(d => d.avgRate));
+  const chartH = 300;
+  const chartW = 100;
+
+  const points = days.map((d, i) => {
+    const x = (i / (days.length - 1)) * chartW;
+    const y = chartH - 40 - ((d.avgRate - minRate) / (maxRate - minRate)) * (chartH - 80);
+    return `${x},${y}`;
+  }).join(' ');
+
+  const dots = days.map((d, i) => {
+    const x = (i / (days.length - 1)) * chartW;
+    const y = chartH - 40 - ((d.avgRate - minRate) / (maxRate - minRate)) * (chartH - 80);
+    return `<circle cx="${x}" cy="${y}" r="2" fill="var(--sig-active)"><title>${formatShortDate(d.date)}: ${d.avgRate.toFixed(2)} lb/hr</title></circle>`;
+  }).join('');
+
+  const avgRate = days.reduce((sum, d) => sum + d.avgRate, 0) / days.length;
+  const avgY = chartH - 40 - ((avgRate - minRate) / (maxRate - minRate)) * (chartH - 80);
+
+  const xLabels = days.filter((_, i) => i % Math.ceil(days.length / 8) === 0).map(d => {
+    const idx = days.indexOf(d);
+    const x = (idx / (days.length - 1)) * chartW;
+    return `<text x="${x}%" y="${chartH - 10}" fill="rgba(255,255,255,0.5)" font-size="10" text-anchor="middle" font-family="Geist Mono">${formatShortDate(d.date)}</text>`;
+  }).join('');
+
+  return `
+    <svg viewBox="0 0 ${chartW} ${chartH}" class="analytics-chart">
+      <line x1="0" y1="${avgY}" x2="${chartW}" y2="${avgY}" stroke="rgba(255,255,255,0.2)" stroke-width="0.3" stroke-dasharray="2,2" />
+      <text x="2" y="${avgY - 5}" fill="rgba(255,255,255,0.5)" font-size="9" font-family="Geist Mono">avg: ${avgRate.toFixed(2)}</text>
+      <polyline points="${points}" fill="none" stroke="var(--sig-active)" stroke-width="0.5" />
+      ${dots}
+      ${xLabels}
+    </svg>
+  `;
+}
+
+function buildCostChart(days) {
+  if (days.length === 0) return '<div class="analytics-chart-empty">No data</div>';
+
+  const maxCost = Math.max(...days.map(d => d.costPerLb));
+  const minCost = Math.min(...days.map(d => d.costPerLb));
+  const chartH = 300;
+  const chartW = 100;
+
+  const points = days.map((d, i) => {
+    const x = (i / (days.length - 1)) * chartW;
+    const y = chartH - 40 - ((d.costPerLb - minCost) / (maxCost - minCost)) * (chartH - 80);
+    return `${x},${y}`;
+  }).join(' ');
+
+  const dots = days.map((d, i) => {
+    const x = (i / (days.length - 1)) * chartW;
+    const y = chartH - 40 - ((d.costPerLb - minCost) / (maxCost - minCost)) * (chartH - 80);
+    // Lower cost = green, higher = red
+    const normalized = (d.costPerLb - minCost) / (maxCost - minCost);
+    const color = normalized < 0.33 ? '#4CAF50' : normalized < 0.67 ? '#FF9800' : '#f44336';
+    return `<circle cx="${x}" cy="${y}" r="2" fill="${color}"><title>${formatShortDate(d.date)}: $${d.costPerLb.toFixed(2)}/lb</title></circle>`;
+  }).join('');
+
+  const avgCost = days.reduce((sum, d) => sum + d.costPerLb, 0) / days.length;
+  const avgY = chartH - 40 - ((avgCost - minCost) / (maxCost - minCost)) * (chartH - 80);
+
+  const xLabels = days.filter((_, i) => i % Math.ceil(days.length / 8) === 0).map(d => {
+    const idx = days.indexOf(d);
+    const x = (idx / (days.length - 1)) * chartW;
+    return `<text x="${x}%" y="${chartH - 10}" fill="rgba(255,255,255,0.5)" font-size="10" text-anchor="middle" font-family="Geist Mono">${formatShortDate(d.date)}</text>`;
+  }).join('');
+
+  return `
+    <svg viewBox="0 0 ${chartW} ${chartH}" class="analytics-chart">
+      <line x1="0" y1="${avgY}" x2="${chartW}" y2="${avgY}" stroke="rgba(255,255,255,0.2)" stroke-width="0.3" stroke-dasharray="2,2" />
+      <text x="2" y="${avgY - 5}" fill="rgba(255,255,255,0.5)" font-size="9" font-family="Geist Mono">avg: $${avgCost.toFixed(2)}</text>
+      <polyline points="${points}" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="0.5" />
+      ${dots}
+      ${xLabels}
+    </svg>
+  `;
+}
+
 async function pollData() {
   await Promise.all([fetchAgents(), fetchActivity(), fetchInbox()]);
   // Poll trading data if trading window is open
@@ -720,6 +1026,7 @@ function openWindow(id) {
   if (id === 'trading') fetchTradingData();
   if (id === 'work') fetchWorkData();
   if (id === 'github') fetchGitHubData();
+  if (id === 'analytics') fetchAnalyticsData();
 }
 
 function closeWindow(id) {

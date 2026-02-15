@@ -87,6 +87,10 @@
         <div class="desktop-icon-glyph">🐙</div>
         <span class="desktop-icon-label">GitHub</span>
       </button>
+      <button class="desktop-icon" data-window="analytics" title="Analytics">
+        <div class="desktop-icon-glyph">📈</div>
+        <span class="desktop-icon-label">Analytics</span>
+      </button>
     </div>
 
     <!-- Window container -->
@@ -145,6 +149,10 @@
         <button class="mobile-nav-btn" data-window="github">
           <span class="mobile-nav-icon">🐙</span>
           <span class="mobile-nav-label">GitHub</span>
+        </button>
+        <button class="mobile-nav-btn" data-window="analytics">
+          <span class="mobile-nav-icon">📈</span>
+          <span class="mobile-nav-label">Analytics</span>
         </button>
       </div>
 
@@ -446,6 +454,18 @@
         <div class="trading-loading">
           <div class="loading-spinner"></div>
           <span>Loading repository data...</span>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- Analytics Window -->
+  <template id="tmpl-analytics">
+    <div class="window-body analytics-window">
+      <div class="analytics-main" id="analyticsMain">
+        <div class="trading-loading">
+          <div class="loading-spinner"></div>
+          <span>Loading production analytics...</span>
         </div>
       </div>
     </div>
