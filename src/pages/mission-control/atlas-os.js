@@ -1780,10 +1780,29 @@ function buildRegimeBanner(data) {
   const signal = (data.signal || 'NEUTRAL').toUpperCase();
   const signalClass = signal === 'GREEN' ? 'regime-green' : signal === 'YELLOW' ? 'regime-yellow' : signal === 'RED' ? 'regime-red' : 'regime-neutral';
   const label = data.label || '';
-  const mktData = data.data || {};
-  const spy = mktData.spy_price || data.spy_price || '—';
-  const vix = mktData.vix || mktData.vix_level || data.vix_level || data.vix || '—';
-  const yield10y = mktData.yield_10y || mktData['10y_yield'] || data.yield_10y || '—';
+
+  // Parse SPY and VIX from the text data field if it exists
+  let spy = '—';
+  let vix = '—';
+  let yield10y = '—';
+
+  if (typeof data.data === 'string') {
+    // Parse from text blob: "SPY: $681.75 (+0.07% today)" and "VIX: 20.6 (elevated)"
+    const spyMatch = data.data.match(/SPY:\s*\$?([\d.,]+)/i);
+    const vixMatch = data.data.match(/VIX:\s*([\d.]+)/i);
+    const yieldMatch = data.data.match(/10Y\s+Yield:\s*([\d.]+%?)/i);
+
+    if (spyMatch) spy = `$${spyMatch[1]}`;
+    if (vixMatch) vix = vixMatch[1];
+    if (yieldMatch) yield10y = yieldMatch[1];
+  } else {
+    // Fallback to object structure
+    const mktData = data.data || {};
+    spy = mktData.spy_price || data.spy_price || '—';
+    vix = mktData.vix || mktData.vix_level || data.vix_level || data.vix || '—';
+    yield10y = mktData.yield_10y || mktData['10y_yield'] || data.yield_10y || '—';
+  }
+
   const strategyObj = data.strategy || {};
   const strategyNote = typeof strategyObj === 'string' ? strategyObj : (strategyObj.position_sizing || strategyObj.strategies || '');
 
@@ -1822,10 +1841,25 @@ function buildRegimeCard(data) {
   const signal = (data.signal || 'NEUTRAL').toUpperCase();
   const signalColor = signal === 'GREEN' ? '#22c55e' : signal === 'YELLOW' ? '#eab308' : '#ef4444';
   const timestamp = data.created_at ? formatTime(data.created_at) : 'Unknown';
-  const mktData = data.data || {};
-  const spy = mktData.spy_price || data.spy_price || '—';
-  const vix = mktData.vix || mktData.vix_level || data.vix_level || data.vix || '—';
-  const trend = mktData.spy_trend || mktData.trend || data.trend || '—';
+
+  // REGIME API: signal and label at top level, SPY/VIX in TEXT blob 'data' field
+  let spy = '—';
+  let vix = '—';
+  let trend = '—';
+
+  if (typeof data.data === 'string') {
+    // Parse from text blob: "SPY: $681.75" and "VIX: 20.6"
+    const spyMatch = data.data.match(/SPY:\s*\$?([\d.,]+)/i);
+    const vixMatch = data.data.match(/VIX:\s*([\d.]+)/i);
+    if (spyMatch) spy = `$${spyMatch[1]}`;
+    if (vixMatch) vix = vixMatch[1];
+  }
+
+  // Fallback to legacy object structure if available
+  const mktData = typeof data.data === 'object' ? data.data : {};
+  if (spy === '—') spy = mktData.spy_price || data.spy_price || '—';
+  if (vix === '—') vix = mktData.vix || mktData.vix_level || data.vix_level || data.vix || '—';
+  trend = mktData.spy_trend || mktData.trend || data.trend || '—';
   const factors = Array.isArray(mktData.factors) ? mktData.factors : (Array.isArray(data.factors) ? data.factors : []);
   const reasoning = factors.length > 0 ? factors : (Array.isArray(data.reasoning) ? data.reasoning : []);
   const strategyObj = data.strategy || {};
@@ -1918,18 +1952,41 @@ function buildPlaysSection(data) {
         ${sortedPlays.map(play => {
           const ticker = play.ticker || '—';
           const direction = (play.direction || 'LONG').toUpperCase();
-          const directionClass = direction === 'BULL' || direction === 'LONG' ? 'bull' : 'bear';
+          const directionClass = direction === 'BULL' || direction === 'BULLISH' || direction === 'LONG' ? 'bull' : 'bear';
           const vehicle = play.vehicle || play.type || '—';
-          const strike = play.strike || '';
-          const expiry = play.expiry ? formatDate(play.expiry) : '';
-          const entry = play.entry_price || play.entry || 0;
-          const target = play.target_price || play.target || 0;
-          const stop = play.stop_price || play.stop || 0;
-          const rrRatio = play.rr_ratio || play.reward_risk || '—';
-          const positionSize = play.position_size || play.size || '';
+
+          // PLAYS API: setup.entry.{strike, expiry, premium}, setup.target.price, setup.stop.price, setup.size
+          const setupEntry = play.setup?.entry || {};
+          const setupTarget = play.setup?.target || {};
+          const setupStop = play.setup?.stop || {};
+
+          const strike = setupEntry.strike || play.strike || '';
+          const expiry = setupEntry.expiry || play.expiry;
+          const formattedExpiry = expiry ? formatDate(expiry) : '';
+
+          // Entry price: setup.entry.premium
+          const entry = setupEntry.premium || play.entry_price || play.entry || 0;
+
+          // Target: setup.target.price (handle "$3.10" string format)
+          let target = setupTarget.price || play.target_price || play.target || 0;
+          if (typeof target === 'string' && target.startsWith('$')) {
+            target = parseFloat(target.replace('$', ''));
+          }
+
+          // Stop: setup.stop.price (handle "$0.00" string format)
+          let stop = setupStop.price || play.stop_price || play.stop || 0;
+          if (typeof stop === 'string' && stop.startsWith('$')) {
+            stop = parseFloat(stop.replace('$', ''));
+          }
+
+          // Risk/reward and size: top level risk_reward, setup.size
+          const rrRatio = play.risk_reward || play.rr_ratio || play.reward_risk || '—';
+          const positionSize = play.setup?.size || play.position_size || play.size || '';
+
+          // Analyst fields: top level analyst_score, analyst_verdict
           const analystScore = play.analyst_score || 0;
           const analystVerdict = (play.analyst_verdict || play.status || 'PENDING').toUpperCase();
-          const isApproved = analystVerdict === 'APPROVED' || analystVerdict === 'APPROVED';
+          const isApproved = analystVerdict === 'APPROVED';
           const isRejected = analystVerdict === 'REJECTED' || analystVerdict === 'DECLINED';
           const thesis = play.thesis || play.rationale || '';
 
