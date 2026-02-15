@@ -32,7 +32,10 @@
  * PATCH /api/tasks/:id                   Update task (status, assignment, priority)
  * DELETE /api/tasks/:id                  Remove task
  * GET  /api/tasks/stats                  Task counts by status, agent, domain
+ * GET  /api/github?action=dashboard       GitHub repo dashboard (commits, CI, issues, PRs, branches)
  */
+
+import { handleGitHub } from './github.js';
 
 // ── CORS ────────────────────────────────────────────────────────────
 
@@ -122,6 +125,7 @@ function matchRoute(method, path) {
     ['GET',  /^\/api\/agents\/([a-z-]+)\/files$/,   'agentFilesList'],
     ['GET',  /^\/api\/agents\/([a-z-]+)\/files\/(.+)$/, 'agentFileGet'],
     ['PUT',  /^\/api\/agents\/([a-z-]+)\/files\/(.+)$/, 'agentFilePut'],
+    ['GET',  /^\/api\/github$/,                  'github'],
   ];
 
   for (const [m, re, handler] of routes) {
@@ -898,6 +902,12 @@ const handlers = {
         by_domain: Object.fromEntries(byDomain.results.map(r => [r.domain, r.count])),
       },
     });
+  },
+
+  // GET /api/github — GitHub dashboard proxy
+  async github(req, env) {
+    const result = await handleGitHub(req, env);
+    return json(result, result.success ? 200 : 500);
   },
 
   // PUT /api/agents/:name/files/:filename — create or update file
