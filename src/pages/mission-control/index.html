@@ -83,6 +83,10 @@
         <div class="desktop-icon-glyph">🏭</div>
         <span class="desktop-icon-label">Production</span>
       </button>
+      <button class="desktop-icon" data-window="github" title="GitHub">
+        <div class="desktop-icon-glyph">🐙</div>
+        <span class="desktop-icon-label">GitHub</span>
+      </button>
     </div>
 
     <!-- Window container -->
@@ -137,6 +141,10 @@
         <button class="mobile-nav-btn" data-window="work">
           <span class="mobile-nav-icon">🏭</span>
           <span class="mobile-nav-label">Production</span>
+        </button>
+        <button class="mobile-nav-btn" data-window="github">
+          <span class="mobile-nav-icon">🐙</span>
+          <span class="mobile-nav-label">GitHub</span>
         </button>
       </div>
 
@@ -426,6 +434,18 @@
             <span class="task-meta-label">CONNECTIONS</span>
             <div class="task-detail-dep-list"></div>
           </div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- GitHub Dashboard Window -->
+  <template id="tmpl-github">
+    <div class="window-body github-window">
+      <div class="github-main" id="githubMain">
+        <div class="trading-loading">
+          <div class="loading-spinner"></div>
+          <span>Loading repository data...</span>
         </div>
       </div>
     </div>

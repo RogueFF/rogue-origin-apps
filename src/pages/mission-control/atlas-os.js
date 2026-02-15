@@ -104,6 +104,11 @@ const WINDOW_DEFS = {
     icon: '🏭',
     template: 'tmpl-work',
   },
+  github: {
+    title: 'GitHub',
+    icon: '🐙',
+    template: 'tmpl-github',
+  },
 };
 
 // Compute tiled layout that fills the viewport
@@ -124,6 +129,7 @@ function getDefaultLayout(id) {
     inbox:    { x: pad, y: pad, w: halfW, h: fullH },
     'atlas-chat': { x: pad * 2 + halfW, y: pad, w: halfW, h: fullH },
     tasks:    { x: pad, y: pad, w: halfW + pad + halfW, h: fullH },
+    github:   { x: pad * 2 + halfW, y: pad, w: halfW, h: fullH },
   };
 
   return layouts[id] || { x: 100, y: 50, w: 500, h: 500 };
@@ -278,6 +284,11 @@ function initDesktop() {
   scheduleWorkPoll();
   setInterval(scheduleWorkPoll, 300000);
 
+  // GitHub auto-refresh — every 2 minutes
+  setInterval(async () => {
+    if (state.windows.has('github')) await fetchGitHubData();
+  }, GITHUB_POLL_INTERVAL);
+
   // Resize listener
   window.addEventListener('resize', () => {
     state.isMobile = window.innerWidth <= 768;
@@ -398,6 +409,166 @@ async function fetchProductionData() {
   }
 }
 
+// ─── GitHub Dashboard ───
+const GITHUB_POLL_INTERVAL = 120000; // 2 min
+
+async function fetchGitHubData() {
+  const data = await apiFetch('/github?action=dashboard');
+  if (data) renderGitHubDashboard(data);
+}
+
+function renderGitHubDashboard(data) {
+  const container = document.getElementById('githubMain');
+  if (!container) return;
+
+  const { commits = [], ci_runs = [], issues = [], pulls = [], branches = [], summary = {} } = data;
+
+  // CI status badge
+  const ciStatus = summary.ci_passing
+    ? '<span class="gh-badge gh-badge-pass">✓ CI Passing</span>'
+    : '<span class="gh-badge gh-badge-fail">✗ CI Failing</span>';
+
+  // Commits section
+  const commitsHTML = commits.map(c => `
+    <div class="gh-commit">
+      <code class="gh-sha">${c.sha}</code>
+      <span class="gh-commit-msg">${escapeHTML(c.message)}</span>
+      <span class="gh-meta">${c.time_ago}</span>
+    </div>
+  `).join('') || '<div class="gh-empty">No recent commits</div>';
+
+  // CI runs section
+  const runsHTML = ci_runs.map(r => {
+    const icon = r.conclusion === 'success' ? '<span class="gh-ci-dot gh-ci-pass">●</span>'
+      : r.conclusion === 'failure' ? '<span class="gh-ci-dot gh-ci-fail">●</span>'
+      : '<span class="gh-ci-dot gh-ci-pending">●</span>';
+    const dur = r.duration ? `${r.duration}s` : '—';
+    return `
+      <div class="gh-run">
+        ${icon}
+        <span class="gh-run-name">${escapeHTML(r.name)}</span>
+        <span class="gh-meta">${dur} · ${r.time_ago}</span>
+      </div>
+    `;
+  }).join('') || '<div class="gh-empty">No workflow runs</div>';
+
+  // Issues section
+  const issueCount = issues.length;
+  const issuesHTML = issueCount > 0
+    ? issues.map(i => `
+        <div class="gh-issue">
+          <span class="gh-issue-num">#${i.number}</span>
+          <span class="gh-issue-title">${escapeHTML(i.title)}</span>
+          <span class="gh-meta">${i.time_ago}</span>
+        </div>
+      `).join('')
+    : '<div class="gh-empty-good">No open issues ✓</div>';
+
+  // PRs section
+  const prCount = pulls.length;
+  const prsHTML = prCount > 0
+    ? pulls.map(p => `
+        <div class="gh-pr">
+          <span class="gh-pr-num">#${p.number}</span>
+          <span class="gh-pr-title">${escapeHTML(p.title)}</span>
+          <span class="gh-pr-branch">${escapeHTML(p.branch)}</span>
+          <span class="gh-meta">${p.time_ago}</span>
+        </div>
+      `).join('')
+    : '<div class="gh-empty-good">No open PRs ✓</div>';
+
+  // Branches
+  const branchCount = branches.length;
+  const branchesHTML = branches.map(b => {
+    const badge = b.protected ? ' <span class="gh-branch-protected">protected</span>' : '';
+    const isMain = b.name === 'master' || b.name === 'main';
+    return `<span class="gh-branch ${isMain ? 'gh-branch-main' : ''}">${escapeHTML(b.name)}${badge}</span>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="gh-header">
+      <div class="gh-repo">
+        <span class="gh-repo-icon">🐙</span>
+        <span class="gh-repo-name">${escapeHTML(data.repo)}</span>
+        ${ciStatus}
+      </div>
+      <div class="gh-summary">
+        <span class="gh-stat"><strong>${summary.total_commits || 0}</strong> recent</span>
+        <span class="gh-stat-sep">·</span>
+        <span class="gh-stat"><strong>${issueCount}</strong> issue${issueCount !== 1 ? 's' : ''}</span>
+        <span class="gh-stat-sep">·</span>
+        <span class="gh-stat"><strong>${prCount}</strong> PR${prCount !== 1 ? 's' : ''}</span>
+        <span class="gh-stat-sep">·</span>
+        <span class="gh-stat"><strong>${branchCount}</strong> branch${branchCount !== 1 ? 'es' : ''}</span>
+      </div>
+    </div>
+
+    <div class="gh-grid">
+      <div class="gh-section">
+        <div class="gh-section-header">
+          <span class="gh-section-icon">⊙</span>
+          <span class="gh-section-title">RECENT COMMITS</span>
+        </div>
+        <div class="gh-section-body gh-commits-list">
+          ${commitsHTML}
+        </div>
+      </div>
+
+      <div class="gh-section">
+        <div class="gh-section-header">
+          <span class="gh-section-icon">◎</span>
+          <span class="gh-section-title">CI RUNS</span>
+        </div>
+        <div class="gh-section-body">
+          ${runsHTML}
+        </div>
+      </div>
+
+      <div class="gh-section gh-section-half">
+        <div class="gh-section-header">
+          <span class="gh-section-icon">◉</span>
+          <span class="gh-section-title">ISSUES</span>
+          <span class="gh-count">${issueCount}</span>
+        </div>
+        <div class="gh-section-body">
+          ${issuesHTML}
+        </div>
+      </div>
+
+      <div class="gh-section gh-section-half">
+        <div class="gh-section-header">
+          <span class="gh-section-icon">⊕</span>
+          <span class="gh-section-title">PULL REQUESTS</span>
+          <span class="gh-count">${prCount}</span>
+        </div>
+        <div class="gh-section-body">
+          ${prsHTML}
+        </div>
+      </div>
+
+      <div class="gh-section">
+        <div class="gh-section-header">
+          <span class="gh-section-icon">⊘</span>
+          <span class="gh-section-title">BRANCHES</span>
+          <span class="gh-count">${branchCount}</span>
+        </div>
+        <div class="gh-branches">
+          ${branchesHTML}
+        </div>
+      </div>
+    </div>
+
+    <div class="gh-footer">
+      <span class="gh-refresh-note">Updated ${new Date(data.fetched_at).toLocaleTimeString()} · Refreshing every 2m</span>
+    </div>
+  `;
+}
+
+function escapeHTML(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 async function pollData() {
   await Promise.all([fetchAgents(), fetchActivity(), fetchInbox()]);
   // Poll trading data if trading window is open
@@ -407,6 +578,10 @@ async function pollData() {
   // Poll work data if work window is open
   if (state.windows.has('work')) {
     await fetchWorkData();
+  }
+  // Poll GitHub data if github window is open
+  if (state.windows.has('github')) {
+    await fetchGitHubData();
   }
 }
 
@@ -537,6 +712,7 @@ function openWindow(id) {
   if (id === 'tasks') initTasksWindow();
   if (id === 'trading') fetchTradingData();
   if (id === 'work') fetchWorkData();
+  if (id === 'github') fetchGitHubData();
 }
 
 function closeWindow(id) {
