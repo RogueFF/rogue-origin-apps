@@ -761,38 +761,48 @@ function buildOutputChart(days, avgLine) {
   if (days.length === 0) return '<div class="analytics-chart-empty">No data</div>';
 
   const maxLbs = Math.max(...days.map(d => d.totalLbs));
-  const chartH = 300;
-  const chartW = 100; // percentage
-  const barW = Math.max(3, Math.min(20, 80 / days.length));
-  const gap = Math.max(1, barW * 0.2);
+  const chartH = 200;
+  const chartW = 800;
+  const padL = 50, padR = 20, padT = 20, padB = 30;
+  const plotW = chartW - padL - padR;
+  const plotH = chartH - padT - padB;
+  const barW = Math.max(4, Math.min(24, (plotW / days.length) * 0.7));
+  const barGap = plotW / days.length;
 
   const bars = days.map((d, i) => {
-    const h = (d.totalLbs / maxLbs) * (chartH - 60);
-    const x = (i / days.length) * chartW + (barW / 2);
-    const color = d.totalLbs >= 150 ? '#4CAF50'
-                : d.totalLbs >= 100 ? '#FF9800'
-                : '#f44336';
-
-    return `
-      <rect x="${x}%" y="${chartH - h - 40}" width="${barW}%" height="${h}"
-            fill="${color}" opacity="0.8" rx="1">
-        <title>${formatShortDate(d.date)}: ${d.totalLbs.toFixed(1)} lbs</title>
-      </rect>
-    `;
+    const h = (d.totalLbs / maxLbs) * plotH;
+    const x = padL + i * barGap + (barGap - barW) / 2;
+    const y = padT + plotH - h;
+    const color = d.totalLbs >= 150 ? 'var(--sig-success)'
+                : d.totalLbs >= 100 ? 'var(--sig-warning)'
+                : 'var(--sig-danger)';
+    return `<rect x="${x}" y="${y}" width="${barW}" height="${h}" fill="${color}" opacity="0.85" rx="1.5"><title>${formatShortDate(d.date)}: ${d.totalLbs.toFixed(1)} lbs</title></rect>`;
   }).join('');
 
-  const avgY = chartH - ((avgLine / maxLbs) * (chartH - 60)) - 40;
+  const avgY = padT + plotH - (avgLine / maxLbs) * plotH;
 
-  const xLabels = days.filter((_, i) => i % Math.ceil(days.length / 8) === 0).map(d => {
+  // Y-axis labels
+  const ySteps = 4;
+  const yLabels = Array.from({ length: ySteps + 1 }, (_, i) => {
+    const val = (maxLbs / ySteps) * i;
+    const y = padT + plotH - (val / maxLbs) * plotH;
+    return `<text x="${padL - 6}" y="${y + 3}" fill="rgba(255,255,255,0.4)" font-size="8" text-anchor="end" font-family="var(--font-mono)">${Math.round(val)}</text>` +
+           `<line x1="${padL}" y1="${y}" x2="${chartW - padR}" y2="${y}" stroke="rgba(255,255,255,0.05)" stroke-width="0.5"/>`;
+  }).join('');
+
+  // X-axis labels (every Nth day)
+  const labelEvery = Math.ceil(days.length / 10);
+  const xLabels = days.filter((_, i) => i % labelEvery === 0).map(d => {
     const idx = days.indexOf(d);
-    const x = (idx / days.length) * chartW + (barW / 2);
-    return `<text x="${x}%" y="${chartH - 10}" fill="rgba(255,255,255,0.5)" font-size="10" text-anchor="middle" font-family="Geist Mono">${formatShortDate(d.date)}</text>`;
+    const x = padL + idx * barGap + barGap / 2;
+    return `<text x="${x}" y="${chartH - 5}" fill="rgba(255,255,255,0.4)" font-size="7" text-anchor="middle" font-family="var(--font-mono)">${formatShortDate(d.date)}</text>`;
   }).join('');
 
   return `
-    <svg viewBox="0 0 100 ${chartH}" class="analytics-chart">
-      <line x1="0" y1="${avgY}" x2="100" y2="${avgY}" stroke="rgba(255,255,255,0.3)" stroke-width="0.3" stroke-dasharray="2,2" />
-      <text x="2" y="${avgY - 5}" fill="rgba(255,255,255,0.5)" font-size="9" font-family="Geist Mono">avg: ${avgLine.toFixed(1)}</text>
+    <svg viewBox="0 0 ${chartW} ${chartH}" class="analytics-chart" preserveAspectRatio="xMidYMid meet">
+      ${yLabels}
+      <line x1="${padL}" y1="${avgY}" x2="${chartW - padR}" y2="${avgY}" stroke="rgba(255,255,255,0.3)" stroke-width="0.5" stroke-dasharray="4,3" />
+      <text x="${padL + 4}" y="${avgY - 4}" fill="rgba(255,255,255,0.5)" font-size="7" font-family="var(--font-mono)">avg: ${avgLine.toFixed(0)}</text>
       ${bars}
       ${xLabels}
     </svg>
@@ -804,35 +814,56 @@ function buildEfficiencyChart(days) {
 
   const maxRate = Math.max(...days.map(d => d.avgRate));
   const minRate = Math.min(...days.map(d => d.avgRate));
-  const chartH = 300;
-  const chartW = 100;
+  const range = maxRate - minRate || 0.1;
+  const chartH = 200;
+  const chartW = 800;
+  const padL = 50, padR = 20, padT = 20, padB = 30;
+  const plotW = chartW - padL - padR;
+  const plotH = chartH - padT - padB;
 
-  const points = days.map((d, i) => {
-    const x = (i / (days.length - 1)) * chartW;
-    const y = chartH - 40 - ((d.avgRate - minRate) / (maxRate - minRate)) * (chartH - 80);
-    return `${x},${y}`;
-  }).join(' ');
+  const getX = (i) => padL + (days.length === 1 ? plotW / 2 : (i / (days.length - 1)) * plotW);
+  const getY = (val) => padT + plotH - ((val - minRate) / range) * plotH;
 
-  const dots = days.map((d, i) => {
-    const x = (i / (days.length - 1)) * chartW;
-    const y = chartH - 40 - ((d.avgRate - minRate) / (maxRate - minRate)) * (chartH - 80);
-    return `<circle cx="${x}" cy="${y}" r="2" fill="var(--sig-active)"><title>${formatShortDate(d.date)}: ${d.avgRate.toFixed(2)} lb/hr</title></circle>`;
-  }).join('');
+  const points = days.map((d, i) => `${getX(i)},${getY(d.avgRate)}`).join(' ');
+
+  const dots = days.map((d, i) =>
+    `<circle cx="${getX(i)}" cy="${getY(d.avgRate)}" r="3" fill="var(--sig-active)" opacity="0.9"><title>${formatShortDate(d.date)}: ${d.avgRate.toFixed(2)} lb/hr</title></circle>`
+  ).join('');
 
   const avgRate = days.reduce((sum, d) => sum + d.avgRate, 0) / days.length;
-  const avgY = chartH - 40 - ((avgRate - minRate) / (maxRate - minRate)) * (chartH - 80);
+  const avgY = getY(avgRate);
 
-  const xLabels = days.filter((_, i) => i % Math.ceil(days.length / 8) === 0).map(d => {
-    const idx = days.indexOf(d);
-    const x = (idx / (days.length - 1)) * chartW;
-    return `<text x="${x}%" y="${chartH - 10}" fill="rgba(255,255,255,0.5)" font-size="10" text-anchor="middle" font-family="Geist Mono">${formatShortDate(d.date)}</text>`;
+  // Y-axis labels
+  const ySteps = 4;
+  const yLabels = Array.from({ length: ySteps + 1 }, (_, i) => {
+    const val = minRate + (range / ySteps) * i;
+    const y = getY(val);
+    return `<text x="${padL - 6}" y="${y + 3}" fill="rgba(255,255,255,0.4)" font-size="8" text-anchor="end" font-family="var(--font-mono)">${val.toFixed(2)}</text>` +
+           `<line x1="${padL}" y1="${y}" x2="${chartW - padR}" y2="${y}" stroke="rgba(255,255,255,0.05)" stroke-width="0.5"/>`;
   }).join('');
 
+  const labelEvery = Math.ceil(days.length / 10);
+  const xLabels = days.filter((_, i) => i % labelEvery === 0).map((d, _, arr) => {
+    const idx = days.indexOf(d);
+    return `<text x="${getX(idx)}" y="${chartH - 5}" fill="rgba(255,255,255,0.4)" font-size="7" text-anchor="middle" font-family="var(--font-mono)">${formatShortDate(d.date)}</text>`;
+  }).join('');
+
+  // Gradient area fill
+  const areaPath = `M${getX(0)},${padT + plotH} ${days.map((d, i) => `L${getX(i)},${getY(d.avgRate)}`).join(' ')} L${getX(days.length - 1)},${padT + plotH} Z`;
+
   return `
-    <svg viewBox="0 0 ${chartW} ${chartH}" class="analytics-chart">
-      <line x1="0" y1="${avgY}" x2="${chartW}" y2="${avgY}" stroke="rgba(255,255,255,0.2)" stroke-width="0.3" stroke-dasharray="2,2" />
-      <text x="2" y="${avgY - 5}" fill="rgba(255,255,255,0.5)" font-size="9" font-family="Geist Mono">avg: ${avgRate.toFixed(2)}</text>
-      <polyline points="${points}" fill="none" stroke="var(--sig-active)" stroke-width="0.5" />
+    <svg viewBox="0 0 ${chartW} ${chartH}" class="analytics-chart" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <linearGradient id="effGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="var(--sig-active)" stop-opacity="0.2"/>
+          <stop offset="100%" stop-color="var(--sig-active)" stop-opacity="0.02"/>
+        </linearGradient>
+      </defs>
+      ${yLabels}
+      <line x1="${padL}" y1="${avgY}" x2="${chartW - padR}" y2="${avgY}" stroke="rgba(255,255,255,0.25)" stroke-width="0.5" stroke-dasharray="4,3" />
+      <text x="${padL + 4}" y="${avgY - 4}" fill="rgba(255,255,255,0.5)" font-size="7" font-family="var(--font-mono)">avg: ${avgRate.toFixed(2)}</text>
+      <path d="${areaPath}" fill="url(#effGrad)" />
+      <polyline points="${points}" fill="none" stroke="var(--sig-active)" stroke-width="1.5" stroke-linejoin="round" />
       ${dots}
       ${xLabels}
     </svg>
@@ -844,38 +875,58 @@ function buildCostChart(days) {
 
   const maxCost = Math.max(...days.map(d => d.costPerLb));
   const minCost = Math.min(...days.map(d => d.costPerLb));
-  const chartH = 300;
-  const chartW = 100;
+  const range = maxCost - minCost || 1;
+  const chartH = 200;
+  const chartW = 800;
+  const padL = 50, padR = 20, padT = 20, padB = 30;
+  const plotW = chartW - padL - padR;
+  const plotH = chartH - padT - padB;
 
-  const points = days.map((d, i) => {
-    const x = (i / (days.length - 1)) * chartW;
-    const y = chartH - 40 - ((d.costPerLb - minCost) / (maxCost - minCost)) * (chartH - 80);
-    return `${x},${y}`;
-  }).join(' ');
+  const getX = (i) => padL + (days.length === 1 ? plotW / 2 : (i / (days.length - 1)) * plotW);
+  const getY = (val) => padT + plotH - ((val - minCost) / range) * plotH;
+
+  const points = days.map((d, i) => `${getX(i)},${getY(d.costPerLb)}`).join(' ');
 
   const dots = days.map((d, i) => {
-    const x = (i / (days.length - 1)) * chartW;
-    const y = chartH - 40 - ((d.costPerLb - minCost) / (maxCost - minCost)) * (chartH - 80);
-    // Lower cost = green, higher = red
-    const normalized = (d.costPerLb - minCost) / (maxCost - minCost);
-    const color = normalized < 0.33 ? '#4CAF50' : normalized < 0.67 ? '#FF9800' : '#f44336';
-    return `<circle cx="${x}" cy="${y}" r="2" fill="${color}"><title>${formatShortDate(d.date)}: $${d.costPerLb.toFixed(2)}/lb</title></circle>`;
+    const normalized = (d.costPerLb - minCost) / range;
+    const color = normalized < 0.33 ? 'var(--sig-success)' : normalized < 0.67 ? 'var(--sig-warning)' : 'var(--sig-danger)';
+    return `<circle cx="${getX(i)}" cy="${getY(d.costPerLb)}" r="3" fill="${color}" opacity="0.9"><title>${formatShortDate(d.date)}: $${d.costPerLb.toFixed(2)}/lb</title></circle>`;
   }).join('');
 
   const avgCost = days.reduce((sum, d) => sum + d.costPerLb, 0) / days.length;
-  const avgY = chartH - 40 - ((avgCost - minCost) / (maxCost - minCost)) * (chartH - 80);
+  const avgY = getY(avgCost);
 
-  const xLabels = days.filter((_, i) => i % Math.ceil(days.length / 8) === 0).map(d => {
-    const idx = days.indexOf(d);
-    const x = (idx / (days.length - 1)) * chartW;
-    return `<text x="${x}%" y="${chartH - 10}" fill="rgba(255,255,255,0.5)" font-size="10" text-anchor="middle" font-family="Geist Mono">${formatShortDate(d.date)}</text>`;
+  // Y-axis labels
+  const ySteps = 4;
+  const yLabels = Array.from({ length: ySteps + 1 }, (_, i) => {
+    const val = minCost + (range / ySteps) * i;
+    const y = getY(val);
+    return `<text x="${padL - 6}" y="${y + 3}" fill="rgba(255,255,255,0.4)" font-size="8" text-anchor="end" font-family="var(--font-mono)">$${val.toFixed(0)}</text>` +
+           `<line x1="${padL}" y1="${y}" x2="${chartW - padR}" y2="${y}" stroke="rgba(255,255,255,0.05)" stroke-width="0.5"/>`;
   }).join('');
 
+  const labelEvery = Math.ceil(days.length / 10);
+  const xLabels = days.filter((_, i) => i % labelEvery === 0).map(d => {
+    const idx = days.indexOf(d);
+    return `<text x="${getX(idx)}" y="${chartH - 5}" fill="rgba(255,255,255,0.4)" font-size="7" text-anchor="middle" font-family="var(--font-mono)">${formatShortDate(d.date)}</text>`;
+  }).join('');
+
+  // Area fill
+  const areaPath = `M${getX(0)},${padT + plotH} ${days.map((d, i) => `L${getX(i)},${getY(d.costPerLb)}`).join(' ')} L${getX(days.length - 1)},${padT + plotH} Z`;
+
   return `
-    <svg viewBox="0 0 ${chartW} ${chartH}" class="analytics-chart">
-      <line x1="0" y1="${avgY}" x2="${chartW}" y2="${avgY}" stroke="rgba(255,255,255,0.2)" stroke-width="0.3" stroke-dasharray="2,2" />
-      <text x="2" y="${avgY - 5}" fill="rgba(255,255,255,0.5)" font-size="9" font-family="Geist Mono">avg: $${avgCost.toFixed(2)}</text>
-      <polyline points="${points}" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="0.5" />
+    <svg viewBox="0 0 ${chartW} ${chartH}" class="analytics-chart" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <linearGradient id="costGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="var(--sig-warning)" stop-opacity="0.15"/>
+          <stop offset="100%" stop-color="var(--sig-warning)" stop-opacity="0.02"/>
+        </linearGradient>
+      </defs>
+      ${yLabels}
+      <line x1="${padL}" y1="${avgY}" x2="${chartW - padR}" y2="${avgY}" stroke="rgba(255,255,255,0.25)" stroke-width="0.5" stroke-dasharray="4,3" />
+      <text x="${padL + 4}" y="${avgY - 4}" fill="rgba(255,255,255,0.5)" font-size="7" font-family="var(--font-mono)">avg: $${avgCost.toFixed(2)}</text>
+      <path d="${areaPath}" fill="url(#costGrad)" />
+      <polyline points="${points}" fill="none" stroke="var(--sig-warning)" stroke-width="1.5" stroke-linejoin="round" opacity="0.7" />
       ${dots}
       ${xLabels}
     </svg>
