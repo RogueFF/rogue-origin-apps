@@ -1610,7 +1610,44 @@ function renderTradingDesk(regime, plays, portfolio, positions, brief) {
     : 'CLOSED';
 
   const openPositions = Array.isArray(positions) ? positions : (portfolio?.positions || []);
-  const degenPlay = brief?.degen_play || null;
+
+  // Parse brief body (it's a JSON string inside the brief object)
+  let briefData = {};
+  try {
+    if (brief?.body && typeof brief.body === 'string') {
+      briefData = JSON.parse(brief.body);
+    } else if (brief?.body && typeof brief.body === 'object') {
+      briefData = brief.body;
+    } else if (brief?.plays) {
+      briefData = brief; // Already parsed
+    }
+  } catch (e) { /* brief parse failed */ }
+
+  const degenPlay = briefData?.degen_play || brief?.degen_play || null;
+
+  // Enrich plays with analyst data from brief (brief has scores, plays API doesn't)
+  let enrichedPlays = Array.isArray(plays) ? plays : [];
+  try {
+    const briefPlays = briefData?.plays?.structured_plays || [];
+    if (briefPlays.length > 0) {
+      const briefMap = {};
+      for (const bp of briefPlays) {
+        if (bp.ticker) briefMap[bp.ticker] = bp;
+      }
+      enrichedPlays = enrichedPlays.map(p => {
+        const match = briefMap[p.ticker];
+        if (match) {
+          return {
+            ...p,
+            analyst_score: p.analyst_score || match.analyst_score || null,
+            analyst_verdict: p.analyst_verdict || match.analyst_verdict || null,
+            risk_reward: p.risk_reward || match.risk_reward || null,
+          };
+        }
+        return p;
+      });
+    }
+  } catch (e) { /* brief enrichment failed, use raw plays */ }
 
   const html = `
     <div class="trading-status-bar">
@@ -1619,7 +1656,7 @@ function renderTradingDesk(regime, plays, portfolio, positions, brief) {
     </div>
     ${buildRegimeBanner(regime)}
     <div class="trading-desk-content">
-      ${buildPlaysSection(plays)}
+      ${buildPlaysSection(enrichedPlays)}
       ${buildPortfolioStrip(portfolio, openPositions)}
       ${degenPlay ? buildDegenPlay(degenPlay) : ''}
     </div>
