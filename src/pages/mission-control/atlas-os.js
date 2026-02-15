@@ -123,12 +123,18 @@ function getDefaultLayout(id) {
   const halfW = Math.floor(usableW / 2);
   const fullH = usableH;
 
+  // Trading desk: largest window, center-left (70% width)
+  const tradingW = Math.floor(usableW * 0.7);
+  const sidebarW = usableW - tradingW - pad;
+
   const layouts = {
-    activity: { x: pad, y: pad, w: halfW, h: fullH },
-    agents:   { x: pad * 2 + halfW, y: pad, w: halfW, h: fullH },
+    trading:  { x: pad, y: pad, w: tradingW, h: fullH }, // HERO: 70% width, left
+    agents:   { x: pad * 2 + tradingW, y: pad, w: sidebarW, h: Math.floor(fullH / 2) - pad/2 }, // Right sidebar, top
+    activity: { x: pad * 2 + tradingW, y: pad * 2 + Math.floor(fullH / 2), w: sidebarW, h: Math.floor(fullH / 2) - pad }, // Right sidebar, bottom
     inbox:    { x: pad, y: pad, w: halfW, h: fullH },
     'atlas-chat': { x: pad * 2 + halfW, y: pad, w: halfW, h: fullH },
     tasks:    { x: pad, y: pad, w: halfW + pad + halfW, h: fullH },
+    work:     { x: pad, y: pad, w: tradingW, h: fullH },
     github:   { x: pad * 2 + halfW, y: pad, w: halfW, h: fullH },
   };
 
@@ -240,19 +246,19 @@ function initDesktop() {
 
   // Open default windows
   if (state.isMobile) {
-    // Mobile: open all windows as stacked cards
+    // Mobile: Trading Desk is the default view
+    openWindow('trading');
     openWindow('agents');
     openWindow('activity');
-    openWindow('inbox');
   } else {
     const saved = loadWindowState();
     if (saved && saved.length > 0) {
       saved.forEach(id => openWindow(id));
     } else {
-      openWindow('activity');
-      openWindow('agents');
+      // Default desktop layout: Trading Desk (hero) + Agent Fleet + Activity Feed
       openWindow('trading');
-      openWindow('work');
+      openWindow('agents');
+      openWindow('activity');
     }
   }
 
@@ -360,15 +366,16 @@ async function fetchInbox() {
 }
 
 async function fetchTradingData() {
-  const [regime, plays, portfolio, closed] = await Promise.all([
+  const [regime, plays, portfolio, positions, brief] = await Promise.all([
     apiFetch('/regime'),
     apiFetch('/plays'),
     apiFetch('/portfolio'),
-    apiFetch('/positions?status=closed'),
+    apiFetch('/positions?status=open'),
+    apiFetch('/briefs/latest'),
   ]);
 
   if (regime || plays || portfolio) {
-    renderTradingDesk(regime, plays, portfolio, closed);
+    renderTradingDesk(regime, plays, portfolio, positions, brief);
   }
 }
 
@@ -1593,7 +1600,7 @@ document.addEventListener('click', (e) => {
 /* ═══════════════════════════════════════════════════
    TRADING DESK
    ═══════════════════════════════════════════════════ */
-function renderTradingDesk(regime, plays, portfolio, closed) {
+function renderTradingDesk(regime, plays, portfolio, positions, brief) {
   const container = document.getElementById('tradingMain');
   if (!container) return;
 
@@ -1602,17 +1609,19 @@ function renderTradingDesk(regime, plays, portfolio, closed) {
     ? '<span class="live-dot"></span> LIVE'
     : 'CLOSED';
 
-  const closedTrades = Array.isArray(closed) ? closed : [];
+  const openPositions = Array.isArray(positions) ? positions : (portfolio?.positions || []);
+  const degenPlay = brief?.degen_play || null;
 
   const html = `
     <div class="trading-status-bar">
       <span class="trading-market-status ${marketOpen ? 'market-open' : 'market-closed'}">${liveIndicator}</span>
       <span class="trading-refresh-rate">${marketOpen ? 'Refreshing every 60s' : 'Refreshing every 5m'}</span>
     </div>
-    <div class="trading-grid">
-      ${buildRegimeCard(regime)}
-      ${buildPlaysCard(plays)}
-      ${buildPortfolioCard(portfolio, closedTrades)}
+    ${buildRegimeBanner(regime)}
+    <div class="trading-desk-content">
+      ${buildPlaysSection(plays)}
+      ${buildPortfolioStrip(portfolio, openPositions)}
+      ${degenPlay ? buildDegenPlay(degenPlay) : ''}
     </div>
   `;
 
@@ -1755,6 +1764,47 @@ function buildProductionCard(data) {
   `;
 }
 
+// ─── NEW: Full-width regime banner (hero element) ───
+function buildRegimeBanner(data) {
+  if (!data) {
+    return `
+      <div class="regime-banner regime-neutral">
+        <div class="regime-banner-signal">NEUTRAL</div>
+        <div class="regime-banner-meta">
+          <span class="regime-banner-label">No regime data</span>
+        </div>
+      </div>
+    `;
+  }
+
+  const signal = (data.signal || 'NEUTRAL').toUpperCase();
+  const signalClass = signal === 'GREEN' ? 'regime-green' : signal === 'YELLOW' ? 'regime-yellow' : signal === 'RED' ? 'regime-red' : 'regime-neutral';
+  const label = data.label || '';
+  const mktData = data.data || {};
+  const spy = mktData.spy_price || data.spy_price || '—';
+  const vix = mktData.vix || mktData.vix_level || data.vix_level || data.vix || '—';
+  const yield10y = mktData.yield_10y || mktData['10y_yield'] || data.yield_10y || '—';
+  const strategyObj = data.strategy || {};
+  const strategyNote = typeof strategyObj === 'string' ? strategyObj : (strategyObj.position_sizing || strategyObj.strategies || '');
+
+  return `
+    <div class="regime-banner ${signalClass}">
+      <div class="regime-banner-signal">${escapeHtml(signal)}</div>
+      <div class="regime-banner-content">
+        ${label ? `<div class="regime-banner-label">${escapeHtml(label)}</div>` : ''}
+        <div class="regime-banner-data">
+          <span class="regime-banner-metric"><strong>SPY</strong> ${escapeHtml(String(spy))}</span>
+          <span class="regime-banner-divider">·</span>
+          <span class="regime-banner-metric"><strong>VIX</strong> ${escapeHtml(String(vix))}</span>
+          ${yield10y !== '—' ? `<span class="regime-banner-divider">·</span><span class="regime-banner-metric"><strong>10Y</strong> ${escapeHtml(String(yield10y))}</span>` : ''}
+        </div>
+        ${strategyNote ? `<div class="regime-banner-strategy">${escapeHtml(strategyNote)}</div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+// ─── Legacy regime card (kept for compatibility) ───
 function buildRegimeCard(data) {
   if (!data) {
     return `
@@ -1830,6 +1880,107 @@ function buildRegimeCard(data) {
   `;
 }
 
+// ─── NEW: Plays section with analyst scores (hero content) ───
+function buildPlaysSection(data) {
+  const plays = Array.isArray(data) ? data : (data?.plays || []);
+
+  if (plays.length === 0) {
+    return `
+      <div class="plays-section">
+        <div class="plays-section-header">
+          <span class="plays-section-title">Today's Plays</span>
+          <span class="plays-count">0 setups</span>
+        </div>
+        <div class="plays-empty">
+          <div class="empty-glyph">◻</div>
+          <p>No plays structured today. Atlas Squad is monitoring markets.</p>
+        </div>
+      </div>
+    `;
+  }
+
+  // Sort plays by analyst_score descending, then by approved status
+  const sortedPlays = [...plays].sort((a, b) => {
+    const aApproved = a.status === 'approved' || a.analyst_verdict === 'APPROVED';
+    const bApproved = b.status === 'approved' || b.analyst_verdict === 'APPROVED';
+    if (aApproved && !bApproved) return -1;
+    if (!aApproved && bApproved) return 1;
+    return (b.analyst_score || 0) - (a.analyst_score || 0);
+  });
+
+  return `
+    <div class="plays-section">
+      <div class="plays-section-header">
+        <span class="plays-section-title">Today's Plays</span>
+        <span class="plays-count">${plays.length} setup${plays.length !== 1 ? 's' : ''}</span>
+      </div>
+      <div class="plays-grid">
+        ${sortedPlays.map(play => {
+          const ticker = play.ticker || '—';
+          const direction = (play.direction || 'LONG').toUpperCase();
+          const directionClass = direction === 'BULL' || direction === 'LONG' ? 'bull' : 'bear';
+          const vehicle = play.vehicle || play.type || '—';
+          const strike = play.strike || '';
+          const expiry = play.expiry ? formatDate(play.expiry) : '';
+          const entry = play.entry_price || play.entry || 0;
+          const target = play.target_price || play.target || 0;
+          const stop = play.stop_price || play.stop || 0;
+          const rrRatio = play.rr_ratio || play.reward_risk || '—';
+          const positionSize = play.position_size || play.size || '';
+          const analystScore = play.analyst_score || 0;
+          const analystVerdict = (play.analyst_verdict || play.status || 'PENDING').toUpperCase();
+          const isApproved = analystVerdict === 'APPROVED' || analystVerdict === 'APPROVED';
+          const isRejected = analystVerdict === 'REJECTED' || analystVerdict === 'DECLINED';
+          const thesis = play.thesis || play.rationale || '';
+
+          const cardClass = isApproved ? 'play-approved' : isRejected ? 'play-rejected' : 'play-pending';
+          const scoreColor = analystScore >= 8 ? '#22c55e' : analystScore >= 6 ? '#eab308' : '#ef4444';
+
+          return `
+            <div class="play-card ${cardClass}">
+              <div class="play-card-header">
+                <div class="play-card-ticker-row">
+                  <span class="play-card-ticker">${escapeHtml(ticker)}</span>
+                  <span class="play-card-direction ${directionClass}">${escapeHtml(direction)}</span>
+                </div>
+                <div class="play-card-score" style="--score-color: ${scoreColor}">
+                  <span class="play-score-value">${analystScore.toFixed(1)}</span>
+                  <span class="play-score-label">/10</span>
+                </div>
+              </div>
+              <div class="play-card-vehicle">${escapeHtml(vehicle)}${strike ? ` · ${strike}` : ''}${expiry ? ` · exp ${expiry}` : ''}</div>
+              <div class="play-card-prices">
+                <div class="play-price-item">
+                  <span class="play-price-label">Entry</span>
+                  <span class="play-price-value">${formatCurrency(entry)}</span>
+                </div>
+                <div class="play-price-item">
+                  <span class="play-price-label">Target</span>
+                  <span class="play-price-value positive">${formatCurrency(target)}</span>
+                </div>
+                <div class="play-price-item">
+                  <span class="play-price-label">Stop</span>
+                  <span class="play-price-value negative">${formatCurrency(stop)}</span>
+                </div>
+                <div class="play-price-item">
+                  <span class="play-price-label">R:R</span>
+                  <span class="play-price-value">${escapeHtml(String(rrRatio))}</span>
+                </div>
+              </div>
+              ${positionSize ? `<div class="play-card-size">Size: ${escapeHtml(positionSize)}</div>` : ''}
+              <div class="play-card-verdict ${analystVerdict.toLowerCase()}">
+                ${isApproved ? '✓' : isRejected ? '✗' : '○'} ${escapeHtml(analystVerdict)}
+              </div>
+              ${thesis ? `<div class="play-card-thesis">${escapeHtml(thesis)}</div>` : ''}
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// ─── Legacy plays card (kept for compatibility) ───
 function buildPlaysCard(data) {
   const plays = Array.isArray(data) ? data : (data?.plays || []);
 
@@ -2050,10 +2201,134 @@ function buildPortfolioCard(data, closedTrades) {
   `;
 }
 
+// ─── NEW: Portfolio strip (persistent summary) ───
+function buildPortfolioStrip(portfolio, openPositions) {
+  if (!portfolio) {
+    return `
+      <div class="portfolio-strip">
+        <div class="portfolio-strip-stat">
+          <span class="portfolio-strip-label">Portfolio</span>
+          <span class="portfolio-strip-value">—</span>
+        </div>
+      </div>
+    `;
+  }
+
+  const bankroll = portfolio.portfolio_value || portfolio.bankroll || 0;
+  const cash = portfolio.available_cash || portfolio.cash || 0;
+  const totalPnl = (portfolio.unrealized_pnl || 0) + (portfolio.realized_pnl || 0);
+  const winRate = portfolio.win_rate || 0;
+  const pnlClass = totalPnl >= 0 ? 'positive' : 'negative';
+  const pnlSign = totalPnl >= 0 ? '+' : '';
+  const positions = Array.isArray(openPositions) ? openPositions : [];
+
+  return `
+    <div class="portfolio-strip">
+      <div class="portfolio-strip-header">
+        <span class="portfolio-strip-title">Portfolio</span>
+        <div class="portfolio-strip-stats">
+          <div class="portfolio-strip-stat">
+            <span class="portfolio-strip-label">Value</span>
+            <span class="portfolio-strip-value">${formatCurrency(bankroll)}</span>
+          </div>
+          <div class="portfolio-strip-stat">
+            <span class="portfolio-strip-label">Cash</span>
+            <span class="portfolio-strip-value">${formatCurrency(cash)}</span>
+          </div>
+          <div class="portfolio-strip-stat">
+            <span class="portfolio-strip-label">P&L</span>
+            <span class="portfolio-strip-value ${pnlClass}">${pnlSign}${formatCurrency(totalPnl)}</span>
+          </div>
+          <div class="portfolio-strip-stat">
+            <span class="portfolio-strip-label">Win Rate</span>
+            <span class="portfolio-strip-value">${winRate}%</span>
+          </div>
+        </div>
+      </div>
+      ${positions.length > 0 ? `
+        <div class="portfolio-strip-positions">
+          ${positions.map(pos => {
+            const ticker = pos.ticker || '—';
+            const direction = (pos.direction || '').toLowerCase();
+            const entry = pos.entry_price || pos.entry || 0;
+            const current = pos.current_price || entry;
+            const pnl = pos.current_pnl || pos.pnl || 0;
+            const pnlColor = pnl > 0 ? '#22c55e' : pnl < 0 ? '#ef4444' : 'var(--os-text-muted)';
+            const pnlSign = pnl > 0 ? '+' : '';
+            return `
+              <div class="portfolio-strip-position">
+                <span class="strip-pos-ticker ${direction}">${escapeHtml(ticker)}</span>
+                <span class="strip-pos-entry">${formatCurrency(entry)} → ${formatCurrency(current)}</span>
+                <span class="strip-pos-pnl" style="color: ${pnlColor}">${pnlSign}${formatCurrency(pnl)}</span>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      ` : '<div class="portfolio-strip-empty">No open positions</div>'}
+    </div>
+  `;
+}
+
+// ─── NEW: Degen play (YOLO section with danger styling) ───
+function buildDegenPlay(degen) {
+  if (!degen) return '';
+
+  const ticker = degen.ticker || '—';
+  const rrRatio = degen.rr_ratio || degen.reward_risk || '—';
+  const thesis = degen.thesis || degen.rationale || '';
+  const size = degen.position_size || degen.size || '1% max';
+  const vehicle = degen.vehicle || degen.type || '';
+  const entry = degen.entry_price || degen.entry || 0;
+  const target = degen.target_price || degen.target || 0;
+  const stop = degen.stop_price || degen.stop || 0;
+
+  return `
+    <div class="degen-play">
+      <div class="degen-play-header">
+        <div class="degen-play-title">
+          <span class="degen-play-icon">⚠️</span>
+          <span class="degen-play-label">DEGEN PLAY</span>
+        </div>
+        <div class="degen-play-warning">HIGH RISK · YOLO ONLY</div>
+      </div>
+      <div class="degen-play-content">
+        <div class="degen-play-ticker-row">
+          <span class="degen-play-ticker">${escapeHtml(ticker)}</span>
+          <span class="degen-play-rr">R:R ${escapeHtml(String(rrRatio))}</span>
+        </div>
+        ${vehicle ? `<div class="degen-play-vehicle">${escapeHtml(vehicle)}</div>` : ''}
+        ${thesis ? `<div class="degen-play-thesis">${escapeHtml(thesis)}</div>` : ''}
+        <div class="degen-play-levels">
+          <div class="degen-level-item">
+            <span class="degen-level-label">Entry</span>
+            <span class="degen-level-value">${formatCurrency(entry)}</span>
+          </div>
+          <div class="degen-level-item">
+            <span class="degen-level-label">Target</span>
+            <span class="degen-level-value">${formatCurrency(target)}</span>
+          </div>
+          <div class="degen-level-item">
+            <span class="degen-level-label">Stop</span>
+            <span class="degen-level-value">${formatCurrency(stop)}</span>
+          </div>
+        </div>
+        <div class="degen-play-size">Max Size: ${escapeHtml(size)}</div>
+      </div>
+    </div>
+  `;
+}
+
 function formatCurrency(val) {
   const num = parseFloat(val);
   if (isNaN(num)) return '$0.00';
   return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return dateStr;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 
