@@ -2138,43 +2138,10 @@ function renderTradingDesk(regime, plays, portfolio, positions, brief) {
 
   const openPositions = Array.isArray(positions) ? positions : (portfolio?.positions || []);
 
-  // Parse brief body (it's a JSON string inside the brief object)
-  let briefData = {};
-  try {
-    if (brief?.body && typeof brief.body === 'string') {
-      briefData = JSON.parse(brief.body);
-    } else if (brief?.body && typeof brief.body === 'object') {
-      briefData = brief.body;
-    } else if (brief?.plays) {
-      briefData = brief; // Already parsed
-    }
-  } catch (e) { /* brief parse failed */ }
-
-  const degenPlay = briefData?.degen_play || brief?.degen_play || null;
-
-  // Enrich plays with analyst data from brief (brief has scores, plays API doesn't)
-  let enrichedPlays = Array.isArray(plays) ? plays : [];
-  try {
-    const briefPlays = briefData?.plays?.structured_plays || [];
-    if (briefPlays.length > 0) {
-      const briefMap = {};
-      for (const bp of briefPlays) {
-        if (bp.ticker) briefMap[bp.ticker] = bp;
-      }
-      enrichedPlays = enrichedPlays.map(p => {
-        const match = briefMap[p.ticker];
-        if (match) {
-          return {
-            ...p,
-            analyst_score: p.analyst_score || match.analyst_score || null,
-            analyst_verdict: p.analyst_verdict || match.analyst_verdict || null,
-            risk_reward: p.risk_reward || match.risk_reward || null,
-          };
-        }
-        return p;
-      });
-    }
-  } catch (e) { /* brief enrichment failed, use raw plays */ }
+  // Separate stock plays from options plays
+  const allPlays = Array.isArray(plays) ? plays : [];
+  const stockPlays = allPlays.filter(p => p.vehicle === 'shares');
+  const optionPlays = allPlays.filter(p => p.vehicle === 'calls' || p.vehicle === 'puts');
 
   const html = `
     <div class="trading-status-bar">
@@ -2182,10 +2149,11 @@ function renderTradingDesk(regime, plays, portfolio, positions, brief) {
       <span class="trading-refresh-rate">${marketOpen ? 'Refreshing every 60s' : 'Refreshing every 5m'}</span>
     </div>
     ${buildRegimeBanner(regime)}
-    <div class="trading-desk-content">
-      ${buildPlaysSection(enrichedPlays)}
-      ${buildPortfolioStrip(portfolio, openPositions)}
-      ${degenPlay ? buildDegenPlay(degenPlay) : ''}
+    ${buildPortfolioOverview(portfolio, openPositions, optionPlays)}
+    <div class="td-sections">
+      ${buildStockPicks(stockPlays)}
+      ${buildOptionPlays(optionPlays)}
+      ${buildOpenPositions(openPositions)}
     </div>
   `;
 
@@ -2328,616 +2296,239 @@ function buildProductionCard(data) {
   `;
 }
 
-// ─── NEW: Full-width regime banner (hero element) ───
+
+// ─── Trading Desk: Regime Banner ───
 function buildRegimeBanner(data) {
   if (!data) {
-    return `
-      <div class="regime-banner regime-neutral">
-        <div class="regime-banner-signal">NEUTRAL</div>
-        <div class="regime-banner-meta">
-          <span class="regime-banner-label">No regime data</span>
-        </div>
-      </div>
-    `;
+    return `<div class="td-regime td-regime-neutral"><span class="td-regime-signal">—</span><span class="td-regime-label">No regime data</span></div>`;
   }
 
   const signal = (data.signal || 'NEUTRAL').toUpperCase();
-  const signalClass = signal === 'GREEN' ? 'regime-green' : signal === 'YELLOW' ? 'regime-yellow' : signal === 'RED' ? 'regime-red' : 'regime-neutral';
+  const cls = signal === 'GREEN' ? 'td-regime-green' : signal === 'YELLOW' ? 'td-regime-yellow' : signal === 'RED' ? 'td-regime-red' : 'td-regime-neutral';
   const label = data.label || '';
 
-  // Parse SPY and VIX from the text data field if it exists
-  let spy = '—';
-  let vix = '—';
-  let yield10y = '—';
+  let rawData = data.data || {};
+  if (typeof rawData === 'string') try { rawData = JSON.parse(rawData); } catch { rawData = {}; }
+  let strategy = data.strategy || {};
+  if (typeof strategy === 'string') try { strategy = JSON.parse(strategy); } catch { strategy = {}; }
+  let reasoning = data.reasoning || [];
+  if (typeof reasoning === 'string') try { reasoning = JSON.parse(reasoning); } catch { reasoning = []; }
 
-  if (typeof data.data === 'string') {
-    // Parse from text blob: "SPY: $681.75 (+0.07% today)" and "VIX: 20.6 (elevated)"
-    const spyMatch = data.data.match(/SPY:\s*\$?([\d.,]+)/i);
-    const vixMatch = data.data.match(/VIX:\s*([\d.]+)/i);
-    const yieldMatch = data.data.match(/10Y\s+Yield:\s*([\d.]+%?)/i);
-
-    if (spyMatch) spy = `$${spyMatch[1]}`;
-    if (vixMatch) vix = vixMatch[1];
-    if (yieldMatch) yield10y = yieldMatch[1];
-  } else {
-    // Fallback to object structure
-    const mktData = data.data || {};
-    spy = mktData.spy_price || data.spy_price || '—';
-    vix = mktData.vix || mktData.vix_level || data.vix_level || data.vix || '—';
-    yield10y = mktData.yield_10y || mktData['10y_yield'] || data.yield_10y || '—';
-  }
-
-  const strategyObj = data.strategy || {};
-  const strategyNote = typeof strategyObj === 'string' ? strategyObj : (strategyObj.position_sizing || strategyObj.strategies || '');
+  const spy = rawData.spy_price || '—';
+  const vix = rawData.vix || '—';
+  const y10 = rawData.yield_10y || '—';
+  const sizing = strategy.position_sizing || '';
 
   return `
-    <div class="regime-banner ${signalClass}">
-      <div class="regime-banner-signal">${escapeHtml(signal)}</div>
-      <div class="regime-banner-content">
-        ${label ? `<div class="regime-banner-label">${escapeHtml(label)}</div>` : ''}
-        <div class="regime-banner-data">
-          <span class="regime-banner-metric"><strong>SPY</strong> ${escapeHtml(String(spy))}</span>
-          <span class="regime-banner-divider">·</span>
-          <span class="regime-banner-metric"><strong>VIX</strong> ${escapeHtml(String(vix))}</span>
-          ${yield10y !== '—' ? `<span class="regime-banner-divider">·</span><span class="regime-banner-metric"><strong>10Y</strong> ${escapeHtml(String(yield10y))}</span>` : ''}
+    <div class="td-regime ${cls}">
+      <div class="td-regime-left">
+        <span class="td-regime-signal">${signal}</span>
+        <span class="td-regime-label">${escapeHTML(label)}</span>
+      </div>
+      <div class="td-regime-data">
+        <div class="td-regime-stat"><span class="td-regime-stat-label">SPY</span><span class="td-regime-stat-value">${spy}</span></div>
+        <div class="td-regime-stat"><span class="td-regime-stat-label">VIX</span><span class="td-regime-stat-value">${vix}</span></div>
+        <div class="td-regime-stat"><span class="td-regime-stat-label">10Y</span><span class="td-regime-stat-value">${y10}</span></div>
+      </div>
+      ${sizing ? `<div class="td-regime-sizing">${escapeHTML(sizing)}</div>` : ''}
+    </div>
+  `;
+}
+
+// ─── Trading Desk: Portfolio Overview ───
+function buildPortfolioOverview(portfolio, openPositions, optionPlays) {
+  if (!portfolio) return '';
+
+  const pv = portfolio.portfolio_value || portfolio.starting_bankroll || 10000;
+  const start = portfolio.starting_bankroll || 10000;
+  const realized = portfolio.realized_pnl || 0;
+  const unrealized = portfolio.unrealized_pnl || 0;
+  const totalPnl = realized + unrealized;
+  const pnlPct = start > 0 ? ((pv / start - 1) * 100) : 0;
+  const pnlColor = totalPnl >= 0 ? 'var(--sig-green, #22c55e)' : 'var(--sig-red, #ef4444)';
+
+  const exposure = portfolio.open_exposure || 0;
+  const bankroll = portfolio.available_bankroll || pv;
+  const openCount = portfolio.open_positions || 0;
+  const closedCount = portfolio.closed_trades || 0;
+  const winRate = portfolio.win_rate || 0;
+  const wins = portfolio.wins || 0;
+  const losses = portfolio.losses || 0;
+
+  // Calculate allocation bars
+  const stockExposure = (openPositions || []).filter(p => p.vehicle === 'shares').reduce((s, p) => s + (p.entry_price || 0) * (p.quantity || 0), 0);
+  const optionExposure = (openPositions || []).filter(p => p.vehicle === 'calls' || p.vehicle === 'puts').reduce((s, p) => s + (p.entry_price || 0) * (p.quantity || 0) * 100, 0);
+  const cashAmount = Math.max(0, pv - stockExposure - optionExposure);
+
+  const stockPct = pv > 0 ? (stockExposure / pv * 100) : 0;
+  const optionPct = pv > 0 ? (optionExposure / pv * 100) : 0;
+  const cashPct = pv > 0 ? (cashAmount / pv * 100) : 0;
+
+  return `
+    <div class="td-portfolio">
+      <div class="td-portfolio-header">
+        <span class="td-portfolio-title">PORTFOLIO</span>
+        <div class="td-portfolio-value">
+          <span class="td-portfolio-amount">$${pv.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>
+          <span class="td-portfolio-pnl" style="color:${pnlColor}">${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%</span>
         </div>
-        ${strategyNote ? `<div class="regime-banner-strategy">${escapeHtml(strategyNote)}</div>` : ''}
+      </div>
+      <div class="td-portfolio-alloc">
+        <div class="td-alloc-row">
+          <span class="td-alloc-label">Stocks</span>
+          <div class="td-alloc-bar-wrap"><div class="td-alloc-bar td-alloc-stocks" style="width:${Math.min(stockPct, 100)}%"></div></div>
+          <span class="td-alloc-val">$${Math.round(stockExposure).toLocaleString()} <span class="td-alloc-pct">${stockPct.toFixed(0)}%</span></span>
+        </div>
+        <div class="td-alloc-row">
+          <span class="td-alloc-label">Options</span>
+          <div class="td-alloc-bar-wrap"><div class="td-alloc-bar td-alloc-options" style="width:${Math.min(optionPct, 100)}%"></div></div>
+          <span class="td-alloc-val">$${Math.round(optionExposure).toLocaleString()} <span class="td-alloc-pct">${optionPct.toFixed(0)}%</span></span>
+        </div>
+        <div class="td-alloc-row">
+          <span class="td-alloc-label">Cash</span>
+          <div class="td-alloc-bar-wrap"><div class="td-alloc-bar td-alloc-cash" style="width:${Math.min(cashPct, 100)}%"></div></div>
+          <span class="td-alloc-val">$${Math.round(cashAmount).toLocaleString()} <span class="td-alloc-pct">${cashPct.toFixed(0)}%</span></span>
+        </div>
+      </div>
+      <div class="td-portfolio-stats">
+        <div class="td-pstat"><span class="td-pstat-val" style="color:${pnlColor}">$${totalPnl >= 0 ? '+' : ''}${totalPnl.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span><span class="td-pstat-label">P&L</span></div>
+        <div class="td-pstat"><span class="td-pstat-val">${closedCount}</span><span class="td-pstat-label">Trades</span></div>
+        <div class="td-pstat"><span class="td-pstat-val">${closedCount > 0 ? winRate.toFixed(0) + '%' : '—'}</span><span class="td-pstat-label">Win Rate</span></div>
+        <div class="td-pstat"><span class="td-pstat-val">${wins}W/${losses}L</span><span class="td-pstat-label">Record</span></div>
       </div>
     </div>
   `;
 }
 
-// ─── Legacy regime card (kept for compatibility) ───
-function buildRegimeCard(data) {
-  if (!data) {
-    return `
-      <div class="trading-card regime-card">
-        <div class="trading-card-header">
-          <span class="trading-card-title">Market Regime</span>
-        </div>
-        <div class="trading-card-body">
-          <div class="regime-error">Data unavailable</div>
-        </div>
-      </div>
-    `;
-  }
+// ─── Trading Desk: Stock Picks ───
+function buildStockPicks(plays) {
+  if (!plays || plays.length === 0) return '';
 
-  const signal = (data.signal || 'NEUTRAL').toUpperCase();
-  const signalColor = signal === 'GREEN' ? '#22c55e' : signal === 'YELLOW' ? '#eab308' : '#ef4444';
-  const timestamp = data.created_at ? formatTime(data.created_at) : 'Unknown';
-
-  // REGIME API: signal and label at top level, SPY/VIX in TEXT blob 'data' field
-  let spy = '—';
-  let vix = '—';
-  let trend = '—';
-
-  if (typeof data.data === 'string') {
-    // Parse from text blob: "SPY: $681.75" and "VIX: 20.6"
-    const spyMatch = data.data.match(/SPY:\s*\$?([\d.,]+)/i);
-    const vixMatch = data.data.match(/VIX:\s*([\d.]+)/i);
-    if (spyMatch) spy = `$${spyMatch[1]}`;
-    if (vixMatch) vix = vixMatch[1];
-  }
-
-  // Fallback to legacy object structure if available
-  const mktData = typeof data.data === 'object' ? data.data : {};
-  if (spy === '—') spy = mktData.spy_price || data.spy_price || '—';
-  if (vix === '—') vix = mktData.vix || mktData.vix_level || data.vix_level || data.vix || '—';
-  trend = mktData.spy_trend || mktData.trend || data.trend || '—';
-  const factors = Array.isArray(mktData.factors) ? mktData.factors : (Array.isArray(data.factors) ? data.factors : []);
-  const reasoning = factors.length > 0 ? factors : (Array.isArray(data.reasoning) ? data.reasoning : []);
-  const strategyObj = data.strategy || {};
-  const strategy = typeof strategyObj === 'string' ? strategyObj : (strategyObj.position_sizing ? [
-    strategyObj.position_sizing,
-    strategyObj.strategies,
-    strategyObj.stops,
-    strategyObj.new_entries
-  ].filter(Boolean).join(' · ') : '');
-
-  return `
-    <div class="trading-card regime-card">
-      <div class="trading-card-header">
-        <span class="trading-card-title">Market Regime</span>
-        <span class="regime-timestamp">${escapeHtml(timestamp)}</span>
-      </div>
-      <div class="trading-card-body">
-        <div class="regime-signal" style="--signal-color: ${signalColor}">
-          <div class="regime-signal-indicator">${escapeHtml(signal)}</div>
-          ${data.label ? `<div class="regime-signal-label">${escapeHtml(data.label)}</div>` : ''}
-        </div>
-        <div class="regime-data">
-          <div class="regime-data-row">
-            <span class="regime-data-label">SPY</span>
-            <span class="regime-data-value">${escapeHtml(String(spy))}</span>
-          </div>
-          <div class="regime-data-row">
-            <span class="regime-data-label">VIX</span>
-            <span class="regime-data-value">${escapeHtml(String(vix))}</span>
-          </div>
-          <div class="regime-data-row">
-            <span class="regime-data-label">Trend</span>
-            <span class="regime-data-value">${escapeHtml(String(trend))}</span>
-          </div>
-        </div>
-        ${reasoning.length > 0 ? `
-          <div class="regime-reasoning">
-            <div class="regime-reasoning-title">Analysis</div>
-            <ul class="regime-reasoning-list">
-              ${reasoning.map(r => `<li>${escapeHtml(r)}</li>`).join('')}
-            </ul>
-          </div>
-        ` : ''}
-        ${strategy ? `
-          <div class="regime-strategy">
-            <div class="regime-strategy-title">Strategy</div>
-            <div class="regime-strategy-text">${escapeHtml(strategy)}</div>
-          </div>
-        ` : ''}
-      </div>
-    </div>
-  `;
-}
-
-// ─── NEW: Plays section with analyst scores (hero content) ───
-function buildPlaysSection(data) {
-  const plays = Array.isArray(data) ? data : (data?.plays || []);
-
-  if (plays.length === 0) {
-    return `
-      <div class="plays-section">
-        <div class="plays-section-header">
-          <span class="plays-section-title">Today's Plays</span>
-          <span class="plays-count">0 setups</span>
-        </div>
-        <div class="plays-empty">
-          <div class="empty-glyph">◻</div>
-          <p>No plays structured today. Atlas Squad is monitoring markets.</p>
-        </div>
-      </div>
-    `;
-  }
-
-  // Sort plays by analyst_score descending, then by approved status
-  const sortedPlays = [...plays].sort((a, b) => {
-    const aApproved = a.status === 'approved' || a.analyst_verdict === 'APPROVED';
-    const bApproved = b.status === 'approved' || b.analyst_verdict === 'APPROVED';
-    if (aApproved && !bApproved) return -1;
-    if (!aApproved && bApproved) return 1;
-    return (b.analyst_score || 0) - (a.analyst_score || 0);
+  const sorted = [...plays].sort((a, b) => {
+    const aSetup = typeof a.setup === 'string' ? JSON.parse(a.setup || '{}') : (a.setup || {});
+    const bSetup = typeof b.setup === 'string' ? JSON.parse(b.setup || '{}') : (b.setup || {});
+    return (bSetup.quant_score || 0) - (aSetup.quant_score || 0);
   });
 
-  return `
-    <div class="plays-section">
-      <div class="plays-section-header">
-        <span class="plays-section-title">Today's Plays</span>
-        <span class="plays-count">${plays.length} setup${plays.length !== 1 ? 's' : ''}</span>
-      </div>
-      <div class="plays-grid">
-        ${sortedPlays.map(play => {
-          const ticker = play.ticker || '—';
-          const direction = (play.direction || 'LONG').toUpperCase();
-          const directionClass = direction === 'BULL' || direction === 'BULLISH' || direction === 'LONG' ? 'bull' : 'bear';
-          const vehicle = play.vehicle || play.type || '—';
+  const rows = sorted.map(play => {
+    const setup = typeof play.setup === 'string' ? JSON.parse(play.setup || '{}') : (play.setup || {});
+    const ticker = play.ticker || '—';
+    const score = setup.quant_score || 0;
+    const conviction = setup.conviction || play.risk_level || 'medium';
+    const weight = setup.weight_pct || 0;
+    const price = setup.entry_price || 0;
+    const convCls = conviction === 'high' ? 'td-conv-high' : conviction === 'low' ? 'td-conv-low' : 'td-conv-med';
+    const convLabel = conviction.charAt(0).toUpperCase() + conviction.slice(1);
 
-          // PLAYS API: setup.entry.{strike, expiry, premium}, setup.target.price, setup.stop.price, setup.size
-          const setupEntry = play.setup?.entry || {};
-          const setupTarget = play.setup?.target || {};
-          const setupStop = play.setup?.stop || {};
-
-          const strike = setupEntry.strike || play.strike || '';
-          const expiry = setupEntry.expiry || play.expiry;
-          const formattedExpiry = expiry ? formatDate(expiry) : '';
-
-          // Entry price: setup.entry.premium
-          const entry = setupEntry.premium || play.entry_price || play.entry || 0;
-
-          // Target: setup.target.price (handle "$3.10" string format)
-          let target = setupTarget.price || play.target_price || play.target || 0;
-          if (typeof target === 'string' && target.startsWith('$')) {
-            target = parseFloat(target.replace('$', ''));
-          }
-
-          // Stop: setup.stop.price (handle "$0.00" string format)
-          let stop = setupStop.price || play.stop_price || play.stop || 0;
-          if (typeof stop === 'string' && stop.startsWith('$')) {
-            stop = parseFloat(stop.replace('$', ''));
-          }
-
-          // Risk/reward and size: top level risk_reward, setup.size
-          const rrRatio = play.risk_reward || play.rr_ratio || play.reward_risk || '—';
-          const positionSize = play.setup?.size || play.position_size || play.size || '';
-
-          // Analyst fields: top level analyst_score, analyst_verdict
-          const analystScore = play.analyst_score || 0;
-          const analystVerdict = (play.analyst_verdict || play.status || 'PENDING').toUpperCase();
-          const isApproved = analystVerdict === 'APPROVED';
-          const isRejected = analystVerdict === 'REJECTED' || analystVerdict === 'DECLINED';
-          const thesis = play.thesis || play.rationale || '';
-
-          const cardClass = isApproved ? 'play-approved' : isRejected ? 'play-rejected' : 'play-pending';
-          const scoreColor = analystScore >= 8 ? '#22c55e' : analystScore >= 6 ? '#eab308' : '#ef4444';
-
-          return `
-            <div class="play-card ${cardClass}">
-              <div class="play-card-header">
-                <div class="play-card-ticker-row">
-                  <span class="play-card-ticker">${escapeHtml(ticker)}</span>
-                  <span class="play-card-direction ${directionClass}">${escapeHtml(direction)}</span>
-                </div>
-                <div class="play-card-score" style="--score-color: ${scoreColor}">
-                  <span class="play-score-value">${analystScore.toFixed(1)}</span>
-                  <span class="play-score-label">/10</span>
-                </div>
-              </div>
-              <div class="play-card-vehicle">${escapeHtml(vehicle)}${strike ? ` · ${strike}` : ''}${expiry ? ` · exp ${expiry}` : ''}</div>
-              <div class="play-card-prices">
-                <div class="play-price-item">
-                  <span class="play-price-label">Entry</span>
-                  <span class="play-price-value">${formatCurrency(entry)}</span>
-                </div>
-                <div class="play-price-item">
-                  <span class="play-price-label">Target</span>
-                  <span class="play-price-value positive">${formatCurrency(target)}</span>
-                </div>
-                <div class="play-price-item">
-                  <span class="play-price-label">Stop</span>
-                  <span class="play-price-value negative">${formatCurrency(stop)}</span>
-                </div>
-                <div class="play-price-item">
-                  <span class="play-price-label">R:R</span>
-                  <span class="play-price-value">${escapeHtml(String(rrRatio))}</span>
-                </div>
-              </div>
-              ${positionSize ? `<div class="play-card-size">Size: ${escapeHtml(positionSize)}</div>` : ''}
-              <div class="play-card-verdict ${analystVerdict.toLowerCase()}">
-                ${isApproved ? '✓' : isRejected ? '✗' : '○'} ${escapeHtml(analystVerdict)}
-              </div>
-              ${thesis ? `<div class="play-card-thesis">${escapeHtml(thesis)}</div>` : ''}
-            </div>
-          `;
-        }).join('')}
-      </div>
-    </div>
-  `;
-}
-
-// ─── Legacy plays card (kept for compatibility) ───
-function buildPlaysCard(data) {
-  const plays = Array.isArray(data) ? data : (data?.plays || []);
-
-  if (plays.length === 0) {
     return `
-      <div class="trading-card plays-card">
-        <div class="trading-card-header">
-          <span class="trading-card-title">Today's Plays</span>
-          <span class="plays-count">0 setups</span>
-        </div>
-        <div class="trading-card-body">
-          <div class="plays-empty">No plays structured today</div>
-        </div>
+      <div class="td-stock-row">
+        <span class="td-stock-ticker">${escapeHTML(ticker)}</span>
+        <span class="td-stock-alpha">α:${score >= 0 ? '+' : ''}${score.toFixed(3)}</span>
+        <span class="td-conv-badge ${convCls}">${convLabel}</span>
+        <span class="td-stock-weight">${weight.toFixed(1)}%</span>
+        <span class="td-stock-price">${price > 0 ? '$' + price.toFixed(2) : '—'}</span>
       </div>
     `;
-  }
+  }).join('');
 
   return `
-    <div class="trading-card plays-card">
-      <div class="trading-card-header">
-        <span class="trading-card-title">Today's Plays</span>
-        <span class="plays-count">${plays.length} setup${plays.length !== 1 ? 's' : ''}</span>
+    <div class="td-section">
+      <div class="td-section-header">
+        <span class="td-section-title">📈 Stock Picks</span>
+        <span class="td-section-count">${plays.length}</span>
       </div>
-      <div class="trading-card-body">
-        <div class="plays-list">
-          ${plays.map(play => {
-            const ticker = play.ticker || '—';
-            const direction = play.direction || 'LONG';
-            const vehicle = play.vehicle || '—';
-            const thesis = play.thesis || '';
-            const risk = play.risk_level || 'MEDIUM';
-            const riskClass = risk.toLowerCase();
-
-            return `
-              <div class="play-item">
-                <div class="play-header">
-                  <span class="play-ticker">${escapeHtml(ticker)}</span>
-                  <span class="play-direction ${direction.toLowerCase()}">${escapeHtml(direction)}</span>
-                  <span class="play-risk ${riskClass}">${escapeHtml(risk)}</span>
-                </div>
-                <div class="play-vehicle">${escapeHtml(vehicle)}</div>
-                ${thesis ? `<div class="play-thesis">${escapeHtml(thesis)}</div>` : ''}
-              </div>
-            `;
-          }).join('')}
-        </div>
-      </div>
+      <div class="td-stock-list">${rows}</div>
     </div>
   `;
 }
 
-function buildPortfolioCard(data, closedTrades) {
-  if (!data) {
+// ─── Trading Desk: Options Plays ───
+function buildOptionPlays(plays) {
+  if (!plays || plays.length === 0) return '';
+
+  const rows = plays.map(play => {
+    const setup = typeof play.setup === 'string' ? JSON.parse(play.setup || '{}') : (play.setup || {});
+    const ticker = play.ticker || '—';
+    const direction = (play.direction || '').toUpperCase();
+    const isCall = play.vehicle === 'calls';
+    const emoji = isCall ? '📈' : '📉';
+    const strike = setup.strike || 0;
+    const expiry = setup.expiry || '';
+    const contracts = setup.contracts || 0;
+    const ask = setup.entry_price || 0;
+    const iv = setup.iv || 0;
+    const be = setup.breakeven || 0;
+    const cost = setup.cost || 0;
+    const expiryShort = expiry ? expiry.replace(/^\d{4}-/, '') : '';
+
     return `
-      <div class="trading-card portfolio-card">
-        <div class="trading-card-header">
-          <span class="trading-card-title">Portfolio</span>
-        </div>
-        <div class="trading-card-body">
-          <div class="portfolio-error">Data unavailable</div>
-        </div>
+      <div class="td-option-row">
+        <span class="td-option-emoji">${emoji}</span>
+        <span class="td-option-ticker">${escapeHTML(ticker)}</span>
+        <span class="td-option-strike">$${strike}${isCall ? 'C' : 'P'}</span>
+        <span class="td-option-expiry">${expiryShort}</span>
+        <span class="td-option-detail">${contracts}x @ $${ask.toFixed(2)}</span>
+        <span class="td-option-iv">IV:${iv}%</span>
+        <span class="td-option-cost">$${cost.toLocaleString()}</span>
       </div>
     `;
-  }
-
-  const bankroll = data.portfolio_value || data.bankroll || 0;
-  const unrealizedPnl = data.unrealized_pnl || 0;
-  const realizedPnl = data.realized_pnl || 0;
-  const totalPnl = unrealizedPnl + realizedPnl;
-  const winRate = data.win_rate || 0;
-  const positions = Array.isArray(data.positions) ? data.positions : (Array.isArray(data.open_positions) ? data.open_positions : []);
-  const closed = Array.isArray(closedTrades) ? closedTrades : [];
-
-  const pnlClass = totalPnl >= 0 ? 'positive' : 'negative';
-  const pnlSign = totalPnl >= 0 ? '+' : '';
-
-  // Performance stats — show dashes when no closed trades
-  const hasClosedTrades = closed.length > 0 || winRate > 0;
-  const expectancy = data.expectancy || 0;
-  const avgWin = data.avg_winner || 0;
-  const avgLoss = data.avg_loser || 0;
-  const openExposure = data.open_exposure || 0;
-  const exposurePct = bankroll > 0 ? ((openExposure / bankroll) * 100).toFixed(1) : '0.0';
-
-  // Equity bar segments
-  const startingBankroll = data.starting_bankroll || bankroll;
-  const realizedGains = Math.max(0, realizedPnl);
-  const realizedLosses = Math.abs(Math.min(0, realizedPnl));
-  const absUnrealized = Math.abs(unrealizedPnl);
-  const equityTotal = realizedGains + realizedLosses + absUnrealized || 1;
-  const greenPct = ((realizedGains / equityTotal) * 100).toFixed(1);
-  const redPct = ((realizedLosses / equityTotal) * 100).toFixed(1);
-  const grayPct = ((absUnrealized / equityTotal) * 100).toFixed(1);
-
-  // Build closed trades HTML
-  const closedTradesHtml = closed.length > 0 ? `
-    <div class="portfolio-closed-trades">
-      <div class="portfolio-positions-title">Closed Trades</div>
-      <div class="closed-trades-list">
-        ${closed.map(trade => {
-          const ticker = trade.ticker || '—';
-          const vehicle = trade.vehicle || trade.type || '';
-          const pnl = trade.pnl || 0;
-          const pnlColor = pnl > 0 ? 'var(--sig-green, #22c55e)' : pnl < 0 ? 'var(--sig-red, #ef4444)' : 'var(--os-text-muted)';
-          const pnlPrefix = pnl > 0 ? '+' : '';
-          const closedAt = trade.closed_at || trade.updated_at || '';
-          const closeDate = closedAt ? new Date(closedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
-          const notes = trade.notes || '';
-          // Extract close reason — use first phrase from notes or 'closed'
-          const reason = notes ? notes.split(/[.;,]/)[0].trim() : '';
-          return `
-            <div class="closed-trade-item">
-              <div class="closed-trade-header">
-                <span class="closed-trade-ticker">${escapeHtml(ticker)}</span>
-                <span class="closed-trade-vehicle">${escapeHtml(vehicle)}</span>
-                <span class="closed-trade-date">Closed ${escapeHtml(closeDate)}</span>
-              </div>
-              <div class="closed-trade-footer">
-                <span class="closed-trade-pnl" style="color: ${pnlColor}">P&L: ${pnlPrefix}${formatCurrency(pnl)}</span>
-                ${reason ? `<span class="closed-trade-reason">${escapeHtml(reason)}</span>` : ''}
-              </div>
-            </div>
-          `;
-        }).join('')}
-      </div>
-    </div>
-  ` : '';
+  }).join('');
 
   return `
-    <div class="trading-card portfolio-card">
-      <div class="trading-card-header">
-        <span class="trading-card-title">Portfolio</span>
+    <div class="td-section">
+      <div class="td-section-header">
+        <span class="td-section-title">🎰 Options</span>
+        <span class="td-section-count">${plays.length}</span>
       </div>
-      <div class="trading-card-body">
-        <div class="portfolio-stats">
-          <div class="portfolio-stat">
-            <span class="portfolio-stat-label">Bankroll</span>
-            <span class="portfolio-stat-value">${formatCurrency(bankroll)}</span>
-          </div>
-          <div class="portfolio-stat">
-            <span class="portfolio-stat-label">Total P&L</span>
-            <span class="portfolio-stat-value ${pnlClass}">${pnlSign}${formatCurrency(totalPnl)}</span>
-          </div>
-          <div class="portfolio-stat">
-            <span class="portfolio-stat-label">Win Rate</span>
-            <span class="portfolio-stat-value">${hasClosedTrades ? winRate + '%' : '—'}</span>
-          </div>
-        </div>
-        <div class="portfolio-perf-stats">
-          <div class="portfolio-stat">
-            <span class="portfolio-stat-label">Expectancy</span>
-            <span class="portfolio-stat-value">${hasClosedTrades ? formatCurrency(expectancy) : '—'}</span>
-          </div>
-          <div class="portfolio-stat">
-            <span class="portfolio-stat-label">Avg Win</span>
-            <span class="portfolio-stat-value positive">${hasClosedTrades ? formatCurrency(avgWin) : '—'}</span>
-          </div>
-          <div class="portfolio-stat">
-            <span class="portfolio-stat-label">Avg Loss</span>
-            <span class="portfolio-stat-value negative">${hasClosedTrades ? formatCurrency(avgLoss) : '—'}</span>
-          </div>
-          <div class="portfolio-stat">
-            <span class="portfolio-stat-label">Exposure</span>
-            <span class="portfolio-stat-value">${exposurePct}%</span>
-          </div>
-        </div>
-        <div class="equity-bar-container">
-          <div class="equity-bar-label">Equity</div>
-          <div class="equity-bar">
-            <div class="equity-bar-segment equity-bar-green" style="width: ${greenPct}%"></div>
-            <div class="equity-bar-segment equity-bar-red" style="width: ${redPct}%"></div>
-            <div class="equity-bar-segment equity-bar-gray" style="width: ${grayPct}%"></div>
-          </div>
-        </div>
-        ${positions.length > 0 ? `
-          <div class="portfolio-positions">
-            <div class="portfolio-positions-title">Open Positions</div>
-            <div class="positions-list">
-              ${positions.map(pos => {
-                const ticker = pos.ticker || '—';
-                const entry = pos.entry_price || pos.entry || 0;
-                const target = pos.target_price || pos.target || 0;
-                const currentPrice = pos.current_price || entry;
-                const pnl = pos.current_pnl || 0;
-                const size = pos.quantity || pos.size || 0;
-                const vehicle = pos.vehicle || pos.type || 'shares';
-                const direction = pos.direction || '';
-                const notes = pos.notes || '';
-                const isDegen = notes.includes('⭐');
-                const pnlColor = pnl > 0 ? 'var(--sig-green, #22c55e)' : pnl < 0 ? 'var(--sig-red, #ef4444)' : 'var(--os-text-muted)';
-                const pnlSign = pnl > 0 ? '+' : '';
-                const strike = pos.strike || '';
-                const expiry = pos.expiry || '';
-
-                return `
-                  <div class="position-item${isDegen ? ' position-degen' : ''}">
-                    <div class="position-header">
-                      <span class="position-ticker">${isDegen ? '⭐ ' : ''}${escapeHtml(ticker)}</span>
-                      <span class="position-pnl" style="color: ${pnlColor}">${pnlSign}${formatCurrency(pnl)}</span>
-                    </div>
-                    <div class="position-meta">
-                      <span>${escapeHtml(direction)} ${size}x ${escapeHtml(vehicle)}${strike ? ' $' + strike : ''}${expiry ? ' · ' + escapeHtml(expiry) : ''}</span>
-                    </div>
-                    <div class="position-levels">
-                      <span class="position-level">Entry: ${formatCurrency(entry)}</span>
-                      <span class="position-level">Now: <strong style="color: ${pnlColor}">${formatCurrency(currentPrice)}</strong></span>
-                      <span class="position-level">Target: ${formatCurrency(target)}</span>
-                    </div>
-                  </div>
-                `;
-              }).join('')}
-            </div>
-          </div>
-        ` : ''}
-        ${closedTradesHtml}
-      </div>
+      <div class="td-option-list">${rows}</div>
     </div>
   `;
 }
 
-// ─── NEW: Portfolio strip (persistent summary) ───
-function buildPortfolioStrip(portfolio, openPositions) {
-  if (!portfolio) {
+// ─── Trading Desk: Open Positions ───
+function buildOpenPositions(positions) {
+  if (!positions || positions.length === 0) return '';
+
+  const rows = positions.map(pos => {
+    const ticker = pos.ticker || '—';
+    const vehicle = pos.vehicle || 'shares';
+    const entry = pos.entry_price || 0;
+    const current = pos.current_price || entry;
+    const qty = pos.quantity || 0;
+    const isOption = vehicle === 'calls' || vehicle === 'puts';
+    const multiplier = isOption ? 100 : 1;
+    const pnl = (current - entry) * qty * multiplier * (pos.direction === 'short' ? -1 : 1);
+    const pnlPct = entry > 0 ? ((current / entry - 1) * 100) : 0;
+    const pnlColor = pnl >= 0 ? 'var(--sig-green, #22c55e)' : 'var(--sig-red, #ef4444)';
+    const vehicleLabel = isOption ? `${vehicle === 'calls' ? 'C' : 'P'} $${pos.strike || ''}` : 'shares';
+
     return `
-      <div class="portfolio-strip">
-        <div class="portfolio-strip-stat">
-          <span class="portfolio-strip-label">Portfolio</span>
-          <span class="portfolio-strip-value">—</span>
-        </div>
+      <div class="td-pos-row">
+        <span class="td-pos-ticker">${escapeHTML(ticker)}</span>
+        <span class="td-pos-vehicle">${vehicleLabel}</span>
+        <span class="td-pos-qty">${isOption ? qty + 'x' : qty.toFixed(1)}</span>
+        <span class="td-pos-entry">$${entry.toFixed(2)}</span>
+        <span class="td-pos-current">$${current.toFixed(2)}</span>
+        <span class="td-pos-pnl" style="color:${pnlColor}">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(0)} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%)</span>
       </div>
     `;
-  }
-
-  const bankroll = portfolio.portfolio_value || portfolio.bankroll || 0;
-  const cash = portfolio.available_cash || portfolio.cash || 0;
-  const totalPnl = (portfolio.unrealized_pnl || 0) + (portfolio.realized_pnl || 0);
-  const winRate = portfolio.win_rate || 0;
-  const pnlClass = totalPnl >= 0 ? 'positive' : 'negative';
-  const pnlSign = totalPnl >= 0 ? '+' : '';
-  const positions = Array.isArray(openPositions) ? openPositions : [];
+  }).join('');
 
   return `
-    <div class="portfolio-strip">
-      <div class="portfolio-strip-header">
-        <span class="portfolio-strip-title">Portfolio</span>
-        <div class="portfolio-strip-stats">
-          <div class="portfolio-strip-stat">
-            <span class="portfolio-strip-label">Value</span>
-            <span class="portfolio-strip-value">${formatCurrency(bankroll)}</span>
-          </div>
-          <div class="portfolio-strip-stat">
-            <span class="portfolio-strip-label">Cash</span>
-            <span class="portfolio-strip-value">${formatCurrency(cash)}</span>
-          </div>
-          <div class="portfolio-strip-stat">
-            <span class="portfolio-strip-label">P&L</span>
-            <span class="portfolio-strip-value ${pnlClass}">${pnlSign}${formatCurrency(totalPnl)}</span>
-          </div>
-          <div class="portfolio-strip-stat">
-            <span class="portfolio-strip-label">Win Rate</span>
-            <span class="portfolio-strip-value">${winRate}%</span>
-          </div>
-        </div>
+    <div class="td-section">
+      <div class="td-section-header">
+        <span class="td-section-title">📋 Open Positions</span>
+        <span class="td-section-count">${positions.length}</span>
       </div>
-      ${positions.length > 0 ? `
-        <div class="portfolio-strip-positions">
-          ${positions.map(pos => {
-            const ticker = pos.ticker || '—';
-            const direction = (pos.direction || '').toLowerCase();
-            const entry = pos.entry_price || pos.entry || 0;
-            const current = pos.current_price || entry;
-            const pnl = pos.current_pnl || pos.pnl || 0;
-            const pnlColor = pnl > 0 ? '#22c55e' : pnl < 0 ? '#ef4444' : 'var(--os-text-muted)';
-            const pnlSign = pnl > 0 ? '+' : '';
-            return `
-              <div class="portfolio-strip-position">
-                <span class="strip-pos-ticker ${direction}">${escapeHtml(ticker)}</span>
-                <span class="strip-pos-entry">${formatCurrency(entry)} → ${formatCurrency(current)}</span>
-                <span class="strip-pos-pnl" style="color: ${pnlColor}">${pnlSign}${formatCurrency(pnl)}</span>
-              </div>
-            `;
-          }).join('')}
-        </div>
-      ` : '<div class="portfolio-strip-empty">No open positions</div>'}
+      <div class="td-pos-list">${rows}</div>
     </div>
   `;
 }
 
-// ─── NEW: Degen play (YOLO section with danger styling) ───
-function buildDegenPlay(degen) {
-  if (!degen) return '';
-
-  const ticker = degen.ticker || '—';
-  const rrRatio = degen.rr_ratio || degen.reward_risk || '—';
-  const thesis = degen.thesis || degen.rationale || '';
-  const size = degen.position_size || degen.size || '1% max';
-  const vehicle = degen.vehicle || degen.type || '';
-  const entry = degen.entry_price || degen.entry || 0;
-  const target = degen.target_price || degen.target || 0;
-  const stop = degen.stop_price || degen.stop || 0;
-
-  return `
-    <div class="degen-play">
-      <div class="degen-play-header">
-        <div class="degen-play-title">
-          <span class="degen-play-icon">⚠️</span>
-          <span class="degen-play-label">DEGEN PLAY</span>
-        </div>
-        <div class="degen-play-warning">HIGH RISK · YOLO ONLY</div>
-      </div>
-      <div class="degen-play-content">
-        <div class="degen-play-ticker-row">
-          <span class="degen-play-ticker">${escapeHtml(ticker)}</span>
-          <span class="degen-play-rr">R:R ${escapeHtml(String(rrRatio))}</span>
-        </div>
-        ${vehicle ? `<div class="degen-play-vehicle">${escapeHtml(vehicle)}</div>` : ''}
-        ${thesis ? `<div class="degen-play-thesis">${escapeHtml(thesis)}</div>` : ''}
-        <div class="degen-play-levels">
-          <div class="degen-level-item">
-            <span class="degen-level-label">Entry</span>
-            <span class="degen-level-value">${formatCurrency(entry)}</span>
-          </div>
-          <div class="degen-level-item">
-            <span class="degen-level-label">Target</span>
-            <span class="degen-level-value">${formatCurrency(target)}</span>
-          </div>
-          <div class="degen-level-item">
-            <span class="degen-level-label">Stop</span>
-            <span class="degen-level-value">${formatCurrency(stop)}</span>
-          </div>
-        </div>
-        <div class="degen-play-size">Max Size: ${escapeHtml(size)}</div>
-      </div>
-    </div>
-  `;
-}
+// Keep legacy function names as no-ops for compatibility
+function buildPlaysSection(data) { return ''; }
+function buildPortfolioStrip() { return ''; }
+function buildDegenPlay() { return ''; }
 
 function formatCurrency(val) {
   const num = parseFloat(val);
