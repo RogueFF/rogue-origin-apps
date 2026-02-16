@@ -6010,10 +6010,12 @@ input {
 .td-option-detail { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: rgba(255,255,255,0.55); }
 .td-option-iv { font-size: 0.65rem; color: rgba(255,255,255,0.35); }
 .td-option-cost { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: rgba(255,255,255,0.6); margin-left: auto; }
-.td-option-dte { font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; font-weight: 700; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
-.td-option-dte-critical { background: rgba(239,68,68,0.2); color: #ef4444; }
-.td-option-dte-warning { background: rgba(234,179,8,0.2); color: #eab308; }
-.td-option-dte-normal { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.35); }
+.td-option-dte { font-family: var(--font-mono); font-size: 0.62rem; font-weight: 700; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
+.td-option-dte-critical { background: rgba(239,68,68,0.25); color: var(--sig-danger); }
+.td-option-dte-warning { background: rgba(249,115,22,0.2); color: #f97316; }
+.td-option-dte-caution { background: rgba(234,179,8,0.15); color: var(--sig-warning); }
+.td-option-dte-safe { background: rgba(34,197,94,0.1); color: var(--sig-success); }
+.td-option-dte-normal { background: rgba(255,255,255,0.05); color: var(--os-text-muted); }
 
 /* Open Positions */
 .td-pos-list { padding: 4px 0; }
@@ -6108,23 +6110,45 @@ input {
 .td-brief-news-item { font-size: 0.68rem; color: rgba(255,255,255,0.5); line-height: 1.5; }
 
 /* Sparklines */
+/* Sparkline (legacy) */
 .td-stock-spark { display: inline-flex; align-items: center; vertical-align: middle; }
 .td-sparkline { vertical-align: middle; display: block; }
 
-/* Regime History Strip */
-.td-regime-strip {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 4px 0;
-  margin-bottom: 8px;
-}
+/* % Change Pills */
+.td-change-pill { font-family: var(--font-mono); font-size: 0.65rem; font-weight: 700; padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
+.td-change-up { background: rgba(34,197,94,0.15); color: var(--sig-success); }
+.td-change-down { background: rgba(239,68,68,0.15); color: var(--sig-danger); }
+.td-change-na { background: rgba(255,255,255,0.04); color: var(--os-text-muted); }
+
+/* Alpha Score Visual Bar */
+.td-stock-alpha-bar { position: relative; display: inline-flex; align-items: center; min-width: 72px; height: 18px; border-radius: 3px; overflow: hidden; background: rgba(255,255,255,0.04); }
+.td-alpha-fill { position: absolute; left: 0; top: 0; height: 100%; background: rgba(34,197,94,0.2); border-radius: 3px; transition: width 0.3s ease; }
+.td-alpha-text { position: relative; z-index: 1; font-family: var(--font-mono); font-size: 0.65rem; color: var(--sig-success); padding: 0 6px; white-space: nowrap; }
+.td-stock-top .td-alpha-fill { background: rgba(34,197,94,0.3); }
+
+/* Stop / Target indicators */
+.td-stock-stops { font-family: var(--font-mono); font-size: 0.58rem; color: var(--os-text-muted); white-space: nowrap; letter-spacing: 0.3px; }
+
+/* Regime History Strip v2 */
+.td-regime-strip-v2 { display: flex; align-items: center; gap: 12px; padding: 6px 0; margin-bottom: 8px; }
+.td-rs-days { display: flex; gap: 6px; }
+.td-rs-day { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.td-rs-block-lg { width: 22px; height: 16px; border-radius: 3px; }
+.td-rs-day-label { font-size: 0.5rem; color: var(--os-text-muted); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.5px; }
+.td-rs-green { background: var(--sig-success); }
+.td-rs-yellow { background: var(--sig-warning); }
+.td-rs-red { background: var(--sig-danger); }
+.td-rs-none { background: rgba(255,255,255,0.05); }
+.td-rs-summary { font-size: 0.6rem; font-family: var(--font-mono); color: var(--os-text-secondary); white-space: nowrap; }
+.td-rs-count { font-weight: 700; }
+.td-rs-red-text { color: var(--sig-danger); }
+.td-rs-yellow-text { color: var(--sig-warning); }
+.td-rs-green-text { color: var(--sig-success); }
+
+/* Legacy 30d strip (kept for compat) */
+.td-regime-strip { display: flex; align-items: center; gap: 2px; padding: 4px 0; margin-bottom: 8px; }
 .td-rs-label { font-size: 0.55rem; color: rgba(255,255,255,0.2); text-transform: uppercase; letter-spacing: 0.5px; padding: 0 4px; }
 .td-rs-block { width: 100%; max-width: 12px; height: 10px; border-radius: 1px; flex-shrink: 1; }
-.td-rs-green { background: #22c55e; }
-.td-rs-yellow { background: #eab308; }
-.td-rs-red { background: #ef4444; }
-.td-rs-none { background: rgba(255,255,255,0.05); }
 
 /* Widget Row */
 .td-widget-row { display: flex; gap: 10px; margin-bottom: 10px; }

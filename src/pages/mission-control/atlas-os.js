@@ -2455,6 +2455,13 @@ function buildStockPicks(plays, suppressed, sparklines) {
     return (bSetup.quant_score || 0) - (aSetup.quant_score || 0);
   });
 
+  // Find max alpha score for bar scaling
+  const allScores = sorted.map(p => {
+    const s = typeof p.setup === 'string' ? JSON.parse(p.setup || '{}') : (p.setup || {});
+    return Math.abs(s.quant_score || 0);
+  });
+  const maxScore = Math.max(...allScores, 0.01);
+
   const rows = sorted.map((play, idx) => {
     const setup = typeof play.setup === 'string' ? JSON.parse(play.setup || '{}') : (play.setup || {});
     const ticker = play.ticker || '—';
@@ -2462,22 +2469,42 @@ function buildStockPicks(plays, suppressed, sparklines) {
     const conviction = setup.conviction || play.risk_level || 'medium';
     const weight = setup.weight_pct || 0;
     const price = setup.entry_price || 0;
+    const currentPrice = setup.current_price || play.current_price || 0;
     const convCls = conviction === 'high' ? 'td-conv-high' : conviction === 'low' ? 'td-conv-low' : 'td-conv-med';
     const convLabel = conviction.charAt(0).toUpperCase() + conviction.slice(1);
     // Top 3 get visual emphasis
     const rankCls = idx < 3 ? 'td-stock-top' : '';
-    const spark = (sparklines || {})[ticker] || [];
-    const sparkSvg = spark.length >= 2 ? buildSparklineSVG(spark) : '';
+
+    // Alpha bar width as percentage of max
+    const barWidth = Math.round((Math.abs(score) / maxScore) * 100);
+
+    // % change pill instead of sparkline
+    let changePill = '<span class="td-change-pill td-change-na">—</span>';
+    if (currentPrice > 0 && price > 0) {
+      const pctChange = ((currentPrice - price) / price) * 100;
+      const sign = pctChange >= 0 ? '+' : '';
+      const pillCls = pctChange >= 0 ? 'td-change-up' : 'td-change-down';
+      changePill = `<span class="td-change-pill ${pillCls}">${sign}${pctChange.toFixed(1)}%</span>`;
+    }
+
+    // Stop/target indicators
+    const targetPrice = setup.target_price || (price > 0 ? (price * 1.10) : 0);
+    const stopPrice = setup.stop_loss || (price > 0 ? (price * 0.95) : 0);
+    const stopTarget = price > 0 ? `<span class="td-stock-stops">T:$${targetPrice.toFixed(0)} · S:$${stopPrice.toFixed(0)}</span>` : '';
 
     return `
       <div class="td-stock-row ${rankCls}">
         <span class="td-stock-rank">${idx + 1}</span>
         <span class="td-stock-ticker">${escapeHTML(ticker)}</span>
-        ${sparkSvg ? `<span class="td-stock-spark">${sparkSvg}</span>` : ''}
-        <span class="td-stock-alpha">α:${score >= 0 ? '+' : ''}${score.toFixed(3)}</span>
+        ${changePill}
+        <span class="td-stock-alpha-bar">
+          <span class="td-alpha-fill" style="width:${barWidth}%"></span>
+          <span class="td-alpha-text">α:${score >= 0 ? '+' : ''}${score.toFixed(3)}</span>
+        </span>
         <span class="td-conv-badge ${convCls}">${convLabel}</span>
         <span class="td-stock-weight">${weight.toFixed(1)}%</span>
         <span class="td-stock-price">${price > 0 ? '$' + price.toFixed(2) : '—'}</span>
+        ${stopTarget}
       </div>
     `;
   }).join('');
@@ -2513,16 +2540,18 @@ function buildOptionPlays(plays, totalExposure) {
     const cost = setup.cost || 0;
     const expiryShort = expiry ? expiry.replace(/^\d{4}-/, '') : '';
 
-    // Calculate DTE (days to expiration)
+    // Calculate DTE (days to expiration) with urgency colors
     let dteLabel = '';
-    let dteClass = 'td-option-dte-normal';
+    let dteClass = 'td-option-dte-safe';
     if (expiry) {
       const now = new Date();
       const exp = new Date(expiry + 'T16:00:00');
       const dte = Math.max(0, Math.ceil((exp - now) / (1000 * 60 * 60 * 24)));
       dteLabel = dte + 'd';
-      if (dte <= 2) dteClass = 'td-option-dte-critical';
-      else if (dte <= 5) dteClass = 'td-option-dte-warning';
+      if (dte < 3) dteClass = 'td-option-dte-critical';
+      else if (dte <= 7) dteClass = 'td-option-dte-warning';
+      else if (dte <= 14) dteClass = 'td-option-dte-caution';
+      else dteClass = 'td-option-dte-safe';
     }
 
     return `
@@ -2613,23 +2642,33 @@ function buildSparklineSVG(prices) {
 // ─── Trading Desk: Regime History Strip ───
 function buildRegimeStrip(history) {
   if (!history || history.length === 0) return '';
-  // Pad to 30 days
+  // Show last 7 days as larger blocks with day labels
   const days = [];
   const now = new Date();
-  for (let i = 29; i >= 0; i--) {
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  for (let i = 6; i >= 0; i--) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
     const dateStr = d.toISOString().slice(0, 10);
     const match = history.find(h => h.date === dateStr);
-    days.push({ date: dateStr, signal: match ? match.signal : null, day: d.toLocaleDateString('en-US', { weekday: 'narrow' }) });
+    days.push({ date: dateStr, signal: match ? match.signal : null, dayLabel: dayNames[d.getDay()] });
   }
+
+  // Summary counts
+  const counts = { GREEN: 0, YELLOW: 0, RED: 0 };
+  days.forEach(d => { if (d.signal && counts[d.signal] !== undefined) counts[d.signal]++; });
+  const summaryParts = [];
+  if (counts.RED > 0) summaryParts.push(`<span class="td-rs-count td-rs-red-text">${counts.RED} RED</span>`);
+  if (counts.YELLOW > 0) summaryParts.push(`<span class="td-rs-count td-rs-yellow-text">${counts.YELLOW} YEL</span>`);
+  if (counts.GREEN > 0) summaryParts.push(`<span class="td-rs-count td-rs-green-text">${counts.GREEN} GRN</span>`);
+  const summary = summaryParts.join(' · ');
+
   const blocks = days.map(d => {
     const cls = d.signal === 'GREEN' ? 'td-rs-green' : d.signal === 'YELLOW' ? 'td-rs-yellow' : d.signal === 'RED' ? 'td-rs-red' : 'td-rs-none';
-    const title = `${d.date} — ${d.signal || 'No data'}`;
-    return `<div class="td-rs-block ${cls}" title="${title}"></div>`;
+    return `<div class="td-rs-day" title="${d.date} — ${d.signal || 'No data'}"><div class="td-rs-block-lg ${cls}"></div><span class="td-rs-day-label">${d.dayLabel}</span></div>`;
   }).join('');
-  
-  return `<div class="td-regime-strip"><span class="td-rs-label">30d</span>${blocks}<span class="td-rs-label">now</span></div>`;
+
+  return `<div class="td-regime-strip-v2"><div class="td-rs-days">${blocks}</div><div class="td-rs-summary">${summary}</div></div>`;
 }
 
 // ─── Trading Desk: Fear & Greed Gauge ───
