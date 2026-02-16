@@ -6049,3 +6049,80 @@ input {
 .td-brief-strat { font-size: 0.68rem; color: rgba(255,255,255,0.55); }
 .td-brief-avoid { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: #ef4444; }
 .td-brief-news-item { font-size: 0.68rem; color: rgba(255,255,255,0.5); line-height: 1.5; }
+
+/* Sparklines */
+.td-stock-spark { display: inline-flex; align-items: center; }
+.td-sparkline { vertical-align: middle; }
+
+/* Regime History Strip */
+.td-regime-strip {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 0;
+  margin-bottom: 8px;
+}
+.td-rs-label { font-size: 0.55rem; color: rgba(255,255,255,0.2); text-transform: uppercase; letter-spacing: 0.5px; padding: 0 4px; }
+.td-rs-block { width: 100%; max-width: 12px; height: 8px; border-radius: 1px; flex-shrink: 1; }
+.td-rs-green { background: #22c55e; }
+.td-rs-yellow { background: #eab308; }
+.td-rs-red { background: #ef4444; }
+.td-rs-none { background: rgba(255,255,255,0.05); }
+
+/* Widget Row */
+.td-widget-row { display: flex; gap: 10px; margin-bottom: 10px; }
+.td-widget-title { font-size: 0.68rem; font-weight: 600; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+
+/* Fear & Greed Gauge */
+.td-fg-gauge {
+  flex: 0 0 140px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.td-fg-header { font-size: 0.55rem; color: rgba(255,255,255,0.35); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 4px; }
+.td-fg-arc { width: 90px; height: 50px; }
+.td-fg-score { font-family: 'JetBrains Mono', monospace; font-size: 1.8rem; font-weight: 800; margin-top: -8px; }
+.td-fg-label { font-size: 0.68rem; color: rgba(255,255,255,0.5); margin-top: -2px; }
+
+/* Sector Heatmap */
+.td-sector-map {
+  flex: 1;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.td-sector-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 4px;
+}
+.td-sector-cell {
+  padding: 6px 8px;
+  border-radius: 4px;
+  text-align: center;
+}
+.td-sector-name { font-size: 0.58rem; color: rgba(255,255,255,0.45); display: block; text-transform: uppercase; letter-spacing: 0.5px; }
+.td-sector-pct { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; font-weight: 700; display: block; }
+.td-sector-wk { font-size: 0.52rem; color: rgba(255,255,255,0.25); display: block; }
+
+/* Calendar Widget */
+.td-calendar {
+  flex: 1;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.td-cal-row { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 0.68rem; }
+.td-cal-date { font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; color: rgba(255,255,255,0.35); width: 42px; }
+.td-cal-event { color: rgba(255,255,255,0.7); }
+.td-cal-note { font-size: 0.58rem; color: rgba(255,255,255,0.3); margin-left: auto; }
+.td-cal-divider { height: 1px; background: rgba(255,255,255,0.06); margin: 4px 0; }
+
+/* Portfolio now flexes within widget row */
+.td-widget-row .td-portfolio { flex: 1; margin-bottom: 0; }

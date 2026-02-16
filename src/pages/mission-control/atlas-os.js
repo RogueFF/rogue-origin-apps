@@ -377,16 +377,18 @@ async function fetchInbox() {
 }
 
 async function fetchTradingData() {
-  const [regime, plays, portfolio, positions, brief] = await Promise.all([
+  const [regime, plays, portfolio, positions, brief, regimeHistory, widgets] = await Promise.all([
     apiFetch('/regime'),
     apiFetch('/plays'),
     apiFetch('/portfolio'),
     apiFetch('/positions?status=open'),
     apiFetch('/briefs/latest'),
+    apiFetch('/regime/history'),
+    apiFetch('/widgets'),
   ]);
 
   if (regime || plays || portfolio) {
-    renderTradingDesk(regime, plays, portfolio, positions, brief);
+    renderTradingDesk(regime, plays, portfolio, positions, brief, regimeHistory, widgets);
   }
 }
 
@@ -2127,7 +2129,7 @@ document.addEventListener('click', (e) => {
 /* ═══════════════════════════════════════════════════
    TRADING DESK
    ═══════════════════════════════════════════════════ */
-function renderTradingDesk(regime, plays, portfolio, positions, brief) {
+function renderTradingDesk(regime, plays, portfolio, positions, brief, regimeHistory, widgets) {
   const container = document.getElementById('tradingMain');
   if (!container) return;
 
@@ -2171,13 +2173,21 @@ function renderTradingDesk(regime, plays, portfolio, positions, brief) {
       <span class="trading-refresh-rate">${marketOpen ? 'Refreshing every 60s' : 'Refreshing every 5m'}</span>
     </div>
     ${buildRegimeBanner(regime)}
-    ${buildPortfolioOverview(portfolio, openPositions, optionPlays)}
+    ${buildRegimeStrip(Array.isArray(regimeHistory) ? regimeHistory : [])}
+    <div class="td-widget-row">
+      ${buildFearGreedGauge(widgets?.fear_greed)}
+      ${buildPortfolioOverview(portfolio, openPositions, optionPlays)}
+    </div>
     <div class="td-sections ${suppressed ? 'td-suppressed' : ''}">
-      ${buildStockPicks(stockPlays, suppressed)}
+      ${buildStockPicks(stockPlays, suppressed, widgets?.sparklines)}
       ${buildOptionPlays(optionPlays, optionsTotal)}
       ${buildOpenPositions(openPositions)}
-      ${briefData ? buildStructuredBrief(briefData) : (briefRaw ? buildBriefSection(briefRaw) : '')}
     </div>
+    <div class="td-widget-row">
+      ${buildSectorHeatmap(widgets?.sectors)}
+      ${buildCalendarWidget(widgets?.econ_calendar, widgets?.earnings)}
+    </div>
+    ${briefData ? buildStructuredBrief(briefData) : (briefRaw ? buildBriefSection(briefRaw) : '')}
   `;
 
   container.innerHTML = html;
@@ -2428,7 +2438,7 @@ function buildPortfolioOverview(portfolio, openPositions, optionPlays) {
 }
 
 // ─── Trading Desk: Stock Picks ───
-function buildStockPicks(plays, suppressed) {
+function buildStockPicks(plays, suppressed, sparklines) {
   if (!plays || plays.length === 0) return '';
 
   const sorted = [...plays].sort((a, b) => {
@@ -2448,11 +2458,14 @@ function buildStockPicks(plays, suppressed) {
     const convLabel = conviction.charAt(0).toUpperCase() + conviction.slice(1);
     // Top 3 get visual emphasis
     const rankCls = idx < 3 ? 'td-stock-top' : '';
+    const spark = (sparklines || {})[ticker] || [];
+    const sparkSvg = spark.length >= 2 ? buildSparklineSVG(spark) : '';
 
     return `
       <div class="td-stock-row ${rankCls}">
         <span class="td-stock-rank">${idx + 1}</span>
         <span class="td-stock-ticker">${escapeHTML(ticker)}</span>
+        ${sparkSvg ? `<span class="td-stock-spark">${sparkSvg}</span>` : ''}
         <span class="td-stock-alpha">α:${score >= 0 ? '+' : ''}${score.toFixed(3)}</span>
         <span class="td-conv-badge ${convCls}">${convLabel}</span>
         <span class="td-stock-weight">${weight.toFixed(1)}%</span>
@@ -2555,6 +2568,138 @@ function buildOpenPositions(positions) {
         <span class="td-section-count">${positions.length}</span>
       </div>
       <div class="td-pos-list">${rows}</div>
+    </div>
+  `;
+}
+
+// ─── Trading Desk: Sparkline SVG ───
+function buildSparklineSVG(prices) {
+  if (!prices || prices.length < 2) return '';
+  const w = 48, h = 16, pad = 1;
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  const range = max - min || 1;
+  const points = prices.map((p, i) => {
+    const x = pad + (i / (prices.length - 1)) * (w - 2 * pad);
+    const y = pad + (1 - (p - min) / range) * (h - 2 * pad);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const up = prices[prices.length - 1] >= prices[0];
+  const color = up ? '#22c55e' : '#ef4444';
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" class="td-sparkline"><polyline points="${points}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+// ─── Trading Desk: Regime History Strip ───
+function buildRegimeStrip(history) {
+  if (!history || history.length === 0) return '';
+  // Pad to 30 days
+  const days = [];
+  const now = new Date();
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().slice(0, 10);
+    const match = history.find(h => h.date === dateStr);
+    days.push({ date: dateStr, signal: match ? match.signal : null, day: d.toLocaleDateString('en-US', { weekday: 'narrow' }) });
+  }
+  const blocks = days.map(d => {
+    const cls = d.signal === 'GREEN' ? 'td-rs-green' : d.signal === 'YELLOW' ? 'td-rs-yellow' : d.signal === 'RED' ? 'td-rs-red' : 'td-rs-none';
+    const title = `${d.date} — ${d.signal || 'No data'}`;
+    return `<div class="td-rs-block ${cls}" title="${title}"></div>`;
+  }).join('');
+  
+  return `<div class="td-regime-strip"><span class="td-rs-label">30d</span>${blocks}<span class="td-rs-label">now</span></div>`;
+}
+
+// ─── Trading Desk: Fear & Greed Gauge ───
+function buildFearGreedGauge(data) {
+  if (!data) return '';
+  const score = data.score || 50;
+  const label = data.label || 'Neutral';
+  // Color based on score
+  let color, bg;
+  if (score >= 75) { color = '#22c55e'; bg = 'rgba(34,197,94,0.1)'; }
+  else if (score >= 55) { color = '#86efac'; bg = 'rgba(134,239,172,0.08)'; }
+  else if (score >= 45) { color = '#eab308'; bg = 'rgba(234,179,8,0.08)'; }
+  else if (score >= 25) { color = '#f97316'; bg = 'rgba(249,115,22,0.08)'; }
+  else { color = '#ef4444'; bg = 'rgba(239,68,68,0.1)'; }
+
+  // Arc gauge
+  const angle = (score / 100) * 180;
+  const rad = angle * Math.PI / 180;
+  const r = 40, cx = 50, cy = 50;
+  const x = cx + r * Math.cos(Math.PI - rad);
+  const y = cy - r * Math.sin(Math.PI - rad);
+  const largeArc = angle > 90 ? 1 : 0;
+
+  return `
+    <div class="td-fg-gauge" style="background:${bg}">
+      <div class="td-fg-header">FEAR & GREED</div>
+      <svg viewBox="0 0 100 55" class="td-fg-arc">
+        <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="6" stroke-linecap="round"/>
+        <path d="M 10 50 A 40 40 0 ${largeArc} 1 ${x.toFixed(1)} ${y.toFixed(1)}" fill="none" stroke="${color}" stroke-width="6" stroke-linecap="round"/>
+      </svg>
+      <div class="td-fg-score" style="color:${color}">${score}</div>
+      <div class="td-fg-label">${escapeHTML(label)}</div>
+    </div>
+  `;
+}
+
+// ─── Trading Desk: Sector Heatmap ───
+function buildSectorHeatmap(sectors) {
+  if (!sectors || sectors.length === 0) return '';
+  const cells = sectors.map(s => {
+    const pct = s.daily_pct || 0;
+    const wk = s.weekly_pct || 0;
+    let bg, textColor;
+    if (pct >= 1.5) { bg = 'rgba(34,197,94,0.35)'; textColor = '#4ade80'; }
+    else if (pct >= 0.5) { bg = 'rgba(34,197,94,0.15)'; textColor = '#86efac'; }
+    else if (pct >= -0.5) { bg = 'rgba(255,255,255,0.04)'; textColor = 'rgba(255,255,255,0.6)'; }
+    else if (pct >= -1.5) { bg = 'rgba(239,68,68,0.15)'; textColor = '#fca5a5'; }
+    else { bg = 'rgba(239,68,68,0.35)'; textColor = '#ef4444'; }
+
+    const shortName = s.name.replace('Consumer ', '').replace('Real Estate', 'RE');
+    return `
+      <div class="td-sector-cell" style="background:${bg}">
+        <span class="td-sector-name">${escapeHTML(shortName)}</span>
+        <span class="td-sector-pct" style="color:${textColor}">${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%</span>
+        <span class="td-sector-wk">${wk >= 0 ? '+' : ''}${wk.toFixed(1)}% wk</span>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="td-sector-map">
+      <div class="td-widget-title">📊 Sectors</div>
+      <div class="td-sector-grid">${cells}</div>
+    </div>
+  `;
+}
+
+// ─── Trading Desk: Calendar Widget ───
+function buildCalendarWidget(econ, earnings) {
+  const econEvents = (econ || []).slice(0, 6);
+  const earningsEvents = (earnings || []).slice(0, 5);
+  
+  if (econEvents.length === 0 && earningsEvents.length === 0) return '';
+
+  const impactIcon = { critical: '🔴', high: '🟡', medium: '⚪', low: '⚫' };
+  
+  const econHtml = econEvents.map(e => {
+    const icon = impactIcon[e.impact] || '⚪';
+    const dateShort = (e.date || '').slice(5); // MM-DD
+    return `<div class="td-cal-row"><span class="td-cal-date">${dateShort}</span>${icon} <span class="td-cal-event">${escapeHTML(e.event)}</span><span class="td-cal-note">${escapeHTML(e.note || '')}</span></div>`;
+  }).join('');
+
+  const earningsHtml = earningsEvents.map(e => {
+    return `<div class="td-cal-row"><span class="td-cal-date">${(e.date || '').slice(5)}</span>📊 <span class="td-cal-event">${escapeHTML(e.ticker)}</span><span class="td-cal-note">in ${e.days_until}d</span></div>`;
+  }).join('');
+
+  return `
+    <div class="td-calendar">
+      <div class="td-widget-title">📅 Calendar</div>
+      ${econHtml}
+      ${earningsHtml ? `<div class="td-cal-divider"></div>${earningsHtml}` : ''}
     </div>
   `;
 }
