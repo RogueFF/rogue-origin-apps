@@ -35,6 +35,14 @@ module.exports = defineConfig({
     /* Base URL for file:// protocol */
     baseURL: 'file://' + path.resolve(__dirname, 'src/pages'),
 
+    /* Run headless (required for WSL2/CI) */
+    headless: true,
+
+    /* Launch options for WSL2/headless environments */
+    launchOptions: {
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    },
+
     /* Collect trace when retrying the failed test */
     trace: 'on-first-retry',
 
@@ -50,6 +58,9 @@ module.exports = defineConfig({
     /* Maximum time each navigation can take */
     navigationTimeout: 30000,
   },
+
+  /* Ignore legacy puppeteer-based tests */
+  testIgnore: ['**/page-loading.test.js', '**/baseline.test.js', '**/iframe-navigation.test.js', '**/quick-visual-test.js', '**/automated-dashboard-tests.js'],
 
   /* Configure projects for major browsers */
   projects: [
