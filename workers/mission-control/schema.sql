@@ -91,6 +91,10 @@ CREATE TABLE IF NOT EXISTS positions (
   exit_date DATETIME,
   pnl REAL,                           -- realized P&L (set on close)
   notes TEXT,
+  target_price REAL DEFAULT 0,
+  stop_loss REAL DEFAULT 0,
+  current_price REAL,
+  current_pnl REAL DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

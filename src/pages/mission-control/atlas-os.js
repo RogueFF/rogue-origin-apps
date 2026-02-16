@@ -2396,9 +2396,9 @@ function buildPortfolioOverview(portfolio, openPositions, optionPlays) {
   const wins = portfolio.wins || 0;
   const losses = portfolio.losses || 0;
 
-  // Calculate allocation bars
-  const stockExposure = (openPositions || []).filter(p => p.vehicle === 'shares').reduce((s, p) => s + (p.entry_price || 0) * (p.quantity || 0), 0);
-  const optionExposure = (openPositions || []).filter(p => p.vehicle === 'calls' || p.vehicle === 'puts').reduce((s, p) => s + (p.entry_price || 0) * (p.quantity || 0) * 100, 0);
+  // Calculate allocation bars (use current_price if available, fall back to entry_price)
+  const stockExposure = (openPositions || []).filter(p => p.vehicle === 'shares').reduce((s, p) => s + (p.current_price || p.entry_price || 0) * (p.quantity || 0), 0);
+  const optionExposure = (openPositions || []).filter(p => p.vehicle === 'calls' || p.vehicle === 'puts').reduce((s, p) => s + (p.current_price || p.entry_price || 0) * (p.quantity || 0) * 100, 0);
   const cashAmount = Math.max(0, pv - stockExposure - optionExposure);
 
   const stockPct = pv > 0 ? (stockExposure / pv * 100) : 0;
