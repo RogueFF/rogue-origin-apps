@@ -105,6 +105,11 @@
 
       const ctx = document.getElementById('hourlyChart').getContext('2d');
 
+      // Register datalabels plugin
+      if (typeof ChartDataLabels !== 'undefined') {
+        Chart.register(ChartDataLabels);
+      }
+
       const newChart = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -134,10 +139,22 @@
           maintainAspectRatio: false,
           animation: false,
           layout: {
-            padding: { bottom: 10, top: 10 }
+            padding: { bottom: 10, top: 25 }
           },
           plugins: {
             legend: { display: false },
+            datalabels: {
+              display: function(context) {
+                return context.datasetIndex === 0;
+              },
+              anchor: 'end',
+              align: 'top',
+              color: 'rgba(255,255,255,0.85)',
+              font: { size: 11, weight: '600', family: 'JetBrains Mono, monospace' },
+              formatter: function(value) {
+                return value.toFixed(2);
+              }
+            },
             tooltip: {
               // Use external/custom tooltip for richer display
               enabled: true,
