@@ -5957,6 +5957,10 @@ input {
 .td-option-detail { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: rgba(255,255,255,0.55); }
 .td-option-iv { font-size: 0.65rem; color: rgba(255,255,255,0.35); }
 .td-option-cost { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: rgba(255,255,255,0.6); margin-left: auto; }
+.td-option-dte { font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; font-weight: 700; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
+.td-option-dte-critical { background: rgba(239,68,68,0.2); color: #ef4444; }
+.td-option-dte-warning { background: rgba(234,179,8,0.2); color: #eab308; }
+.td-option-dte-normal { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.35); }
 
 /* Open Positions */
 .td-pos-list { padding: 4px 0; }
@@ -6051,8 +6055,8 @@ input {
 .td-brief-news-item { font-size: 0.68rem; color: rgba(255,255,255,0.5); line-height: 1.5; }
 
 /* Sparklines */
-.td-stock-spark { display: inline-flex; align-items: center; }
-.td-sparkline { vertical-align: middle; }
+.td-stock-spark { display: inline-flex; align-items: center; vertical-align: middle; }
+.td-sparkline { vertical-align: middle; display: block; }
 
 /* Regime History Strip */
 .td-regime-strip {
@@ -6063,7 +6067,7 @@ input {
   margin-bottom: 8px;
 }
 .td-rs-label { font-size: 0.55rem; color: rgba(255,255,255,0.2); text-transform: uppercase; letter-spacing: 0.5px; padding: 0 4px; }
-.td-rs-block { width: 100%; max-width: 12px; height: 8px; border-radius: 1px; flex-shrink: 1; }
+.td-rs-block { width: 100%; max-width: 12px; height: 10px; border-radius: 1px; flex-shrink: 1; }
 .td-rs-green { background: #22c55e; }
 .td-rs-yellow { background: #eab308; }
 .td-rs-red { background: #ef4444; }
@@ -6084,7 +6088,7 @@ input {
   border: 1px solid rgba(255,255,255,0.06);
 }
 .td-fg-header { font-size: 0.55rem; color: rgba(255,255,255,0.35); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 4px; }
-.td-fg-arc { width: 90px; height: 50px; }
+.td-fg-arc { width: 90px; height: 55px; }
 .td-fg-score { font-family: 'JetBrains Mono', monospace; font-size: 1.8rem; font-weight: 800; margin-top: -8px; }
 .td-fg-label { font-size: 0.68rem; color: rgba(255,255,255,0.5); margin-top: -2px; }
 
@@ -6106,7 +6110,7 @@ input {
   border-radius: 4px;
   text-align: center;
 }
-.td-sector-name { font-size: 0.58rem; color: rgba(255,255,255,0.45); display: block; text-transform: uppercase; letter-spacing: 0.5px; }
+.td-sector-name { font-size: 0.58rem; color: rgba(255,255,255,0.45); display: block; text-transform: uppercase; letter-spacing: 0.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .td-sector-pct { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; font-weight: 700; display: block; }
 .td-sector-wk { font-size: 0.52rem; color: rgba(255,255,255,0.25); display: block; }
 

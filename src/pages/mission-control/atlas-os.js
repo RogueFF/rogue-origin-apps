@@ -2505,12 +2505,25 @@ function buildOptionPlays(plays, totalExposure) {
     const cost = setup.cost || 0;
     const expiryShort = expiry ? expiry.replace(/^\d{4}-/, '') : '';
 
+    // Calculate DTE (days to expiration)
+    let dteLabel = '';
+    let dteClass = 'td-option-dte-normal';
+    if (expiry) {
+      const now = new Date();
+      const exp = new Date(expiry + 'T16:00:00');
+      const dte = Math.max(0, Math.ceil((exp - now) / (1000 * 60 * 60 * 24)));
+      dteLabel = dte + 'd';
+      if (dte <= 2) dteClass = 'td-option-dte-critical';
+      else if (dte <= 5) dteClass = 'td-option-dte-warning';
+    }
+
     return `
       <div class="td-option-row">
         <span class="td-option-emoji">${emoji}</span>
         <span class="td-option-ticker">${escapeHTML(ticker)}</span>
         <span class="td-option-strike">$${strike}${isCall ? 'C' : 'P'}</span>
         <span class="td-option-expiry">${expiryShort}</span>
+        ${dteLabel ? `<span class="td-option-dte ${dteClass}">${dteLabel}</span>` : ''}
         <span class="td-option-detail">${contracts}x @ $${ask.toFixed(2)}</span>
         <span class="td-option-iv">IV:${iv}%</span>
         <span class="td-option-cost">$${cost.toLocaleString()}</span>
@@ -2636,8 +2649,8 @@ function buildFearGreedGauge(data) {
     <div class="td-fg-gauge" style="background:${bg}">
       <div class="td-fg-header">FEAR & GREED</div>
       <svg viewBox="0 0 100 55" class="td-fg-arc">
-        <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="6" stroke-linecap="round"/>
-        <path d="M 10 50 A 40 40 0 ${largeArc} 1 ${x.toFixed(1)} ${y.toFixed(1)}" fill="none" stroke="${color}" stroke-width="6" stroke-linecap="round"/>
+        <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="10" stroke-linecap="round"/>
+        <path d="M 10 50 A 40 40 0 ${largeArc} 1 ${x.toFixed(1)} ${y.toFixed(1)}" fill="none" stroke="${color}" stroke-width="10" stroke-linecap="round"/>
       </svg>
       <div class="td-fg-score" style="color:${color}">${score}</div>
       <div class="td-fg-label">${escapeHTML(label)}</div>
@@ -2658,9 +2671,9 @@ function buildSectorHeatmap(sectors) {
     else if (pct >= -1.5) { bg = 'rgba(239,68,68,0.15)'; textColor = '#fca5a5'; }
     else { bg = 'rgba(239,68,68,0.35)'; textColor = '#ef4444'; }
 
-    const shortName = s.name.replace('Consumer ', '').replace('Real Estate', 'RE');
+    const shortName = s.name.replace('Consumer ', '').replace('Real Estate', 'RE').replace('Communication Services', 'Comm Svcs').replace('Information Technology', 'Info Tech');
     return `
-      <div class="td-sector-cell" style="background:${bg}">
+      <div class="td-sector-cell" style="background:${bg}" title="${escapeHTML(s.name)}">
         <span class="td-sector-name">${escapeHTML(shortName)}</span>
         <span class="td-sector-pct" style="color:${textColor}">${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%</span>
         <span class="td-sector-wk">${wk >= 0 ? '+' : ''}${wk.toFixed(1)}% wk</span>
