@@ -6398,16 +6398,14 @@ input {
 
 /* ─── Trading Desk Redesign ─── */
 
-/* Regime Banner */
+/* Regime Banner - Compact single row */
 .td-regime {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
   gap: 12px;
-  padding: 14px 18px;
-  border-radius: 8px;
-  margin-bottom: 12px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  margin-bottom: 6px;
   border: 1px solid rgba(255,255,255,0.08);
 }
 .td-regime-green { background: linear-gradient(135deg, rgba(34,197,94,0.15), rgba(34,197,94,0.05)); border-color: rgba(34,197,94,0.3); }
@@ -6415,10 +6413,9 @@ input {
 .td-regime-red { background: linear-gradient(135deg, rgba(239,68,68,0.15), rgba(239,68,68,0.05)); border-color: rgba(239,68,68,0.3); }
 .td-regime-neutral { background: rgba(255,255,255,0.03); }
 
-.td-regime-left { display: flex; align-items: center; gap: 12px; }
 .td-regime-signal {
   font-family: 'JetBrains Mono', 'SF Mono', monospace;
-  font-size: 1.4rem;
+  font-size: 1.1rem;
   font-weight: 800;
   letter-spacing: 2px;
 }
@@ -6426,28 +6423,45 @@ input {
 .td-regime-yellow .td-regime-signal { color: #eab308; }
 .td-regime-red .td-regime-signal { color: #ef4444; }
 
-.td-regime-label { font-size: 0.82rem; color: rgba(255,255,255,0.7); max-width: 200px; }
+.td-regime-label { font-size: 0.75rem; color: rgba(255,255,255,0.7); }
 
-.td-regime-data { display: flex; gap: 16px; }
-.td-regime-stat { display: flex; flex-direction: column; align-items: center; }
-.td-regime-stat-label { font-size: 0.65rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 1px; }
-.td-regime-stat-value { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: rgba(255,255,255,0.9); }
+.td-regime-stats { display: flex; gap: 12px; margin-left: auto; }
+.td-regime-stat-inline { 
+  font-family: 'JetBrains Mono', monospace; 
+  font-size: 0.72rem; 
+  color: rgba(255,255,255,0.7);
+}
 
-.td-regime-sizing { font-size: 0.72rem; color: rgba(255,255,255,0.5); width: 100%; margin-top: 4px; }
+.td-regime-sizing { 
+  font-size: 0.65rem; 
+  color: rgba(255,255,255,0.45); 
+  width: 100%; 
+  margin-top: 4px;
+  font-style: italic;
+}
 
 /* Portfolio Overview */
 .td-portfolio {
   background: rgba(255,255,255,0.03);
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 8px;
-  padding: 14px 18px;
-  margin-bottom: 12px;
+  padding: 12px 16px;
+  margin-bottom: 8px;
 }
-.td-portfolio-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+.td-portfolio-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
 .td-portfolio-title { font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 2px; }
 .td-portfolio-value { display: flex; align-items: baseline; gap: 8px; }
-.td-portfolio-amount { font-family: 'JetBrains Mono', monospace; font-size: 1.3rem; font-weight: 700; color: #fff; }
-.td-portfolio-pnl { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; font-weight: 600; }
+.td-portfolio-amount { font-family: 'JetBrains Mono', monospace; font-size: 1.2rem; font-weight: 700; color: #fff; }
+.td-portfolio-pnl { font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; font-weight: 600; }
+.td-fg-badge { 
+  font-family: 'JetBrains Mono', monospace; 
+  font-size: 0.65rem; 
+  font-weight: 600; 
+  padding: 2px 8px; 
+  border-radius: 10px; 
+  background: rgba(255,255,255,0.06);
+  white-space: nowrap;
+}
 
 .td-portfolio-alloc { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
 .td-alloc-row { display: flex; align-items: center; gap: 10px; }
@@ -6490,34 +6504,35 @@ input {
   border-radius: 10px;
 }
 
-/* Stock Picks */
-.td-stock-list { padding: 4px 0; }
+/* Stock Picks - Compact rows */
+.td-stock-list { padding: 2px 0; }
 .td-stock-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 14px;
+  gap: 8px;
+  padding: 6px 12px;
   transition: background 0.15s;
+  cursor: help;
 }
 .td-stock-row:hover { background: rgba(255,255,255,0.03); }
 .td-stock-ticker {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 700;
   color: #fff;
-  width: 55px;
+  width: 50px;
 }
 .td-stock-alpha {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   color: #22c55e;
-  width: 70px;
+  width: 65px;
 }
 .td-conv-badge {
-  font-size: 0.62rem;
+  font-size: 0.58rem;
   font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 10px;
+  padding: 2px 6px;
+  border-radius: 8px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -6525,52 +6540,99 @@ input {
 .td-conv-med { background: rgba(234,179,8,0.15); color: #eab308; border: 1px solid rgba(234,179,8,0.3); }
 .td-conv-low { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
 
-.td-stock-weight { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: rgba(255,255,255,0.5); width: 40px; text-align: right; }
-.td-stock-price { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: rgba(255,255,255,0.5); margin-left: auto; }
+.td-stock-weight { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: rgba(255,255,255,0.5); width: 38px; text-align: right; }
+.td-stock-price { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: rgba(255,255,255,0.5); margin-left: auto; }
 
-/* Options Plays */
-.td-option-list { padding: 4px 0; }
+/* Options Plays - Compact rows */
+.td-option-list { padding: 2px 0; }
 .td-option-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 14px;
+  gap: 6px;
+  padding: 6px 12px;
   border-left: 3px solid transparent;
   transition: background 0.15s;
 }
 .td-option-row:hover { background: rgba(168,85,247,0.05); }
 .td-option-row { border-left-color: rgba(168,85,247,0.4); }
 
-.td-option-emoji { font-size: 0.8rem; }
-.td-option-ticker { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; font-weight: 700; color: #fff; width: 45px; }
-.td-option-strike { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: #a855f7; width: 65px; }
-.td-option-expiry { font-size: 0.68rem; color: rgba(255,255,255,0.4); width: 50px; }
-.td-option-detail { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: rgba(255,255,255,0.55); }
-.td-option-iv { font-size: 0.65rem; color: rgba(255,255,255,0.35); }
-.td-option-cost { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: rgba(255,255,255,0.6); margin-left: auto; }
-.td-option-dte { font-family: var(--font-mono); font-size: 0.62rem; font-weight: 700; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
-.td-option-dte-critical { background: rgba(239,68,68,0.25); color: var(--sig-danger); }
+.td-option-emoji { font-size: 0.75rem; }
+.td-option-ticker { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; font-weight: 700; color: #fff; width: 42px; }
+.td-option-strike { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: #a855f7; width: 60px; }
+.td-option-expiry { font-size: 0.62rem; color: rgba(255,255,255,0.4); width: 45px; }
+.td-option-detail { font-family: 'JetBrains Mono', monospace; font-size: 0.64rem; color: rgba(255,255,255,0.55); }
+.td-option-iv { font-size: 0.6rem; color: rgba(255,255,255,0.35); }
+.td-option-cost { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: rgba(255,255,255,0.6); margin-left: auto; }
+.td-option-dte { 
+  font-family: 'JetBrains Mono', monospace; 
+  font-size: 0.58rem; 
+  font-weight: 700; 
+  padding: 1px 4px; 
+  border-radius: 3px; 
+  white-space: nowrap; 
+}
+.td-option-dte-critical { background: rgba(239,68,68,0.25); color: #ef4444; }
 .td-option-dte-warning { background: rgba(249,115,22,0.2); color: #f97316; }
-.td-option-dte-caution { background: rgba(234,179,8,0.15); color: var(--sig-warning); }
-.td-option-dte-safe { background: rgba(34,197,94,0.1); color: var(--sig-success); }
-.td-option-dte-normal { background: rgba(255,255,255,0.05); color: var(--os-text-muted); }
+.td-option-dte-caution { background: rgba(234,179,8,0.15); color: #eab308; }
+.td-option-dte-safe { background: rgba(34,197,94,0.1); color: #22c55e; }
+.td-option-dte-normal { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.5); }
 
-/* Open Positions */
-.td-pos-list { padding: 4px 0; }
+/* Open Positions - Compact with P&L stripe */
+.td-pos-list { padding: 2px 0; }
 .td-pos-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 14px;
+  padding: 6px 12px;
+  border-left: 3px solid transparent;
   transition: background 0.15s;
 }
 .td-pos-row:hover { background: rgba(255,255,255,0.03); }
-.td-pos-ticker { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; font-weight: 700; color: #fff; width: 50px; }
-.td-pos-vehicle { font-size: 0.68rem; color: rgba(255,255,255,0.4); width: 55px; }
-.td-pos-qty { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: rgba(255,255,255,0.5); width: 40px; }
-.td-pos-entry { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: rgba(255,255,255,0.45); }
-.td-pos-current { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: rgba(255,255,255,0.7); }
-.td-pos-pnl { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; font-weight: 600; margin-left: auto; }
+.td-pos-ticker { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; font-weight: 700; color: #fff; width: 48px; }
+.td-pos-vehicle { font-size: 0.64rem; color: rgba(255,255,255,0.4); width: 52px; }
+.td-pos-qty { font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; color: rgba(255,255,255,0.5); width: 38px; }
+.td-pos-entry { font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; color: rgba(255,255,255,0.45); }
+.td-pos-current { font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; color: rgba(255,255,255,0.7); }
+.td-pos-pnl { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; font-weight: 600; margin-left: auto; }
+
+/* Collapsible sections (Sectors + Calendar) */
+.td-collapsible { 
+  margin: 8px 0; 
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.td-collapsible-toggle {
+  display: block;
+  width: 100%;
+  padding: 8px 14px;
+  background: rgba(255,255,255,0.02);
+  color: rgba(255,255,255,0.6);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: background 0.15s;
+  list-style: none;
+}
+.td-collapsible-toggle::-webkit-details-marker,
+.td-collapsible-toggle::marker {
+  display: none;
+}
+.td-collapsible-toggle:hover { 
+  background: rgba(255,255,255,0.04); 
+  color: rgba(255,255,255,0.8);
+}
+.td-collapsible[open] .td-collapsible-toggle::after { 
+  content: ' ▾'; 
+}
+.td-collapsible:not([open]) .td-collapsible-toggle::after { 
+  content: ' ▸'; 
+}
+.td-collapsible-content { 
+  padding: 8px; 
+}
 
 /* Regime suppression */
 .td-suppressed .td-stock-row { opacity: 0.6; }
@@ -6583,6 +6645,30 @@ input {
   border-bottom: 1px solid rgba(234,179,8,0.1);
 }
 
+/* Smooth scrolling and thin scrollbar */
+#tradingMain,
+.trading-card-body {
+  scroll-behavior: smooth;
+  overflow-y: auto;
+}
+#tradingMain::-webkit-scrollbar,
+.trading-card-body::-webkit-scrollbar {
+  width: 4px;
+}
+#tradingMain::-webkit-scrollbar-track,
+.trading-card-body::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.02);
+}
+#tradingMain::-webkit-scrollbar-thumb,
+.trading-card-body::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+}
+#tradingMain::-webkit-scrollbar-thumb:hover,
+.trading-card-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.15);
+}
+
 /* Stock rank number */
 .td-stock-rank {
   font-family: 'JetBrains Mono', monospace;
@@ -6592,10 +6678,13 @@ input {
   text-align: right;
 }
 
-/* Top 3 stock emphasis */
-.td-stock-top { border-left: 2px solid rgba(34,197,94,0.4); padding-left: 12px !important; }
-.td-stock-top .td-stock-ticker { color: #fff; font-size: 0.88rem; }
-.td-stock-top .td-stock-alpha { color: #4ade80; }
+/* Top 3 stock emphasis - Subtle left accent */
+.td-stock-top { 
+  border-left: 3px solid rgba(34,197,94,0.5); 
+  padding-left: 10px !important; 
+}
+.td-stock-top .td-stock-ticker { color: #fff; }
+.td-stock-top .td-alpha-text { color: #4ade80; }
 
 /* Options header */
 .td-section-header-right { display: flex; align-items: center; gap: 10px; }
@@ -6658,30 +6747,67 @@ input {
 .td-change-down { background: rgba(239,68,68,0.15); color: var(--sig-danger); }
 .td-change-na { background: rgba(255,255,255,0.04); color: var(--os-text-muted); }
 
-/* Alpha Score Visual Bar */
-.td-stock-alpha-bar { position: relative; display: inline-flex; align-items: center; min-width: 72px; height: 18px; border-radius: 3px; overflow: hidden; background: rgba(255,255,255,0.04); }
-.td-alpha-fill { position: absolute; left: 0; top: 0; height: 100%; background: rgba(34,197,94,0.2); border-radius: 3px; transition: width 0.3s ease; }
-.td-alpha-text { position: relative; z-index: 1; font-family: var(--font-mono); font-size: 0.65rem; color: var(--sig-success); padding: 0 6px; white-space: nowrap; }
-.td-stock-top .td-alpha-fill { background: rgba(34,197,94,0.3); }
+/* Alpha Score Visual Bar - Thinner */
+.td-stock-alpha-bar { 
+  position: relative; 
+  display: inline-flex; 
+  align-items: center; 
+  min-width: 68px; 
+  height: 14px; 
+  border-radius: 3px; 
+  overflow: hidden; 
+  background: rgba(255,255,255,0.04); 
+}
+.td-alpha-fill { 
+  position: absolute; 
+  left: 0; 
+  top: 0; 
+  height: 4px; 
+  background: rgba(34,197,94,0.2); 
+  border-radius: 3px; 
+  transition: width 0.3s ease; 
+}
+.td-alpha-text { 
+  position: relative; 
+  z-index: 1; 
+  font-family: 'JetBrains Mono', monospace; 
+  font-size: 0.62rem; 
+  color: #22c55e; 
+  padding: 0 4px; 
+  white-space: nowrap; 
+}
+.td-stock-top .td-alpha-fill { background: rgba(34,197,94,0.3); height: 4px; }
 
-/* Stop / Target indicators */
-.td-stock-stops { font-family: var(--font-mono); font-size: 0.58rem; color: var(--os-text-muted); white-space: nowrap; letter-spacing: 0.3px; }
-
-/* Regime History Strip v2 */
-.td-regime-strip-v2 { display: flex; align-items: center; gap: 12px; padding: 6px 0; margin-bottom: 8px; }
-.td-rs-days { display: flex; gap: 6px; }
-.td-rs-day { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.td-rs-block-lg { width: 22px; height: 16px; border-radius: 3px; }
-.td-rs-day-label { font-size: 0.5rem; color: var(--os-text-muted); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.5px; }
-.td-rs-green { background: var(--sig-success); }
-.td-rs-yellow { background: var(--sig-warning); }
-.td-rs-red { background: var(--sig-danger); }
-.td-rs-none { background: rgba(255,255,255,0.05); }
-.td-rs-summary { font-size: 0.6rem; font-family: var(--font-mono); color: var(--os-text-secondary); white-space: nowrap; }
+/* Regime History Strip - Compact circles */
+.td-regime-strip-compact { 
+  display: flex; 
+  align-items: center; 
+  gap: 10px; 
+  padding: 4px 0; 
+  margin-bottom: 6px; 
+}
+.td-rs-circles { display: flex; gap: 4px; }
+.td-rs-circle { 
+  width: 12px; 
+  height: 12px; 
+  border-radius: 50%; 
+  cursor: help;
+}
+.td-rs-green { background: var(--sig-success, #22c55e); }
+.td-rs-yellow { background: var(--sig-warning, #eab308); }
+.td-rs-red { background: var(--sig-danger, #ef4444); }
+.td-rs-none { background: rgba(255,255,255,0.08); }
+.td-rs-summary { 
+  font-size: 0.62rem; 
+  font-family: 'JetBrains Mono', monospace; 
+  color: rgba(255,255,255,0.5); 
+  white-space: nowrap; 
+  margin-left: auto;
+}
 .td-rs-count { font-weight: 700; }
-.td-rs-red-text { color: var(--sig-danger); }
-.td-rs-yellow-text { color: var(--sig-warning); }
-.td-rs-green-text { color: var(--sig-success); }
+.td-rs-red-text { color: var(--sig-danger, #ef4444); }
+.td-rs-yellow-text { color: var(--sig-warning, #eab308); }
+.td-rs-green-text { color: var(--sig-success, #22c55e); }
 
 /* Legacy 30d strip (kept for compat) */
 .td-regime-strip { display: flex; align-items: center; gap: 2px; padding: 4px 0; margin-bottom: 8px; }

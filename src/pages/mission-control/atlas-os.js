@@ -2182,19 +2182,21 @@ function renderTradingDesk(regime, plays, portfolio, positions, brief, regimeHis
     </div>
     ${buildRegimeBanner(regime)}
     ${buildRegimeStrip(Array.isArray(regimeHistory) ? regimeHistory : [])}
-    <div class="td-widget-row">
-      ${buildFearGreedGauge(widgets?.fear_greed)}
-      ${buildPortfolioOverview(portfolio, openPositions, optionPlays)}
-    </div>
+    ${buildPortfolioOverview(portfolio, openPositions, optionPlays, widgets?.fear_greed)}
     <div class="td-sections ${suppressed ? 'td-suppressed' : ''}">
       ${buildStockPicks(stockPlays, suppressed, widgets?.sparklines)}
       ${buildOptionPlays(optionPlays, optionsTotal)}
       ${buildOpenPositions(openPositions)}
     </div>
-    <div class="td-widget-row">
-      ${buildSectorHeatmap(widgets?.sectors)}
-      ${buildCalendarWidget(widgets?.econ_calendar, widgets?.earnings)}
-    </div>
+    <details class="td-collapsible">
+      <summary class="td-collapsible-toggle">More ▸</summary>
+      <div class="td-collapsible-content">
+        <div class="td-widget-row">
+          ${buildSectorHeatmap(widgets?.sectors)}
+          ${buildCalendarWidget(widgets?.econ_calendar, widgets?.earnings)}
+        </div>
+      </div>
+    </details>
     ${briefData ? buildStructuredBrief(briefData) : (briefRaw ? buildBriefSection(briefRaw) : '')}
   `;
 
@@ -2362,14 +2364,12 @@ function buildRegimeBanner(data) {
 
   return `
     <div class="td-regime ${cls}">
-      <div class="td-regime-left">
-        <span class="td-regime-signal">${signal}</span>
-        <span class="td-regime-label">${escapeHTML(label)}</span>
-      </div>
-      <div class="td-regime-data">
-        <div class="td-regime-stat"><span class="td-regime-stat-label">SPY</span><span class="td-regime-stat-value">${spy}</span></div>
-        <div class="td-regime-stat"><span class="td-regime-stat-label">VIX</span><span class="td-regime-stat-value">${vix}</span></div>
-        <div class="td-regime-stat"><span class="td-regime-stat-label">10Y</span><span class="td-regime-stat-value">${y10}</span></div>
+      <span class="td-regime-signal">${signal}</span>
+      <span class="td-regime-label">${escapeHTML(label)}</span>
+      <div class="td-regime-stats">
+        <span class="td-regime-stat-inline">SPY ${spy}</span>
+        <span class="td-regime-stat-inline">VIX ${vix}</span>
+        <span class="td-regime-stat-inline">10Y ${y10}</span>
       </div>
       ${sizing ? `<div class="td-regime-sizing">${escapeHTML(sizing)}</div>` : ''}
     </div>
@@ -2377,7 +2377,7 @@ function buildRegimeBanner(data) {
 }
 
 // ─── Trading Desk: Portfolio Overview ───
-function buildPortfolioOverview(portfolio, openPositions, optionPlays) {
+function buildPortfolioOverview(portfolio, openPositions, optionPlays, fearGreedData) {
   if (!portfolio) return '';
 
   const pv = portfolio.portfolio_value || portfolio.starting_bankroll || 10000;
@@ -2405,6 +2405,20 @@ function buildPortfolioOverview(portfolio, openPositions, optionPlays) {
   const optionPct = pv > 0 ? (optionExposure / pv * 100) : 0;
   const cashPct = pv > 0 ? (cashAmount / pv * 100) : 0;
 
+  // Fear & Greed badge
+  let fgBadge = '';
+  if (fearGreedData) {
+    const score = fearGreedData.score || 50;
+    const label = fearGreedData.label || 'Neutral';
+    let fgColor;
+    if (score >= 75) fgColor = '#22c55e';
+    else if (score >= 55) fgColor = '#86efac';
+    else if (score >= 45) fgColor = '#eab308';
+    else if (score >= 25) fgColor = '#f97316';
+    else fgColor = '#ef4444';
+    fgBadge = `<span class="td-fg-badge" style="color:${fgColor}">F&G: ${score} ${label}</span>`;
+  }
+
   return `
     <div class="td-portfolio">
       <div class="td-portfolio-header">
@@ -2412,6 +2426,7 @@ function buildPortfolioOverview(portfolio, openPositions, optionPlays) {
         <div class="td-portfolio-value">
           <span class="td-portfolio-amount">$${pv.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>
           <span class="td-portfolio-pnl" style="color:${pnlColor}">${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%</span>
+          ${fgBadge}
         </div>
       </div>
       <div class="td-portfolio-alloc">
@@ -2487,13 +2502,13 @@ function buildStockPicks(plays, suppressed, sparklines) {
       changePill = `<span class="td-change-pill ${pillCls}">${sign}${pctChange.toFixed(1)}%</span>`;
     }
 
-    // Stop/target indicators
+    // Stop/target indicators (only on hover via title)
     const targetPrice = setup.target_price || (price > 0 ? (price * 1.10) : 0);
     const stopPrice = setup.stop_loss || (price > 0 ? (price * 0.95) : 0);
-    const stopTarget = price > 0 ? `<span class="td-stock-stops">T:$${targetPrice.toFixed(0)} · S:$${stopPrice.toFixed(0)}</span>` : '';
+    const stopTargetTitle = price > 0 ? `Target: $${targetPrice.toFixed(2)} | Stop: $${stopPrice.toFixed(2)}` : '';
 
     return `
-      <div class="td-stock-row ${rankCls}">
+      <div class="td-stock-row ${rankCls}" title="${stopTargetTitle}">
         <span class="td-stock-rank">${idx + 1}</span>
         <span class="td-stock-ticker">${escapeHTML(ticker)}</span>
         ${changePill}
@@ -2504,7 +2519,6 @@ function buildStockPicks(plays, suppressed, sparklines) {
         <span class="td-conv-badge ${convCls}">${convLabel}</span>
         <span class="td-stock-weight">${weight.toFixed(1)}%</span>
         <span class="td-stock-price">${price > 0 ? '$' + price.toFixed(2) : '—'}</span>
-        ${stopTarget}
       </div>
     `;
   }).join('');
@@ -2600,7 +2614,7 @@ function buildOpenPositions(positions) {
     const vehicleLabel = isOption ? `${vehicle === 'calls' ? 'C' : 'P'} $${pos.strike || ''}` : 'shares';
 
     return `
-      <div class="td-pos-row">
+      <div class="td-pos-row" style="border-left-color:${pnlColor}">
         <span class="td-pos-ticker">${escapeHTML(ticker)}</span>
         <span class="td-pos-vehicle">${vehicleLabel}</span>
         <span class="td-pos-qty">${isOption ? qty + 'x' : qty.toFixed(1)}</span>
@@ -2642,7 +2656,7 @@ function buildSparklineSVG(prices) {
 // ─── Trading Desk: Regime History Strip ───
 function buildRegimeStrip(history) {
   if (!history || history.length === 0) return '';
-  // Show last 7 days as larger blocks with day labels
+  // Show last 7 days as small circles with day labels on hover
   const days = [];
   const now = new Date();
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -2658,17 +2672,17 @@ function buildRegimeStrip(history) {
   const counts = { GREEN: 0, YELLOW: 0, RED: 0 };
   days.forEach(d => { if (d.signal && counts[d.signal] !== undefined) counts[d.signal]++; });
   const summaryParts = [];
-  if (counts.RED > 0) summaryParts.push(`<span class="td-rs-count td-rs-red-text">${counts.RED} RED</span>`);
-  if (counts.YELLOW > 0) summaryParts.push(`<span class="td-rs-count td-rs-yellow-text">${counts.YELLOW} YEL</span>`);
-  if (counts.GREEN > 0) summaryParts.push(`<span class="td-rs-count td-rs-green-text">${counts.GREEN} GRN</span>`);
-  const summary = summaryParts.join(' · ');
+  if (counts.RED > 0) summaryParts.push(`<span class="td-rs-count td-rs-red-text">${counts.RED}R</span>`);
+  if (counts.YELLOW > 0) summaryParts.push(`<span class="td-rs-count td-rs-yellow-text">${counts.YELLOW}Y</span>`);
+  if (counts.GREEN > 0) summaryParts.push(`<span class="td-rs-count td-rs-green-text">${counts.GREEN}G</span>`);
+  const summary = summaryParts.join(' ');
 
-  const blocks = days.map(d => {
+  const circles = days.map(d => {
     const cls = d.signal === 'GREEN' ? 'td-rs-green' : d.signal === 'YELLOW' ? 'td-rs-yellow' : d.signal === 'RED' ? 'td-rs-red' : 'td-rs-none';
-    return `<div class="td-rs-day" title="${d.date} — ${d.signal || 'No data'}"><div class="td-rs-block-lg ${cls}"></div><span class="td-rs-day-label">${d.dayLabel}</span></div>`;
+    return `<div class="td-rs-circle ${cls}" title="${d.dayLabel} ${d.date} — ${d.signal || 'No data'}"></div>`;
   }).join('');
 
-  return `<div class="td-regime-strip-v2"><div class="td-rs-days">${blocks}</div><div class="td-rs-summary">${summary}</div></div>`;
+  return `<div class="td-regime-strip-compact"><div class="td-rs-circles">${circles}</div><div class="td-rs-summary">${summary}</div></div>`;
 }
 
 // ─── Trading Desk: Fear & Greed Gauge ───
