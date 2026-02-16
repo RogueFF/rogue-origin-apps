@@ -139,6 +139,7 @@ function matchRoute(method, path) {
     ['GET',  /^\/api\/agents\/([a-z-]+)\/files\/(.+)$/, 'agentFileGet'],
     ['PUT',  /^\/api\/agents\/([a-z-]+)\/files\/(.+)$/, 'agentFilePut'],
     ['GET',  /^\/api\/github$/,                  'github'],
+    ['GET',  /^\/api\/prices$/,                  'pricesGet'],
   ];
 
   for (const [m, re, handler] of routes) {
@@ -1178,6 +1179,38 @@ const handlers = {
   async github(req, env) {
     const result = await handleGitHub(req, env);
     return json(result, result.success ? 200 : 500);
+  },
+
+  // GET /api/prices?symbols=MRNA,CSGP,KLAC — Yahoo Finance price proxy
+  async pricesGet(req, env) {
+    const url = new URL(req.url);
+    const symbols = (url.searchParams.get('symbols') || '').split(',').filter(Boolean).slice(0, 20);
+    if (symbols.length === 0) return err('Missing symbols parameter', 'VALIDATION_ERROR', 400);
+
+    const prices = {};
+    const fetches = symbols.map(async (ticker) => {
+      try {
+        const resp = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`, {
+          headers: { 'User-Agent': 'Mozilla/5.0' }
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          const meta = data?.chart?.result?.[0]?.meta;
+          if (meta) {
+            const price = meta.regularMarketPrice || 0;
+            const prevClose = meta.previousClose || meta.chartPreviousClose || 0;
+            prices[ticker] = {
+              price,
+              prevClose,
+              change: prevClose > 0 ? +(price - prevClose).toFixed(2) : 0,
+              changePct: prevClose > 0 ? +((price - prevClose) / prevClose * 100).toFixed(2) : 0
+            };
+          }
+        }
+      } catch {}
+    });
+    await Promise.all(fetches);
+    return json({ success: true, data: prices, timestamp: new Date().toISOString() });
   },
 
   // PUT /api/agents/:name/files/:filename — create or update file
