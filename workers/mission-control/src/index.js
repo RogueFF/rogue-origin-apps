@@ -1001,10 +1001,16 @@ const handlers = {
           const existing = await db.prepare('SELECT id, title, status, priority FROM tasks WHERE clickup_id = ?').bind(clickupId).first();
 
           if (existing) {
-            if (existing.title !== title || existing.status !== status || existing.priority !== priority) {
+            // Only override local status if ClickUp says "done" (closed task).
+            // If ClickUp says "to do" but local is active/review/blocked, keep local status.
+            const localAdvanced = ['active', 'review', 'blocked'].includes(existing.status);
+            const effectiveStatus = (status === 'backlog' && localAdvanced) ? existing.status : status;
+            const effectiveCompleted = effectiveStatus === 'done' ? (completedAt || updatedAt) : null;
+
+            if (existing.title !== title || existing.status !== effectiveStatus || existing.priority !== priority) {
               await db.prepare(
                 'UPDATE tasks SET title=?, description=?, status=?, priority=?, assigned_agent=?, domain=?, updated_at=?, completed_at=? WHERE clickup_id=?'
-              ).bind(title, description, status, priority, assignee, domain, updatedAt, completedAt, clickupId).run();
+              ).bind(title, description, effectiveStatus, priority, assignee, domain, updatedAt, effectiveCompleted, clickupId).run();
               updated++;
             } else {
               unchanged++;
