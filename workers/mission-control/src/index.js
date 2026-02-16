@@ -97,6 +97,7 @@ function matchRoute(method, path) {
   const routes = [
     ['GET',  /^\/api\/health$/,                  'health'],
     ['GET',  /^\/api\/agents$/,                  'agentsList'],
+    ['GET',  /^\/api\/agents\/roster$/,          'agentsRoster'],
     ['GET',  /^\/api\/agents\/([a-z-]+)$/,       'agentsGet'],
     ['PATCH',/^\/api\/agents\/([a-z-]+)$/,       'agentsUpdate'],
     ['GET',  /^\/api\/activity$/,                'activityList'],
@@ -115,6 +116,14 @@ function matchRoute(method, path) {
     ['GET',  /^\/api\/portfolio$/,                'portfolio'],
     ['GET',  /^\/api\/tasks\/stats$/,               'tasksStats'],
     ['POST', /^\/api\/tasks\/sync$/,                'tasksSync'],
+    ['POST', /^\/api\/tasks\/push-all$/,            'tasksPushAll'],
+    ['GET',  /^\/api\/tasks\/(\d+)\/comments$/,     'taskCommentsList'],
+    ['POST', /^\/api\/tasks\/(\d+)\/comments$/,     'taskCommentsCreate'],
+    ['DELETE',/^\/api\/tasks\/(\d+)\/comments\/(\d+)$/, 'taskCommentsDelete'],
+    ['GET',  /^\/api\/tasks\/(\d+)\/deliverables$/, 'taskDeliverablesList'],
+    ['POST', /^\/api\/tasks\/(\d+)\/deliverables$/, 'taskDeliverablesCreate'],
+    ['DELETE',/^\/api\/tasks\/(\d+)\/deliverables\/(\d+)$/, 'taskDeliverablesDelete'],
+    ['POST', /^\/api\/tasks\/(\d+)\/push$/,         'taskPushClickUp'],
     ['GET',  /^\/api\/tasks$/,                      'tasksList'],
     ['POST', /^\/api\/tasks$/,                      'tasksCreate'],
     ['PATCH',/^\/api\/tasks\/(\d+)$/,               'tasksUpdate'],
@@ -1029,6 +1038,142 @@ const handlers = {
     return json({ success: true, data: { created, updated, unchanged, total: created + updated + unchanged } });
   },
 
+  // ── Comments ──────────────────────────────────────────
+
+  async taskCommentsList(_req, env, params) {
+    const db = env.DB;
+    const taskId = parseInt(params[0]);
+    const results = await db.prepare('SELECT * FROM task_comments WHERE task_id = ? ORDER BY created_at ASC').bind(taskId).all();
+    return json({ success: true, data: results.results });
+  },
+
+  async taskCommentsCreate(req, env, params) {
+    const db = env.DB;
+    const taskId = parseInt(params[0]);
+    const body = await parseBody(req);
+    if (!body.body) return err('Missing required field: body', 'VALIDATION_ERROR', 400);
+    const now = new Date().toISOString();
+    const result = await db.prepare(
+      'INSERT INTO task_comments (task_id, author, body, comment_type, created_at) VALUES (?,?,?,?,?)'
+    ).bind(taskId, body.author || 'atlas', body.body, body.comment_type || 'comment', now).run();
+    const comment = await db.prepare('SELECT * FROM task_comments WHERE id = ?').bind(result.meta.last_row_id).first();
+    return json({ success: true, data: comment }, 201);
+  },
+
+  async taskCommentsDelete(_req, env, params) {
+    const db = env.DB;
+    const taskId = parseInt(params[0]);
+    const commentId = parseInt(params[1]);
+    const c = await db.prepare('SELECT * FROM task_comments WHERE id = ? AND task_id = ?').bind(commentId, taskId).first();
+    if (!c) return err('Comment not found', 'NOT_FOUND', 404);
+    await db.prepare('DELETE FROM task_comments WHERE id = ?').bind(commentId).run();
+    return json({ success: true, data: { id: commentId, deleted: true } });
+  },
+
+  // ── Deliverables ──────────────────────────────────────
+
+  async taskDeliverablesList(_req, env, params) {
+    const db = env.DB;
+    const taskId = parseInt(params[0]);
+    const results = await db.prepare('SELECT * FROM task_deliverables WHERE task_id = ? ORDER BY created_at DESC').bind(taskId).all();
+    return json({ success: true, data: results.results });
+  },
+
+  async taskDeliverablesCreate(req, env, params) {
+    const db = env.DB;
+    const taskId = parseInt(params[0]);
+    const body = await parseBody(req);
+    if (!body.title) return err('Missing required field: title', 'VALIDATION_ERROR', 400);
+    const now = new Date().toISOString();
+    const result = await db.prepare(
+      'INSERT INTO task_deliverables (task_id, title, url, content, deliverable_type, author, created_at) VALUES (?,?,?,?,?,?,?)'
+    ).bind(taskId, body.title, body.url || null, body.content || null, body.deliverable_type || 'link', body.author || 'atlas', now).run();
+    const d = await db.prepare('SELECT * FROM task_deliverables WHERE id = ?').bind(result.meta.last_row_id).first();
+    return json({ success: true, data: d }, 201);
+  },
+
+  async taskDeliverablesDelete(_req, env, params) {
+    const db = env.DB;
+    const taskId = parseInt(params[0]);
+    const delId = parseInt(params[1]);
+    const d = await db.prepare('SELECT * FROM task_deliverables WHERE id = ? AND task_id = ?').bind(delId, taskId).first();
+    if (!d) return err('Deliverable not found', 'NOT_FOUND', 404);
+    await db.prepare('DELETE FROM task_deliverables WHERE id = ?').bind(delId).run();
+    return json({ success: true, data: { id: delId, deleted: true } });
+  },
+
+  // ── Push to ClickUp ──────────────────────────────────
+
+  async taskPushClickUp(_req, env, params) {
+    const db = env.DB;
+    const token = env.CLICKUP_API_TOKEN;
+    if (!token) return err('CLICKUP_API_TOKEN not configured', 'CONFIG_ERROR', 500);
+    const id = parseInt(params[0]);
+    const task = await db.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first();
+    if (!task) return err('Task not found', 'NOT_FOUND', 404);
+
+    const STATUS_REVERSE = { backlog: 'to do', active: 'to do', review: 'to do', blocked: 'to do', done: 'complete' };
+    const DEFAULT_LIST = '901710736660'; // Operations/Backlog
+
+    if (task.clickup_id) {
+      // Update existing
+      await fetch(`https://api.clickup.com/api/v2/task/${task.clickup_id}`, {
+        method: 'PUT',
+        headers: { Authorization: token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: task.title, description: task.description || '', status: STATUS_REVERSE[task.status] || 'to do' }),
+      });
+      return json({ success: true, data: { action: 'updated', clickup_id: task.clickup_id } });
+    } else {
+      // Create new
+      const resp = await fetch(`https://api.clickup.com/api/v2/list/${DEFAULT_LIST}/task`, {
+        method: 'POST',
+        headers: { Authorization: token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: task.title, description: task.description || '', status: STATUS_REVERSE[task.status] || 'to do' }),
+      });
+      const cu = await resp.json();
+      if (cu.id) {
+        await db.prepare('UPDATE tasks SET clickup_id = ?, clickup_list_id = ? WHERE id = ?').bind(cu.id, DEFAULT_LIST, id).run();
+        return json({ success: true, data: { action: 'created', clickup_id: cu.id } });
+      }
+      return err('ClickUp API error', 'EXTERNAL_ERROR', 502);
+    }
+  },
+
+  async tasksPushAll(_req, env) {
+    const db = env.DB;
+    const token = env.CLICKUP_API_TOKEN;
+    if (!token) return err('CLICKUP_API_TOKEN not configured', 'CONFIG_ERROR', 500);
+
+    const unsynced = await db.prepare('SELECT * FROM tasks WHERE clickup_id IS NULL').all();
+    const DEFAULT_LIST = '901710736660';
+    const STATUS_REVERSE = { backlog: 'to do', active: 'to do', review: 'to do', blocked: 'to do', done: 'complete' };
+    let pushed = 0;
+
+    for (const task of unsynced.results) {
+      const resp = await fetch(`https://api.clickup.com/api/v2/list/${DEFAULT_LIST}/task`, {
+        method: 'POST',
+        headers: { Authorization: token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: task.title, description: task.description || '', status: STATUS_REVERSE[task.status] || 'to do' }),
+      });
+      const cu = await resp.json();
+      if (cu.id) {
+        await db.prepare('UPDATE tasks SET clickup_id = ?, clickup_list_id = ? WHERE id = ?').bind(cu.id, DEFAULT_LIST, task.id).run();
+        pushed++;
+      }
+    }
+    return json({ success: true, data: { pushed, total: unsynced.results.length } });
+  },
+
+  // ── Agent Roster ──────────────────────────────────────
+
+  async agentsRoster(_req, env) {
+    const db = env.DB;
+    const results = await db.prepare('SELECT name, signature_color, status FROM agents ORDER BY name ASC').all();
+    // Add Koa as assignable
+    const roster = [{ name: 'koa', signature_color: '#f97316', status: 'active' }, ...results.results];
+    return json({ success: true, data: roster });
+  },
+
   // GET /api/github — GitHub dashboard proxy
   async github(req, env) {
     const result = await handleGitHub(req, env);
@@ -1094,6 +1239,17 @@ export default {
         headers.set(k, v);
       }
       return new Response(response.body, { status: response.status, headers });
+    }
+  },
+
+  // Cron: sync ClickUp tasks every 5 minutes
+  async scheduled(event, env, ctx) {
+    try {
+      const fakeReq = new Request('https://localhost/api/tasks/sync', { method: 'POST' });
+      await handlers.tasksSync(fakeReq, env);
+      console.log('Cron sync completed');
+    } catch (e) {
+      console.error('Cron sync failed:', e);
     }
   },
 };
