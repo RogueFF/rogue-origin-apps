@@ -5462,3 +5462,345 @@ input {
     align-items: center;
   }
 }
+
+/* ═══════════════════════════════════════════════ */
+/* SYSTEM STATUS WINDOW                            */
+/* ═══════════════════════════════════════════════ */
+
+.system-window {
+  overflow-y: auto;
+  padding: var(--sp-16);
+}
+
+.sys-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-16);
+}
+
+.sys-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: var(--sp-16);
+}
+
+.sys-card-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: var(--sp-12);
+}
+
+/* Machine Overview */
+.sys-machine {
+  background: linear-gradient(135deg, rgba(0, 255, 136, 0.04), rgba(0, 136, 255, 0.04));
+  border-color: rgba(0, 255, 136, 0.1);
+}
+
+.sys-machine-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--sp-12);
+}
+
+.sys-machine-name {
+  font-size: 22px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+  letter-spacing: 0.5px;
+}
+
+.sys-machine-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sys-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #00ff88;
+  box-shadow: 0 0 8px rgba(0, 255, 136, 0.6);
+  animation: sysPulse 2s ease-in-out infinite;
+}
+
+@keyframes sysPulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(0, 255, 136, 0.6); }
+  50% { opacity: 0.5; box-shadow: 0 0 16px rgba(0, 255, 136, 0.3); }
+}
+
+.sys-status-text {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  color: #00ff88;
+}
+
+.sys-machine-specs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: var(--sp-16);
+}
+
+.sys-spec {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.sys-spec-sep {
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+}
+
+/* Resource Bars */
+.sys-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: var(--sp-16);
+}
+
+.sys-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sys-bar-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.4);
+  width: 32px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sys-bar-track {
+  flex: 1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.sys-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.6s ease;
+}
+
+.sys-bar-cpu {
+  background: linear-gradient(90deg, #00ff88, #00cc6a);
+  box-shadow: 0 0 6px rgba(0, 255, 136, 0.3);
+}
+
+.sys-bar-ram {
+  background: linear-gradient(90deg, #00aaff, #0077cc);
+  box-shadow: 0 0 6px rgba(0, 170, 255, 0.3);
+}
+
+.sys-bar-disk {
+  background: linear-gradient(90deg, #ffaa00, #cc8800);
+  box-shadow: 0 0 6px rgba(255, 170, 0, 0.3);
+}
+
+.sys-bar-val {
+  font-size: 11px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: rgba(255, 255, 255, 0.5);
+  min-width: 70px;
+  text-align: right;
+}
+
+/* Session Info */
+.sys-session-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: var(--sp-12);
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.sys-info-item {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.sys-info-item strong {
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 500;
+}
+
+/* Heartbeat Checks */
+.sys-checks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sys-check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.sys-check-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.sys-check-icon {
+  font-size: 14px;
+  width: 20px;
+  text-align: center;
+}
+
+.sys-check-label {
+  flex: 1;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.sys-check-ago {
+  font-size: 11px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: rgba(255, 255, 255, 0.35);
+  min-width: 60px;
+  text-align: right;
+}
+
+.sys-check-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sys-dot-recent {
+  background: #00ff88;
+  box-shadow: 0 0 6px rgba(0, 255, 136, 0.5);
+}
+
+.sys-dot-stale {
+  background: #ffaa00;
+  box-shadow: 0 0 6px rgba(255, 170, 0, 0.4);
+}
+
+.sys-dot-overdue {
+  background: #ff4444;
+  box-shadow: 0 0 6px rgba(255, 68, 68, 0.4);
+}
+
+.sys-dot-offline {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Nightly Build Log */
+.sys-card-scroll {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.sys-builds-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-12);
+}
+
+.sys-build-entry {
+  padding: var(--sp-12);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  transition: border-color 0.15s;
+}
+
+.sys-build-entry:hover {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.sys-build-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.sys-build-date {
+  font-size: 11px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.sys-build-badge {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.sys-badge-complete {
+  background: rgba(0, 255, 136, 0.12);
+  color: #00ff88;
+  border: 1px solid rgba(0, 255, 136, 0.2);
+}
+
+.sys-badge-in-progress {
+  background: rgba(0, 170, 255, 0.12);
+  color: #00aaff;
+  border: 1px solid rgba(0, 170, 255, 0.2);
+}
+
+.sys-build-task {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: 6px;
+}
+
+.sys-build-highlights {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sys-highlight {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .system-window {
+    padding: var(--sp-12);
+  }
+
+  .sys-machine-specs {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .sys-spec-sep {
+    display: none;
+  }
+
+  .sys-session-info {
+    flex-direction: column;
+    gap: 6px;
+  }
+}

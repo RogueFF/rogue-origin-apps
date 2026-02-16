@@ -91,6 +91,10 @@
         <div class="desktop-icon-glyph">📈</div>
         <span class="desktop-icon-label">Analytics</span>
       </button>
+      <button class="desktop-icon" data-window="system" title="System Status">
+        <div class="desktop-icon-glyph">🖥️</div>
+        <span class="desktop-icon-label">System</span>
+      </button>
     </div>
 
     <!-- Window container -->
@@ -153,6 +157,10 @@
         <button class="mobile-nav-btn" data-window="analytics">
           <span class="mobile-nav-icon">📈</span>
           <span class="mobile-nav-label">Analytics</span>
+        </button>
+        <button class="mobile-nav-btn" data-window="system">
+          <span class="mobile-nav-icon">🖥️</span>
+          <span class="mobile-nav-label">System</span>
         </button>
       </div>
 
@@ -466,6 +474,17 @@
         <div class="trading-loading">
           <div class="loading-spinner"></div>
           <span>Loading production analytics...</span>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <template id="tmpl-system">
+    <div class="window-body system-window">
+      <div class="system-main" id="systemMain">
+        <div class="trading-loading">
+          <div class="loading-spinner"></div>
+          <span>Loading system status...</span>
         </div>
       </div>
     </div>

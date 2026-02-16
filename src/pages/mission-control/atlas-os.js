@@ -114,6 +114,11 @@ const WINDOW_DEFS = {
     icon: '📈',
     template: 'tmpl-analytics',
   },
+  system: {
+    title: 'System Status',
+    icon: '🖥️',
+    template: 'tmpl-system',
+  },
 };
 
 // Compute tiled layout that fills the viewport
@@ -933,6 +938,169 @@ function buildCostChart(days) {
   `;
 }
 
+// ══════════════════════════════════════════════
+// SYSTEM STATUS WINDOW
+// ══════════════════════════════════════════════
+
+function renderSystemStatus() {
+  const el = document.getElementById('systemMain');
+  if (!el) return;
+
+  const heartbeatState = {
+    lastChecks: {
+      production: '2026-02-13T12:00:00-08:00',
+      github: '2026-02-15T20:55:00-08:00',
+      weather: '2026-02-15T17:50:00-08:00',
+      digest: '2026-02-15T20:55:00-08:00',
+      radar: '2026-02-15T08:02:00-08:00',
+      eveningBuild: '2026-02-15T19:02:00-08:00',
+      selfEvolution: '2026-02-15T04:11:00-08:00',
+      nightlyBuild: '2026-02-15T22:02:00-08:00',
+    },
+  };
+
+  const nightlyBuilds = [
+    { date: '2026-02-15', task: 'Production Analytics Window', status: 'complete', highlights: ['SVG bar/line charts', 'Day-of-week analysis', 'Tops vs smalls breakdown'] },
+    { date: '2026-02-14', task: 'GitHub Dashboard', status: 'complete', highlights: ['Server-side GitHub API proxy', 'Commits, CI, issues, PRs, branches'] },
+    { date: '2026-02-13', task: 'Test Suite + CI + Repo Refactor', status: 'complete', highlights: ['227 tests, 60 suites', 'Deleted 5 legacy handlers', 'Split 2,700-line handler → 12 modules'] },
+    { date: '2026-02-06', task: 'Evening Cleanup & Docs', status: 'complete', highlights: ['Documentation updates', 'Code cleanup'] },
+    { date: '2026-02-05', task: 'Pool Inventory System', status: 'complete', highlights: ['Full CRUD inventory', 'D1 backend integration'] },
+    { date: '2026-02-03', task: 'Cookbook App', status: 'complete', highlights: ['Cooking Mama pixel art', '25 recipes, favorites'] },
+    { date: '2026-02-02', task: 'Repo Review + Briefing Cards', status: 'complete', highlights: ['Root cleanup 50→13 files', 'SQL injection guards'] },
+  ];
+
+  const checkLabels = {
+    production: { label: 'Production Pulse', icon: '🏭' },
+    github: { label: 'GitHub Sentinel', icon: '🐙' },
+    weather: { label: 'Weather Report', icon: '🌤️' },
+    digest: { label: 'Daily Digest', icon: '📝' },
+    radar: { label: "Koa's Radar", icon: '📡' },
+    eveningBuild: { label: 'Evening Build', icon: '🔧' },
+    selfEvolution: { label: 'Self-Evolution', icon: '🧬' },
+    nightlyBuild: { label: 'Nightly Build', icon: '⭐' },
+  };
+
+  function timeAgo(isoStr) {
+    if (!isoStr) return 'never';
+    const diff = Date.now() - new Date(isoStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + 'm ago';
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + 'h ago';
+    const days = Math.floor(hrs / 24);
+    return days + 'd ago';
+  }
+
+  function checkStatus(isoStr) {
+    if (!isoStr) return 'offline';
+    const diff = Date.now() - new Date(isoStr).getTime();
+    const hrs = diff / 3600000;
+    if (hrs < 6) return 'recent';
+    if (hrs < 24) return 'stale';
+    return 'overdue';
+  }
+
+  // Machine Overview
+  const machineHTML = `
+    <div class="sys-card sys-machine">
+      <div class="sys-machine-header">
+        <div class="sys-machine-status">
+          <span class="sys-pulse"></span>
+          <span class="sys-status-text">ONLINE</span>
+        </div>
+        <div class="sys-machine-name">Fern</div>
+      </div>
+      <div class="sys-machine-specs">
+        <span class="sys-spec">ASUS ROG Zephyrus 14"</span>
+        <span class="sys-spec-sep">·</span>
+        <span class="sys-spec">Ryzen 9</span>
+        <span class="sys-spec-sep">·</span>
+        <span class="sys-spec">16GB DDR5</span>
+        <span class="sys-spec-sep">·</span>
+        <span class="sys-spec">RX 6700S</span>
+      </div>
+      <div class="sys-bars">
+        <div class="sys-bar-row">
+          <span class="sys-bar-label">CPU</span>
+          <div class="sys-bar-track"><div class="sys-bar-fill sys-bar-cpu" style="width:12%"></div></div>
+          <span class="sys-bar-val">12%</span>
+        </div>
+        <div class="sys-bar-row">
+          <span class="sys-bar-label">RAM</span>
+          <div class="sys-bar-track"><div class="sys-bar-fill sys-bar-ram" style="width:68%"></div></div>
+          <span class="sys-bar-val">9.5/14 GB</span>
+        </div>
+        <div class="sys-bar-row">
+          <span class="sys-bar-label">Disk</span>
+          <div class="sys-bar-track"><div class="sys-bar-fill sys-bar-disk" style="width:41%"></div></div>
+          <span class="sys-bar-val">410/1000 GB</span>
+        </div>
+      </div>
+      <div class="sys-session-info">
+        <span class="sys-info-item">Model: <strong>Claude Opus 4.6</strong></span>
+        <span class="sys-info-item">Boot: <strong>Feb 1, 2026</strong></span>
+        <span class="sys-info-item">WSL2: <strong>Ubuntu 24.04</strong></span>
+      </div>
+    </div>
+  `;
+
+  // Heartbeat Timeline
+  const checksHTML = Object.entries(heartbeatState.lastChecks).map(([key, val]) => {
+    const meta = checkLabels[key] || { label: key, icon: '⏱️' };
+    const status = checkStatus(val);
+    const ago = timeAgo(val);
+    return `
+      <div class="sys-check-row">
+        <span class="sys-check-icon">${meta.icon}</span>
+        <span class="sys-check-label">${meta.label}</span>
+        <span class="sys-check-ago">${ago}</span>
+        <span class="sys-check-dot sys-dot-${status}"></span>
+      </div>
+    `;
+  }).join('');
+
+  const heartbeatHTML = `
+    <div class="sys-card">
+      <div class="sys-card-title">Heartbeat Checks</div>
+      <div class="sys-checks-list">
+        ${checksHTML}
+      </div>
+    </div>
+  `;
+
+  // Nightly Build Log
+  const buildsHTML = nightlyBuilds.map(b => `
+    <div class="sys-build-entry">
+      <div class="sys-build-header">
+        <span class="sys-build-date">${b.date}</span>
+        <span class="sys-build-badge sys-badge-${b.status}">${b.status}</span>
+      </div>
+      <div class="sys-build-task">${escapeHTML(b.task)}</div>
+      <div class="sys-build-highlights">
+        ${b.highlights.map(h => `<span class="sys-highlight">• ${escapeHTML(h)}</span>`).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  const buildLogHTML = `
+    <div class="sys-card sys-card-scroll">
+      <div class="sys-card-title">Nightly Build Log</div>
+      <div class="sys-builds-list">
+        ${buildsHTML}
+      </div>
+    </div>
+  `;
+
+  el.innerHTML = `
+    <div class="sys-grid">
+      ${machineHTML}
+      ${heartbeatHTML}
+      ${buildLogHTML}
+    </div>
+  `;
+}
+
 async function pollData() {
   await Promise.all([fetchAgents(), fetchActivity(), fetchInbox()]);
   // Poll trading data if trading window is open
@@ -1078,6 +1246,7 @@ function openWindow(id) {
   if (id === 'work') fetchWorkData();
   if (id === 'github') fetchGitHubData();
   if (id === 'analytics') fetchAnalyticsData();
+  if (id === 'system') renderSystemStatus();
 }
 
 function closeWindow(id) {
