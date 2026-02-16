@@ -2146,19 +2146,18 @@ function renderTradingDesk(regime, plays, portfolio, positions, brief) {
   const regimeSignal = (regime?.signal || '').toUpperCase();
   const suppressed = regimeSignal === 'RED';
 
-  // Parse brief for morning narrative
-  let briefBody = '';
+  // Parse brief data (structured JSON or fallback to raw text)
+  let briefData = null;
+  let briefRaw = '';
   try {
     if (brief?.body && typeof brief.body === 'string') {
-      // Check if it's JSON or plain markdown
       if (brief.body.trim().startsWith('{')) {
-        const parsed = JSON.parse(brief.body);
-        briefBody = parsed.summary || parsed.body || brief.body;
+        briefData = JSON.parse(brief.body);
       } else {
-        briefBody = brief.body;
+        briefRaw = brief.body;
       }
     }
-  } catch { briefBody = brief?.body || ''; }
+  } catch { briefRaw = brief?.body || ''; }
 
   // Calculate options total
   const optionsTotal = optionPlays.reduce((sum, p) => {
@@ -2177,7 +2176,7 @@ function renderTradingDesk(regime, plays, portfolio, positions, brief) {
       ${buildStockPicks(stockPlays, suppressed)}
       ${buildOptionPlays(optionPlays, optionsTotal)}
       ${buildOpenPositions(openPositions)}
-      ${briefBody ? buildBriefSection(briefBody) : ''}
+      ${briefData ? buildStructuredBrief(briefData) : (briefRaw ? buildBriefSection(briefRaw) : '')}
     </div>
   `;
 
@@ -2560,7 +2559,90 @@ function buildOpenPositions(positions) {
   `;
 }
 
-// ─── Trading Desk: Morning Brief ───
+// ─── Trading Desk: Structured Morning Brief ───
+function buildStructuredBrief(d) {
+  const regimeEmoji = {GREEN: '🟢', YELLOW: '🟡', RED: '🔴'}[d.regime?.signal] || '⚪';
+  
+  // Market indices
+  const indices = d.market?.indices || {};
+  const indexRows = ['S&P 500', 'NASDAQ', 'Russell 2000'].map(name => {
+    const idx = indices[name] || {};
+    const chg = idx.daily_change_pct || 0;
+    const wk = idx.weekly_change_pct || 0;
+    const arrow = chg >= 0 ? '▲' : '▼';
+    const color = chg >= 0 ? 'var(--sig-green, #22c55e)' : 'var(--sig-red, #ef4444)';
+    return `<div class="td-brief-idx"><span class="td-brief-idx-name">${name}</span><span class="td-brief-idx-price">${(idx.price || 0).toLocaleString('en-US', {maximumFractionDigits: 0})}</span><span style="color:${color}">${arrow}${Math.abs(chg).toFixed(1)}%</span><span class="td-brief-idx-wk">${wk >= 0 ? '+' : ''}${wk.toFixed(1)}% wk</span></div>`;
+  }).join('');
+
+  // VIX
+  const vix = d.market?.vix || {};
+  const vixLevel = vix.level || '—';
+  const vixRegime = vix.regime || '';
+  const vixColor = vixLevel > 25 ? 'var(--sig-red)' : vixLevel > 18 ? '#eab308' : 'var(--sig-green)';
+
+  // Sector rotation
+  const leaders = (d.market?.sector_leaders || []).join(', ');
+  const laggards = (d.market?.sector_laggards || []).join(', ');
+
+  // Regime reasoning
+  const reasoning = (d.regime?.reasoning || []).map(r => 
+    `<div class="td-brief-reason">${escapeHTML(r.substring(0, 200))}</div>`
+  ).join('');
+
+  // Strategy
+  const strat = d.regime?.strategy || {};
+  const sizing = strat.position_sizing || '';
+  const strategies = strat.strategies || '';
+
+  // Avoid list  
+  const avoid = (d.avoid || []).join(', ');
+
+  // News
+  const newsHtml = (d.news_headlines || []).map(h => 
+    `<div class="td-brief-news-item">• ${escapeHTML(h.substring(0, 120))}</div>`
+  ).join('');
+
+  return `
+    <div class="td-section td-brief-section">
+      <div class="td-section-header">
+        <span class="td-section-title">📋 Morning Brief</span>
+        <span class="td-brief-date">${escapeHTML(d.date || '')}</span>
+      </div>
+      <div class="td-brief-structured">
+        <div class="td-brief-block">
+          <div class="td-brief-block-title">Market Snapshot</div>
+          <div class="td-brief-indices">${indexRows}</div>
+          <div class="td-brief-vix">VIX: <span style="color:${vixColor};font-weight:600">${vixLevel}</span> <span class="td-brief-dim">${escapeHTML(vixRegime)}</span></div>
+          ${leaders ? `<div class="td-brief-sectors"><span class="td-brief-dim">Leading:</span> ${escapeHTML(leaders)}</div>` : ''}
+          ${laggards ? `<div class="td-brief-sectors"><span class="td-brief-dim">Lagging:</span> ${escapeHTML(laggards)}</div>` : ''}
+        </div>
+
+        <div class="td-brief-block">
+          <div class="td-brief-block-title">${regimeEmoji} Regime Analysis</div>
+          ${reasoning}
+          ${sizing ? `<div class="td-brief-strat"><span class="td-brief-dim">Sizing:</span> ${escapeHTML(sizing)}</div>` : ''}
+          ${strategies ? `<div class="td-brief-strat"><span class="td-brief-dim">Strategy:</span> ${escapeHTML(strategies.substring(0, 200))}</div>` : ''}
+        </div>
+
+        ${avoid ? `
+        <div class="td-brief-block">
+          <div class="td-brief-block-title">🚫 Avoid</div>
+          <div class="td-brief-avoid">${escapeHTML(avoid)}</div>
+        </div>
+        ` : ''}
+
+        ${newsHtml ? `
+        <div class="td-brief-block">
+          <div class="td-brief-block-title">📰 Catalysts & News</div>
+          ${newsHtml}
+        </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+}
+
+// ─── Trading Desk: Fallback Raw Brief ───
 function buildBriefSection(body) {
   if (!body) return '';
   // Truncate for preview, keep first ~600 chars
