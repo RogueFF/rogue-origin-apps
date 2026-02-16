@@ -119,9 +119,12 @@ function matchRoute(method, path) {
     ['PATCH',/^\/api\/tasks\/(\d+)$/,               'tasksUpdate'],
     ['DELETE',/^\/api\/tasks\/(\d+)$/,              'tasksDelete'],
     ['GET',  /^\/api\/regime$/,                       'regimeGet'],
+    ['GET',  /^\/api\/regime\/history$/,             'regimeHistory'],
     ['POST', /^\/api\/regime$/,                      'regimeUpdate'],
     ['GET',  /^\/api\/plays$/,                       'playsGet'],
     ['POST', /^\/api\/plays$/,                       'playsCreate'],
+    ['GET',  /^\/api\/widgets$/,                     'widgetsGet'],
+    ['POST', /^\/api\/widgets$/,                     'widgetsUpdate'],
     ['GET',  /^\/api\/agents\/([a-z-]+)\/files$/,   'agentFilesList'],
     ['GET',  /^\/api\/agents\/([a-z-]+)\/files\/(.+)$/, 'agentFileGet'],
     ['PUT',  /^\/api\/agents\/([a-z-]+)\/files\/(.+)$/, 'agentFilePut'],
@@ -674,6 +677,50 @@ const handlers = {
       JSON.stringify(body.strategy || {})
     ).run();
     return json({ success: true, data: { signal: body.signal } }, 201);
+  },
+
+  // GET /api/regime/history — last 30 days of regime signals (one per day)
+  async regimeHistory(_req, env) {
+    const db = env.DB;
+    const rows = await db.prepare(
+      `SELECT signal, label, DATE(created_at) as date, created_at
+       FROM regime_signals
+       WHERE created_at >= datetime('now', '-30 days')
+       ORDER BY created_at DESC`
+    ).all();
+    // Deduplicate to one per day (latest)
+    const byDate = {};
+    for (const r of (rows.results || [])) {
+      if (!byDate[r.date]) byDate[r.date] = r;
+    }
+    const history = Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
+    return json({ success: true, data: history });
+  },
+
+  // GET /api/widgets — get cached widget data
+  async widgetsGet(_req, env) {
+    const db = env.DB;
+    const rows = await db.prepare(
+      `SELECT key, value FROM widgets ORDER BY key`
+    ).all();
+    const widgets = {};
+    for (const r of (rows.results || [])) {
+      try { widgets[r.key] = JSON.parse(r.value); } catch { widgets[r.key] = r.value; }
+    }
+    return json({ success: true, data: widgets });
+  },
+
+  // POST /api/widgets — update widget data (key-value)
+  async widgetsUpdate(req, env) {
+    const db = env.DB;
+    const body = await parseBody(req);
+    if (!body.key || body.value === undefined) return err('Missing key or value', 'VALIDATION_ERROR', 400);
+    const key = body.key;
+    const value = typeof body.value === 'string' ? body.value : JSON.stringify(body.value);
+    await db.prepare(
+      `INSERT OR REPLACE INTO widgets (key, value, updated_at) VALUES (?, ?, datetime('now'))`
+    ).bind(key, value).run();
+    return json({ success: true, data: { key: body.key } }, 201);
   },
 
   // GET /api/plays — today's trade setups
