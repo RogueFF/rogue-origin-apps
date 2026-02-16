@@ -3882,9 +3882,35 @@ function renderTaskBoard() {
 
       card.ondragstart = (e) => {
         e.dataTransfer.setData('text/plain', task.id);
+        e.dataTransfer.effectAllowed = 'move';
         card.classList.add('dragging');
       };
-      card.ondragend = () => card.classList.remove('dragging');
+      card.ondragend = () => {
+        card.classList.remove('dragging');
+        container.querySelectorAll('.card-drop-before,.card-drop-after').forEach(c => c.classList.remove('card-drop-before','card-drop-after'));
+      };
+      card.ondragover = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const dragging = container.querySelector('.dragging');
+        if (!dragging || dragging === card) return;
+        const rect = card.getBoundingClientRect();
+        const mid = rect.top + rect.height / 2;
+        card.classList.toggle('card-drop-before', e.clientY < mid);
+        card.classList.toggle('card-drop-after', e.clientY >= mid);
+      };
+      card.ondragleave = () => card.classList.remove('card-drop-before','card-drop-after');
+      card.ondrop = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        card.classList.remove('card-drop-before','card-drop-after');
+        container.classList.remove('drag-over');
+        const dragging = container.querySelector('.dragging');
+        if (!dragging || dragging === card) return;
+        const rect = card.getBoundingClientRect();
+        const before = e.clientY < rect.top + rect.height / 2;
+        container.insertBefore(dragging, before ? card : card.nextSibling);
+      };
 
       const agentColor = getAgentColor(task.owner);
 

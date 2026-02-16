@@ -3117,6 +3117,13 @@ input {
   border-bottom-color: rgba(34, 211, 238, 0.2);
 }
 
+.task-card.card-drop-before {
+  box-shadow: 0 -2px 0 0 rgba(34, 211, 238, 0.7);
+}
+.task-card.card-drop-after {
+  box-shadow: 0 2px 0 0 rgba(34, 211, 238, 0.7);
+}
+
 /* ── Board: comment count badge on card ── */
 .task-card-comment-count {
   font-family: var(--font-mono);
