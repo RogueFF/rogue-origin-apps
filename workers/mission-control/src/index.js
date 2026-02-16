@@ -114,6 +114,7 @@ function matchRoute(method, path) {
     ['PATCH',/^\/api\/positions\/(\d+)$/,         'positionsUpdate'],
     ['GET',  /^\/api\/portfolio$/,                'portfolio'],
     ['GET',  /^\/api\/tasks\/stats$/,               'tasksStats'],
+    ['POST', /^\/api\/tasks\/sync$/,                'tasksSync'],
     ['GET',  /^\/api\/tasks$/,                      'tasksList'],
     ['POST', /^\/api\/tasks$/,                      'tasksCreate'],
     ['PATCH',/^\/api\/tasks\/(\d+)$/,               'tasksUpdate'],
@@ -499,8 +500,8 @@ const handlers = {
     }
 
     const result = await db.prepare(
-      `INSERT INTO positions (ticker, direction, vehicle, strike, expiry, entry_price, quantity, entry_date, status, notes, target_price, stop_loss)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?)`
+      `INSERT INTO positions (ticker, direction, vehicle, strike, expiry, entry_price, quantity, entry_date, status, notes, target_price, stop_loss, current_price, current_pnl)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)`
     ).bind(
       body.ticker.toUpperCase(),
       body.direction,
@@ -512,7 +513,9 @@ const handlers = {
       body.entry_date,
       body.notes || null,
       body.target_price || 0,
-      body.stop_loss || 0
+      body.stop_loss || 0,
+      body.current_price || null,
+      body.current_pnl || 0
     ).run();
 
     const position = await db.prepare('SELECT * FROM positions WHERE id = ?')
@@ -949,6 +952,75 @@ const handlers = {
         by_domain: Object.fromEntries(byDomain.results.map(r => [r.domain, r.count])),
       },
     });
+  },
+
+  // POST /api/tasks/sync — sync tasks from ClickUp
+  async tasksSync(_req, env) {
+    const db = env.DB;
+    const token = env.CLICKUP_API_TOKEN;
+    if (!token) return err('CLICKUP_API_TOKEN not configured', 'CONFIG_ERROR', 500);
+
+    const LISTS = [
+      { id: '901710736658', domain: 'work' },
+      { id: '901710736659', domain: 'work' },
+      { id: '901710736660', domain: 'system' },
+      { id: '901710736661', domain: 'work' },
+    ];
+
+    const STATUS_MAP = { 'to do': 'backlog', 'in progress': 'active', 'review': 'review', 'complete': 'done', 'closed': 'done' };
+    const PRIORITY_MAP = { 1: 'critical', 2: 'high', 3: 'medium', 4: 'low' };
+
+    let created = 0, updated = 0, unchanged = 0;
+
+    for (const list of LISTS) {
+      let page = 0;
+      let hasMore = true;
+      while (hasMore) {
+        const resp = await fetch(
+          `https://api.clickup.com/api/v2/list/${list.id}/task?include_closed=true&page=${page}&subtasks=true`,
+          { headers: { Authorization: token } }
+        );
+        if (!resp.ok) { hasMore = false; break; }
+        const data = await resp.json();
+        const tasks = data.tasks || [];
+        if (tasks.length === 0 || data.last_page) hasMore = false;
+
+        for (const t of tasks) {
+          const clickupId = t.id;
+          const title = t.name;
+          const description = t.description || null;
+          const statusRaw = (t.status?.status || 'to do').toLowerCase();
+          const status = STATUS_MAP[statusRaw] || 'backlog';
+          const priority = PRIORITY_MAP[t.priority?.id] || 'medium';
+          const domain = list.domain;
+          const assignee = t.assignees?.[0]?.username || null;
+          const createdAt = t.date_created ? new Date(parseInt(t.date_created)).toISOString() : new Date().toISOString();
+          const updatedAt = t.date_updated ? new Date(parseInt(t.date_updated)).toISOString() : createdAt;
+          const completedAt = status === 'done' ? (t.date_done ? new Date(parseInt(t.date_done)).toISOString() : updatedAt) : null;
+
+          const existing = await db.prepare('SELECT id, title, status, priority FROM tasks WHERE clickup_id = ?').bind(clickupId).first();
+
+          if (existing) {
+            if (existing.title !== title || existing.status !== status || existing.priority !== priority) {
+              await db.prepare(
+                'UPDATE tasks SET title=?, description=?, status=?, priority=?, assigned_agent=?, domain=?, updated_at=?, completed_at=? WHERE clickup_id=?'
+              ).bind(title, description, status, priority, assignee, domain, updatedAt, completedAt, clickupId).run();
+              updated++;
+            } else {
+              unchanged++;
+            }
+          } else {
+            await db.prepare(
+              'INSERT INTO tasks (title, description, status, priority, assigned_agent, domain, created_at, updated_at, completed_at, clickup_id) VALUES (?,?,?,?,?,?,?,?,?,?)'
+            ).bind(title, description, status, priority, assignee, domain, createdAt, updatedAt, completedAt, clickupId).run();
+            created++;
+          }
+        }
+        page++;
+      }
+    }
+
+    return json({ success: true, data: { created, updated, unchanged, total: created + updated + unchanged } });
   },
 
   // GET /api/github — GitHub dashboard proxy
