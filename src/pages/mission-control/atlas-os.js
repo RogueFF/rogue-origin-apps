@@ -2137,6 +2137,39 @@ document.addEventListener('click', (e) => {
 /* ═══════════════════════════════════════════════════
    TRADING DESK
    ═══════════════════════════════════════════════════ */
+
+// ─── Live Price Fetcher ───
+async function fetchLivePrices(tickers) {
+  if (!tickers || tickers.length === 0) return {};
+  try {
+    // Use Yahoo Finance v8 quote endpoint (CORS-friendly via query1)
+    const prices = {};
+    const fetches = tickers.map(async (ticker) => {
+      try {
+        const resp = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`);
+        if (resp.ok) {
+          const data = await resp.json();
+          const meta = data?.chart?.result?.[0]?.meta;
+          if (meta) {
+            prices[ticker] = {
+              price: meta.regularMarketPrice || 0,
+              prevClose: meta.previousClose || meta.chartPreviousClose || 0,
+              change: 0,
+              changePct: 0
+            };
+            if (prices[ticker].prevClose > 0) {
+              prices[ticker].change = prices[ticker].price - prices[ticker].prevClose;
+              prices[ticker].changePct = (prices[ticker].change / prices[ticker].prevClose) * 100;
+            }
+          }
+        }
+      } catch {}
+    });
+    await Promise.all(fetches);
+    return prices;
+  } catch { return {}; }
+}
+
 function renderTradingDesk(regime, plays, portfolio, positions, brief, regimeHistory, widgets) {
   const container = document.getElementById('tradingMain');
   if (!container) return;
@@ -2201,6 +2234,96 @@ function renderTradingDesk(regime, plays, portfolio, positions, brief, regimeHis
   `;
 
   container.innerHTML = html;
+
+  // Fetch live prices and update stock picks
+  const stockTickers = stockPlays.map(p => p.ticker).filter(t => t && t !== '—');
+  if (stockTickers.length > 0) {
+    fetchLivePrices(stockTickers).then(prices => {
+      if (Object.keys(prices).length === 0) return;
+      
+      // Update each stock row with live data
+      const rows = container.querySelectorAll('.td-stock-row');
+      rows.forEach(row => {
+        const tickerEl = row.querySelector('.td-stock-ticker');
+        if (!tickerEl) return;
+        const ticker = tickerEl.textContent.trim();
+        const liveData = prices[ticker];
+        if (!liveData || !liveData.price) return;
+        
+        // Update price column
+        const priceEl = row.querySelector('.td-stock-price');
+        if (priceEl) priceEl.textContent = '$' + liveData.price.toFixed(2);
+        
+        // Add/update change pill
+        const existingPill = row.querySelector('.td-change-pill');
+        const sign = liveData.changePct >= 0 ? '+' : '';
+        const pillCls = liveData.changePct >= 0 ? 'td-change-up' : 'td-change-down';
+        const pillHTML = `<span class="td-change-pill ${pillCls}">${sign}${liveData.changePct.toFixed(1)}%</span>`;
+        
+        if (existingPill) {
+          existingPill.outerHTML = pillHTML;
+        } else {
+          // Insert after ticker
+          tickerEl.insertAdjacentHTML('afterend', pillHTML);
+        }
+        
+        // Update P&L if we have entry price
+        const entryEl = row.querySelector('.td-stock-entry');
+        const qtyEl = row.querySelector('.td-stock-qty');
+        if (entryEl && qtyEl) {
+          const entryText = entryEl.textContent.trim();
+          const qtyText = qtyEl.textContent.trim();
+          if (entryText !== '—' && qtyText !== '—') {
+            const entryPrice = parseFloat(entryText.replace('$', ''));
+            const qty = parseFloat(qtyText);
+            if (entryPrice > 0 && qty > 0) {
+              const pnl = (liveData.price - entryPrice) * qty;
+              const pnlPct = ((liveData.price - entryPrice) / entryPrice) * 100;
+              const pnlColor = pnl >= 0 ? 'var(--sig-green, #22c55e)' : 'var(--sig-red, #ef4444)';
+              // Add P&L display after qty
+              const existingPnl = row.querySelector('.td-stock-pnl');
+              const pnlHTML = `<span class="td-stock-pnl" style="color:${pnlColor};font-family:'JetBrains Mono',monospace;font-size:0.7rem">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(0)} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%)</span>`;
+              if (existingPnl) {
+                existingPnl.outerHTML = pnlHTML;
+              } else {
+                qtyEl.insertAdjacentHTML('afterend', pnlHTML);
+              }
+            }
+          }
+        }
+      });
+      
+      // Update portfolio with total unrealized P&L
+      const totalUnrealized = stockTickers.reduce((sum, ticker) => {
+        const liveData = prices[ticker];
+        if (!liveData) return sum;
+        const posMatch = (openPositions || []).find(p => p.ticker === ticker && p.vehicle === 'shares');
+        if (!posMatch) return sum;
+        return sum + (liveData.price - (posMatch.entry_price || 0)) * (posMatch.quantity || 0);
+      }, 0);
+      
+      if (totalUnrealized !== 0) {
+        const pnlEl = container.querySelector('.td-pstat-val');
+        if (pnlEl) {
+          const color = totalUnrealized >= 0 ? 'var(--sig-green, #22c55e)' : 'var(--sig-red, #ef4444)';
+          pnlEl.style.color = color;
+          pnlEl.textContent = `$${totalUnrealized >= 0 ? '+' : ''}${totalUnrealized.toFixed(0)}`;
+        }
+      }
+
+      // Add "prices as of" timestamp
+      const stockSection = container.querySelector('.td-section');
+      if (stockSection) {
+        const sectionHeader = stockSection.querySelector('.td-section-header');
+        if (sectionHeader && !sectionHeader.querySelector('.td-prices-timestamp')) {
+          const now = new Date();
+          const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+          const timestampHTML = `<span class="td-prices-timestamp" style="font-size:0.65rem;color:rgba(255,255,255,0.3);margin-left:8px">Live prices as of ${timeStr}</span>`;
+          sectionHeader.insertAdjacentHTML('beforeend', timestampHTML);
+        }
+      }
+    });
+  }
 }
 
 function buildProductionCard(data) {
@@ -2547,6 +2670,7 @@ function buildStockPicks(plays, suppressed, sparklines, positions) {
         <span class="td-stock-price">Price</span>
         <span class="td-stock-entry">Entry</span>
         <span class="td-stock-qty">Qty</span>
+        <span class="td-stock-pnl">P&L</span>
       </div>
       <div class="td-stock-list">${rows}</div>
     </div>

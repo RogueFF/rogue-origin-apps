@@ -6562,6 +6562,8 @@ input {
 .td-stock-price { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: rgba(255,255,255,0.5); margin-left: auto; }
 .td-stock-entry { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: rgba(255,255,255,0.4); }
 .td-stock-qty { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: rgba(255,255,255,0.4); }
+.td-stock-pnl { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; min-width: 80px; text-align: right; }
+.td-stock-header-row .td-stock-pnl { font-family: inherit; }
 
 /* Options Plays - Compact rows */
 .td-option-list { padding: 2px 0; }
