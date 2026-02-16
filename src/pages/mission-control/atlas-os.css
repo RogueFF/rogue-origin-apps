@@ -2308,6 +2308,59 @@ input {
   gap: var(--sp-16);
 }
 
+.tasks-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.tasks-action-btn {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--os-text-muted, #94a3b8);
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: var(--os-font-mono);
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.5px;
+}
+
+.tasks-action-btn:hover {
+  background: rgba(34,211,238,0.1);
+  border-color: rgba(34,211,238,0.3);
+  color: #22d3ee;
+}
+
+.tasks-add-btn:hover {
+  background: rgba(52,211,153,0.1);
+  border-color: rgba(52,211,153,0.3);
+  color: #34d399;
+}
+
+.task-detail-select {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-family: var(--os-font-mono);
+  cursor: pointer;
+  letter-spacing: 1px;
+  font-weight: 600;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.task-detail-select:hover {
+  border-color: rgba(34,211,238,0.3);
+}
+
+.task-detail-select option {
+  background: #1a1a2e;
+  color: #e2e8f0;
+}
+
 .tasks-legend {
   display: flex;
   align-items: center;
