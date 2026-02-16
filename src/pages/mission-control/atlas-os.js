@@ -2142,31 +2142,11 @@ document.addEventListener('click', (e) => {
 async function fetchLivePrices(tickers) {
   if (!tickers || tickers.length === 0) return {};
   try {
-    // Use Yahoo Finance v8 quote endpoint (CORS-friendly via query1)
-    const prices = {};
-    const fetches = tickers.map(async (ticker) => {
-      try {
-        const resp = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`);
-        if (resp.ok) {
-          const data = await resp.json();
-          const meta = data?.chart?.result?.[0]?.meta;
-          if (meta) {
-            prices[ticker] = {
-              price: meta.regularMarketPrice || 0,
-              prevClose: meta.previousClose || meta.chartPreviousClose || 0,
-              change: 0,
-              changePct: 0
-            };
-            if (prices[ticker].prevClose > 0) {
-              prices[ticker].change = prices[ticker].price - prices[ticker].prevClose;
-              prices[ticker].changePct = (prices[ticker].change / prices[ticker].prevClose) * 100;
-            }
-          }
-        }
-      } catch {}
-    });
-    await Promise.all(fetches);
-    return prices;
+    const symbols = tickers.join(',');
+    const resp = await fetch(`${API_BASE}/prices?symbols=${encodeURIComponent(symbols)}`);
+    if (!resp.ok) return {};
+    const result = await resp.json();
+    return result.data || {};
   } catch { return {}; }
 }
 
