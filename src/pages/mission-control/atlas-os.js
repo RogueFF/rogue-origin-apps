@@ -114,6 +114,11 @@ const WINDOW_DEFS = {
     icon: '📈',
     template: 'tmpl-analytics',
   },
+  scout: {
+    title: 'Scout — Opportunities',
+    icon: '🔭',
+    template: 'tmpl-scout',
+  },
   system: {
     title: 'System Status',
     icon: '🖥️',
@@ -147,6 +152,7 @@ function getDefaultLayout(id) {
     work:     { x: pad, y: pad, w: tradingW, h: fullH },
     github:   { x: pad * 2 + halfW, y: pad, w: halfW, h: fullH },
     analytics: { x: pad, y: pad, w: tradingW, h: fullH },
+    scout:    { x: pad * 2 + halfW, y: pad, w: halfW, h: fullH },
   };
 
   return layouts[id] || { x: 100, y: 50, w: 500, h: 500 };
@@ -1244,6 +1250,7 @@ function openWindow(id) {
   if (id === 'inbox') renderInbox();
   if (id === 'atlas-chat') initChat();
   if (id === 'tasks') initTasksWindow();
+  if (id === 'scout') renderScoutWindow();
   if (id === 'trading') fetchTradingData();
   if (id === 'work') fetchWorkData();
   if (id === 'github') fetchGitHubData();
@@ -4196,3 +4203,111 @@ function darkenColor(hex, percent) {
   const B = Math.max(0, (num & 0x0000FF) - amt);
   return `rgb(${R}, ${G}, ${B})`;
 }
+
+/* ═══════════════════════════════════════════════════
+   SCOUT — Opportunity Radar
+   ═══════════════════════════════════════════════════ */
+const SCOUT_API = 'https://trading-desk-api-production.roguefamilyfarms.workers.dev/api/desk/scout';
+
+async function renderScoutWindow() {
+  const cardsEl = document.getElementById('scoutCards');
+  const trendsEl = document.getElementById('scoutTrends');
+  const metaEl = document.getElementById('scoutMeta');
+  if (!cardsEl) return;
+
+  try {
+    const res = await fetch(SCOUT_API);
+    if (!res.ok) throw new Error('No data');
+    const data = await res.json();
+    const opps = data.opportunities || [];
+
+    metaEl.textContent = `${opps.length} opportunities • Last scan: ${data.scan_date || 'today'}`;
+
+    // Trends
+    if (data.trends_noticed?.length) {
+      trendsEl.innerHTML = `
+        <div class="scout-trends-title">TRENDS DETECTED</div>
+        ${data.trends_noticed.map(t => `<div class="scout-trend-item">→ ${escapeHtml(t)}</div>`).join('')}
+      `;
+    }
+
+    // Opportunity cards
+    if (opps.length === 0) {
+      cardsEl.innerHTML = '<div class="scout-empty">No opportunities passed the filter. Scout is selective.</div>';
+      return;
+    }
+
+    cardsEl.innerHTML = opps.map(opp => {
+      const scoreClass = opp.match_score >= 85 ? 'score-high' : opp.match_score >= 75 ? 'score-mid' : 'score-low';
+      return `
+        <div class="scout-card">
+          <div class="scout-card-header">
+            <div>
+              <div class="scout-card-title">${escapeHtml(opp.title)}</div>
+              <div class="scout-card-source">${escapeHtml(opp.source || '')}</div>
+            </div>
+            <div class="scout-score ${scoreClass}">${opp.match_score}%</div>
+          </div>
+          <div class="scout-card-body">${escapeHtml(opp.what || '')}</div>
+          <div class="scout-card-grid">
+            <div class="scout-stat"><div class="scout-stat-label">REVENUE</div><div class="scout-stat-value scout-revenue">${escapeHtml(opp.revenue_potential || '?')}</div></div>
+            <div class="scout-stat"><div class="scout-stat-label">STARTUP</div><div class="scout-stat-value">${escapeHtml(opp.startup_cost || '?')}</div></div>
+            <div class="scout-stat"><div class="scout-stat-label">TIME</div><div class="scout-stat-value">${escapeHtml(opp.time_investment || '?')}</div></div>
+            <div class="scout-stat"><div class="scout-stat-label">WHY NOW</div><div class="scout-stat-value scout-whynow">${escapeHtml((opp.why_now || '').substring(0, 120))}</div></div>
+          </div>
+          <div class="scout-tags">${(opp.leverages || []).map(l => `<span class="scout-tag">${escapeHtml(l)}</span>`).join('')}</div>
+          ${opp.nicole_role ? `<div class="scout-nicole"><span class="scout-nicole-label">Nicole's Role:</span> ${escapeHtml(opp.nicole_role)}</div>` : ''}
+          <div class="scout-next-step"><strong>NEXT STEP</strong><br>${escapeHtml(opp.next_step || '')}</div>
+        </div>`;
+    }).join('');
+  } catch (e) {
+    cardsEl.innerHTML = '<div class="scout-empty">Scout data unavailable. Runs weekly on Sundays.</div>';
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   QUICK ACTIONS
+   ═══════════════════════════════════════════════════ */
+(function initQuickActions() {
+  const btn = document.getElementById('qaNewTask');
+  const modal = document.getElementById('newTaskModal');
+  const cancelBtn = document.getElementById('newTaskCancel');
+  const submitBtn = document.getElementById('newTaskSubmit');
+  const titleInput = document.getElementById('newTaskTitle');
+  if (!btn || !modal) return;
+
+  btn.addEventListener('click', () => {
+    modal.style.display = 'flex';
+    titleInput?.focus();
+  });
+
+  cancelBtn?.addEventListener('click', () => { modal.style.display = 'none'; });
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+
+  submitBtn?.addEventListener('click', async () => {
+    const title = titleInput?.value?.trim();
+    if (!title) return;
+    try {
+      await fetch(TASK_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          priority: document.getElementById('newTaskPriority')?.value || 'normal',
+          domain: document.getElementById('newTaskDomain')?.value || 'work',
+          owner: document.getElementById('newTaskOwner')?.value || null,
+          description: document.getElementById('newTaskDesc')?.value || '',
+        }),
+      });
+      modal.style.display = 'none';
+      titleInput.value = '';
+      document.getElementById('newTaskDesc').value = '';
+      // Refresh task board if open
+      if (LIVE_TASKS) { await fetchTasks(); renderTaskList(); renderTaskBoard(); updateTaskStats(); }
+    } catch (e) { console.error('Failed to create task:', e); }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modal.style.display !== 'none') modal.style.display = 'none';
+  });
+})();

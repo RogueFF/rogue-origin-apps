@@ -91,6 +91,10 @@
         <div class="desktop-icon-glyph">📈</div>
         <span class="desktop-icon-label">Analytics</span>
       </button>
+      <button class="desktop-icon" data-window="scout" title="Scout — Opportunities">
+        <div class="desktop-icon-glyph">🔭</div>
+        <span class="desktop-icon-label">Scout</span>
+      </button>
       <button class="desktop-icon" data-window="system" title="System Status">
         <div class="desktop-icon-glyph">🖥️</div>
         <span class="desktop-icon-label">System</span>
@@ -157,6 +161,10 @@
         <button class="mobile-nav-btn" data-window="analytics">
           <span class="mobile-nav-icon">📈</span>
           <span class="mobile-nav-label">Analytics</span>
+        </button>
+        <button class="mobile-nav-btn" data-window="scout">
+          <span class="mobile-nav-icon">🔭</span>
+          <span class="mobile-nav-label">Scout</span>
         </button>
         <button class="mobile-nav-btn" data-window="system">
           <span class="mobile-nav-icon">🖥️</span>
@@ -478,6 +486,58 @@
       </div>
     </div>
   </template>
+
+  <template id="tmpl-scout">
+    <div class="window-body scout-window">
+      <div class="scout-header">
+        <span class="scout-title-glyph">🔭</span>
+        <span class="scout-title-text">OPPORTUNITY RADAR</span>
+        <span class="scout-meta" id="scoutMeta">Loading...</span>
+      </div>
+      <div class="scout-trends" id="scoutTrends"></div>
+      <div class="scout-cards" id="scoutCards">
+        <div class="trading-loading"><div class="loading-spinner"></div><span>Scanning opportunities...</span></div>
+      </div>
+    </div>
+  </template>
+
+  <!-- Quick action bar -->
+  <div class="quick-actions" id="quickActions">
+    <button class="qa-btn" id="qaNewTask" title="New Task">+ Task</button>
+  </div>
+
+  <!-- New Task Modal -->
+  <div class="qa-modal-overlay" id="newTaskModal" style="display:none;">
+    <div class="qa-modal">
+      <div class="qa-modal-header">New Task</div>
+      <input class="qa-input" id="newTaskTitle" placeholder="Task title..." autofocus>
+      <div class="qa-row">
+        <select class="qa-select" id="newTaskPriority">
+          <option value="normal">Normal</option>
+          <option value="high">High</option>
+          <option value="urgent">Urgent</option>
+          <option value="low">Low</option>
+        </select>
+        <select class="qa-select" id="newTaskDomain">
+          <option value="work">Work</option>
+          <option value="trading">Trading</option>
+          <option value="system">System</option>
+        </select>
+        <select class="qa-select" id="newTaskOwner">
+          <option value="">Unassigned</option>
+          <option value="friday">Friday</option>
+          <option value="atlas">Atlas</option>
+          <option value="darwin">Darwin</option>
+          <option value="viper">Viper</option>
+        </select>
+      </div>
+      <textarea class="qa-textarea" id="newTaskDesc" placeholder="Description (optional)..." rows="2"></textarea>
+      <div class="qa-row" style="justify-content:flex-end;gap:8px;">
+        <button class="qa-btn qa-cancel" id="newTaskCancel">Cancel</button>
+        <button class="qa-btn qa-submit" id="newTaskSubmit">Create</button>
+      </div>
+    </div>
+  </div>
 
   <template id="tmpl-system">
     <div class="window-body system-window">
