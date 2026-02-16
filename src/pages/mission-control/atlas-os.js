@@ -56,6 +56,7 @@ const state = {
   agents: [],
   activity: [],
   inbox: [],
+  tasks: [],
   windows: new Map(),
   nextZ: 100,
   focusedWindow: null,
@@ -3448,93 +3449,130 @@ const NEURAL_COLORS = {
   done:    { fill: '#34d399', glow: 'rgba(52, 211, 153, 0.15)', pulse: false },
 };
 
-const PRIORITY_SIZES = { urgent: 1.5, high: 1.25, normal: 1.0, low: 0.8 };
-
-// Mock task data — will be replaced by API when endpoint exists
-const MOCK_TASKS = [
-  {
-    id: 1, title: 'Error handling & loading states', description: 'Phase 3.1 — Add comprehensive error handling and loading states across all modules.',
-    status: 'active', priority: 'high', owner: 'friday',
-    deps: [3], domain: 'work', created_at: '2026-02-10T08:00:00Z',
-  },
-  {
-    id: 2, title: 'WCAG AA accessibility audit', description: 'Phase 5.1 — Audit and fix accessibility issues. Contrast ratios, focus indicators, ARIA labels.',
-    status: 'active', priority: 'high', owner: 'friday',
-    deps: [], domain: 'work', created_at: '2026-02-10T09:00:00Z',
-  },
-  {
-    id: 3, title: 'CSS consolidation', description: 'Phase 6.3 — Consolidate duplicate CSS, reduce bundle size, enforce shared-base.css as single source.',
-    status: 'review', priority: 'normal', owner: 'friday',
-    deps: [], domain: 'work', created_at: '2026-02-08T10:00:00Z',
-  },
-  {
-    id: 4, title: 'Scoreboard optimization', description: 'Phase 4.1 — Optimize scoreboard rendering for floor TV. Reduce repaints, smooth animations.',
-    status: 'backlog', priority: 'normal', owner: null,
-    deps: [1], domain: 'work', created_at: '2026-02-07T10:00:00Z',
-  },
-  {
-    id: 5, title: 'Morning trading brief — audio pipeline', description: 'Build TTS pipeline for morning briefs. Text-to-speech with Eleven Labs, auto-post to Telegram.',
-    status: 'active', priority: 'urgent', owner: 'atlas',
-    deps: [], domain: 'trading', created_at: '2026-02-12T06:00:00Z',
-  },
-  {
-    id: 6, title: 'Viper scanner — sentiment v2', description: 'Upgrade sentiment analysis model. Better sarcasm detection, meme stock filtering.',
-    status: 'backlog', priority: 'high', owner: 'viper',
-    deps: [5], domain: 'trading', created_at: '2026-02-11T14:00:00Z',
-  },
-  {
-    id: 7, title: 'Neural Tasks view', description: 'Build the neural network task visualization for Atlas OS Mission Control.',
-    status: 'active', priority: 'urgent', owner: 'friday',
-    deps: [], domain: 'system', created_at: '2026-02-13T00:00:00Z',
-  },
-  {
-    id: 8, title: 'Agent SOUL.md authoring', description: 'Write personality and soul files for each agent. Voice, tone, decision-making style.',
-    status: 'done', priority: 'normal', owner: 'atlas',
-    deps: [], domain: 'system', created_at: '2026-02-05T10:00:00Z',
-  },
-  {
-    id: 9, title: 'D1 migration — production hourly', description: 'Migrate production hourly entry from Google Sheets to D1. Complex — needs offline support.',
-    status: 'backlog', priority: 'normal', owner: null,
-    deps: [1, 3], domain: 'work', created_at: '2026-02-06T10:00:00Z',
-  },
-  {
-    id: 10, title: 'Webhook security hardening', description: 'Add HMAC signature verification to all Shopify webhook handlers.',
-    status: 'done', priority: 'high', owner: 'friday',
-    deps: [], domain: 'work', created_at: '2026-02-04T10:00:00Z',
-  },
-  {
-    id: 11, title: 'Darwin portfolio rebalance algo', description: 'Evolutionary algorithm for portfolio rebalancing. Multi-objective: risk, return, correlation.',
-    status: 'review', priority: 'high', owner: 'darwin',
-    deps: [6], domain: 'trading', created_at: '2026-02-09T10:00:00Z',
-  },
-  {
-    id: 12, title: 'Agent fleet monitoring dashboard', description: 'Real-time health metrics for all agents. CPU, memory, error rates, task throughput.',
-    status: 'backlog', priority: 'low', owner: null,
-    deps: [7], domain: 'system', created_at: '2026-02-11T10:00:00Z',
-  },
-  {
-    id: 13, title: 'Barcode label template v2', description: 'New label format with QR code, batch info, and COA link. Supports Grove Bag sizing.',
-    status: 'done', priority: 'normal', owner: 'friday',
-    deps: [], domain: 'work', created_at: '2026-02-03T10:00:00Z',
-  },
-  {
-    id: 14, title: 'Telegram bot — Koa commands', description: 'Build Telegram bot for Koa to issue commands, check status, approve inbox items from phone.',
-    status: 'backlog', priority: 'high', owner: 'wire',
-    deps: [5], domain: 'system', created_at: '2026-02-12T10:00:00Z',
-  },
-];
+const PRIORITY_SIZES = { critical: 1.5, high: 1.25, medium: 1.0, low: 0.8, urgent: 1.5, normal: 1.0 };
 
 // ─── Task view state ───
 let neuralState = null;
-let currentTaskView = 'list'; // 'list', 'board', or 'neural'
+let currentTaskView = 'list';
+
+// Normalize API tasks to have `owner` and `deps` for backward compat with neural map
+function normalizeTasks(apiTasks) {
+  return apiTasks.map(t => ({
+    ...t,
+    owner: t.assigned_agent || null,
+    deps: [],
+    priority: t.priority || 'medium',
+    status: t.status || 'backlog',
+    domain: t.domain || 'work',
+  }));
+}
+
+async function fetchTasks() {
+  try {
+    const resp = await fetch(`${API_BASE}/tasks?limit=500`);
+    const data = await resp.json();
+    if (data.success) {
+      state.tasks = normalizeTasks(data.data);
+    }
+  } catch (e) {
+    console.error('Failed to fetch tasks:', e);
+    if (!state.tasks) state.tasks = [];
+  }
+}
+
+async function syncClickUp() {
+  const btn = document.getElementById('tasksSyncBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⟳ Syncing…'; }
+  try {
+    const resp = await fetch(`${API_BASE}/tasks/sync`, { method: 'POST' });
+    const data = await resp.json();
+    if (data.success) {
+      const d = data.data;
+      showTaskToast(`Synced: ${d.created} new, ${d.updated} updated, ${d.unchanged} unchanged`);
+      await fetchTasks();
+      renderTaskList();
+      renderTaskBoard();
+      updateTaskStats();
+      if (currentTaskView === 'neural' && neuralState) {
+        neuralState = null;
+        initNeuralTasks();
+      }
+    }
+  } catch (e) {
+    showTaskToast('Sync failed: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⟳ Sync'; }
+  }
+}
+
+function showTaskToast(msg) {
+  let toast = document.getElementById('taskToast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'taskToast';
+    toast.style.cssText = 'position:fixed;bottom:60px;right:20px;background:rgba(34,211,238,0.15);border:1px solid rgba(34,211,238,0.4);color:#22d3ee;padding:8px 16px;border-radius:6px;font-size:12px;font-family:var(--os-font-mono);z-index:9999;opacity:0;transition:opacity 0.3s;backdrop-filter:blur(8px)';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.style.opacity = '1';
+  setTimeout(() => { toast.style.opacity = '0'; }, 3000);
+}
+
+async function createTask(taskData) {
+  try {
+    const resp = await fetch(`${API_BASE}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(taskData),
+    });
+    const data = await resp.json();
+    if (data.success) {
+      await fetchTasks();
+      renderTaskList();
+      renderTaskBoard();
+      updateTaskStats();
+      showTaskToast('Task created');
+    }
+    return data;
+  } catch (e) {
+    showTaskToast('Failed to create task');
+    return null;
+  }
+}
+
+async function updateTask(id, updates) {
+  try {
+    const resp = await fetch(`${API_BASE}/tasks/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    const data = await resp.json();
+    if (data.success) {
+      await fetchTasks();
+      renderTaskList();
+      renderTaskBoard();
+      updateTaskStats();
+      showTaskToast('Task updated');
+    }
+    return data;
+  } catch (e) {
+    showTaskToast('Failed to update task');
+    return null;
+  }
+}
 
 /* ═══ Task board + neural toggle ═══ */
-function initTasksWindow() {
+async function initTasksWindow() {
+  const container = document.getElementById('tasksList');
+  if (container) container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--os-text-muted);font-family:var(--os-font-mono);font-size:12px">Loading tasks…</div>';
+  await fetchTasks();
   renderTaskList();
   renderTaskBoard();
   updateTaskStats();
   initTaskViewToggle();
   initTaskDetailClose();
+  initTaskToolbarActions();
 }
 
 function initTaskDetailClose() {
@@ -3605,7 +3643,7 @@ function renderTaskList() {
   const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
 
   groups.forEach(group => {
-    const tasks = MOCK_TASKS
+    const tasks = state.tasks
       .filter(t => t.status === group.key)
       .sort((a, b) => (priorityOrder[a.priority] || 2) - (priorityOrder[b.priority] || 2));
     if (tasks.length === 0) return;
@@ -3652,7 +3690,7 @@ function renderTaskBoard() {
     if (!container) return;
     container.innerHTML = '';
 
-    const tasks = MOCK_TASKS.filter(t => t.status === status);
+    const tasks = state.tasks.filter(t => t.status === status);
 
     // Sort: urgent first, then high, then by created date
     const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
@@ -3717,7 +3755,7 @@ function initNeuralTasks() {
   }
 
   // Build node graph from tasks
-  const nodes = MOCK_TASKS.map((task, i) => {
+  const nodes = state.tasks.map((task, i) => {
     const sizeMultiplier = PRIORITY_SIZES[task.priority] || 1.0;
     const baseRadius = 18;
     return {
@@ -3736,7 +3774,7 @@ function initNeuralTasks() {
 
   // Build synapse connections from deps
   const synapses = [];
-  MOCK_TASKS.forEach(task => {
+  state.tasks.forEach(task => {
     (task.deps || []).forEach(depId => {
       const fromNode = nodes.find(n => n.id === depId);
       const toNode = nodes.find(n => n.id === task.id);
@@ -4132,24 +4170,75 @@ function showTaskDetail(task) {
 
   const panel = overlay.querySelector('.task-detail-panel');
   panel.dataset.status = task.status;
+  panel.dataset.taskId = task.id;
 
   panel.querySelector('.task-detail-title-text').textContent = task.title;
   panel.querySelector('.task-detail-description').textContent = task.description || '';
 
-  // Meta
-  panel.querySelector('.task-detail-status').textContent = task.status.toUpperCase();
-  panel.querySelector('.task-detail-status').style.color = NEURAL_COLORS[task.status]?.fill || '';
+  // Status — editable select
+  const statusEl = panel.querySelector('.task-detail-status');
+  statusEl.innerHTML = '';
+  const statusSelect = document.createElement('select');
+  statusSelect.className = 'task-detail-select';
+  ['backlog', 'active', 'review', 'done', 'blocked'].forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s; opt.textContent = s.toUpperCase();
+    if (s === task.status) opt.selected = true;
+    statusSelect.appendChild(opt);
+  });
+  statusSelect.style.color = NEURAL_COLORS[task.status]?.fill || '';
+  statusSelect.addEventListener('change', async () => {
+    statusSelect.style.color = NEURAL_COLORS[statusSelect.value]?.fill || '';
+    await updateTask(task.id, { status: statusSelect.value });
+    task.status = statusSelect.value;
+    panel.dataset.status = task.status;
+  });
+  statusEl.appendChild(statusSelect);
+
+  // Priority — editable select
+  const priEl = panel.querySelector('.task-detail-priority');
+  priEl.innerHTML = '';
+  const priSelect = document.createElement('select');
+  priSelect.className = 'task-detail-select';
+  ['critical', 'high', 'medium', 'low'].forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p; opt.textContent = p.toUpperCase();
+    if (p === task.priority) opt.selected = true;
+    priSelect.appendChild(opt);
+  });
+  const priColors = { critical: '#f87171', high: '#f97316', medium: '', low: '' };
+  priSelect.style.color = priColors[task.priority] || '';
+  priSelect.addEventListener('change', async () => {
+    priSelect.style.color = priColors[priSelect.value] || '';
+    await updateTask(task.id, { priority: priSelect.value });
+    task.priority = priSelect.value;
+  });
+  priEl.appendChild(priSelect);
+
   panel.querySelector('.task-detail-owner').textContent = task.owner ? task.owner.toUpperCase() : 'UNASSIGNED';
-  panel.querySelector('.task-detail-priority').textContent = task.priority.toUpperCase();
-  panel.querySelector('.task-detail-priority').style.color =
-    task.priority === 'urgent' ? '#f87171' :
-    task.priority === 'high' ? '#f97316' : '';
   panel.querySelector('.task-detail-created').textContent = formatTimeFull(task.created_at);
+
+  // ClickUp link
+  let clickupLink = panel.querySelector('.task-detail-clickup-link');
+  if (task.clickup_id) {
+    if (!clickupLink) {
+      clickupLink = document.createElement('a');
+      clickupLink.className = 'task-detail-clickup-link';
+      clickupLink.target = '_blank';
+      clickupLink.style.cssText = 'color:#22d3ee;font-size:11px;font-family:var(--os-font-mono);text-decoration:none;opacity:0.7';
+      panel.querySelector('.task-detail-meta')?.appendChild(clickupLink);
+    }
+    clickupLink.href = `https://app.clickup.com/t/${task.clickup_id}`;
+    clickupLink.textContent = '↗ ClickUp';
+    clickupLink.style.display = '';
+  } else if (clickupLink) {
+    clickupLink.style.display = 'none';
+  }
 
   // Connections
   const depList = panel.querySelector('.task-detail-dep-list');
   depList.innerHTML = '';
-  const relatedTasks = MOCK_TASKS.filter(t =>
+  const relatedTasks = state.tasks.filter(t =>
     (task.deps || []).includes(t.id) ||
     (t.deps || []).includes(task.id)
   );
@@ -4170,10 +4259,78 @@ function showTaskDetail(task) {
   overlay.style.display = 'flex';
 }
 
+function initTaskToolbarActions() {
+  const syncBtn = document.getElementById('tasksSyncBtn');
+  const addBtn = document.getElementById('tasksAddBtn');
+
+  if (syncBtn) syncBtn.addEventListener('click', () => { syncClickUp(); soundClick(); });
+
+  if (addBtn) addBtn.addEventListener('click', () => {
+    soundClick();
+    showAddTaskModal();
+  });
+}
+
+function showAddTaskModal() {
+  let modal = document.getElementById('addTaskModal');
+  if (modal) { modal.style.display = 'flex'; return; }
+
+  modal = document.createElement('div');
+  modal.id = 'addTaskModal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px)';
+
+  modal.innerHTML = `
+    <div style="background:var(--os-surface, #1a1a2e);border:1px solid rgba(34,211,238,0.2);border-radius:8px;padding:20px;width:360px;max-width:90vw;font-family:var(--os-font-mono)">
+      <div style="color:#22d3ee;font-size:12px;margin-bottom:16px;letter-spacing:1px">◉ NEW TASK</div>
+      <input id="addTaskTitle" placeholder="Task title…" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#e2e8f0;padding:8px 10px;border-radius:4px;font-size:13px;font-family:inherit;margin-bottom:10px" />
+      <textarea id="addTaskDesc" placeholder="Description (optional)" rows="2" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#e2e8f0;padding:8px 10px;border-radius:4px;font-size:12px;font-family:inherit;margin-bottom:10px;resize:vertical"></textarea>
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <select id="addTaskPriority" style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#e2e8f0;padding:6px 8px;border-radius:4px;font-size:12px;font-family:inherit">
+          <option value="medium">Medium</option>
+          <option value="critical">Critical</option>
+          <option value="high">High</option>
+          <option value="low">Low</option>
+        </select>
+        <select id="addTaskDomain" style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#e2e8f0;padding:6px 8px;border-radius:4px;font-size:12px;font-family:inherit">
+          <option value="work">Work</option>
+          <option value="system">System</option>
+          <option value="trading">Trading</option>
+          <option value="personal">Personal</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button id="addTaskCancel" style="background:transparent;border:1px solid rgba(255,255,255,0.15);color:#94a3b8;padding:6px 14px;border-radius:4px;font-size:12px;cursor:pointer;font-family:inherit">Cancel</button>
+        <button id="addTaskSubmit" style="background:rgba(34,211,238,0.15);border:1px solid rgba(34,211,238,0.3);color:#22d3ee;padding:6px 14px;border-radius:4px;font-size:12px;cursor:pointer;font-family:inherit">Create</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+  document.getElementById('addTaskCancel').addEventListener('click', () => { modal.style.display = 'none'; });
+  document.getElementById('addTaskSubmit').addEventListener('click', async () => {
+    const title = document.getElementById('addTaskTitle').value.trim();
+    if (!title) return;
+    await createTask({
+      title,
+      description: document.getElementById('addTaskDesc').value.trim() || null,
+      priority: document.getElementById('addTaskPriority').value,
+      domain: document.getElementById('addTaskDomain').value,
+      status: 'backlog',
+    });
+    document.getElementById('addTaskTitle').value = '';
+    document.getElementById('addTaskDesc').value = '';
+    modal.style.display = 'none';
+  });
+
+  document.getElementById('addTaskTitle').focus();
+}
+
 // ─── Update task stats in toolbar ───
 function updateTaskStats() {
-  const activeCount = MOCK_TASKS.filter(t => t.status === 'active').length;
-  const totalCount = MOCK_TASKS.length;
+  const activeCount = state.tasks.filter(t => t.status === 'active').length;
+  const totalCount = state.tasks.length;
   const el1 = document.getElementById('tasksActiveCount');
   const el2 = document.getElementById('tasksTotalCount');
   if (el1) el1.textContent = activeCount + ' active';
