@@ -2538,6 +2538,16 @@ function buildStockPicks(plays, suppressed, sparklines, positions) {
         <span class="td-section-count">${plays.length}</span>
       </div>
       ${suppressed ? '<div class="td-suppressed-note">⚠️ Regime suppressed — all positions sized to 25%</div>' : ''}
+      <div class="td-stock-header-row">
+        <span class="td-stock-rank">#</span>
+        <span class="td-stock-ticker">Ticker</span>
+        <span class="td-stock-alpha-bar">Alpha</span>
+        <span class="td-conv-badge" style="background:none;color:var(--os-text-muted)">Conv</span>
+        <span class="td-stock-weight">Wt%</span>
+        <span class="td-stock-price">Price</span>
+        <span class="td-stock-entry">Entry</span>
+        <span class="td-stock-qty">Qty</span>
+      </div>
       <div class="td-stock-list">${rows}</div>
     </div>
   `;
@@ -2598,6 +2608,16 @@ function buildOptionPlays(plays, totalExposure) {
           ${totalExposure ? `<span class="td-options-total">$${totalExposure.toLocaleString()}</span>` : ''}
           <span class="td-section-count">${plays.length}</span>
         </div>
+      </div>
+      <div class="td-option-header-row">
+        <span class="td-option-emoji"></span>
+        <span class="td-option-ticker">Ticker</span>
+        <span class="td-option-strike">Strike</span>
+        <span class="td-option-expiry">Exp</span>
+        <span class="td-option-dte">DTE</span>
+        <span class="td-option-detail">Size</span>
+        <span class="td-option-iv">IV</span>
+        <span class="td-option-cost">Cost</span>
       </div>
       <div class="td-option-list">${rows}</div>
     </div>

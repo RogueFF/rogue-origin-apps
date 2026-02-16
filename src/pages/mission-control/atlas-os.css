@@ -6513,6 +6513,17 @@ input {
 
 /* Stock Picks - Compact rows */
 .td-stock-list { padding: 2px 0; }
+.td-stock-header-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  font-size: 0.6rem;
+  color: var(--os-text-muted, rgba(255,255,255,0.35));
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
 .td-stock-row {
   display: flex;
   align-items: center;
@@ -6554,6 +6565,17 @@ input {
 
 /* Options Plays - Compact rows */
 .td-option-list { padding: 2px 0; }
+.td-option-header-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  font-size: 0.6rem;
+  color: var(--os-text-muted, rgba(255,255,255,0.35));
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
 .td-option-row {
   display: flex;
   align-items: center;
