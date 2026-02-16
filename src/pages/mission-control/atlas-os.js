@@ -2143,6 +2143,29 @@ function renderTradingDesk(regime, plays, portfolio, positions, brief) {
   const stockPlays = allPlays.filter(p => p.vehicle === 'shares');
   const optionPlays = allPlays.filter(p => p.vehicle === 'calls' || p.vehicle === 'puts');
 
+  const regimeSignal = (regime?.signal || '').toUpperCase();
+  const suppressed = regimeSignal === 'RED';
+
+  // Parse brief for morning narrative
+  let briefBody = '';
+  try {
+    if (brief?.body && typeof brief.body === 'string') {
+      // Check if it's JSON or plain markdown
+      if (brief.body.trim().startsWith('{')) {
+        const parsed = JSON.parse(brief.body);
+        briefBody = parsed.summary || parsed.body || brief.body;
+      } else {
+        briefBody = brief.body;
+      }
+    }
+  } catch { briefBody = brief?.body || ''; }
+
+  // Calculate options total
+  const optionsTotal = optionPlays.reduce((sum, p) => {
+    const setup = typeof p.setup === 'string' ? JSON.parse(p.setup || '{}') : (p.setup || {});
+    return sum + (setup.cost || 0);
+  }, 0);
+
   const html = `
     <div class="trading-status-bar">
       <span class="trading-market-status ${marketOpen ? 'market-open' : 'market-closed'}">${liveIndicator}</span>
@@ -2150,10 +2173,11 @@ function renderTradingDesk(regime, plays, portfolio, positions, brief) {
     </div>
     ${buildRegimeBanner(regime)}
     ${buildPortfolioOverview(portfolio, openPositions, optionPlays)}
-    <div class="td-sections">
-      ${buildStockPicks(stockPlays)}
-      ${buildOptionPlays(optionPlays)}
+    <div class="td-sections ${suppressed ? 'td-suppressed' : ''}">
+      ${buildStockPicks(stockPlays, suppressed)}
+      ${buildOptionPlays(optionPlays, optionsTotal)}
       ${buildOpenPositions(openPositions)}
+      ${briefBody ? buildBriefSection(briefBody) : ''}
     </div>
   `;
 
@@ -2374,14 +2398,15 @@ function buildPortfolioOverview(portfolio, openPositions, optionPlays) {
         </div>
       </div>
       <div class="td-portfolio-alloc">
+        ${stockExposure > 0 || optionExposure > 0 ? `
         <div class="td-alloc-row">
           <span class="td-alloc-label">Stocks</span>
-          <div class="td-alloc-bar-wrap"><div class="td-alloc-bar td-alloc-stocks" style="width:${Math.min(stockPct, 100)}%"></div></div>
+          <div class="td-alloc-bar-wrap"><div class="td-alloc-bar td-alloc-stocks" style="width:${Math.max(stockPct > 0 ? 3 : 0, Math.min(stockPct, 100))}%"></div></div>
           <span class="td-alloc-val">$${Math.round(stockExposure).toLocaleString()} <span class="td-alloc-pct">${stockPct.toFixed(0)}%</span></span>
         </div>
         <div class="td-alloc-row">
           <span class="td-alloc-label">Options</span>
-          <div class="td-alloc-bar-wrap"><div class="td-alloc-bar td-alloc-options" style="width:${Math.min(optionPct, 100)}%"></div></div>
+          <div class="td-alloc-bar-wrap"><div class="td-alloc-bar td-alloc-options" style="width:${Math.max(optionPct > 0 ? 3 : 0, Math.min(optionPct, 100))}%"></div></div>
           <span class="td-alloc-val">$${Math.round(optionExposure).toLocaleString()} <span class="td-alloc-pct">${optionPct.toFixed(0)}%</span></span>
         </div>
         <div class="td-alloc-row">
@@ -2389,6 +2414,9 @@ function buildPortfolioOverview(portfolio, openPositions, optionPlays) {
           <div class="td-alloc-bar-wrap"><div class="td-alloc-bar td-alloc-cash" style="width:${Math.min(cashPct, 100)}%"></div></div>
           <span class="td-alloc-val">$${Math.round(cashAmount).toLocaleString()} <span class="td-alloc-pct">${cashPct.toFixed(0)}%</span></span>
         </div>
+        ` : `
+        <div class="td-alloc-empty">100% cash — no open positions</div>
+        `}
       </div>
       <div class="td-portfolio-stats">
         <div class="td-pstat"><span class="td-pstat-val" style="color:${pnlColor}">$${totalPnl >= 0 ? '+' : ''}${totalPnl.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span><span class="td-pstat-label">P&L</span></div>
@@ -2401,7 +2429,7 @@ function buildPortfolioOverview(portfolio, openPositions, optionPlays) {
 }
 
 // ─── Trading Desk: Stock Picks ───
-function buildStockPicks(plays) {
+function buildStockPicks(plays, suppressed) {
   if (!plays || plays.length === 0) return '';
 
   const sorted = [...plays].sort((a, b) => {
@@ -2410,7 +2438,7 @@ function buildStockPicks(plays) {
     return (bSetup.quant_score || 0) - (aSetup.quant_score || 0);
   });
 
-  const rows = sorted.map(play => {
+  const rows = sorted.map((play, idx) => {
     const setup = typeof play.setup === 'string' ? JSON.parse(play.setup || '{}') : (play.setup || {});
     const ticker = play.ticker || '—';
     const score = setup.quant_score || 0;
@@ -2419,9 +2447,12 @@ function buildStockPicks(plays) {
     const price = setup.entry_price || 0;
     const convCls = conviction === 'high' ? 'td-conv-high' : conviction === 'low' ? 'td-conv-low' : 'td-conv-med';
     const convLabel = conviction.charAt(0).toUpperCase() + conviction.slice(1);
+    // Top 3 get visual emphasis
+    const rankCls = idx < 3 ? 'td-stock-top' : '';
 
     return `
-      <div class="td-stock-row">
+      <div class="td-stock-row ${rankCls}">
+        <span class="td-stock-rank">${idx + 1}</span>
         <span class="td-stock-ticker">${escapeHTML(ticker)}</span>
         <span class="td-stock-alpha">α:${score >= 0 ? '+' : ''}${score.toFixed(3)}</span>
         <span class="td-conv-badge ${convCls}">${convLabel}</span>
@@ -2437,13 +2468,14 @@ function buildStockPicks(plays) {
         <span class="td-section-title">📈 Stock Picks</span>
         <span class="td-section-count">${plays.length}</span>
       </div>
+      ${suppressed ? '<div class="td-suppressed-note">⚠️ Regime suppressed — all positions sized to 25%</div>' : ''}
       <div class="td-stock-list">${rows}</div>
     </div>
   `;
 }
 
 // ─── Trading Desk: Options Plays ───
-function buildOptionPlays(plays) {
+function buildOptionPlays(plays, totalExposure) {
   if (!plays || plays.length === 0) return '';
 
   const rows = plays.map(play => {
@@ -2478,7 +2510,10 @@ function buildOptionPlays(plays) {
     <div class="td-section">
       <div class="td-section-header">
         <span class="td-section-title">🎰 Options</span>
-        <span class="td-section-count">${plays.length}</span>
+        <div class="td-section-header-right">
+          ${totalExposure ? `<span class="td-options-total">$${totalExposure.toLocaleString()}</span>` : ''}
+          <span class="td-section-count">${plays.length}</span>
+        </div>
       </div>
       <div class="td-option-list">${rows}</div>
     </div>
@@ -2521,6 +2556,27 @@ function buildOpenPositions(positions) {
         <span class="td-section-count">${positions.length}</span>
       </div>
       <div class="td-pos-list">${rows}</div>
+    </div>
+  `;
+}
+
+// ─── Trading Desk: Morning Brief ───
+function buildBriefSection(body) {
+  if (!body) return '';
+  // Truncate for preview, keep first ~600 chars
+  const preview = body.length > 600 ? body.substring(0, 600) + '…' : body;
+  // Simple markdown-ish rendering: **bold**, newlines
+  const rendered = escapeHTML(preview)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br>');
+
+  return `
+    <div class="td-section td-brief-section">
+      <div class="td-section-header">
+        <span class="td-section-title">📋 Morning Brief</span>
+        <span class="td-brief-toggle" onclick="this.closest('.td-brief-section').classList.toggle('td-brief-expanded')">expand</span>
+      </div>
+      <div class="td-brief-body">${rendered}</div>
     </div>
   `;
 }
