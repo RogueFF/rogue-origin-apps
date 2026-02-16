@@ -430,37 +430,97 @@
         </div>
       </div>
 
-      <!-- Shared task detail overlay -->
+      <!-- Task detail overlay (rich tabbed panel) -->
       <div class="task-detail-overlay" id="taskDetailOverlay" style="display:none;">
-        <div class="task-detail-panel">
+        <div class="task-detail-panel" id="taskDetailPanel">
           <div class="task-detail-close" id="taskDetailClose">×</div>
           <div class="task-detail-status-bar"></div>
-          <div class="task-detail-title-row">
-            <span class="task-detail-priority-gem"></span>
-            <span class="task-detail-title-text"></span>
+
+          <!-- Editable title -->
+          <div class="td-title-wrap">
+            <span class="td-title-text" id="tdTitleText"></span>
+            <input class="td-title-input" id="tdTitleInput" style="display:none" />
           </div>
-          <div class="task-detail-description"></div>
-          <div class="task-detail-meta-grid">
-            <div class="task-meta-cell">
+
+          <!-- Editable description -->
+          <div class="td-desc-wrap">
+            <span class="td-desc-text" id="tdDescText"></span>
+            <textarea class="td-desc-input" id="tdDescInput" rows="3" style="display:none"></textarea>
+          </div>
+
+          <!-- Meta row: 4 dropdowns -->
+          <div class="td-meta-row">
+            <div class="td-meta-cell">
               <span class="task-meta-label">STATUS</span>
-              <span class="task-meta-value task-detail-status"></span>
+              <select class="task-detail-select" id="tdStatus"></select>
             </div>
-            <div class="task-meta-cell">
-              <span class="task-meta-label">OWNER</span>
-              <span class="task-meta-value task-detail-owner"></span>
-            </div>
-            <div class="task-meta-cell">
+            <div class="td-meta-cell">
               <span class="task-meta-label">PRIORITY</span>
-              <span class="task-meta-value task-detail-priority"></span>
+              <select class="task-detail-select" id="tdPriority"></select>
             </div>
-            <div class="task-meta-cell">
-              <span class="task-meta-label">CREATED</span>
-              <span class="task-meta-value task-detail-created"></span>
+            <div class="td-meta-cell">
+              <span class="task-meta-label">ASSIGNED</span>
+              <select class="task-detail-select" id="tdAssigned"></select>
+            </div>
+            <div class="td-meta-cell">
+              <span class="task-meta-label">DOMAIN</span>
+              <select class="task-detail-select" id="tdDomain"></select>
             </div>
           </div>
-          <div class="task-detail-deps">
-            <span class="task-meta-label">CONNECTIONS</span>
-            <div class="task-detail-dep-list"></div>
+
+          <!-- Date + ClickUp link row -->
+          <div class="td-info-row">
+            <span class="td-created" id="tdCreated"></span>
+            <a class="td-clickup-link" id="tdClickUp" target="_blank" style="display:none">↗ ClickUp</a>
+          </div>
+
+          <!-- Tabs -->
+          <div class="td-tabs">
+            <button class="td-tab active" data-tab="comments">💬 Comments <span class="td-tab-count" id="tdCommentCount"></span></button>
+            <button class="td-tab" data-tab="deliverables">📎 Deliverables <span class="td-tab-count" id="tdDeliverableCount"></span></button>
+            <button class="td-tab" data-tab="log">⚡ Log</button>
+          </div>
+
+          <!-- Tab content -->
+          <div class="td-tab-content" id="tdTabContent">
+            <!-- Comments tab (default) -->
+            <div class="td-tab-pane active" data-pane="comments">
+              <div class="td-comments-list" id="tdCommentsList"></div>
+              <div class="td-comment-form">
+                <textarea class="td-comment-input" id="tdCommentInput" placeholder="Add comment..." rows="2"></textarea>
+                <div class="td-comment-form-row">
+                  <select class="task-detail-select" id="tdCommentType">
+                    <option value="comment">comment</option>
+                    <option value="insight">insight</option>
+                    <option value="status_update">status_update</option>
+                  </select>
+                  <button class="td-comment-send" id="tdCommentSend">Send</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Deliverables tab -->
+            <div class="td-tab-pane" data-pane="deliverables" style="display:none">
+              <div class="td-deliverables-list" id="tdDeliverablesList"></div>
+              <div class="td-deliverable-form">
+                <input class="td-deliv-input" id="tdDelivTitle" placeholder="Title" />
+                <input class="td-deliv-input" id="tdDelivUrl" placeholder="URL (optional)" />
+                <select class="task-detail-select" id="tdDelivType">
+                  <option value="link">🔗 link</option>
+                  <option value="note">📄 note</option>
+                  <option value="screenshot">📸 screenshot</option>
+                  <option value="code">💻 code</option>
+                  <option value="file">📁 file</option>
+                </select>
+                <textarea class="td-deliv-input td-deliv-content" id="tdDelivContent" placeholder="Content (optional)" rows="2"></textarea>
+                <button class="td-deliv-add" id="tdDelivAdd">+ Add Deliverable</button>
+              </div>
+            </div>
+
+            <!-- Log tab -->
+            <div class="td-tab-pane" data-pane="log" style="display:none">
+              <div class="td-log-list" id="tdLogList"></div>
+            </div>
           </div>
         </div>
       </div>

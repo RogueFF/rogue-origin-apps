@@ -3493,6 +3493,109 @@ const PRIORITY_SIZES = { critical: 1.5, high: 1.25, medium: 1.0, low: 0.8, urgen
 // ─── Task view state ───
 let neuralState = null;
 let currentTaskView = 'list';
+let agentRosterCache = null;
+let doneColumnCollapsed = true;
+
+async function getAgentRoster() {
+  if (agentRosterCache) return agentRosterCache;
+  try {
+    const resp = await fetch(`${API_BASE}/agents/roster`);
+    const data = await resp.json();
+    agentRosterCache = data.success ? data.data : (Array.isArray(data) ? data : []);
+  } catch (e) {
+    console.error('Failed to fetch agent roster:', e);
+    agentRosterCache = [];
+  }
+  return agentRosterCache;
+}
+
+function getAgentColor(agentName) {
+  if (!agentName || !agentRosterCache) return 'var(--os-text-muted)';
+  const agent = agentRosterCache.find(a => a.name === agentName);
+  return agent?.signature_color || 'var(--os-text-muted)';
+}
+
+function relativeTime(dateStr) {
+  if (!dateStr) return '';
+  let normalized = dateStr;
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(dateStr)) {
+    normalized = dateStr.replace(' ', 'T') + 'Z';
+  }
+  const d = new Date(normalized);
+  if (isNaN(d)) return '';
+  const diff = Date.now() - d.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + 'm ago';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return days + 'd ago';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function niceDate(dateStr) {
+  if (!dateStr) return '';
+  let normalized = dateStr;
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(dateStr)) {
+    normalized = dateStr.replace(' ', 'T') + 'Z';
+  }
+  const d = new Date(normalized);
+  if (isNaN(d)) return '';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// ── Comments CRUD ──
+async function fetchComments(taskId) {
+  try {
+    const resp = await fetch(`${API_BASE}/tasks/${taskId}/comments`);
+    const data = await resp.json();
+    return data.success ? data.data : [];
+  } catch { return []; }
+}
+
+async function postComment(taskId, body, commentType) {
+  try {
+    const resp = await fetch(`${API_BASE}/tasks/${taskId}/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ author: 'koa', body, comment_type: commentType }),
+    });
+    return await resp.json();
+  } catch { return null; }
+}
+
+async function deleteComment(taskId, commentId) {
+  try {
+    await fetch(`${API_BASE}/tasks/${taskId}/comments/${commentId}`, { method: 'DELETE' });
+  } catch { /* ignore */ }
+}
+
+// ── Deliverables CRUD ──
+async function fetchDeliverables(taskId) {
+  try {
+    const resp = await fetch(`${API_BASE}/tasks/${taskId}/deliverables`);
+    const data = await resp.json();
+    return data.success ? data.data : [];
+  } catch { return []; }
+}
+
+async function postDeliverable(taskId, delivData) {
+  try {
+    const resp = await fetch(`${API_BASE}/tasks/${taskId}/deliverables`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...delivData, author: 'koa' }),
+    });
+    return await resp.json();
+  } catch { return null; }
+}
+
+async function deleteDeliverable(taskId, delivId) {
+  try {
+    await fetch(`${API_BASE}/tasks/${taskId}/deliverables/${delivId}`, { method: 'DELETE' });
+  } catch { /* ignore */ }
+}
 
 // Normalize API tasks to have `owner` and `deps` for backward compat with neural map
 function normalizeTasks(apiTasks) {
@@ -3735,22 +3838,64 @@ function renderTaskBoard() {
     const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
     tasks.sort((a, b) => (priorityOrder[a.priority] || 2) - (priorityOrder[b.priority] || 2));
 
-    tasks.forEach((task, i) => {
+    // Done column: collapsed by default, show last 10 only
+    const isDone = status === 'done';
+    if (isDone && tasks.length > 0) {
+      const header = container.closest('.tasks-column')?.querySelector('.tasks-column-header');
+      if (header && !header.querySelector('.tasks-column-toggle')) {
+        const toggle = document.createElement('button');
+        toggle.className = 'tasks-column-toggle';
+        toggle.textContent = '▸';
+        toggle.title = 'Expand/collapse';
+        toggle.onclick = (e) => {
+          e.stopPropagation();
+          container.classList.toggle('collapsed');
+          toggle.textContent = container.classList.contains('collapsed') ? '▸' : '▾';
+        };
+        header.appendChild(toggle);
+        container.classList.add('collapsed');
+      }
+    }
+
+    const displayTasks = isDone ? tasks.slice(0, 10) : tasks;
+
+    // Column drop zone for drag-and-drop
+    container.ondragover = (e) => { e.preventDefault(); container.classList.add('drag-over'); };
+    container.ondragleave = () => container.classList.remove('drag-over');
+    container.ondrop = async (e) => {
+      e.preventDefault();
+      container.classList.remove('drag-over');
+      const taskId = parseInt(e.dataTransfer.getData('text/plain'));
+      if (taskId) {
+        await updateTask(taskId, { status });
+        const t = state.tasks.find(t => t.id === taskId);
+        if (t) t.status = status;
+      }
+    };
+
+    displayTasks.forEach((task, i) => {
       const card = document.createElement('div');
       card.className = 'task-card';
       card.dataset.priority = task.priority;
       card.style.setProperty('--card-delay', (i * 60) + 'ms');
+      card.draggable = true;
 
-      const ownerAgent = task.owner ? state.agents.find(a => a.name === task.owner) : null;
-      const ownerColor = ownerAgent?.signature_color || 'var(--os-text-muted)';
-      const ownerGlyph = task.owner ? (GLYPH_MAP[task.owner] || '●') : '';
+      card.ondragstart = (e) => {
+        e.dataTransfer.setData('text/plain', task.id);
+        card.classList.add('dragging');
+      };
+      card.ondragend = () => card.classList.remove('dragging');
 
-      const showPriority = task.priority === 'urgent' || task.priority === 'high';
+      const agentColor = getAgentColor(task.owner);
+
+      const showPriority = task.priority === 'critical' || task.priority === 'high';
+      const priStripe = task.priority === 'critical' ? '#f87171' : task.priority === 'high' ? '#f97316' : '';
 
       card.innerHTML = `
+        ${priStripe ? `<div class="task-card-pri-stripe" style="background:${priStripe}"></div>` : ''}
         <div class="task-card-title">${escapeHtml(task.title)}</div>
         <div class="task-card-footer">
-          ${task.owner ? `<span class="task-card-owner"><span class="task-card-owner-dot" style="background:${ownerColor}"></span>${escapeHtml(task.owner)}</span>` : '<span class="task-card-owner" style="opacity:0.3">unassigned</span>'}
+          ${task.owner ? `<span class="task-card-owner"><span class="task-card-owner-dot" style="background:${agentColor}"></span>${escapeHtml(task.owner)}</span>` : '<span class="task-card-owner" style="opacity:0.3">unassigned</span>'}
           ${showPriority ? `<span class="task-card-priority-badge" data-priority="${task.priority}">${task.priority}</span>` : ''}
           <span class="task-card-domain">${escapeHtml(task.domain)}</span>
         </div>
@@ -4202,100 +4347,329 @@ function renderNeuralFrame(ns) {
   ns.animId = requestAnimationFrame(() => renderNeuralFrame(ns));
 }
 
-// ─── Show task detail panel ───
-function showTaskDetail(task) {
+// ─── Show task detail panel (rich tabbed) ───
+async function showTaskDetail(task) {
   const overlay = document.getElementById('taskDetailOverlay');
   if (!overlay) return;
 
-  const panel = overlay.querySelector('.task-detail-panel');
+  const panel = document.getElementById('taskDetailPanel');
   panel.dataset.status = task.status;
   panel.dataset.taskId = task.id;
 
-  panel.querySelector('.task-detail-title-text').textContent = task.title;
-  panel.querySelector('.task-detail-description').textContent = task.description || '';
+  // Ensure roster is cached
+  await getAgentRoster();
 
-  // Status — editable select
-  const statusEl = panel.querySelector('.task-detail-status');
-  statusEl.innerHTML = '';
-  const statusSelect = document.createElement('select');
-  statusSelect.className = 'task-detail-select';
+  // ── Title (click to edit) ──
+  const titleText = document.getElementById('tdTitleText');
+  const titleInput = document.getElementById('tdTitleInput');
+  titleText.textContent = task.title;
+  titleText.style.display = '';
+  titleInput.style.display = 'none';
+
+  titleText.onclick = () => {
+    titleInput.value = task.title;
+    titleText.style.display = 'none';
+    titleInput.style.display = '';
+    titleInput.focus();
+  };
+
+  const saveTitleFn = async () => {
+    const v = titleInput.value.trim();
+    if (v && v !== task.title) {
+      await updateTask(task.id, { title: v });
+      task.title = v;
+    }
+    titleText.textContent = task.title;
+    titleInput.style.display = 'none';
+    titleText.style.display = '';
+  };
+  titleInput.onblur = saveTitleFn;
+  titleInput.onkeydown = (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); titleInput.blur(); }
+    if (e.key === 'Escape') { titleInput.style.display = 'none'; titleText.style.display = ''; }
+  };
+
+  // ── Description (click to edit) ──
+  const descText = document.getElementById('tdDescText');
+  const descInput = document.getElementById('tdDescInput');
+  if (task.description) {
+    descText.textContent = task.description;
+    descText.classList.remove('td-placeholder');
+  } else {
+    descText.textContent = 'Add description...';
+    descText.classList.add('td-placeholder');
+  }
+  descText.style.display = '';
+  descInput.style.display = 'none';
+
+  descText.onclick = () => {
+    descInput.value = task.description || '';
+    descText.style.display = 'none';
+    descInput.style.display = '';
+    descInput.focus();
+  };
+
+  const saveDescFn = async () => {
+    const v = descInput.value.trim();
+    if (v !== (task.description || '')) {
+      await updateTask(task.id, { description: v || null });
+      task.description = v || null;
+    }
+    if (task.description) {
+      descText.textContent = task.description;
+      descText.classList.remove('td-placeholder');
+    } else {
+      descText.textContent = 'Add description...';
+      descText.classList.add('td-placeholder');
+    }
+    descInput.style.display = 'none';
+    descText.style.display = '';
+  };
+  descInput.onblur = saveDescFn;
+  descInput.onkeydown = (e) => {
+    if (e.key === 'Escape') { descInput.style.display = 'none'; descText.style.display = ''; }
+  };
+
+  // ── Status dropdown ──
+  const statusSel = document.getElementById('tdStatus');
+  statusSel.innerHTML = '';
   ['backlog', 'active', 'review', 'done', 'blocked'].forEach(s => {
     const opt = document.createElement('option');
     opt.value = s; opt.textContent = s.toUpperCase();
     if (s === task.status) opt.selected = true;
-    statusSelect.appendChild(opt);
+    statusSel.appendChild(opt);
   });
-  statusSelect.style.color = NEURAL_COLORS[task.status]?.fill || '';
-  statusSelect.addEventListener('change', async () => {
-    statusSelect.style.color = NEURAL_COLORS[statusSelect.value]?.fill || '';
-    await updateTask(task.id, { status: statusSelect.value });
-    task.status = statusSelect.value;
+  statusSel.style.color = NEURAL_COLORS[task.status]?.fill || '';
+  statusSel.onchange = async () => {
+    statusSel.style.color = NEURAL_COLORS[statusSel.value]?.fill || '';
+    await updateTask(task.id, { status: statusSel.value });
+    task.status = statusSel.value;
     panel.dataset.status = task.status;
-  });
-  statusEl.appendChild(statusSelect);
+  };
 
-  // Priority — editable select
-  const priEl = panel.querySelector('.task-detail-priority');
-  priEl.innerHTML = '';
-  const priSelect = document.createElement('select');
-  priSelect.className = 'task-detail-select';
+  // ── Priority dropdown ──
+  const priSel = document.getElementById('tdPriority');
+  priSel.innerHTML = '';
+  const priColors = { critical: '#f87171', high: '#f97316', medium: '', low: '' };
   ['critical', 'high', 'medium', 'low'].forEach(p => {
     const opt = document.createElement('option');
     opt.value = p; opt.textContent = p.toUpperCase();
     if (p === task.priority) opt.selected = true;
-    priSelect.appendChild(opt);
+    priSel.appendChild(opt);
   });
-  const priColors = { critical: '#f87171', high: '#f97316', medium: '', low: '' };
-  priSelect.style.color = priColors[task.priority] || '';
-  priSelect.addEventListener('change', async () => {
-    priSelect.style.color = priColors[priSelect.value] || '';
-    await updateTask(task.id, { priority: priSelect.value });
-    task.priority = priSelect.value;
+  priSel.style.color = priColors[task.priority] || '';
+  priSel.onchange = async () => {
+    priSel.style.color = priColors[priSel.value] || '';
+    await updateTask(task.id, { priority: priSel.value });
+    task.priority = priSel.value;
+  };
+
+  // ── Assigned dropdown (from roster) ──
+  const assignSel = document.getElementById('tdAssigned');
+  assignSel.innerHTML = '';
+  const unOpt = document.createElement('option');
+  unOpt.value = ''; unOpt.textContent = 'Unassigned';
+  assignSel.appendChild(unOpt);
+  (agentRosterCache || []).forEach(a => {
+    const opt = document.createElement('option');
+    opt.value = a.name;
+    opt.textContent = a.name;
+    opt.style.color = a.signature_color || '';
+    if (a.name === task.owner) opt.selected = true;
+    assignSel.appendChild(opt);
   });
-  priEl.appendChild(priSelect);
+  assignSel.onchange = async () => {
+    const val = assignSel.value || null;
+    await updateTask(task.id, { assigned_agent: val });
+    task.assigned_agent = val;
+    task.owner = val;
+  };
 
-  panel.querySelector('.task-detail-owner').textContent = task.owner ? task.owner.toUpperCase() : 'UNASSIGNED';
-  panel.querySelector('.task-detail-created').textContent = formatTimeFull(task.created_at);
+  // ── Domain dropdown ──
+  const domainSel = document.getElementById('tdDomain');
+  domainSel.innerHTML = '';
+  ['work', 'system', 'trading', 'personal'].forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d; opt.textContent = d;
+    if (d === task.domain) opt.selected = true;
+    domainSel.appendChild(opt);
+  });
+  domainSel.onchange = async () => {
+    await updateTask(task.id, { domain: domainSel.value });
+    task.domain = domainSel.value;
+  };
 
-  // ClickUp link
-  let clickupLink = panel.querySelector('.task-detail-clickup-link');
+  // ── Created date + ClickUp link ──
+  document.getElementById('tdCreated').textContent = 'Created ' + niceDate(task.created_at);
+  const clickupEl = document.getElementById('tdClickUp');
   if (task.clickup_id) {
-    if (!clickupLink) {
-      clickupLink = document.createElement('a');
-      clickupLink.className = 'task-detail-clickup-link';
-      clickupLink.target = '_blank';
-      clickupLink.style.cssText = 'color:#22d3ee;font-size:11px;font-family:var(--os-font-mono);text-decoration:none;opacity:0.7';
-      panel.querySelector('.task-detail-meta')?.appendChild(clickupLink);
-    }
-    clickupLink.href = `https://app.clickup.com/t/${task.clickup_id}`;
-    clickupLink.textContent = '↗ ClickUp';
-    clickupLink.style.display = '';
-  } else if (clickupLink) {
-    clickupLink.style.display = 'none';
-  }
-
-  // Connections
-  const depList = panel.querySelector('.task-detail-dep-list');
-  depList.innerHTML = '';
-  const relatedTasks = state.tasks.filter(t =>
-    (task.deps || []).includes(t.id) ||
-    (t.deps || []).includes(task.id)
-  );
-  if (relatedTasks.length > 0) {
-    relatedTasks.forEach(t => {
-      const tag = document.createElement('span');
-      tag.className = 'task-dep-tag';
-      const arrow = (task.deps || []).includes(t.id) ? '← ' : '→ ';
-      tag.textContent = arrow + t.title;
-      tag.style.borderColor = NEURAL_COLORS[t.status]?.fill || '';
-      depList.appendChild(tag);
-    });
-    panel.querySelector('.task-detail-deps').style.display = '';
+    clickupEl.href = `https://app.clickup.com/t/${task.clickup_id}`;
+    clickupEl.style.display = '';
   } else {
-    panel.querySelector('.task-detail-deps').style.display = 'none';
+    clickupEl.style.display = 'none';
   }
 
+  // ── Tabs setup ──
+  const tabs = panel.querySelectorAll('.td-tab');
+  const panes = panel.querySelectorAll('.td-tab-pane');
+  tabs.forEach(tab => {
+    tab.onclick = () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      panes.forEach(p => p.style.display = 'none');
+      const target = panel.querySelector(`.td-tab-pane[data-pane="${tab.dataset.tab}"]`);
+      if (target) target.style.display = '';
+    };
+  });
+
+  // Reset to comments tab
+  tabs.forEach(t => t.classList.remove('active'));
+  tabs[0].classList.add('active');
+  panes.forEach(p => p.style.display = 'none');
+  panes[0].style.display = '';
+
+  // Show overlay
   overlay.style.display = 'flex';
+
+  // ── Load comments ──
+  loadDetailComments(task.id);
+
+  // ── Load deliverables ──
+  loadDetailDeliverables(task.id);
+
+  // ── Load log ──
+  renderDetailLog(task);
+
+  // ── Wire comment form ──
+  const commentSendBtn = document.getElementById('tdCommentSend');
+  commentSendBtn.onclick = async () => {
+    const input = document.getElementById('tdCommentInput');
+    const body = input.value.trim();
+    if (!body) return;
+    const type = document.getElementById('tdCommentType').value;
+    commentSendBtn.disabled = true;
+    commentSendBtn.textContent = '...';
+    await postComment(task.id, body, type);
+    input.value = '';
+    commentSendBtn.disabled = false;
+    commentSendBtn.textContent = 'Send';
+    loadDetailComments(task.id);
+  };
+
+  // ── Wire deliverable form ──
+  const delivAddBtn = document.getElementById('tdDelivAdd');
+  delivAddBtn.onclick = async () => {
+    const title = document.getElementById('tdDelivTitle').value.trim();
+    if (!title) return;
+    delivAddBtn.disabled = true;
+    delivAddBtn.textContent = '...';
+    await postDeliverable(task.id, {
+      title,
+      url: document.getElementById('tdDelivUrl').value.trim() || null,
+      deliverable_type: document.getElementById('tdDelivType').value,
+      content: document.getElementById('tdDelivContent').value.trim() || null,
+    });
+    document.getElementById('tdDelivTitle').value = '';
+    document.getElementById('tdDelivUrl').value = '';
+    document.getElementById('tdDelivContent').value = '';
+    delivAddBtn.disabled = false;
+    delivAddBtn.textContent = '+ Add Deliverable';
+    loadDetailDeliverables(task.id);
+  };
+}
+
+async function loadDetailComments(taskId) {
+  const list = document.getElementById('tdCommentsList');
+  list.innerHTML = '<div class="td-empty">Loading...</div>';
+  const comments = await fetchComments(taskId);
+  const countEl = document.getElementById('tdCommentCount');
+  if (countEl) countEl.textContent = comments.length ? `(${comments.length})` : '';
+
+  if (comments.length === 0) {
+    list.innerHTML = '<div class="td-empty">No comments yet</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  comments.forEach(c => {
+    const color = getAgentColor(c.author);
+    const el = document.createElement('div');
+    el.className = 'td-comment';
+    el.innerHTML = `
+      <div class="td-comment-header">
+        <span class="td-comment-dot" style="background:${color}"></span>
+        <span class="td-comment-author">${escapeHtml(c.author || 'unknown')}</span>
+        <span class="td-comment-type" data-type="${escapeHtml(c.comment_type || 'comment')}">${escapeHtml(c.comment_type || 'comment')}</span>
+        <span class="td-comment-time">${relativeTime(c.created_at)}</span>
+      </div>
+      <div class="td-comment-body">${escapeHtml(c.body || '')}</div>
+    `;
+    list.appendChild(el);
+  });
+}
+
+async function loadDetailDeliverables(taskId) {
+  const list = document.getElementById('tdDeliverablesList');
+  list.innerHTML = '<div class="td-empty">Loading...</div>';
+  const deliverables = await fetchDeliverables(taskId);
+  const countEl = document.getElementById('tdDeliverableCount');
+  if (countEl) countEl.textContent = deliverables.length ? `(${deliverables.length})` : '';
+
+  if (deliverables.length === 0) {
+    list.innerHTML = '<div class="td-empty">No deliverables yet</div>';
+    return;
+  }
+
+  const typeIcons = { link: '🔗', note: '📄', screenshot: '📸', code: '💻', file: '📁' };
+  list.innerHTML = '';
+  deliverables.forEach(d => {
+    const el = document.createElement('div');
+    el.className = 'td-deliverable';
+    const icon = typeIcons[d.deliverable_type] || '📄';
+    el.innerHTML = `
+      <span class="td-deliverable-icon">${icon}</span>
+      <div class="td-deliverable-info">
+        <div class="td-deliverable-title">${escapeHtml(d.title)}</div>
+        ${d.url ? `<a class="td-deliverable-url" href="${escapeHtml(d.url)}" target="_blank">${escapeHtml(d.url)}</a>` : ''}
+        ${d.content ? `<div class="td-deliverable-preview">${escapeHtml(d.content)}</div>` : ''}
+      </div>
+      <button class="td-deliverable-delete" data-did="${d.id}" title="Delete">×</button>
+    `;
+    // Expand/collapse content preview
+    const preview = el.querySelector('.td-deliverable-preview');
+    if (preview) preview.onclick = () => preview.classList.toggle('expanded');
+    // Delete handler
+    el.querySelector('.td-deliverable-delete').onclick = async (e) => {
+      e.stopPropagation();
+      await deleteDeliverable(taskId, d.id);
+      loadDetailDeliverables(taskId);
+    };
+    list.appendChild(el);
+  });
+}
+
+function renderDetailLog(task) {
+  const list = document.getElementById('tdLogList');
+  list.innerHTML = '';
+  const entries = [
+    { label: 'CREATED', value: task.created_at },
+    { label: 'UPDATED', value: task.updated_at },
+    { label: 'COMPLETED', value: task.completed_at },
+  ];
+  entries.forEach(e => {
+    if (!e.value) return;
+    const el = document.createElement('div');
+    el.className = 'td-log-entry';
+    el.innerHTML = `
+      <span class="td-log-label">${e.label}</span>
+      <span class="td-log-value">${niceDate(e.value)}</span>
+      <span class="td-comment-time">${relativeTime(e.value)}</span>
+    `;
+    list.appendChild(el);
+  });
+  if (list.children.length === 0) {
+    list.innerHTML = '<div class="td-empty">No log entries</div>';
+  }
 }
 
 function initTaskToolbarActions() {
