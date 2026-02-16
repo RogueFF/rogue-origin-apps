@@ -5974,3 +5974,57 @@ input {
 .td-pos-entry { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: rgba(255,255,255,0.45); }
 .td-pos-current { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: rgba(255,255,255,0.7); }
 .td-pos-pnl { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; font-weight: 600; margin-left: auto; }
+
+/* Regime suppression */
+.td-suppressed .td-stock-row { opacity: 0.6; }
+.td-suppressed .td-stock-top { opacity: 0.85; }
+.td-suppressed-note {
+  font-size: 0.7rem;
+  color: #eab308;
+  padding: 6px 14px;
+  background: rgba(234,179,8,0.06);
+  border-bottom: 1px solid rgba(234,179,8,0.1);
+}
+
+/* Stock rank number */
+.td-stock-rank {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
+  color: rgba(255,255,255,0.2);
+  width: 16px;
+  text-align: right;
+}
+
+/* Top 3 stock emphasis */
+.td-stock-top { border-left: 2px solid rgba(34,197,94,0.4); padding-left: 12px !important; }
+.td-stock-top .td-stock-ticker { color: #fff; font-size: 0.88rem; }
+.td-stock-top .td-stock-alpha { color: #4ade80; }
+
+/* Options header */
+.td-section-header-right { display: flex; align-items: center; gap: 10px; }
+.td-options-total { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: #a855f7; font-weight: 600; }
+
+/* Portfolio empty allocation */
+.td-alloc-empty { font-size: 0.72rem; color: rgba(255,255,255,0.3); text-align: center; padding: 8px 0; font-style: italic; }
+
+/* Brief section */
+.td-brief-section .td-brief-body {
+  padding: 10px 14px;
+  font-size: 0.72rem;
+  color: rgba(255,255,255,0.55);
+  line-height: 1.6;
+  max-height: 80px;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+.td-brief-section.td-brief-expanded .td-brief-body { max-height: 1000px; }
+.td-brief-toggle {
+  font-size: 0.62rem;
+  color: rgba(255,255,255,0.3);
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.td-brief-toggle:hover { color: rgba(255,255,255,0.6); }
+.td-brief-expanded .td-brief-toggle::after { content: ' ▲'; }
+.td-brief-section:not(.td-brief-expanded) .td-brief-toggle::after { content: ' ▼'; }
