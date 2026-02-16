@@ -2184,7 +2184,7 @@ function renderTradingDesk(regime, plays, portfolio, positions, brief, regimeHis
     ${buildRegimeStrip(Array.isArray(regimeHistory) ? regimeHistory : [])}
     ${buildPortfolioOverview(portfolio, openPositions, optionPlays, widgets?.fear_greed)}
     <div class="td-sections ${suppressed ? 'td-suppressed' : ''}">
-      ${buildStockPicks(stockPlays, suppressed, widgets?.sparklines)}
+      ${buildStockPicks(stockPlays, suppressed, widgets?.sparklines, openPositions)}
       ${buildOptionPlays(optionPlays, optionsTotal)}
       ${buildOpenPositions(openPositions)}
     </div>
@@ -2363,7 +2363,7 @@ function buildRegimeBanner(data) {
   const sizing = strategy.position_sizing || '';
 
   return `
-    <div class="td-regime ${cls}">
+    <div class="td-regime ${cls}" ${sizing ? `title="${escapeHTML(sizing)}"` : ''}>
       <span class="td-regime-signal">${signal}</span>
       <span class="td-regime-label">${escapeHTML(label)}</span>
       <div class="td-regime-stats">
@@ -2371,7 +2371,6 @@ function buildRegimeBanner(data) {
         <span class="td-regime-stat-inline">VIX ${vix}</span>
         <span class="td-regime-stat-inline">10Y ${y10}</span>
       </div>
-      ${sizing ? `<div class="td-regime-sizing">${escapeHTML(sizing)}</div>` : ''}
     </div>
   `;
 }
@@ -2461,7 +2460,7 @@ function buildPortfolioOverview(portfolio, openPositions, optionPlays, fearGreed
 }
 
 // ─── Trading Desk: Stock Picks ───
-function buildStockPicks(plays, suppressed, sparklines) {
+function buildStockPicks(plays, suppressed, sparklines, positions) {
   if (!plays || plays.length === 0) return '';
 
   const sorted = [...plays].sort((a, b) => {
@@ -2493,14 +2492,21 @@ function buildStockPicks(plays, suppressed, sparklines) {
     // Alpha bar width as percentage of max
     const barWidth = Math.round((Math.abs(score) / maxScore) * 100);
 
-    // % change pill instead of sparkline
-    let changePill = '<span class="td-change-pill td-change-na">—</span>';
-    if (currentPrice > 0 && price > 0) {
+    // % change pill - only show if prices differ
+    let changePill = '';
+    if (currentPrice > 0 && price > 0 && currentPrice !== price) {
       const pctChange = ((currentPrice - price) / price) * 100;
       const sign = pctChange >= 0 ? '+' : '';
       const pillCls = pctChange >= 0 ? 'td-change-up' : 'td-change-down';
       changePill = `<span class="td-change-pill ${pillCls}">${sign}${pctChange.toFixed(1)}%</span>`;
     }
+
+    // Look up position data for this ticker (stock positions only)
+    const position = positions ? positions.find(p => p.ticker === ticker && p.vehicle === 'shares') : null;
+    const entryPrice = position ? position.entry_price : 0;
+    const qty = position ? position.quantity : 0;
+    const entryDisplay = entryPrice > 0 ? `$${entryPrice.toFixed(2)}` : '—';
+    const qtyDisplay = qty > 0 ? `${qty.toFixed(0)} sh` : '—';
 
     // Stop/target indicators (only on hover via title)
     const targetPrice = setup.target_price || (price > 0 ? (price * 1.10) : 0);
@@ -2519,6 +2525,8 @@ function buildStockPicks(plays, suppressed, sparklines) {
         <span class="td-conv-badge ${convCls}">${convLabel}</span>
         <span class="td-stock-weight">${weight.toFixed(1)}%</span>
         <span class="td-stock-price">${price > 0 ? '$' + price.toFixed(2) : '—'}</span>
+        <span class="td-stock-entry">${entryDisplay}</span>
+        <span class="td-stock-qty">${qtyDisplay}</span>
       </div>
     `;
   }).join('');
@@ -2596,31 +2604,48 @@ function buildOptionPlays(plays, totalExposure) {
   `;
 }
 
-// ─── Trading Desk: Open Positions ───
+// ─── Trading Desk: Open Positions (Options Only) ───
 function buildOpenPositions(positions) {
   if (!positions || positions.length === 0) return '';
 
-  const rows = positions.map(pos => {
+  // Filter to only show options positions
+  const optionsPositions = positions.filter(pos => {
+    const vehicle = pos.vehicle || 'shares';
+    return vehicle === 'calls' || vehicle === 'puts';
+  });
+
+  if (optionsPositions.length === 0) return '';
+
+  const rows = optionsPositions.map(pos => {
     const ticker = pos.ticker || '—';
     const vehicle = pos.vehicle || 'shares';
     const entry = pos.entry_price || 0;
     const current = pos.current_price || entry;
     const qty = pos.quantity || 0;
-    const isOption = vehicle === 'calls' || vehicle === 'puts';
-    const multiplier = isOption ? 100 : 1;
+    const multiplier = 100;
     const pnl = (current - entry) * qty * multiplier * (pos.direction === 'short' ? -1 : 1);
     const pnlPct = entry > 0 ? ((current / entry - 1) * 100) : 0;
     const pnlColor = pnl >= 0 ? 'var(--sig-green, #22c55e)' : 'var(--sig-red, #ef4444)';
-    const vehicleLabel = isOption ? `${vehicle === 'calls' ? 'C' : 'P'} $${pos.strike || ''}` : 'shares';
+    const vehicleLabel = `${vehicle === 'calls' ? 'C' : 'P'} $${pos.strike || ''}`;
+
+    // Handle zero prices
+    const entryDisplay = entry > 0 ? `$${entry.toFixed(2)}` : '—';
+    const currentDisplay = current > 0 ? `$${current.toFixed(2)}` : '—';
+    let pnlDisplay;
+    if (entry === 0 && current === 0) {
+      pnlDisplay = 'no data';
+    } else {
+      pnlDisplay = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(0)} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%)`;
+    }
 
     return `
       <div class="td-pos-row" style="border-left-color:${pnlColor}">
         <span class="td-pos-ticker">${escapeHTML(ticker)}</span>
         <span class="td-pos-vehicle">${vehicleLabel}</span>
-        <span class="td-pos-qty">${isOption ? qty + 'x' : qty.toFixed(1)}</span>
-        <span class="td-pos-entry">$${entry.toFixed(2)}</span>
-        <span class="td-pos-current">$${current.toFixed(2)}</span>
-        <span class="td-pos-pnl" style="color:${pnlColor}">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(0)} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%)</span>
+        <span class="td-pos-qty">${qty}x</span>
+        <span class="td-pos-entry">${entryDisplay}</span>
+        <span class="td-pos-current">${currentDisplay}</span>
+        <span class="td-pos-pnl" style="color:${pnlColor}">${pnlDisplay}</span>
       </div>
     `;
   }).join('');
@@ -2628,8 +2653,8 @@ function buildOpenPositions(positions) {
   return `
     <div class="td-section">
       <div class="td-section-header">
-        <span class="td-section-title">📋 Open Positions</span>
-        <span class="td-section-count">${positions.length}</span>
+        <span class="td-section-title">📋 Options Positions</span>
+        <span class="td-section-count">${optionsPositions.length}</span>
       </div>
       <div class="td-pos-list">${rows}</div>
     </div>
@@ -2784,14 +2809,22 @@ function buildStructuredBrief(d) {
   
   // Market indices
   const indices = d.market?.indices || {};
+  
+  // Check if market data is all zeros/empty
+  const sp500Price = (indices['S&P 500']?.price || 0);
+  const nasdaqPrice = (indices['NASDAQ']?.price || 0);
+  const hasMarketData = sp500Price > 0 || nasdaqPrice > 0;
+  
   const indexRows = ['S&P 500', 'NASDAQ', 'Russell 2000'].map(name => {
     const idx = indices[name] || {};
+    const price = idx.price || 0;
+    if (price === 0) return ''; // Skip zero prices
     const chg = idx.daily_change_pct || 0;
     const wk = idx.weekly_change_pct || 0;
     const arrow = chg >= 0 ? '▲' : '▼';
     const color = chg >= 0 ? 'var(--sig-green, #22c55e)' : 'var(--sig-red, #ef4444)';
-    return `<div class="td-brief-idx"><span class="td-brief-idx-name">${name}</span><span class="td-brief-idx-price">${(idx.price || 0).toLocaleString('en-US', {maximumFractionDigits: 0})}</span><span style="color:${color}">${arrow}${Math.abs(chg).toFixed(1)}%</span><span class="td-brief-idx-wk">${wk >= 0 ? '+' : ''}${wk.toFixed(1)}% wk</span></div>`;
-  }).join('');
+    return `<div class="td-brief-idx"><span class="td-brief-idx-name">${name}</span><span class="td-brief-idx-price">${price.toLocaleString('en-US', {maximumFractionDigits: 0})}</span><span style="color:${color}">${arrow}${Math.abs(chg).toFixed(1)}%</span><span class="td-brief-idx-wk">${wk >= 0 ? '+' : ''}${wk.toFixed(1)}% wk</span></div>`;
+  }).filter(row => row !== '').join('');
 
   // VIX
   const vix = d.market?.vix || {};
@@ -2828,6 +2861,7 @@ function buildStructuredBrief(d) {
         <span class="td-brief-date">${escapeHTML(d.date || '')}</span>
       </div>
       <div class="td-brief-structured">
+        ${hasMarketData ? `
         <div class="td-brief-block">
           <div class="td-brief-block-title">Market Snapshot</div>
           <div class="td-brief-indices">${indexRows}</div>
@@ -2835,6 +2869,7 @@ function buildStructuredBrief(d) {
           ${leaders ? `<div class="td-brief-sectors"><span class="td-brief-dim">Leading:</span> ${escapeHTML(leaders)}</div>` : ''}
           ${laggards ? `<div class="td-brief-sectors"><span class="td-brief-dim">Lagging:</span> ${escapeHTML(laggards)}</div>` : ''}
         </div>
+        ` : ''}
 
         <div class="td-brief-block">
           <div class="td-brief-block-title">${regimeEmoji} Regime Analysis</div>

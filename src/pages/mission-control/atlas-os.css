@@ -6423,7 +6423,14 @@ input {
 .td-regime-yellow .td-regime-signal { color: #eab308; }
 .td-regime-red .td-regime-signal { color: #ef4444; }
 
-.td-regime-label { font-size: 0.75rem; color: rgba(255,255,255,0.7); }
+.td-regime-label { 
+  font-size: 0.75rem; 
+  color: rgba(255,255,255,0.7); 
+  white-space: nowrap; 
+  overflow: hidden; 
+  text-overflow: ellipsis; 
+  max-width: 180px; 
+}
 
 .td-regime-stats { display: flex; gap: 12px; margin-left: auto; }
 .td-regime-stat-inline { 
@@ -6542,6 +6549,8 @@ input {
 
 .td-stock-weight { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: rgba(255,255,255,0.5); width: 38px; text-align: right; }
 .td-stock-price { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: rgba(255,255,255,0.5); margin-left: auto; }
+.td-stock-entry { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: rgba(255,255,255,0.4); }
+.td-stock-qty { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: rgba(255,255,255,0.4); }
 
 /* Options Plays - Compact rows */
 .td-option-list { padding: 2px 0; }
