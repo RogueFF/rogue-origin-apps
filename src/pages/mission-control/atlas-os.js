@@ -3,6 +3,42 @@
    Window manager, data layer, UI controllers, sound design
    ═══════════════════════════════════════════════════════════════ */
 
+// ── morphInto: flicker-free DOM updates via morphdom ──────────
+// Wraps html string in a container div, morphs into target element.
+// Preserves scroll, focus, open <details>, event listeners, DD panels.
+function morphInto(target, html) {
+  if (!target) return;
+  // First render — just set innerHTML (morphdom needs existing DOM)
+  if (!target.hasChildNodes()) {
+    target.innerHTML = html;
+    return;
+  }
+  const wrapper = document.createElement(target.tagName || 'div');
+  // Copy id/class so morphdom matches the root
+  wrapper.id = target.id;
+  wrapper.className = target.className;
+  wrapper.innerHTML = html;
+  morphdom(target, wrapper, {
+    childrenOnly: false,
+    onBeforeElUpdated(fromEl, toEl) {
+      // Preserve open/closed state on <details>
+      if (fromEl.tagName === 'DETAILS' && fromEl.hasAttribute('open') && !toEl.hasAttribute('open')) {
+        toEl.setAttribute('open', '');
+      }
+      // Preserve DD panel open state
+      if (fromEl.classList?.contains('dd-open') && !toEl.classList?.contains('dd-open')) {
+        toEl.classList.add('dd-open');
+      }
+      if (fromEl.classList?.contains('dd-active') && !toEl.classList?.contains('dd-active')) {
+        toEl.classList.add('dd-active');
+      }
+      // Skip updating focused inputs
+      if (fromEl === document.activeElement && fromEl.tagName === 'INPUT') return false;
+      return true;
+    }
+  });
+}
+
 const API_BASE = 'https://mission-control-api.roguefamilyfarms.workers.dev/api';
 const POLL_INTERVAL = 30000;
 const TRADING_POLL_INTERVAL = 60000; // 60s during market hours
@@ -417,7 +453,7 @@ function renderWorkPanel(production) {
     ? '<span class="live-dot"></span> ON SHIFT'
     : 'OFF SHIFT';
 
-  container.innerHTML = `
+  morphInto(container, `
     <div class="trading-status-bar">
       <span class="trading-market-status ${shiftActive ? 'market-open' : 'market-closed'}">${shiftIndicator}</span>
       <span class="trading-refresh-rate">${shiftActive ? 'Refreshing every 60s' : 'Refreshing every 5m'}</span>
@@ -425,7 +461,7 @@ function renderWorkPanel(production) {
     <div class="work-grid">
       ${buildProductionCard(production)}
     </div>
-  `;
+  `);
 }
 
 async function fetchProductionData() {
@@ -516,7 +552,7 @@ function renderGitHubDashboard(data) {
     return `<span class="gh-branch ${isMain ? 'gh-branch-main' : ''}">${escapeHTML(b.name)}${badge}</span>`;
   }).join('');
 
-  container.innerHTML = `
+  morphInto(container, `
     <div class="gh-header">
       <div class="gh-repo">
         <span class="gh-repo-icon">🐙</span>
@@ -592,7 +628,7 @@ function renderGitHubDashboard(data) {
     <div class="gh-footer">
       <span class="gh-refresh-note">Updated ${new Date(data.fetched_at).toLocaleTimeString()} · Refreshing every 2m</span>
     </div>
-  `;
+  `);
 }
 
 function escapeHTML(str) {
@@ -675,7 +711,7 @@ function renderAnalytics(days) {
   const topsPercent = (totalTops / totalLbs * 100).toFixed(1);
   const smallsPercent = (totalSmalls / totalLbs * 100).toFixed(1);
 
-  container.innerHTML = `
+  morphInto(container, `
     <div class="analytics-scroll">
       <div class="analytics-summary-cards">
         <div class="portfolio-stat">
@@ -765,7 +801,7 @@ function renderAnalytics(days) {
         </div>
       </div>
     </div>
-  `;
+  `);
 }
 
 function formatShortDate(dateStr) {
@@ -2211,29 +2247,8 @@ function renderTradingDesk(regime, plays, portfolio, positions, closedPositions,
     ${briefData ? buildStructuredBrief(briefData) : (briefRaw ? buildBriefSection(briefRaw) : '')}
   `;
 
-  // Skip re-render if content hasn't meaningfully changed (prevents blink)
-  if (!container._lastHtml) {
-    container.innerHTML = html;
-  } else if (container._lastHtml !== html) {
-    // Selective update: find sections that changed and only replace those
-    const temp = document.createElement('div');
-    temp.innerHTML = html;
-    const oldSections = container.querySelectorAll('.td-portfolio, .td-section, .td-collapsible, .trading-status-bar, .regime-banner, .regime-strip, .td-brief');
-    const newSections = temp.querySelectorAll('.td-portfolio, .td-section, .td-collapsible, .trading-status-bar, .regime-banner, .regime-strip, .td-brief');
-    let didPartialUpdate = false;
-    if (oldSections.length === newSections.length && oldSections.length > 0) {
-      didPartialUpdate = true;
-      for (let i = 0; i < oldSections.length; i++) {
-        if (oldSections[i].innerHTML !== newSections[i].innerHTML) {
-          oldSections[i].innerHTML = newSections[i].innerHTML;
-        }
-      }
-    }
-    if (!didPartialUpdate) {
-      container.innerHTML = html;
-    }
-  }
-  container._lastHtml = html;
+  // Morph the DOM — only patches what changed, no blink, preserves state
+  morphInto(container, html);
 
   // ── Option DD panel — click-to-expand event delegation ──
   // Only attach once — use a flag to prevent duplicate listeners
