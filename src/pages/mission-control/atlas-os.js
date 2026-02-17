@@ -3718,6 +3718,32 @@ function niceDate(dateStr) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+// ── Basic Markdown renderer (safe, no external deps) ──
+function renderBasicMarkdown(md) {
+  if (!md) return '';
+  // Escape HTML first for safety
+  let html = escapeHtml(md);
+  // Headers: ### → h3, ## → h2, # → h1
+  html = html.replace(/^### (.+)$/gm, '<h4 class="md-h4">$1</h4>');
+  html = html.replace(/^## (.+)$/gm, '<h3 class="md-h3">$1</h3>');
+  html = html.replace(/^# (.+)$/gm, '<h2 class="md-h2">$1</h2>');
+  // Bold: **text**
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  // Italic: *text* (but not inside **)
+  html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
+  // Inline code: `text`
+  html = html.replace(/`([^`]+)`/g, '<code class="md-code">$1</code>');
+  // Unordered list items: - item
+  html = html.replace(/^- (.+)$/gm, '<li class="md-li">$1</li>');
+  // Wrap consecutive <li> in <ul>
+  html = html.replace(/((?:<li class="md-li">.*?<\/li>\n?)+)/g, '<ul class="md-ul">$1</ul>');
+  // Line breaks: double newline → paragraph break
+  html = html.replace(/\n\n/g, '</p><p class="md-p">');
+  // Single newlines → <br>
+  html = html.replace(/\n/g, '<br>');
+  return '<p class="md-p">' + html + '</p>';
+}
+
 // ── Comments CRUD ──
 async function fetchComments(taskId) {
   try {
@@ -3981,11 +4007,20 @@ function renderTaskList() {
                         task.priority === 'high' ? 'tl-pri-high' :
                         task.priority === 'low' ? 'tl-pri-low' : 'tl-pri-normal';
 
+      // Session badge for list view
+      let sessionBadgeHtml = '';
+      if (task.session_url && task.status === 'active') {
+        sessionBadgeHtml = `<a class="tl-session-badge tl-session-live" href="${escapeHtml(task.session_url)}" target="_blank" onclick="event.stopPropagation()"><span class="session-live-dot"></span>Live</a>`;
+      } else if (task.session_url) {
+        sessionBadgeHtml = `<a class="tl-session-badge tl-session-replay" href="${escapeHtml(task.session_url)}" target="_blank" onclick="event.stopPropagation()">📼</a>`;
+      }
+
       const row = document.createElement('div');
       row.className = 'tl-row' + (group.key === 'done' ? ' tl-row-done' : '');
       row.innerHTML = `
         <span class="tl-pri ${priClass}"></span>
         <span class="tl-title">${escapeHtml(task.title)}</span>
+        ${sessionBadgeHtml}
         ${task.owner ? `<span class="tl-owner" style="color:${ownerColor}">${ownerGlyph} ${escapeHtml(task.owner)}</span>` : '<span class="tl-owner tl-owner-none">—</span>'}
         <span class="tl-domain">${escapeHtml(task.domain)}</span>
       `;
@@ -4090,9 +4125,18 @@ function renderTaskBoard() {
       const showPriority = task.priority === 'critical' || task.priority === 'high';
       const priStripe = task.priority === 'critical' ? '#f87171' : task.priority === 'high' ? '#f97316' : '';
 
+      // Session badge for board cards
+      let cardSessionHtml = '';
+      if (task.session_url && task.status === 'active') {
+        cardSessionHtml = `<a class="task-card-session task-card-session-live" href="${escapeHtml(task.session_url)}" target="_blank" onclick="event.stopPropagation()"><span class="session-live-dot"></span>Live</a>`;
+      } else if (task.session_url) {
+        cardSessionHtml = `<a class="task-card-session task-card-session-replay" href="${escapeHtml(task.session_url)}" target="_blank" onclick="event.stopPropagation()">📼 Session</a>`;
+      }
+
       card.innerHTML = `
         ${priStripe ? `<div class="task-card-pri-stripe" style="background:${priStripe}"></div>` : ''}
         <div class="task-card-title">${escapeHtml(task.title)}</div>
+        ${cardSessionHtml}
         <div class="task-card-footer">
           ${task.owner ? `<span class="task-card-owner"><span class="task-card-owner-dot" style="background:${agentColor}"></span>${escapeHtml(task.owner)}</span>` : '<span class="task-card-owner" style="opacity:0.3">unassigned</span>'}
           ${showPriority ? `<span class="task-card-priority-badge" data-priority="${task.priority}">${task.priority}</span>` : ''}
@@ -4698,8 +4742,20 @@ async function showTaskDetail(task) {
     task.domain = domainSel.value;
   };
 
-  // ── Created date + ClickUp link ──
+  // ── Created date + Session badge + ClickUp link ──
   document.getElementById('tdCreated').textContent = 'Created ' + niceDate(task.created_at);
+
+  const sessionBadge = document.getElementById('tdSessionBadge');
+  if (task.session_url) {
+    sessionBadge.href = task.session_url;
+    const isLive = task.status === 'active';
+    sessionBadge.className = 'td-session-badge' + (isLive ? ' td-session-live' : ' td-session-replay');
+    sessionBadge.innerHTML = isLive ? '<span class="session-live-dot"></span> Live' : '📼 Session';
+    sessionBadge.style.display = '';
+  } else {
+    sessionBadge.style.display = 'none';
+  }
+
   const clickupEl = document.getElementById('tdClickUp');
   if (task.clickup_id) {
     clickupEl.href = `https://app.clickup.com/t/${task.clickup_id}`;
@@ -4819,24 +4875,72 @@ async function loadDetailDeliverables(taskId) {
     return;
   }
 
-  const typeIcons = { link: '🔗', note: '📄', screenshot: '📸', code: '💻', file: '📁' };
+  const typeIcons = { link: '🔗', note: '📄', screenshot: '📸', markdown: '📝', code: '💻', file: '📁' };
   list.innerHTML = '';
   deliverables.forEach(d => {
     const el = document.createElement('div');
-    el.className = 'td-deliverable';
+    el.className = 'td-deliverable' + (d.deliverable_type === 'screenshot' ? ' td-deliverable-screenshot' : '') + (d.deliverable_type === 'markdown' ? ' td-deliverable-markdown' : '');
     const icon = typeIcons[d.deliverable_type] || '📄';
+
+    // Render based on type
+    let contentHtml = '';
+    if (d.deliverable_type === 'screenshot' && d.url) {
+      // Screenshot: render as clickable thumbnail
+      contentHtml = `
+        <div class="td-screenshot-wrap">
+          <img class="td-screenshot-thumb" src="${escapeHtml(d.url)}" alt="${escapeHtml(d.title)}" loading="lazy" />
+          <div class="td-screenshot-overlay" title="View full size">⤢</div>
+        </div>
+      `;
+    } else if (d.deliverable_type === 'screenshot' && d.content) {
+      // Screenshot with base64 content
+      contentHtml = `
+        <div class="td-screenshot-wrap">
+          <img class="td-screenshot-thumb" src="data:image/png;base64,${d.content}" alt="${escapeHtml(d.title)}" loading="lazy" />
+          <div class="td-screenshot-overlay" title="View full size">⤢</div>
+        </div>
+      `;
+    } else if (d.deliverable_type === 'markdown' && d.content) {
+      // Markdown: render inline with basic formatting
+      contentHtml = `<div class="td-markdown-content">${renderBasicMarkdown(d.content)}</div>`;
+    } else if (d.content) {
+      contentHtml = `<div class="td-deliverable-preview">${escapeHtml(d.content)}</div>`;
+    }
+
     el.innerHTML = `
       <span class="td-deliverable-icon">${icon}</span>
       <div class="td-deliverable-info">
         <div class="td-deliverable-title">${escapeHtml(d.title)}</div>
-        ${d.url ? `<a class="td-deliverable-url" href="${escapeHtml(d.url)}" target="_blank">${escapeHtml(d.url)}</a>` : ''}
-        ${d.content ? `<div class="td-deliverable-preview">${escapeHtml(d.content)}</div>` : ''}
+        ${d.url && d.deliverable_type !== 'screenshot' ? `<a class="td-deliverable-url" href="${escapeHtml(d.url)}" target="_blank">${escapeHtml(d.url)}</a>` : ''}
+        ${contentHtml}
       </div>
       <button class="td-deliverable-delete" data-did="${d.id}" title="Delete">×</button>
     `;
-    // Expand/collapse content preview
+
+    // Screenshot click-to-expand
+    const thumb = el.querySelector('.td-screenshot-thumb');
+    if (thumb) {
+      const wrap = el.querySelector('.td-screenshot-wrap');
+      wrap.onclick = () => wrap.classList.toggle('td-screenshot-expanded');
+    }
+
+    // Expand/collapse content preview (for non-markdown, non-screenshot)
     const preview = el.querySelector('.td-deliverable-preview');
     if (preview) preview.onclick = () => preview.classList.toggle('expanded');
+
+    // Markdown expand/collapse
+    const mdContent = el.querySelector('.td-markdown-content');
+    if (mdContent) {
+      const toggle = document.createElement('button');
+      toggle.className = 'td-markdown-toggle';
+      toggle.textContent = '▾ Expand';
+      toggle.onclick = () => {
+        mdContent.classList.toggle('expanded');
+        toggle.textContent = mdContent.classList.contains('expanded') ? '▴ Collapse' : '▾ Expand';
+      };
+      el.querySelector('.td-deliverable-info').insertBefore(toggle, mdContent.nextSibling);
+    }
+
     // Delete handler
     el.querySelector('.td-deliverable-delete').onclick = async (e) => {
       e.stopPropagation();
