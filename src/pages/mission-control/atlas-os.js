@@ -384,18 +384,19 @@ async function fetchInbox() {
 }
 
 async function fetchTradingData() {
-  const [regime, plays, portfolio, positions, brief, regimeHistory, widgets] = await Promise.all([
+  const [regime, plays, portfolio, positions, closedPositions, brief, regimeHistory, widgets] = await Promise.all([
     apiFetch('/regime'),
     apiFetch('/plays'),
     apiFetch('/portfolio'),
     apiFetch('/positions?status=open'),
+    apiFetch('/positions?status=closed'),
     apiFetch('/briefs/latest'),
     apiFetch('/regime/history'),
     apiFetch('/widgets'),
   ]);
 
   if (regime || plays || portfolio) {
-    renderTradingDesk(regime, plays, portfolio, positions, brief, regimeHistory, widgets);
+    renderTradingDesk(regime, plays, portfolio, positions, closedPositions, brief, regimeHistory, widgets);
   }
 }
 
@@ -2150,7 +2151,7 @@ async function fetchLivePrices(tickers) {
   } catch { return {}; }
 }
 
-function renderTradingDesk(regime, plays, portfolio, positions, brief, regimeHistory, widgets) {
+function renderTradingDesk(regime, plays, portfolio, positions, closedPositions, brief, regimeHistory, widgets) {
   const container = document.getElementById('tradingMain');
   if (!container) return;
 
@@ -2197,6 +2198,7 @@ function renderTradingDesk(regime, plays, portfolio, positions, brief, regimeHis
     <details class="td-collapsible">
       <summary class="td-collapsible-toggle">More ▸</summary>
       <div class="td-collapsible-content">
+        ${buildTradeHistory(Array.isArray(closedPositions) ? closedPositions : [])}
         <div class="td-widget-row">
           ${buildSectorHeatmap(widgets?.sectors)}
           ${buildCalendarWidget(widgets?.econ_calendar, widgets?.earnings)}
@@ -2703,10 +2705,11 @@ function buildOptionPlays(plays, openPositions) {
     const short   = pos.direction === 'short' ? -1 : 1;
 
     // Prefer API-supplied P&L if present, otherwise compute
+    const costBasis = entry * qty * 100;
     const pnl    = pos.current_pnl != null
       ? pos.current_pnl
       : (current - entry) * qty * 100 * short;
-    const pnlPct = entry > 0 ? ((current / entry - 1) * 100 * short) : 0;
+    const pnlPct = costBasis > 0 ? (pnl / costBasis * 100) : 0;
     const pnlColor = pnl >= 0 ? 'var(--sig-green, #22c55e)' : 'var(--sig-red, #ef4444)';
 
     const entryDisplay   = entry   > 0 ? `$${entry.toFixed(2)}`   : '—';
@@ -2867,6 +2870,60 @@ function buildFearGreedGauge(data) {
       </svg>
       <div class="td-fg-score" style="color:${color}">${score}</div>
       <div class="td-fg-label">${escapeHTML(label)}</div>
+    </div>
+  `;
+}
+
+// ─── Trading Desk: Trade History (Closed Positions) ───
+function buildTradeHistory(closedPositions) {
+  if (!closedPositions || closedPositions.length === 0) return '';
+
+  const MONO = "font-family:var(--font-mono,'JetBrains Mono',monospace)";
+
+  // Sort by exit_date descending (most recent first)
+  const sorted = [...closedPositions].sort((a, b) =>
+    new Date(b.exit_date || 0) - new Date(a.exit_date || 0)
+  );
+
+  const rows = sorted.map(pos => {
+    const ticker = pos.ticker || '—';
+    const vehicle = pos.vehicle || 'shares';
+    const typeLabel = vehicle === 'shares' ? 'STK' : vehicle === 'spread' ? 'SPD' : (vehicle === 'calls' ? 'C' : 'P');
+    const strike = pos.strike ? `$${pos.strike}` : '';
+    const entry = pos.entry_price || 0;
+    const exit = pos.exit_price || 0;
+    const pnl = pos.pnl || 0;
+    const costBasis = vehicle === 'shares'
+      ? entry * (pos.quantity || 0)
+      : entry * (pos.quantity || 0) * 100;
+    const pnlPct = costBasis > 0 ? (pnl / costBasis * 100) : 0;
+    const pnlColor = pnl >= 0 ? 'var(--sig-green, #22c55e)' : 'var(--sig-red, #ef4444)';
+    const icon = pnl >= 0 ? '✅' : '❌';
+    const exitDate = pos.exit_date ? new Date(pos.exit_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
+    const reason = (pos.notes || '').replace('Dealer auto-close: ', '').replace(/_/g, ' ');
+
+    return `
+      <div class="td-option-row" style="border-left:2px solid ${pnlColor}">
+        <span style="width:20px">${icon}</span>
+        <span class="td-option-ticker">${escapeHTML(ticker)}</span>
+        <span class="td-option-strike">${strike}${typeLabel}</span>
+        <span style="color:var(--os-text-muted);font-size:0.7rem;min-width:50px">${exitDate}</span>
+        <span style="${MONO};min-width:50px">$${entry.toFixed(2)}</span>
+        <span style="color:var(--os-text-muted);min-width:15px">→</span>
+        <span style="${MONO};min-width:50px">$${exit.toFixed(2)}</span>
+        <span class="td-option-pnl" style="color:${pnlColor};${MONO}">${pnl >= 0 ? '+' : '-'}$${Math.abs(pnl).toFixed(0)} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(0)}%)</span>
+        <span style="color:var(--os-text-muted);font-size:0.65rem">${escapeHTML(reason)}</span>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="td-section" style="margin-top:12px">
+      <div class="td-section-header">
+        <span class="td-section-title">📜 Trade History</span>
+        <span class="td-section-count">${sorted.length}</span>
+      </div>
+      <div class="td-option-list">${rows}</div>
     </div>
   `;
 }
