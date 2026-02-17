@@ -493,7 +493,7 @@
 
 <script>
 const DATA_URL = 'data.json';
-const STATUS_ORDER = ['booked', 'pickup', 'departed', 'in-transit', 'arrived', 'customs', 'delivered'];
+const STATUS_ORDER = ['booked', 'pickup', 'in-transit', 'departed', 'in-flight', 'arrived', 'customs', 'delivered'];
 const AIRPORT_CITIES = {
   'RO': 'Grants Pass, OR', 'MFR': 'Medford, OR', 'SFO': 'San Francisco', 'ZRH': 'Zürich',
   'PDX': 'Portland, OR', 'LAX': 'Los Angeles', 'JFK': 'New York',
@@ -508,8 +508,19 @@ function stepClass(current, step) {
   return '';
 }
 
-function progress(status) {
-  return { 'booked': 0, 'pickup': 10, 'departed': 30, 'in-transit': 60, 'arrived': 90, 'customs': 95, 'delivered': 100 }[status] || 0;
+// leg1 = ground (RO→SFO), leg2 = air (SFO→ZRH)
+function progressLegs(status, leg) {
+  const legs = {
+    'booked':     { leg1: 0,   leg2: 0 },
+    'pickup':     { leg1: 20,  leg2: 0 },
+    'in-transit': { leg1: 60,  leg2: 0 },   // ground transit
+    'departed':   { leg1: 100, leg2: 20 },   // flight departed
+    'in-flight':  { leg1: 100, leg2: 60 },   // airborne
+    'arrived':    { leg1: 100, leg2: 100 },
+    'customs':    { leg1: 100, leg2: 100 },
+    'delivered':  { leg1: 100, leg2: 100 },
+  };
+  return (legs[status] || { leg1: 0, leg2: 0 })[leg];
 }
 
 function fmtAWB(awb) {
@@ -534,8 +545,8 @@ function countdown(flightDate) {
 
 function renderCard(s) {
   const st = s.status || 'booked';
-  const pct = progress(st);
-  const pct2 = Math.max(0, pct > 50 ? (pct - 50) * 2 : 0);
+  const pct = progressLegs(st, 'leg1');
+  const pct2 = progressLegs(st, 'leg2');
   const hubHtml = s.hub ? `
     <div class="route-point">
       <div class="route-code">${s.hub}</div>
@@ -544,14 +555,14 @@ function renderCard(s) {
     </div>
     <div class="route-connector">
       <div class="route-connector-fill" style="width:${pct2}%"></div>
-      <div class="transport-icon" style="left:${pct2}%">✈️</div>
+      <div class="transport-icon" style="left:${pct2}%;${pct2===0?'opacity:0.2':''}">✈️</div>
       <div class="leg-label">${s.flight||'Air'}</div>
     </div>` : '';
 
   const originDot = st !== 'booked' ? 'completed' : 'active';
   const destDot = st === 'delivered' ? 'completed' : (st === 'arrived' || st === 'customs') ? 'active' : '';
-  const steps = ['booked','pickup','departed','in-transit','arrived','customs','delivered'];
-  const stepLabels = ['Booked','Pickup','Departed','In Transit','Arrived','Customs','Delivered'];
+  const steps = ['booked','pickup','in-transit','departed','in-flight','arrived','customs','delivered'];
+  const stepLabels = ['Booked','Pickup','Ground','Departed','In Flight','Arrived','Customs','Delivered'];
 
   const now = new Date();
   const updated = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' + 
