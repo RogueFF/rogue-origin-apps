@@ -142,3 +142,58 @@ CREATE TABLE IF NOT EXISTS trade_plays (
 
 CREATE INDEX IF NOT EXISTS idx_plays_created ON trade_plays(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_plays_ticker ON trade_plays(ticker);
+
+-- Tasks — dispatch/project tracking
+CREATE TABLE IF NOT EXISTS tasks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  description TEXT,
+  status TEXT DEFAULT 'backlog',      -- 'backlog' | 'active' | 'review' | 'done' | 'blocked'
+  priority TEXT DEFAULT 'medium',     -- 'critical' | 'high' | 'medium' | 'low'
+  assigned_agent TEXT,
+  domain TEXT,
+  parent_id INTEGER,
+  clickup_id TEXT,
+  clickup_list_id TEXT,
+  session_url TEXT,                   -- dispatch session viewer deep-link
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  completed_at DATETIME
+);
+
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+CREATE INDEX IF NOT EXISTS idx_tasks_agent ON tasks(assigned_agent);
+CREATE INDEX IF NOT EXISTS idx_tasks_clickup ON tasks(clickup_id);
+
+-- Task comments
+CREATE TABLE IF NOT EXISTS task_comments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id INTEGER NOT NULL,
+  author TEXT,
+  body TEXT,
+  comment_type TEXT DEFAULT 'comment',  -- 'comment' | 'insight' | 'status_update'
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_comments_task ON task_comments(task_id);
+
+-- Task deliverables — screenshots, markdown, links, files
+CREATE TABLE IF NOT EXISTS task_deliverables (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  url TEXT,
+  content TEXT,
+  deliverable_type TEXT DEFAULT 'link', -- 'link' | 'note' | 'screenshot' | 'code' | 'file' | 'markdown'
+  author TEXT DEFAULT 'atlas',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_deliverables_task ON task_deliverables(task_id);
+
+-- Widgets — cached KV data for dashboard
+CREATE TABLE IF NOT EXISTS widgets (
+  key TEXT PRIMARY KEY,
+  value TEXT,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
