@@ -9,8 +9,8 @@
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
 
   <!-- Non-critical CSS: Deferred for faster initial render -->
-  <link rel="preload" href="../css/hourly-entry.css?v=51" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link rel="stylesheet" href="../css/hourly-entry.css?v=51"></noscript>
+  <link rel="preload" href="../css/hourly-entry.css?v=52" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/hourly-entry.css?v=52"></noscript>
 </head>
 <body>
   <a href="#timeline-list" class="skip-link">Skip to timeline</a>
@@ -255,17 +255,18 @@
         </div>
       </div>
 
-      <!-- CARD 2: Barcode (25%) -->
+      <!-- CARD 2: Inventory (25%) -->
       <div class="dashboard-card card-barcode">
         <div class="card-header">
           <div class="barcode-tabs">
-            <button type="button" class="barcode-tab active" data-tab="printer" data-i18n="printer">Printer</button>
-            <button type="button" class="barcode-tab" data-tab="scanner" data-i18n="inventory">Inventory</button>
+            <!-- Printer tab hidden — barcodes deprecated, using pools now -->
+            <button type="button" class="barcode-tab" data-tab="printer" data-i18n="printer" style="display: none;">Printer</button>
+            <button type="button" class="barcode-tab active" data-tab="scanner" data-i18n="inventory">Inventory</button>
           </div>
         </div>
         <div class="card-content">
-          <!-- Printer Tab -->
-          <div class="barcode-tab-content" id="tab-printer">
+          <!-- Printer Tab (hidden — kept for rollback) -->
+          <div class="barcode-tab-content hidden" id="tab-printer">
             <div class="barcode-controls">
               <label class="barcode-label" data-i18n="strain">Strain</label>
               <!-- Custom dropdown for better styling -->
@@ -293,8 +294,14 @@
               <button type="button" class="barcode-btn btn-smalls" data-type="10lb-smalls" data-i18n="print10lbSmalls">10lb Smalls</button>
             </div>
           </div>
-          <!-- Scanner Tab -->
-          <div class="barcode-tab-content hidden" id="tab-scanner">
+          <!-- Inventory Tab (default) -->
+          <div class="barcode-tab-content" id="tab-scanner">
+            <!-- 5KG Bag Complete Button -->
+            <button type="button" class="bag-complete-btn" id="bag-complete-btn">
+              <span class="bag-btn-icon">📦</span>
+              <span class="bag-btn-text" id="bag-complete-text">5KG Bag Complete</span>
+            </button>
+
             <!-- Pool Type Toggle -->
             <div class="pool-type-toggle">
               <button type="button" class="pool-type-btn active" data-pool-type="smalls" data-i18n="smalls">Smalls</button>
@@ -518,6 +525,6 @@
     <button class="tooltip-close">×</button>
   </div>
 
-  <script type="module" src="../js/hourly-entry/index.js?v=65"></script>
+  <script type="module" src="../js/hourly-entry/index.js?v=66"></script>
 </body>
 </html>

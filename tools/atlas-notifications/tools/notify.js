@@ -17,7 +17,7 @@
  *   --category="..."
  */
 
-const DEFAULT_HOST = '100.65.60.42:9400';
+const DEFAULT_HOST = 'gablewindowed-ivelisse-latently.ngrok-free.dev';
 
 // ─── Argument Parser ────────────────────────────────────────────────
 
