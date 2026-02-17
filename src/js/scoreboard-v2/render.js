@@ -101,9 +101,13 @@
       document.body.classList.remove('ahead', 'on-target', 'behind', 'idle');
       document.body.classList.add(status);
 
-      // Update status display
+      // Update status display — override to COMPLETE when shift ended
+      if (shiftEnded) {
+        statusIcon = '✓';
+        statusKey = 'shiftComplete';
+      }
       var _el = safeGetEl('statusIcon'); if (_el) _el.textContent = statusIcon;
-      var _el = safeGetEl('statusText'); if (_el) _el.textContent = t(statusKey);
+      var _el = safeGetEl('statusText'); if (_el) _el.textContent = shiftEnded ? 'COMPLETE' : t(statusKey);
 
       // Last hour card
       var _el = safeGetEl('lastHourLbs'); if (_el) _el.textContent = lastHourLbs > 0 ? lastHourLbs.toFixed(1) : '—';
@@ -312,6 +316,52 @@
         sri.innerHTML = `<span style="font-size:12px;color:rgba(228,170,79,0.9)">${t('fallbackRate')}</span>`;
       } else {
         sri.innerHTML = '';
+      }
+
+      // Shift summary card — populate when shift ended
+      if (shiftEnded) {
+        const summaryEl = safeGetEl('shiftSummary');
+        if (summaryEl) {
+          summaryEl.style.display = 'flex';
+
+          var _el = safeGetEl('summaryTotalLbs');
+          if (_el) _el.textContent = todayLbs.toFixed(1);
+
+          var _el = safeGetEl('summaryPctTarget');
+          if (_el) {
+            const pct = todayTarget > 0 ? Math.round((todayLbs / todayTarget) * 100) : 0;
+            _el.textContent = pct + '%';
+            _el.style.color = pct >= 100 ? 'var(--green)' : pct >= 90 ? 'var(--yellow)' : 'var(--red)';
+          }
+
+          // Best hour from hourly rates
+          var _el = safeGetEl('summaryBestHour');
+          if (_el && data.hourlyRates && data.hourlyRates.length > 0) {
+            const best = data.hourlyRates.reduce(function(a, b) { return (b.rate || 0) > (a.rate || 0) ? b : a; });
+            _el.textContent = best.rate ? best.rate.toFixed(2) : '—';
+          }
+
+          // Bags — read from timer state or DOM
+          var _el = safeGetEl('summaryBags');
+          if (_el) {
+            const bagsEl = safeGetEl('bagsToday');
+            _el.textContent = bagsEl ? bagsEl.textContent : '—';
+          }
+
+          // Avg cycle — read from DOM
+          var _el = safeGetEl('summaryAvgCycle');
+          if (_el) {
+            const avgEl = safeGetEl('avgToday');
+            _el.textContent = avgEl ? avgEl.textContent : '—';
+          }
+
+          // Hours worked
+          var _el = safeGetEl('summaryHours');
+          if (_el) _el.textContent = effectiveHours.toFixed(1);
+        }
+      } else {
+        const summaryEl = safeGetEl('shiftSummary');
+        if (summaryEl) summaryEl.style.display = 'none';
       }
     },
 
