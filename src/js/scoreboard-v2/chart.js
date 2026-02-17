@@ -105,9 +105,10 @@
 
       const ctx = document.getElementById('hourlyChart').getContext('2d');
 
-      // Register datalabels plugin
-      if (typeof ChartDataLabels !== 'undefined') {
+      // Register datalabels plugin (once)
+      if (typeof ChartDataLabels !== 'undefined' && !window._chartDataLabelsRegistered) {
         Chart.register(ChartDataLabels);
+        window._chartDataLabelsRegistered = true;
       }
 
       const newChart = new Chart(ctx, {
