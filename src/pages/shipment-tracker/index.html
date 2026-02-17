@@ -321,6 +321,7 @@
   .sensor-icon.temp { background: rgba(251,113,133,0.12); }
   .sensor-icon.humidity { background: rgba(56,189,248,0.12); }
   .sensor-icon.location { background: rgba(0,198,167,0.12); }
+  .sensor-icon.battery { background: rgba(74,222,128,0.12); }
 
   .sensor-value {
     font-family: 'JetBrains Mono', monospace;
@@ -576,7 +577,7 @@ function renderCard(s) {
         </div>
         <div class="route-connector">
           <div class="route-connector-fill" style="width:${pct}%"></div>
-          <div class="transport-icon" style="left:${pct}%">🚚</div>
+          <div class="transport-icon" style="left:${pct}%;display:inline-block;transform:translate(-50%,-50%) scaleX(-1)">🚚</div>
           <div class="leg-label">Ground</div>
         </div>
         ${hubHtml}
@@ -622,6 +623,10 @@ function renderCard(s) {
       <div class="sensor-item">
         <div class="sensor-icon location">📍</div>
         <div><div class="sensor-value">${s.sensorData?.location||'Awaiting'}</div><div class="sensor-label-text">Last Loc</div></div>
+      </div>
+      <div class="sensor-item">
+        <div class="sensor-icon battery">🔋</div>
+        <div><div class="sensor-value">${s.sensorData?.battery||'—'}</div><div class="sensor-label-text">Battery</div></div>
       </div>
     </div>
 
