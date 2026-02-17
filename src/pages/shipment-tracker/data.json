@@ -11,8 +11,17 @@
       "hub": "SFO",
       "finalDest": "ZRH",
       "tiveUrl": "https://platform.tive.com/shared/shipment/df75dbe01b1d42fd83df83df9e68ac7c",
-      "status": "booked",
-      "lastUpdate": null,
+      "status": "in-transit",
+      "eta": "Feb 19, 3:30 PM CET",
+      "weight": "—",
+      "sensorData": {
+        "temp": "63.5°F",
+        "humidity": "22.9%",
+        "location": "Mt Shasta, CA",
+        "light": "0.0 lux",
+        "battery": "87%"
+      },
+      "lastUpdate": "2026-02-17T23:22:18Z",
       "created": "2026-02-17T20:00:00Z"
     }
   ]
