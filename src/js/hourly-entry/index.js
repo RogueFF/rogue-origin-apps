@@ -2431,6 +2431,55 @@ async function initScannerTab() {
   initRefreshPoolButton();
   initPoolUpdateButton();
   initRecentChanges();
+  initBagCompleteButton();
+}
+
+/**
+ * Initialize the 5KG Bag Complete button (replaces barcode scanning)
+ */
+function initBagCompleteButton() {
+  const btn = document.getElementById('bag-complete-btn');
+  const btnText = document.getElementById('bag-complete-text');
+  if (!btn) return;
+
+  registerListener(btn, 'click', async () => {
+    if (btn.disabled) return;
+
+    btn.disabled = true;
+    const originalText = btnText.textContent;
+    btnText.textContent = 'Logging...';
+
+    try {
+      const response = await fetch(`${API_URL}?action=logBag`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ size: '5 kg.' })
+      });
+
+      if (!response.ok) throw new Error('Failed to log bag');
+
+      btnText.textContent = '✓ Logged!';
+      btn.classList.add('success');
+
+      // Reset timer display immediately
+      if (typeof loadBagTimer === 'function') {
+        loadBagTimer();
+      }
+
+      setTimeout(() => {
+        btnText.textContent = originalText;
+        btn.classList.remove('success');
+        btn.disabled = false;
+      }, 2000);
+    } catch (error) {
+      console.error('Error logging bag:', error);
+      btnText.textContent = '✗ Failed — tap to retry';
+      setTimeout(() => {
+        btnText.textContent = originalText;
+        btn.disabled = false;
+      }, 3000);
+    }
+  });
 }
 
 /**
