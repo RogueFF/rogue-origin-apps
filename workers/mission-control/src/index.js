@@ -910,7 +910,7 @@ const handlers = {
       return err(`Invalid priority. Must be: ${validPriorities.join(', ')}`, 'VALIDATION_ERROR', 400);
     }
 
-    const allowed = ['title', 'description', 'status', 'priority', 'assigned_agent', 'domain', 'parent_id'];
+    const allowed = ['title', 'description', 'status', 'priority', 'assigned_agent', 'domain', 'parent_id', 'session_url'];
     const sets = [];
     const vals = [];
     for (const key of allowed) {

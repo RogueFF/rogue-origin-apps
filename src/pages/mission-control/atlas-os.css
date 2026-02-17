@@ -3010,6 +3010,299 @@ input {
   border-color: rgba(52, 211, 153, 0.35);
 }
 
+/* ── Session badges (shared dot animation) ── */
+@keyframes livePulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 4px currentColor; }
+  50% { opacity: 0.4; box-shadow: 0 0 8px currentColor; }
+}
+
+.session-live-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sig-danger);
+  margin-right: 4px;
+  animation: livePulse 1.4s ease-in-out infinite;
+  vertical-align: middle;
+}
+
+/* ── Detail panel session badge ── */
+.td-session-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  transition: all var(--duration-fast);
+}
+
+.td-session-live {
+  color: var(--sig-danger);
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+}
+
+.td-session-live:hover {
+  background: rgba(248, 113, 113, 0.2);
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+.td-session-replay {
+  color: var(--os-text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--os-border);
+}
+
+.td-session-replay:hover {
+  color: var(--os-text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ── List view session badge ── */
+.tl-session-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 2px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  transition: all var(--duration-fast);
+}
+
+.tl-session-live {
+  color: var(--sig-danger);
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.2);
+}
+
+.tl-session-live:hover {
+  background: rgba(248, 113, 113, 0.22);
+}
+
+.tl-session-replay {
+  color: var(--os-text-muted);
+  background: none;
+  border: 1px solid transparent;
+  font-size: 10px;
+}
+
+.tl-session-replay:hover {
+  color: var(--os-text-secondary);
+}
+
+/* ── Board card session badge ── */
+.task-card-session {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  border-radius: 2px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin: 0 var(--sp-8) var(--sp-4);
+  transition: all var(--duration-fast);
+}
+
+.task-card-session-live {
+  color: var(--sig-danger);
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.2);
+}
+
+.task-card-session-live:hover {
+  background: rgba(248, 113, 113, 0.2);
+}
+
+.task-card-session-replay {
+  color: var(--os-text-muted);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--os-border);
+}
+
+.task-card-session-replay:hover {
+  color: var(--os-text-secondary);
+}
+
+/* ── Screenshot deliverables ── */
+.td-deliverable-screenshot {
+  flex-direction: column;
+}
+
+.td-screenshot-wrap {
+  position: relative;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid var(--os-border);
+  max-width: 280px;
+  margin-top: var(--sp-4);
+  transition: max-width var(--duration-normal), border-color var(--duration-fast);
+}
+
+.td-screenshot-wrap:hover {
+  border-color: var(--os-border-strong);
+}
+
+.td-screenshot-wrap.td-screenshot-expanded {
+  max-width: 100%;
+}
+
+.td-screenshot-thumb {
+  width: 100%;
+  height: auto;
+  display: block;
+  opacity: 0.9;
+  transition: opacity var(--duration-fast);
+}
+
+.td-screenshot-wrap:hover .td-screenshot-thumb {
+  opacity: 1;
+}
+
+.td-screenshot-overlay {
+  position: absolute;
+  top: var(--sp-4);
+  right: var(--sp-4);
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--os-text);
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity var(--duration-fast);
+  pointer-events: none;
+}
+
+.td-screenshot-wrap:hover .td-screenshot-overlay {
+  opacity: 1;
+}
+
+/* ── Markdown deliverables ── */
+.td-deliverable-markdown .td-markdown-content {
+  margin-top: var(--sp-6);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--os-text-secondary);
+  max-height: 120px;
+  overflow: hidden;
+  transition: max-height var(--duration-normal);
+  padding: var(--sp-8);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--os-border);
+  border-radius: var(--r-sm);
+}
+
+.td-markdown-content.expanded {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.td-markdown-content .md-h2 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--os-text);
+  margin: var(--sp-8) 0 var(--sp-4);
+  font-family: var(--font-mono);
+}
+
+.td-markdown-content .md-h3 {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--os-text);
+  margin: var(--sp-6) 0 var(--sp-2);
+  font-family: var(--font-mono);
+}
+
+.td-markdown-content .md-h4 {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--os-text);
+  margin: var(--sp-4) 0 var(--sp-2);
+  font-family: var(--font-mono);
+}
+
+.td-markdown-content .md-p {
+  margin: 0 0 var(--sp-4);
+}
+
+.td-markdown-content .md-ul {
+  list-style: none;
+  padding: 0;
+  margin: var(--sp-4) 0;
+}
+
+.td-markdown-content .md-li {
+  padding-left: 12px;
+  position: relative;
+  margin-bottom: var(--sp-2);
+}
+
+.td-markdown-content .md-li::before {
+  content: '▸';
+  position: absolute;
+  left: 0;
+  color: var(--sig-active);
+  font-size: 10px;
+}
+
+.td-markdown-content .md-code {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 4px;
+  border-radius: 2px;
+  color: var(--sig-active);
+}
+
+.td-markdown-content strong {
+  color: var(--os-text);
+  font-weight: 600;
+}
+
+.td-markdown-content em {
+  font-style: italic;
+  color: var(--os-text-secondary);
+}
+
+.td-markdown-toggle {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--sig-active);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--sp-2) 0;
+  opacity: 0.7;
+  transition: opacity var(--duration-fast);
+}
+
+.td-markdown-toggle:hover {
+  opacity: 1;
+}
+
 /* ── Log tab ── */
 .td-log-list {
   padding: var(--sp-12);
