@@ -67,6 +67,9 @@ const state = {
   connected: true,
 };
 
+// ─── Option Position DD Panel Data Store ───
+const optPosDataMap = new Map();
+
 // ─── Window Definitions ───
 // Default positions/sizes are computed dynamically to fill viewport
 const WINDOW_DEFS = {
@@ -2208,7 +2211,58 @@ function renderTradingDesk(regime, plays, portfolio, positions, closedPositions,
     ${briefData ? buildStructuredBrief(briefData) : (briefRaw ? buildBriefSection(briefRaw) : '')}
   `;
 
-  container.innerHTML = html;
+  // Skip re-render if content hasn't meaningfully changed (prevents blink)
+  if (!container._lastHtml) {
+    container.innerHTML = html;
+  } else if (container._lastHtml !== html) {
+    // Selective update: find sections that changed and only replace those
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    const oldSections = container.querySelectorAll('.td-portfolio, .td-section, .td-collapsible, .trading-status-bar, .regime-banner, .regime-strip, .td-brief');
+    const newSections = temp.querySelectorAll('.td-portfolio, .td-section, .td-collapsible, .trading-status-bar, .regime-banner, .regime-strip, .td-brief');
+    let didPartialUpdate = false;
+    if (oldSections.length === newSections.length && oldSections.length > 0) {
+      didPartialUpdate = true;
+      for (let i = 0; i < oldSections.length; i++) {
+        if (oldSections[i].innerHTML !== newSections[i].innerHTML) {
+          oldSections[i].innerHTML = newSections[i].innerHTML;
+        }
+      }
+    }
+    if (!didPartialUpdate) {
+      container.innerHTML = html;
+    }
+  }
+  container._lastHtml = html;
+
+  // ── Option DD panel — click-to-expand event delegation ──
+  // Only attach once — use a flag to prevent duplicate listeners
+  if (!container._ddListenerAttached) {
+  container._ddListenerAttached = true;
+  container.addEventListener('click', (e) => {
+    const row = e.target.closest('.td-option-pos-row');
+    if (!row) return;
+    const posId = row.dataset.posId;
+    if (!posId) return;
+    const panel = document.getElementById('dd-' + posId);
+    if (!panel) return;
+
+    const isOpen = panel.classList.contains('dd-open');
+
+    // Close any open panels
+    container.querySelectorAll('.td-option-dd-panel.dd-open').forEach(p => {
+      p.classList.remove('dd-open');
+    });
+    container.querySelectorAll('.td-option-pos-row.dd-active').forEach(r => {
+      r.classList.remove('dd-active');
+    });
+
+    if (!isOpen) {
+      panel.classList.add('dd-open');
+      row.classList.add('dd-active');
+    }
+  });
+  } // end _ddListenerAttached guard
 
   // Fetch live prices and update stock picks
   const stockTickers = stockPlays.map(p => p.ticker).filter(t => t && t !== '—');
@@ -2652,6 +2706,218 @@ function buildStockPicks(plays, suppressed, sparklines, positions) {
   `;
 }
 
+// ─── Trading Desk: Option DD Panel CSS (injected once) ───
+(function injectOptionDDStyles() {
+  if (document.getElementById('opt-dd-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'opt-dd-styles';
+  style.textContent = `
+    .td-option-pos-row { cursor: pointer; transition: background 0.15s; }
+    .td-option-pos-row:hover { background: rgba(168,85,247,0.08) !important; }
+    .td-option-pos-row.dd-active { background: rgba(168,85,247,0.1) !important; border-left-color: #a855f7 !important; }
+
+    .td-option-dd-panel {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s cubic-bezier(0.4,0,0.2,1);
+    }
+    .td-option-dd-panel.dd-open {
+      max-height: 600px;
+    }
+
+    .dd-inner {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(168,85,247,0.15);
+      border-top: none;
+      border-radius: 0 0 6px 6px;
+      padding: 10px 12px 12px;
+      font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    }
+
+    .dd-thesis {
+      font-size: 0.78rem;
+      color: rgba(255,255,255,0.9);
+      line-height: 1.5;
+      margin-bottom: 10px;
+      padding: 8px 10px;
+      background: rgba(168,85,247,0.08);
+      border-left: 2px solid #a855f7;
+      border-radius: 0 4px 4px 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-weight: 400;
+    }
+
+    .dd-rr-section { margin-bottom: 10px; }
+
+    .dd-rr-track {
+      position: relative;
+      height: 8px;
+      border-radius: 4px;
+      overflow: visible;
+      margin: 6px 0 4px;
+    }
+    .dd-rr-fill {
+      position: absolute;
+      inset: 0;
+      border-radius: 4px;
+    }
+    .dd-rr-marker {
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 3px;
+      height: 14px;
+      background: #fff;
+      border-radius: 2px;
+      box-shadow: 0 0 4px rgba(0,0,0,0.8);
+    }
+    .dd-rr-marker-label {
+      position: absolute;
+      top: -18px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.56rem;
+      color: #fff;
+      white-space: nowrap;
+      background: rgba(0,0,0,0.7);
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    }
+    .dd-rr-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.58rem;
+      opacity: 0.85;
+      margin-top: 6px;
+    }
+
+    .dd-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+      gap: 6px 10px;
+    }
+    .dd-cell {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .dd-label {
+      font-size: 0.55rem;
+      color: rgba(255,255,255,0.35);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .dd-val {
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.85);
+      font-weight: 600;
+    }
+  `;
+  document.head.appendChild(style);
+})();
+
+// ─── Trading Desk: Option DD Panel Content Builder ───
+function buildOptionDDPanel(pos) {
+  const MONO = "font-family:var(--font-mono,'JetBrains Mono',monospace)";
+
+  // Extract thesis from pos.notes
+  // Format: "strike/spread expiry xQty. [THESIS TEXT]"
+  const notesRaw = pos.notes || '';
+  const sepIdx = notesRaw.indexOf('. ');
+  const thesis = sepIdx > -1 ? notesRaw.slice(sepIdx + 2).trim() : notesRaw.trim();
+
+  const entry   = pos.entry_price   || 0;
+  const current = pos.current_price || entry;
+  const qty     = pos.quantity      || 0;
+  const short   = pos.direction === 'short' ? -1 : 1;
+  const stop    = pos.stop_loss    || 0;
+  const target  = pos.target_price || 0;
+
+  // P&L
+  const costBasis    = entry * qty * 100;
+  const currentValue = current * qty * 100;
+  const pnl    = pos.current_pnl != null
+    ? pos.current_pnl
+    : (current - entry) * qty * 100 * short;
+  const pnlPct = costBasis > 0 ? (pnl / costBasis * 100) : 0;
+  const pnlColor = pnl >= 0 ? '#22c55e' : '#ef4444';
+
+  // DTE
+  const expiry = pos.expiry || '';
+  let dteDisplay = '';
+  if (expiry) {
+    const now = new Date();
+    const exp = new Date(expiry + 'T16:00:00');
+    const dteNum = Math.max(0, Math.ceil((exp - now) / (1000 * 60 * 60 * 24)));
+    dteDisplay = dteNum + 'd';
+  }
+
+  // Entry date
+  const rawDate = pos.entry_date || pos.created_at || '';
+  const entryDateDisplay = rawDate
+    ? new Date(rawDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : '—';
+
+  // Risk/Reward bar
+  let rrBarHTML = '';
+  if (stop > 0 && target > 0 && entry > 0) {
+    const low  = Math.min(stop, entry, current, target);
+    const high = Math.max(stop, entry, current, target);
+    const range = high - low || 1;
+    const pct = v => (((v - low) / range) * 100).toFixed(1);
+    const stopP    = pct(stop);
+    const entryP   = pct(entry);
+    const currentP = Math.min(100, Math.max(0, parseFloat(pct(current))));
+    const targetP  = pct(target);
+
+    rrBarHTML = `
+      <div class="dd-rr-section">
+        <div class="dd-label">RISK / REWARD</div>
+        <div class="dd-rr-track">
+          <div class="dd-rr-fill" style="background:linear-gradient(to right,#ef4444 0%,#ef4444 ${stopP}%,#eab308 ${stopP}%,#eab308 ${entryP}%,#22c55e ${entryP}%,#22c55e 100%)"></div>
+          <div class="dd-rr-marker" style="left:${currentP}%">
+            <div class="dd-rr-marker-label">$${current.toFixed(2)}</div>
+          </div>
+        </div>
+        <div class="dd-rr-labels">
+          <span style="color:#ef4444">Stop $${stop.toFixed(2)}</span>
+          <span style="color:#eab308">Entry $${entry.toFixed(2)}</span>
+          <span style="color:#22c55e">Target $${target.toFixed(2)}</span>
+        </div>
+      </div>`;
+  }
+
+  const vehicle   = (pos.vehicle   || 'calls').toUpperCase();
+  const direction = (pos.direction || 'long').toUpperCase();
+
+  // Grid cells — only include meaningful ones
+  const cells = [
+    { label: 'ENTRY',      val: entry   > 0 ? `$${entry.toFixed(2)}`   : '—' },
+    { label: 'MARK',       val: current > 0 ? `$${current.toFixed(2)}` : '—' },
+    ...(stop   > 0 ? [{ label: 'STOP',   val: `$${stop.toFixed(2)}`,   color: '#ef4444' }] : []),
+    ...(target > 0 ? [{ label: 'TARGET', val: `$${target.toFixed(2)}`, color: '#22c55e' }] : []),
+    { label: 'COST BASIS', val: costBasis > 0 ? `$${costBasis.toFixed(0)}` : '—' },
+    { label: 'CURR VALUE', val: currentValue > 0 ? `$${currentValue.toFixed(0)}` : '—' },
+    { label: 'UNREALIZED', val: `${pnl >= 0 ? '+' : ''}$${Math.abs(pnl).toFixed(0)} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%)`, color: pnlColor },
+    { label: 'DIRECTION',  val: direction },
+    { label: 'TYPE',       val: vehicle },
+    { label: 'CONTRACTS',  val: qty + 'x' },
+    ...(dteDisplay ? [{ label: 'DTE', val: dteDisplay }] : []),
+    { label: 'ENTERED',    val: entryDateDisplay },
+  ];
+
+  const gridHTML = cells.map(c =>
+    `<div class="dd-cell"><span class="dd-label">${c.label}</span><span class="dd-val"${c.color ? ` style="color:${c.color}"` : ''}>${escapeHTML(String(c.val))}</span></div>`
+  ).join('');
+
+  return `<div class="dd-inner">
+    ${thesis ? `<div class="dd-thesis">${escapeHTML(thesis)}</div>` : ''}
+    ${rrBarHTML}
+    <div class="dd-grid">${gridHTML}</div>
+  </div>`;
+}
+
 // ─── Trading Desk: Options (Positions + Pending Plays) ───
 function buildOptionPlays(plays, openPositions) {
   // Filter openPositions to options only
@@ -2690,7 +2956,7 @@ function buildOptionPlays(plays, openPositions) {
   const MONO = "font-family:var(--font-mono,'JetBrains Mono',monospace)";
 
   // ── Active position rows ─────────────────────────────────
-  const positionRows = optPositions.map(pos => {
+  const positionRows = optPositions.map((pos, idx) => {
     const ticker  = pos.ticker || '—';
     const vehicle = pos.vehicle || 'calls';
     const isCall  = vehicle === 'calls';
@@ -2718,8 +2984,13 @@ function buildOptionPlays(plays, openPositions) {
       ? 'no data'
       : `${pnl >= 0 ? '+' : '-'}$${Math.abs(pnl).toFixed(0)} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%)`;
 
+    // DD panel setup
+    const posId = `optpos-${(ticker).toLowerCase().replace(/[^a-z0-9]/g, '')}-${idx}`;
+    optPosDataMap.set(posId, pos);
+    const ddPanelHTML = buildOptionDDPanel(pos);
+
     return `
-      <div class="td-option-row td-option-pos-row" style="border-left:2px solid ${pnlColor}">
+      <div class="td-option-row td-option-pos-row" style="border-left:2px solid ${pnlColor}" data-pos-id="${posId}">
         <span class="td-option-ticker">${escapeHTML(ticker)}</span>
         <span class="td-option-strike">$${strike}${typeLabel}</span>
         <span class="td-option-expiry">${expiryShort}</span>
@@ -2729,6 +3000,7 @@ function buildOptionPlays(plays, openPositions) {
         <span class="td-option-pnl" style="color:${pnlColor};${MONO}">${pnlDisplay}</span>
         <span class="td-option-contracts" style="color:var(--os-text-muted)">${qty}x</span>
       </div>
+      <div class="td-option-dd-panel" id="dd-${posId}">${ddPanelHTML}</div>
     `;
   }).join('');
 
