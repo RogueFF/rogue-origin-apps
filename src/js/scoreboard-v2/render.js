@@ -92,8 +92,9 @@
       }
 
       // Detect shift-ended state: production happened but no current hour and no active timer
+      const _projTotal = data.projectedTotal || 0;
       const shiftEnded = todayLbs > 0 && currentHourTrimmers === 0 && !currentTimeSlot &&
-        hoursLogged > 0 && (projectedTotal <= 0 || Math.abs(projectedTotal - todayLbs) < 0.5);
+        hoursLogged > 0 && (_projTotal <= 0 || Math.abs(_projTotal - todayLbs) < 0.5);
       document.body.classList.toggle('shift-ended', shiftEnded);
 
       // Update status classes without overriding timer background
