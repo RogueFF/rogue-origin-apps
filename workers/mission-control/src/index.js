@@ -36,6 +36,7 @@
  */
 
 import { handleGitHub } from './github.js';
+import { dispatch } from './webhook.js';
 
 // ── CORS ────────────────────────────────────────────────────────────
 
@@ -297,7 +298,7 @@ const handlers = {
   },
 
   // POST /api/inbox — create inbox item
-  async inboxCreate(req, env) {
+  async inboxCreate(req, env, _params, ctx) {
     const db = env.DB;
     const body = await parseBody(req);
 
@@ -315,6 +316,12 @@ const handlers = {
       body.actions ? JSON.stringify(body.actions) : null,
       body.priority || 'normal'
     ).run();
+
+    // Webhook: notify atlas-notifications for urgent/high priority items
+    const prio = (body.priority || 'normal').toLowerCase();
+    if (ctx && (prio === 'urgent' || prio === 'high')) {
+      ctx.waitUntil(dispatch(env, 'alert', body));
+    }
 
     return json({
       success: true,
@@ -440,7 +447,7 @@ const handlers = {
   },
 
   // POST /api/briefs — create a brief
-  async briefsCreate(req, env) {
+  async briefsCreate(req, env, _params, ctx) {
     const db = env.DB;
     const body = await parseBody(req);
 
@@ -457,6 +464,9 @@ const handlers = {
       body.audio_url || null,
       body.action_items ? JSON.stringify(body.action_items) : null
     ).run();
+
+    // Webhook: notify atlas-notifications of new brief
+    if (ctx) ctx.waitUntil(dispatch(env, 'briefing', body));
 
     return json({
       success: true,
@@ -674,7 +684,7 @@ const handlers = {
   },
 
   // POST /api/regime — update regime signal
-  async regimeUpdate(req, env) {
+  async regimeUpdate(req, env, _params, ctx) {
     const db = env.DB;
     const body = await parseBody(req);
     if (!body.signal) return err('Missing required field: signal', 'VALIDATION_ERROR', 400);
@@ -689,6 +699,10 @@ const handlers = {
       JSON.stringify(body.reasoning || []),
       JSON.stringify(body.strategy || {})
     ).run();
+
+    // Webhook: notify atlas-notifications of regime change
+    if (ctx) ctx.waitUntil(dispatch(env, 'regime', body));
+
     return json({ success: true, data: { signal: body.signal } }, 201);
   },
 
@@ -750,7 +764,7 @@ const handlers = {
   },
 
   // POST /api/plays — create a trade setup/play
-  async playsCreate(req, env) {
+  async playsCreate(req, env, _params, ctx) {
     const db = env.DB;
     const body = await parseBody(req);
     if (!body.ticker) return err('Missing required field: ticker', 'VALIDATION_ERROR', 400);
@@ -766,6 +780,10 @@ const handlers = {
       body.risk_level || 'normal',
       body.source_agent || 'strategist'
     ).run();
+
+    // Webhook: notify atlas-notifications of new play
+    if (ctx) ctx.waitUntil(dispatch(env, 'play', body));
+
     return json({ success: true, data: { ticker: body.ticker } }, 201);
   },
 
@@ -1250,7 +1268,7 @@ export default {
 
       let response;
       if (route) {
-        response = await handlers[route.handler](request, env, route.params);
+        response = await handlers[route.handler](request, env, route.params, ctx);
       } else if (path === '/' || path === '/api') {
         response = await handlers.health();
       } else {
