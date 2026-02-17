@@ -195,7 +195,7 @@
     transition: width 1s ease;
   }
 
-  .plane-icon {
+  .transport-icon {
     position: absolute;
     top: 50%;
     transform: translate(-50%, -50%);
@@ -203,6 +203,19 @@
     filter: drop-shadow(0 0 6px rgba(14,165,233,0.5));
     z-index: 3;
     transition: left 1s ease;
+  }
+
+  .leg-label {
+    position: absolute;
+    bottom: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    color: #374151;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    white-space: nowrap;
   }
 
   .flight-label {
@@ -481,7 +494,7 @@
 const DATA_URL = 'data.json';
 const STATUS_ORDER = ['booked', 'pickup', 'departed', 'in-transit', 'arrived', 'customs', 'delivered'];
 const AIRPORT_CITIES = {
-  'MFR': 'Medford, OR', 'SFO': 'San Francisco', 'ZRH': 'Zürich',
+  'RO': 'Grants Pass, OR', 'MFR': 'Medford, OR', 'SFO': 'San Francisco', 'ZRH': 'Zürich',
   'PDX': 'Portland, OR', 'LAX': 'Los Angeles', 'JFK': 'New York',
   'FRA': 'Frankfurt', 'AMS': 'Amsterdam', 'PRG': 'Prague',
 };
@@ -530,6 +543,8 @@ function renderCard(s) {
     </div>
     <div class="route-connector">
       <div class="route-connector-fill" style="width:${pct2}%"></div>
+      <div class="transport-icon" style="left:${pct2}%">✈️</div>
+      <div class="leg-label">${s.flight||'Air'}</div>
     </div>` : '';
 
   const originDot = st !== 'booked' ? 'completed' : 'active';
@@ -561,7 +576,8 @@ function renderCard(s) {
         </div>
         <div class="route-connector">
           <div class="route-connector-fill" style="width:${pct}%"></div>
-          <div class="plane-icon" style="left:${pct}%">✈️</div>
+          <div class="transport-icon" style="left:${pct}%">🚚</div>
+          <div class="leg-label">Ground</div>
         </div>
         ${hubHtml}
         <div class="route-point">
