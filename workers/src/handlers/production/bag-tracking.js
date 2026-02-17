@@ -19,8 +19,8 @@ import {
 
 // Blacklist for test/accidental bag scans
 const BLACKLISTED_BAGS = [
-  // Add entries here if needed for specific test scans
-  // Example: { exact: new Date('2026-01-28T19:25:46Z'), tolerance: 2000 }
+  // Double-scan: 28 seconds after previous bag (2026-02-17)
+  { exact: new Date('2026-02-17T16:49:53Z'), tolerance: 5000 },
 ];
 
 function isBlacklistedBag(bagDate) {
@@ -192,7 +192,10 @@ async function getBagTimerData(env, date = null) {
       const rowDate = new Date(row.timestamp);
       if (isNaN(rowDate.getTime())) continue;
 
-      if (isBlacklistedBag(rowDate)) continue;
+      if (isBlacklistedBag(rowDate)) {
+        console.log(`Blacklisted bag skipped: ${row.timestamp}`);
+        continue;
+      }
 
       if (row.flow_run_id && seenFlowRunIds.has(row.flow_run_id)) {
         console.log(`Skipping duplicate flow_run_id: ${row.flow_run_id} at ${row.timestamp}`);

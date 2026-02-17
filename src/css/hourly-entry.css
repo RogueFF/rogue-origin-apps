@@ -3393,3 +3393,49 @@ input[type="number"] {
   border-top: 1px solid var(--gold);
   transform: rotate(45deg);
 }
+
+/* ===== 5KG BAG COMPLETE BUTTON ===== */
+.bag-complete-btn {
+  width: 100%;
+  padding: 16px 20px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: linear-gradient(135deg, #1a6b3c, #22884d);
+  color: #fff;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.bag-complete-btn:active {
+  transform: scale(0.97);
+  background: linear-gradient(135deg, #155a32, #1a6b3c);
+}
+
+.bag-complete-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.bag-complete-btn.success {
+  background: linear-gradient(135deg, #22884d, #2ea85e);
+  border-color: #2ea85e;
+}
+
+.bag-btn-icon {
+  font-size: 1.3rem;
+}
+
+.bag-btn-text {
+  letter-spacing: 0.02em;
+}
