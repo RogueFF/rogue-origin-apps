@@ -173,7 +173,9 @@
 
     const manualBtn = el('manualBtn');
     if (manualBtn) {
-      manualBtn.addEventListener('click', logManualEntry);
+      manualBtn.addEventListener('click', function() {
+        if (window.logManualEntry) window.logManualEntry();
+      });
     }
 
     const pauseBtn = el('pauseBtn');
