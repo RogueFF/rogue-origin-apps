@@ -91,6 +91,11 @@
         }
       }
 
+      // Detect shift-ended state: production happened but no current hour and no active timer
+      const shiftEnded = todayLbs > 0 && currentHourTrimmers === 0 && !currentTimeSlot &&
+        hoursLogged > 0 && (projectedTotal <= 0 || Math.abs(projectedTotal - todayLbs) < 0.5);
+      document.body.classList.toggle('shift-ended', shiftEnded);
+
       // Update status classes without overriding timer background
       document.body.classList.remove('ahead', 'on-target', 'behind', 'idle');
       document.body.classList.add(status);
@@ -148,11 +153,25 @@
       const todayDelta = data.todayDelta || 0;
       const dde = safeGetEl('dailyDelta');
       if (dde && todayTarget > 0) {
-        const da = Math.abs(todayDelta).toFixed(1);
-        if (todayDelta >= 0.05) {
+        // When shift ended with zero delta, show actual final result instead of "= 0.0"
+        const effectiveDelta = (shiftEnded && Math.abs(todayDelta) < 0.05) ? (todayLbs - todayTarget) : todayDelta;
+        const da = Math.abs(effectiveDelta).toFixed(1);
+        if (shiftEnded && Math.abs(todayDelta) < 0.05 && Math.abs(effectiveDelta) >= 0.05) {
+          // Shift complete — show final result
+          if (effectiveDelta >= 0.05) {
+            dde.textContent = `COMPLETE · +${da} lbs`;
+            dde.className = 'daily-delta positive';
+          } else {
+            dde.textContent = `COMPLETE · -${da} lbs`;
+            dde.className = 'daily-delta negative';
+          }
+        } else if (shiftEnded) {
+          dde.textContent = 'SHIFT COMPLETE';
+          dde.className = 'daily-delta positive';
+        } else if (effectiveDelta >= 0.05) {
           dde.textContent = `↑ +${da} lbs`;
           dde.className = 'daily-delta positive';
-        } else if (todayDelta <= -0.05) {
+        } else if (effectiveDelta <= -0.05) {
           dde.textContent = `↓ -${da} lbs`;
           dde.className = 'daily-delta negative';
         } else {
@@ -169,27 +188,44 @@
       var _el = safeGetEl('progressHours'); if (_el) _el.textContent = `${effectiveHours.toFixed(1)} ${t('hrs')}`;
       var _el = safeGetEl('progressFill'); if (_el) _el.style.width = `${Math.min(100, todayPct || avgPct || 0)}%`;
 
+      // Smalls display
+      const todaySmalls = data.todaySmalls || 0;
+      const smallsEl = safeGetEl('smallsDisplay');
+      const smallsValEl = safeGetEl('smallsValue');
+      if (smallsEl && smallsValEl) {
+        if (todaySmalls > 0) {
+          smallsEl.style.display = 'flex';
+          smallsValEl.textContent = todaySmalls.toFixed(1);
+        } else {
+          smallsEl.style.display = 'none';
+        }
+      }
+
       // Projection
       const projectedTotal = data.projectedTotal || 0;
       const dailyGoal = data.dailyGoal || 0;
       const projectedDelta = data.projectedDelta || 0;
 
-      var _el = safeGetEl('projectionLabel'); if (_el) _el.textContent = t('endOfDay');
-      var _el = safeGetEl('projectionValue'); if (_el) _el.textContent = projectedTotal > 0 ? projectedTotal.toFixed(1) : '—';
-      var _el = safeGetEl('projectionGoal'); if (_el) _el.textContent = dailyGoal > 0 ? `/ ${dailyGoal.toFixed(1)} ${t('lbsGoal')}` : '';
+      var _el = safeGetEl('projectionLabel');
+      if (_el) _el.textContent = shiftEnded ? t('endOfDay') : t('endOfDay');
+      var _el = safeGetEl('projectionValue');
+      if (_el) _el.textContent = shiftEnded ? todayLbs.toFixed(1) : (projectedTotal > 0 ? projectedTotal.toFixed(1) : '—');
+      var _el = safeGetEl('projectionGoal');
+      if (_el) _el.textContent = dailyGoal > 0 ? `/ ${dailyGoal.toFixed(1)} ${t('lbsGoal')}` : '';
 
       const pde = safeGetEl('projectionDelta');
-      if (pde && dailyGoal > 0 && projectedTotal > 0) {
-        const pda = Math.abs(projectedDelta).toFixed(1);
-        if (projectedDelta >= 0.5) {
-          pde.textContent = `↑ +${pda} lbs`;
+      if (pde && dailyGoal > 0 && (projectedTotal > 0 || shiftEnded)) {
+        const finalDelta = shiftEnded ? (todayLbs - dailyGoal) : projectedDelta;
+        const pda = Math.abs(finalDelta).toFixed(1);
+        if (finalDelta >= 0.5) {
+          pde.textContent = `= +${pda} lbs`;
           pde.className = 'projection-delta positive';
-        } else if (projectedDelta <= -0.5) {
-          pde.textContent = `↓ -${pda} lbs`;
+        } else if (finalDelta <= -0.5) {
+          pde.textContent = `= -${pda} lbs`;
           pde.className = 'projection-delta negative';
         } else {
-          pde.textContent = `= 0.0 lbs`;
-          pde.className = 'projection-delta neutral';
+          pde.textContent = shiftEnded ? '✓ On target' : `= 0.0 lbs`;
+          pde.className = shiftEnded ? 'projection-delta positive' : 'projection-delta neutral';
         }
       } else if (pde) {
         pde.textContent = '—';
