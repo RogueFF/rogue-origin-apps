@@ -2182,12 +2182,6 @@ function renderTradingDesk(regime, plays, portfolio, positions, brief, regimeHis
     }
   } catch { briefRaw = brief?.body || ''; }
 
-  // Calculate options total
-  const optionsTotal = optionPlays.reduce((sum, p) => {
-    const setup = typeof p.setup === 'string' ? JSON.parse(p.setup || '{}') : (p.setup || {});
-    return sum + (setup.cost || 0);
-  }, 0);
-
   const html = `
     <div class="trading-status-bar">
       <span class="trading-market-status ${marketOpen ? 'market-open' : 'market-closed'}">${liveIndicator}</span>
@@ -2198,8 +2192,7 @@ function renderTradingDesk(regime, plays, portfolio, positions, brief, regimeHis
     ${buildPortfolioOverview(portfolio, openPositions, optionPlays, widgets?.fear_greed)}
     <div class="td-sections ${suppressed ? 'td-suppressed' : ''}">
       ${buildStockPicks(stockPlays, suppressed, widgets?.sparklines, openPositions)}
-      ${buildOptionPlays(optionPlays, optionsTotal)}
-      ${buildOpenPositions(openPositions)}
+      ${buildOptionPlays(optionPlays, openPositions)}
     </div>
     <details class="td-collapsible">
       <summary class="td-collapsible-toggle">More ▸</summary>
@@ -2657,130 +2650,140 @@ function buildStockPicks(plays, suppressed, sparklines, positions) {
   `;
 }
 
-// ─── Trading Desk: Options Plays ───
-function buildOptionPlays(plays, totalExposure) {
-  if (!plays || plays.length === 0) return '';
+// ─── Trading Desk: Options (Positions + Pending Plays) ───
+function buildOptionPlays(plays, openPositions) {
+  // Filter openPositions to options only
+  const optPositions = (openPositions || []).filter(pos => {
+    const v = pos.vehicle || 'shares';
+    return v === 'calls' || v === 'puts' || v === 'spread';
+  });
 
-  const rows = plays.map(play => {
-    const setup = typeof play.setup === 'string' ? JSON.parse(play.setup || '{}') : (play.setup || {});
-    const ticker = play.ticker || '—';
-    const direction = (play.direction || '').toUpperCase();
-    const isCall = play.vehicle === 'calls';
-    const emoji = isCall ? '📈' : '📉';
-    const strike = setup.strike || 0;
-    const expiry = setup.expiry || '';
-    const contracts = setup.contracts || 0;
-    const ask = setup.entry_price || 0;
-    const iv = setup.iv || 0;
-    const be = setup.breakeven || 0;
-    const cost = setup.cost || 0;
-    const expiryShort = expiry ? expiry.replace(/^\d{4}-/, '') : '';
+  // Tickers that already have an active position
+  const positionTickers = new Set(optPositions.map(p => (p.ticker || '').toUpperCase()));
 
-    // Calculate DTE (days to expiration) with urgency colors
-    let dteLabel = '';
-    let dteClass = 'td-option-dte-safe';
-    if (expiry) {
-      const now = new Date();
-      const exp = new Date(expiry + 'T16:00:00');
-      const dte = Math.max(0, Math.ceil((exp - now) / (1000 * 60 * 60 * 24)));
-      dteLabel = dte + 'd';
-      if (dte < 3) dteClass = 'td-option-dte-critical';
-      else if (dte <= 7) dteClass = 'td-option-dte-warning';
-      else if (dte <= 14) dteClass = 'td-option-dte-caution';
-      else dteClass = 'td-option-dte-safe';
-    }
+  // Strategist plays whose ticker is NOT yet in positions (pending)
+  const pendingPlays = (plays || []).filter(play =>
+    !positionTickers.has((play.ticker || '').toUpperCase())
+  );
+
+  if (optPositions.length === 0 && pendingPlays.length === 0) return '';
+
+  // Cost basis: entry_price × contracts × 100
+  const totalCost = optPositions.reduce((sum, pos) =>
+    sum + (pos.entry_price || 0) * (pos.quantity || 0) * 100, 0);
+
+  // ── DTE helper ──────────────────────────────────────────
+  function dteBadge(expiry) {
+    if (!expiry) return { label: '', cls: 'td-option-dte-safe' };
+    const now = new Date();
+    const exp = new Date(expiry + 'T16:00:00');
+    const dte = Math.max(0, Math.ceil((exp - now) / (1000 * 60 * 60 * 24)));
+    let cls = 'td-option-dte-safe';
+    if (dte < 3)       cls = 'td-option-dte-critical';
+    else if (dte <= 7)  cls = 'td-option-dte-warning';
+    else if (dte <= 14) cls = 'td-option-dte-caution';
+    return { label: dte + 'd', cls };
+  }
+
+  const MONO = "font-family:var(--font-mono,'JetBrains Mono',monospace)";
+
+  // ── Active position rows ─────────────────────────────────
+  const positionRows = optPositions.map(pos => {
+    const ticker  = pos.ticker || '—';
+    const vehicle = pos.vehicle || 'calls';
+    const isCall  = vehicle === 'calls';
+    const typeLabel = vehicle === 'spread' ? 'SPD' : (isCall ? 'C' : 'P');
+    const strike  = pos.strike || '';
+    const expiry  = pos.expiry || '';
+    const expiryShort = expiry ? expiry.replace(/^\d{4}-/, '') : '—';
+    const dte     = dteBadge(expiry);
+    const entry   = pos.entry_price   || 0;
+    const current = pos.current_price || entry;
+    const qty     = pos.quantity      || 0;
+    const short   = pos.direction === 'short' ? -1 : 1;
+
+    // Prefer API-supplied P&L if present, otherwise compute
+    const pnl    = pos.current_pnl != null
+      ? pos.current_pnl
+      : (current - entry) * qty * 100 * short;
+    const pnlPct = entry > 0 ? ((current / entry - 1) * 100 * short) : 0;
+    const pnlColor = pnl >= 0 ? 'var(--sig-green, #22c55e)' : 'var(--sig-red, #ef4444)';
+
+    const entryDisplay   = entry   > 0 ? `$${entry.toFixed(2)}`   : '—';
+    const currentDisplay = current > 0 ? `$${current.toFixed(2)}` : '—';
+    const pnlDisplay = (entry === 0 && current === 0)
+      ? 'no data'
+      : `${pnl >= 0 ? '+' : '-'}$${Math.abs(pnl).toFixed(0)} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%)`;
 
     return `
-      <div class="td-option-row">
-        <span class="td-option-emoji">${emoji}</span>
+      <div class="td-option-row td-option-pos-row" style="border-left:2px solid ${pnlColor}">
         <span class="td-option-ticker">${escapeHTML(ticker)}</span>
-        <span class="td-option-strike">$${strike}${isCall ? 'C' : 'P'}</span>
+        <span class="td-option-strike">$${strike}${typeLabel}</span>
         <span class="td-option-expiry">${expiryShort}</span>
-        ${dteLabel ? `<span class="td-option-dte ${dteClass}">${dteLabel}</span>` : ''}
-        <span class="td-option-detail">${contracts}x @ $${ask.toFixed(2)}</span>
-        <span class="td-option-iv">IV:${iv}%</span>
-        <span class="td-option-cost">$${cost.toLocaleString()}</span>
+        <span class="td-option-dte ${dte.cls}">${dte.label}</span>
+        <span class="td-option-entry" style="${MONO}">${entryDisplay}</span>
+        <span class="td-option-current" style="${MONO}">${currentDisplay}</span>
+        <span class="td-option-pnl" style="color:${pnlColor};${MONO}">${pnlDisplay}</span>
+        <span class="td-option-contracts" style="color:var(--os-text-muted)">${qty}x</span>
       </div>
     `;
   }).join('');
+
+  // ── Pending play rows ────────────────────────────────────
+  const pendingRows = pendingPlays.map(play => {
+    const setup   = typeof play.setup === 'string' ? JSON.parse(play.setup || '{}') : (play.setup || {});
+    const ticker  = play.ticker || '—';
+    const vehicle = play.vehicle || 'calls';
+    const isCall  = vehicle === 'calls';
+    const typeLabel = vehicle === 'spread' ? 'SPD' : (isCall ? 'C' : 'P');
+    const strike  = setup.strike    || 0;
+    const expiry  = setup.expiry    || '';
+    const expiryShort = expiry ? expiry.replace(/^\d{4}-/, '') : '—';
+    const dte       = dteBadge(expiry);
+    const ask       = setup.entry_price || 0;
+    const contracts = setup.contracts   || 0;
+
+    return `
+      <div class="td-option-row td-option-pending-row">
+        <span class="td-option-ticker">${escapeHTML(ticker)}</span>
+        <span class="td-option-strike">$${strike}${typeLabel}</span>
+        <span class="td-option-expiry">${expiryShort}</span>
+        <span class="td-option-dte ${dte.cls}">${dte.label}</span>
+        <span class="td-option-entry" style="${MONO}">${ask > 0 ? `$${ask.toFixed(2)}` : '—'}</span>
+        <span class="td-option-current" style="color:var(--os-text-muted)">pending</span>
+        <span class="td-option-pnl" style="color:var(--os-text-muted)">—</span>
+        <span class="td-option-contracts" style="color:var(--os-text-muted)">${contracts}x</span>
+      </div>
+    `;
+  }).join('');
+
+  const pendingSection = pendingRows
+    ? `<div class="td-pending-divider">PENDING</div>${pendingRows}`
+    : '';
 
   return `
     <div class="td-section">
       <div class="td-section-header">
         <span class="td-section-title">🎰 Options</span>
         <div class="td-section-header-right">
-          ${totalExposure ? `<span class="td-options-total">$${totalExposure.toLocaleString()}</span>` : ''}
-          <span class="td-section-count">${plays.length}</span>
+          ${totalCost > 0 ? `<span class="td-options-total">$${totalCost.toLocaleString()}</span>` : ''}
+          <span class="td-section-count">${optPositions.length}</span>
         </div>
       </div>
       <div class="td-option-header-row">
-        <span class="td-option-emoji"></span>
         <span class="td-option-ticker">Ticker</span>
         <span class="td-option-strike">Strike</span>
         <span class="td-option-expiry">Exp</span>
         <span class="td-option-dte">DTE</span>
-        <span class="td-option-detail">Size</span>
-        <span class="td-option-iv">IV</span>
-        <span class="td-option-cost">Cost</span>
+        <span class="td-option-entry">Entry</span>
+        <span class="td-option-current">Mark</span>
+        <span class="td-option-pnl">P&amp;L</span>
+        <span class="td-option-contracts">Qty</span>
       </div>
-      <div class="td-option-list">${rows}</div>
-    </div>
-  `;
-}
-
-// ─── Trading Desk: Open Positions (Options Only) ───
-function buildOpenPositions(positions) {
-  if (!positions || positions.length === 0) return '';
-
-  // Filter to only show options positions
-  const optionsPositions = positions.filter(pos => {
-    const vehicle = pos.vehicle || 'shares';
-    return vehicle === 'calls' || vehicle === 'puts';
-  });
-
-  if (optionsPositions.length === 0) return '';
-
-  const rows = optionsPositions.map(pos => {
-    const ticker = pos.ticker || '—';
-    const vehicle = pos.vehicle || 'shares';
-    const entry = pos.entry_price || 0;
-    const current = pos.current_price || entry;
-    const qty = pos.quantity || 0;
-    const multiplier = 100;
-    const pnl = (current - entry) * qty * multiplier * (pos.direction === 'short' ? -1 : 1);
-    const pnlPct = entry > 0 ? ((current / entry - 1) * 100) : 0;
-    const pnlColor = pnl >= 0 ? 'var(--sig-green, #22c55e)' : 'var(--sig-red, #ef4444)';
-    const vehicleLabel = `${vehicle === 'calls' ? 'C' : 'P'} $${pos.strike || ''}`;
-
-    // Handle zero prices
-    const entryDisplay = entry > 0 ? `$${entry.toFixed(2)}` : '—';
-    const currentDisplay = current > 0 ? `$${current.toFixed(2)}` : '—';
-    let pnlDisplay;
-    if (entry === 0 && current === 0) {
-      pnlDisplay = 'no data';
-    } else {
-      pnlDisplay = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(0)} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%)`;
-    }
-
-    return `
-      <div class="td-pos-row" style="border-left-color:${pnlColor}">
-        <span class="td-pos-ticker">${escapeHTML(ticker)}</span>
-        <span class="td-pos-vehicle">${vehicleLabel}</span>
-        <span class="td-pos-qty">${qty}x</span>
-        <span class="td-pos-entry">${entryDisplay}</span>
-        <span class="td-pos-current">${currentDisplay}</span>
-        <span class="td-pos-pnl" style="color:${pnlColor}">${pnlDisplay}</span>
+      <div class="td-option-list">
+        ${positionRows}
+        ${pendingSection}
       </div>
-    `;
-  }).join('');
-
-  return `
-    <div class="td-section">
-      <div class="td-section-header">
-        <span class="td-section-title">📋 Options Positions</span>
-        <span class="td-section-count">${optionsPositions.length}</span>
-      </div>
-      <div class="td-pos-list">${rows}</div>
     </div>
   `;
 }

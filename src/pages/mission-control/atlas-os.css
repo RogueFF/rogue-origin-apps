@@ -6903,6 +6903,30 @@ input {
 .td-option-dte-safe { background: rgba(34,197,94,0.1); color: #22c55e; }
 .td-option-dte-normal { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.5); }
 
+/* Options - merged position + pending columns */
+.td-option-entry    { font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; color: rgba(255,255,255,0.45); width: 54px; }
+.td-option-current  { font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; color: rgba(255,255,255,0.7);  width: 54px; }
+.td-option-pnl      { font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; font-weight: 600; flex: 1; text-align: right; }
+.td-option-contracts{ font-family: 'JetBrains Mono', monospace; font-size: 0.64rem; color: rgba(255,255,255,0.45); width: 28px; text-align: right; }
+
+/* Active position row — left border set inline via pnlColor */
+.td-option-pos-row { border-left-width: 2px !important; }
+
+/* Pending play row — muted / dimmer */
+.td-option-pending-row { opacity: 0.6; border-left: 2px solid rgba(255,255,255,0.15) !important; }
+.td-option-pending-row:hover { opacity: 0.85; }
+
+/* Divider between active positions and pending plays */
+.td-pending-divider {
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.3);
+  padding: 5px 12px 3px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  text-transform: uppercase;
+}
+
 /* Open Positions - Compact with P&L stripe */
 .td-pos-list { padding: 2px 0; }
 .td-pos-row {
