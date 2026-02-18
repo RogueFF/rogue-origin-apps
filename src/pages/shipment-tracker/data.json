@@ -15,14 +15,14 @@
       "eta": "Feb 19, 3:30 PM CET",
       "weight": "380 kg (2 pallets)",
       "sensorData": {
-        "temp": "59.6°F",
-        "humidity": "23.7%",
-        "battery": "82%",
+        "temp": "54.0°F",
+        "humidity": "21.5%",
+        "battery": "84%",
         "location": "Vallejo, CA",
-        "coords": "38.151694, -122.217612",
-        "fullAddress": "943 Griffin Dr, Vallejo, CA 94589, USA"
+        "coords": "38.151698, -122.217611",
+        "fullAddress": "154 Goldenrod St, Vallejo, CA 94589, USA"
       },
-      "lastUpdate": "2026-02-18T12:08:31.618Z",
+      "lastUpdate": "2026-02-18T12:30:11.926Z",
       "created": "2026-02-17T20:00:00Z",
       "history": [
         {
