@@ -510,6 +510,15 @@
             <button class="header-btn primary" onclick="confirmMediaUpload()"><i class="ph-duotone ph-check"></i> <span data-i18n="useThis">Use This</span></button>
           </div>
         </div>
+        <div class="media-upload-progress" id="mediaUploadProgress" style="display:none;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <i class="ph-duotone ph-cloud-arrow-up"></i>
+            <span id="mediaUploadLabel">Uploading...</span>
+          </div>
+          <div style="width:100%;height:8px;background:var(--border);border-radius:4px;overflow:hidden;">
+            <div id="mediaUploadBar" style="height:100%;width:0%;background:var(--ro-green);border-radius:4px;transition:width 0.2s;"></div>
+          </div>
+        </div>
         <p class="media-note" id="mediaSizeNote" style="display:none;"><i class="ph-duotone ph-info"></i> <span data-i18n="videoNote">Videos must be uploaded to YouTube or Google Drive. Paste the sharing link.</span></p>
       </div>
     </div>
@@ -964,6 +973,8 @@
       if (lower.includes('drive.google.com')) return 'gdrive';
       if (lower.includes('vimeo.com')) return 'vimeo';
       if (lower.match(/\.(mp4|webm|mov|avi|mkv)(\?|$)/i)) return 'video';
+      // R2 serve URLs: check key param extension for video
+      if (lower.includes('action=serve') && lower.match(/key=.*\.(mp4|webm|mov)/)) return 'video';
       if (lower.startsWith('data:video/')) return 'video';
       if (lower.startsWith('data:image/')) return 'image';
       return 'image'; // default to image
@@ -976,18 +987,16 @@
       try {
         if (type === 'image') {
           showToast(t('compressing'), 'success');
-          const compressed = await compressImage(file, 400, 0.6);
-          showMediaPreview(compressed, 'image');
+          const blob = await compressImageToBlob(file, 800, 0.7);
+          showMediaPreview(blob, 'image');
         } else {
-          // For video, check size
-          if (file.size > 5 * 1024 * 1024) { // 5MB limit for embedded video
-            showToast('Video too large. Upload to YouTube/Drive and paste URL.', 'error');
+          // Check video size (100MB limit with R2)
+          if (file.size > 100 * 1024 * 1024) {
+            showToast('Video too large (100MB limit). Upload to YouTube/Drive and paste URL.', 'error');
             document.getElementById('mediaSizeNote').style.display = 'flex';
             return;
           }
-          showToast(t('processing'), 'success');
-          const dataUrl = await fileToDataUrl(file);
-          showMediaPreview(dataUrl, 'video');
+          showMediaPreview(file, 'video');
         }
       } catch (e) {
         console.error('Media processing error:', e);
@@ -998,18 +1007,19 @@
       input.value = '';
     }
 
-    function showMediaPreview(dataUrl, type) {
-      pendingMediaData = dataUrl;
+    function showMediaPreview(blobOrUrl, type) {
+      pendingMediaData = blobOrUrl;
       pendingMediaType = type;
 
       document.querySelector('.media-options').style.display = 'none';
       document.getElementById('mediaUrlInput').style.display = 'none';
 
       const previewContent = document.getElementById('mediaPreviewContent');
+      const previewUrl = (blobOrUrl instanceof Blob) ? URL.createObjectURL(blobOrUrl) : blobOrUrl;
       if (type === 'image') {
-        previewContent.innerHTML = '<img src="' + dataUrl + '" alt="Preview">';
+        previewContent.innerHTML = '<img src="' + previewUrl + '" alt="Preview">';
       } else {
-        previewContent.innerHTML = '<video src="' + dataUrl + '" controls playsinline style="max-height:200px;"></video>';
+        previewContent.innerHTML = '<video src="' + previewUrl + '" controls playsinline style="max-height:200px;"></video>';
       }
 
       document.getElementById('mediaPreview').style.display = 'block';
@@ -1022,14 +1032,29 @@
       document.querySelector('.media-options').style.display = 'grid';
     }
 
-    function confirmMediaUpload() {
+    async function confirmMediaUpload() {
       if (!pendingMediaData || currentMediaStepIndex === null) return;
 
-      editingSteps[currentMediaStepIndex].media = pendingMediaData;
-      editingSteps[currentMediaStepIndex].mediaType = pendingMediaType;
-      // Backwards compatibility
-      if (pendingMediaType === 'image') {
-        editingSteps[currentMediaStepIndex].image = pendingMediaData;
+      // If it's a Blob/File, upload to R2
+      if (pendingMediaData instanceof Blob) {
+        try {
+          const url = await uploadToR2(pendingMediaData);
+          editingSteps[currentMediaStepIndex].media = url;
+          editingSteps[currentMediaStepIndex].mediaType = pendingMediaType;
+          if (pendingMediaType === 'image') {
+            editingSteps[currentMediaStepIndex].image = url;
+          }
+        } catch (e) {
+          showToast(t('error') + ': ' + e.message, 'error');
+          return;
+        }
+      } else {
+        // Already a URL string (shouldn't happen in new flow, but safe fallback)
+        editingSteps[currentMediaStepIndex].media = pendingMediaData;
+        editingSteps[currentMediaStepIndex].mediaType = pendingMediaType;
+        if (pendingMediaType === 'image') {
+          editingSteps[currentMediaStepIndex].image = pendingMediaData;
+        }
       }
 
       renderSteps();
@@ -1098,6 +1123,98 @@
       });
     }
 
+    // Compress image and return a Blob (for R2 upload)
+    function compressImageToBlob(file, maxSize, quality) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+              if (width > maxSize) {
+                height = Math.round((height * maxSize) / width);
+                width = maxSize;
+              }
+            } else {
+              if (height > maxSize) {
+                width = Math.round((width * maxSize) / height);
+                height = maxSize;
+              }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+
+            canvas.toBlob((blob) => {
+              if (blob) resolve(blob);
+              else reject(new Error('Failed to compress image'));
+            }, 'image/jpeg', quality);
+          };
+          img.onerror = () => reject(new Error('Failed to load image'));
+          img.src = e.target.result;
+        };
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // Upload file/blob to R2 via the media API with progress
+    function uploadToR2(fileOrBlob) {
+      return new Promise((resolve, reject) => {
+        const formData = new FormData();
+        const name = fileOrBlob.name || ('upload.' + (fileOrBlob.type?.split('/')[1] || 'jpg'));
+        formData.append('file', fileOrBlob, name);
+
+        const xhr = new XMLHttpRequest();
+        const progressEl = document.getElementById('mediaUploadProgress');
+        const barEl = document.getElementById('mediaUploadBar');
+        const labelEl = document.getElementById('mediaUploadLabel');
+
+        // Show progress
+        if (progressEl) progressEl.style.display = 'block';
+        if (barEl) barEl.style.width = '0%';
+
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable && barEl) {
+            const pct = Math.round((e.loaded / e.total) * 100);
+            barEl.style.width = pct + '%';
+            if (labelEl) labelEl.textContent = 'Uploading... ' + pct + '%';
+          }
+        });
+
+        xhr.addEventListener('load', () => {
+          if (progressEl) progressEl.style.display = 'none';
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const resp = JSON.parse(xhr.responseText);
+              if (resp.success && resp.url) {
+                resolve(resp.url);
+              } else {
+                reject(new Error(resp.error || 'Upload failed'));
+              }
+            } catch {
+              reject(new Error('Invalid response'));
+            }
+          } else {
+            reject(new Error('Upload failed (' + xhr.status + ')'));
+          }
+        });
+
+        xhr.addEventListener('error', () => {
+          if (progressEl) progressEl.style.display = 'none';
+          reject(new Error('Network error during upload'));
+        });
+
+        xhr.open('POST', API_BASE + '/media?action=upload');
+        xhr.send(formData);
+      });
+    }
+
     // Get YouTube embed URL
     function getYouTubeEmbedUrl(url) {
       const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
@@ -1115,7 +1232,8 @@
     function openAnnotationEditor(stepIndex) {
       const step = editingSteps[stepIndex];
       const imageUrl = step?.media || step?.image || '';
-      if (!imageUrl || !imageUrl.startsWith('data:image')) {
+      const isEditableImage = imageUrl && (imageUrl.startsWith('data:image') || (imageUrl.includes('action=serve') && !imageUrl.match(/key=.*\.(mp4|webm|mov)/)));
+      if (!isEditableImage) {
         showToast(appLang === 'es' ? 'No hay imagen para editar' : 'No image to edit', 'error');
         return;
       }
@@ -1156,6 +1274,10 @@
       annotationCtx = annotationCanvas.getContext('2d');
 
       annotationImage = new Image();
+      // Enable cross-origin for R2-hosted images so canvas export works
+      if (!imageSrc.startsWith('data:')) {
+        annotationImage.crossOrigin = 'anonymous';
+      }
       annotationImage.onload = function() {
         // Calculate size to fit container while maintaining aspect ratio
         const container = document.getElementById('canvasContainer');
@@ -1502,25 +1624,27 @@
       img.src = next;
     }
 
-    function saveAnnotation() {
+    async function saveAnnotation() {
       if (annotationStepIndex === null) return;
 
-      // Get flattened image as JPEG
-      const dataUrl = annotationCanvas.toDataURL('image/jpeg', 0.85);
+      // Get annotated image as blob and upload to R2
+      try {
+        const blob = await new Promise(resolve => annotationCanvas.toBlob(resolve, 'image/jpeg', 0.85));
+        showToast('Uploading annotated image...', 'success');
+        const url = await uploadToR2(blob);
 
-      // Update step image - use media field if it exists, otherwise image
-      if (editingSteps[annotationStepIndex].media) {
-        editingSteps[annotationStepIndex].media = dataUrl;
-      } else {
-        editingSteps[annotationStepIndex].image = dataUrl;
+        if (editingSteps[annotationStepIndex].media) {
+          editingSteps[annotationStepIndex].media = url;
+        } else {
+          editingSteps[annotationStepIndex].image = url;
+        }
+      } catch (e) {
+        showToast(t('error') + ': ' + e.message, 'error');
+        return;
       }
 
-      // Re-render steps
       renderSteps();
-
-      // Close modal
       closeAnnotationEditor();
-
       showToast(t('annotationSaved'), 'success');
     }
 
@@ -2761,10 +2885,10 @@
               '</div>';
             }
           } else {
-            // Check if it's a base64 image (editable) vs URL image (not editable)
-            const isBase64Image = mediaUrl.startsWith('data:image');
+            // Check if image is editable (base64 or R2-hosted image)
+            const isEditableImg = mediaUrl.startsWith('data:image') || (mediaUrl.includes('action=serve') && !mediaUrl.match(/key=.*\.(mp4|webm|mov)/));
             mediaPreviewHtml = '<img src="' + esc(mediaUrl) + '">';
-            if (isBase64Image) {
+            if (isEditableImg) {
               mediaPreviewHtml += '<button type="button" class="step-image-edit-btn" onclick="event.stopPropagation(); openAnnotationEditor(' + i + ')" title="Edit Image"><i class="ph-duotone ph-pencil-simple"></i></button>';
             }
           }
