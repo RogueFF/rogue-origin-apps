@@ -2945,9 +2945,14 @@ function buildOptionPlays(plays, openPositions) {
   const positionTickers = new Set(optPositions.map(p => (p.ticker || '').toUpperCase()));
 
   // Strategist plays whose ticker is NOT yet in positions (pending)
-  const pendingPlays = (plays || []).filter(play =>
-    !positionTickers.has((play.ticker || '').toUpperCase())
-  );
+  // Also filter out plays older than 16 hours (auto-expire stale plays)
+  const sixteenHoursAgo = Date.now() - 16 * 60 * 60 * 1000;
+  const pendingPlays = (plays || []).filter(play => {
+    if (positionTickers.has((play.ticker || '').toUpperCase())) return false;
+    const created = play.created_at ? new Date(play.created_at + 'Z').getTime() : 0;
+    if (created && created < sixteenHoursAgo) return false;
+    return true;
+  });
 
   if (optPositions.length === 0 && pendingPlays.length === 0) return '';
 
@@ -3034,7 +3039,7 @@ function buildOptionPlays(plays, openPositions) {
     const contracts = setup.contracts   || 0;
 
     return `
-      <div class="td-option-row td-option-pending-row">
+      <div class="td-option-row td-option-pending-row" data-play-id="${play.id}">
         <span class="td-option-ticker">${escapeHTML(ticker)}</span>
         <span class="td-option-strike">$${strike}${typeLabel}</span>
         <span class="td-option-expiry">${expiryShort}</span>
@@ -3043,6 +3048,7 @@ function buildOptionPlays(plays, openPositions) {
         <span class="td-option-current" style="color:var(--os-text-muted)">pending</span>
         <span class="td-option-pnl" style="color:var(--os-text-muted)">—</span>
         <span class="td-option-contracts" style="color:var(--os-text-muted)">${contracts}x</span>
+        <button class="td-play-dismiss" onclick="dismissPlay(${play.id}, this)" title="Dismiss play">✕</button>
       </div>
     `;
   }).join('');
@@ -3076,6 +3082,27 @@ function buildOptionPlays(plays, openPositions) {
       </div>
     </div>
   `;
+}
+
+// ─── Trading Desk: Dismiss Pending Play ───
+async function dismissPlay(playId, btn) {
+  if (!playId) return;
+  const row = btn.closest('.td-option-pending-row');
+  if (row) { row.style.opacity = '0.2'; row.style.pointerEvents = 'none'; }
+  try {
+    const res = await fetch(`${API_BASE}/plays/${playId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'dismissed' }) });
+    if (!res.ok) throw new Error(`API ${res.status}`);
+    if (row) row.remove();
+    // Remove divider if no more pending rows
+    const container = document.querySelector('.td-option-list');
+    if (container && !container.querySelector('.td-option-pending-row')) {
+      const divider = container.querySelector('.td-pending-divider');
+      if (divider) divider.remove();
+    }
+  } catch (e) {
+    console.error('Failed to dismiss play:', e);
+    if (row) { row.style.opacity = ''; row.style.pointerEvents = ''; }
+  }
 }
 
 // ─── Trading Desk: Sparkline SVG ───
