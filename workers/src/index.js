@@ -11,6 +11,7 @@
  * - /api/complaints - Customer complaints tracking (D1)
  * - /api/pool-bins - Pool bin inventory (D1)
  * - /api/pool - Shopify pool inventory proxy
+ * - /api/media - Media upload/serve (R2)
  */
 
 import { handleProductionD1 } from './handlers/production-d1.js';
@@ -22,6 +23,7 @@ import { handleConsignmentD1 } from './handlers/consignment-d1.js';
 import { handleComplaintsD1 } from './handlers/complaints-d1.js';
 import { handlePoolD1 } from './handlers/pool-d1.js';
 import { handlePoolRequest } from './handlers/pool.js';
+import { handleMediaR2 } from './handlers/media-r2.js';
 import { corsHeaders, handleCors } from './lib/cors.js';
 import { jsonResponse, errorResponse } from './lib/response.js';
 import { ApiError } from './lib/errors.js';
@@ -72,6 +74,8 @@ export default {
         response = await handleComplaintsD1(request, env, ctx);
       } else if (path.startsWith('/api/consignment')) {
         response = await handleConsignmentD1(request, env, ctx);
+      } else if (path.startsWith('/api/media')) {
+        response = await handleMediaR2(request, env);
       } else if (path.startsWith('/api/pool-bins')) {
         response = await handlePoolD1(request, env, ctx);
       } else if (path.startsWith('/api/pool')) {
@@ -83,7 +87,7 @@ export default {
           success: true,
           message: 'Rogue Origin API - Cloudflare Workers',
           version: '1.0.0',
-          endpoints: ['/api/production', '/api/orders', '/api/barcode', '/api/kanban', '/api/sop', '/api/consignment', '/api/complaints', '/api/pool']
+          endpoints: ['/api/production', '/api/orders', '/api/barcode', '/api/kanban', '/api/sop', '/api/consignment', '/api/complaints', '/api/pool', '/api/media']
         });
       } else {
         response = errorResponse('Not found', 'NOT_FOUND', 404);
