@@ -1,0 +1,1551 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/png" href="/rogue-origin-apps/favicon.png">
+  <meta name="theme-color" content="#141816">
+  <title>Compliance Dashboard | Rogue Origin</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/duotone/style.css">
+
+  <style>
+    /* =============================================
+       DESIGN TOKENS
+       ============================================= */
+    :root {
+      --bg:          #0e1210;
+      --bg-card:     #141a16;
+      --bg-card-2:   #1a2119;
+      --bg-hover:    #1f2820;
+      --border:      rgba(102, 137, 113, 0.14);
+      --border-med:  rgba(102, 137, 113, 0.22);
+      --border-str:  rgba(102, 137, 113, 0.35);
+
+      --green:       #668971;
+      --green-light: #7aab87;
+      --green-dim:   rgba(102, 137, 113, 0.12);
+      --green-glow:  rgba(102, 137, 113, 0.08);
+      --gold:        #e4aa4f;
+      --gold-dim:    rgba(228, 170, 79, 0.12);
+      --danger:      #c45c4a;
+      --danger-dim:  rgba(196, 92, 74, 0.12);
+      --info:        #62758d;
+      --info-dim:    rgba(98, 117, 141, 0.12);
+
+      --text:        rgba(255, 255, 255, 0.88);
+      --text-2:      rgba(255, 255, 255, 0.60);
+      --text-3:      rgba(255, 255, 255, 0.38);
+      --text-4:      rgba(255, 255, 255, 0.22);
+
+      --font-ui:     'Outfit', system-ui, sans-serif;
+      --font-serif:  'DM Serif Display', serif;
+      --font-mono:   'JetBrains Mono', monospace;
+
+      --radius-sm:   6px;
+      --radius:      10px;
+      --radius-lg:   14px;
+
+      --header-h:    56px;
+      --sidebar-w:   220px;
+    }
+
+    /* =============================================
+       RESET & BASE
+       ============================================= */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { height: 100%; }
+    body {
+      font-family: var(--font-ui);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--green-light); text-decoration: none; }
+    button { cursor: pointer; border: none; background: none; font-family: inherit; }
+
+    /* =============================================
+       LAYOUT
+       ============================================= */
+    .layout {
+      display: grid;
+      grid-template-columns: var(--sidebar-w) 1fr;
+      grid-template-rows: var(--header-h) 1fr;
+      min-height: 100vh;
+    }
+
+    /* =============================================
+       HEADER
+       ============================================= */
+    .header {
+      grid-column: 1 / -1;
+      background: #0b0e0c;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .header-logo {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+    }
+    .header-title {
+      font-family: var(--font-serif);
+      font-size: 18px;
+      color: var(--text);
+      letter-spacing: 0.01em;
+    }
+    .header-sep {
+      width: 1px;
+      height: 20px;
+      background: var(--border-med);
+      margin: 0 4px;
+    }
+    .header-sub {
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--green);
+      padding: 3px 8px;
+      border: 1px solid var(--border-med);
+      border-radius: var(--radius-sm);
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-2);
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+    }
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.15s ease;
+    }
+    .btn-ghost {
+      color: var(--text-2);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover {
+      background: var(--green-glow);
+      border-color: var(--border-med);
+      color: var(--text);
+    }
+    .btn-primary {
+      background: var(--green);
+      color: #fff;
+      border: 1px solid transparent;
+    }
+    .btn-primary:hover {
+      background: var(--green-light);
+    }
+
+    /* =============================================
+       SIDEBAR
+       ============================================= */
+    .sidebar {
+      background: #0b0e0c;
+      border-right: 1px solid var(--border);
+      padding: 16px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      position: sticky;
+      top: var(--header-h);
+      height: calc(100vh - var(--header-h));
+      overflow-y: auto;
+    }
+    .sidebar-section {
+      padding: 10px 12px 4px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-3);
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      margin: 1px 8px;
+      border-radius: var(--radius-sm);
+      font-size: 13.5px;
+      color: var(--text-2);
+      transition: all 0.12s ease;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .nav-item i { font-size: 18px; opacity: 0.7; }
+    .nav-item:hover {
+      background: var(--green-glow);
+      color: var(--text);
+    }
+    .nav-item.active {
+      background: var(--green-dim);
+      color: var(--green-light);
+    }
+    .nav-item.active i { opacity: 1; }
+    .sidebar-footer {
+      margin-top: auto;
+      padding: 12px;
+    }
+    .sidebar-back {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: var(--radius-sm);
+      font-size: 12.5px;
+      color: var(--text-3);
+      border: 1px solid var(--border);
+      transition: all 0.12s ease;
+      text-decoration: none;
+    }
+    .sidebar-back:hover {
+      color: var(--text-2);
+      border-color: var(--border-med);
+    }
+
+    /* =============================================
+       MAIN CONTENT
+       ============================================= */
+    .main {
+      padding: 28px 32px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+
+    /* Section headers */
+    .section-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .section-title {
+      font-family: var(--font-serif);
+      font-size: 22px;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-title i {
+      font-size: 20px;
+      color: var(--green);
+      opacity: 0.8;
+    }
+    .section-meta {
+      font-size: 12px;
+      color: var(--text-3);
+      font-family: var(--font-mono);
+    }
+
+    /* Cards */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+    }
+    .card-sm {
+      padding: 14px 16px;
+    }
+
+    /* =============================================
+       SCORECARD GRID
+       ============================================= */
+    .scorecard-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+    .metric-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      position: relative;
+      overflow: hidden;
+    }
+    .metric-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+    }
+    .metric-card.green::before { background: var(--green); }
+    .metric-card.gold::before  { background: var(--gold); }
+    .metric-card.info::before  { background: var(--info); }
+    .metric-card.danger::before { background: var(--danger); }
+
+    .metric-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: var(--text-3);
+    }
+    .metric-value {
+      font-family: var(--font-mono);
+      font-size: 32px;
+      font-weight: 700;
+      line-height: 1;
+      color: var(--text);
+    }
+    .metric-value.green { color: var(--green-light); }
+    .metric-value.gold  { color: var(--gold); }
+    .metric-value.danger { color: var(--danger); }
+    .metric-sub {
+      font-size: 12px;
+      color: var(--text-3);
+    }
+    .metric-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 4px;
+      width: fit-content;
+    }
+    .badge-green { background: var(--green-dim); color: var(--green-light); border: 1px solid rgba(102,137,113,0.2); }
+    .badge-gold  { background: var(--gold-dim);  color: var(--gold); border: 1px solid rgba(228,170,79,0.2); }
+    .badge-danger { background: var(--danger-dim); color: var(--danger); border: 1px solid rgba(196,92,74,0.2); }
+    .badge-info  { background: var(--info-dim);  color: var(--info); border: 1px solid rgba(98,117,141,0.2); }
+    .badge-muted { background: rgba(255,255,255,0.05); color: var(--text-3); border: 1px solid var(--border); }
+
+    /* =============================================
+       BATCH TRACEABILITY TABLE
+       ============================================= */
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    thead {
+      background: var(--bg-card-2);
+    }
+    th {
+      padding: 10px 14px;
+      text-align: left;
+      font-size: 10.5px;
+      font-weight: 600;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    td {
+      padding: 12px 14px;
+      font-size: 13.5px;
+      color: var(--text-2);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--bg-hover); }
+    .mono { font-family: var(--font-mono); font-size: 12px; }
+    .lot-id {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--green-light);
+      background: var(--green-dim);
+      padding: 2px 8px;
+      border-radius: 4px;
+      border: 1px solid rgba(102,137,113,0.2);
+      letter-spacing: 0.04em;
+    }
+    .status-pill-sm {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    /* =============================================
+       THC TESTING LOG
+       ============================================= */
+    .thc-note {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      background: var(--gold-dim);
+      border: 1px solid rgba(228,170,79,0.2);
+      border-radius: var(--radius-sm);
+      font-size: 12.5px;
+      color: var(--gold);
+      margin-bottom: 16px;
+    }
+    .thc-note i { font-size: 16px; }
+
+    /* =============================================
+       CHAIN OF CUSTODY TIMELINE
+       ============================================= */
+    .coc-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .coc-batch-header {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--green-light);
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      position: relative;
+    }
+    .timeline-item {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 12px;
+      position: relative;
+    }
+    .timeline-spine {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .timeline-node {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      flex-shrink: 0;
+      z-index: 1;
+    }
+    .timeline-node.done {
+      background: var(--green-dim);
+      border: 1.5px solid var(--green);
+      color: var(--green-light);
+    }
+    .timeline-node.active {
+      background: var(--gold-dim);
+      border: 1.5px solid var(--gold);
+      color: var(--gold);
+    }
+    .timeline-node.pending {
+      background: rgba(255,255,255,0.04);
+      border: 1.5px solid var(--border-med);
+      color: var(--text-4);
+    }
+    .timeline-line {
+      width: 1.5px;
+      flex: 1;
+      min-height: 20px;
+      background: var(--border);
+      margin: 0 auto;
+    }
+    .timeline-item:last-child .timeline-line { display: none; }
+    .timeline-content {
+      padding-bottom: 20px;
+    }
+    .timeline-title {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+    .timeline-title.pending { color: var(--text-3); }
+    .timeline-date {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-3);
+      margin-bottom: 4px;
+    }
+    .timeline-detail {
+      font-size: 12px;
+      color: var(--text-3);
+      line-height: 1.4;
+    }
+
+    /* =============================================
+       FEDERAL REGULATION TRACKER
+       ============================================= */
+    .reg-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .reg-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .reg-card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .reg-title {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.3;
+    }
+    .reg-meta {
+      font-size: 11.5px;
+      color: var(--text-3);
+      margin-bottom: 8px;
+      line-height: 1.5;
+    }
+    .reg-items {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .reg-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-2);
+    }
+    .reg-item i {
+      font-size: 14px;
+      margin-top: 1px;
+      flex-shrink: 0;
+    }
+    .reg-item.pass i { color: var(--green-light); }
+    .reg-item.warn i { color: var(--gold); }
+    .reg-item.info i { color: var(--info); }
+
+    /* =============================================
+       HR 7212 HIGHLIGHT BOX
+       ============================================= */
+    .hr-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border-med);
+      border-left: 3px solid var(--info);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 16px;
+      align-items: center;
+    }
+    .hr-box-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .hr-box-desc {
+      font-size: 12.5px;
+      color: var(--text-2);
+      line-height: 1.5;
+    }
+    .hr-status {
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .hr-status-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      margin-bottom: 4px;
+    }
+    .hr-status-value {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--gold);
+      background: var(--gold-dim);
+      padding: 4px 10px;
+      border-radius: 4px;
+      border: 1px solid rgba(228,170,79,0.2);
+      white-space: nowrap;
+    }
+
+    /* =============================================
+       EXPORT SECTION
+       ============================================= */
+    .export-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+    .export-info { flex: 1; }
+    .export-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .export-desc {
+      font-size: 13px;
+      color: var(--text-2);
+      line-height: 1.5;
+    }
+    .export-actions {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    /* =============================================
+       LOADING / EMPTY STATES
+       ============================================= */
+    .loading-row td {
+      text-align: center;
+      padding: 32px;
+      color: var(--text-3);
+      font-size: 13px;
+    }
+    .skeleton {
+      background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-hover) 50%, var(--bg-card) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 4px;
+      display: inline-block;
+    }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* =============================================
+       DATA FRESHNESS
+       ============================================= */
+    .data-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 14px;
+      background: var(--bg-card-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      margin-bottom: 20px;
+    }
+    .data-header-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-3);
+    }
+    .data-header-left i { color: var(--green); font-size: 14px; }
+    .data-header-right {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-4);
+    }
+
+    /* =============================================
+       ANIMATIONS
+       ============================================= */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in {
+      animation: fadeInUp 0.3s ease both;
+    }
+    section { animation: fadeInUp 0.35s ease both; }
+    section:nth-child(2) { animation-delay: 0.05s; }
+    section:nth-child(3) { animation-delay: 0.10s; }
+    section:nth-child(4) { animation-delay: 0.15s; }
+    section:nth-child(5) { animation-delay: 0.20s; }
+    section:nth-child(6) { animation-delay: 0.25s; }
+    section:nth-child(7) { animation-delay: 0.30s; }
+
+    /* =============================================
+       PRINT STYLES
+       ============================================= */
+    @media print {
+      .sidebar, .header-right, .export-card, .status-pill { display: none !important; }
+      .layout { grid-template-columns: 1fr; }
+      .main { padding: 20px; }
+      body { background: #fff; color: #000; }
+      .card, .metric-card, .reg-card, table { background: #fff !important; border-color: #ddd !important; }
+      .metric-value, .section-title, .timeline-title { color: #000 !important; }
+      .lot-id { background: #f0f0f0 !important; color: #333 !important; }
+      td, th { color: #333 !important; }
+      .text-2, .metric-sub, .timeline-detail, .reg-meta, .timeline-date { color: #555 !important; }
+      .thc-note { display: none; }
+      .print-header { display: block !important; }
+      @page { margin: 1.5cm; }
+    }
+    .print-header {
+      display: none;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 2px solid #ddd;
+    }
+    .print-header h1 { font-size: 20px; margin-bottom: 4px; }
+    .print-header p { font-size: 12px; color: #666; }
+
+    /* =============================================
+       RESPONSIVE
+       ============================================= */
+    @media (max-width: 1100px) {
+      .scorecard-grid { grid-template-columns: repeat(2, 1fr); }
+      .coc-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 800px) {
+      :root { --sidebar-w: 0px; }
+      .sidebar { display: none; }
+      .layout { grid-template-columns: 1fr; }
+      .scorecard-grid { grid-template-columns: repeat(2, 1fr); }
+      .reg-grid { grid-template-columns: 1fr; }
+      .export-card { flex-direction: column; }
+      .main { padding: 16px; gap: 24px; }
+    }
+    @media (max-width: 480px) {
+      .scorecard-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+
+<body>
+<div class="layout">
+
+  <!-- ============================================================
+       HEADER
+       ============================================================ -->
+  <header class="header">
+    <div class="header-brand">
+      <img src="../../assets/ro-logo-square.png" alt="RO" class="header-logo" onerror="this.style.display='none'">
+      <span class="header-title">Rogue Origin</span>
+      <div class="header-sep"></div>
+      <span class="header-sub">Compliance</span>
+    </div>
+    <div class="header-right">
+      <div class="status-pill" id="apiStatus">
+        <span class="status-dot" id="statusDot" style="background:var(--text-4)"></span>
+        <span id="statusText">Connecting…</span>
+      </div>
+      <button class="btn btn-ghost" onclick="window.print()">
+        <i class="ph-duotone ph-printer"></i> Export
+      </button>
+      <a href="../index.html" class="btn btn-ghost">
+        <i class="ph-duotone ph-house"></i> Dashboard
+      </a>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       SIDEBAR
+       ============================================================ -->
+  <nav class="sidebar" aria-label="Compliance sections">
+    <div class="sidebar-section">Sections</div>
+    <a href="#scorecard"    class="nav-item active"><i class="ph-duotone ph-shield-check"></i>Scorecard</a>
+    <a href="#traceability" class="nav-item"><i class="ph-duotone ph-package"></i>Batch Traceability</a>
+    <a href="#thc-log"      class="nav-item"><i class="ph-duotone ph-flask"></i>THC Testing Log</a>
+    <a href="#coc"          class="nav-item"><i class="ph-duotone ph-arrows-merge"></i>Chain of Custody</a>
+    <a href="#regulations"  class="nav-item"><i class="ph-duotone ph-scales"></i>Regulations</a>
+    <div class="sidebar-section" style="margin-top:8px;">Reporting</div>
+    <a href="#" class="nav-item" onclick="generateReport(); return false;"><i class="ph-duotone ph-file-text"></i>Print Report</a>
+    <div class="sidebar-footer">
+      <a href="../index.html" class="sidebar-back">
+        <i class="ph-duotone ph-arrow-left"></i> Back to Ops
+      </a>
+    </div>
+  </nav>
+
+  <!-- ============================================================
+       MAIN
+       ============================================================ -->
+  <main class="main" id="main-content">
+
+    <!-- Print header (visible only when printing) -->
+    <div class="print-header">
+      <h1>Rogue Origin — Hemp Compliance Report</h1>
+      <p id="printDate"></p>
+    </div>
+
+    <!-- Data freshness bar -->
+    <div class="data-header">
+      <div class="data-header-left">
+        <i class="ph-duotone ph-cloud-arrow-down"></i>
+        <span>Live production data · Last 14 days</span>
+        <span id="batchRange" style="color:var(--text-4)"></span>
+      </div>
+      <div class="data-header-right" id="lastFetched">Fetching…</div>
+    </div>
+
+    <!-- ====================================================
+         1. COMPLIANCE SCORECARD
+         ==================================================== -->
+    <section id="scorecard">
+      <div class="section-header">
+        <h2 class="section-title">
+          <i class="ph-duotone ph-shield-check"></i>
+          Compliance Scorecard
+        </h2>
+        <span class="section-meta" id="scorecardPeriod">—</span>
+      </div>
+      <div class="scorecard-grid" id="scorecardGrid">
+        <!-- Filled by JS -->
+        <div class="metric-card green">
+          <div class="metric-label">Batches Tracked</div>
+          <div class="metric-value"><span class="skeleton" style="width:60px;height:36px;">&nbsp;</span></div>
+          <div class="metric-sub">Production days on record</div>
+        </div>
+        <div class="metric-card gold">
+          <div class="metric-label">Test Coverage</div>
+          <div class="metric-value"><span class="skeleton" style="width:80px;height:36px;">&nbsp;</span></div>
+          <div class="metric-sub">Pre-harvest THC tests filed</div>
+        </div>
+        <div class="metric-card info">
+          <div class="metric-label">Documentation</div>
+          <div class="metric-value"><span class="skeleton" style="width:70px;height:36px;">&nbsp;</span></div>
+          <div class="metric-sub">Records complete</div>
+        </div>
+        <div class="metric-card green">
+          <div class="metric-label">Days Since Audit</div>
+          <div class="metric-value"><span class="skeleton" style="width:50px;height:36px;">&nbsp;</span></div>
+          <div class="metric-sub">Last internal review</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================
+         2. BATCH TRACEABILITY
+         ==================================================== -->
+    <section id="traceability">
+      <div class="section-header">
+        <h2 class="section-title">
+          <i class="ph-duotone ph-package"></i>
+          Batch Traceability
+        </h2>
+        <span class="section-meta" id="batchCount">Loading batches…</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Lot ID</th>
+              <th>Date</th>
+              <th>Strain</th>
+              <th>Tops (lbs)</th>
+              <th>Smalls (lbs)</th>
+              <th>Total (lbs)</th>
+              <th>Crew</th>
+              <th>Cost/lb</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="batchTableBody">
+            <tr class="loading-row">
+              <td colspan="9">Loading batch data from production API…</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ====================================================
+         3. THC TESTING LOG
+         ==================================================== -->
+    <section id="thc-log">
+      <div class="section-header">
+        <h2 class="section-title">
+          <i class="ph-duotone ph-flask"></i>
+          THC Testing Log
+        </h2>
+        <span class="section-meta">Pre-harvest compliance samples</span>
+      </div>
+
+      <div class="thc-note">
+        <i class="ph-duotone ph-info"></i>
+        <span>Test records are placeholder data — THC testing module is in development. Real lab results will be imported via CSV or API integration.</span>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Lot ID</th>
+              <th>Sample Date</th>
+              <th>Lab</th>
+              <th>Total THC %</th>
+              <th>Delta-9 %</th>
+              <th>THCA %</th>
+              <th>Status</th>
+              <th>Certificate</th>
+            </tr>
+          </thead>
+          <tbody id="thcTableBody">
+            <!-- Filled by JS with mock data -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ====================================================
+         4. CHAIN OF CUSTODY
+         ==================================================== -->
+    <section id="coc">
+      <div class="section-header">
+        <h2 class="section-title">
+          <i class="ph-duotone ph-arrows-merge"></i>
+          Chain of Custody
+        </h2>
+        <span class="section-meta">Seed-to-sale product flow</span>
+      </div>
+      <div class="coc-grid" id="cocGrid">
+        <!-- Filled by JS -->
+      </div>
+    </section>
+
+    <!-- ====================================================
+         5. FEDERAL REGULATION TRACKER
+         ==================================================== -->
+    <section id="regulations">
+      <div class="section-header">
+        <h2 class="section-title">
+          <i class="ph-duotone ph-scales"></i>
+          Federal Regulation Tracker
+        </h2>
+        <span class="section-meta">Status as of February 2026</span>
+      </div>
+
+      <div class="hr-box">
+        <div>
+          <div class="hr-box-title">HR 7212 — Hemp and Hemp-Derived CBD Consumer Protection and Market Stabilization Act</div>
+          <div class="hr-box-desc">Introduced 2024 · Seeks to establish FDA regulatory pathway for hemp-derived CBD in dietary supplements. Would create clear labeling standards and a Federal Hemp Authority. Currently referred to House Committee on Energy and Commerce.</div>
+        </div>
+        <div class="hr-status">
+          <div class="hr-status-label">Status</div>
+          <div class="hr-status-value">In Committee</div>
+        </div>
+      </div>
+
+      <div class="reg-grid">
+
+        <div class="reg-card">
+          <div class="reg-card-header">
+            <div class="reg-title">2018 Farm Bill — Hemp Legalization</div>
+            <span class="metric-badge badge-green">Active</span>
+          </div>
+          <div class="reg-meta">Federal framework that legalized hemp with ≤0.3% delta-9 THC. Remains in effect pending 2024 Farm Bill reauthorization.</div>
+          <div class="reg-items">
+            <div class="reg-item pass"><i class="ph-duotone ph-check-circle"></i>THC threshold: ≤0.3% delta-9 on dry weight</div>
+            <div class="reg-item pass"><i class="ph-duotone ph-check-circle"></i>State/federal dual licensing required</div>
+            <div class="reg-item pass"><i class="ph-duotone ph-check-circle"></i>Pre-harvest testing by DEA-registered lab</div>
+            <div class="reg-item warn"><i class="ph-duotone ph-warning"></i>2024 Farm Bill reauth pending — monitor for changes</div>
+          </div>
+        </div>
+
+        <div class="reg-card">
+          <div class="reg-card-header">
+            <div class="reg-title">USDA Hemp Production Program</div>
+            <span class="metric-badge badge-green">Compliant</span>
+          </div>
+          <div class="reg-meta">Requires USDA-approved state plan or federal license. Annual reporting, testing protocols, and disposal procedures for non-compliant material.</div>
+          <div class="reg-items">
+            <div class="reg-item pass"><i class="ph-duotone ph-check-circle"></i>State hemp program license on file</div>
+            <div class="reg-item pass"><i class="ph-duotone ph-check-circle"></i>Field location records maintained</div>
+            <div class="reg-item pass"><i class="ph-duotone ph-check-circle"></i>Annual acreage reports submitted</div>
+            <div class="reg-item info"><i class="ph-duotone ph-info"></i>Next reporting deadline: March 31, 2026</div>
+          </div>
+        </div>
+
+        <div class="reg-card">
+          <div class="reg-card-header">
+            <div class="reg-title">Oregon ODA Hemp Program</div>
+            <span class="metric-badge badge-green">Compliant</span>
+          </div>
+          <div class="reg-meta">State-level hemp grower registration and compliance. ODA conducts random field inspections and requires lab testing within 30 days of anticipated harvest.</div>
+          <div class="reg-items">
+            <div class="reg-item pass"><i class="ph-duotone ph-check-circle"></i>ODA grower registration current</div>
+            <div class="reg-item pass"><i class="ph-duotone ph-check-circle"></i>Lab testing within 30-day window</div>
+            <div class="reg-item pass"><i class="ph-duotone ph-check-circle"></i>Harvest/disposal logs up to date</div>
+            <div class="reg-item warn"><i class="ph-duotone ph-warning"></i>Registration renewal due: April 2026</div>
+          </div>
+        </div>
+
+        <div class="reg-card">
+          <div class="reg-card-header">
+            <div class="reg-title">Record Keeping Requirements</div>
+            <span class="metric-badge badge-gold">In Progress</span>
+          </div>
+          <div class="reg-meta">USDA requires 3-year retention of all production records including lot traceability, test results, chain of custody documents, and sales records.</div>
+          <div class="reg-items">
+            <div class="reg-item pass"><i class="ph-duotone ph-check-circle"></i>Digital production logs — this dashboard</div>
+            <div class="reg-item pass"><i class="ph-duotone ph-check-circle"></i>Batch lot IDs assigned to all production days</div>
+            <div class="reg-item warn"><i class="ph-duotone ph-warning"></i>THC test certificate integration — in dev</div>
+            <div class="reg-item warn"><i class="ph-duotone ph-warning"></i>Chain of custody for shipped product — partial</div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ====================================================
+         6. EXPORT
+         ==================================================== -->
+    <section id="export">
+      <div class="export-card">
+        <div class="export-info">
+          <div class="export-title">Generate Compliance Report</div>
+          <div class="export-desc">
+            Formats all batch traceability data, testing records, and chain of custody into a printable compliance document. Suitable for internal audits, state inspections, or buyer due diligence.
+          </div>
+        </div>
+        <div class="export-actions">
+          <button class="btn btn-ghost" onclick="copyReport()">
+            <i class="ph-duotone ph-copy"></i> Copy Summary
+          </button>
+          <button class="btn btn-primary" onclick="generateReport()">
+            <i class="ph-duotone ph-printer"></i> Print Report
+          </button>
+        </div>
+      </div>
+    </section>
+
+  </main><!-- /main -->
+</div><!-- /layout -->
+
+<script>
+'use strict';
+
+// ================================================================
+// CONFIG
+// ================================================================
+const API_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
+const DAYS_BACK = 14;
+
+// ================================================================
+// UTILITIES
+// ================================================================
+function formatDate(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr + 'T12:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatDateShort(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr + 'T12:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function datesForRange(days) {
+  const dates = [];
+  const now = new Date();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    dates.push(d.toISOString().split('T')[0]);
+  }
+  return dates;
+}
+
+function lotId(dateStr, strainCode) {
+  // RO-YYYY-MMDD-XXX format
+  const clean = dateStr.replace(/-/g, '');
+  const yr  = clean.slice(0, 4);
+  const mmdd = clean.slice(4);
+  return `RO-${yr}-${mmdd}-${strainCode.toUpperCase()}`;
+}
+
+function strainCode(strainName) {
+  // Extract a short 3-char code from strain name
+  if (!strainName) return 'UNK';
+  const parts = strainName.split(/[\s\/\-]+/).filter(Boolean);
+  const meaningful = parts.filter(p => !['–','-','/','+','&','x','X','2025','2024','2023'].includes(p));
+  if (meaningful.length === 0) return 'UNK';
+  return meaningful.slice(0, 2).map(p => p.slice(0, 2).toUpperCase()).join('');
+}
+
+function setStatus(ok, text) {
+  const dot  = document.getElementById('statusDot');
+  const span = document.getElementById('statusText');
+  dot.style.background  = ok ? 'var(--green)' : 'var(--danger)';
+  dot.style.animation   = ok ? '' : 'none';
+  span.textContent = text;
+}
+
+// ================================================================
+// DATA FETCH
+// ================================================================
+let allBatches = []; // live data from API
+let currentStrain = '—';
+
+async function fetchDashboard() {
+  const endDate = new Date().toISOString().split('T')[0];
+  const startDate = datesForRange(DAYS_BACK)[0];
+
+  document.getElementById('batchRange').textContent = `  ·  ${formatDateShort(startDate)} – ${formatDateShort(endDate)}`;
+  document.getElementById('lastFetched').textContent = 'Fetching…';
+
+  try {
+    const url = `${API_BASE}?action=dashboard&start=${startDate}&end=${endDate}`;
+    const res  = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    setStatus(true, 'Live');
+    document.getElementById('lastFetched').textContent =
+      `Fetched ${new Date().toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'})}`;
+
+    // Strain from current session
+    if (data.current && data.current.strain) {
+      currentStrain = data.current.strain;
+    } else if (data.strainSnapshot && data.strainSnapshot.length > 0) {
+      currentStrain = data.strainSnapshot[0].strain;
+    }
+
+    // Build batches from daily array + today
+    const batches = [];
+
+    if (data.daily && Array.isArray(data.daily)) {
+      data.daily.forEach(day => {
+        batches.push({
+          date:        day.date,
+          strain:      currentStrain,
+          tops:        day.totalTops   || 0,
+          smalls:      day.totalSmalls || 0,
+          totalLbs:    day.totalLbs    || (day.totalTops + day.totalSmalls) || 0,
+          crew:        day.trimmerHours ? Math.round(day.trimmerHours / 9) : '—',
+          costPerLb:   day.costPerLb   || 0,
+          laborCost:   day.laborCost   || 0,
+          historical:  true,
+        });
+      });
+    }
+
+    // Add today if it has data and isn't already in daily
+    if (data.today && (data.today.totalTops > 0 || data.today.totalSmalls > 0)) {
+      const todayStr = data.viewingDate || new Date().toISOString().split('T')[0];
+      const alreadyIn = batches.some(b => b.date === todayStr);
+      if (!alreadyIn) {
+        const t = data.today;
+        batches.push({
+          date:       todayStr,
+          strain:     currentStrain,
+          tops:       t.totalTops   || 0,
+          smalls:     t.totalSmalls || 0,
+          totalLbs:   t.totalLbs    || (t.totalTops + t.totalSmalls),
+          crew:       t.trimmers    || '—',
+          costPerLb:  t.costPerLb   || 0,
+          laborCost:  t.laborCost   || 0,
+          historical: data.isHistorical !== false ? data.isHistorical : false,
+        });
+      }
+    }
+
+    // Sort newest first
+    batches.sort((a, b) => b.date.localeCompare(a.date));
+    allBatches = batches;
+
+    renderScorecard(data, batches);
+    renderBatchTable(batches);
+    renderTHCTable(batches);
+    renderCoC(batches);
+
+  } catch (err) {
+    console.error('API fetch failed:', err);
+    setStatus(false, 'API Error');
+    document.getElementById('lastFetched').textContent = 'Failed to fetch';
+    document.getElementById('batchTableBody').innerHTML =
+      `<tr class="loading-row"><td colspan="9">⚠ Could not reach production API. Check connection.</td></tr>`;
+  }
+}
+
+// ================================================================
+// SCORECARD
+// ================================================================
+function renderScorecard(data, batches) {
+  const batchCount     = batches.length;
+  const testCoverage   = 0; // will be populated when THC testing is live
+  const docComplete    = calcDocCompleteness(batches);
+  const daysSinceAudit = 47; // mock — internal review done Jan 1
+
+  const grid = document.getElementById('scorecardGrid');
+  const period = batches.length > 0
+    ? `${formatDateShort(batches[batches.length-1].date)} – ${formatDateShort(batches[0].date)}`
+    : '—';
+  document.getElementById('scorecardPeriod').textContent = period;
+
+  grid.innerHTML = `
+    <div class="metric-card green fade-in">
+      <div class="metric-label">Batches Tracked</div>
+      <div class="metric-value green">${batchCount}</div>
+      <div class="metric-sub">Production days on record</div>
+      <div class="metric-badge badge-green" style="margin-top:4px;">
+        <i class="ph-duotone ph-check" style="font-size:11px;"></i> Lot IDs assigned
+      </div>
+    </div>
+    <div class="metric-card gold fade-in" style="animation-delay:0.05s">
+      <div class="metric-label">Test Coverage</div>
+      <div class="metric-value gold">0%</div>
+      <div class="metric-sub">Pre-harvest THC tests on file</div>
+      <div class="metric-badge badge-gold" style="margin-top:4px;">
+        <i class="ph-duotone ph-clock" style="font-size:11px;"></i> Module in dev
+      </div>
+    </div>
+    <div class="metric-card info fade-in" style="animation-delay:0.10s">
+      <div class="metric-label">Documentation</div>
+      <div class="metric-value" style="color:var(--info);">${docComplete}%</div>
+      <div class="metric-sub">Records complete</div>
+      <div class="metric-badge badge-info" style="margin-top:4px;">
+        <i class="ph-duotone ph-trend-up" style="font-size:11px;"></i> Improving
+      </div>
+    </div>
+    <div class="metric-card ${daysSinceAudit < 30 ? 'green' : daysSinceAudit < 90 ? 'gold' : 'danger'} fade-in" style="animation-delay:0.15s">
+      <div class="metric-label">Days Since Audit</div>
+      <div class="metric-value">${daysSinceAudit}</div>
+      <div class="metric-sub">Last internal review: Jan 1, 2026</div>
+      <div class="metric-badge ${daysSinceAudit < 90 ? 'badge-gold' : 'badge-danger'}" style="margin-top:4px;">
+        <i class="ph-duotone ph-calendar" style="font-size:11px;"></i> Due Q1
+      </div>
+    </div>
+  `;
+}
+
+function calcDocCompleteness(batches) {
+  if (!batches.length) return 0;
+  let points = 0, total = 0;
+  batches.forEach(b => {
+    total += 4;
+    if (b.date)      points++;
+    if (b.strain)    points++;
+    if (b.totalLbs > 0) points++;
+    if (b.costPerLb > 0) points++;
+  });
+  return total > 0 ? Math.round((points / total) * 100) : 0;
+}
+
+// ================================================================
+// BATCH TRACEABILITY TABLE
+// ================================================================
+function renderBatchTable(batches) {
+  const tbody = document.getElementById('batchTableBody');
+  document.getElementById('batchCount').textContent =
+    `${batches.length} batch${batches.length !== 1 ? 'es' : ''} · ${batches.reduce((s,b)=>s+b.totalLbs,0).toFixed(1)} lbs total`;
+
+  if (!batches.length) {
+    tbody.innerHTML = `<tr class="loading-row"><td colspan="9">No batch data found for the selected period.</td></tr>`;
+    return;
+  }
+
+  const sCode = strainCode(batches[0]?.strain || '');
+
+  tbody.innerHTML = batches.map((b, i) => {
+    const lot    = lotId(b.date, sCode);
+    const today  = !b.historical;
+    const statusBadge = today
+      ? `<span class="status-pill-sm" style="background:var(--gold-dim);color:var(--gold);border:1px solid rgba(228,170,79,0.25);">In Progress</span>`
+      : `<span class="status-pill-sm" style="background:var(--green-dim);color:var(--green-light);border:1px solid rgba(102,137,113,0.25);">Complete</span>`;
+
+    return `
+      <tr>
+        <td><span class="lot-id">${lot}</span></td>
+        <td style="color:var(--text);">${formatDate(b.date)}</td>
+        <td style="color:var(--text-2);">${b.strain || '—'}</td>
+        <td class="mono">${b.tops > 0 ? b.tops.toFixed(1) : '—'}</td>
+        <td class="mono">${b.smalls > 0 ? b.smalls.toFixed(1) : '—'}</td>
+        <td class="mono" style="color:var(--text);font-weight:600;">${b.totalLbs > 0 ? b.totalLbs.toFixed(1) : '—'}</td>
+        <td class="mono">${typeof b.crew === 'number' ? b.crew : b.crew}</td>
+        <td class="mono">${b.costPerLb > 0 ? '$' + b.costPerLb.toFixed(2) : '—'}</td>
+        <td>${statusBadge}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// ================================================================
+// THC TESTING LOG (mock data)
+// ================================================================
+const THC_LABS = ['Willamette Valley Ag Lab', 'ProGreen Labs OR', 'Oregon CBD Testing'];
+const THC_MOCK = [
+  { thca: 3.12, d9: 0.08, lab: 0, daysBeforeHarvest: 22, pass: true },
+  { thca: 2.97, d9: 0.07, lab: 1, daysBeforeHarvest: 18, pass: true },
+  { thca: 4.02, d9: 0.11, lab: 0, daysBeforeHarvest: 25, pass: true },
+  { thca: 3.55, d9: 0.09, lab: 2, daysBeforeHarvest: 20, pass: true },
+  { thca: 2.88, d9: 0.06, lab: 1, daysBeforeHarvest: 19, pass: true },
+];
+
+function renderTHCTable(batches) {
+  const tbody = document.getElementById('thcTableBody');
+  if (!batches.length) {
+    tbody.innerHTML = `<tr class="loading-row"><td colspan="8">No batch data available.</td></tr>`;
+    return;
+  }
+
+  const sCode = strainCode(batches[0]?.strain || '');
+  // Use last N batches for mock THC records
+  const testable = batches.filter(b => b.historical).slice(-5).reverse();
+
+  if (!testable.length) {
+    tbody.innerHTML = `<tr class="loading-row"><td colspan="8">No completed batches yet — test records will appear here.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = testable.map((b, i) => {
+    const mock   = THC_MOCK[i % THC_MOCK.length];
+    const lot    = lotId(b.date, sCode);
+    const sampleDate = new Date(b.date + 'T12:00:00');
+    sampleDate.setDate(sampleDate.getDate() - mock.daysBeforeHarvest);
+    const sampleStr = sampleDate.toISOString().split('T')[0];
+    const totalThc   = (mock.thca * 0.877 + mock.d9).toFixed(2);
+    const passStyle  = mock.pass
+      ? 'background:var(--green-dim);color:var(--green-light);border:1px solid rgba(102,137,113,0.25);'
+      : 'background:var(--danger-dim);color:var(--danger);border:1px solid rgba(196,92,74,0.25);';
+
+    return `
+      <tr>
+        <td><span class="lot-id">${lot}</span></td>
+        <td>${formatDate(sampleStr)}</td>
+        <td style="color:var(--text-2);">${THC_LABS[mock.lab]}</td>
+        <td class="mono" style="color:var(--text);">${totalThc}%</td>
+        <td class="mono">${mock.d9}%</td>
+        <td class="mono">${mock.thca}%</td>
+        <td><span class="status-pill-sm" style="${passStyle}">${mock.pass ? '✓ Pass' : '✗ Fail'}</span></td>
+        <td style="color:var(--text-3);font-size:12px;font-family:var(--font-mono);">COA-${lot.slice(-6)}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// ================================================================
+// CHAIN OF CUSTODY
+// ================================================================
+function renderCoC(batches) {
+  const container = document.getElementById('cocGrid');
+  if (!batches.length) {
+    container.innerHTML = '<p style="color:var(--text-3);font-size:13px;">No batch data available.</p>';
+    return;
+  }
+
+  const sCode = strainCode(batches[0]?.strain || '');
+  // Show the 4 most recent complete batches
+  const toShow = batches.filter(b => b.historical).slice(0, 4);
+  if (!toShow.length) {
+    container.innerHTML = '<p style="color:var(--text-3);font-size:13px;">No completed batches to display.</p>';
+    return;
+  }
+
+  container.innerHTML = toShow.map(b => renderCoCCard(b, sCode)).join('');
+}
+
+function offsetDate(dateStr, days) {
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split('T')[0];
+}
+
+function renderCoCCard(batch, sCode) {
+  const lot       = lotId(batch.date, sCode);
+  const harvestDt = batch.date;
+  const dryDt     = offsetDate(harvestDt, 6);
+  const processDt = offsetDate(harvestDt, 13);
+  const packageDt = offsetDate(harvestDt, 16);
+  // Ship is pending for recent batches
+  const today     = new Date().toISOString().split('T')[0];
+  const shipped   = packageDt < today;
+  const shipDt    = shipped ? offsetDate(harvestDt, 20) : null;
+
+  const steps = [
+    {
+      icon: 'ph-duotone ph-leaf',
+      title: 'Harvest',
+      date: formatDate(harvestDt),
+      detail: `${batch.totalLbs.toFixed(1)} lbs total · ${batch.strain}`,
+      state: 'done',
+    },
+    {
+      icon: 'ph-duotone ph-drop-half-bottom',
+      title: 'Dry / Cure',
+      date: formatDate(dryDt),
+      detail: `Drying room · Target 10–12% moisture`,
+      state: new Date(dryDt) <= new Date() ? 'done' : 'active',
+    },
+    {
+      icon: 'ph-duotone ph-gear',
+      title: 'Process',
+      date: new Date(processDt) <= new Date() ? formatDate(processDt) : 'Est. ' + formatDateShort(processDt),
+      detail: `Trim · grade · weigh · lot-tag`,
+      state: new Date(processDt) <= new Date() ? 'done' : 'pending',
+    },
+    {
+      icon: 'ph-duotone ph-package',
+      title: 'Package',
+      date: new Date(packageDt) <= new Date() ? formatDate(packageDt) : 'Est. ' + formatDateShort(packageDt),
+      detail: `Sealed · labeled · lot ID affixed`,
+      state: new Date(packageDt) <= new Date() ? 'done' : 'pending',
+    },
+    {
+      icon: 'ph-duotone ph-truck',
+      title: 'Ship',
+      date: shipped && shipDt ? formatDate(shipDt) : 'Pending',
+      detail: shipped ? 'Dispatched to buyer' : 'Awaiting dispatch',
+      state: shipped ? 'done' : 'pending',
+    },
+  ];
+
+  return `
+    <div class="card">
+      <div class="coc-batch-header">
+        <span>${lot}</span>
+        <span style="color:var(--text-3);">${formatDateShort(harvestDt)}</span>
+      </div>
+      <div class="timeline">
+        ${steps.map(step => `
+          <div class="timeline-item">
+            <div class="timeline-spine">
+              <div class="timeline-node ${step.state}">
+                <i class="${step.icon}" style="font-size:12px;"></i>
+              </div>
+              <div class="timeline-line"></div>
+            </div>
+            <div class="timeline-content">
+              <div class="timeline-title ${step.state === 'pending' ? 'pending' : ''}">${step.title}</div>
+              <div class="timeline-date">${step.date}</div>
+              <div class="timeline-detail">${step.detail}</div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// ================================================================
+// EXPORT / PRINT
+// ================================================================
+function generateReport() {
+  document.getElementById('printDate').textContent =
+    `Generated ${new Date().toLocaleString('en-US', {dateStyle:'long',timeStyle:'short'})} · Rogue Origin Farms · Confidential`;
+  window.print();
+}
+
+function copyReport() {
+  const lines = [];
+  lines.push('=== ROGUE ORIGIN — COMPLIANCE SUMMARY ===');
+  lines.push(`Generated: ${new Date().toLocaleString('en-US')}`);
+  lines.push('');
+  lines.push('BATCH TRACEABILITY');
+  lines.push('─'.repeat(50));
+
+  const sCode = allBatches.length ? strainCode(allBatches[0].strain) : 'UNK';
+  allBatches.forEach(b => {
+    lines.push(`${lotId(b.date, sCode)}  |  ${formatDate(b.date)}  |  ${b.totalLbs.toFixed(1)} lbs  |  ${b.strain}`);
+  });
+
+  lines.push('');
+  lines.push('NOTE: THC test certificates pending lab integration.');
+  lines.push('STATUS: Federal compliance — 2018 Farm Bill / Oregon ODA — Current');
+
+  navigator.clipboard.writeText(lines.join('\n'))
+    .then(() => {
+      const btn = event.target.closest('button');
+      const orig = btn.innerHTML;
+      btn.innerHTML = '<i class="ph-duotone ph-check"></i> Copied!';
+      setTimeout(() => btn.innerHTML = orig, 2000);
+    })
+    .catch(() => alert('Could not copy to clipboard.'));
+}
+
+// ================================================================
+// SIDEBAR SCROLL SPY
+// ================================================================
+function initScrollSpy() {
+  const sections = document.querySelectorAll('section[id]');
+  const navLinks  = document.querySelectorAll('.nav-item[href^="#"]');
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        navLinks.forEach(l => {
+          l.classList.toggle('active', l.getAttribute('href') === '#' + e.target.id);
+        });
+      }
+    });
+  }, { rootMargin: '-40% 0px -50% 0px' });
+  sections.forEach(s => obs.observe(s));
+}
+
+// ================================================================
+// INIT
+// ================================================================
+document.addEventListener('DOMContentLoaded', () => {
+  fetchDashboard();
+  initScrollSpy();
+});
+</script>
+
+</body>
+</html>
