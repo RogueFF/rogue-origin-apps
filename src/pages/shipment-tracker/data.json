@@ -15,14 +15,12 @@
       "eta": "Feb 19, 3:30 PM CET",
       "weight": "380 kg (2 pallets)",
       "sensorData": {
-        "temp": "54.0°F",
-        "humidity": "21.5%",
-        "battery": "84%",
-        "location": "Vallejo, CA",
-        "coords": "38.151698, -122.217611",
-        "fullAddress": "154 Goldenrod St, Vallejo, CA 94589, USA"
+        "temp": "56.8°F",
+        "humidity": "22.6%",
+        "battery": "85%",
+        "location": "San Francisco, CA"
       },
-      "lastUpdate": "2026-02-18T12:30:11.926Z",
+      "lastUpdate": "2026-02-18T17:00:00.000Z",
       "created": "2026-02-17T20:00:00Z",
       "history": [
         {
@@ -38,6 +36,13 @@
           "temp": "59.6°F",
           "humidity": "23.7%",
           "battery": "82%"
+        },
+        {
+          "time": "2026-02-18T17:00:00Z",
+          "location": "San Francisco, CA",
+          "temp": "56.8°F",
+          "humidity": "22.6%",
+          "battery": "85%"
         }
       ]
     }
