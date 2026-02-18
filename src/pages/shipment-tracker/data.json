@@ -19,14 +19,14 @@
       "flightStatus": "SCHEDULED",
       "weight": "380 kg (2 pallets)",
       "sensorData": {
-        "temp": "52.9°F",
-        "humidity": "22.2%",
-        "battery": "79%",
+        "temp": "53.7°F",
+        "humidity": "22.4%",
+        "battery": "78%",
         "location": "San Francisco, CA",
-        "coords": "37.622229, -122.395613",
+        "coords": "37.622276, -122.395688",
         "fullAddress": "632 W Field Rd, San Francisco, CA 94128, USA"
       },
-      "lastUpdate": "2026-02-18T21:00:10.068Z",
+      "lastUpdate": "2026-02-18T21:30:12.057Z",
       "created": "2026-02-17T20:00:00Z",
       "history": [
         {
