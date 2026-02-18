@@ -2094,6 +2094,7 @@ async function initBarcodeCard() {
   initBarcodePrintButtons();
   initBarcodeTabs();
   initScannerTab();
+  initBagCompleteButton();
 }
 
 /**
@@ -2431,7 +2432,6 @@ async function initScannerTab() {
   initRefreshPoolButton();
   initPoolUpdateButton();
   initRecentChanges();
-  initBagCompleteButton();
 }
 
 /**
