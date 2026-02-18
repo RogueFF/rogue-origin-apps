@@ -2253,7 +2253,15 @@
 
       document.getElementById('modalTitle').innerHTML = '<i class="ph-duotone ph-pencil-simple"></i> Edit SOP';
       document.getElementById('sopTitle').value = s.title;
-      document.getElementById('sopDept').value = s.dept;
+      // If dept isn't in the dropdown (e.g. removed from settings), add it temporarily
+      const sopDeptEl = document.getElementById('sopDept');
+      if (s.dept && !Array.from(sopDeptEl.options).some(o => o.value === s.dept)) {
+        const opt = document.createElement('option');
+        opt.value = s.dept;
+        opt.textContent = s.dept + ' (legacy)';
+        sopDeptEl.appendChild(opt);
+      }
+      sopDeptEl.value = s.dept;
       document.getElementById('sopDocNum').value = s.docNum || '';
       document.getElementById('sopRevision').value = s.revision || '1.0';
       document.getElementById('sopStatus').value = s.status || 'draft';
