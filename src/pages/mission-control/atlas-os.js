@@ -85,6 +85,8 @@ const GLYPH_MAP = {
   guide:      '🧭',   // navigation, compass
   scout:      '🔭',   // discovery, observation
   sensei:     '☯️',    // mastery, balance
+  razor:      '🪒',   // sharpening, precision cuts
+  dealer:     '🎰',   // position management
 };
 
 // ─── State ───
