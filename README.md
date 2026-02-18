@@ -1,35 +1,192 @@
-# Rogue Origin Operations Hub
+# Rogue Origin Apps
 
-> Hemp processing operations management system for Rogue Origin in Southern Oregon
+Operations hub for [Rogue Origin](https://rogueorigin.com) — a seed-to-sale hemp flower business in Southern Oregon. Production tracking, order management, AI-powered mission control, and an autonomous trading desk.
 
-**Architecture**: Static HTML frontend (GitHub Pages) + Google Apps Script backend + Google Sheets database
-**Stack**: Vanilla JavaScript, Chart.js, Muuri.js, Google Apps Script
-**Deployment**: [rogueff.github.io/rogue-origin-apps](https://rogueff.github.io/rogue-origin-apps/)
+**Live:** [rogueff.github.io/rogue-origin-apps](https://rogueff.github.io/rogue-origin-apps)
 
 ---
 
-## Quick Start
+## Architecture
 
-### View the Dashboard
-1. Open `src/pages/index.html` in a browser
-2. Or visit: https://rogueff.github.io/rogue-origin-apps/
+```
+GitHub Pages (Frontend)  ←→  Cloudflare Workers (API)  ←→  Cloudflare D1 (Database)
+       ↑                              ↑
+  atlas-os.js                   Two workers:
+  (Mission Control)             • rogue-origin-api (operations)
+                                • mission-control-api (Atlas OS)
+```
 
-### For Developers
+### Stack
+- **Frontend:** Vanilla JS, no framework — served via GitHub Pages
+- **API:** Cloudflare Workers (two separate workers)
+- **Database:** Cloudflare D1 (SQLite at edge)
+- **AI Agents:** Node.js scripts orchestrated by Atlas (OpenClaw) via cron
+- **CI:** GitHub Actions — tests run on every push
+
+---
+
+## Apps & Pages
+
+| App | Path | Description |
+|-----|------|-------------|
+| **Mission Control** | `src/pages/mission-control/` | Atlas OS — agent fleet, trading desk, task board, production, activity feed |
+| **Scoreboard** | `src/pages/scoreboard.html` | Real-time production scoreboard (lbs/hr, crew, targets) |
+| **Pool Inventory** | `src/pages/pool-inventory.html` | Flower inventory by strain, grade, location |
+| **Consignment** | `src/pages/consignment.html` | Partner farm intake → inventory → payment workflow |
+| **Order Management** | `src/pages/orders.html` | Wholesale order tracking, shipments |
+| **Barcode System** | `src/pages/barcode.html` | Label generation + scanning for bags/boxes |
+| **SOP Manager** | `src/pages/sop-manager.html` | Standard operating procedures with versioning |
+| **Kanban** | `src/pages/kanban.html` | Visual task board |
+| **Complaints** | `src/pages/complaints.html` | Customer complaint tracking |
+| **Scale Reader** | `scale-reader/` | USB scale integration for weighing stations |
+
+---
+
+## Workers (API)
+
+### `rogue-origin-api`
+**Path:** `workers/`
+**URL:** `rogue-origin-api.roguefamilyfarms.workers.dev`
+
+Core operations API:
+- `/api/production` — real-time production tracking (scoreboard, dashboard, KPIs)
+- `/api/pool` — flower inventory management
+- `/api/consignment` — partner farm consignment workflow
+- `/api/orders` — wholesale order management
+- `/api/barcode` — barcode/label generation
+- `/api/sop` — SOP versioning
+- `/api/kanban` — task board
+- `/api/prices` — live stock price proxy (Yahoo Finance)
+
+### `mission-control-api`
+**Path:** `workers/mission-control/`
+**URL:** `mission-control-api.roguefamilyfarms.workers.dev`
+
+Atlas OS backend:
+- `/api/agents` — agent fleet status (register, update, query)
+- `/api/activity` — activity feed (all agent actions logged here)
+- `/api/tasks` — task management (neural task board)
+- `/api/inbox` — Koa's decision inbox
+- `/api/regime` — market regime signal (RED/YELLOW/GREEN)
+- `/api/plays` — trading desk plays (Strategist recommendations)
+- `/api/positions` — portfolio positions (open/closed)
+- `/api/widgets` — dashboard widget config
+- `/api/github` — GitHub proxy (commits, CI, issues, PRs)
+
+---
+
+## Atlas OS (Mission Control)
+
+The command center. A single-page app with draggable, resizable windows:
+
+- **Activity Feed** — real-time log of all agent actions
+- **Agent Fleet** — status of every agent (active/idle/error)
+- **Trading Desk** — regime signal, portfolio, positions, plays, trade history, sectors, calendar
+- **Neural Tasks** — interactive task graph with domain clustering
+- **Inbox** — items requiring Koa's decision
+- **Production** — live scoreboard with auto-refresh (60s on shift, 5m off)
+- **Atlas Chat** — direct AI chat interface
+- **GitHub** — commits, CI status, issues, PRs, branch activity
+
+---
+
+## Agent Squad
+
+Autonomous agents running on cron, orchestrated by Atlas:
+
+### Trading Desk Agents
+
+| Agent | Glyph | Schedule | Role |
+|-------|-------|----------|------|
+| **Regime** | 🛡️ | 6:30 AM daily | Market regime classification (RED/YELLOW/GREEN) — SPY, VIX, moving averages |
+| **Wire** | 🔗 | 6:30 AM daily | Market scanning, news, watchlist generation |
+| **Viper** | ⚡ | 6:30 AM daily | Options signals, earnings plays, unusual activity |
+| **Strategist** | ♟️ | Every 30m, 7AM-1PM | Structures plays from Wire+Viper+Regime intelligence |
+| **Analyst** | 💎 | 7:30 AM daily | Validates Strategist plays against regime (scoring, risk flags) |
+| **Dealer** | 🎰 | Every 30m, 7AM-1PM | Position management — entries, exits, stop losses |
+| **Ledger** | 📊 | 1:30 PM daily | Portfolio snapshot, daily P&L, trade journal |
+| **Razor** | 🪒 | 2 PM daily + Fri weekly | Performance auditor — win/loss analysis, strategy drift, evolution proposals |
+
+### System Agents
+
+| Agent | Glyph | Schedule | Role |
+|-------|-------|----------|------|
+| **Friday** | 🔧 | On-demand | Coding agent (Claude Code CLI + Agent Teams) |
+| **Darwin** | 🧬 | 11 PM nightly | System evolution — audits agents, proposes improvements |
+| **Scout** | 🔭 | On-demand | Opportunity scanner (Reddit, deals, events) |
+
+### Agent Data Flow
+
+```
+Wire + Viper → Strategist → Analyst (validates) → Dealer (executes)
+                                                       ↓
+Razor (audits) ← Ledger (snapshots) ← Positions API ←─┘
+      ↓
+Darwin (evolves configs based on Razor findings)
+```
+
+---
+
+## Database Schema
+
+### Operations DB (`rogue-origin-api`)
+- `production_sessions` / `production_entries` — shift tracking, hourly logs
+- `pool_inventory` — flower inventory by strain/grade/location
+- `consignment_*` — partner intakes, inventory, payments
+- `orders` / `shipments` — wholesale order lifecycle
+- `barcodes` — label tracking
+- `sops` — standard operating procedures
+
+### Mission Control DB (`mission-control-api`)
+- `agents` — fleet registry (name, domain, status, color)
+- `activity` — full activity feed (every agent action)
+- `tasks` — task board with status/priority/domain
+- `inbox` — decision items for Koa
+- `regime` — market regime history
+- `trade_plays` — Strategist recommendations (with dismiss/fill status)
+- `positions` — portfolio positions (open/closed, P&L tracking)
+- `agent_files` — agent deliverables and config storage
+
+---
+
+## Development
+
+### Prerequisites
+- Node.js 22+
+- Cloudflare account with Wrangler CLI authenticated
+- GitHub CLI (`gh`) authenticated
+
+### Local Development
 ```bash
-# Clone and explore
-git clone <repo-url>
-cd rogue-origin-apps-main
+# Install dependencies
+npm install
 
-# Edit HTML files in src/pages/
-# Edit styles in src/css/
-# Edit JavaScript in src/js/
-# No build process needed - pure HTML/CSS/JS
+# Run operations worker locally
+cd workers && npx wrangler dev
 
-# Deploy to GitHub Pages
-git add .
-git commit -m "Your changes"
-git push origin main
-# Auto-deploys in 1-2 minutes
+# Run mission control worker locally
+cd workers/mission-control && npx wrangler dev
+
+# Run tests
+npm test
+```
+
+### Deployment
+```bash
+# Operations API
+npx wrangler deploy --config workers/wrangler.toml
+
+# Mission Control API
+npx wrangler deploy --config workers/mission-control/wrangler.toml
+
+# Frontend (GitHub Pages)
+git push origin master  # Auto-deploys via GitHub Pages
+```
+
+### Testing
+```bash
+npm test                    # Run all tests (node:test)
+npx playwright test         # E2E tests
 ```
 
 ---
@@ -38,318 +195,37 @@ git push origin main
 
 ```
 rogue-origin-apps/
-├── src/                          📦 Source code
-│   ├── pages/                    📄 HTML applications
-│   │   ├── index.html           ⭐ Main Operations Dashboard
-│   │   ├── scoreboard.html      📺 Floor TV display
-│   │   ├── barcode.html         🏷️  Label printing
-│   │   ├── kanban.html          📊 Task board
-│   │   ├── orders.html          📦 Internal order management
-│   │   ├── order.html           👤 Customer portal
-│   │   ├── sop-manager.html     📋 Standard Operating Procedures
-│   │   └── ops-hub.html         🔧 Alternative dashboard
-│   │
-│   ├── js/                       💻 JavaScript
-│   │   ├── modules/             ES6 dashboard modules (11 files)
-│   │   ├── scoreboard/          Scoreboard modules (10 files)
-│   │   ├── shared/              Shared utilities (api-cache.js)
-│   │   └── legacy/              Deprecated code (dashboard.js)
-│   │
-│   ├── css/                      🎨 Stylesheets
-│   │   └── *.css                Per-page stylesheets
-│   │
-│   └── assets/                   🖼️  Static assets
-│       ├── icons/               SVG icons (hemp leaf, patterns)
-│       └── images/              (future use)
-│
-├── apps-script/                  🔌 Backend code
-│   ├── production-tracking/      Main backend (~1,900 lines)
-│   ├── barcode-manager/          Barcode backend
-│   ├── kanban/                   Kanban backend
-│   └── wholesale-orders/         Order backend
-│
-├── docs/                         📚 Documentation
-│   ├── technical/               Architecture & API docs
-│   ├── design/                  Design system specs
-│   ├── plans/                   Implementation plans
-│   ├── guides/                  Setup & user guides
-│   └── sessions/                Development session notes
-│
-├── tests/                        🧪 Test suite
-├── archive/                      📦 Backups & design explorations
-├── Skills/                       🤖 Custom AI skills
-│
-├── index.html                    🔀 Root redirect to src/pages/
-├── sw.js                         ⚙️  Service worker
-├── CLAUDE.md                     🧠 AI context file (read this!)
-├── ROADMAP.md                    🗺️  Development phases
-└── README.md                     📖 This file
+├── src/pages/                  # Frontend apps (HTML + JS)
+│   ├── mission-control/        # Atlas OS (atlas-os.js + atlas-os.css)
+│   ├── scoreboard.html         # Production scoreboard
+│   ├── consignment.html        # Consignment workflow
+│   ├── pool-inventory.html     # Flower inventory
+│   └── ...                     # Other operational apps
+├── workers/                    # Cloudflare Workers
+│   ├── src/                    # Operations API
+│   │   ├── index.js            # Router + handlers
+│   │   └── handlers/           # Domain handlers (production, orders, etc.)
+│   ├── mission-control/        # Mission Control API
+│   │   ├── src/index.js        # Router + all handlers
+│   │   └── schema.sql          # D1 schema
+│   └── migrations/             # D1 migrations
+├── tools/agents/               # Atlas agent squad (see Agent Squad above)
+├── tests/                      # Test suite
+├── scale-reader/               # USB scale integration
+├── docs/                       # Design docs, plans, technical docs
+└── scripts/                    # Utility scripts
 ```
 
 ---
 
-## Apps Overview
+## Philosophy
 
-| App | File | Backend | Status | Purpose |
-|-----|------|---------|--------|---------|
-| **Operations Dashboard** | `src/pages/index.html` | Production Code.gs | ✅ Live | Main hub with AI chat, Muuri drag-drop widgets |
-| **Scoreboard** | `src/pages/scoreboard.html` | Production Code.gs | ✅ Live | Floor TV display (468KB with embedded charts) |
-| **SOP Manager** | `src/pages/sop-manager.html` | SOP Code.gs | ✅ Live | Procedures management |
-| **Kanban** | `src/pages/kanban.html` | Kanban Code.gs | ✅ Live | Task tracking board |
-| **Barcode Manager** | `src/pages/barcode.html` | Barcode Code.gs | ✅ Live | Label printing system |
-| **Orders (Internal)** | `src/pages/orders.html` | Wholesale Orders Code.gs | ✅ Live | Wholesale order & shipment management |
-| **Customer Portal** | `src/pages/order.html` | *(pending)* | 🚧 80% | Customer order view |
-| **Ops Hub (Alt)** | `src/pages/ops-hub.html` | Production Code.gs | ✅ Live | Alternative dashboard design |
+- **LEAN / Kaizen** — continuous improvement is the operating system, not a buzzword
+- **No framework loyalty** — use whatever's best for the job
+- **Ship production-grade** — no "good enough for now"
+- **Agents do the work** — Atlas orchestrates, subagents execute
+- **Every trade teaches** — Razor audits, Darwin evolves, the desk gets sharper
 
 ---
 
-## Key Features
-
-### 🎨 Hybrid Dashboard (index.html)
-- **Dual Theme System**: Light (professional cream) + Dark (organic industrial with hemp leaf pattern)
-- **Muuri.js Drag-and-Drop**: Resizable, collapsible widgets with persistent layout
-- **AI Chat Assistant**: Claude-powered production insights (🌿 FAB button)
-- **Real-time Data**: Auto-refresh production metrics
-- **Bilingual**: Full EN/ES support
-- **Mobile-First**: Responsive design, boss uses phone
-- **Typography**: DM Serif Display + JetBrains Mono + Outfit
-- **Animations**: Spring physics, staggered reveals, smooth transitions
-
-### 🤖 AI Agent ✅ Complete
-- Answers production questions ("How are we doing today?")
-- Historical analysis ("Compare this week to last week")
-- Projections ("How long for 40kg with 5 trimmers?")
-- **Shipment management** ("Create a shipment for Cannaflora, 500kg Lifter Tops")
-- **Voice mode** - Speech-to-text + Text-to-speech
-- Learns from corrections ("Actually..." detection)
-- Persistent memory across sessions
-- Task execution with visual feedback
-- Data sources: Real-time production, crew counts, 30-day history, wholesale orders
-
-### 📊 Production Tracking
-- Hour-by-hour production logging
-- Line 1 & Line 2 tracking
-- Cultivar management
-- Tops/Smalls separation
-- Bag timer with cycle times
-- Crew change logging
-
----
-
-## Tech Stack
-
-### Frontend
-- **Pure HTML/CSS/JavaScript** - No build process
-- **Chart.js** - Production visualizations
-- **Muuri.js** - Dashboard drag-and-drop
-- **Google Fonts** - DM Serif Display, JetBrains Mono, Outfit
-
-### Backend
-- **Google Apps Script** - Serverless functions
-- **Google Sheets** - Database (monthly tabs in YYYY-MM format)
-
-### External Services
-- **Anthropic Claude API** - AI chat (claude-sonnet-4-20250514)
-- **Shopify Webhooks** - Bag completion events
-- **TEC-IT Barcode Service** - Label generation
-
----
-
-## Development
-
-### Local Testing
-```bash
-# Open any HTML file directly in browser
-# For API calls, you'll need Apps Script container or deployed backend
-```
-
-### Frontend Deployment
-```bash
-git add .
-git commit -m "Description of changes"
-git push origin main
-# GitHub Pages auto-deploys in 1-2 minutes
-```
-
-### Backend Deployment (Apps Script)
-1. Open Google Sheet → Extensions → Apps Script
-2. Copy code from `apps-script/[app-name]/Code.gs`
-3. Paste into Apps Script editor
-4. Deploy → Manage deployments → Edit → New version → Deploy
-5. Test: `?action=test`
-
-### Code Patterns
-
-#### Dual-Mode Detection (Required)
-```javascript
-const isAppsScript = typeof google !== 'undefined' && google.script;
-const API_URL = 'https://script.google.com/macros/s/AKfycbx.../exec';
-
-async function loadData(action) {
-  if (isAppsScript) {
-    return new Promise((resolve, reject) => {
-      google.script.run
-        .withSuccessHandler(resolve)
-        .withFailureHandler(reject)
-        .getData(action);
-    });
-  }
-  return fetch(`${API_URL}?action=${action}`).then(r => r.json());
-}
-```
-
-#### CORS-Safe POST (Critical)
-```javascript
-// MUST use text/plain to avoid CORS preflight
-fetch(`${API_URL}?action=chat`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-  body: JSON.stringify(data)
-});
-```
-
-#### Bilingual Support
-```javascript
-const labels = {
-  en: { save: 'Save', loading: 'Loading...', trimmers: 'Trimmers' },
-  es: { save: 'Guardar', loading: 'Cargando...', trimmers: 'Podadores' }
-};
-let lang = 'en';
-const t = (key) => labels[lang][key] || key;
-```
-
----
-
-## Configuration
-
-### Brand Colors
-```css
---ro-green: #668971;      /* Primary */
---ro-green-dark: #4a6b54;
---gold: #e4aa4f;          /* Accent */
---danger: #c45c4a;
---bg-main: #1a1a1a;       /* Dark mode default */
---bg-card: #2d2d2d;
-```
-
-### API Endpoints
-- **Production API**: `https://script.google.com/macros/s/AKfycbxDAHSFl9cedGS49L3Lf5ztqy-SSToYigyA30ZtsdpmWNAR9H61X_Mm48JOOTGqqr-Z/exec`
-- **Production Sheet ID**: `1dARXrKU2u4KJY08ylA3GUKrT0zwmxCmtVh7IJxnn7is`
-- **Barcode Sheet ID**: `1JQRU1-kW5hLcAdNhRvOvvj91fhezBE_-StN5X1Ni6zE`
-
-### AI Configuration
-- **Model**: `claude-sonnet-4-20250514`
-- **API Key**: Stored in Apps Script Project Properties → `ANTHROPIC_API_KEY`
-
----
-
-## Roadmap
-
-See [ROADMAP.md](ROADMAP.md) for complete details.
-
-### Current Phase: Phase 1 - AI Agent Foundation (~70% Complete)
-- ✅ AI chat interface
-- ✅ Production data tools
-- ✅ Historical analysis & projections
-- ✅ Correction learning
-- 📋 Voice input/output (moved to Phase 4)
-
-### Next: Phase 2 - Customer Order Dashboard (~80% Complete)
-- ✅ Order entry UI
-- ✅ Customer portal
-- ✅ Pallet tracking
-- 📋 Backend API integration
-- 📋 COA workflow
-
----
-
-## Documentation
-
-### For Claude Code Users
-**Read**: [`CLAUDE.md`](CLAUDE.md) - Comprehensive AI context file with:
-- Quick reference (URLs, Sheet IDs, colors)
-- Architecture patterns
-- Code standards
-- Domain terminology
-- Development guidelines
-
-### For Developers
-- **[docs/README.md](docs/README.md)** - Documentation index
-- **[docs/technical/APP_CATALOG.md](docs/technical/APP_CATALOG.md)** - Complete API reference
-- **[docs/technical/CODEBASE_INVENTORY.md](docs/technical/CODEBASE_INVENTORY.md)** - File/function inventory
-- **[docs/technical/PROJECT_STRUCTURE.md](docs/technical/PROJECT_STRUCTURE.md)** - Architecture deep-dive
-- **[docs/sessions/](docs/sessions/)** - Development session notes
-
----
-
-## Troubleshooting
-
-### "Failed to fetch"
-- Use `text/plain` not `application/json` (CORS requirement)
-- Check deployment URL is current
-- Hard refresh browser (Ctrl+Shift+R)
-
-### AI Not Responding
-- Check `ANTHROPIC_API_KEY` in Script Properties
-- Check Apps Script execution logs (View → Executions)
-
-### Debug in Console
-```javascript
-fetch('API_URL?action=test').then(r=>r.json()).then(console.log)
-```
-
----
-
-## Domain Context
-
-**Company**: Rogue Origin - Hemp processing in Southern Oregon
-**Product**: Premium hemp flower (tops & smalls)
-**Workforce**: Bilingual (EN/ES), mobile-first users
-**Operations**: 7am-4:30pm, ~7.5 effective hours/day
-**Packaging**: 5kg Grove Bags (11.02 lbs) for wholesale
-
-**Key Terms**:
-- **Tops**: Premium flower buds
-- **Smalls**: Smaller buds, lower grade
-- **Bucking**: Removing buds from stems
-- **Line 1/2**: Production lines in trim room
-- **COA**: Certificate of Analysis (lab test)
-
----
-
-## Contributing
-
-### Git Workflow
-Work directly on `main` - no PRs required (single-person/small team workflow).
-
-```bash
-git add .
-git commit -m "description"
-git push origin main
-```
-
-### Code Standards
-- **Mobile-first** - Boss primarily uses phone
-- **Bilingual** - All UI text needs EN + ES
-- **Dual-mode** - Support Apps Script + GitHub Pages (fetch)
-- **No build tools** - Pure HTML/CSS/JS
-- **CORS-aware** - Use `text/plain` for POST requests
-
----
-
-## License
-
-Proprietary - Rogue Origin internal use only.
-
----
-
-## Contact
-
-For questions or support, contact Rogue Origin operations team.
-
----
-
-**Version**: 2.0 (Hybrid Dashboard with AI Agent)
-**Last Updated**: January 4, 2026
-**Status**: ✅ Production Ready
-
+*Built and maintained by Atlas + Koa at Rogue Origin.*
