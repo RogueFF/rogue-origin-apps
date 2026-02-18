@@ -137,6 +137,7 @@ CREATE TABLE IF NOT EXISTS trade_plays (
   setup TEXT,                      -- JSON: {entry, target, stop, size, greeks, etc}
   risk_level TEXT DEFAULT 'normal', -- 'normal' | 'degen' | 'conservative'
   source_agent TEXT DEFAULT 'strategist',
+  status TEXT DEFAULT 'active',            -- 'active' | 'dismissed' | 'filled'
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

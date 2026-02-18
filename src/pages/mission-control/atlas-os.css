@@ -6913,8 +6913,16 @@ input {
 .td-option-pos-row { border-left-width: 2px !important; }
 
 /* Pending play row — muted / dimmer */
-.td-option-pending-row { opacity: 0.6; border-left: 2px solid rgba(255,255,255,0.15) !important; }
+.td-option-pending-row { opacity: 0.6; border-left: 2px solid rgba(255,255,255,0.15) !important; position: relative; }
 .td-option-pending-row:hover { opacity: 0.85; }
+.td-play-dismiss {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; color: rgba(255,255,255,0.2); cursor: pointer;
+  font-size: 0.7rem; padding: 2px 6px; border-radius: 3px; opacity: 0;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+}
+.td-option-pending-row:hover .td-play-dismiss { opacity: 1; }
+.td-play-dismiss:hover { color: #ef4444; background: rgba(239,68,68,0.12); }
 
 /* Divider between active positions and pending plays */
 .td-pending-divider {
