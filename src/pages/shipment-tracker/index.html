@@ -670,7 +670,7 @@ function stepClass(current, step) {
   return '';
 }
 
-function progressLegs(status) {
+function progressLegs(status, location) {
   const legs = {
     'booked':     { leg1: 0,   leg2: 0 },
     'pickup':     { leg1: 15,  leg2: 0 },
@@ -681,7 +681,17 @@ function progressLegs(status) {
     'customs':    { leg1: 100, leg2: 100 },
     'delivered':  { leg1: 100, leg2: 100 },
   };
-  return legs[status] || { leg1: 0, leg2: 0 };
+  const result = legs[status] || { leg1: 0, leg2: 0 };
+  // If ground transit and location matches hub city, truck is at airport
+  if (status === 'in-transit' && location) {
+    const loc = location.toLowerCase();
+    if (loc.includes('san francisco') || loc.includes('sfo')) {
+      result.leg1 = 95;
+    } else if (loc.includes('vallejo') || loc.includes('sacramento') || loc.includes('bay area')) {
+      result.leg1 = 80;
+    }
+  }
+  return result;
 }
 
 function fmtAWB(awb) {
@@ -737,7 +747,7 @@ function fmtHistoryTime(isoStr) {
 function renderCard(s) {
   currentShipment = s;
   const st = s.status || 'booked';
-  const { leg1, leg2 } = progressLegs(st);
+  const { leg1, leg2 } = progressLegs(st, s.sensorData?.location);
   
   const originDot = st !== 'booked' ? 'completed' : 'active';
   const hubDotDone = ['departed','in-flight','arrived','customs','delivered'].includes(st);
