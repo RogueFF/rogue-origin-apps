@@ -10,57 +10,75 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
+  :root {
+    --teal: #00c6a7;
+    --blue: #0ea5e9;
+    --bg: #060810;
+    --card-bg: #0a0c10;
+    --card-border: rgba(255,255,255,0.06);
+    --text-primary: #f0f2f5;
+    --text-secondary: #9ca3af;
+    --text-dim: #4b5563;
+    --text-muted: #374151;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
   body {
-    background: #060810;
-    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    font-family: var(--sans);
     color: #e8eaed;
     min-height: 100vh;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
-    padding: 24px 16px;
+    padding: 24px 16px 48px;
     overflow-x: hidden;
   }
 
-  /* Ambient glow behind card */
   body::before {
     content: '';
     position: fixed;
-    top: 50%;
+    top: 40%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 600px;
-    height: 600px;
-    background: radial-gradient(circle, rgba(0,198,167,0.06) 0%, transparent 70%);
+    width: 800px;
+    height: 800px;
+    background: radial-gradient(circle, rgba(0,198,167,0.04) 0%, transparent 60%);
     pointer-events: none;
     z-index: 0;
   }
 
-  .card {
+  .container {
     width: 100%;
-    max-width: 520px;
-    background: linear-gradient(165deg, #0f1218 0%, #0a0c10 40%, #0d1117 100%);
-    border: 1px solid rgba(255,255,255,0.06);
+    max-width: 560px;
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .card {
+    background: linear-gradient(165deg, #0f1218 0%, var(--card-bg) 40%, #0d1117 100%);
+    border: 1px solid var(--card-border);
     border-radius: 16px;
     overflow: hidden;
     position: relative;
-    z-index: 1;
   }
 
   .card::after {
     content: '';
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
+    top: 0; left: 0; right: 0;
     height: 2px;
-    background: linear-gradient(90deg, #00c6a7, #0ea5e9, #00c6a7);
+    background: linear-gradient(90deg, var(--teal), var(--blue), var(--teal));
     z-index: 2;
   }
 
   .card-inner { position: relative; z-index: 3; }
 
-  /* HEADER */
+  /* ── Header ── */
   .header {
     padding: 24px 28px 16px;
     display: flex;
@@ -75,14 +93,14 @@
     font-weight: 600;
     letter-spacing: 2.5px;
     text-transform: uppercase;
-    color: #00c6a7;
+    color: var(--teal);
     opacity: 0.9;
   }
 
   .customer-name {
     font-size: 22px;
     font-weight: 700;
-    color: #f0f2f5;
+    color: var(--text-primary);
     letter-spacing: -0.3px;
     margin-top: 2px;
   }
@@ -106,16 +124,16 @@
   }
 
   .status-badge.booked { background: rgba(99,102,241,0.15); color: #818cf8; border: 1px solid rgba(99,102,241,0.2); }
-  .status-badge.in-transit { background: rgba(14,165,233,0.15); color: #38bdf8; border: 1px solid rgba(14,165,233,0.2); }
-  .status-badge.departed { background: rgba(0,198,167,0.15); color: #00c6a7; border: 1px solid rgba(0,198,167,0.2); }
   .status-badge.pickup { background: rgba(168,85,247,0.15); color: #c084fc; border: 1px solid rgba(168,85,247,0.2); }
+  .status-badge.in-transit { background: rgba(14,165,233,0.15); color: #38bdf8; border: 1px solid rgba(14,165,233,0.2); }
+  .status-badge.departed { background: rgba(0,198,167,0.15); color: var(--teal); border: 1px solid rgba(0,198,167,0.2); }
+  .status-badge.in-flight { background: rgba(0,198,167,0.15); color: var(--teal); border: 1px solid rgba(0,198,167,0.2); }
   .status-badge.arrived { background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.2); }
   .status-badge.customs { background: rgba(251,191,36,0.15); color: #fbbf24; border: 1px solid rgba(251,191,36,0.2); }
   .status-badge.delivered { background: rgba(34,197,94,0.2); color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }
 
   .status-dot {
-    width: 7px;
-    height: 7px;
+    width: 7px; height: 7px;
     border-radius: 50%;
     background: currentColor;
     animation: pulse-dot 2s ease-in-out infinite;
@@ -126,7 +144,7 @@
     50% { opacity: 0.4; }
   }
 
-  /* FLIGHT PATH */
+  /* ── Route Visual ── */
   .flight-path { padding: 24px 28px 20px; }
 
   .route-line {
@@ -142,19 +160,19 @@
     align-items: center;
     gap: 6px;
     z-index: 2;
-    min-width: 60px;
+    min-width: 50px;
   }
 
   .route-code {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 20px;
+    font-family: var(--mono);
+    font-size: 18px;
     font-weight: 600;
-    color: #f0f2f5;
+    color: var(--text-primary);
     letter-spacing: 1px;
   }
 
   .route-city {
-    font-size: 10px;
+    font-size: 9px;
     color: #6b7280;
     text-transform: uppercase;
     letter-spacing: 1px;
@@ -162,19 +180,19 @@
   }
 
   .route-dot {
-    width: 12px;
-    height: 12px;
+    width: 12px; height: 12px;
     border-radius: 50%;
-    border: 2px solid #00c6a7;
-    background: #0a0c10;
+    border: 2px solid var(--teal);
+    background: var(--card-bg);
+    transition: all 0.5s;
   }
 
   .route-dot.active {
-    background: #00c6a7;
+    background: var(--teal);
     box-shadow: 0 0 12px rgba(0,198,167,0.4);
   }
 
-  .route-dot.completed { background: #00c6a7; }
+  .route-dot.completed { background: var(--teal); }
 
   .route-connector {
     flex: 1;
@@ -190,9 +208,9 @@
     position: absolute;
     top: 0; left: 0;
     height: 100%;
-    background: linear-gradient(90deg, #00c6a7, #0ea5e9);
+    background: linear-gradient(90deg, var(--teal), var(--blue));
     border-radius: 1px;
-    transition: width 1s ease;
+    transition: width 1.5s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .transport-icon {
@@ -202,7 +220,7 @@
     font-size: 16px;
     filter: drop-shadow(0 0 6px rgba(14,165,233,0.5));
     z-index: 3;
-    transition: left 1s ease;
+    transition: left 1.5s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .leg-label {
@@ -211,8 +229,8 @@
     left: 50%;
     transform: translateX(-50%);
     font-size: 8px;
-    font-family: 'JetBrains Mono', monospace;
-    color: #374151;
+    font-family: var(--mono);
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 1px;
     white-space: nowrap;
@@ -221,16 +239,15 @@
   .flight-label {
     text-align: center;
     margin-top: 14px;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--mono);
     font-size: 12px;
-    color: #4b5563;
+    color: var(--text-dim);
   }
+  .flight-label span { color: var(--text-secondary); }
 
-  .flight-label span { color: #9ca3af; }
-
-  /* ETA */
+  /* ── ETA with Live Countdown ── */
   .eta-block {
-    padding: 0 28px 8px;
+    padding: 4px 28px 12px;
     display: flex;
     align-items: center;
     gap: 12px;
@@ -242,30 +259,50 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 2px;
-    color: #4b5563;
+    color: var(--text-dim);
   }
 
   .eta-value {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--mono);
     font-size: 16px;
     font-weight: 600;
-    color: #00c6a7;
+    color: var(--teal);
   }
 
   .eta-countdown {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--mono);
     font-size: 11px;
     color: #6b7280;
     margin-left: auto;
   }
 
-  /* INFO GRID */
+  .countdown-live {
+    display: inline-flex;
+    gap: 4px;
+    align-items: baseline;
+  }
+
+  .countdown-unit {
+    background: rgba(0,198,167,0.08);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+    color: var(--teal);
+    font-size: 12px;
+  }
+
+  .countdown-sep {
+    color: var(--text-muted);
+    font-size: 10px;
+  }
+
+  /* ── Info Grid ── */
   .info-grid {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
     gap: 1px;
     background: rgba(255,255,255,0.04);
-    margin: 8px 28px 0;
+    margin: 4px 28px 0;
     border-radius: 10px;
     overflow: hidden;
   }
@@ -283,23 +320,23 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 1.5px;
-    color: #4b5563;
+    color: var(--text-dim);
   }
 
   .info-value {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--mono);
     font-size: 13px;
     font-weight: 500;
     color: #d1d5db;
   }
 
-  /* SENSOR STRIP */
+  /* ── Sensors ── */
   .sensor-strip {
-    display: flex;
-    gap: 16px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
     padding: 16px 28px;
-    margin-top: 8px;
-    flex-wrap: wrap;
+    margin-top: 4px;
   }
 
   .sensor-item {
@@ -309,13 +346,13 @@
   }
 
   .sensor-icon {
-    width: 32px;
-    height: 32px;
+    width: 32px; height: 32px;
     border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 14px;
+    flex-shrink: 0;
   }
 
   .sensor-icon.temp { background: rgba(251,113,133,0.12); }
@@ -324,7 +361,7 @@
   .sensor-icon.battery { background: rgba(74,222,128,0.12); }
 
   .sensor-value {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--mono);
     font-size: 13px;
     font-weight: 600;
     color: #e5e7eb;
@@ -337,7 +374,7 @@
     letter-spacing: 1px;
   }
 
-  /* TIMELINE */
+  /* ── Timeline ── */
   .timeline { padding: 16px 28px 8px; }
 
   .timeline-title {
@@ -345,7 +382,7 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 2px;
-    color: #4b5563;
+    color: var(--text-dim);
     margin-bottom: 12px;
   }
 
@@ -359,8 +396,7 @@
     content: '';
     position: absolute;
     top: 11px;
-    left: 16px;
-    right: 16px;
+    left: 16px; right: 16px;
     height: 2px;
     background: rgba(255,255,255,0.06);
   }
@@ -375,54 +411,150 @@
   }
 
   .step-dot {
-    width: 10px;
-    height: 10px;
+    width: 10px; height: 10px;
     border-radius: 50%;
     border: 2px solid #2d3748;
-    background: #0a0c10;
-    transition: all 0.3s ease;
+    background: var(--card-bg);
+    transition: all 0.5s;
   }
 
-  .step-dot.done {
-    background: #00c6a7;
-    border-color: #00c6a7;
-  }
-
+  .step-dot.done { background: var(--teal); border-color: var(--teal); }
   .step-dot.active {
-    border-color: #0ea5e9;
-    background: #0ea5e9;
+    border-color: var(--blue);
+    background: var(--blue);
     box-shadow: 0 0 8px rgba(14,165,233,0.4);
     animation: pulse-dot 2s ease-in-out infinite;
   }
 
   .step-label {
-    font-size: 9px;
-    color: #4b5563;
+    font-size: 8px;
+    color: var(--text-dim);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     text-align: center;
+    white-space: nowrap;
   }
 
-  .step-label.done { color: #00c6a7; }
+  .step-label.done { color: var(--teal); }
   .step-label.active { color: #38bdf8; }
 
-  /* TIVE LINK */
-  .tive-link-row {
-    padding: 8px 28px 4px;
+  /* ── History Section ── */
+  .history-card {
+    background: linear-gradient(165deg, #0f1218 0%, var(--card-bg) 100%);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    padding: 20px 24px;
   }
+
+  .section-title {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(255,255,255,0.06);
+  }
+
+  .history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+  }
+
+  .history-item {
+    display: flex;
+    gap: 16px;
+    padding: 12px 0;
+    position: relative;
+  }
+
+  .history-item:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 7px;
+    top: 34px;
+    bottom: 0;
+    width: 2px;
+    background: rgba(0,198,167,0.15);
+  }
+
+  .history-item:last-child .h-dot {
+    background: var(--blue);
+    border-color: var(--blue);
+    box-shadow: 0 0 8px rgba(14,165,233,0.3);
+  }
+
+  .h-dot {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--teal);
+    background: rgba(0,198,167,0.3);
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .h-content { flex: 1; }
+
+  .h-location {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .h-time {
+    font-size: 11px;
+    color: #6b7280;
+    margin-top: 2px;
+  }
+
+  .h-sensors {
+    display: flex;
+    gap: 16px;
+    margin-top: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+
+  .h-phase {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--teal);
+    background: rgba(0,198,167,0.1);
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-top: 4px;
+  }
+
+  /* ── Tive Link ── */
+  .tive-link-row { padding: 8px 28px 4px; }
 
   .tive-link-row a {
     font-size: 11px;
-    color: #0ea5e9;
+    color: var(--blue);
     text-decoration: none;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--mono);
     opacity: 0.7;
     transition: opacity 0.2s;
   }
-
   .tive-link-row a:hover { opacity: 1; }
 
-  /* FOOTER */
+  /* ── Footer ── */
   .footer {
     padding: 12px 28px 20px;
     display: flex;
@@ -432,32 +564,39 @@
 
   .tive-badge {
     font-size: 9px;
-    color: #374151;
+    color: var(--text-muted);
     letter-spacing: 1px;
     text-transform: uppercase;
   }
-
   .tive-badge span { color: #4ade80; }
 
   .last-updated {
     font-size: 9px;
-    color: #374151;
-    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-muted);
+    font-family: var(--mono);
   }
 
-  /* LOADING */
+  .auto-refresh-hint {
+    font-size: 9px;
+    color: var(--text-muted);
+    text-align: center;
+    font-family: var(--mono);
+    padding: 8px;
+    opacity: 0.5;
+  }
+
+  /* ── Loading ── */
   .loading {
     text-align: center;
     padding: 60px 20px;
-    color: #4b5563;
+    color: var(--text-dim);
     font-size: 13px;
   }
 
   .loading .spinner {
-    width: 24px;
-    height: 24px;
+    width: 24px; height: 24px;
     border: 2px solid rgba(0,198,167,0.2);
-    border-top-color: #00c6a7;
+    border-top-color: var(--teal);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
     margin: 0 auto 12px;
@@ -465,40 +604,63 @@
 
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* Mobile */
-  @media (max-width: 540px) {
-    body { padding: 12px 8px; }
+  /* ── Mobile ── */
+  @media (max-width: 560px) {
+    body { padding: 12px 8px 32px; }
     .header { padding: 20px 20px 12px; }
-    .flight-path { padding: 20px 20px 16px; }
-    .route-code { font-size: 16px; }
-    .info-grid { margin: 8px 20px 0; grid-template-columns: 1fr 1fr; }
-    .sensor-strip { padding: 12px 20px; }
+    .flight-path { padding: 16px 16px 16px; }
+    .route-code { font-size: 15px; }
+    .info-grid { margin: 4px 20px 0; }
+    .sensor-strip {
+      padding: 12px 20px;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
     .timeline { padding: 12px 20px 8px; }
-    .eta-block { padding: 0 20px 8px; }
+    .step-label { font-size: 7px; }
+    .eta-block { padding: 4px 20px 8px; }
     .footer { padding: 12px 20px 16px; }
     .tive-link-row { padding: 8px 20px 4px; }
+    .history-card { padding: 16px; }
+    .container { gap: 12px; }
   }
 </style>
 </head>
 <body>
 
-<div class="card">
-  <div class="card-inner" id="card-content">
-    <div class="loading">
-      <div class="spinner"></div>
-      Loading shipment data...
+<div class="container">
+  <!-- Main Tracking Card -->
+  <div class="card">
+    <div class="card-inner" id="card-content">
+      <div class="loading">
+        <div class="spinner"></div>
+        Loading shipment data...
+      </div>
     </div>
   </div>
+
+  <!-- Location History -->
+  <div class="history-card" id="history-card" style="display:none">
+    <div class="section-title">Location History</div>
+    <div class="history-list" id="history-list"></div>
+  </div>
+
+  <div class="auto-refresh-hint" id="refresh-hint"></div>
 </div>
 
 <script>
 const DATA_URL = 'data.json';
+const REFRESH_MS = 3 * 60 * 1000; // 3 min refresh
 const STATUS_ORDER = ['booked', 'pickup', 'in-transit', 'departed', 'in-flight', 'arrived', 'customs', 'delivered'];
+const STEP_LABELS = ['Booked', 'Pickup', 'Ground', 'Departed', 'In Flight', 'Arrived', 'Customs', 'Delivered'];
 const AIRPORT_CITIES = {
-  'RO': 'Grants Pass, OR', 'MFR': 'Medford, OR', 'SFO': 'San Francisco', 'ZRH': 'Zürich',
-  'PDX': 'Portland, OR', 'LAX': 'Los Angeles', 'JFK': 'New York',
+  'RO': 'Grants Pass', 'MFR': 'Medford', 'SFO': 'San Francisco', 'ZRH': 'Zürich',
+  'PDX': 'Portland', 'LAX': 'Los Angeles', 'JFK': 'New York',
   'FRA': 'Frankfurt', 'AMS': 'Amsterdam', 'PRG': 'Prague',
 };
+
+let currentShipment = null;
+let countdownTimer = null;
 
 function stepClass(current, step) {
   const ci = STATUS_ORDER.indexOf(current);
@@ -508,19 +670,18 @@ function stepClass(current, step) {
   return '';
 }
 
-// leg1 = ground (RO→SFO), leg2 = air (SFO→ZRH)
-function progressLegs(status, leg) {
+function progressLegs(status) {
   const legs = {
     'booked':     { leg1: 0,   leg2: 0 },
-    'pickup':     { leg1: 20,  leg2: 0 },
-    'in-transit': { leg1: 60,  leg2: 0 },   // ground transit
-    'departed':   { leg1: 100, leg2: 20 },   // flight departed
-    'in-flight':  { leg1: 100, leg2: 60 },   // airborne
+    'pickup':     { leg1: 15,  leg2: 0 },
+    'in-transit': { leg1: 60,  leg2: 0 },
+    'departed':   { leg1: 100, leg2: 25 },
+    'in-flight':  { leg1: 100, leg2: 60 },
     'arrived':    { leg1: 100, leg2: 100 },
     'customs':    { leg1: 100, leg2: 100 },
     'delivered':  { leg1: 100, leg2: 100 },
   };
-  return (legs[status] || { leg1: 0, leg2: 0 })[leg];
+  return legs[status] || { leg1: 0, leg2: 0 };
 }
 
 function fmtAWB(awb) {
@@ -532,41 +693,72 @@ function fmtAWB(awb) {
   return awb;
 }
 
-function countdown(flightDate) {
-  if (!flightDate) return '';
+function liveCountdown(flightDate, etaStr) {
+  // Parse ETA — "Feb 19, 3:30 PM CET"
+  // Flight departs Feb 18 evening PST
+  // We'll countdown to the ETA (arrival)
+  const etaDate = new Date('2026-02-19T14:30:00+01:00'); // 3:30 PM CET = 14:30 CET
   const now = new Date();
-  const flight = new Date(flightDate + 'T08:00:00-08:00');
-  const diff = flight - now;
-  if (diff < 0) return 'In progress';
-  const hrs = Math.floor(diff / 36e5);
-  if (hrs < 24) return hrs + 'h until departure';
-  return Math.floor(hrs / 24) + 'd ' + (hrs % 24) + 'h until departure';
+  const diff = etaDate - now;
+  
+  if (diff <= 0) return '<span style="color:#4ade80">Arrived</span>';
+  
+  const days = Math.floor(diff / 86400000);
+  const hours = Math.floor((diff % 86400000) / 3600000);
+  const mins = Math.floor((diff % 3600000) / 60000);
+  
+  let parts = [];
+  if (days > 0) parts.push(`<span class="countdown-unit">${days}d</span>`);
+  parts.push(`<span class="countdown-unit">${hours}h</span>`);
+  parts.push(`<span class="countdown-unit">${mins}m</span>`);
+  
+  return '<span class="countdown-live">' + parts.join('<span class="countdown-sep">:</span>') + '</span>';
+}
+
+function timeAgo(isoStr) {
+  const d = new Date(isoStr);
+  const now = new Date();
+  const diff = now - d;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ${mins % 60}m ago`;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + 
+         d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Los_Angeles' });
+}
+
+function fmtHistoryTime(isoStr) {
+  const d = new Date(isoStr);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/Los_Angeles' }) + ', ' +
+         d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Los_Angeles' });
 }
 
 function renderCard(s) {
+  currentShipment = s;
   const st = s.status || 'booked';
-  const pct = progressLegs(st, 'leg1');
-  const pct2 = progressLegs(st, 'leg2');
+  const { leg1, leg2 } = progressLegs(st);
+  
+  const originDot = st !== 'booked' ? 'completed' : 'active';
+  const hubDotDone = ['departed','in-flight','arrived','customs','delivered'].includes(st);
+  const destDotDone = st === 'delivered';
+  const destDotActive = ['arrived','customs'].includes(st);
+
   const hubHtml = s.hub ? `
     <div class="route-point">
       <div class="route-code">${s.hub}</div>
-      <div class="route-dot ${stepClass(st,'departed')==='done'?'completed':''}"></div>
-      <div class="route-city">${AIRPORT_CITIES[s.hub]||s.hub}</div>
+      <div class="route-dot ${hubDotDone ? 'completed' : ''}"></div>
+      <div class="route-city">${AIRPORT_CITIES[s.hub] || s.hub}</div>
     </div>
     <div class="route-connector">
-      <div class="route-connector-fill" style="width:${pct2}%"></div>
-      <div class="transport-icon" style="left:${pct2}%;${pct2===0?'opacity:0.2':''}">✈️</div>
-      <div class="leg-label">${s.flight||'Air'}</div>
+      <div class="route-connector-fill" style="width:${leg2}%"></div>
+      <div class="transport-icon" style="left:${leg2}%;${leg2 === 0 ? 'opacity:0.2' : ''}">✈️</div>
+      <div class="leg-label">${s.flight || 'Air'}</div>
     </div>` : '';
 
-  const originDot = st !== 'booked' ? 'completed' : 'active';
-  const destDot = st === 'delivered' ? 'completed' : (st === 'arrived' || st === 'customs') ? 'active' : '';
-  const steps = ['booked','pickup','in-transit','departed','in-flight','arrived','customs','delivered'];
-  const stepLabels = ['Booked','Pickup','Ground','Departed','In Flight','Arrived','Customs','Delivered'];
-
   const now = new Date();
-  const updated = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' + 
-    now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  const updated = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/Los_Angeles' }) + ', ' + 
+    now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Los_Angeles' });
 
   document.getElementById('card-content').innerHTML = `
     <div class="header">
@@ -575,36 +767,37 @@ function renderCard(s) {
         <div class="customer-name">${s.customer}</div>
         <div class="shipment-subtitle">Wholesale Export · ${s.destination}</div>
       </div>
-      <div class="status-badge ${st}"
-        ><div class="status-dot"></div>${st.replace('-',' ')}</div>
+      <div class="status-badge ${st}">
+        <div class="status-dot"></div>${st.replace(/-/g, ' ')}
+      </div>
     </div>
 
     <div class="flight-path">
       <div class="route-line">
         <div class="route-point">
-          <div class="route-code">${s.origin||'MFR'}</div>
+          <div class="route-code">${s.origin || 'MFR'}</div>
           <div class="route-dot ${originDot}"></div>
-          <div class="route-city">${AIRPORT_CITIES[s.origin]||s.origin}</div>
+          <div class="route-city">${AIRPORT_CITIES[s.origin] || s.origin}</div>
         </div>
         <div class="route-connector">
-          <div class="route-connector-fill" style="width:${pct}%"></div>
-          <div class="transport-icon" style="left:${pct}%;display:inline-block;transform:translate(-50%,-50%) scaleX(-1)">🚚</div>
+          <div class="route-connector-fill" style="width:${leg1}%"></div>
+          <div class="transport-icon" style="left:${leg1}%;display:inline-block;transform:translate(-50%,-50%) scaleX(-1)">🚚</div>
           <div class="leg-label">Ground</div>
         </div>
         ${hubHtml}
         <div class="route-point">
-          <div class="route-code">${s.finalDest||'ZRH'}</div>
-          <div class="route-dot ${destDot}"></div>
-          <div class="route-city">${AIRPORT_CITIES[s.finalDest]||s.finalDest}</div>
+          <div class="route-code">${s.finalDest || 'ZRH'}</div>
+          <div class="route-dot ${destDotDone ? 'completed' : destDotActive ? 'active' : ''}"></div>
+          <div class="route-city">${AIRPORT_CITIES[s.finalDest] || s.finalDest}</div>
         </div>
       </div>
-      <div class="flight-label">${s.flight||'—'} <span>· ${s.flightDate||'—'}</span></div>
+      <div class="flight-label">${s.flight || '—'} <span>· ${s.flightDate || '—'}</span></div>
     </div>
 
     <div class="eta-block">
       <div class="eta-label">ETA</div>
-      <div class="eta-value">${s.eta||'Feb 19, 2026'}</div>
-      <div class="eta-countdown">${countdown(s.flightDate)}</div>
+      <div class="eta-value">${s.eta || '—'}</div>
+      <div class="eta-countdown" id="live-countdown"></div>
     </div>
 
     <div class="info-grid">
@@ -618,42 +811,42 @@ function renderCard(s) {
       </div>
       <div class="info-cell">
         <div class="info-label">Weight</div>
-        <div class="info-value">${s.weight||'—'}</div>
+        <div class="info-value">${s.weight || '—'}</div>
       </div>
     </div>
 
     <div class="sensor-strip">
       <div class="sensor-item">
         <div class="sensor-icon temp">🌡️</div>
-        <div><div class="sensor-value">${s.sensorData?.temp||'—'}</div><div class="sensor-label-text">Temp</div></div>
+        <div><div class="sensor-value">${s.sensorData?.temp || '—'}</div><div class="sensor-label-text">Temp</div></div>
       </div>
       <div class="sensor-item">
         <div class="sensor-icon humidity">💧</div>
-        <div><div class="sensor-value">${s.sensorData?.humidity||'—'}</div><div class="sensor-label-text">Humidity</div></div>
+        <div><div class="sensor-value">${s.sensorData?.humidity || '—'}</div><div class="sensor-label-text">Humidity</div></div>
       </div>
       <div class="sensor-item">
         <div class="sensor-icon location">📍</div>
-        <div><div class="sensor-value">${s.sensorData?.location||'Awaiting'}</div><div class="sensor-label-text">Last Loc</div></div>
+        <div><div class="sensor-value">${s.sensorData?.location || 'Awaiting'}</div><div class="sensor-label-text">Location</div></div>
       </div>
       <div class="sensor-item">
         <div class="sensor-icon battery">🔋</div>
-        <div><div class="sensor-value">${s.sensorData?.battery||'—'}</div><div class="sensor-label-text">Battery</div></div>
+        <div><div class="sensor-value">${s.sensorData?.battery || '—'}</div><div class="sensor-label-text">Battery</div></div>
       </div>
     </div>
 
     <div class="timeline">
       <div class="timeline-title">Shipment Progress</div>
       <div class="timeline-steps">
-        ${steps.map((step, i) => `
+        ${STATUS_ORDER.map((step, i) => `
           <div class="timeline-step">
             <div class="step-dot ${stepClass(st, step)}"></div>
-            <div class="step-label ${stepClass(st, step)}">${stepLabels[i]}</div>
+            <div class="step-label ${stepClass(st, step)}">${STEP_LABELS[i]}</div>
           </div>
         `).join('')}
       </div>
     </div>
 
-    ${s.tiveUrl ? `<div class="tive-link-row"><a href="${s.tiveUrl}" target="_blank">↗ Open Tive Sensor Dashboard</a></div>` : ''}
+    ${s.tiveUrl ? `<div class="tive-link-row"><a href="${s.tiveUrl}" target="_blank" rel="noopener">↗ Open Tive Sensor Dashboard</a></div>` : ''}
 
     <div class="footer">
       <div class="tive-badge"><span>●</span> Tive Sensor Active</div>
@@ -661,7 +854,49 @@ function renderCard(s) {
     </div>
   `;
 
-  document.title = `${s.customer} · ${st.replace('-',' ').toUpperCase()} · Shipment Tracker`;
+  document.title = s.customer + ' · ' + st.replace(/-/g, ' ').toUpperCase() + ' · Shipment Tracker';
+
+  // Start live countdown
+  updateCountdown();
+  if (countdownTimer) clearInterval(countdownTimer);
+  countdownTimer = setInterval(updateCountdown, 30000); // update every 30s
+}
+
+function updateCountdown() {
+  const el = document.getElementById('live-countdown');
+  if (el && currentShipment) {
+    el.innerHTML = liveCountdown(currentShipment.flightDate, currentShipment.eta);
+  }
+}
+
+function renderHistory(s) {
+  const hist = s.history;
+  if (!hist || hist.length === 0) {
+    document.getElementById('history-card').style.display = 'none';
+    return;
+  }
+
+  document.getElementById('history-card').style.display = 'block';
+  const list = document.getElementById('history-list');
+  
+  // Reverse to show newest first
+  const sorted = [...hist].reverse();
+  
+  list.innerHTML = sorted.map((h, i) => `
+    <div class="history-item">
+      <div class="h-dot"></div>
+      <div class="h-content">
+        <div class="h-location">${h.location}</div>
+        <div class="h-time">${fmtHistoryTime(h.time)} · ${timeAgo(h.time)}</div>
+        <div class="h-sensors">
+          <span>🌡️ ${h.temp || '—'}</span>
+          <span>💧 ${h.humidity || '—'}</span>
+          <span>🔋 ${h.battery || '—'}</span>
+        </div>
+        ${h.phase ? `<div class="h-phase">${h.phase.replace(/-/g, ' ')}</div>` : ''}
+      </div>
+    </div>
+  `).join('');
 }
 
 async function load() {
@@ -670,16 +905,21 @@ async function load() {
     const data = await res.json();
     const shipment = data.shipments?.[0] || data;
     renderCard(shipment);
+    renderHistory(shipment);
+    
+    // Show next refresh
+    const nextRefresh = Math.round(REFRESH_MS / 60000);
+    document.getElementById('refresh-hint').textContent = 
+      'Auto-refreshes every ' + nextRefresh + ' min · Polling every 30 min via Tive sensor';
   } catch (e) {
     document.getElementById('card-content').innerHTML = `
-      <div class="loading" style="color:#f87171">Failed to load shipment data</div>`;
+      <div class="loading" style="color:#f87171">Failed to load shipment data<br><small style="color:#6b7280">${e.message}</small></div>`;
     console.error(e);
   }
 }
 
 load();
-// Auto-refresh every 5 minutes
-setInterval(load, 5 * 60 * 1000);
+setInterval(load, REFRESH_MS);
 </script>
 </body>
 </html>
