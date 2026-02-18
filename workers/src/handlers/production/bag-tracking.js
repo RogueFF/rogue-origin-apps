@@ -330,7 +330,19 @@ async function getBagTimerData(env, date = null) {
 async function logBag(body, env) {
   const size = body.size || '5 kg.';
   const now = new Date();
+  const sku = 'MANUAL-5KG-BAG';
+  const flowRunId = `MANUAL-5KG-${now.toISOString()}`;
 
+  // Write to inventory_adjustments (where bag timer reads from)
+  await insert(env.DB, 'inventory_adjustments', {
+    timestamp: now.toISOString(),
+    size: '5kg',
+    sku: sku,
+    product_name: 'Manual 5KG Bag Scan',
+    flow_run_id: flowRunId,
+  });
+
+  // Also write to production_tracking for legacy tracking
   await insert(env.DB, 'production_tracking', {
     timestamp: now.toISOString(),
     bag_type: size,
