@@ -15,13 +15,31 @@
       "eta": "Feb 19, 3:30 PM CET",
       "weight": "380 kg (2 pallets)",
       "sensorData": {
-        "temp": "63.5°F",
-        "humidity": "22.9%",
-        "battery": "87%",
-        "location": "3J9P+JF Sims, CA"
+        "temp": "59.6°F",
+        "humidity": "23.7%",
+        "battery": "82%",
+        "location": "Vallejo, CA",
+        "coords": "38.151694, -122.217612",
+        "fullAddress": "943 Griffin Dr, Vallejo, CA 94589, USA"
       },
-      "lastUpdate": "2026-02-18T00:00:44.244Z",
-      "created": "2026-02-17T20:00:00Z"
+      "lastUpdate": "2026-02-18T12:08:31.618Z",
+      "created": "2026-02-17T20:00:00Z",
+      "history": [
+        {
+          "time": "2026-02-17T23:22:18Z",
+          "location": "Mt Shasta, CA",
+          "temp": "63.5°F",
+          "humidity": "22.9%",
+          "battery": "87%"
+        },
+        {
+          "time": "2026-02-18T11:22:10Z",
+          "location": "Vallejo, CA",
+          "temp": "59.6°F",
+          "humidity": "23.7%",
+          "battery": "82%"
+        }
+      ]
     }
   ]
 }
