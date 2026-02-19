@@ -19,14 +19,14 @@
       "flightStatus": "SCHEDULED",
       "weight": "380 kg (2 pallets)",
       "sensorData": {
-        "temp": "54.4°F",
-        "humidity": "22.5%",
+        "temp": "69.9°F",
+        "humidity": "28.4%",
         "battery": "77%",
-        "location": "JJC3+67 San Bruno, CA",
-        "coords": "37.622236, -122.395663",
-        "fullAddress": "JJC3+67 San Bruno, CA, USA"
+        "location": "San Francisco, CA",
+        "coords": "37.619622, -122.397054",
+        "fullAddress": "39 N McDonnell Rd, San Francisco, CA 94128, USA"
       },
-      "lastUpdate": "2026-02-19T00:00:12.607Z",
+      "lastUpdate": "2026-02-19T00:30:11.998Z",
       "created": "2026-02-17T20:00:00Z",
       "history": [
         {
@@ -55,6 +55,14 @@
           "location": "JJC3+67 San Bruno, CA",
           "temp": "54.4°F",
           "humidity": "22.5%",
+          "battery": "77%",
+          "phase": "at-airport"
+        },
+        {
+          "time": "2026-02-19T00:30:11.997Z",
+          "location": "San Francisco, CA",
+          "temp": "69.9°F",
+          "humidity": "28.4%",
           "battery": "77%",
           "phase": "at-airport"
         }
