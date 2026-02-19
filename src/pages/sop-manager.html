@@ -3870,17 +3870,17 @@
       const fontLink = '<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">';
 
       const css = `
-        :root {
+        .pdf-container {
           --green: #668971; --green-dark: #2d3a2e; --green-deep: #1e2a20; --green-light: #7a9d86;
           --gold: #e4aa4f; --gold-light: #f0cb60; --gold-dim: #f8f0dc;
           --danger: #c45c4a; --danger-light: #fde9e5;
           --cream: #faf8f3; --cream-dark: #f0ece3;
           --card-bg: #ffffff; --card-stroke: #e4dfd5;
           --text: #2d2d2d; --text-light: #6b6b6b; --text-muted: #999;
+          font-family: 'Outfit', sans-serif; color: #2d2d2d;
         }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Outfit', sans-serif; }
-        .page { width: 794px; height: 1123px; background: var(--cream); position: relative; overflow: hidden; page-break-after: always; }
+        .pdf-container * { margin: 0; padding: 0; box-sizing: border-box; }
+        .page { width: 794px; height: 1123px; background: var(--cream); color: var(--text); position: relative; overflow: hidden; page-break-after: always; }
         .page:last-child { page-break-after: avoid; }
         .header-band { background: var(--green-deep); padding: 0 56px; height: 150px; display: flex; align-items: center; justify-content: space-between; position: relative; }
         .header-band::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, var(--gold) 0%, var(--gold-light) 50%, var(--gold) 100%); }
@@ -4186,6 +4186,7 @@
         // html2canvas needs the element fully visible in the DOM (no opacity/z-index tricks)
         // Container is removed immediately after rendering
         const container = document.createElement('div');
+        container.className = 'pdf-container';
         container.style.width = '794px';
         container.innerHTML = htmlContent;
         document.body.appendChild(container);
