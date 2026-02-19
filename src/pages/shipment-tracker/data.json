@@ -19,14 +19,14 @@
       "flightStatus": "SCHEDULED",
       "weight": "380 kg (2 pallets)",
       "sensorData": {
-        "temp": "69.9°F",
-        "humidity": "28.4%",
-        "battery": "77%",
+        "temp": "61.1°F",
+        "humidity": "22.7%",
+        "battery": "81%",
         "location": "San Francisco, CA",
         "coords": "37.619622, -122.397054",
         "fullAddress": "39 N McDonnell Rd, San Francisco, CA 94128, USA"
       },
-      "lastUpdate": "2026-02-19T01:00:11.541Z",
+      "lastUpdate": "2026-02-19T01:30:12.364Z",
       "created": "2026-02-17T20:00:00Z",
       "history": [
         {
