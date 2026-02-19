@@ -11,7 +11,7 @@
       "hub": "SFO",
       "finalDest": "ZRH",
       "tiveUrl": "https://platform.tive.com/shared/shipment/df75dbe01b1d42fd83df83df9e68ac7c",
-      "status": "in-flight",
+      "status": "arrived",
       "eta": "Feb 19, 3:30 PM CET",
       "departure": "Feb 18, 7:25 PM PST",
       "terminal": "INTL",
@@ -19,14 +19,14 @@
       "flightStatus": "SCHEDULED",
       "weight": "380 kg (2 pallets)",
       "sensorData": {
-        "temp": "53.0°F",
-        "humidity": "22.5%",
-        "battery": "87%",
-        "location": "Flughafenstrasse, 8302 Kloten",
-        "coords": "37.618684, -122.394241",
-        "fullAddress": "Gates E, Flughafenstrasse, 8302 Kloten, Switzerland"
+        "temp": "46.1°F",
+        "humidity": "21.6%",
+        "battery": "68%",
+        "location": "FH47+CH Kloten, Switzerland",
+        "coords": "47.456014, 8.564092",
+        "fullAddress": "FH47+CH Kloten, Switzerland"
       },
-      "lastUpdate": "2026-02-19T15:00:13.361Z",
+      "lastUpdate": "2026-02-19T15:30:10.277Z",
       "created": "2026-02-17T20:00:00Z",
       "history": [
         {
@@ -73,6 +73,14 @@
           "humidity": "22.5%",
           "battery": "87%",
           "phase": "at-airport"
+        },
+        {
+          "time": "2026-02-19T15:30:10.277Z",
+          "location": "FH47+CH Kloten, Switzerland",
+          "temp": "46.1°F",
+          "humidity": "21.6%",
+          "battery": "68%",
+          "phase": "arrived"
         }
       ],
       "_prevStatus": "in-flight"
