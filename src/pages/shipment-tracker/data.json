@@ -22,11 +22,11 @@
         "temp": "46.1°F",
         "humidity": "21.6%",
         "battery": "68%",
-        "location": "FH47+CH Kloten, Switzerland",
+        "location": "Fracht W, 8302 Kloten",
         "coords": "47.456014, 8.564092",
-        "fullAddress": "FH47+CH Kloten, Switzerland"
+        "fullAddress": "Operation Center 4, Fracht W, 8302 Kloten, Switzerland"
       },
-      "lastUpdate": "2026-02-19T15:30:10.277Z",
+      "lastUpdate": "2026-02-19T16:00:13.213Z",
       "created": "2026-02-17T20:00:00Z",
       "history": [
         {
@@ -81,9 +81,17 @@
           "humidity": "21.6%",
           "battery": "68%",
           "phase": "arrived"
+        },
+        {
+          "time": "2026-02-19T16:00:13.213Z",
+          "location": "Fracht W, 8302 Kloten",
+          "temp": "46.1°F",
+          "humidity": "21.6%",
+          "battery": "68%",
+          "phase": "arrived"
         }
       ],
-      "_prevStatus": "in-flight"
+      "_prevStatus": "arrived"
     }
   ]
 }
