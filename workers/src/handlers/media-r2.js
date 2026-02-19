@@ -19,7 +19,7 @@ const ALLOWED_TYPES = {
 };
 
 const IMAGE_MAX = 5 * 1024 * 1024;   // 5 MB
-const VIDEO_MAX = 100 * 1024 * 1024;  // 100 MB
+const VIDEO_MAX = 250 * 1024 * 1024;  // 250 MB
 
 function isVideo(mime) {
   return mime.startsWith('video/');
@@ -73,10 +73,10 @@ async function handleUpload(request, env) {
   const rand = Math.random().toString(36).slice(2, 10);
   const key = `sop/${timestamp}-${rand}.${ext}`;
 
-  // Upload to R2
-  const body = await file.arrayBuffer();
-  await env.MEDIA_BUCKET.put(key, body, {
+  // Upload to R2 (stream to avoid memory limits on large files)
+  await env.MEDIA_BUCKET.put(key, file.stream(), {
     httpMetadata: { contentType: mime },
+    customMetadata: { originalName: file.name || key, size: String(file.size) },
   });
 
   // Build serve URL
