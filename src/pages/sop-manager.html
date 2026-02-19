@@ -28,7 +28,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=optional" rel="stylesheet">
 
   <!-- Scripts: Lazy loaded when needed -->
-  <!-- Phosphor Icons and jsPDF are loaded on-demand -->
+  <!-- Phosphor Icons and html2pdf.js are loaded on-demand -->
   
   <!-- Critical CSS: Loaded synchronously -->
   <link rel="stylesheet" href="../css/shared-base.css">
@@ -339,20 +339,31 @@
             <label class="pdf-layout-option"><input type="radio" name="pdfLayout" value="2col" checked><div class="pdf-layout-card"><div class="pdf-layout-preview grid-preview cols-1"><div class="box"></div><div class="box"></div></div><span>2 Per Page</span></div></label>
             <label class="pdf-layout-option"><input type="radio" name="pdfLayout" value="4col"><div class="pdf-layout-card"><div class="pdf-layout-preview grid-preview cols-2"><div class="box"></div><div class="box"></div><div class="box"></div><div class="box"></div></div><span>4 Per Page</span></div></label>
           </div>
+          <div class="pdf-layout-help">
+            <span data-layout="text">Full-width step cards with images below text</span>
+            <span data-layout="2col" class="active">2 step cards stacked per page, image + text side by side</span>
+            <span data-layout="4col">2×2 grid of compact step cards per page</span>
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">Options</label>
           <div style="display:flex;flex-direction:column;gap:8px;">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="pdfIncludeQR" checked> Include QR Code</label>
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="pdfBilingual"> Bilingual (EN + ES)</label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="pdfIncludeImages" checked> Include Step Images</label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="pdfIncludeRelated" checked> Include Related SOPs</label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="pdfBilingual" onchange="togglePdfLangRadios()"> Bilingual (EN + ES)</label>
           </div>
         </div>
-        <div class="form-group">
+        <div class="form-group" id="pdfLangGroup">
           <label class="form-label">Language</label>
           <div style="display:flex;gap:8px;">
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="pdfLang" value="en" checked> English</label>
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="pdfLang" value="es"> Español</label>
           </div>
+        </div>
+        <div class="pdf-progress" id="pdfProgress" style="display:none;">
+          <div class="pdf-progress-bar"><div class="pdf-progress-fill" id="pdfProgressFill"></div></div>
+          <div class="pdf-progress-text" id="pdfProgressText">Preparing...</div>
         </div>
       </div>
       <div class="modal-footer">
@@ -990,9 +1001,9 @@
           const blob = await compressImageToBlob(file, 800, 0.7);
           showMediaPreview(blob, 'image');
         } else {
-          // Check video size (100MB limit with R2)
-          if (file.size > 100 * 1024 * 1024) {
-            showToast('Video too large (100MB limit). Upload to YouTube/Drive and paste URL.', 'error');
+          // Check video size (250MB limit with R2)
+          if (file.size > 250 * 1024 * 1024) {
+            showToast('Video too large (250MB limit). Upload to YouTube/Drive and paste URL.', 'error');
             document.getElementById('mediaSizeNote').style.display = 'flex';
             return;
           }
@@ -1198,17 +1209,30 @@
                 reject(new Error(resp.error || 'Upload failed'));
               }
             } catch {
-              reject(new Error('Invalid response'));
+              reject(new Error('Invalid server response'));
             }
+          } else if (xhr.status === 413) {
+            reject(new Error('File too large for server. Try a shorter video or use YouTube/Drive link.'));
+          } else if (xhr.status === 524 || xhr.status === 522) {
+            reject(new Error('Upload timed out. Try a smaller file or faster connection.'));
           } else {
-            reject(new Error('Upload failed (' + xhr.status + ')'));
+            let msg = 'Upload failed (HTTP ' + xhr.status + ')';
+            try { const r = JSON.parse(xhr.responseText); if (r.error) msg = r.error; } catch {}
+            reject(new Error(msg));
           }
         });
 
         xhr.addEventListener('error', () => {
           if (progressEl) progressEl.style.display = 'none';
-          reject(new Error('Network error during upload'));
+          reject(new Error('Network error — check your connection and try again.'));
         });
+
+        xhr.addEventListener('timeout', () => {
+          if (progressEl) progressEl.style.display = 'none';
+          reject(new Error('Upload timed out. Try a smaller file.'));
+        });
+
+        xhr.timeout = 300000; // 5 min timeout for large uploads
 
         xhr.open('POST', API_BASE + '/media?action=upload');
         xhr.send(formData);
@@ -2295,17 +2319,24 @@
           if (fab) fab.style.display = 'flex';
         }, 100);
       }
-      // Lazy load jsPDF when PDF modal opens
-      if (id === 'pdfModal' && !window.jspdf) {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-        script.onload = () => {
-          console.log('jsPDF loaded');
-        };
-        script.onerror = () => {
-          showToast('Failed to load PDF library', 'error');
-        };
-        document.head.appendChild(script);
+      // Lazy load html2pdf.js + qrcode-generator when PDF modal opens
+      if (id === 'pdfModal') {
+        if (!window.html2pdf) {
+          const script = document.createElement('script');
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+          script.onload = () => console.log('html2pdf.js loaded');
+          script.onerror = () => showToast('Failed to load PDF library', 'error');
+          document.head.appendChild(script);
+        }
+        if (!window.qrcode) {
+          const qrScript = document.createElement('script');
+          qrScript.src = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js';
+          qrScript.onload = () => console.log('qrcode-generator loaded');
+          qrScript.onerror = () => console.warn('QR lib failed to load, will use API fallback');
+          document.head.appendChild(qrScript);
+        }
+        // Update layout help text
+        updatePdfLayoutHelp();
       }
     }
     
@@ -3454,8 +3485,12 @@
     }
     
     // =====================================================
-    // PDF Generation
+    // PDF Generation — Premium Document Engine
     // =====================================================
+
+    // PDF rendering uses html2pdf.js (HTML/CSS → canvas → PDF)
+
+    // --- QR Code generation (local lib + API fallback) ---
 
     async function fetchQRAsBase64(data, size = 80) {
       const url = 'https://api.qrserver.com/v1/create-qr-code/?size=' + size + 'x' + size + '&data=' + encodeURIComponent(data);
@@ -3474,11 +3509,569 @@
       }
     }
 
+    function generateQRBase64(data, cellSize = 4) {
+      try {
+        if (typeof qrcode === 'function') {
+          const qr = qrcode(0, 'M');
+          qr.addData(data);
+          qr.make();
+          const modules = qr.getModuleCount();
+          const size = modules * cellSize;
+          const canvas = document.createElement('canvas');
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, size, size);
+          ctx.fillStyle = '#000000';
+          for (let row = 0; row < modules; row++) {
+            for (let col = 0; col < modules; col++) {
+              if (qr.isDark(row, col)) {
+                ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
+              }
+            }
+          }
+          return canvas.toDataURL('image/png');
+        }
+      } catch (e) {
+        console.warn('Local QR generation failed:', e);
+      }
+      return null;
+    }
+
+    async function getQRBase64(data) {
+      const local = generateQRBase64(data);
+      if (local) return local;
+      return await fetchQRAsBase64(data, 150);
+    }
+
+    // --- Image fetching helpers ---
+
+    async function fetchImageAsBase64(url, maxWidth = 400) {
+      if (!url) return null;
+      try {
+        // Handle data URIs directly
+        if (url.startsWith('data:image/')) {
+          return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+              const scale = Math.min(1, maxWidth / img.width);
+              const w = img.width * scale;
+              const h = img.height * scale;
+              const canvas = document.createElement('canvas');
+              canvas.width = w;
+              canvas.height = h;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, w, h);
+              resolve({ base64: canvas.toDataURL('image/jpeg', 0.85), width: w, height: h });
+            };
+            img.onerror = () => resolve(null);
+            img.src = url;
+          });
+        }
+
+        const response = await fetch(url, { mode: 'cors' });
+        if (!response.ok) return null;
+        const blob = await response.blob();
+        if (!blob.type.startsWith('image/')) return null;
+
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const img = new Image();
+            img.onload = () => {
+              const scale = Math.min(1, maxWidth / img.width);
+              const w = img.width * scale;
+              const h = img.height * scale;
+              const canvas = document.createElement('canvas');
+              canvas.width = w;
+              canvas.height = h;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, w, h);
+              resolve({ base64: canvas.toDataURL('image/jpeg', 0.85), width: w, height: h });
+            };
+            img.onerror = () => resolve(null);
+            img.src = reader.result;
+          };
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(blob);
+        });
+      } catch (e) {
+        console.warn('Failed to fetch image:', url, e);
+        return null;
+      }
+    }
+
+    let _logoCache = null;
+    async function getLogoBase64() {
+      if (_logoCache) return _logoCache;
+      try {
+        // Use the circle badge logo
+        const result = await fetchImageAsBase64('../assets/ro-logo-horizontal.png', 300);
+        if (result) _logoCache = result;
+        return result;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    // --- Asset prefetching ---
+
+    async function fetchPDFAssets(sop, options) {
+      const assets = { logo: null, mainQR: null, steps: {}, relatedQRs: {} };
+      const promises = [];
+      let totalAssets = 0;
+      let loadedAssets = 0;
+
+      const updateProgress = (msg) => {
+        loadedAssets++;
+        const pct = Math.round((loadedAssets / Math.max(totalAssets, 1)) * 100);
+        setPdfProgress(pct, msg || `Loading assets (${loadedAssets}/${totalAssets})...`);
+      };
+
+      // Logo
+      totalAssets++;
+      promises.push(getLogoBase64().then(r => { assets.logo = r; updateProgress('Logo loaded'); }));
+
+      // Main QR
+      if (options.includeQR) {
+        totalAssets++;
+        const sopViewUrl = window.location.origin + window.location.pathname + '?view=' + sop.id;
+        promises.push(getQRBase64(sopViewUrl).then(r => { assets.mainQR = r; updateProgress('QR code generated'); }));
+      }
+
+      // Step assets
+      const steps = sop.steps || [];
+      for (let i = 0; i < steps.length; i++) {
+        const step = steps[i];
+        const mediaUrl = step.media || step.image || '';
+        const mediaType = step.mediaType || detectMediaType(mediaUrl);
+        const isVideo = mediaType === 'video' || mediaType === 'youtube' || mediaType === 'gdrive' || mediaType === 'vimeo';
+
+        assets.steps[i] = { image: null, videoQR: null };
+
+        if (mediaUrl && !isVideo && options.includeImages) {
+          totalAssets++;
+          const idx = i;
+          promises.push(fetchImageAsBase64(mediaUrl, 600).then(r => { assets.steps[idx].image = r; updateProgress(`Step ${idx + 1} image`); }));
+        }
+        if (isVideo && mediaUrl && options.includeQR) {
+          totalAssets++;
+          const idx = i;
+          promises.push(getQRBase64(mediaUrl).then(r => { assets.steps[idx].videoQR = r; updateProgress(`Step ${idx + 1} video QR`); }));
+        }
+      }
+
+      // Related SOP QRs
+      if (options.includeRelated && sop.linkedSops && sop.linkedSops.length > 0) {
+        for (const link of sop.linkedSops) {
+          const linked = getSopById(link.sopId);
+          if (!linked) continue;
+          totalAssets++;
+          const id = link.sopId;
+          const linkUrl = window.location.origin + window.location.pathname + '?view=' + id;
+          promises.push(getQRBase64(linkUrl).then(r => { assets.relatedQRs[id] = r; updateProgress('Related SOP QR'); }));
+        }
+      }
+
+      if (totalAssets === 0) totalAssets = 1;
+      setPdfProgress(0, `Preparing ${totalAssets} assets...`);
+
+      await Promise.all(promises);
+      setPdfProgress(100, 'Building PDF...');
+      return assets;
+    }
+
+    // --- PDF UI helpers ---
+
+    function setPdfProgress(pct, text) {
+      const bar = document.getElementById('pdfProgress');
+      const fill = document.getElementById('pdfProgressFill');
+      const txt = document.getElementById('pdfProgressText');
+      if (bar) bar.style.display = 'block';
+      if (fill) fill.style.width = pct + '%';
+      if (txt) txt.textContent = text || '';
+    }
+
+    function hidePdfProgress() {
+      const bar = document.getElementById('pdfProgress');
+      if (bar) bar.style.display = 'none';
+    }
+
+    function togglePdfLangRadios() {
+      const bilingual = document.getElementById('pdfBilingual').checked;
+      const group = document.getElementById('pdfLangGroup');
+      if (group) group.style.opacity = bilingual ? '0.4' : '1';
+      if (group) group.style.pointerEvents = bilingual ? 'none' : 'auto';
+    }
+
+    function updatePdfLayoutHelp() {
+      const layout = document.querySelector('input[name="pdfLayout"]:checked')?.value || 'text';
+      document.querySelectorAll('.pdf-layout-help span').forEach(el => {
+        el.classList.toggle('active', el.dataset.layout === layout);
+      });
+    }
+    // Attach layout change listener
+    document.addEventListener('change', (e) => {
+      if (e.target.name === 'pdfLayout') updatePdfLayoutHelp();
+    });
+
+    // --- HTML Template Builder for PDF (renders via html2pdf.js) ---
+
+    function buildPDFHTML(sop, assets, options) {
+      const { bilingual, lang, layout, includeQR, includeImages, includeRelated } = options;
+      const steps = sop.steps || [];
+      const esc = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+      // Get title based on lang/bilingual
+      const titleEn = sop.title_en || sop.title || '';
+      const titleEs = sop.title_es || sop.title || '';
+      const title = bilingual ? titleEn : (sop['title_' + lang] || sop.title || '');
+
+      // Description
+      const descEn = sop.desc_en || sop.description || '';
+      const descEs = sop.desc_es || '';
+
+      // Meta pills
+      const metaItems = [
+        { label: 'Department', value: sop.dept || 'N/A' },
+        { label: 'Doc #', value: sop.docNum || 'N/A' },
+        { label: 'Rev', value: sop.revision || '1.0' },
+        { label: 'Status', value: (sop.status || 'Draft').charAt(0).toUpperCase() + (sop.status || 'draft').slice(1) },
+      ];
+      if (sop.updated) {
+        metaItems.push({ label: 'Updated', value: new Date(sop.updated).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) });
+      }
+
+      // Determine steps per page based on layout
+      const isGrid = layout === '2col' || layout === '4col';
+      const stepsPerPage = layout === '4col' ? 4 : (layout === '2col' ? 2 : 3);
+      const isCompact = layout === '4col';
+
+      // Distribute steps into pages
+      const pages = [];
+      let firstPageSteps, otherPageSteps;
+      // First page has less room (full header + title + meta + description)
+      if (layout === 'text') {
+        firstPageSteps = 2; // Conservative for text layout with full header
+        otherPageSteps = 4;
+      } else if (layout === '2col') {
+        firstPageSteps = 2;
+        otherPageSteps = 2;
+      } else {
+        firstPageSteps = 4;
+        otherPageSteps = 4;
+      }
+
+      let remaining = [...steps];
+      let pageIdx = 0;
+      while (remaining.length > 0) {
+        const count = pageIdx === 0 ? firstPageSteps : otherPageSteps;
+        pages.push(remaining.splice(0, count));
+        pageIdx++;
+      }
+      if (pages.length === 0) pages.push([]);
+
+      // Check if related SOPs section is needed
+      const hasRelated = includeRelated && sop.linkedSops && sop.linkedSops.length > 0;
+
+      // Total pages (add 1 if related section exists and last step page is full)
+      let totalPages = pages.length;
+      if (hasRelated) {
+        const lastPageSteps = pages[pages.length - 1].length;
+        const lastPageMax = pages.length === 1 ? firstPageSteps : otherPageSteps;
+        if (lastPageSteps >= lastPageMax) totalPages++;
+      }
+
+      // --- CSS (from mockup, adapted for PDF rendering) ---
+      // Font link tag (loaded outside <style> so html2canvas can use them)
+      const fontLink = '<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">';
+
+      const css = `
+        :root {
+          --green: #668971; --green-dark: #2d3a2e; --green-deep: #1e2a20; --green-light: #7a9d86;
+          --gold: #e4aa4f; --gold-light: #f0cb60; --gold-dim: #f8f0dc;
+          --danger: #c45c4a; --danger-light: #fde9e5;
+          --cream: #faf8f3; --cream-dark: #f0ece3;
+          --card-bg: #ffffff; --card-stroke: #e4dfd5;
+          --text: #2d2d2d; --text-light: #6b6b6b; --text-muted: #999;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Outfit', sans-serif; }
+        .page { width: 794px; height: 1123px; background: var(--cream); position: relative; overflow: hidden; page-break-after: always; }
+        .page:last-child { page-break-after: avoid; }
+        .header-band { background: var(--green-deep); padding: 0 56px; height: 150px; display: flex; align-items: center; justify-content: space-between; position: relative; }
+        .header-band::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, var(--gold) 0%, var(--gold-light) 50%, var(--gold) 100%); }
+        .header-band::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(-45deg, transparent, transparent 8px, rgba(255,255,255,0.015) 8px, rgba(255,255,255,0.015) 9px); pointer-events: none; }
+        .header-left { display: flex; align-items: center; gap: 20px; }
+        .header-logo { width: 80px; height: 80px; border-radius: 50%; overflow: hidden; border: 3px solid rgba(228, 170, 79, 0.3); flex-shrink: 0; box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+        .header-logo img { width: 100%; height: 100%; object-fit: cover; }
+        .header-text { display: flex; flex-direction: column; gap: 4px; }
+        .header-company { font-family: 'DM Serif Display', serif; font-size: 28px; color: var(--gold); letter-spacing: 3px; line-height: 1; }
+        .header-subtitle { font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 500; color: var(--green-light); text-transform: uppercase; letter-spacing: 4px; }
+        .header-qr { background: white; border-radius: 8px; padding: 8px; display: flex; flex-direction: column; align-items: center; gap: 5px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+        .header-qr img { width: 80px; height: 80px; border-radius: 4px; }
+        .header-qr .qr-label { font-size: 8px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 1px; }
+        .title-section { padding: 28px 56px 0; }
+        .sop-title { font-family: 'DM Serif Display', serif; font-size: 26px; color: var(--green-dark); line-height: 1.25; margin-bottom: 4px; }
+        .sop-title-es { font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 400; color: var(--green); font-style: italic; margin-bottom: 14px; }
+        .meta-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+        .meta-pill { background: var(--cream-dark); border: 1px solid var(--card-stroke); border-radius: 6px; padding: 5px 12px; font-size: 11px; display: flex; align-items: center; gap: 4px; }
+        .meta-pill .label { color: var(--text-muted); font-weight: 400; }
+        .meta-pill .value { color: var(--green-dark); font-weight: 600; }
+        .meta-pill.status .value { color: var(--green); }
+        .gold-divider { height: 1px; background: linear-gradient(90deg, var(--gold), var(--gold-light), transparent); margin-bottom: 16px; }
+        .sop-description { font-size: 13px; line-height: 1.7; color: var(--text); padding: 0 56px; margin-bottom: 8px; }
+        .sop-description.es { color: var(--text-light); font-style: italic; font-size: 12px; }
+        .section-label { padding: 12px 56px 8px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 3px; color: var(--text-muted); }
+        .steps-container { padding: 0 56px 28px; display: flex; flex-direction: column; gap: 14px; }
+        .steps-container.grid-2 { }
+        .steps-container.grid-4 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .step-card { background: var(--card-bg); border: 1px solid var(--card-stroke); border-radius: 10px; display: flex; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06); position: relative; }
+        .step-card.safety { border-color: var(--danger); }
+        .step-card.safety .step-bar { background: var(--danger); }
+        .step-card.safety .step-number { background: var(--danger); }
+        .step-card.safety .step-body { background: var(--danger-light); }
+        .step-bar { width: 5px; background: var(--green); flex-shrink: 0; }
+        .step-number-col { padding: 16px 0 16px 14px; flex-shrink: 0; }
+        .step-number { width: 36px; height: 36px; background: var(--green); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; font-family: 'JetBrains Mono', monospace; }
+        .step-body { flex: 1; padding: 14px 16px; min-width: 0; }
+        .step-header { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 6px; }
+        .step-title { font-family: 'DM Serif Display', serif; font-size: 15px; color: var(--green-dark); line-height: 1.3; flex: 1; }
+        .step-title-es { font-size: 12px; font-weight: 400; color: var(--green); font-style: italic; margin-bottom: 6px; }
+        .badge { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; padding: 3px 8px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; }
+        .badge.safety { background: var(--danger); color: white; }
+        .badge.quality { background: var(--green); color: white; }
+        .step-desc { font-size: 11.5px; line-height: 1.65; color: var(--text); }
+        .step-image-area { flex-shrink: 0; padding: 14px 16px 14px 0; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+        .step-image { width: 140px; height: 95px; border-radius: 6px; border: 1px solid var(--card-stroke); overflow: hidden; object-fit: cover; }
+        .step-video-qr { width: 80px; flex-shrink: 0; padding: 14px 16px 14px 0; display: flex; flex-direction: column; align-items: center; gap: 4px; border-left: 1px solid var(--card-stroke); margin-left: auto; }
+        .step-video-qr img { width: 56px; height: 56px; border: 1px solid #e0e0e0; border-radius: 4px; }
+        .step-video-qr .qr-mini-label { font-size: 7px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 600; text-align: center; }
+        .related-section { padding: 0 56px 28px; }
+        .related-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding-top: 8px; }
+        .related-header::before { content: ''; flex: 0 0 20px; height: 2px; background: var(--gold); }
+        .related-header h3 { font-family: 'DM Serif Display', serif; font-size: 16px; color: var(--green-dark); white-space: nowrap; }
+        .related-header::after { content: ''; flex: 1; height: 2px; background: linear-gradient(90deg, var(--gold), transparent); }
+        .related-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+        .related-card { background: var(--card-bg); border: 1px solid var(--card-stroke); border-radius: 8px; padding: 14px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+        .related-card img { width: 70px; height: 70px; border-radius: 4px; border: 1px solid #e8e8e8; }
+        .related-card .related-title { font-size: 10px; font-weight: 600; color: var(--green-dark); line-height: 1.3; }
+        .related-card .related-meta { font-size: 8px; color: var(--text-muted); }
+        .page-footer { position: absolute; bottom: 0; left: 0; right: 0; padding: 0 56px 20px; }
+        .footer-lines { height: 4px; margin-bottom: 8px; position: relative; }
+        .footer-lines::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1.5px; background: linear-gradient(90deg, var(--gold), var(--gold-light), var(--gold)); }
+        .footer-lines::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px; background: var(--green); opacity: 0.4; }
+        .footer-content { display: flex; justify-content: space-between; align-items: center; font-size: 9px; }
+        .footer-brand { font-weight: 700; color: var(--green-dark); text-transform: uppercase; letter-spacing: 2px; font-size: 8px; }
+        .footer-date { color: var(--text-muted); font-weight: 400; }
+        .footer-page { color: var(--text-muted); font-weight: 500; font-family: 'JetBrains Mono', monospace; font-size: 9px; }
+        .header-compact { background: var(--green-deep); padding: 0 56px; height: 44px; display: flex; align-items: center; justify-content: space-between; position: relative; }
+        .header-compact::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px; background: var(--gold); }
+        .header-compact .compact-left { display: flex; align-items: center; gap: 10px; }
+        .header-compact .compact-logo { width: 28px; height: 28px; border-radius: 50%; overflow: hidden; }
+        .header-compact .compact-logo img { width: 100%; height: 100%; object-fit: cover; }
+        .header-compact .compact-title { font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 600; color: var(--gold); }
+        .header-compact .compact-doc { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--green-light); }
+        /* Compact mode for 4-per-page */
+        .compact .step-number { width: 28px; height: 28px; font-size: 13px; }
+        .compact .step-title { font-size: 13px; }
+        .compact .step-desc { font-size: 10px; }
+        .compact .step-body { padding: 10px 12px; }
+        .compact .step-number-col { padding: 12px 0 12px 10px; }
+        .compact .step-image { width: 100px; height: 70px; }
+        .compact .step-image-area { padding: 10px 12px 10px 0; }
+        .compact .step-video-qr img { width: 44px; height: 44px; }
+      `;
+
+      // --- Build footer HTML ---
+      function footerHTML(pageNum, total) {
+        return '<div class="page-footer"><div class="footer-lines"></div><div class="footer-content">' +
+          '<div class="footer-brand">Rogue Origin</div>' +
+          '<div class="footer-date">' + esc(dateStr) + '</div>' +
+          '<div class="footer-page">Page ' + pageNum + ' of ' + total + '</div>' +
+        '</div></div>';
+      }
+
+      // --- Build step card HTML ---
+      function stepCardHTML(step, index) {
+        const isSafety = step.safety;
+        const isQuality = step.quality;
+        const mediaUrl = step.media || step.image || '';
+        const mediaType = step.mediaType || detectMediaType(mediaUrl);
+        const isVideo = mediaType === 'video' || mediaType === 'youtube' || mediaType === 'gdrive' || mediaType === 'vimeo';
+        const stepAssets = assets.steps[index] || {};
+        const hasImage = !isVideo && stepAssets.image && includeImages;
+        const hasVideoQR = isVideo && stepAssets.videoQR;
+
+        const stepTitle = bilingual ? (step.title_en || step.title || '') : (step['title_' + lang] || step.title || '');
+        const stepTitleEs = bilingual ? (step.title_es || step.title || '') : '';
+        const stepDescEn = bilingual ? (step.desc_en || step.description || '') : (step['desc_' + lang] || step.description || '');
+        const stepDescEs = bilingual ? (step.desc_es || '') : '';
+
+        let html = '<div class="step-card' + (isSafety ? ' safety' : '') + '">';
+        html += '<div class="step-bar"></div>';
+        html += '<div class="step-number-col"><div class="step-number">' + (index + 1) + '</div></div>';
+        html += '<div class="step-body">';
+        html += '<div class="step-header"><div>';
+        html += '<div class="step-title">' + esc(stepTitle) + '</div>';
+        if (bilingual && stepTitleEs) {
+          html += '<div class="step-title-es">' + esc(stepTitleEs) + '</div>';
+        }
+        html += '</div>';
+        if (isSafety) html += '<span class="badge safety">' + (bilingual ? 'Safety / Seguridad' : 'Safety') + '</span>';
+        if (isQuality) html += '<span class="badge quality">QC</span>';
+        html += '</div>';
+        html += '<div class="step-desc">' + esc(stepDescEn);
+        if (bilingual && stepDescEs) {
+          html += '<br><br><em style="color:var(--text-light)">' + esc(stepDescEs) + '</em>';
+        }
+        html += '</div>';
+        html += '</div>';
+
+        if (hasImage) {
+          html += '<div class="step-image-area"><img class="step-image" src="' + stepAssets.image.base64 + '"></div>';
+        }
+        if (hasVideoQR) {
+          html += '<div class="step-video-qr"><img src="' + stepAssets.videoQR + '">';
+          html += '<div class="qr-mini-label">' + (bilingual ? 'Escanear<br>para ver' : 'Scan to<br>Watch') + '</div></div>';
+        }
+
+        html += '</div>';
+        return html;
+      }
+
+      // --- Build full header (page 1) ---
+      function fullHeaderHTML() {
+        let h = '<div class="header-band"><div class="header-left">';
+        if (assets.logo) {
+          h += '<div class="header-logo"><img src="' + assets.logo.base64 + '"></div>';
+        }
+        h += '<div class="header-text"><div class="header-company">ROGUE ORIGIN</div>';
+        h += '<div class="header-subtitle">Standard Operating Procedure</div></div></div>';
+        if (includeQR && assets.mainQR) {
+          h += '<div class="header-qr"><img src="' + assets.mainQR + '">';
+          h += '<div class="qr-label">Scan to View</div></div>';
+        }
+        h += '</div>';
+
+        h += '<div class="title-section"><div class="sop-title">' + esc(title) + '</div>';
+        if (bilingual) {
+          h += '<div class="sop-title-es">' + esc(titleEs) + '</div>';
+        }
+        h += '<div class="meta-row">';
+        metaItems.forEach(m => {
+          const isStatus = m.label === 'Status';
+          h += '<div class="meta-pill' + (isStatus ? ' status' : '') + '">';
+          h += '<span class="label">' + esc(m.label) + '</span>';
+          h += '<span class="value">' + esc(m.value) + '</span></div>';
+        });
+        h += '</div><div class="gold-divider"></div></div>';
+
+        if (bilingual) {
+          if (descEn) h += '<div class="sop-description">' + esc(descEn) + '</div>';
+          if (descEs) h += '<div class="sop-description es">' + esc(descEs) + '</div>';
+        } else {
+          const desc = sop['desc_' + lang] || sop.description || '';
+          if (desc) h += '<div class="sop-description">' + esc(desc) + '</div>';
+        }
+
+        const stepsLabel = bilingual ? 'Procedure Steps / Pasos del Procedimiento' : 'Procedure Steps';
+        h += '<div class="section-label">' + stepsLabel + '</div>';
+        return h;
+      }
+
+      // --- Build compact header (page 2+) ---
+      function compactHeaderHTML() {
+        let h = '<div class="header-compact"><div class="compact-left">';
+        if (assets.logo) {
+          h += '<div class="compact-logo"><img src="' + assets.logo.base64 + '"></div>';
+        }
+        h += '<div class="compact-title">' + esc(title) + '</div></div>';
+        h += '<div class="compact-doc">' + esc(sop.docNum || '') + '</div></div>';
+        const contLabel = bilingual ? 'Procedure Steps (continued) / Pasos (continuacion)' : 'Procedure Steps (continued)';
+        h += '<div class="section-label">' + contLabel + '</div>';
+        return h;
+      }
+
+      // --- Build related SOPs section ---
+      function relatedHTML() {
+        if (!hasRelated) return '';
+        let h = '<div class="related-section"><div class="related-header"><h3>Related Procedures</h3></div>';
+        h += '<div class="related-grid">';
+        sop.linkedSops.forEach(link => {
+          const linked = getSopById(link.sopId);
+          if (!linked) return;
+          const linkTitle = linked['title_' + lang] || linked.title || '';
+          const qrData = assets.relatedQRs[link.sopId];
+          h += '<div class="related-card">';
+          if (qrData) h += '<img src="' + qrData + '">';
+          h += '<div class="related-title">' + esc(linkTitle) + '</div>';
+          h += '<div class="related-meta">' + esc((linked.dept || '') + (linked.docNum ? ' | ' + linked.docNum : '')) + '</div>';
+          h += '</div>';
+        });
+        h += '</div></div>';
+        return h;
+      }
+
+      // --- Assemble pages ---
+      let html = fontLink + '<style>' + css + '</style>';
+      const containerClass = isCompact ? ' compact' : '';
+      const stepsClass = layout === '4col' ? ' grid-4' : (layout === '2col' ? ' grid-2' : '');
+
+      pages.forEach((pageSteps, pi) => {
+        html += '<div class="page' + containerClass + '">';
+
+        // Header
+        if (pi === 0) {
+          html += fullHeaderHTML();
+        } else {
+          html += compactHeaderHTML();
+        }
+
+        // Steps
+        if (pageSteps.length > 0) {
+          html += '<div class="steps-container' + stepsClass + '">';
+          const baseIndex = pages.slice(0, pi).reduce((sum, p) => sum + p.length, 0);
+          pageSteps.forEach((step, si) => {
+            html += stepCardHTML(step, baseIndex + si);
+          });
+          html += '</div>';
+        }
+
+        // Related SOPs on last step page if room, or on dedicated page
+        if (pi === pages.length - 1 && hasRelated && pageSteps.length < (pi === 0 ? firstPageSteps : otherPageSteps)) {
+          html += relatedHTML();
+        }
+
+        html += footerHTML(pi + 1, totalPages);
+        html += '</div>';
+      });
+
+      // Dedicated related page if needed
+      if (hasRelated) {
+        const lastPageSteps = pages[pages.length - 1].length;
+        const lastPageMax = pages.length === 1 ? firstPageSteps : otherPageSteps;
+        if (lastPageSteps >= lastPageMax) {
+          html += '<div class="page' + containerClass + '">';
+          html += compactHeaderHTML();
+          html += relatedHTML();
+          html += footerHTML(totalPages, totalPages);
+          html += '</div>';
+        }
+      }
+
+      return html;
+    }
+
+    // --- Main PDF Generator ---
+
     async function generatePDF() {
       const s = sops.find(x => x.id == currentSopId);
       if (!s) return;
 
-      if (!window.jspdf) {
+      if (!window.html2pdf) {
         showToast('PDF library still loading, please wait...', 'error');
         return;
       }
@@ -3487,165 +4080,72 @@
       btn.disabled = true;
       btn.innerHTML = '<i class="ph-duotone ph-spinner" style="animation:spin 1s linear infinite"></i> Generating...';
 
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF();
+      try {
+        const layout = document.querySelector('input[name="pdfLayout"]:checked').value;
+        const options = {
+          lang: document.querySelector('input[name="pdfLang"]:checked').value,
+          includeQR: document.getElementById('pdfIncludeQR').checked,
+          includeImages: document.getElementById('pdfIncludeImages').checked,
+          includeRelated: document.getElementById('pdfIncludeRelated').checked,
+          bilingual: document.getElementById('pdfBilingual').checked,
+          layout,
+        };
 
-      const lang = document.querySelector('input[name="pdfLang"]:checked').value;
-      const includeQR = document.getElementById('pdfIncludeQR').checked;
-      const bilingual = document.getElementById('pdfBilingual').checked;
-      const layout = document.querySelector('input[name="pdfLayout"]:checked').value;
-      
-      // Note: Grid layouts (2col, 4col) not yet implemented - defaults to text layout
-      if (layout !== 'text') {
-        console.log('Grid layout selected but not yet implemented, using text layout');
-      }
-      
-      let title, desc;
-      if (bilingual) {
-        title = (s.title_en || s.title) + ' / ' + (s.title_es || s.title);
-        desc = ((s.desc_en || s.description || '') + (s.desc_es ? '\n' + s.desc_es : ''));
-      } else {
-        title = s['title_' + lang] || s.title;
-        desc = s['desc_' + lang] || s.description;
-      }
-      
-      const sopViewUrl = window.location.origin + window.location.pathname + '?view=' + s.id;
+        setPdfProgress(0, 'Loading assets...');
 
-      // Fetch main QR code
-      let mainQRBase64 = null;
-      if (includeQR) {
-        mainQRBase64 = await fetchQRAsBase64(sopViewUrl, 60);
-      }
+        // Prefetch all assets (unchanged — produces base64 for img tags)
+        const assets = await fetchPDFAssets(s, options);
 
-      // Header with title and QR
-      doc.setFontSize(bilingual ? 14 : 18);
-      doc.setTextColor(45, 58, 46);
-      const titleLines = doc.splitTextToSize(title, includeQR && mainQRBase64 ? 140 : 170);
-      doc.text(titleLines, 20, 22);
+        setPdfProgress(80, 'Rendering PDF...');
 
-      // Add main QR code in top right
-      if (mainQRBase64) {
-        try {
-          doc.addImage(mainQRBase64, 'PNG', 160, 10, 30, 30);
-          doc.setFontSize(6);
-          doc.setTextColor(120, 120, 120);
-          doc.text('Scan to view', 167, 43);
-        } catch (e) {
-          console.error('Failed to add QR to PDF:', e);
+        // Build HTML template
+        const htmlContent = buildPDFHTML(s, assets, options);
+
+        // Create container for html2pdf rendering
+        // Must stay on-screen (html2canvas can't capture off-screen elements)
+        // but visually hidden behind everything
+        const container = document.createElement('div');
+        container.style.position = 'absolute';
+        container.style.left = '0';
+        container.style.top = '0';
+        container.style.zIndex = '-9999';
+        container.style.opacity = '0';
+        container.style.pointerEvents = 'none';
+        container.style.width = '794px';
+        container.innerHTML = htmlContent;
+        document.body.appendChild(container);
+
+        // Wait for fonts & images to settle
+        if (document.fonts && document.fonts.ready) {
+          await document.fonts.ready;
         }
+        await new Promise(r => setTimeout(r, 500));
+
+        // Render with html2pdf
+        const filename = 'SOP-' + (s.docNum || s.id) + '.pdf';
+        await html2pdf().set({
+          margin: 0,
+          filename: filename,
+          image: { type: 'jpeg', quality: 0.95 },
+          html2canvas: { scale: 2, useCORS: true, logging: false, width: 794, windowWidth: 794 },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak: { mode: ['css'] }
+        }).from(container).save();
+
+        // Cleanup
+        document.body.removeChild(container);
+
+        setPdfProgress(100, 'Complete!');
+        closeModal('pdfModal');
+        showToast('PDF generated!', 'success');
+      } catch (err) {
+        console.error('PDF generation failed:', err);
+        showToast('PDF generation failed: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ph-duotone ph-file-pdf"></i> Generate PDF';
+        hidePdfProgress();
       }
-
-      const titleHeight = titleLines.length * 7;
-      doc.setFontSize(9);
-      doc.setTextColor(90, 107, 95);
-      doc.text('Department: ' + s.dept + '  |  Doc #: ' + (s.docNum || 'N/A') + '  |  Rev: ' + (s.revision || '1.0'), 20, 22 + titleHeight + 2);
-
-      let y = 22 + titleHeight + 8;
-
-      if (desc) {
-        doc.setFontSize(10);
-        doc.setTextColor(70, 70, 70);
-        const descLines = doc.splitTextToSize(desc, 170);
-        doc.text(descLines, 20, y);
-        y += descLines.length * 5 + 8;
-      }
-
-      // Draw a separator line
-      doc.setDrawColor(200, 200, 200);
-      doc.line(20, y, 190, y);
-      y += 8;
-
-      // Steps
-      for (let i = 0; i < (s.steps || []).length; i++) {
-        const step = s.steps[i];
-        if (y > 250) {
-          doc.addPage();
-          y = 20;
-        }
-
-        const stepTitle = bilingual ? 
-          ((step.title_en || step.title) + ' / ' + (step.title_es || step.title)) :
-          (step['title_' + lang] || step.title);
-        const stepDesc = bilingual ?
-          ((step.desc_en || step.description || '') + (step.desc_es ? '\n' + step.desc_es : '')) :
-          (step['desc_' + lang] || step.description);
-        const mediaUrl = step.media || step.image || '';
-        const mediaType = step.mediaType || detectMediaType(mediaUrl);
-        const isVideo = mediaType === 'video' || mediaType === 'youtube' || mediaType === 'gdrive' || mediaType === 'vimeo';
-        const hasVideoQR = isVideo && mediaUrl && includeQR;
-
-        // Step number circle (simulated with filled circle)
-        doc.setFillColor(102, 137, 113);
-        doc.circle(25, y - 2, 4, 'F');
-        doc.setFontSize(10);
-        doc.setTextColor(255, 255, 255);
-        doc.text(String(i + 1), 23.5, y);
-
-        // Step title
-        doc.setFontSize(12);
-        doc.setTextColor(45, 58, 46);
-        doc.setFont(undefined, 'bold');
-        const stepTitleMaxWidth = hasVideoQR ? 130 : 155;
-        const stepTitleLines = doc.splitTextToSize(stepTitle, stepTitleMaxWidth);
-        doc.text(stepTitleLines, 33, y);
-        doc.setFont(undefined, 'normal');
-
-        // Safety/Quality indicators
-        let iconX = 33 + doc.getTextWidth(stepTitleLines[0]) + 3;
-        if (step.safety) {
-          doc.setTextColor(196, 92, 74);
-          doc.setFontSize(8);
-          doc.text('⚠ SAFETY', iconX, y);
-          iconX += 25;
-        }
-        if (step.quality) {
-          doc.setTextColor(102, 137, 113);
-          doc.setFontSize(8);
-          doc.text('✓ QC', iconX, y);
-        }
-
-        y += stepTitleLines.length * 5 + 2;
-
-        // Step description
-        if (stepDesc) {
-          doc.setFontSize(10);
-          doc.setTextColor(80, 80, 80);
-          const descMaxWidth = hasVideoQR ? 125 : 155;
-          const lines = doc.splitTextToSize(stepDesc, descMaxWidth);
-          doc.text(lines, 33, y);
-          y += lines.length * 5;
-        }
-
-        // Video QR code (placed on the right side of the step)
-        if (hasVideoQR) {
-          const videoQR = await fetchQRAsBase64(mediaUrl, 50);
-          if (videoQR) {
-            try {
-              const qrY = y - (stepTitleLines.length * 5 + (stepDesc ? 10 : 0));
-              doc.addImage(videoQR, 'PNG', 165, qrY - 5, 25, 25);
-              doc.setFontSize(6);
-              doc.setTextColor(150, 150, 150);
-              doc.text('Watch video', 168, qrY + 22);
-            } catch (e) {
-              console.error('Failed to add video QR:', e);
-            }
-          }
-        }
-
-        y += 12;
-      }
-
-      // Footer
-      doc.setFontSize(8);
-      doc.setTextColor(150, 150, 150);
-      doc.text('Generated: ' + new Date().toLocaleDateString() + ' | Rogue Origin SOP Manager', 20, 285);
-
-      doc.save('SOP-' + (s.docNum || s.id) + '.pdf');
-      closeModal('pdfModal');
-      showToast('PDF generated!', 'success');
-
-      btn.disabled = false;
-      btn.innerHTML = '<i class="ph-duotone ph-file-pdf"></i> Generate PDF';
     }
     
     // =====================================================
