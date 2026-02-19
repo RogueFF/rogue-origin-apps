@@ -2196,6 +2196,10 @@ function renderTradingDesk(regime, plays, portfolio, positions, closedPositions,
   const container = document.getElementById('tradingMain');
   if (!container) return;
 
+  // Stash portfolio in state for live price updater to reference
+  if (!state.tradingDesk) state.tradingDesk = {};
+  state.tradingDesk.portfolio = portfolio;
+
   const marketOpen = isMarketHours();
   const liveIndicator = marketOpen
     ? '<span class="live-dot"></span> LIVE'
@@ -2339,22 +2343,25 @@ function renderTradingDesk(regime, plays, portfolio, positions, closedPositions,
         }
       });
       
-      // Update portfolio with total unrealized P&L
-      const totalUnrealized = stockTickers.reduce((sum, ticker) => {
+      // Update portfolio P&L with live stock unrealized + existing realized + options unrealized
+      const stockUnrealized = stockTickers.reduce((sum, ticker) => {
         const liveData = prices[ticker];
         if (!liveData) return sum;
         const posMatch = (openPositions || []).find(p => p.ticker === ticker && p.vehicle === 'shares');
         if (!posMatch) return sum;
         return sum + (liveData.price - (posMatch.entry_price || 0)) * (posMatch.quantity || 0);
       }, 0);
-      
-      if (totalUnrealized !== 0) {
-        const pnlEl = container.querySelector('.td-pstat-val');
-        if (pnlEl) {
-          const color = totalUnrealized >= 0 ? 'var(--sig-green, #22c55e)' : 'var(--sig-red, #ef4444)';
-          pnlEl.style.color = color;
-          pnlEl.textContent = `$${totalUnrealized >= 0 ? '+' : ''}${totalUnrealized.toFixed(0)}`;
-        }
+
+      // Combine: realized (from portfolio API) + options unrealized (from portfolio API) + live stock unrealized
+      const realizedFromApi = state.tradingDesk?.portfolio?.realized_pnl || 0;
+      const optionsUnrealized = state.tradingDesk?.portfolio?.unrealized_pnl || 0;
+      const liveTotalPnl = realizedFromApi + optionsUnrealized + stockUnrealized;
+
+      const pnlEl = container.querySelector('.td-pstat-val');
+      if (pnlEl) {
+        const color = liveTotalPnl >= 0 ? 'var(--sig-green, #22c55e)' : 'var(--sig-red, #ef4444)';
+        pnlEl.style.color = color;
+        pnlEl.textContent = `$${liveTotalPnl >= 0 ? '+' : ''}${liveTotalPnl.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0})}`;
       }
 
       // Add "prices as of" timestamp
