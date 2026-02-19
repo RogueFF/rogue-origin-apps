@@ -22,11 +22,11 @@
         "temp": "51.7°F",
         "humidity": "23.1%",
         "battery": "68%",
-        "location": "Fracht W 2, 8302 Kloten",
+        "location": "Fracht W, 8302 Kloten",
         "coords": "47.453637, 8.569032",
-        "fullAddress": "Fracht W 2, 8302 Kloten, Switzerland"
+        "fullAddress": "Operation Center 4, Fracht W, 8302 Kloten, Switzerland"
       },
-      "lastUpdate": "2026-02-19T16:30:11.706Z",
+      "lastUpdate": "2026-02-19T17:00:12.431Z",
       "created": "2026-02-17T20:00:00Z",
       "history": [
         {
@@ -93,6 +93,14 @@
         {
           "time": "2026-02-19T16:30:11.705Z",
           "location": "Fracht W 2, 8302 Kloten",
+          "temp": "51.7°F",
+          "humidity": "23.1%",
+          "battery": "68%",
+          "phase": "arrived"
+        },
+        {
+          "time": "2026-02-19T17:00:12.431Z",
+          "location": "Fracht W, 8302 Kloten",
           "temp": "51.7°F",
           "humidity": "23.1%",
           "battery": "68%",
