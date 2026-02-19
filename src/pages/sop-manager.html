@@ -1175,7 +1175,18 @@
     }
 
     // Upload file/blob to R2 via the media API with progress
-    function uploadToR2(fileOrBlob) {
+    // Upload small files (<10MB) via Worker, large files via chunked R2 multipart
+    async function uploadToR2(fileOrBlob) {
+      const CHUNK_THRESHOLD = 10 * 1024 * 1024; // 10MB — above this, use chunked upload
+
+      if (fileOrBlob.size > CHUNK_THRESHOLD) {
+        return uploadToR2Chunked(fileOrBlob);
+      }
+      return uploadToR2Direct(fileOrBlob);
+    }
+
+    // Small file upload — goes through Worker (with progress bar)
+    function uploadToR2Direct(fileOrBlob) {
       return new Promise((resolve, reject) => {
         const formData = new FormData();
         const name = fileOrBlob.name || ('upload.' + (fileOrBlob.type?.split('/')[1] || 'jpg'));
@@ -1186,7 +1197,6 @@
         const barEl = document.getElementById('mediaUploadBar');
         const labelEl = document.getElementById('mediaUploadLabel');
 
-        // Show progress
         if (progressEl) progressEl.style.display = 'block';
         if (barEl) barEl.style.width = '0%';
 
@@ -1213,8 +1223,6 @@
             }
           } else if (xhr.status === 413) {
             reject(new Error('File too large for server. Try a shorter video or use YouTube/Drive link.'));
-          } else if (xhr.status === 524 || xhr.status === 522) {
-            reject(new Error('Upload timed out. Try a smaller file or faster connection.'));
           } else {
             let msg = 'Upload failed (HTTP ' + xhr.status + ')';
             try { const r = JSON.parse(xhr.responseText); if (r.error) msg = r.error; } catch {}
@@ -1232,11 +1240,84 @@
           reject(new Error('Upload timed out. Try a smaller file.'));
         });
 
-        xhr.timeout = 300000; // 5 min timeout for large uploads
+        xhr.timeout = 120000; // 2 min for small files
 
         xhr.open('POST', API_BASE + '/media?action=upload');
         xhr.send(formData);
       });
+    }
+
+    // Large file upload — chunked multipart directly to R2 (bypasses Worker body limits)
+    async function uploadToR2Chunked(fileOrBlob) {
+      const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks
+      const progressEl = document.getElementById('mediaUploadProgress');
+      const barEl = document.getElementById('mediaUploadBar');
+      const labelEl = document.getElementById('mediaUploadLabel');
+
+      if (progressEl) progressEl.style.display = 'block';
+      if (barEl) barEl.style.width = '0%';
+      if (labelEl) labelEl.textContent = 'Preparing upload...';
+
+      try {
+        // Step 1: Ask Worker to create a multipart upload
+        const initResp = await fetch(API_BASE + '/media?action=create-upload-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contentType: fileOrBlob.type,
+            fileSize: fileOrBlob.size,
+            fileName: fileOrBlob.name || 'upload',
+          }),
+        });
+        const initData = await initResp.json();
+        if (!initData.success) throw new Error(initData.error || 'Failed to start upload');
+
+        const { key, uploadId } = initData;
+
+        // Step 2: Upload chunks via Worker (each chunk is small enough)
+        const totalChunks = Math.ceil(fileOrBlob.size / CHUNK_SIZE);
+        const parts = [];
+
+        for (let i = 0; i < totalChunks; i++) {
+          const start = i * CHUNK_SIZE;
+          const end = Math.min(start + CHUNK_SIZE, fileOrBlob.size);
+          const chunk = fileOrBlob.slice(start, end);
+          const partNumber = i + 1;
+
+          if (labelEl) labelEl.textContent = 'Uploading part ' + partNumber + '/' + totalChunks + '...';
+          if (barEl) barEl.style.width = Math.round((i / totalChunks) * 90) + '%';
+
+          const partResp = await fetch(API_BASE + '/media?action=upload-part&key=' + encodeURIComponent(key) + '&uploadId=' + encodeURIComponent(uploadId) + '&partNumber=' + partNumber, {
+            method: 'PUT',
+            body: chunk,
+          });
+          const partData = await partResp.json();
+          if (!partData.success) throw new Error(partData.error || 'Chunk ' + partNumber + ' failed');
+
+          parts.push({ partNumber, etag: partData.etag });
+        }
+
+        if (barEl) barEl.style.width = '95%';
+        if (labelEl) labelEl.textContent = 'Finalizing...';
+
+        // Step 3: Complete the multipart upload
+        const completeResp = await fetch(API_BASE + '/media?action=confirm-upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key, uploadId, parts }),
+        });
+        const completeData = await completeResp.json();
+        if (!completeData.success) throw new Error(completeData.error || 'Failed to finalize upload');
+
+        if (barEl) barEl.style.width = '100%';
+        if (labelEl) labelEl.textContent = 'Upload complete!';
+        if (progressEl) setTimeout(() => { progressEl.style.display = 'none'; }, 500);
+
+        return completeData.url;
+      } catch (e) {
+        if (progressEl) progressEl.style.display = 'none';
+        throw e;
+      }
     }
 
     // Get YouTube embed URL
