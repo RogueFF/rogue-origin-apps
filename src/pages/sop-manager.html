@@ -4182,8 +4182,8 @@
         const htmlContent = buildPDFHTML(s, assets, options);
 
         // Create container for html2pdf rendering
-        // html2canvas needs the element fully visible in the DOM (no opacity/z-index tricks)
-        // Container is removed immediately after rendering
+        // html2canvas needs the element in normal DOM flow (no position:fixed/absolute, no z-index tricks)
+        // We tell html2canvas exactly the width to capture, so page layout offset doesn't matter
         const container = document.createElement('div');
         container.className = 'pdf-container';
         container.style.width = '794px';
@@ -4203,7 +4203,7 @@
           margin: 0,
           filename: filename,
           image: { type: 'jpeg', quality: 0.95 },
-          html2canvas: { scale: 2, useCORS: true, logging: false, width: 794, windowWidth: 794 },
+          html2canvas: { scale: 2, useCORS: true, logging: false, width: 794, windowWidth: 794, scrollX: 0, scrollY: 0, x: 0, y: 0 },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
           pagebreak: { mode: ['css'] }
         }).from(container).outputPdf('blob');
