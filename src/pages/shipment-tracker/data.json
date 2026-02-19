@@ -19,14 +19,14 @@
       "flightStatus": "SCHEDULED",
       "weight": "380 kg (2 pallets)",
       "sensorData": {
-        "temp": "54.1°F",
-        "humidity": "22.1%",
+        "temp": "53.0°F",
+        "humidity": "22.5%",
         "battery": "87%",
         "location": "San Francisco, CA",
-        "coords": "37.618684, -122.39424",
+        "coords": "37.618684, -122.394241",
         "fullAddress": "106 Upper Loop Rd, San Francisco, CA 94128, USA"
       },
-      "lastUpdate": "2026-02-19T03:00:12.447Z",
+      "lastUpdate": "2026-02-19T03:30:12.815Z",
       "created": "2026-02-17T20:00:00Z",
       "history": [
         {
