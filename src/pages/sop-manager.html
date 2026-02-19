@@ -4183,15 +4183,9 @@
         const htmlContent = buildPDFHTML(s, assets, options);
 
         // Create container for html2pdf rendering
-        // Must stay on-screen (html2canvas can't capture off-screen elements)
-        // but visually hidden behind everything
+        // html2canvas needs the element fully visible in the DOM (no opacity/z-index tricks)
+        // Container is removed immediately after rendering
         const container = document.createElement('div');
-        container.style.position = 'absolute';
-        container.style.left = '0';
-        container.style.top = '0';
-        container.style.zIndex = '-9999';
-        container.style.opacity = '0';
-        container.style.pointerEvents = 'none';
         container.style.width = '794px';
         container.innerHTML = htmlContent;
         document.body.appendChild(container);
@@ -4202,19 +4196,30 @@
         }
         await new Promise(r => setTimeout(r, 500));
 
-        // Render with html2pdf
+        // Render with html2pdf — use outputPdf('blob') + manual download
+        // (.save() can trigger download before rendering completes)
         const filename = 'SOP-' + (s.docNum || s.id) + '.pdf';
-        await html2pdf().set({
+        const pdfBlob = await html2pdf().set({
           margin: 0,
           filename: filename,
           image: { type: 'jpeg', quality: 0.95 },
           html2canvas: { scale: 2, useCORS: true, logging: false, width: 794, windowWidth: 794 },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
           pagebreak: { mode: ['css'] }
-        }).from(container).save();
+        }).from(container).outputPdf('blob');
 
-        // Cleanup
+        // Cleanup container
         document.body.removeChild(container);
+
+        // Trigger download from blob
+        const url = URL.createObjectURL(pdfBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
 
         setPdfProgress(100, 'Complete!');
         closeModal('pdfModal');
