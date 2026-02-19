@@ -11,7 +11,7 @@
       "hub": "SFO",
       "finalDest": "ZRH",
       "tiveUrl": "https://platform.tive.com/shared/shipment/df75dbe01b1d42fd83df83df9e68ac7c",
-      "status": "in-transit",
+      "status": "at-airport",
       "eta": "Feb 19, 3:30 PM CET",
       "departure": "Feb 18, 7:25 PM PST",
       "terminal": "INTL",
