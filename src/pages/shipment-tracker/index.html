@@ -126,6 +126,7 @@
   .status-badge.booked { background: rgba(99,102,241,0.15); color: #818cf8; border: 1px solid rgba(99,102,241,0.2); }
   .status-badge.pickup { background: rgba(168,85,247,0.15); color: #c084fc; border: 1px solid rgba(168,85,247,0.2); }
   .status-badge.in-transit { background: rgba(14,165,233,0.15); color: #38bdf8; border: 1px solid rgba(14,165,233,0.2); }
+  .status-badge.at-airport { background: rgba(251,191,36,0.15); color: #fbbf24; border: 1px solid rgba(251,191,36,0.2); }
   .status-badge.departed { background: rgba(0,198,167,0.15); color: var(--teal); border: 1px solid rgba(0,198,167,0.2); }
   .status-badge.in-flight { background: rgba(0,198,167,0.15); color: var(--teal); border: 1px solid rgba(0,198,167,0.2); }
   .status-badge.arrived { background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.2); }
@@ -651,8 +652,8 @@
 <script>
 const DATA_URL = 'data.json';
 const REFRESH_MS = 3 * 60 * 1000; // 3 min refresh
-const STATUS_ORDER = ['booked', 'pickup', 'in-transit', 'departed', 'in-flight', 'arrived', 'customs', 'delivered'];
-const STEP_LABELS = ['Booked', 'Pickup', 'Ground', 'Departed', 'In Flight', 'Arrived', 'Customs', 'Delivered'];
+const STATUS_ORDER = ['booked', 'pickup', 'in-transit', 'at-airport', 'departed', 'in-flight', 'arrived', 'customs', 'delivered'];
+const STEP_LABELS = ['Booked', 'Pickup', 'Ground', 'At Airport', 'Departed', 'In Flight', 'Arrived', 'Customs', 'Delivered'];
 const AIRPORT_CITIES = {
   'RO': 'Grants Pass', 'MFR': 'Medford', 'SFO': 'San Francisco', 'ZRH': 'Zürich',
   'PDX': 'Portland', 'LAX': 'Los Angeles', 'JFK': 'New York',
@@ -675,6 +676,7 @@ function progressLegs(status, location) {
     'booked':     { leg1: 0,   leg2: 0 },
     'pickup':     { leg1: 15,  leg2: 0 },
     'in-transit': { leg1: 60,  leg2: 0 },
+    'at-airport': { leg1: 95,  leg2: 0 },
     'departed':   { leg1: 100, leg2: 25 },
     'in-flight':  { leg1: 100, leg2: 60 },
     'arrived':    { leg1: 100, leg2: 100 },
@@ -682,12 +684,10 @@ function progressLegs(status, location) {
     'delivered':  { leg1: 100, leg2: 100 },
   };
   const result = legs[status] || { leg1: 0, leg2: 0 };
-  // If ground transit and location matches hub city, truck is at airport
+  // Location-aware leg1 for ground transit
   if (status === 'in-transit' && location) {
     const loc = location.toLowerCase();
-    if (loc.includes('san francisco') || loc.includes('sfo')) {
-      result.leg1 = 95;
-    } else if (loc.includes('vallejo') || loc.includes('sacramento') || loc.includes('bay area')) {
+    if (loc.includes('vallejo') || loc.includes('sacramento') || loc.includes('bay area')) {
       result.leg1 = 80;
     }
   }
