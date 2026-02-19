@@ -22,11 +22,11 @@
         "temp": "54.4°F",
         "humidity": "22.5%",
         "battery": "77%",
-        "location": "San Francisco, CA",
+        "location": "JJC3+67 San Bruno, CA",
         "coords": "37.622236, -122.395663",
-        "fullAddress": "632 W Field Rd, San Francisco, CA 94128, USA"
+        "fullAddress": "JJC3+67 San Bruno, CA, USA"
       },
-      "lastUpdate": "2026-02-18T23:30:11.707Z",
+      "lastUpdate": "2026-02-19T00:00:12.607Z",
       "created": "2026-02-17T20:00:00Z",
       "history": [
         {
@@ -49,6 +49,14 @@
           "temp": "56.8°F",
           "humidity": "22.6%",
           "battery": "85%"
+        },
+        {
+          "time": "2026-02-19T00:00:12.607Z",
+          "location": "JJC3+67 San Bruno, CA",
+          "temp": "54.4°F",
+          "humidity": "22.5%",
+          "battery": "77%",
+          "phase": "at-airport"
         }
       ]
     }
