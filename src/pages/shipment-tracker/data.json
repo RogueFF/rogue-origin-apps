@@ -22,11 +22,11 @@
         "temp": "59.1°F",
         "humidity": "54.9%",
         "battery": "83%",
-        "location": "Grindelstrasse 17, 8303 Bassersdorf",
+        "location": "Grindelstrasse 15, 8303 Bassersdorf",
         "coords": "47.444926, 8.611096",
-        "fullAddress": "Grindelstrasse 17, 8303 Bassersdorf, Switzerland"
+        "fullAddress": "Grindelstrasse 15, 8303 Bassersdorf, Switzerland"
       },
-      "lastUpdate": "2026-02-20T11:30:13.603Z",
+      "lastUpdate": "2026-02-20T12:00:10.356Z",
       "created": "2026-02-17T20:00:00Z",
       "history": [
         {
@@ -133,6 +133,14 @@
         {
           "time": "2026-02-20T11:30:13.603Z",
           "location": "Grindelstrasse 17, 8303 Bassersdorf",
+          "temp": "59.1°F",
+          "humidity": "54.9%",
+          "battery": "83%",
+          "phase": "arrived"
+        },
+        {
+          "time": "2026-02-20T12:00:10.356Z",
+          "location": "Grindelstrasse 15, 8303 Bassersdorf",
           "temp": "59.1°F",
           "humidity": "54.9%",
           "battery": "83%",
