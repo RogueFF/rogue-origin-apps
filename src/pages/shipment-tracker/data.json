@@ -19,14 +19,14 @@
       "flightStatus": "SCHEDULED",
       "weight": "380 kg (2 pallets)",
       "sensorData": {
-        "temp": "62.0°F",
+        "temp": "62.1°F",
         "humidity": "24.3%",
-        "battery": "82%",
+        "battery": "83%",
         "location": "Fracht W 2, 8302 Kloten",
-        "coords": "47.453645, 8.569017",
+        "coords": "47.453645, 8.569018",
         "fullAddress": "Fracht W 2, 8302 Kloten, Switzerland"
       },
-      "lastUpdate": "2026-02-20T04:00:10.280Z",
+      "lastUpdate": "2026-02-20T04:30:12.230Z",
       "created": "2026-02-17T20:00:00Z",
       "history": [
         {
