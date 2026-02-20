@@ -4203,7 +4203,18 @@
           margin: 0,
           filename: filename,
           image: { type: 'jpeg', quality: 0.95 },
-          html2canvas: { scale: 2, useCORS: true, logging: false, width: 794, windowWidth: 794, scrollX: 0, scrollY: 0, x: 0, y: 0 },
+          html2canvas: {
+            scale: 2, useCORS: true, logging: false, width: 794, windowWidth: 794,
+            onclone: (clonedDoc) => {
+              // Move cloned element to top-left so capture is centered on A4 page
+              const el = clonedDoc.querySelector('.pdf-container');
+              if (el) {
+                el.style.position = 'absolute';
+                el.style.left = '0';
+                el.style.top = '0';
+              }
+            }
+          },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
           pagebreak: { mode: ['css'] }
         }).from(container).outputPdf('blob');
