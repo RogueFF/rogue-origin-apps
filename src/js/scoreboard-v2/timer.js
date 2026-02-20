@@ -458,7 +458,7 @@
           vsTargetEl.textContent = dm + ' min';
           vsTargetEl.className = 'timer-stat-value negative';
         } else {
-          vsTargetEl.textContent = 'On pace';
+          vsTargetEl.textContent = (window.ScoreboardI18n ? window.ScoreboardI18n.t('onPace') : 'On pace');
           vsTargetEl.className = 'timer-stat-value';
         }
       } else {

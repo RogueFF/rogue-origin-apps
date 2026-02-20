@@ -107,7 +107,7 @@
         statusKey = 'shiftComplete';
       }
       var _el = safeGetEl('statusIcon'); if (_el) _el.textContent = statusIcon;
-      var _el = safeGetEl('statusText'); if (_el) _el.textContent = shiftEnded ? 'COMPLETE' : t(statusKey);
+      var _el = safeGetEl('statusText'); if (_el) _el.textContent = shiftEnded ? t('shiftEnded') : t(statusKey);
 
       // Last hour card
       var _el = safeGetEl('lastHourLbs'); if (_el) _el.textContent = lastHourLbs > 0 ? lastHourLbs.toFixed(1) : '—';
@@ -171,7 +171,7 @@
             dde.className = 'daily-delta negative';
           }
         } else if (shiftEnded) {
-          dde.textContent = 'SHIFT COMPLETE';
+          dde.textContent = t('shiftEnded');
           dde.className = 'daily-delta positive';
         } else if (effectiveDelta >= 0.05) {
           dde.textContent = `↑ +${da} lbs`;
@@ -250,6 +250,15 @@
       var _el = safeGetEl('crewCount'); if (_el) _el.textContent = displayTrimmers > 0 ? displayTrimmers : '—';
       var _el = safeGetEl('targetRate'); if (_el) _el.textContent = targetRate > 0 ? targetRate.toFixed(2) : '—';
       var _el = safeGetEl('strainName'); if (_el) _el.textContent = strain || '—';
+
+      // Update translatable labels
+      var _el = safeGetEl('lastHourHeader'); if (_el) _el.textContent = t('lastHour');
+      var _el = safeGetEl('currentHourHeader'); if (_el) _el.innerHTML = '<i class="ph-duotone ph-timer" style="margin-right:6px"></i> ' + t('currentHour');
+      var _el = safeGetEl('trimmersLabel'); if (_el) _el.textContent = t('trimmersLabel');
+      var _el = safeGetEl('trimmersSmallLabel'); if (_el) _el.textContent = t('trimmers');
+      var _el = safeGetEl('targetRateLabel'); if (_el) _el.textContent = t('targetRate');
+      var _el = safeGetEl('streakLabel'); if (_el) _el.textContent = t('hrStreak');
+      var _el = safeGetEl('bagsTodayLabel'); if (_el) _el.textContent = t('bagsToday');
 
       // Performance deltas
       const avgEl = safeGetEl('avgPercentage');
