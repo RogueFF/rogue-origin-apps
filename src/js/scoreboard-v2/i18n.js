@@ -39,6 +39,10 @@
       downBy: 'Down',
       onPace: 'On pace',
       hrStreak: 'hr streak',
+      lbsHr: 'lbs/hr',
+      ofTargetLabel: 'of Target',
+      complete: 'COMPLETE',
+      shiftComplete: 'SHIFT COMPLETE',
 
       // Status Headers
       todaysProgress: 'LINE 1 TODAY',
@@ -124,6 +128,10 @@
       downBy: 'Abajo',
       onPace: 'Al ritmo',
       hrStreak: 'hrs seguidas',
+      lbsHr: 'lbs/hr',
+      ofTargetLabel: 'de la Meta',
+      complete: 'COMPLETO',
+      shiftComplete: 'TURNO COMPLETO',
 
       // Status Headers
       todaysProgress: 'LÍNEA 1 HOY',
