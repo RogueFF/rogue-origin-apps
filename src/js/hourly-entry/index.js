@@ -410,6 +410,16 @@ let SLOT_END_MINUTES = {
   '4:00 PM – 4:30 PM': 16 * 60 + 30,
 };
 
+// Break-adjusted multipliers matching backend (TIME_SLOT_MULTIPLIERS)
+// Accounts for: 10-min morning break (9-10 AM), 10-min afternoon break (3-4 PM), cleanup (4-4:30 PM)
+const BREAK_ADJUSTED_MULTIPLIERS = {
+  '9:00 AM – 10:00 AM': 0.83,   // 10-min morning break
+  '3:00 PM – 4:00 PM': 0.83,    // 10-min afternoon break
+  '4:00 PM – 4:30 PM': 0.33,    // 20-min slot, 10-min cleanup
+  '2:30 PM – 3:00 PM': 0.5,     // half-hour slot
+  '3:00 PM – 3:30 PM': 0.5,     // half-hour slot
+};
+
 /**
  * Load shift start from localStorage and sync with API
  * Uses same keys as scoreboard for cross-page sync
@@ -1581,9 +1591,13 @@ function getSlotMultiplier(slot) {
   const slotEnd = SLOT_END_MINUTES[slot];
   if (slotStart === undefined || slotEnd === undefined) return 1;
 
-  // Actual fraction of a full hour this slot covers
-  const slotDuration = slotEnd - slotStart;
-  let multiplier = slotDuration / 60;
+  // Use break-adjusted multiplier if available (accounts for scheduled breaks)
+  let multiplier = BREAK_ADJUSTED_MULTIPLIERS[slot];
+  if (multiplier === undefined) {
+    // Fall back to duration-based calculation
+    const slotDuration = slotEnd - slotStart;
+    multiplier = slotDuration / 60;
+  }
 
   // For today with shift start: may need further reduction
   const isToday = currentDate === formatDateLocal(new Date());
@@ -1593,8 +1607,15 @@ function getSlotMultiplier(slot) {
   if (shiftMin >= slotEnd) return 0;
   if (shiftMin <= slotStart) return multiplier;
 
-  // Shift starts mid-slot
-  return (slotEnd - shiftMin) / 60;
+  // Shift starts mid-slot — calculate based on actual working time minus breaks
+  const actualStart = Math.max(slotStart, shiftMin);
+  const workableMinutes = slotEnd - actualStart;
+  // If the slot has a break adjustment, scale proportionally
+  if (BREAK_ADJUSTED_MULTIPLIERS[slot] !== undefined) {
+    const fullSlotMinutes = slotEnd - slotStart;
+    return (workableMinutes / fullSlotMinutes) * BREAK_ADJUSTED_MULTIPLIERS[slot];
+  }
+  return workableMinutes / 60;
 }
 
 function getCurrentTimeSlot() {
