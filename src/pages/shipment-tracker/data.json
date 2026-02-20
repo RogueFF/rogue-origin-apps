@@ -19,14 +19,14 @@
       "flightStatus": "SCHEDULED",
       "weight": "380 kg (2 pallets)",
       "sensorData": {
-        "temp": "71.5°F",
-        "humidity": "36.7%",
-        "battery": "83%",
-        "location": "Grindelstrasse 15, 8303 Bassersdorf",
-        "coords": "47.444891, 8.61107",
-        "fullAddress": "Grindelstrasse 15, 8303 Bassersdorf, Switzerland"
+        "temp": "71.8°F",
+        "humidity": "33.5%",
+        "battery": "87%",
+        "location": "Grindelstrasse 17, 8303 Bassersdorf",
+        "coords": "47.444894, 8.611062",
+        "fullAddress": "Grindelstrasse 17, 8303 Bassersdorf, Switzerland"
       },
-      "lastUpdate": "2026-02-20T13:00:10.412Z",
+      "lastUpdate": "2026-02-20T13:30:13.623Z",
       "created": "2026-02-17T20:00:00Z",
       "history": [
         {
@@ -160,6 +160,14 @@
           "temp": "71.5°F",
           "humidity": "36.7%",
           "battery": "83%",
+          "phase": "arrived"
+        },
+        {
+          "time": "2026-02-20T13:30:13.623Z",
+          "location": "Grindelstrasse 17, 8303 Bassersdorf",
+          "temp": "71.8°F",
+          "humidity": "33.5%",
+          "battery": "87%",
           "phase": "arrived"
         }
       ],
