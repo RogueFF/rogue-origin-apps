@@ -20,13 +20,13 @@
       "weight": "380 kg (2 pallets)",
       "sensorData": {
         "temp": "62.2°F",
-        "humidity": "24.3%",
-        "battery": "83%",
+        "humidity": "24.2%",
+        "battery": "84%",
         "location": "Fracht W 2, 8302 Kloten",
-        "coords": "47.453648, 8.569017",
+        "coords": "47.453647, 8.569018",
         "fullAddress": "Fracht W 2, 8302 Kloten, Switzerland"
       },
-      "lastUpdate": "2026-02-20T07:00:12.881Z",
+      "lastUpdate": "2026-02-20T07:30:12.776Z",
       "created": "2026-02-17T20:00:00Z",
       "history": [
         {
