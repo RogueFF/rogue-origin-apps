@@ -243,13 +243,22 @@ async function getProduction(params, env) {
   }
 
   const timeSlotMultipliers = (await getConfig(env, 'schedule.time_slot_multipliers')) ?? TIME_SLOT_MULTIPLIERS;
-  const targetRate = await getEffectiveTargetRate(env, 7, timeSlotMultipliers);
+  // targetRate determined after fetching rows
 
   const rows = await query(env.DB, `
     SELECT * FROM monthly_production
     WHERE production_date = ?
     ORDER BY time_slot
   `, [date]);
+
+  // Determine active strain for target rate
+  const cultivarRows = await query(env.DB, `
+    SELECT cultivar1 FROM monthly_production
+    WHERE production_date = ? AND cultivar1 IS NOT NULL AND cultivar1 != ''
+    ORDER BY time_slot DESC LIMIT 1
+  `, [date]);
+  const activeStrain = cultivarRows.length > 0 ? cultivarRows[0].cultivar1 : '';
+  const targetRate = await getEffectiveTargetRate(env, 7, timeSlotMultipliers, activeStrain);
 
   return successResponse({
     success: true,
