@@ -1,0 +1,19 @@
+name = "war-room-api"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+account_id = "55f4e15ce53f10a387526d8b1bcfdb17"
+
+[dev]
+port = 8790
+local_protocol = "http"
+
+[env.production]
+name = "war-room-api"
+
+# KV Namespace
+[[kv_namespaces]]
+binding = "WAR_ROOM"
+id = "cb3652a65bb84da2b1719f39cd47f12e"
+
+[vars]
+ALLOWED_ORIGINS = "https://rogueff.github.io,http://localhost:3000,http://localhost:5500,http://localhost:8080"
