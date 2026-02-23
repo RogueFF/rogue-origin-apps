@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MC v2 — Design Concepts</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  min-height: 100vh;
+  background: #050508;
+  color: rgba(255,255,255,0.85);
+  font-family: 'Inter', sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+h1 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 300;
+  font-size: 12px;
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.3);
+  margin-bottom: 8px;
+}
+
+h2 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 32px;
+  margin-bottom: 40px;
+  background: linear-gradient(135deg, #00f0ff, #aa77ff, #ff00aa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.concepts {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 400px;
+}
+
+a {
+  display: block;
+  padding: 24px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 16px;
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+a:hover {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.12);
+  transform: translateY(-2px);
+}
+
+.concept-letter {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.3);
+  margin-bottom: 4px;
+}
+
+.concept-name {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.concept-desc {
+  font-size: 12px;
+  color: rgba(255,255,255,0.4);
+  line-height: 1.5;
+}
+
+.c-a .concept-name { color: #00f0ff; }
+.c-b .concept-name { color: #00ff41; }
+.c-c .concept-name { color: #b4a0ff; }
+</style>
+</head>
+<body>
+  <h1>Rogue Origin</h1>
+  <h2>MC v2 Concepts</h2>
+  <div class="concepts">
+    <a href="topology.html" class="c-a">
+      <div class="concept-letter">Concept A</div>
+      <div class="concept-name">Topology</div>
+      <div class="concept-desc">Living network graph. Agents as nodes in space, connected by pulsing data lines. Click to expand. The UI is the data.</div>
+    </a>
+    <a href="brutalist.html" class="c-b">
+      <div class="concept-letter">Concept B</div>
+      <div class="concept-name">Brutalist Terminal</div>
+      <div class="concept-desc">1983 mainframe meets punk zine. Dense monospaced data, ASCII borders, scanlines. Giant serif KPI numbers breaking the grid.</div>
+    </a>
+    <a href="liquid-glass.html" class="c-c">
+      <div class="concept-letter">Concept C</div>
+      <div class="concept-name">Liquid Glass</div>
+      <div class="concept-desc">Ethereal frosted panels floating over a shifting aurora. Muted pastels, micro-animations, depth and layering. Everything breathes.</div>
+    </a>
+  </div>
+</body>
+</html>
