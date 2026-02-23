@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>MC v2 — Concept D: Editorial</title>
+<link href="https://api.fontshare.com/v2/css?f[]=fraunces@0,400;1,400;0,700;1,700&f[]=general-sans@400,500,600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --olive: #282c20;
+  --olive-light: #333828;
+  --cream: #f4f4ed;
+  --cream-dim: rgba(244,244,237,0.5);
+  --cream-faint: rgba(244,244,237,0.15);
+  --sage: #b4b8a5;
+  --accent: #c8e600;
+  --serif: 'Fraunces', Georgia, serif;
+  --sans: 'General Sans', -apple-system, sans-serif;
+}
+
+html {
+  background: var(--olive);
+  color: var(--cream);
+  font-family: var(--sans);
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Masthead */
+.masthead {
+  padding: 20px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.masthead .logo {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: -0.5px;
+}
+
+.masthead .logo span { color: var(--accent); }
+
+.masthead .dateline {
+  font-size: 11px;
+  color: var(--sage);
+  letter-spacing: 0.5px;
+}
+
+/* Divider line */
+.rule {
+  height: 1px;
+  background: var(--cream-faint);
+  margin: 0 24px;
+}
+
+.rule-accent {
+  height: 2px;
+  background: var(--accent);
+  margin: 0 24px;
+}
+
+/* Hero */
+.hero {
+  padding: 60px 24px 40px;
+  max-width: 900px;
+}
+
+.hero-kpi {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: clamp(72px, 20vw, 160px);
+  line-height: 0.85;
+  letter-spacing: -4px;
+  color: var(--cream);
+}
+
+.hero-kpi .unit {
+  font-style: italic;
+  font-weight: 400;
+  color: var(--sage);
+  font-size: 0.45em;
+  letter-spacing: 0;
+  vertical-align: baseline;
+}
+
+.hero-sub {
+  font-family: var(--sans);
+  font-size: clamp(14px, 3vw, 18px);
+  color: var(--sage);
+  margin-top: 20px;
+  line-height: 1.6;
+  max-width: 500px;
+}
+
+.hero-sub strong {
+  color: var(--cream);
+  font-weight: 600;
+}
+
+.hero-sub .dot {
+  display: inline-block;
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin: 0 10px;
+  vertical-align: middle;
+}
+
+/* KPI Row */
+.kpi-row {
+  padding: 40px 24px;
+  display: flex;
+  gap: 0;
+  max-width: 900px;
+}
+
+.kpi-item {
+  flex: 1;
+  padding-right: 24px;
+}
+
+.kpi-item:not(:last-child) {
+  border-right: 1px solid var(--cream-faint);
+  margin-right: 24px;
+}
+
+.kpi-value {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: clamp(28px, 7vw, 48px);
+  line-height: 1;
+  letter-spacing: -1px;
+}
+
+.kpi-label {
+  font-size: 11px;
+  color: var(--sage);
+  margin-top: 8px;
+  letter-spacing: 0.5px;
+}
+
+/* Section headers */
+.section-head {
+  padding: 60px 24px 20px;
+}
+
+.section-head h2 {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: clamp(32px, 8vw, 56px);
+  line-height: 0.95;
+  letter-spacing: -1.5px;
+}
+
+.section-head h2 em {
+  font-weight: 400;
+  color: var(--sage);
+}
+
+/* Agent Columns — newspaper style */
+.agent-columns {
+  padding: 0 24px 40px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0;
+  max-width: 900px;
+}
+
+.agent-col {
+  padding: 20px 16px 20px 0;
+  border-right: 1px solid var(--cream-faint);
+}
+
+.agent-col:last-child { border-right: none; }
+
+.agent-col .agent-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.agent-col .agent-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.agent-col .agent-name {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.3px;
+}
+
+.agent-col .agent-role {
+  font-size: 10px;
+  color: var(--sage);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 10px;
+}
+
+.agent-col .agent-update {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--cream-dim);
+}
+
+.agent-col .agent-update strong {
+  color: var(--cream);
+  font-weight: 500;
+}
+
+.agent-col .agent-meta {
+  font-size: 10px;
+  color: var(--sage);
+  margin-top: 10px;
+  font-style: italic;
+}
+
+/* Editorial Quote Block */
+.pullquote {
+  padding: 60px 24px;
+  max-width: 700px;
+}
+
+.pullquote blockquote {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: clamp(24px, 5vw, 40px);
+  line-height: 1.3;
+  letter-spacing: -0.5px;
+  color: var(--cream);
+}
+
+.pullquote blockquote .highlight {
+  font-style: normal;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.pullquote .attribution {
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--sage);
+  margin-top: 16px;
+  letter-spacing: 0.5px;
+}
+
+/* Abstract shape */
+.editorial-shape {
+  margin: 20px 24px 40px;
+  height: 120px;
+  background: linear-gradient(135deg, var(--olive-light) 0%, rgba(200,230,0,0.08) 50%, var(--olive-light) 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.editorial-shape::before {
+  content: '';
+  position: absolute;
+  top: -50%; left: -20%;
+  width: 80%; height: 200%;
+  background: radial-gradient(ellipse, rgba(200,230,0,0.06) 0%, transparent 60%);
+  animation: shapeFloat 12s ease-in-out infinite;
+}
+
+@keyframes shapeFloat {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(30px, -20px); }
+}
+
+/* Chyron ticker */
+.chyron-wrap {
+  position: fixed;
+  bottom: 0;
+  left: 0; right: 0;
+  background: var(--olive);
+  border-top: 2px solid var(--accent);
+  z-index: 50;
+}
+
+.chyron {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.chyron-label {
+  background: var(--accent);
+  color: var(--olive);
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 0 16px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.chyron-track {
+  flex: 1;
+  overflow: hidden;
+}
+
+.chyron-scroll {
+  display: inline-flex;
+  gap: 40px;
+  animation: ticker 45s linear infinite;
+  padding-left: 20px;
+}
+
+@keyframes ticker {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.chyron-item {
+  font-size: 12px;
+  color: var(--cream-dim);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.chyron-item .nick {
+  color: var(--cream);
+  font-weight: 600;
+}
+
+.chyron-item .sep {
+  color: var(--accent);
+  font-size: 8px;
+}
+
+/* Chat bar */
+.chat-section {
+  padding: 40px 24px 100px;
+}
+
+.chat-input-wrap {
+  max-width: 500px;
+  display: flex;
+  gap: 0;
+}
+
+.chat-input-wrap input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--cream-faint);
+  color: var(--cream);
+  font-family: var(--sans);
+  font-size: 14px;
+  padding: 12px 0;
+  outline: none;
+  transition: border-color 0.3s;
+}
+
+.chat-input-wrap input:focus {
+  border-bottom-color: var(--accent);
+}
+
+.chat-input-wrap input::placeholder { color: var(--sage); }
+
+.chat-input-wrap button {
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--cream-faint);
+  color: var(--accent);
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 12px 16px;
+  cursor: pointer;
+}
+
+/* Label concept */
+.concept-label {
+  padding: 12px 24px;
+  font-size: 10px;
+  color: var(--sage);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+  .hero { padding: 40px 20px 30px; }
+  .hero-kpi { letter-spacing: -2px; }
+  .kpi-row { flex-wrap: wrap; gap: 20px; padding: 30px 20px; }
+  .kpi-item { flex: 1 1 45%; padding-right: 0; border-right: none !important; margin-right: 0 !important; }
+  .agent-columns { grid-template-columns: 1fr; }
+  .agent-col { border-right: none; border-bottom: 1px solid var(--cream-faint); padding: 16px 0; }
+  .agent-col:last-child { border-bottom: none; }
+  .section-head { padding: 40px 20px 16px; }
+  .pullquote { padding: 40px 20px; }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 0; }
+</style>
+</head>
+<body>
+
+<div class="concept-label">MC v2 — Concept D: Editorial</div>
+
+<div class="masthead">
+  <div class="logo">Rogue <span>Origin</span></div>
+  <div class="dateline">Mission Control · Sunday, Feb 22, 2026</div>
+</div>
+
+<div class="rule-accent"></div>
+
+<!-- Hero KPI -->
+<div class="hero">
+  <div class="hero-kpi">847 <span class="unit">lbs</span></div>
+  <div class="hero-sub">
+    processed today <span class="dot"></span> <strong>12.4/hr avg</strong> <span class="dot"></span> Batch #847 complete
+  </div>
+</div>
+
+<div class="rule"></div>
+
+<!-- KPI Row -->
+<div class="kpi-row">
+  <div class="kpi-item">
+    <div class="kpi-value">12</div>
+    <div class="kpi-label">Active Orders</div>
+  </div>
+  <div class="kpi-item">
+    <div class="kpi-value" style="color: var(--accent);">$47.2K</div>
+    <div class="kpi-label">Revenue</div>
+  </div>
+  <div class="kpi-item">
+    <div class="kpi-value">98.7<span style="font-size:0.5em;color:var(--sage);">%</span></div>
+    <div class="kpi-label">Uptime</div>
+  </div>
+</div>
+
+<div class="rule"></div>
+
+<!-- Editorial shape -->
+<div class="editorial-shape"></div>
+
+<!-- Agent Fleet -->
+<div class="section-head">
+  <h2>The <em>Fleet</em></h2>
+</div>
+
+<div class="agent-columns">
+  <div class="agent-col">
+    <div class="agent-header">
+      <div class="agent-dot" style="background: var(--accent);"></div>
+      <div class="agent-name">Atlas</div>
+    </div>
+    <div class="agent-role">Orchestrator</div>
+    <div class="agent-update">Dispatched <strong>nightly build spec</strong> to Hex. Running daily digest cycle across all agents. Coordinating MC v2 design review with Koa.</div>
+    <div class="agent-meta">21:38 · online</div>
+  </div>
+
+  <div class="agent-col">
+    <div class="agent-header">
+      <div class="agent-dot" style="background: var(--accent);"></div>
+      <div class="agent-name">Hex</div>
+    </div>
+    <div class="agent-role">Coding</div>
+    <div class="agent-update">Shipped <strong>3 MC v2 concept pages</strong> to GitHub Pages. 227 tests passing. Now building Agent Comms Dashboard for overnight.</div>
+    <div class="agent-meta">21:47 · online</div>
+  </div>
+
+  <div class="agent-col">
+    <div class="agent-header">
+      <div class="agent-dot" style="background: var(--accent);"></div>
+      <div class="agent-name">Kiln</div>
+    </div>
+    <div class="agent-role">Production</div>
+    <div class="agent-update">Batch 847 <strong>complete and QA'd</strong>. Weekend — no active production lines. Last full run Friday, 847 lbs processed across both lines.</div>
+    <div class="agent-meta">21:35 · online</div>
+  </div>
+
+  <div class="agent-col">
+    <div class="agent-header">
+      <div class="agent-dot" style="background: var(--sage);"></div>
+      <div class="agent-name">Razor</div>
+    </div>
+    <div class="agent-role">Trading</div>
+    <div class="agent-update">Markets closed for the weekend. Running <strong>overnight analysis</strong> on position data. Regime status stable.</div>
+    <div class="agent-meta">21:30 · idle</div>
+  </div>
+
+  <div class="agent-col">
+    <div class="agent-header">
+      <div class="agent-dot" style="background: rgba(244,244,237,0.2);"></div>
+      <div class="agent-name">Meridian</div>
+    </div>
+    <div class="agent-role">Logistics</div>
+    <div class="agent-update">Cannaflora shipment <strong>arrived in Switzerland</strong>. Tracking 1 active shipment. No new consignment activity.</div>
+    <div class="agent-meta">20:45 · away</div>
+  </div>
+</div>
+
+<div class="rule"></div>
+
+<!-- Pull Quote -->
+<div class="pullquote">
+  <blockquote>
+    Five agents, one operation. <span class="highlight">Every lb tracked,</span> every trade logged, every shipment monitored — <em>seed to sale.</em>
+  </blockquote>
+  <div class="attribution">— Mission Control v2 · Rogue Origin Operations Hub</div>
+</div>
+
+<div class="rule"></div>
+
+<!-- Chat -->
+<div class="chat-section">
+  <div class="chat-input-wrap">
+    <input type="text" placeholder="Message the operation..." />
+    <button>Send</button>
+  </div>
+</div>
+
+<!-- Chyron Ticker -->
+<div class="chyron-wrap">
+  <div class="chyron">
+    <div class="chyron-label">Comms</div>
+    <div class="chyron-track">
+      <div class="chyron-scroll" id="ticker">
+        <div class="chyron-item"><span class="nick">Atlas</span> → Hex: Priority build — MC v2 concepts needed tonight <span class="sep">●</span></div>
+        <div class="chyron-item"><span class="nick">Hex</span> → Atlas: On it. Spinning up 3 subagents <span class="sep">●</span></div>
+        <div class="chyron-item"><span class="nick">Kiln</span> → Atlas: Production batch 847 complete, ready for QA <span class="sep">●</span></div>
+        <div class="chyron-item"><span class="nick">Razor</span> → Atlas: Markets closed, running overnight analysis <span class="sep">●</span></div>
+        <div class="chyron-item"><span class="nick">Atlas</span> → Hex: Priority build — MC v2 concepts needed tonight <span class="sep">●</span></div>
+        <div class="chyron-item"><span class="nick">Hex</span> → Atlas: On it. Spinning up 3 subagents <span class="sep">●</span></div>
+        <div class="chyron-item"><span class="nick">Kiln</span> → Atlas: Production batch 847 complete, ready for QA <span class="sep">●</span></div>
+        <div class="chyron-item"><span class="nick">Razor</span> → Atlas: Markets closed, running overnight analysis <span class="sep">●</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Live clock in masthead
+const dateline = document.querySelector('.dateline');
+function updateDate() {
+  const now = new Date();
+  const opts = { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' };
+  const time = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  dateline.textContent = `Mission Control · ${now.toLocaleDateString('en-US', opts)} · ${time}`;
+}
+setInterval(updateDate, 30000);
+</script>
+</body>
+</html>
