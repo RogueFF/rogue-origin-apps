@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>MC v2 — Concept E: Terrain</title>
+<link href="https://api.fontshare.com/v2/css?f[]=fraunces@0,400;1,400;0,700;1,700&f[]=general-sans@400,500,600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --olive: #282c20;
+  --olive-deep: #1e2118;
+  --cream: #f4f4ed;
+  --cream-dim: rgba(244,244,237,0.45);
+  --cream-faint: rgba(244,244,237,0.1);
+  --sage: #b4b8a5;
+  --sage-dim: rgba(180,184,165,0.3);
+  --accent: #c8e600;
+  --accent-dim: rgba(200,230,0,0.15);
+  --serif: 'Fraunces', Georgia, serif;
+  --sans: 'General Sans', -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+}
+
+html {
+  background: var(--olive-deep);
+  color: var(--cream);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+body {
+  min-height: 100vh;
+  position: relative;
+}
+
+/* Topo contour background */
+.topo-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.topo-bg svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.08;
+}
+
+/* Content layer */
+.content {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  padding-bottom: 80px;
+}
+
+/* Concept label */
+.concept-label {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 100;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 11px;
+  color: var(--sage);
+  letter-spacing: 0.5px;
+}
+
+.concept-label strong {
+  font-style: normal;
+  font-weight: 700;
+  color: var(--cream);
+}
+
+/* Coordinates display */
+.coords {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 100;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--sage-dim);
+  text-align: right;
+  letter-spacing: 0.5px;
+}
+
+/* Altitude scale — KPIs vertical left edge */
+.altitude-scale {
+  position: fixed;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 8px 0;
+  background: rgba(30,33,24,0.85);
+}
+
+.alt-item {
+  padding: 12px 14px;
+  border-left: 2px solid var(--cream-faint);
+  min-width: 80px;
+}
+
+.alt-item.active { border-left-color: var(--accent); }
+
+.alt-value {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1;
+  letter-spacing: -0.5px;
+}
+
+.alt-label {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 9px;
+  color: var(--sage);
+  margin-top: 3px;
+}
+
+/* Map region — agent waypoints */
+.map-region {
+  margin-left: 90px;
+  padding: 80px 20px 40px;
+  position: relative;
+  min-height: 60vh;
+}
+
+/* Central path line */
+.central-path {
+  position: absolute;
+  left: 50%;
+  top: 60px;
+  bottom: 40px;
+  width: 1px;
+  background: linear-gradient(to bottom, transparent, var(--cream-faint) 10%, var(--cream-faint) 90%, transparent);
+  z-index: 0;
+}
+
+/* Path nodes (comms markers) */
+.path-markers {
+  position: absolute;
+  left: 50%;
+  top: 60px;
+  bottom: 40px;
+  width: 0;
+  z-index: 1;
+}
+
+.path-marker {
+  position: absolute;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  left: -4px;
+  opacity: 0.4;
+}
+
+.path-marker:nth-child(1) { top: 15%; }
+.path-marker:nth-child(2) { top: 35%; }
+.path-marker:nth-child(3) { top: 55%; }
+.path-marker:nth-child(4) { top: 75%; }
+
+/* Waypoints */
+.waypoint {
+  position: relative;
+  margin-bottom: 60px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  z-index: 2;
+}
+
+.waypoint:nth-child(even) { direction: rtl; }
+.waypoint:nth-child(even) > * { direction: ltr; }
+
+.wp-data {
+  padding: 20px 0;
+}
+
+.wp-coords {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--sage-dim);
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+.wp-name {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: clamp(28px, 6vw, 42px);
+  letter-spacing: -1px;
+  line-height: 0.95;
+  margin-bottom: 4px;
+}
+
+.wp-role {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--sage);
+  margin-bottom: 16px;
+}
+
+.wp-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--sage);
+  margin-bottom: 16px;
+}
+
+.wp-status .dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+}
+
+.wp-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wp-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  max-width: 200px;
+}
+
+.wp-stat .label {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 11px;
+  color: var(--sage);
+}
+
+.wp-stat .val {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.wp-update {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--cream-dim);
+  max-width: 300px;
+  padding-top: 20px;
+}
+
+/* Comms Route Section */
+.comms-section {
+  margin-left: 90px;
+  padding: 20px 20px 40px;
+}
+
+.comms-title {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: clamp(24px, 5vw, 36px);
+  letter-spacing: -0.5px;
+  margin-bottom: 30px;
+}
+
+.comms-title em {
+  font-weight: 400;
+  color: var(--sage);
+}
+
+.route-feed {
+  position: relative;
+  padding-left: 24px;
+}
+
+.route-line {
+  position: absolute;
+  left: 4px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--cream-faint);
+}
+
+.route-msg {
+  position: relative;
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+}
+
+.route-msg:not(:last-child) {
+  border-bottom: 1px solid var(--cream-faint);
+}
+
+.route-msg::before {
+  content: '';
+  position: absolute;
+  left: -24px;
+  top: 6px;
+  width: 9px; height: 9px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  background: var(--olive-deep);
+}
+
+.route-msg .route-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.route-msg .route-names {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.route-msg .route-names .arrow {
+  color: var(--sage);
+  font-weight: 400;
+  margin: 0 4px;
+}
+
+.route-msg .route-time {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--sage-dim);
+}
+
+.route-msg .route-text {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--cream-dim);
+}
+
+/* Map legend — bottom right */
+.map-legend {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 50;
+  font-size: 9px;
+  color: var(--sage-dim);
+  text-align: right;
+  font-family: var(--mono);
+}
+
+.map-legend .legend-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-bottom: 3px;
+}
+
+.map-legend .legend-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+}
+
+/* Chat bar */
+.chat-bar {
+  margin-left: 90px;
+  padding: 20px 20px 40px;
+}
+
+.chat-inner {
+  max-width: 400px;
+  display: flex;
+  gap: 0;
+}
+
+.chat-inner input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--cream-faint);
+  color: var(--cream);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 10px 0;
+  outline: none;
+}
+
+.chat-inner input:focus { border-bottom-color: var(--accent); }
+.chat-inner input::placeholder { color: var(--sage-dim); }
+
+.chat-inner button {
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--cream-faint);
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+/* Mobile */
+@media (max-width: 700px) {
+  .altitude-scale {
+    position: relative;
+    left: 0;
+    top: 0;
+    transform: none;
+    flex-direction: row;
+    overflow-x: auto;
+    background: rgba(30,33,24,0.95);
+    border-bottom: 1px solid var(--cream-faint);
+  }
+  .alt-item {
+    border-left: none;
+    border-bottom: 2px solid var(--cream-faint);
+    min-width: 70px;
+    padding: 10px 12px;
+  }
+  .alt-item.active { border-bottom-color: var(--accent); border-left: none; }
+  .map-region, .comms-section, .chat-bar { margin-left: 0; }
+  .map-region { padding: 40px 16px 20px; }
+  .waypoint { grid-template-columns: 1fr; gap: 12px; }
+  .waypoint:nth-child(even) { direction: ltr; }
+  .central-path, .path-markers { display: none; }
+  .comms-section { padding: 20px 16px; }
+  .chat-bar { padding: 20px 16px; }
+  .map-legend { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- Topo contour background -->
+<div class="topo-bg">
+  <svg viewBox="0 0 1000 1000" preserveAspectRatio="none">
+    <defs>
+      <pattern id="topo" x="0" y="0" width="200" height="200" patternUnits="userSpaceOnUse">
+        <ellipse cx="100" cy="100" rx="90" ry="60" fill="none" stroke="#f4f4ed" stroke-width="0.5"/>
+        <ellipse cx="100" cy="100" rx="70" ry="45" fill="none" stroke="#f4f4ed" stroke-width="0.5"/>
+        <ellipse cx="100" cy="100" rx="50" ry="30" fill="none" stroke="#f4f4ed" stroke-width="0.5"/>
+        <ellipse cx="100" cy="100" rx="30" ry="18" fill="none" stroke="#f4f4ed" stroke-width="0.5"/>
+        <ellipse cx="100" cy="100" rx="12" ry="7" fill="none" stroke="#f4f4ed" stroke-width="0.5"/>
+      </pattern>
+      <pattern id="topo2" x="80" y="120" width="300" height="300" patternUnits="userSpaceOnUse">
+        <ellipse cx="150" cy="150" rx="130" ry="80" fill="none" stroke="#f4f4ed" stroke-width="0.3"/>
+        <ellipse cx="150" cy="150" rx="100" ry="60" fill="none" stroke="#f4f4ed" stroke-width="0.3"/>
+        <ellipse cx="150" cy="150" rx="70" ry="40" fill="none" stroke="#f4f4ed" stroke-width="0.3"/>
+        <ellipse cx="150" cy="150" rx="40" ry="22" fill="none" stroke="#f4f4ed" stroke-width="0.3"/>
+      </pattern>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#topo)"/>
+    <rect width="100%" height="100%" fill="url(#topo2)"/>
+  </svg>
+</div>
+
+<div class="content">
+
+<div class="concept-label"><strong>MC v2</strong> — Concept E: Terrain</div>
+
+<div class="coords">
+  42.2°N 122.8°W<br>
+  Southern Oregon<br>
+  <span style="color:var(--accent);">ROGUE ORIGIN</span>
+</div>
+
+<!-- Altitude Scale (KPIs) -->
+<div class="altitude-scale">
+  <div class="alt-item active">
+    <div class="alt-value" style="color:var(--accent);">847</div>
+    <div class="alt-label">lbs processed</div>
+  </div>
+  <div class="alt-item">
+    <div class="alt-value">12</div>
+    <div class="alt-label">active orders</div>
+  </div>
+  <div class="alt-item active">
+    <div class="alt-value">$47.2K</div>
+    <div class="alt-label">revenue</div>
+  </div>
+  <div class="alt-item">
+    <div class="alt-value">98.7%</div>
+    <div class="alt-label">uptime</div>
+  </div>
+</div>
+
+<!-- Map Region — Agent Waypoints -->
+<div class="map-region">
+  <div class="central-path"></div>
+  <div class="path-markers">
+    <div class="path-marker"></div>
+    <div class="path-marker"></div>
+    <div class="path-marker"></div>
+    <div class="path-marker"></div>
+  </div>
+
+  <!-- Atlas -->
+  <div class="waypoint">
+    <div class="wp-data">
+      <div class="wp-coords">ATL · 12.4% CPU · 340MB</div>
+      <div class="wp-name">Atlas</div>
+      <div class="wp-role">Orchestrator</div>
+      <div class="wp-status"><div class="dot" style="background:var(--accent)"></div> ONLINE · 21:38</div>
+      <div class="wp-stats">
+        <div class="wp-stat"><span class="label">Tasks</span><span class="val">8</span></div>
+        <div class="wp-stat"><span class="label">Uptime</span><span class="val">99.9%</span></div>
+        <div class="wp-stat"><span class="label">Agents</span><span class="val">5 / 5</span></div>
+      </div>
+    </div>
+    <div class="wp-update">Dispatched nightly build spec to Hex. Running daily digest cycle. Coordinating MC v2 design review.</div>
+  </div>
+
+  <!-- Hex -->
+  <div class="waypoint">
+    <div class="wp-data">
+      <div class="wp-coords">HEX · 67.0% CPU · 1.2GB</div>
+      <div class="wp-name">Hex</div>
+      <div class="wp-role">Coding</div>
+      <div class="wp-status"><div class="dot" style="background:var(--accent)"></div> ONLINE · 21:47</div>
+      <div class="wp-stats">
+        <div class="wp-stat"><span class="label">Tasks</span><span class="val">3</span></div>
+        <div class="wp-stat"><span class="label">Tests</span><span class="val">227 / 0</span></div>
+        <div class="wp-stat"><span class="label">Deploys</span><span class="val">2 today</span></div>
+      </div>
+    </div>
+    <div class="wp-update">Shipped 3 MC v2 concepts to Pages. Now building Agent Comms Dashboard overnight.</div>
+  </div>
+
+  <!-- Kiln -->
+  <div class="waypoint">
+    <div class="wp-data">
+      <div class="wp-coords">KLN · 23.0% CPU · 512MB</div>
+      <div class="wp-name">Kiln</div>
+      <div class="wp-role">Production</div>
+      <div class="wp-status"><div class="dot" style="background:var(--accent)"></div> ONLINE · 21:35</div>
+      <div class="wp-stats">
+        <div class="wp-stat"><span class="label">Today</span><span class="val">847 lbs</span></div>
+        <div class="wp-stat"><span class="label">Rate</span><span class="val">12.4/hr</span></div>
+        <div class="wp-stat"><span class="label">QA</span><span class="val">passed</span></div>
+      </div>
+    </div>
+    <div class="wp-update">Batch 847 complete. Weekend — no active lines. Last full run Friday.</div>
+  </div>
+
+  <!-- Razor -->
+  <div class="waypoint">
+    <div class="wp-data">
+      <div class="wp-coords">RZR · 3.0% CPU · 256MB</div>
+      <div class="wp-name">Razor</div>
+      <div class="wp-role">Trading</div>
+      <div class="wp-status"><div class="dot" style="background:var(--sage)"></div> IDLE · 21:30</div>
+      <div class="wp-stats">
+        <div class="wp-stat"><span class="label">Regime</span><span class="val">stable</span></div>
+        <div class="wp-stat"><span class="label">Positions</span><span class="val">analyzing</span></div>
+        <div class="wp-stat"><span class="label">Market</span><span class="val">closed</span></div>
+      </div>
+    </div>
+    <div class="wp-update">Markets closed for weekend. Running overnight position analysis.</div>
+  </div>
+
+  <!-- Meridian -->
+  <div class="waypoint">
+    <div class="wp-data">
+      <div class="wp-coords">MRD · 1.0% CPU · 128MB</div>
+      <div class="wp-name">Meridian</div>
+      <div class="wp-role">Logistics</div>
+      <div class="wp-status"><div class="dot" style="background:var(--cream-faint)"></div> AWAY · 20:45</div>
+      <div class="wp-stats">
+        <div class="wp-stat"><span class="label">Shipments</span><span class="val">1 active</span></div>
+        <div class="wp-stat"><span class="label">Latest</span><span class="val">arrived CH</span></div>
+        <div class="wp-stat"><span class="label">Alerts</span><span class="val">0</span></div>
+      </div>
+    </div>
+    <div class="wp-update">Cannaflora shipment arrived Switzerland. No new consignment activity.</div>
+  </div>
+</div>
+
+<!-- Comms as route markers -->
+<div class="comms-section">
+  <div class="comms-title">Route <em>Log</em></div>
+  <div class="route-feed">
+    <div class="route-line"></div>
+    <div class="route-msg">
+      <div class="route-header">
+        <span class="route-names">Atlas <span class="arrow">→</span> Hex</span>
+        <span class="route-time">21:14 PST</span>
+      </div>
+      <div class="route-text">Priority build: MC v2 concepts needed tonight</div>
+    </div>
+    <div class="route-msg">
+      <div class="route-header">
+        <span class="route-names">Hex <span class="arrow">→</span> Atlas</span>
+        <span class="route-time">21:14 PST</span>
+      </div>
+      <div class="route-text">On it. Spinning up 3 subagents</div>
+    </div>
+    <div class="route-msg">
+      <div class="route-header">
+        <span class="route-names">Kiln <span class="arrow">→</span> Atlas</span>
+        <span class="route-time">21:15 PST</span>
+      </div>
+      <div class="route-text">Production batch 847 complete, ready for QA</div>
+    </div>
+    <div class="route-msg">
+      <div class="route-header">
+        <span class="route-names">Razor <span class="arrow">→</span> Atlas</span>
+        <span class="route-time">21:15 PST</span>
+      </div>
+      <div class="route-text">Markets closed, running overnight analysis</div>
+    </div>
+  </div>
+</div>
+
+<!-- Chat -->
+<div class="chat-bar">
+  <div class="chat-inner">
+    <input type="text" placeholder="transmit..." />
+    <button>send</button>
+  </div>
+</div>
+
+</div><!-- content -->
+
+<!-- Map legend -->
+<div class="map-legend">
+  <div class="legend-row"><div class="legend-dot" style="background:var(--accent)"></div> online</div>
+  <div class="legend-row"><div class="legend-dot" style="background:var(--sage)"></div> idle</div>
+  <div class="legend-row"><div class="legend-dot" style="background:var(--cream-faint)"></div> away</div>
+  <div style="margin-top:6px;">ROGUE ORIGIN MC v2</div>
+</div>
+
+</body>
+</html>
