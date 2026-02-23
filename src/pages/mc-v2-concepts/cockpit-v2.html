@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>MC v2 — Cockpit v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --cyan: #00e5ff;
+  --cyan-hi: #40efff;
+  --cyan-60: rgba(0,229,255,0.6);
+  --cyan-30: rgba(0,229,255,0.3);
+  --cyan-15: rgba(0,229,255,0.15);
+  --cyan-08: rgba(0,229,255,0.08);
+  --cyan-04: rgba(0,229,255,0.04);
+  --cyan-glow: 0 0 12px rgba(0,229,255,0.2);
+  /* Warm accent for comms */
+  --warm: #7ab8ff;
+  --warm-60: rgba(122,184,255,0.6);
+  --warm-30: rgba(122,184,255,0.3);
+  --warm-15: rgba(122,184,255,0.15);
+  /* Fleet panel — slightly muted */
+  --fleet: rgba(0,200,230,0.5);
+  --fleet-dim: rgba(0,200,230,0.25);
+  --amber: #ffb000;
+  --amber-60: rgba(255,176,0,0.6);
+  --red: #ff3040;
+  --green: #00ff88;
+  --void: #000000;
+  --glass: rgba(0,229,255,0.03);
+  --orbitron: 'Orbitron', sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+}
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--void);
+  color: var(--cyan-60);
+  font-family: var(--mono);
+  -webkit-font-smoothing: antialiased;
+  cursor: crosshair;
+}
+
+/* ═══════ STAR FIELD ═══════ */
+#starfield {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+#starfield canvas { width: 100%; height: 100%; display: block; }
+
+/* ═══════ HORIZON LINE ═══════ */
+.horizon {
+  position: fixed;
+  left: 0; right: 0;
+  top: 50%;
+  height: 1px;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(90deg,
+    transparent 5%,
+    rgba(0,229,255,0.06) 20%,
+    rgba(0,229,255,0.1) 50%,
+    rgba(0,229,255,0.06) 80%,
+    transparent 95%
+  );
+}
+.horizon::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  top: -20px;
+  height: 40px;
+  background: linear-gradient(180deg,
+    transparent 0%,
+    rgba(0,60,120,0.04) 40%,
+    rgba(0,60,120,0.06) 50%,
+    rgba(0,60,120,0.04) 60%,
+    transparent 100%
+  );
+}
+
+/* ═══════ VIGNETTE ═══════ */
+.vignette {
+  position: fixed; inset: 0; z-index: 2; pointer-events: none;
+  background: radial-gradient(ellipse 70% 60% at 50% 50%, transparent 40%, rgba(0,0,0,0.75) 100%);
+}
+
+/* ═══════ HUD LAYER ═══════ */
+.hud { position: fixed; inset: 0; z-index: 10; pointer-events: none; }
+.hud > * { pointer-events: auto; }
+
+/* ═══════ TOP INSTRUMENT STRIP ═══════ */
+.top-strip {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 100%);
+  border-bottom: 1px solid var(--cyan-08);
+  padding: 0 16px;
+}
+
+.strip-item {
+  font-family: var(--orbitron);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--cyan-30);
+}
+.strip-item .val {
+  font-family: var(--mono);
+  font-weight: 400;
+  color: var(--cyan-60);
+  letter-spacing: 0;
+}
+
+.strip-brand {
+  font-family: var(--orbitron);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 4px;
+  color: var(--cyan-hi);
+  text-shadow: 0 0 20px rgba(0,229,255,0.3);
+}
+
+.strip-divider { width: 1px; height: 14px; background: var(--cyan-08); }
+
+/* ═══════ LEFT HUD — AGENT FLEET ═══════ */
+.left-hud {
+  position: absolute;
+  top: 56px;
+  left: 12px;
+  width: 200px;
+}
+
+.left-hud-frame {
+  border: 1px solid var(--cyan-08);
+  border-left: 2px solid var(--fleet-dim);
+  background: var(--glass);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  padding: 10px 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Scanline */
+.left-hud-frame::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,229,255,0.02) 2px, rgba(0,229,255,0.02) 4px);
+  pointer-events: none;
+  animation: scanDrift 8s linear infinite;
+}
+@keyframes scanDrift { 0% { transform: translateY(0); } 100% { transform: translateY(20px); } }
+
+/* Corner ticks only */
+.corner-tick {
+  position: absolute;
+  width: 6px; height: 6px;
+  pointer-events: none;
+}
+.corner-tick.tl { top: -1px; left: -1px; border-top: 1px solid var(--fleet); border-left: 1px solid var(--fleet); }
+.corner-tick.br { bottom: -1px; right: -1px; border-bottom: 1px solid var(--fleet); border-right: 1px solid var(--fleet); }
+.corner-tick.tr { top: -1px; right: -1px; border-top: 1px solid var(--fleet); border-right: 1px solid var(--fleet); }
+.corner-tick.bl { bottom: -1px; left: -1px; border-bottom: 1px solid var(--fleet); border-left: 1px solid var(--fleet); }
+
+.left-hud-title {
+  font-family: var(--orbitron);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  color: var(--fleet-dim);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.agent-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--cyan-04);
+  font-size: 11px;
+  line-height: 1;
+}
+.agent-line:last-child { border-bottom: none; }
+
+.agent-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px currentColor;
+  transition: box-shadow 0.3s;
+}
+.agent-dot.online { color: var(--cyan); background: var(--cyan); }
+.agent-dot.idle { color: var(--amber); background: var(--amber); }
+.agent-dot.away { color: var(--cyan-15); background: var(--cyan-15); }
+
+/* Agent dot pulse animation — applied via JS on status change */
+@keyframes dotPulse {
+  0% { box-shadow: 0 0 6px currentColor; transform: scale(1); }
+  50% { box-shadow: 0 0 16px currentColor, 0 0 30px currentColor; transform: scale(1.8); }
+  100% { box-shadow: 0 0 6px currentColor; transform: scale(1); }
+}
+.agent-dot.pulse { animation: dotPulse 0.6s ease-out; }
+
+.agent-name {
+  font-family: var(--orbitron);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: var(--fleet);
+  min-width: 52px;
+  text-transform: uppercase;
+}
+.agent-metric {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--fleet-dim);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* ═══════ RIGHT HUD — COMMS ═══════ */
+.right-hud {
+  position: absolute;
+  top: 56px;
+  right: 12px;
+  width: 220px;
+  max-height: calc(100vh - 160px);
+  overflow: hidden;
+}
+
+.right-hud-frame {
+  border: 1px solid var(--warm-15);
+  border-right: 2px solid var(--warm-30);
+  background: rgba(122,184,255,0.02);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  padding: 10px 12px;
+  position: relative;
+  max-height: calc(100vh - 180px);
+  overflow: hidden;
+}
+
+.right-hud-frame::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 40px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, transparent 100%);
+  z-index: 2;
+  pointer-events: none;
+}
+.right-hud-frame::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 40px;
+  background: linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%);
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Corner ticks for comms — warm color */
+.right-hud-frame .corner-tick.tl { border-color: var(--warm-30); }
+.right-hud-frame .corner-tick.br { border-color: var(--warm-30); }
+.right-hud-frame .corner-tick.tr { border-color: var(--warm-30); }
+.right-hud-frame .corner-tick.bl { border-color: var(--warm-30); }
+
+.right-hud-title {
+  font-family: var(--orbitron);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  color: var(--warm-30);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  position: relative;
+  z-index: 3;
+}
+
+.comms-feed { display: flex; flex-direction: column; gap: 12px; }
+
+.comm-msg {
+  font-size: 10px;
+  line-height: 1.5;
+  position: relative;
+  transition: opacity 0.5s;
+}
+/* Fade older entries */
+.comm-msg:nth-child(n+4) { opacity: 0.5; }
+.comm-msg:nth-child(n+6) { opacity: 0.25; }
+.comm-msg:nth-child(n+7) { opacity: 0.12; }
+
+.comm-time {
+  font-size: 8px;
+  color: var(--warm-15);
+  letter-spacing: 1px;
+}
+.comm-route {
+  font-family: var(--orbitron);
+  font-size: 8px;
+  font-weight: 600;
+  color: var(--warm-60);
+  letter-spacing: 0.5px;
+}
+.comm-route .arrow { color: var(--warm-30); margin: 0 3px; }
+.comm-text {
+  color: var(--warm-30);
+  font-size: 10px;
+}
+
+/* ═══════ CENTER KPI — THE HERO ═══════ */
+.center-kpi {
+  position: absolute;
+  bottom: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  pointer-events: none;
+}
+
+.kpi-main {
+  font-family: var(--orbitron);
+  font-weight: 900;
+  font-size: clamp(56px, 18vw, 140px);
+  letter-spacing: -2px;
+  line-height: 0.85;
+  color: rgba(0,229,255,0.22);
+  text-shadow: 0 0 80px rgba(0,229,255,0.15), 0 0 160px rgba(0,229,255,0.08);
+  animation: kpiPulse 4s ease-in-out infinite;
+  white-space: nowrap;
+}
+.kpi-main .unit {
+  font-size: 0.35em;
+  font-weight: 500;
+  letter-spacing: 6px;
+  color: rgba(0,229,255,0.14);
+  vertical-align: baseline;
+  margin-left: 8px;
+}
+@keyframes kpiPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+
+.kpi-sub {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.kpi-sub-item {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--cyan-30);
+  white-space: nowrap;
+}
+.kpi-sub-item .num { font-weight: 600; color: var(--cyan-60); }
+
+/* ═══════ VELOCITY BAR ═══════ */
+.velocity {
+  position: absolute;
+  right: 12px;
+  bottom: 56px;
+  width: 4px;
+  height: 120px;
+  pointer-events: none;
+}
+.velocity-track {
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--cyan-08);
+  position: relative;
+  overflow: hidden;
+}
+.velocity-fill {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  background: linear-gradient(0deg, var(--cyan), var(--green));
+  opacity: 0.4;
+  transition: height 2s ease;
+}
+.velocity-label {
+  font-family: var(--orbitron);
+  font-size: 7px;
+  letter-spacing: 2px;
+  color: var(--cyan-15);
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  position: absolute;
+  right: 10px;
+  bottom: 56px;
+  pointer-events: none;
+}
+
+/* ═══════ CORNER DIAGNOSTICS ═══════ */
+.diag {
+  position: absolute;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--cyan-08);
+  letter-spacing: 0.5px;
+  line-height: 1.6;
+}
+.diag .label {
+  font-family: var(--orbitron);
+  font-size: 7px;
+  letter-spacing: 2px;
+  color: var(--cyan-15);
+}
+.diag .val { color: var(--cyan-15); }
+.diag-bl { bottom: 56px; left: 12px; }
+.diag-br { bottom: 180px; right: 12px; text-align: right; }
+
+/* ═══════ BOTTOM COMMAND INPUT ═══════ */
+.cmd-bar {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  height: 36px;
+}
+.cmd-inner {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  border: 1px solid var(--cyan-08);
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.cmd-prompt {
+  font-family: var(--orbitron);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: var(--cyan-30);
+  padding: 0 12px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--cyan-08);
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+.cmd-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--cyan);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 0 12px;
+  outline: none;
+  caret-color: var(--cyan);
+}
+.cmd-input::placeholder { color: var(--cyan-08); }
+.cmd-send {
+  background: none;
+  border: none;
+  border-left: 1px solid var(--cyan-08);
+  color: var(--cyan-30);
+  font-family: var(--orbitron);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 0 14px;
+  height: 100%;
+  cursor: pointer;
+  transition: color 0.3s, background 0.3s;
+}
+.cmd-send:hover { color: var(--cyan); background: var(--cyan-04); }
+
+/* ═══════ MOBILE ═══════ */
+@media (max-width: 700px) {
+  .left-hud { width: 150px; top: 44px; left: 6px; }
+  .right-hud { width: 160px; top: 44px; right: 6px; }
+  .top-strip { height: 30px; gap: 10px; }
+  .strip-item { font-size: 7px; letter-spacing: 1px; }
+  .strip-brand { font-size: 8px; }
+  .center-kpi { bottom: 22%; }
+  .kpi-main { font-size: clamp(44px, 16vw, 90px); }
+  .diag { font-size: 7px; }
+  .diag-bl { bottom: 50px; left: 6px; }
+  .diag-br { bottom: 160px; right: 6px; }
+  .cmd-bar { left: 6px; right: 6px; bottom: 6px; }
+  .agent-name { font-size: 7px; min-width: 38px; }
+  .agent-metric { font-size: 8px; }
+  .agent-line { gap: 5px; padding: 4px 0; }
+  .left-hud-frame { padding: 8px 8px; }
+  .right-hud-frame { padding: 8px 8px; }
+  .comm-text { font-size: 9px; }
+  .velocity { display: none; }
+  .velocity-label { display: none; }
+}
+@media (max-width: 400px) {
+  .right-hud { display: none; }
+  .left-hud { width: calc(100% - 12px); left: 6px; top: 38px; }
+  .left-hud-frame { display: flex; flex-wrap: wrap; gap: 0; }
+  .left-hud-title { width: 100%; }
+  .agent-line { flex: 1 1 48%; }
+  .center-kpi { bottom: 28%; }
+}
+</style>
+</head>
+<body>
+
+<!-- STAR FIELD -->
+<div id="starfield"><canvas id="stars"></canvas></div>
+
+<!-- HORIZON LINE -->
+<div class="horizon"></div>
+
+<!-- Vignette -->
+<div class="vignette"></div>
+
+<!-- HUD Layer -->
+<div class="hud">
+
+  <!-- Top Instrument Strip -->
+  <div class="top-strip">
+    <span class="strip-brand">MISSION CONTROL</span>
+    <span class="strip-divider"></span>
+    <span class="strip-item" id="clock">SYS <span class="val">22:44:00</span></span>
+    <span class="strip-divider"></span>
+    <span class="strip-item">STATUS <span class="val" style="color:var(--cyan);">NOMINAL</span></span>
+    <span class="strip-divider"></span>
+    <span class="strip-item">AGENTS <span class="val">5/5</span></span>
+  </div>
+
+  <!-- LEFT HUD — Agent Fleet -->
+  <div class="left-hud">
+    <div class="left-hud-frame">
+      <div class="corner-tick tl"></div>
+      <div class="corner-tick br"></div>
+      <div class="left-hud-title">Fleet Status</div>
+
+      <div class="agent-line">
+        <div class="agent-dot online" data-agent="atlas"></div>
+        <div class="agent-name">Atlas</div>
+        <div class="agent-metric">8 tasks</div>
+      </div>
+      <div class="agent-line">
+        <div class="agent-dot online" data-agent="hex"></div>
+        <div class="agent-name">Hex</div>
+        <div class="agent-metric">227/0</div>
+      </div>
+      <div class="agent-line">
+        <div class="agent-dot online" data-agent="kiln"></div>
+        <div class="agent-name">Kiln</div>
+        <div class="agent-metric">847 lbs</div>
+      </div>
+      <div class="agent-line">
+        <div class="agent-dot idle" data-agent="razor"></div>
+        <div class="agent-name">Razor</div>
+        <div class="agent-metric">stable</div>
+      </div>
+      <div class="agent-line">
+        <div class="agent-dot away" data-agent="meridian"></div>
+        <div class="agent-name">Meridian</div>
+        <div class="agent-metric">1 ship</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT HUD — Comms -->
+  <div class="right-hud">
+    <div class="right-hud-frame">
+      <div class="corner-tick tl"></div>
+      <div class="corner-tick br"></div>
+      <div class="right-hud-title">Intercept Log</div>
+
+      <div class="comms-feed">
+        <div class="comm-msg">
+          <div class="comm-time">22:35:44</div>
+          <div class="comm-route">HEX <span class="arrow">→</span> ATL</div>
+          <div class="comm-text">Editorial + Terrain deployed. 227 tests passing.</div>
+        </div>
+        <div class="comm-msg">
+          <div class="comm-time">22:15:03</div>
+          <div class="comm-route">KLN <span class="arrow">→</span> ATL</div>
+          <div class="comm-text">Batch 847 complete, QA passed</div>
+        </div>
+        <div class="comm-msg">
+          <div class="comm-time">21:47:12</div>
+          <div class="comm-route">HEX <span class="arrow">→</span> ATL</div>
+          <div class="comm-text">3 concepts shipped to Pages. Starting comms dashboard.</div>
+        </div>
+        <div class="comm-msg">
+          <div class="comm-time">21:38:07</div>
+          <div class="comm-route">ATL <span class="arrow">→</span> ALL</div>
+          <div class="comm-text">Nightly digest cycle complete</div>
+        </div>
+        <div class="comm-msg">
+          <div class="comm-time">21:15:18</div>
+          <div class="comm-route">RZR <span class="arrow">→</span> ATL</div>
+          <div class="comm-text">Markets closed, overnight analysis running</div>
+        </div>
+        <div class="comm-msg">
+          <div class="comm-time">21:14:45</div>
+          <div class="comm-route">HEX <span class="arrow">→</span> ATL</div>
+          <div class="comm-text">On it. Spinning up 3 subagents</div>
+        </div>
+        <div class="comm-msg">
+          <div class="comm-time">21:14:22</div>
+          <div class="comm-route">ATL <span class="arrow">→</span> HEX</div>
+          <div class="comm-text">Priority build: MC v2 concepts needed tonight</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER KPI — no radar sweep -->
+  <div class="center-kpi">
+    <div class="kpi-main">847<span class="unit">LBS</span></div>
+    <div class="kpi-sub">
+      <div class="kpi-sub-item"><span class="num">12</span> orders</div>
+      <div class="kpi-sub-item"><span class="num">$47.2K</span> rev</div>
+      <div class="kpi-sub-item"><span class="num">98.7%</span> uptime</div>
+    </div>
+  </div>
+
+  <!-- VELOCITY BAR -->
+  <div class="velocity-label">VELOCITY</div>
+  <div class="velocity">
+    <div class="velocity-track">
+      <div class="velocity-fill" id="velocity-fill" style="height: 65%;"></div>
+    </div>
+  </div>
+
+  <!-- CORNER DIAGNOSTICS -->
+  <div class="diag diag-bl">
+    <div class="label">SYSTEM</div>
+    <div>CPU <span class="val">12.4%</span></div>
+    <div>MEM <span class="val">1.2GB</span></div>
+    <div>LOAD <span class="val">0.84</span></div>
+  </div>
+
+  <div class="diag diag-br">
+    <div class="label">NETWORK</div>
+    <div><span class="val">98.7%</span> UP</div>
+    <div><span class="val">45ms</span> RTT</div>
+    <div><span class="val">285</span> COMMITS</div>
+  </div>
+
+  <!-- COMMAND INPUT -->
+  <div class="cmd-bar">
+    <div class="cmd-inner">
+      <div class="cmd-prompt">TRANSMIT &gt;</div>
+      <input class="cmd-input" type="text" placeholder="enter command..." autofocus />
+      <button class="cmd-send">SEND</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ═══════ 3-LAYER STAR FIELD ═══════
+(function() {
+  const canvas = document.getElementById('stars');
+  const ctx = canvas.getContext('2d');
+  let W, H, cx, cy;
+
+  // 3 layers: deep (tiny, slow), mid (medium), near (bright, fast streaks)
+  const LAYERS = [
+    { count: 200, speedMin: 0.0005, speedMax: 0.002, sizeMin: 0.3, sizeMax: 0.6, brightness: 0.25, color: '180,200,220' },
+    { count: 80,  speedMin: 0.002,  speedMax: 0.005, sizeMin: 0.5, sizeMax: 1.0, brightness: 0.55, color: '200,230,255' },
+    { count: 20,  speedMin: 0.005,  speedMax: 0.012, sizeMin: 1.0, sizeMax: 2.0, brightness: 0.85, color: '220,245,255' },
+  ];
+
+  const allStars = [];
+
+  function spawnStar(layer, recycle) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = layer.speedMin + Math.random() * (layer.speedMax - layer.speedMin);
+    const brightness = layer.brightness * (0.7 + Math.random() * 0.3);
+    const r = recycle ? Math.random() * 0.1 : Math.random() * 0.5;
+    return {
+      angle, r, speed, brightness,
+      size: layer.sizeMin + Math.random() * (layer.sizeMax - layer.sizeMin),
+      color: layer.color,
+      streakThreshold: layer.speedMin > 0.004 ? 0.15 : 0.35,
+    };
+  }
+
+  function resize() {
+    W = canvas.width = window.innerWidth * devicePixelRatio;
+    H = canvas.height = window.innerHeight * devicePixelRatio;
+    canvas.style.width = window.innerWidth + 'px';
+    canvas.style.height = window.innerHeight + 'px';
+    cx = W / 2; cy = H / 2;
+  }
+
+  // Init
+  LAYERS.forEach(layer => {
+    for (let i = 0; i < layer.count; i++) allStars.push(spawnStar(layer, false));
+  });
+
+  let layerIdx = 0;
+  function getLayerForStar(s) {
+    // Find matching layer by color
+    return LAYERS.find(l => l.color === s.color) || LAYERS[0];
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    const maxR = Math.sqrt(cx * cx + cy * cy);
+
+    for (let i = 0; i < allStars.length; i++) {
+      const s = allStars[i];
+      s.r += s.speed * (1 + s.r * 3);
+
+      if (s.r > 1.5) {
+        allStars[i] = spawnStar(getLayerForStar(s), true);
+        continue;
+      }
+
+      const x = cx + Math.cos(s.angle) * s.r * maxR;
+      const y = cy + Math.sin(s.angle) * s.r * maxR;
+      const scale = 0.3 + s.r * 2.5;
+      const alpha = Math.min(1, s.r * 2.5) * s.brightness;
+      const sz = s.size * scale * devicePixelRatio;
+
+      // Streaks for near-layer stars
+      if (s.r > s.streakThreshold) {
+        const streakLen = s.r * (s.size > 1 ? 8 : 4) * devicePixelRatio;
+        const dx = Math.cos(s.angle) * streakLen;
+        const dy = Math.sin(s.angle) * streakLen;
+        ctx.beginPath();
+        ctx.moveTo(x - dx, y - dy);
+        ctx.lineTo(x, y);
+        ctx.strokeStyle = `rgba(${s.color},${alpha * 0.3})`;
+        ctx.lineWidth = sz * 0.5;
+        ctx.stroke();
+      }
+
+      ctx.beginPath();
+      ctx.arc(x, y, sz * 0.5, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${s.color},${alpha})`;
+      ctx.fill();
+    }
+
+    requestAnimationFrame(draw);
+  }
+
+  window.addEventListener('resize', resize);
+  resize();
+  draw();
+})();
+
+// ═══════ CLOCK ═══════
+(function() {
+  const el = document.getElementById('clock');
+  function tick() {
+    const t = new Date().toLocaleTimeString('en-US', { hour12: false });
+    el.innerHTML = `SYS <span class="val">${t}</span>`;
+  }
+  setInterval(tick, 1000);
+  tick();
+})();
+
+// ═══════ VELOCITY ANIMATION ═══════
+(function() {
+  const fill = document.getElementById('velocity-fill');
+  function drift() {
+    const h = 30 + Math.random() * 60;
+    fill.style.height = h + '%';
+    setTimeout(drift, 3000 + Math.random() * 4000);
+  }
+  drift();
+})();
+
+// ═══════ AGENT DOT PULSE (demo — pulses a random agent every 8-15s) ═══════
+(function() {
+  const dots = document.querySelectorAll('.agent-dot');
+  function pulseRandom() {
+    const dot = dots[Math.floor(Math.random() * dots.length)];
+    dot.classList.add('pulse');
+    dot.addEventListener('animationend', () => dot.classList.remove('pulse'), { once: true });
+    setTimeout(pulseRandom, 8000 + Math.random() * 7000);
+  }
+  setTimeout(pulseRandom, 3000);
+})();
+</script>
+</body>
+</html>
