@@ -42,7 +42,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_since ON messages(thread_id, id);
 `;
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method;
@@ -81,7 +81,7 @@ export default {
       }
       // Post message
       else if (path === '/api/warroom/messages' && method === 'POST') {
-        res = await postMessage(env.DB, await request.json());
+        res = await postMessage(env.DB, await request.json(), env, ctx);
       }
       // Recent messages across threads
       else if (path === '/api/warroom/messages/recent' && method === 'GET') {
@@ -202,7 +202,7 @@ async function updateThread(db, id, body) {
 
 // ─── Messages ───
 
-async function postMessage(db, body) {
+async function postMessage(db, body, env, ctx) {
   const { sender, thread, thread_id, content, type } = body;
   const tid = thread_id || thread;
   if (!sender || !tid || !content) {
@@ -210,7 +210,7 @@ async function postMessage(db, body) {
   }
 
   // Verify thread exists
-  const thr = await db.prepare('SELECT id, participants FROM threads WHERE id = ?').bind(tid).first();
+  const thr = await db.prepare('SELECT id, title, participants FROM threads WHERE id = ?').bind(tid).first();
   if (!thr) return json({ error: 'Thread not found' }, 404);
 
   const now = new Date().toISOString();
@@ -239,7 +239,34 @@ async function postMessage(db, body) {
     created_at: now
   };
 
+  // Fire webhook notification (non-blocking)
+  if (env.WEBHOOK_URL) {
+    const webhook = fireWebhook(env.WEBHOOK_URL, env.WEBHOOK_SECRET, {
+      event: 'message',
+      message: msg,
+      thread: { id: thr.id, title: thr.title, participants: parts }
+    });
+    if (ctx?.waitUntil) ctx.waitUntil(webhook);
+  }
+
   return json({ message: msg }, 201);
+}
+
+// ─── Webhook ───
+
+async function fireWebhook(url, secret, payload) {
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (secret) headers['X-Webhook-Secret'] = secret;
+
+    await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload)
+    });
+  } catch (err) {
+    console.error('Webhook failed:', err.message);
+  }
 }
 
 async function getMessages(db, threadId, params) {
