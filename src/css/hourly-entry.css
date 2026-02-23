@@ -1093,6 +1093,48 @@ body {
   font-size: 16px;
 }
 
+/* Quick Add Buttons */
+.quick-add-section {
+  padding-top: 8px;
+}
+
+.quick-add-buttons {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.btn-quick-add {
+  flex: 1;
+  padding: 14px 12px !important;
+  text-align: center;
+  font-size: 15px !important;
+}
+
+.btn-quick-add .quick-add-weight {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.5px;
+}
+
+.btn-quick-add:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+/* Shake animation for no-strain-selected feedback */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-4px); }
+  40%, 80% { transform: translateX(4px); }
+}
+
+.shake {
+  animation: shake 0.4s ease;
+}
+
 /* Recent Changes Section */
 .recent-changes-section {
   max-height: 200px;
