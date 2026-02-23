@@ -9,8 +9,8 @@
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
 
   <!-- Non-critical CSS: Deferred for faster initial render -->
-  <link rel="preload" href="../css/hourly-entry.css?v=52" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link rel="stylesheet" href="../css/hourly-entry.css?v=52"></noscript>
+  <link rel="preload" href="../css/hourly-entry.css?v=53" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/hourly-entry.css?v=53"></noscript>
 </head>
 <body>
   <a href="#timeline-list" class="skip-link">Skip to timeline</a>
@@ -407,6 +407,19 @@
               </div>
             </div>
 
+            <!-- Quick Add Buttons -->
+            <div class="scanner-section quick-add-section">
+              <label class="barcode-label" data-i18n="quickAdd">Quick Add</label>
+              <div class="quick-add-buttons">
+                <button type="button" class="scanner-btn btn-pool btn-quick-add" id="quick-add-10lb" data-amount-lbs="10">
+                  <span class="quick-add-weight">+10 lbs</span>
+                </button>
+                <button type="button" class="scanner-btn btn-pool btn-quick-add" id="quick-add-5kg" data-amount-grams="5000">
+                  <span class="quick-add-weight">+5 kg</span>
+                </button>
+              </div>
+            </div>
+
             <!-- Recent Changes Log -->
             <div class="scanner-section recent-changes-section">
               <div class="section-header-row">
@@ -524,6 +537,6 @@
     <button class="tooltip-close">×</button>
   </div>
 
-  <script type="module" src="../js/hourly-entry/index.js?v=67"></script>
+  <script type="module" src="../js/hourly-entry/index.js?v=68"></script>
 </body>
 </html>
