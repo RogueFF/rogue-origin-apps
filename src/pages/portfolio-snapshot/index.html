@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0c0f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Portfolio Snapshot — Rogue Origin</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg: #0a0c0f;
+      --surface: #12151a;
+      --elevated: #181c23;
+      --panel: #1e222b;
+      --border: rgba(255,255,255,0.06);
+      --border-strong: rgba(255,255,255,0.1);
+      --text: rgba(255,255,255,0.92);
+      --text-secondary: rgba(255,255,255,0.55);
+      --text-muted: rgba(255,255,255,0.3);
+      --green: #22c55e;
+      --green-dim: rgba(34,197,94,0.1);
+      --red: #ef4444;
+      --red-dim: rgba(239,68,68,0.1);
+      --yellow: #f59e0b;
+      --yellow-dim: rgba(245,158,11,0.1);
+      --blue: #3b82f6;
+      --purple: #8b5cf6;
+      --font-display: 'Syne', sans-serif;
+      --font-mono: 'Geist Mono', monospace;
+      --font-body: 'Instrument Sans', sans-serif;
+      --r-sm: 4px;
+      --r-md: 8px;
+      --r-lg: 12px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      font-family: var(--font-body);
+      font-size: 14px;
+      color: var(--text);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .card {
+      max-width: 520px;
+      margin: 24px auto;
+      padding: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      overflow: hidden;
+    }
+
+    /* ─── REGIME HEADER ─── */
+    .regime-header {
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .regime-header.red { background: linear-gradient(90deg, rgba(239,68,68,0.08), transparent 60%); }
+    .regime-header.yellow { background: linear-gradient(90deg, rgba(245,158,11,0.08), transparent 60%); }
+    .regime-header.green { background: linear-gradient(90deg, rgba(34,197,94,0.08), transparent 60%); }
+
+    .regime-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .regime-badge {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.05em;
+    }
+    .regime-badge.red { background: var(--red-dim); color: var(--red); border: 1px solid rgba(239,68,68,0.2); }
+    .regime-badge.yellow { background: var(--yellow-dim); color: var(--yellow); border: 1px solid rgba(245,158,11,0.2); }
+    .regime-badge.green { background: var(--green-dim); color: var(--green); border: 1px solid rgba(34,197,94,0.2); }
+
+    .regime-label {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .card-title {
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.03em;
+    }
+
+    /* ─── MARKET CONTEXT ─── */
+    .market-row {
+      display: flex;
+      padding: 10px 20px;
+      gap: 16px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.01);
+    }
+
+    .market-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    .market-label {
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .market-value {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .market-change {
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .market-change.up { color: var(--green); }
+    .market-change.down { color: var(--red); }
+
+    .market-spacer { flex: 1; }
+
+    .refresh-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      padding: 2px 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .refresh-btn:hover { border-color: var(--border-strong); color: var(--text-secondary); }
+
+    .last-updated {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    /* ─── SECTION ─── */
+    .section {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section-title {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    /* ─── POSITIONS TABLE ─── */
+    .positions-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    .positions-table th {
+      text-align: left;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-muted);
+      padding: 4px 0;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--border);
+    }
+    .positions-table th:last-child,
+    .positions-table td:last-child { text-align: right; }
+    .positions-table th:nth-child(3),
+    .positions-table td:nth-child(3),
+    .positions-table th:nth-child(4),
+    .positions-table td:nth-child(4) { text-align: right; }
+
+    .positions-table td {
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      vertical-align: middle;
+    }
+
+    .ticker {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .positions-scroll {
+      max-height: 180px;
+      overflow-y: auto;
+    }
+    .positions-scroll::-webkit-scrollbar { width: 3px; }
+    .positions-scroll::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
+
+    /* ─── RISK GAUGES ─── */
+    .gauge-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .gauge-row:last-child { margin-bottom: 0; }
+
+    .gauge-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-secondary);
+      width: 110px;
+      flex-shrink: 0;
+    }
+
+    .gauge-bar-bg {
+      flex: 1;
+      height: 6px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .gauge-bar {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.6s cubic-bezier(0.16,1,0.3,1);
+    }
+
+    .gauge-value {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      width: 40px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    /* ─── MOVERS ─── */
+    .movers-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+
+    .mover-item {
+      padding: 8px 10px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+    }
+
+    .mover-label {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+
+    .mover-ticker {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .mover-pct {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    /* ─── STRATEGY NOTE ─── */
+    .strategy-note {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      white-space: pre-wrap;
+    }
+
+    /* ─── VIPER SIGNALS ─── */
+    .signal-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .signal-row:last-child { border-bottom: none; }
+
+    .signal-ticker {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      width: 60px;
+    }
+
+    .signal-sentiment {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 500;
+      padding: 1px 6px;
+      border-radius: 3px;
+    }
+    .signal-sentiment.bullish { background: var(--green-dim); color: var(--green); }
+    .signal-sentiment.bearish { background: var(--red-dim); color: var(--red); }
+    .signal-sentiment.neutral { background: rgba(255,255,255,0.05); color: var(--text-muted); }
+
+    .signal-class {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .signal-mentions {
+      margin-left: auto;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    /* ─── FOOTER LINKS ─── */
+    .footer-links {
+      display: flex;
+      gap: 12px;
+      padding: 12px 20px;
+      background: rgba(255,255,255,0.01);
+    }
+
+    .footer-link {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .footer-link:hover { color: var(--text-secondary); }
+
+    /* ─── MARKET CLOSED BANNER ─── */
+    .market-closed {
+      display: none;
+      padding: 6px 20px;
+      background: rgba(255,255,255,0.03);
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-muted);
+      letter-spacing: 0.1em;
+      border-bottom: 1px solid var(--border);
+    }
+    .market-closed.visible { display: block; }
+
+    /* ─── EMPTY STATE ─── */
+    .empty-positions {
+      text-align: center;
+      padding: 20px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .empty-positions .connect-hint {
+      font-size: 10px;
+      margin-top: 6px;
+      opacity: 0.6;
+    }
+
+    /* ─── LOADING ─── */
+    .loading {
+      text-align: center;
+      padding: 40px 20px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--text-muted);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 8px;
+    }
+
+    /* ─── RESPONSIVE ─── */
+    @media (max-width: 560px) {
+      .card { margin: 12px; border-radius: var(--r-md); }
+      .movers-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="card" id="card">
+  <div class="loading" id="loadingState">
+    <div class="spinner"></div>
+    <div>Loading portfolio snapshot...</div>
+  </div>
+</div>
+
+<script>
+const API = 'https://trading-desk-api.roguefamilyfarms.workers.dev';
+const REFRESH_MS = 60000;
+let refreshTimer = null;
+
+async function fetchData() {
+  const [regimeRes, todayRes, viperRes] = await Promise.allSettled([
+    fetch(`${API}/api/desk/regime`).then(r => r.json()),
+    fetch(`${API}/api/desk/today`).then(r => r.json()),
+    fetch(`${API}/api/desk/viper`).then(r => r.json())
+  ]);
+
+  return {
+    regime: regimeRes.status === 'fulfilled' ? regimeRes.value : null,
+    today: todayRes.status === 'fulfilled' ? todayRes.value : null,
+    viper: viperRes.status === 'fulfilled' ? viperRes.value : null
+  };
+}
+
+function isMarketOpen() {
+  const now = new Date();
+  const pst = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+  const day = pst.getDay();
+  if (day === 0 || day === 6) return false;
+  const h = pst.getHours(), m = pst.getMinutes();
+  const mins = h * 60 + m;
+  return mins >= 390 && mins <= 780; // 6:30 AM - 1:00 PM PST
+}
+
+function colorForPnl(pct) {
+  if (pct < -2) return 'var(--red)';
+  if (pct > 2) return 'var(--green)';
+  return 'var(--yellow)';
+}
+
+function gaugeColor(pct, cap) {
+  const ratio = pct / cap;
+  if (ratio > 0.8) return 'var(--red)';
+  if (ratio > 0.5) return 'var(--yellow)';
+  return 'var(--green)';
+}
+
+function formatTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Los_Angeles' });
+}
+
+function render(data) {
+  const { regime, today, viper } = data;
+  const r = regime || {};
+  const rd = r.data || {};
+  const signal = (r.signal || 'RED').toLowerCase();
+  const marketOpen = isMarketOpen();
+
+  // Top tickers from today's brief
+  const tickers = today?.market_pulse?.top_tickers || [];
+  const viperFindings = viper?.findings || [];
+
+  // Mock positions (placeholder until portfolio API exists)
+  const positions = [];
+
+  // Top movers from viper data
+  const topBull = tickers.find(t => t.sentiment === 'bullish');
+  const topBear = tickers.find(t => t.sentiment === 'bearish');
+  const topWatch = tickers.find(t => t.classification?.includes('actionable'));
+
+  const card = document.getElementById('card');
+  card.innerHTML = `
+    <!-- Regime Header -->
+    <div class="regime-header ${signal}">
+      <div class="regime-left">
+        <span class="regime-badge ${signal}">${(r.signal || 'RED').toUpperCase()}</span>
+        <span class="regime-label">${r.label || 'Unknown'}</span>
+      </div>
+      <span class="card-title">PORTFOLIO SNAPSHOT</span>
+    </div>
+
+    <!-- Market Closed Banner -->
+    <div class="market-closed ${marketOpen ? '' : 'visible'}">MARKET CLOSED</div>
+
+    <!-- Market Context -->
+    <div class="market-row">
+      <div class="market-item">
+        <span class="market-label">SPY</span>
+        <span class="market-value">${rd.spy_price ? '$' + rd.spy_price.toFixed(2) : '—'}</span>
+        <span class="market-change ${rd.spy_trend === 'uptrend' ? 'up' : 'down'}">${rd.spy_trend || '—'}</span>
+      </div>
+      <div class="market-item">
+        <span class="market-label">VIX</span>
+        <span class="market-value" style="color: ${rd.vix > 25 ? 'var(--red)' : rd.vix > 18 ? 'var(--yellow)' : 'var(--green)'}">${rd.vix || '—'}</span>
+        <span class="market-change" style="color: var(--text-muted)">${rd.vix_level || ''}</span>
+      </div>
+      <div class="market-item">
+        <span class="market-label">10Y</span>
+        <span class="market-value">${rd.yield_10y ? rd.yield_10y.toFixed(2) + '%' : '—'}</span>
+      </div>
+      <div class="market-spacer"></div>
+      <button class="refresh-btn" onclick="refresh()">↻</button>
+      <span class="last-updated">${formatTime(r.timestamp)}</span>
+    </div>
+
+    <!-- Positions -->
+    <div class="section">
+      <div class="section-title">Positions</div>
+      ${positions.length > 0 ? `
+        <div class="positions-scroll">
+          <table class="positions-table">
+            <thead><tr>
+              <th>SYM</th><th>ENTRY</th><th>CURRENT</th><th>P/L %</th><th>SIZE</th>
+            </tr></thead>
+            <tbody>
+              ${positions.map(p => `
+                <tr>
+                  <td class="ticker">${p.symbol}</td>
+                  <td>$${p.entry.toFixed(2)}</td>
+                  <td>$${p.current.toFixed(2)}</td>
+                  <td style="color:${colorForPnl(p.pnlPct)}">${p.pnlPct > 0 ? '+' : ''}${p.pnlPct.toFixed(1)}%</td>
+                  <td>${p.size.toFixed(1)}%</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : `
+        <div class="empty-positions">
+          No positions data connected
+          <div class="connect-hint">Portfolio API endpoint needed — Phase 1</div>
+        </div>
+      `}
+    </div>
+
+    <!-- Risk Gauges -->
+    <div class="section">
+      <div class="section-title">Risk Gauges</div>
+      <div class="gauge-row">
+        <span class="gauge-label">Regime Score</span>
+        <div class="gauge-bar-bg">
+          <div class="gauge-bar" style="width:${(r.scores?.red || 0) / 13 * 100}%; background:${gaugeColor((r.scores?.red || 0) / 13 * 100, 100)}"></div>
+        </div>
+        <span class="gauge-value" style="color:${(r.scores?.red || 0) > 7 ? 'var(--red)' : 'var(--yellow)'}">${r.scores?.red || 0}/13</span>
+      </div>
+      <div class="gauge-row">
+        <span class="gauge-label">Position Sizing</span>
+        <div class="gauge-bar-bg">
+          <div class="gauge-bar" style="width:25%; background:var(--red)"></div>
+        </div>
+        <span class="gauge-value" style="color:var(--red)">25%</span>
+      </div>
+      <div class="gauge-row">
+        <span class="gauge-label">VIX Stress</span>
+        <div class="gauge-bar-bg">
+          <div class="gauge-bar" style="width:${rd.vix ? (rd.vix / 40) * 100 : 0}%; background:${rd.vix > 25 ? 'var(--red)' : rd.vix > 18 ? 'var(--yellow)' : 'var(--green)'}"></div>
+        </div>
+        <span class="gauge-value" style="color:${rd.vix > 18 ? 'var(--yellow)' : 'var(--green)'}">${rd.vix || '—'}</span>
+      </div>
+    </div>
+
+    <!-- Top Signals (Viper) -->
+    ${tickers.length > 0 ? `
+    <div class="section">
+      <div class="section-title">Viper Signals</div>
+      ${tickers.slice(0, 5).map(t => `
+        <div class="signal-row">
+          <span class="signal-ticker" style="color:${t.sentiment === 'bullish' ? 'var(--green)' : t.sentiment === 'bearish' ? 'var(--red)' : 'var(--text-secondary)'}">${t.ticker}</span>
+          <span class="signal-sentiment ${t.sentiment}">${t.sentiment}</span>
+          <span class="signal-class">${t.classification || ''}</span>
+          <span class="signal-mentions">${t.mentions}×</span>
+        </div>
+      `).join('')}
+    </div>
+    ` : ''}
+
+    <!-- Top Movers -->
+    <div class="section">
+      <div class="section-title">Top Movers Today</div>
+      <div class="movers-grid">
+        <div class="mover-item">
+          <div class="mover-label">Best Signal</div>
+          <div class="mover-ticker" style="color:var(--green)">${topBull?.ticker || '—'}</div>
+          <div class="mover-pct" style="color:var(--green)">${topBull ? topBull.sentiment : ''}</div>
+        </div>
+        <div class="mover-item">
+          <div class="mover-label">Weakest</div>
+          <div class="mover-ticker" style="color:var(--red)">${topBear?.ticker || '—'}</div>
+          <div class="mover-pct" style="color:var(--red)">${topBear ? topBear.sentiment : ''}</div>
+        </div>
+        <div class="mover-item">
+          <div class="mover-label">Actionable</div>
+          <div class="mover-ticker" style="color:var(--yellow)">${topWatch?.ticker || '—'}</div>
+          <div class="mover-pct" style="color:var(--yellow)">${topWatch ? topWatch.classification : ''}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Strategy Note -->
+    <div class="section">
+      <div class="section-title">Strategy</div>
+      <div class="strategy-note">${r.strategy?.position_sizing || '—'}\n\n${r.strategy?.strategies || ''}</div>
+    </div>
+
+    <!-- Footer Links -->
+    <div class="footer-links">
+      <a class="footer-link" href="https://trading-desk-api.roguefamilyfarms.workers.dev/" target="_blank">Trading Desk →</a>
+      <a class="footer-link" href="https://rogueff.github.io/rogue-origin-apps/src/pages/war-room/" target="_blank">War Room →</a>
+    </div>
+  `;
+}
+
+async function refresh() {
+  try {
+    const data = await fetchData();
+    render(data);
+  } catch (err) {
+    console.error('Refresh failed:', err);
+  }
+}
+
+function startAutoRefresh() {
+  refresh();
+  refreshTimer = setInterval(() => {
+    if (isMarketOpen()) refresh();
+  }, REFRESH_MS);
+}
+
+startAutoRefresh();
+</script>
+</body>
+</html>
