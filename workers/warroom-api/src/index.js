@@ -39,6 +39,14 @@ CREATE TABLE IF NOT EXISTS messages (
 
 CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_messages_since ON messages(thread_id, id);
+
+CREATE TABLE IF NOT EXISTS presence (
+  agent TEXT NOT NULL,
+  thread_id TEXT NOT NULL,
+  status TEXT DEFAULT 'typing',
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (agent, thread_id)
+);
 `;
 
 export default {
@@ -86,6 +94,14 @@ export default {
       // Recent messages across threads
       else if (path === '/api/warroom/messages/recent' && method === 'GET') {
         res = await recentMessages(env.DB, url.searchParams);
+      }
+      // Presence: set
+      else if (path === '/api/warroom/presence' && method === 'POST') {
+        res = await setPresence(env.DB, await request.json());
+      }
+      // Presence: get
+      else if (path === '/api/warroom/presence' && method === 'GET') {
+        res = await getPresence(env.DB, url.searchParams);
       }
       else {
         res = json({ error: 'Not found' }, 404);
@@ -239,6 +255,9 @@ async function postMessage(db, body, env, ctx) {
     created_at: now
   };
 
+  // Clear typing presence on message send
+  await db.prepare('DELETE FROM presence WHERE agent = ? AND thread_id = ?').bind(sender, tid).run();
+
   // Fire webhook notification (non-blocking)
   if (env.WEBHOOK_URL) {
     const webhook = fireWebhook(env.WEBHOOK_URL, env.WEBHOOK_SECRET, {
@@ -252,20 +271,78 @@ async function postMessage(db, body, env, ctx) {
   return json({ message: msg }, 201);
 }
 
+// ─── Presence ───
+
+const PRESENCE_TTL_MS = 30000; // 30s expiry
+
+async function setPresence(db, body) {
+  const { agent, thread_id, status } = body;
+  if (!agent || !thread_id) return json({ error: 'agent and thread_id required' }, 400);
+
+  const now = new Date().toISOString();
+
+  if (status === 'idle') {
+    await db.prepare('DELETE FROM presence WHERE agent = ? AND thread_id = ?').bind(agent, thread_id).run();
+  } else {
+    await db.prepare(
+      'INSERT INTO presence (agent, thread_id, status, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(agent, thread_id) DO UPDATE SET status = ?, updated_at = ?'
+    ).bind(agent, thread_id, status || 'typing', now, status || 'typing', now).run();
+  }
+
+  return json({ ok: true });
+}
+
+async function getPresence(db, params) {
+  const threadId = params.get('thread_id');
+  if (!threadId) return json({ error: 'thread_id required' }, 400);
+
+  const cutoff = new Date(Date.now() - PRESENCE_TTL_MS).toISOString();
+
+  // Clean expired
+  await db.prepare('DELETE FROM presence WHERE updated_at < ?').bind(cutoff).run();
+
+  const { results } = await db.prepare(
+    'SELECT agent, status, updated_at FROM presence WHERE thread_id = ? AND updated_at >= ?'
+  ).bind(threadId, cutoff).all();
+
+  return json({ presence: results });
+}
+
 // ─── Webhook ───
 
 async function fireWebhook(url, secret, payload) {
-  try {
-    const headers = { 'Content-Type': 'application/json' };
-    if (secret) headers['X-Webhook-Secret'] = secret;
+  const AGENT_IDS = ['atlas', 'hex', 'razor', 'kiln', 'meridian'];
+  const sender = payload.message?.sender?.toLowerCase();
+  const participants = (payload.thread?.participants || [])
+    .map(p => p.toLowerCase())
+    .filter(p => p !== sender && p !== 'koa' && AGENT_IDS.includes(p));
 
-    await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload)
-    });
-  } catch (err) {
-    console.error('Webhook failed:', err.message);
+  if (participants.length === 0) return;
+
+  const threadTitle = payload.thread?.title || 'War Room';
+  const threadId = payload.thread?.id;
+  const content = payload.message?.content;
+
+  for (const agentId of participants) {
+    try {
+      const body = {
+        message: `**War Room — ${threadTitle}**\nFrom **${sender}**: ${content}\n\n**MANDATORY: Read the FULL thread before responding.** GET https://warroom-api.roguefamilyfarms.workers.dev/api/warroom/threads/${threadId}/messages — Do NOT duplicate work already done. Do NOT ask questions already answered. Reference what others said. This is a conversation, not a bulletin board.\n\nTo respond: POST to https://warroom-api.roguefamilyfarms.workers.dev/api/warroom/messages with {"sender":"${agentId}","thread_id":"${threadId}","content":"your reply"}`,
+        agentId,
+        name: 'WarRoom',
+        wakeMode: 'now',
+        deliver: false
+      };
+      await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${secret}`
+        },
+        body: JSON.stringify(body)
+      });
+    } catch (err) {
+      console.error(`Webhook to ${agentId} failed:`, err.message);
+    }
   }
 }
 
