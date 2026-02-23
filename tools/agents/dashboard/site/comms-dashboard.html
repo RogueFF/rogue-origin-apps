@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Comms Dashboard — Rogue Origin</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #0a0a0f;
+  --surface: #12121a;
+  --surface-2: #1a1a25;
+  --border: rgba(255,255,255,0.06);
+  --border-bright: rgba(255,255,255,0.12);
+  --text: rgba(255,255,255,0.85);
+  --text-dim: rgba(255,255,255,0.45);
+  --text-faint: rgba(255,255,255,0.2);
+  --cyan: #00f0ff;
+  --green: #00ff88;
+  --amber: #ffb000;
+  --red: #ff4444;
+  --magenta: #ff00aa;
+  --lavender: #aa77ff;
+  --rose: #ff7eb3;
+  --mono: 'IBM Plex Mono', monospace;
+  --display: 'Space Grotesk', sans-serif;
+}
+
+html, body {
+  width: 100%;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+/* Layout */
+.header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.header h1 {
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.header h1 span { color: var(--cyan); }
+
+.header-stats {
+  display: flex;
+  gap: 16px;
+  font-size: 11px;
+}
+
+.header-stats .stat-value { font-weight: 600; }
+.header-stats .stat-label { color: var(--text-dim); margin-left: 4px; }
+
+/* Tabs */
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.tab {
+  padding: 10px 20px;
+  cursor: pointer;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+
+/* Panels */
+.panel { display: none; padding: 16px; }
+.panel.active { display: block; }
+
+/* Message Log Table */
+.filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.filters select, .filters input {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 6px 10px;
+  outline: none;
+}
+
+.filters select:focus, .filters input:focus {
+  border-color: var(--cyan);
+}
+
+.msg-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.msg-table th {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-bright);
+  color: var(--text-dim);
+  font-weight: 500;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  cursor: pointer;
+}
+
+.msg-table th:hover { color: var(--cyan); }
+
+.msg-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.msg-table tr:hover td { background: var(--surface); }
+
+.msg-table .from-cell, .msg-table .to-cell {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.msg-table .preview-cell {
+  max-width: 400px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  color: var(--text-dim);
+}
+
+.msg-table .preview-cell:hover { color: var(--text); }
+
+.msg-table .time-cell {
+  white-space: nowrap;
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.badge-escalation { background: rgba(255,68,68,0.15); color: var(--red); }
+.badge-request { background: rgba(0,240,255,0.1); color: var(--cyan); }
+.badge-completion { background: rgba(0,255,136,0.1); color: var(--green); }
+.badge-report { background: rgba(255,255,255,0.05); color: var(--text-dim); }
+.badge-sent { background: rgba(0,255,136,0.1); color: var(--green); }
+.badge-failed { background: rgba(255,68,68,0.15); color: var(--red); }
+.badge-forbidden { background: rgba(255,176,0,0.15); color: var(--amber); }
+.badge-delivered { background: rgba(0,240,255,0.1); color: var(--cyan); }
+
+.table-wrap {
+  max-height: 600px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+}
+
+.table-wrap::-webkit-scrollbar { width: 4px; }
+.table-wrap::-webkit-scrollbar-track { background: var(--surface); }
+.table-wrap::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
+
+/* Expanded message */
+.msg-expanded {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.8);
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.msg-expanded.visible { display: flex; }
+
+.msg-expanded-inner {
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+  padding: 24px;
+  max-width: 600px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+  position: relative;
+}
+
+.msg-expanded-inner .close {
+  position: absolute;
+  top: 12px; right: 12px;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  width: 28px; height: 28px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.msg-expanded-inner h3 {
+  font-family: var(--display);
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.msg-expanded-inner .meta {
+  color: var(--text-dim);
+  font-size: 10px;
+  margin-bottom: 12px;
+  display: flex;
+  gap: 16px;
+}
+
+.msg-expanded-inner .full-text {
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+/* Graph Panel */
+#graphCanvas {
+  width: 100%;
+  height: 500px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: grab;
+}
+
+.graph-legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--text-dim);
+  flex-wrap: wrap;
+}
+
+.graph-legend .dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+/* Health Panel */
+.health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.health-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 16px;
+}
+
+.health-card .agent-name {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.health-card .stat-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+
+.health-card .stat-row .label { color: var(--text-dim); }
+
+.health-card .stat-row .value { font-weight: 600; }
+
+/* Live Feed */
+.live-feed {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  height: 600px;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+
+.live-feed .feed-msg {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  animation: feedSlide 0.3s ease;
+}
+
+@keyframes feedSlide {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.live-feed .feed-msg.escalation {
+  border-left: 3px solid var(--red);
+  background: rgba(255,68,68,0.03);
+}
+
+.live-feed .feed-time {
+  font-size: 9px;
+  color: var(--text-faint);
+}
+
+.live-feed .feed-route {
+  font-size: 11px;
+  font-weight: 600;
+  margin: 2px 0;
+}
+
+.live-feed .feed-text {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.live-controls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  align-items: center;
+}
+
+.live-controls button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 6px 12px;
+  cursor: pointer;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.live-controls button.active { border-color: var(--cyan); color: var(--cyan); }
+
+.live-controls .live-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: livePulse 2s ease-in-out infinite;
+}
+
+@keyframes livePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.live-controls .live-label {
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--green);
+}
+
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.pagination button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+.pagination button:disabled { opacity: 0.3; cursor: default; }
+
+/* Mobile */
+@media (max-width: 700px) {
+  .header { padding: 12px; }
+  .header h1 { font-size: 14px; }
+  .header-stats { font-size: 10px; gap: 8px; }
+  .panel { padding: 8px; }
+  .msg-table .preview-cell { max-width: 180px; }
+  .health-grid { grid-template-columns: 1fr; }
+  #graphCanvas { height: 350px; }
+  .hide-mobile { display: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Agent <span>Comms</span> Dashboard</h1>
+  <div class="header-stats" id="headerStats"></div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-panel="messages">📋 Message Log</div>
+  <div class="tab" data-panel="graph">🔗 Comm Graph</div>
+  <div class="tab" data-panel="health">💚 Agent Health</div>
+  <div class="tab" data-panel="live">⚡ Live Feed</div>
+</div>
+
+<!-- Message Log -->
+<div class="panel active" id="panel-messages">
+  <div class="filters">
+    <select id="filterFrom"><option value="">All Senders</option></select>
+    <select id="filterTo"><option value="">All Recipients</option></select>
+    <select id="filterType">
+      <option value="">All Types</option>
+      <option value="escalation">Escalation</option>
+      <option value="request">Request</option>
+      <option value="completion">Completion</option>
+      <option value="report">Report</option>
+    </select>
+    <input type="text" id="filterSearch" placeholder="Search messages..." />
+  </div>
+  <div class="table-wrap">
+    <table class="msg-table">
+      <thead>
+        <tr>
+          <th data-sort="timestamp">Time ▼</th>
+          <th data-sort="from">From</th>
+          <th data-sort="to">To</th>
+          <th>Preview</th>
+          <th data-sort="type">Type</th>
+          <th data-sort="status">Status</th>
+        </tr>
+      </thead>
+      <tbody id="msgBody"></tbody>
+    </table>
+  </div>
+  <div class="pagination">
+    <span id="pageInfo"></span>
+    <div>
+      <button id="prevPage">← Prev</button>
+      <button id="nextPage">Next →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Communication Graph -->
+<div class="panel" id="panel-graph">
+  <canvas id="graphCanvas"></canvas>
+  <div class="graph-legend">
+    <span><span class="dot" style="background:var(--red)"></span> Escalation</span>
+    <span><span class="dot" style="background:var(--cyan)"></span> Request</span>
+    <span><span class="dot" style="background:var(--green)"></span> Completion</span>
+    <span><span class="dot" style="background:var(--text-dim)"></span> Report</span>
+    <span style="margin-left: auto; color: var(--text-faint);">Node size = message volume · Edge width = frequency</span>
+  </div>
+</div>
+
+<!-- Agent Health -->
+<div class="panel" id="panel-health">
+  <div class="health-grid" id="healthGrid"></div>
+</div>
+
+<!-- Live Feed -->
+<div class="panel" id="panel-live">
+  <div class="live-controls">
+    <div class="live-dot"></div>
+    <span class="live-label">Live</span>
+    <button id="pauseBtn">⏸ Pause</button>
+    <button id="filterEscBtn">🔴 Escalations Only</button>
+  </div>
+  <div class="live-feed" id="liveFeed"></div>
+</div>
+
+<!-- Expanded message modal -->
+<div class="msg-expanded" id="msgModal">
+  <div class="msg-expanded-inner">
+    <button class="close" onclick="closeModal()">×</button>
+    <h3 id="modalTitle"></h3>
+    <div class="meta" id="modalMeta"></div>
+    <div class="full-text" id="modalText"></div>
+  </div>
+</div>
+
+<script>
+let DATA = null;
+let currentPage = 0;
+const PAGE_SIZE = 50;
+let sortField = 'timestamp';
+let sortDir = -1;
+let livePaused = false;
+let liveEscOnly = false;
+let liveIndex = 0;
+
+const AGENT_COLORS = {
+  atlas: '#00f0ff', main: '#00f0ff',
+  hex: '#aa77ff',
+  kiln: '#00ff88',
+  razor: '#ffb000',
+  meridian: '#ff00aa',
+  opus: '#ff7eb3',
+};
+
+function getColor(agent) {
+  return AGENT_COLORS[agent] || '#888888';
+}
+
+function formatTime(ts) {
+  const d = new Date(ts);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
+    d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function relativeTime(ts) {
+  const diff = Date.now() - new Date(ts).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return mins + 'm ago';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  return Math.floor(hrs / 24) + 'd ago';
+}
+
+// Load data
+async function loadData() {
+  try {
+    // Try fetch first (works when served via HTTP)
+    const resp = await fetch('comms-data.json');
+    DATA = await resp.json();
+  } catch (e) {
+    // Fallback to embedded data (for file:// protocol)
+    if (typeof EMBEDDED_DATA !== 'undefined') {
+      DATA = EMBEDDED_DATA;
+    } else {
+      console.error('Failed to load comms-data.json:', e);
+      document.body.innerHTML = '<div style="padding:40px;color:#ff4444;font-family:monospace;">Failed to load comms-data.json. Run extract-comms.js first, or use build-embedded.sh.</div>';
+      return;
+    }
+  }
+
+  renderHeaderStats();
+  populateFilters();
+  renderMessages();
+  renderHealth();
+  startLiveFeed();
+}
+
+function renderHeaderStats() {
+  const s = DATA.summary;
+  document.getElementById('headerStats').innerHTML = `
+    <div><span class="stat-value">${DATA.totalMessages}</span><span class="stat-label">total msgs</span></div>
+    <div><span class="stat-value" style="color:var(--red)">${s.escalations}</span><span class="stat-label">escalations</span></div>
+    <div><span class="stat-value" style="color:var(--cyan)">${s.last24h}</span><span class="stat-label">last 24h</span></div>
+    <div><span class="stat-value">${s.totalAgents}</span><span class="stat-label">agents</span></div>
+    <div><span class="stat-value" style="color:${s.failures > 0 ? 'var(--red)' : 'var(--green)'}">${s.failures}</span><span class="stat-label">failures</span></div>
+  `;
+}
+
+function populateFilters() {
+  const agents = new Set();
+  DATA.messages.forEach(m => { agents.add(m.from); agents.add(m.to); });
+  const sorted = [...agents].sort();
+  const fromSel = document.getElementById('filterFrom');
+  const toSel = document.getElementById('filterTo');
+  sorted.forEach(a => {
+    fromSel.add(new Option(a, a));
+    toSel.add(new Option(a, a));
+  });
+}
+
+function getFiltered() {
+  const from = document.getElementById('filterFrom').value;
+  const to = document.getElementById('filterTo').value;
+  const type = document.getElementById('filterType').value;
+  const search = document.getElementById('filterSearch').value.toLowerCase();
+
+  let msgs = DATA.messages.filter(m => {
+    if (from && m.from !== from) return false;
+    if (to && m.to !== to) return false;
+    if (type && m.type !== type) return false;
+    if (search && !m.message.toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  msgs.sort((a, b) => {
+    let va = a[sortField], vb = b[sortField];
+    if (sortField === 'timestamp') { va = new Date(va).getTime(); vb = new Date(vb).getTime(); }
+    if (va < vb) return -1 * sortDir;
+    if (va > vb) return 1 * sortDir;
+    return 0;
+  });
+
+  return msgs;
+}
+
+function renderMessages() {
+  const msgs = getFiltered();
+  const start = currentPage * PAGE_SIZE;
+  const page = msgs.slice(start, start + PAGE_SIZE);
+  const tbody = document.getElementById('msgBody');
+
+  tbody.innerHTML = page.map((m, i) => `
+    <tr onclick="showMessage(${start + i})">
+      <td class="time-cell">${formatTime(m.timestamp)}</td>
+      <td class="from-cell" style="color:${getColor(m.from)}">${m.from}</td>
+      <td class="to-cell" style="color:${getColor(m.to)}">${m.to}</td>
+      <td class="preview-cell">${escHtml(m.preview)}</td>
+      <td><span class="badge badge-${m.type}">${m.type}</span></td>
+      <td><span class="badge badge-${m.status}">${m.status}</span></td>
+    </tr>
+  `).join('');
+
+  const totalPages = Math.ceil(msgs.length / PAGE_SIZE);
+  document.getElementById('pageInfo').textContent = `Page ${currentPage + 1} of ${totalPages} (${msgs.length} messages)`;
+  document.getElementById('prevPage').disabled = currentPage === 0;
+  document.getElementById('nextPage').disabled = currentPage >= totalPages - 1;
+}
+
+function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function showMessage(idx) {
+  const msgs = getFiltered();
+  const m = msgs[idx];
+  if (!m) return;
+  document.getElementById('modalTitle').textContent = `${m.from} → ${m.to}`;
+  document.getElementById('modalTitle').style.color = getColor(m.from);
+  document.getElementById('modalMeta').innerHTML = `
+    <span>${formatTime(m.timestamp)}</span>
+    <span class="badge badge-${m.type}">${m.type}</span>
+    <span class="badge badge-${m.status}">${m.status}</span>
+    <span>${m.direction}</span>
+  `;
+  document.getElementById('modalText').textContent = m.message;
+  document.getElementById('msgModal').classList.add('visible');
+}
+
+function closeModal() {
+  document.getElementById('msgModal').classList.remove('visible');
+}
+
+// Graph
+function renderGraph() {
+  const canvas = document.getElementById('graphCanvas');
+  const ctx = canvas.getContext('2d');
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const W = rect.width;
+  const H = 500;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  // Filter to known agent names (skip UUIDs)
+  const knownAgents = ['main', 'atlas', 'hex', 'kiln', 'razor', 'meridian', 'opus', 'heartbeat'];
+  const agentKeys = Object.keys(DATA.agents).filter(a => knownAgents.includes(a) || (!a.includes('-') && a.length < 15));
+  const edges = DATA.edges.filter(e => agentKeys.includes(e.from) && agentKeys.includes(e.to));
+
+  // Layout: circular
+  const cx = W / 2, cy = H / 2;
+  const radius = Math.min(W, H) * 0.35;
+  const positions = {};
+  agentKeys.forEach((a, i) => {
+    const angle = (i / agentKeys.length) * Math.PI * 2 - Math.PI / 2;
+    positions[a] = { x: cx + Math.cos(angle) * radius, y: cy + Math.sin(angle) * radius };
+  });
+
+  // Draw edges
+  const maxEdge = Math.max(...edges.map(e => e.count), 1);
+  edges.forEach(e => {
+    const from = positions[e.from], to = positions[e.to];
+    if (!from || !to) return;
+    const thickness = 1 + (e.count / maxEdge) * 6;
+    const dominantType = Object.entries(e.types).sort((a,b) => b[1]-a[1])[0]?.[0] || 'report';
+    const colors = { escalation: 'rgba(255,68,68,0.3)', request: 'rgba(0,240,255,0.25)', completion: 'rgba(0,255,136,0.2)', report: 'rgba(255,255,255,0.08)' };
+
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.strokeStyle = colors[dominantType] || colors.report;
+    ctx.lineWidth = thickness;
+    ctx.stroke();
+
+    // Arrow
+    const angle = Math.atan2(to.y - from.y, to.x - from.x);
+    const midX = (from.x + to.x) / 2, midY = (from.y + to.y) / 2;
+    ctx.beginPath();
+    ctx.moveTo(midX + Math.cos(angle) * 8, midY + Math.sin(angle) * 8);
+    ctx.lineTo(midX + Math.cos(angle + 2.5) * 6, midY + Math.sin(angle + 2.5) * 6);
+    ctx.lineTo(midX + Math.cos(angle - 2.5) * 6, midY + Math.sin(angle - 2.5) * 6);
+    ctx.closePath();
+    ctx.fillStyle = colors[dominantType] || colors.report;
+    ctx.fill();
+
+    // Count label
+    ctx.font = '500 9px "IBM Plex Mono"';
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.textAlign = 'center';
+    ctx.fillText(e.count, midX, midY - 6);
+  });
+
+  // Draw nodes
+  const maxVolume = Math.max(...Object.values(DATA.agents).map(a => a.sent + a.received), 1);
+  agentKeys.forEach(a => {
+    const pos = positions[a];
+    if (!pos) return;
+    const stats = DATA.agents[a] || { sent: 0, received: 0 };
+    const volume = stats.sent + stats.received;
+    const r = 12 + (volume / maxVolume) * 24;
+    const color = getColor(a);
+
+    // Glow
+    const glow = ctx.createRadialGradient(pos.x, pos.y, r * 0.5, pos.x, pos.y, r * 2.5);
+    glow.addColorStop(0, color + '25');
+    glow.addColorStop(1, color + '00');
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, r * 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = glow;
+    ctx.fill();
+
+    // Node
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = color + '20';
+    ctx.fill();
+    ctx.strokeStyle = color + '88';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Label
+    ctx.font = '600 11px "Space Grotesk"';
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.fillText(a, pos.x, pos.y + r + 16);
+
+    // Volume label
+    ctx.font = '400 9px "IBM Plex Mono"';
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillText(`${volume} msgs`, pos.x, pos.y + r + 28);
+  });
+}
+
+// Health
+function renderHealth() {
+  const grid = document.getElementById('healthGrid');
+  const knownAgents = ['main', 'atlas', 'hex', 'kiln', 'razor', 'meridian'];
+  const cards = knownAgents.map(a => {
+    const s = DATA.agents[a];
+    if (!s) return '';
+    const total = s.sent + s.received;
+    const failRate = total > 0 ? ((s.failures / total) * 100).toFixed(1) : '0.0';
+    const lastSeen = s.lastSeen ? relativeTime(s.lastSeen) : 'never';
+    const lastSeenColor = s.lastSeen && (Date.now() - new Date(s.lastSeen).getTime() > 48 * 3600000) ? 'var(--red)' :
+      s.lastSeen && (Date.now() - new Date(s.lastSeen).getTime() > 24 * 3600000) ? 'var(--amber)' : 'var(--green)';
+
+    return `<div class="health-card">
+      <div class="agent-name" style="color:${getColor(a)}">${a}</div>
+      <div class="stat-row"><span class="label">Last Seen</span><span class="value" style="color:${lastSeenColor}">${lastSeen}</span></div>
+      <div class="stat-row"><span class="label">Sent</span><span class="value">${s.sent}</span></div>
+      <div class="stat-row"><span class="label">Received</span><span class="value">${s.received}</span></div>
+      <div class="stat-row"><span class="label">24h Volume</span><span class="value" style="color:var(--cyan)">${s.volume24h}</span></div>
+      <div class="stat-row"><span class="label">Failures</span><span class="value" style="color:${s.failures > 0 ? 'var(--red)' : 'var(--green)'}">${s.failures}</span></div>
+      <div class="stat-row"><span class="label">Fail Rate</span><span class="value">${failRate}%</span></div>
+    </div>`;
+  });
+  grid.innerHTML = cards.join('');
+}
+
+// Live Feed
+function startLiveFeed() {
+  const feed = document.getElementById('liveFeed');
+  const msgs = [...DATA.messages].reverse(); // newest first
+  liveIndex = 0;
+
+  // Initial batch
+  const initial = msgs.slice(0, 20);
+  feed.innerHTML = initial.map(m => feedMsgHtml(m)).join('');
+  liveIndex = 20;
+
+  // Simulate live by dripping in older messages
+  setInterval(() => {
+    if (livePaused || liveIndex >= msgs.length) return;
+    const m = msgs[liveIndex++];
+    if (liveEscOnly && m.type !== 'escalation') return;
+    const div = document.createElement('div');
+    div.innerHTML = feedMsgHtml(m);
+    feed.prepend(div.firstElementChild);
+    // Trim
+    while (feed.children.length > 100) feed.removeChild(feed.lastChild);
+  }, 3000);
+}
+
+function feedMsgHtml(m) {
+  const cls = m.type === 'escalation' ? ' escalation' : '';
+  return `<div class="feed-msg${cls}">
+    <div class="feed-time">${formatTime(m.timestamp)}</div>
+    <div class="feed-route"><span style="color:${getColor(m.from)}">${m.from}</span> → <span style="color:${getColor(m.to)}">${m.to}</span></div>
+    <div class="feed-text">${escHtml(m.preview)}</div>
+  </div>`;
+}
+
+// Event listeners
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
+    if (tab.dataset.panel === 'graph') setTimeout(renderGraph, 50);
+  });
+});
+
+document.querySelectorAll('.filters select, .filters input').forEach(el => {
+  el.addEventListener('input', () => { currentPage = 0; renderMessages(); });
+});
+
+document.querySelectorAll('.msg-table th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const field = th.dataset.sort;
+    if (sortField === field) sortDir *= -1;
+    else { sortField = field; sortDir = -1; }
+    currentPage = 0;
+    renderMessages();
+  });
+});
+
+document.getElementById('prevPage').addEventListener('click', () => { if (currentPage > 0) { currentPage--; renderMessages(); } });
+document.getElementById('nextPage').addEventListener('click', () => { currentPage++; renderMessages(); });
+
+document.getElementById('msgModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('msgModal')) closeModal();
+});
+
+document.getElementById('pauseBtn').addEventListener('click', function() {
+  livePaused = !livePaused;
+  this.textContent = livePaused ? '▶ Resume' : '⏸ Pause';
+  this.classList.toggle('active', livePaused);
+});
+
+document.getElementById('filterEscBtn').addEventListener('click', function() {
+  liveEscOnly = !liveEscOnly;
+  this.classList.toggle('active', liveEscOnly);
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+});
+
+// Boot
+loadData();
+</script>
+</body>
+</html>
