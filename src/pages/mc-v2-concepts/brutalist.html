@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>MC v2 — Concept B: Brutalist Terminal</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --black: #000000;
+  --green: #00ff41;
+  --green-dim: #00ff4133;
+  --green-mid: #00ff4188;
+  --amber: #ffb000;
+  --red: #ff0000;
+  --white: #cccccc;
+  --mono: 'IBM Plex Mono', monospace;
+  --serif: 'Instrument Serif', serif;
+}
+
+html, body {
+  width: 100%;
+  min-height: 100vh;
+  background: var(--black);
+  color: var(--green);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+/* CRT overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0,0,0,0.15) 0px,
+    rgba(0,0,0,0.15) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  pointer-events: none;
+  z-index: 1000;
+}
+
+/* CRT vignette + curvature */
+body::after {
+  content: '';
+  position: fixed;
+  inset: -2%;
+  background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.7) 100%);
+  pointer-events: none;
+  z-index: 999;
+}
+
+/* CRT flicker */
+@keyframes flicker {
+  0% { opacity: 0.97; }
+  5% { opacity: 0.95; }
+  10% { opacity: 0.98; }
+  15% { opacity: 0.96; }
+  20% { opacity: 0.97; }
+  100% { opacity: 0.97; }
+}
+
+.crt-wrap {
+  animation: flicker 0.15s infinite;
+  padding: 8px;
+  min-height: 100vh;
+  position: relative;
+}
+
+/* Title */
+.title-bar {
+  border: 2px solid var(--green);
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.title-bar h1 {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.title-bar .system-time {
+  font-size: 11px;
+  color: var(--amber);
+}
+
+/* ASCII divider */
+.ascii-divider {
+  color: var(--green-mid);
+  font-size: 11px;
+  overflow: hidden;
+  white-space: nowrap;
+  margin: 6px 0;
+  user-select: none;
+}
+
+/* KPI Section - THE BIG BREAK */
+.kpi-section {
+  position: relative;
+  margin: 8px 0 16px 0;
+  padding: 0;
+  overflow: visible;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  border: 2px solid var(--green);
+}
+
+.kpi-cell {
+  border-right: 1px solid var(--green-dim);
+  padding: 6px 8px;
+  position: relative;
+  overflow: visible;
+}
+
+.kpi-cell:last-child { border-right: none; }
+
+.kpi-label {
+  font-size: 8px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--green-mid);
+  font-weight: 500;
+}
+
+.kpi-number {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: clamp(42px, 10vw, 72px);
+  line-height: 0.85;
+  color: var(--green);
+  margin-top: 2px;
+  position: relative;
+  z-index: 5;
+  /* BREAK THE GRID */
+  margin-bottom: -12px;
+  text-shadow: 0 0 30px var(--green-dim);
+}
+
+.kpi-number.amber { color: var(--amber); text-shadow: 0 0 30px rgba(255,176,0,0.3); }
+
+.kpi-unit {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--green-mid);
+  letter-spacing: 1px;
+  position: relative;
+  z-index: 6;
+}
+
+/* Process table */
+.proc-section {
+  border: 2px solid var(--green);
+  margin-bottom: 8px;
+}
+
+.proc-header {
+  background: var(--green);
+  color: var(--black);
+  padding: 4px 8px;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.proc-table {
+  width: 100%;
+  font-size: 11px;
+  border-collapse: collapse;
+}
+
+.proc-table th {
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--green-dim);
+  color: var(--green-mid);
+  font-weight: 500;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.proc-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid rgba(0,255,65,0.08);
+  white-space: nowrap;
+}
+
+.proc-table tr:last-child td { border-bottom: none; }
+
+.status-online { color: var(--green); }
+.status-online::before { content: '● '; }
+.status-idle { color: var(--amber); }
+.status-idle::before { content: '◐ '; }
+.status-away { color: var(--red); }
+.status-away::before { content: '○ '; }
+
+/* IRC Comms */
+.irc-section {
+  border: 2px solid var(--green);
+  margin-bottom: 8px;
+}
+
+.irc-header {
+  background: var(--green);
+  color: var(--black);
+  padding: 4px 8px;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.irc-log {
+  padding: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.irc-msg {
+  margin-bottom: 4px;
+  word-wrap: break-word;
+}
+
+.irc-time { color: var(--green-mid); }
+.irc-nick { font-weight: 700; }
+.irc-nick.atlas { color: #00f0ff; }
+.irc-nick.hex { color: #aa77ff; }
+.irc-nick.kiln { color: #00ff88; }
+.irc-nick.razor { color: var(--amber); }
+
+/* System log */
+.sys-log {
+  border: 2px solid var(--green-dim);
+  padding: 8px;
+  margin-bottom: 8px;
+  font-size: 10px;
+  color: var(--green-mid);
+  max-height: 100px;
+  overflow-y: auto;
+}
+
+.sys-log .warn { color: var(--amber); }
+.sys-log .err { color: var(--red); }
+
+/* Chat input */
+.terminal-input {
+  position: fixed;
+  bottom: 0;
+  left: 0; right: 0;
+  background: var(--black);
+  border-top: 2px solid var(--green);
+  padding: 10px 8px;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  z-index: 100;
+}
+
+.prompt-char {
+  color: var(--green);
+  font-weight: 700;
+  font-size: 14px;
+  margin-right: 8px;
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.terminal-input input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--green);
+  font-family: var(--mono);
+  font-size: 13px;
+  outline: none;
+  caret-color: var(--green);
+}
+
+.terminal-input input::placeholder { color: var(--green-dim); }
+
+/* ASCII art */
+.ascii-art {
+  font-size: 9px;
+  line-height: 1.2;
+  color: var(--green-dim);
+  margin: 8px 0;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+/* Mobile adjustments */
+@media (max-width: 600px) {
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .kpi-cell:nth-child(2) { border-right: none; }
+  .kpi-cell:nth-child(1), .kpi-cell:nth-child(2) { border-bottom: 1px solid var(--green-dim); }
+  .kpi-number { font-size: clamp(38px, 14vw, 60px); }
+  .proc-table { font-size: 10px; }
+  .proc-table th, .proc-table td { padding: 3px 6px; }
+  .crt-wrap { padding: 4px; }
+  body { font-size: 11px; }
+  .hide-mobile { display: none; }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--black); }
+::-webkit-scrollbar-thumb { background: var(--green-dim); }
+
+/* Selection */
+::selection { background: var(--green); color: var(--black); }
+
+/* Boot animation */
+@keyframes typeIn {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+.boot-line {
+  overflow: hidden;
+  white-space: nowrap;
+  animation: typeIn 0.5s steps(40) forwards;
+}
+</style>
+</head>
+<body>
+<div class="crt-wrap">
+
+<div class="title-bar">
+  <h1>MC v2 — Concept B: Brutalist Terminal</h1>
+  <div class="system-time" id="sysTime">SUN 22-FEB-2026 21:38:00 PST</div>
+</div>
+
+<div class="ascii-art">╔══════════════════════════════════════════════════════════════════════════╗
+║  ██████╗  ██████╗  ██████╗ ██╗   ██╗███████╗     ██████╗ ██████╗ ██╗  ║
+║  ██╔══██╗██╔═══██╗██╔════╝ ██║   ██║██╔════╝    ██╔═══██╗██╔══██╗██║  ║
+║  ██████╔╝██║   ██║██║  ███╗██║   ██║█████╗      ██║   ██║██████╔╝██║  ║
+║  ██╔══██╗██║   ██║██║   ██║██║   ██║██╔══╝      ██║   ██║██╔══██╗██║  ║
+║  ██║  ██║╚██████╔╝╚██████╔╝╚██████╔╝███████╗    ╚██████╔╝██║  ██║██║  ║
+║  ╚═╝  ╚═╝ ╚═════╝  ╚═════╝  ╚═════╝ ╚══════╝     ╚═════╝ ╚═╝  ╚═╝╚═╝  ║
+║                     MISSION CONTROL v2.0                                ║
+╚══════════════════════════════════════════════════════════════════════════╝</div>
+
+<div class="ascii-divider">────────────────────────────────────────────────────────────────────────────────────</div>
+
+<!-- KPI SECTION -->
+<div class="kpi-section">
+  <div class="kpi-grid">
+    <div class="kpi-cell">
+      <div class="kpi-label">Processed</div>
+      <div class="kpi-number">847</div>
+      <div class="kpi-unit">LBS</div>
+    </div>
+    <div class="kpi-cell">
+      <div class="kpi-label">Orders</div>
+      <div class="kpi-number">12</div>
+      <div class="kpi-unit">ACTIVE</div>
+    </div>
+    <div class="kpi-cell">
+      <div class="kpi-label">Revenue</div>
+      <div class="kpi-number amber">47.2</div>
+      <div class="kpi-unit">K USD</div>
+    </div>
+    <div class="kpi-cell">
+      <div class="kpi-label">Uptime</div>
+      <div class="kpi-number">98.7</div>
+      <div class="kpi-unit">PERCENT</div>
+    </div>
+  </div>
+</div>
+
+<div class="ascii-divider">═══════════════════════════════════════════════════════════════════════════════════</div>
+
+<!-- PROCESS TABLE -->
+<div class="proc-section">
+  <div class="proc-header">▌ Agent Fleet — Process Table</div>
+  <table class="proc-table">
+    <thead>
+      <tr>
+        <th>PID</th>
+        <th>Agent</th>
+        <th>Role</th>
+        <th>Status</th>
+        <th class="hide-mobile">CPU</th>
+        <th class="hide-mobile">MEM</th>
+        <th>Last</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>0001</td>
+        <td>atlas</td>
+        <td>orchestrator</td>
+        <td><span class="status-online">ONLINE</span></td>
+        <td class="hide-mobile">12%</td>
+        <td class="hide-mobile">340M</td>
+        <td>21:38</td>
+      </tr>
+      <tr>
+        <td>0002</td>
+        <td>hex</td>
+        <td>coding</td>
+        <td><span class="status-online">ONLINE</span></td>
+        <td class="hide-mobile">67%</td>
+        <td class="hide-mobile">1.2G</td>
+        <td>21:38</td>
+      </tr>
+      <tr>
+        <td>0003</td>
+        <td>kiln</td>
+        <td>production</td>
+        <td><span class="status-online">ONLINE</span></td>
+        <td class="hide-mobile">23%</td>
+        <td class="hide-mobile">512M</td>
+        <td>21:35</td>
+      </tr>
+      <tr>
+        <td>0004</td>
+        <td>razor</td>
+        <td>trading</td>
+        <td><span class="status-idle">IDLE</span></td>
+        <td class="hide-mobile">3%</td>
+        <td class="hide-mobile">256M</td>
+        <td>21:30</td>
+      </tr>
+      <tr>
+        <td>0005</td>
+        <td>meridian</td>
+        <td>logistics</td>
+        <td><span class="status-away">AWAY</span></td>
+        <td class="hide-mobile">1%</td>
+        <td class="hide-mobile">128M</td>
+        <td>20:45</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="ascii-divider">────────────────────────────────────────────────────────────────────────────────────</div>
+
+<!-- IRC COMMS -->
+<div class="irc-section">
+  <div class="irc-header">▌ Comms Feed — #mission-control</div>
+  <div class="irc-log">
+    <div class="irc-msg"><span class="irc-time">[21:14]</span> <span class="irc-nick atlas">&lt;Atlas&gt;</span> Priority build: MC v2 concepts needed tonight</div>
+    <div class="irc-msg"><span class="irc-time">[21:14]</span> <span class="irc-nick hex">&lt;Hex&gt;</span> On it. Spinning up 3 subagents</div>
+    <div class="irc-msg"><span class="irc-time">[21:15]</span> <span class="irc-nick kiln">&lt;Kiln&gt;</span> Production batch 847 complete, ready for QA</div>
+    <div class="irc-msg"><span class="irc-time">[21:15]</span> <span class="irc-nick razor">&lt;Razor&gt;</span> Markets closed, running overnight analysis</div>
+    <div class="irc-msg"><span class="irc-time">[21:16]</span> <span class="irc-time">--- System: 5 agents connected, 0 errors, uptime 14d 7h 23m ---</span></div>
+  </div>
+</div>
+
+<!-- SYSTEM LOG -->
+<div class="sys-log">
+  <div>[21:38:01] BOOT: Mission Control v2.0 initialized</div>
+  <div>[21:38:01] LOAD: 5 agent processes registered</div>
+  <div>[21:38:02] NET:  All mesh connections established</div>
+  <div class="warn">[21:38:02] WARN: Razor entering idle mode — markets closed</div>
+  <div class="warn">[21:38:03] WARN: Meridian last heartbeat 53m ago</div>
+  <div>[21:38:03] QA:   Audit cycle clean ✓</div>
+  <div>[21:38:04] CRON: Next sentinel check in 1h 22m</div>
+  <div>[21:38:04] SYS:  Memory: 2.4G/8G — CPU: 21% — Disk: 47%</div>
+</div>
+
+<div class="ascii-divider" style="margin-bottom: 60px;">════════════════════════════════════════════════════════════════════════════════════</div>
+
+</div><!-- crt-wrap -->
+
+<div class="terminal-input">
+  <span class="prompt-char">&gt;_</span>
+  <input type="text" placeholder="enter command..." spellcheck="false" autocomplete="off" />
+</div>
+
+<script>
+// Live clock
+function updateClock() {
+  const now = new Date();
+  const days = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+  const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  const d = days[now.getDay()];
+  const m = months[now.getMonth()];
+  const day = String(now.getDate()).padStart(2, '0');
+  const y = now.getFullYear();
+  const h = String(now.getHours()).padStart(2, '0');
+  const min = String(now.getMinutes()).padStart(2, '0');
+  const s = String(now.getSeconds()).padStart(2, '0');
+  document.getElementById('sysTime').textContent = `${d} ${day}-${m}-${y} ${h}:${min}:${s} PST`;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// Cursor flash effect on type
+const input = document.querySelector('.terminal-input input');
+input.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    const val = input.value.trim();
+    if (val) {
+      // Add to IRC log
+      const log = document.querySelector('.irc-log');
+      const now = new Date();
+      const time = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+      const msg = document.createElement('div');
+      msg.className = 'irc-msg';
+      msg.innerHTML = `<span class="irc-time">[${time}]</span> <span class="irc-nick" style="color:var(--white)">&lt;you&gt;</span> ${val.replace(/</g,'&lt;').replace(/>/g,'&gt;')}`;
+      log.appendChild(msg);
+      log.scrollTop = log.scrollHeight;
+      input.value = '';
+    }
+  }
+});
+
+// Random system log entries
+const sysMessages = [
+  'HEARTBEAT: All agents responding',
+  'NET: Mesh latency 12ms avg',
+  'QA: No deploy violations detected',
+  'CRON: Routine check passed',
+  'SYS: GC cycle completed — freed 47MB',
+];
+
+setInterval(() => {
+  const log = document.querySelector('.sys-log');
+  const now = new Date();
+  const time = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+  const msg = sysMessages[Math.floor(Math.random() * sysMessages.length)];
+  const div = document.createElement('div');
+  div.textContent = `[${time}] ${msg}`;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+  // Keep log trimmed
+  while (log.children.length > 20) log.removeChild(log.firstChild);
+}, 8000);
+</script>
+</body>
+</html>
