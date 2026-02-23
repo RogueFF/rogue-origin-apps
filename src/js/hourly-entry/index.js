@@ -176,6 +176,9 @@ const LABELS = {
     adding: 'Adding',
     subtracting: 'Subtracting',
     setting: 'Setting to',
+    quickAdd: 'Quick Add',
+    quickAddNote10lb: '+10 lbs quick add',
+    quickAddNote5kg: '+5 kg quick add',
     recentChanges: 'Recent Changes',
     noChangesYet: 'No changes yet',
     updating: 'Updating...',
@@ -269,6 +272,9 @@ const LABELS = {
     adding: 'Agregando',
     subtracting: 'Restando',
     setting: 'Estableciendo a',
+    quickAdd: 'Agregar Rápido',
+    quickAddNote10lb: '+10 lbs agregar rápido',
+    quickAddNote5kg: '+5 kg agregar rápido',
     recentChanges: 'Cambios Recientes',
     noChangesYet: 'Sin cambios aún',
     updating: 'Actualizando...',
@@ -2452,6 +2458,7 @@ async function initScannerTab() {
   initPoolAmountInput();
   initRefreshPoolButton();
   initPoolUpdateButton();
+  initQuickAddButtons();
   initRecentChanges();
 }
 
@@ -3150,6 +3157,129 @@ function displayUpdateResult(result) {
   setTimeout(() => {
     resultEl.style.display = 'none';
   }, 5000);
+}
+
+/**
+ * Initialize quick-add buttons (+10 lbs, +5 kg)
+ */
+function initQuickAddButtons() {
+  const buttons = document.querySelectorAll('.btn-quick-add');
+  buttons.forEach(btn => {
+    registerListener(btn, 'click', async () => {
+      if (btn.disabled) return;
+
+      // Validate strain is selected
+      const productId = document.getElementById('scanner-strain')?.value;
+      if (!productId) {
+        const dropdown = document.getElementById('scanner-strain-dropdown');
+        const trigger = dropdown?.querySelector('.custom-select-trigger');
+        if (trigger) {
+          trigger.focus();
+          trigger.classList.add('shake');
+          setTimeout(() => trigger.classList.remove('shake'), 500);
+        }
+        return;
+      }
+
+      // Determine amount in grams
+      let amountGrams;
+      let noteKey;
+      if (btn.dataset.amountLbs) {
+        amountGrams = parseFloat(btn.dataset.amountLbs) * 453.592;
+        noteKey = 'quickAddNote10lb';
+      } else {
+        amountGrams = parseFloat(btn.dataset.amountGrams);
+        noteKey = 'quickAddNote5kg';
+      }
+
+      const note = LABELS[currentLang][noteKey] || '+quick add';
+
+      // Get current pool values for optimistic update
+      const poolValueGramsEl = document.getElementById('current-pool-value-grams');
+      const poolValueLbsEl = document.getElementById('current-pool-value-lbs');
+      const currentValue = parseFloat(poolValueGramsEl.textContent.replace(/,/g, '')) || 0;
+      const optimisticNewValue = currentValue + amountGrams;
+
+      // Optimistic UI update
+      poolValueGramsEl.textContent = optimisticNewValue.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+      poolValueLbsEl.textContent = (optimisticNewValue / 453.592).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+      const product = poolProducts.find(p => p.id === productId);
+      if (product) product.poolValue = optimisticNewValue;
+
+      // Show optimistic result
+      displayUpdateResult({
+        previousValue: currentValue,
+        changeAmount: amountGrams,
+        newValue: optimisticNewValue,
+        operation: 'add'
+      });
+
+      // Disable button, show feedback
+      btn.disabled = true;
+      const originalHTML = btn.innerHTML;
+      btn.innerHTML = `<span class="quick-add-weight">${LABELS[currentLang].updating || 'Updating...'}</span>`;
+
+      try {
+        const response = await fetch(`${POOL_API_URL}?action=update_pool`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productId,
+            operation: 'add',
+            amount: amountGrams,
+            note,
+            poolType: currentPoolType
+          })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          const actualNewValue = result.newValue || result.data?.newValue || optimisticNewValue;
+          poolValueGramsEl.textContent = actualNewValue.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+          poolValueLbsEl.textContent = (actualNewValue / 453.592).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+          if (product) product.poolValue = actualNewValue;
+
+          if (poolCache[currentPoolType].data) {
+            poolCache[currentPoolType].timestamp = Date.now();
+          }
+
+          displayUpdateResult({
+            previousValue: result.previousValue || result.data?.previousValue || currentValue,
+            changeAmount: result.changeAmount || result.data?.changeAmount || amountGrams,
+            newValue: actualNewValue,
+            operation: 'add'
+          });
+
+          loadRecentChanges();
+
+          // Success flash
+          btn.innerHTML = `<span class="quick-add-weight">✓</span>`;
+          setTimeout(() => {
+            btn.innerHTML = originalHTML;
+            btn.disabled = false;
+          }, 1500);
+        } else {
+          throw new Error(result.error || 'Failed to update pool');
+        }
+      } catch (error) {
+        console.error('Quick add error:', error);
+
+        // Revert optimistic update
+        poolValueGramsEl.textContent = currentValue.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+        poolValueLbsEl.textContent = (currentValue / 453.592).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        if (product) product.poolValue = currentValue;
+
+        btn.innerHTML = `<span class="quick-add-weight">✗ Error</span>`;
+        setTimeout(() => {
+          btn.innerHTML = originalHTML;
+          btn.disabled = false;
+        }, 2000);
+      }
+    });
+  });
 }
 
 /**
