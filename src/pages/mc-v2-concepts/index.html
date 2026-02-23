@@ -4,116 +4,173 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MC v2 — Design Concepts</title>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://api.fontshare.com/v2/css?f[]=fraunces@0,400;1,400;0,700;1,700&f[]=general-sans@400,500,600&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
+:root {
+  --olive: #282c20;
+  --cream: #f4f4ed;
+  --sage: #b4b8a5;
+  --accent: #c8e600;
+}
+
 body {
   min-height: 100vh;
-  background: #050508;
-  color: rgba(255,255,255,0.85);
-  font-family: 'Inter', sans-serif;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 20px;
+  background: var(--olive);
+  color: var(--cream);
+  font-family: 'General Sans', -apple-system, sans-serif;
+  padding: 48px 24px;
+}
+
+.head {
+  max-width: 600px;
+  margin-bottom: 48px;
 }
 
 h1 {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Fraunces', Georgia, serif;
   font-weight: 300;
-  font-size: 12px;
-  letter-spacing: 6px;
+  font-style: italic;
+  font-size: 11px;
+  letter-spacing: 3px;
   text-transform: uppercase;
-  color: rgba(255,255,255,0.3);
+  color: var(--sage);
   margin-bottom: 8px;
 }
 
 h2 {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Fraunces', Georgia, serif;
   font-weight: 700;
-  font-size: 32px;
-  margin-bottom: 40px;
-  background: linear-gradient(135deg, #00f0ff, #aa77ff, #ff00aa);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-size: clamp(36px, 8vw, 56px);
+  letter-spacing: -2px;
+  line-height: 0.95;
+}
+
+h2 em { font-weight: 400; color: var(--sage); }
+
+.subtitle {
+  font-size: 13px;
+  color: var(--sage);
+  margin-top: 12px;
+  line-height: 1.6;
 }
 
 .concepts {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  width: 100%;
-  max-width: 400px;
+  gap: 0;
+  max-width: 600px;
 }
+
+.divider { height: 1px; background: rgba(244,244,237,0.1); }
 
 a {
   display: block;
-  padding: 24px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 16px;
+  padding: 28px 0;
   text-decoration: none;
   color: inherit;
-  transition: all 0.3s ease;
-  backdrop-filter: blur(10px);
+  transition: all 0.3s;
 }
 
-a:hover {
-  background: rgba(255,255,255,0.06);
-  border-color: rgba(255,255,255,0.12);
-  transform: translateY(-2px);
-}
+a:hover { padding-left: 12px; }
+a:hover .concept-name { color: var(--accent); }
 
 .concept-letter {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Fraunces', serif;
+  font-style: italic;
   font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 3px;
+  letter-spacing: 2px;
   text-transform: uppercase;
-  color: rgba(255,255,255,0.3);
+  color: var(--sage);
   margin-bottom: 4px;
 }
 
 .concept-name {
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 22px;
+  font-family: 'Fraunces', serif;
+  font-size: clamp(22px, 5vw, 32px);
   font-weight: 700;
-  margin-bottom: 6px;
+  letter-spacing: -0.5px;
+  transition: color 0.3s;
 }
 
 .concept-desc {
   font-size: 12px;
-  color: rgba(255,255,255,0.4);
-  line-height: 1.5;
+  color: var(--sage);
+  line-height: 1.6;
+  margin-top: 6px;
+  max-width: 420px;
 }
 
-.c-a .concept-name { color: #00f0ff; }
-.c-b .concept-name { color: #00ff41; }
-.c-c .concept-name { color: #b4a0ff; }
+.badge-new {
+  display: inline-block;
+  background: var(--accent);
+  color: var(--olive);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.section-label {
+  font-family: 'Fraunces', serif;
+  font-style: italic;
+  font-size: 10px;
+  color: var(--sage);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 40px 0 8px;
+}
 </style>
 </head>
 <body>
-  <h1>Rogue Origin</h1>
-  <h2>MC v2 Concepts</h2>
+  <div class="head">
+    <h1>Rogue Origin</h1>
+    <h2>Mission Control <em>v2</em></h2>
+    <div class="subtitle">Five design concepts. Same data, radically different aesthetics. Tap to preview — best on mobile.</div>
+  </div>
+
+  <div class="section-label">Round 2 — Editorial Direction</div>
   <div class="concepts">
-    <a href="topology.html" class="c-a">
+    <div class="divider"></div>
+    <a href="editorial.html">
+      <div class="concept-letter">Concept D</div>
+      <div class="concept-name">Editorial <span class="badge-new">New</span></div>
+      <div class="concept-desc">The dashboard as a newspaper front page. 847 LBS in massive serif takes up half the viewport. Agent fleet as columnar text. News chyron comms ticker. Warm olive and cream.</div>
+    </a>
+    <div class="divider"></div>
+    <a href="terrain.html">
+      <div class="concept-letter">Concept E</div>
+      <div class="concept-name">Terrain <span class="badge-new">New</span></div>
+      <div class="concept-desc">Topographic map aesthetic. Agents as waypoints with coordinates. Vertical altitude KPI scale. Comms as route markers. Faint contour lines on olive-dark. Fraunces + JetBrains Mono.</div>
+    </a>
+    <div class="divider"></div>
+  </div>
+
+  <div class="section-label">Round 1 — Initial Exploration</div>
+  <div class="concepts">
+    <div class="divider"></div>
+    <a href="topology.html">
       <div class="concept-letter">Concept A</div>
       <div class="concept-name">Topology</div>
-      <div class="concept-desc">Living network graph. Agents as nodes in space, connected by pulsing data lines. Click to expand. The UI is the data.</div>
+      <div class="concept-desc">Network graph. Agents as floating nodes connected by pulsing data lines. Click to expand. Bioluminescent neons on dark void.</div>
     </a>
-    <a href="brutalist.html" class="c-b">
+    <div class="divider"></div>
+    <a href="brutalist.html">
       <div class="concept-letter">Concept B</div>
       <div class="concept-name">Brutalist Terminal</div>
-      <div class="concept-desc">1983 mainframe meets punk zine. Dense monospaced data, ASCII borders, scanlines. Giant serif KPI numbers breaking the grid.</div>
+      <div class="concept-desc">1983 mainframe meets punk zine. Dense monospaced data, ASCII borders, scanlines. Giant serif KPIs breaking the grid.</div>
     </a>
-    <a href="liquid-glass.html" class="c-c">
+    <div class="divider"></div>
+    <a href="liquid-glass.html">
       <div class="concept-letter">Concept C</div>
       <div class="concept-name">Liquid Glass</div>
-      <div class="concept-desc">Ethereal frosted panels floating over a shifting aurora. Muted pastels, micro-animations, depth and layering. Everything breathes.</div>
+      <div class="concept-desc">Frosted glass panels over shifting aurora gradient. Muted pastels, micro-animations, depth and layering.</div>
     </a>
+    <div class="divider"></div>
   </div>
 </body>
 </html>
