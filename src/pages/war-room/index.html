@@ -713,14 +713,35 @@ function renderFeed() {
     `;
   }).join('');
 
-  // Only replace if changed
-  const existing = $feed.querySelectorAll('.thread-group');
-  const container = document.createElement('div');
-  container.innerHTML = html;
+  // Only replace if content actually changed (prevents flash)
+  const existingGroups = $feed.querySelectorAll('.thread-group');
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html;
+  const newGroups = tempDiv.querySelectorAll('.thread-group');
 
-  // Clear existing thread groups and insert new ones
-  $feed.querySelectorAll('.thread-group').forEach(el => el.remove());
-  container.querySelectorAll('.thread-group').forEach(el => $feed.appendChild(el));
+  // Compare each thread group individually, only update what changed
+  const existingMap = {};
+  existingGroups.forEach(el => { existingMap[el.dataset.thread] = el; });
+
+  const newIds = new Set();
+  newGroups.forEach(newEl => {
+    const id = newEl.dataset.thread;
+    newIds.add(id);
+    const oldEl = existingMap[id];
+    if (oldEl) {
+      // Only replace if innerHTML differs
+      if (oldEl.innerHTML !== newEl.innerHTML) {
+        oldEl.innerHTML = newEl.innerHTML;
+      }
+    } else {
+      $feed.appendChild(newEl);
+    }
+  });
+
+  // Remove threads no longer present
+  existingGroups.forEach(el => {
+    if (!newIds.has(el.dataset.thread)) el.remove();
+  });
 
   if (shouldScroll) {
     $feed.scrollTop = $feed.scrollHeight;
