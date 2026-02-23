@@ -597,26 +597,31 @@ async function fetchThreads() {
     const res = await fetch(`${API_BASE}/api/war-room/threads`);
     if (!res.ok) throw new Error('fetch failed');
     const data = await res.json();
-    threads = data.threads || [];
+    const newThreads = data.threads || [];
     setConnected(true);
+
+    // Preserve _messages from previous threads
+    const oldThreadMap = {};
+    threads.forEach(t => { oldThreadMap[t.id] = t._messages || []; });
+
+    threads = newThreads;
 
     // Fetch messages for each thread
     for (const thread of threads) {
+      // Carry forward existing messages
+      thread._messages = oldThreadMap[thread.id] || [];
+
       const after = lastMessages[thread.id] || null;
       const msgRes = await fetch(`${API_BASE}/api/war-room/threads/${thread.id}/messages${after ? `?after=${encodeURIComponent(after)}` : ''}`);
       if (msgRes.ok) {
         const msgData = await msgRes.json();
         if (msgData.messages.length > 0) {
-          // Store full messages on thread object
-          if (!thread._messages) thread._messages = [];
           if (after) {
             thread._messages.push(...msgData.messages);
           } else {
             thread._messages = msgData.messages;
           }
           lastMessages[thread.id] = msgData.messages[msgData.messages.length - 1].id;
-        } else if (!thread._messages) {
-          thread._messages = [];
         }
       }
     }
