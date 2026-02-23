@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0c0f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>⚔️ War Room — Rogue Origin</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    /* ─── DESIGN TOKENS ─── */
+    :root {
+      --bg: #0a0c0f;
+      --surface: #12151a;
+      --elevated: #181c23;
+      --panel: #1e222b;
+      --border: rgba(255,255,255,0.06);
+      --border-strong: rgba(255,255,255,0.1);
+      --border-glow: rgba(255,255,255,0.15);
+
+      --text: rgba(255,255,255,0.92);
+      --text-secondary: rgba(255,255,255,0.55);
+      --text-muted: rgba(255,255,255,0.3);
+
+      /* Agent colors — spec defined */
+      --agent-atlas: #22c55e;
+      --agent-kiln: #f59e0b;
+      --agent-razor: #8b5cf6;
+      --agent-meridian: #3b82f6;
+      --agent-hex: #ef4444;
+      --agent-koa: #d4a574;
+      --agent-system: rgba(255,255,255,0.3);
+
+      --success: #22c55e;
+      --warning: #f59e0b;
+
+      --font-display: 'Syne', sans-serif;
+      --font-mono: 'Geist Mono', monospace;
+      --font-body: 'Instrument Sans', sans-serif;
+
+      --r-sm: 4px;
+      --r-md: 8px;
+      --r-lg: 12px;
+      --r-xl: 16px;
+
+      --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      font-family: var(--font-body);
+      font-size: 14px;
+      color: var(--text);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ─── LAYOUT ─── */
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 16px;
+    }
+
+    /* ─── HEADER ─── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 0 16px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header h1 {
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .header h1 span { opacity: 0.5; }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: rgba(34,197,94,0.1);
+      border: 1px solid rgba(34,197,94,0.2);
+      border-radius: 20px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--success);
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--success);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .thread-filter {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      padding: 6px 12px;
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .thread-filter:hover { border-color: var(--border-strong); }
+    .thread-filter:focus { border-color: var(--border-glow); }
+
+    /* ─── FEED ─── */
+    .feed {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 0;
+      scroll-behavior: smooth;
+    }
+
+    .feed::-webkit-scrollbar { width: 4px; }
+    .feed::-webkit-scrollbar-track { background: transparent; }
+    .feed::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
+
+    /* ─── THREAD GROUP ─── */
+    .thread-group {
+      margin-bottom: 24px;
+    }
+
+    .thread-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      margin-bottom: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .thread-header:hover { background: var(--elevated); }
+
+    .thread-icon {
+      font-size: 14px;
+      opacity: 0.6;
+    }
+
+    .thread-title {
+      flex: 1;
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    .thread-agents {
+      display: flex;
+      gap: 4px;
+    }
+
+    .agent-pip {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      opacity: 0.8;
+    }
+
+    .thread-status {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .thread-status.active {
+      background: rgba(34,197,94,0.1);
+      color: var(--success);
+    }
+    .thread-status.completed {
+      background: rgba(255,255,255,0.05);
+      color: var(--text-muted);
+    }
+
+    .thread-messages {
+      padding-left: 12px;
+      border-left: 2px solid var(--border);
+      margin-left: 18px;
+    }
+
+    /* ─── MESSAGE ─── */
+    .message {
+      padding: 10px 14px;
+      margin-bottom: 4px;
+      border-radius: var(--r-md);
+      animation: fadeIn 0.3s var(--ease-out);
+      transition: background 0.15s;
+    }
+    .message:hover { background: rgba(255,255,255,0.02); }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .message-top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .message-agent {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .message-arrow {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .message-to {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .message-time {
+      margin-left: auto;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .message-body {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* Koa messages — gold left border */
+    .message.from-koa {
+      border-left: 2px solid var(--agent-koa);
+      padding-left: 12px;
+    }
+
+    /* System messages */
+    .message.type-system {
+      opacity: 0.5;
+      font-style: italic;
+    }
+
+    /* Completion messages — green banner */
+    .message.type-completion {
+      background: rgba(34,197,94,0.06);
+      border: 1px solid rgba(34,197,94,0.15);
+      border-radius: var(--r-md);
+    }
+    .message.type-completion .message-body {
+      color: var(--success);
+      font-weight: 500;
+    }
+
+    /* ─── EMPTY STATE ─── */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: 12px;
+      color: var(--text-muted);
+    }
+    .empty-state .icon { font-size: 48px; opacity: 0.3; }
+    .empty-state p { font-family: var(--font-mono); font-size: 13px; }
+
+    /* ─── COMPOSER ─── */
+    .composer {
+      flex-shrink: 0;
+      padding: 16px 0 20px;
+      border-top: 1px solid var(--border);
+    }
+
+    .composer-row {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+    }
+
+    .agent-select-group {
+      display: flex;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .agent-toggle {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--r-md);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-muted);
+      font-size: 11px;
+      font-family: var(--font-mono);
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .agent-toggle:hover { border-color: var(--border-strong); }
+    .agent-toggle.selected {
+      background: var(--agent-color);
+      color: #000;
+      border-color: transparent;
+      opacity: 0.9;
+    }
+    .agent-toggle.selected:hover { opacity: 1; }
+
+    .task-input {
+      flex: 1;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      padding: 8px 12px;
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      outline: none;
+      resize: none;
+      min-height: 36px;
+      max-height: 120px;
+      transition: border-color 0.2s;
+    }
+    .task-input:focus { border-color: var(--border-glow); }
+    .task-input::placeholder { color: var(--text-muted); }
+
+    .launch-btn {
+      flex-shrink: 0;
+      height: 36px;
+      padding: 0 20px;
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 600;
+      background: rgba(255,255,255,0.08);
+      color: var(--text);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--r-md);
+      cursor: pointer;
+      transition: all 0.15s;
+      letter-spacing: 0.02em;
+    }
+    .launch-btn:hover {
+      background: rgba(255,255,255,0.12);
+      border-color: var(--border-glow);
+    }
+    .launch-btn:active { transform: scale(0.97); }
+    .launch-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    /* ─── CONNECTION BAR ─── */
+    .connection-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: 6px;
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      background: rgba(239,68,68,0.15);
+      color: #ef4444;
+      z-index: 100;
+      display: none;
+    }
+    .connection-bar.visible { display: block; }
+
+    /* ─── RESPONSIVE ─── */
+    @media (max-width: 640px) {
+      .app { padding: 0 12px; }
+      .header h1 { font-size: 18px; }
+      .agent-select-group { flex-wrap: wrap; }
+      .composer-row { flex-wrap: wrap; }
+      .task-input { min-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="connection-bar" id="connectionBar">Connection lost — retrying...</div>
+
+<div class="app">
+  <!-- Header -->
+  <header class="header">
+    <div class="header-left">
+      <h1>⚔️ War Room</h1>
+      <div class="status-badge">
+        <div class="status-dot"></div>
+        <span id="statusText">LIVE</span>
+      </div>
+    </div>
+    <select class="thread-filter" id="threadFilter">
+      <option value="all">All Threads</option>
+      <option value="active">Active</option>
+      <option value="completed">Completed</option>
+    </select>
+  </header>
+
+  <!-- Feed -->
+  <div class="feed" id="feed">
+    <div class="empty-state" id="emptyState">
+      <div class="icon">⚔️</div>
+      <p>No active threads</p>
+      <p style="font-size:11px;">Launch a collab below to get started</p>
+    </div>
+  </div>
+
+  <!-- Composer -->
+  <div class="composer">
+    <div class="composer-row">
+      <div class="agent-select-group">
+        <button class="agent-toggle" data-agent="atlas" style="--agent-color:var(--agent-atlas)" title="Atlas">AT</button>
+        <button class="agent-toggle" data-agent="hex" style="--agent-color:var(--agent-hex)" title="Hex">HX</button>
+        <button class="agent-toggle" data-agent="kiln" style="--agent-color:var(--agent-kiln)" title="Kiln">KN</button>
+        <button class="agent-toggle" data-agent="razor" style="--agent-color:var(--agent-razor)" title="Razor">RZ</button>
+        <button class="agent-toggle" data-agent="meridian" style="--agent-color:var(--agent-meridian)" title="Meridian">MR</button>
+      </div>
+      <textarea class="task-input" id="taskInput" placeholder="Describe the task..." rows="1"></textarea>
+      <button class="launch-btn" id="launchBtn" disabled>Launch</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── CONFIG ───
+const API_BASE = getApiBase();
+const POLL_INTERVAL = 2500;
+const AGENTS = {
+  atlas:    { name: 'Atlas',    color: '#22c55e', short: 'AT' },
+  hex:      { name: 'Hex',      color: '#ef4444', short: 'HX' },
+  kiln:     { name: 'Kiln',     color: '#f59e0b', short: 'KN' },
+  razor:    { name: 'Razor',    color: '#8b5cf6', short: 'RZ' },
+  meridian: { name: 'Meridian', color: '#3b82f6', short: 'MR' },
+  koa:      { name: 'Koa',      color: '#d4a574', short: 'KO' },
+  system:   { name: 'System',   color: 'rgba(255,255,255,0.3)', short: 'SY' }
+};
+
+function getApiBase() {
+  // Auto-detect: if running locally, use local dev worker
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+    return 'http://localhost:8790';
+  }
+  return 'https://war-room-api.roguefamilyfarms.workers.dev';
+}
+
+// ─── STATE ───
+let threads = [];
+let selectedAgents = new Set();
+let lastMessages = {};  // threadId → last message id for polling
+let pollTimer = null;
+let isConnected = true;
+
+// ─── DOM ───
+const $feed = document.getElementById('feed');
+const $empty = document.getElementById('emptyState');
+const $input = document.getElementById('taskInput');
+const $launch = document.getElementById('launchBtn');
+const $filter = document.getElementById('threadFilter');
+const $connBar = document.getElementById('connectionBar');
+
+// ─── AGENT TOGGLES ───
+document.querySelectorAll('.agent-toggle').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const agent = btn.dataset.agent;
+    if (selectedAgents.has(agent)) {
+      selectedAgents.delete(agent);
+      btn.classList.remove('selected');
+    } else {
+      selectedAgents.add(agent);
+      btn.classList.add('selected');
+    }
+    updateLaunchBtn();
+  });
+});
+
+// ─── INPUT ───
+$input.addEventListener('input', () => {
+  $input.style.height = 'auto';
+  $input.style.height = Math.min($input.scrollHeight, 120) + 'px';
+  updateLaunchBtn();
+});
+
+$input.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    if (!$launch.disabled) launchCollab();
+  }
+});
+
+function updateLaunchBtn() {
+  $launch.disabled = selectedAgents.size === 0 || $input.value.trim() === '';
+}
+
+// ─── LAUNCH ───
+$launch.addEventListener('click', launchCollab);
+
+async function launchCollab() {
+  const task = $input.value.trim();
+  const agents = [...selectedAgents];
+  if (!task || agents.length === 0) return;
+
+  $launch.disabled = true;
+  $launch.textContent = '...';
+
+  try {
+    const res = await fetch(`${API_BASE}/api/war-room/threads`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: task.slice(0, 100),
+        agents,
+        createdBy: 'koa'
+      })
+    });
+
+    if (!res.ok) throw new Error('Failed to create thread');
+    const data = await res.json();
+
+    // Log the task as a message from Koa
+    await fetch(`${API_BASE}/api/war-room/log`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: 'koa',
+        threadId: data.thread.id,
+        message: `${agents.map(a => AGENTS[a]?.name || a).join(' + ')}: ${task}`
+      })
+    });
+
+    // Clear input
+    $input.value = '';
+    $input.style.height = 'auto';
+    selectedAgents.clear();
+    document.querySelectorAll('.agent-toggle').forEach(b => b.classList.remove('selected'));
+    updateLaunchBtn();
+
+    // Immediate refresh
+    await fetchThreads();
+  } catch (err) {
+    console.error('Launch failed:', err);
+  } finally {
+    $launch.textContent = 'Launch';
+    updateLaunchBtn();
+  }
+}
+
+// ─── POLLING ───
+async function fetchThreads() {
+  try {
+    const res = await fetch(`${API_BASE}/api/war-room/threads`);
+    if (!res.ok) throw new Error('fetch failed');
+    const data = await res.json();
+    threads = data.threads || [];
+    setConnected(true);
+
+    // Fetch messages for each thread
+    for (const thread of threads) {
+      const after = lastMessages[thread.id] || null;
+      const msgRes = await fetch(`${API_BASE}/api/war-room/threads/${thread.id}/messages${after ? `?after=${encodeURIComponent(after)}` : ''}`);
+      if (msgRes.ok) {
+        const msgData = await msgRes.json();
+        if (msgData.messages.length > 0) {
+          // Store full messages on thread object
+          if (!thread._messages) thread._messages = [];
+          if (after) {
+            thread._messages.push(...msgData.messages);
+          } else {
+            thread._messages = msgData.messages;
+          }
+          lastMessages[thread.id] = msgData.messages[msgData.messages.length - 1].id;
+        } else if (!thread._messages) {
+          thread._messages = [];
+        }
+      }
+    }
+
+    renderFeed();
+  } catch (err) {
+    console.error('Poll error:', err);
+    setConnected(false);
+  }
+}
+
+function setConnected(connected) {
+  isConnected = connected;
+  $connBar.classList.toggle('visible', !connected);
+  document.getElementById('statusText').textContent = connected ? 'LIVE' : 'OFFLINE';
+}
+
+function startPolling() {
+  fetchThreads();
+  pollTimer = setInterval(fetchThreads, POLL_INTERVAL);
+}
+
+// ─── RENDER ───
+function renderFeed() {
+  const filter = $filter.value;
+  const filtered = threads.filter(t => {
+    if (filter === 'active') return t.status === 'active';
+    if (filter === 'completed') return t.status === 'completed';
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    $empty.style.display = 'flex';
+    // Remove thread groups but keep empty state
+    $feed.querySelectorAll('.thread-group').forEach(el => el.remove());
+    return;
+  }
+
+  $empty.style.display = 'none';
+
+  // Check if we should auto-scroll (user is near bottom)
+  const shouldScroll = $feed.scrollTop + $feed.clientHeight >= $feed.scrollHeight - 60;
+
+  // Build thread HTML
+  const html = filtered.map(thread => {
+    const messages = thread._messages || [];
+    const agentPips = (thread.agents || []).map(a => {
+      const agent = AGENTS[a] || { color: '#666' };
+      return `<div class="agent-pip" style="background:${agent.color}" title="${agent.name || a}"></div>`;
+    }).join('');
+
+    const statusClass = thread.status === 'completed' ? 'completed' : 'active';
+    const statusLabel = thread.status === 'completed' ? 'DONE' : 'ACTIVE';
+
+    const msgHtml = messages.map(msg => {
+      const agent = AGENTS[msg.from] || { name: msg.from, color: '#666' };
+      const time = formatTime(msg.timestamp);
+      const classes = ['message'];
+      if (msg.from === 'koa') classes.push('from-koa');
+      if (msg.type === 'system') classes.push('type-system');
+      if (msg.type === 'completion') classes.push('type-completion');
+
+      const toHtml = msg.to
+        ? `<span class="message-arrow">→</span><span class="message-to">${AGENTS[msg.to]?.name || msg.to}</span>`
+        : '';
+
+      return `
+        <div class="${classes.join(' ')}">
+          <div class="message-top">
+            <span class="message-agent" style="color:${agent.color}">${agent.name || msg.from}</span>
+            ${toHtml}
+            <span class="message-time">${time}</span>
+          </div>
+          <div class="message-body">${escapeHtml(msg.message)}</div>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="thread-group" data-thread="${thread.id}">
+        <div class="thread-header">
+          <span class="thread-icon">${statusClass === 'active' ? '🔴' : '✅'}</span>
+          <span class="thread-title">${escapeHtml(thread.title)}</span>
+          <div class="thread-agents">${agentPips}</div>
+          <span class="thread-status ${statusClass}">${statusLabel}</span>
+        </div>
+        <div class="thread-messages">${msgHtml}</div>
+      </div>
+    `;
+  }).join('');
+
+  // Only replace if changed
+  const existing = $feed.querySelectorAll('.thread-group');
+  const container = document.createElement('div');
+  container.innerHTML = html;
+
+  // Clear existing thread groups and insert new ones
+  $feed.querySelectorAll('.thread-group').forEach(el => el.remove());
+  container.querySelectorAll('.thread-group').forEach(el => $feed.appendChild(el));
+
+  if (shouldScroll) {
+    $feed.scrollTop = $feed.scrollHeight;
+  }
+}
+
+// ─── FILTER ───
+$filter.addEventListener('change', renderFeed);
+
+// ─── UTILS ───
+function formatTime(iso) {
+  const d = new Date(iso);
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ─── INIT ───
+startPolling();
+</script>
+</body>
+</html>
