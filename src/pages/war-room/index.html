@@ -344,6 +344,36 @@
     .msg.type-done .msg-body { color: var(--success); }
 
     /* ─── COMPOSER ─── */
+    /* ─── TYPING INDICATOR ─── */
+    .typing-indicator {
+      padding: 4px 20px 8px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+      min-height: 0;
+      overflow: hidden;
+      transition: all 0.2s;
+    }
+    .typing-indicator:empty { padding: 0; }
+
+    .typing-dot {
+      display: inline-block;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      margin-left: 2px;
+      animation: typingBounce 1.2s infinite;
+    }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes typingBounce {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+      30% { transform: translateY(-3px); opacity: 1; }
+    }
+
     .composer {
       padding: 12px 20px 16px;
       border-top: 1px solid var(--border);
@@ -626,6 +656,7 @@
       </div>
     </div>
 
+    <div class="typing-indicator" id="typingIndicator"></div>
     <div class="composer" id="composer" style="display:none">
       <div class="composer-inner">
         <textarea class="composer-input" id="msgInput" placeholder="Type a message as Koa..." rows="1"></textarea>
@@ -678,6 +709,7 @@ const $msgInput = document.getElementById('msgInput');
 const $sendBtn = document.getElementById('sendBtn');
 const $completeBtn = document.getElementById('completeBtn');
 const $connStatus = document.getElementById('connStatus');
+const $typingIndicator = document.getElementById('typingIndicator');
 const $modalOverlay = document.getElementById('modalOverlay');
 const $modalTitle = document.getElementById('modalTitle');
 const $modalCreate = document.getElementById('modalCreate');
@@ -837,7 +869,34 @@ function renderMessages(shouldScroll = false) {
 
 function startMessagePoll() {
   if (pollTimer) clearInterval(pollTimer);
-  pollTimer = setInterval(loadMessages, POLL_MS);
+  pollTimer = setInterval(() => {
+    loadMessages();
+    pollPresence();
+  }, POLL_MS);
+  pollPresence();
+}
+
+async function pollPresence() {
+  if (!currentThread) return;
+  try {
+    const data = await api(`/api/warroom/presence?thread_id=${currentThread.id}`);
+    const typing = (data.presence || []).filter(p => p.status === 'typing' && p.agent !== 'koa');
+    renderTyping(typing);
+  } catch (e) { /* silent */ }
+}
+
+function renderTyping(agents) {
+  if (!agents.length) {
+    $typingIndicator.innerHTML = '';
+    return;
+  }
+  const names = agents.map(a => {
+    const info = AGENTS[a.agent] || { name: a.agent, color: '#666' };
+    return `<span style="color:${info.color}">${info.name}</span>`;
+  });
+  const dots = '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
+  const verb = agents.length === 1 ? 'is' : 'are';
+  $typingIndicator.innerHTML = `${names.join(', ')} ${verb} typing ${dots}`;
 }
 
 // ─── SEND MESSAGE ───
