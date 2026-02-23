@@ -17,3 +17,5 @@ database_id = "3fe6424e-c2db-47d7-be7f-23339c29fa16"
 
 [vars]
 ALLOWED_ORIGINS = "https://rogueff.github.io,http://localhost:3000,http://localhost:5500,http://localhost:8080"
+# Set via: wrangler secret put WEBHOOK_URL
+# Set via: wrangler secret put WEBHOOK_SECRET
