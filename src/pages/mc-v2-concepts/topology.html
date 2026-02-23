@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>MC v2 — Concept A: Topology</title>
+<link href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@300;400;500;700&family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --void: #050508;
+  --grid: rgba(255,255,255,0.03);
+  --grid-bright: rgba(255,255,255,0.06);
+  --cyan: #00f0ff;
+  --magenta: #ff00aa;
+  --amber: #ffaa00;
+  --green: #00ff88;
+  --lavender: #aa77ff;
+  --text: rgba(255,255,255,0.85);
+  --text-dim: rgba(255,255,255,0.4);
+  --mono: 'Azeret Mono', monospace;
+  --display: 'Outfit', sans-serif;
+}
+
+html, body {
+  width: 100%; height: 100%;
+  background: var(--void);
+  color: var(--text);
+  font-family: var(--mono);
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Grid background */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 40px 40px;
+  z-index: 0;
+  animation: gridPulse 8s ease-in-out infinite;
+}
+
+@keyframes gridPulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.7; }
+}
+
+/* Title card */
+.title-card {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  font-family: var(--display);
+  font-weight: 300;
+  font-size: 11px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  background: rgba(5,5,8,0.8);
+  padding: 8px 20px;
+  border: 1px solid rgba(255,255,255,0.06);
+  white-space: nowrap;
+}
+
+.title-card span {
+  color: var(--cyan);
+  font-weight: 600;
+}
+
+/* Canvas */
+#network {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+}
+
+/* KPI Strip */
+.kpi-strip {
+  position: fixed;
+  bottom: 70px;
+  left: 0; right: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 8px;
+}
+
+.kpi-item {
+  background: rgba(5,5,8,0.85);
+  border: 1px solid rgba(255,255,255,0.06);
+  padding: 8px 12px;
+  text-align: center;
+  flex: 1;
+  max-width: 120px;
+}
+
+.kpi-value {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.kpi-label {
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+/* Chat bar */
+.chat-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0; right: 0;
+  z-index: 50;
+  padding: 10px 12px;
+  background: rgba(5,5,8,0.92);
+  border-top: 1px solid rgba(255,255,255,0.06);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.chat-bar input {
+  flex: 1;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 10px 14px;
+  outline: none;
+  transition: border-color 0.3s;
+}
+
+.chat-bar input:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 20px rgba(0,240,255,0.1);
+}
+
+.chat-bar input::placeholder { color: var(--text-dim); }
+
+.chat-bar button {
+  background: var(--cyan);
+  color: var(--void);
+  border: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 10px 16px;
+  cursor: pointer;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* Agent panel (expanded) */
+.agent-panel {
+  position: fixed;
+  z-index: 60;
+  background: rgba(5,5,8,0.94);
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: 20px;
+  width: 280px;
+  max-height: 70vh;
+  overflow-y: auto;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  pointer-events: none;
+  display: none;
+}
+
+.agent-panel.visible {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: all;
+  display: block;
+}
+
+.agent-panel .agent-name {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+
+.agent-panel .agent-role {
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 16px;
+}
+
+.agent-panel .agent-stat {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 11px;
+}
+
+.agent-panel .agent-stat .label { color: var(--text-dim); }
+
+.agent-panel .close-btn {
+  position: absolute;
+  top: 12px; right: 12px;
+  background: none;
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--text-dim);
+  width: 24px; height: 24px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Comms panel */
+.comms-panel {
+  position: fixed;
+  top: 50px;
+  right: 8px;
+  z-index: 40;
+  width: 260px;
+  max-height: 300px;
+  overflow-y: auto;
+  background: rgba(5,5,8,0.8);
+  border: 1px solid rgba(255,255,255,0.04);
+  padding: 12px;
+  opacity: 0;
+  animation: fadeIn 2s ease 1s forwards;
+}
+
+@keyframes fadeIn {
+  to { opacity: 1; }
+}
+
+.comms-title {
+  font-size: 9px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+
+.comm-msg {
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  font-size: 10px;
+  line-height: 1.5;
+  animation: msgSlide 0.5s ease;
+}
+
+@keyframes msgSlide {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.comm-route {
+  font-size: 8px;
+  letter-spacing: 1px;
+  margin-bottom: 3px;
+}
+
+.comm-text {
+  color: var(--text-dim);
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+  .comms-panel { width: 200px; right: 4px; top: 44px; padding: 8px; }
+  .kpi-item { padding: 6px 8px; }
+  .kpi-value { font-size: 14px; }
+  .kpi-label { font-size: 7px; }
+  .agent-panel { width: 240px; padding: 16px; }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 2px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
+</style>
+</head>
+<body>
+
+<div class="title-card">MC v2 — Concept A: <span>Topology</span></div>
+
+<canvas id="network"></canvas>
+
+<div class="comms-panel">
+  <div class="comms-title">⚡ Live Comms Feed</div>
+  <div class="comm-msg">
+    <div class="comm-route" style="color: var(--cyan);">Atlas → Hex</div>
+    <div class="comm-text">Priority build: MC v2 concepts needed tonight</div>
+  </div>
+  <div class="comm-msg">
+    <div class="comm-route" style="color: var(--lavender);">Hex → Atlas</div>
+    <div class="comm-text">On it. Spinning up 3 subagents</div>
+  </div>
+  <div class="comm-msg">
+    <div class="comm-route" style="color: var(--green);">Kiln → Atlas</div>
+    <div class="comm-text">Production batch 847 complete, ready for QA</div>
+  </div>
+  <div class="comm-msg">
+    <div class="comm-route" style="color: var(--amber);">Razor → Atlas</div>
+    <div class="comm-text">Markets closed, running overnight analysis</div>
+  </div>
+</div>
+
+<div class="kpi-strip">
+  <div class="kpi-item">
+    <div class="kpi-value" style="color: var(--green);">847</div>
+    <div class="kpi-label">lbs processed</div>
+  </div>
+  <div class="kpi-item">
+    <div class="kpi-value" style="color: var(--cyan);">12</div>
+    <div class="kpi-label">active orders</div>
+  </div>
+  <div class="kpi-item">
+    <div class="kpi-value" style="color: var(--amber);">$47.2K</div>
+    <div class="kpi-label">revenue</div>
+  </div>
+  <div class="kpi-item">
+    <div class="kpi-value" style="color: var(--magenta);">98.7%</div>
+    <div class="kpi-label">uptime</div>
+  </div>
+</div>
+
+<div class="chat-bar">
+  <input type="text" placeholder="Message the network..." />
+  <button>Send</button>
+</div>
+
+<div class="agent-panel" id="agentPanel">
+  <button class="close-btn" onclick="closePanel()">×</button>
+  <div class="agent-name" id="panelName"></div>
+  <div class="agent-role" id="panelRole"></div>
+  <div id="panelStats"></div>
+</div>
+
+<script>
+const canvas = document.getElementById('network');
+const ctx = canvas.getContext('2d');
+let W, H, dpr;
+
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  // Reposition agents for new screen size
+  agents.forEach((a, i) => {
+    a.baseX = getBaseX(i);
+    a.baseY = getBaseY(i);
+    a.x = a.baseX;
+    a.y = a.baseY;
+  });
+}
+
+function getBaseX(i) {
+  const cx = W / 2;
+  const positions = [
+    [0, -0.22],    // Atlas top center
+    [-0.25, 0.02], // Hex left
+    [0.25, 0.02],  // Kiln right
+    [-0.18, 0.22], // Razor bottom-left
+    [0.18, 0.22],  // Meridian bottom-right
+  ];
+  return cx + positions[i][0] * Math.min(W, 500);
+}
+
+function getBaseY(i) {
+  const cy = H * 0.38;
+  const positions = [
+    [0, -0.22],
+    [-0.25, 0.02],
+    [0.25, 0.02],
+    [-0.18, 0.22],
+    [0.18, 0.22],
+  ];
+  return cy + positions[i][1] * Math.min(H, 700);
+}
+
+const agentData = [
+  { name: 'Atlas', role: 'Orchestrator', color: '#00f0ff', status: 'online', cpu: '12%', mem: '340MB', tasks: 8, uptime: '99.9%' },
+  { name: 'Hex', role: 'Coding', color: '#aa77ff', status: 'online', cpu: '67%', mem: '1.2GB', tasks: 3, uptime: '98.7%' },
+  { name: 'Kiln', role: 'Production', color: '#00ff88', status: 'online', cpu: '23%', mem: '512MB', tasks: 5, uptime: '99.2%' },
+  { name: 'Razor', role: 'Trading', color: '#ffaa00', status: 'idle', cpu: '3%', mem: '256MB', tasks: 0, uptime: '97.8%' },
+  { name: 'Meridian', role: 'Logistics', color: '#ff00aa', status: 'away', cpu: '1%', mem: '128MB', tasks: 1, uptime: '96.5%' },
+];
+
+const connections = [
+  [0, 1], [0, 2], [0, 3], [0, 4], [1, 2], [3, 4],
+];
+
+let agents = agentData.map((d, i) => ({
+  ...d,
+  baseX: 0, baseY: 0,
+  x: 0, y: 0,
+  radius: d.name === 'Atlas' ? 28 : 20,
+  phase: Math.random() * Math.PI * 2,
+  driftSpeed: 0.3 + Math.random() * 0.4,
+  driftRadius: 3 + Math.random() * 5,
+}));
+
+// Particles traveling along connections
+let particles = [];
+
+function spawnParticle() {
+  const conn = connections[Math.floor(Math.random() * connections.length)];
+  const dir = Math.random() > 0.5 ? 1 : 0;
+  const from = agents[conn[dir]];
+  const to = agents[conn[1 - dir]];
+  particles.push({
+    fromIdx: conn[dir],
+    toIdx: conn[1 - dir],
+    t: 0,
+    speed: 0.004 + Math.random() * 0.006,
+    color: from.color,
+    size: 2 + Math.random() * 2,
+  });
+}
+
+setInterval(spawnParticle, 800);
+
+let time = 0;
+let hoveredAgent = -1;
+let selectedAgent = -1;
+
+function draw() {
+  time += 0.016;
+  ctx.clearRect(0, 0, W, H);
+
+  // Update positions (drift)
+  agents.forEach(a => {
+    a.x = a.baseX + Math.sin(time * a.driftSpeed + a.phase) * a.driftRadius;
+    a.y = a.baseY + Math.cos(time * a.driftSpeed * 0.7 + a.phase) * a.driftRadius;
+  });
+
+  // Draw connections
+  connections.forEach(([i, j]) => {
+    const a = agents[i], b = agents[j];
+    const pulse = 0.04 + 0.03 * Math.sin(time * 2 + i + j);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.strokeStyle = `rgba(255,255,255,${pulse})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Glow line
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    const gradient = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
+    gradient.addColorStop(0, a.color + '15');
+    gradient.addColorStop(1, b.color + '15');
+    ctx.strokeStyle = gradient;
+    ctx.lineWidth = 4;
+    ctx.stroke();
+  });
+
+  // Draw particles
+  particles = particles.filter(p => {
+    p.t += p.speed;
+    if (p.t > 1) return false;
+    const a = agents[p.fromIdx], b = agents[p.toIdx];
+    const px = a.x + (b.x - a.x) * p.t;
+    const py = a.y + (b.y - a.y) * p.t;
+    ctx.beginPath();
+    ctx.arc(px, py, p.size, 0, Math.PI * 2);
+    ctx.fillStyle = p.color;
+    ctx.fill();
+    // Glow
+    ctx.beginPath();
+    ctx.arc(px, py, p.size * 3, 0, Math.PI * 2);
+    const g = ctx.createRadialGradient(px, py, 0, px, py, p.size * 3);
+    g.addColorStop(0, p.color + '40');
+    g.addColorStop(1, p.color + '00');
+    ctx.fillStyle = g;
+    ctx.fill();
+    return true;
+  });
+
+  // Draw agent nodes
+  agents.forEach((a, i) => {
+    const isHovered = hoveredAgent === i;
+    const isSelected = selectedAgent === i;
+    const breathe = 1 + 0.08 * Math.sin(time * 1.5 + a.phase);
+    const r = a.radius * breathe * (isHovered ? 1.15 : 1);
+
+    // Outer glow
+    const glowSize = r * 3;
+    const glow = ctx.createRadialGradient(a.x, a.y, r * 0.5, a.x, a.y, glowSize);
+    glow.addColorStop(0, a.color + (isSelected ? '30' : '18'));
+    glow.addColorStop(1, a.color + '00');
+    ctx.beginPath();
+    ctx.arc(a.x, a.y, glowSize, 0, Math.PI * 2);
+    ctx.fillStyle = glow;
+    ctx.fill();
+
+    // Node body
+    ctx.beginPath();
+    ctx.arc(a.x, a.y, r, 0, Math.PI * 2);
+    const bg = ctx.createRadialGradient(a.x, a.y, 0, a.x, a.y, r);
+    bg.addColorStop(0, a.color + '35');
+    bg.addColorStop(1, a.color + '10');
+    ctx.fillStyle = bg;
+    ctx.fill();
+    ctx.strokeStyle = a.color + (isSelected ? 'cc' : '66');
+    ctx.lineWidth = isSelected ? 2 : 1;
+    ctx.stroke();
+
+    // Status indicator
+    const statusColor = a.status === 'online' ? '#00ff88' : a.status === 'idle' ? '#ffaa00' : '#ff006644';
+    ctx.beginPath();
+    ctx.arc(a.x + r * 0.6, a.y - r * 0.6, 4, 0, Math.PI * 2);
+    ctx.fillStyle = statusColor;
+    ctx.fill();
+
+    // Name label
+    ctx.font = '500 11px "Azeret Mono", monospace';
+    ctx.fillStyle = a.color;
+    ctx.textAlign = 'center';
+    ctx.fillText(a.name, a.x, a.y + r + 18);
+
+    // Role label
+    ctx.font = '300 8px "Azeret Mono", monospace';
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.fillText(a.role.toUpperCase(), a.x, a.y + r + 30);
+  });
+
+  requestAnimationFrame(draw);
+}
+
+// Interaction
+function getAgentAt(mx, my) {
+  for (let i = agents.length - 1; i >= 0; i--) {
+    const a = agents[i];
+    const dx = mx - a.x, dy = my - a.y;
+    if (dx * dx + dy * dy < (a.radius + 10) * (a.radius + 10)) return i;
+  }
+  return -1;
+}
+
+function showPanel(idx) {
+  const a = agents[idx];
+  const panel = document.getElementById('agentPanel');
+  document.getElementById('panelName').textContent = a.name;
+  document.getElementById('panelName').style.color = a.color;
+  document.getElementById('panelRole').textContent = a.role;
+
+  const stats = [
+    ['Status', a.status.toUpperCase()],
+    ['CPU', a.cpu],
+    ['Memory', a.mem],
+    ['Active Tasks', a.tasks],
+    ['Uptime', a.uptime],
+  ];
+
+  document.getElementById('panelStats').innerHTML = stats.map(([l, v]) =>
+    `<div class="agent-stat"><span class="label">${l}</span><span>${v}</span></div>`
+  ).join('');
+
+  // Position panel near the node
+  let px = a.x + a.radius + 20;
+  let py = a.y - 60;
+  if (px + 280 > W) px = a.x - 300;
+  if (py < 50) py = 50;
+  if (py + 300 > H - 120) py = H - 420;
+
+  panel.style.left = px + 'px';
+  panel.style.top = py + 'px';
+  panel.style.borderColor = a.color + '33';
+  panel.classList.add('visible');
+  selectedAgent = idx;
+}
+
+function closePanel() {
+  document.getElementById('agentPanel').classList.remove('visible');
+  selectedAgent = -1;
+}
+
+canvas.addEventListener('mousemove', e => {
+  hoveredAgent = getAgentAt(e.clientX, e.clientY);
+  canvas.style.cursor = hoveredAgent >= 0 ? 'pointer' : 'default';
+});
+
+canvas.addEventListener('click', e => {
+  const idx = getAgentAt(e.clientX, e.clientY);
+  if (idx >= 0) showPanel(idx);
+  else closePanel();
+});
+
+canvas.addEventListener('touchstart', e => {
+  const t = e.touches[0];
+  const idx = getAgentAt(t.clientX, t.clientY);
+  if (idx >= 0) { e.preventDefault(); showPanel(idx); }
+  else closePanel();
+}, { passive: false });
+
+window.addEventListener('resize', resize);
+resize();
+draw();
+
+// Spawn initial burst of particles
+for (let i = 0; i < 8; i++) spawnParticle();
+</script>
+</body>
+</html>
