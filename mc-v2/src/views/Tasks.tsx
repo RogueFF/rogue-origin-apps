@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { useTasks, useCreateTask, useUpdateTask, type Task } from '../lib/tasks-api';
+import { useTasks, useCreateTask, useUpdateTask, useDispatchTask, type Task } from '../lib/tasks-api';
 import { useGatewayStore } from '../store/gateway';
 import { DepthCard } from '../components/DepthCard';
 import { AGENT_GLYPHS } from '../data/mock';
@@ -35,13 +35,15 @@ function timeAgo(ts: string): string {
 // TaskCard
 // ---------------------------------------------------------------------------
 
-function TaskCard({ task, onDispatch }: {
+function TaskCard({ task, onDispatch, flashAgent }: {
   task: Task;
   onDispatch: (taskId: number, agentId: string) => void;
+  flashAgent?: string | null;
 }) {
   const agents = useGatewayStore((s) => s.agents);
   const [showDispatch, setShowDispatch] = useState(false);
   const isDone = task.status === 'done';
+  const isFlashing = !!flashAgent;
 
   return (
     <DepthCard
@@ -67,6 +69,27 @@ function TaskCard({ task, onDispatch }: {
         }}
         style={{ cursor: 'grab' }}
       >
+        {/* Dispatch flash */}
+        {isFlashing && (
+          <div style={{
+            position: 'absolute',
+            top: 0, left: 0, right: 0, bottom: 0,
+            borderRadius: 'var(--card-radius)',
+            background: 'rgba(0,255,136,0.08)',
+            border: '1px solid rgba(0,255,136,0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 5,
+            animation: 'dispatch-flash 2s ease-out forwards',
+            pointerEvents: 'none',
+          }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--accent-green)', fontWeight: 600 }}>
+              ⚡ Dispatched to {AGENT_NAMES[flashAgent!] || flashAgent}
+            </span>
+          </div>
+        )}
+
         {/* Title row */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginBottom: 6 }}>
           <div style={{
@@ -250,7 +273,7 @@ function QuickAddInput({ status, onCreate }: { status: Task['status']; onCreate:
 // KanbanColumn (desktop)
 // ---------------------------------------------------------------------------
 
-function KanbanColumn({ status, tasks, onDrop, onCreate, onDispatch, collapsed, onToggle }: {
+function KanbanColumn({ status, tasks, onDrop, onCreate, onDispatch, collapsed, onToggle, flashMap }: {
   status: Task['status'];
   tasks: Task[];
   onDrop: (taskId: number, newStatus: Task['status']) => void;
@@ -258,6 +281,7 @@ function KanbanColumn({ status, tasks, onDrop, onCreate, onDispatch, collapsed, 
   onDispatch: (taskId: number, agentId: string) => void;
   collapsed?: boolean;
   onToggle?: () => void;
+  flashMap?: Record<number, string>;
 }) {
   const [dragOver, setDragOver] = useState(false);
   const isDone = status === 'done';
@@ -338,7 +362,7 @@ function KanbanColumn({ status, tasks, onDrop, onCreate, onDispatch, collapsed, 
           {/* Cards */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, overflow: 'auto' }}>
             {tasks.map(task => (
-              <TaskCard key={task.id} task={task} onDispatch={onDispatch} />
+              <TaskCard key={task.id} task={task} onDispatch={onDispatch} flashAgent={flashMap?.[task.id] || null} />
             ))}
             {tasks.length === 0 && (
               <div style={{
@@ -478,11 +502,13 @@ export function Tasks() {
   const { data: tasks = [], isError } = useTasks();
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
+  const dispatchTask = useDispatchTask();
   const isMobile = useIsMobile();
 
   const [agentFilter, setAgentFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [doneCollapsed, setDoneCollapsed] = useState(true);
+  const [flashMap, setFlashMap] = useState<Record<number, string>>({});
 
   // Filter tasks
   const filtered = tasks.filter(t => {
@@ -517,8 +543,25 @@ export function Tasks() {
   }, [createTask]);
 
   const handleDispatch = useCallback((taskId: number, agentId: string) => {
-    updateTask.mutate({ id: taskId, agent: agentId, status: 'active' });
-  }, [updateTask]);
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+    dispatchTask.mutate({
+      id: taskId,
+      agent: agentId,
+      title: task.title,
+      priority: task.priority,
+      domain: task.domain,
+    });
+    // Flash animation
+    setFlashMap(prev => ({ ...prev, [taskId]: agentId }));
+    setTimeout(() => {
+      setFlashMap(prev => {
+        const next = { ...prev };
+        delete next[taskId];
+        return next;
+      });
+    }, 2200);
+  }, [dispatchTask, tasks]);
 
   // ── Mobile layout ──
   if (isMobile) {
@@ -579,6 +622,13 @@ export function Tasks() {
   // ── Desktop Kanban ──
   return (
     <div style={{ padding: '16px 20px', overflow: 'hidden', height: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <style>{`
+        @keyframes dispatch-flash {
+          0% { opacity: 1; }
+          70% { opacity: 1; }
+          100% { opacity: 0; }
+        }
+      `}</style>
 
       {/* Filter bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -632,9 +682,9 @@ export function Tasks() {
 
       {/* Kanban columns */}
       <div data-two-col="" style={{ display: 'flex', gap: 10, flex: 1, minHeight: 0 }}>
-        <KanbanColumn status="backlog" tasks={byStatus('backlog')} onDrop={handleDrop} onCreate={handleCreate} onDispatch={handleDispatch} />
-        <KanbanColumn status="active" tasks={byStatus('active')} onDrop={handleDrop} onCreate={handleCreate} onDispatch={handleDispatch} />
-        <KanbanColumn status="review" tasks={byStatus('review')} onDrop={handleDrop} onDispatch={handleDispatch} />
+        <KanbanColumn status="backlog" tasks={byStatus('backlog')} onDrop={handleDrop} onCreate={handleCreate} onDispatch={handleDispatch} flashMap={flashMap} />
+        <KanbanColumn status="active" tasks={byStatus('active')} onDrop={handleDrop} onCreate={handleCreate} onDispatch={handleDispatch} flashMap={flashMap} />
+        <KanbanColumn status="review" tasks={byStatus('review')} onDrop={handleDrop} onDispatch={handleDispatch} flashMap={flashMap} />
         <KanbanColumn
           status="done"
           tasks={doneFiltered}
@@ -642,6 +692,7 @@ export function Tasks() {
           onDispatch={handleDispatch}
           collapsed={doneCollapsed}
           onToggle={() => setDoneCollapsed(!doneCollapsed)}
+          flashMap={flashMap}
         />
       </div>
     </div>
