@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mission Control — Solaris</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600;700&family=Source+Code+Pro:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0d0b08;--fg:#f5f0e8;--dim:rgba(245,240,232,0.4);--mid:rgba(245,240,232,0.65);--amber:#d4a853;--sage:#7a9e7e;--rose:#c47a7a;--cream:#f5f0e8;--border:rgba(245,240,232,0.08);--card:rgba(245,240,232,0.03);--card-hover:rgba(245,240,232,0.05)}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--fg);font-family:'DM Sans',sans-serif;font-size:13px;line-height:1.5}
+/* Grain overlay */
+.grain{position:fixed;inset:0;pointer-events:none;z-index:9999;opacity:.04}
+.grain svg{width:100%;height:100%}
+.shell{display:grid;grid-template-columns:220px 1fr 300px;grid-template-rows:1fr 52px;height:100vh;position:relative}
+/* Sidebar */
+.sidebar{grid-row:1/3;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;background:rgba(13,11,8,0.95)}
+.sidebar::-webkit-scrollbar{width:0}
+.logo{padding:20px;border-bottom:1px solid var(--border)}
+.logo h1{font-family:'Playfair Display',serif;font-weight:800;font-size:18px;color:var(--amber);letter-spacing:-.5px}
+.logo .sub{font-family:'Source Code Pro',monospace;font-size:9px;color:var(--dim);margin-top:2px;letter-spacing:1px}
+.s-label{font-family:'Source Code Pro',monospace;font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:2px;padding:16px 20px 8px}
+.agent-item{display:flex;align-items:center;gap:10px;padding:7px 20px;cursor:pointer;transition:background .3s ease}
+.agent-item:hover{background:var(--card)}
+.a-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;transition:all .3s ease}
+.a-dot.active{box-shadow:0 0 8px currentColor}
+.a-name{font-weight:600;font-size:12px}
+.a-task{font-family:'Source Code Pro',monospace;font-size:9px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px}
+.nav-section{flex:1;padding:8px 0}
+.nav-item{display:flex;align-items:center;gap:12px;padding:8px 20px;cursor:pointer;color:var(--dim);font-size:12px;font-weight:500;border-radius:0;transition:all .3s ease}
+.nav-item:hover{color:var(--fg);background:var(--card)}
+.nav-item.active{color:var(--amber);background:rgba(212,168,83,0.06)}
+.nav-icon{font-size:14px}
+.sys-bar{padding:14px 20px;border-top:1px solid var(--border);font-family:'Source Code Pro',monospace;font-size:10px;color:var(--dim)}
+.sys-bar div{display:flex;justify-content:space-between;padding:1px 0}
+.sys-bar .ok{color:var(--sage)}
+/* Main */
+.main{grid-row:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:20px}
+.main::-webkit-scrollbar{width:4px}
+.main::-webkit-scrollbar-thumb{background:rgba(245,240,232,0.08);border-radius:4px}
+/* Cards */
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;transition:all .4s cubic-bezier(.4,0,.2,1);position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(212,168,83,0.02) 0%,transparent 50%);border-radius:16px;pointer-events:none}
+.card:hover{background:var(--card-hover);border-color:rgba(245,240,232,0.12)}
+.card-title{font-family:'Playfair Display',serif;font-weight:700;font-size:16px;margin-bottom:14px;display:flex;align-items:center;gap:10px}
+.card-title .badge{font-family:'DM Sans',sans-serif;font-size:10px;font-weight:500;padding:3px 10px;border-radius:20px;background:rgba(212,168,83,0.1);color:var(--amber);border:1px solid rgba(212,168,83,0.15)}
+/* Stats */
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:18px}
+.stat{text-align:center;padding:14px;background:rgba(245,240,232,0.02);border-radius:12px;border:1px solid var(--border);transition:all .3s ease}
+.stat:hover{background:rgba(245,240,232,0.04)}
+.stat .val{font-family:'Source Code Pro',monospace;font-size:26px;font-weight:600;line-height:1}
+.stat .lbl{font-family:'Source Code Pro',monospace;font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:1.5px;margin-top:4px}
+.stat .delta{font-family:'Source Code Pro',monospace;font-size:10px;margin-top:3px}
+.stat .delta.up{color:var(--sage)}.stat .delta.dn{color:var(--rose)}
+/* Chart */
+.chart-wrap{height:110px;border-radius:12px;overflow:hidden;background:rgba(245,240,232,0.02);border:1px solid var(--border);position:relative;margin-bottom:14px}
+.chart-wrap svg{width:100%;height:100%}
+.chart-line{fill:none;stroke:var(--amber);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.chart-fill{fill:url(#solarGrad)}
+.chart-tag{position:absolute;top:10px;right:12px;font-family:'Source Code Pro',monospace;font-size:9px;color:var(--dim)}
+.chart-tag .live{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--sage);margin-right:4px;animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.crew-pills{display:flex;gap:8px;flex-wrap:wrap}
+.crew-pill{font-family:'DM Sans',sans-serif;font-size:11px;padding:5px 12px;border-radius:20px;background:rgba(245,240,232,0.04);border:1px solid var(--border);color:var(--mid);transition:all .3s ease}
+.crew-pill:hover{background:rgba(245,240,232,0.08)}
+/* Two col */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+/* Trading */
+.regime-pill{display:inline-flex;align-items:center;gap:5px;padding:4px 14px;border-radius:20px;font-size:11px;font-weight:600}
+.regime-pill.bull{background:rgba(122,158,126,0.12);color:var(--sage);border:1px solid rgba(122,158,126,0.2)}
+.port-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:14px 0}
+.port-stat{text-align:center;padding:10px;border-radius:10px;background:rgba(245,240,232,0.02);border:1px solid var(--border)}
+.port-stat .v{font-family:'Source Code Pro',monospace;font-size:16px;font-weight:600}
+.port-stat .l{font-family:'Source Code Pro',monospace;font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-top:2px}
+.pos-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-family:'Source Code Pro',monospace;font-size:11px}
+.pos-row:last-child{border-bottom:none}
+.pos-ticker{font-weight:600;min-width:45px}
+.pos-pnl.g{color:var(--sage)}.pos-pnl.r{color:var(--rose)}
+/* Tasks */
+.task-columns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.task-col-head{font-family:'Source Code Pro',monospace;font-size:9px;text-transform:uppercase;letter-spacing:2px;color:var(--dim);margin-bottom:8px;display:flex;justify-content:space-between}
+.task-col-head .cnt{background:rgba(245,240,232,0.06);padding:1px 8px;border-radius:10px}
+.task-card{background:rgba(245,240,232,0.025);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer;transition:all .3s ease;font-size:12px}
+.task-card:hover{background:rgba(245,240,232,0.05);transform:translateY(-1px)}
+.task-card .domain{font-family:'Source Code Pro',monospace;font-size:9px;color:var(--dim);margin-top:4px}
+/* Fleet */
+.fleet-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+.fleet-card{text-align:center;padding:14px 10px;background:rgba(245,240,232,0.02);border:1px solid var(--border);border-radius:12px;transition:all .3s ease}
+.fleet-card:hover{background:rgba(245,240,232,0.04)}
+.fleet-card .name{font-family:'Playfair Display',serif;font-weight:700;font-size:13px;margin-top:6px}
+.fleet-card .role{font-family:'Source Code Pro',monospace;font-size:9px;color:var(--dim);margin-top:1px}
+.fleet-card .health{font-family:'Source Code Pro',monospace;font-size:20px;font-weight:600;margin-top:6px}
+.fleet-card .task-sm{font-family:'Source Code Pro',monospace;font-size:9px;color:var(--dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Right sidebar */
+.sidebar-r{grid-row:1;border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;background:rgba(13,11,8,0.95)}
+.notif-head{padding:16px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.notif-head h3{font-family:'Playfair Display',serif;font-weight:700;font-size:15px}
+.notif-cnt{font-family:'Source Code Pro',monospace;font-size:10px;color:var(--dim);background:rgba(212,168,83,0.1);padding:2px 10px;border-radius:10px;color:var(--amber)}
+.notif-feed{flex:1;overflow-y:auto;padding:8px}
+.notif-feed::-webkit-scrollbar{width:3px}
+.notif-feed::-webkit-scrollbar-thumb{background:rgba(245,240,232,0.06);border-radius:3px}
+.notif{border-radius:12px;padding:12px 14px;margin-bottom:8px;background:var(--card);border:1px solid var(--border);border-left:3px solid;transition:all .4s ease}
+.notif.toast{border-left-color:var(--amber)}
+.notif.briefing{border-left-color:var(--sage)}
+.notif.alert{border-left-color:var(--rose)}
+.notif .type{font-family:'Source Code Pro',monospace;font-size:8px;text-transform:uppercase;letter-spacing:2px;margin-bottom:4px}
+.notif.toast .type{color:var(--amber)}.notif.briefing .type{color:var(--sage)}.notif.alert .type{color:var(--rose)}
+.notif .title{font-family:'Playfair Display',serif;font-weight:600;font-size:12px;margin-bottom:3px}
+.notif .body{font-size:11px;color:var(--dim);line-height:1.45}
+.notif .time{font-family:'Source Code Pro',monospace;font-size:9px;color:rgba(245,240,232,0.2);margin-top:6px}
+/* Bottom bar */
+.bottom-bar{grid-column:2/4;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 18px;background:rgba(13,11,8,0.95)}
+.bottom-bar select{font-family:'Source Code Pro',monospace;font-size:10px;background:rgba(245,240,232,0.04);border:1px solid var(--border);color:var(--fg);padding:4px 10px;border-radius:20px;cursor:pointer}
+.bottom-bar select option{background:#0d0b08}
+.bottom-bar input{flex:1;background:rgba(245,240,232,0.03);border:1px solid var(--border);border-radius:24px;padding:8px 16px;color:var(--fg);font-family:'DM Sans',sans-serif;font-size:12px;outline:none;transition:all .3s ease}
+.bottom-bar input:focus{border-color:rgba(212,168,83,0.3);background:rgba(245,240,232,0.05)}
+.bottom-bar input::placeholder{color:var(--dim)}
+.bottom-bar .send{background:rgba(212,168,83,0.12);border:1px solid rgba(212,168,83,0.2);color:var(--amber);padding:7px 16px;border-radius:20px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;transition:all .3s ease}
+.bottom-bar .send:hover{background:rgba(212,168,83,0.2)}
+/* Responsive */
+@media(max-width:1100px){.shell{grid-template-columns:60px 1fr 260px}.sidebar .s-label,.a-task,.nav-item span:not(.nav-icon),.logo .sub,.sys-bar span:first-child{display:none}.logo h1{font-size:14px;text-align:center}}
+@media(max-width:768px){.shell{grid-template-columns:1fr;grid-template-rows:auto 1fr auto auto}.sidebar{grid-row:auto;flex-direction:row;overflow-x:auto;border-right:none;border-bottom:1px solid var(--border)}.sidebar-r{grid-row:auto;border-left:none;border-top:1px solid var(--border);max-height:250px}.two-col,.task-columns{grid-template-columns:1fr}.stat-grid,.fleet-row{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="grain"><svg><filter id="grain"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter><rect width="100%" height="100%" filter="url(#grain)"/></svg></div>
+
+<div class="shell">
+<aside class="sidebar">
+<div class="logo"><h1>Solaris</h1><div class="sub">Mission Control v2.0</div></div>
+<div class="s-label">Fleet</div>
+<div class="agent-item"><span class="a-dot active" style="background:#22c55e;color:#22c55e"></span><div><div class="a-name">Atlas</div><div class="a-task">Orchestrating</div></div></div>
+<div class="agent-item"><span class="a-dot active" style="background:#f59e0b;color:#f59e0b"></span><div><div class="a-name">Kiln</div><div class="a-task">Hourly pulse check</div></div></div>
+<div class="agent-item"><span class="a-dot" style="background:#8b5cf6;opacity:.4"></span><div><div class="a-name">Razor</div><div class="a-task">Idle</div></div></div>
+<div class="agent-item"><span class="a-dot active" style="background:#3b82f6;color:#3b82f6"></span><div><div class="a-name">Meridian</div><div class="a-task">Cannaflora check</div></div></div>
+<div class="agent-item"><span class="a-dot active" style="background:#ef4444;color:#ef4444"></span><div><div class="a-name">Hex</div><div class="a-task">MC v2 build</div></div></div>
+<nav class="nav-section">
+<div class="s-label">Navigation</div>
+<div class="nav-item active"><span class="nav-icon">◈</span><span>Dashboard</span></div>
+<div class="nav-item"><span class="nav-icon">◇</span><span>Production</span></div>
+<div class="nav-item"><span class="nav-icon">△</span><span>Trading</span></div>
+<div class="nav-item"><span class="nav-icon">□</span><span>Tasks</span></div>
+<div class="nav-item"><span class="nav-icon">○</span><span>Shipments</span></div>
+<div class="nav-item"><span class="nav-icon">⚙</span><span>Settings</span></div>
+</nav>
+<div class="sys-bar">
+<div><span>System</span><span class="ok">● Nominal</span></div>
+<div><span>Uptime</span><span>14d 7h 23m</span></div>
+<div><span>Fleet</span><span class="ok">4/5 active</span></div>
+</div>
+</aside>
+
+<main class="main">
+<!-- Production -->
+<div class="card">
+<div class="card-title">Production Dashboard <span class="badge">🌿 Cherry Truffle</span></div>
+<div class="stat-grid">
+<div class="stat"><div class="val" style="color:var(--cream)">47.2</div><div class="lbl">lbs processed</div><div class="delta up">+3.1 vs yesterday</div></div>
+<div class="stat"><div class="val" style="color:var(--amber)">96</div><div class="lbl">lbs/hour</div><div class="delta up">+8% avg</div></div>
+<div class="stat"><div class="val" style="color:var(--sage)">4</div><div class="lbl">crew</div><div class="delta" style="color:var(--dim)">Full shift</div></div>
+<div class="stat"><div class="val" style="color:var(--mid)">6.2</div><div class="lbl">hours active</div><div class="delta" style="color:var(--dim)">~1.8h remain</div></div>
+</div>
+<div class="chart-wrap">
+<svg viewBox="0 0 600 110" preserveAspectRatio="none">
+<defs><linearGradient id="solarGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#d4a853" stop-opacity="0.15"/><stop offset="100%" stop-color="#d4a853" stop-opacity="0"/></linearGradient></defs>
+<path class="chart-fill" d="M0,110 L0,75 40,72 80,60 120,65 160,50 200,55 240,40 280,45 320,32 360,38 400,25 440,30 480,22 520,28 560,18 600,22 600,110Z"/>
+<path class="chart-line" d="M0,75 40,72 80,60 120,65 160,50 200,55 240,40 280,45 320,32 360,38 400,25 440,30 480,22 520,28 560,18 600,22"/>
+</svg>
+<div class="chart-tag"><span class="live"></span>Live — Hourly Output</div>
+</div>
+<div class="crew-pills">
+<span class="crew-pill">👤 Koa — Lead</span>
+<span class="crew-pill">👤 Marcus — Trim</span>
+<span class="crew-pill">👤 Dani — Trim</span>
+<span class="crew-pill">👤 Sam — Buck</span>
+</div>
+</div>
+
+<div class="two-col">
+<!-- Trading -->
+<div class="card">
+<div class="card-title">Trading Desk <span class="regime-pill bull">▲ Bull</span></div>
+<div class="port-stats">
+<div class="port-stat"><div class="v" style="color:var(--sage)">+$2,847</div><div class="l">Day P&L</div></div>
+<div class="port-stat"><div class="v">$48.2K</div><div class="l">Portfolio</div></div>
+<div class="port-stat"><div class="v" style="color:var(--sage)">+6.2%</div><div class="l">MTD</div></div>
+</div>
+<div class="pos-row"><span class="pos-ticker">SPY</span><span style="color:var(--dim)">587.42</span><span class="pos-pnl g">+$1,240 (+0.8%)</span></div>
+<div class="pos-row"><span class="pos-ticker">NVDA</span><span style="color:var(--dim)">892.10</span><span class="pos-pnl g">+$890 (+1.2%)</span></div>
+<div class="pos-row"><span class="pos-ticker">TSLA</span><span style="color:var(--dim)">198.55</span><span class="pos-pnl r">-$320 (-0.4%)</span></div>
+<div class="pos-row"><span class="pos-ticker">QQQ</span><span style="color:var(--dim)">512.88</span><span class="pos-pnl g">+$1,037 (+0.6%)</span></div>
+<div style="margin-top:10px;font-family:'Source Code Pro',monospace;font-size:10px;color:var(--dim)">
+<span style="color:var(--sage)">BUY</span> NVDA 890C 3/7 @ 14.20 — 10:32a<br>
+<span style="color:var(--amber)">HOLD</span> SPY 585P hedge — 584 support
+</div>
+</div>
+
+<!-- Tasks -->
+<div class="card">
+<div class="card-title">Tasks</div>
+<div class="task-columns">
+<div>
+<div class="task-col-head">Active <span class="cnt">3</span></div>
+<div class="task-card"><div>MC v2 concepts build</div><div class="domain" style="color:#ef4444">Hex · dev</div></div>
+<div class="task-card"><div>Cannaflora follow-up</div><div class="domain" style="color:#3b82f6">Meridian · ops</div></div>
+<div class="task-card"><div>Hourly production pulse</div><div class="domain" style="color:#f59e0b">Kiln · prod</div></div>
+</div>
+<div>
+<div class="task-col-head">Queued <span class="cnt">4</span></div>
+<div class="task-card"><div>Swiss pricing update</div><div class="domain">ops</div></div>
+<div class="task-card"><div>Barcode redesign</div><div class="domain">dev</div></div>
+<div class="task-card"><div>EOD rebalance</div><div class="domain" style="color:#8b5cf6">Razor</div></div>
+<div class="task-card"><div>Strain yield analysis</div><div class="domain">prod</div></div>
+</div>
+<div>
+<div class="task-col-head">Done <span class="cnt">5</span></div>
+<div class="task-card" style="opacity:.5"><div>Morning briefing</div><div class="domain" style="color:#22c55e">Atlas</div></div>
+<div class="task-card" style="opacity:.5"><div>Crew schedule</div><div class="domain">ops</div></div>
+<div class="task-card" style="opacity:.5"><div>SPY 585C sold</div><div class="domain" style="color:#8b5cf6">Razor</div></div>
+<div class="task-card" style="opacity:.5"><div>Batch logged</div><div class="domain" style="color:#f59e0b">Kiln</div></div>
+<div class="task-card" style="opacity:.5"><div>API health ✓</div><div class="domain" style="color:#ef4444">Hex</div></div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Fleet -->
+<div class="card">
+<div class="card-title">Fleet Health</div>
+<div class="fleet-row">
+<div class="fleet-card"><div class="a-dot active" style="background:#22c55e;color:#22c55e;width:10px;height:10px;border-radius:50%;margin:0 auto"></div><div class="name">Atlas</div><div class="role">Orchestrator</div><div class="health" style="color:var(--sage)">98%</div><div class="task-sm">online</div></div>
+<div class="fleet-card"><div class="a-dot active" style="background:#f59e0b;color:#f59e0b;width:10px;height:10px;border-radius:50%;margin:0 auto"></div><div class="name">Kiln</div><div class="role">Production</div><div class="health" style="color:var(--sage)">95%</div><div class="task-sm">pulse check</div></div>
+<div class="fleet-card"><div class="a-dot" style="background:#8b5cf6;opacity:.4;width:10px;height:10px;border-radius:50%;margin:0 auto"></div><div class="name">Razor</div><div class="role">Trading</div><div class="health" style="color:var(--dim)">IDLE</div><div class="task-sm">standby</div></div>
+<div class="fleet-card"><div class="a-dot active" style="background:#3b82f6;color:#3b82f6;width:10px;height:10px;border-radius:50%;margin:0 auto"></div><div class="name">Meridian</div><div class="role">Shipments</div><div class="health" style="color:var(--sage)">91%</div><div class="task-sm">cannaflora</div></div>
+<div class="fleet-card"><div class="a-dot active" style="background:#ef4444;color:#ef4444;width:10px;height:10px;border-radius:50%;margin:0 auto"></div><div class="name">Hex</div><div class="role">Dev/Deploy</div><div class="health" style="color:var(--amber)">87%</div><div class="task-sm">mc v2 build</div></div>
+</div>
+</div>
+</main>
+
+<!-- Right sidebar -->
+<aside class="sidebar-r">
+<div class="notif-head"><h3>Notifications</h3><span class="notif-cnt">12 today</span></div>
+<div class="notif-feed">
+<div class="notif alert"><div class="type">Alert</div><div class="title">Humidity spike — Dry Room B</div><div class="body">RH hit 68% at 15:32. Threshold 62%. Dehumidifier may need service.</div><div class="time">2 min ago</div></div>
+<div class="notif toast"><div class="type">Update</div><div class="title">Cannaflora shipment</div><div class="body">CF-2847 cleared customs, ETA Wednesday. 12 units Cherry Truffle tops.</div><div class="time">18 min ago</div></div>
+<div class="notif briefing"><div class="type">Briefing</div><div class="title">Afternoon Brief</div><div class="body">Production on pace — 47.2 lbs / 6.2 hrs. Trading +$2.8K bull. Swiss inquiry from Zurich Botanics for 50 lb lot.</div><div class="time">34 min ago</div></div>
+<div class="notif toast"><div class="type">Update</div><div class="title">Deploy complete</div><div class="body">rogue-origin-api v2.4.1 pushed to production. All checks passing.</div><div class="time">1h ago</div></div>
+<div class="notif toast"><div class="type">Update</div><div class="title">Consignment intake</div><div class="body">Green Valley Farms — 8.4 lbs smalls, Banana Runtz @ $180/lb. Intake #347.</div><div class="time">1h 22m ago</div></div>
+<div class="notif briefing"><div class="type">Briefing</div><div class="title">Morning Brief</div><div class="body">58°F clear. Good drying. Dry Room A 58% RH. 4 crew confirmed. 3 tasks due.</div><div class="time">6h ago</div></div>
+<div class="notif alert"><div class="type">Alert</div><div class="title">ClickUp sync 429</div><div class="body">Retrying in 5m. No data loss.</div><div class="time">7h ago</div></div>
+<div class="notif toast"><div class="type">Update</div><div class="title">Market open scan</div><div class="body">SPY +0.3%, VIX 14.2. Bull regime confirmed.</div><div class="time">8h ago</div></div>
+</div>
+</aside>
+
+<div class="bottom-bar">
+<select><option>Atlas</option><option>Kiln</option><option>Razor</option><option>Meridian</option><option>Hex</option><option>All</option></select>
+<input placeholder="Message agents..." type="text">
+<button class="send">Send</button>
+</div>
+</div>
+<script>
+document.querySelector('.bottom-bar input').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.value.trim())e.target.value=''});
+</script>
+</body>
+</html>

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mission Control — Meridian</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@300;400;500;600;700&family=Newsreader:wght@200;300;400;700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0c0c0e;--fg:#e8e8e8;--dim:#555;--border:#1e1e22;--green:#22c55e;--amber:#f59e0b;--red:#ef4444;--blue:#3b82f6;--violet:#8b5cf6}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--fg);font-family:'Instrument Sans',sans-serif;font-size:13px;line-height:1.45}
+::selection{background:rgba(255,255,255,0.15)}
+.shell{display:grid;grid-template-columns:200px 1fr 280px;grid-template-rows:1fr 44px;height:100vh}
+/* Sidebar */
+.sidebar{grid-row:1/3;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto}
+.sidebar::-webkit-scrollbar{width:0}
+.logo{padding:16px;border-bottom:1px solid var(--border)}
+.logo h1{font-family:'Newsreader',serif;font-weight:800;font-size:16px;letter-spacing:-.5px}
+.logo .ver{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--dim);margin-top:1px}
+.s-section{padding:12px 16px}
+.s-label{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:2px;margin-bottom:8px}
+.agent{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px}
+.agent .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.agent .name{font-weight:600;min-width:60px}
+.agent .status{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--dim);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nav{flex:1;padding:8px 0}
+.nav a{display:flex;align-items:center;gap:10px;padding:6px 16px;font-size:12px;color:var(--dim);cursor:pointer;text-decoration:none;transition:color .15s}
+.nav a:hover{color:var(--fg)}
+.nav a.active{color:var(--fg);background:rgba(255,255,255,0.03)}
+.nav .kbd{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#333;border:1px solid #2a2a2e;padding:1px 5px;border-radius:3px}
+.sys{padding:12px 16px;border-top:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--dim)}
+.sys div{display:flex;justify-content:space-between;padding:1px 0}
+.sys .ok{color:var(--green)}
+/* Main */
+.main{grid-row:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:1px}
+.main::-webkit-scrollbar{width:3px}
+.main::-webkit-scrollbar-thumb{background:#222;border-radius:2px}
+/* Section headers */
+.sec-head{font-family:'Newsreader',serif;font-weight:200;font-size:28px;letter-spacing:-1px;padding:8px 0 4px;border-bottom:1px solid var(--border);margin-bottom:12px}
+.sec-head span{font-weight:800}
+/* Dense grid */
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--border);margin-bottom:16px}
+.metric{padding:12px 14px;border-right:1px solid var(--border)}
+.metric:last-child{border-right:none}
+.metric .val{font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:700;line-height:1}
+.metric .lbl{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:1.5px;margin-top:3px}
+.metric .delta{font-family:'IBM Plex Mono',monospace;font-size:10px;margin-top:2px}
+.metric .delta.up{color:var(--green)}.metric .delta.dn{color:var(--red)}
+/* Chart - minimal */
+.chart-area{height:90px;border:1px solid var(--border);margin-bottom:16px;position:relative;overflow:hidden}
+.chart-area svg{width:100%;height:100%}
+.chart-area .tag{position:absolute;top:6px;right:8px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--dim)}
+.chart-line{fill:none;stroke:var(--fg);stroke-width:1.5}
+.chart-fill{fill:rgba(255,255,255,0.03)}
+/* Info rows */
+.info-row{display:flex;border-bottom:1px solid var(--border);font-size:12px}
+.info-row:last-child{border-bottom:none}
+.info-row .key{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--dim);padding:5px 0;min-width:100px}
+.info-row .val{padding:5px 0}
+/* Two col */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:16px}
+.col-title{font-family:'Newsreader',serif;font-weight:800;font-size:14px;border-bottom:1px solid var(--border);padding-bottom:4px;margin-bottom:8px}
+/* Positions table */
+.pos-table{width:100%;border-collapse:collapse;font-family:'IBM Plex Mono',monospace;font-size:11px}
+.pos-table th{text-align:left;font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:1.5px;padding:4px 0;border-bottom:1px solid var(--border);font-weight:400}
+.pos-table td{padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.03)}
+.pos-table .ticker{font-weight:700;color:var(--fg)}
+.pos-table .green{color:var(--green)}.pos-table .red{color:var(--red)}
+/* Regime */
+.regime{display:inline-flex;align-items:center;gap:4px;font-family:'IBM Plex Mono',monospace;font-size:11px;padding:2px 8px;border:1px solid}
+.regime.bull{color:var(--green);border-color:var(--green)}
+/* Task list */
+.task-list{list-style:none}
+.task-list li{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.03);font-size:12px}
+.task-list li:last-child{border-bottom:none}
+.task-check{width:12px;height:12px;border:1px solid var(--border);border-radius:2px;flex-shrink:0}
+.task-check.done{background:var(--green);border-color:var(--green)}
+.task-domain{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--dim);margin-left:auto;text-transform:uppercase}
+/* Fleet grid */
+.fleet-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;border:1px solid var(--border);margin-bottom:16px}
+.fleet-cell{padding:10px;border-right:1px solid var(--border);text-align:center}
+.fleet-cell:last-child{border-right:none}
+.fleet-cell .name{font-weight:700;font-size:12px;margin-bottom:2px}
+.fleet-cell .role{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--dim)}
+.fleet-cell .health{font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:700;margin-top:4px}
+.fleet-cell .task{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Right sidebar - notifications */
+.sidebar-r{grid-row:1;border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.notif-head{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.notif-head h3{font-family:'Newsreader',serif;font-weight:800;font-size:14px}
+.notif-count{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--dim)}
+.notif-feed{flex:1;overflow-y:auto}
+.notif-feed::-webkit-scrollbar{width:2px}
+.notif-feed::-webkit-scrollbar-thumb{background:#222}
+.notif{padding:10px 14px;border-bottom:1px solid var(--border)}
+.notif .type{font-family:'IBM Plex Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:3px}
+.notif .type.alert{color:var(--red)}.notif .type.toast{color:var(--amber)}.notif .type.briefing{color:var(--green)}
+.notif .title{font-weight:600;font-size:12px;margin-bottom:2px}
+.notif .body{font-size:11px;color:var(--dim);line-height:1.4}
+.notif .time{font-family:'IBM Plex Mono',monospace;font-size:9px;color:#333;margin-top:4px}
+/* Bottom bar */
+.bottom-bar{grid-column:2/4;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;padding:0 14px}
+.bottom-bar select{font-family:'IBM Plex Mono',monospace;font-size:10px;background:transparent;border:1px solid var(--border);color:var(--fg);padding:3px 6px;border-radius:2px}
+.bottom-bar select option{background:#0c0c0e}
+.bottom-bar input{flex:1;background:transparent;border:1px solid var(--border);padding:6px 12px;color:var(--fg);font-family:'Instrument Sans',sans-serif;font-size:12px;outline:none;border-radius:2px}
+.bottom-bar input:focus{border-color:#444}
+.bottom-bar input::placeholder{color:#333}
+.bottom-bar .send{font-family:'IBM Plex Mono',monospace;font-size:10px;background:transparent;border:1px solid var(--border);color:var(--dim);padding:5px 12px;border-radius:2px;cursor:pointer}
+.bottom-bar .send:hover{color:var(--fg);border-color:#444}
+/* Responsive */
+@media(max-width:1000px){.shell{grid-template-columns:1fr;grid-template-rows:auto 1fr auto auto}.sidebar,.sidebar-r{display:none}.two-col{grid-template-columns:1fr}.fleet-grid{grid-template-columns:repeat(3,1fr)}.metrics{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="shell">
+<aside class="sidebar">
+<div class="logo"><h1>Mission Control</h1><div class="ver">Meridian v2.0</div></div>
+<div class="s-section">
+<div class="s-label">Fleet</div>
+<div class="agent"><span class="dot" style="background:var(--green)"></span><span class="name">Atlas</span><span class="status">online</span></div>
+<div class="agent"><span class="dot" style="background:var(--amber)"></span><span class="name">Kiln</span><span class="status">pulse check</span></div>
+<div class="agent"><span class="dot" style="background:var(--violet);opacity:.4"></span><span class="name">Razor</span><span class="status">idle</span></div>
+<div class="agent"><span class="dot" style="background:var(--blue)"></span><span class="name">Meridian</span><span class="status">cannaflora</span></div>
+<div class="agent"><span class="dot" style="background:var(--red)"></span><span class="name">Hex</span><span class="status">mc v2 build</span></div>
+</div>
+<nav class="nav">
+<a class="active">Dashboard<span class="kbd">D</span></a>
+<a>Production<span class="kbd">P</span></a>
+<a>Trading<span class="kbd">T</span></a>
+<a>Tasks<span class="kbd">K</span></a>
+<a>Shipments<span class="kbd">S</span></a>
+<a>Settings<span class="kbd">,</span></a>
+</nav>
+<div class="sys">
+<div><span>System</span><span class="ok">nominal</span></div>
+<div><span>Uptime</span><span>14d 7h</span></div>
+<div><span>Agents</span><span>4/5</span></div>
+<div><span>Sync</span><span>2s</span></div>
+</div>
+</aside>
+
+<main class="main">
+<div class="sec-head"><span>Production</span> Dashboard</div>
+<div class="metrics">
+<div class="metric"><div class="val">47.2</div><div class="lbl">lbs processed</div><div class="delta up">+3.1 vs yesterday</div></div>
+<div class="metric"><div class="val">96</div><div class="lbl">lbs/hour</div><div class="delta up">+8%</div></div>
+<div class="metric"><div class="val">4</div><div class="lbl">crew</div><div class="delta" style="color:var(--dim)">full shift</div></div>
+<div class="metric"><div class="val">6.2h</div><div class="lbl">active</div><div class="delta" style="color:var(--dim)">~1.8h left</div></div>
+</div>
+<div class="chart-area">
+<svg viewBox="0 0 600 90" preserveAspectRatio="none">
+<path class="chart-fill" d="M0,90 L0,60 40,58 80,48 120,52 160,40 200,44 240,30 280,34 320,22 360,28 400,18 440,24 480,16 520,22 560,14 600,18 600,90Z"/>
+<path class="chart-line" d="M0,60 40,58 80,48 120,52 160,40 200,44 240,30 280,34 320,22 360,28 400,18 440,24 480,16 520,22 560,14 600,18"/>
+</svg>
+<div class="tag">Hourly output (lbs) — Cherry Truffle</div>
+</div>
+<div class="info-row"><div class="key">Strain</div><div class="val">Cherry Truffle — Batch #CT-2024-089</div></div>
+<div class="info-row"><div class="key">Crew</div><div class="val">Koa (lead), Marcus (trim), Dani (trim), Sam (buck)</div></div>
+
+<div class="fleet-grid">
+<div class="fleet-cell"><div class="dot" style="background:var(--green);width:6px;height:6px;border-radius:50%;margin:0 auto 4px"></div><div class="name">Atlas</div><div class="role">orchestrator</div><div class="health" style="color:var(--green)">98%</div><div class="task">online</div></div>
+<div class="fleet-cell"><div class="dot" style="background:var(--amber);width:6px;height:6px;border-radius:50%;margin:0 auto 4px"></div><div class="name">Kiln</div><div class="role">production</div><div class="health" style="color:var(--green)">95%</div><div class="task">hourly pulse</div></div>
+<div class="fleet-cell"><div class="dot" style="background:var(--violet);width:6px;height:6px;border-radius:50%;margin:0 auto 4px;opacity:.4"></div><div class="name">Razor</div><div class="role">trading</div><div class="health" style="color:var(--dim)">IDLE</div><div class="task">standby</div></div>
+<div class="fleet-cell"><div class="dot" style="background:var(--blue);width:6px;height:6px;border-radius:50%;margin:0 auto 4px"></div><div class="name">Meridian</div><div class="role">shipments</div><div class="health" style="color:var(--green)">91%</div><div class="task">cannaflora check</div></div>
+<div class="fleet-cell"><div class="dot" style="background:var(--red);width:6px;height:6px;border-radius:50%;margin:0 auto 4px"></div><div class="name">Hex</div><div class="role">dev/deploy</div><div class="health" style="color:var(--amber)">87%</div><div class="task">mc v2 build</div></div>
+</div>
+
+<div class="two-col">
+<div>
+<div class="col-title">Trading Desk <span class="regime bull">▲ BULL</span></div>
+<table class="pos-table">
+<tr><th>Ticker</th><th>Price</th><th>P&L</th><th>%</th></tr>
+<tr><td class="ticker">SPY</td><td>587.42</td><td class="green">+$1,240</td><td class="green">+0.8%</td></tr>
+<tr><td class="ticker">NVDA</td><td>892.10</td><td class="green">+$890</td><td class="green">+1.2%</td></tr>
+<tr><td class="ticker">TSLA</td><td>198.55</td><td class="red">-$320</td><td class="red">-0.4%</td></tr>
+<tr><td class="ticker">QQQ</td><td>512.88</td><td class="green">+$1,037</td><td class="green">+0.6%</td></tr>
+</table>
+<div style="margin-top:8px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--dim)">
+Day P&L: <span style="color:var(--green)">+$2,847</span> · Portfolio: $48.2K · MTD: <span style="color:var(--green)">+6.2%</span>
+</div>
+<div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--dim)">
+<span style="color:var(--green)">BUY</span> NVDA 890C 3/7 @ 14.20 — 10:32a<br>
+<span style="color:var(--amber)">HOLD</span> SPY 585P hedge — watching 584
+</div>
+</div>
+<div>
+<div class="col-title">Tasks</div>
+<ul class="task-list">
+<li><span class="task-check"></span>MC v2 concepts build<span class="task-domain" style="color:var(--red)">hex</span></li>
+<li><span class="task-check"></span>Cannaflora shipment follow-up<span class="task-domain" style="color:var(--blue)">meridian</span></li>
+<li><span class="task-check"></span>Hourly production pulse<span class="task-domain" style="color:var(--amber)">kiln</span></li>
+<li><span class="task-check"></span>Swiss wholesale pricing<span class="task-domain">ops</span></li>
+<li><span class="task-check"></span>Barcode label redesign<span class="task-domain">dev</span></li>
+<li><span class="task-check done"></span><span style="text-decoration:line-through;color:var(--dim)">Morning briefing sent</span><span class="task-domain" style="color:var(--green)">atlas</span></li>
+<li><span class="task-check done"></span><span style="text-decoration:line-through;color:var(--dim)">SPY 585C sold @ 12.80</span><span class="task-domain" style="color:var(--violet)">razor</span></li>
+<li><span class="task-check done"></span><span style="text-decoration:line-through;color:var(--dim)">Cherry Truffle batch logged</span><span class="task-domain" style="color:var(--amber)">kiln</span></li>
+<li><span class="task-check done"></span><span style="text-decoration:line-through;color:var(--dim)">API health check passed</span><span class="task-domain" style="color:var(--red)">hex</span></li>
+</ul>
+</div>
+</div>
+</main>
+
+<aside class="sidebar-r">
+<div class="notif-head"><h3>Feed</h3><span class="notif-count">12</span></div>
+<div class="notif-feed">
+<div class="notif"><div class="type alert">alert</div><div class="title">Humidity spike — Dry Room B</div><div class="body">RH 68% at 15:32. Threshold 62%. Dehumidifier may need service.</div><div class="time">2m ago</div></div>
+<div class="notif"><div class="type toast">toast</div><div class="title">Cannaflora shipment update</div><div class="body">CF-2847 cleared customs. ETA Wed. 12 units Cherry Truffle tops.</div><div class="time">18m ago</div></div>
+<div class="notif"><div class="type briefing">briefing</div><div class="title">Afternoon Brief</div><div class="body">Production on pace 47.2 lbs / 6.2 hrs. Trading +$2.8K bull. Swiss inquiry from Zurich Botanics 50 lb lot.</div><div class="time">34m ago</div></div>
+<div class="notif"><div class="type toast">toast</div><div class="title">Deploy: rogue-origin-api v2.4.1</div><div class="body">Pushed to prod. Health checks passing.</div><div class="time">1h ago</div></div>
+<div class="notif"><div class="type toast">toast</div><div class="title">Consignment: Green Valley Farms</div><div class="body">8.4 lbs smalls, Banana Runtz @ $180/lb. #347.</div><div class="time">1h 22m ago</div></div>
+<div class="notif"><div class="type briefing">briefing</div><div class="title">Morning Brief</div><div class="body">58°F clear. Dry Room A 58% RH. 4 crew. 3 tasks due. 2 shipments pending.</div><div class="time">6h ago</div></div>
+<div class="notif"><div class="type alert">alert</div><div class="title">ClickUp sync 429</div><div class="body">Retrying in 5m. No data loss.</div><div class="time">7h ago</div></div>
+<div class="notif"><div class="type toast">toast</div><div class="title">Market open scan</div><div class="body">SPY +0.3% VIX 14.2. Bull confirmed.</div><div class="time">8h ago</div></div>
+</div>
+</aside>
+
+<div class="bottom-bar">
+<select><option>Atlas</option><option>Kiln</option><option>Razor</option><option>Meridian</option><option>Hex</option><option>All</option></select>
+<input placeholder="Command... (⌘K to focus)" type="text">
+<button class="send">↵</button>
+</div>
+</div>
+<script>
+document.querySelector('.bottom-bar input').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.value.trim()){e.target.value=''}});
+document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();document.querySelector('.bottom-bar input').focus()}});
+</script>
+</body>
+</html>
