@@ -1679,7 +1679,7 @@ body {
 
 .scale-display {
   position: relative;
-  width: min(85%, 280px);
+  width: min(90%, 340px);
   aspect-ratio: 1;
   border-radius: 50%;
   background: #1c2220;
@@ -1816,7 +1816,7 @@ body {
 
 .timer-ring-container {
   position: relative;
-  width: min(85%, 320px);
+  width: min(90%, 380px);
   aspect-ratio: 1;
   border-radius: 50%;
   background: #1c2220;
