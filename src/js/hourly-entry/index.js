@@ -3622,23 +3622,32 @@ function getWorkingSecondsSinceInternal(startTime) {
 
   const nowMins = now.getHours() * 60 + now.getMinutes();
 
-  // Check if we're currently ON a break
+  // After hours: cap at last break start (4:20 PM) to freeze timer
+  const isAfterHours = nowMins >= WORKDAY_END_MINUTES || nowMins < WORKDAY_START_MINUTES;
+  const lastBreakStartMins = WORKDAY_END_MINUTES - 10; // 4:20 PM
+
+  // Check if we're currently ON a break (only during work hours)
   let currentlyOnBreak = false;
   let currentBreakStart = 0;
 
-  for (const brk of TIMER_BREAKS) {
-    const bStart = brk[0] * 60 + brk[1];
-    const bEnd = brk[2] * 60 + brk[3];
-    if (nowMins >= bStart && nowMins < bEnd) {
-      currentlyOnBreak = true;
-      currentBreakStart = bStart;
-      break;
+  if (!isAfterHours) {
+    for (const brk of TIMER_BREAKS) {
+      const bStart = brk[0] * 60 + brk[1];
+      const bEnd = brk[2] * 60 + brk[3];
+      if (nowMins >= bStart && nowMins < bEnd) {
+        currentlyOnBreak = true;
+        currentBreakStart = bStart;
+        break;
+      }
     }
   }
 
-  // If currently on break, calculate elapsed time up to break start
+  // Cap elapsed time: after hours → 4:20, on break → break start, otherwise now
   let endTime;
-  if (currentlyOnBreak) {
+  if (isAfterHours) {
+    endTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(),
+      Math.floor(lastBreakStartMins / 60), lastBreakStartMins % 60, 0);
+  } else if (currentlyOnBreak) {
     endTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(),
       Math.floor(currentBreakStart / 60), currentBreakStart % 60, 0);
   } else {
@@ -3692,23 +3701,32 @@ function getWorkingSecondsSince(startTime) {
 
   const nowMins = now.getHours() * 60 + now.getMinutes();
 
-  // Check if we're currently ON a break
+  // After hours: cap at last break start (4:20 PM) to freeze timer
+  const isAfterHours = nowMins >= WORKDAY_END_MINUTES || nowMins < WORKDAY_START_MINUTES;
+  const lastBreakStartMins = WORKDAY_END_MINUTES - 10; // 4:20 PM
+
+  // Check if we're currently ON a break (only during work hours)
   let currentlyOnBreak = false;
   let currentBreakStart = 0;
 
-  for (const brk of TIMER_BREAKS) {
-    const bStart = brk[0] * 60 + brk[1];
-    const bEnd = brk[2] * 60 + brk[3];
-    if (nowMins >= bStart && nowMins < bEnd) {
-      currentlyOnBreak = true;
-      currentBreakStart = bStart;
-      break;
+  if (!isAfterHours) {
+    for (const brk of TIMER_BREAKS) {
+      const bStart = brk[0] * 60 + brk[1];
+      const bEnd = brk[2] * 60 + brk[3];
+      if (nowMins >= bStart && nowMins < bEnd) {
+        currentlyOnBreak = true;
+        currentBreakStart = bStart;
+        break;
+      }
     }
   }
 
-  // If currently on break, calculate elapsed time up to break start
+  // Cap elapsed time: after hours → 4:20, on break → break start, otherwise now
   let endTime;
-  if (currentlyOnBreak) {
+  if (isAfterHours) {
+    endTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(),
+      Math.floor(lastBreakStartMins / 60), lastBreakStartMins % 60, 0);
+  } else if (currentlyOnBreak) {
     endTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(),
       Math.floor(currentBreakStart / 60), currentBreakStart % 60, 0);
   } else {
