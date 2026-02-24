@@ -419,9 +419,15 @@
       if (brk.onBreak) {
         if (brk.afterHours) {
           setTimerColor('neutral');
-          valEl.textContent = '--:--';
+          if (lastBagTimestamp) {
+            const elapsed = getWorkingSeconds(lastBagTimestamp);
+            valEl.textContent = formatTime(Math.abs(timerTargetSeconds - elapsed));
+            setTimerRing(Math.min(1, elapsed / timerTargetSeconds));
+          } else {
+            valEl.textContent = '--:--';
+            setTimerRing(0);
+          }
           lblEl.textContent = 'SHIFT ENDED';
-          setTimerRing(0);
           return;
         }
         setTimerColor('yellow');
