@@ -98,16 +98,16 @@ body {
 }
 
 .card-timer .card-header::after {
-  background: linear-gradient(90deg, var(--green), transparent 80%);
+  background: linear-gradient(90deg, rgba(95, 189, 132, 0.5), transparent 80%);
   transition: background 0.5s ease;
 }
 
 .card-timer.timer-yellow .card-header::after {
-  background: linear-gradient(90deg, var(--gold), transparent 80%);
+  background: linear-gradient(90deg, rgba(229, 188, 85, 0.5), transparent 80%);
 }
 
 .card-timer.timer-red .card-header::after {
-  background: linear-gradient(90deg, var(--error), transparent 80%);
+  background: linear-gradient(90deg, rgba(217, 116, 101, 0.5), transparent 80%);
 }
 
 .card-title {
@@ -1570,60 +1570,124 @@ body {
 /* ===================
    BAG TIMER CARD
    =================== */
+/* ========================================
+   CARD-TIMER — Scoreboard V2 Style
+   Glassmorphism panel with metallic rings
+   ======================================== */
 .card-timer {
   transition: background 0.5s ease;
+  position: relative;
+  overflow: hidden;
 }
 
-/* Timer panel background states (matches scoreboard, boosted for smaller card) */
+/* State-dependent edge glow (scoreboard-v2 style) */
+.card-timer.timer-green::before {
+  content: '';
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 2px;
+  background: linear-gradient(180deg, transparent, rgba(95, 189, 132, 0.3), transparent);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.card-timer.timer-yellow::before {
+  content: '';
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 2px;
+  background: linear-gradient(180deg, transparent, rgba(229, 188, 85, 0.3), transparent);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.card-timer.timer-red::before {
+  content: '';
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 2px;
+  background: linear-gradient(180deg, transparent, rgba(217, 116, 101, 0.3), transparent);
+  pointer-events: none;
+  z-index: 1;
+  animation: panelPulse 1.5s ease-in-out infinite;
+}
+
+.card-timer.timer-neutral::before {
+  content: none;
+}
+
+@keyframes panelPulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+/* Timer panel background states */
 .card-timer.timer-green {
-  background: linear-gradient(180deg, rgba(102, 137, 113, 0.5) 0%, rgba(102, 137, 113, 0.25) 100%);
-  border-color: rgba(102, 137, 113, 0.6);
-  box-shadow: inset 0 0 40px rgba(102, 137, 113, 0.15);
+  background: rgba(28, 34, 32, 0.5);
+  border-color: rgba(95, 189, 132, 0.15);
 }
 
 .card-timer.timer-yellow {
-  background: linear-gradient(180deg, rgba(228, 170, 79, 0.5) 0%, rgba(228, 170, 79, 0.25) 100%);
-  border-color: rgba(228, 170, 79, 0.6);
-  box-shadow: inset 0 0 40px rgba(228, 170, 79, 0.15);
+  background: rgba(28, 34, 32, 0.5);
+  border-color: rgba(229, 188, 85, 0.15);
 }
 
 .card-timer.timer-red {
-  background: linear-gradient(180deg, rgba(239, 68, 68, 0.4) 0%, rgba(185, 28, 28, 0.25) 100%);
-  border-color: rgba(239, 68, 68, 0.6);
-  box-shadow: inset 0 0 40px rgba(239, 68, 68, 0.15);
+  background: rgba(28, 34, 32, 0.5);
+  border-color: rgba(217, 116, 101, 0.15);
 }
 
 .card-timer.timer-neutral {
-  background: var(--bg-card);
+  background: rgba(28, 34, 32, 0.5);
 }
 
-.card-timer .card-content {
+/* Glassmorphism content area */
+.timer-panel-content {
   display: flex;
   flex-direction: column;
-  justify-content: center;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   height: 100%;
-  padding: 12px;
+  padding: 16px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  overflow-y: auto;
+  scrollbar-width: none;
 }
 
-/* ===================
-   SCALE WEIGHT CIRCLE
-   =================== */
+.timer-panel-content::-webkit-scrollbar { display: none; }
 
+/* ========================================
+   SCALE RING — Metallic bezel, scoreboard-v2
+   ======================================== */
 .scale-section {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-bottom: 12px;
+}
+
+.scale-header,
+.timer-header {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: rgba(242, 239, 232, 0.5);
   margin-bottom: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .scale-display {
   position: relative;
-  width: 300px;
-  height: 300px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: #1c2220;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0 0 3px rgba(245, 195, 109, 0.12),
+    0 8px 24px rgba(0, 0, 0, 0.5),
+    inset 0 2px 4px rgba(255, 255, 255, 0.05);
   flex-shrink: 0;
 }
 
@@ -1635,29 +1699,30 @@ body {
 
 .scale-ring-bg {
   fill: none;
-  stroke: var(--bg-input);
-  stroke-width: 10;
+  stroke: rgba(255, 255, 255, 0.035);
+  stroke-width: 2;
 }
 
 .scale-ring-progress {
   fill: none;
-  stroke-width: 10;
+  stroke: var(--gold);
+  stroke-width: 3;
   stroke-linecap: round;
   stroke-dasharray: 597;
   stroke-dashoffset: 597;
-  transition: stroke-dashoffset 0.5s ease, stroke 0.3s ease;
+  transition: stroke-dashoffset 0.8s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .scale-ring-progress.filling {
-  stroke: var(--success);
+  stroke: var(--gold);
 }
 
 .scale-ring-progress.near-target {
-  stroke: #9ae6b4;
+  stroke: #e5bc55;
 }
 
 .scale-ring-progress.at-target {
-  stroke: var(--gold);
+  stroke: #5fbd84;
 }
 
 .scale-ring-progress.stale {
@@ -1666,39 +1731,46 @@ body {
 
 .scale-center {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  text-align: center;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .scale-value {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 36px;
-  font-weight: 600;
-  color: var(--text-primary);
+  font-family: 'Bebas Neue', 'Impact', sans-serif;
+  font-size: 38px;
+  font-weight: 400;
+  color: #f2efe8;
   line-height: 1;
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 16px rgba(242, 239, 232, 0.08);
 }
 
 .scale-value.filling {
-  color: var(--success);
-}
-
-.scale-value.near-target {
-  color: #9ae6b4;
-}
-
-.scale-value.at-target {
   color: var(--gold);
 }
 
+.scale-value.near-target {
+  color: #e5bc55;
+}
+
+.scale-value.at-target {
+  color: #5fbd84;
+}
+
 .scale-value.stale {
-  color: var(--text-secondary);
+  color: rgba(242, 239, 232, 0.5);
 }
 
 .scale-label {
-  font-size: 15px;
-  color: var(--text-secondary);
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(242, 239, 232, 0.5);
   margin-top: 4px;
 }
 
@@ -1706,32 +1778,53 @@ body {
   position: absolute;
   top: 8px;
   right: 8px;
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
+  background: #6b7370;
+  transition: all 0.15s;
 }
 
 .scale-status-dot.connected {
-  background: var(--success);
-  animation: scalePulse 2s ease-in-out infinite;
+  background: #5fbd84;
+  box-shadow: 0 0 8px rgba(95, 189, 132, 0.6);
+  animation: dotPulse 3s ease-in-out infinite;
 }
 
 .scale-status-dot.stale {
-  background: rgba(255, 255, 255, 0.2);
+  background: #d97465;
   animation: none;
 }
 
-@keyframes scalePulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(95, 189, 132, 0.6); }
+  50% { opacity: 0.6; box-shadow: 0 0 4px rgba(95, 189, 132, 0.3); }
 }
 
-/* Circular Timer Ring (matches scoreboard) */
+.scale-display.filling .scale-ring-progress { stroke: var(--gold); }
+.scale-display.near-target .scale-ring-progress { stroke: #e5bc55; }
+.scale-display.at-target .scale-ring-progress { stroke: #5fbd84; }
+
+/* ========================================
+   TIMER RING — Metallic bezel, scoreboard-v2
+   ======================================== */
+.timer-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 .timer-ring-container {
   position: relative;
-  width: 300px;
-  height: 300px;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: #1c2220;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0 0 3px rgba(245, 195, 109, 0.12),
+    0 8px 24px rgba(0, 0, 0, 0.5),
+    inset 0 2px 4px rgba(255, 255, 255, 0.05);
   flex-shrink: 0;
 }
 
@@ -1743,122 +1836,240 @@ body {
 
 .timer-ring-bg {
   fill: none;
-  stroke: var(--bg-input);
-  stroke-width: 10;
+  stroke: rgba(255, 255, 255, 0.035);
+  stroke-width: 2;
 }
 
 .timer-ring-progress {
   fill: none;
-  stroke-width: 10;
+  stroke-width: 4;
   stroke-linecap: round;
-  stroke-dasharray: 597; /* 2 * PI * 95 */
-  stroke-dashoffset: 0;
-  transition: stroke-dashoffset 0.5s ease, stroke 0.3s ease;
+  transition: stroke-dashoffset 1s linear;
 }
 
 .timer-ring-progress.green {
-  stroke: var(--success);
+  stroke: #5fbd84;
 }
 
 .timer-ring-progress.yellow {
-  stroke: var(--gold);
+  stroke: #e5bc55;
+  animation: timerPulseYellow 4s ease-in-out infinite;
 }
 
 .timer-ring-progress.red {
-  stroke: var(--error);
+  stroke: #d97465;
+  animation: timerPulseRed 1.5s ease-in-out infinite;
+}
+
+.timer-ring-progress.neutral {
+  stroke: rgba(242, 239, 232, 0.22);
+  filter: none;
+}
+
+@keyframes timerPulseYellow {
+  0%, 100% { filter: none; }
+  50% { filter: drop-shadow(0 0 6px rgba(229, 188, 85, 0.3)); }
+}
+
+@keyframes timerPulseRed {
+  0%, 100% { filter: none; }
+  50% { filter: drop-shadow(0 0 8px rgba(217, 116, 101, 0.4)); }
+}
+
+/* Ring glow layer */
+.timer-ring-glow {
+  transition: opacity 0.6s;
+  opacity: 0;
+}
+
+.card-timer.timer-green .timer-ring-glow { opacity: 0.3; }
+.card-timer.timer-yellow .timer-ring-glow { opacity: 0.5; animation: glowBreatheYellow 4s ease-in-out infinite; }
+.card-timer.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 1.5s ease-in-out infinite; }
+
+@keyframes glowBreathe {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.8; }
+}
+
+@keyframes glowBreatheYellow {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.6; }
 }
 
 .timer-center {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  text-align: center;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .timer-value {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 52px;
-  font-weight: 600;
-  color: var(--text-primary);
-  letter-spacing: 2px;
+  font-family: 'Bebas Neue', 'Impact', sans-serif;
+  font-size: 48px;
+  font-weight: 400;
+  color: #f2efe8;
   line-height: 1;
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 16px rgba(242, 239, 232, 0.08);
 }
 
 .timer-value.green {
-  color: var(--success);
+  color: #5fbd84;
+  text-shadow: 0 0 20px rgba(95, 189, 132, 0.2);
 }
 
 .timer-value.yellow {
-  color: var(--gold);
+  color: #e5bc55;
+  text-shadow: 0 0 20px rgba(229, 188, 85, 0.2);
 }
 
 .timer-value.red {
-  color: var(--error);
+  color: #d97465;
+  text-shadow: 0 0 20px rgba(217, 116, 101, 0.2);
+}
+
+.timer-value.neutral {
+  color: rgba(242, 239, 232, 0.5);
+  text-shadow: 0 0 12px rgba(242, 239, 232, 0.06);
 }
 
 .timer-label {
-  font-size: 15px;
-  color: var(--text-secondary);
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 400;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-top: 8px;
+  letter-spacing: 0.08em;
+  color: rgba(242, 239, 232, 0.5);
+  margin-top: 4px;
 }
 
 /* Timer Target Info */
 .timer-target {
-  font-size: 14px;
-  color: var(--text-secondary);
-  text-align: center;
-  margin: 12px 0;
   font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(242, 239, 232, 0.5);
+  text-align: center;
+  letter-spacing: 0.05em;
 }
 
 .timer-target span {
-  color: var(--text-primary);
+  color: #f2efe8;
 }
 
-/* Timer Stats */
+/* ========================================
+   BAG STATS — Scoreboard-v2 card style
+   ======================================== */
 .timer-stats {
   display: flex;
-  gap: 24px;
-  text-align: center;
-  flex-wrap: wrap;
-  justify-content: center;
+  gap: 8px;
+  width: 100%;
 }
 
 .timer-stat {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-width: 70px;
+  align-items: center;
+  padding: 8px;
+  background: #1c2220;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: all 0.15s;
 }
 
-.stat-label {
-  font-size: 13px;
-  color: var(--text-secondary);
+.timer-stat:hover {
+  border-color: rgba(228, 170, 79, 0.3);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.timer-stat-label {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 400;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.12em;
+  color: rgba(242, 239, 232, 0.5);
+  margin-bottom: 3px;
 }
 
-.stat-value {
+.timer-stat-value {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 28px;
-  font-weight: 600;
-  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 700;
+  color: #f2efe8;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 10px rgba(242, 239, 232, 0.06);
 }
 
-.stat-value.on-track {
-  color: var(--success);
+.timer-stat-value.positive {
+  color: #5fbd84;
+  text-shadow: 0 0 12px rgba(95, 189, 132, 0.12);
 }
 
-.stat-value.behind {
-  color: var(--error);
+.timer-stat-value.negative {
+  color: #d97465;
+  text-shadow: 0 0 12px rgba(217, 116, 101, 0.12);
 }
 
-.stat-value.on-break {
+/* Legacy stat-value classes (kept for JS compat) */
+.stat-value { /* alias for timer-stat-value */ }
+.stat-value.on-track { color: #5fbd84; }
+.stat-value.behind { color: #d97465; }
+.stat-value.on-break { color: #e5bc55; }
+
+/* ========================================
+   BUTTON ROW — Scoreboard-v2 style
+   ======================================== */
+.timer-btn-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.manual-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: transparent;
+  border: 1.5px solid var(--gold);
+  border-radius: 10px;
   color: var(--gold);
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+.manual-btn .icon { font-size: 18px; display: flex; }
+
+.manual-btn:hover {
+  background: rgba(245, 195, 109, 0.15);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(228, 170, 79, 0.15);
+}
+
+.manual-btn:active { transform: translateY(0); }
+
+.manual-btn.btn-green { border-color: #5fbd84; color: #5fbd84; }
+.manual-btn.btn-green:hover { background: rgba(95, 189, 132, 0.18); }
+.manual-btn.btn-yellow { border-color: #e5bc55; color: #e5bc55; }
+.manual-btn.btn-red { border-color: #d97465; color: #d97465; }
+.manual-btn.btn-red:hover { background: rgba(217, 116, 101, 0.18); }
+.manual-btn.btn-neutral { border-color: rgba(242, 239, 232, 0.22); color: rgba(242, 239, 232, 0.5); }
+
+.manual-btn.loading { opacity: 0.6; pointer-events: none; }
+.manual-btn.success { border-color: #5fbd84; color: #5fbd84; background: rgba(95, 189, 132, 0.18); }
+.manual-btn.error { border-color: #d97465; color: #d97465; background: rgba(217, 116, 101, 0.18); }
 
 /* ===================
    TIMELINE VIEW (legacy)
@@ -1893,16 +2104,25 @@ body {
   }
 
   .scale-display {
-    width: 140px;
-    height: 140px;
+    width: 130px;
+    height: 130px;
+  }
+
+  .timer-ring-container {
+    width: 150px;
+    height: 150px;
   }
 
   .scale-value {
-    font-size: 22px;
+    font-size: 28px;
   }
 
   .timer-value {
-    font-size: 40px;
+    font-size: 36px;
+  }
+
+  .timer-stat-value {
+    font-size: 15px;
   }
 
   .barcode-btn {
