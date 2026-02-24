@@ -417,12 +417,12 @@ let SLOT_END_MINUTES = {
 };
 
 // Break-adjusted multipliers matching backend (TIME_SLOT_MULTIPLIERS)
-// Accounts for: 10-min morning break (9-10 AM), 10-min afternoon break (3-4 PM), cleanup (4-4:30 PM)
+// Accounts for: 10-min morning break (9-10 AM), 10-min afternoon break (2-3 PM), cleanup (4-4:30 PM)
 const BREAK_ADJUSTED_MULTIPLIERS = {
-  '9:00 AM – 10:00 AM': 0.83,   // 10-min morning break
-  '3:00 PM – 4:00 PM': 0.83,    // 10-min afternoon break
+  '9:00 AM – 10:00 AM': 0.83,   // 10-min morning break (9:00-9:10)
+  '2:00 PM – 3:00 PM': 0.83,    // 10-min afternoon break (2:30-2:40)
   '4:00 PM – 4:30 PM': 0.33,    // 20-min slot, 10-min cleanup
-  '2:30 PM – 3:00 PM': 0.5,     // half-hour slot
+  '2:30 PM – 3:00 PM': 0.33,    // half-hour slot minus 10-min break
   '3:00 PM – 3:30 PM': 0.5,     // half-hour slot
 };
 
