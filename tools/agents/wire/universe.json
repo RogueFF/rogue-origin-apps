@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "updated": "2026-02-24",
+  "description": "Wire ticker universe — S&P 100 components + key additions from Razor spec",
+  "tickers": {
+    "indices": ["SPY", "QQQ", "IWM", "DIA"],
+    "tech": [
+      "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "META", "NVDA", "TSLA",
+      "AVGO", "ADBE", "CRM", "AMD", "INTC", "CSCO", "ORCL", "IBM",
+      "TXN", "QCOM", "NOW", "INTU", "AMAT", "ADI", "LRCX", "MU",
+      "PANW", "CRWD", "SNOW", "NET", "DDOG", "MDB", "TEAM", "ZS",
+      "PLTR", "SHOP"
+    ],
+    "financials": [
+      "JPM", "BAC", "GS", "MS", "WFC", "C", "BLK", "SCHW",
+      "AXP", "COF", "V", "MA", "PYPL", "SQ", "COIN", "HOOD"
+    ],
+    "healthcare": [
+      "UNH", "JNJ", "PFE", "MRK", "ABBV", "LLY", "TMO", "ABT",
+      "BMY", "AMGN", "GILD", "ISRG", "MDT", "CVS"
+    ],
+    "consumer": [
+      "WMT", "COST", "TGT", "HD", "LOW", "NKE", "SBUX", "MCD",
+      "DIS", "NFLX", "ABNB", "BKNG", "UBER", "LYFT", "DASH",
+      "AMZN", "PG", "KO", "PEP"
+    ],
+    "industrials": [
+      "BA", "CAT", "DE", "HON", "GE", "RTX", "LMT", "UPS", "FDX"
+    ],
+    "energy": [
+      "XOM", "CVX", "COP", "SLB"
+    ],
+    "international": [
+      "BABA", "PDD", "TSM"
+    ],
+    "speculative": [
+      "RBLX", "RIVN", "LCID", "SOFI", "AFRM"
+    ]
+  },
+  "flat": [
+    "SPY", "QQQ", "IWM", "DIA",
+    "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "META", "NVDA", "TSLA",
+    "AVGO", "ADBE", "CRM", "AMD", "INTC", "CSCO", "ORCL", "IBM",
+    "TXN", "QCOM", "NOW", "INTU", "AMAT", "ADI", "LRCX", "MU",
+    "PANW", "CRWD", "SNOW", "NET", "DDOG", "MDB", "TEAM", "ZS",
+    "PLTR", "SHOP",
+    "JPM", "BAC", "GS", "MS", "WFC", "C", "BLK", "SCHW",
+    "AXP", "COF", "V", "MA", "PYPL", "SQ", "COIN", "HOOD",
+    "UNH", "JNJ", "PFE", "MRK", "ABBV", "LLY", "TMO", "ABT",
+    "BMY", "AMGN", "GILD", "ISRG", "MDT", "CVS",
+    "WMT", "COST", "TGT", "HD", "LOW", "NKE", "SBUX", "MCD",
+    "DIS", "NFLX", "ABNB", "BKNG", "UBER", "LYFT", "DASH",
+    "PG", "KO", "PEP",
+    "BA", "CAT", "DE", "HON", "GE", "RTX", "LMT", "UPS", "FDX",
+    "XOM", "CVX", "COP", "SLB",
+    "BABA", "PDD", "TSM",
+    "RBLX", "RIVN", "LCID", "SOFI", "AFRM"
+  ],
+  "notes": "flat[] is the deduplicated ticker list for cron.sh consumption. Sectored tickers{} for human reference + future per-sector scan weighting."
+}
