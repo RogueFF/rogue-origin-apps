@@ -138,10 +138,12 @@
     .ring-progress.green { stroke: #668971; }
     .ring-progress.yellow { stroke: #e4aa4f; }
     .ring-progress.red { stroke: #ef4444; }
+    .ring-progress.neutral { stroke: rgba(255,255,255,0.1); }
 
     .timer-value.green { color: #668971; }
     .timer-value.yellow { color: #e4aa4f; }
     .timer-value.red { color: #ef4444; }
+    .timer-value.neutral { color: rgba(255,255,255,0.3); }
 
     /* Status dot */
     .status-dot {
@@ -415,22 +417,22 @@
 
       // On break
       if (brk.onBreak) {
-        setTimerColor('yellow');
         if (brk.afterHours) {
+          setTimerColor('neutral');
           valEl.textContent = '--:--';
           lblEl.textContent = 'SHIFT ENDED';
-        } else {
-          if (lastBagTimestamp) {
-            const elapsed = getWorkingSeconds(lastBagTimestamp);
-            valEl.textContent = formatTime(Math.max(0, timerTargetSeconds - elapsed));
-          } else {
-            valEl.textContent = '--:--';
-          }
-          lblEl.textContent = 'ON BREAK';
+          setTimerRing(0);
+          return;
         }
+        setTimerColor('yellow');
         if (lastBagTimestamp) {
-          setTimerRing(Math.min(1, getWorkingSeconds(lastBagTimestamp) / timerTargetSeconds));
+          const elapsed = getWorkingSeconds(lastBagTimestamp);
+          valEl.textContent = formatTime(Math.max(0, timerTargetSeconds - elapsed));
+          setTimerRing(Math.min(1, elapsed / timerTargetSeconds));
+        } else {
+          valEl.textContent = '--:--';
         }
+        lblEl.textContent = 'ON BREAK';
         return;
       }
 
@@ -469,7 +471,7 @@
       const panel = document.getElementById('timerPanel');
 
       if (valEl) { valEl.className = 'ring-value timer-value ' + color; }
-      if (ring) { ring.classList.remove('green', 'yellow', 'red'); ring.classList.add(color); }
+      if (ring) { ring.classList.remove('green', 'yellow', 'red', 'neutral'); ring.classList.add(color); }
       if (panel) {
         panel.classList.remove('timer-green', 'timer-yellow', 'timer-red', 'timer-neutral');
         panel.classList.add('timer-' + color);
