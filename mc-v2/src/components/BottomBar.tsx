@@ -1,8 +1,14 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useGatewayStore, type ChatMessage } from '../store/gateway';
 import { useChatStore } from '../store/chat';
+import { getGatewayClient } from '../lib/gateway-client';
 
-/** Minimal markdown: **bold**, newlines, `code` */
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+const STORAGE_KEY = 'mc-v2-selected-agent';
+
 function renderMd(text: string) {
   const lines = text.split('\n');
   return lines.map((line, li) => {
@@ -25,22 +31,13 @@ function renderMd(text: string) {
   });
 }
 
-function DeliveryBadge({ msg }: { msg: ChatMessage }) {
-  if (msg.role !== 'user') return null;
-  const state = msg.state || 'complete';
-  const labels: Record<string, { text: string; color: string }> = {
-    pending:   { text: 'sending', color: 'var(--text-tertiary)' },
-    streaming: { text: 'sent',    color: 'var(--accent-cyan)' },
-    complete:  { text: '✓ delivered', color: 'var(--accent-green)' },
-    error:     { text: '✗ failed',   color: 'var(--accent-red)' },
-  };
-  const { text, color } = labels[state] || labels.complete;
-  return (
-    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color, marginLeft: 6 }}>
-      {text}
-    </span>
-  );
+function formatTime(ts: number): string {
+  return new Date(ts).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
 }
+
+// ---------------------------------------------------------------------------
+// BottomBar
+// ---------------------------------------------------------------------------
 
 export function BottomBar() {
   const { selectedAgent, message, setSelectedAgent, setMessage } = useChatStore();
@@ -54,20 +51,81 @@ export function BottomBar() {
 
   const [expanded, setExpanded] = useState(false);
   const [busyWarning, setBusyWarning] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [historyLoaded, setHistoryLoaded] = useState<Record<string, boolean>>({});
+  const [userScrolled, setUserScrolled] = useState(false);
 
   const agent = agents.find((a) => a.id === selectedAgent) || agents[0];
   const history = chatHistory[selectedAgent] || [];
   const isStreaming = chatStreaming[selectedAgent] || false;
   const isConnected = connectionState === 'connected';
 
-  // Auto-scroll on new messages
+  // Persist agent selection
   useEffect(() => {
-    if (chatRef.current && expanded) {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved && agents.some(a => a.id === saved)) {
+      setSelectedAgent(saved);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, selectedAgent);
+  }, [selectedAgent]);
+
+  // Load history when agent changes or panel expands
+  useEffect(() => {
+    if (!expanded || !isConnected || historyLoaded[selectedAgent]) return;
+    const loadHistory = async () => {
+      try {
+        const client = getGatewayClient();
+        const sessionKey = `agent:${selectedAgent}:main`;
+        const resp = await client.chatHistory(sessionKey, 20) as { messages?: Array<{ role: string; content: unknown; timestamp?: number }> };
+        if (resp?.messages?.length) {
+          // Merge into existing history (gateway store handles this via chat events,
+          // but we can seed from history if empty)
+          const existing = useGatewayStore.getState().chatHistory[selectedAgent] || [];
+          if (existing.length === 0) {
+            const seeded: ChatMessage[] = resp.messages.map((m, i) => {
+              const text = typeof m.content === 'string' ? m.content :
+                Array.isArray(m.content) ? m.content.map((b: unknown) => typeof b === 'string' ? b : (b as { text?: string })?.text || '').join('') :
+                String(m.content || '');
+              return {
+                id: `hist-${i}-${m.timestamp || Date.now()}`,
+                role: m.role as 'user' | 'assistant',
+                content: text,
+                timestamp: m.timestamp || Date.now(),
+                state: 'complete' as const,
+              };
+            });
+            useGatewayStore.setState(s => ({
+              chatHistory: { ...s.chatHistory, [selectedAgent]: seeded },
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn('[chat] History load failed:', err);
+      }
+      setHistoryLoaded(prev => ({ ...prev, [selectedAgent]: true }));
+    };
+    loadHistory();
+  }, [expanded, isConnected, selectedAgent, historyLoaded]);
+
+  // Auto-scroll on new messages (unless user scrolled up)
+  useEffect(() => {
+    if (chatRef.current && !userScrolled) {
       chatRef.current.scrollTop = chatRef.current.scrollHeight;
     }
-  }, [history, expanded]);
+  }, [history, userScrolled]);
 
-  // Timeout stuck streaming after 60s
+  // Detect user scroll
+  const handleScroll = useCallback(() => {
+    if (!chatRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = chatRef.current;
+    const atBottom = scrollHeight - scrollTop - clientHeight < 40;
+    setUserScrolled(!atBottom);
+  }, []);
+
+  // Streaming timeout
   useEffect(() => {
     if (!isStreaming) {
       setBusyWarning(false);
@@ -77,34 +135,40 @@ export function BottomBar() {
     const killTimer = setTimeout(() => {
       useGatewayStore.getState().clearStreaming?.(selectedAgent);
     }, 60_000);
-    return () => {
-      clearTimeout(busyTimer);
-      clearTimeout(killTimer);
-    };
+    return () => { clearTimeout(busyTimer); clearTimeout(killTimer); };
   }, [isStreaming, selectedAgent]);
-
-  // Auto-expand when there's history
-  useEffect(() => {
-    if (history.length > 0 && !expanded) {
-      // Don't auto-expand, let user control
-    }
-  }, [history.length, expanded]);
 
   const handleSend = async () => {
     if (!message.trim() || !isConnected) return;
     const msg = message.trim();
     setMessage('');
+    setSendError(null);
     setBusyWarning(false);
     if (!expanded) setExpanded(true);
     try {
       await sendChat(selectedAgent, msg);
     } catch (err) {
-      console.error('Chat send failed:', err);
+      const errMsg = err instanceof Error ? err.message : 'Send failed';
+      setSendError(errMsg);
     }
     inputRef.current?.focus();
   };
 
-  const historyCount = history.length;
+  const handleRetry = () => {
+    setSendError(null);
+    // Re-send last user message
+    const lastUser = [...history].reverse().find(m => m.role === 'user');
+    if (lastUser) {
+      setMessage(lastUser.content);
+    }
+  };
+
+  // Last message preview for collapsed state
+  const lastMsg = history[history.length - 1];
+  const previewText = lastMsg
+    ? `${lastMsg.role === 'user' ? 'You' : agent?.name}: ${lastMsg.content.slice(0, 60)}${lastMsg.content.length > 60 ? '...' : ''}`
+    : '';
+  const hasUnread = lastMsg?.role === 'assistant' && lastMsg.state === 'complete' && !expanded;
 
   return (
     <div style={{
@@ -115,14 +179,28 @@ export function BottomBar() {
       position: 'relative',
       zIndex: 10,
     }}>
+      {/* Connection lost banner */}
+      {!isConnected && (
+        <div style={{
+          background: 'rgba(255,51,68,0.1)',
+          borderBottom: '1px solid rgba(255,51,68,0.2)',
+          padding: '4px 16px',
+          fontFamily: 'var(--font-mono)',
+          fontSize: 9,
+          color: 'var(--accent-red)',
+          textAlign: 'center',
+        }}>
+          ⚠ Connection lost — reconnecting...
+        </div>
+      )}
 
-      {/* ── Expandable Chat Panel ── */}
+      {/* ── Expanded Chat Panel ── */}
       {expanded && (
         <div style={{
-          borderBottom: '1px solid var(--border-subtle)',
-          maxHeight: 280,
+          height: 300,
           display: 'flex',
           flexDirection: 'column',
+          borderBottom: '1px solid var(--border-subtle)',
         }}>
           {/* Panel header */}
           <div style={{
@@ -131,6 +209,7 @@ export function BottomBar() {
             alignItems: 'center',
             padding: '6px 16px',
             borderBottom: '1px solid var(--border-subtle)',
+            flexShrink: 0,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <div style={{
@@ -141,23 +220,22 @@ export function BottomBar() {
               <span style={{
                 fontFamily: 'var(--font-mono)',
                 fontSize: 9,
-                color: 'var(--text-tertiary)',
+                color: agent?.color || 'var(--text-tertiary)',
                 textTransform: 'uppercase',
                 letterSpacing: '0.08em',
               }}>
-                Session: {agent?.name || selectedAgent}
+                {agent?.name || selectedAgent}
+              </span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-tertiary)' }}>
+                agent:{selectedAgent}:main
               </span>
             </div>
             <button
               onClick={() => setExpanded(false)}
               style={{
-                background: 'none',
-                border: 'none',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 10,
-                color: 'var(--text-tertiary)',
-                cursor: 'pointer',
-                padding: '2px 6px',
+                background: 'none', border: 'none',
+                fontFamily: 'var(--font-mono)', fontSize: 10,
+                color: 'var(--text-tertiary)', cursor: 'pointer', padding: '2px 6px',
               }}
             >
               ▾ collapse
@@ -165,77 +243,179 @@ export function BottomBar() {
           </div>
 
           {/* Messages */}
-          <div ref={chatRef} style={{ flex: 1, overflow: 'auto', padding: '8px 16px' }}>
+          <div
+            ref={chatRef}
+            onScroll={handleScroll}
+            style={{ flex: 1, overflow: 'auto', padding: '8px 16px' }}
+          >
             {history.length === 0 && (
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-tertiary)', padding: '12px 0', textAlign: 'center' }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-tertiary)', padding: '24px 0', textAlign: 'center' }}>
                 No messages yet — send one below
               </div>
             )}
-            {history.slice(-30).map((msg) => (
-              <div
-                key={msg.id}
-                style={{
-                  display: 'flex',
-                  gap: 8,
-                  padding: '4px 0',
-                  fontFamily: 'var(--font-body)',
-                  fontSize: 12,
-                }}
-              >
-                <span style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 10,
-                  color: msg.role === 'user' ? 'var(--accent-cyan)' : agent?.color || 'var(--text-secondary)',
-                  fontWeight: 600,
-                  flexShrink: 0,
-                  minWidth: 40,
-                }}>
-                  {msg.role === 'user' ? 'you' : agent?.name?.toLowerCase() || 'agent'}
-                </span>
-                <span style={{
-                  color: msg.state === 'error' ? 'var(--accent-red)' : 'var(--text-primary)',
-                  opacity: msg.state === 'streaming' ? 0.8 : 1,
-                  wordBreak: 'break-word',
-                  lineHeight: 1.5,
-                  flex: 1,
-                }}>
-                  {renderMd(msg.content)}
-                  {msg.state === 'streaming' && (
-                    <span style={{ color: 'var(--text-tertiary)', marginLeft: 4 }}>▌</span>
-                  )}
-                </span>
-                <DeliveryBadge msg={msg} />
-              </div>
-            ))}
+            {history.map((msg) => {
+              const isUser = msg.role === 'user';
+              return (
+                <div
+                  key={msg.id}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: isUser ? 'flex-end' : 'flex-start',
+                    marginBottom: 8,
+                  }}
+                >
+                  {/* Message bubble */}
+                  <div style={{
+                    maxWidth: '80%',
+                    background: isUser ? 'rgba(0,240,255,0.08)' : 'rgba(255,255,255,0.04)',
+                    border: `1px solid ${isUser ? 'rgba(0,240,255,0.15)' : 'var(--border-subtle)'}`,
+                    borderRadius: isUser ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
+                    padding: '8px 12px',
+                  }}>
+                    <div style={{
+                      fontFamily: 'var(--font-body)',
+                      fontSize: 12,
+                      color: msg.state === 'error' ? 'var(--accent-red)' : 'var(--text-primary)',
+                      opacity: msg.state === 'streaming' ? 0.8 : 1,
+                      lineHeight: 1.5,
+                      wordBreak: 'break-word',
+                    }}>
+                      {renderMd(msg.content)}
+                      {msg.state === 'streaming' && (
+                        <span style={{ color: 'var(--text-tertiary)', marginLeft: 4 }}>▌</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Timestamp + delivery state */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    marginTop: 2,
+                    padding: '0 4px',
+                  }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-tertiary)' }}>
+                      {formatTime(msg.timestamp)}
+                    </span>
+                    {isUser && (
+                      <span style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 7,
+                        color: msg.state === 'error' ? 'var(--accent-red)'
+                          : msg.state === 'pending' ? 'var(--text-tertiary)'
+                          : msg.state === 'streaming' ? 'var(--accent-cyan)'
+                          : 'var(--accent-green)',
+                      }}>
+                        {msg.state === 'pending' ? 'sending...'
+                          : msg.state === 'error' ? '✗ failed'
+                          : msg.state === 'streaming' ? 'sent'
+                          : '✓ delivered'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Streaming indicator */}
             {isStreaming && history[history.length - 1]?.role !== 'assistant' && (
               <div style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 10,
-                color: 'var(--text-tertiary)',
-                padding: '4px 0',
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
+                padding: '4px 0',
               }}>
-                <span style={{ color: agent?.color }}>●</span>
-                <span>{agent?.name} is thinking...</span>
+                <div className="dot-pulse" style={{
+                  width: 6, height: 6, borderRadius: '50%',
+                  background: agent?.color || 'var(--accent-cyan)',
+                }} />
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-tertiary)' }}>
+                  {agent?.name} is thinking...
+                </span>
                 {busyWarning && (
-                  <span style={{
-                    color: 'var(--accent-gold)',
-                    fontSize: 9,
-                    marginLeft: 8,
-                    fontStyle: 'italic',
-                  }}>
-                    Agent may be busy — you can still send messages
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--accent-gold)', fontStyle: 'italic' }}>
+                    Agent may be busy
                   </span>
                 )}
+              </div>
+            )}
+
+            {/* Send error */}
+            {sendError && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '6px 10px',
+                background: 'rgba(255,51,68,0.08)',
+                border: '1px solid rgba(255,51,68,0.15)',
+                borderRadius: 8,
+                marginTop: 4,
+              }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--accent-red)' }}>
+                  ⚠ {sendError}
+                </span>
+                <button
+                  onClick={handleRetry}
+                  style={{
+                    background: 'none',
+                    border: '1px solid var(--accent-red)',
+                    borderRadius: 4,
+                    padding: '2px 8px',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    color: 'var(--accent-red)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Retry
+                </button>
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* ── Input Bar ── */}
+      {/* ── Collapsed preview / Input bar ── */}
+      {!expanded && previewText && (
+        <div
+          onClick={() => setExpanded(true)}
+          style={{
+            padding: '6px 16px',
+            borderBottom: '1px solid var(--border-subtle)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          {hasUnread && (
+            <div style={{
+              width: 6, height: 6, borderRadius: '50%',
+              background: 'var(--accent-cyan)',
+              flexShrink: 0,
+            }} />
+          )}
+          <span style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            color: 'var(--text-secondary)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            flex: 1,
+          }}>
+            {previewText}
+          </span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-tertiary)' }}>
+            ▴ expand
+          </span>
+        </div>
+      )}
+
+      {/* Input bar */}
       <div style={{
         height: 52,
         display: 'flex',
@@ -243,41 +423,14 @@ export function BottomBar() {
         padding: '0 16px',
         gap: 10,
       }}>
-        {/* Expand toggle */}
-        <button
-          onClick={() => setExpanded(!expanded)}
-          style={{
-            background: 'none',
-            border: 'none',
-            fontFamily: 'var(--font-mono)',
-            fontSize: 12,
-            color: historyCount > 0 ? 'var(--accent-cyan)' : 'var(--text-tertiary)',
-            cursor: 'pointer',
-            padding: '4px 6px',
-            flexShrink: 0,
-            position: 'relative',
-          }}
-          title={expanded ? 'Collapse chat' : 'Expand chat'}
-        >
-          {expanded ? '▾' : '▴'}
-          {historyCount > 0 && !expanded && (
-            <span style={{
-              position: 'absolute',
-              top: 0,
-              right: 0,
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background: 'var(--accent-cyan)',
-            }} />
-          )}
-        </button>
-
         {/* Agent selector */}
         <div style={{ position: 'relative', flexShrink: 0 }}>
           <select
             value={selectedAgent}
-            onChange={(e) => setSelectedAgent(e.target.value)}
+            onChange={(e) => {
+              setSelectedAgent(e.target.value);
+              setUserScrolled(false);
+            }}
             style={{
               appearance: 'none',
               background: 'var(--input-bg)',
@@ -292,22 +445,13 @@ export function BottomBar() {
             }}
           >
             {agents.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
+              <option key={a.id} value={a.id}>{a.name}</option>
             ))}
           </select>
           <span style={{
-            position: 'absolute',
-            right: 8,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            fontSize: 8,
-            color: 'var(--text-tertiary)',
-            pointerEvents: 'none',
-          }}>
-            ▾
-          </span>
+            position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+            fontSize: 8, color: 'var(--text-tertiary)', pointerEvents: 'none',
+          }}>▾</span>
         </div>
 
         {/* Input */}
@@ -317,10 +461,8 @@ export function BottomBar() {
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           placeholder={
-            !isConnected
-              ? 'Connecting to Gateway...'
-              : isStreaming
-              ? `${agent?.name} is responding... (you can still type)`
+            !isConnected ? 'Connecting...'
+              : isStreaming ? `${agent?.name} responding... (you can still type)`
               : `Message ${agent?.name}...`
           }
           disabled={!isConnected}
@@ -336,9 +478,7 @@ export function BottomBar() {
             outline: 'none',
             opacity: isConnected ? 1 : 0.5,
           }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleSend();
-          }}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleSend(); }}
           onFocus={() => { if (history.length > 0 && !expanded) setExpanded(true); }}
         />
 
