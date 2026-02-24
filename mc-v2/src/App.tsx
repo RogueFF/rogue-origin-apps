@@ -18,6 +18,7 @@ import { Trading } from './views/Trading';
 import { MobileDashboard } from './views/MobileDashboard';
 import { MobileFleet } from './views/MobileFleet';
 import { MobileFeed } from './views/MobileFeed';
+import { Monitor } from './views/Monitor';
 import { Placeholder } from './views/Placeholder';
 
 const queryClient = new QueryClient({
@@ -68,7 +69,7 @@ function AppShell() {
             <Route path="/tasks" element={<Placeholder title="Tasks" />} />
             <Route path="/production" element={<Placeholder title="Production" />} />
             <Route path="/trading" element={<Placeholder title="Trading" />} />
-            <Route path="/monitor" element={<Placeholder title="Monitor" />} />
+            <Route path="/monitor" element={<Monitor />} />
             <Route path="/system" element={<Placeholder title="System" />} />
           </Routes>
         </main>
@@ -98,7 +99,7 @@ function AppShell() {
             <Route path="/production" element={<Production />} />
             <Route path="/trading" element={<Trading />} />
             <Route path="/tasks" element={<Placeholder title="Tasks" />} />
-            <Route path="/monitor" element={<Placeholder title="Monitor" />} />
+            <Route path="/monitor" element={<Monitor />} />
             <Route path="/system" element={<Placeholder title="System" />} />
           </Routes>
         </main>
