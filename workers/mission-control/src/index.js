@@ -134,6 +134,7 @@ function matchRoute(method, path) {
     ['POST', /^\/api\/regime$/,                      'regimeUpdate'],
     ['GET',  /^\/api\/plays$/,                       'playsGet'],
     ['POST', /^\/api\/plays$/,                       'playsCreate'],
+    ['PATCH',/^\/api\/plays\/(\d+)$/,               'playsUpdate'],
     ['GET',  /^\/api\/widgets$/,                     'widgetsGet'],
     ['POST', /^\/api\/widgets$/,                     'widgetsUpdate'],
     ['GET',  /^\/api\/agents\/([a-z-]+)\/files$/,   'agentFilesList'],
@@ -141,6 +142,8 @@ function matchRoute(method, path) {
     ['PUT',  /^\/api\/agents\/([a-z-]+)\/files\/(.+)$/, 'agentFilePut'],
     ['GET',  /^\/api\/github$/,                  'github'],
     ['GET',  /^\/api\/prices$/,                  'pricesGet'],
+    ['GET',  /^\/api\/chrome-status$/,           'chromeStatus'],
+    ['POST', /^\/api\/chrome-status$/,           'chromeStatusUpdate'],
   ];
 
   for (const [m, re, handler] of routes) {
@@ -754,7 +757,7 @@ const handlers = {
   async playsGet(_req, env) {
     const db = env.DB;
     const rows = await db.prepare(
-      `SELECT * FROM trade_plays WHERE created_at >= datetime('now', '-24 hours') ORDER BY created_at DESC`
+      `SELECT * FROM trade_plays WHERE created_at >= datetime('now', '-24 hours') AND COALESCE(status, 'active') != 'dismissed' ORDER BY created_at DESC`
     ).all();
     const plays = (rows.results || []).map(r => {
       try { r.setup = JSON.parse(r.setup || '{}'); } catch { r.setup = {}; }
@@ -785,6 +788,19 @@ const handlers = {
     if (ctx) ctx.waitUntil(dispatch(env, 'play', body));
 
     return json({ success: true, data: { ticker: body.ticker } }, 201);
+  },
+
+  // PATCH /api/plays/:id — update play status (dismiss, fill, etc.)
+  async playsUpdate(req, env, params) {
+    const db = env.DB;
+    const id = params[0];
+    const body = await parseBody(req);
+    const allowed = ['active', 'dismissed', 'filled'];
+    if (!body.status || !allowed.includes(body.status)) {
+      return err('Invalid status', 'VALIDATION_ERROR', 400);
+    }
+    await db.prepare(`UPDATE trade_plays SET status = ? WHERE id = ?`).bind(body.status, id).run();
+    return json({ success: true });
   },
 
   // GET /api/agents/:name/files — list all files for an agent
@@ -1229,6 +1245,47 @@ const handlers = {
     });
     await Promise.all(fetches);
     return json({ success: true, data: prices, timestamp: new Date().toISOString() });
+  },
+
+  // GET /api/chrome-status — Chrome process memory/status from D1
+  async chromeStatus(req, env) {
+    const db = env.DB;
+    // Get latest stats
+    const latest = await db.prepare(
+      `SELECT data FROM chrome_status WHERE key = 'latest' LIMIT 1`
+    ).first().catch(() => null);
+
+    // Get history (last 48 entries = 12h at 15min intervals)
+    const historyRows = await db.prepare(
+      `SELECT data FROM chrome_status_history ORDER BY id DESC LIMIT 48`
+    ).all().catch(() => ({ results: [] }));
+
+    const stats = latest?.data ? JSON.parse(latest.data) : { total_rss_kb: 0, total_processes: 0, renderer_count: 0, browser_count: 0, last_freed_kb: 0, freed_24h_kb: 0, timestamp: null };
+    const history = (historyRows.results || []).map(r => JSON.parse(r.data)).reverse();
+
+    return json({ success: true, data: { ...stats, history } });
+  },
+
+  // POST /api/chrome-status — Push stats from cleanup cron
+  async chromeStatusUpdate(req, env) {
+    const body = await parseBody(req);
+    const db = env.DB;
+
+    // Upsert latest
+    await db.prepare(
+      `INSERT INTO chrome_status (key, data, updated_at) VALUES ('latest', ?, datetime('now'))
+       ON CONFLICT(key) DO UPDATE SET data = excluded.data, updated_at = datetime('now')`
+    ).bind(JSON.stringify(body)).run();
+
+    // Append to history, prune to 96 entries
+    await db.prepare(
+      `INSERT INTO chrome_status_history (data, created_at) VALUES (?, datetime('now'))`
+    ).bind(JSON.stringify(body)).run();
+    await db.prepare(
+      `DELETE FROM chrome_status_history WHERE id NOT IN (SELECT id FROM chrome_status_history ORDER BY id DESC LIMIT 96)`
+    ).run();
+
+    return json({ success: true });
   },
 
   // PUT /api/agents/:name/files/:filename — create or update file
