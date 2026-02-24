@@ -4,6 +4,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getGatewayClient } from './gateway-client';
 
 export interface Task {
   id: number;
@@ -108,6 +109,49 @@ export function useUpdateTask() {
       const prev = qc.getQueryData<Task[]>(['tasks']);
       qc.setQueryData<Task[]>(['tasks'], (old) =>
         (old || []).map(t => t.id === updated.id ? { ...t, ...updated, updated_at: new Date().toISOString() } : t)
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['tasks'], ctx.prev);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
+  });
+}
+
+export function useDispatchTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, agent, title, priority, domain }: {
+      id: number;
+      agent: string;
+      title: string;
+      priority: string;
+      domain: string;
+    }) => {
+      // 1. PATCH task: assign agent + move to active
+      const resp = await fetchJson<TaskResponse>(`${BASE}/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ agent, status: 'active' }),
+      });
+
+      // 2. Send dispatch message to agent via gateway
+      try {
+        const client = getGatewayClient();
+        const sessionKey = `agent:${agent}:main`;
+        const msg = `New task assigned: ${title}. Task ID: ${id}. Priority: ${priority}. Domain: ${domain}. Check the task details and begin work.`;
+        await client.chatSend(sessionKey, msg);
+      } catch (err) {
+        console.warn('[dispatch] Gateway send failed (task still assigned):', err);
+      }
+
+      return resp.data;
+    },
+    onMutate: async ({ id, agent }) => {
+      await qc.cancelQueries({ queryKey: ['tasks'] });
+      const prev = qc.getQueryData<Task[]>(['tasks']);
+      qc.setQueryData<Task[]>(['tasks'], (old) =>
+        (old || []).map(t => t.id === id ? { ...t, agent, status: 'active' as const, updated_at: new Date().toISOString() } : t)
       );
       return { prev };
     },
