@@ -534,3 +534,61 @@ body {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+/* ── Mobile layout (< 768px) ─────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Hide sidebars — main content fills width */
+  [data-sidebar="left"],
+  [data-sidebar="right"] {
+    display: none !important;
+  }
+
+  /* Main content fills available space */
+  main {
+    width: 100% !important;
+    flex: 1 !important;
+  }
+
+  /* KPI strip: horizontal scroll */
+  [data-kpi-strip] {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    flex-wrap: nowrap !important;
+    padding-bottom: 4px;
+  }
+  [data-kpi-strip] > * {
+    min-width: 110px;
+    flex-shrink: 0;
+    scroll-snap-align: start;
+  }
+
+  /* Bottom bar: fixed to bottom */
+  [data-bottom-bar] {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+  }
+
+  /* Add padding to main so content isn't hidden behind fixed bottom bar */
+  main > div {
+    padding-bottom: 60px !important;
+  }
+
+  /* Two-column layouts → stack on mobile */
+  [data-two-col] {
+    flex-direction: column !important;
+  }
+
+  /* Depth cards: reduce padding on mobile */
+  .depth-card {
+    padding: 10px 12px !important;
+  }
+
+  /* Agent fleet rows: tighter */
+  [data-agent-row] {
+    padding: 4px 6px !important;
+  }
+}
