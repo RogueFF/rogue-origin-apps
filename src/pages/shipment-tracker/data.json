@@ -26,7 +26,7 @@
         "coords": "47.444895, 8.611059",
         "fullAddress": "Grindelstrasse 17, 8303 Bassersdorf, Switzerland"
       },
-      "lastUpdate": "2026-02-24T23:00:12.819Z",
+      "lastUpdate": "2026-02-24T23:10:47.130Z",
       "created": "2026-02-17T20:00:00Z",
       "history": [
         {
@@ -196,6 +196,28 @@
         }
       ],
       "_prevStatus": "arrived"
+    },
+    {
+      "id": "robert-pallet-27873",
+      "customer": "Robert Pallet #27873",
+      "destination": "Czech Republic",
+      "origin": "Beagle, OR",
+      "finalDest": "Prague",
+      "tiveUrl": "https://platform.tive.com/shared/shipment/faca6361eb904527a5c45b953577dfee?trackerId=865918072486928",
+      "status": "pre-departure",
+      "eta": "Feb 28, 10:40 AM CET",
+      "sensorData": {
+        "temp": "65.45°F",
+        "humidity": "45.7%",
+        "battery": "98%",
+        "location": "H38J+HV Beagle, OR, USA",
+        "coords": "42.566392, -122.917778",
+        "fullAddress": "Salačova 4, 104 00 Praha 22, Czechia"
+      },
+      "lastUpdate": "2026-02-24T22:03:00Z",
+      "created": "2026-02-24T22:03:00Z",
+      "history": [],
+      "_prevStatus": "pre-departure"
     }
   ]
 }
