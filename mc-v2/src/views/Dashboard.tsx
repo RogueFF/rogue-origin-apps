@@ -38,12 +38,33 @@ interface HourlyBar {
   notes?: string;
 }
 
-function HourlyChart({ hours, target }: { hours: HourlyBar[]; target: number }) {
-  if (!hours.length) return (
-    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-tertiary)', padding: '20px 0' }}>
-      No hourly data yet
-    </div>
-  );
+function isShiftHours(): boolean {
+  const now = new Date();
+  const pst = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+  return pst.getHours() >= 7 && pst.getHours() < 17;
+}
+
+function HourlyChart({ hours, target, totalLbs }: { hours: HourlyBar[]; target: number; totalLbs?: number }) {
+  if (!hours.length) {
+    const inShift = isShiftHours();
+    if (!inShift && totalLbs && totalLbs > 0) {
+      return (
+        <div style={{ padding: '12px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Day complete
+          </span>
+          <span style={{ fontFamily: 'var(--font-stat)', fontSize: 16, fontWeight: 700, color: 'var(--accent-green)' }}>
+            {totalLbs.toFixed(1)} lbs
+          </span>
+        </div>
+      );
+    }
+    return (
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-tertiary)', padding: '12px 0', opacity: 0.7 }}>
+        {inShift ? 'Waiting for production data...' : 'Production data loads during shift hours (7 AM – 5 PM PST)'}
+      </div>
+    );
+  }
 
   const maxLbs = Math.max(...hours.map(h => h.lbs), target * 1.2);
   const barW = Math.min(40, (320 - hours.length * 4) / hours.length);
@@ -187,7 +208,7 @@ export function Dashboard() {
     <div style={{ padding: '16px 20px', overflow: 'auto', height: '100%', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
       {/* ── KPI STRIP ── */}
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div data-kpi-strip="" style={{ display: 'flex', gap: 8 }}>
         {kpis.map((kpi) => (
           <DepthCard
             key={kpi.label}
@@ -231,7 +252,7 @@ export function Dashboard() {
       </div>
 
       {/* ── MAIN TWO-COLUMN GRID ── */}
-      <div style={{ display: 'flex', gap: 12, flex: 1, minHeight: 0 }}>
+      <div data-two-col="" style={{ display: 'flex', gap: 12, flex: 1, minHeight: 0 }}>
 
         {/* LEFT COLUMN */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -265,7 +286,7 @@ export function Dashboard() {
 
             {/* Mini hourly chart */}
             <div style={{ marginTop: 10 }}>
-              <HourlyChart hours={hourlyBars} target={prod?.rate ?? 5} />
+              <HourlyChart hours={hourlyBars} target={prod?.rate ?? 5} totalLbs={prod?.totalLbs} />
             </div>
           </DepthCard>
 

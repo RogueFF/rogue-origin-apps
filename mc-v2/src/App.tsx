@@ -91,7 +91,7 @@ function AppShell() {
       <AmbientBg />
       <Header connectionState={connectionState} />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        <LeftSidebar />
+        <div data-sidebar="left"><LeftSidebar /></div>
         <main style={{ flex: 1, overflow: 'hidden' }}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
@@ -102,9 +102,9 @@ function AppShell() {
             <Route path="/system" element={<Placeholder title="System" />} />
           </Routes>
         </main>
-        <RightSidebar />
+        <div data-sidebar="right"><RightSidebar /></div>
       </div>
-      <BottomBar />
+      <div data-bottom-bar=""><BottomBar /></div>
     </div>
   );
 }
