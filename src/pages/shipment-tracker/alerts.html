@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rogue Origin · Shipment Alerts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0a0a0f;
+    --card-bg: #12121a;
+    --card-border: rgba(255,255,255,0.06);
+    --green: #00e676;
+    --yellow: #ffab00;
+    --red: #ff1744;
+    --cyan: #00bcd4;
+    --text: #e4e4ef;
+    --text-dim: #6b6b80;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Outfit', sans-serif;
+  }
+  body {
+    background: var(--bg);
+    font-family: var(--sans);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px 16px 48px;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+  .container { max-width: 960px; margin: 0 auto; position: relative; z-index: 1; }
+  
+  /* Header */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 32px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--card-border);
+  }
+  .header h1 {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+  }
+  .header .subtitle {
+    font-size: 13px;
+    color: var(--text-dim);
+    font-family: var(--mono);
+  }
+  .header .last-check {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--text-dim);
+    font-family: var(--mono);
+  }
+  
+  /* Summary bar */
+  .summary {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  .summary-card {
+    flex: 1;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    text-align: center;
+  }
+  .summary-card .count {
+    font-size: 28px;
+    font-weight: 700;
+    font-family: var(--mono);
+  }
+  .summary-card .label {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 4px;
+  }
+  
+  /* Shipment cards */
+  .shipment-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-left: 3px solid var(--health);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+    transition: border-color 0.2s;
+  }
+  .shipment-card:hover { border-color: rgba(255,255,255,0.12); border-left-color: var(--health); }
+  .shipment-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .health-dot { font-size: 20px; }
+  .shipment-title h3 { font-size: 16px; font-weight: 600; }
+  .shipment-route { font-size: 12px; color: var(--cyan); font-family: var(--mono); }
+  .shipment-status {
+    margin-left: auto;
+    font-size: 12px;
+    font-family: var(--mono);
+    padding: 4px 10px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .shipment-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px 16px;
+    margin-bottom: 12px;
+  }
+  .meta-item { display: flex; flex-direction: column; gap: 2px; }
+  .meta-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.8px; }
+  .meta-value { font-size: 13px; font-family: var(--mono); }
+  
+  .alert-list { margin-top: 12px; }
+  .alert-item {
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .alert-item.critical { background: rgba(255,23,68,0.12); color: var(--red); }
+  .alert-item.high { background: rgba(255,23,68,0.08); color: #ff5252; }
+  .alert-item.medium { background: rgba(255,171,0,0.08); color: var(--yellow); }
+  
+  .alert-badge {
+    font-size: 9px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .alert-badge.critical { background: rgba(255,23,68,0.2); color: var(--red); }
+  .alert-badge.high { background: rgba(255,82,82,0.2); color: #ff5252; }
+  .alert-badge.medium { background: rgba(255,171,0,0.2); color: var(--yellow); }
+  
+  .all-clear {
+    font-size: 13px;
+    color: var(--green);
+    font-family: var(--mono);
+    opacity: 0.7;
+  }
+  
+  /* Alert history table */
+  .section-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 36px 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--card-border);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  th {
+    text-align: left;
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--card-border);
+  }
+  td {
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .ts { color: var(--text-dim); white-space: nowrap; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  
+  /* Mobile */
+  @media (max-width: 640px) {
+    .summary { flex-direction: column; gap: 8px; }
+    .shipment-meta { grid-template-columns: 1fr 1fr; }
+    .header { flex-direction: column; align-items: flex-start; }
+    .header .last-check { margin-left: 0; }
+    table { font-size: 11px; }
+    td, th { padding: 6px 8px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div>
+      <h1>📦 Shipment Alerts</h1>
+      <div class="subtitle">Rogue Origin Logistics Monitor</div>
+    </div>
+    <div class="last-check">Last check: Feb 22, 12:25 AM PST</div>
+  </div>
+  
+  <div class="summary">
+    <div class="summary-card"><div class="count" style="color: var(--green)">1</div><div class="label">Healthy</div></div>
+    <div class="summary-card"><div class="count" style="color: var(--yellow)">0</div><div class="label">Warning</div></div>
+    <div class="summary-card"><div class="count" style="color: var(--red)">0</div><div class="label">Critical</div></div>
+    <div class="summary-card"><div class="count">1</div><div class="label">Total</div></div>
+  </div>
+  
+  
+      <div class="shipment-card" style="--health: #00e676">
+        <div class="shipment-header">
+          <span class="health-dot" style="color: #00e676">●</span>
+          <div class="shipment-title">
+            <h3>Cannaflora</h3>
+            <span class="shipment-route">RO → ZRH</span>
+          </div>
+          <div class="shipment-status">arrived</div>
+        </div>
+        <div class="shipment-meta">
+          <div class="meta-item"><span class="meta-label">AWB</span><span class="meta-value">724-87055953</span></div>
+          <div class="meta-item"><span class="meta-label">ETA</span><span class="meta-value">Feb 19, 3:30 PM CET</span></div>
+          <div class="meta-item"><span class="meta-label">Last Update</span><span class="meta-value">0h ago</span></div>
+          <div class="meta-item"><span class="meta-label">Weight</span><span class="meta-value">380 kg (2 pallets)</span></div>
+          
+          <div class="meta-item"><span class="meta-label">Temp</span><span class="meta-value">71.4°F</span></div>
+          <div class="meta-item"><span class="meta-label">Humidity</span><span class="meta-value">32.4%</span></div>
+          <div class="meta-item"><span class="meta-label">Battery</span><span class="meta-value">90%</span></div>
+          
+        </div>
+        <div class="all-clear">✓ No issues detected</div>
+      </div>
+  
+  <h2 class="section-title">Alert History</h2>
+  <div style="overflow-x:auto">
+    <table>
+      <thead><tr><th>Time</th><th>Customer</th><th>Severity</th><th>Type</th><th>Details</th><th>Sent</th></tr></thead>
+      <tbody><tr><td colspan="6" style="text-align:center;color:var(--text-dim)">No alerts recorded</td></tr></tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>
