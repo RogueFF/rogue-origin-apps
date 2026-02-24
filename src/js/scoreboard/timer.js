@@ -66,11 +66,21 @@
       }
     }
 
-    // If currently on break, calculate elapsed time up to break start
-    var endTime = currentlyOnBreak ?
-      new Date(now.getFullYear(), now.getMonth(), now.getDate(),
-               Math.floor(currentBreakStart / 60), currentBreakStart % 60, 0) :
-      now;
+    // If after hours, cap at last break start (4:20 PM) to freeze timer
+    var workdayEndMins = (Config && Config.workday && Config.workday.endMinutes) || (16 * 60 + 30);
+    var lastBreakStartMins = workdayEndMins - 10; // 4:20 PM (cleanup break start)
+    var isAfterHours = nowMins >= workdayEndMins || nowMins < ((Config && Config.workday && Config.workday.startMinutes) || (7 * 60));
+
+    var endTime;
+    if (isAfterHours) {
+      endTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(),
+               Math.floor(lastBreakStartMins / 60), lastBreakStartMins % 60, 0);
+    } else if (currentlyOnBreak) {
+      endTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(),
+               Math.floor(currentBreakStart / 60), currentBreakStart % 60, 0);
+    } else {
+      endTime = now;
+    }
 
     var totalSecs = Math.floor((endTime - startTime) / 1000);
     var startMins = startTime.getHours() * 60 + startTime.getMinutes();
@@ -376,9 +386,17 @@
       tv.className = 'timer-value yellow';
       tl.textContent = currentLang === 'es' ? 'PAUSADO' : 'PAUSED';
     } else if (breakStatus.onBreak && !State.debugMode) {
-      tv.textContent = breakStatus.afterHours ? formatTime(State.totalPausedSeconds || 0) : formatTime(displaySec);
-      tv.className = 'timer-value yellow';
-      tl.textContent = breakStatus.afterHours ? ((currentLang === 'es' ? 'PAUSADO TOTAL' : 'TOTAL PAUSED') + ' · ' + (t[currentLang] && t[currentLang].shiftEnded)) : (t[currentLang] && t[currentLang].onBreak);
+      if (breakStatus.afterHours) {
+        // Show frozen timer value + total paused time
+        var pausedStr = (State.totalPausedSeconds > 0) ? ' · ' + (currentLang === 'es' ? 'Pausado' : 'Paused') + ' ' + formatTime(State.totalPausedSeconds) : '';
+        tv.textContent = formatTime(displaySec);
+        tv.className = 'timer-value neutral';
+        tl.textContent = (t[currentLang] && t[currentLang].shiftEnded || 'SHIFT ENDED') + pausedStr;
+      } else {
+        tv.textContent = formatTime(displaySec);
+        tv.className = 'timer-value yellow';
+        tl.textContent = (t[currentLang] && t[currentLang].onBreak);
+      }
     } else {
       var showTime = State.debugMode || effectiveTarget > 0 || elapsedSec > 0;
       tv.textContent = showTime ? formatTime(displaySec) : '--:--';
