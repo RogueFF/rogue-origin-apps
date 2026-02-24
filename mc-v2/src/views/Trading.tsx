@@ -166,8 +166,8 @@ export function Trading() {
               <StatRow label="Total P&L" value={`${totalPnl >= 0 ? '+' : ''}$${totalPnl.toFixed(0)}`} accent={pnlColor} />
               <StatRow label="Realized" value={`$${portfolio.realized_pnl?.toFixed(0) ?? '—'}`} />
               <StatRow label="Unrealized" value={`$${portfolio.unrealized_pnl?.toFixed(0) ?? '—'}`} />
-              <StatRow label="Win Rate" value={portfolio.win_rate != null ? `${(portfolio.win_rate * 100).toFixed(0)}%` : '—'}
-                accent={portfolio.win_rate != null && portfolio.win_rate >= 0.5 ? 'var(--accent-green)' : undefined} />
+              <StatRow label="Win Rate" value={portfolio.win_rate != null ? `${portfolio.win_rate.toFixed(1)}%` : '—'}
+                accent={portfolio.win_rate != null && portfolio.win_rate >= 50 ? 'var(--accent-green)' : undefined} />
               <StatRow label="Open Exposure" value={`$${portfolio.open_exposure?.toLocaleString() ?? '—'}`} />
               <StatRow label="Open Positions" value={String(portfolio.open_positions ?? 0)} />
             </div>
