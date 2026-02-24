@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Relay Stream — Mission Control v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Mono:wght@400;700&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--void:#030504;--gold:#e4aa4f;--cyan:#00f0ff;--cream:#f0ece4;--green:#00ff88;--red:#ff3344;--violet:#a855f7;--blue:#3b82f6;--card-bg:rgba(15,18,16,0.85);--card-border:rgba(228,170,79,0.15)}
+body{background:var(--void);color:var(--cream);font-family:'Outfit',sans-serif;height:100vh;overflow:hidden;display:flex}
+canvas#particles{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:0.35}
+
+/* Left icon rail */
+.rail{width:52px;height:100vh;background:rgba(3,5,4,0.95);border-right:1px solid var(--card-border);display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:6px;z-index:10;flex-shrink:0}
+.rail-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;transition:all 0.2s;color:rgba(240,236,228,0.35);position:relative}
+.rail-icon:hover{background:rgba(240,236,228,0.06);color:var(--cream)}
+.rail-icon.active{color:var(--gold);background:rgba(228,170,79,0.1)}
+.rail-icon .badge{position:absolute;top:2px;right:2px;width:8px;height:8px;border-radius:50%;background:var(--red)}
+.rail-spacer{flex:1}
+.rail-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--gold),var(--cyan));display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;color:var(--void)}
+
+/* Main content area */
+.main{flex:1;display:flex;flex-direction:column;position:relative;z-index:5;overflow:hidden}
+
+/* Pinned cards */
+.pinned{display:flex;gap:12px;padding:16px 20px 12px;border-bottom:1px solid var(--card-border);background:rgba(3,5,4,0.6);backdrop-filter:blur(8px);flex-shrink:0}
+.pin-card{flex:1;background:var(--card-bg);border:1px solid var(--card-border);border-radius:10px;padding:14px 16px;position:relative;overflow:hidden;animation:cardBreathe 4s ease-in-out infinite}
+.pin-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(228,170,79,0.3),transparent)}
+.pin-card .pin-label{font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(240,236,228,0.3);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.pin-card .pin-label .pin-dot{width:5px;height:5px;border-radius:50%;background:var(--gold);animation:pulse 2s ease-in-out infinite}
+.pin-card .pin-big{font-family:'Space Mono',monospace;font-size:28px;font-weight:700;color:var(--gold)}
+.pin-card .pin-sub{font-size:11px;color:rgba(240,236,228,0.45);margin-top:3px;font-family:'Manrope',sans-serif}
+.pin-card .pin-mono{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--cyan);margin-top:4px}
+.pin-card.trading .pin-big{font-size:22px;color:var(--cream)}
+.pin-card.trading .pnl{font-family:'Space Mono',monospace;font-size:20px;color:var(--green);margin-top:4px}
+.pin-card.agents .agent-dots{display:flex;gap:8px;margin-top:8px}
+.pin-card.agents .a-dot{display:flex;align-items:center;gap:4px;font-family:'JetBrains Mono',monospace;font-size:10px}
+.pin-card.agents .a-dot .dot{width:6px;height:6px;border-radius:50%}
+
+/* Feed */
+.feed{flex:1;overflow-y:auto;padding:0 20px;scrollbar-width:thin;scrollbar-color:rgba(228,170,79,0.2) transparent}
+.feed::-webkit-scrollbar{width:4px}
+.feed::-webkit-scrollbar-track{background:transparent}
+.feed::-webkit-scrollbar-thumb{background:rgba(228,170,79,0.2);border-radius:2px}
+.feed-item{display:flex;gap:12px;padding:14px 0;border-bottom:1px solid rgba(240,236,228,0.04);animation:feedIn 0.4s ease-out both}
+.feed-item:last-child{border-bottom:none}
+.fi-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px}
+.fi-icon.production{background:rgba(228,170,79,0.1);color:var(--gold)}
+.fi-icon.agent{background:rgba(0,240,255,0.1);color:var(--cyan)}
+.fi-icon.trade{background:rgba(0,255,136,0.1);color:var(--green)}
+.fi-icon.alert{background:rgba(255,51,68,0.1);color:var(--red)}
+.fi-icon.task{background:rgba(168,85,247,0.1);color:var(--violet)}
+.fi-icon.briefing{background:rgba(0,240,255,0.1);color:var(--cyan)}
+.fi-body{flex:1;min-width:0}
+.fi-header{display:flex;align-items:baseline;gap:8px;margin-bottom:3px}
+.fi-source{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600}
+.fi-time{font-family:'JetBrains Mono',monospace;font-size:9px;color:rgba(240,236,228,0.25)}
+.fi-text{font-size:13px;color:rgba(240,236,228,0.7);line-height:1.5;font-family:'Manrope',sans-serif}
+.fi-text strong{color:var(--cream);font-weight:600}
+.fi-text .val{font-family:'JetBrains Mono',monospace;color:var(--cyan)}
+.fi-text .val-gold{font-family:'JetBrains Mono',monospace;color:var(--gold)}
+.fi-text .val-green{font-family:'JetBrains Mono',monospace;color:var(--green)}
+.fi-text .val-red{font-family:'JetBrains Mono',monospace;color:var(--red)}
+.fi-meta{display:flex;gap:12px;margin-top:6px}
+.fi-tag{font-family:'JetBrains Mono',monospace;font-size:9px;padding:2px 8px;border-radius:3px;text-transform:uppercase;letter-spacing:0.5px}
+.fi-tag.prod-tag{background:rgba(228,170,79,0.1);color:var(--gold)}
+.fi-tag.agent-tag{background:rgba(0,240,255,0.1);color:var(--cyan)}
+.fi-tag.trade-tag{background:rgba(0,255,136,0.1);color:var(--green)}
+.fi-tag.alert-tag{background:rgba(255,51,68,0.1);color:var(--red)}
+.fi-tag.task-tag{background:rgba(168,85,247,0.1);color:var(--violet)}
+
+/* Feed separator */
+.feed-sep{padding:8px 0;display:flex;align-items:center;gap:10px}
+.feed-sep .line{flex:1;height:1px;background:rgba(228,170,79,0.1)}
+.feed-sep .label{font-family:'JetBrains Mono',monospace;font-size:9px;color:rgba(240,236,228,0.2);text-transform:uppercase;letter-spacing:1px}
+
+@keyframes cardBreathe{0%,100%{box-shadow:0 0 0 rgba(228,170,79,0)}50%{box-shadow:0 0 15px rgba(228,170,79,0.04)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+@keyframes feedIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+
+<canvas id="particles"></canvas>
+
+<!-- Left Icon Rail -->
+<div class="rail">
+  <div class="rail-icon active" title="Feed">⚡</div>
+  <div class="rail-icon" title="Production">🌿</div>
+  <div class="rail-icon" title="Agents">🤖</div>
+  <div class="rail-icon" title="Trading">📈</div>
+  <div class="rail-icon" title="Tasks">☑</div>
+  <div class="rail-icon" title="Alerts"><span>🔔</span><div class="badge"></div></div>
+  <div class="rail-spacer"></div>
+  <div class="rail-icon" title="Settings">⚙</div>
+  <div class="rail-avatar">K</div>
+</div>
+
+<!-- Main -->
+<div class="main">
+  <!-- Pinned Cards -->
+  <div class="pinned">
+    <!-- Production Scoreboard (always pinned) -->
+    <div class="pin-card">
+      <div class="pin-label"><div class="pin-dot"></div> Production — Live</div>
+      <div class="pin-big">47.2 <span style="font-size:14px;color:rgba(240,236,228,0.4)">lbs</span></div>
+      <div class="pin-mono">12.1 lbs/hr · 68% target</div>
+      <div class="pin-sub">Tropicana Cookies · 6 crew</div>
+    </div>
+
+    <!-- Trading -->
+    <div class="pin-card trading">
+      <div class="pin-label"><div class="pin-dot" style="background:var(--green)"></div> Trading — Bull</div>
+      <div class="pin-big">SPY 587.42 <span style="font-size:14px;color:var(--green)">+0.8%</span></div>
+      <div class="pnl">+$342</div>
+      <div class="pin-sub">2 open · NVDA +$218 · AAPL +$124</div>
+    </div>
+
+    <!-- Agents -->
+    <div class="pin-card agents">
+      <div class="pin-label"><div class="pin-dot" style="background:var(--cyan)"></div> Agents</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:rgba(240,236,228,0.6)">5 online · 3 running</div>
+      <div class="agent-dots">
+        <div class="a-dot"><div class="dot" style="background:var(--green);box-shadow:0 0 4px var(--green)"></div><span style="color:var(--green)">Atlas</span></div>
+        <div class="a-dot"><div class="dot" style="background:var(--gold);box-shadow:0 0 4px var(--gold)"></div><span style="color:var(--gold)">Kiln</span></div>
+        <div class="a-dot"><div class="dot" style="background:var(--violet)"></div><span style="color:var(--violet)">Razor</span></div>
+        <div class="a-dot"><div class="dot" style="background:var(--blue);box-shadow:0 0 4px var(--blue)"></div><span style="color:var(--blue)">Meridian</span></div>
+        <div class="a-dot"><div class="dot" style="background:var(--red);box-shadow:0 0 4px var(--red)"></div><span style="color:var(--red)">Hex</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Activity Feed -->
+  <div class="feed" id="feed">
+    <div class="feed-sep"><div class="line"></div><div class="label">Now</div><div class="line"></div></div>
+
+    <div class="feed-item" style="animation-delay:0s">
+      <div class="fi-icon agent">🤖</div>
+      <div class="fi-body">
+        <div class="fi-header"><div class="fi-source" style="color:var(--red)">Hex</div><div class="fi-time">16:04</div></div>
+        <div class="fi-text">Building MC v2 layout concepts — <span class="val">2/3 complete</span>. Relay Hub and Relay Stream done, starting Relay Deck.</div>
+        <div class="fi-meta"><span class="fi-tag agent-tag">agent</span></div>
+      </div>
+    </div>
+
+    <div class="feed-item" style="animation-delay:0.05s">
+      <div class="fi-icon production">🌿</div>
+      <div class="fi-body">
+        <div class="fi-header"><div class="fi-source" style="color:var(--gold)">Production</div><div class="fi-time">16:00</div></div>
+        <div class="fi-text">Hourly update: <span class="val-gold">47.2 lbs</span> total · <span class="val">12.1 lbs/hr</span> rate · <span class="val-gold">68%</span> of daily target. On track for completion by 18:30.</div>
+        <div class="fi-meta"><span class="fi-tag prod-tag">production</span></div>
+      </div>
+    </div>
+
+    <div class="feed-item" style="animation-delay:0.1s">
+      <div class="fi-icon alert">⚠</div>
+      <div class="fi-body">
+        <div class="fi-header"><div class="fi-source" style="color:var(--cyan)">Briefing</div><div class="fi-time">15:42</div></div>
+        <div class="fi-text"><strong>Daily briefing generated.</strong> 3 action items flagged: Swiss wholesale pricing follow-up, Cannaflora inventory sync, production rate dip review.</div>
+        <div class="fi-meta"><span class="fi-tag alert-tag">briefing</span></div>
+      </div>
+    </div>
+
+    <div class="feed-item" style="animation-delay:0.15s">
+      <div class="fi-icon agent">🤖</div>
+      <div class="fi-body">
+        <div class="fi-header"><div class="fi-source" style="color:var(--blue)">Meridian</div><div class="fi-time">15:38</div></div>
+        <div class="fi-text">Started <span class="val">Cannaflora check</span> — querying partner inventory levels across 3 SKUs.</div>
+        <div class="fi-meta"><span class="fi-tag agent-tag">agent</span></div>
+      </div>
+    </div>
+
+    <div class="feed-item" style="animation-delay:0.2s">
+      <div class="fi-icon trade">📈</div>
+      <div class="fi-body">
+        <div class="fi-header"><div class="fi-source" style="color:var(--green)">Razor</div><div class="fi-time">15:30</div></div>
+        <div class="fi-text">Market regime confirmed <span class="val-green">BULL</span>. SPY holding above 585 support. Portfolio P&L: <span class="val-green">+$342</span>. No action required.</div>
+        <div class="fi-meta"><span class="fi-tag trade-tag">trading</span></div>
+      </div>
+    </div>
+
+    <div class="feed-sep"><div class="line"></div><div class="label">Earlier today</div><div class="line"></div></div>
+
+    <div class="feed-item" style="animation-delay:0.25s">
+      <div class="fi-icon production">🌿</div>
+      <div class="fi-body">
+        <div class="fi-header"><div class="fi-source" style="color:var(--gold)">Production</div><div class="fi-time">15:00</div></div>
+        <div class="fi-text">Hourly update: <span class="val-gold">41.6 lbs</span> total · Rate recovering to <span class="val">11.8 lbs/hr</span> after lunch dip.</div>
+        <div class="fi-meta"><span class="fi-tag prod-tag">production</span></div>
+      </div>
+    </div>
+
+    <div class="feed-item" style="animation-delay:0.3s">
+      <div class="fi-icon alert">🔴</div>
+      <div class="fi-body">
+        <div class="fi-header"><div class="fi-source" style="color:var(--red)">Alert</div><div class="fi-time">14:18</div></div>
+        <div class="fi-text"><strong>Production rate dropped below 10 lbs/hr</strong> for 22 minutes (12:48–13:10). Cause: crew lunch rotation overlap. Rate has since recovered.</div>
+        <div class="fi-meta"><span class="fi-tag alert-tag">alert</span></div>
+      </div>
+    </div>
+
+    <div class="feed-item" style="animation-delay:0.35s">
+      <div class="fi-icon task">☑</div>
+      <div class="fi-body">
+        <div class="fi-header"><div class="fi-source" style="color:var(--violet)">Tasks</div><div class="fi-time">14:00</div></div>
+        <div class="fi-text">Task summary: <span class="val">8 active</span> · <span class="val-red">3 blocked</span> · 12 backlog. Blocked: Swiss pricing (partner), label printer (hardware), API rate limit (Cloudflare).</div>
+        <div class="fi-meta"><span class="fi-tag task-tag">tasks</span></div>
+      </div>
+    </div>
+
+    <div class="feed-item" style="animation-delay:0.4s">
+      <div class="fi-icon agent">🤖</div>
+      <div class="fi-body">
+        <div class="fi-header"><div class="fi-source" style="color:var(--gold)">Kiln</div><div class="fi-time">13:30</div></div>
+        <div class="fi-text">Hourly pulse complete — all 4 monitored systems nominal. No anomalies. Next pulse: <span class="val">14:30</span>.</div>
+        <div class="fi-meta"><span class="fi-tag agent-tag">agent</span></div>
+      </div>
+    </div>
+
+    <div class="feed-item" style="animation-delay:0.45s">
+      <div class="fi-icon production">🌿</div>
+      <div class="fi-body">
+        <div class="fi-header"><div class="fi-source" style="color:var(--gold)">Production</div><div class="fi-time">13:00</div></div>
+        <div class="fi-text">Hourly update: <span class="val-gold">32.8 lbs</span> total. Lunch break rotation started. Expect reduced rate for ~30 min.</div>
+        <div class="fi-meta"><span class="fi-tag prod-tag">production</span></div>
+      </div>
+    </div>
+
+    <div class="feed-item" style="animation-delay:0.5s">
+      <div class="fi-icon trade">📈</div>
+      <div class="fi-body">
+        <div class="fi-header"><div class="fi-source" style="color:var(--green)">Razor</div><div class="fi-time">11:30</div></div>
+        <div class="fi-text"><span class="val-red">⚠ Unusual volume spike</span> detected on SPY at 11:28. Volume 2.3x 20-day average. Within risk parameters — no action taken.</div>
+        <div class="fi-meta"><span class="fi-tag trade-tag">trading</span><span class="fi-tag alert-tag">alert</span></div>
+      </div>
+    </div>
+
+    <div class="feed-item" style="animation-delay:0.55s">
+      <div class="fi-icon agent">🤖</div>
+      <div class="fi-body">
+        <div class="fi-header"><div class="fi-source" style="color:var(--green)">Atlas</div><div class="fi-time">09:15</div></div>
+        <div class="fi-text">Morning initialization complete. All agents spawned. Production tracking live. Trading signals active. <span class="val-green">Systems nominal.</span></div>
+        <div class="fi-meta"><span class="fi-tag agent-tag">agent</span></div>
+      </div>
+    </div>
+
+    <div class="feed-item" style="animation-delay:0.6s">
+      <div class="fi-icon production">🌿</div>
+      <div class="fi-body">
+        <div class="fi-header"><div class="fi-source" style="color:var(--gold)">Production</div><div class="fi-time">06:00</div></div>
+        <div class="fi-text">Shift started. <span class="val">6 crew</span> on floor. Strain: <span class="val-gold">Tropicana Cookies</span>. Daily target: 69.4 lbs.</div>
+        <div class="fi-meta"><span class="fi-tag prod-tag">production</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas=document.getElementById('particles'),ctx=canvas.getContext('2d');
+let W,H,particles=[];
+function resize(){W=canvas.width=window.innerWidth;H=canvas.height=window.innerHeight}
+window.addEventListener('resize',resize);resize();
+for(let i=0;i<50;i++)particles.push({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-0.5)*0.2,vy:(Math.random()-0.5)*0.2,r:Math.random()*1.2+0.3,a:Math.random()*0.4+0.1});
+function draw(){ctx.clearRect(0,0,W,H);particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;if(p.x<0)p.x=W;if(p.x>W)p.x=0;if(p.y<0)p.y=H;if(p.y>H)p.y=0;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle=`rgba(228,170,79,${p.a})`;ctx.fill()});requestAnimationFrame(draw)}
+draw();
+
+// Simulate new feed item every 15s
+const sources=[
+  {icon:'🌿',cls:'production',name:'Production',color:'var(--gold)',tag:'prod-tag',texts:['Rate holding steady at <span class="val">12.1 lbs/hr</span>. Next milestone: 50 lbs.','Crew rotation smooth. All stations active.']},
+  {icon:'🤖',cls:'agent',name:'Kiln',color:'var(--gold)',tag:'agent-tag',texts:['Hourly pulse — all systems nominal.','Checking production sensors...']},
+  {icon:'📈',cls:'trade',name:'Razor',color:'var(--green)',tag:'trade-tag',texts:['SPY trending above VWAP. Bull regime intact.','Portfolio value stable. No signals.']}
+];
+let feedIdx=0;
+setInterval(()=>{
+  const s=sources[feedIdx%sources.length];
+  const t=s.texts[Math.floor(Math.random()*s.texts.length)];
+  const now=new Date();
+  const time=now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'America/Los_Angeles'});
+  const item=document.createElement('div');
+  item.className='feed-item';
+  item.style.animation='feedIn 0.4s ease-out both';
+  item.innerHTML=`<div class="fi-icon ${s.cls}">${s.icon}</div><div class="fi-body"><div class="fi-header"><div class="fi-source" style="color:${s.color}">${s.name}</div><div class="fi-time">${time}</div></div><div class="fi-text">${t}</div><div class="fi-meta"><span class="fi-tag ${s.tag}">${s.cls==='trade'?'trading':s.cls}</span></div></div>`;
+  const feed=document.getElementById('feed');
+  const firstSep=feed.querySelector('.feed-sep');
+  if(firstSep&&firstSep.nextElementSibling)feed.insertBefore(item,firstSep.nextElementSibling);
+  feedIdx++;
+},15000);
+</script>
+</body>
+</html>

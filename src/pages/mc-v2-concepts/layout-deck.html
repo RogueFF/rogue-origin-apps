@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Relay Deck — Mission Control v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Mono:wght@400;700&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--void:#030504;--gold:#e4aa4f;--cyan:#00f0ff;--cream:#f0ece4;--green:#00ff88;--red:#ff3344;--violet:#a855f7;--blue:#3b82f6;--card-bg:rgba(15,18,16,0.85);--card-border:rgba(228,170,79,0.15)}
+body{background:var(--void);color:var(--cream);font-family:'Outfit',sans-serif;height:100vh;overflow:hidden;display:flex;flex-direction:column}
+canvas#particles{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:0.3}
+
+/* Top bar */
+.topbar{position:relative;z-index:10;display:flex;align-items:center;justify-content:space-between;padding:10px 20px;border-bottom:1px solid var(--card-border);background:rgba(3,5,4,0.95);backdrop-filter:blur(12px);flex-shrink:0}
+.topbar .logo{font-family:'Space Mono',monospace;font-size:13px;color:var(--gold);letter-spacing:2px}
+.topbar .logo span{color:var(--cyan)}
+.topbar .right{display:flex;gap:14px;align-items:center}
+.topbar .regime{font-family:'JetBrains Mono',monospace;font-size:10px;padding:3px 8px;border-radius:3px;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.25);color:var(--green);text-transform:uppercase;letter-spacing:1px}
+.topbar .clock{font-family:'JetBrains Mono',monospace;font-size:12px;color:rgba(240,236,228,0.4)}
+
+/* Columns container */
+.columns{display:flex;flex:1;overflow:hidden;position:relative;z-index:5}
+
+/* Single column */
+.col{flex:1;display:flex;flex-direction:column;border-right:1px solid rgba(240,236,228,0.04);min-width:0;transition:flex 0.3s}
+.col:last-child{border-right:none}
+.col.collapsed{flex:0 0 42px;overflow:hidden}
+.col.collapsed .col-body{display:none}
+.col.collapsed .col-head{writing-mode:vertical-rl;text-orientation:mixed;padding:12px 8px;cursor:pointer}
+.col.collapsed .col-head .col-stat{display:none}
+.col.collapsed .col-head .col-toggle{transform:rotate(180deg)}
+
+.col-head{padding:10px 14px;border-bottom:1px solid var(--card-border);background:rgba(3,5,4,0.6);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;cursor:default}
+.col-head .col-title{font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(240,236,228,0.5);display:flex;align-items:center;gap:6px}
+.col-head .col-title .col-dot{width:6px;height:6px;border-radius:50%}
+.col-head .col-stat{font-family:'Space Mono',monospace;font-size:13px;font-weight:700}
+.col-head .col-toggle{font-size:10px;color:rgba(240,236,228,0.25);cursor:pointer;padding:2px 6px;border-radius:3px;transition:all 0.2s}
+.col-head .col-toggle:hover{color:var(--cream);background:rgba(240,236,228,0.06)}
+
+.col-body{flex:1;overflow-y:auto;padding:8px;scrollbar-width:thin;scrollbar-color:rgba(228,170,79,0.15) transparent}
+.col-body::-webkit-scrollbar{width:3px}
+.col-body::-webkit-scrollbar-thumb{background:rgba(228,170,79,0.15);border-radius:2px}
+
+/* Deck cards */
+.dk{background:var(--card-bg);border:1px solid var(--card-border);border-radius:8px;padding:10px 12px;margin-bottom:6px;position:relative;overflow:hidden;animation:cardBreathe 4s ease-in-out infinite}
+.dk::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(228,170,79,0.2),transparent)}
+.dk .dk-time{font-family:'JetBrains Mono',monospace;font-size:9px;color:rgba(240,236,228,0.2)}
+.dk .dk-text{font-size:12px;color:rgba(240,236,228,0.7);line-height:1.5;margin-top:4px;font-family:'Manrope',sans-serif}
+.dk .dk-text .v{font-family:'JetBrains Mono',monospace}
+.dk .dk-text .v-gold{font-family:'JetBrains Mono',monospace;color:var(--gold)}
+.dk .dk-text .v-cyan{font-family:'JetBrains Mono',monospace;color:var(--cyan)}
+.dk .dk-text .v-green{font-family:'JetBrains Mono',monospace;color:var(--green)}
+.dk .dk-text .v-red{font-family:'JetBrains Mono',monospace;color:var(--red)}
+
+/* Big stat in card */
+.dk-stat{font-family:'Space Mono',monospace;font-size:20px;font-weight:700;margin:4px 0}
+
+/* Agent status card */
+.dk-agent{display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:4px;background:var(--card-bg);border:1px solid var(--card-border);border-radius:6px}
+.dk-agent .a-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.dk-agent .a-name{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;min-width:55px}
+.dk-agent .a-status{font-size:10px;color:rgba(240,236,228,0.4);font-family:'Manrope',sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Alert severity */
+.dk.sev-high{border-left:2px solid var(--red)}
+.dk.sev-medium{border-left:2px solid var(--gold)}
+.dk.sev-low{border-left:2px solid rgba(240,236,228,0.15)}
+.dk.sev-info{border-left:2px solid var(--cyan)}
+
+/* Task card */
+.dk-task{display:flex;align-items:center;gap:8px}
+.dk-task .t-status{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.dk-task .t-name{font-size:11px;flex:1}
+.dk-task .t-tag{font-family:'JetBrains Mono',monospace;font-size:9px;padding:1px 6px;border-radius:2px}
+
+/* Bottom bar */
+.bottombar{position:relative;z-index:10;padding:10px 20px;border-top:1px solid var(--card-border);background:rgba(3,5,4,0.95);backdrop-filter:blur(12px);display:flex;gap:12px;align-items:center;flex-shrink:0}
+.bottombar .chat-input{flex:1;background:rgba(240,236,228,0.04);border:1px solid var(--card-border);border-radius:8px;padding:8px 14px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--cream);outline:none;transition:border-color 0.2s}
+.bottombar .chat-input:focus{border-color:var(--gold)}
+.bottombar .chat-input::placeholder{color:rgba(240,236,228,0.2)}
+.bottombar .chat-send{background:rgba(228,170,79,0.15);border:1px solid rgba(228,170,79,0.3);border-radius:6px;padding:8px 16px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--gold);cursor:pointer;transition:all 0.2s;text-transform:uppercase;letter-spacing:1px}
+.bottombar .chat-send:hover{background:rgba(228,170,79,0.25);border-color:var(--gold)}
+
+@keyframes cardBreathe{0%,100%{box-shadow:0 0 0 rgba(228,170,79,0)}50%{box-shadow:0 0 12px rgba(228,170,79,0.03)}}
+</style>
+</head>
+<body>
+
+<canvas id="particles"></canvas>
+
+<div class="topbar">
+  <div class="logo">RELAY <span>DECK</span></div>
+  <div class="right">
+    <div class="regime">● Bull</div>
+    <div class="clock" id="clock">16:06 PST</div>
+  </div>
+</div>
+
+<div class="columns">
+  <!-- PRODUCTION -->
+  <div class="col" id="col-prod">
+    <div class="col-head">
+      <div class="col-title"><div class="col-dot" style="background:var(--gold)"></div>Production</div>
+      <div class="col-stat" style="color:var(--gold)">47.2 lbs</div>
+    </div>
+    <div class="col-body">
+      <div class="dk">
+        <div class="dk-time">16:00 — Hourly Update</div>
+        <div class="dk-stat" style="color:var(--gold)">47.2 lbs</div>
+        <div class="dk-text"><span class="v-cyan">12.1 lbs/hr</span> · 68% of target<br>Tropicana Cookies · 6 crew</div>
+      </div>
+      <div class="dk">
+        <div class="dk-time">15:00</div>
+        <div class="dk-text">41.6 lbs total. Rate recovering to <span class="v-cyan">11.8 lbs/hr</span> after lunch rotation dip.</div>
+      </div>
+      <div class="dk">
+        <div class="dk-time">14:00</div>
+        <div class="dk-text">36.4 lbs total. <span class="v-red">Rate dip</span> — 9.2 lbs/hr during lunch overlap. Recovering.</div>
+      </div>
+      <div class="dk">
+        <div class="dk-time">13:00</div>
+        <div class="dk-text">32.8 lbs. Lunch break rotation started. Expected rate drop ~30 min.</div>
+      </div>
+      <div class="dk">
+        <div class="dk-time">12:00</div>
+        <div class="dk-text">28.0 lbs. Steady at <span class="v-cyan">12.4 lbs/hr</span>. All stations active.</div>
+      </div>
+      <div class="dk">
+        <div class="dk-time">11:00</div>
+        <div class="dk-text">22.2 lbs. <span class="v-green">Strong morning</span>. Crew hitting rhythm.</div>
+      </div>
+      <div class="dk">
+        <div class="dk-time">10:00</div>
+        <div class="dk-text">16.4 lbs. Rate: <span class="v-cyan">6.4 lbs/hr</span> this hour (above avg).</div>
+      </div>
+      <div class="dk">
+        <div class="dk-time">06:00 — Shift Start</div>
+        <div class="dk-text">Shift started. <span class="v-cyan">6 crew</span> on floor. Strain: <span class="v-gold">Tropicana Cookies</span>. Target: 69.4 lbs.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AGENTS -->
+  <div class="col" id="col-agents">
+    <div class="col-head">
+      <div class="col-title"><div class="col-dot" style="background:var(--cyan)"></div>Agents</div>
+      <div class="col-stat" style="color:var(--cyan)">5 online</div>
+    </div>
+    <div class="col-body">
+      <div class="dk-agent"><div class="a-dot" style="background:var(--green);box-shadow:0 0 6px var(--green)"></div><div class="a-name" style="color:var(--green)">Atlas</div><div class="a-status">Online — orchestrating</div></div>
+      <div class="dk-agent"><div class="a-dot" style="background:var(--gold);box-shadow:0 0 6px var(--gold)"></div><div class="a-name" style="color:var(--gold)">Kiln</div><div class="a-status">Hourly pulse</div></div>
+      <div class="dk-agent"><div class="a-dot" style="background:var(--violet)"></div><div class="a-name" style="color:var(--violet)">Razor</div><div class="a-status">Idle</div></div>
+      <div class="dk-agent"><div class="a-dot" style="background:var(--blue);box-shadow:0 0 6px var(--blue)"></div><div class="a-name" style="color:var(--blue)">Meridian</div><div class="a-status">Cannaflora check</div></div>
+      <div class="dk-agent"><div class="a-dot" style="background:var(--red);box-shadow:0 0 6px var(--red)"></div><div class="a-name" style="color:var(--red)">Hex</div><div class="a-status">MC v2 build</div></div>
+
+      <div style="height:8px"></div>
+
+      <div class="dk">
+        <div class="dk-time">16:04 — Hex</div>
+        <div class="dk-text">Building MC v2 layout concepts — <span class="v-cyan">2/3 complete</span>.</div>
+      </div>
+      <div class="dk">
+        <div class="dk-time">15:38 — Meridian</div>
+        <div class="dk-text">Started Cannaflora check. Querying 3 SKUs.</div>
+      </div>
+      <div class="dk">
+        <div class="dk-time">15:30 — Razor</div>
+        <div class="dk-text">Market regime confirmed <span class="v-green">BULL</span>. No action needed.</div>
+      </div>
+      <div class="dk">
+        <div class="dk-time">13:30 — Kiln</div>
+        <div class="dk-text">Hourly pulse complete. All systems nominal.</div>
+      </div>
+      <div class="dk">
+        <div class="dk-time">11:30 — Razor</div>
+        <div class="dk-text"><span class="v-red">⚠ Volume spike</span> detected on SPY. 2.3x avg. Within risk params.</div>
+      </div>
+      <div class="dk">
+        <div class="dk-time">09:15 — Atlas</div>
+        <div class="dk-text">Morning init complete. All agents spawned. <span class="v-green">Systems nominal.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TRADING -->
+  <div class="col" id="col-trading">
+    <div class="col-head">
+      <div class="col-title"><div class="col-dot" style="background:var(--green)"></div>Trading</div>
+      <div class="col-stat" style="color:var(--green)">+$342</div>
+    </div>
+    <div class="col-body">
+      <div class="dk">
+        <div class="dk-time">Portfolio</div>
+        <div class="dk-stat" style="color:var(--green)">+$342</div>
+        <div class="dk-text">SPY <span class="v">587.42</span> <span class="v-green">+0.8%</span><br>Regime: <span class="v-green">BULL</span> · 2 positions open</div>
+      </div>
+      <div class="dk">
+        <div class="dk-time">NVDA — Long</div>
+        <div class="dk-text"><span class="v-green">+$218 (+1.2%)</span><br>50 shares @ $882.40</div>
+      </div>
+      <div class="dk">
+        <div class="dk-time">AAPL — Long</div>
+        <div class="dk-text"><span class="v-green">+$124 (+0.6%)</span><br>30 shares @ $241.20</div>
+      </div>
+      <div class="dk">
+        <div class="dk-time">15:30 — Signal</div>
+        <div class="dk-text">Bull regime confirmed. SPY holding above 585 support. No exits signaled.</div>
+      </div>
+      <div class="dk">
+        <div class="dk-time">11:30 — Alert</div>
+        <div class="dk-text"><span class="v-red">Volume spike</span> on SPY — 2.3x 20-day avg. Investigated, within parameters.</div>
+      </div>
+      <div class="dk">
+        <div class="dk-time">09:30 — Open</div>
+        <div class="dk-text">Market opened. SPY gapped up +0.3%. Regime filter: <span class="v-green">BULL</span>.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TASKS -->
+  <div class="col" id="col-tasks">
+    <div class="col-head">
+      <div class="col-title"><div class="col-dot" style="background:var(--violet)"></div>Tasks</div>
+      <div class="col-stat" style="color:var(--violet)">8 / 3 / 12</div>
+    </div>
+    <div class="col-body">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:rgba(240,236,228,0.25);padding:4px 4px 6px;margin-top:2px">Active — 8</div>
+
+      <div class="dk" style="padding:8px 10px;margin-bottom:4px"><div class="dk-task"><div class="t-status" style="background:var(--cyan)"></div><div class="t-name">MC v2 layout concepts</div><div class="t-tag" style="background:rgba(0,240,255,0.1);color:var(--cyan)">dev</div></div></div>
+      <div class="dk" style="padding:8px 10px;margin-bottom:4px"><div class="dk-task"><div class="t-status" style="background:var(--cyan)"></div><div class="t-name">Cannaflora inventory sync</div><div class="t-tag" style="background:rgba(0,240,255,0.1);color:var(--cyan)">ops</div></div></div>
+      <div class="dk" style="padding:8px 10px;margin-bottom:4px"><div class="dk-task"><div class="t-status" style="background:var(--cyan)"></div><div class="t-name">Deploy gate QA audit</div><div class="t-tag" style="background:rgba(0,240,255,0.1);color:var(--cyan)">dev</div></div></div>
+      <div class="dk" style="padding:8px 10px;margin-bottom:4px"><div class="dk-task"><div class="t-status" style="background:var(--cyan)"></div><div class="t-name">Agent Teams optimization</div><div class="t-tag" style="background:rgba(0,240,255,0.1);color:var(--cyan)">dev</div></div></div>
+      <div class="dk" style="padding:8px 10px;margin-bottom:4px"><div class="dk-task"><div class="t-status" style="background:var(--cyan)"></div><div class="t-name">Nightly build pipeline</div><div class="t-tag" style="background:rgba(0,240,255,0.1);color:var(--cyan)">dev</div></div></div>
+
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:rgba(240,236,228,0.25);padding:8px 4px 6px">Blocked — 3</div>
+
+      <div class="dk sev-high" style="padding:8px 10px;margin-bottom:4px"><div class="dk-task"><div class="t-status" style="background:var(--red)"></div><div class="t-name">Swiss wholesale pricing</div><div class="t-tag" style="background:rgba(255,51,68,0.1);color:var(--red)">partner</div></div></div>
+      <div class="dk sev-high" style="padding:8px 10px;margin-bottom:4px"><div class="dk-task"><div class="t-status" style="background:var(--red)"></div><div class="t-name">Label printer calibration</div><div class="t-tag" style="background:rgba(255,51,68,0.1);color:var(--red)">hw</div></div></div>
+      <div class="dk sev-high" style="padding:8px 10px;margin-bottom:4px"><div class="dk-task"><div class="t-status" style="background:var(--red)"></div><div class="t-name">API rate limit fix</div><div class="t-tag" style="background:rgba(255,51,68,0.1);color:var(--red)">infra</div></div></div>
+
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:rgba(240,236,228,0.25);padding:8px 4px 6px">Backlog — 12</div>
+
+      <div class="dk" style="padding:8px 10px;margin-bottom:4px;opacity:0.5"><div class="dk-task"><div class="t-status" style="background:rgba(240,236,228,0.15)"></div><div class="t-name">Barcode scanner integration</div></div></div>
+      <div class="dk" style="padding:8px 10px;margin-bottom:4px;opacity:0.5"><div class="dk-task"><div class="t-status" style="background:rgba(240,236,228,0.15)"></div><div class="t-name">Czech market research</div></div></div>
+      <div class="dk" style="padding:8px 10px;margin-bottom:4px;opacity:0.5"><div class="dk-task"><div class="t-status" style="background:rgba(240,236,228,0.15)"></div><div class="t-name">SOP documentation v2</div></div></div>
+    </div>
+  </div>
+
+  <!-- ALERTS -->
+  <div class="col" id="col-alerts">
+    <div class="col-head">
+      <div class="col-title"><div class="col-dot" style="background:var(--red)"></div>Alerts</div>
+      <div class="col-stat" style="color:var(--red)">4</div>
+    </div>
+    <div class="col-body">
+      <div class="dk sev-info">
+        <div class="dk-time">15:42 — Briefing</div>
+        <div class="dk-text"><strong style="color:var(--cream)">Daily briefing generated.</strong> 3 action items flagged: Swiss pricing, Cannaflora sync, rate dip review.</div>
+      </div>
+      <div class="dk sev-high">
+        <div class="dk-time">14:18 — Production Alert</div>
+        <div class="dk-text"><span class="v-red">Rate dropped below 10 lbs/hr</span> for 22 min (12:48–13:10). Lunch rotation overlap. Recovered.</div>
+      </div>
+      <div class="dk sev-low">
+        <div class="dk-time">13:05 — Toast</div>
+        <div class="dk-text">Kiln hourly pulse — all systems nominal. No anomalies.</div>
+      </div>
+      <div class="dk sev-high">
+        <div class="dk-time">11:30 — Trading Alert</div>
+        <div class="dk-text">Razor: <span class="v-red">unusual SPY volume</span> spike. 2.3x 20-day avg. Within risk parameters.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bottom Chat Bar -->
+<div class="bottombar">
+  <input class="chat-input" type="text" placeholder="Message Atlas..." id="chatInput">
+  <button class="chat-send" id="chatSend">Send</button>
+</div>
+
+<script>
+// Particles
+const canvas=document.getElementById('particles'),ctx=canvas.getContext('2d');
+let W,H,pts=[];
+function resize(){W=canvas.width=window.innerWidth;H=canvas.height=window.innerHeight}
+window.addEventListener('resize',resize);resize();
+for(let i=0;i<40;i++)pts.push({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-0.5)*0.2,vy:(Math.random()-0.5)*0.2,r:Math.random()*1+0.3,a:Math.random()*0.35+0.1});
+function draw(){ctx.clearRect(0,0,W,H);pts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;if(p.x<0)p.x=W;if(p.x>W)p.x=0;if(p.y<0)p.y=H;if(p.y>H)p.y=0;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle=`rgba(228,170,79,${p.a})`;ctx.fill()});requestAnimationFrame(draw)}
+draw();
+
+// Clock
+function updateClock(){const d=new Date();document.getElementById('clock').textContent=d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'America/Los_Angeles'})+' PST'}
+setInterval(updateClock,1000);updateClock();
+
+// Chat input
+document.getElementById('chatInput').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){
+    const v=e.target.value.trim();
+    if(!v)return;
+    // Simulate response in alerts column
+    const col=document.querySelector('#col-alerts .col-body');
+    const card=document.createElement('div');
+    card.className='dk sev-info';
+    card.style.animation='fadeIn 0.3s ease-out';
+    const now=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'America/Los_Angeles'});
+    card.innerHTML=`<div class="dk-time">${now} — You</div><div class="dk-text" style="color:var(--cream)">${v}</div>`;
+    col.insertBefore(card,col.firstChild);
+    e.target.value='';
+    // Fake Atlas response
+    setTimeout(()=>{
+      const r=document.createElement('div');
+      r.className='dk sev-info';
+      r.style.animation='fadeIn 0.3s ease-out';
+      r.innerHTML=`<div class="dk-time">${now} — Atlas</div><div class="dk-text"><span class="v-green">Acknowledged.</span> Processing your request.</div>`;
+      col.insertBefore(r,col.firstChild);
+    },1500);
+  }
+});
+
+// Add fadeIn keyframe
+const style=document.createElement('style');
+style.textContent='@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}';
+document.head.appendChild(style);
+</script>
+</body>
+</html>
