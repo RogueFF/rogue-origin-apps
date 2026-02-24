@@ -2986,7 +2986,11 @@ function initPoolUpdateButton() {
 
     const productId = strainSelect?.value;
     const amount = parseFloat(amountInput?.value) || 0;
-    const note = noteInput?.value.trim() || '';
+    let note = noteInput?.value.trim() || '';
+    // Filter out spreadsheet error values
+    if (/^#(ERROR|REF|NAME|VALUE|DIV\/0|NULL|N\/A)!?$/i.test(note)) {
+      note = '';
+    }
 
     // Validation
     if (!productId) {
@@ -3332,11 +3336,11 @@ async function loadRecentChanges() {
             <span class="change-entry-timestamp">${timestamp}</span>
           </div>
           <div class="change-entry-details">
-            <span class="change-entry-action ${actionClass}">${actionLabel}${entry.changeAmount}g</span>
+            <span class="change-entry-action ${actionClass}">${actionLabel}${parseFloat(entry.changeAmount).toLocaleString('en-US', {maximumFractionDigits: 1})}g</span>
             <span>→</span>
-            <span>${entry.newValue}g</span>
+            <span>${parseFloat(entry.newValue).toLocaleString('en-US', {maximumFractionDigits: 1})}g</span>
           </div>
-          ${entry.note ? `<div class="change-entry-note">${escapeHtml(entry.note)}</div>` : ''}
+          ${entry.note && !/^#(ERROR|REF|NAME|VALUE|DIV\/0|NULL|N\/A)!?$/i.test(entry.note) ? `<div class="change-entry-note">${escapeHtml(entry.note)}</div>` : ''}
         </div>
       `;
     }).join('');
