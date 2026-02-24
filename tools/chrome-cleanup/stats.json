@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-02-24T04:06:26-08:00",
+  "total_rss_kb": 488672,
+  "total_processes": 17,
+  "renderer_count": 1,
+  "browser_count": 16,
+  "last_freed_kb": 0,
+  "last_killed": 0,
+  "freed_24h_kb": 0,
+  "freed_24h_reset": "2026-02-24T04:06:26-08:00"
+}
