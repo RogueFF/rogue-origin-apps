@@ -1679,8 +1679,8 @@ body {
 
 .scale-display {
   position: relative;
-  width: 180px;
-  height: 180px;
+  width: min(85%, 280px);
+  aspect-ratio: 1;
   border-radius: 50%;
   background: #1c2220;
   box-shadow:
@@ -1816,8 +1816,8 @@ body {
 
 .timer-ring-container {
   position: relative;
-  width: 200px;
-  height: 200px;
+  width: min(85%, 320px);
+  aspect-ratio: 1;
   border-radius: 50%;
   background: #1c2220;
   box-shadow:
