@@ -6,6 +6,26 @@ import { DepthCard } from '../components/DepthCard';
 import { AGENT_GLYPHS } from '../data/mock';
 
 // ---------------------------------------------------------------------------
+// Skeleton — pulsing placeholder for loading states
+// ---------------------------------------------------------------------------
+
+function Skeleton({ width = '100%', height = 16, radius = 4 }: { width?: string | number; height?: number; radius?: number }) {
+  return (
+    <div
+      className="skeleton-pulse"
+      style={{
+        width,
+        height,
+        borderRadius: radius,
+        background: 'linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%)',
+        backgroundSize: '200% 100%',
+        animation: 'skeleton-shimmer 1.5s ease-in-out infinite',
+      }}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
 // HourlyChart — mini bar chart for production summary
 // ---------------------------------------------------------------------------
 
@@ -124,9 +144,9 @@ export function Dashboard() {
   const agents = useGatewayStore((s) => s.agents);
   const notifications = useGatewayStore((s) => s.notifications);
 
-  const { data: scoreboard, isError: scoreboardError } = useScoreboard();
-  const { data: regimeResp } = useRegime();
-  const { data: portfolioResp } = usePortfolio();
+  const { data: scoreboard, isError: scoreboardError, isLoading: prodLoading } = useScoreboard();
+  const { data: regimeResp, isLoading: regimeLoading } = useRegime();
+  const { data: portfolioResp, isLoading: portfolioLoading } = usePortfolio();
 
   const regime = (regimeResp as Record<string, unknown>)?.success
     ? (regimeResp as Record<string, unknown>).data as RegimeData | null
@@ -155,12 +175,12 @@ export function Dashboard() {
 
   // KPI data
   const kpis = [
-    { label: "Lbs Today", value: prod?.totalLbs?.toFixed(1) ?? '—', unit: 'lbs', color: pct >= 100 ? 'var(--accent-green)' : undefined },
-    { label: 'Rate', value: prod?.rate?.toFixed(1) ?? '—', unit: 'lbs/hr' },
-    { label: 'Crew', value: String(prod?.crew ?? '—') },
-    { label: 'Agents', value: `${agents.filter(a => a.status !== 'offline').length}/${agents.length}` },
-    { label: 'Trades', value: String(portfolio?.open_positions ?? '—') },
-    { label: 'Regime', value: regime?.signal ?? '—', color: regimeColor },
+    { label: "Lbs Today", value: prod?.totalLbs?.toFixed(1), unit: 'lbs', color: pct >= 100 ? 'var(--accent-green)' : undefined, loading: prodLoading },
+    { label: 'Rate', value: prod?.rate?.toFixed(1), unit: 'lbs/hr', loading: prodLoading },
+    { label: 'Crew', value: prod?.crew != null ? String(prod.crew) : undefined, loading: prodLoading },
+    { label: 'Agents', value: `${agents.filter(a => a.status !== 'offline').length}/${agents.length}`, loading: false },
+    { label: 'Trades', value: portfolio?.open_positions != null ? String(portfolio.open_positions) : undefined, loading: portfolioLoading },
+    { label: 'Regime', value: regime?.signal, color: regimeColor, loading: regimeLoading },
   ];
 
   return (
@@ -185,19 +205,25 @@ export function Dashboard() {
               {kpi.label}
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
-              <span style={{
-                fontFamily: 'var(--font-stat)',
-                fontSize: 20,
-                fontWeight: 700,
-                color: kpi.color || 'var(--text-primary)',
-                lineHeight: 1,
-              }}>
-                {kpi.value}
-              </span>
-              {kpi.unit && (
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-tertiary)' }}>
-                  {kpi.unit}
-                </span>
+              {kpi.loading ? (
+                <Skeleton width={48} height={20} radius={4} />
+              ) : (
+                <>
+                  <span style={{
+                    fontFamily: 'var(--font-stat)',
+                    fontSize: 20,
+                    fontWeight: 700,
+                    color: kpi.color || 'var(--text-primary)',
+                    lineHeight: 1,
+                  }}>
+                    {kpi.value ?? '—'}
+                  </span>
+                  {kpi.unit && (
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-tertiary)' }}>
+                      {kpi.unit}
+                    </span>
+                  )}
+                </>
               )}
             </div>
           </DepthCard>
