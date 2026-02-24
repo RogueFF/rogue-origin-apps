@@ -1,0 +1,29 @@
+{
+  "dataSource": "../../../src/pages/shipment-tracker/data.json",
+  "alertHistory": "./alert-history.json",
+  "thresholds": {
+    "overdueHours": 0,
+    "staleTrackingHours": 24,
+    "tempMinF": 32,
+    "tempMaxF": 85,
+    "humidityMaxPct": 70,
+    "batteryMinPct": 20
+  },
+  "statusAnomalies": [
+    "customs-hold",
+    "delivery-exception",
+    "returned",
+    "damaged",
+    "seized",
+    "lost"
+  ],
+  "notify": {
+    "primary": "https://gablewindowed-ivelisse-latently.ngrok-free.dev/notify",
+    "fallback": "http://100.65.60.42:9400/notify",
+    "timeoutMs": 5000
+  },
+  "dashboard": {
+    "outputPath": "./dashboard.html"
+  },
+  "pollIntervalMin": 30
+}

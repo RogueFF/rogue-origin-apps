@@ -69,11 +69,19 @@ async function getScoreboardData(env, date = null) {
   if (todayRows.length === 0) return result;
 
   const rowsBySlot = {};
+  // Dedup: if two rows share the same end-hour (e.g. "7:01 AM – 8:00 AM" and "7:02 AM – 8:00 AM"),
+  // keep the one with more tops lbs (the more complete entry). Key by normalized end-hour.
+  const getEndHour = (ts) => {
+    const parts = (ts || '').replace(/[-–—]/g, '–').split('–');
+    return parts.length > 1 ? parts[1].trim() : (ts || '').trim();
+  };
+
   todayRows.forEach(r => {
     const slot = (r.time_slot || '').replace(/[-–—]/g, '–');
+    const endKey = getEndHour(slot);
     const rawTrimmers = r.trimmers_line1 || 0;
     const effectiveTrimmers = r.effective_trimmers_line1 != null ? r.effective_trimmers_line1 : rawTrimmers;
-    rowsBySlot[slot] = {
+    const entry = {
       timeSlot: r.time_slot || '',
       tops: r.tops_lbs1 || 0,
       smalls: r.smalls_lbs1 || 0,
@@ -84,10 +92,15 @@ async function getScoreboardData(env, date = null) {
       multiplier: getTimeSlotMultiplier(r.time_slot, timeSlotMultipliers),
       notes: r.qc || '',
     };
+    // If we already have an entry for this end-hour, keep the one with more data
+    const existing = rowsBySlot[endKey];
+    if (!existing || entry.tops > existing.tops) {
+      rowsBySlot[endKey] = entry;
+    }
   });
 
-  const allSlotsFromDB = todayRows.map(r => (r.time_slot || '').replace(/[-–—]/g, '–'));
-  const uniqueSlots = [...new Set([...ALL_TIME_SLOTS.map(s => s.replace(/[-–—]/g, '–')), ...allSlotsFromDB])];
+  const allSlotsFromDB = todayRows.map(r => getEndHour((r.time_slot || '').replace(/[-–—]/g, '–')));
+  const uniqueSlots = [...new Set([...ALL_TIME_SLOTS.map(s => getEndHour(s.replace(/[-–—]/g, '–'))), ...allSlotsFromDB])];
 
   const parseSlotStart = (ts) => {
     const m = (ts || '').match(/^(\d{1,2}):(\d{2})\s*(AM|PM)/i);
