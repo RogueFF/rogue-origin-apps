@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mission Control — v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Space+Mono:wght@400;700&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+/* ═══ RELAY THEME (default) ═══ */
+:root{
+--bg:#030504;--cream:#f0ece4;--gold:#e4aa4f;--cyan:#00f0ff;--holo-green:#00ff88;--signal-red:#ff3344;
+--card-bg:rgba(255,255,255,0.04);--card-border:rgba(255,255,255,0.08);--card-border-hover:rgba(255,255,255,0.14);
+--text-dim:rgba(240,236,228,0.45);--text-mid:rgba(240,236,228,0.7);
+--stat-accent:var(--cyan);
+--sidebar-bg:rgba(3,5,4,0.8);--bottom-bg:rgba(3,5,4,0.9);
+--notif-toast:var(--gold);--notif-briefing:var(--holo-green);--notif-alert:var(--signal-red);
+--card-radius:8px;--card-padding:16px;--card-border-left:none;--card-border-top:none;
+--card-box-border:1px solid var(--card-border);
+--glow-cyan:rgba(0,240,255,0.03);--glow-green:rgba(0,255,136,0.02);
+--noise-opacity:0.03;--particle-opacity:0.15;--scanner-opacity:0.12;
+--body-weight:400;--body-spacing:0;--section-spacing:16px;
+--title-shadow:0 0 20px rgba(0,240,255,0.3),2px 0 0 rgba(255,51,68,0.15),-2px 0 0 rgba(0,240,255,0.15);
+--notif-title-shadow:0 0 15px rgba(0,240,255,0.2);
+--paper-overlay:none;
+}
+
+/* ═══ ZEN THEME ═══ */
+[data-theme="zen"]{
+--bg:#1a1a2e;--cream:#f0e6d3;--gold:#d4a017;--cyan:#d4a017;--holo-green:#7b8b6f;--signal-red:#c53d43;
+--card-bg:rgba(240,230,211,0.03);--card-border:rgba(240,230,211,0.06);--card-border-hover:rgba(240,230,211,0.12);
+--text-dim:rgba(240,230,211,0.35);--text-mid:rgba(240,230,211,0.6);
+--stat-accent:#d4a017;
+--sidebar-bg:rgba(26,26,46,0.85);--bottom-bg:rgba(26,26,46,0.92);
+--notif-toast:#d4a017;--notif-briefing:#7b8b6f;--notif-alert:#c53d43;
+--card-radius:4px;--card-padding:20px;--card-border-left:3px solid rgba(240,230,211,0.08);--card-border-top:2px solid transparent;
+--card-box-border:none;
+--glow-cyan:rgba(212,160,23,0.02);--glow-green:rgba(123,139,111,0.02);
+--noise-opacity:0.06;--particle-opacity:0.06;--scanner-opacity:0;
+--body-weight:300;--body-spacing:0.015em;--section-spacing:24px;
+--title-shadow:none;
+--notif-title-shadow:none;
+--paper-overlay:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+}
+
+/* Zen card ink-wash top border */
+[data-theme="zen"] .card{
+border-image:linear-gradient(90deg, rgba(240,230,211,0.15), rgba(240,230,211,0.03) 60%, transparent) 1 / 2px 0 0 0;
+border-left:var(--card-border-left);
+}
+[data-theme="zen"] .card:hover{border-image:linear-gradient(90deg, rgba(240,230,211,0.25), rgba(240,230,211,0.05) 60%, transparent) 1 / 2px 0 0 0}
+
+/* Zen breathing room */
+[data-theme="zen"] .main-content{padding:28px;gap:24px}
+[data-theme="zen"] .production-grid{gap:20px}
+[data-theme="zen"] .stat-label{letter-spacing:2.5px;margin-top:8px}
+[data-theme="zen"] .stat-value{text-shadow:none !important}
+[data-theme="zen"] .fleet-section,[data-theme="zen"] .nav-section{padding:20px}
+[data-theme="zen"] .agent-item{padding:10px 12px;margin-bottom:4px}
+[data-theme="zen"] .notif-card{padding:14px 16px;margin-bottom:10px}
+[data-theme="zen"] .task-card{padding:10px 12px;margin-bottom:8px}
+
+/* Paper overlay for zen */
+[data-theme="zen"]::after{
+content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
+background:var(--paper-overlay);background-size:300px 300px;opacity:1;
+}
+
+/* ═══ Transitions ═══ */
+*{transition:background-color .3s, color .3s, border-color .3s, box-shadow .3s, opacity .3s}
+
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--cream);font-family:'Manrope',sans-serif;font-size:13px;line-height:1.5;font-weight:var(--body-weight);letter-spacing:var(--body-spacing)}
+
+.atmosphere{position:fixed;inset:0;pointer-events:none;z-index:0}
+.atmosphere svg{width:100%;height:100%;opacity:var(--noise-opacity)}
+.radial-glow{position:fixed;inset:0;background:radial-gradient(ellipse at 30% 40%,var(--glow-cyan) 0%,transparent 60%),radial-gradient(ellipse at 70% 70%,var(--glow-green) 0%,transparent 50%);pointer-events:none;z-index:0}
+.particles{position:fixed;inset:0;pointer-events:none;z-index:1;overflow:hidden}
+.particle{position:absolute;width:1px;height:1px;background:rgba(240,236,228,var(--particle-opacity));border-radius:50%;animation:drift linear infinite}
+@keyframes drift{0%{transform:translateY(100vh) translateX(0);opacity:0}10%{opacity:1}90%{opacity:1}100%{transform:translateY(-10vh) translateX(40px);opacity:0}}
+.scanner{position:fixed;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:var(--scanner-opacity);z-index:2;animation:scanDown 8s linear infinite;pointer-events:none}
+@keyframes scanDown{0%{top:0}100%{top:100%}}
+
+/* Layout */
+.shell{display:grid;grid-template-columns:220px 1fr 300px;grid-template-rows:1fr 52px;height:100vh;position:relative;z-index:3}
+.sidebar-left{grid-row:1/3;border-right:1px solid var(--card-border);background:var(--sidebar-bg);backdrop-filter:blur(30px);display:flex;flex-direction:column;overflow-y:auto}
+.logo-area{padding:20px 16px 12px;border-bottom:1px solid var(--card-border);display:flex;justify-content:space-between;align-items:flex-start}
+.logo-text{}
+.logo-title{font-family:'Outfit',sans-serif;font-weight:800;font-size:18px;letter-spacing:-.5px;text-shadow:var(--title-shadow)}
+.logo-sub{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text-dim);letter-spacing:2px;text-transform:uppercase;margin-top:2px}
+
+/* Theme toggle */
+.theme-toggle{
+width:28px;height:28px;border-radius:4px;border:1px solid var(--card-border);
+background:rgba(255,255,255,0.04);cursor:pointer;display:flex;align-items:center;justify-content:center;
+font-size:13px;line-height:1;color:var(--text-mid);transition:all .2s;flex-shrink:0;margin-top:2px;
+}
+.theme-toggle:hover{background:rgba(255,255,255,0.08);color:var(--cream)}
+
+.fleet-section{padding:16px}
+.section-label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);margin-bottom:10px}
+.agent-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;margin-bottom:2px;cursor:pointer;transition:background .2s}
+.agent-item:hover{background:rgba(255,255,255,0.04)}
+.agent-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.agent-dot.online{box-shadow:0 0 6px currentColor,0 0 12px currentColor}
+.agent-name{font-family:'Manrope',sans-serif;font-weight:600;font-size:12px}
+.agent-task{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px}
+.nav-section{padding:8px 16px;flex:1}
+.nav-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;cursor:pointer;transition:all .2s;font-size:12px;font-weight:500;color:var(--text-mid)}
+.nav-item:hover,.nav-item.active{background:rgba(255,255,255,0.06);color:var(--cream)}
+.nav-item.active{border-left:2px solid var(--cyan)}
+.nav-icon{width:16px;text-align:center;font-size:11px}
+.system-status{padding:12px 16px;border-top:1px solid var(--card-border);font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text-dim)}
+.status-row{display:flex;justify-content:space-between;margin-bottom:3px}
+.status-val{color:var(--holo-green)}
+.main-content{grid-row:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:var(--section-spacing)}
+.main-content::-webkit-scrollbar{width:4px}
+.main-content::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:2px}
+
+/* Cards */
+.card{background:var(--card-bg);border:var(--card-box-border);border-radius:var(--card-radius);backdrop-filter:blur(20px);padding:var(--card-padding);animation:breathe 8s ease-in-out infinite;position:relative;overflow:hidden}
+@keyframes breathe{0%,100%{box-shadow:0 0 0 rgba(0,240,255,0)}50%{box-shadow:0 0 20px var(--glow-cyan)}}
+.card:hover{border-color:var(--card-border-hover)}
+.card-title{font-family:'Outfit',sans-serif;font-weight:800;font-size:14px;letter-spacing:-.3px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card-title .icon{font-size:12px;opacity:.6}
+
+/* Production */
+.production-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:16px}
+.stat-block{text-align:center}
+.stat-value{font-family:'Space Mono',monospace;font-size:28px;font-weight:700;line-height:1;text-shadow:0 0 30px rgba(0,240,255,0.2)}
+.stat-label{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1.5px;margin-top:4px}
+.stat-delta{font-family:'JetBrains Mono',monospace;font-size:10px;margin-top:2px}
+.stat-delta.up{color:var(--holo-green)}.stat-delta.down{color:var(--signal-red)}
+
+.pulse-chart{position:relative;height:120px;border:1px solid var(--card-border);border-radius:6px;overflow:hidden;background:rgba(0,0,0,0.3)}
+.pulse-chart svg{width:100%;height:100%}
+.pulse-line{fill:none;stroke:var(--stat-accent);stroke-width:2;filter:drop-shadow(0 0 4px rgba(0,240,255,0.4))}
+.pulse-area{fill:url(#pulseGrad);opacity:.3}
+.chart-overlay{position:absolute;top:8px;right:10px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-mid)}
+.chart-overlay .live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--signal-red);margin-right:4px;animation:livePulse 1.5s ease-in-out infinite}
+@keyframes livePulse{0%,100%{opacity:1}50%{opacity:.3}}
+.crew-bar{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.crew-tag{font-family:'JetBrains Mono',monospace;font-size:10px;padding:3px 8px;border-radius:4px;background:rgba(255,255,255,0.06);border:1px solid var(--card-border);color:var(--text-mid)}
+.strain-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:4px;background:rgba(228,170,79,0.1);border:1px solid rgba(228,170,79,0.2);font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--gold)}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+/* Trading */
+.regime-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:4px;font-family:'Outfit',sans-serif;font-weight:600;font-size:12px}
+.regime-badge.bull{background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.2);color:var(--holo-green)}
+.position-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-family:'JetBrains Mono',monospace;font-size:11px}
+.position-row:last-child{border-bottom:none}
+.ticker{font-weight:700;color:var(--cream);min-width:50px}
+.pos-price{color:var(--text-mid)}
+.pos-pnl.green{color:var(--holo-green)}.pos-pnl.red{color:var(--signal-red)}
+.portfolio-summary{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:12px 0}
+.port-stat{text-align:center;padding:8px;background:rgba(255,255,255,0.02);border-radius:4px}
+.port-stat .val{font-family:'Space Mono',monospace;font-size:16px;font-weight:700}
+.port-stat .lbl{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-top:2px}
+
+/* Tasks */
+.task-cols{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.task-col-title{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px;display:flex;justify-content:space-between}
+.task-col-title .count{background:rgba(255,255,255,0.08);padding:1px 6px;border-radius:3px;font-size:9px}
+.task-card{background:rgba(255,255,255,0.03);border:1px solid var(--card-border);border-radius:5px;padding:8px 10px;margin-bottom:6px;font-size:11px;cursor:pointer;transition:all .2s}
+.task-card:hover{background:rgba(255,255,255,0.06);transform:translateY(-1px)}
+.task-card .domain{font-family:'JetBrains Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:1px;margin-top:4px}
+
+/* Right sidebar */
+.sidebar-right{grid-row:1;border-left:1px solid var(--card-border);background:var(--sidebar-bg);backdrop-filter:blur(30px);display:flex;flex-direction:column;overflow:hidden}
+.notif-header{padding:14px 16px;border-bottom:1px solid var(--card-border);display:flex;justify-content:space-between;align-items:center}
+.notif-header h3{font-family:'Outfit',sans-serif;font-weight:800;font-size:13px;text-shadow:var(--notif-title-shadow)}
+.notif-count{font-family:'JetBrains Mono',monospace;font-size:10px;background:rgba(228,170,79,0.15);color:var(--gold);padding:2px 8px;border-radius:10px}
+.notif-feed{flex:1;overflow-y:auto;padding:8px}
+.notif-feed::-webkit-scrollbar{width:3px}
+.notif-feed::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.08);border-radius:2px}
+.notif-card{border-radius:6px;padding:10px 12px;margin-bottom:6px;background:var(--card-bg);border:1px solid var(--card-border);border-left:3px solid;position:relative;animation:materialize .4s ease-out}
+@keyframes materialize{from{opacity:0;filter:blur(8px);transform:scale(.96)}to{opacity:1;filter:blur(0);transform:scale(1)}}
+.notif-card.toast{border-left-color:var(--notif-toast)}
+.notif-card.briefing{border-left-color:var(--notif-briefing)}
+.notif-card.alert{border-left-color:var(--notif-alert)}
+.notif-card.alert{animation:materialize .4s ease-out,vhsGlitch .1s ease-in-out .5s}
+@keyframes vhsGlitch{0%{transform:translateX(0)}25%{transform:translateX(-3px)}50%{transform:translateX(2px)}75%{transform:translateX(-1px)}100%{transform:translateX(0)}}
+.notif-type{font-family:'JetBrains Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:2px;margin-bottom:4px}
+.notif-card.toast .notif-type{color:var(--notif-toast)}
+.notif-card.briefing .notif-type{color:var(--notif-briefing)}
+.notif-card.alert .notif-type{color:var(--notif-alert)}
+.notif-title{font-family:'Manrope',sans-serif;font-weight:600;font-size:12px;margin-bottom:3px}
+.notif-body{font-size:11px;color:var(--text-mid);line-height:1.4}
+.notif-time{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text-dim);margin-top:6px}
+.briefing-segments{display:flex;flex-direction:column;gap:3px;margin-top:6px}
+.briefing-seg{padding:4px 8px;background:rgba(255,255,255,0.03);border-radius:3px;font-size:10px;color:var(--text-mid);border-top:2px solid}
+.briefing-seg:nth-child(odd){border-top-color:var(--stat-accent)}
+.briefing-seg:nth-child(even){border-top-color:var(--gold)}
+
+/* Bottom bar */
+.bottom-bar{grid-column:2/4;border-top:1px solid var(--card-border);display:flex;align-items:center;padding:0 16px;gap:10px;background:var(--bottom-bg);backdrop-filter:blur(20px)}
+.chat-agent-select{font-family:'JetBrains Mono',monospace;font-size:10px;background:rgba(255,255,255,0.06);border:1px solid var(--card-border);color:var(--cream);padding:4px 8px;border-radius:4px;cursor:pointer}
+.chat-agent-select option{background:#0a0a0a}
+.chat-input{flex:1;background:rgba(255,255,255,0.04);border:1px solid var(--card-border);border-radius:6px;padding:8px 14px;color:var(--cream);font-family:'Manrope',sans-serif;font-size:12px;outline:none;transition:border-color .2s}
+.chat-input:focus{border-color:rgba(0,240,255,0.3)}
+.chat-input::placeholder{color:var(--text-dim)}
+.chat-send{background:rgba(0,240,255,0.1);border:1px solid rgba(0,240,255,0.2);color:var(--cyan);padding:6px 14px;border-radius:5px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;transition:all .2s}
+.chat-send:hover{background:rgba(0,240,255,0.2)}
+
+/* Zen send button override */
+[data-theme="zen"] .chat-send{background:rgba(212,160,23,0.1);border-color:rgba(212,160,23,0.2);color:var(--gold)}
+[data-theme="zen"] .chat-send:hover{background:rgba(212,160,23,0.2)}
+[data-theme="zen"] .chat-input:focus{border-color:rgba(212,160,23,0.3)}
+[data-theme="zen"] .regime-badge.bull{background:rgba(123,139,111,0.15);border-color:rgba(123,139,111,0.25)}
+[data-theme="zen"] .pulse-chart{background:rgba(0,0,0,0.15);border-color:rgba(240,230,211,0.06)}
+[data-theme="zen"] .pulse-line{filter:none}
+[data-theme="zen"] .agent-dot.online{box-shadow:0 0 4px currentColor}
+
+/* Responsive */
+@media(max-width:1100px){.shell{grid-template-columns:60px 1fr 260px}.sidebar-left .logo-sub,.agent-task,.nav-item span,.section-label,.system-status .status-row span:first-child{display:none}.logo-title{font-size:14px;text-align:center}.agent-item{justify-content:center}.nav-item{justify-content:center}}
+@media(max-width:768px){.shell{grid-template-columns:1fr;grid-template-rows:auto 1fr auto auto}.sidebar-left{grid-row:auto;flex-direction:row;overflow-x:auto;border-right:none;border-bottom:1px solid var(--card-border)}.sidebar-right{grid-row:auto;border-left:none;border-top:1px solid var(--card-border);max-height:250px}.two-col,.task-cols{grid-template-columns:1fr}.production-grid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="atmosphere"><svg><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter><rect width="100%" height="100%" filter="url(#noise)" opacity="0.03"/></svg></div>
+<div class="radial-glow"></div>
+<div class="particles" id="particles"></div>
+<div class="scanner"></div>
+
+<div class="shell">
+<!-- Left Sidebar -->
+<aside class="sidebar-left">
+<div class="logo-area">
+<div class="logo-text">
+<div class="logo-title">MISSION CONTROL</div>
+<div class="logo-sub">v2.0 — Rogue Origin</div>
+</div>
+<button class="theme-toggle" id="themeToggle" title="Toggle theme">◐</button>
+</div>
+<div class="fleet-section">
+<div class="section-label">Agent Fleet</div>
+<div class="agent-item"><span class="agent-dot online" style="background:#22c55e;color:#22c55e"></span><div><div class="agent-name">Atlas</div><div class="agent-task">Orchestrating — online</div></div></div>
+<div class="agent-item"><span class="agent-dot online" style="background:#f59e0b;color:#f59e0b"></span><div><div class="agent-name">Kiln</div><div class="agent-task">Hourly pulse check</div></div></div>
+<div class="agent-item"><span class="agent-dot" style="background:#8b5cf6;opacity:.4"></span><div><div class="agent-name">Razor</div><div class="agent-task">Idle — trading desk</div></div></div>
+<div class="agent-item"><span class="agent-dot online" style="background:#3b82f6;color:#3b82f6"></span><div><div class="agent-name">Meridian</div><div class="agent-task">Cannaflora status check</div></div></div>
+<div class="agent-item"><span class="agent-dot online" style="background:#ef4444;color:#ef4444"></span><div><div class="agent-name">Hex</div><div class="agent-task">MC v2 concepts build</div></div></div>
+</div>
+<nav class="nav-section">
+<div class="section-label">Navigation</div>
+<div class="nav-item active"><span class="nav-icon">◈</span><span>Dashboard</span></div>
+<div class="nav-item"><span class="nav-icon">◇</span><span>Production</span></div>
+<div class="nav-item"><span class="nav-icon">△</span><span>Trading</span></div>
+<div class="nav-item"><span class="nav-icon">□</span><span>Tasks</span></div>
+<div class="nav-item"><span class="nav-icon">○</span><span>Shipments</span></div>
+<div class="nav-item"><span class="nav-icon">⬡</span><span>Settings</span></div>
+</nav>
+<div class="system-status">
+<div class="status-row"><span>System</span><span class="status-val">● Nominal</span></div>
+<div class="status-row"><span>Uptime</span><span>14d 7h 23m</span></div>
+<div class="status-row"><span>Agents</span><span class="status-val">4/5 active</span></div>
+<div class="status-row"><span>Last sync</span><span>2s ago</span></div>
+</div>
+</aside>
+
+<!-- Main Content -->
+<main class="main-content">
+<!-- Production Dashboard -->
+<div class="card">
+<div class="card-title"><span class="icon">◈</span> Production Dashboard <span class="strain-badge">🌿 Cherry Truffle</span></div>
+<div class="production-grid">
+<div class="stat-block"><div class="stat-value" style="color:var(--cream)">47.2</div><div class="stat-label">lbs processed</div><div class="stat-delta up">↑ 3.1 from yesterday</div></div>
+<div class="stat-block"><div class="stat-value" style="color:var(--stat-accent)">96</div><div class="stat-label">lbs / hour</div><div class="stat-delta up">↑ 8% avg</div></div>
+<div class="stat-block"><div class="stat-value" style="color:var(--gold)">4</div><div class="stat-label">crew on floor</div><div class="stat-delta" style="color:var(--text-dim)">Full shift</div></div>
+<div class="stat-block"><div class="stat-value" style="color:var(--holo-green)">6.2</div><div class="stat-label">hours active</div><div class="stat-delta" style="color:var(--text-dim)">~1.8h remain</div></div>
+</div>
+<div class="pulse-chart">
+<svg viewBox="0 0 600 120" preserveAspectRatio="none">
+<defs><linearGradient id="pulseGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--stat-accent)" stop-opacity="0.3"/><stop offset="100%" stop-color="var(--stat-accent)" stop-opacity="0"/></linearGradient></defs>
+<path class="pulse-area" d="M0,120 L0,80 30,75 60,65 90,70 120,55 150,60 180,45 210,50 240,35 270,40 300,30 330,38 360,25 390,32 420,20 450,28 480,22 510,30 540,25 570,18 600,22 600,120Z"/>
+<path class="pulse-line" d="M0,80 30,75 60,65 90,70 120,55 150,60 180,45 210,50 240,35 270,40 300,30 330,38 360,25 390,32 420,20 450,28 480,22 510,30 540,25 570,18 600,22"/>
+</svg>
+<div class="chart-overlay"><span class="live-dot"></span>LIVE — Hourly Output (lbs)</div>
+</div>
+<div class="crew-bar">
+<span class="crew-tag">👤 Koa — Lead</span>
+<span class="crew-tag">👤 Marcus — Trim</span>
+<span class="crew-tag">👤 Dani — Trim</span>
+<span class="crew-tag">👤 Sam — Buck</span>
+</div>
+</div>
+
+<!-- Trading + Tasks row -->
+<div class="two-col">
+<div class="card">
+<div class="card-title"><span class="icon">△</span> Trading Desk <span class="regime-badge bull">▲ Bull Regime</span></div>
+<div class="portfolio-summary">
+<div class="port-stat"><div class="val" style="color:var(--holo-green)">+$2,847</div><div class="lbl">Day P&L</div></div>
+<div class="port-stat"><div class="val">$48.2K</div><div class="lbl">Portfolio</div></div>
+<div class="port-stat"><div class="val" style="color:var(--holo-green)">+6.2%</div><div class="lbl">MTD Return</div></div>
+</div>
+<div style="margin-bottom:6px;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase">Positions</div>
+<div class="position-row"><span class="ticker">SPY</span><span class="pos-price">587.42</span><span class="pos-pnl green">+$1,240 (+0.8%)</span></div>
+<div class="position-row"><span class="ticker">NVDA</span><span class="pos-price">892.10</span><span class="pos-pnl green">+$890 (+1.2%)</span></div>
+<div class="position-row"><span class="ticker">TSLA</span><span class="pos-price">198.55</span><span class="pos-pnl red">-$320 (-0.4%)</span></div>
+<div class="position-row"><span class="ticker">QQQ</span><span class="pos-price">512.88</span><span class="pos-pnl green">+$1,037 (+0.6%)</span></div>
+<div style="margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Today's Plays</div>
+<div style="font-size:11px;color:var(--text-mid);font-family:'JetBrains Mono',monospace"><span style="color:var(--holo-green)">BUY</span> NVDA 890C 3/7 @ 14.20 — filled 10:32a<br><span style="color:var(--gold)">HOLD</span> SPY 585P hedge — watching 584 support</div>
+</div>
+
+<div class="card">
+<div class="card-title"><span class="icon">□</span> Tasks</div>
+<div class="task-cols">
+<div>
+<div class="task-col-title">In Progress <span class="count">3</span></div>
+<div class="task-card"><div>MC v2 concepts build</div><div class="domain" style="color:var(--ef4444,#ef4444)">⬡ Hex — dev</div></div>
+<div class="task-card"><div>Cannaflora shipment follow-up</div><div class="domain" style="color:#3b82f6">◇ Meridian — ops</div></div>
+<div class="task-card"><div>Hourly production pulse</div><div class="domain" style="color:#f59e0b">◈ Kiln — production</div></div>
+</div>
+<div>
+<div class="task-col-title">Queued <span class="count">4</span></div>
+<div class="task-card"><div>Swiss wholesale pricing update</div><div class="domain" style="color:var(--text-dim)">ops</div></div>
+<div class="task-card"><div>Barcode label redesign</div><div class="domain" style="color:var(--text-dim)">dev</div></div>
+<div class="task-card"><div>EOD portfolio rebalance</div><div class="domain" style="color:#8b5cf6">△ Razor — trading</div></div>
+<div class="task-card"><div>Weekly strain yield analysis</div><div class="domain" style="color:var(--text-dim)">production</div></div>
+</div>
+<div>
+<div class="task-col-title">Done Today <span class="count">5</span></div>
+<div class="task-card" style="opacity:.6"><div>Morning briefing sent</div><div class="domain" style="color:#22c55e">◈ Atlas</div></div>
+<div class="task-card" style="opacity:.6"><div>Trim crew schedule confirmed</div><div class="domain" style="color:var(--text-dim)">ops</div></div>
+<div class="task-card" style="opacity:.6"><div>SPY 585C sold @ 12.80</div><div class="domain" style="color:#8b5cf6">△ Razor</div></div>
+<div class="task-card" style="opacity:.6"><div>Cherry Truffle batch logged</div><div class="domain" style="color:#f59e0b">◈ Kiln</div></div>
+<div class="task-card" style="opacity:.6"><div>API health check passed</div><div class="domain" style="color:#ef4444">⬡ Hex</div></div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Fleet Health -->
+<div class="card">
+<div class="card-title"><span class="icon">○</span> Fleet Health</div>
+<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
+<div style="text-align:center;padding:12px 8px;background:rgba(255,255,255,0.02);border-radius:6px;border:1px solid var(--card-border)">
+<div class="agent-dot online" style="background:#22c55e;color:#22c55e;width:10px;height:10px;margin:0 auto 6px"></div>
+<div style="font-family:'Outfit',sans-serif;font-weight:600;font-size:12px">Atlas</div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text-dim);margin-top:2px">Orchestrator</div>
+<div style="font-family:'Space Mono',monospace;font-size:18px;font-weight:700;color:var(--holo-green);margin-top:6px">98%</div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--text-dim)">Health</div>
+</div>
+<div style="text-align:center;padding:12px 8px;background:rgba(255,255,255,0.02);border-radius:6px;border:1px solid var(--card-border)">
+<div class="agent-dot online" style="background:#f59e0b;color:#f59e0b;width:10px;height:10px;margin:0 auto 6px"></div>
+<div style="font-family:'Outfit',sans-serif;font-weight:600;font-size:12px">Kiln</div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text-dim);margin-top:2px">Production</div>
+<div style="font-family:'Space Mono',monospace;font-size:18px;font-weight:700;color:var(--holo-green);margin-top:6px">95%</div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--text-dim)">Health</div>
+</div>
+<div style="text-align:center;padding:12px 8px;background:rgba(255,255,255,0.02);border-radius:6px;border:1px solid var(--card-border)">
+<div class="agent-dot" style="background:#8b5cf6;opacity:.4;width:10px;height:10px;margin:0 auto 6px"></div>
+<div style="font-family:'Outfit',sans-serif;font-weight:600;font-size:12px">Razor</div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text-dim);margin-top:2px">Trading</div>
+<div style="font-family:'Space Mono',monospace;font-size:18px;font-weight:700;color:var(--text-mid);margin-top:6px">IDLE</div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--text-dim)">Standby</div>
+</div>
+<div style="text-align:center;padding:12px 8px;background:rgba(255,255,255,0.02);border-radius:6px;border:1px solid var(--card-border)">
+<div class="agent-dot online" style="background:#3b82f6;color:#3b82f6;width:10px;height:10px;margin:0 auto 6px"></div>
+<div style="font-family:'Outfit',sans-serif;font-weight:600;font-size:12px">Meridian</div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text-dim);margin-top:2px">Shipments</div>
+<div style="font-family:'Space Mono',monospace;font-size:18px;font-weight:700;color:var(--holo-green);margin-top:6px">91%</div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--text-dim)">Health</div>
+</div>
+<div style="text-align:center;padding:12px 8px;background:rgba(255,255,255,0.02);border-radius:6px;border:1px solid var(--card-border)">
+<div class="agent-dot online" style="background:#ef4444;color:#ef4444;width:10px;height:10px;margin:0 auto 6px"></div>
+<div style="font-family:'Outfit',sans-serif;font-weight:600;font-size:12px">Hex</div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text-dim);margin-top:2px">Dev/Deploy</div>
+<div style="font-family:'Space Mono',monospace;font-size:18px;font-weight:700;color:var(--gold);margin-top:6px">87%</div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--text-dim)">High load</div>
+</div>
+</div>
+</div>
+</main>
+
+<!-- Right Sidebar -->
+<aside class="sidebar-right">
+<div class="notif-header">
+<h3>⚡ Transmissions</h3>
+<span class="notif-count">12 today</span>
+</div>
+<div class="notif-feed">
+<div class="notif-card alert">
+<div class="notif-type">⚠ Alert</div>
+<div class="notif-title">Humidity spike — Dry Room B</div>
+<div class="notif-body">RH hit 68% at 15:32. Threshold is 62%. Dehumidifier may need service. Kiln monitoring.</div>
+<div class="notif-time">2 min ago</div>
+</div>
+<div class="notif-card toast">
+<div class="notif-type">◈ Toast</div>
+<div class="notif-title">Cannaflora shipment update</div>
+<div class="notif-body">Tracking #CF-2847 — cleared customs, ETA Wednesday. 12 units, Cherry Truffle tops.</div>
+<div class="notif-time">18 min ago</div>
+</div>
+<div class="notif-card briefing">
+<div class="notif-type">◇ Briefing</div>
+<div class="notif-title">Afternoon Operations Brief</div>
+<div class="briefing-segments">
+<div class="briefing-seg">Production on pace — 47.2 lbs through 6.2 hrs. Cherry Truffle batch running clean.</div>
+<div class="briefing-seg">Trading desk green +$2.8K. Bull regime holding. NVDA call filled at 10:32.</div>
+<div class="briefing-seg">Swiss wholesale inquiry from Zurich Botanics — pricing request for 50 lb lot.</div>
+</div>
+<div class="notif-time">34 min ago</div>
+</div>
+<div class="notif-card toast">
+<div class="notif-type">◈ Toast</div>
+<div class="notif-title">Hex: Deploy complete</div>
+<div class="notif-body">rogue-origin-api v2.4.1 pushed to production. All health checks passing.</div>
+<div class="notif-time">1h ago</div>
+</div>
+<div class="notif-card toast">
+<div class="notif-type">◈ Toast</div>
+<div class="notif-title">Consignment intake logged</div>
+<div class="notif-body">Green Valley Farms — 8.4 lbs smalls, Banana Runtz @ $180/lb. Intake #347.</div>
+<div class="notif-time">1h 22m ago</div>
+</div>
+<div class="notif-card briefing">
+<div class="notif-type">◇ Briefing</div>
+<div class="notif-title">Morning Operations Brief</div>
+<div class="briefing-segments">
+<div class="briefing-seg">Weather: 58°F, clear. Good drying conditions. Dry Room A at 58% RH.</div>
+<div class="briefing-seg">4 crew confirmed for today's shift. Marcus covering for Jay.</div>
+<div class="briefing-seg">3 ClickUp tasks due today. 2 shipments pending confirmation.</div>
+</div>
+<div class="notif-time">6h ago</div>
+</div>
+<div class="notif-card alert">
+<div class="notif-type">⚠ Alert</div>
+<div class="notif-title">ClickUp sync failed</div>
+<div class="notif-body">D1 → ClickUp push returned 429. Retrying in 5m. No data loss.</div>
+<div class="notif-time">7h ago</div>
+</div>
+<div class="notif-card toast">
+<div class="notif-type">◈ Toast</div>
+<div class="notif-title">Razor: Market open scan</div>
+<div class="notif-body">Pre-market: SPY +0.3%, VIX 14.2. Bull regime confirmed. No overnight alerts.</div>
+<div class="notif-time">8h ago</div>
+</div>
+</div>
+</aside>
+
+<!-- Bottom Bar -->
+<div class="bottom-bar">
+<select class="chat-agent-select">
+<option>Atlas</option><option>Kiln</option><option>Razor</option><option>Meridian</option><option>Hex</option><option>All</option>
+</select>
+<input class="chat-input" placeholder="Message agents... (Enter to send)" type="text">
+<button class="chat-send">Send ⏎</button>
+</div>
+</div>
+
+<script>
+// Theme toggle
+const toggle = document.getElementById('themeToggle');
+const saved = localStorage.getItem('mc-v2-theme');
+if (saved === 'zen') { document.documentElement.setAttribute('data-theme', 'zen'); toggle.textContent = '◑'; }
+
+toggle.addEventListener('click', () => {
+  const isZen = document.documentElement.getAttribute('data-theme') === 'zen';
+  if (isZen) {
+    document.documentElement.removeAttribute('data-theme');
+    toggle.textContent = '◐';
+    localStorage.setItem('mc-v2-theme', 'relay');
+  } else {
+    document.documentElement.setAttribute('data-theme', 'zen');
+    toggle.textContent = '◑';
+    localStorage.setItem('mc-v2-theme', 'zen');
+  }
+});
+
+// Particles
+const pc=document.getElementById('particles');
+for(let i=0;i<40;i++){const p=document.createElement('div');p.className='particle';p.style.left=Math.random()*100+'%';p.style.animationDuration=(15+Math.random()*25)+'s';p.style.animationDelay=(-Math.random()*30)+'s';p.style.width=p.style.height=(0.5+Math.random()*1.5)+'px';pc.appendChild(p)}
+
+// Live stat updates
+const stats=document.querySelectorAll('.stat-value');
+setInterval(()=>{if(stats[0]){const v=parseFloat(stats[0].textContent);stats[0].textContent=(v+(.1*Math.random()-.02)).toFixed(1)}},8000);
+
+// Chat input
+document.querySelector('.chat-input').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.value.trim()){e.target.value='';e.target.placeholder='Message sent...';setTimeout(()=>e.target.placeholder='Message agents... (Enter to send)',2000)}});
+</script>
+</body>
+</html>

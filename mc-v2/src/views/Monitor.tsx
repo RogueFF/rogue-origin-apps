@@ -121,10 +121,10 @@ function SystemBar({ stats }: { stats?: SystemStats | null }) {
 
   const memPct = stats.mem.total > 0 ? (stats.mem.used / stats.mem.total) * 100 : 0;
   const diskPct = stats.disk.total > 0 ? (stats.disk.used / stats.disk.total) * 100 : 0;
-  const memUsedGB = (stats.mem.used / 1024 / 1024 / 1024).toFixed(1);
-  const memTotalGB = (stats.mem.total / 1024 / 1024 / 1024).toFixed(1);
-  const diskUsedGB = (stats.disk.used / 1024 / 1024 / 1024).toFixed(0);
-  const diskTotalGB = (stats.disk.total / 1024 / 1024 / 1024).toFixed(0);
+  const memUsedGB = stats.mem.used.toFixed(1);
+  const memTotalGB = stats.mem.total.toFixed(1);
+  const diskUsedGB = stats.disk.used.toFixed(0);
+  const diskTotalGB = stats.disk.total.toFixed(0);
   const load1m = stats.loadAvg?.[0] ?? 0;
 
   return (
