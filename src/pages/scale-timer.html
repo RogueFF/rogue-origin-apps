@@ -420,7 +420,14 @@
         if (brk.afterHours) {
           setTimerColor('neutral');
           if (lastBagTimestamp) {
-            const elapsed = getWorkingSeconds(lastBagTimestamp);
+            // Cap elapsed at shift end (4:20 PM — start of last break)
+            const shiftEndCap = new Date();
+            shiftEndCap.setHours(16, 20, 0, 0);
+            const capTime = Math.min(shiftEndCap.getTime(), new Date().getTime());
+            const startMs = lastBagTimestamp.getTime();
+            // Use getWorkingSecondsInternal but with time capped at 4:20
+            const savedNow = new Date();
+            const elapsed = getWorkingSecondsAtTime(lastBagTimestamp, shiftEndCap);
             valEl.textContent = formatTime(Math.abs(timerTargetSeconds - elapsed));
             setTimerRing(Math.min(1, elapsed / timerTargetSeconds));
           } else {
@@ -514,6 +521,21 @@
         if (t.toDateString() === today) return t;
       }
       const d = new Date(); d.setHours(7, 0, 0, 0); return d;
+    }
+
+    function getWorkingSecondsAtTime(startTime, endTime) {
+      if (!startTime || !endTime) return 0;
+      if (startTime.toDateString() !== endTime.toDateString()) return 0;
+      const sMins = startTime.getHours() * 60 + startTime.getMinutes();
+      const eMins = endTime.getHours() * 60 + endTime.getMinutes();
+      let total = Math.floor((endTime - startTime) / 1000);
+      for (const b of BREAKS) {
+        const bs = b[0] * 60 + b[1], be = b[2] * 60 + b[3];
+        if (sMins < be && eMins > bs) {
+          total -= (Math.min(eMins, be) - Math.max(sMins, bs)) * 60;
+        }
+      }
+      return Math.max(0, total);
     }
 
     function getWorkingSeconds(startTime) {
