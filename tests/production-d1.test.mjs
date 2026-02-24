@@ -914,7 +914,7 @@ describe('Daily projection trimmers selection', () => {
 
 describe('Special slot: 2:30 PM – 3:00 PM', () => {
   it('is in TIME_SLOT_MULTIPLIERS with 0.5 multiplier', () => {
-    assert.equal(TIME_SLOT_MULTIPLIERS['2:30 PM – 3:00 PM'], 0.5);
+    assert.equal(TIME_SLOT_MULTIPLIERS['2:30 PM – 3:00 PM'], 0.33);
   });
 
   it('is NOT in ALL_TIME_SLOTS', () => {
@@ -924,8 +924,8 @@ describe('Special slot: 2:30 PM – 3:00 PM', () => {
     );
   });
 
-  it('getTimeSlotMultiplier returns 0.5 for 2:30 PM – 3:00 PM', () => {
-    assert.equal(getTimeSlotMultiplier('2:30 PM – 3:00 PM'), 0.5);
+  it('getTimeSlotMultiplier returns 0.33 for 2:30 PM – 3:00 PM', () => {
+    assert.equal(getTimeSlotMultiplier('2:30 PM – 3:00 PM'), 0.33);
   });
 
   it('buildSortedRows handles DB row with 2:30 PM – 3:00 PM slot', () => {
@@ -938,7 +938,7 @@ describe('Special slot: 2:30 PM – 3:00 PM', () => {
     const pm230Row = rows.find(r => r.timeSlot === '2:30 PM – 3:00 PM');
     assert.ok(pm230Row, '2:30 PM slot should appear in rows');
     assert.equal(pm230Row.tops, 8);
-    assert.equal(pm230Row.multiplier, 0.5);
+    assert.equal(pm230Row.multiplier, 0.33);
   });
 
   it('3:00 PM – 3:30 PM also exists in TIME_SLOT_MULTIPLIERS with 0.5', () => {
@@ -1009,12 +1009,12 @@ describe('findHourIndices with smalls-only production', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 20. 3:00 PM – 4:00 PM has 0.83 multiplier (afternoon break at 2:30 PM)
+// 20. 3:00 PM – 4:00 PM multiplier (break moved to 2:00–3:00 PM slot)
 // ---------------------------------------------------------------------------
 
 describe('Afternoon break slot multiplier', () => {
-  it('3:00 PM – 4:00 PM has 0.83 multiplier (not 1.0)', () => {
-    assert.equal(getTimeSlotMultiplier('3:00 PM – 4:00 PM'), 0.83);
+  it('3:00 PM – 4:00 PM has 1.0 multiplier (break is now in 2-3 PM slot)', () => {
+    assert.equal(getTimeSlotMultiplier('3:00 PM – 4:00 PM'), 1.0);
   });
 
   it('4:00 PM – 4:30 PM has 0.33 multiplier (cleanup break)', () => {
