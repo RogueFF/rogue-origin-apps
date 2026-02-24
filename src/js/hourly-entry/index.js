@@ -3962,7 +3962,15 @@ function updateBagTimerTick() {
   if (breakStatus.onBreak) {
     setTimerColor('yellow');
     if (breakStatus.afterHours) {
-      timerValue.textContent = '--:--';
+      // Show frozen remaining time at 4:20 (cleanup start), not --:--
+      if (lastBagTimestamp) {
+        const elapsedSeconds = getWorkingSecondsSince(lastBagTimestamp);
+        const remainingSeconds = Math.max(0, timerTargetSeconds - elapsedSeconds);
+        timerValue.textContent = formatTimeMMSS(remainingSeconds);
+        setRingProgress(Math.min(1, elapsedSeconds / timerTargetSeconds));
+      } else {
+        timerValue.textContent = '--:--';
+      }
       timerLabel.textContent = currentLang === 'es' ? 'Turno terminado' : 'Shift ended';
     } else {
       // During break, show frozen time (time remaining when break started)
