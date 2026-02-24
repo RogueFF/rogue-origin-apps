@@ -630,10 +630,12 @@ function initializeUI() {
 
   // Language toggle
   const langBtn = document.getElementById('lang-toggle');
+  document.documentElement.lang = currentLang;
   langBtn.textContent = currentLang === 'en' ? 'ES' : 'EN';
   langBtn.addEventListener('click', () => {
     currentLang = currentLang === 'en' ? 'es' : 'en';
     localStorage.setItem('lang', currentLang);
+    document.documentElement.lang = currentLang;
     langBtn.textContent = currentLang === 'en' ? 'ES' : 'EN';
     updateLabels();
   });
@@ -1079,16 +1081,17 @@ function getCrewChanges() {
   const current = getCurrentCrewData();
   const changes = [];
 
+  const l = LABELS[currentLang];
   const fieldLabels = {
-    buckers1: 'Buckers L1',
-    trimmers1: 'Trimmers L1',
-    tzero1: 'T-Zero L1',
-    qcperson: 'QC',
-    cultivar1: 'Cultivar L1',
-    buckers2: 'Buckers L2',
-    trimmers2: 'Trimmers L2',
-    tzero2: 'T-Zero L2',
-    cultivar2: 'Cultivar L2',
+    buckers1: `${l.buckers} ${l.line1}`,
+    trimmers1: `${l.trimmers} ${l.line1}`,
+    tzero1: `${l.tzero} ${l.line1}`,
+    qcperson: l.qcperson,
+    cultivar1: `${l.cultivar} ${l.line1}`,
+    buckers2: `${l.buckers} ${l.line2}`,
+    trimmers2: `${l.trimmers} ${l.line2}`,
+    tzero2: `${l.tzero} ${l.line2}`,
+    cultivar2: `${l.cultivar} ${l.line2}`,
   };
 
   for (const field of CREW_FIELDS) {
@@ -1654,8 +1657,8 @@ function highlightCurrentTimeSlot() {
 }
 
 function formatSlotShort(slot) {
-  // "7:00 AM – 8:00 AM" -> "7-8 AM"
-  const match = slot.match(/(\d+):00\s*(AM|PM)\s*[–-]\s*(\d+):(\d+)\s*(AM|PM)/i);
+  // "7:00 AM – 8:00 AM" -> "7-8 AM", "7:30 AM – 8:30 AM" -> "7-8 AM"
+  const match = slot.match(/(\d+):\d+\s*(AM|PM)\s*[–-]\s*(\d+):(\d+)\s*(AM|PM)/i);
   if (match) {
     const startHour = match[1];
     const endHour = match[3];
@@ -1681,6 +1684,12 @@ function updateLabels() {
     const key = el.dataset.i18n;
     if (LABELS[currentLang][key]) {
       el.textContent = LABELS[currentLang][key];
+    }
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+    const key = el.getAttribute('data-i18n-placeholder');
+    if (LABELS[currentLang][key]) {
+      el.placeholder = LABELS[currentLang][key];
     }
   });
 }
@@ -1779,7 +1788,7 @@ const TUTORIAL_STEPS = [
   },
   {
     id: 'navigation-arrows',
-    target: 'editor-nav-inline',
+    target: 'hour-nav-group',
     title: { en: 'Hour Navigation', es: 'Navegación por Hora' },
     text: {
       en: 'Use the arrow buttons ← → to quickly move between hours without going back to the timeline.\n\n← Previous hour\n→ Next hour\n\nThis makes it fast to enter data for multiple hours in a row!',
@@ -1929,8 +1938,8 @@ function positionTutorialElements(step) {
       if (targetEl && targetEl.style.display === 'none') {
         targetEl = document.getElementById('start-time-badge');
       }
-    } else if (step.target === 'editor-nav-inline') {
-      targetEl = document.querySelector('.editor-nav-inline');
+    } else if (step.target === 'hour-nav-group') {
+      targetEl = document.querySelector('.hour-nav-group');
     } else if (step.target === 'crew-section') {
       targetEl = document.querySelector('.crew-section');
     } else if (step.target === 'production-section') {
