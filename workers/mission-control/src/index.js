@@ -140,6 +140,13 @@ function matchRoute(method, path) {
     ['GET',  /^\/api\/agents\/([a-z-]+)\/files$/,   'agentFilesList'],
     ['GET',  /^\/api\/agents\/([a-z-]+)\/files\/(.+)$/, 'agentFileGet'],
     ['PUT',  /^\/api\/agents\/([a-z-]+)\/files\/(.+)$/, 'agentFilePut'],
+    // Pool inventory routes
+    ['GET',  /^\/api\/pool\/bins$/,              'poolBinsList'],
+    ['POST', /^\/api\/pool\/bins$/,              'poolBinsCreate'],
+    ['POST', /^\/api\/pool\/intake$/,            'poolIntake'],
+    ['POST', /^\/api\/pool\/dispense$/,          'poolDispense'],
+    ['GET',  /^\/api\/pool\/dashboard$/,         'poolDashboard'],
+    ['GET',  /^\/api\/pool\/transactions$/,      'poolTransactions'],
     ['GET',  /^\/api\/github$/,                  'github'],
     ['GET',  /^\/api\/prices$/,                  'pricesGet'],
     ['GET',  /^\/api\/chrome-status$/,           'chromeStatus'],
@@ -1213,6 +1220,249 @@ const handlers = {
     // Add Koa as assignable
     const roster = [{ name: 'koa', signature_color: '#f97316', status: 'active' }, ...results.results];
     return json({ success: true, data: roster });
+  },
+
+  // ── Pool Inventory ─────────────────────────────────────────────────
+
+  // GET /api/pool/bins — list bins with optional filters
+  async poolBinsList(req, env) {
+    const db = env.DB;
+    const url = new URL(req.url);
+    const source = url.searchParams.get('source');
+    const type = url.searchParams.get('type');
+    const cultivar = url.searchParams.get('cultivar');
+    const status = url.searchParams.get('status');
+
+    let sql = `SELECT b.*, COALESCE(bb.current_lbs, 0) as current_lbs, bb.last_intake_at, bb.last_dispense_at, bb.last_updated
+               FROM bins b LEFT JOIN bin_balances bb ON b.id = bb.bin_id`;
+    const conditions = [];
+    const params = [];
+
+    if (source) { conditions.push('b.source = ?'); params.push(source); }
+    if (type) { conditions.push('b.type = ?'); params.push(type); }
+    if (cultivar) { conditions.push('b.cultivar LIKE ?'); params.push(`%${cultivar}%`); }
+    if (status) { conditions.push('b.status = ?'); params.push(status); }
+
+    if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ');
+    sql += ' ORDER BY b.bin_number';
+
+    const results = await db.prepare(sql).bind(...params).all();
+    return json({ success: true, data: results.results });
+  },
+
+  // POST /api/pool/bins — register a bin
+  async poolBinsCreate(req, env) {
+    const db = env.DB;
+    const body = await parseBody(req);
+
+    const required = ['bin_number', 'cultivar', 'type', 'source'];
+    for (const field of required) {
+      if (!body[field]) return err(`Missing required field: ${field}`, 'VALIDATION_ERROR', 400);
+    }
+
+    if (!['tops', 'smalls'].includes(body.type)) return err('Type must be tops or smalls', 'VALIDATION_ERROR', 400);
+    if (!['in-house', 'consignment'].includes(body.source)) return err('Source must be in-house or consignment', 'VALIDATION_ERROR', 400);
+
+    try {
+      const result = await db.prepare(
+        `INSERT INTO bins (bin_number, cultivar, type, source, capacity_lbs) VALUES (?, ?, ?, ?, ?)`
+      ).bind(body.bin_number, body.cultivar, body.type, body.source, body.capacity_lbs || 12.5).run();
+
+      // Create balance record
+      await db.prepare(`INSERT INTO bin_balances (bin_id, current_lbs) VALUES (?, 0)`).bind(result.meta.last_row_id).run();
+
+      const bin = await db.prepare('SELECT b.*, bb.current_lbs FROM bins b LEFT JOIN bin_balances bb ON b.id = bb.bin_id WHERE b.id = ?')
+        .bind(result.meta.last_row_id).first();
+      return json({ success: true, data: bin }, 201);
+    } catch (e) {
+      if (e.message?.includes('UNIQUE')) return err('Bin number already exists', 'DUPLICATE', 409);
+      throw e;
+    }
+  },
+
+  // POST /api/pool/intake — log intake + update balance
+  async poolIntake(req, env) {
+    const db = env.DB;
+    const body = await parseBody(req);
+
+    if (!body.bin_id || !body.weight_lbs) return err('Missing bin_id or weight_lbs', 'VALIDATION_ERROR', 400);
+    if (body.weight_lbs <= 0) return err('Weight must be positive', 'VALIDATION_ERROR', 400);
+
+    const bin = await db.prepare('SELECT * FROM bins WHERE id = ?').bind(body.bin_id).first();
+    if (!bin) return err('Bin not found', 'NOT_FOUND', 404);
+
+    // Insert transaction
+    const result = await db.prepare(
+      `INSERT INTO pool_transactions (bin_id, type, weight_lbs, source_ref, notes, created_by)
+       VALUES (?, 'intake', ?, ?, ?, ?)`
+    ).bind(body.bin_id, body.weight_lbs, body.source_ref || null, body.notes || null, body.created_by || 'system').run();
+
+    // Update balance
+    const now = new Date().toISOString();
+    await db.prepare(
+      `INSERT INTO bin_balances (bin_id, current_lbs, last_intake_at, last_updated)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(bin_id) DO UPDATE SET
+         current_lbs = current_lbs + excluded.current_lbs,
+         last_intake_at = excluded.last_intake_at,
+         last_updated = excluded.last_updated`
+    ).bind(body.bin_id, body.weight_lbs, now, now).run();
+
+    const balance = await db.prepare('SELECT current_lbs FROM bin_balances WHERE bin_id = ?').bind(body.bin_id).first();
+
+    return json({
+      success: true,
+      data: {
+        transaction_id: result.meta.last_row_id,
+        bin_id: body.bin_id,
+        bin_number: bin.bin_number,
+        weight_added: body.weight_lbs,
+        new_balance: balance.current_lbs,
+      },
+    }, 201);
+  },
+
+  // POST /api/pool/dispense — log dispense + update balance
+  async poolDispense(req, env) {
+    const db = env.DB;
+    const body = await parseBody(req);
+
+    if (!body.bin_id || !body.weight_lbs) return err('Missing bin_id or weight_lbs', 'VALIDATION_ERROR', 400);
+    if (body.weight_lbs <= 0) return err('Weight must be positive', 'VALIDATION_ERROR', 400);
+
+    const balance = await db.prepare('SELECT current_lbs FROM bin_balances WHERE bin_id = ?').bind(body.bin_id).first();
+    if (!balance) return err('Bin has no balance record', 'NOT_FOUND', 404);
+    if (balance.current_lbs < body.weight_lbs) return err(`Insufficient balance: ${balance.current_lbs} lbs available`, 'INSUFFICIENT', 400);
+
+    const bin = await db.prepare('SELECT * FROM bins WHERE id = ?').bind(body.bin_id).first();
+
+    // Insert transaction
+    const result = await db.prepare(
+      `INSERT INTO pool_transactions (bin_id, type, weight_lbs, package_size, package_count, source_ref, notes, created_by)
+       VALUES (?, 'dispense', ?, ?, ?, ?, ?, ?)`
+    ).bind(body.bin_id, body.weight_lbs, body.package_size || null, body.package_count || null,
+           body.source_ref || null, body.notes || null, body.created_by || 'system').run();
+
+    // Update balance
+    const now = new Date().toISOString();
+    await db.prepare(
+      `UPDATE bin_balances SET current_lbs = current_lbs - ?, last_dispense_at = ?, last_updated = ? WHERE bin_id = ?`
+    ).bind(body.weight_lbs, now, now, body.bin_id).run();
+
+    const newBalance = await db.prepare('SELECT current_lbs FROM bin_balances WHERE bin_id = ?').bind(body.bin_id).first();
+
+    return json({
+      success: true,
+      data: {
+        transaction_id: result.meta.last_row_id,
+        bin_id: body.bin_id,
+        bin_number: bin.bin_number,
+        weight_dispensed: body.weight_lbs,
+        package_size: body.package_size,
+        package_count: body.package_count,
+        new_balance: newBalance.current_lbs,
+      },
+    }, 201);
+  },
+
+  // GET /api/pool/dashboard — full dashboard state
+  async poolDashboard(_req, env) {
+    const db = env.DB;
+
+    // All bins with balances
+    const bins = await db.prepare(
+      `SELECT b.*, COALESCE(bb.current_lbs, 0) as current_lbs, bb.last_intake_at, bb.last_dispense_at
+       FROM bins b LEFT JOIN bin_balances bb ON b.id = bb.bin_id
+       WHERE b.status = 'active'
+       ORDER BY b.bin_number`
+    ).all();
+
+    const allBins = bins.results || [];
+
+    // Compute stats
+    const totalBins = allBins.length;
+    const totalLbs = allBins.reduce((s, b) => s + (b.current_lbs || 0), 0);
+    const totalCapacity = allBins.reduce((s, b) => s + (b.capacity_lbs || 12.5), 0);
+    const lowStockBins = allBins.filter(b => b.current_lbs < 3);
+    const emptyBins = allBins.filter(b => b.current_lbs === 0);
+
+    // By source
+    const inHouse = allBins.filter(b => b.source === 'in-house');
+    const consignment = allBins.filter(b => b.source === 'consignment');
+
+    // Recent transactions (last 20)
+    const recentTx = await db.prepare(
+      `SELECT pt.*, b.bin_number, b.cultivar FROM pool_transactions pt
+       JOIN bins b ON pt.bin_id = b.id
+       ORDER BY pt.created_at DESC LIMIT 20`
+    ).all();
+
+    // Today's activity
+    const todayTx = await db.prepare(
+      `SELECT type, SUM(weight_lbs) as total_lbs, COUNT(*) as count
+       FROM pool_transactions WHERE DATE(created_at) = DATE('now')
+       GROUP BY type`
+    ).all();
+
+    return json({
+      success: true,
+      data: {
+        summary: {
+          total_bins: totalBins,
+          total_lbs: Math.round(totalLbs * 100) / 100,
+          total_capacity: totalCapacity,
+          fill_pct: totalCapacity > 0 ? Math.round(totalLbs / totalCapacity * 10000) / 100 : 0,
+          low_stock_count: lowStockBins.length,
+          empty_count: emptyBins.length,
+        },
+        by_source: {
+          in_house: {
+            count: inHouse.length,
+            total_lbs: Math.round(inHouse.reduce((s, b) => s + b.current_lbs, 0) * 100) / 100,
+          },
+          consignment: {
+            count: consignment.length,
+            total_lbs: Math.round(consignment.reduce((s, b) => s + b.current_lbs, 0) * 100) / 100,
+          },
+        },
+        alerts: lowStockBins.map(b => ({
+          bin_number: b.bin_number,
+          cultivar: b.cultivar,
+          current_lbs: b.current_lbs,
+          type: b.current_lbs === 0 ? 'empty' : 'low_stock',
+          message: b.current_lbs === 0
+            ? `${b.bin_number} (${b.cultivar}) is EMPTY`
+            : `${b.bin_number} (${b.cultivar}) low: ${b.current_lbs} lbs`,
+        })),
+        bins: allBins,
+        recent_transactions: recentTx.results || [],
+        today: Object.fromEntries((todayTx.results || []).map(r => [r.type, { total_lbs: r.total_lbs, count: r.count }])),
+      },
+    });
+  },
+
+  // GET /api/pool/transactions — transaction history with filters
+  async poolTransactions(req, env) {
+    const db = env.DB;
+    const url = new URL(req.url);
+    const binId = url.searchParams.get('bin_id');
+    const type = url.searchParams.get('type');
+    const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 200);
+    const offset = parseInt(url.searchParams.get('offset') || '0');
+
+    let sql = `SELECT pt.*, b.bin_number, b.cultivar FROM pool_transactions pt JOIN bins b ON pt.bin_id = b.id`;
+    const conditions = [];
+    const params = [];
+
+    if (binId) { conditions.push('pt.bin_id = ?'); params.push(parseInt(binId)); }
+    if (type) { conditions.push('pt.type = ?'); params.push(type); }
+
+    if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ');
+    sql += ' ORDER BY pt.created_at DESC LIMIT ? OFFSET ?';
+    params.push(limit, offset);
+
+    const results = await db.prepare(sql).bind(...params).all();
+    return json({ success: true, data: results.results });
   },
 
   // GET /api/github — GitHub dashboard proxy
