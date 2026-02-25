@@ -1,4 +1,4 @@
-const { BrowserWindow, screen } = require('electron');
+const { BrowserWindow, screen, ipcMain } = require('electron');
 const path = require('path');
 const https = require('https');
 const http = require('http');
@@ -8,13 +8,11 @@ const http = require('http');
 // ---------------------------------------------------------------------------
 
 const API_BASE = 'https://mission-control-api.roguefamilyfarms.workers.dev';
-const POLL_INTERVAL = 15_000; // 15s
-const TOAST_WIDTH = 360;
-const TOAST_HEIGHT = 120;
-const TOAST_GAP = 8;
+const POLL_INTERVAL = 15_000;
+const TOAST_WIDTH = 420;
+const TOAST_HEIGHT = 220;
+const TOAST_GAP = 10;
 const MAX_VISIBLE = 3;
-const DISMISS_NORMAL = 6_000;
-const DISMISS_HIGH = 12_000;
 
 // ---------------------------------------------------------------------------
 // State
@@ -22,9 +20,10 @@ const DISMISS_HIGH = 12_000;
 
 let pollTimer = null;
 let seenIds = new Set();
-let activeToasts = []; // { win, id, timer }
+let activeToasts = []; // { win, id }
 let mainWindow = null;
 let onBadgeUpdate = null;
+let theme = 'relay';
 
 // ---------------------------------------------------------------------------
 // API
@@ -73,7 +72,7 @@ function patchJSON(url, body) {
 }
 
 // ---------------------------------------------------------------------------
-// Toast windows
+// Toast positioning
 // ---------------------------------------------------------------------------
 
 function getToastPosition(index) {
@@ -93,12 +92,10 @@ function repositionToasts() {
   });
 }
 
-function dismissToast(id) {
+function removeToast(id) {
   const idx = activeToasts.findIndex((t) => t.id === id);
   if (idx === -1) return;
-
   const toast = activeToasts[idx];
-  if (toast.timer) clearTimeout(toast.timer);
   if (toast.win && !toast.win.isDestroyed()) {
     toast.win.close();
   }
@@ -106,11 +103,15 @@ function dismissToast(id) {
   repositionToasts();
 }
 
+// ---------------------------------------------------------------------------
+// Show toast using popup BrowserWindow + IPC
+// ---------------------------------------------------------------------------
+
 function showToast(notification) {
-  // Cap at MAX_VISIBLE — dismiss oldest if full
+  // Cap at MAX_VISIBLE
   while (activeToasts.length >= MAX_VISIBLE) {
     const oldest = activeToasts[activeToasts.length - 1];
-    dismissToast(oldest.id);
+    removeToast(oldest.id);
   }
 
   const index = activeToasts.length;
@@ -119,7 +120,7 @@ function showToast(notification) {
   const win = new BrowserWindow({
     width: TOAST_WIDTH,
     height: TOAST_HEIGHT,
-    x: pos.x + TOAST_WIDTH, // Start offscreen right for slide-in
+    x: pos.x,
     y: pos.y,
     frame: false,
     transparent: true,
@@ -129,156 +130,100 @@ function showToast(notification) {
     focusable: false,
     show: false,
     webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
 
-  // Build toast HTML inline with notification data
-  const priorityColor = notification.priority === 'high' ? '#ff3344'
-    : notification.priority === 'low' ? '#00ff88' : '#00f0ff';
-
-  const escapedTitle = escapeHtml(notification.title || '');
-  const escapedBody = escapeHtml(notification.body || '');
-
-  const html = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700&family=Manrope:wght@400;500&display=swap" rel="stylesheet">
-<style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-html, body {
-  background: transparent;
-  overflow: hidden;
-  -webkit-app-region: no-drag;
-}
-.toast {
-  width: ${TOAST_WIDTH - 16}px;
-  margin: 4px 8px;
-  background: rgba(10, 10, 10, 0.85);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-left: 3px solid ${priorityColor};
-  border-radius: 12px;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.4), inset 0 0.5px 0 rgba(255,255,255,0.08);
-  padding: 12px 14px;
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  cursor: pointer;
-  transform: translateX(${TOAST_WIDTH}px);
-  animation: slideIn 300ms ease-out forwards;
-}
-@keyframes slideIn {
-  to { transform: translateX(0); }
-}
-.icon { font-size: 16px; flex-shrink: 0; padding-top: 1px; }
-.content { flex: 1; min-width: 0; }
-.title {
-  font-family: 'Outfit', sans-serif;
-  font-size: 13px;
-  font-weight: 700;
-  color: #f0ece4;
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.body {
-  font-family: 'Manrope', sans-serif;
-  font-size: 11px;
-  font-weight: 400;
-  color: rgba(240,236,228,0.6);
-  line-height: 1.3;
-  margin-top: 3px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-.close {
-  background: none;
-  border: none;
-  color: rgba(240,236,228,0.4);
-  font-size: 14px;
-  cursor: pointer;
-  padding: 0 2px;
-  line-height: 1;
-  flex-shrink: 0;
-  transition: color 150ms;
-}
-.close:hover { color: #f0ece4; }
-</style>
-</head>
-<body>
-<div class="toast" id="toast">
-  <span class="icon">${notification.type === 'alert' ? '⚠' : notification.type === 'production-card' ? '📊' : '🔔'}</span>
-  <div class="content">
-    <div class="title">${escapedTitle}</div>
-    ${escapedBody ? `<div class="body">${escapedBody}</div>` : ''}
-  </div>
-  <button class="close" id="closeBtn">✕</button>
-</div>
-<script>
-  document.getElementById('toast').addEventListener('click', (e) => {
-    if (e.target.id === 'closeBtn') return;
-    window.close();
-    // Main process handles mark-read + focus
-  });
-  document.getElementById('closeBtn').addEventListener('click', () => {
-    window.close();
-  });
-</script>
-</body>
-</html>`;
-
-  win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+  // Load the toast.html page
+  win.loadFile(path.join(__dirname, 'toast.html'));
 
   win.once('ready-to-show', () => {
     win.showInactive();
-    // Animate to final position
-    setTimeout(() => {
-      if (!win.isDestroyed()) {
-        win.setPosition(pos.x, pos.y, true);
-      }
-    }, 50);
+
+    // Send notification data to the popup renderer via IPC
+    const notifData = {
+      ...notification,
+      timestamp: notification.created_at || new Date().toISOString(),
+    };
+    win.webContents.send('show-popup', { notification: notifData });
   });
 
-  const dismissTime = notification.priority === 'high' ? DISMISS_HIGH : DISMISS_NORMAL;
-  const timer = setTimeout(() => dismissToast(notification.id), dismissTime);
-
-  // On close (by click or dismiss), mark as read
   win.on('closed', () => {
-    markRead(notification.id);
     const idx = activeToasts.findIndex((t) => t.id === notification.id);
     if (idx !== -1) {
-      if (activeToasts[idx].timer) clearTimeout(activeToasts[idx].timer);
       activeToasts.splice(idx, 1);
       repositionToasts();
     }
   });
 
-  activeToasts.unshift({ win, id: notification.id, timer });
+  activeToasts.unshift({ win, id: notification.id });
   repositionToasts();
 }
 
-function escapeHtml(str) {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
+// ---------------------------------------------------------------------------
+// Mark read
+// ---------------------------------------------------------------------------
 
 async function markRead(id) {
   try {
     await patchJSON(`${API_BASE}/api/notifications/${id}`, { read: 1 });
   } catch { /* best effort */ }
+}
+
+// ---------------------------------------------------------------------------
+// IPC handlers (registered once from main)
+// ---------------------------------------------------------------------------
+
+function registerIPC() {
+  // Popup dismissed (auto-dismiss or ghost trail complete)
+  ipcMain.on('popup:dismiss', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win && !win.isDestroyed()) {
+      const toast = activeToasts.find((t) => t.win === win);
+      if (toast) {
+        markRead(toast.id);
+        removeToast(toast.id);
+      } else {
+        win.close();
+      }
+    }
+  });
+
+  // Popup clicked (user wants to focus main window)
+  ipcMain.on('popup:clicked', (event, id) => {
+    markRead(id);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win && !win.isDestroyed()) {
+      removeToast(id);
+    }
+  });
+
+  // Alert acknowledged
+  ipcMain.on('popup:acknowledge', (_event, id) => {
+    markRead(id);
+  });
+
+  // Theme
+  ipcMain.handle('get-theme', () => theme);
+
+  // Settings
+  ipcMain.handle('get-settings', () => ({
+    soundEnabled: true,
+  }));
+
+  // TTS config (no keys configured — gracefully falls back)
+  ipcMain.handle('get-tts-config', () => ({
+    ttsEnabled: false,
+    elevenLabsKey: '',
+    elevenLabsVoice: '',
+    ttsVolume: 0.8,
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -316,6 +261,9 @@ function startPoller(win, badgeCallback) {
   mainWindow = win;
   onBadgeUpdate = badgeCallback;
 
+  // Register IPC handlers
+  registerIPC();
+
   // Initial poll
   setTimeout(poll, 2000);
 
@@ -331,8 +279,12 @@ function stopPoller() {
 
   // Dismiss all active toasts
   for (const t of [...activeToasts]) {
-    dismissToast(t.id);
+    removeToast(t.id);
   }
 }
 
-module.exports = { startPoller, stopPoller };
+function setTheme(newTheme) {
+  theme = newTheme;
+}
+
+module.exports = { startPoller, stopPoller, setTheme };
