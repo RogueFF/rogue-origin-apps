@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <link rel="icon" type="image/png" href="/rogue-origin-apps/favicon.png">
+  <meta name="theme-color" content="#1a1f16">
+  <title>Supersack Tracker — Rogue Origin</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=optional" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/duotone/style.css">
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d1108;
+      --bg-card: #151a10;
+      --bg-elevated: #1c2316;
+      --bg-input: #1a2014;
+      --glass: rgba(102, 137, 113, 0.06);
+      --glass-border: rgba(102, 137, 113, 0.12);
+      --glass-hover: rgba(102, 137, 113, 0.10);
+      --ro-green: #668971;
+      --ro-green-bright: #7aad8a;
+      --ro-gold: #e4aa4f;
+      --ro-gold-dim: rgba(228, 170, 79, 0.15);
+      --danger: #c45c4a;
+      --danger-dim: rgba(196, 92, 74, 0.15);
+      --text: #e8ede9;
+      --text-secondary: #9aaa9e;
+      --text-muted: #6b7d70;
+      --font-display: 'DM Serif Display', Georgia, serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --font-ui: 'Outfit', system-ui, sans-serif;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --radius-lg: 16px;
+      --shadow: 0 2px 12px rgba(0,0,0,0.3);
+      --shadow-lg: 0 8px 32px rgba(0,0,0,0.4);
+    }
+
+    html { font-size: 15px; }
+    body {
+      font-family: var(--font-ui);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Subtle noise texture */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Layout ── */
+    .app { position: relative; z-index: 1; }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--glass-border);
+      background: rgba(13, 17, 8, 0.85);
+      backdrop-filter: blur(20px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .topbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .topbar-brand img { width: 28px; height: 28px; }
+    .topbar-brand h1 {
+      font-family: var(--font-display);
+      font-size: 1.2rem;
+      font-weight: 400;
+      color: var(--text);
+      letter-spacing: 0.02em;
+    }
+    .topbar-brand span {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    .nav-tabs {
+      display: flex;
+      gap: 4px;
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      padding: 4px;
+      border: 1px solid var(--glass-border);
+    }
+    .nav-tab {
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+      background: none;
+      font-family: var(--font-ui);
+      white-space: nowrap;
+    }
+    .nav-tab:hover { color: var(--text-secondary); background: var(--glass); }
+    .nav-tab.active {
+      color: var(--text);
+      background: var(--ro-green);
+      box-shadow: 0 2px 8px rgba(102, 137, 113, 0.3);
+    }
+    .nav-tab i { margin-right: 6px; }
+
+    .content { padding: 24px; max-width: 1400px; margin: 0 auto; }
+    .view { display: none; }
+    .view.active { display: block; animation: fadeIn 0.3s ease; }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .card-title {
+      font-family: var(--font-display);
+      font-size: 1.15rem;
+      color: var(--text);
+    }
+
+    /* ── Summary Stats ── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius);
+      padding: 16px;
+      text-align: center;
+    }
+    .stat-value {
+      font-family: var(--font-mono);
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--ro-green-bright);
+      line-height: 1.1;
+    }
+    .stat-value.warn { color: var(--ro-gold); }
+    .stat-value.danger { color: var(--danger); }
+    .stat-label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    /* ── Bin Grid ── */
+    .bin-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+      gap: 12px;
+    }
+    .bin-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius);
+      padding: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .bin-card:hover {
+      border-color: var(--ro-green);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(102, 137, 113, 0.15);
+    }
+    .bin-card.selected {
+      border-color: var(--ro-green-bright);
+      box-shadow: 0 0 0 2px rgba(102, 137, 113, 0.3);
+    }
+    .bin-number {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: 0.05em;
+    }
+    .bin-cultivar {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .bin-fill-bar {
+      height: 4px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 2px;
+      margin-top: 10px;
+      overflow: hidden;
+    }
+    .bin-fill-level {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.5s ease;
+    }
+    .bin-weight {
+      font-family: var(--font-mono);
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--ro-green-bright);
+      margin-top: 6px;
+    }
+    .bin-weight-unit {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+    .bin-badge {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      font-size: 0.6rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .badge-ih { background: rgba(102, 137, 113, 0.2); color: var(--ro-green-bright); }
+    .badge-cn { background: var(--ro-gold-dim); color: var(--ro-gold); }
+    .badge-empty { background: var(--danger-dim); color: var(--danger); }
+    .badge-low { background: rgba(228, 170, 79, 0.2); color: var(--ro-gold); }
+
+    /* Fill colors */
+    .fill-high { background: var(--ro-green-bright); }
+    .fill-mid { background: var(--ro-gold); }
+    .fill-low { background: var(--danger); }
+    .fill-empty { background: rgba(255,255,255,0.1); }
+
+    /* ── Section Headers ── */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .section-title {
+      font-family: var(--font-display);
+      font-size: 1.3rem;
+      color: var(--text);
+    }
+    .section-subtitle {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    /* ── Filter Bar ── */
+    .filter-bar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .filter-btn {
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      background: var(--bg-elevated);
+      border: 1px solid var(--glass-border);
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: var(--font-ui);
+    }
+    .filter-btn:hover { color: var(--text-secondary); border-color: var(--ro-green); }
+    .filter-btn.active { color: var(--text); background: rgba(102,137,113,0.15); border-color: var(--ro-green); }
+
+    /* ── Forms ── */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group.full { grid-column: 1 / -1; }
+    .form-label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+    .form-input, .form-select, .form-textarea {
+      background: var(--bg-input);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      color: var(--text);
+      font-family: var(--font-ui);
+      font-size: 0.9rem;
+      transition: border-color 0.2s;
+    }
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      outline: none;
+      border-color: var(--ro-green);
+      box-shadow: 0 0 0 3px rgba(102, 137, 113, 0.15);
+    }
+    .form-select { cursor: pointer; }
+    .form-textarea { min-height: 80px; resize: vertical; }
+
+    /* Package size buttons */
+    .pkg-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .pkg-btn {
+      padding: 12px 8px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--glass-border);
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+    .pkg-btn:hover { border-color: var(--ro-green); color: var(--text); }
+    .pkg-btn.active {
+      background: rgba(102,137,113,0.15);
+      border-color: var(--ro-green);
+      color: var(--ro-green-bright);
+    }
+    .pkg-btn small { display: block; font-size: 0.6rem; color: var(--text-muted); margin-top: 2px; font-weight: 400; }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-ui);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+    }
+    .btn-primary {
+      background: var(--ro-green);
+      color: white;
+      box-shadow: 0 2px 8px rgba(102,137,113,0.3);
+    }
+    .btn-primary:hover { background: var(--ro-green-bright); transform: translateY(-1px); }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+    .btn-secondary {
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      border: 1px solid var(--glass-border);
+    }
+    .btn-secondary:hover { border-color: var(--ro-green); color: var(--text); }
+    .btn-gold {
+      background: var(--ro-gold);
+      color: #1a1a1a;
+    }
+    .btn-gold:hover { background: #f0cb60; }
+
+    /* ── Alerts Panel ── */
+    .alert-list { display: flex; flex-direction: column; gap: 8px; }
+    .alert-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 0.82rem;
+    }
+    .alert-item.alert-empty {
+      background: var(--danger-dim);
+      border: 1px solid rgba(196,92,74,0.2);
+      color: var(--danger);
+    }
+    .alert-item.alert-low {
+      background: var(--ro-gold-dim);
+      border: 1px solid rgba(228,170,79,0.2);
+      color: var(--ro-gold);
+    }
+    .alert-icon { font-size: 1.1rem; }
+    .alert-text { flex: 1; }
+    .alert-action {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+    .alert-action:hover { color: var(--text); }
+
+    /* ── Transaction Log ── */
+    .tx-list { display: flex; flex-direction: column; gap: 6px; }
+    .tx-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-elevated);
+      border: 1px solid var(--glass-border);
+      font-size: 0.8rem;
+    }
+    .tx-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      flex-shrink: 0;
+    }
+    .tx-icon.intake { background: rgba(102,137,113,0.15); color: var(--ro-green-bright); }
+    .tx-icon.dispense { background: var(--ro-gold-dim); color: var(--ro-gold); }
+    .tx-detail { flex: 1; }
+    .tx-bin { font-family: var(--font-mono); font-weight: 600; color: var(--text); }
+    .tx-desc { color: var(--text-secondary); font-size: 0.75rem; }
+    .tx-weight {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 0.85rem;
+    }
+    .tx-weight.positive { color: var(--ro-green-bright); }
+    .tx-weight.negative { color: var(--ro-gold); }
+    .tx-time { font-size: 0.68rem; color: var(--text-muted); font-family: var(--font-mono); }
+
+    /* ── Selected bin info ── */
+    .selected-bin-info {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+    }
+    .selected-bin-name {
+      font-family: var(--font-mono);
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--ro-green-bright);
+    }
+    .selected-bin-meta {
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+    }
+    .selected-bin-balance {
+      margin-left: auto;
+      text-align: right;
+    }
+    .selected-bin-lbs {
+      font-family: var(--font-mono);
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    /* ── Toast ── */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .toast {
+      padding: 12px 20px;
+      border-radius: var(--radius-sm);
+      font-size: 0.82rem;
+      font-weight: 500;
+      animation: slideIn 0.3s ease;
+      box-shadow: var(--shadow-lg);
+    }
+    .toast.success { background: var(--ro-green); color: white; }
+    .toast.error { background: var(--danger); color: white; }
+    @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: none; } }
+
+    /* ── Empty state ── */
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .topbar { padding: 12px 16px; flex-direction: column; gap: 12px; }
+      .nav-tabs { width: 100%; overflow-x: auto; }
+      .content { padding: 16px; }
+      .bin-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+      .form-grid { grid-template-columns: 1fr; }
+      .pkg-grid { grid-template-columns: repeat(2, 1fr); }
+      .selected-bin-info { flex-direction: column; text-align: center; }
+      .selected-bin-balance { margin-left: 0; }
+    }
+    @media (max-width: 480px) {
+      .bin-grid { grid-template-columns: repeat(2, 1fr); }
+      .stats-row { grid-template-columns: 1fr 1fr; gap: 8px; }
+      .nav-tab { padding: 6px 10px; font-size: 0.72rem; }
+      .nav-tab i { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Top Bar -->
+    <header class="topbar">
+      <div class="topbar-brand">
+        <img src="/rogue-origin-apps/favicon.png" alt="RO" onerror="this.style.display='none'">
+        <div>
+          <h1>Supersack Tracker</h1>
+          <span>Pool Inventory</span>
+        </div>
+      </div>
+      <nav class="nav-tabs">
+        <button class="nav-tab active" data-view="grid" onclick="switchView('grid')">
+          <i class="ph-duotone ph-grid-four"></i>Bins
+        </button>
+        <button class="nav-tab" data-view="intake" onclick="switchView('intake')">
+          <i class="ph-duotone ph-download-simple"></i>Intake
+        </button>
+        <button class="nav-tab" data-view="dispense" onclick="switchView('dispense')">
+          <i class="ph-duotone ph-package"></i>Dispense
+        </button>
+        <button class="nav-tab" data-view="dashboard" onclick="switchView('dashboard')">
+          <i class="ph-duotone ph-chart-bar"></i>Dashboard
+        </button>
+      </nav>
+    </header>
+
+    <div class="content">
+      <!-- ═══ BIN GRID VIEW ═══ -->
+      <div id="view-grid" class="view active">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Bin Inventory</h2>
+            <p class="section-subtitle" id="grid-subtitle">32 bins • 0.00 lbs total</p>
+          </div>
+          <div class="filter-bar">
+            <button class="filter-btn active" data-filter="all" onclick="filterBins('all')">All</button>
+            <button class="filter-btn" data-filter="in-house" onclick="filterBins('in-house')">In-House</button>
+            <button class="filter-btn" data-filter="consignment" onclick="filterBins('consignment')">Consignment</button>
+            <button class="filter-btn" data-filter="low" onclick="filterBins('low')">Low Stock</button>
+          </div>
+        </div>
+        <div class="bin-grid" id="bin-grid"></div>
+      </div>
+
+      <!-- ═══ INTAKE VIEW ═══ -->
+      <div id="view-intake" class="view">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Log Intake</h2>
+            <p class="section-subtitle">Add product to a bin</p>
+          </div>
+        </div>
+
+        <div id="intake-bin-select" style="margin-bottom: 20px;">
+          <p class="form-label" style="margin-bottom: 10px;">Select Bin (or click from grid)</p>
+          <div class="bin-grid" id="intake-bin-grid"></div>
+        </div>
+
+        <div id="intake-selected-bin" class="selected-bin-info" style="display:none;"></div>
+
+        <div class="card" id="intake-form-card" style="display:none;">
+          <form id="intake-form">
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">Weight (lbs)</label>
+                <input type="number" class="form-input" id="intake-weight" step="0.01" min="0.01" required placeholder="0.00">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Source Reference</label>
+                <input type="text" class="form-input" id="intake-source-ref" placeholder="Batch ID, partner name...">
+              </div>
+              <div class="form-group full">
+                <label class="form-label">Notes</label>
+                <textarea class="form-textarea" id="intake-notes" placeholder="Optional notes..."></textarea>
+              </div>
+            </div>
+            <div style="margin-top: 16px; display: flex; gap: 8px;">
+              <button type="submit" class="btn btn-primary" id="intake-submit">
+                <i class="ph-duotone ph-download-simple"></i> Log Intake
+              </button>
+              <button type="button" class="btn btn-secondary" onclick="clearIntakeForm()">Cancel</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- ═══ DISPENSE VIEW ═══ -->
+      <div id="view-dispense" class="view">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Dispense</h2>
+            <p class="section-subtitle">Package product from a bin</p>
+          </div>
+        </div>
+
+        <div id="dispense-bin-select" style="margin-bottom: 20px;">
+          <p class="form-label" style="margin-bottom: 10px;">Select Bin</p>
+          <div class="bin-grid" id="dispense-bin-grid"></div>
+        </div>
+
+        <div id="dispense-selected-bin" class="selected-bin-info" style="display:none;"></div>
+
+        <div class="card" id="dispense-form-card" style="display:none;">
+          <form id="dispense-form">
+            <div class="form-grid">
+              <div class="form-group full">
+                <label class="form-label">Package Size</label>
+                <div class="pkg-grid">
+                  <button type="button" class="pkg-btn" data-size="1oz" data-weight="0.0625" onclick="selectPkg(this)">
+                    1 oz<small>0.0625 lb</small>
+                  </button>
+                  <button type="button" class="pkg-btn" data-size="1/4lb" data-weight="0.25" onclick="selectPkg(this)">
+                    ¼ lb<small>0.25 lb</small>
+                  </button>
+                  <button type="button" class="pkg-btn" data-size="1/2lb" data-weight="0.5" onclick="selectPkg(this)">
+                    ½ lb<small>0.50 lb</small>
+                  </button>
+                  <button type="button" class="pkg-btn" data-size="1lb" data-weight="1" onclick="selectPkg(this)">
+                    1 lb<small>1.00 lb</small>
+                  </button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Quantity</label>
+                <input type="number" class="form-input" id="dispense-qty" min="1" value="1" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Total Weight</label>
+                <input type="text" class="form-input" id="dispense-total" readonly style="font-family:var(--font-mono);font-weight:700;color:var(--ro-gold);">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Order ID (optional)</label>
+                <input type="text" class="form-input" id="dispense-order" placeholder="ORD-XXXX">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Notes</label>
+                <input type="text" class="form-input" id="dispense-notes" placeholder="Optional...">
+              </div>
+            </div>
+            <div style="margin-top: 16px; display: flex; gap: 8px;">
+              <button type="submit" class="btn btn-gold" id="dispense-submit">
+                <i class="ph-duotone ph-package"></i> Dispense
+              </button>
+              <button type="button" class="btn btn-secondary" onclick="clearDispenseForm()">Cancel</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- ═══ DASHBOARD VIEW ═══ -->
+      <div id="view-dashboard" class="view">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Dashboard</h2>
+            <p class="section-subtitle" id="dash-updated">Last updated: —</p>
+          </div>
+          <button class="btn btn-secondary" onclick="loadDashboard()">
+            <i class="ph-duotone ph-arrows-clockwise"></i> Refresh
+          </button>
+        </div>
+
+        <div class="stats-row" id="dash-stats"></div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Alerts</h3>
+              <span id="alert-count" style="font-family:var(--font-mono);font-size:0.75rem;color:var(--danger);"></span>
+            </div>
+            <div class="alert-list" id="alert-list">
+              <div class="empty-state">No alerts</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Today's Activity</h3>
+            </div>
+            <div id="today-activity">
+              <div class="empty-state">No activity today</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Recent Transactions</h3>
+          </div>
+          <div class="tx-list" id="recent-tx">
+            <div class="empty-state">No transactions yet</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast-container" id="toast-container"></div>
+  </div>
+
+  <script>
+    const API = 'https://mission-control-api.roguefamilyfarms.workers.dev';
+    let bins = [];
+    let dashData = null;
+    let selectedBin = null;
+    let selectedPkg = null;
+    let currentFilter = 'all';
+
+    // ── Init ──
+    async function init() {
+      await loadBins();
+      switchView('grid');
+    }
+
+    // ── API helpers ──
+    async function api(path, opts = {}) {
+      const resp = await fetch(`${API}${path}`, {
+        headers: { 'Content-Type': 'application/json' },
+        ...opts,
+      });
+      return resp.json();
+    }
+
+    // ── Load bins ──
+    async function loadBins() {
+      const res = await api('/api/pool/bins');
+      if (res.success) {
+        bins = res.data;
+        renderBinGrid('bin-grid', bins, currentFilter);
+        renderBinGrid('intake-bin-grid', bins, 'all', 'intake');
+        renderBinGrid('dispense-bin-grid', bins.filter(b => (b.current_lbs || 0) > 0), 'all', 'dispense');
+        updateGridSubtitle();
+      }
+    }
+
+    function updateGridSubtitle() {
+      const filtered = filterBinData(bins, currentFilter);
+      const total = filtered.reduce((s, b) => s + (b.current_lbs || 0), 0);
+      document.getElementById('grid-subtitle').textContent =
+        `${filtered.length} bins • ${total.toFixed(2)} lbs total`;
+    }
+
+    function filterBinData(data, filter) {
+      if (filter === 'all') return data;
+      if (filter === 'in-house') return data.filter(b => b.source === 'in-house');
+      if (filter === 'consignment') return data.filter(b => b.source === 'consignment');
+      if (filter === 'low') return data.filter(b => (b.current_lbs || 0) < 3 && (b.current_lbs || 0) > 0);
+      return data;
+    }
+
+    function filterBins(filter) {
+      currentFilter = filter;
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === filter));
+      renderBinGrid('bin-grid', bins, filter);
+      updateGridSubtitle();
+    }
+
+    // ── Render bin grid ──
+    function renderBinGrid(containerId, data, filter = 'all', mode = null) {
+      const container = document.getElementById(containerId);
+      const filtered = filterBinData(data, filter);
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="empty-state">No bins match this filter</div>';
+        return;
+      }
+
+      container.innerHTML = filtered.map(b => {
+        const pct = b.capacity_lbs > 0 ? (b.current_lbs || 0) / b.capacity_lbs * 100 : 0;
+        const fillClass = pct === 0 ? 'fill-empty' : pct < 25 ? 'fill-low' : pct < 60 ? 'fill-mid' : 'fill-high';
+        const badgeClass = b.source === 'in-house' ? 'badge-ih' : 'badge-cn';
+        const badgeText = b.source === 'in-house' ? 'IH' : 'CN';
+        let statusBadge = '';
+        if ((b.current_lbs || 0) === 0) statusBadge = '<span class="bin-badge badge-empty">Empty</span>';
+        else if ((b.current_lbs || 0) < 3) statusBadge = '<span class="bin-badge badge-low">Low</span>';
+        else statusBadge = `<span class="bin-badge ${badgeClass}">${badgeText}</span>`;
+
+        const isSelected = selectedBin && selectedBin.id === b.id;
+        const clickHandler = mode === 'intake' ? `selectBinForIntake(${b.id})`
+          : mode === 'dispense' ? `selectBinForDispense(${b.id})`
+          : '';
+
+        return `<div class="bin-card ${isSelected ? 'selected' : ''}" ${clickHandler ? `onclick="${clickHandler}"` : ''}>
+          ${statusBadge}
+          <div class="bin-number">${b.bin_number}</div>
+          <div class="bin-cultivar">${b.cultivar} • ${b.type}</div>
+          <div class="bin-weight">${(b.current_lbs || 0).toFixed(2)} <span class="bin-weight-unit">lbs</span></div>
+          <div class="bin-fill-bar"><div class="bin-fill-level ${fillClass}" style="width:${Math.min(pct, 100)}%"></div></div>
+        </div>`;
+      }).join('');
+    }
+
+    // ── View switching ──
+    function switchView(view) {
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.getElementById(`view-${view}`).classList.add('active');
+      document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
+
+      if (view === 'dashboard') loadDashboard();
+      if (view === 'intake') renderBinGrid('intake-bin-grid', bins, 'all', 'intake');
+      if (view === 'dispense') renderBinGrid('dispense-bin-grid', bins.filter(b => (b.current_lbs || 0) > 0), 'all', 'dispense');
+    }
+
+    // ── Intake flow ──
+    function selectBinForIntake(binId) {
+      selectedBin = bins.find(b => b.id === binId);
+      if (!selectedBin) return;
+
+      document.getElementById('intake-selected-bin').style.display = 'flex';
+      document.getElementById('intake-selected-bin').innerHTML = `
+        <div>
+          <div class="selected-bin-name">${selectedBin.bin_number}</div>
+          <div class="selected-bin-meta">${selectedBin.cultivar} • ${selectedBin.type} • ${selectedBin.source}</div>
+        </div>
+        <div class="selected-bin-balance">
+          <div class="selected-bin-lbs">${(selectedBin.current_lbs || 0).toFixed(2)} lbs</div>
+          <div style="font-size:0.7rem;color:var(--text-muted)">current balance</div>
+        </div>`;
+      document.getElementById('intake-form-card').style.display = 'block';
+      renderBinGrid('intake-bin-grid', bins, 'all', 'intake');
+    }
+
+    function clearIntakeForm() {
+      selectedBin = null;
+      document.getElementById('intake-selected-bin').style.display = 'none';
+      document.getElementById('intake-form-card').style.display = 'none';
+      document.getElementById('intake-form').reset();
+    }
+
+    document.getElementById('intake-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!selectedBin) return;
+
+      const weight = parseFloat(document.getElementById('intake-weight').value);
+      if (!weight || weight <= 0) return toast('Enter a valid weight', 'error');
+
+      const btn = document.getElementById('intake-submit');
+      btn.disabled = true;
+
+      const res = await api('/api/pool/intake', {
+        method: 'POST',
+        body: JSON.stringify({
+          bin_id: selectedBin.id,
+          weight_lbs: weight,
+          source_ref: document.getElementById('intake-source-ref').value || null,
+          notes: document.getElementById('intake-notes').value || null,
+          created_by: 'koa',
+        }),
+      });
+
+      btn.disabled = false;
+
+      if (res.success) {
+        toast(`Added ${weight} lbs to ${res.data.bin_number} → ${res.data.new_balance} lbs`, 'success');
+        clearIntakeForm();
+        await loadBins();
+      } else {
+        toast(res.error || 'Intake failed', 'error');
+      }
+    });
+
+    // ── Dispense flow ──
+    function selectBinForDispense(binId) {
+      selectedBin = bins.find(b => b.id === binId);
+      if (!selectedBin) return;
+
+      document.getElementById('dispense-selected-bin').style.display = 'flex';
+      document.getElementById('dispense-selected-bin').innerHTML = `
+        <div>
+          <div class="selected-bin-name">${selectedBin.bin_number}</div>
+          <div class="selected-bin-meta">${selectedBin.cultivar} • ${selectedBin.type} • ${selectedBin.source}</div>
+        </div>
+        <div class="selected-bin-balance">
+          <div class="selected-bin-lbs">${(selectedBin.current_lbs || 0).toFixed(2)} lbs</div>
+          <div style="font-size:0.7rem;color:var(--text-muted)">available</div>
+        </div>`;
+      document.getElementById('dispense-form-card').style.display = 'block';
+      selectedPkg = null;
+      document.querySelectorAll('.pkg-btn').forEach(b => b.classList.remove('active'));
+      updateDispenseTotal();
+      renderBinGrid('dispense-bin-grid', bins.filter(b => (b.current_lbs || 0) > 0), 'all', 'dispense');
+    }
+
+    function clearDispenseForm() {
+      selectedBin = null;
+      selectedPkg = null;
+      document.getElementById('dispense-selected-bin').style.display = 'none';
+      document.getElementById('dispense-form-card').style.display = 'none';
+      document.getElementById('dispense-form').reset();
+      document.querySelectorAll('.pkg-btn').forEach(b => b.classList.remove('active'));
+    }
+
+    function selectPkg(el) {
+      document.querySelectorAll('.pkg-btn').forEach(b => b.classList.remove('active'));
+      el.classList.add('active');
+      selectedPkg = { size: el.dataset.size, weight: parseFloat(el.dataset.weight) };
+      updateDispenseTotal();
+    }
+
+    function updateDispenseTotal() {
+      const qty = parseInt(document.getElementById('dispense-qty').value) || 1;
+      const weight = selectedPkg ? selectedPkg.weight * qty : 0;
+      document.getElementById('dispense-total').value = weight > 0 ? `${weight.toFixed(4)} lbs` : '—';
+    }
+
+    document.getElementById('dispense-qty').addEventListener('input', updateDispenseTotal);
+
+    document.getElementById('dispense-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!selectedBin || !selectedPkg) return toast('Select a bin and package size', 'error');
+
+      const qty = parseInt(document.getElementById('dispense-qty').value) || 1;
+      const totalWeight = selectedPkg.weight * qty;
+
+      if (totalWeight > (selectedBin.current_lbs || 0)) {
+        return toast(`Not enough in bin: ${(selectedBin.current_lbs || 0).toFixed(2)} lbs available`, 'error');
+      }
+
+      const btn = document.getElementById('dispense-submit');
+      btn.disabled = true;
+
+      const res = await api('/api/pool/dispense', {
+        method: 'POST',
+        body: JSON.stringify({
+          bin_id: selectedBin.id,
+          weight_lbs: totalWeight,
+          package_size: selectedPkg.size,
+          package_count: qty,
+          source_ref: document.getElementById('dispense-order').value || null,
+          notes: document.getElementById('dispense-notes').value || null,
+          created_by: 'koa',
+        }),
+      });
+
+      btn.disabled = false;
+
+      if (res.success) {
+        toast(`Dispensed ${qty}× ${selectedPkg.size} from ${res.data.bin_number} → ${res.data.new_balance} lbs remaining`, 'success');
+        clearDispenseForm();
+        await loadBins();
+      } else {
+        toast(res.error || 'Dispense failed', 'error');
+      }
+    });
+
+    // ── Dashboard ──
+    async function loadDashboard() {
+      const res = await api('/api/pool/dashboard');
+      if (!res.success) return;
+      dashData = res.data;
+
+      document.getElementById('dash-updated').textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+
+      // Stats
+      const s = dashData.summary;
+      document.getElementById('dash-stats').innerHTML = `
+        <div class="stat-card">
+          <div class="stat-value">${s.total_bins}</div>
+          <div class="stat-label">Active Bins</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${s.total_lbs.toFixed(1)}</div>
+          <div class="stat-label">Total lbs</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${s.fill_pct.toFixed(1)}%</div>
+          <div class="stat-label">Fill Rate</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value ${s.low_stock_count > 5 ? 'danger' : s.low_stock_count > 0 ? 'warn' : ''}">${s.low_stock_count}</div>
+          <div class="stat-label">Low Stock</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value ${s.empty_count > 0 ? 'danger' : ''}">${s.empty_count}</div>
+          <div class="stat-label">Empty Bins</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${s.total_capacity.toFixed(0)}</div>
+          <div class="stat-label">Capacity (lbs)</div>
+        </div>
+      `;
+
+      // Alerts
+      const alerts = dashData.alerts || [];
+      const alertCount = document.getElementById('alert-count');
+      alertCount.textContent = alerts.length > 0 ? `${alerts.length} active` : '';
+      const alertList = document.getElementById('alert-list');
+      if (alerts.length === 0) {
+        alertList.innerHTML = '<div class="empty-state">✅ All bins healthy</div>';
+      } else {
+        alertList.innerHTML = alerts.slice(0, 10).map(a => `
+          <div class="alert-item alert-${a.type === 'empty' ? 'empty' : 'low'}">
+            <span class="alert-icon">${a.type === 'empty' ? '🔴' : '🟡'}</span>
+            <span class="alert-text">${a.message}</span>
+          </div>
+        `).join('');
+      }
+
+      // Today
+      const today = dashData.today || {};
+      const todayEl = document.getElementById('today-activity');
+      if (Object.keys(today).length === 0) {
+        todayEl.innerHTML = '<div class="empty-state">No activity today</div>';
+      } else {
+        let html = '<div style="display:flex;flex-direction:column;gap:8px;">';
+        if (today.intake) html += `<div class="stat-card" style="padding:12px;"><div class="stat-value" style="font-size:1.2rem;">${today.intake.count}</div><div class="stat-label">Intakes (${today.intake.total_lbs.toFixed(2)} lbs)</div></div>`;
+        if (today.dispense) html += `<div class="stat-card" style="padding:12px;"><div class="stat-value warn" style="font-size:1.2rem;">${today.dispense.count}</div><div class="stat-label">Dispenses (${today.dispense.total_lbs.toFixed(2)} lbs)</div></div>`;
+        html += '</div>';
+        todayEl.innerHTML = html;
+      }
+
+      // Recent transactions
+      const txList = document.getElementById('recent-tx');
+      const txs = dashData.recent_transactions || [];
+      if (txs.length === 0) {
+        txList.innerHTML = '<div class="empty-state">No transactions yet</div>';
+      } else {
+        txList.innerHTML = txs.map(tx => {
+          const isIntake = tx.type === 'intake';
+          const time = new Date(tx.created_at + 'Z').toLocaleString();
+          return `<div class="tx-item">
+            <div class="tx-icon ${tx.type}"><i class="ph-duotone ph-${isIntake ? 'download-simple' : 'package'}"></i></div>
+            <div class="tx-detail">
+              <div class="tx-bin">${tx.bin_number} <span style="color:var(--text-muted);font-weight:400;">— ${tx.cultivar}</span></div>
+              <div class="tx-desc">${tx.type}${tx.package_size ? ` • ${tx.package_count}× ${tx.package_size}` : ''}${tx.notes ? ` • ${tx.notes}` : ''}</div>
+            </div>
+            <div style="text-align:right;">
+              <div class="tx-weight ${isIntake ? 'positive' : 'negative'}">${isIntake ? '+' : '-'}${tx.weight_lbs.toFixed(4)}</div>
+              <div class="tx-time">${time}</div>
+            </div>
+          </div>`;
+        }).join('');
+      }
+    }
+
+    // ── Toast ──
+    function toast(msg, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const el = document.createElement('div');
+      el.className = `toast ${type}`;
+      el.textContent = msg;
+      container.appendChild(el);
+      setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3500);
+    }
+
+    // ── Boot ──
+    init();
+  </script>
+</body>
+</html>
