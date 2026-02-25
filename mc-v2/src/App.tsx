@@ -22,6 +22,7 @@ import { Monitor } from './views/Monitor';
 import { Tasks } from './views/Tasks';
 import { Placeholder } from './views/Placeholder';
 import { System } from './views/System';
+import { ToastContainer } from './components/Toast';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -92,6 +93,7 @@ function AppShell() {
     >
       <Particles />
       <AmbientBg />
+      <ToastContainer />
       <Header connectionState={connectionState} />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <div data-sidebar="left"><LeftSidebar /></div>

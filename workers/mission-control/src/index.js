@@ -144,6 +144,12 @@ function matchRoute(method, path) {
     ['GET',  /^\/api\/prices$/,                  'pricesGet'],
     ['GET',  /^\/api\/chrome-status$/,           'chromeStatus'],
     ['POST', /^\/api\/chrome-status$/,           'chromeStatusUpdate'],
+    ['GET',  /^\/api\/notifications$/,           'notificationsList'],
+    ['POST', /^\/api\/notifications\/read-all$/, 'notificationsReadAll'],
+    ['DELETE',/^\/api\/notifications\/expired$/,  'notificationsCleanExpired'],
+    ['POST', /^\/api\/notifications$/,           'notificationsCreate'],
+    ['PATCH',/^\/api\/notifications\/([a-zA-Z0-9_-]+)$/, 'notificationsUpdate'],
+    ['DELETE',/^\/api\/notifications\/([a-zA-Z0-9_-]+)$/, 'notificationsDelete'],
   ];
 
   for (const [m, re, handler] of routes) {
@@ -1286,6 +1292,102 @@ const handlers = {
     ).run();
 
     return json({ success: true });
+  },
+
+  // ── Notifications ─────────────────────────────────────────────────
+
+  // GET /api/notifications — list notifications
+  async notificationsList(req, env) {
+    const db = env.DB;
+    const url = new URL(req.url);
+    const unreadOnly = url.searchParams.get('unread') === 'true';
+    const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10), 200);
+    const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+
+    const where = unreadOnly ? 'WHERE read = 0' : '';
+    const rows = await db.prepare(
+      `SELECT * FROM notifications ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`
+    ).bind(limit, offset).all();
+
+    const countResult = await db.prepare(
+      'SELECT COUNT(*) as cnt FROM notifications WHERE read = 0'
+    ).first();
+
+    return json({
+      success: true,
+      notifications: rows.results,
+      unreadCount: countResult?.cnt || 0,
+    });
+  },
+
+  // POST /api/notifications — create notification
+  async notificationsCreate(req, env) {
+    const db = env.DB;
+    const body = await parseBody(req);
+    if (!body.title) return err('Missing required field: title', 'VALIDATION_ERROR', 400);
+
+    const id = body.id || crypto.randomUUID();
+    const type = body.type || 'toast';
+    const priority = body.priority || 'normal';
+    const category = body.category || '';
+    const expiresAt = body.expires_at || new Date(Date.now() + 7 * 86400000).toISOString().replace('T', ' ').slice(0, 19);
+
+    await db.prepare(
+      `INSERT INTO notifications (id, type, title, body, priority, category, read, created_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, 0, datetime('now'), ?)`
+    ).bind(id, type, body.title, body.body || '', priority, category, expiresAt).run();
+
+    const created = await db.prepare('SELECT * FROM notifications WHERE id = ?').bind(id).first();
+    return json({ success: true, notification: created }, 201);
+  },
+
+  // PATCH /api/notifications/:id — update notification (mark read, etc.)
+  async notificationsUpdate(req, env, params) {
+    const db = env.DB;
+    const id = params[0];
+    const body = await parseBody(req);
+
+    const sets = [];
+    const binds = [];
+    if (body.read !== undefined) { sets.push('read = ?'); binds.push(body.read ? 1 : 0); }
+    if (body.title !== undefined) { sets.push('title = ?'); binds.push(body.title); }
+    if (body.body !== undefined) { sets.push('body = ?'); binds.push(body.body); }
+
+    if (sets.length === 0) return err('No fields to update', 'VALIDATION_ERROR', 400);
+
+    binds.push(id);
+    const result = await db.prepare(
+      `UPDATE notifications SET ${sets.join(', ')} WHERE id = ?`
+    ).bind(...binds).run();
+
+    if (!result.meta.changes) return err('Notification not found', 'NOT_FOUND', 404);
+    const updated = await db.prepare('SELECT * FROM notifications WHERE id = ?').bind(id).first();
+    return json({ success: true, notification: updated });
+  },
+
+  // POST /api/notifications/read-all — mark all as read
+  async notificationsReadAll(_req, env) {
+    const db = env.DB;
+    const result = await db.prepare('UPDATE notifications SET read = 1 WHERE read = 0').run();
+    return json({ success: true, updated: result.meta.changes || 0 });
+  },
+
+  // DELETE /api/notifications/:id — delete single
+  async notificationsDelete(_req, env, params) {
+    const db = env.DB;
+    const id = params[0];
+    const result = await db.prepare('DELETE FROM notifications WHERE id = ?').bind(id).run();
+    if (!result.meta.changes) return err('Notification not found', 'NOT_FOUND', 404);
+    return json({ success: true });
+  },
+
+  // DELETE /api/notifications/expired — cleanup expired
+  async notificationsCleanExpired(_req, env) {
+    const db = env.DB;
+    const result = await db.prepare(
+      "DELETE FROM notifications WHERE expires_at IS NOT NULL AND expires_at < datetime('now')"
+    ).run();
+    return json({ success: true, deleted: result.meta.changes || 0 });
   },
 
   // PUT /api/agents/:name/files/:filename — create or update file

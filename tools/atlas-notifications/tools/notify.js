@@ -136,31 +136,70 @@ function buildBriefing(title, flags) {
 
 // ─── API Sender ─────────────────────────────────────────────────────
 
-async function sendNotification(payload, host) {
+const MC_API_URL = 'https://mission-control-api.roguefamilyfarms.workers.dev/api/notifications';
+
+async function sendToMcApi(payload) {
+  try {
+    const response = await fetch(MC_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: payload.type || 'toast',
+        title: payload.title || '',
+        body: payload.body || (payload.data ? JSON.stringify(payload.data) : ''),
+        priority: payload.priority || 'normal',
+        category: payload.category || '',
+      }),
+    });
+    const result = await response.json();
+    if (response.ok) {
+      console.log(`✅ MC API: sent (ID: ${result.notification?.id || '?'})`);
+      return true;
+    }
+    console.error(`❌ MC API Error: ${result.error || 'Unknown'}`);
+    return false;
+  } catch (error) {
+    console.error(`❌ MC API Network Error: ${error.message}`);
+    return false;
+  }
+}
+
+async function sendToSurvey(payload, host) {
   const url = `http://${host}/notify`;
-  
   try {
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
     });
-    
     const result = await response.json();
-    
     if (response.ok) {
-      console.log(`✅ Notification sent successfully (ID: ${result.id})`);
+      console.log(`✅ Survey API: sent (ID: ${result.id || '?'})`);
       return true;
-    } else {
-      console.error(`❌ API Error: ${result.error || 'Unknown error'}`);
-      return false;
     }
+    console.error(`❌ Survey API Error: ${result.error || 'Unknown'}`);
+    return false;
   } catch (error) {
-    console.error(`❌ Network Error: ${error.message}`);
-    console.error(`   Could not reach ${url}`);
-    console.error(`   Check that Atlas Notifications is running and host is correct.`);
+    console.error(`❌ Survey API Network Error: ${error.message}`);
     return false;
   }
+}
+
+async function sendNotification(payload, host) {
+  // Fire both in parallel — MC API is primary, Survey is secondary for desktop toasts
+  const [mcOk, surveyOk] = await Promise.allSettled([
+    sendToMcApi(payload),
+    sendToSurvey(payload, host),
+  ]);
+
+  const mcSuccess = mcOk.status === 'fulfilled' && mcOk.value;
+  const surveySuccess = surveyOk.status === 'fulfilled' && surveyOk.value;
+
+  if (mcSuccess || surveySuccess) {
+    return true;
+  }
+  console.error('❌ Both MC API and Survey API failed');
+  return false;
 }
 
 // ─── Help Text ──────────────────────────────────────────────────────
