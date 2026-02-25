@@ -7,7 +7,7 @@ body {
   font-family: var(--font-ui);
   overflow: hidden;
   padding: 10px;
-  width: 400px;
+  width: 420px;
 }
 
 #popup-container {
@@ -86,20 +86,24 @@ body {
   margin-bottom: 0;
   cursor: pointer;
   border-radius: var(--radius);
-  background: var(--bg-card);
+  background: rgba(8, 10, 8, 0.96);
   backdrop-filter: blur(20px);
-  border: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   color: var(--cream);
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.6),
-    0 2px 8px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    0 8px 32px rgba(0, 0, 0, 0.7),
+    0 2px 8px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 40px rgba(0, 240, 255, 0.02);
   animation: none;
 }
 
 [data-theme="terrain"] #popup-container .notif-card {
+  background: rgba(33, 31, 23, 0.97);
   backdrop-filter: none;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.4);
+  border-color: rgba(196, 164, 106, 0.15);
 }
 
 #popup-container .notif-card:hover {
