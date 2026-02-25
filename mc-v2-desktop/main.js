@@ -139,6 +139,8 @@ app.on('ready', () => {
   initTray(showWindow, () => {
     app.isQuitting = true;
     app.quit();
+  }, (newTheme) => {
+    setTheme(newTheme);
   });
 
   // Start notification poller
