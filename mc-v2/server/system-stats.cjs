@@ -60,6 +60,64 @@ function getProcessCounts() {
   } catch { return { total: 0 }; }
 }
 
+function getServices() {
+  const services = [];
+  const checks = [
+    { name: 'mc-v2-vite', unit: 'mc-v2-vite' },
+    { name: 'system-stats', unit: 'system-stats' },
+    { name: 'gateway', cmd: 'openclaw' },
+  ];
+
+  for (const svc of checks) {
+    try {
+      if (svc.unit) {
+        const out = execSync(`systemctl --user show ${svc.unit} --property=ActiveState,MainPID,ExecMainStartTimestamp 2>/dev/null`, { encoding: 'utf8', timeout: 3000 });
+        const state = out.match(/ActiveState=(\w+)/)?.[1] || 'unknown';
+        const pid = parseInt(out.match(/MainPID=(\d+)/)?.[1] || '0');
+        const startStr = out.match(/ExecMainStartTimestamp=(.+)/)?.[1] || '';
+        const startMs = startStr ? new Date(startStr).getTime() : 0;
+        const uptime = startMs ? Math.floor((Date.now() - startMs) / 1000) : 0;
+        services.push({ name: svc.name, status: state === 'active' ? 'active' : 'inactive', pid, uptime });
+      }
+    } catch { services.push({ name: svc.name, status: 'unknown', pid: 0, uptime: 0 }); }
+  }
+
+  // Check n8n docker
+  try {
+    const out = execSync('docker inspect n8n --format="{{.State.Status}} {{.State.StartedAt}}" 2>/dev/null', { encoding: 'utf8', timeout: 3000 });
+    const [status, started] = out.trim().split(' ');
+    const uptime = started ? Math.floor((Date.now() - new Date(started).getTime()) / 1000) : 0;
+    services.push({ name: 'n8n', status: status === 'running' ? 'active' : 'inactive', type: 'docker', uptime });
+  } catch { services.push({ name: 'n8n', status: 'unknown', type: 'docker', uptime: 0 }); }
+
+  // Check gateway process
+  try {
+    const out = execSync('pgrep -f "openclaw.*gateway" 2>/dev/null', { encoding: 'utf8', timeout: 3000 });
+    const pid = parseInt(out.trim().split('\n')[0]) || 0;
+    if (pid) {
+      const statFile = `/proc/${pid}/stat`;
+      let uptime = 0;
+      try {
+        const boottime = Number(fs.readFileSync('/proc/stat', 'utf8').match(/btime (\d+)/)?.[1] || 0);
+        const startTicks = Number(fs.readFileSync(statFile, 'utf8').split(' ')[21]);
+        uptime = Math.floor(Date.now() / 1000 - boottime - startTicks / 100);
+      } catch {}
+      services.push({ name: 'gateway', status: 'active', pid, uptime: Math.max(uptime, 0) });
+    } else {
+      services.push({ name: 'gateway', status: 'inactive', pid: 0, uptime: 0 });
+    }
+  } catch { services.push({ name: 'gateway', status: 'unknown', pid: 0, uptime: 0 }); }
+
+  // Chromium count
+  try {
+    const out = execSync('pgrep -c chromium 2>/dev/null', { encoding: 'utf8', timeout: 3000 });
+    const count = parseInt(out.trim()) || 0;
+    services.push({ name: 'chromium', status: count > 0 ? 'active' : 'inactive', count });
+  } catch { services.push({ name: 'chromium', status: 'inactive', count: 0 }); }
+
+  return services;
+}
+
 // Prime CPU reading
 getCpuPercent();
 
@@ -84,6 +142,7 @@ const server = http.createServer((req, res) => {
     loadAvg: os.loadavg().map(v => Math.round(v * 100) / 100),
     uptime: Math.floor(os.uptime()),
     processes: getProcessCounts(),
+    services: getServices(),
     timestamp: Date.now(),
   };
 
