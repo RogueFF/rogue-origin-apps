@@ -10,8 +10,8 @@ const http = require('http');
 const API_BASE = 'https://mission-control-api.roguefamilyfarms.workers.dev';
 const POLL_INTERVAL = 15_000;
 const TOAST_WIDTH = 420;
-const TOAST_HEIGHT = 280;
-const TOAST_GAP = 10;
+const TOAST_HEIGHT = 200;
+const TOAST_GAP = 8;
 const MAX_VISIBLE = 3;
 
 // ---------------------------------------------------------------------------
@@ -84,10 +84,16 @@ function getToastPosition(index) {
 }
 
 function repositionToasts() {
-  activeToasts.forEach((t, i) => {
+  const display = screen.getPrimaryDisplay();
+  const workArea = display.workArea;
+  const x = workArea.x + workArea.width - TOAST_WIDTH - 16;
+  let bottomY = workArea.y + workArea.height;
+
+  activeToasts.forEach((t) => {
     if (t.win && !t.win.isDestroyed()) {
-      const pos = getToastPosition(i);
-      t.win.setPosition(pos.x, pos.y, false);
+      const h = t.win.getBounds().height;
+      bottomY -= h + TOAST_GAP;
+      t.win.setPosition(x, bottomY, false);
     }
   });
 }
@@ -148,6 +154,18 @@ function showToast(notification) {
       timestamp: notification.created_at || new Date().toISOString(),
     };
     win.webContents.send('show-popup', { notification: notifData });
+
+    // Auto-resize to content height after render
+    setTimeout(() => {
+      if (!win.isDestroyed()) {
+        win.webContents.executeJavaScript('document.body.scrollHeight').then((h) => {
+          if (!win.isDestroyed() && h > 0) {
+            win.setBounds({ width: TOAST_WIDTH, height: Math.min(h + 4, 400) });
+            repositionToasts();
+          }
+        }).catch(() => {});
+      }
+    }, 300);
   });
 
   win.on('closed', () => {
