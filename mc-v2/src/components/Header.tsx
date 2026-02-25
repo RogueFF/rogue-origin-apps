@@ -1,5 +1,6 @@
 import { useThemeStore } from '../store/theme';
 import { WarClock } from './WarClock';
+import { NotificationBell } from './NotificationBell';
 import type { ConnectionState } from '../lib/gateway-client';
 
 const stateColors: Record<ConnectionState, string> = {
@@ -69,6 +70,8 @@ export function Header({ connectionState }: { connectionState: ConnectionState }
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
         <WarClock />
+        <span style={{ color: 'var(--border-card)', fontSize: 10 }}>│</span>
+        <NotificationBell />
         <span style={{ color: 'var(--border-card)', fontSize: 10 }}>│</span>
         <button
           onClick={toggleTheme}
