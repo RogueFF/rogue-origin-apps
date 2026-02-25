@@ -1,11 +1,11 @@
 {
-  "timestamp": "2026-02-24T15:15:12-08:00",
-  "total_rss_kb": 857696,
+  "timestamp": "2026-02-24T16:00:36-08:00",
+  "total_rss_kb": 873068,
   "total_processes": 17,
   "renderer_count": 3,
   "browser_count": 14,
-  "last_freed_kb": 0,
-  "last_killed": 0,
-  "freed_24h_kb": 519540,
+  "last_freed_kb": 238164,
+  "last_killed": 1,
+  "freed_24h_kb": 995868,
   "freed_24h_reset": "2026-02-24T10:01:01-08:00"
 }

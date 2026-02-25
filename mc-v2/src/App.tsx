@@ -21,6 +21,7 @@ import { MobileFeed } from './views/MobileFeed';
 import { Monitor } from './views/Monitor';
 import { Tasks } from './views/Tasks';
 import { Placeholder } from './views/Placeholder';
+import { System } from './views/System';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -71,7 +72,7 @@ function AppShell() {
             <Route path="/production" element={<Placeholder title="Production" />} />
             <Route path="/trading" element={<Placeholder title="Trading" />} />
             <Route path="/monitor" element={<Monitor />} />
-            <Route path="/system" element={<Placeholder title="System" />} />
+            <Route path="/system" element={<System />} />
           </Routes>
         </main>
         <MobileTabBar />
@@ -101,7 +102,7 @@ function AppShell() {
             <Route path="/trading" element={<Trading />} />
             <Route path="/tasks" element={<Tasks />} />
             <Route path="/monitor" element={<Monitor />} />
-            <Route path="/system" element={<Placeholder title="System" />} />
+            <Route path="/system" element={<System />} />
           </Routes>
         </main>
         <div data-sidebar="right"><RightSidebar /></div>
