@@ -1,0 +1,419 @@
+/* ─── Popup Window — Pass 5: Dual Theme ─────────────────────────────── */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: transparent;
+  font-family: var(--font-ui);
+  overflow: hidden;
+  padding: 10px;
+  width: 400px;
+}
+
+#popup-container {
+  animation: popupMaterialize 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  border-radius: var(--radius);
+  overflow: hidden;
+  position: relative;
+}
+
+/* Terrain: simpler entrance — just fade in */
+[data-theme="terrain"] #popup-container {
+  animation: popupTerrainEnter 0.3s ease-out forwards;
+}
+
+/* Dramatic materialize with glow burst (Relay) */
+@keyframes popupMaterialize {
+  0% {
+    opacity: 0;
+    filter: blur(20px);
+    transform: scale(0.9) translateY(20px);
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow: 0 0 40px var(--gold-glow);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1) translateY(0);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  }
+}
+
+@keyframes popupTerrainEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+}
+
+/* Horizontal scan sweep on materialize (Relay only) */
+.popup-scan-sweep {
+  position: fixed;
+  left: 0;
+  right: 0;
+  height: 2px;
+  pointer-events: none;
+  z-index: 100;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(0, 240, 255, 0.3) 20%,
+    rgba(0, 240, 255, 0.7) 50%,
+    rgba(0, 240, 255, 0.3) 80%,
+    transparent 100%
+  );
+  animation: scanSweep 0.3s ease-out forwards;
+  opacity: 0;
+}
+
+[data-theme="terrain"] .popup-scan-sweep {
+  display: none;
+}
+
+@keyframes scanSweep {
+  0% { top: 10px; opacity: 1; }
+  100% { top: calc(100% - 10px); opacity: 0; }
+}
+
+/* Override card styles for popup context */
+#popup-container .notif-card {
+  margin-bottom: 0;
+  cursor: pointer;
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  color: var(--cream);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.6),
+    0 2px 8px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  animation: none;
+}
+
+[data-theme="terrain"] #popup-container .notif-card {
+  backdrop-filter: none;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+#popup-container .notif-card:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-hover);
+}
+
+/* Left accent bar with stronger glow for popup */
+#popup-container .notif-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+
+[data-theme="terrain"] #popup-container .notif-card::before {
+  width: 4px;
+}
+
+#popup-container .notif-card[data-type="toast"]::before {
+  background: var(--gold);
+  box-shadow: 0 0 12px var(--gold-glow);
+}
+
+#popup-container .notif-card[data-type="briefing"]::before {
+  background: var(--holo-green);
+  box-shadow: 0 0 12px var(--holo-green-glow);
+}
+
+#popup-container .notif-card[data-type="alert"]::before {
+  background: var(--signal-red);
+  box-shadow: 0 0 12px var(--signal-red-glow);
+}
+
+#popup-container .notif-card[data-type="production-card"]::before {
+  background: var(--gold);
+  box-shadow: 0 0 12px var(--gold-glow);
+}
+
+#popup-container .notif-card[data-type="production-card"].pace-ahead::before {
+  background: var(--holo-green);
+  box-shadow: 0 0 12px var(--holo-green-glow);
+}
+
+#popup-container .notif-card[data-type="production-card"].pace-behind::before {
+  background: var(--signal-red);
+  box-shadow: 0 0 12px var(--signal-red-glow);
+}
+
+/* Terrain popup: no glow on accent bars */
+[data-theme="terrain"] #popup-container .notif-card[data-type="toast"]::before { box-shadow: none; background: var(--accent-primary); }
+[data-theme="terrain"] #popup-container .notif-card[data-type="briefing"]::before { box-shadow: none; background: var(--accent-green); }
+[data-theme="terrain"] #popup-container .notif-card[data-type="alert"]::before { box-shadow: none; background: var(--accent-red); }
+[data-theme="terrain"] #popup-container .notif-card[data-type="production-card"]::before { box-shadow: none; background: var(--accent-blue); }
+[data-theme="terrain"] #popup-container .notif-card[data-type="production-card"].pace-ahead::before { box-shadow: none; background: var(--accent-green); }
+[data-theme="terrain"] #popup-container .notif-card[data-type="production-card"].pace-behind::before { box-shadow: none; background: var(--accent-red); }
+
+/* Alert VHS glitch + pulsing red border on arrival (Relay) */
+#popup-container .notif-card[data-type="alert"]:not(.acknowledged) {
+  background: rgba(255, 51, 68, 0.06);
+  animation: alertVhsGlitch 0.4s ease-out, alertPopupBorderPulse 2s infinite 0.5s;
+}
+
+/* Terrain: calm alert popup */
+[data-theme="terrain"] #popup-container .notif-card[data-type="alert"]:not(.acknowledged) {
+  background: rgba(196, 90, 62, 0.06);
+  animation: none;
+}
+
+@keyframes alertVhsGlitch {
+  0% { transform: translateX(-2px); }
+  15% { transform: translateX(3px); }
+  30% { transform: translateX(-2px); }
+  45% { transform: translateX(1px); }
+  60% { transform: translateX(-1px); }
+  75% { transform: translateX(0.5px); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes alertPopupBorderPulse {
+  0%, 100% {
+    border-color: rgba(255, 51, 68, 0.3);
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.6),
+      0 2px 8px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+  50% {
+    border-color: rgba(255, 51, 68, 0.6);
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.6),
+      0 2px 8px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 0 20px var(--signal-red-glow);
+  }
+}
+
+/* ─── Progress Bar ─────────────────────────────────────────────── */
+
+#popup-progress {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  right: 10px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.04);
+  overflow: visible;
+  pointer-events: none;
+  border-radius: 2px;
+  z-index: 50;
+}
+
+#popup-progress-bar {
+  height: 100%;
+  background: linear-gradient(to right, var(--gold) 0%, var(--cyan) 100%);
+  box-shadow: 0 0 8px var(--gold-glow), 0 0 4px var(--cyan-glow);
+  width: 100%;
+  transform-origin: left;
+  transition: transform 0.1s linear;
+  border-radius: 2px;
+  position: relative;
+}
+
+/* Terrain: simpler progress bar */
+[data-theme="terrain"] #popup-progress-bar {
+  background: linear-gradient(to right, var(--accent-primary) 0%, var(--accent-green) 100%);
+  box-shadow: none;
+}
+
+/* Scan line overlay on progress bar (Relay only) */
+#popup-progress-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 3px,
+    rgba(0, 0, 0, 0.15) 3px,
+    rgba(0, 0, 0, 0.15) 4px
+  );
+  border-radius: inherit;
+}
+
+[data-theme="terrain"] #popup-progress-bar::after {
+  display: none;
+}
+
+/* ─── Ghost Trail Dismiss (Relay) ────────────────────────────────── */
+
+.popup-dismissing #popup-container {
+  animation: ghostDismiss 0.35s cubic-bezier(0.55, 0, 1, 0.45) forwards;
+}
+
+/* Terrain: simple fade out */
+[data-theme="terrain"] .popup-dismissing #popup-container {
+  animation: terrainDismiss 0.25s ease-in forwards;
+}
+
+@keyframes ghostDismiss {
+  0% {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1) translateX(0);
+  }
+  40% {
+    opacity: 0.3;
+    filter: blur(2px);
+    transform: scale(1) translateX(20px);
+  }
+  70% {
+    opacity: 0.15;
+    filter: blur(6px);
+    transform: scale(0.98) translateX(50px);
+  }
+  100% {
+    opacity: 0;
+    filter: blur(12px);
+    transform: scale(0.95) translateX(80px);
+  }
+}
+
+@keyframes terrainDismiss {
+  0% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(8px); }
+}
+
+/* Ghost afterimage via pseudo-element (Relay only) */
+.popup-dismissing #popup-container::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: inherit;
+  backdrop-filter: blur(20px);
+  opacity: 0;
+  animation: ghostAfterimage 0.5s ease-out 0.1s forwards;
+  pointer-events: none;
+  z-index: 10;
+}
+
+[data-theme="terrain"] .popup-dismissing #popup-container::after {
+  display: none;
+}
+
+@keyframes ghostAfterimage {
+  0% {
+    opacity: 0.15;
+    filter: blur(4px);
+    transform: translateX(-5px);
+    box-shadow: 0 0 20px var(--cyan-glow);
+  }
+  100% {
+    opacity: 0;
+    filter: blur(16px);
+    transform: translateX(-10px);
+    box-shadow: 0 0 0 transparent;
+  }
+}
+
+/* ─── Popup-specific ack feedback ─────────────────────────────────── */
+
+.alert-acked {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--holo-green);
+  font-family: var(--font-stat);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  text-shadow: 0 0 8px var(--holo-green-glow);
+}
+
+[data-theme="terrain"] .alert-acked {
+  text-shadow: none;
+}
+
+/* ─── Typography overrides for popup ────────────────────────────── */
+
+#popup-container .notif-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+#popup-container .decoded-segment-label {
+  font-family: var(--font-stat);
+}
+
+/* ─── Decoded transmission in popup — compact mode ───────────────── */
+
+#popup-container .decoded-title {
+  font-size: 15px;
+  margin-bottom: 6px;
+}
+
+#popup-container .compact-segment {
+  font-size: 12px;
+}
+
+#popup-container .compact-segment-label {
+  font-size: 9px;
+}
+
+#popup-container .decoded-segment-body {
+  font-size: 12.5px;
+}
+
+#popup-container .decoded-segment-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+/* ─── Pulse monitor in popup ─────────────────────────────────── */
+
+#popup-container .pulse-chart-svg {
+  height: 160px;
+}
+
+#popup-container .pulse-stat-lbs .pulse-stat-value {
+  font-size: 24px;
+}
+
+#popup-container .compact-production {
+  display: none;
+}
+
+#popup-container .pulse-monitor {
+  max-height: none;
+  opacity: 1;
+}
+
+/* ─── Weather card in popup ───────────────────────────────────── */
+
+#popup-container .notif-card[data-type="weather"]::before {
+  background: var(--cyan);
+  box-shadow: 0 0 12px var(--cyan-glow);
+}
+
+[data-theme="terrain"] #popup-container .notif-card[data-type="weather"]::before {
+  box-shadow: none;
+  background: var(--accent-blue);
+}
+
+#popup-container .weather-card-body {
+  padding: 12px 16px;
+}
+
+#popup-container .weather-temp-large {
+  font-size: 42px;
+}
+
+#popup-container .weather-stat-row {
+  font-size: 11px;
+  gap: 12px;
+}
