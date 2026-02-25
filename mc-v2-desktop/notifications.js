@@ -10,7 +10,7 @@ const http = require('http');
 const API_BASE = 'https://mission-control-api.roguefamilyfarms.workers.dev';
 const POLL_INTERVAL = 15_000;
 const TOAST_WIDTH = 420;
-const TOAST_HEIGHT = 220;
+const TOAST_HEIGHT = 280;
 const TOAST_GAP = 10;
 const MAX_VISIBLE = 3;
 
