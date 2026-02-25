@@ -4,10 +4,12 @@ const path = require('path');
 let tray = null;
 let showCallback = null;
 let quitCallback = null;
+let themeCallback = null;
 
-function initTray(onShow, onQuit) {
+function initTray(onShow, onQuit, onThemeChange) {
   showCallback = onShow;
   quitCallback = onQuit;
+  themeCallback = onThemeChange;
 
   const iconPath = path.join(__dirname, 'assets', 'tray-icon.png');
   let icon;
@@ -52,6 +54,8 @@ function createFallbackIcon() {
   return nativeImage.createFromBuffer(canvas, { width: size, height: size });
 }
 
+let currentTheme = 'relay';
+
 function updateContextMenu(unreadCount) {
   if (!tray) return;
 
@@ -65,6 +69,24 @@ function updateContextMenu(unreadCount) {
     {
       label: 'Show',
       click: () => { if (showCallback) showCallback(); },
+    },
+    { type: 'separator' },
+    {
+      label: 'Theme',
+      submenu: [
+        {
+          label: 'Relay (Hologram)',
+          type: 'radio',
+          checked: currentTheme === 'relay',
+          click: () => { currentTheme = 'relay'; if (themeCallback) themeCallback('relay'); },
+        },
+        {
+          label: 'Terrain (Topo)',
+          type: 'radio',
+          checked: currentTheme === 'terrain',
+          click: () => { currentTheme = 'terrain'; if (themeCallback) themeCallback('terrain'); },
+        },
+      ],
     },
     {
       label: 'Start with Windows',
