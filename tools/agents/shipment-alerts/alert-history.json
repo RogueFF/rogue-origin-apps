@@ -1,4 +1,41 @@
 {
-  "alerts": [],
-  "lastCheck": "2026-02-25T12:00:09.515Z"
+  "alerts": [
+    {
+      "timestamp": "2026-02-25T22:30:15.591Z",
+      "shipmentId": "robert-pallet-27873",
+      "customer": "Robert Pallet #27873",
+      "type": "stale-tracking",
+      "severity": "medium",
+      "message": "Tracking stale for 24h (last: 2026-02-24T22:03:00.000Z)",
+      "notified": true
+    },
+    {
+      "timestamp": "2026-02-26T05:01:35.511Z",
+      "shipmentId": "robert-pallet-27873",
+      "customer": "Robert Pallet #27873",
+      "type": "stale-tracking",
+      "severity": "medium",
+      "message": "Tracking stale for 31h (last: 2026-02-24T22:03:00.000Z)",
+      "notified": true
+    },
+    {
+      "timestamp": "2026-02-26T11:30:05.783Z",
+      "shipmentId": "robert-pallet-27873",
+      "customer": "Robert Pallet #27873",
+      "type": "stale-tracking",
+      "severity": "medium",
+      "message": "Tracking stale for 37h (last: 2026-02-24T22:03:00.000Z)",
+      "notified": true
+    },
+    {
+      "timestamp": "2026-02-26T17:30:25.876Z",
+      "shipmentId": "robert-pallet-27873",
+      "customer": "Robert Pallet #27873",
+      "type": "stale-tracking",
+      "severity": "medium",
+      "message": "Tracking stale for 43h (last: 2026-02-24T22:03:00.000Z)",
+      "notified": true
+    }
+  ],
+  "lastCheck": "2026-02-26T18:00:47.733Z"
 }

@@ -592,3 +592,9 @@ body {
     padding: 4px 6px !important;
   }
 }
+
+/* Trading news card scrollbar */
+.trading-news-card::-webkit-scrollbar { width: 4px; }
+.trading-news-card::-webkit-scrollbar-track { background: transparent; }
+.trading-news-card::-webkit-scrollbar-thumb { background: var(--border-card); border-radius: 2px; }
+.trading-news-card { scrollbar-width: thin; scrollbar-color: var(--border-card) transparent; }

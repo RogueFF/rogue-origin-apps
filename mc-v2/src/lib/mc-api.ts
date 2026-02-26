@@ -62,6 +62,15 @@ export interface PortfolioData {
     strike: number;
     expiry: string;
     status: string;
+    entry_price: number;
+    quantity: number;
+    entry_date: string;
+    target_price: number | null;
+    stop_loss: number | null;
+    current_price: number | null;
+    current_pnl: number;
+    pnl: number | null;
+    notes: string | null;
   }>;
 }
 
@@ -71,5 +80,34 @@ export function usePortfolio() {
     queryFn: () => fetcher('/api/mc/portfolio'),
     refetchInterval: 60_000,
     staleTime: 30_000,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Market News (from widgets)
+// ---------------------------------------------------------------------------
+
+export interface NewsItem {
+  ticker: string;
+  title: string;
+  publisher: string;
+  url: string;
+  published: string;
+  sentiment: string | null;
+  mentions: number;
+}
+
+export function useMarketNews() {
+  return useQuery({
+    queryKey: ['market-news'],
+    queryFn: async () => {
+      const data = await fetcher('/api/mc/widgets');
+      const raw = data?.data?.market_news;
+      if (!raw) return { items: [] };
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      return parsed as { updated_at: string; items: NewsItem[] };
+    },
+    refetchInterval: 300_000,
+    staleTime: 120_000,
   });
 }
