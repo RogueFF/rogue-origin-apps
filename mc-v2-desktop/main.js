@@ -1,7 +1,45 @@
-const { app, BrowserWindow, screen } = require('electron');
+const { app, BrowserWindow, screen, Notification } = require('electron');
 const path = require('path');
+const { autoUpdater } = require('electron-updater');
 const { initTray, destroyTray, updateBadge } = require('./tray');
 const { startPoller, stopPoller } = require('./notifications');
+
+// ---------------------------------------------------------------------------
+// Auto-updater
+// ---------------------------------------------------------------------------
+
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
+
+autoUpdater.on('checking-for-update', () => {
+  console.log('[updater] Checking for updates...');
+});
+
+autoUpdater.on('update-available', (info) => {
+  console.log(`[updater] Update available: ${info.version}`);
+});
+
+autoUpdater.on('update-not-available', () => {
+  console.log('[updater] App is up to date.');
+});
+
+autoUpdater.on('download-progress', (progress) => {
+  console.log(`[updater] Download: ${Math.round(progress.percent)}%`);
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  console.log(`[updater] Update downloaded: ${info.version}`);
+  if (Notification.isSupported()) {
+    new Notification({
+      title: 'Nerve Update Ready',
+      body: `Version ${info.version} will install when you quit.`,
+    }).show();
+  }
+});
+
+autoUpdater.on('error', (err) => {
+  console.error('[updater] Error:', err.message);
+});
 
 // ---------------------------------------------------------------------------
 // Config
@@ -141,6 +179,11 @@ app.on('ready', () => {
     app.quit();
   }, (newTheme) => {
     setTheme(newTheme);
+  });
+
+  // Check for updates
+  autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+    console.error('[updater] Check failed:', err.message);
   });
 
   // Start notification poller
