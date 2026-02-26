@@ -606,7 +606,7 @@ const handlers = {
   // GET /api/portfolio — portfolio summary
   async portfolio(_req, env) {
     const db = env.DB;
-    const STARTING_BANKROLL = 10000;
+    const STARTING_BANKROLL = 5000;
 
     // Get all positions
     const open = await db.prepare(

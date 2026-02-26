@@ -56,7 +56,6 @@ function AppShell() {
         style={{
           display: 'flex',
           flexDirection: 'column',
-          height: '100vh',
           height: '100dvh',
           position: 'relative',
           zIndex: 2,
