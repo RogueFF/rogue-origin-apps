@@ -122,13 +122,13 @@ async function createSOP(body, env) {
 
   await insert(env.DB, 'sops', {
     id,
-    title: (sop.title || ''),
+    title: (sop.title_en || sop.title || ''),
     title_es: (sop.title_es || ''),
     dept: (sop.dept || ''),
     doc_num: (sop.docNum || ''),
     revision: (sop.revision || '1'),
     status: (sop.status || 'draft'),
-    description: (sop.description || ''),
+    description: (sop.desc_en || sop.description || ''),
     desc_es: (sop.desc_es || ''),
     tags: JSON.stringify(sop.tags || []),
     steps: JSON.stringify(sop.steps || []),
@@ -158,13 +158,13 @@ async function updateSOP(body, env) {
   const now = new Date().toISOString();
 
   await update(env.DB, 'sops', {
-    title: (sop.title || ''),
+    title: (sop.title_en || sop.title || ''),
     title_es: (sop.title_es || ''),
     dept: (sop.dept || ''),
     doc_num: (sop.docNum || ''),
     revision: (sop.revision || '1'),
     status: (sop.status || 'draft'),
-    description: (sop.description || ''),
+    description: (sop.desc_en || sop.description || ''),
     desc_es: (sop.desc_es || ''),
     tags: JSON.stringify(sop.tags || []),
     steps: JSON.stringify(sop.steps || []),
