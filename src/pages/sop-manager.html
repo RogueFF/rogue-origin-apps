@@ -4184,10 +4184,10 @@
         const htmlContent = buildPDFHTML(s, assets, options);
 
         // Create container for html2pdf rendering
-        // Placed off-screen but in DOM flow so html2canvas can measure it
+        // Must be in normal DOM flow — html2canvas can't capture off-screen elements
         const container = document.createElement('div');
         container.className = 'pdf-container';
-        container.style.cssText = 'width:794px; position:absolute; left:-9999px; top:0; overflow:hidden;';
+        container.style.cssText = 'width:794px; overflow:hidden;';
         container.innerHTML = htmlContent;
         document.body.appendChild(container);
 
@@ -4207,12 +4207,17 @@
           html2canvas: {
             scale: 2, useCORS: true, logging: false, width: 794, windowWidth: 794,
             onclone: (clonedDoc) => {
-              // Reset clone environment so inherited page styles don't shift the capture
+              // Hide all page content except the PDF container so capture is clean
               const body = clonedDoc.body;
-              body.style.cssText = 'margin:0; padding:0; width:794px; overflow:hidden;';
+              body.style.cssText = 'margin:0; padding:0; width:794px;';
+              Array.from(body.children).forEach(child => {
+                if (!child.classList.contains('pdf-container')) {
+                  child.style.display = 'none';
+                }
+              });
               const el = clonedDoc.querySelector('.pdf-container');
               if (el) {
-                el.style.cssText = 'position:absolute; left:0; top:0; width:794px; margin:0; padding:0; overflow:hidden;';
+                el.style.cssText = 'width:794px; margin:0; padding:0; overflow:hidden;';
               }
             }
           },
