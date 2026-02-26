@@ -35,13 +35,24 @@
       "assets/**/*"
     ],
     "win": {
-      "target": ["nsis", "portable"],
+      "target": [
+        "nsis",
+        "portable"
+      ],
       "icon": "icon.ico"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "RogueFF",
+      "repo": "rogue-origin-apps"
     },
     "nsis": {
       "oneClick": true,
       "perMachine": false,
       "allowToChangeInstallationDirectory": false
     }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.3"
   }
 }
