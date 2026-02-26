@@ -4,6 +4,7 @@ import { useGatewayStore } from '../store/gateway';
 import { DepthCard } from '../components/DepthCard';
 import { AGENT_GLYPHS } from '../data/mock';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { TaskDetailPanel } from '../components/TaskDetailPanel';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -35,10 +36,11 @@ function timeAgo(ts: string): string {
 // TaskCard
 // ---------------------------------------------------------------------------
 
-function TaskCard({ task, onDispatch, flashAgent }: {
+function TaskCard({ task, onDispatch, flashAgent, onSelect }: {
   task: Task;
   onDispatch: (taskId: number, agentId: string) => void;
   flashAgent?: string | null;
+  onSelect?: (task: Task) => void;
 }) {
   const agents = useGatewayStore((s) => s.agents);
   const [showDispatch, setShowDispatch] = useState(false);
@@ -67,6 +69,7 @@ function TaskCard({ task, onDispatch, flashAgent }: {
         onDragEnd={(e) => {
           (e.currentTarget.parentElement as HTMLElement).style.opacity = '';
         }}
+        onClick={() => onSelect?.(task)}
         style={{ cursor: 'grab' }}
       >
         {/* Dispatch flash */}
@@ -273,7 +276,7 @@ function QuickAddInput({ status, onCreate }: { status: Task['status']; onCreate:
 // KanbanColumn (desktop)
 // ---------------------------------------------------------------------------
 
-function KanbanColumn({ status, tasks, onDrop, onCreate, onDispatch, collapsed, onToggle, flashMap }: {
+function KanbanColumn({ status, tasks, onDrop, onCreate, onDispatch, collapsed, onToggle, flashMap, onSelect }: {
   status: Task['status'];
   tasks: Task[];
   onDrop: (taskId: number, newStatus: Task['status']) => void;
@@ -282,6 +285,7 @@ function KanbanColumn({ status, tasks, onDrop, onCreate, onDispatch, collapsed, 
   collapsed?: boolean;
   onToggle?: () => void;
   flashMap?: Record<number, string>;
+  onSelect?: (task: Task) => void;
 }) {
   const [dragOver, setDragOver] = useState(false);
   const isDone = status === 'done';
@@ -362,7 +366,7 @@ function KanbanColumn({ status, tasks, onDrop, onCreate, onDispatch, collapsed, 
           {/* Cards */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, overflow: 'auto' }}>
             {tasks.map(task => (
-              <TaskCard key={task.id} task={task} onDispatch={onDispatch} flashAgent={flashMap?.[task.id] || null} />
+              <TaskCard key={task.id} task={task} onDispatch={onDispatch} flashAgent={flashMap?.[task.id] || null} onSelect={onSelect} />
             ))}
             {tasks.length === 0 && (
               <div style={{
@@ -399,11 +403,12 @@ function KanbanColumn({ status, tasks, onDrop, onCreate, onDispatch, collapsed, 
 // MobileSection
 // ---------------------------------------------------------------------------
 
-function MobileSection({ status, tasks, onStatusChange, onDispatch }: {
+function MobileSection({ status, tasks, onStatusChange, onDispatch, onSelect }: {
   status: Task['status'];
   tasks: Task[];
   onStatusChange: (taskId: number, newStatus: Task['status']) => void;
   onDispatch: (taskId: number, agentId: string) => void;
+  onSelect?: (task: Task) => void;
 }) {
   const [expanded, setExpanded] = useState(status !== 'done');
 
@@ -453,7 +458,7 @@ function MobileSection({ status, tasks, onStatusChange, onDispatch }: {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '6px 0' }}>
           {tasks.map(task => (
             <div key={task.id} style={{ position: 'relative' }}>
-              <TaskCard task={task} onDispatch={onDispatch} />
+              <TaskCard task={task} onDispatch={onDispatch} onSelect={onSelect} />
               {/* Status move buttons */}
               <div style={{
                 display: 'flex',
@@ -509,6 +514,10 @@ export function Tasks() {
   const [search, setSearch] = useState('');
   const [doneCollapsed, setDoneCollapsed] = useState(true);
   const [flashMap, setFlashMap] = useState<Record<number, string>>({});
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+
+  // Keep selectedTask in sync with latest data from query
+  const resolvedTask = selectedTask ? tasks.find(t => t.id === selectedTask.id) || selectedTask : null;
 
   // Filter tasks
   const filtered = tasks.filter(t => {
@@ -613,8 +622,12 @@ export function Tasks() {
             tasks={s === 'done' ? doneFiltered : byStatus(s)}
             onStatusChange={handleDrop}
             onDispatch={handleDispatch}
+            onSelect={setSelectedTask}
           />
         ))}
+        {resolvedTask && (
+          <TaskDetailPanel task={resolvedTask} onClose={() => setSelectedTask(null)} />
+        )}
       </div>
     );
   }
@@ -682,9 +695,9 @@ export function Tasks() {
 
       {/* Kanban columns */}
       <div data-two-col="" style={{ display: 'flex', gap: 10, flex: 1, minHeight: 0 }}>
-        <KanbanColumn status="backlog" tasks={byStatus('backlog')} onDrop={handleDrop} onCreate={handleCreate} onDispatch={handleDispatch} flashMap={flashMap} />
-        <KanbanColumn status="active" tasks={byStatus('active')} onDrop={handleDrop} onCreate={handleCreate} onDispatch={handleDispatch} flashMap={flashMap} />
-        <KanbanColumn status="review" tasks={byStatus('review')} onDrop={handleDrop} onDispatch={handleDispatch} flashMap={flashMap} />
+        <KanbanColumn status="backlog" tasks={byStatus('backlog')} onDrop={handleDrop} onCreate={handleCreate} onDispatch={handleDispatch} flashMap={flashMap} onSelect={setSelectedTask} />
+        <KanbanColumn status="active" tasks={byStatus('active')} onDrop={handleDrop} onCreate={handleCreate} onDispatch={handleDispatch} flashMap={flashMap} onSelect={setSelectedTask} />
+        <KanbanColumn status="review" tasks={byStatus('review')} onDrop={handleDrop} onDispatch={handleDispatch} flashMap={flashMap} onSelect={setSelectedTask} />
         <KanbanColumn
           status="done"
           tasks={doneFiltered}
@@ -693,8 +706,12 @@ export function Tasks() {
           collapsed={doneCollapsed}
           onToggle={() => setDoneCollapsed(!doneCollapsed)}
           flashMap={flashMap}
+          onSelect={setSelectedTask}
         />
       </div>
+      {resolvedTask && (
+        <TaskDetailPanel task={resolvedTask} onClose={() => setSelectedTask(null)} />
+      )}
     </div>
   );
 }
