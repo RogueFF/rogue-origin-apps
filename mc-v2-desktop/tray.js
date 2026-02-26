@@ -1,4 +1,5 @@
-const { Tray, Menu, nativeImage, app } = require('electron');
+const { Tray, Menu, nativeImage, app, dialog } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 
 let tray = null;
@@ -89,6 +90,14 @@ function updateContextMenu(unreadCount) {
       ],
     },
     {
+      label: 'Check for Updates',
+      click: () => {
+        autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+          dialog.showErrorBox('Update Error', err.message);
+        });
+      },
+    },
+    {
       label: 'Start with Windows',
       type: 'checkbox',
       checked: app.getLoginItemSettings().openAtLogin,
@@ -106,9 +115,10 @@ function updateContextMenu(unreadCount) {
   tray.setContextMenu(menu);
 
   // Update tooltip
+  const version = app.getVersion();
   const tip = unreadCount > 0
-    ? `Atlas MC — ${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}`
-    : 'Nerve';
+    ? `Nerve v${version} — ${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}`
+    : `Nerve v${version}`;
   tray.setToolTip(tip);
 }
 
