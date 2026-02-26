@@ -32,8 +32,11 @@ export interface TaskComment {
 export interface TaskDeliverable {
   id: number;
   task_id: number;
-  label: string;
-  value: string;
+  title: string;
+  url: string | null;
+  content: string | null;
+  deliverable_type: string;
+  author: string;
   created_at: string;
 }
 
@@ -266,5 +269,35 @@ export function useTaskDeliverables(taskId: number | null) {
     },
     enabled: taskId !== null,
     staleTime: 15_000,
+  });
+}
+
+export function useCreateDeliverable() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ taskId, title, url, content, deliverable_type, author }: {
+      taskId: number; title: string; url?: string; content?: string; deliverable_type?: string; author?: string;
+    }) => {
+      const resp = await fetchJson<{ success: boolean; data: TaskDeliverable }>(`${BASE}/${taskId}/deliverables`, {
+        method: 'POST',
+        body: JSON.stringify({ title, url, content, deliverable_type: deliverable_type || 'file', author: author || 'koa' }),
+      });
+      return resp.data;
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['task-deliverables', vars.taskId] });
+    },
+  });
+}
+
+export function useDeleteDeliverable() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ taskId, deliverableId }: { taskId: number; deliverableId: number }) => {
+      await fetchJson(`${BASE}/${taskId}/deliverables/${deliverableId}`, { method: 'DELETE' });
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['task-deliverables', vars.taskId] });
+    },
   });
 }
