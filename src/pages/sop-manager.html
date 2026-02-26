@@ -2483,7 +2483,9 @@
       editingLinkedSops = (s.linkedSops || []).map(l => ({ ...l }));
 
       window.sopTranslations = {
+        title_en: s.title || '',
         title_es: s.title_es || '',
+        desc_en: s.description || '',
         desc_es: s.desc_es || ''
       };
 
@@ -4182,11 +4184,10 @@
         const htmlContent = buildPDFHTML(s, assets, options);
 
         // Create container for html2pdf rendering
-        // html2canvas needs the element in normal DOM flow (no position:fixed/absolute, no z-index tricks)
-        // We tell html2canvas exactly the width to capture, so page layout offset doesn't matter
+        // Placed off-screen but in DOM flow so html2canvas can measure it
         const container = document.createElement('div');
         container.className = 'pdf-container';
-        container.style.width = '794px';
+        container.style.cssText = 'width:794px; position:absolute; left:-9999px; top:0; overflow:hidden;';
         container.innerHTML = htmlContent;
         document.body.appendChild(container);
 
@@ -4206,12 +4207,12 @@
           html2canvas: {
             scale: 2, useCORS: true, logging: false, width: 794, windowWidth: 794,
             onclone: (clonedDoc) => {
-              // Move cloned element to top-left so capture is centered on A4 page
+              // Reset clone environment so inherited page styles don't shift the capture
+              const body = clonedDoc.body;
+              body.style.cssText = 'margin:0; padding:0; width:794px; overflow:hidden;';
               const el = clonedDoc.querySelector('.pdf-container');
               if (el) {
-                el.style.position = 'absolute';
-                el.style.left = '0';
-                el.style.top = '0';
+                el.style.cssText = 'position:absolute; left:0; top:0; width:794px; margin:0; padding:0; overflow:hidden;';
               }
             }
           },
