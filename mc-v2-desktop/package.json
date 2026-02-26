@@ -1,22 +1,22 @@
 {
-  "name": "mc-v2-desktop",
+  "name": "nerve",
   "version": "1.0.0",
-  "description": "Atlas Mission Control — Desktop Shell",
+  "description": "Nerve — Personal Command Center",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "build": "electron-builder --win",
     "build:portable": "electron-builder --win portable"
   },
-  "author": "Rogue Origin",
+  "author": "Koa",
   "license": "UNLICENSED",
   "devDependencies": {
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0"
   },
   "build": {
-    "appId": "com.rogueorigin.mission-control",
-    "productName": "Atlas Mission Control",
+    "appId": "com.nerve.app",
+    "productName": "Nerve",
     "directories": {
       "output": "dist"
     },
@@ -27,11 +27,16 @@
       "notifications.js",
       "toast.html",
       "toast.css",
+      "popup.css",
+      "popup.js",
+      "card-renderer.js",
+      "icon.png",
+      "icon.ico",
       "assets/**/*"
     ],
     "win": {
       "target": ["nsis", "portable"],
-      "icon": "assets/icon.png"
+      "icon": "icon.ico"
     },
     "nsis": {
       "oneClick": true,
