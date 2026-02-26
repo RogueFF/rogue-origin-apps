@@ -9,7 +9,8 @@ import { getGatewayClient } from './gateway-client';
 export interface Task {
   id: number;
   title: string;
-  status: 'backlog' | 'active' | 'review' | 'done';
+  description?: string;
+  status: 'backlog' | 'active' | 'review' | 'done' | 'blocked';
   priority: 'critical' | 'high' | 'medium' | 'low';
   domain: string;
   agent: string | null;
@@ -17,6 +18,23 @@ export interface Task {
   updated_at: string;
   comment_count?: number;
   clickup_id?: string;
+}
+
+export interface TaskComment {
+  id: number;
+  task_id: number;
+  body: string;
+  author: string;
+  comment_type: string;
+  created_at: string;
+}
+
+export interface TaskDeliverable {
+  id: number;
+  task_id: number;
+  label: string;
+  value: string;
+  created_at: string;
 }
 
 interface TasksResponse {
@@ -98,9 +116,15 @@ export function useUpdateTask() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...patch }: Partial<Task> & { id: number }) => {
+      // API uses assigned_agent, frontend uses agent
+      const apiPatch: Record<string, unknown> = { ...patch };
+      if ('agent' in apiPatch) {
+        apiPatch.assigned_agent = apiPatch.agent;
+        delete apiPatch.agent;
+      }
       const resp = await fetchJson<TaskResponse>(`${BASE}/${id}`, {
         method: 'PATCH',
-        body: JSON.stringify(patch),
+        body: JSON.stringify(apiPatch),
       });
       return resp.data;
     },
@@ -178,5 +202,69 @@ export function useDeleteTask() {
       if (ctx?.prev) qc.setQueryData(['tasks'], ctx.prev);
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Comments
+// ---------------------------------------------------------------------------
+
+export function useTaskComments(taskId: number | null) {
+  return useQuery<TaskComment[]>({
+    queryKey: ['task-comments', taskId],
+    queryFn: async () => {
+      const resp = await fetchJson<{ success: boolean; data: TaskComment[] }>(`${BASE}/${taskId}/comments`);
+      return resp.data || [];
+    },
+    enabled: taskId !== null,
+    staleTime: 15_000,
+  });
+}
+
+export function useCreateComment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ taskId, body, author, comment_type }: {
+      taskId: number; body: string; author: string; comment_type: string;
+    }) => {
+      const resp = await fetchJson<{ success: boolean; data: TaskComment }>(`${BASE}/${taskId}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({ body, author, comment_type }),
+      });
+      return resp.data;
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['task-comments', vars.taskId] });
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+    },
+  });
+}
+
+export function useDeleteComment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ taskId, commentId }: { taskId: number; commentId: number }) => {
+      await fetchJson(`${BASE}/${taskId}/comments/${commentId}`, { method: 'DELETE' });
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['task-comments', vars.taskId] });
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Deliverables
+// ---------------------------------------------------------------------------
+
+export function useTaskDeliverables(taskId: number | null) {
+  return useQuery<TaskDeliverable[]>({
+    queryKey: ['task-deliverables', taskId],
+    queryFn: async () => {
+      const resp = await fetchJson<{ success: boolean; data: TaskDeliverable[] }>(`${BASE}/${taskId}/deliverables`);
+      return resp.data || [];
+    },
+    enabled: taskId !== null,
+    staleTime: 15_000,
   });
 }
