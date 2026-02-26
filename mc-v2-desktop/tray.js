@@ -22,7 +22,7 @@ function initTray(onShow, onQuit, onThemeChange) {
   }
 
   tray = new Tray(icon);
-  tray.setToolTip('Atlas Mission Control');
+  tray.setToolTip('Nerve');
 
   updateContextMenu(0);
 
@@ -62,7 +62,7 @@ function updateContextMenu(unreadCount) {
   const badge = unreadCount > 0 ? ` (${unreadCount})` : '';
   const menu = Menu.buildFromTemplate([
     {
-      label: `Atlas Mission Control${badge}`,
+      label: `Nerve${badge}`,
       enabled: false,
     },
     { type: 'separator' },
@@ -108,7 +108,7 @@ function updateContextMenu(unreadCount) {
   // Update tooltip
   const tip = unreadCount > 0
     ? `Atlas MC — ${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}`
-    : 'Atlas Mission Control';
+    : 'Nerve';
   tray.setToolTip(tip);
 }
 
