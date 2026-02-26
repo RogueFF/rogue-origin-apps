@@ -7,6 +7,8 @@ import {
   useCreateComment,
   useDeleteComment,
   useTaskDeliverables,
+  useCreateDeliverable,
+  useDeleteDeliverable,
 } from '../lib/tasks-api';
 import { useGatewayStore } from '../store/gateway';
 
@@ -81,6 +83,196 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 // ---------------------------------------------------------------------------
+// AttachmentAdder
+// ---------------------------------------------------------------------------
+
+const ATTACH_TYPES = [
+  { value: 'link', label: '🔗 Link', placeholder: 'https://...' },
+  { value: 'file', label: '📎 File', placeholder: '/path/to/file or URL' },
+  { value: 'note', label: '📄 Note', placeholder: 'Note content...' },
+  { value: 'screenshot', label: '📸 Screenshot', placeholder: 'Screenshot URL...' },
+  { value: 'code', label: '💻 Code', placeholder: 'Code snippet or gist URL...' },
+];
+
+function AttachmentAdder({ taskId, onCreate }: {
+  taskId: number;
+  onCreate: (args: { taskId: number; title: string; url?: string; content?: string; deliverable_type: string }) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [type, setType] = useState('link');
+  const [title, setTitle] = useState('');
+  const [value, setValue] = useState('');
+
+  const handleAdd = () => {
+    if (!title.trim()) return;
+    const isContent = type === 'note' || type === 'code';
+    onCreate({
+      taskId,
+      title: title.trim(),
+      ...(isContent ? { content: value } : { url: value || undefined }),
+      deliverable_type: type,
+    });
+    setTitle('');
+    setValue('');
+    setOpen(false);
+  };
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        style={{
+          width: '100%',
+          background: 'var(--bg-glass)',
+          border: '1px dashed var(--border-glass)',
+          borderRadius: 8,
+          padding: '6px 10px',
+          fontFamily: 'var(--font-mono)',
+          fontSize: 10,
+          color: 'var(--text-tertiary)',
+          cursor: 'pointer',
+          marginBottom: 8,
+          transition: `all var(--transition-speed) var(--transition-ease)`,
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent-cyan)'; e.currentTarget.style.color = 'var(--accent-cyan)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-glass)'; e.currentTarget.style.color = 'var(--text-tertiary)'; }}
+      >
+        + Attach file, link, or note
+      </button>
+    );
+  }
+
+  const currentType = ATTACH_TYPES.find(t => t.value === type)!;
+
+  return (
+    <div style={{
+      background: 'var(--bg-glass)',
+      border: '1px solid var(--border-glass)',
+      borderRadius: 'var(--card-radius)',
+      padding: '10px',
+      marginBottom: 8,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 6,
+    }}>
+      {/* Type selector */}
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+        {ATTACH_TYPES.map(t => (
+          <button
+            key={t.value}
+            onClick={() => setType(t.value)}
+            style={{
+              background: type === t.value ? 'rgba(255,255,255,0.08)' : 'transparent',
+              border: `1px solid ${type === t.value ? 'var(--border-glass)' : 'transparent'}`,
+              borderRadius: 6,
+              padding: '2px 8px',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9,
+              color: type === t.value ? 'var(--text-primary)' : 'var(--text-tertiary)',
+              cursor: 'pointer',
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Title */}
+      <input
+        autoFocus
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="Title / name..."
+        style={{
+          background: 'var(--input-bg)',
+          border: '1px solid var(--input-border)',
+          borderRadius: 6,
+          padding: '5px 10px',
+          fontFamily: 'var(--font-body)',
+          fontSize: 11,
+          color: 'var(--text-primary)',
+          outline: 'none',
+        }}
+      />
+
+      {/* Value (URL or content) */}
+      {(type === 'note' || type === 'code') ? (
+        <textarea
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={currentType.placeholder}
+          rows={3}
+          style={{
+            background: 'var(--input-bg)',
+            border: '1px solid var(--input-border)',
+            borderRadius: 6,
+            padding: '5px 10px',
+            fontFamily: type === 'code' ? 'var(--font-mono)' : 'var(--font-body)',
+            fontSize: 11,
+            color: 'var(--text-primary)',
+            outline: 'none',
+            resize: 'vertical',
+          }}
+        />
+      ) : (
+        <input
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={currentType.placeholder}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
+          style={{
+            background: 'var(--input-bg)',
+            border: '1px solid var(--input-border)',
+            borderRadius: 6,
+            padding: '5px 10px',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            color: 'var(--text-primary)',
+            outline: 'none',
+          }}
+        />
+      )}
+
+      {/* Actions */}
+      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+        <button
+          onClick={() => { setOpen(false); setTitle(''); setValue(''); }}
+          style={{
+            background: 'none',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 6,
+            padding: '4px 10px',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9,
+            color: 'var(--text-tertiary)',
+            cursor: 'pointer',
+          }}
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleAdd}
+          disabled={!title.trim()}
+          style={{
+            background: title.trim() ? 'var(--accent-cyan)' : 'var(--bg-glass)',
+            color: title.trim() ? 'var(--bg-primary)' : 'var(--text-tertiary)',
+            border: 'none',
+            borderRadius: 6,
+            padding: '4px 12px',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9,
+            fontWeight: 600,
+            cursor: title.trim() ? 'pointer' : 'default',
+          }}
+        >
+          Attach
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // TaskDetailPanel
 // ---------------------------------------------------------------------------
 
@@ -97,6 +289,8 @@ export function TaskDetailPanel({ task, onClose }: {
   const createComment = useCreateComment();
   const deleteComment = useDeleteComment();
   const { data: deliverables = [] } = useTaskDeliverables(task.id);
+  const createDeliverable = useCreateDeliverable();
+  const deleteDeliverable = useDeleteDeliverable();
 
   // Local editable state
   const [title, setTitle] = useState(task.title);
@@ -467,32 +661,96 @@ export function TaskDetailPanel({ task, onClose }: {
             )}
           </div>
 
-          {/* Deliverables */}
-          {deliverables.length > 0 && (
-            <div>
-              <SectionLabel>Deliverables</SectionLabel>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {deliverables.map(d => (
-                  <div key={d.id} style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '6px 10px',
-                    background: 'var(--bg-glass)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: 8,
-                  }}>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-secondary)' }}>
-                      {d.label}
+          {/* Attachments / Deliverables */}
+          <div>
+            <SectionLabel>Attachments {deliverables.length > 0 && `(${deliverables.length})`}</SectionLabel>
+
+            {/* Add attachment */}
+            <AttachmentAdder taskId={task.id} onCreate={createDeliverable.mutate} />
+
+            {/* List */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {deliverables.map(d => (
+                <div key={d.id} style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '8px 10px',
+                  background: 'var(--bg-glass)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 8,
+                  gap: 8,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: 12, flexShrink: 0 }}>
+                      {d.deliverable_type === 'link' ? '🔗' : d.deliverable_type === 'file' ? '📎' : d.deliverable_type === 'screenshot' ? '📸' : d.deliverable_type === 'code' ? '💻' : '📄'}
                     </span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--accent-cyan)' }}>
-                      {d.value}
-                    </span>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      {d.url ? (
+                        <a
+                          href={d.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: 10,
+                            color: 'var(--accent-cyan)',
+                            textDecoration: 'none',
+                            display: 'block',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.textDecoration = 'underline'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.textDecoration = 'none'; }}
+                        >
+                          {d.title}
+                        </a>
+                      ) : (
+                        <span style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 10,
+                          color: 'var(--text-secondary)',
+                          display: 'block',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {d.title}
+                        </span>
+                      )}
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-tertiary)' }}>
+                        {d.deliverable_type} · {d.author} · {new Date(d.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
                   </div>
-                ))}
-              </div>
+                  <button
+                    onClick={() => deleteDeliverable.mutate({ taskId: task.id, deliverableId: d.id })}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-tertiary)',
+                      fontSize: 10,
+                      cursor: 'pointer',
+                      padding: '0 2px',
+                      lineHeight: 1,
+                      flexShrink: 0,
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent-red)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-tertiary)'; }}
+                    title="Remove"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              {deliverables.length === 0 && (
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-tertiary)', textAlign: 'center', padding: '8px 0', opacity: 0.6 }}>
+                  No attachments
+                </div>
+              )}
             </div>
-          )}
+          </div>
 
           {/* Comments */}
           <div>
