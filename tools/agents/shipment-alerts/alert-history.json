@@ -35,7 +35,25 @@
       "severity": "medium",
       "message": "Tracking stale for 43h (last: 2026-02-24T22:03:00.000Z)",
       "notified": true
+    },
+    {
+      "timestamp": "2026-02-27T00:00:37.985Z",
+      "shipmentId": "robert-pallet-27873",
+      "customer": "Robert Pallet #27873",
+      "type": "stale-tracking",
+      "severity": "high",
+      "message": "Tracking stale for 50h (last: 2026-02-24T22:03:00.000Z)",
+      "notified": true
+    },
+    {
+      "timestamp": "2026-02-27T06:30:14.665Z",
+      "shipmentId": "robert-pallet-27873",
+      "customer": "Robert Pallet #27873",
+      "type": "stale-tracking",
+      "severity": "high",
+      "message": "Tracking stale for 56h (last: 2026-02-24T22:03:00.000Z)",
+      "notified": true
     }
   ],
-  "lastCheck": "2026-02-26T19:30:29.240Z"
+  "lastCheck": "2026-02-27T07:30:30.956Z"
 }
