@@ -120,21 +120,22 @@
       const lhp = safeGetEl('lastHourPct');
       if (lhp && lastHourTarget > 0) {
         const deltaAbs = Math.abs(lastHourDelta).toFixed(1);
+        lhp.className = '';
         if (lastHourDelta >= 0.05) {
           lhp.textContent = `+${deltaAbs} lbs`;
-          lhp.style.color = '#7a9d87';
+          lhp.classList.add('text-green');
         } else if (lastHourDelta <= -0.05) {
           lhp.textContent = `-${deltaAbs} lbs`;
-          lhp.style.color = '#f87171';
+          lhp.classList.add('text-red');
         } else {
           // On pace - use i18n translation
           var I18n = window.ScoreboardI18n;
           lhp.textContent = I18n ? I18n.t('onPace') : 'On pace';
-          lhp.style.color = '#e4aa4f';
+          lhp.classList.add('text-gold');
         }
-      } else {
+      } else if (lhp) {
         lhp.textContent = '—';
-        lhp.style.color = 'rgba(255,255,255,0.5)';
+        lhp.className = 'text-muted';
       }
 
       // Effective indicator on last hour
@@ -233,7 +234,7 @@
       const projectedDelta = data.projectedDelta || 0;
 
       var _el = safeGetEl('projectionLabel');
-      if (_el) _el.textContent = shiftEnded ? t('endOfDay') : t('endOfDay');
+      if (_el) _el.textContent = shiftEnded ? t('finalTotal') : t('endOfDay');
       var _el = safeGetEl('projectionValue');
       if (_el) _el.textContent = shiftEnded ? todayLbs.toFixed(1) : (projectedTotal > 0 ? projectedTotal.toFixed(1) : '—');
       var _el = safeGetEl('projectionGoal');
@@ -270,6 +271,28 @@
       const displayTrimmers = currentHourTrimmers > 0 ? currentHourTrimmers : lastHourTrimmers;
       const displayEffTrimmers = currentHourTrimmers > 0 ? currentHourEffTrimmers : lastHourEffTrimmers;
       var _el = safeGetEl('crewCount'); if (_el) _el.textContent = displayTrimmers > 0 ? displayTrimmers : '—';
+
+      // Crew change toast — detect trimmer count changes between renders
+      var _state = window.ScoreboardState;
+      if (_state && displayTrimmers > 0) {
+        if (_state._prevTrimmers !== undefined && _state._prevTrimmers !== displayTrimmers) {
+          var toastMsg = 'Crew: ' + _state._prevTrimmers + ' → ' + displayTrimmers;
+          if (Math.abs(displayEffTrimmers - displayTrimmers) > 0.05) {
+            toastMsg += ' (eff: ' + displayEffTrimmers.toFixed(1) + ')';
+          }
+          var toastEl = document.getElementById('crewToast');
+          if (toastEl) {
+            toastEl.textContent = toastMsg;
+            toastEl.classList.add('visible');
+            clearTimeout(_state._crewToastTimer);
+            _state._crewToastTimer = setTimeout(function() {
+              toastEl.classList.remove('visible');
+            }, 3000);
+          }
+        }
+        _state._prevTrimmers = displayTrimmers;
+      }
+
       // Show effective trimmer indicator when weighted avg differs from raw
       var _el = safeGetEl('crewEffective'); if (_el) {
         if (displayTrimmers > 0 && Math.abs(displayEffTrimmers - displayTrimmers) > 0.05) {
@@ -295,26 +318,30 @@
       const avgEl = safeGetEl('avgPercentage');
       const bestEl = safeGetEl('bestHour');
 
-      if (data.avgDelta !== undefined && data.avgDelta !== 0) {
-        avgEl.textContent = (data.avgDelta >= 0 ? '+' : '') + data.avgDelta.toFixed(1);
-        avgEl.style.color = data.avgDelta >= 0.05 ? '#7a9d87' : data.avgDelta <= -0.05 ? '#f87171' : '#e4aa4f';
-      } else if (data.avgDelta === 0) {
-        avgEl.textContent = '0';
-        avgEl.style.color = '#e4aa4f';
-      } else {
-        avgEl.textContent = '—';
-        avgEl.style.color = 'rgba(255,255,255,0.9)';
+      if (avgEl) {
+        avgEl.className = '';
+        if (data.avgDelta !== undefined && data.avgDelta !== 0) {
+          avgEl.textContent = (data.avgDelta >= 0 ? '+' : '') + data.avgDelta.toFixed(1);
+          avgEl.classList.add(data.avgDelta >= 0.05 ? 'text-green' : data.avgDelta <= -0.05 ? 'text-red' : 'text-gold');
+        } else if (data.avgDelta === 0) {
+          avgEl.textContent = '0';
+          avgEl.classList.add('text-gold');
+        } else {
+          avgEl.textContent = '—';
+        }
       }
 
-      if (data.bestDelta !== undefined && data.bestDelta !== 0) {
-        bestEl.textContent = (data.bestDelta >= 0 ? '+' : '') + data.bestDelta.toFixed(1);
-        bestEl.style.color = data.bestDelta >= 0.05 ? '#7a9d87' : data.bestDelta <= -0.05 ? '#f87171' : '#e4aa4f';
-      } else if (data.bestDelta === 0) {
-        bestEl.textContent = '0';
-        bestEl.style.color = '#e4aa4f';
-      } else {
-        bestEl.textContent = '—';
-        bestEl.style.color = 'rgba(255,255,255,0.9)';
+      if (bestEl) {
+        bestEl.className = '';
+        if (data.bestDelta !== undefined && data.bestDelta !== 0) {
+          bestEl.textContent = (data.bestDelta >= 0 ? '+' : '') + data.bestDelta.toFixed(1);
+          bestEl.classList.add(data.bestDelta >= 0.05 ? 'text-green' : data.bestDelta <= -0.05 ? 'text-red' : 'text-gold');
+        } else if (data.bestDelta === 0) {
+          bestEl.textContent = '0';
+          bestEl.classList.add('text-gold');
+        } else {
+          bestEl.textContent = '—';
+        }
       }
 
       // Momentum arrow — compare current cycle rate vs rolling average

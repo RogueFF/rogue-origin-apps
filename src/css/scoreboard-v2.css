@@ -1985,6 +1985,34 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 1.5s ease
   letter-spacing: 0.12em;
   color: var(--cream-muted);
   margin-bottom: var(--sp-3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+
+.chart-smalls-toggle {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--cream-muted);
+  background: var(--surface-glass);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 2px 10px;
+  cursor: pointer;
+  transition: all var(--t-fast) var(--ease-out);
+}
+.chart-smalls-toggle:hover {
+  color: var(--cream);
+  border-color: var(--border);
+}
+.chart-smalls-toggle.active {
+  color: var(--gold);
+  background: var(--gold-dim);
+  border-color: var(--gold);
 }
 
 .chart-wrapper {
@@ -4101,6 +4129,39 @@ html.tv-mode .cycle-bars { height: 150px; }
 html.tv-mode .cycle-bar-label { font-size: 11px; }
 html.tv-mode .cycle-bar-value { font-size: 10px; }
 html.tv-mode .cycle-bars-target-label { font-size: 11px; }
+
+/* ========================================
+   CREW CHANGE TOAST
+   ======================================== */
+.crew-toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  font-family: var(--font-data);
+  font-size: 12px;
+  color: var(--cream-soft);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 6px 16px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t-normal) var(--ease-out), transform var(--t-normal) var(--ease-out);
+  z-index: 900;
+}
+.crew-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ========================================
+   UTILITY TEXT-COLOR CLASSES
+   ======================================== */
+.text-green  { color: var(--green); }
+.text-red    { color: var(--red); }
+.text-gold   { color: var(--gold); }
+.text-muted  { color: var(--cream-muted); }
 
 @media print {
   body { background: #fff; color: #000; }
