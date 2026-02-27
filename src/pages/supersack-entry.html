@@ -380,7 +380,7 @@
       display: flex; align-items: center; gap: 6px; flex-shrink: 0;
     }
     .strain-counter .mini-btn {
-      width: 34px; height: 34px; border-radius: var(--radius-sm);
+      width: 40px; height: 40px; border-radius: var(--radius-sm);
       border: 1.5px solid rgba(102, 137, 113, 0.35); background: var(--green-dim);
       color: var(--green); font-size: 18px; cursor: pointer;
       display: flex; align-items: center; justify-content: center;
@@ -457,6 +457,43 @@
 
     /* Color scheme for dark inputs */
     input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); }
+
+    /* Mobile optimizations */
+    @media (max-width: 400px) {
+      .main { padding: 12px 14px; }
+      .card { padding: 14px; }
+      .header { padding: 12px 14px; }
+      .header h1 { font-size: 17px; }
+      .counter-btn { width: 46px; height: 46px; font-size: 22px; }
+      .counter-value { font-size: 40px; min-width: 70px; }
+      .counter-row { gap: 12px; }
+      .strain-name { font-size: 12px; }
+      .strain-counter input { width: 44px; font-size: 16px; }
+      .strain-counter .mini-btn { width: 34px; height: 34px; font-size: 18px; }
+      .auto-label { font-size: 12px; }
+      .auto-value { font-size: 14px; }
+      .weight-input { font-size: 16px; padding: 12px; }
+      .submit-btn { padding: 14px; font-size: 14px; }
+      .breakdown-legend { gap: 6px; }
+      .legend-item { font-size: 9px; }
+    }
+
+    /* Prevent iOS zoom on input focus (font-size must be >= 16px) */
+    @media (max-width: 768px) {
+      .weight-input, .date-input, input[type="number"] { font-size: 16px; }
+      .strain-counter input { font-size: 16px; }
+    }
+
+    /* Safe area for notched phones */
+    .main { padding-bottom: max(20px, env(safe-area-inset-bottom)); }
+
+    /* Touch feedback for all interactive elements */
+    @media (hover: none) {
+      .counter-btn:active, .mini-btn:active, .today-btn:active, .submit-btn:active {
+        transform: scale(0.93);
+      }
+      .strain-row:active { background: rgba(102, 137, 113, 0.08); }
+    }
   </style>
 </head>
 <body>
