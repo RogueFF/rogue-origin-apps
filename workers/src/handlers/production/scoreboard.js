@@ -136,7 +136,7 @@ async function getScoreboardData(env, date = null) {
   }
   result.strain = activeStrain;
 
-  const targetRate = await getEffectiveTargetRate(env, 7, timeSlotMultipliers, activeStrain);
+  const targetRate = await getEffectiveTargetRate(env, 2, timeSlotMultipliers, activeStrain);
   result.targetRate = targetRate;
 
   let totalLbs = 0;
