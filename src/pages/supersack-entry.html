@@ -498,6 +498,12 @@
     <div id="avg-body"></div>
   </div>
 
+  <!-- Projected Remaining Yield -->
+  <div class="card" id="yield-card" style="display:none">
+    <div class="card-title">Remaining Raw Goods → Projected Yield</div>
+    <div id="yield-body"></div>
+  </div>
+
   <!-- Submit -->
   <button class="submit-btn" id="submit-btn" data-i18n="submit">Submit & Update Pools</button>
   <div class="status-msg" id="status-msg"></div>
@@ -703,6 +709,63 @@
       }).join('');
     } else {
       avgCard.style.display = 'none';
+    }
+
+    // Projected remaining yield
+    const yieldCard = document.getElementById('yield-card');
+    const yieldBody = document.getElementById('yield-body');
+    if (strainsWithSacks.length > 0) {
+      yieldCard.style.display = '';
+      let totalRemTops = 0, totalRemSmalls = 0, totalRemBio = 0, totalRemTrim = 0, totalRemWaste = 0, totalRemSacks = 0;
+
+      const sections = strainsWithSacks.map(([name, s]) => {
+        const shortName = name.replace(/^\d{4} - /, '').replace(/ \/ Sungrown$/, '');
+        const n = s.sacks;
+        const remaining = (s.poolValue || 0) - n; // sacks left after today
+        if (remaining <= 0) return '';
+
+        const avgTops = s.tops / n;
+        const avgSmalls = s.smalls / n;
+        const ratio = n / sackCount;
+        const avgBio = (biomass * ratio) / n;
+        const avgTrim = (trim * ratio) / n;
+        const avgWaste = Math.max(0, SACK_WEIGHT - avgTops - avgSmalls - avgBio - avgTrim);
+
+        const remTops = remaining * avgTops;
+        const remSmalls = remaining * avgSmalls;
+        const remBio = remaining * avgBio;
+        const remTrim = remaining * avgTrim;
+        const remWaste = remaining * avgWaste;
+        totalRemTops += remTops; totalRemSmalls += remSmalls;
+        totalRemBio += remBio; totalRemTrim += remTrim;
+        totalRemWaste += remWaste; totalRemSacks += remaining;
+
+        return `
+          <div class="avg-strain-section">
+            <div class="avg-strain-title">${shortName} — ${remaining.toLocaleString()} sacks remaining</div>
+            <div class="auto-row"><span class="auto-label">Tops</span><span class="auto-value" style="color:var(--green)">${remTops.toFixed(0)} lbs</span></div>
+            <div class="auto-row"><span class="auto-label">Smalls</span><span class="auto-value" style="color:var(--cyan)">${remSmalls.toFixed(0)} lbs</span></div>
+            <div class="auto-row"><span class="auto-label">Biomass</span><span class="auto-value" style="color:var(--gold)">${remBio.toFixed(0)} lbs</span></div>
+            <div class="auto-row"><span class="auto-label">Trim</span><span class="auto-value" style="color:var(--blue)">${remTrim.toFixed(0)} lbs</span></div>
+            <div class="auto-row"><span class="auto-label">Waste</span><span class="auto-value" style="color:var(--red)">${remWaste.toFixed(0)} lbs</span></div>
+          </div>`;
+      }).filter(Boolean);
+
+      // Grand total if multiple strains
+      if (totalRemSacks > 0) {
+        const totalHtml = (sections.length > 1 ? `
+          <div class="avg-strain-section" style="border-top:1px solid rgba(0,255,136,0.15);padding-top:12px;margin-top:4px">
+            <div class="avg-strain-title" style="color:var(--text)">ALL STRAINS — ${totalRemSacks.toLocaleString()} sacks</div>
+            <div class="auto-row"><span class="auto-label">Tops</span><span class="auto-value" style="color:var(--green)">${totalRemTops.toFixed(0)} lbs</span></div>
+            <div class="auto-row"><span class="auto-label">Smalls</span><span class="auto-value" style="color:var(--cyan)">${totalRemSmalls.toFixed(0)} lbs</span></div>
+            <div class="auto-row"><span class="auto-label">Biomass</span><span class="auto-value" style="color:var(--gold)">${totalRemBio.toFixed(0)} lbs</span></div>
+            <div class="auto-row"><span class="auto-label">Trim</span><span class="auto-value" style="color:var(--blue)">${totalRemTrim.toFixed(0)} lbs</span></div>
+            <div class="auto-row"><span class="auto-label">Waste</span><span class="auto-value" style="color:var(--red)">${totalRemWaste.toFixed(0)} lbs</span></div>
+          </div>` : '');
+        yieldBody.innerHTML = sections.join('') + totalHtml;
+      }
+    } else {
+      yieldCard.style.display = 'none';
     }
   }
 
