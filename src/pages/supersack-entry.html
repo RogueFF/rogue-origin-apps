@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Supersack Tracker — Rogue Origin</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0a;
+      --card: #141414;
+      --card-border: #1e1e1e;
+      --text: #e8e4dc;
+      --text-dim: rgba(232,228,220,0.5);
+      --text-faint: rgba(232,228,220,0.25);
+      --green: #00ff88;
+      --green-dim: rgba(0,255,136,0.15);
+      --gold: #e4aa4f;
+      --red: #ff3344;
+      --cyan: #00f0ff;
+      --blue: #3b82f6;
+      --radius: 12px;
+    }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Header */
+    .header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header h1 {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .header h1 span { color: var(--green); }
+    .header-date {
+      font-size: 12px;
+      color: var(--text-dim);
+      font-family: 'SF Mono', 'Menlo', monospace;
+    }
+
+    /* Main */
+    .main { padding: 16px 20px; max-width: 480px; margin: 0 auto; }
+
+    /* Cards */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .card-title {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      margin-bottom: 12px;
+    }
+
+    /* Date picker */
+    .date-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .date-input {
+      background: #1a1a1a;
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: 'SF Mono', 'Menlo', monospace;
+      font-size: 14px;
+      padding: 8px 12px;
+      flex: 1;
+      outline: none;
+    }
+    .date-input:focus { border-color: var(--green); }
+    .today-btn {
+      background: var(--green-dim);
+      border: 1px solid rgba(0,255,136,0.3);
+      border-radius: 8px;
+      color: var(--green);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 8px 14px;
+      cursor: pointer;
+    }
+
+    /* Supersack counter */
+    .counter-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      margin: 8px 0;
+    }
+    .counter-btn {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      border: 2px solid var(--green);
+      background: transparent;
+      color: var(--green);
+      font-size: 24px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 150ms;
+    }
+    .counter-btn:active {
+      background: var(--green);
+      color: var(--bg);
+      transform: scale(0.95);
+    }
+    .counter-value {
+      font-size: 48px;
+      font-weight: 800;
+      min-width: 80px;
+      text-align: center;
+      font-family: 'SF Mono', 'Menlo', monospace;
+    }
+    .counter-label {
+      text-align: center;
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 4px;
+    }
+    .counter-weight {
+      text-align: center;
+      font-size: 13px;
+      color: var(--green);
+      font-family: 'SF Mono', 'Menlo', monospace;
+      margin-top: 2px;
+    }
+
+    /* Weight inputs */
+    .input-group {
+      margin-bottom: 14px;
+    }
+    .input-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+      display: block;
+    }
+    .weight-input {
+      width: 100%;
+      background: #1a1a1a;
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 18px;
+      font-family: 'SF Mono', 'Menlo', monospace;
+      padding: 10px 14px;
+      outline: none;
+    }
+    .weight-input:focus { border-color: var(--green); }
+    .input-unit {
+      font-size: 12px;
+      color: var(--text-faint);
+      margin-top: 4px;
+    }
+
+    /* Auto-pulled data */
+    .auto-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .auto-row:last-child { border-bottom: none; }
+    .auto-label { font-size: 13px; color: var(--text-dim); }
+    .auto-value {
+      font-size: 15px;
+      font-weight: 600;
+      font-family: 'SF Mono', 'Menlo', monospace;
+    }
+    .auto-value.loading { color: var(--text-faint); }
+
+    /* Breakdown bar */
+    .breakdown-bar {
+      height: 28px;
+      border-radius: 6px;
+      overflow: hidden;
+      display: flex;
+      margin: 12px 0;
+      background: #1a1a1a;
+    }
+    .breakdown-segment {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-weight: 700;
+      color: var(--bg);
+      transition: width 300ms ease;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .breakdown-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+    }
+
+    /* Submit */
+    .submit-btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: var(--radius);
+      background: var(--green);
+      color: var(--bg);
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 150ms;
+      letter-spacing: 0.02em;
+    }
+    .submit-btn:active { transform: scale(0.98); }
+    .submit-btn:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+    .submit-btn.saving { background: var(--gold); }
+    .submit-btn.error { background: var(--red); }
+
+    /* Status */
+    .status-msg {
+      text-align: center;
+      font-size: 11px;
+      margin-top: 8px;
+      min-height: 16px;
+    }
+    .status-msg.success { color: var(--green); }
+    .status-msg.error { color: var(--red); }
+
+    /* Config */
+    .config-toggle {
+      background: none;
+      border: none;
+      color: var(--text-faint);
+      font-size: 18px;
+      cursor: pointer;
+      padding: 4px;
+    }
+    .config-panel {
+      display: none;
+      padding: 12px 0 0;
+    }
+    .config-panel.open { display: block; }
+    .config-select {
+      width: 100%;
+      background: #1a1a1a;
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 12px;
+      padding: 8px 10px;
+      outline: none;
+      margin-bottom: 8px;
+      appearance: none;
+    }
+    .config-label {
+      font-size: 10px;
+      color: var(--text-faint);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 4px;
+      display: block;
+    }
+    .config-save-btn {
+      background: var(--green-dim);
+      border: 1px solid rgba(0,255,136,0.3);
+      border-radius: 8px;
+      color: var(--green);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 8px 16px;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span>◆</span> Supersack Tracker</h1>
+  <span class="header-date" id="header-date"></span>
+</div>
+
+<div class="main">
+  <!-- Date -->
+  <div class="date-row">
+    <input type="date" class="date-input" id="date-input">
+    <button class="today-btn" id="today-btn">Today</button>
+  </div>
+
+  <!-- Supersack Count -->
+  <div class="card">
+    <div class="card-title">Supersacks Opened</div>
+    <div class="counter-row">
+      <button class="counter-btn" id="dec-btn">−</button>
+      <div class="counter-value" id="sack-count">0</div>
+      <button class="counter-btn" id="inc-btn">+</button>
+    </div>
+    <div class="counter-weight" id="raw-weight">0 lbs raw</div>
+  </div>
+
+  <!-- Manual Inputs -->
+  <div class="card">
+    <div class="card-title">Water Spider Entry</div>
+    <div class="input-group">
+      <label class="input-label">Biomass (trim)</label>
+      <input type="number" class="weight-input" id="biomass-input" placeholder="0.0" min="0" step="0.1" inputmode="decimal">
+      <div class="input-unit">lbs</div>
+    </div>
+    <div class="input-group">
+      <label class="input-label">Premium #1 Trim</label>
+      <input type="number" class="weight-input" id="trim-input" placeholder="0.0" min="0" step="0.1" inputmode="decimal">
+      <div class="input-unit">lbs</div>
+    </div>
+  </div>
+
+  <!-- Auto-Pulled Production -->
+  <div class="card">
+    <div class="card-title">Production Data (auto-pulled)</div>
+    <div class="auto-row">
+      <span class="auto-label">Tops</span>
+      <span class="auto-value loading" id="tops-value">loading...</span>
+    </div>
+    <div class="auto-row">
+      <span class="auto-label">Smalls</span>
+      <span class="auto-value loading" id="smalls-value">loading...</span>
+    </div>
+  </div>
+
+  <!-- Breakdown -->
+  <div class="card">
+    <div class="card-title">Material Balance</div>
+    <div class="auto-row">
+      <span class="auto-label">Raw Input</span>
+      <span class="auto-value" id="total-raw">0 lbs</span>
+    </div>
+    <div class="auto-row">
+      <span class="auto-label">Tops</span>
+      <span class="auto-value" style="color:var(--green)" id="bd-tops">0 lbs</span>
+    </div>
+    <div class="auto-row">
+      <span class="auto-label">Smalls</span>
+      <span class="auto-value" style="color:var(--cyan)" id="bd-smalls">0 lbs</span>
+    </div>
+    <div class="auto-row">
+      <span class="auto-label">Biomass</span>
+      <span class="auto-value" style="color:var(--gold)" id="bd-biomass">0 lbs</span>
+    </div>
+    <div class="auto-row">
+      <span class="auto-label">Premium #1 Trim</span>
+      <span class="auto-value" style="color:var(--blue)" id="bd-trim">0 lbs</span>
+    </div>
+    <div class="auto-row" style="border-top:1px solid rgba(255,255,255,0.06);padding-top:10px;margin-top:4px">
+      <span class="auto-label" style="font-weight:600">Waste (sticks + mold)</span>
+      <span class="auto-value" style="color:var(--red)" id="bd-waste">0 lbs</span>
+    </div>
+
+    <div class="breakdown-bar" id="breakdown-bar"></div>
+    <div class="breakdown-legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Tops</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--cyan)"></div>Smalls</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--gold)"></div>Biomass</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div>Trim</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>Waste</div>
+    </div>
+  </div>
+
+  <!-- Submit -->
+  <button class="submit-btn" id="submit-btn">Submit & Update Pools</button>
+  <div class="status-msg" id="status-msg"></div>
+
+  <!-- Config -->
+  <div class="card" style="margin-top:20px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div class="card-title" style="margin-bottom:0">Pool Product Mapping</div>
+      <button class="config-toggle" id="config-toggle">⚙</button>
+    </div>
+    <div class="config-panel" id="config-panel">
+      <div class="input-group">
+        <label class="config-label">Supersack Product (subtract)</label>
+        <select class="config-select" id="cfg-supersack"><option value="">Loading products...</option></select>
+      </div>
+      <div class="input-group">
+        <label class="config-label">Biomass Product (add)</label>
+        <select class="config-select" id="cfg-biomass"><option value="">Loading products...</option></select>
+      </div>
+      <div class="input-group">
+        <label class="config-label">Premium #1 Trim Product (add)</label>
+        <select class="config-select" id="cfg-trim"><option value="">Loading products...</option></select>
+      </div>
+      <button class="config-save-btn" id="cfg-save">Save Mapping</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  const POOL_API = 'https://script.google.com/macros/s/AKfycbxvLdXrC24ztTKkcZcGV_Mpx_001jglf99c3H18HBWX9KpyjoZ4f22He3pyXDT2zDB_jw/exec';
+  const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
+  const MC_API = 'https://mission-control-api.roguefamilyfarms.workers.dev/api';
+  const LBS_TO_GRAMS = 453.592;
+  const SACK_WEIGHT = 37;
+
+  // State
+  let sackCount = 0;
+  let topsLbs = 0;
+  let smallsLbs = 0;
+  let poolProducts = [];
+  let config = JSON.parse(localStorage.getItem('supersack-config') || '{}');
+
+  // Elements
+  const dateInput = document.getElementById('date-input');
+  const headerDate = document.getElementById('header-date');
+  const sackCountEl = document.getElementById('sack-count');
+  const rawWeightEl = document.getElementById('raw-weight');
+  const biomassInput = document.getElementById('biomass-input');
+  const trimInput = document.getElementById('trim-input');
+  const topsEl = document.getElementById('tops-value');
+  const smallsEl = document.getElementById('smalls-value');
+  const submitBtn = document.getElementById('submit-btn');
+  const statusMsg = document.getElementById('status-msg');
+
+  // Today
+  function todayStr() {
+    return new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+  }
+
+  function initDate() {
+    dateInput.value = todayStr();
+    updateHeaderDate();
+  }
+
+  function updateHeaderDate() {
+    const d = new Date(dateInput.value + 'T12:00:00');
+    headerDate.textContent = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  }
+
+  dateInput.addEventListener('change', () => {
+    updateHeaderDate();
+    fetchProduction();
+  });
+
+  document.getElementById('today-btn').addEventListener('click', () => {
+    dateInput.value = todayStr();
+    updateHeaderDate();
+    fetchProduction();
+  });
+
+  // Supersack counter
+  document.getElementById('inc-btn').addEventListener('click', () => {
+    sackCount++;
+    updateCounter();
+  });
+
+  document.getElementById('dec-btn').addEventListener('click', () => {
+    if (sackCount > 0) sackCount--;
+    updateCounter();
+  });
+
+  function updateCounter() {
+    sackCountEl.textContent = sackCount;
+    rawWeightEl.textContent = (sackCount * SACK_WEIGHT) + ' lbs raw';
+    recalc();
+  }
+
+  // Inputs
+  biomassInput.addEventListener('input', recalc);
+  trimInput.addEventListener('input', recalc);
+
+  // Recalculate
+  function recalc() {
+    const raw = sackCount * SACK_WEIGHT;
+    const biomass = parseFloat(biomassInput.value) || 0;
+    const trim = parseFloat(trimInput.value) || 0;
+    const waste = Math.max(0, raw - topsLbs - smallsLbs - biomass - trim);
+
+    document.getElementById('total-raw').textContent = raw.toFixed(1) + ' lbs';
+    document.getElementById('bd-tops').textContent = topsLbs.toFixed(1) + ' lbs';
+    document.getElementById('bd-smalls').textContent = smallsLbs.toFixed(1) + ' lbs';
+    document.getElementById('bd-biomass').textContent = biomass.toFixed(1) + ' lbs';
+    document.getElementById('bd-trim').textContent = trim.toFixed(1) + ' lbs';
+    document.getElementById('bd-waste').textContent = waste.toFixed(1) + ' lbs';
+
+    // Breakdown bar
+    const bar = document.getElementById('breakdown-bar');
+    if (raw === 0) {
+      bar.innerHTML = '';
+      return;
+    }
+    const segments = [
+      { val: topsLbs, color: 'var(--green)', label: 'Tops' },
+      { val: smallsLbs, color: 'var(--cyan)', label: 'Smalls' },
+      { val: biomass, color: 'var(--gold)', label: 'Bio' },
+      { val: trim, color: 'var(--blue)', label: 'Trim' },
+      { val: waste, color: 'var(--red)', label: 'Waste' },
+    ];
+    bar.innerHTML = segments.map(s => {
+      const pct = (s.val / raw) * 100;
+      if (pct < 1) return '';
+      return `<div class="breakdown-segment" style="width:${pct}%;background:${s.color}">${pct >= 8 ? Math.round(pct) + '%' : ''}</div>`;
+    }).join('');
+  }
+
+  // Fetch production data
+  async function fetchProduction() {
+    const date = dateInput.value;
+    topsEl.textContent = 'loading...';
+    topsEl.classList.add('loading');
+    smallsEl.textContent = 'loading...';
+    smallsEl.classList.add('loading');
+
+    try {
+      const resp = await fetch(`${PROD_API}?action=dashboard&start=${date}&end=${date}`);
+      const data = await resp.json();
+      const day = data.daily && data.daily.length > 0 ? data.daily[0] : null;
+      topsLbs = day ? (day.totalTops || 0) : 0;
+      smallsLbs = day ? (day.totalSmalls || 0) : 0;
+
+      topsEl.textContent = topsLbs.toFixed(1) + ' lbs';
+      topsEl.classList.remove('loading');
+      smallsEl.textContent = smallsLbs.toFixed(1) + ' lbs';
+      smallsEl.classList.remove('loading');
+    } catch (e) {
+      topsEl.textContent = 'error';
+      smallsEl.textContent = 'error';
+      topsLbs = 0;
+      smallsLbs = 0;
+    }
+    recalc();
+  }
+
+  // Pool API
+  async function fetchPoolProducts() {
+    try {
+      const resp = await fetch(POOL_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ action: 'list_products', poolType: 'smalls' }),
+        redirect: 'follow',
+      });
+      const data = await resp.json();
+      poolProducts = data.products || [];
+      populateConfigSelects();
+    } catch (e) {
+      console.error('Pool API error:', e);
+      // Try GET fallback
+      try {
+        const resp2 = await fetch(POOL_API + '?action=list_products&poolType=smalls', { redirect: 'follow' });
+        const text = await resp2.text();
+        // If it returns JSON
+        try {
+          const data = JSON.parse(text);
+          poolProducts = data.products || [];
+          populateConfigSelects();
+        } catch { /* HTML response, can't parse */ }
+      } catch {}
+    }
+  }
+
+  async function updatePool(productId, operation, amountLbs, note) {
+    if (!productId) return { success: false, error: 'No product mapped' };
+    const amountGrams = amountLbs * LBS_TO_GRAMS;
+    try {
+      const resp = await fetch(POOL_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({
+          action: 'update_pool',
+          productId,
+          operation,
+          amount: Math.round(amountGrams * 10) / 10,
+          note,
+          poolType: 'smalls',
+        }),
+        redirect: 'follow',
+      });
+      return await resp.json();
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+
+  // Config
+  function populateConfigSelects() {
+    const selects = ['cfg-supersack', 'cfg-biomass', 'cfg-trim'];
+    selects.forEach(id => {
+      const el = document.getElementById(id);
+      el.innerHTML = '<option value="">-- Select product --</option>';
+      poolProducts.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = `${p.title} (${(p.poolValue || 0).toLocaleString()}g)`;
+        el.appendChild(opt);
+      });
+    });
+    // Restore saved config
+    if (config.supersack) document.getElementById('cfg-supersack').value = config.supersack;
+    if (config.biomass) document.getElementById('cfg-biomass').value = config.biomass;
+    if (config.trim) document.getElementById('cfg-trim').value = config.trim;
+  }
+
+  document.getElementById('config-toggle').addEventListener('click', () => {
+    document.getElementById('config-panel').classList.toggle('open');
+  });
+
+  document.getElementById('cfg-save').addEventListener('click', () => {
+    config = {
+      supersack: document.getElementById('cfg-supersack').value,
+      biomass: document.getElementById('cfg-biomass').value,
+      trim: document.getElementById('cfg-trim').value,
+    };
+    localStorage.setItem('supersack-config', JSON.stringify(config));
+    document.getElementById('config-panel').classList.remove('open');
+    setStatus('Mapping saved', 'success');
+  });
+
+  // Auto-open config if not set
+  function checkConfig() {
+    if (!config.supersack || !config.biomass || !config.trim) {
+      document.getElementById('config-panel').classList.add('open');
+    }
+  }
+
+  // Submit
+  submitBtn.addEventListener('click', async () => {
+    if (sackCount === 0) {
+      setStatus('Enter supersack count first', 'error');
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Saving...';
+    submitBtn.classList.add('saving');
+
+    const biomass = parseFloat(biomassInput.value) || 0;
+    const trim = parseFloat(trimInput.value) || 0;
+    const date = dateInput.value;
+    const raw = sackCount * SACK_WEIGHT;
+    const waste = Math.max(0, raw - topsLbs - smallsLbs - biomass - trim);
+
+    let poolErrors = [];
+
+    // 1. Subtract supersacks from pool
+    if (config.supersack) {
+      const r = await updatePool(config.supersack, 'subtract', sackCount * SACK_WEIGHT, `${sackCount} supersacks (${date})`);
+      if (!r.success) poolErrors.push('Supersack pool: ' + (r.error || 'failed'));
+    }
+
+    // 2. Add biomass to pool
+    if (config.biomass && biomass > 0) {
+      const r = await updatePool(config.biomass, 'add', biomass, `Biomass entry (${date})`);
+      if (!r.success) poolErrors.push('Biomass pool: ' + (r.error || 'failed'));
+    }
+
+    // 3. Add trim to pool
+    if (config.trim && trim > 0) {
+      const r = await updatePool(config.trim, 'add', trim, `Premium #1 Trim entry (${date})`);
+      if (!r.success) poolErrors.push('Trim pool: ' + (r.error || 'failed'));
+    }
+
+    // 4. Save to D1 (will fail gracefully if endpoint doesn't exist yet)
+    try {
+      await fetch(`${MC_API}/supersack/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date, supersack_count: sackCount, biomass_lbs: biomass,
+          trim_lbs: trim, tops_lbs: topsLbs, smalls_lbs: smallsLbs,
+          waste_lbs: waste,
+        }),
+      });
+    } catch {}
+
+    submitBtn.disabled = false;
+    submitBtn.classList.remove('saving');
+
+    if (poolErrors.length > 0) {
+      submitBtn.classList.add('error');
+      setStatus('Pool errors: ' + poolErrors.join('; '), 'error');
+      setTimeout(() => submitBtn.classList.remove('error'), 2000);
+    } else {
+      submitBtn.textContent = '✓ Saved';
+      setStatus('Pools updated + data saved', 'success');
+      setTimeout(() => { submitBtn.textContent = 'Submit & Update Pools'; }, 2000);
+    }
+  });
+
+  function setStatus(msg, type) {
+    statusMsg.textContent = msg;
+    statusMsg.className = 'status-msg ' + (type || '');
+    if (type === 'success') setTimeout(() => { statusMsg.textContent = ''; }, 4000);
+  }
+
+  // Init
+  initDate();
+  fetchProduction();
+  fetchPoolProducts();
+  setTimeout(checkConfig, 1000);
+})();
+</script>
+</body>
+</html>
