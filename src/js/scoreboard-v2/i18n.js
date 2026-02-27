@@ -45,8 +45,9 @@
       shiftComplete: 'SHIFT COMPLETE',
 
       // Status Headers
-      todaysProgress: 'LINE 1 TODAY',
+      todaysProgress: 'TODAY',
       endOfDay: 'End of day:',
+      finalTotal: 'Final total:',
       chartHeader: 'HOURLY PERFORMANCE (LBS/TRIMMER)',
 
       // Performance Status
@@ -134,8 +135,9 @@
       shiftComplete: 'TURNO COMPLETO',
 
       // Status Headers
-      todaysProgress: 'LÍNEA 1 HOY',
+      todaysProgress: 'HOY',
       endOfDay: 'Fin del día:',
+      finalTotal: 'Total final:',
       chartHeader: 'RENDIMIENTO POR HORA (LBS/TRIMINADOR)',
 
       // Performance Status

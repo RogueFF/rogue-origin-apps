@@ -160,6 +160,16 @@
       });
     }
 
+    // Chart Smalls Toggle
+    const chartSmallsToggle = el('chartSmallsToggle');
+    if (chartSmallsToggle) {
+      chartSmallsToggle.addEventListener('click', function() {
+        if (window.ScoreboardChart && window.ScoreboardChart.toggleSmalls) {
+          window.ScoreboardChart.toggleSmalls();
+        }
+      });
+    }
+
     // AVG/BEST Toggle
     const avgBestContainer = el('avgBestContainer');
     if (avgBestContainer) {
