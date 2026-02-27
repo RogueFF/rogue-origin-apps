@@ -795,9 +795,10 @@
         const ratio = n / sackCount;
         const strainBio = biomass * ratio;
         const strainTrim = trim * ratio;
+        const daysLabel = s.histDays > 1 ? ` · ${s.histDays}-day avg` : '';
         return `
           <div class="avg-strain-section">
-            <div class="avg-strain-title">${shortName} (${n} sacks)</div>
+            <div class="avg-strain-title">${shortName} (${n} sacks${daysLabel})</div>
             <div class="auto-row"><span class="auto-label">Tops</span><span class="auto-value" style="color:var(--green)">${(s.tops / n).toFixed(2)} lbs</span></div>
             <div class="auto-row"><span class="auto-label">Smalls</span><span class="auto-value" style="color:var(--cyan)">${(s.smalls / n).toFixed(2)} lbs</span></div>
             <div class="auto-row"><span class="auto-label">Biomass</span><span class="auto-value" style="color:var(--gold)">${(strainBio / n).toFixed(2)} lbs</span></div>
@@ -822,12 +823,17 @@
         const remaining = (s.poolValue || 0) - n; // sacks left after today
         if (remaining <= 0) return '';
 
-        const avgTops = s.tops / n;
-        const avgSmalls = s.smalls / n;
+        // Use 2-day history for projection averages (more stable than today-only)
+        const histTotal = (s.histTops || 0) + (s.histSmalls || 0);
+        const topsPct = histTotal > 0 ? s.histTops / histTotal : 0.5;
+        const smallsPct = 1 - topsPct;
         const ratio = n / sackCount;
         const avgBio = (biomass * ratio) / n;
         const avgTrim = (trim * ratio) / n;
-        const avgWaste = Math.max(0, SACK_WEIGHT - avgTops - avgSmalls - avgBio - avgTrim);
+        const usable = SACK_WEIGHT - avgBio - avgTrim;
+        const avgTops = usable * topsPct;
+        const avgSmalls = usable * smallsPct;
+        const avgWaste = 0; // waste absorbed into tops/smalls projection
 
         const remTops = remaining * avgTops;
         const remSmalls = remaining * avgSmalls;
@@ -873,8 +879,12 @@
     topsEl.textContent = 'loading...'; topsEl.classList.add('loading');
     smallsEl.textContent = 'loading...'; smallsEl.classList.add('loading');
 
-    const [scoreboardRes, supersackRes, smallsPoolRes, topsPoolRes] = await Promise.allSettled([
+    // 2-day date range for historical averages
+    const today = new Date(); const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+    const fmtD = d => d.toISOString().slice(0, 10);
+    const [scoreboardRes, dashboardRes, supersackRes, smallsPoolRes, topsPoolRes] = await Promise.allSettled([
       fetch(`${PROD_API}?action=scoreboard`).then(r => r.json()),
+      fetch(`${PROD_API}?action=dashboard&start=${fmtD(yesterday)}&end=${fmtD(today)}`).then(r => r.json()),
       fetch(`${POOL_API}?action=get_supersack_variants`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
       }).then(r => r.json()),
@@ -934,13 +944,29 @@
     const oldSacks = {}; // Preserve user-entered sack counts
     Object.entries(strainData).forEach(([name, s]) => { if (s.sacks > 0) oldSacks[name] = s.sacks; });
 
+    // Build 2-day per-strain history from dashboard strainSnapshot
+    const strainHistory = {}; // { strainTitle: { tops, smalls, totalLbs, daysWorked } }
+    if (dashboardRes.status === 'fulfilled') {
+      (dashboardRes.value.strainSnapshot || []).forEach(snap => {
+        strainHistory[snap.strain] = {
+          tops: snap.tops || 0, smalls: snap.smalls || 0,
+          totalLbs: snap.totalLbs || 0, daysWorked: snap.daysWorked || 1,
+        };
+      });
+    }
+
     strainData = {};
     for (const [strain, prod] of Object.entries(perStrainProd)) {
       const variant = supersackMap[strain];
+      const hist = strainHistory[strain];
       strainData[strain] = {
         sacks: oldSacks[strain] || 0,
         tops: prod.tops,
         smalls: prod.smalls,
+        // 2-day history for averages (falls back to today-only)
+        histTops: hist ? hist.tops : prod.tops,
+        histSmalls: hist ? hist.smalls : prod.smalls,
+        histDays: hist ? hist.daysWorked : 1,
         productId: variant?.id || null,
         inventoryItemId: variant?.inventoryItemId || null,
         locationId: variant?.locationId || null,
