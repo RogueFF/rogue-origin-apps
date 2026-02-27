@@ -857,7 +857,7 @@
 
     // 1. Subtract supersacks from pool
     if (config.supersack) {
-      const r = await updatePool(config.supersack, 'subtract', sackCount * SACK_WEIGHT, `${sackCount} supersacks (${date})`);
+      const r = await updatePool(config.supersack, 'subtract', sackCount, `${sackCount} supersacks (${date})`);
       if (!r.success) poolErrors.push('Supersack pool: ' + (r.error || 'failed'));
     }
 
