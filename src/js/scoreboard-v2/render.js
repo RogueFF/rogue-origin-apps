@@ -54,8 +54,10 @@
       const lastHourLbs = data.lastHourLbs || 0;
       const lastHourTarget = data.lastHourTarget || 0;
       const lastHourTrimmers = data.lastHourTrimmers || 0;
+      const lastHourEffTrimmers = data.lastHourEffectiveTrimmers || lastHourTrimmers;
       const lastTimeSlot = data.lastTimeSlot || '—';
       const currentHourTrimmers = data.currentHourTrimmers || 0;
+      const currentHourEffTrimmers = data.currentHourEffectiveTrimmers || currentHourTrimmers;
       const currentHourTarget = data.currentHourTarget || 0;
       const currentTimeSlot = data.currentTimeSlot || '';
       const targetRate = data.targetRate || 0;
@@ -135,6 +137,16 @@
         lhp.style.color = 'rgba(255,255,255,0.5)';
       }
 
+      // Effective indicator on last hour
+      var _el = safeGetEl('lastHourEffective'); if (_el) {
+        if (lastHourTrimmers > 0 && Math.abs(lastHourEffTrimmers - lastHourTrimmers) > 0.05) {
+          _el.textContent = `(eff: ${lastHourEffTrimmers.toFixed(1)} trimmers)`;
+          _el.style.display = 'block';
+        } else {
+          _el.style.display = 'none';
+        }
+      }
+
       // Current hour card
       const chc = safeGetEl('currentHourCard');
       if (chc && currentHourTrimmers > 0) {
@@ -142,6 +154,15 @@
         var _el = safeGetEl('currentHourTrimmers'); if (_el) _el.textContent = currentHourTrimmers;
         var _el = safeGetEl('currentHourTimeslot'); if (_el) _el.textContent = currentTimeSlot;
         var _el = safeGetEl('currentHourTargetLbs'); if (_el) _el.textContent = currentHourTarget > 0 ? currentHourTarget.toFixed(1) : '—';
+        // Effective indicator on current hour
+        var _el = safeGetEl('currentHourEffective'); if (_el) {
+          if (Math.abs(currentHourEffTrimmers - currentHourTrimmers) > 0.05) {
+            _el.textContent = `(eff: ${currentHourEffTrimmers.toFixed(1)} trimmers)`;
+            _el.style.display = 'block';
+          } else {
+            _el.style.display = 'none';
+          }
+        }
       } else {
         if (chc) chc.style.display = 'none';
       }
@@ -247,7 +268,17 @@
 
       // Crew and rate info
       const displayTrimmers = currentHourTrimmers > 0 ? currentHourTrimmers : lastHourTrimmers;
+      const displayEffTrimmers = currentHourTrimmers > 0 ? currentHourEffTrimmers : lastHourEffTrimmers;
       var _el = safeGetEl('crewCount'); if (_el) _el.textContent = displayTrimmers > 0 ? displayTrimmers : '—';
+      // Show effective trimmer indicator when weighted avg differs from raw
+      var _el = safeGetEl('crewEffective'); if (_el) {
+        if (displayTrimmers > 0 && Math.abs(displayEffTrimmers - displayTrimmers) > 0.05) {
+          _el.textContent = `eff: ${displayEffTrimmers.toFixed(1)}`;
+          _el.style.display = 'inline';
+        } else {
+          _el.style.display = 'none';
+        }
+      }
       var _el = safeGetEl('targetRate'); if (_el) _el.textContent = targetRate > 0 ? targetRate.toFixed(2) : '—';
       var _el = safeGetEl('strainName'); if (_el) _el.textContent = strain || '—';
 

@@ -267,6 +267,14 @@ body {
   color: var(--danger);
 }
 
+.card-hourly .slot-eff {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #e4aa4f;
+  opacity: 0.9;
+  margin-left: 4px;
+}
+
 .card-hourly .slot-status {
   font-size: 14px;
   flex-shrink: 0;
