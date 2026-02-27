@@ -491,6 +491,7 @@
   let topsLbs = 0;
   let smallsLbs = 0;
   let poolProducts = [];
+  let todayStrains = []; // strains worked today from production data
   let config = JSON.parse(localStorage.getItem('supersack-config') || '{}');
 
   // Elements
@@ -620,7 +621,33 @@
     debugEl.textContent = 'Loading products...';
     debugEl.className = 'status-msg';
 
-    // 1. Load supersack variants (for supersack dropdown)
+    // 1. Get today's strains from production scoreboard
+    try {
+      const resp = await fetch(`${PROD_API}?action=scoreboard`);
+      const data = await resp.json();
+      const sb = data.scoreboard || {};
+      // Collect unique strains from hourly rates + current strain
+      const strainSet = new Set();
+      if (sb.strain) strainSet.add(sb.strain);
+      (sb.hourlyRates || []).forEach(h => { if (h.strain) strainSet.add(h.strain); });
+      todayStrains = [...strainSet];
+    } catch (e) {
+      console.error('Scoreboard fetch error:', e);
+    }
+
+    // If scoreboard didn't have per-hour strains, query distinct from DB via dashboard
+    if (todayStrains.length === 0) {
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const resp = await fetch(`${PROD_API}?action=dashboard&start=${today}&end=${today}`);
+        const data = await resp.json();
+        if (data.current?.strain) todayStrains.push(data.current.strain);
+      } catch (e) {
+        console.error('Dashboard fetch error:', e);
+      }
+    }
+
+    // 2. Load supersack variants (for supersack dropdown)
     try {
       const resp = await fetch(`${POOL_API}?action=get_supersack_variants`, {
         method: 'POST',
@@ -643,7 +670,7 @@
       console.error('Supersack API error:', e);
     }
 
-    // 2. Load pool products for biomass/trim (smalls + tops)
+    // 3. Load pool products for biomass/trim (smalls + tops)
     for (const poolType of ['smalls', 'tops']) {
       try {
         const resp = await fetch(`${POOL_API}?action=list_products`, {
@@ -716,7 +743,14 @@
     selects.forEach(id => {
       const el = document.getElementById(id);
       el.innerHTML = '<option value="">-- Select product --</option>';
-      poolProducts.forEach(p => {
+
+      // For supersack dropdown: only show today's strains
+      const isSupersack = id === 'cfg-supersack';
+      const filteredProducts = isSupersack && todayStrains.length > 0
+        ? poolProducts.filter(p => p._poolType === 'supersack' && todayStrains.includes(p.title))
+        : poolProducts;
+
+      filteredProducts.forEach(p => {
         const opt = document.createElement('option');
         opt.value = p.id;
         const unit = p._unit === 'sacks' ? 'sacks' : 'g';
@@ -730,8 +764,15 @@
     if (biomassProduct) config.biomass = biomassProduct.id;
     if (trimProduct) config.trim = trimProduct.id;
 
+    // Auto-select supersack if only one strain today
+    const supersackEl = document.getElementById('cfg-supersack');
+    const supersackOptions = supersackEl.querySelectorAll('option[value]');
+    if (supersackOptions.length === 1) {
+      config.supersack = supersackOptions[0].value;
+    }
+
     // Restore saved config (supersack only — biomass/trim are fixed)
-    if (config.supersack) document.getElementById('cfg-supersack').value = config.supersack;
+    if (config.supersack) supersackEl.value = config.supersack;
     if (config.biomass) document.getElementById('cfg-biomass').value = config.biomass;
     if (config.trim) document.getElementById('cfg-trim').value = config.trim;
   }
