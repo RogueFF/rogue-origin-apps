@@ -97,9 +97,12 @@
                   State._rawTodayTarget = yData.todayTarget;
                   State._showingYesterday = true;
                   var banner = document.getElementById('historicalDateBanner');
+                  var dateDisplay = document.getElementById('historicalDateDisplay');
                   if (banner) {
                     banner.style.display = 'flex';
-                    banner.textContent = 'Showing yesterday\'s results (' + yStr + ')';
+                  }
+                  if (dateDisplay) {
+                    dateDisplay.textContent = 'Yesterday\'s results (' + yStr + ')';
                   }
 
                   // Load yesterday's cycle history + timer data
