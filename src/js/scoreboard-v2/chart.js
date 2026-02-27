@@ -34,6 +34,32 @@
 
   var ScoreboardChart = {
     /**
+     * Toggle smalls overlay on the hourly chart
+     */
+    toggleSmalls: function() {
+      var show = localStorage.getItem('chartShowSmalls') === 'true';
+      var newState = !show;
+      localStorage.setItem('chartShowSmalls', newState.toString());
+
+      var btn = document.getElementById('chartSmallsToggle');
+      if (btn) {
+        if (newState) btn.classList.add('active');
+        else btn.classList.remove('active');
+      }
+
+      // Re-render chart with current data
+      var data = window.ScoreboardState ? window.ScoreboardState.data : null;
+      if (data && data.hourlyRates) {
+        // Destroy existing chart to force full rebuild with/without smalls dataset
+        if (window.ScoreboardState.hourlyChart) {
+          window.ScoreboardState.hourlyChart.destroy();
+          window.ScoreboardState.hourlyChart = null;
+        }
+        this.renderHourlyChart(data.hourlyRates, data.targetRate || 0);
+      }
+    },
+
+    /**
      * Render or update the hourly performance chart
      * @param {Array} hourlyRates - Array of {timeSlot, rate, target} objects
      * @param {Number} targetRate - Overall target rate (for reference)
@@ -83,6 +109,19 @@
 
       const rates = hourlyRates.map(h => parseFloat(h.rate.toFixed(2)));
       const targets = hourlyRates.map(h => parseFloat(h.target.toFixed(2)));
+      const showSmalls = localStorage.getItem('chartShowSmalls') === 'true';
+      const smallsRates = hourlyRates.map(h => {
+        var s = h.smalls || 0;
+        var t = h.trimmers || 1;
+        return parseFloat((s / t).toFixed(2));
+      });
+
+      // Sync toggle button state
+      var smallsBtn = document.getElementById('chartSmallsToggle');
+      if (smallsBtn) {
+        if (showSmalls) smallsBtn.classList.add('active');
+        else smallsBtn.classList.remove('active');
+      }
 
       // Color bars based on performance - using brand colors
       const barColors = hourlyRates.map(h => {
@@ -99,6 +138,10 @@
         chart.data.datasets[0].data = rates;
         chart.data.datasets[0].backgroundColor = barColors;
         chart.data.datasets[1].data = targets;
+        // Update smalls dataset if present
+        if (showSmalls && chart.data.datasets.length >= 3) {
+          chart.data.datasets[2].data = smallsRates;
+        }
         chart.update('none');
         return;
       }
@@ -121,7 +164,7 @@
               data: rates,
               backgroundColor: barColors,
               borderRadius: 4,
-              barThickness: 32
+              barThickness: showSmalls ? 24 : 32
             },
             {
               label: 'Target',
@@ -133,7 +176,13 @@
               pointRadius: 0,
               fill: false
             }
-          ]
+          ].concat(showSmalls ? [{
+            label: 'Smalls',
+            data: smallsRates,
+            backgroundColor: 'rgba(95, 189, 132, 0.35)',
+            borderRadius: 4,
+            barThickness: 14
+          }] : [])
         },
         options: {
           responsive: true,
