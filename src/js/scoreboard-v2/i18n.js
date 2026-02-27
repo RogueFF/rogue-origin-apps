@@ -8,8 +8,8 @@
   var translations = {
     en: {
       // Strain/Line Info
-      currentStrain: 'Line 1 • Current Strain',
-      trimmersLabel: 'Line 1 Trimmers',
+      currentStrain: 'Current Strain',
+      trimmersLabel: 'Trimmers',
 
       // Time Periods
       lastHour: 'Last Hour (Completed)',
@@ -97,8 +97,8 @@
 
     es: {
       // Strain/Line Info
-      currentStrain: 'Línea 1 • Variedad Actual',
-      trimmersLabel: 'Triminadores L1',
+      currentStrain: 'Variedad Actual',
+      trimmersLabel: 'Triminadores',
 
       // Time Periods
       lastHour: 'Última Hora (Completa)',
