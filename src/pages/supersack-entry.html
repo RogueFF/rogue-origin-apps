@@ -312,6 +312,49 @@
       width: 100%;
       margin-top: 4px;
     }
+    /* Strain counter rows */
+    .strain-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .strain-row:last-child { border-bottom: none; }
+    .strain-name {
+      flex: 1; font-size: 13px; font-weight: 600; color: var(--green);
+      line-height: 1.3;
+    }
+    .strain-name .sack-inventory {
+      font-size: 11px; font-weight: 400; color: rgba(255,255,255,0.35);
+    }
+    .strain-counter {
+      display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+    }
+    .strain-counter .mini-btn {
+      width: 30px; height: 30px; border-radius: 50%;
+      border: 1px solid rgba(0,255,136,0.3); background: transparent;
+      color: var(--green); font-size: 16px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .strain-counter .mini-btn:hover { background: rgba(0,255,136,0.15); }
+    .strain-counter .mini-btn:active { transform: scale(0.9); }
+    .strain-counter input {
+      width: 50px; text-align: center; font-size: 18px; font-weight: 700;
+      background: rgba(0,255,136,0.08); border: 1px solid rgba(0,255,136,0.3);
+      border-radius: 8px; color: var(--green); padding: 4px 0;
+    }
+    .strain-production {
+      font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 2px;
+    }
+    .strain-production span { margin-right: 8px; }
+
+    /* Per-strain avg section */
+    .avg-strain-section { margin-bottom: 12px; }
+    .avg-strain-section:last-child { margin-bottom: 0; }
+    .avg-strain-title {
+      font-size: 12px; font-weight: 700; color: var(--green);
+      margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+
     /* Custom strain picker */
     .strain-picker-btn {
       display: flex; align-items: center; justify-content: space-between;
@@ -372,23 +415,15 @@
     <button class="today-btn" id="today-btn">Today</button>
   </div>
 
-  <!-- Supersack Count -->
+  <!-- Supersack Count — per strain -->
   <div class="card">
     <div class="card-title" data-i18n="supersacksOpened">Supersacks Opened</div>
-    <div class="strain-picker" id="strain-picker" style="margin-bottom:10px;position:relative">
-      <input type="hidden" id="cfg-supersack" value="">
-      <div class="strain-picker-btn" id="strain-picker-btn">
-        <span class="strain-picker-label" id="strain-picker-label">Loading strains...</span>
-        <span class="strain-picker-arrow">▾</span>
-      </div>
-      <div class="strain-picker-menu" id="strain-picker-menu"></div>
+    <div id="strain-counters">
+      <div style="color:rgba(255,255,255,0.4);font-size:13px;text-align:center;padding:12px">Loading strains...</div>
     </div>
-    <div class="counter-row">
-      <button class="counter-btn" id="dec-btn">−</button>
-      <input type="number" class="counter-value" id="sack-count" value="0" min="0" step="1" inputmode="numeric" style="background:rgba(0,255,136,0.08);border:1px solid rgba(0,255,136,0.3);border-radius:8px;text-align:center;width:80px;color:var(--green);-moz-appearance:textfield;cursor:text" onclick="this.select()">
-      <button class="counter-btn" id="inc-btn">+</button>
+    <div style="margin-top:8px;text-align:center">
+      <span class="counter-weight" id="raw-weight">0 lbs raw total</span>
     </div>
-    <div class="counter-weight" id="raw-weight">0 lbs raw</div>
   </div>
 
   <!-- Manual Inputs -->
@@ -457,29 +492,10 @@
     </div>
   </div>
 
-  <!-- Per Sack Averages -->
+  <!-- Per Strain Averages -->
   <div class="card" id="avg-card" style="display:none">
     <div class="card-title">Per Supersack Average</div>
-    <div class="auto-row">
-      <span class="auto-label">Tops</span>
-      <span class="auto-value" style="color:var(--green)" id="avg-tops">—</span>
-    </div>
-    <div class="auto-row">
-      <span class="auto-label">Smalls</span>
-      <span class="auto-value" style="color:var(--cyan)" id="avg-smalls">—</span>
-    </div>
-    <div class="auto-row">
-      <span class="auto-label">Biomass</span>
-      <span class="auto-value" style="color:var(--gold)" id="avg-biomass">—</span>
-    </div>
-    <div class="auto-row">
-      <span class="auto-label">Premium Trim</span>
-      <span class="auto-value" style="color:var(--blue)" id="avg-trim">—</span>
-    </div>
-    <div class="auto-row" style="border-top:1px solid rgba(255,255,255,0.06);padding-top:10px;margin-top:4px">
-      <span class="auto-label" style="font-weight:600">Waste</span>
-      <span class="auto-value" style="color:var(--red)" id="avg-waste">—</span>
-    </div>
+    <div id="avg-body"></div>
   </div>
 
   <!-- Submit -->
@@ -542,17 +558,15 @@
   const SACK_WEIGHT = 37;
 
   // State
-  let sackCount = 0;
+  let strainData = {}; // { strainTitle: { sacks, tops, smalls, productId, inventoryItemId, locationId, poolValue } }
   let topsLbs = 0;
   let smallsLbs = 0;
   let poolProducts = [];
-  let todayStrains = []; // strains worked today from production data
   let config = JSON.parse(localStorage.getItem('supersack-config') || '{}');
 
   // Elements
   const dateInput = document.getElementById('date-input');
   const headerDate = document.getElementById('header-date');
-  const sackCountEl = document.getElementById('sack-count');
   const rawWeightEl = document.getElementById('raw-weight');
   const biomassInput = document.getElementById('biomass-input');
   const trimInput = document.getElementById('trim-input');
@@ -561,10 +575,7 @@
   const submitBtn = document.getElementById('submit-btn');
   const statusMsg = document.getElementById('status-msg');
 
-  // Today
-  function todayStr() {
-    return new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
-  }
+  function todayStr() { return new Date().toLocaleDateString('en-CA'); }
 
   function initDate() {
     dateInput.value = todayStr();
@@ -576,52 +587,75 @@
     headerDate.textContent = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   }
 
-  dateInput.addEventListener('change', () => {
-    updateHeaderDate();
-    fetchProduction();
-  });
-
+  dateInput.addEventListener('change', () => { updateHeaderDate(); loadAll(); });
   document.getElementById('today-btn').addEventListener('click', () => {
-    dateInput.value = todayStr();
-    updateHeaderDate();
-    fetchProduction();
+    dateInput.value = todayStr(); updateHeaderDate(); loadAll();
   });
 
-  // Supersack counter
-  document.getElementById('inc-btn').addEventListener('click', () => {
-    sackCount++;
-    updateCounter();
-  });
-
-  document.getElementById('dec-btn').addEventListener('click', () => {
-    if (sackCount > 0) sackCount--;
-    updateCounter();
-  });
-
-  function updateCounter() {
-    sackCountEl.value = sackCount;
-    rawWeightEl.textContent = (sackCount * SACK_WEIGHT) + ' lbs raw';
-    recalc();
-  }
-
-  // Allow manual sack count entry
-  sackCountEl.addEventListener('input', () => {
-    const val = parseInt(sackCountEl.value) || 0;
-    sackCount = Math.max(0, val);
-    rawWeightEl.textContent = (sackCount * SACK_WEIGHT) + ' lbs raw';
-    recalc();
-  });
-
-  // Inputs
   biomassInput.addEventListener('input', recalc);
   trimInput.addEventListener('input', recalc);
 
-  // Recalculate
+  // Total sack count across all strains
+  function totalSacks() {
+    return Object.values(strainData).reduce((sum, s) => sum + (s.sacks || 0), 0);
+  }
+
+  // Build per-strain counter rows
+  function renderStrainCounters() {
+    const container = document.getElementById('strain-counters');
+    const strains = Object.keys(strainData);
+
+    if (strains.length === 0) {
+      container.innerHTML = '<div style="color:rgba(255,255,255,0.4);font-size:13px;text-align:center;padding:12px">No strains today</div>';
+      return;
+    }
+
+    container.innerHTML = strains.map(name => {
+      const s = strainData[name];
+      const shortName = name.replace(/^\d{4} - /, '').replace(/ \/ Sungrown$/, '');
+      return `
+        <div class="strain-row" data-strain="${name}">
+          <div class="strain-name">
+            ${shortName}
+            <div class="strain-production">
+              <span style="color:var(--green)">↑${s.tops.toFixed(1)}</span>
+              <span style="color:var(--cyan)">↓${s.smalls.toFixed(1)}</span>
+              <span class="sack-inventory">${s.poolValue || 0} in stock</span>
+            </div>
+          </div>
+          <div class="strain-counter">
+            <button class="mini-btn" onclick="window._strainDec('${name}')">−</button>
+            <input type="number" value="${s.sacks}" min="0" inputmode="numeric"
+              onchange="window._strainSet('${name}', this.value)"
+              onclick="this.select()">
+            <button class="mini-btn" onclick="window._strainInc('${name}')">+</button>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // Strain counter controls (exposed to window for inline handlers)
+  window._strainInc = (name) => { strainData[name].sacks++; renderStrainCounters(); recalc(); };
+  window._strainDec = (name) => { if (strainData[name].sacks > 0) strainData[name].sacks--; renderStrainCounters(); recalc(); };
+  window._strainSet = (name, val) => { strainData[name].sacks = Math.max(0, parseInt(val) || 0); renderStrainCounters(); recalc(); };
+
+  // Recalculate totals + per-strain averages
   function recalc() {
+    const sackCount = totalSacks();
     const raw = sackCount * SACK_WEIGHT;
     const biomass = parseFloat(biomassInput.value) || 0;
     const trim = parseFloat(trimInput.value) || 0;
+
+    // Totals from all strains
+    topsLbs = Object.values(strainData).reduce((sum, s) => sum + s.tops, 0);
+    smallsLbs = Object.values(strainData).reduce((sum, s) => sum + s.smalls, 0);
     const waste = Math.max(0, raw - topsLbs - smallsLbs - biomass - trim);
+
+    rawWeightEl.textContent = raw.toFixed(1) + ' lbs raw total';
+    topsEl.textContent = topsLbs.toFixed(1) + ' lbs';
+    topsEl.classList.remove('loading');
+    smallsEl.textContent = smallsLbs.toFixed(1) + ' lbs';
+    smallsEl.classList.remove('loading');
 
     document.getElementById('total-raw').textContent = raw.toFixed(1) + ' lbs';
     document.getElementById('bd-tops').textContent = topsLbs.toFixed(1) + ' lbs';
@@ -632,72 +666,55 @@
 
     // Breakdown bar
     const bar = document.getElementById('breakdown-bar');
-    if (raw === 0) {
-      bar.innerHTML = '';
-      return;
+    if (raw === 0) { bar.innerHTML = ''; } else {
+      const segments = [
+        { val: topsLbs, color: 'var(--green)' }, { val: smallsLbs, color: 'var(--cyan)' },
+        { val: biomass, color: 'var(--gold)' }, { val: trim, color: 'var(--blue)' },
+        { val: waste, color: 'var(--red)' },
+      ];
+      bar.innerHTML = segments.map(s => {
+        const pct = (s.val / raw) * 100;
+        return pct < 1 ? '' : `<div class="breakdown-segment" style="width:${pct}%;background:${s.color}">${pct >= 8 ? Math.round(pct) + '%' : ''}</div>`;
+      }).join('');
     }
-    const segments = [
-      { val: topsLbs, color: 'var(--green)', label: 'Tops' },
-      { val: smallsLbs, color: 'var(--cyan)', label: 'Smalls' },
-      { val: biomass, color: 'var(--gold)', label: 'Bio' },
-      { val: trim, color: 'var(--blue)', label: 'Trim' },
-      { val: waste, color: 'var(--red)', label: 'Waste' },
-    ];
-    bar.innerHTML = segments.map(s => {
-      const pct = (s.val / raw) * 100;
-      if (pct < 1) return '';
-      return `<div class="breakdown-segment" style="width:${pct}%;background:${s.color}">${pct >= 8 ? Math.round(pct) + '%' : ''}</div>`;
-    }).join('');
 
-    // Per-sack averages
+    // Per-strain averages
     const avgCard = document.getElementById('avg-card');
-    if (sackCount > 0) {
+    const avgBody = document.getElementById('avg-body');
+    const strainsWithSacks = Object.entries(strainData).filter(([, s]) => s.sacks > 0);
+
+    if (strainsWithSacks.length > 0) {
       avgCard.style.display = '';
-      const fmt = v => (v / sackCount).toFixed(2) + ' lbs';
-      document.getElementById('avg-tops').textContent = fmt(topsLbs);
-      document.getElementById('avg-smalls').textContent = fmt(smallsLbs);
-      document.getElementById('avg-biomass').textContent = fmt(biomass);
-      document.getElementById('avg-trim').textContent = fmt(trim);
-      document.getElementById('avg-waste').textContent = fmt(waste);
+      avgBody.innerHTML = strainsWithSacks.map(([name, s]) => {
+        const shortName = name.replace(/^\d{4} - /, '').replace(/ \/ Sungrown$/, '');
+        const n = s.sacks;
+        const strainWaste = Math.max(0, (n * SACK_WEIGHT) - s.tops - s.smalls);
+        // Proportional biomass/trim based on sack ratio
+        const ratio = n / sackCount;
+        const strainBio = biomass * ratio;
+        const strainTrim = trim * ratio;
+        return `
+          <div class="avg-strain-section">
+            <div class="avg-strain-title">${shortName} (${n} sacks)</div>
+            <div class="auto-row"><span class="auto-label">Tops</span><span class="auto-value" style="color:var(--green)">${(s.tops / n).toFixed(2)} lbs</span></div>
+            <div class="auto-row"><span class="auto-label">Smalls</span><span class="auto-value" style="color:var(--cyan)">${(s.smalls / n).toFixed(2)} lbs</span></div>
+            <div class="auto-row"><span class="auto-label">Biomass</span><span class="auto-value" style="color:var(--gold)">${(strainBio / n).toFixed(2)} lbs</span></div>
+            <div class="auto-row"><span class="auto-label">Trim</span><span class="auto-value" style="color:var(--blue)">${(strainTrim / n).toFixed(2)} lbs</span></div>
+            <div class="auto-row"><span class="auto-label">Waste</span><span class="auto-value" style="color:var(--red)">${(strainWaste / n).toFixed(2)} lbs</span></div>
+          </div>`;
+      }).join('');
     } else {
       avgCard.style.display = 'none';
     }
   }
 
-  // Fetch production data
-  async function fetchProduction() {
+  // Fetch scoreboard (per-strain production) + supersack variants + pool products in parallel
+  async function loadAll() {
     const date = dateInput.value;
-    topsEl.textContent = 'loading...';
-    topsEl.classList.add('loading');
-    smallsEl.textContent = 'loading...';
-    smallsEl.classList.add('loading');
+    topsEl.textContent = 'loading...'; topsEl.classList.add('loading');
+    smallsEl.textContent = 'loading...'; smallsEl.classList.add('loading');
 
-    try {
-      const resp = await fetch(`${PROD_API}?action=dashboard&start=${date}&end=${date}`);
-      const data = await resp.json();
-      const day = data.daily && data.daily.length > 0 ? data.daily[0] : null;
-      topsLbs = day ? (day.totalTops || 0) : 0;
-      smallsLbs = day ? (day.totalSmalls || 0) : 0;
-
-      topsEl.textContent = topsLbs.toFixed(1) + ' lbs';
-      topsEl.classList.remove('loading');
-      smallsEl.textContent = smallsLbs.toFixed(1) + ' lbs';
-      smallsEl.classList.remove('loading');
-    } catch (e) {
-      topsEl.textContent = 'error';
-      smallsEl.textContent = 'error';
-      topsLbs = 0;
-      smallsLbs = 0;
-    }
-    recalc();
-  }
-
-  // Pool API — all fetches in parallel
-  async function fetchPoolProducts() {
-    const debugEl = document.getElementById('status-msg');
-
-    // Fire ALL requests simultaneously
-    const [scoreboardRes, supersackRes, smallsRes, topsRes] = await Promise.allSettled([
+    const [scoreboardRes, supersackRes, smallsPoolRes, topsPoolRes] = await Promise.allSettled([
       fetch(`${PROD_API}?action=scoreboard`).then(r => r.json()),
       fetch(`${POOL_API}?action=get_supersack_variants`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
@@ -710,18 +727,29 @@
       }).then(r => r.json()),
     ]);
 
-    // 1. Today's strains from scoreboard
+    // Build per-strain production from scoreboard hourly rates
+    const perStrainProd = {}; // { strainTitle: { tops, smalls } }
     if (scoreboardRes.status === 'fulfilled') {
       const sb = scoreboardRes.value.scoreboard || {};
-      const strainSet = new Set();
-      if (sb.strain) strainSet.add(sb.strain);
-      (sb.hourlyRates || []).forEach(h => { if (h.strain) strainSet.add(h.strain); });
-      todayStrains = [...strainSet];
+      (sb.hourlyRates || []).forEach(h => {
+        const strain = h.strain || sb.strain;
+        if (!strain) return;
+        if (!perStrainProd[strain]) perStrainProd[strain] = { tops: 0, smalls: 0 };
+        perStrainProd[strain].tops += (h.lbs || 0);
+        perStrainProd[strain].smalls += (h.smalls || 0);
+      });
+      // If no per-hour strains, use current strain with dashboard totals
+      if (Object.keys(perStrainProd).length === 0 && sb.strain) {
+        perStrainProd[sb.strain] = { tops: sb.todayLbs || 0, smalls: 0 };
+      }
     }
 
-    // 2. Supersack variants
+    // Supersack variants (Shopify inventory)
+    const supersackMap = {}; // { title: variant }
+    poolProducts = [];
     if (supersackRes.status === 'fulfilled') {
       (supersackRes.value.variants || []).forEach(v => {
+        supersackMap[v.title] = v;
         poolProducts.push({
           id: v.id, title: v.title, poolValue: (v.quantity || 0),
           _unit: 'sacks', _inventoryItemId: v.inventoryItemId,
@@ -730,10 +758,10 @@
       });
     }
 
-    // 3. Pool products (biomass/trim)
-    for (const res of [smallsRes, topsRes]) {
+    // Pool products (biomass/trim)
+    for (const res of [smallsPoolRes, topsPoolRes]) {
       if (res.status === 'fulfilled') {
-        const poolType = res === smallsRes ? 'smalls' : 'tops';
+        const poolType = res === smallsPoolRes ? 'smalls' : 'tops';
         (res.value.products || []).forEach(p => {
           if (!poolProducts.find(x => x.id === p.id)) {
             p._poolType = poolType; p._unit = 'g';
@@ -743,43 +771,54 @@
       }
     }
 
-    debugEl.textContent = poolProducts.length + ' products loaded';
-    debugEl.className = 'status-msg ' + (poolProducts.length > 0 ? 'success' : 'error');
-    setTimeout(() => { debugEl.textContent = ''; debugEl.className = 'status-msg'; }, 5000);
-    populateConfigSelects();
+    // Build strainData — merge production with supersack variants
+    const oldSacks = {}; // Preserve user-entered sack counts
+    Object.entries(strainData).forEach(([name, s]) => { if (s.sacks > 0) oldSacks[name] = s.sacks; });
+
+    strainData = {};
+    for (const [strain, prod] of Object.entries(perStrainProd)) {
+      const variant = supersackMap[strain];
+      strainData[strain] = {
+        sacks: oldSacks[strain] || 0,
+        tops: prod.tops,
+        smalls: prod.smalls,
+        productId: variant?.id || null,
+        inventoryItemId: variant?.inventoryItemId || null,
+        locationId: variant?.locationId || null,
+        poolValue: variant?.quantity || 0,
+      };
+    }
+
+    // Auto-set biomass/trim
+    config.biomass = poolProducts.find(p => /CBD Biomass.*Trim/i.test(p.title))?.id || null;
+    config.trim = poolProducts.find(p => /Premium CBD Flower Trim/i.test(p.title))?.id || null;
+
+    renderStrainCounters();
+    recalc();
   }
 
-  async function updatePool(productId, operation, amountLbs, note) {
+  async function updatePool(productId, operation, amount, note, isSupersack) {
     if (!productId) return { success: false, error: 'No product mapped' };
-    const amountGrams = amountLbs * LBS_TO_GRAMS;
     try {
       const product = poolProducts.find(p => p.id === productId);
       let resp;
-      if (product?._poolType === 'supersack') {
-        // Supersack variant — update via Shopify inventory
+      if (isSupersack || product?._poolType === 'supersack') {
         resp = await fetch(`${POOL_API}?action=update_supersack_inventory`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             variantId: productId,
-            inventoryItemId: product._inventoryItemId,
-            locationId: product._locationId,
-            operation,
-            quantity: amountLbs,
-            note,
+            inventoryItemId: product?._inventoryItemId,
+            locationId: product?._locationId,
+            operation, quantity: amount, note,
           }),
         });
       } else {
-        // Pool product (biomass/trim) — update via pool action
         resp = await fetch(`${POOL_API}?action=update_pool`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            productId,
-            operation,
-            amount: Math.round(amountGrams * 10) / 10,
-            note,
-            poolType: product?._poolType || 'smalls',
+            productId, operation,
+            amount: Math.round(amount * LBS_TO_GRAMS * 10) / 10,
+            note, poolType: product?._poolType || 'smalls',
           }),
         });
       }
@@ -789,98 +828,10 @@
     }
   }
 
-  // Config
-  function populateConfigSelects() {
-    // 1. Custom strain picker for supersack
-    const menu = document.getElementById('strain-picker-menu');
-    const label = document.getElementById('strain-picker-label');
-    const hiddenInput = document.getElementById('cfg-supersack');
-    menu.innerHTML = '';
-
-    const supersackProducts = todayStrains.length > 0
-      ? poolProducts.filter(p => p._poolType === 'supersack' && todayStrains.includes(p.title))
-      : poolProducts.filter(p => p._poolType === 'supersack');
-
-    supersackProducts.forEach(p => {
-      const item = document.createElement('div');
-      item.className = 'strain-picker-item';
-      item.dataset.value = p.id;
-      item.innerHTML = `<span>${p.title}</span><span class="sack-count">${(p.poolValue || 0).toLocaleString()} sacks</span>`;
-      item.addEventListener('click', () => {
-        hiddenInput.value = p.id;
-        config.supersack = p.id;
-        label.textContent = p.title;
-        menu.querySelectorAll('.strain-picker-item').forEach(i => i.classList.remove('selected'));
-        item.classList.add('selected');
-        document.getElementById('strain-picker').classList.remove('open');
-      });
-      menu.appendChild(item);
-    });
-
-    // Auto-select if only one strain
-    if (supersackProducts.length === 1) {
-      config.supersack = supersackProducts[0].id;
-      hiddenInput.value = supersackProducts[0].id;
-      label.textContent = supersackProducts[0].title;
-      menu.querySelector('.strain-picker-item')?.classList.add('selected');
-    } else if (supersackProducts.length === 0) {
-      label.textContent = 'No strains today';
-    } else {
-      label.textContent = '— Select strain —';
-    }
-
-    // Restore saved
-    if (config.supersack) {
-      const match = supersackProducts.find(p => p.id === config.supersack);
-      if (match) {
-        hiddenInput.value = match.id;
-        label.textContent = match.title;
-        menu.querySelector(`[data-value="${match.id}"]`)?.classList.add('selected');
-      }
-    }
-
-    // 2. Native selects for biomass/trim (hidden in config panel)
-    ['cfg-biomass', 'cfg-trim'].forEach(id => {
-      const el = document.getElementById(id);
-      el.innerHTML = '<option value="">-- Select product --</option>';
-      poolProducts.forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = p.id;
-        const unit = p._unit === 'sacks' ? 'sacks' : 'g';
-        opt.textContent = `${p.title} (${(p.poolValue || 0).toLocaleString()}${unit === 'g' ? 'g' : ' sacks'})`;
-        el.appendChild(opt);
-      });
-    });
-
-    // Auto-set biomass and trim
-    const biomassProduct = poolProducts.find(p => /CBD Biomass.*Trim/i.test(p.title));
-    const trimProduct = poolProducts.find(p => /Premium CBD Flower Trim/i.test(p.title));
-    if (biomassProduct) config.biomass = biomassProduct.id;
-    if (trimProduct) config.trim = trimProduct.id;
-    if (config.biomass) document.getElementById('cfg-biomass').value = config.biomass;
-    if (config.trim) document.getElementById('cfg-trim').value = config.trim;
-  }
-
-  // Strain picker toggle
-  document.getElementById('strain-picker-btn').addEventListener('click', () => {
-    document.getElementById('strain-picker').classList.toggle('open');
-  });
-  // Close on outside click
-  document.addEventListener('click', (e) => {
-    const picker = document.getElementById('strain-picker');
-    if (!picker.contains(e.target)) picker.classList.remove('open');
-  });
-
-  function checkConfig() {
-    // Biomass/trim are always auto-set, no config needed
-  }
-
-  // Submit
+  // Submit — per-strain supersack updates
   submitBtn.addEventListener('click', async () => {
-    if (sackCount === 0) {
-      setStatus('Enter supersack count first', 'error');
-      return;
-    }
+    const sackCount = totalSacks();
+    if (sackCount === 0) { setStatus('Enter supersack count first', 'error'); return; }
 
     submitBtn.disabled = true;
     submitBtn.textContent = 'Saving...';
@@ -889,38 +840,37 @@
     const biomass = parseFloat(biomassInput.value) || 0;
     const trim = parseFloat(trimInput.value) || 0;
     const date = dateInput.value;
-    const raw = sackCount * SACK_WEIGHT;
-    const waste = Math.max(0, raw - topsLbs - smallsLbs - biomass - trim);
-
     let poolErrors = [];
 
-    // 1. Subtract supersacks from pool
-    if (config.supersack) {
-      const r = await updatePool(config.supersack, 'subtract', sackCount, `${sackCount} supersacks (${date})`);
-      if (!r.success) poolErrors.push('Supersack pool: ' + (r.error || 'failed'));
+    // 1. Subtract supersacks per strain
+    for (const [name, s] of Object.entries(strainData)) {
+      if (s.sacks > 0 && s.productId) {
+        const r = await updatePool(s.productId, 'subtract', s.sacks, `${s.sacks} supersacks ${name} (${date})`, true);
+        if (!r.success) poolErrors.push(`${name}: ${r.error || 'failed'}`);
+      }
     }
 
     // 2. Add biomass to pool
     if (config.biomass && biomass > 0) {
       const r = await updatePool(config.biomass, 'add', biomass, `Biomass entry (${date})`);
-      if (!r.success) poolErrors.push('Biomass pool: ' + (r.error || 'failed'));
+      if (!r.success) poolErrors.push('Biomass: ' + (r.error || 'failed'));
     }
 
     // 3. Add trim to pool
     if (config.trim && trim > 0) {
-      const r = await updatePool(config.trim, 'add', trim, `Premium #1 Trim entry (${date})`);
-      if (!r.success) poolErrors.push('Trim pool: ' + (r.error || 'failed'));
+      const r = await updatePool(config.trim, 'add', trim, `Trim entry (${date})`);
+      if (!r.success) poolErrors.push('Trim: ' + (r.error || 'failed'));
     }
 
-    // 4. Save to D1 (will fail gracefully if endpoint doesn't exist yet)
+    // 4. Save summary to D1
     try {
       await fetch(`${MC_API}/supersack/submit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           date, supersack_count: sackCount, biomass_lbs: biomass,
           trim_lbs: trim, tops_lbs: topsLbs, smalls_lbs: smallsLbs,
-          waste_lbs: waste,
+          waste_lbs: Math.max(0, (sackCount * SACK_WEIGHT) - topsLbs - smallsLbs - biomass - trim),
+          strains: Object.fromEntries(Object.entries(strainData).map(([k, v]) => [k, v.sacks])),
         }),
       });
     } catch {}
@@ -948,9 +898,7 @@
   // Init
   initDate();
   applyLang();
-  fetchProduction();
-  fetchPoolProducts();
-  setTimeout(checkConfig, 1000);
+  loadAll();
 })();
 </script>
 </body>
