@@ -258,7 +258,7 @@ async function getProduction(params, env) {
     ORDER BY time_slot DESC LIMIT 1
   `, [date]);
   const activeStrain = cultivarRows.length > 0 ? cultivarRows[0].cultivar1 : '';
-  const targetRate = await getEffectiveTargetRate(env, 7, timeSlotMultipliers, activeStrain);
+  const targetRate = await getEffectiveTargetRate(env, 2, timeSlotMultipliers, activeStrain);
 
   return successResponse({
     success: true,
