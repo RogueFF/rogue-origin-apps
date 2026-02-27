@@ -316,6 +316,7 @@
             <span class="target-lbs" id="lastHourTarget">—</span>
           </div>
           <div class="lbs-unit" id="lbsUnit">lbs</div>
+          <div id="lastHourEffective" style="display:none;font-size:11px;color:#e4aa4f;margin-top:2px;text-align:center"></div>
           <div class="percentage-display">
             <div class="percentage-value" id="lastHourPct">—%</div>
             <div class="percentage-label" id="ofTargetLabel">of target</div>
@@ -329,6 +330,7 @@
             <span class="actual-lbs" id="currentHourTrimmers">—</span>
             <span class="lbs-unit" style="font-size:14px;margin-left:8px" id="trimmersSmallLabel">trimmers</span>
           </div>
+          <div id="currentHourEffective" style="display:none;font-size:11px;color:#e4aa4f;margin-top:2px;text-align:center"></div>
           <div class="percentage-display">
             <div class="percentage-value" id="currentHourTargetLbs">—</div>
             <div class="percentage-label" id="lbsTargetLabel">lbs target</div>
@@ -338,7 +340,7 @@
 
       <!-- Info Bar -->
       <div class="info-bar">
-        <div class="info-section"><span class="info-icon"><i class="ph-duotone ph-users-three"></i></span><span><span id="crewCount">—</span> <span id="trimmersLabel">Trimmers</span></span></div>
+        <div class="info-section"><span class="info-icon"><i class="ph-duotone ph-users-three"></i></span><span><span id="crewCount">—</span> <span id="trimmersLabel">Trimmers</span> <span id="crewEffective" style="display:none;font-size:11px;color:#e4aa4f"></span></span></div>
         <div class="info-divider"></div>
         <div class="info-section"><span class="info-icon"><i class="ph-duotone ph-crosshair"></i></span><span><span id="targetRateLabel">Target:</span> <span id="targetRate">—</span> lbs/hr</span><span class="momentum-arrow" id="momentumArrow"></span></div>
         <div class="info-divider" id="avgBestDivider"></div>
