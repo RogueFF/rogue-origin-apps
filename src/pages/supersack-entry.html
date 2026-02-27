@@ -461,24 +461,9 @@
   <button class="submit-btn" id="submit-btn" data-i18n="submit">Submit & Update Pools</button>
   <div class="status-msg" id="status-msg"></div>
 
-  <!-- Config -->
-  <div class="card" style="margin-top:20px">
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <div class="card-title" style="margin-bottom:0" data-i18n="poolMapping">Pool Product Mapping</div>
-      <button class="config-toggle" id="config-toggle">⚙</button>
-    </div>
-    <div class="config-panel" id="config-panel">
-      <div class="input-group">
-        <label class="config-label">Biomass Product (add)</label>
-        <select class="config-select" id="cfg-biomass"><option value="">Loading products...</option></select>
-      </div>
-      <div class="input-group">
-        <label class="config-label">Premium #1 Trim Product (add)</label>
-        <select class="config-select" id="cfg-trim"><option value="">Loading products...</option></select>
-      </div>
-      <button class="config-save-btn" id="cfg-save">Save Mapping</button>
-    </div>
-  </div>
+  <!-- Hidden config elements for biomass/trim (auto-set, no UI needed) -->
+  <select id="cfg-biomass" style="display:none"></select>
+  <select id="cfg-trim" style="display:none"></select>
 </div>
 
 <script>
@@ -847,26 +832,8 @@
     if (!picker.contains(e.target)) picker.classList.remove('open');
   });
 
-  document.getElementById('config-toggle').addEventListener('click', () => {
-    document.getElementById('config-panel').classList.toggle('open');
-  });
-
-  document.getElementById('cfg-save').addEventListener('click', () => {
-    config = {
-      supersack: document.getElementById('cfg-supersack').value,
-      biomass: document.getElementById('cfg-biomass').value,
-      trim: document.getElementById('cfg-trim').value,
-    };
-    localStorage.setItem('supersack-config', JSON.stringify(config));
-    document.getElementById('config-panel').classList.remove('open');
-    setStatus('Mapping saved', 'success');
-  });
-
-  // Auto-open config if not set
   function checkConfig() {
-    if (!config.supersack || !config.biomass || !config.trim) {
-      document.getElementById('config-panel').classList.add('open');
-    }
+    // Biomass/trim are always auto-set, no config needed
   }
 
   // Submit
