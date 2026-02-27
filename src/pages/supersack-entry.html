@@ -696,7 +696,13 @@
         el.appendChild(opt);
       });
     });
-    // Restore saved config
+    // Auto-set biomass and trim to fixed products (always)
+    const biomassProduct = poolProducts.find(p => /CBD Biomass.*Trim/i.test(p.title));
+    const trimProduct = poolProducts.find(p => /Premium CBD Flower Trim/i.test(p.title));
+    if (biomassProduct) config.biomass = biomassProduct.id;
+    if (trimProduct) config.trim = trimProduct.id;
+
+    // Restore saved config (supersack only — biomass/trim are fixed)
     if (config.supersack) document.getElementById('cfg-supersack').value = config.supersack;
     if (config.biomass) document.getElementById('cfg-biomass').value = config.biomass;
     if (config.trim) document.getElementById('cfg-trim').value = config.trim;
