@@ -616,16 +616,31 @@
 
   // Pool API
   async function fetchPoolProducts() {
+    const debugEl = document.getElementById('status-msg');
+    debugEl.textContent = 'Loading pool products...';
+    debugEl.className = 'status-msg';
+
     // Load both pool types
     for (const poolType of ['smalls', 'tops']) {
       try {
+        debugEl.textContent = 'Fetching ' + poolType + '...';
         const resp = await fetch(`${POOL_API}?action=list_products`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ poolType }),
         });
-        const data = await resp.json();
+        debugEl.textContent = poolType + ' response: ' + resp.status;
+        const text = await resp.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          debugEl.textContent = poolType + ': non-JSON response (' + text.substring(0,80) + ')';
+          debugEl.className = 'status-msg error';
+          continue;
+        }
         const products = data.products || [];
+        debugEl.textContent = poolType + ': ' + products.length + ' products';
         // Merge, avoid dupes by id
         products.forEach(p => {
           if (!poolProducts.find(x => x.id === p.id)) {
@@ -634,9 +649,14 @@
           }
         });
       } catch (e) {
+        debugEl.textContent = poolType + ' error: ' + e.message;
+        debugEl.className = 'status-msg error';
         console.error('Pool API error (' + poolType + '):', e);
       }
     }
+    debugEl.textContent = 'Total products: ' + poolProducts.length;
+    debugEl.className = 'status-msg ' + (poolProducts.length > 0 ? 'success' : 'error');
+    setTimeout(() => { debugEl.textContent = ''; debugEl.className = 'status-msg'; }, 5000);
     populateConfigSelects();
   }
 
