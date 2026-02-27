@@ -216,13 +216,13 @@
       <h1>📦 Shipment Alerts</h1>
       <div class="subtitle">Rogue Origin Logistics Monitor</div>
     </div>
-    <div class="last-check">Last check: Feb 26, 11:30 AM PST</div>
+    <div class="last-check">Last check: Feb 26, 11:30 PM PST</div>
   </div>
   
   <div class="summary">
     <div class="summary-card"><div class="count" style="color: var(--green)">1</div><div class="label">Healthy</div></div>
-    <div class="summary-card"><div class="count" style="color: var(--yellow)">1</div><div class="label">Warning</div></div>
-    <div class="summary-card"><div class="count" style="color: var(--red)">0</div><div class="label">Critical</div></div>
+    <div class="summary-card"><div class="count" style="color: var(--yellow)">0</div><div class="label">Warning</div></div>
+    <div class="summary-card"><div class="count" style="color: var(--red)">1</div><div class="label">Critical</div></div>
     <div class="summary-card"><div class="count">2</div><div class="label">Total</div></div>
   </div>
   
@@ -249,9 +249,9 @@
         </div>
         <div class="all-clear">✓ No issues detected</div>
       </div>
-      <div class="shipment-card" style="--health: #ffab00">
+      <div class="shipment-card" style="--health: #ff1744">
         <div class="shipment-header">
-          <span class="health-dot" style="color: #ffab00">◐</span>
+          <span class="health-dot" style="color: #ff1744">◉</span>
           <div class="shipment-title">
             <h3>Robert Pallet #27873</h3>
             <span class="shipment-route">Beagle, OR → Prague</span>
@@ -261,7 +261,7 @@
         <div class="shipment-meta">
           <div class="meta-item"><span class="meta-label">AWB</span><span class="meta-value">N/A</span></div>
           <div class="meta-item"><span class="meta-label">ETA</span><span class="meta-value">Feb 28, 10:40 AM CET</span></div>
-          <div class="meta-item"><span class="meta-label">Last Update</span><span class="meta-value">45h ago</span></div>
+          <div class="meta-item"><span class="meta-label">Last Update</span><span class="meta-value">57h ago</span></div>
           <div class="meta-item"><span class="meta-label">Weight</span><span class="meta-value">N/A</span></div>
           
           <div class="meta-item"><span class="meta-label">Temp</span><span class="meta-value">65.45°F</span></div>
@@ -269,7 +269,7 @@
           <div class="meta-item"><span class="meta-label">Battery</span><span class="meta-value">98%</span></div>
           
         </div>
-        <div class="alert-list"><div class="alert-item medium"><span class="alert-badge">medium</span> Tracking stale for 45h (last: 2026-02-24T22:03:00.000Z)</div></div>
+        <div class="alert-list"><div class="alert-item high"><span class="alert-badge">high</span> Tracking stale for 57h (last: 2026-02-24T22:03:00.000Z)</div></div>
       </div>
   
   <h2 class="section-title">Alert History</h2>
@@ -277,6 +277,24 @@
     <table>
       <thead><tr><th>Time</th><th>Customer</th><th>Severity</th><th>Type</th><th>Details</th><th>Sent</th></tr></thead>
       <tbody>
+    <tr>
+      <td class="ts">Feb 26, 10:30 PM</td>
+      <td>Robert Pallet #27873</td>
+      <td><span class="alert-badge high">high</span></td>
+      <td>stale-tracking</td>
+      <td>Tracking stale for 56h (last: 2026-02-24T22:03:00.000Z)</td>
+      <td>✓</td>
+    </tr>
+  
+    <tr>
+      <td class="ts">Feb 26, 04:00 PM</td>
+      <td>Robert Pallet #27873</td>
+      <td><span class="alert-badge high">high</span></td>
+      <td>stale-tracking</td>
+      <td>Tracking stale for 50h (last: 2026-02-24T22:03:00.000Z)</td>
+      <td>✓</td>
+    </tr>
+  
     <tr>
       <td class="ts">Feb 26, 09:30 AM</td>
       <td>Robert Pallet #27873</td>

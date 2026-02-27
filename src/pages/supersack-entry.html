@@ -616,48 +616,46 @@
 
   // Pool API
   async function fetchPoolProducts() {
-    try {
-      const resp = await fetch(POOL_API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ action: 'list_products', poolType: 'smalls' }),
-        redirect: 'follow',
-      });
-      const data = await resp.json();
-      poolProducts = data.products || [];
-      populateConfigSelects();
-    } catch (e) {
-      console.error('Pool API error:', e);
-      // Try GET fallback
+    // Load both pool types
+    for (const poolType of ['smalls', 'tops']) {
       try {
-        const resp2 = await fetch(POOL_API + '?action=list_products&poolType=smalls', { redirect: 'follow' });
-        const text = await resp2.text();
-        // If it returns JSON
-        try {
-          const data = JSON.parse(text);
-          poolProducts = data.products || [];
-          populateConfigSelects();
-        } catch { /* HTML response, can't parse */ }
-      } catch {}
+        const resp = await fetch(`${POOL_API}?action=list_products`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ poolType }),
+        });
+        const data = await resp.json();
+        const products = data.products || [];
+        // Merge, avoid dupes by id
+        products.forEach(p => {
+          if (!poolProducts.find(x => x.id === p.id)) {
+            p._poolType = poolType;
+            poolProducts.push(p);
+          }
+        });
+      } catch (e) {
+        console.error('Pool API error (' + poolType + '):', e);
+      }
     }
+    populateConfigSelects();
   }
 
   async function updatePool(productId, operation, amountLbs, note) {
     if (!productId) return { success: false, error: 'No product mapped' };
     const amountGrams = amountLbs * LBS_TO_GRAMS;
     try {
-      const resp = await fetch(POOL_API, {
+      const product = poolProducts.find(p => p.id === productId);
+      const poolType = product?._poolType || 'smalls';
+      const resp = await fetch(`${POOL_API}?action=update_pool`, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'update_pool',
           productId,
           operation,
           amount: Math.round(amountGrams * 10) / 10,
           note,
-          poolType: 'smalls',
+          poolType,
         }),
-        redirect: 'follow',
       });
       return await resp.json();
     } catch (e) {
