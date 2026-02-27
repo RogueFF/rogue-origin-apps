@@ -870,8 +870,11 @@ function createSlotElement(slot, currentSlot) {
     : '';
 
   // Target display (only show if we have trimmers/target)
+  const rawTrimmers = (data.trimmers1 || 0) + (data.trimmers2 || 0);
+  const effDiff = rawTrimmers > 0 && Math.abs(effectiveTotal - rawTrimmers) > 0.05;
+  const effLabel = effDiff ? ` <span class="slot-eff" title="Crew changed mid-hour">eff:${effectiveTotal.toFixed(1)}</span>` : '';
   const targetDisplay = hourlyTarget > 0
-    ? `<span class="slot-target ${metTarget ? 'met' : 'missed'}">/ ${hourlyTarget.toFixed(1)}</span>`
+    ? `<span class="slot-target ${metTarget ? 'met' : 'missed'}">/ ${hourlyTarget.toFixed(1)}</span>${effLabel}`
     : '';
 
   div.innerHTML = `
@@ -1294,7 +1297,11 @@ function updateStepGuide() {
   // Update hourly target display
   const hourlyTargetEl = document.getElementById('hourly-target-value');
   if (hourlyTargetEl) {
-    hourlyTargetEl.textContent = hourlyTarget > 0 ? `${hourlyTarget.toFixed(1)} lbs` : '-- lbs';
+    const rawTotal = totalTrimmers;
+    const effNote = (rawTotal > 0 && Math.abs(effectiveTotal - rawTotal) > 0.05)
+      ? ` (eff: ${effectiveTotal.toFixed(1)})`
+      : '';
+    hourlyTargetEl.textContent = hourlyTarget > 0 ? `${hourlyTarget.toFixed(1)} lbs${effNote}` : '-- lbs';
   }
 }
 
