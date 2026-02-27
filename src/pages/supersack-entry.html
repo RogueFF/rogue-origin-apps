@@ -626,79 +626,54 @@
     recalc();
   }
 
-  // Pool API
+  // Pool API — all fetches in parallel
   async function fetchPoolProducts() {
     const debugEl = document.getElementById('status-msg');
-    debugEl.textContent = 'Loading products...';
-    debugEl.className = 'status-msg';
 
-    // 1. Get today's strains from production scoreboard
-    try {
-      const resp = await fetch(`${PROD_API}?action=scoreboard`);
-      const data = await resp.json();
-      const sb = data.scoreboard || {};
-      // Collect unique strains from hourly rates + current strain
+    // Fire ALL requests simultaneously
+    const [scoreboardRes, supersackRes, smallsRes, topsRes] = await Promise.allSettled([
+      fetch(`${PROD_API}?action=scoreboard`).then(r => r.json()),
+      fetch(`${POOL_API}?action=get_supersack_variants`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+      }).then(r => r.json()),
+      fetch(`${POOL_API}?action=list_products`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"poolType":"smalls"}',
+      }).then(r => r.json()),
+      fetch(`${POOL_API}?action=list_products`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"poolType":"tops"}',
+      }).then(r => r.json()),
+    ]);
+
+    // 1. Today's strains from scoreboard
+    if (scoreboardRes.status === 'fulfilled') {
+      const sb = scoreboardRes.value.scoreboard || {};
       const strainSet = new Set();
       if (sb.strain) strainSet.add(sb.strain);
       (sb.hourlyRates || []).forEach(h => { if (h.strain) strainSet.add(h.strain); });
       todayStrains = [...strainSet];
-    } catch (e) {
-      console.error('Scoreboard fetch error:', e);
     }
 
-    // If scoreboard didn't have per-hour strains, query distinct from DB via dashboard
-    if (todayStrains.length === 0) {
-      try {
-        const today = new Date().toISOString().split('T')[0];
-        const resp = await fetch(`${PROD_API}?action=dashboard&start=${today}&end=${today}`);
-        const data = await resp.json();
-        if (data.current?.strain) todayStrains.push(data.current.strain);
-      } catch (e) {
-        console.error('Dashboard fetch error:', e);
-      }
-    }
-
-    // 2. Load supersack variants (for supersack dropdown)
-    try {
-      const resp = await fetch(`${POOL_API}?action=get_supersack_variants`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      const data = await resp.json();
-      (data.variants || []).forEach(v => {
+    // 2. Supersack variants
+    if (supersackRes.status === 'fulfilled') {
+      (supersackRes.value.variants || []).forEach(v => {
         poolProducts.push({
-          id: v.id,
-          title: v.title,
-          poolValue: (v.quantity || 0),
-          _unit: 'sacks',
-          _inventoryItemId: v.inventoryItemId,
-          _locationId: v.locationId,
-          _poolType: 'supersack',
+          id: v.id, title: v.title, poolValue: (v.quantity || 0),
+          _unit: 'sacks', _inventoryItemId: v.inventoryItemId,
+          _locationId: v.locationId, _poolType: 'supersack',
         });
       });
-    } catch (e) {
-      console.error('Supersack API error:', e);
     }
 
-    // 3. Load pool products for biomass/trim (smalls + tops)
-    for (const poolType of ['smalls', 'tops']) {
-      try {
-        const resp = await fetch(`${POOL_API}?action=list_products`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ poolType }),
-        });
-        const data = await resp.json();
-        (data.products || []).forEach(p => {
+    // 3. Pool products (biomass/trim)
+    for (const res of [smallsRes, topsRes]) {
+      if (res.status === 'fulfilled') {
+        const poolType = res === smallsRes ? 'smalls' : 'tops';
+        (res.value.products || []).forEach(p => {
           if (!poolProducts.find(x => x.id === p.id)) {
-            p._poolType = poolType;
-            p._unit = 'g';
+            p._poolType = poolType; p._unit = 'g';
             poolProducts.push(p);
           }
         });
-      } catch (e) {
-        console.error('Pool API error (' + poolType + '):', e);
       }
     }
 
