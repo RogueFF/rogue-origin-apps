@@ -617,43 +617,54 @@
   // Pool API
   async function fetchPoolProducts() {
     const debugEl = document.getElementById('status-msg');
-    debugEl.textContent = 'Loading supersack variants...';
+    debugEl.textContent = 'Loading products...';
     debugEl.className = 'status-msg';
 
+    // 1. Load supersack variants (for supersack dropdown)
     try {
       const resp = await fetch(`${POOL_API}?action=get_supersack_variants`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       });
-      const text = await resp.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        debugEl.textContent = 'Non-JSON response: ' + text.substring(0, 80);
-        debugEl.className = 'status-msg error';
-        return;
-      }
-      const variants = data.variants || [];
-      debugEl.textContent = variants.length + ' supersack variants loaded';
-      // Map variants to the product format the rest of the code expects
-      variants.forEach(v => {
+      const data = await resp.json();
+      (data.variants || []).forEach(v => {
         poolProducts.push({
           id: v.id,
           title: v.title,
           poolValue: (v.quantity || 0),
+          _unit: 'sacks',
           _inventoryItemId: v.inventoryItemId,
           _locationId: v.locationId,
           _poolType: 'supersack',
         });
       });
     } catch (e) {
-      debugEl.textContent = 'Error: ' + e.message;
-      debugEl.className = 'status-msg error';
       console.error('Supersack API error:', e);
     }
 
+    // 2. Load pool products for biomass/trim (smalls + tops)
+    for (const poolType of ['smalls', 'tops']) {
+      try {
+        const resp = await fetch(`${POOL_API}?action=list_products`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ poolType }),
+        });
+        const data = await resp.json();
+        (data.products || []).forEach(p => {
+          if (!poolProducts.find(x => x.id === p.id)) {
+            p._poolType = poolType;
+            p._unit = 'g';
+            poolProducts.push(p);
+          }
+        });
+      } catch (e) {
+        console.error('Pool API error (' + poolType + '):', e);
+      }
+    }
+
+    debugEl.textContent = poolProducts.length + ' products loaded';
     debugEl.className = 'status-msg ' + (poolProducts.length > 0 ? 'success' : 'error');
     setTimeout(() => { debugEl.textContent = ''; debugEl.className = 'status-msg'; }, 5000);
     populateConfigSelects();
@@ -661,20 +672,38 @@
 
   async function updatePool(productId, operation, amountLbs, note) {
     if (!productId) return { success: false, error: 'No product mapped' };
+    const amountGrams = amountLbs * LBS_TO_GRAMS;
     try {
       const product = poolProducts.find(p => p.id === productId);
-      const resp = await fetch(`${POOL_API}?action=update_supersack_inventory`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          variantId: productId,
-          inventoryItemId: product?._inventoryItemId,
-          locationId: product?._locationId,
-          operation,
-          quantity: amountLbs, // supersacks count, not grams
-          note,
-        }),
-      });
+      let resp;
+      if (product?._poolType === 'supersack') {
+        // Supersack variant — update via Shopify inventory
+        resp = await fetch(`${POOL_API}?action=update_supersack_inventory`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            variantId: productId,
+            inventoryItemId: product._inventoryItemId,
+            locationId: product._locationId,
+            operation,
+            quantity: amountLbs,
+            note,
+          }),
+        });
+      } else {
+        // Pool product (biomass/trim) — update via pool action
+        resp = await fetch(`${POOL_API}?action=update_pool`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productId,
+            operation,
+            amount: Math.round(amountGrams * 10) / 10,
+            note,
+            poolType: product?._poolType || 'smalls',
+          }),
+        });
+      }
       return await resp.json();
     } catch (e) {
       return { success: false, error: e.message };
@@ -690,7 +719,8 @@
       poolProducts.forEach(p => {
         const opt = document.createElement('option');
         opt.value = p.id;
-        opt.textContent = `${p.title} (${(p.poolValue || 0).toLocaleString()} sacks)`;
+        const unit = p._unit === 'sacks' ? 'sacks' : 'g';
+        opt.textContent = `${p.title} (${(p.poolValue || 0).toLocaleString()}${unit === 'g' ? 'g' : ' sacks'})`;
         el.appendChild(opt);
       });
     });
