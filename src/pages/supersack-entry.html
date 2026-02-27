@@ -312,6 +312,43 @@
       width: 100%;
       margin-top: 4px;
     }
+    /* Custom strain picker */
+    .strain-picker-btn {
+      display: flex; align-items: center; justify-content: space-between;
+      width: 100%; padding: 12px 14px; font-size: 14px; font-weight: 600;
+      border-radius: 10px; cursor: pointer; transition: all 0.2s;
+      background: linear-gradient(135deg, rgba(0,255,136,0.1), rgba(0,255,136,0.04));
+      border: 1px solid rgba(0,255,136,0.3); color: var(--green);
+      box-sizing: border-box;
+    }
+    .strain-picker-btn:hover, .strain-picker.open .strain-picker-btn {
+      border-color: var(--green); background: rgba(0,255,136,0.15);
+      box-shadow: 0 0 12px rgba(0,255,136,0.15);
+    }
+    .strain-picker-arrow { font-size: 12px; opacity: 0.6; transition: transform 0.2s; }
+    .strain-picker.open .strain-picker-arrow { transform: rotate(180deg); }
+    .strain-picker-menu {
+      display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+      background: #1a1f2a; border: 1px solid rgba(0,255,136,0.3);
+      border-radius: 10px; overflow: hidden; z-index: 100;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      max-height: 240px; overflow-y: auto;
+    }
+    .strain-picker.open .strain-picker-menu { display: block; }
+    .strain-picker-item {
+      padding: 11px 14px; cursor: pointer; font-size: 13px;
+      color: rgba(255,255,255,0.7); transition: all 0.15s;
+      display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .strain-picker-item:last-child { border-bottom: none; }
+    .strain-picker-item:hover { background: rgba(0,255,136,0.1); color: var(--green); }
+    .strain-picker-item.selected { background: rgba(0,255,136,0.15); color: var(--green); font-weight: 600; }
+    .strain-picker-item .sack-count { font-size: 12px; opacity: 0.5; font-weight: 400; }
+    .strain-picker-item.selected .sack-count { opacity: 0.8; }
+    .strain-picker-menu::-webkit-scrollbar { width: 4px; }
+    .strain-picker-menu::-webkit-scrollbar-thumb { background: rgba(0,255,136,0.3); border-radius: 2px; }
+
     /* Hide number input spinners */
     input[type=number]::-webkit-inner-spin-button,
     input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
@@ -338,8 +375,13 @@
   <!-- Supersack Count -->
   <div class="card">
     <div class="card-title" data-i18n="supersacksOpened">Supersacks Opened</div>
-    <div style="margin-bottom:10px">
-      <select class="config-select" id="cfg-supersack" style="width:100%;padding:10px 12px;font-size:14px;border-radius:8px;background:rgba(0,255,136,0.08);border:1px solid rgba(0,255,136,0.3);color:var(--green)"><option value="">Loading strains...</option></select>
+    <div class="strain-picker" id="strain-picker" style="margin-bottom:10px;position:relative">
+      <input type="hidden" id="cfg-supersack" value="">
+      <div class="strain-picker-btn" id="strain-picker-btn">
+        <span class="strain-picker-label" id="strain-picker-label">Loading strains...</span>
+        <span class="strain-picker-arrow">▾</span>
+      </div>
+      <div class="strain-picker-menu" id="strain-picker-menu"></div>
     </div>
     <div class="counter-row">
       <button class="counter-btn" id="dec-btn">−</button>
@@ -725,18 +767,59 @@
 
   // Config
   function populateConfigSelects() {
-    const selects = ['cfg-supersack', 'cfg-biomass', 'cfg-trim'];
-    selects.forEach(id => {
+    // 1. Custom strain picker for supersack
+    const menu = document.getElementById('strain-picker-menu');
+    const label = document.getElementById('strain-picker-label');
+    const hiddenInput = document.getElementById('cfg-supersack');
+    menu.innerHTML = '';
+
+    const supersackProducts = todayStrains.length > 0
+      ? poolProducts.filter(p => p._poolType === 'supersack' && todayStrains.includes(p.title))
+      : poolProducts.filter(p => p._poolType === 'supersack');
+
+    supersackProducts.forEach(p => {
+      const item = document.createElement('div');
+      item.className = 'strain-picker-item';
+      item.dataset.value = p.id;
+      item.innerHTML = `<span>${p.title}</span><span class="sack-count">${(p.poolValue || 0).toLocaleString()} sacks</span>`;
+      item.addEventListener('click', () => {
+        hiddenInput.value = p.id;
+        config.supersack = p.id;
+        label.textContent = p.title;
+        menu.querySelectorAll('.strain-picker-item').forEach(i => i.classList.remove('selected'));
+        item.classList.add('selected');
+        document.getElementById('strain-picker').classList.remove('open');
+      });
+      menu.appendChild(item);
+    });
+
+    // Auto-select if only one strain
+    if (supersackProducts.length === 1) {
+      config.supersack = supersackProducts[0].id;
+      hiddenInput.value = supersackProducts[0].id;
+      label.textContent = supersackProducts[0].title;
+      menu.querySelector('.strain-picker-item')?.classList.add('selected');
+    } else if (supersackProducts.length === 0) {
+      label.textContent = 'No strains today';
+    } else {
+      label.textContent = '— Select strain —';
+    }
+
+    // Restore saved
+    if (config.supersack) {
+      const match = supersackProducts.find(p => p.id === config.supersack);
+      if (match) {
+        hiddenInput.value = match.id;
+        label.textContent = match.title;
+        menu.querySelector(`[data-value="${match.id}"]`)?.classList.add('selected');
+      }
+    }
+
+    // 2. Native selects for biomass/trim (hidden in config panel)
+    ['cfg-biomass', 'cfg-trim'].forEach(id => {
       const el = document.getElementById(id);
       el.innerHTML = '<option value="">-- Select product --</option>';
-
-      // For supersack dropdown: only show today's strains
-      const isSupersack = id === 'cfg-supersack';
-      const filteredProducts = isSupersack && todayStrains.length > 0
-        ? poolProducts.filter(p => p._poolType === 'supersack' && todayStrains.includes(p.title))
-        : poolProducts;
-
-      filteredProducts.forEach(p => {
+      poolProducts.forEach(p => {
         const opt = document.createElement('option');
         opt.value = p.id;
         const unit = p._unit === 'sacks' ? 'sacks' : 'g';
@@ -744,24 +827,25 @@
         el.appendChild(opt);
       });
     });
-    // Auto-set biomass and trim to fixed products (always)
+
+    // Auto-set biomass and trim
     const biomassProduct = poolProducts.find(p => /CBD Biomass.*Trim/i.test(p.title));
     const trimProduct = poolProducts.find(p => /Premium CBD Flower Trim/i.test(p.title));
     if (biomassProduct) config.biomass = biomassProduct.id;
     if (trimProduct) config.trim = trimProduct.id;
-
-    // Auto-select supersack if only one strain today
-    const supersackEl = document.getElementById('cfg-supersack');
-    const supersackOptions = supersackEl.querySelectorAll('option[value]');
-    if (supersackOptions.length === 1) {
-      config.supersack = supersackOptions[0].value;
-    }
-
-    // Restore saved config (supersack only — biomass/trim are fixed)
-    if (config.supersack) supersackEl.value = config.supersack;
     if (config.biomass) document.getElementById('cfg-biomass').value = config.biomass;
     if (config.trim) document.getElementById('cfg-trim').value = config.trim;
   }
+
+  // Strain picker toggle
+  document.getElementById('strain-picker-btn').addEventListener('click', () => {
+    document.getElementById('strain-picker').classList.toggle('open');
+  });
+  // Close on outside click
+  document.addEventListener('click', (e) => {
+    const picker = document.getElementById('strain-picker');
+    if (!picker.contains(e.target)) picker.classList.remove('open');
+  });
 
   document.getElementById('config-toggle').addEventListener('click', () => {
     document.getElementById('config-panel').classList.toggle('open');
