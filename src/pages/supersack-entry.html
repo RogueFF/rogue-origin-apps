@@ -317,8 +317,11 @@
 <body>
 
 <div class="header">
-  <h1><span>◆</span> Supersack Tracker</h1>
-  <span class="header-date" id="header-date"></span>
+  <h1><span>◆</span> <span data-i18n="title">Supersack Tracker</span></h1>
+  <div style="display:flex;align-items:center;gap:8px">
+    <span class="header-date" id="header-date"></span>
+    <button id="lang-toggle" style="background:var(--green-dim);border:1px solid rgba(0,255,136,0.3);border-radius:6px;color:var(--green);font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer">ES</button>
+  </div>
 </div>
 
 <div class="main">
@@ -330,7 +333,7 @@
 
   <!-- Supersack Count -->
   <div class="card">
-    <div class="card-title">Supersacks Opened</div>
+    <div class="card-title" data-i18n="supersacksOpened">Supersacks Opened</div>
     <div class="counter-row">
       <button class="counter-btn" id="dec-btn">−</button>
       <div class="counter-value" id="sack-count">0</div>
@@ -341,14 +344,14 @@
 
   <!-- Manual Inputs -->
   <div class="card">
-    <div class="card-title">Water Spider Entry</div>
+    <div class="card-title" data-i18n="waterSpiderEntry">Water Spider Entry</div>
     <div class="input-group">
-      <label class="input-label">Biomass (trim)</label>
+      <label class="input-label" data-i18n="biomass">Biomass (trim)</label>
       <input type="number" class="weight-input" id="biomass-input" placeholder="0.0" min="0" step="0.1" inputmode="decimal">
       <div class="input-unit">lbs</div>
     </div>
     <div class="input-group">
-      <label class="input-label">Premium #1 Trim</label>
+      <label class="input-label" data-i18n="premiumTrim">Premium #1 Trim</label>
       <input type="number" class="weight-input" id="trim-input" placeholder="0.0" min="0" step="0.1" inputmode="decimal">
       <div class="input-unit">lbs</div>
     </div>
@@ -356,42 +359,42 @@
 
   <!-- Auto-Pulled Production -->
   <div class="card">
-    <div class="card-title">Production Data (auto-pulled)</div>
+    <div class="card-title" data-i18n="productionData">Production Data (auto-pulled)</div>
     <div class="auto-row">
-      <span class="auto-label">Tops</span>
+      <span class="auto-label" data-i18n="tops">Tops</span>
       <span class="auto-value loading" id="tops-value">loading...</span>
     </div>
     <div class="auto-row">
-      <span class="auto-label">Smalls</span>
+      <span class="auto-label" data-i18n="smalls">Smalls</span>
       <span class="auto-value loading" id="smalls-value">loading...</span>
     </div>
   </div>
 
   <!-- Breakdown -->
   <div class="card">
-    <div class="card-title">Material Balance</div>
+    <div class="card-title" data-i18n="materialBalance">Material Balance</div>
     <div class="auto-row">
-      <span class="auto-label">Raw Input</span>
+      <span class="auto-label" data-i18n="rawInput">Raw Input</span>
       <span class="auto-value" id="total-raw">0 lbs</span>
     </div>
     <div class="auto-row">
-      <span class="auto-label">Tops</span>
+      <span class="auto-label" data-i18n="tops">Tops</span>
       <span class="auto-value" style="color:var(--green)" id="bd-tops">0 lbs</span>
     </div>
     <div class="auto-row">
-      <span class="auto-label">Smalls</span>
+      <span class="auto-label" data-i18n="smalls">Smalls</span>
       <span class="auto-value" style="color:var(--cyan)" id="bd-smalls">0 lbs</span>
     </div>
     <div class="auto-row">
-      <span class="auto-label">Biomass</span>
+      <span class="auto-label" data-i18n="biomass">Biomass</span>
       <span class="auto-value" style="color:var(--gold)" id="bd-biomass">0 lbs</span>
     </div>
     <div class="auto-row">
-      <span class="auto-label">Premium #1 Trim</span>
+      <span class="auto-label" data-i18n="premiumTrim">Premium #1 Trim</span>
       <span class="auto-value" style="color:var(--blue)" id="bd-trim">0 lbs</span>
     </div>
     <div class="auto-row" style="border-top:1px solid rgba(255,255,255,0.06);padding-top:10px;margin-top:4px">
-      <span class="auto-label" style="font-weight:600">Waste (sticks + mold)</span>
+      <span class="auto-label" style="font-weight:600" data-i18n="waste">Waste (sticks + mold)</span>
       <span class="auto-value" style="color:var(--red)" id="bd-waste">0 lbs</span>
     </div>
 
@@ -406,13 +409,13 @@
   </div>
 
   <!-- Submit -->
-  <button class="submit-btn" id="submit-btn">Submit & Update Pools</button>
+  <button class="submit-btn" id="submit-btn" data-i18n="submit">Submit & Update Pools</button>
   <div class="status-msg" id="status-msg"></div>
 
   <!-- Config -->
   <div class="card" style="margin-top:20px">
     <div style="display:flex;justify-content:space-between;align-items:center">
-      <div class="card-title" style="margin-bottom:0">Pool Product Mapping</div>
+      <div class="card-title" style="margin-bottom:0" data-i18n="poolMapping">Pool Product Mapping</div>
       <button class="config-toggle" id="config-toggle">⚙</button>
     </div>
     <div class="config-panel" id="config-panel">
@@ -436,6 +439,46 @@
 <script>
 (function() {
   'use strict';
+
+  // i18n
+  const LANG = { en: {
+    title: 'Supersack Tracker', supersacksOpened: 'Supersacks Opened',
+    waterSpiderEntry: 'Water Spider Entry', biomass: 'Biomass (trim)',
+    premiumTrim: 'Premium #1 Trim', productionData: 'Production Data (auto-pulled)',
+    tops: 'Tops', smalls: 'Smalls', materialBalance: 'Material Balance',
+    rawInput: 'Raw Input', waste: 'Waste (sticks + mold)',
+    submit: 'Submit & Update Pools', poolMapping: 'Pool Product Mapping',
+    saving: 'Saving...', saved: '✓ Saved', poolsUpdated: 'Pools updated + data saved',
+    enterCount: 'Enter supersack count first', loading: 'loading...',
+    mappingSaved: 'Mapping saved', today: 'Today',
+  }, es: {
+    title: 'Rastreador de Supersacos', supersacksOpened: 'Supersacos Abiertos',
+    waterSpiderEntry: 'Entrada del Water Spider', biomass: 'Biomasa (recorte)',
+    premiumTrim: 'Recorte Premium #1', productionData: 'Datos de Producción (automático)',
+    tops: 'Tops', smalls: 'Smalls', materialBalance: 'Balance de Materiales',
+    rawInput: 'Entrada Bruta', waste: 'Desperdicio (palos + moho)',
+    submit: 'Enviar y Actualizar Pools', poolMapping: 'Mapeo de Productos Pool',
+    saving: 'Guardando...', saved: '✓ Guardado', poolsUpdated: 'Pools actualizados + datos guardados',
+    enterCount: 'Ingrese la cantidad de supersacos primero', loading: 'cargando...',
+    mappingSaved: 'Mapeo guardado', today: 'Hoy',
+  }};
+  let currentLang = localStorage.getItem('supersack-lang') || 'en';
+
+  function applyLang() {
+    const t = LANG[currentLang];
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      if (t[key]) el.textContent = t[key];
+    });
+    document.getElementById('lang-toggle').textContent = currentLang === 'en' ? 'ES' : 'EN';
+    document.getElementById('today-btn').textContent = t.today;
+  }
+
+  document.getElementById('lang-toggle').addEventListener('click', () => {
+    currentLang = currentLang === 'en' ? 'es' : 'en';
+    localStorage.setItem('supersack-lang', currentLang);
+    applyLang();
+  });
 
   const POOL_API = 'https://script.google.com/macros/s/AKfycbxvLdXrC24ztTKkcZcGV_Mpx_001jglf99c3H18HBWX9KpyjoZ4f22He3pyXDT2zDB_jw/exec';
   const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
@@ -735,6 +778,7 @@
 
   // Init
   initDate();
+  applyLang();
   fetchProduction();
   fetchPoolProducts();
   setTimeout(checkConfig, 1000);
