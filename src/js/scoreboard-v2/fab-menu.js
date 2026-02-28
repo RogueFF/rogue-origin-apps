@@ -81,6 +81,15 @@
       elements.fabHelp.addEventListener('click', handleHelp);
     }
 
+    // Wire up TV Mode toggle from FAB
+    var fabTvToggle = document.getElementById('fabTvToggle');
+    if (fabTvToggle) {
+      fabTvToggle.addEventListener('click', handleTvToggle);
+    }
+
+    // Set initial TV indicator
+    updateTvIndicator();
+
     // Keyboard navigation
     document.addEventListener('keydown', handleKeyboard);
 
@@ -257,6 +266,45 @@
     }
     // Update indicator after toggle
     setTimeout(updateOrderQueueIndicator, 100);
+  }
+
+  /**
+   * Handle TV Mode toggle
+   */
+  function handleTvToggle() {
+    closeMenu();
+
+    var currentMode = localStorage.getItem('tvMode') === 'true';
+    var newMode = !currentMode;
+
+    localStorage.setItem('tvMode', newMode.toString());
+
+    if (newMode) {
+      document.documentElement.classList.add('tv-mode');
+    } else {
+      document.documentElement.classList.remove('tv-mode');
+    }
+
+    // Sync the standalone tvModeToggleBtn if it exists
+    var tvModeToggleBtn = document.getElementById('tvModeToggleBtn');
+    if (tvModeToggleBtn) {
+      tvModeToggleBtn.classList.toggle('active', newMode);
+    }
+
+    updateTvIndicator();
+    console.log('[FAB Menu] TV Mode:', newMode ? 'ON' : 'OFF');
+  }
+
+  /**
+   * Update TV mode indicator (ON/OFF)
+   */
+  function updateTvIndicator() {
+    var indicator = document.getElementById('tvIndicator');
+    if (!indicator) return;
+
+    var isOn = localStorage.getItem('tvMode') === 'true';
+    indicator.textContent = isOn ? 'ON' : 'OFF';
+    indicator.classList.toggle('on', isOn);
   }
 
   /**
