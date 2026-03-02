@@ -3501,7 +3501,7 @@
       if (!s) return;
 
       // Auto-translate to Spanish if needed
-      if (lang === 'es' && (!s.title_es || s.title_es === s.title)) {
+      if (lang === 'es' && (!s.title_es || s.title_es === s.title || !s.desc_es)) {
         const esBtn = document.querySelector('#viewLangToggle button:last-child');
         esBtn.innerHTML = '<i class="ph-duotone ph-spinner" style="animation:spin 1s linear infinite"></i>';
         esBtn.disabled = true;
@@ -3532,7 +3532,8 @@
       }
 
       // Auto-translate to English if needed (for SOPs written in Spanish)
-      if (lang === 'en' && !s.title_en) {
+      // Check title OR description — either might be missing its English version
+      if (lang === 'en' && (!s.title_en || !s.desc_en)) {
         // Helper to detect Spanish text (for legacy SOPs without sourceLang)
         const looksLikeSpanish = (text) => {
           if (!text) return false;
