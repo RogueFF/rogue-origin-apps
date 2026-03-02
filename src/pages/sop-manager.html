@@ -4027,6 +4027,12 @@
         return html;
       }
 
+      // Inject the PDF styles into the document head so html2canvas can see them
+      const pdfStyleEl = document.createElement('style');
+      pdfStyleEl.id = 'pdf-render-styles';
+      pdfStyleEl.textContent = css;
+      document.head.appendChild(pdfStyleEl);
+
       // --- Build full header (page 1) ---
       function fullHeaderHTML() {
         let h = '<div class="header-band"><div class="header-left">';
@@ -4190,15 +4196,21 @@
         // html2canvas needs the element in normal DOM flow
         const container = document.createElement('div');
         container.className = 'pdf-container';
-        container.style.width = '794px';
+        container.style.cssText = 'width:794px;position:relative;background:#fff;overflow:visible;';
         container.innerHTML = htmlContent;
         document.body.appendChild(container);
+
+        // Debug: log container dimensions and content
+        console.log('[PDF Debug] container offsetHeight:', container.offsetHeight,
+                    'children:', container.children.length,
+                    'innerHTML length:', container.innerHTML.length,
+                    'pages:', container.querySelectorAll('.page').length);
 
         // Wait for fonts & images to settle
         if (document.fonts && document.fonts.ready) {
           await document.fonts.ready;
         }
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 1000));
 
         // Render with html2pdf — use outputPdf('blob') + manual download
         // (.save() can trigger download before rendering completes)
@@ -4208,15 +4220,30 @@
           filename: filename,
           image: { type: 'jpeg', quality: 0.95 },
           html2canvas: {
-            scale: 2, useCORS: true, logging: false, width: 794, windowWidth: 794,
-            scrollX: 0, scrollY: 0, x: 0, y: 0
+            scale: 2, useCORS: true, logging: true, width: 794, windowWidth: 794,
+            scrollX: 0, scrollY: 0, x: 0, y: 0,
+            onclone: function(clonedDoc) {
+              // Ensure the cloned container is visible and properly styled
+              const clonedContainer = clonedDoc.querySelector('.pdf-container');
+              if (clonedContainer) {
+                clonedContainer.style.position = 'relative';
+                clonedContainer.style.left = '0';
+                clonedContainer.style.top = '0';
+                clonedContainer.style.display = 'block';
+                clonedContainer.style.visibility = 'visible';
+                clonedContainer.style.opacity = '1';
+                clonedContainer.style.background = '#ffffff';
+              }
+            }
           },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
           pagebreak: { mode: ['css'] }
         }).from(container).outputPdf('blob');
 
-        // Cleanup container
+        // Cleanup container and injected styles
         document.body.removeChild(container);
+        const pdfStyles = document.getElementById('pdf-render-styles');
+        if (pdfStyles) pdfStyles.remove();
 
         // Trigger download from blob
         const url = URL.createObjectURL(pdfBlob);
