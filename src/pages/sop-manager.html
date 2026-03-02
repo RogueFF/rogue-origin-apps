@@ -2403,8 +2403,15 @@
           if (fab) fab.style.display = 'flex';
         }, 100);
       }
-      // Lazy load html2pdf.js + qrcode-generator when PDF modal opens
+      // Lazy load html2pdf.js + html2canvas + qrcode-generator when PDF modal opens
       if (id === 'pdfModal') {
+        if (!window.html2canvas) {
+          const h2cScript = document.createElement('script');
+          h2cScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+          h2cScript.onload = () => console.log('html2canvas loaded');
+          h2cScript.onerror = () => console.warn('html2canvas separate load failed');
+          document.head.appendChild(h2cScript);
+        }
         if (!window.html2pdf) {
           const script = document.createElement('script');
           script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
@@ -4248,9 +4255,21 @@
           const pageEl = pageElements[i];
           setPdfProgress(80 + Math.round((i / pageElements.length) * 18), `Rendering page ${i + 1} of ${pageElements.length}...`);
 
-          const h2c = window.html2canvas;
-          if (!h2c) throw new Error('html2canvas not available');
-          const canvas = await h2c(pageEl, {
+          // html2canvas may be global OR bundled inside html2pdf
+          const h2c = window.html2canvas || (window.html2pdf && html2pdf().opt.html2canvas && window.html2canvas);
+          if (!h2c) {
+            // Last resort: load it synchronously
+            await new Promise((resolve, reject) => {
+              const s = document.createElement('script');
+              s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+              s.onload = resolve;
+              s.onerror = reject;
+              document.head.appendChild(s);
+            });
+          }
+          const html2canvasFn = window.html2canvas;
+          if (!html2canvasFn) throw new Error('html2canvas not available after all load attempts');
+          const canvas = await html2canvasFn(pageEl, {
             scale: 2,
             useCORS: true,
             logging: false,
