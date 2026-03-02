@@ -2419,6 +2419,13 @@
           qrScript.onerror = () => console.warn('QR lib failed to load, will use API fallback');
           document.head.appendChild(qrScript);
         }
+        if (!(window.jspdf && window.jspdf.jsPDF)) {
+          const jspdfScript = document.createElement('script');
+          jspdfScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+          jspdfScript.onload = () => console.log('jsPDF loaded');
+          jspdfScript.onerror = () => console.warn('jsPDF standalone failed to load');
+          document.head.appendChild(jspdfScript);
+        }
         // Update layout help text
         updatePdfLayoutHelp();
       }
@@ -4214,12 +4221,26 @@
           throw new Error('No .page elements found in PDF content');
         }
 
-        // Create jsPDF instance — html2pdf.bundle exposes jsPDF on window.jspdf
-        const jsPDFClass = (window.jspdf && window.jspdf.jsPDF) || (window.jsPDF);
+        // Get jsPDF from html2pdf worker internals
+        const worker = html2pdf();
+        const jsPDFClass = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF || worker.jsPDF ||
+          (function() {
+            // html2pdf.bundle doesn't always expose jsPDF globally — extract from a temp worker
+            try { return html2pdf().set({jsPDF:{unit:'mm',format:'a4'}}).prop.jsPDF; } catch(e) {}
+            return null;
+          })();
+        // Fallback: load jsPDF separately if bundle doesn't expose it
         if (!jsPDFClass) {
-          throw new Error('jsPDF not available — html2pdf bundle may not have loaded correctly');
+          await new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+            s.onload = resolve;
+            s.onerror = reject;
+            document.head.appendChild(s);
+          });
         }
-        const pdf = new jsPDFClass({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+        const JsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF || jsPDFClass;
+        const pdf = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
         const pdfWidth = pdf.internal.pageSize.getWidth();   // 210mm
         const pdfHeight = pdf.internal.pageSize.getHeight();  // 297mm
 
@@ -4227,7 +4248,8 @@
           const pageEl = pageElements[i];
           setPdfProgress(80 + Math.round((i / pageElements.length) * 18), `Rendering page ${i + 1} of ${pageElements.length}...`);
 
-          const h2c = window.html2canvas || html2canvas;
+          const h2c = window.html2canvas;
+          if (!h2c) throw new Error('html2canvas not available');
           const canvas = await h2c(pageEl, {
             scale: 2,
             useCORS: true,
