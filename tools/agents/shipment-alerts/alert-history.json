@@ -71,7 +71,97 @@
       "severity": "high",
       "message": "Tracking stale for 69h (last: 2026-02-24T22:03:00.000Z)",
       "notified": true
+    },
+    {
+      "timestamp": "2026-02-28T01:00:59.473Z",
+      "shipmentId": "robert-pallet-27873",
+      "customer": "Robert Pallet #27873",
+      "type": "stale-tracking",
+      "severity": "critical",
+      "message": "Tracking stale for 75h (last: 2026-02-24T22:03:00.000Z)",
+      "notified": true
+    },
+    {
+      "timestamp": "2026-02-28T07:30:42.039Z",
+      "shipmentId": "robert-pallet-27873",
+      "customer": "Robert Pallet #27873",
+      "type": "stale-tracking",
+      "severity": "critical",
+      "message": "Tracking stale for 81h (last: 2026-02-24T22:03:00.000Z)",
+      "notified": true
+    },
+    {
+      "timestamp": "2026-02-28T14:01:17.587Z",
+      "shipmentId": "robert-pallet-27873",
+      "customer": "Robert Pallet #27873",
+      "type": "stale-tracking",
+      "severity": "critical",
+      "message": "Tracking stale for 88h (last: 2026-02-24T22:03:00.000Z)",
+      "notified": true
+    },
+    {
+      "timestamp": "2026-02-28T18:30:12.916Z",
+      "shipmentId": "robert-pallet-27873",
+      "customer": "Robert Pallet #27873",
+      "type": "overdue",
+      "severity": "medium",
+      "message": "1h past ETA (Feb 28, 10:40 AM CET), status: pre-departure",
+      "notified": true
+    },
+    {
+      "timestamp": "2026-02-28T20:30:14.230Z",
+      "shipmentId": "robert-pallet-27873",
+      "customer": "Robert Pallet #27873",
+      "type": "stale-tracking",
+      "severity": "critical",
+      "message": "Tracking stale for 94h (last: 2026-02-24T22:03:00.000Z)",
+      "notified": true
+    },
+    {
+      "timestamp": "2026-03-01T00:30:15.203Z",
+      "shipmentId": "robert-pallet-27873",
+      "customer": "Robert Pallet #27873",
+      "type": "overdue",
+      "severity": "medium",
+      "message": "7h past ETA (Feb 28, 10:40 AM CET), status: pre-departure",
+      "notified": true
+    },
+    {
+      "timestamp": "2026-03-01T02:30:14.607Z",
+      "shipmentId": "robert-pallet-27873",
+      "customer": "Robert Pallet #27873",
+      "type": "stale-tracking",
+      "severity": "critical",
+      "message": "Tracking stale for 100h (last: 2026-02-24T22:03:00.000Z)",
+      "notified": true
+    },
+    {
+      "timestamp": "2026-03-01T07:00:08.949Z",
+      "shipmentId": "robert-pallet-27873",
+      "customer": "Robert Pallet #27873",
+      "type": "overdue",
+      "severity": "medium",
+      "message": "13h past ETA (Feb 28, 10:40 AM CET), status: pre-departure",
+      "notified": true
+    },
+    {
+      "timestamp": "2026-03-02T16:01:03.363Z",
+      "shipmentId": "robert-pallet-27873",
+      "customer": "Robert Pallet #27873",
+      "type": "overdue",
+      "severity": "high",
+      "message": "46h past ETA (Feb 28, 10:40 AM CET), status: pre-departure",
+      "notified": true
+    },
+    {
+      "timestamp": "2026-03-02T16:01:03.363Z",
+      "shipmentId": "robert-pallet-27873",
+      "customer": "Robert Pallet #27873",
+      "type": "stale-tracking",
+      "severity": "critical",
+      "message": "Tracking stale for 138h (last: 2026-02-24T22:03:00.000Z)",
+      "notified": true
     }
   ],
-  "lastCheck": "2026-02-28T00:00:40.635Z"
+  "lastCheck": "2026-03-02T19:30:27.336Z"
 }
