@@ -2022,8 +2022,17 @@
       
       const description = document.getElementById('sopDesc').value.trim();
 
-      // Track which language the SOP was written in
-      const sourceLang = editLang;
+      // Auto-detect language mismatch before saving
+      let sourceLang = editLang;
+      const contentToCheck = (title + ' ' + description).trim();
+      const detectedSpanish = looksLikeSpanish(contentToCheck);
+      const detectedLang = detectedSpanish ? 'es' : 'en';
+      if (detectedLang !== editLang && contentToCheck.length > 0) {
+        const detectedLabel = detectedSpanish ? 'Spanish' : 'English';
+        const toggleLabel = editLang.toUpperCase();
+        const confirmed = confirm('The content appears to be in ' + detectedLabel + ' but the language toggle is set to ' + toggleLabel + '. Save as ' + detectedLabel + ' instead?');
+        if (confirmed) sourceLang = detectedLang;
+      }
 
       // Store content in the appropriate language field based on editLang
       const sopData = {
@@ -3500,14 +3509,6 @@
       const s = sops.find(x => x.id == currentSopId);
       if (!s) return;
 
-      // Language detection helper — used by both EN and ES translation paths
-      const looksLikeSpanish = (text) => {
-        if (!text) return false;
-        const spanishWords = /\b(el|la|los|las|de|del|para|por|con|que|una|uno|está|están|son|su|sus|este|procedimiento|operacional|procesamiento)\b/i;
-        const spanishChars = /[áéíóúüñ¿¡]/i;
-        return spanishWords.test(text) || spanishChars.test(text);
-      };
-
       // Auto-translate to Spanish if needed
       if (lang === 'es' && (!s.title_es || s.title_es === s.title || !s.desc_es)) {
         const esBtn = document.querySelector('#viewLangToggle button:last-child');
@@ -4042,6 +4043,13 @@
         .badge.safety { background: var(--danger); color: white; }
         .badge.quality { background: var(--green); color: white; }
         .step-desc { font-size: 11.5px; line-height: 1.65; color: var(--text); }
+        .step-safety-banner { background: #c45c4a; color: white; font-size: 10px; font-weight: 700; letter-spacing: 1px; padding: 3px 12px; text-transform: uppercase; font-family: 'JetBrains Mono', monospace; border-radius: 4px 4px 0 0; }
+        .step-quality-banner { background: #e4aa4f; color: white; font-size: 10px; font-weight: 700; letter-spacing: 1px; padding: 3px 12px; text-transform: uppercase; font-family: 'JetBrains Mono', monospace; border-radius: 4px 4px 0 0; }
+        .step-card.safety { background: #fde9e5; }
+        .step-card.quality { background: #fdf8eb; }
+        .step-card.quality .step-bar { background: #e4aa4f; }
+        .step-card.quality .step-number { background: #e4aa4f; }
+        .ref-mention { display: inline; background: var(--green-dark); color: white; font-size: 9px; font-weight: 600; padding: 1px 6px; border-radius: 3px; font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
         .step-image-area { flex-shrink: 0; padding: 14px 16px 14px 0; display: flex; flex-direction: column; gap: 6px; align-items: center; }
         .step-image { width: 140px; height: 95px; border-radius: 6px; border: 1px solid var(--card-stroke); overflow: hidden; object-fit: cover; }
         .step-video-qr { width: 80px; flex-shrink: 0; padding: 14px 16px 14px 0; display: flex; flex-direction: column; align-items: center; gap: 4px; border-left: 1px solid var(--card-stroke); margin-left: auto; }
@@ -4115,10 +4123,12 @@
         const stepDescEn = bilingual ? (step.desc_en || step.description || '') : (step['desc_' + lang] || step.description || '');
         const stepDescEs = bilingual ? (step.desc_es || '') : '';
 
-        let html = '<div class="step-card' + (isSafety ? ' safety' : '') + '">';
+        let html = '<div class="step-card' + (isSafety ? ' safety' : '') + (isQuality ? ' quality' : '') + '">';
         html += '<div class="step-bar"></div>';
         html += '<div class="step-number-col"><div class="step-number">' + (index + 1) + '</div></div>';
         html += '<div class="step-body">';
+        if (isSafety) html += '<div class="step-safety-banner">' + (bilingual ? '⚠️ SAFETY / SEGURIDAD' : '⚠️ SAFETY') + '</div>';
+        if (isQuality) html += '<div class="step-quality-banner">' + (bilingual ? '✓ QUALITY CHECK / CONTROL DE CALIDAD' : '✓ QUALITY CHECK') + '</div>';
         html += '<div class="step-header"><div>';
         html += '<div class="step-title">' + esc(stepTitle) + '</div>';
         if (bilingual && stepTitleEs) {
@@ -4128,9 +4138,9 @@
         if (isSafety) html += '<span class="badge safety">' + (bilingual ? 'Safety / Seguridad' : 'Safety') + '</span>';
         if (isQuality) html += '<span class="badge quality">QC</span>';
         html += '</div>';
-        html += '<div class="step-desc">' + esc(stepDescEn);
+        html += '<div class="step-desc">' + highlightRefs(esc(stepDescEn));
         if (bilingual && stepDescEs) {
-          html += '<br><br><em style="color:var(--text-light)">' + esc(stepDescEs) + '</em>';
+          html += '<br><br><em style="color:var(--text-light)">' + highlightRefs(esc(stepDescEs)) + '</em>';
         }
         html += '</div>';
         html += '</div>';
@@ -4711,6 +4721,20 @@
     function esc(s) {
       if (!s) return '';
       return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function looksLikeSpanish(text) {
+      if (!text) return false;
+      const spanishWords = /\b(el|la|los|las|de|del|para|por|con|que|una|uno|está|están|son|su|sus|este|procedimiento|operacional|procesamiento)\b/i;
+      const spanishChars = /[áéíóúüñ¿¡]/i;
+      return spanishWords.test(text) || spanishChars.test(text);
+    }
+
+    function highlightRefs(text) {
+      if (!text) return text;
+      return text.replace(/(?:reference\s+paper|papel\s+de\s+referencia)\s+#(\d+)/gi, function(match, num) {
+        return '<span class="ref-mention">📄 Reference Paper #' + num + '</span>';
+      });
     }
     
     function showToast(msg, type) {
