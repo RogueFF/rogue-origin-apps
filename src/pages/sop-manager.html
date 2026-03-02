@@ -3781,6 +3781,48 @@
         }
       }
 
+      // Detect "reference paper" / "papel de referencia" mentions in step text → generate QR codes
+      assets.refQRs = {}; // { stepIndex: [{ label, qrBase64, sopId }] }
+      if (options.includeQR) {
+        const refPattern = /(?:reference\s+paper|papel\s+de\s+referencia)\s*#?\s*(\d+)(?:\s*>?\s*v\.?\s*(\d+))?/gi;
+        for (let i = 0; i < steps.length; i++) {
+          const stepText = (steps[i].description || '') + ' ' + (steps[i].desc_en || '') + ' ' + (steps[i].desc_es || '');
+          const matches = [...stepText.matchAll(refPattern)];
+          if (matches.length === 0) continue;
+          
+          // Deduplicate by ref number+version
+          const seen = new Set();
+          for (const m of matches) {
+            const refNum = m[1];
+            const refVer = m[2] || null;
+            const key = refNum + (refVer ? '-v' + refVer : '');
+            if (seen.has(key)) continue;
+            seen.add(key);
+            
+            // Find matching SOP by title pattern
+            const matchingSop = sops.find(s => {
+              const t = (s.title || '').toLowerCase();
+              const hasRef = t.includes('#' + refNum) || t.includes('# ' + refNum);
+              if (!hasRef) return false;
+              if (refVer) return t.includes('v.' + refVer) || t.includes('v' + refVer);
+              // If no version specified, prefer the latest (or any match)
+              return true;
+            });
+            
+            if (matchingSop && matchingSop.id !== sop.id) {
+              if (!assets.refQRs[i]) assets.refQRs[i] = [];
+              const refLabel = 'Ref #' + refNum + (refVer ? ' V.' + refVer : '');
+              const refUrl = window.location.origin + window.location.pathname + '?view=' + matchingSop.id;
+              totalAssets++;
+              const idx = i;
+              const refIdx = assets.refQRs[i].length;
+              assets.refQRs[idx].push({ label: refLabel, qrBase64: null, sopId: matchingSop.id });
+              promises.push(getQRBase64(refUrl).then(r => { assets.refQRs[idx][refIdx].qrBase64 = r; updateProgress('Ref paper QR'); }));
+            }
+          }
+        }
+      }
+
       // Related SOP QRs
       if (options.includeRelated && sop.linkedSops && sop.linkedSops.length > 0) {
         for (const link of sop.linkedSops) {
@@ -4039,6 +4081,13 @@
         .compact .step-image { width: 100px; height: 70px; }
         .compact .step-image-area { padding: 10px 12px 10px 0; }
         .compact .step-video-qr img { width: 44px; height: 44px; }
+        /* Reference paper QR codes */
+        .step-ref-qrs { display: flex; gap: 8px; padding: 6px 12px 8px 56px; flex-wrap: wrap; }
+        .ref-qr-item { display: flex; align-items: center; gap: 6px; background: var(--cream-dark); border-radius: 6px; padding: 4px 8px; }
+        .ref-qr-item img { width: 40px; height: 40px; border-radius: 3px; }
+        .ref-qr-label { font-size: 9px; font-weight: 600; color: var(--green-dark); font-family: 'JetBrains Mono', monospace; }
+        .compact .step-ref-qrs { padding-left: 40px; }
+        .compact .ref-qr-item img { width: 32px; height: 32px; }
       `;
 
       // --- Build footer HTML ---
@@ -4092,6 +4141,21 @@
         if (hasVideoQR) {
           html += '<div class="step-video-qr"><img src="' + stepAssets.videoQR + '">';
           html += '<div class="qr-mini-label">' + (bilingual ? 'Escanear<br>para ver' : 'Scan to<br>Watch') + '</div></div>';
+        }
+
+        // Reference paper QR codes (auto-detected from step text)
+        const refQRs = assets.refQRs[index];
+        if (refQRs && refQRs.length > 0) {
+          html += '<div class="step-ref-qrs">';
+          refQRs.forEach(ref => {
+            if (ref.qrBase64) {
+              html += '<div class="ref-qr-item">';
+              html += '<img src="' + ref.qrBase64 + '">';
+              html += '<div class="ref-qr-label">' + esc(ref.label) + '</div>';
+              html += '</div>';
+            }
+          });
+          html += '</div>';
         }
 
         html += '</div>';
@@ -4681,7 +4745,7 @@
       const urlParams = new URLSearchParams(window.location.search);
       const viewId = urlParams.get('view');
       if (viewId) {
-        setTimeout(() => viewSOP(parseInt(viewId)), 1000);
+        setTimeout(() => viewSOP(viewId), 1000);
       }
     });
   </script>
