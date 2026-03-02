@@ -3868,29 +3868,68 @@
       const stepsPerPage = layout === '4col' ? 4 : (layout === '2col' ? 2 : 3);
       const isCompact = layout === '4col';
 
-      // Distribute steps into pages
-      const pages = [];
-      let firstPageSteps, otherPageSteps;
-      // First page has less room (full header + title + meta + description)
-      if (layout === 'text') {
-        firstPageSteps = 2; // Conservative for text layout with full header
-        otherPageSteps = 4;
-      } else if (layout === '2col') {
-        firstPageSteps = 2;
-        otherPageSteps = 2;
-      } else {
-        firstPageSteps = 4;
-        otherPageSteps = 4;
+      // Dynamic step packing — estimate content height per step and fill pages
+      const PAGE_HEIGHT = 1123; // px (A4 at 96dpi)
+      const FULL_HEADER_HEIGHT = bilingual ? 320 : 280; // page 1 header + title + meta + desc
+      const COMPACT_HEADER_HEIGHT = 60; // page 2+ header
+      const FOOTER_HEIGHT = 50;
+      const SECTION_LABEL_HEIGHT = 30;
+      const STEP_BASE_HEIGHT = 70; // card chrome: number, title, padding, margins
+      const STEP_IMAGE_HEIGHT = 80; // extra for image/video QR
+      const CHAR_PER_LINE = layout === '4col' ? 25 : (layout === '2col' ? 35 : 70);
+      const LINE_HEIGHT = 15; // px per line of description text
+      const DESC_HEIGHT = (sop.description || '').length > 0 ? Math.ceil((sop.description || '').length / 80) * LINE_HEIGHT + 20 : 0;
+
+      function estimateStepHeight(step) {
+        const descLen = ((step.description || '') + (bilingual ? (step.desc_es || '') : '')).length;
+        const descLines = Math.max(1, Math.ceil(descLen / CHAR_PER_LINE));
+        const hasMedia = !!(step.media || step.image);
+        let h = STEP_BASE_HEIGHT + (descLines * LINE_HEIGHT);
+        if (hasMedia && includeImages) h = Math.max(h, STEP_BASE_HEIGHT + STEP_IMAGE_HEIGHT);
+        if (layout === '4col') h = Math.max(h, 100); // min for compact
+        return h;
       }
 
-      let remaining = [...steps];
-      let pageIdx = 0;
-      while (remaining.length > 0) {
-        const count = pageIdx === 0 ? firstPageSteps : otherPageSteps;
-        pages.push(remaining.splice(0, count));
-        pageIdx++;
+      const pages = [];
+      let remaining = [...steps.map((s, i) => ({ step: s, idx: i, height: estimateStepHeight(s) }))];
+
+      if (remaining.length === 0) {
+        pages.push([]);
+      } else {
+        let pageIdx = 0;
+        while (remaining.length > 0) {
+          const headerH = pageIdx === 0 ? (FULL_HEADER_HEIGHT + DESC_HEIGHT + SECTION_LABEL_HEIGHT) : (COMPACT_HEADER_HEIGHT + SECTION_LABEL_HEIGHT);
+          let available = PAGE_HEIGHT - headerH - FOOTER_HEIGHT;
+          const pageSteps = [];
+
+          // For grid layouts, pack in rows
+          if (layout === '2col' || layout === '4col') {
+            const cols = layout === '4col' ? 4 : 2;
+            while (remaining.length > 0) {
+              const row = remaining.slice(0, Math.min(cols, remaining.length));
+              const rowH = Math.max(...row.map(r => r.height));
+              if (available - rowH < 0 && pageSteps.length > 0) break;
+              pageSteps.push(...remaining.splice(0, row.length));
+              available -= rowH;
+            }
+          } else {
+            // Text layout — pack vertically
+            while (remaining.length > 0) {
+              const next = remaining[0];
+              if (available - next.height < 0 && pageSteps.length > 0) break;
+              pageSteps.push(remaining.shift());
+              available -= next.height;
+            }
+          }
+
+          pages.push(pageSteps.map(r => steps[r.idx]));
+          pageIdx++;
+        }
       }
-      if (pages.length === 0) pages.push([]);
+
+      // Preserve firstPageSteps/otherPageSteps for related section logic
+      const firstPageSteps = pages[0]?.length || 0;
+      const otherPageSteps = pages.length > 1 ? pages[pages.length - 1].length : firstPageSteps;
 
       // Check if related SOPs section is needed
       const hasRelated = includeRelated && sop.linkedSops && sop.linkedSops.length > 0;
