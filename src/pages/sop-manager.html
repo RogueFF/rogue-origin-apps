@@ -3885,8 +3885,8 @@
           font-family: 'Outfit', sans-serif; color: #2d2d2d;
         }
         .pdf-container * { margin: 0; padding: 0; box-sizing: border-box; }
-        .page { width: 794px; height: 1123px; background: var(--cream); color: var(--text); position: relative; overflow: hidden; page-break-after: always; }
-        .page:last-child { page-break-after: avoid; }
+        .page { width: 794px; min-height: 1123px; background: var(--cream); color: var(--text); position: relative; overflow: hidden; }
+        .page + .page { page-break-before: always; }
         .header-band { background: var(--green-deep); padding: 0 56px; height: 150px; display: flex; align-items: center; justify-content: space-between; position: relative; }
         .header-band::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: #e4aa4f; }
         .header-left { display: flex; align-items: center; gap: 20px; }
@@ -4237,7 +4237,7 @@
             }
           },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          pagebreak: { mode: ['css'] }
+          pagebreak: { mode: ['css'], before: '.page + .page', avoid: '.step-card' }
         }).from(container).outputPdf('blob');
 
         // Cleanup container and injected styles
