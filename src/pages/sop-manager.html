@@ -3500,6 +3500,14 @@
       const s = sops.find(x => x.id == currentSopId);
       if (!s) return;
 
+      // Language detection helper — used by both EN and ES translation paths
+      const looksLikeSpanish = (text) => {
+        if (!text) return false;
+        const spanishWords = /\b(el|la|los|las|de|del|para|por|con|que|una|uno|está|están|son|su|sus|este|procedimiento|operacional|procesamiento)\b/i;
+        const spanishChars = /[áéíóúüñ¿¡]/i;
+        return spanishWords.test(text) || spanishChars.test(text);
+      };
+
       // Auto-translate to Spanish if needed
       if (lang === 'es' && (!s.title_es || s.title_es === s.title || !s.desc_es)) {
         const esBtn = document.querySelector('#viewLangToggle button:last-child');
@@ -3509,17 +3517,27 @@
         try {
           showToast('Translating to Spanish...', 'success');
           // Use title_en if available, otherwise fall back to base title
+          // Guard: verify source text is actually English before translating
           const sourceTitle = s.title_en || s.title;
           const sourceDesc = s.desc_en || s.description;
-          s.title_es = await translateText(sourceTitle, 'en', 'es');
-          if (sourceDesc) s.desc_es = await translateText(sourceDesc, 'en', 'es');
+          if (!s.title_es || s.title_es === s.title) {
+            s.title_es = !looksLikeSpanish(sourceTitle) ? await translateText(sourceTitle, 'en', 'es') : sourceTitle;
+          }
+          if (sourceDesc && (!s.desc_es || s.desc_es === sourceDesc)) {
+            // If source already looks Spanish, use it directly as desc_es
+            s.desc_es = !looksLikeSpanish(sourceDesc) ? await translateText(sourceDesc, 'en', 'es') : sourceDesc;
+          }
           for (let step of (s.steps || [])) {
             const stepSourceTitle = step.title_en || step.title;
             const stepSourceDesc = step.desc_en || step.description;
             const needsTitleTranslation = stepSourceTitle && (!step.title_es || step.title_es === stepSourceTitle);
             const needsDescTranslation = stepSourceDesc && (!step.desc_es || step.desc_es === stepSourceDesc);
-            if (needsTitleTranslation) step.title_es = await translateText(stepSourceTitle, 'en', 'es');
-            if (needsDescTranslation) step.desc_es = await translateText(stepSourceDesc, 'en', 'es');
+            if (needsTitleTranslation) {
+              step.title_es = !looksLikeSpanish(stepSourceTitle) ? await translateText(stepSourceTitle, 'en', 'es') : stepSourceTitle;
+            }
+            if (needsDescTranslation) {
+              step.desc_es = !looksLikeSpanish(stepSourceDesc) ? await translateText(stepSourceDesc, 'en', 'es') : stepSourceDesc;
+            }
           }
           showToast('Translation complete!', 'success');
         } catch (e) {
@@ -3534,16 +3552,6 @@
       // Auto-translate to English if needed (for SOPs written in Spanish)
       // Check title OR description — either might be missing its English version
       if (lang === 'en' && (!s.title_en || !s.desc_en)) {
-        // Helper to detect Spanish text (for legacy SOPs without sourceLang)
-        const looksLikeSpanish = (text) => {
-          if (!text) return false;
-          // Common Spanish words
-          const spanishWords = /\b(el|la|los|las|de|del|para|por|con|que|una|uno|es|está|están|son|al|en|y|o|su|sus)\b/i;
-          // Spanish-specific characters
-          const spanishChars = /[áéíóúüñ¿¡]/i;
-          return spanishWords.test(text) || spanishChars.test(text);
-        };
-
         // Check if content appears to be in Spanish
         const needsEnglish = s.sourceLang === 'es' ||
           (s.title_es && s.title_es === s.title) ||
@@ -3558,18 +3566,28 @@
 
           try {
             showToast('Translating to English...', 'success');
-            // Use title_es if available, otherwise fall back to base title (which is in Spanish)
+            // Use title_es if available, otherwise fall back to base title
+            // Guard: verify source text is actually Spanish before translating
             const sourceTitle = s.title_es || s.title;
             const sourceDesc = s.desc_es || s.description;
-            s.title_en = await translateText(sourceTitle, 'es', 'en');
-            if (sourceDesc) s.desc_en = await translateText(sourceDesc, 'es', 'en');
+            if (!s.title_en) {
+              s.title_en = looksLikeSpanish(sourceTitle) ? await translateText(sourceTitle, 'es', 'en') : sourceTitle;
+            }
+            if (!s.desc_en && sourceDesc) {
+              // If desc_es contains English text (data mismatch), use it directly as desc_en
+              s.desc_en = looksLikeSpanish(sourceDesc) ? await translateText(sourceDesc, 'es', 'en') : sourceDesc;
+            }
             for (let step of (s.steps || [])) {
               const stepSourceTitle = step.title_es || step.title;
               const stepSourceDesc = step.desc_es || step.description;
               const needsTitleTranslation = stepSourceTitle && (!step.title_en || step.title_en === stepSourceTitle);
               const needsDescTranslation = stepSourceDesc && (!step.desc_en || step.desc_en === stepSourceDesc);
-              if (needsTitleTranslation) step.title_en = await translateText(stepSourceTitle, 'es', 'en');
-              if (needsDescTranslation) step.desc_en = await translateText(stepSourceDesc, 'es', 'en');
+              if (needsTitleTranslation) {
+                step.title_en = looksLikeSpanish(stepSourceTitle) ? await translateText(stepSourceTitle, 'es', 'en') : stepSourceTitle;
+              }
+              if (needsDescTranslation) {
+                step.desc_en = looksLikeSpanish(stepSourceDesc) ? await translateText(stepSourceDesc, 'es', 'en') : stepSourceDesc;
+              }
             }
             showToast('Translation complete!', 'success');
           } catch (e) {
