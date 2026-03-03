@@ -450,6 +450,37 @@
     .strain-picker-menu::-webkit-scrollbar { width: 4px; }
     .strain-picker-menu::-webkit-scrollbar-thumb { background: rgba(102, 137, 113, 0.4); border-radius: 2px; }
 
+    /* Recent changes */
+    .change-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(102, 137, 113, 0.08);
+      gap: 8px;
+    }
+    .change-row:last-child { border-bottom: none; }
+    .change-info { flex: 1; min-width: 0; }
+    .change-strain {
+      font-size: 13px; font-weight: 600; color: var(--text);
+      font-family: var(--font-ui);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .change-date {
+      font-size: 11px; color: var(--text-faint);
+      font-family: var(--font-mono); margin-top: 2px;
+    }
+    .change-amount {
+      font-size: 15px; font-weight: 700; font-family: var(--font-mono);
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .change-amount.subtract { color: var(--red); }
+    .change-amount.add { color: var(--green); }
+    .change-remaining {
+      font-size: 11px; color: var(--text-faint);
+      font-family: var(--font-mono); text-align: right; margin-top: 2px;
+    }
+
     /* Hide number input spinners */
     input[type=number]::-webkit-inner-spin-button,
     input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
@@ -607,6 +638,14 @@
   <div class="card" id="yield-card" style="display:none">
     <div class="card-title">Remaining Raw Goods → Projected Yield</div>
     <div id="yield-body"></div>
+  </div>
+
+  <!-- Recent Changes -->
+  <div class="card">
+    <div class="card-title">Recent Changes</div>
+    <div id="recent-changes">
+      <div style="color:var(--text-faint);font-size:13px;text-align:center;padding:12px;font-family:var(--font-ui)">Loading...</div>
+    </div>
   </div>
 
   <!-- Hidden config elements for biomass/trim (auto-set, no UI needed) -->
@@ -990,6 +1029,44 @@
 
     renderStrainCounters();
     recalc();
+    loadRecentChanges();
+  }
+
+  async function loadRecentChanges() {
+    const container = document.getElementById('recent-changes');
+    try {
+      const res = await fetch(`${POOL_API}?action=get_supersack_recent_changes`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+      });
+      const data = await res.json();
+      const entries = data.entries || [];
+      if (entries.length === 0) {
+        container.innerHTML = '<div style="color:var(--text-faint);font-size:13px;text-align:center;padding:12px">No recent changes</div>';
+        return;
+      }
+      container.innerHTML = entries.map(e => {
+        const shortName = (e.variantTitle || '').replace(/^\d{4} - /, '').replace(/ \/ Sungrown$/, '');
+        const isSubtract = e.action === 'subtract';
+        const sign = isSubtract ? '−' : '+';
+        const cls = isSubtract ? 'subtract' : 'add';
+        const d = new Date(e.timestamp);
+        const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        return `
+          <div class="change-row">
+            <div class="change-info">
+              <div class="change-strain">${shortName}</div>
+              <div class="change-date">${dateStr} · ${timeStr}</div>
+            </div>
+            <div style="text-align:right">
+              <div class="change-amount ${cls}">${sign}${e.changeAmount} sacks</div>
+              <div class="change-remaining">${e.newValue} remaining</div>
+            </div>
+          </div>`;
+      }).join('');
+    } catch (err) {
+      container.innerHTML = '<div style="color:var(--text-faint);font-size:13px;text-align:center;padding:12px">Failed to load</div>';
+    }
   }
 
   async function updatePool(productId, operation, amount, note, isSupersack) {
