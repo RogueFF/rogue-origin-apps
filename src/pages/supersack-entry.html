@@ -480,6 +480,10 @@
       font-size: 11px; color: var(--text-faint);
       font-family: var(--font-mono); text-align: right; margin-top: 2px;
     }
+    .change-note {
+      font-size: 11px; color: var(--text-faint); margin-top: 2px;
+      font-family: var(--font-ui); font-style: italic;
+    }
 
     /* Hide number input spinners */
     input[type=number]::-webkit-inner-spin-button,
@@ -1035,32 +1039,86 @@
   async function loadRecentChanges() {
     const container = document.getElementById('recent-changes');
     try {
-      const res = await fetch(`${POOL_API}?action=get_supersack_recent_changes`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+      // Fetch both supersack changes and pool product changes in parallel
+      const [supersackRes, poolRes] = await Promise.allSettled([
+        fetch(`${POOL_API}?action=get_supersack_recent_changes`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+        }).then(r => r.json()),
+        fetch(`${POOL_API}?action=get_recent_changes`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+        }).then(r => r.json()),
+      ]);
+
+      const supersackEntries = (supersackRes.status === 'fulfilled' ? supersackRes.value.entries : []) || [];
+      const poolEntries = (poolRes.status === 'fulfilled' ? poolRes.value.entries : []) || [];
+
+      // Filter pool entries to only ones from Supersack Tracker (by note tag)
+      const trackerPoolEntries = poolEntries.filter(e =>
+        (e.note || '').includes('[Supersack Tracker]')
+      );
+
+      // Normalize into unified format
+      const allEntries = [];
+
+      supersackEntries.forEach(e => {
+        const d = new Date(e.timestamp);
+        allEntries.push({
+          name: (e.variantTitle || '').replace(/^\d{4} - /, '').replace(/ \/ Sungrown$/, ''),
+          action: e.action,
+          amount: e.changeAmount,
+          unit: 'sacks',
+          remaining: e.newValue != null ? `${e.newValue} remaining` : '',
+          note: e.note || '',
+          date: d,
+          dateStr: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          timeStr: d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+        });
       });
-      const data = await res.json();
-      const entries = data.entries || [];
-      if (entries.length === 0) {
+
+      trackerPoolEntries.forEach(e => {
+        const d = new Date(e.timestamp);
+        const name = (e.productTitle || e.title || '').replace(/^\d{4} - /, '').replace(/ \/ Sungrown$/, '');
+        const amountRaw = e.changeAmount || e.amount || 0;
+        // Pool amounts are in grams for non-supersack — convert to lbs for display
+        const isGrams = !e.variantTitle;
+        const displayAmount = isGrams ? Math.round(amountRaw / 453.592 * 10) / 10 : amountRaw;
+        const unit = isGrams ? 'lbs' : (e.unit || 'lbs');
+        allEntries.push({
+          name: name,
+          action: e.action,
+          amount: displayAmount,
+          unit: unit,
+          remaining: '',
+          note: (e.note || '').replace('[Supersack Tracker] ', ''),
+          date: d,
+          dateStr: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          timeStr: d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+        });
+      });
+
+      // Sort by date descending
+      allEntries.sort((a, b) => b.date - a.date);
+
+      if (allEntries.length === 0) {
         container.innerHTML = '<div style="color:var(--text-faint);font-size:13px;text-align:center;padding:12px">No recent changes</div>';
         return;
       }
-      container.innerHTML = entries.map(e => {
-        const shortName = (e.variantTitle || '').replace(/^\d{4} - /, '').replace(/ \/ Sungrown$/, '');
+
+      container.innerHTML = allEntries.slice(0, 20).map(e => {
         const isSubtract = e.action === 'subtract';
         const sign = isSubtract ? '−' : '+';
         const cls = isSubtract ? 'subtract' : 'add';
-        const d = new Date(e.timestamp);
-        const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        const noteHtml = e.note ? `<div class="change-note">${e.note}</div>` : '';
         return `
           <div class="change-row">
             <div class="change-info">
-              <div class="change-strain">${shortName}</div>
-              <div class="change-date">${dateStr} · ${timeStr}</div>
+              <div class="change-strain">${e.name}</div>
+              <div class="change-date">${e.dateStr} · ${e.timeStr}</div>
+              ${noteHtml}
             </div>
             <div style="text-align:right">
-              <div class="change-amount ${cls}">${sign}${e.changeAmount} sacks</div>
-              <div class="change-remaining">${e.newValue} remaining</div>
+              <div class="change-amount ${cls}">${sign}${e.amount} ${e.unit}</div>
+              ${e.remaining ? `<div class="change-remaining">${e.remaining}</div>` : ''}
             </div>
           </div>`;
       }).join('');
