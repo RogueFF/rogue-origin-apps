@@ -1190,9 +1190,9 @@
       if (!r.success) poolErrors.push('Trim: ' + (r.error || 'failed'));
     }
 
-    // 4. Save summary to D1
+    // 4. Save summary to D1 (best-effort — endpoint may not exist yet)
     try {
-      await fetch(`${MC_API}/supersack/submit`, {
+      const summaryRes = await fetch(`${MC_API}/supersack/submit`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           date, supersack_count: sackCount, biomass_lbs: biomass,
@@ -1201,6 +1201,7 @@
           strains: Object.fromEntries(Object.entries(strainData).map(([k, v]) => [k, v.sacks])),
         }),
       });
+      if (!summaryRes.ok) console.info('[Supersack] D1 summary save skipped (endpoint not deployed)');
     } catch {}
 
     submitBtn.disabled = false;
