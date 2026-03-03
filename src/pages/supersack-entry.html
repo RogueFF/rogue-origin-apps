@@ -1052,10 +1052,8 @@
       const supersackEntries = (supersackRes.status === 'fulfilled' ? supersackRes.value.entries : []) || [];
       const poolEntries = (poolRes.status === 'fulfilled' ? poolRes.value.entries : []) || [];
 
-      // Filter pool entries to only ones from Supersack Tracker (by note tag)
-      const trackerPoolEntries = poolEntries.filter(e =>
-        (e.note || '').includes('[Supersack Tracker]')
-      );
+      // Show all biomass/trim pool updates (not just Supersack Tracker ones)
+      const trackerPoolEntries = poolEntries;
 
       // Normalize into unified format
       const allEntries = [];
