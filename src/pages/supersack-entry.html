@@ -885,9 +885,14 @@
     // 2-day date range for historical averages
     const today = new Date(); const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
     const fmtD = d => d.toISOString().slice(0, 10);
+    const isToday = date === todayStr();
+    const selectedDate = new Date(date + 'T12:00:00');
+    const prevDate = new Date(selectedDate); prevDate.setDate(selectedDate.getDate() - 1);
     const [scoreboardRes, dashboardRes, supersackRes, smallsPoolRes, topsPoolRes] = await Promise.allSettled([
-      fetch(`${PROD_API}?action=scoreboard`).then(r => r.json()),
-      fetch(`${PROD_API}?action=dashboard&start=${fmtD(yesterday)}&end=${fmtD(today)}`).then(r => r.json()),
+      isToday
+        ? fetch(`${PROD_API}?action=scoreboard`).then(r => r.json())
+        : fetch(`${PROD_API}?action=dashboard&start=${date}&end=${date}`).then(r => r.json()),
+      fetch(`${PROD_API}?action=dashboard&start=${fmtD(prevDate)}&end=${date}`).then(r => r.json()),
       fetch(`${POOL_API}?action=get_supersack_variants`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
       }).then(r => r.json()),
@@ -899,20 +904,40 @@
       }).then(r => r.json()),
     ]);
 
-    // Build per-strain production from scoreboard hourly rates
+    // Build per-strain production from scoreboard (today) or dashboard (past dates)
     const perStrainProd = {}; // { strainTitle: { tops, smalls } }
     if (scoreboardRes.status === 'fulfilled') {
-      const sb = scoreboardRes.value.scoreboard || {};
-      (sb.hourlyRates || []).forEach(h => {
-        const strain = h.strain || sb.strain;
-        if (!strain) return;
-        if (!perStrainProd[strain]) perStrainProd[strain] = { tops: 0, smalls: 0 };
-        perStrainProd[strain].tops += (h.lbs || 0);
-        perStrainProd[strain].smalls += (h.smalls || 0);
-      });
-      // If no per-hour strains, use current strain with dashboard totals
-      if (Object.keys(perStrainProd).length === 0 && sb.strain) {
-        perStrainProd[sb.strain] = { tops: sb.todayLbs || 0, smalls: 0 };
+      if (isToday) {
+        // Live scoreboard format
+        const sb = scoreboardRes.value.scoreboard || {};
+        (sb.hourlyRates || []).forEach(h => {
+          const strain = h.strain || sb.strain;
+          if (!strain) return;
+          if (!perStrainProd[strain]) perStrainProd[strain] = { tops: 0, smalls: 0 };
+          perStrainProd[strain].tops += (h.lbs || 0);
+          perStrainProd[strain].smalls += (h.smalls || 0);
+        });
+        if (Object.keys(perStrainProd).length === 0 && sb.strain) {
+          perStrainProd[sb.strain] = { tops: sb.todayLbs || 0, smalls: 0 };
+        }
+      } else {
+        // Dashboard format for historical dates
+        const data = scoreboardRes.value;
+        (data.strainSnapshot || []).forEach(snap => {
+          if (!perStrainProd[snap.strain]) perStrainProd[snap.strain] = { tops: 0, smalls: 0 };
+          perStrainProd[snap.strain].tops += (snap.tops || snap.totalLbs || 0);
+          perStrainProd[snap.strain].smalls += (snap.smalls || 0);
+        });
+        // Fallback to daily summary if no strainSnapshot
+        if (Object.keys(perStrainProd).length === 0 && data.days) {
+          (data.days || []).forEach(day => {
+            if (day.strain) {
+              if (!perStrainProd[day.strain]) perStrainProd[day.strain] = { tops: 0, smalls: 0 };
+              perStrainProd[day.strain].tops += (day.tops || day.totalLbs || 0);
+              perStrainProd[day.strain].smalls += (day.smalls || 0);
+            }
+          });
+        }
       }
     }
 
