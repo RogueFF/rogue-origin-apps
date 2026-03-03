@@ -889,9 +889,10 @@
     const selectedDate = new Date(date + 'T12:00:00');
     const prevDate = new Date(selectedDate); prevDate.setDate(selectedDate.getDate() - 1);
     const [scoreboardRes, dashboardRes, supersackRes, smallsPoolRes, topsPoolRes] = await Promise.allSettled([
+      // Always use scoreboard — supports ?date= param for historical data
       isToday
         ? fetch(`${PROD_API}?action=scoreboard`).then(r => r.json())
-        : fetch(`${PROD_API}?action=dashboard&start=${date}&end=${date}`).then(r => r.json()),
+        : fetch(`${PROD_API}?action=scoreboard&date=${date}`).then(r => r.json()),
       fetch(`${PROD_API}?action=dashboard&start=${fmtD(prevDate)}&end=${date}`).then(r => r.json()),
       fetch(`${POOL_API}?action=get_supersack_variants`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
@@ -907,64 +908,23 @@
     // Build per-strain production from scoreboard (today) or dashboard (past dates)
     const perStrainProd = {}; // { strainTitle: { tops, smalls } }
     if (scoreboardRes.status === 'fulfilled') {
-      if (isToday) {
-        // Live scoreboard format
-        const sb = scoreboardRes.value.scoreboard || {};
-        (sb.hourlyRates || []).forEach(h => {
-          const strain = h.strain || sb.strain;
-          if (!strain) return;
-          if (!perStrainProd[strain]) perStrainProd[strain] = { tops: 0, smalls: 0 };
-          perStrainProd[strain].tops += (h.lbs || 0);
-          perStrainProd[strain].smalls += (h.smalls || 0);
-        });
-        if (Object.keys(perStrainProd).length === 0 && sb.strain) {
-          perStrainProd[sb.strain] = { tops: sb.todayLbs || 0, smalls: 0 };
-        }
-      } else {
-        // Dashboard format for historical dates — use "today" object (single-day totals)
-        // NOT strainSnapshot which is cumulative across the date range
-        const data = scoreboardRes.value;
-        const dayData = data.today || {};
-        // strainSnapshot has per-strain breakdown but is cumulative — need to check
-        // if we can get single-day strain data from hourly or daily arrays
-        const dailyArr = data.daily || [];
-        const matchDay = dailyArr.find(d => d.date === date || d.label === date);
-
-        // For per-strain data on historical dates, use strainSnapshot only if
-        // it covers exactly 1 day (start==end). Otherwise use aggregate today totals.
-        const snapStrains = data.strainSnapshot || [];
-        const isSingleDay = snapStrains.length > 0 && snapStrains.every(s => (s.daysWorked || 1) <= 1);
-
-        if (isSingleDay) {
-          // Single-day strain snapshot — safe to use per-strain
-          snapStrains.forEach(snap => {
-            if (!perStrainProd[snap.strain]) perStrainProd[snap.strain] = { tops: 0, smalls: 0 };
-            perStrainProd[snap.strain].tops += (snap.tops || 0);
-            perStrainProd[snap.strain].smalls += (snap.smalls || 0);
-          });
-        } else if (matchDay || dayData.totalTops != null) {
-          // Use single-day aggregate totals — no per-strain breakdown available
-          // Pick the strain from strainSnapshot names (or generic label)
-          const src = matchDay || dayData;
-          const strainNames = snapStrains.map(s => s.strain);
-          const label = strainNames.length === 1 ? strainNames[0] : (strainNames[0] || 'Unknown');
-          // If multiple strains, distribute proportionally by cumulative ratios
-          if (strainNames.length > 1) {
-            const totalCumTops = snapStrains.reduce((s, x) => s + (x.tops || 0), 0);
-            const totalCumSmalls = snapStrains.reduce((s, x) => s + (x.smalls || 0), 0);
-            snapStrains.forEach(snap => {
-              const topsRatio = totalCumTops > 0 ? (snap.tops || 0) / totalCumTops : 1 / strainNames.length;
-              const smallsRatio = totalCumSmalls > 0 ? (snap.smalls || 0) / totalCumSmalls : 1 / strainNames.length;
-              perStrainProd[snap.strain] = {
-                tops: (src.totalTops || 0) * topsRatio,
-                smalls: (src.totalSmalls || 0) * smallsRatio,
-              };
-            });
-          } else {
-            perStrainProd[label] = { tops: src.totalTops || 0, smalls: src.totalSmalls || 0 };
-          }
-        }
+      // Scoreboard format (works for both today and historical via ?date= param)
+      const sb = scoreboardRes.value.scoreboard || scoreboardRes.value || {};
+      const hours = sb.hourlyRates || [];
+      // Sum tops/smalls from hourly data (most accurate source)
+      let totalTops = 0, totalSmalls = 0;
+      hours.forEach(h => {
+        totalTops += (h.lbs || 0);
+        totalSmalls += (h.smalls || 0);
+      });
+      // Fallback to scoreboard totals if no hourly breakdown
+      if (hours.length === 0) {
+        totalTops = sb.todayLbs || 0;
+        totalSmalls = sb.todaySmalls || 0;
       }
+      // Use the scoreboard strain (single strain per day — Lifter variants are the same)
+      const strain = sb.strain || 'Unknown';
+      perStrainProd[strain] = { tops: totalTops, smalls: totalSmalls };
     }
 
     // Supersack variants (Shopify inventory)
