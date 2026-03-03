@@ -921,22 +921,48 @@
           perStrainProd[sb.strain] = { tops: sb.todayLbs || 0, smalls: 0 };
         }
       } else {
-        // Dashboard format for historical dates
+        // Dashboard format for historical dates — use "today" object (single-day totals)
+        // NOT strainSnapshot which is cumulative across the date range
         const data = scoreboardRes.value;
-        (data.strainSnapshot || []).forEach(snap => {
-          if (!perStrainProd[snap.strain]) perStrainProd[snap.strain] = { tops: 0, smalls: 0 };
-          perStrainProd[snap.strain].tops += (snap.tops || snap.totalLbs || 0);
-          perStrainProd[snap.strain].smalls += (snap.smalls || 0);
-        });
-        // Fallback to daily summary if no strainSnapshot
-        if (Object.keys(perStrainProd).length === 0 && data.days) {
-          (data.days || []).forEach(day => {
-            if (day.strain) {
-              if (!perStrainProd[day.strain]) perStrainProd[day.strain] = { tops: 0, smalls: 0 };
-              perStrainProd[day.strain].tops += (day.tops || day.totalLbs || 0);
-              perStrainProd[day.strain].smalls += (day.smalls || 0);
-            }
+        const dayData = data.today || {};
+        // strainSnapshot has per-strain breakdown but is cumulative — need to check
+        // if we can get single-day strain data from hourly or daily arrays
+        const dailyArr = data.daily || [];
+        const matchDay = dailyArr.find(d => d.date === date || d.label === date);
+
+        // For per-strain data on historical dates, use strainSnapshot only if
+        // it covers exactly 1 day (start==end). Otherwise use aggregate today totals.
+        const snapStrains = data.strainSnapshot || [];
+        const isSingleDay = snapStrains.length > 0 && snapStrains.every(s => (s.daysWorked || 1) <= 1);
+
+        if (isSingleDay) {
+          // Single-day strain snapshot — safe to use per-strain
+          snapStrains.forEach(snap => {
+            if (!perStrainProd[snap.strain]) perStrainProd[snap.strain] = { tops: 0, smalls: 0 };
+            perStrainProd[snap.strain].tops += (snap.tops || 0);
+            perStrainProd[snap.strain].smalls += (snap.smalls || 0);
           });
+        } else if (matchDay || dayData.totalTops != null) {
+          // Use single-day aggregate totals — no per-strain breakdown available
+          // Pick the strain from strainSnapshot names (or generic label)
+          const src = matchDay || dayData;
+          const strainNames = snapStrains.map(s => s.strain);
+          const label = strainNames.length === 1 ? strainNames[0] : (strainNames[0] || 'Unknown');
+          // If multiple strains, distribute proportionally by cumulative ratios
+          if (strainNames.length > 1) {
+            const totalCumTops = snapStrains.reduce((s, x) => s + (x.tops || 0), 0);
+            const totalCumSmalls = snapStrains.reduce((s, x) => s + (x.smalls || 0), 0);
+            snapStrains.forEach(snap => {
+              const topsRatio = totalCumTops > 0 ? (snap.tops || 0) / totalCumTops : 1 / strainNames.length;
+              const smallsRatio = totalCumSmalls > 0 ? (snap.smalls || 0) / totalCumSmalls : 1 / strainNames.length;
+              perStrainProd[snap.strain] = {
+                tops: (src.totalTops || 0) * topsRatio,
+                smalls: (src.totalSmalls || 0) * smallsRatio,
+              };
+            });
+          } else {
+            perStrainProd[label] = { tops: src.totalTops || 0, smalls: src.totalSmalls || 0 };
+          }
         }
       }
     }
