@@ -826,17 +826,13 @@
         const remaining = (s.poolValue || 0) - n; // sacks left after today
         if (remaining <= 0) return '';
 
-        // Use 2-day history for projection averages (more stable than today-only)
-        const histTotal = (s.histTops || 0) + (s.histSmalls || 0);
-        const topsPct = histTotal > 0 ? s.histTops / histTotal : 0.5;
-        const smallsPct = 1 - topsPct;
+        // Calculate per-sack averages from today's actual data
         const ratio = n / sackCount;
+        const avgTops = s.tops / n;
+        const avgSmalls = s.smalls / n;
         const avgBio = (biomass * ratio) / n;
         const avgTrim = (trim * ratio) / n;
-        const usable = SACK_WEIGHT - avgBio - avgTrim;
-        const avgTops = usable * topsPct;
-        const avgSmalls = usable * smallsPct;
-        const avgWaste = 0; // waste absorbed into tops/smalls projection
+        const avgWaste = Math.max(0, SACK_WEIGHT - avgTops - avgSmalls - avgBio - avgTrim);
 
         const remTops = remaining * avgTops;
         const remSmalls = remaining * avgSmalls;
