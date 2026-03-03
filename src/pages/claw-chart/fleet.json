@@ -1,0 +1,318 @@
+[
+  {
+    "id": "atlas", "name": "Atlas", "role": "Orchestrator", "domain": "orchestrator",
+    "model": "opus", "status": "active", "session": "agent:main:main",
+    "schedule": "Always on", "notes": "Plans, delegates, verifies. The lead.",
+    "lastAudit": "2026-03-03T14:34:00-08:00", "lastOutput": "2026-03-03T14:34:00-08:00",
+    "type": "agent",
+    "connections": [
+      {"to": "hex", "label": "orchestrates"},
+      {"to": "kiln", "label": "orchestrates"},
+      {"to": "razor", "label": "orchestrates"},
+      {"to": "meridian", "label": "orchestrates"},
+      {"to": "friday", "label": "dispatches to"},
+      {"to": "dispatch", "label": "orchestrates"},
+      {"to": "radar", "label": "orchestrates"},
+      {"to": "comms", "label": "broadcasts via"}
+    ]
+  },
+  {
+    "id": "hex", "name": "Hex", "role": "Engineering", "domain": "coding",
+    "model": "sonnet", "status": "active", "session": "agent:hex:main",
+    "schedule": "On-demand + self-audit", "notes": "Coding, deploys, QA, infrastructure. Health: 95.",
+    "lastAudit": "2026-03-03T14:28:00-08:00", "lastOutput": "2026-03-03T14:28:00-08:00",
+    "type": "specialist",
+    "connections": [
+      {"to": "atlas", "label": "reports to"},
+      {"to": "friday", "label": "reviews"}
+    ]
+  },
+  {
+    "id": "kiln", "name": "Kiln", "role": "Production Ops", "domain": "production",
+    "model": "sonnet", "status": "active", "session": "agent:kiln:main",
+    "schedule": "On-demand + self-audit", "notes": "Production tracking, crew briefs. Health: 95.",
+    "lastAudit": "2026-03-03T14:28:00-08:00", "lastOutput": "2026-03-03T14:28:00-08:00",
+    "type": "specialist",
+    "connections": [
+      {"to": "atlas", "label": "reports to"}
+    ]
+  },
+  {
+    "id": "meridian", "name": "Meridian", "role": "Logistics", "domain": "logistics",
+    "model": "sonnet", "status": "active", "session": "agent:meridian:main",
+    "schedule": "On-demand + self-audit", "notes": "Shipment tracking, supply chain, compliance. Health: 90.",
+    "lastAudit": "2026-03-03T14:28:00-08:00", "lastOutput": "2026-03-03T14:28:00-08:00",
+    "type": "specialist",
+    "connections": [
+      {"to": "atlas", "label": "reports to"}
+    ]
+  },
+  {
+    "id": "razor", "name": "Razor", "role": "Trading Desk Chief", "domain": "trading",
+    "model": "sonnet", "status": "active", "session": "agent:razor:main",
+    "schedule": "2 PM daily + 2:30 PM Fri", "notes": "Market analysis, positions, trading strategy. Audit file stale but cron confirmed running.",
+    "lastAudit": "2026-02-24T08:31:00.000Z", "lastOutput": "2026-03-03T14:00:00-08:00",
+    "type": "specialist",
+    "connections": [
+      {"to": "atlas", "label": "reports to"},
+      {"to": "wire", "label": "orchestrates"},
+      {"to": "regime", "label": "orchestrates"},
+      {"to": "viper", "label": "orchestrates"},
+      {"to": "strategist", "label": "orchestrates"},
+      {"to": "dealer", "label": "orchestrates"},
+      {"to": "ledger", "label": "orchestrates"},
+      {"to": "futures-monitor", "label": "orchestrates"}
+    ]
+  },
+  {
+    "id": "wire", "name": "Wire", "role": "Market Scanner", "domain": "trading",
+    "model": "haiku", "status": "active", "session": null,
+    "schedule": "Multiple daily sessions", "notes": "Scanning, watchlist, catalysts. VIX breach, geopolitical monitoring.",
+    "lastAudit": null, "lastOutput": "2026-03-03T14:00:00-08:00",
+    "type": "agent",
+    "connections": [
+      {"to": "razor", "label": "feeds"}
+    ]
+  },
+  {
+    "id": "regime", "name": "Regime", "role": "Market Regime", "domain": "trading",
+    "model": "haiku", "status": "active", "session": null,
+    "schedule": "5:30 AM + noon weekdays", "notes": "Bull/Bear/Neutral/Red signal. Currently RED.",
+    "lastAudit": null, "lastOutput": "2026-03-03T12:00:00-08:00",
+    "type": "agent",
+    "connections": [
+      {"to": "razor", "label": "feeds"}
+    ]
+  },
+  {
+    "id": "viper", "name": "Viper", "role": "Social Signals", "domain": "trading",
+    "model": "haiku", "status": "active", "session": null,
+    "schedule": "*/10 market hours + overnight", "notes": "Options signals, social sentiment, earnings plays.",
+    "lastAudit": null, "lastOutput": "2026-03-03T14:30:00-08:00",
+    "type": "agent",
+    "connections": [
+      {"to": "razor", "label": "feeds"}
+    ]
+  },
+  {
+    "id": "strategist", "name": "Strategist", "role": "Play Selection", "domain": "trading",
+    "model": "sonnet", "status": "active", "session": null,
+    "schedule": "15,45 min market hours", "notes": "Play selection, risk sizing.",
+    "lastAudit": null, "lastOutput": "2026-02-20T12:47:00-08:00",
+    "type": "agent",
+    "connections": [
+      {"to": "razor", "label": "reports to"},
+      {"to": "analyst", "label": "reviewed by"}
+    ]
+  },
+  {
+    "id": "dealer", "name": "Dealer", "role": "Position Mgmt", "domain": "trading",
+    "model": "sonnet", "status": "active", "session": null,
+    "schedule": "Every 30m market hours", "notes": "Scan, enter, exit positions. Price update feed every 5m.",
+    "lastAudit": null, "lastOutput": "2026-02-20T12:45:00-08:00",
+    "type": "agent",
+    "connections": [
+      {"to": "razor", "label": "reports to"},
+      {"to": "price-update", "label": "fed by"}
+    ]
+  },
+  {
+    "id": "analyst", "name": "Analyst", "role": "Play Validator", "domain": "trading",
+    "model": "haiku", "status": "stale", "session": null,
+    "schedule": "7:30 AM weekdays", "notes": "Validates Strategist plays vs regime. Last ran Feb 20.",
+    "lastAudit": null, "lastOutput": "2026-02-20T07:31:00-08:00",
+    "type": "agent",
+    "connections": [
+      {"to": "strategist", "label": "reviews"}
+    ]
+  },
+  {
+    "id": "ledger", "name": "Ledger", "role": "Portfolio Tracking", "domain": "trading",
+    "model": "haiku", "status": "stale", "session": null,
+    "schedule": "1:30 PM weekdays", "notes": "Portfolio tracking, P/L, win rate. Last ran Feb 20.",
+    "lastAudit": null, "lastOutput": "2026-02-20T13:30:00-08:00",
+    "type": "agent",
+    "connections": [
+      {"to": "razor", "label": "reports to"}
+    ]
+  },
+  {
+    "id": "futures-monitor", "name": "Futures Monitor", "role": "Pre-Market Futures", "domain": "trading",
+    "model": "haiku", "status": "active", "session": null,
+    "schedule": "*/15 pre-market UTC", "notes": "Futures scan + brief. Part of Razor's desk.",
+    "lastAudit": null, "lastOutput": "2026-03-03T14:30:00-08:00",
+    "type": "agent",
+    "connections": [
+      {"to": "razor", "label": "feeds"}
+    ]
+  },
+  {
+    "id": "price-update", "name": "Price Update", "role": "Real-time Prices", "domain": "trading",
+    "model": null, "status": "active", "session": null,
+    "schedule": "*/5 market hours", "notes": "Real-time price feeds for Dealer.",
+    "lastAudit": null, "lastOutput": "2026-03-03T12:55:00-08:00",
+    "type": "service",
+    "connections": [
+      {"to": "dealer", "label": "feeds"}
+    ]
+  },
+  {
+    "id": "friday", "name": "Friday", "role": "Coding Agent", "domain": "coding",
+    "model": "opus", "status": "active", "session": null,
+    "schedule": "On-demand", "notes": "Claude Code CLI + Agent Teams. Mandatory QA pipeline.",
+    "lastAudit": null, "lastOutput": "2026-03-02T00:00:00-08:00",
+    "type": "agent",
+    "connections": [
+      {"to": "hex", "label": "reviewed by"},
+      {"to": "qa", "label": "triggers"}
+    ]
+  },
+  {
+    "id": "qa", "name": "QA", "role": "Code Review", "domain": "coding",
+    "model": "sonnet", "status": "active", "session": null,
+    "schedule": "Chained after Friday", "notes": "Mandatory post-build code review gate.",
+    "lastAudit": null, "lastOutput": "2026-03-02T00:00:00-08:00",
+    "type": "agent",
+    "connections": [
+      {"to": "friday", "label": "reviews"}
+    ]
+  },
+  {
+    "id": "dispatch", "name": "Dispatch", "role": "Task Dispatcher", "domain": "infra",
+    "model": "haiku", "status": "active", "session": null,
+    "schedule": "Every 5 min", "notes": "ClickUp → Friday pipeline. Always running.",
+    "lastAudit": null, "lastOutput": "2026-03-03T14:30:00-08:00",
+    "type": "agent",
+    "connections": [
+      {"to": "atlas", "label": "reports to"},
+      {"to": "friday", "label": "dispatches to"}
+    ]
+  },
+  {
+    "id": "radar", "name": "Radar", "role": "Work Scanner", "domain": "infra",
+    "model": "haiku", "status": "active", "session": null,
+    "schedule": "Every 30 min workdays", "notes": "Activity monitor. 119KB log today. UPGRADED from unverified.",
+    "lastAudit": null, "lastOutput": "2026-03-03T14:30:00-08:00",
+    "type": "agent",
+    "connections": [
+      {"to": "atlas", "label": "reports to"}
+    ]
+  },
+  {
+    "id": "qa-audit", "name": "QA Audit", "role": "Deploy Compliance", "domain": "infra",
+    "model": null, "status": "active", "session": null,
+    "schedule": "Every 15 min", "notes": "Deploy compliance checker. 'Clean ✅' today. UPGRADED from unverified.",
+    "lastAudit": null, "lastOutput": "2026-03-03T14:30:00-08:00",
+    "type": "service",
+    "connections": [
+      {"to": "atlas", "label": "reports to"}
+    ]
+  },
+  {
+    "id": "comms", "name": "Comms", "role": "Agent Messaging", "domain": "infra",
+    "model": null, "status": "active", "session": null,
+    "schedule": "Passive (agents write)", "notes": "Inter-agent messaging system. UPGRADED — actively used, not dead code.",
+    "lastAudit": null, "lastOutput": "2026-03-03T14:30:00-08:00",
+    "type": "service",
+    "connections": [
+      {"to": "atlas", "label": "feeds"},
+      {"to": "hex", "label": "connects"},
+      {"to": "razor", "label": "connects"},
+      {"to": "kiln", "label": "connects"},
+      {"to": "meridian", "label": "connects"}
+    ]
+  },
+  {
+    "id": "gateway", "name": "Gateway", "role": "OpenClaw Core", "domain": "infra",
+    "model": null, "status": "active", "session": null,
+    "schedule": "Always on", "notes": "Port 18789. systemd managed.",
+    "lastAudit": null, "lastOutput": "2026-03-03T14:35:00-08:00",
+    "type": "infra",
+    "connections": [
+      {"to": "atlas", "label": "hosts"},
+      {"to": "telegram", "label": "routes to"},
+      {"to": "monitor", "label": "connects"}
+    ]
+  },
+  {
+    "id": "telegram", "name": "Telegram", "role": "Channel", "domain": "infra",
+    "model": null, "status": "active", "session": null,
+    "schedule": "Always on", "notes": "Primary communication channel with Koa.",
+    "lastAudit": null, "lastOutput": "2026-03-03T14:35:00-08:00",
+    "type": "channel",
+    "connections": [
+      {"to": "atlas", "label": "Primary"}
+    ]
+  },
+  {
+    "id": "monitor", "name": "Agent Monitor", "role": "Fleet Monitor", "domain": "infra",
+    "model": null, "status": "active", "session": null,
+    "schedule": "Always on", "notes": "Port 9500. Tracks completions and registrations.",
+    "lastAudit": null, "lastOutput": "2026-03-03T14:35:00-08:00",
+    "type": "infra",
+    "connections": [
+      {"to": "gateway", "label": "Fallback #1"}
+    ]
+  },
+  {
+    "id": "clickup-bridge", "name": "ClickUp Bridge", "role": "Task Sync", "domain": "infra",
+    "model": null, "status": "active", "session": null,
+    "schedule": "Always on", "notes": "Two-way ClickUp ↔ D1 sync. systemd.",
+    "lastAudit": null, "lastOutput": "2026-03-03T14:35:00-08:00",
+    "type": "infra",
+    "connections": [
+      {"to": "dispatch", "label": "feeds"},
+      {"to": "gateway", "label": "connects"}
+    ]
+  },
+  {
+    "id": "scout", "name": "Scout", "role": "Opportunity Scanner", "domain": "life",
+    "model": "haiku", "status": "dead", "session": null,
+    "schedule": "Removed from cron", "notes": "Deferred, merging into Pathfinder.",
+    "lastAudit": null, "lastOutput": null,
+    "type": "agent",
+    "connections": []
+  },
+  {
+    "id": "guide", "name": "Guide", "role": "Life Guide", "domain": "life",
+    "model": "haiku", "status": "dead", "session": null,
+    "schedule": "Removed from cron", "notes": "Deferred, merging into Pathfinder.",
+    "lastAudit": null, "lastOutput": null,
+    "type": "agent",
+    "connections": []
+  },
+  {
+    "id": "sensei", "name": "Sensei", "role": "Mentor", "domain": "life",
+    "model": "haiku", "status": "dead", "session": null,
+    "schedule": "Removed from cron", "notes": "Deferred, merging into Pathfinder.",
+    "lastAudit": null, "lastOutput": null,
+    "type": "agent",
+    "connections": []
+  },
+  {
+    "id": "grower", "name": "Grower", "role": "Grow Ops", "domain": "production",
+    "model": "haiku", "status": "dead", "session": null,
+    "schedule": "Removed from cron", "notes": "Deferred until grow season. Reactivate Mar+.",
+    "lastAudit": null, "lastOutput": "2026-02-20T07:00:00-08:00",
+    "type": "agent",
+    "connections": [
+      {"to": "kiln", "label": "reports to"}
+    ]
+  },
+  {
+    "id": "darwin", "name": "Darwin", "role": "System Evolution", "domain": "meta",
+    "model": null, "status": "dead", "session": null,
+    "schedule": "Retired Feb 19", "notes": "Central auditor replaced by self-audits. Archive directory.",
+    "lastAudit": null, "lastOutput": null,
+    "type": "agent",
+    "connections": []
+  },
+  {
+    "id": "geo-scanner", "name": "Geo Scanner", "role": "Geographic Intel", "domain": "trading",
+    "model": "haiku", "status": "dead", "session": null,
+    "schedule": "Never activated", "notes": "Built Mar 1 but never got a cron entry or ran.",
+    "lastAudit": null, "lastOutput": null,
+    "type": "agent",
+    "connections": []
+  }
+]
