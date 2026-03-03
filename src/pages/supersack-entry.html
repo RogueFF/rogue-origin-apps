@@ -1117,20 +1117,20 @@
     // 1. Subtract supersacks per strain
     for (const [name, s] of Object.entries(strainData)) {
       if (s.sacks > 0 && s.productId) {
-        const r = await updatePool(s.productId, 'subtract', s.sacks, `${s.sacks} supersacks ${name} (${date})`, true);
+        const r = await updatePool(s.productId, 'subtract', s.sacks, `[Supersack Tracker] ${s.sacks} supersacks opened — ${name} (${date})`, true);
         if (!r.success) poolErrors.push(`${name}: ${r.error || 'failed'}`);
       }
     }
 
     // 2. Add biomass to pool
     if (config.biomass && biomass > 0) {
-      const r = await updatePool(config.biomass, 'add', biomass, `Biomass entry (${date})`);
+      const r = await updatePool(config.biomass, 'add', biomass, `[Supersack Tracker] Biomass +${biomass} lbs (${date})`);
       if (!r.success) poolErrors.push('Biomass: ' + (r.error || 'failed'));
     }
 
     // 3. Add trim to pool
     if (config.trim && trim > 0) {
-      const r = await updatePool(config.trim, 'add', trim, `Trim entry (${date})`);
+      const r = await updatePool(config.trim, 'add', trim, `[Supersack Tracker] Trim +${trim} lbs (${date})`);
       if (!r.success) poolErrors.push('Trim: ' + (r.error || 'failed'));
     }
 
