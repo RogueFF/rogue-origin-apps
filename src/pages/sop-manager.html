@@ -3929,24 +3929,59 @@
       const isCompact = layout === '4col';
 
       // Dynamic step packing — estimate content height per step and fill pages
+      // Heights are intentionally generous to prevent overflow past footer
       const PAGE_HEIGHT = 1123; // px (A4 at 96dpi)
-      const FULL_HEADER_HEIGHT = bilingual ? 320 : 280; // page 1 header + title + meta + desc
-      const COMPACT_HEADER_HEIGHT = 60; // page 2+ header
-      const FOOTER_HEIGHT = 50;
-      const SECTION_LABEL_HEIGHT = 30;
-      const STEP_BASE_HEIGHT = 70; // card chrome: number, title, padding, margins
-      const STEP_IMAGE_HEIGHT = 80; // extra for image/video QR
-      const CHAR_PER_LINE = layout === '4col' ? 25 : (layout === '2col' ? 35 : 70);
-      const LINE_HEIGHT = 15; // px per line of description text
-      const DESC_HEIGHT = (sop.description || '').length > 0 ? Math.ceil((sop.description || '').length / 80) * LINE_HEIGHT + 20 : 0;
+      const FULL_HEADER_HEIGHT = bilingual ? 380 : 340; // header band(150) + title section(~80) + meta row(~40) + desc + spacing
+      const COMPACT_HEADER_HEIGHT = 80; // compact header(44) + section label + spacing
+      const FOOTER_HEIGHT = 70; // footer lines + content + padding
+      const SECTION_LABEL_HEIGHT = 35;
+      const STEP_BASE_HEIGHT = 110; // card chrome: bar, number col(16+14 pad), title, step-body padding(14*2), card gap(8), card border/shadow, margins
+      const STEP_IMAGE_HEIGHT = 110; // image area with padding
+      const STEP_VIDEO_QR_HEIGHT = 90; // video QR column
+      const STEP_REF_BUTTONS_HEIGHT = 32; // per ref-mention button row
+      const STEP_REF_QR_HEIGHT = 60; // ref QR items row
+      const STEP_BILINGUAL_TITLE_HEIGHT = 22; // extra for ES title
+      const STEP_BANNER_HEIGHT = 28; // safety or quality banner
+      // Text column is ~420px wide in text layout (794 - 56*2 margins - 5 bar - 50 number col - 80 video qr area - padding)
+      const CHAR_PER_LINE = layout === '4col' ? 22 : (layout === '2col' ? 30 : 50);
+      const LINE_HEIGHT = 16; // px per line of description text (11.5px font * 1.65 line-height ≈ 19px, but estimate conservatively)
+      const DESC_HEIGHT = (sop.description || '').length > 0 ? Math.ceil((sop.description || '').length / 60) * LINE_HEIGHT + 24 : 0;
 
       function estimateStepHeight(step) {
-        const descLen = ((step.description || '') + (bilingual ? (step.desc_es || '') : '')).length;
-        const descLines = Math.max(1, Math.ceil(descLen / CHAR_PER_LINE));
+        const descEn = step.desc_en || step.description || '';
+        const descEs = bilingual ? (step.desc_es || '') : '';
+        const descLen = descEn.length + (descEs.length > 0 ? descEs.length + 20 : 0); // +20 for <br><br><em> spacing
+        const descLines = Math.max(2, Math.ceil(descLen / CHAR_PER_LINE));
         const hasMedia = !!(step.media || step.image);
+        const mediaType = step.mediaType || detectMediaType(step.media || step.image || '');
+        const isVideo = mediaType === 'video' || mediaType === 'youtube' || mediaType === 'gdrive' || mediaType === 'vimeo';
+
         let h = STEP_BASE_HEIGHT + (descLines * LINE_HEIGHT);
-        if (hasMedia && includeImages) h = Math.max(h, STEP_BASE_HEIGHT + STEP_IMAGE_HEIGHT);
-        if (layout === '4col') h = Math.max(h, 100); // min for compact
+
+        // Add height for media
+        if (hasMedia && !isVideo && includeImages) h += STEP_IMAGE_HEIGHT;
+        if (isVideo && includeQR) h = Math.max(h, STEP_BASE_HEIGHT + STEP_VIDEO_QR_HEIGHT + (descLines * LINE_HEIGHT));
+
+        // Bilingual title
+        if (bilingual && (step.title_es || step.title)) h += STEP_BILINGUAL_TITLE_HEIGHT;
+
+        // Safety/quality banner
+        if (step.safety) h += STEP_BANNER_HEIGHT;
+        if (step.quality) h += STEP_BANNER_HEIGHT;
+
+        // Reference paper buttons (from step.refs)
+        if (step.refs && step.refs.length > 0) h += STEP_REF_BUTTONS_HEIGHT;
+
+        // Reference QR codes (from structured refs + text-detected)
+        const refCount = (step.refs ? step.refs.length : 0);
+        const textRefs = ((step.description || '') + ' ' + (step.desc_en || '') + ' ' + (step.desc_es || '')).match(/(?:reference\s+paper|papel\s+de\s+referencia)/gi);
+        const totalRefs = refCount + (textRefs ? textRefs.length : 0);
+        if (totalRefs > 0 && includeQR) h += STEP_REF_QR_HEIGHT;
+
+        // Minimum heights
+        if (layout === '4col') h = Math.max(h, 130);
+        else h = Math.max(h, 120);
+
         return h;
       }
 
@@ -3959,7 +3994,8 @@
         let pageIdx = 0;
         while (remaining.length > 0) {
           const headerH = pageIdx === 0 ? (FULL_HEADER_HEIGHT + DESC_HEIGHT + SECTION_LABEL_HEIGHT) : (COMPACT_HEADER_HEIGHT + SECTION_LABEL_HEIGHT);
-          let available = PAGE_HEIGHT - headerH - FOOTER_HEIGHT;
+          const SAFETY_MARGIN = 40; // prevent any overflow into footer
+          let available = PAGE_HEIGHT - headerH - FOOTER_HEIGHT - SAFETY_MARGIN;
           const pageSteps = [];
 
           // For grid layouts, pack in rows
