@@ -3997,7 +3997,7 @@
           --green: #668971; --green-dark: #2d3a2e; --green-deep: #1e2a20;
           --cream: #faf8f3; --card-bg: #ffffff; --card-stroke: #e4dfd5;
           --text: #2d2d2d; --text-muted: #999;
-          font-family: 'Outfit', sans-serif; color: #2d2d2d;
+          font-family: 'Outfit', system-ui, -apple-system, sans-serif; color: #2d2d2d;
         }
         .pdf-container * { margin: 0; padding: 0; box-sizing: border-box; }
         .page { width: 1123px; height: 794px; background: var(--cream); color: var(--text); position: relative; overflow: hidden; }
@@ -4027,7 +4027,7 @@
         
         .section-label { padding: 10px 48px 8px; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; color: var(--text-muted); }
         
-        .steps-container { padding: 0 48px 20px; display: flex; flex-direction: column; gap: 12px; }
+        .steps-container { padding: 0 48px 20px; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
         
         .step-card { background: var(--card-bg); border: 1px solid var(--card-stroke); border-radius: 8px; display: flex; overflow: hidden; box-shadow: 0 2px 6px rgba(0,0,0,0.04); position: relative; }
         .step-card.safety { border-color: #c45c4a; background: #fde9e5; }
@@ -4125,7 +4125,7 @@
         html += '<div class="step-body">';
         html += '<div class="step-header"><div>';
         html += '<div class="step-title">' + esc(stepTitle) + '</div>';
-        if (bilingual && stepTitleEs) {
+        if (bilingual && stepTitleEs && stepTitleEs.trim()) {
           html += '<div class="step-title-es">' + esc(stepTitleEs) + '</div>';
         }
         html += '</div>';
@@ -4336,9 +4336,14 @@
 
         // Wait for fonts & images
         if (document.fonts && document.fonts.ready) {
+          await Promise.all([
+            document.fonts.load('16px "Outfit"'),
+            document.fonts.load('22px "DM Serif Display"'),
+            document.fonts.load('14px "JetBrains Mono"')
+          ]).catch(() => {});
           await document.fonts.ready;
         }
-        await new Promise(r => setTimeout(r, 800));
+        await new Promise(r => setTimeout(r, 400));
 
         const filename = 'SOP-' + (s.docNum || s.id) + '.pdf';
         const pageElements = container.querySelectorAll('.page');
