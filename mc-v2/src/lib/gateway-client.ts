@@ -394,7 +394,7 @@ export function getGatewayClient(): GatewayClient {
     const wsUrl = import.meta.env.VITE_GATEWAY_WS_URL
       || (location.protocol === 'https:'
         ? `wss://${location.host}/gw-ws`
-        : `ws://localhost:18789`);
+        : `ws://${location.host}/gw-ws`);
     const token = import.meta.env.VITE_GATEWAY_TOKEN as string || '';
 
     instance = new GatewayClient({ url: wsUrl, token });
