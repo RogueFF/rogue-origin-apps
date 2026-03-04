@@ -4719,7 +4719,7 @@
 
     function highlightRefs(text) {
       if (!text) return text;
-      return text.replace(/(?:reference\s+paper|papel\s+de\s+referencia)\s*(?:number\s*)?#?\s*#(\d+)/gi, function(match, num) {
+      return text.replace(/(?:reference\s+paper|papel\s+de\s+referencia)\s*(?:number\s*)?#(\d+)/gi, function(match, num) {
         return '<span class="ref-mention">📄 Reference Paper #' + num + '</span>';
       });
     }
