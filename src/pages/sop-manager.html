@@ -3782,16 +3782,34 @@
         }
       }
 
-      // Detect "reference paper" / "papel de referencia" mentions in step text → generate QR codes
+      // Generate QR codes for step references (structured refs + text-detected refs)
       assets.refQRs = {}; // { stepIndex: [{ label, qrBase64, sopId }] }
       if (options.includeQR) {
-        const refPattern = /(?:reference\s+paper|papel\s+de\s+referencia)\s*#?\s*(\d+)(?:\s*>?\s*v\.?\s*(\d+))?/gi;
         for (let i = 0; i < steps.length; i++) {
+          const seenSopIds = new Set();
+
+          // 1) Structured refs from step.refs array
+          if (steps[i].refs && steps[i].refs.length > 0) {
+            for (const ref of steps[i].refs) {
+              const linked = getSopById(ref.sopId);
+              if (!linked || linked.id === sop.id || seenSopIds.has(ref.sopId)) continue;
+              seenSopIds.add(ref.sopId);
+              if (!assets.refQRs[i]) assets.refQRs[i] = [];
+              const refLabel = linked.docNum || linked.title || 'Ref';
+              const refUrl = window.location.origin + window.location.pathname + '?view=' + ref.sopId;
+              totalAssets++;
+              const idx = i;
+              const refIdx = assets.refQRs[i].length;
+              assets.refQRs[idx].push({ label: refLabel, qrBase64: null, sopId: ref.sopId });
+              promises.push(getQRBase64(refUrl).then(r => { assets.refQRs[idx][refIdx].qrBase64 = r; updateProgress('Ref QR'); }));
+            }
+          }
+
+          // 2) Text-detected "reference paper" / "papel de referencia" mentions
+          const refPattern = /(?:reference\s+paper|papel\s+de\s+referencia)\s*#?\s*(\d+)(?:\s*>?\s*v\.?\s*(\d+))?/gi;
           const stepText = (steps[i].description || '') + ' ' + (steps[i].desc_en || '') + ' ' + (steps[i].desc_es || '');
           const matches = [...stepText.matchAll(refPattern)];
-          if (matches.length === 0) continue;
           
-          // Deduplicate by ref number+version
           const seen = new Set();
           for (const m of matches) {
             const refNum = m[1];
@@ -3800,17 +3818,16 @@
             if (seen.has(key)) continue;
             seen.add(key);
             
-            // Find matching SOP by title pattern
             const matchingSop = sops.find(s => {
               const t = (s.title || '').toLowerCase();
               const hasRef = t.includes('#' + refNum) || t.includes('# ' + refNum);
               if (!hasRef) return false;
               if (refVer) return t.includes('v.' + refVer) || t.includes('v' + refVer);
-              // If no version specified, prefer the latest (or any match)
               return true;
             });
             
-            if (matchingSop && matchingSop.id !== sop.id) {
+            if (matchingSop && matchingSop.id !== sop.id && !seenSopIds.has(matchingSop.id)) {
+              seenSopIds.add(matchingSop.id);
               if (!assets.refQRs[i]) assets.refQRs[i] = [];
               const refLabel = 'Ref #' + refNum + (refVer ? ' V.' + refVer : '');
               const refUrl = window.location.origin + window.location.pathname + '?view=' + matchingSop.id;
@@ -4002,7 +4019,7 @@
         .pdf-container * { margin: 0; padding: 0; box-sizing: border-box; }
         .page { width: 794px; height: 1123px; background: var(--cream); color: var(--text); position: relative; overflow: hidden; }
         .header-band { background: var(--green-deep); padding: 0 56px; height: 150px; display: flex; align-items: center; justify-content: space-between; position: relative; }
-        .header-band::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: #e4aa4f; }
+        .header-band::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px; background: rgba(102,137,113,0.3); }
         .header-left { display: flex; align-items: center; gap: 20px; }
         .header-logo { width: 80px; height: 80px; border-radius: 50%; overflow: hidden; border: 3px solid rgba(228, 170, 79, 0.3); flex-shrink: 0; box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
         .header-logo img { width: 100%; height: 100%; object-fit: cover; }
@@ -4020,7 +4037,7 @@
         .meta-pill .label { color: var(--text-muted); font-weight: 400; }
         .meta-pill .value { color: var(--green-dark); font-weight: 600; }
         .meta-pill.status .value { color: var(--green); }
-        .gold-divider { height: 1px; background: #e4aa4f; margin-bottom: 16px; }
+        .gold-divider { height: 1px; background: rgba(102,137,113,0.2); margin-bottom: 16px; }
         .sop-description { font-size: 13px; line-height: 1.7; color: var(--text); padding: 0 56px; margin-bottom: 8px; }
         .sop-description.es { color: var(--text-light); font-style: italic; font-size: 12px; }
         .section-label { padding: 12px 56px 8px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 3px; color: var(--text-muted); }
@@ -4067,14 +4084,14 @@
         .related-card .related-meta { font-size: 8px; color: var(--text-muted); }
         .page-footer { position: absolute; bottom: 0; left: 0; right: 0; padding: 0 56px 20px; }
         .footer-lines { height: 4px; margin-bottom: 8px; position: relative; }
-        .footer-lines::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1.5px; background: #e4aa4f; }
+        .footer-lines::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: rgba(102,137,113,0.3); }
         .footer-lines::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px; background: #668971; opacity: 0.4; }
         .footer-content { display: flex; justify-content: space-between; align-items: center; font-size: 9px; }
         .footer-brand { font-weight: 700; color: var(--green-dark); text-transform: uppercase; letter-spacing: 2px; font-size: 8px; }
         .footer-date { color: var(--text-muted); font-weight: 400; }
         .footer-page { color: var(--text-muted); font-weight: 500; font-family: 'JetBrains Mono', monospace; font-size: 9px; }
         .header-compact { background: var(--green-deep); padding: 0 56px; height: 44px; display: flex; align-items: center; justify-content: space-between; position: relative; }
-        .header-compact::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px; background: #e4aa4f; }
+        .header-compact::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px; background: rgba(102,137,113,0.3); }
         .header-compact .compact-left { display: flex; align-items: center; gap: 10px; }
         .header-compact .compact-logo { width: 28px; height: 28px; border-radius: 50%; overflow: hidden; }
         .header-compact .compact-logo img { width: 100%; height: 100%; object-fit: cover; }
