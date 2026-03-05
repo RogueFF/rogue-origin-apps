@@ -3,14 +3,17 @@
  * Init, event listeners, auto-refresh, orchestration
  */
 
-import * as api from './api.js?v=6';
-import * as ui from './ui.js?v=10';
+import * as api from './api.js?v=7';
+import * as ui from './ui.js?v=11';
 
 let partners = [];
 let strains = [];
 let selectedPartnerId = null;
 let refreshInterval = null;
 let lineItemCount = 0;
+
+// Vendor product cache: maps strain name → { productId, variants[] }
+let vendorProductMap = null;
 
 // Prefetch cache
 const detailCache = new Map();
@@ -24,12 +27,33 @@ const MIN_REFRESH_GAP = 5000; // Don't refresh if user acted < 5s ago
 // ─── INIT ───────────────────────────────────────────────
 
 async function init() {
-  await Promise.all([loadPartners(), loadStrains(), loadActivity()]);
+  await Promise.all([loadPartners(), loadStrains(), loadActivity(), loadVendorProducts()]);
   setupEventListeners();
   initCommandPalette();
   setupAutoRefresh();
   setDefaultDates();
   loadStrainBreakdowns();
+}
+
+async function loadVendorProducts() {
+  try {
+    const result = await api.listVendorProducts();
+    const products = result.products || [];
+    vendorProductMap = new Map();
+    products.forEach(p => {
+      // displayTitle may include "[VENDOR] " prefix — strip it
+      const cleanName = (p.displayTitle || p.title).replace(/^\[VENDOR\]\s*/i, '');
+      vendorProductMap.set(cleanName.toLowerCase(), { productId: p.id, title: cleanName });
+    });
+    // Store products array for fuzzy matching
+    vendorProductMap._products = products.map(p => ({
+      ...p,
+      cleanName: (p.displayTitle || p.title).replace(/^\[VENDOR\]\s*/i, ''),
+    }));
+  } catch (err) {
+    console.warn('Vendor products unavailable:', err.message);
+    vendorProductMap = null;
+  }
 }
 
 async function loadPartners() {
@@ -95,8 +119,12 @@ async function showPartnerDetail(partnerId) {
     const detail = detailResult.data;
     detail.reconciliation = reconResult.data;
 
+    // Fetch Shopify vendor inventory for this partner's strains
+    detail.vendorInventory = await fetchVendorInventoryForPartner(detail);
+
     detailCache.set(partnerId, { data: detail, ts: Date.now() });
     ui.renderPartnerDetail(detail, el('partner-detail'), () => { selectedPartnerId = null; });
+
   } catch (err) {
     console.error('Failed to load partner detail:', err);
     ui.showToast('Failed to load partner details', 'error');
@@ -728,6 +756,73 @@ function parseCommand(raw) {
       }, 100);
     }
   }
+}
+
+// ─── VENDOR INVENTORY ──────────────────────────────────
+
+/**
+ * Check if a Shopify vendor name matches a consignment partner name.
+ * Shopify format: "Jeff (Wandering Roots Botanicals)" — partner name: "Wandering Roots Botanicals"
+ */
+function vendorNameMatches(shopifyVendor, partnerName) {
+  const a = shopifyVendor.toLowerCase();
+  const b = partnerName.toLowerCase();
+  return a === b || a.includes(b) || b.includes(a);
+}
+
+/**
+ * Find a vendor product by strain name with fuzzy matching.
+ * Tries: exact match → startsWith → contains
+ */
+function findVendorProduct(strainName) {
+  if (!vendorProductMap) return null;
+  const key = strainName.toLowerCase();
+  // Exact match
+  if (vendorProductMap.has(key)) return vendorProductMap.get(key);
+  // Fuzzy: consignment name starts with or is contained in vendor name
+  const products = vendorProductMap._products || [];
+  const match = products.find(p => {
+    const vn = p.cleanName.toLowerCase();
+    return vn.startsWith(key) || key.startsWith(vn);
+  });
+  return match ? { productId: match.id, title: match.cleanName } : null;
+}
+
+/**
+ * Fetch Shopify vendor inventory for a partner's strains.
+ * Returns map of "strain|type" → grams for matching vendor+flowerType combos.
+ */
+async function fetchVendorInventoryForPartner(detail) {
+  if (!vendorProductMap || !detail.inventory || detail.inventory.length === 0) return {};
+
+  const partnerName = detail.partner.name;
+  // Get unique strains this partner has
+  const strainNames = [...new Set(detail.inventory.map(i => i.strain))];
+
+  const vendorInv = {};
+
+  await Promise.all(strainNames.map(async (strain) => {
+    const vendorProduct = findVendorProduct(strain);
+    if (!vendorProduct) return;
+
+    try {
+      const result = await api.getVendorVariants(vendorProduct.productId);
+      const variants = result.variants || [];
+
+      // Find variants matching this partner's name (fuzzy: "Wandering Roots Botanicals" matches "Jeff (Wandering Roots Botanicals)")
+      variants.forEach(v => {
+        if (vendorNameMatches(v.vendorName, partnerName)) {
+          const type = v.flowerType.toLowerCase();
+          const key = `${strain}|${type}`;
+          vendorInv[key] = (vendorInv[key] || 0) + v.quantity;
+        }
+      });
+    } catch (err) {
+      console.warn(`Failed to fetch vendor variants for ${strain}:`, err.message);
+    }
+  }));
+
+  return vendorInv;
 }
 
 // ─── STRAIN BREAKDOWN ──────────────────────────────────

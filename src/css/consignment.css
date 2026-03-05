@@ -1177,7 +1177,7 @@ html[data-theme='light'] .inventory-bar {
 
 .inv-table-header {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
   padding: 8px 12px;
   background: rgba(255, 255, 255, 0.03);
   font-size: 10px;
@@ -1189,7 +1189,7 @@ html[data-theme='light'] .inventory-bar {
 
 .inv-table-row {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
   padding: 8px 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.04);
   font-size: 13px;
@@ -1220,6 +1220,25 @@ html[data-theme='light'] .inventory-bar {
   font-weight: 600;
   color: rgba(255, 255, 255, 0.88);
   text-align: right;
+}
+
+.inv-shopify {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: right;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.inv-shopify-warn {
+  color: #e4aa4f;
+}
+
+.inv-no-link {
+  opacity: 0.3;
+}
+
+.inv-mismatch {
+  background: rgba(228, 170, 79, 0.06);
 }
 
 /* History tables */
@@ -2544,6 +2563,18 @@ html[data-theme='light'] .inv-strain {
 
 html[data-theme='light'] .inv-lbs {
   color: #2d3a2e;
+}
+
+html[data-theme='light'] .inv-shopify {
+  color: rgba(45, 58, 46, 0.45);
+}
+
+html[data-theme='light'] .inv-shopify-warn {
+  color: #b38429;
+}
+
+html[data-theme='light'] .inv-mismatch {
+  background: rgba(179, 132, 41, 0.06);
 }
 
 html[data-theme='light'] .history-table-row {

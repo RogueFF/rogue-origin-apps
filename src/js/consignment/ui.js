@@ -170,6 +170,7 @@ export function renderPartnerDetail(detail, container, onClose) {
   const totalIntakeLbs = d.intakes.reduce((s, i) => s + i.weight_lbs, 0);
   const totalSoldLbs = d.sales.reduce((s, i) => s + i.weight_lbs, 0);
   const onHandLbs = d.inventory.reduce((s, i) => s + i.on_hand_lbs, 0);
+  const stockValue = d.reconciliation?.lines?.reduce((s, l) => s + (l.remaining * l.price_per_lb), 0) || 0;
   
   container.innerHTML = `
     <div class="detail-header">
@@ -200,8 +201,8 @@ export function renderPartnerDetail(detail, container, onClose) {
           <div class="stat-value">${onHandLbs.toFixed(1)} <small>lbs</small></div>
         </div>
         <div class="detail-stat">
-          <div class="stat-label">Total Purchased</div>
-          <div class="stat-value">${totalIntakeLbs.toFixed(1)} <small>lbs</small></div>
+          <div class="stat-label">Stock Value</div>
+          <div class="stat-value">\$${fmt(stockValue)}</div>
         </div>
       </div>
       
@@ -288,14 +289,20 @@ export function renderPartnerDetail(detail, container, onClose) {
               <span>Strain</span>
               <span>Type</span>
               <span>On Hand</span>
+              <span>Shopify</span>
             </div>
-            ${d.inventory.map(i => `
-              <div class="inv-table-row">
+            ${d.inventory.map(i => {
+              const shopifyGrams = d.vendorInventory?.[`${i.strain}|${i.type}`];
+              const shopifyLbs = shopifyGrams != null ? (shopifyGrams / 453.592).toFixed(1) : null;
+              const mismatch = shopifyLbs != null && Math.abs(parseFloat(shopifyLbs) - i.on_hand_lbs) > 0.2;
+              return `
+              <div class="inv-table-row${mismatch ? ' inv-mismatch' : ''}">
                 <span class="inv-strain">${esc(i.strain)}</span>
                 <span class="inv-type type-${i.type}">${i.type}</span>
                 <span class="inv-lbs">${i.on_hand_lbs.toFixed(1)} lbs</span>
-              </div>
-            `).join('')}
+                <span class="inv-shopify${mismatch ? ' inv-shopify-warn' : ''}">${shopifyLbs != null ? shopifyLbs + ' lbs' : '<span class="inv-no-link">—</span>'}</span>
+              </div>`;
+            }).join('')}
           </div>
         </div>
       ` : ''}

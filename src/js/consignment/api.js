@@ -163,3 +163,30 @@ export function saveBatchCount(data) {
 export function getReconciliation(partnerId) {
   return apiGet('getConsignmentReconciliation', { partner_id: partnerId });
 }
+
+// ─── POOL / VENDOR INVENTORY API ────────────────────────
+
+const POOL_API_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/pool';
+
+async function poolPost(action, data = {}) {
+  const res = await fetch(`${POOL_API_BASE}?action=${action}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'Pool API request failed');
+  }
+  const result = await res.json();
+  return result.data || result;
+}
+
+export function listVendorProducts() {
+  return poolPost('list_vendor_products');
+}
+
+export function getVendorVariants(productId) {
+  return poolPost('get_vendor_variants', { productId });
+}
+
