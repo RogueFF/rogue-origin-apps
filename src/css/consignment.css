@@ -2932,3 +2932,149 @@ html[data-theme='light'] .card-strains {
     animation: none;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   BATCH COUNT
+   ═══════════════════════════════════════════════════════════ */
+
+.count-line { align-items: center; }
+.count-strain-name { font-weight: 500; }
+.count-expected { font-family: 'JetBrains Mono', monospace; opacity: 0.7; }
+.count-actual {
+  width: 100%;
+  text-align: right;
+  font-family: 'JetBrains Mono', monospace;
+}
+.count-diff {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  opacity: 0.5;
+  text-align: center;
+  min-width: 50px;
+}
+.count-diff-sold {
+  color: var(--ro-gold, #e4aa4f);
+  opacity: 1;
+  font-weight: 600;
+}
+
+.count-summary {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: rgba(102, 137, 113, 0.1);
+  border: 1px solid rgba(102, 137, 113, 0.2);
+  border-radius: 8px;
+}
+.count-summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 0.95rem;
+}
+.count-summary-row strong {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--ro-gold, #e4aa4f);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RECONCILIATION
+   ═══════════════════════════════════════════════════════════ */
+
+.recon-grade-section { margin-bottom: 20px; }
+.recon-grade-section h4 {
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+  color: rgba(255,255,255,0.7);
+}
+
+.recon-table { width: 100%; }
+.recon-table-header,
+.recon-table-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1.2fr;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 0.85rem;
+  align-items: center;
+}
+.recon-table-header {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  opacity: 0.6;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+}
+.recon-table-row {
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.recon-strain { font-weight: 500; }
+.recon-sold { color: var(--ro-gold, #e4aa4f); font-weight: 600; }
+.recon-revenue {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+}
+
+.recon-totals {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.recon-total-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 0.95rem;
+}
+.recon-total-row strong {
+  font-family: 'JetBrains Mono', monospace;
+}
+.recon-total-row strong.positive { color: var(--ro-green, #668971); }
+.recon-total-row strong.warning { color: var(--ro-gold, #e4aa4f); }
+.recon-balance {
+  border-top: 1px solid rgba(255,255,255,0.1);
+  margin-top: 4px;
+  padding-top: 10px;
+  font-size: 1.05rem;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PARTNER CARD GRADE SPLIT
+   ═══════════════════════════════════════════════════════════ */
+
+.card-grade-split {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  color: var(--ro-gold, #e4aa4f);
+  margin-bottom: 2px;
+}
+.card-strain-list {
+  font-size: 0.75rem;
+  opacity: 0.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LIGHT THEME OVERRIDES
+   ═══════════════════════════════════════════════════════════ */
+
+[data-theme="light"] .count-diff-sold { color: #b8860b; }
+[data-theme="light"] .count-summary { background: rgba(102, 137, 113, 0.08); border-color: rgba(102, 137, 113, 0.15); }
+[data-theme="light"] .count-summary-row strong { color: #b8860b; }
+[data-theme="light"] .recon-grade-section h4 { color: rgba(0,0,0,0.6); }
+[data-theme="light"] .recon-table-header { border-color: rgba(0,0,0,0.1); opacity: 0.5; }
+[data-theme="light"] .recon-table-row { border-color: rgba(0,0,0,0.05); }
+[data-theme="light"] .recon-sold { color: #b8860b; }
+[data-theme="light"] .recon-totals { background: rgba(0,0,0,0.02); border-color: rgba(0,0,0,0.08); }
+[data-theme="light"] .recon-balance { border-color: rgba(0,0,0,0.1); }
+[data-theme="light"] .card-grade-split { color: #b8860b; }
