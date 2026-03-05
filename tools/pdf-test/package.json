@@ -1,0 +1,21 @@
+{
+  "name": "rogue-origin-pdf-test",
+  "version": "1.0.0",
+  "description": "PDF Visual QA Pipeline for Rogue Origin SOP Manager",
+  "main": "generate.js",
+  "scripts": {
+    "test": "./test-pdf.sh"
+  },
+  "keywords": [
+    "pdf",
+    "qa",
+    "testing",
+    "puppeteer"
+  ],
+  "author": "Atlas QA System",
+  "license": "MIT",
+  "dependencies": {
+    "pdf-lib": "^1.17.1",
+    "puppeteer-core": "^21.11.0"
+  }
+}

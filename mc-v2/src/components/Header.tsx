@@ -22,6 +22,7 @@ export function Header({ connectionState }: { connectionState: ConnectionState }
   const dotColor = stateColors[connectionState];
 
   return (
+    <>
     <header
       style={{
         height: 48,
@@ -105,5 +106,22 @@ export function Header({ connectionState }: { connectionState: ConnectionState }
         </button>
       </div>
     </header>
+    {connectionState === 'reconnecting' && (
+      <div style={{
+        height: 2,
+        width: '100%',
+        background: 'var(--accent-gold)',
+        animation: 'reconnect-pulse 1.5s ease-in-out infinite',
+        position: 'relative',
+        zIndex: 10,
+      }} />
+    )}
+    <style>{`
+      @keyframes reconnect-pulse {
+        0%, 100% { opacity: 0.4; }
+        50% { opacity: 1; }
+      }
+    `}</style>
+    </>
   );
 }
