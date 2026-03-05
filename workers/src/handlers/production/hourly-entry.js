@@ -280,8 +280,8 @@ async function getProduction(params, env) {
       tops2: r.tops_lbs2 || 0,
       smalls2: r.smalls_lbs2 || 0,
       qcNotes: r.qc || '',
-      effectiveTrimmers1: r.effective_trimmers_line1 || null,
-      effectiveTrimmers2: r.effective_trimmers_line2 || null,
+      effectiveTrimmers1: r.effective_trimmers_line1 ?? null,
+      effectiveTrimmers2: r.effective_trimmers_line2 ?? null,
     })),
   });
 }

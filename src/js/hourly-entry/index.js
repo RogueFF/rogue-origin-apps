@@ -1193,6 +1193,23 @@ function getEffectiveTrimmers(slot, savedData = null) {
   if (isCurrentEditorSlot) {
     const t1 = parseInt(document.getElementById('trimmers1').value, 10) || 0;
     const t2 = parseInt(document.getElementById('trimmers2').value, 10) || 0;
+
+    // Check dayData for pre-computed effective trimmers from a previous save
+    // (crew change log resets when re-opening the editor, but dayData retains the weighted values)
+    const stored = dayData[slot];
+    if (stored && stored.effectiveTrimmers1 != null) {
+      const storedRaw1 = stored.trimmers1 || 0;
+      const storedRaw2 = stored.trimmers2 || 0;
+      // Only use stored effective values if form fields match saved raw values
+      // (i.e., user hasn't made a NEW crew change in this editor session)
+      if (t1 === storedRaw1 && t2 === storedRaw2) {
+        return {
+          effectiveTrimmers1: stored.effectiveTrimmers1,
+          effectiveTrimmers2: stored.effectiveTrimmers2 || 0,
+        };
+      }
+    }
+
     return { effectiveTrimmers1: t1, effectiveTrimmers2: t2 };
   }
 
