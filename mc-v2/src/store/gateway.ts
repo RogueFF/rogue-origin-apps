@@ -6,6 +6,7 @@
  */
 
 import { create } from 'zustand';
+import { useToastStore } from '../lib/notifications-api';
 import {
   getGatewayClient,
   type ConnectionState,
@@ -13,6 +14,7 @@ import {
   type PresenceEntry,
   type GatewayClient,
 } from '../lib/gateway-client';
+import { toastSuccess, toastWarning, toastInfo } from '../lib/notifications-api';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -43,6 +45,7 @@ export interface Notification {
   title: string;
   body: string;
   timestamp: string;
+  timestampMs?: number;
   accentColor: string;
   sessionKey?: string;
   agentId?: string;
@@ -88,17 +91,10 @@ interface GatewayStore {
   refreshCrons: () => Promise<void>;
 }
 
-// ---------------------------------------------------------------------------
-// Agent config (static — matches gateway config)
-// ---------------------------------------------------------------------------
-
-const AGENT_CONFIG: Record<string, { name: string; color: string; glyph: string }> = {
-  main: { name: 'Atlas', color: '#22c55e', glyph: '軸' },
-  kiln: { name: 'Kiln', color: '#f59e0b', glyph: '窯' },
-  razor: { name: 'Razor', color: '#8b5cf6', glyph: '刃' },
-  meridian: { name: 'Meridian', color: '#3b82f6', glyph: '経' },
-  hex: { name: 'Hex', color: '#ef4444', glyph: '呪' },
-};
+// Agent config from shared constants
+import { AGENT_CONFIG, FEED_CACHE_KEY, FEED_MAX_ITEMS } from '../lib/constants';
+import { timeAgo } from '../lib/utils';
+import { loadChatHistory, persistChatHistory } from './chat';
 
 // Session key patterns for each agent
 function agentMainSessionKey(agentId: string): string {
@@ -113,14 +109,6 @@ function deriveAgentStatus(entry?: PresenceEntry): 'online' | 'running' | 'idle'
   return 'idle';
 }
 
-function timeAgo(ts: number): string {
-  const diffS = Math.floor((Date.now() - ts) / 1000);
-  if (diffS < 60) return 'now';
-  if (diffS < 3600) return `${Math.floor(diffS / 60)}m ago`;
-  if (diffS < 86400) return `${Math.floor(diffS / 3600)}h ago`;
-  return `${Math.floor(diffS / 86400)}d ago`;
-}
-
 // ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
@@ -128,19 +116,21 @@ function timeAgo(ts: number): string {
 export const useGatewayStore = create<GatewayStore>((set, get) => {
   let client: GatewayClient | null = null;
   let cleanups: (() => void)[] = [];
-  let hasSeededActivity = false;
+  let lastSeedConnectId = 0;  // Reseed on each new connection
+  let connectId = 0;
 
   function buildAgents(presence: PresenceEntry[]): AgentState[] {
     return Object.entries(AGENT_CONFIG).map(([id, cfg]) => {
-      // Match presence entry — try tags first, then text, then roles, then host
+      // Match presence entry — prefer agentId field, then tags, then heuristics
       const entry = presence.find(p =>
+        (p as Record<string, unknown>).agentId === id ||
         p.tags?.includes(`agent:${id}`) ||
         p.tags?.includes(id) ||
         p.roles?.includes(id) ||
         p.text?.toLowerCase().includes(id) ||
         p.mode?.toLowerCase().includes(id)
       );
-      // For 'main' (Atlas), use the gateway presence itself
+      // For 'main' (Atlas), use the gateway presence itself as fallback
       const fallback = id === 'main' && !entry ? presence[0] : undefined;
       const match = entry || fallback;
       return {
@@ -155,15 +145,40 @@ export const useGatewayStore = create<GatewayStore>((set, get) => {
   }
 
   function wireEvents(client: GatewayClient) {
-    // Connection state
+    // Connection state — fire toasts on transitions
+    let prevState: ConnectionState = 'disconnected';
     cleanups.push(client.onStateChange((state) => {
       set({ connectionState: state });
+      // Reconnect feedback
+      if (state === 'reconnecting' && prevState === 'connected') {
+        toastWarning('Connection lost', 'Reconnecting...');
+      } else if (state === 'connected' && (prevState === 'reconnecting' || prevState === 'connecting')) {
+        if (prevState === 'reconnecting') {
+          toastSuccess('Connected', 'Gateway connection restored');
+        }
+      } else if (state === 'disconnected' && prevState === 'connected') {
+        toastWarning('Disconnected', 'Gateway connection lost');
+      }
+      prevState = state;
     }));
 
-    // Presence updates
+    // Presence updates — detect agent status changes
     cleanups.push(client.on('presence', (payload) => {
       const entries = (payload as { entries?: PresenceEntry[] })?.entries || [];
-      set({ agents: buildAgents(entries) });
+      const oldAgents = get().agents;
+      const newAgents = buildAgents(entries);
+      // Detect status transitions worth notifying
+      for (const newA of newAgents) {
+        const oldA = oldAgents.find(a => a.id === newA.id);
+        if (oldA && oldA.status !== newA.status) {
+          if (newA.status === 'running' && oldA.status !== 'running') {
+            toastInfo(`${newA.name} active`, 'Agent started working');
+          } else if (newA.status === 'offline' && oldA.status !== 'offline') {
+            toastInfo(`${newA.name} offline`, 'Agent went offline');
+          }
+        }
+      }
+      set({ agents: newAgents });
     }));
 
     // Health updates
@@ -241,6 +256,9 @@ export const useGatewayStore = create<GatewayStore>((set, get) => {
           chatHistory: { ...chatHistory, [agentId]: history },
           chatStreaming: { ...chatStreaming, [agentId]: false },
         });
+        // Toast on agent errors
+        const agentName = AGENT_CONFIG[agentId]?.name || agentId;
+        toastWarning(`${agentName} Error`, ev.errorMessage || 'Agent response failed');
       }
 
       // Add meaningful responses to notification feed (skip noise)
@@ -285,15 +303,31 @@ export const useGatewayStore = create<GatewayStore>((set, get) => {
     }));
   }
 
+  // Load cached feed from localStorage
+  function loadCachedFeed(): Notification[] {
+    try {
+      const raw = localStorage.getItem(FEED_CACHE_KEY);
+      return raw ? (JSON.parse(raw) as Notification[]).slice(0, FEED_MAX_ITEMS) : [];
+    } catch { return []; }
+  }
+
+  function persistFeed(items: Notification[]) {
+    try {
+      localStorage.setItem(FEED_CACHE_KEY, JSON.stringify(items.slice(0, FEED_MAX_ITEMS)));
+    } catch { /* quota exceeded */ }
+  }
+
   function addNotification(n: Omit<Notification, 'id' | 'timestamp'>) {
     const { notifications } = get();
     const notification: Notification = {
       ...n,
       id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       timestamp: new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
+      timestampMs: Date.now(),
     };
-    // Keep max 50 notifications
-    set({ notifications: [notification, ...notifications].slice(0, 50) });
+    const updated = [notification, ...notifications].slice(0, FEED_MAX_ITEMS);
+    set({ notifications: updated });
+    persistFeed(updated);
   }
 
   return {
@@ -304,9 +338,11 @@ export const useGatewayStore = create<GatewayStore>((set, get) => {
       id, name: cfg.name, color: cfg.color, status: 'offline' as const,
       task: 'Connecting...', lastActivity: 'unknown',
     })),
-    chatHistory: {},
+    chatHistory: Object.fromEntries(
+      Object.keys(AGENT_CONFIG).map(id => [id, loadChatHistory(id) as ChatMessage[]])
+    ),
     chatStreaming: {},
-    notifications: [],
+    notifications: loadCachedFeed(),
     crons: [],
     sessions: [],
 
@@ -315,6 +351,7 @@ export const useGatewayStore = create<GatewayStore>((set, get) => {
       wireEvents(client);
 
       try {
+        connectId++;
         const snapshot = await client.connect();
         set({
           uptimeMs: snapshot.uptimeMs,
@@ -441,9 +478,9 @@ export const useGatewayStore = create<GatewayStore>((set, get) => {
         });
         set({ agents: updated });
 
-        // Seed activity feed on first load — show recent session activity
-        if (!hasSeededActivity) {
-          hasSeededActivity = true;
+        // Seed activity feed on connect/reconnect — show recent session activity
+        if (lastSeedConnectId !== connectId) {
+          lastSeedConnectId = connectId;
           const now = Date.now();
           const thirtyMin = 30 * 60 * 1000;
           const recentSessions = sessions
@@ -484,7 +521,9 @@ export const useGatewayStore = create<GatewayStore>((set, get) => {
 
           if (seedNotifs.length > 0) {
             const { notifications: existing } = get();
-            set({ notifications: [...seedNotifs, ...existing].slice(0, 50) });
+            const merged = [...seedNotifs, ...existing].slice(0, FEED_MAX_ITEMS);
+            set({ notifications: merged });
+            persistFeed(merged);
           }
         }
       } catch (err) {
@@ -503,4 +542,16 @@ export const useGatewayStore = create<GatewayStore>((set, get) => {
       }
     },
   };
+});
+
+// Auto-persist chat history to localStorage on changes
+let prevChatRef: Record<string, ChatMessage[]> = {};
+useGatewayStore.subscribe((state) => {
+  const { chatHistory } = state;
+  for (const agentId of Object.keys(chatHistory)) {
+    if (chatHistory[agentId] !== prevChatRef[agentId]) {
+      persistChatHistory(agentId, chatHistory[agentId]);
+    }
+  }
+  prevChatRef = chatHistory;
 });
