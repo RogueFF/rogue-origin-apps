@@ -22,13 +22,21 @@ import { Monitor } from './views/Monitor';
 import { Tasks } from './views/Tasks';
 import { Placeholder } from './views/Placeholder';
 import { System } from './views/System';
+import { MobileChat } from './views/MobileChat';
 import { ToastContainer } from './components/Toast';
+
+import { toastError } from './lib/notifications-api';
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
       retry: 2,
+    },
+    mutations: {
+      onError: (error) => {
+        toastError('Operation failed', error instanceof Error ? error.message : 'Unknown error');
+      },
     },
   },
 });
@@ -68,6 +76,7 @@ function AppShell() {
             <Route path="/" element={<MobileDashboard />} />
             <Route path="/fleet" element={<MobileFleet />} />
             <Route path="/feed" element={<MobileFeed />} />
+            <Route path="/chat" element={<MobileChat />} />
             <Route path="/tasks" element={<Tasks />} />
             <Route path="/production" element={<Placeholder title="Production" />} />
             <Route path="/trading" element={<Placeholder title="Trading" />} />

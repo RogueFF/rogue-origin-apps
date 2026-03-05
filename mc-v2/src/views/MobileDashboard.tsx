@@ -1,7 +1,13 @@
 import { useGatewayStore } from '../store/gateway';
 import { useScoreboard } from '../lib/production-api';
-import { kpis as fallbackKpis, activities, AGENT_GLYPHS } from '../data/mock';
-import type { KPI } from '../data/mock';
+import { AGENT_GLYPHS } from '../lib/constants';
+
+interface KPI {
+  label: string;
+  value: string;
+  unit?: string;
+  trend?: 'up' | 'down' | 'flat';
+}
 
 function KpiCard({ kpi }: { kpi: KPI }) {
   return (
@@ -65,12 +71,15 @@ export function MobileDashboard() {
         { label: 'Strain', value: prod.strain || '—' },
         { label: 'Bags', value: String(prod.bagCount || 0) },
       ]
-    : fallbackKpis;
+    : [
+        { label: "Today's Lbs", value: '—', unit: 'lbs' },
+        { label: 'Rate', value: '—', unit: 'lbs/hr' },
+        { label: 'Crew', value: '—' },
+        { label: 'Agents', value: `${agents.filter(a => a.status !== 'offline').length}/5` },
+      ];
 
-  // Use live notifications or mock activities
-  const feed = notifications.length > 0
-    ? notifications.map(n => ({ id: n.id, type: n.type, title: n.title, body: n.body, timestamp: n.timestamp }))
-    : activities.map(a => ({ id: a.id, type: a.type, title: a.title, body: a.body, timestamp: a.timestamp }));
+  // Use live notifications
+  const feed = notifications.map(n => ({ id: n.id, type: n.type, title: n.title, body: n.body, timestamp: n.timestamp }));
 
   return (
     <div style={{ height: '100%', overflow: 'auto', WebkitOverflowScrolling: 'touch' }}>

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useGatewayStore } from '../store/gateway';
 import { useSystemStats, type SystemStats } from '../lib/system-api';
 import { DepthCard } from '../components/DepthCard';
+import { StateCard } from '../components/StateCard';
+import { formatUptime, formatMs } from '../lib/utils';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -19,20 +21,6 @@ interface ServiceInfo {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function formatUptime(seconds: number): string {
-  if (!seconds || seconds <= 0) return '—';
-  const d = Math.floor(seconds / 86400);
-  const h = Math.floor((seconds % 86400) / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  if (d > 0) return `${d}d ${h}h`;
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
-}
-
-function formatMs(ms: number): string {
-  return formatUptime(Math.floor(ms / 1000));
-}
 
 function statusDot(status: string): { color: string; glow: boolean } {
   switch (status) {
@@ -167,15 +155,7 @@ function ServicesPanel({ stats }: { stats?: SystemStats | null }) {
     }}>
       <SectionLabel>Services</SectionLabel>
       {services.length === 0 ? (
-        <div style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 10,
-          color: 'var(--text-tertiary)',
-          padding: '16px 0',
-          textAlign: 'center',
-        }}>
-          Service data unavailable — waiting for /api/system services field
-        </div>
+        <StateCard state="empty" icon="🔧" message="No services detected" subtitle="Service monitoring will appear when /api/system provides service data" />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {services.map((svc) => {
@@ -351,7 +331,7 @@ function ResourceBar({ label, value, max, unit, pct }: {
   );
 }
 
-function ResourceTrends({ stats }: { stats?: SystemStats | null }) {
+function ResourceTrends({ stats, isError, refetch }: { stats?: SystemStats | null; isError?: boolean; refetch?: () => void }) {
   if (!stats) {
     return (
       <DepthCard className="liquid-glass" style={{
@@ -359,15 +339,12 @@ function ResourceTrends({ stats }: { stats?: SystemStats | null }) {
         padding: '12px 16px',
       }}>
         <SectionLabel>Resource Trends</SectionLabel>
-        <div style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 10,
-          color: 'var(--text-tertiary)',
-          padding: '16px 0',
-          textAlign: 'center',
-        }}>
-          Waiting for system stats…
-        </div>
+        <StateCard
+          state={isError ? 'error' : 'loading'}
+          message={isError ? 'System stats unavailable' : 'Loading system stats…'}
+          subtitle={isError ? '/api/system endpoint not responding' : undefined}
+          onRetry={isError ? refetch : undefined}
+        />
       </DepthCard>
     );
   }
@@ -715,7 +692,7 @@ function NetworkPanel() {
 // ---------------------------------------------------------------------------
 
 export function System() {
-  const { data: systemStats } = useSystemStats();
+  const { data: systemStats, isError: systemError, refetch: systemRefetch } = useSystemStats();
 
   return (
     <div style={{
@@ -756,7 +733,7 @@ export function System() {
           gap: 12,
           minHeight: 0,
         }}>
-          <ResourceTrends stats={systemStats} />
+          <ResourceTrends stats={systemStats} isError={systemError} refetch={() => systemRefetch()} />
           <NetworkPanel />
         </div>
       </div>

@@ -3,7 +3,7 @@ import { useChatStore } from '../store/chat';
 import { useScoreboard } from '../lib/production-api';
 import { useRegime, usePortfolio, type RegimeData, type PortfolioData } from '../lib/mc-api';
 import { DepthCard } from '../components/DepthCard';
-import { AGENT_GLYPHS } from '../data/mock';
+import { AGENT_GLYPHS } from '../lib/constants';
 
 // ---------------------------------------------------------------------------
 // Skeleton — pulsing placeholder for loading states
