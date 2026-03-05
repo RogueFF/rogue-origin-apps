@@ -37,8 +37,10 @@ async function loadPartners() {
     const result = await api.getPartners();
     partners = result.data || [];
     ui.renderPartnerCards(partners, el('partner-cards'), showPartnerDetail);
-    // Update partner dropdowns in modals
+    // Update partner dropdowns in modals — skip open modals to preserve user input
     document.querySelectorAll('.partner-select').forEach(sel => {
+      const modal = sel.closest('.modal-overlay');
+      if (modal && modal.classList.contains('active')) return; // don't clobber open forms
       ui.populatePartnerDropdown(partners, sel);
     });
   } catch (err) {
@@ -555,6 +557,8 @@ function setupAutoRefresh() {
     if (document.hidden) return;
     // Skip if user just did something
     if (Date.now() - lastUserAction < MIN_REFRESH_GAP) return;
+    // Skip if any modal is open — don't clobber user input
+    if (document.querySelector('.modal-overlay.active')) return;
     refreshAll();
   }, REFRESH_INTERVAL);
   
