@@ -3936,8 +3936,8 @@
         const descEn = step.desc_en || step.description || '';
         const descEs = bilingual ? (step.desc_es || '') : '';
         const descLen = descEn.length + (descEs.length > 0 ? descEs.length + 20 : 0);
-        const CHAR_PER_LINE = 70; // landscape layout chars per line
-        const LINE_HEIGHT = 20;
+        const CHAR_PER_LINE = 100; // landscape layout ~946px body width at 14px ≈ 100+ chars
+        const LINE_HEIGHT = 22; // 14px font * 1.55 line-height = 21.7px
         const descLines = Math.max(1, Math.ceil(descLen / CHAR_PER_LINE));
         
         const hasMedia = !!(step.media || step.image);

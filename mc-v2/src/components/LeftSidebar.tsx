@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useGatewayStore } from '../store/gateway';
 import { useChatStore } from '../store/chat';
-import { navItems, upcomingCrons as fallbackCrons, AGENT_GLYPHS } from '../data/mock';
+import { NAV_ITEMS as navItems, FALLBACK_CRONS as fallbackCrons, AGENT_GLYPHS } from '../lib/constants';
 
 export function LeftSidebar() {
   const setSelectedAgent = useChatStore((s) => s.setSelectedAgent);

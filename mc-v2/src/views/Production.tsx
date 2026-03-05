@@ -1,6 +1,30 @@
+import { useEffect } from 'react';
 import { useScoreboard, useDashboard, type ScoreboardRaw } from '../lib/production-api';
 import { useQuery } from '@tanstack/react-query';
 import { DepthCard } from '../components/DepthCard';
+
+// ---------------------------------------------------------------------------
+// Shift hours helper + localStorage caching
+// ---------------------------------------------------------------------------
+
+function isShiftHours(): boolean {
+  const now = new Date();
+  const pst = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+  return pst.getHours() >= 7 && pst.getHours() < 17;
+}
+
+const CACHE_KEY = 'mc-v2-last-shift-data';
+
+function cacheShiftData(data: { totalLbs: number; goal: number; percentage: number; projected: number; strain: string; bagCount: number; date: string }) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch { /* noop */ }
+}
+
+function getCachedShiftData(): { totalLbs: number; goal: number; percentage: number; projected: number; strain: string; bagCount: number; date: string } | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
 
 /** Raw scoreboard for hourly breakdown — separate from the normalized hook */
 function useScoreboardRaw() {
@@ -82,12 +106,47 @@ export function Production() {
   const { data: raw, isError: rawError } = useScoreboardRaw();
   const { data: dashboard } = useDashboard();
 
+  const inShift = isShiftHours();
   const prod = scoreboard?.production;
   const sb = raw?.scoreboard;
   const timer = raw?.timer;
   const hourly = sb?.hourlyRates || [];
-  const pct = prod?.percentage ?? 0;
-  const isLive = !!prod && !sbError;
+  const isLive = !!prod && !sbError && inShift;
+  const cached = getCachedShiftData();
+  const today = new Date().toISOString().split('T')[0];
+
+  // Cache production data when available
+  useEffect(() => {
+    if (prod && prod.totalLbs > 0) {
+      cacheShiftData({
+        totalLbs: prod.totalLbs,
+        goal: prod.goal,
+        percentage: prod.percentage,
+        projected: prod.projected,
+        strain: prod.strain,
+        bagCount: prod.bagCount,
+        date: today,
+      });
+    }
+  }, [prod, today]);
+
+  // Off-shift: use cached data if no live data
+  const displayProd = prod ?? (cached ? {
+    totalLbs: cached.totalLbs,
+    goal: cached.goal,
+    percentage: cached.percentage,
+    projected: cached.projected,
+    strain: cached.strain,
+    bagCount: cached.bagCount,
+    rate: 0,
+    rateUnit: 'lbs/hr',
+    crew: 0,
+    trimmers: 0,
+    targetRate: 0,
+    hourlyRates: [],
+  } : null);
+  const displayPct = displayProd?.percentage ?? 0;
+  const hasTodayData = cached?.date === today || (prod && prod.totalLbs > 0);
 
   return (
     <div style={{ padding: '20px 24px', overflow: 'auto', height: '100%', display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -106,33 +165,53 @@ export function Production() {
             }}>
               Daily Production
             </div>
-            {isLive && (
-              <span style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 9,
-                color: 'var(--accent-green)',
-                letterSpacing: '0.05em',
-              }}>
-                ● LIVE
-              </span>
-            )}
+            <span style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9,
+              color: isLive ? 'var(--accent-green)' : 'var(--text-tertiary)',
+              letterSpacing: '0.05em',
+            }}>
+              {isLive ? '● LIVE' : !inShift ? '◯ OFF-SHIFT' : ''}
+            </span>
           </div>
+          {!inShift && !hasTodayData && (
+            <div style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              color: 'var(--text-tertiary)',
+              padding: '12px 0',
+              textAlign: 'center',
+            }}>
+              🕐 Shift starts 7:00 AM PST
+            </div>
+          )}
+          {!inShift && hasTodayData && !isLive && (
+            <div style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9,
+              color: 'var(--accent-gold)',
+              marginBottom: 8,
+              opacity: 0.8,
+            }}>
+              ✓ Shift complete — final totals below
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 20, marginBottom: 12 }}>
             <StatCell
               label="Total"
-              value={prod?.totalLbs?.toFixed(1) ?? '—'}
+              value={displayProd?.totalLbs?.toFixed(1) ?? '—'}
               unit="lbs"
-              accent={pct >= 100 ? 'var(--accent-green)' : undefined}
+              accent={displayPct >= 100 ? 'var(--accent-green)' : undefined}
             />
-            <StatCell label="Goal" value={prod?.goal?.toFixed(0) ?? '—'} unit="lbs" />
+            <StatCell label="Goal" value={displayProd?.goal?.toFixed(0) ?? '—'} unit="lbs" />
             <StatCell
               label="Progress"
-              value={pct ? `${pct.toFixed(0)}%` : '—'}
-              accent={pct >= 100 ? 'var(--accent-green)' : pct >= 80 ? 'var(--accent-gold)' : 'var(--accent-red)'}
+              value={displayPct ? `${displayPct.toFixed(0)}%` : '—'}
+              accent={displayPct >= 100 ? 'var(--accent-green)' : displayPct >= 80 ? 'var(--accent-gold)' : 'var(--accent-red)'}
             />
-            <StatCell label="Projected" value={prod?.projected?.toFixed(0) ?? '—'} unit="lbs" />
+            <StatCell label="Projected" value={displayProd?.projected?.toFixed(0) ?? '—'} unit="lbs" />
           </div>
-          <ProgressBar pct={pct} />
+          <ProgressBar pct={displayPct} />
         </DepthCard>
 
         <DepthCard className="liquid-glass" style={{ flex: 1, borderRadius: 'var(--card-radius)', padding: '16px 18px' }}>
@@ -250,9 +329,7 @@ export function Production() {
         </div>
 
         {hourly.length === 0 && !rawError ? (
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-tertiary)', padding: '12px 0' }}>
-            No hourly data yet — data appears as production is logged
-          </div>
+          <StateCard state="empty" message="No hourly data yet" subtitle="Data appears as production is logged" />
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
