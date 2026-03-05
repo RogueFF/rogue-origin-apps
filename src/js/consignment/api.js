@@ -99,17 +99,8 @@ export function saveSale(data) {
   return queueablePost('saveConsignmentSale', data);
 }
 
-export async function saveInventoryCount(data) {
-  const res = await fetch(`${API_BASE}?action=saveConsignmentInventoryCount`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + (localStorage.getItem('ro_api_password') || ''),
-    },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) throw new Error('Failed to save inventory count');
-  return res.json();
+export function saveInventoryCount(data) {
+  return queueablePost('saveConsignmentInventoryCount', data);
 }
 
 export function savePayment(data) {
@@ -151,4 +142,24 @@ export function deleteSale(id) {
 
 export function deletePayment(id) {
   return queueablePost('deleteConsignmentPayment', { id });
+}
+
+export function saveStrain(name) {
+  return queueablePost('saveConsignmentStrain', { name });
+}
+
+export function getPricing() {
+  return apiGet('getConsignmentPricing');
+}
+
+export function savePricing(data) {
+  return queueablePost('saveConsignmentPricing', data);
+}
+
+export function saveBatchCount(data) {
+  return queueablePost('saveConsignmentBatchCount', data);
+}
+
+export function getReconciliation(partnerId) {
+  return apiGet('getConsignmentReconciliation', { partner_id: partnerId });
 }
