@@ -8,12 +8,37 @@ import { successResponse, parseBody, getAction, getQueryParams } from '../lib/re
 import { createError } from '../lib/errors.js';
 import { requireAuth } from '../lib/auth.js';
 
+/**
+ * Resolve price per lb: explicit > partner override > global default
+ */
+async function resolvePrice(db, partnerId, grade, explicitPrice) {
+  if (explicitPrice && explicitPrice > 0) return explicitPrice;
+
+  // Check partner-specific pricing first
+  const partnerPrice = await queryOne(db, `
+    SELECT price_per_lb FROM consignment_pricing
+    WHERE partner_id = ? AND grade = ?
+    ORDER BY effective_date DESC LIMIT 1
+  `, [partnerId, grade]);
+  if (partnerPrice) return partnerPrice.price_per_lb;
+
+  // Fall back to global default
+  const globalPrice = await queryOne(db, `
+    SELECT price_per_lb FROM consignment_pricing
+    WHERE partner_id IS NULL AND grade = ?
+    ORDER BY effective_date DESC LIMIT 1
+  `, [grade]);
+  if (globalPrice) return globalPrice.price_per_lb;
+
+  return 0;
+}
+
 // Write actions that require authentication
 const CONSIGNMENT_WRITE_ACTIONS = new Set([
   'saveConsignmentPartner', 'saveConsignmentStrain',
   'saveConsignmentIntake', 'saveConsignmentBatchIntake',
   'saveConsignmentSale', 'saveConsignmentInventoryCount',
-  'saveConsignmentPayment',
+  'saveConsignmentPayment', 'saveConsignmentPricing', 'saveConsignmentBatchCount',
   'deleteConsignmentPartner', 'deleteConsignmentIntake',
   'deleteConsignmentSale', 'deleteConsignmentPayment',
 ]);
@@ -67,6 +92,20 @@ export async function handleConsignmentD1(request, env, ctx) {
     // === ACTIVITY ===
     case 'getConsignmentActivity':
       return getActivity(db, params);
+
+    // === PRICING ===
+    case 'getConsignmentPricing':
+      return getPricing(db, params);
+    case 'saveConsignmentPricing':
+      return savePricing(db, body);
+
+    // === BATCH COUNT ===
+    case 'saveConsignmentBatchCount':
+      return saveBatchCount(db, body);
+
+    // === RECONCILIATION ===
+    case 'getConsignmentReconciliation':
+      return getReconciliation(db, params);
 
     // === DELETES ===
     case 'deleteConsignmentPartner':
@@ -230,12 +269,13 @@ async function saveIntake(db, body) {
   if (!strain) throw createError('VALIDATION_ERROR', 'Strain is required');
   if (!type || !['tops', 'smalls'].includes(type)) throw createError('VALIDATION_ERROR', 'Type must be tops or smalls');
   if (!weight_lbs || weight_lbs <= 0) throw createError('VALIDATION_ERROR', 'Weight must be positive');
-  if (!price_per_lb || price_per_lb <= 0) throw createError('VALIDATION_ERROR', 'Price per lb must be positive');
+
+  const resolvedPrice = await resolvePrice(db, partner_id, type, price_per_lb);
 
   const result = await execute(db, `
     INSERT INTO consignment_intakes (partner_id, date, strain, type, weight_lbs, price_per_lb, notes)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `, [partner_id, date, strain, type, weight_lbs, price_per_lb, notes || null]);
+  `, [partner_id, date, strain, type, weight_lbs, resolvedPrice, notes || null]);
 
   return successResponse({ success: true, id: result.lastRowId });
 }
@@ -256,14 +296,15 @@ async function saveBatchIntake(db, body) {
     if (!strain) throw createError('VALIDATION_ERROR', 'Strain is required for all items');
     if (!type || !['tops', 'smalls'].includes(type)) throw createError('VALIDATION_ERROR', 'Type must be tops or smalls');
     if (!weight_lbs || weight_lbs <= 0) throw createError('VALIDATION_ERROR', 'Weight must be positive');
-    if (!price_per_lb || price_per_lb <= 0) throw createError('VALIDATION_ERROR', 'Price per lb must be positive');
-    
+
+    const resolvedPrice = await resolvePrice(db, partner_id, type, price_per_lb);
+
     const result = await execute(db, `
       INSERT INTO consignment_intakes (partner_id, date, strain, type, weight_lbs, price_per_lb, notes, batch_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `, [partner_id, date, strain.trim(), type, weight_lbs, price_per_lb, notes || null, batchId]);
-    
-    results.push({ id: result.lastRowId, strain, type, weight_lbs });
+    `, [partner_id, date, strain.trim(), type, weight_lbs, resolvedPrice, notes || null, batchId]);
+
+    results.push({ id: result.lastRowId, strain, type, weight_lbs, price_per_lb: resolvedPrice });
   }
   
   return successResponse({ success: true, data: { count: results.length, items: results, batch_id: batchId } });
@@ -477,6 +518,171 @@ async function getActivity(db, params) {
   }));
 
   return successResponse({ success: true, data: enriched });
+}
+
+// ─── PRICING ───────────────────────────────────────────
+
+async function getPricing(db, params) {
+  const rows = await query(db, `
+    SELECT cp.*, p.name as partner_name
+    FROM consignment_pricing cp
+    LEFT JOIN consignment_partners p ON p.id = cp.partner_id
+    ORDER BY cp.partner_id IS NULL DESC, p.name, cp.grade
+  `);
+  return successResponse({ success: true, data: rows });
+}
+
+async function savePricing(db, body) {
+  const { partner_id, grade, price_per_lb } = body;
+  if (!grade || !['tops', 'smalls'].includes(grade)) throw createError('VALIDATION_ERROR', 'Grade must be tops or smalls');
+  if (!price_per_lb || price_per_lb <= 0) throw createError('VALIDATION_ERROR', 'Price must be positive');
+
+  const today = new Date().toISOString().split('T')[0];
+  const result = await execute(db, `
+    INSERT OR REPLACE INTO consignment_pricing (partner_id, grade, price_per_lb, effective_date)
+    VALUES (?, ?, ?, ?)
+  `, [partner_id || null, grade, price_per_lb, today]);
+
+  return successResponse({ success: true, id: result.lastRowId });
+}
+
+// ─── BATCH COUNT ───────────────────────────────────────
+
+async function saveBatchCount(db, body) {
+  const { partner_id, date, items, notes } = body;
+
+  if (!partner_id) throw createError('VALIDATION_ERROR', 'Partner is required');
+  if (!date) throw createError('VALIDATION_ERROR', 'Date is required');
+  if (!items || !Array.isArray(items) || items.length === 0) throw createError('VALIDATION_ERROR', 'At least one item is required');
+
+  // Get all current inventory for this partner
+  const inventory = await query(db, `
+    SELECT strain, type,
+      COALESCE(SUM(intake_lbs), 0) - COALESCE(SUM(sale_lbs), 0) as expected
+    FROM (
+      SELECT strain, type, weight_lbs as intake_lbs, 0 as sale_lbs FROM consignment_intakes WHERE partner_id = ?
+      UNION ALL
+      SELECT strain, type, 0 as intake_lbs, weight_lbs as sale_lbs FROM consignment_sales WHERE partner_id = ?
+    )
+    GROUP BY strain, type
+    HAVING expected > 0
+  `, [partner_id, partner_id]);
+
+  const invMap = new Map();
+  inventory.forEach(i => invMap.set(`${i.strain}|${i.type}`, i.expected));
+
+  const results = [];
+
+  for (const item of items) {
+    const { strain, type, counted_lbs } = item;
+    if (!strain || !type) continue;
+
+    const key = `${strain}|${type}`;
+    const expected = invMap.get(key) || 0;
+    const sold = Math.max(0, expected - (counted_lbs || 0));
+    const price = await resolvePrice(db, partner_id, type, null);
+
+    if (sold > 0) {
+      await execute(db, `
+        INSERT INTO consignment_sales (partner_id, date, strain, type, weight_lbs, sale_price_per_lb, channel, notes)
+        VALUES (?, ?, ?, ?, ?, ?, 'inventory_count', ?)
+      `, [partner_id, date, strain, type, sold, price,
+          notes || `Batch count: ${counted_lbs} lbs on hand (expected ${expected.toFixed(1)} lbs)`]);
+    }
+
+    results.push({
+      strain,
+      type,
+      expected_lbs: expected,
+      counted_lbs: counted_lbs || 0,
+      sold_lbs: sold,
+      price_per_lb: price,
+      revenue: sold * price,
+    });
+
+    invMap.delete(key);
+  }
+
+  // Any inventory items NOT in the count list
+  const uncounted = [];
+  invMap.forEach((expected, key) => {
+    const [strain, type] = key.split('|');
+    uncounted.push({ strain, type, expected_lbs: expected, status: 'not_counted' });
+  });
+
+  const totalSold = results.reduce((s, r) => s + r.sold_lbs, 0);
+  const totalRevenue = results.reduce((s, r) => s + r.revenue, 0);
+
+  return successResponse({
+    success: true,
+    data: {
+      items: results,
+      uncounted,
+      summary: {
+        total_sold_lbs: totalSold,
+        total_revenue: totalRevenue,
+        items_counted: results.length,
+        items_uncounted: uncounted.length,
+      }
+    }
+  });
+}
+
+// ─── RECONCILIATION ────────────────────────────────────
+
+async function getReconciliation(db, params) {
+  const partnerId = params.partner_id;
+  if (!partnerId) throw createError('VALIDATION_ERROR', 'Partner ID required');
+
+  const lines = await query(db, `
+    SELECT strain, type,
+      COALESCE(SUM(intake_lbs), 0) as total_intake,
+      COALESCE(SUM(sale_lbs), 0) as total_sold,
+      COALESCE(SUM(intake_lbs), 0) - COALESCE(SUM(sale_lbs), 0) as remaining
+    FROM (
+      SELECT strain, type, weight_lbs as intake_lbs, 0 as sale_lbs FROM consignment_intakes WHERE partner_id = ?
+      UNION ALL
+      SELECT strain, type, 0 as intake_lbs, weight_lbs as sale_lbs FROM consignment_sales WHERE partner_id = ?
+    )
+    GROUP BY strain, type
+    ORDER BY type, strain
+  `, [partnerId, partnerId]);
+
+  const enriched = await Promise.all(lines.map(async (line) => {
+    const price = await resolvePrice(db, partnerId, line.type, null);
+    return {
+      ...line,
+      price_per_lb: price,
+      sold_revenue: line.total_sold * price,
+      remaining_value: line.remaining * price,
+    };
+  }));
+
+  const topLines = enriched.filter(l => l.type === 'tops');
+  const smallLines = enriched.filter(l => l.type === 'smalls');
+
+  const topsSold = topLines.reduce((s, l) => s + l.total_sold, 0);
+  const smallsSold = smallLines.reduce((s, l) => s + l.total_sold, 0);
+  const topsRevenue = topLines.reduce((s, l) => s + l.sold_revenue, 0);
+  const smallsRevenue = smallLines.reduce((s, l) => s + l.sold_revenue, 0);
+
+  const totalPaid = await queryOne(db, `
+    SELECT COALESCE(SUM(amount), 0) as total FROM consignment_payments WHERE partner_id = ?
+  `, [partnerId]);
+
+  return successResponse({
+    success: true,
+    data: {
+      lines: enriched,
+      summary: {
+        tops: { sold_lbs: topsSold, revenue: topsRevenue },
+        smalls: { sold_lbs: smallsSold, revenue: smallsRevenue },
+        total_revenue: topsRevenue + smallsRevenue,
+        total_paid: totalPaid?.total || 0,
+        balance_owed: Math.max(0, (topsRevenue + smallsRevenue) - (totalPaid?.total || 0)),
+      }
+    }
+  });
 }
 
 // ─── DELETES ────────────────────────────────────────────
