@@ -1,5 +1,5 @@
 /**
- * Hourly Production Entry App - Timeline View
+ * Hourly Production Entry App - Floor Manager
  * Two-view architecture: Timeline (list) and Editor (full-screen)
  */
 
