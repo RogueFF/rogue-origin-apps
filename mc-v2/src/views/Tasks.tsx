@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { useTasks, useCreateTask, useUpdateTask, useDispatchTask, type Task } from '../lib/tasks-api';
 import { useGatewayStore } from '../store/gateway';
 import { DepthCard } from '../components/DepthCard';
-import { AGENT_GLYPHS } from '../data/mock';
+import { AGENT_GLYPHS } from '../lib/constants';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { TaskDetailPanel } from '../components/TaskDetailPanel';
 

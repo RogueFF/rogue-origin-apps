@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useGatewayStore, type CronJob } from '../store/gateway';
 import { useSystemStats, type SystemStats } from '../lib/system-api';
 import { DepthCard } from '../components/DepthCard';
-import { AGENT_GLYPHS } from '../data/mock';
+import { AGENT_GLYPHS } from '../lib/constants';
 
 // ---------------------------------------------------------------------------
 // Shared helpers
