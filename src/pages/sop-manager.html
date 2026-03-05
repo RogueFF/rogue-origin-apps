@@ -3926,37 +3926,37 @@
       // --- LANDSCAPE PAGE PACKING (1123px × 794px) ---
       const PAGE_WIDTH = 1123;
       const PAGE_HEIGHT = 794;
-      const FULL_HEADER_HEIGHT = bilingual ? 280 : 240; // header(110) + title section + meta + desc
-      const COMPACT_HEADER_HEIGHT = 70; // compact header(50) + section label
-      const FOOTER_HEIGHT = 50;
-      const SAFETY_MARGIN = 60; // conservative margin to prevent overflow
+      const FULL_HEADER_HEIGHT = bilingual ? 240 : 200; // header + title section + meta + desc
+      const COMPACT_HEADER_HEIGHT = 55; // compact header + section label
+      const FOOTER_HEIGHT = 40;
+      const SAFETY_MARGIN = 30; // tight margin — overflow:hidden catches edge cases
 
-      // Estimate step card heights (conservative to prevent overflow)
+      // Estimate step card heights
       function estimateStepHeight(step) {
         const descEn = step.desc_en || step.description || '';
         const descEs = bilingual ? (step.desc_es || '') : '';
         const descLen = descEn.length + (descEs.length > 0 ? descEs.length + 20 : 0);
-        const CHAR_PER_LINE = 65; // wider landscape layout, larger font
-        const LINE_HEIGHT = 22;
-        const descLines = Math.max(2, Math.ceil(descLen / CHAR_PER_LINE));
+        const CHAR_PER_LINE = 70; // landscape layout chars per line
+        const LINE_HEIGHT = 20;
+        const descLines = Math.max(1, Math.ceil(descLen / CHAR_PER_LINE));
         
         const hasMedia = !!(step.media || step.image);
         const mediaType = step.mediaType || detectMediaType(step.media || step.image || '');
         const isVideo = mediaType === 'video' || mediaType === 'youtube' || mediaType === 'gdrive' || mediaType === 'vimeo';
 
-        let h = 90 + (descLines * LINE_HEIGHT); // base card height
+        let h = 65 + (descLines * LINE_HEIGHT); // base: step number + title + padding
 
-        if (hasMedia && !isVideo && includeImages) h += 100;
-        if (isVideo && includeQR) h = Math.max(h, 120);
-        if (bilingual && (step.title_es || step.title)) h += 18;
-        if (step.safety || step.quality) h += 24;
-        if (step.refs && step.refs.length > 0) h += 28;
+        if (hasMedia && !isVideo && includeImages) h += 90;
+        if (isVideo && includeQR) h = Math.max(h, 110);
+        if (bilingual && (step.title_es || step.title)) h += 16;
+        if (step.safety || step.quality) h += 20;
+        if (step.refs && step.refs.length > 0) h += 22;
         
         // Reference QR codes from assets
         const refQRs = assets.refQRs && assets.refQRs[steps.indexOf(step)];
-        if (refQRs && refQRs.length > 0) h += 50;
+        if (refQRs && refQRs.length > 0) h += 40;
 
-        return Math.max(h, 100); // minimum height
+        return Math.max(h, 80); // minimum height
       }
 
       // Pack steps into pages
