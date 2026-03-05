@@ -110,10 +110,18 @@ async function fetchProduction<T>(params: Record<string, string>): Promise<T> {
 
 /** Check if currently in shift hours (7AM-5PM PST) */
 function isShiftHours(): boolean {
+  return getShiftState() === 'active';
+}
+
+export type ShiftState = 'pre-shift' | 'active' | 'post-shift';
+
+export function getShiftState(): ShiftState {
   const now = new Date();
   const pst = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
   const hour = pst.getHours();
-  return hour >= 7 && hour < 17;
+  if (hour < 7) return 'pre-shift';
+  if (hour < 17) return 'active';
+  return 'post-shift';
 }
 
 /** Real-time scoreboard — 60s during shift, 5m off-shift */

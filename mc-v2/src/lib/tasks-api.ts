@@ -5,6 +5,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getGatewayClient } from './gateway-client';
+import { toastSuccess } from './notifications-api';
 
 export interface Task {
   id: number;
@@ -171,6 +172,9 @@ export function useDispatchTask() {
       } catch (err) {
         console.warn('[dispatch] Gateway send failed (task still assigned):', err);
       }
+
+      // 3. Toast notification
+      toastSuccess('Task dispatched', `"${title}" assigned to ${agent}`);
 
       return resp.data;
     },

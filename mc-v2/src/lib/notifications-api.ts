@@ -60,6 +60,24 @@ export const useToastStore = create<ToastStore>((set) => ({
 }));
 
 // ---------------------------------------------------------------------------
+// Convenience toast helpers
+// ---------------------------------------------------------------------------
+
+let _toastSeq = 0;
+function toastId(): string {
+  return `toast-${Date.now()}-${++_toastSeq}`;
+}
+
+export function toast(title: string, body = '', priority: 'low' | 'normal' | 'high' = 'normal', type = 'toast') {
+  useToastStore.getState().addToast({ id: toastId(), type, title, body, priority });
+}
+
+export const toastInfo = (title: string, body = '') => toast(title, body, 'normal', 'toast');
+export const toastSuccess = (title: string, body = '') => toast(title, body, 'low', 'toast');
+export const toastError = (title: string, body = '') => toast(title, body, 'high', 'alert');
+export const toastWarning = (title: string, body = '') => toast(title, body, 'high', 'toast');
+
+// ---------------------------------------------------------------------------
 // API helpers
 // ---------------------------------------------------------------------------
 

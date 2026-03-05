@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useGatewayStore } from '../store/gateway';
-import { activities as mockActivities } from '../data/mock';
-import type { Activity } from '../data/mock';
+import { timeAgo } from '../lib/utils';
 
 // Merge type for both live notifications and mock activities
 type FeedItem = {
@@ -10,6 +9,7 @@ type FeedItem = {
   title: string;
   body: string;
   timestamp: string;
+  timestampAbsolute?: string;
   accentColor: string;
 };
 
@@ -51,7 +51,7 @@ function getCardDepth(type: string): { blur: string; bg: string; scale: number; 
   }
 }
 
-function ActivityCard({ activity, isNew = false }: { activity: FeedItem; isNew?: boolean }) {
+function ActivityCard({ activity }: { activity: FeedItem }) {
   const [expanded, setExpanded] = useState(false);
   const [hovered, setHovered] = useState(false);
   const isAlert = activity.type === 'alert';
@@ -67,7 +67,7 @@ function ActivityCard({ activity, isNew = false }: { activity: FeedItem; isNew?:
         borderRadius: 'var(--card-radius)',
         marginBottom: isAlert ? 8 : 5,
         cursor: 'pointer',
-        animation: isNew ? 'card-enter 0.4s ease-out, glass-pulse-ring 0.8s ease-out' : 'none',
+        animation: 'none',
         zIndex: depth.zOffset,
       }}
       onClick={() => setExpanded(!expanded)}
@@ -145,6 +145,7 @@ function ActivityCard({ activity, isNew = false }: { activity: FeedItem; isNew?:
             </span>
           </div>
           <span
+            title={activity.timestampAbsolute || activity.timestamp}
             style={{
               fontFamily: 'var(--font-mono)',
               fontSize: 9,
@@ -219,30 +220,26 @@ export function RightSidebar() {
   const liveNotifications = useGatewayStore((s) => s.notifications);
   const connectionState = useGatewayStore((s) => s.connectionState);
 
-  // Convert live notifications to feed items
+  // Convert live notifications to feed items with relative timestamps
   const liveFeed: FeedItem[] = liveNotifications.map(n => ({
     id: n.id,
     type: n.type,
     title: n.title,
     body: n.body,
-    timestamp: n.timestamp,
+    timestamp: n.timestampMs ? timeAgo(n.timestampMs) : n.timestamp,
+    timestampAbsolute: n.timestamp,
     accentColor: n.accentColor,
   }));
 
-  // Convert mock activities to feed items
-  const mockFeed: FeedItem[] = mockActivities.map((a: Activity) => ({
-    id: a.id,
-    type: a.type,
-    title: a.title,
-    body: a.body,
-    timestamp: a.timestamp,
-    accentColor: a.accentColor,
-  }));
-
-  // Only show mock data when disconnected with no live events
-  const allFeed = connectionState === 'connected' || liveFeed.length > 0 ? liveFeed : mockFeed;
-  const filtered = filter === 'all' ? allFeed : allFeed.filter((a) => a.type === filter);
-  const types = ['all', 'briefing', 'production', 'alert', 'toast', 'chat'];
+  const allFeed = liveFeed;
+  const FILTER_MAP: Record<string, string[]> = {
+    all: [],
+    agents: ['chat'],
+    production: ['production'],
+    system: ['alert', 'toast', 'briefing'],
+  };
+  const filtered = filter === 'all' ? allFeed : allFeed.filter((a) => FILTER_MAP[filter]?.includes(a.type));
+  const types = ['all', 'agents', 'production', 'system'];
 
   return (
     <aside

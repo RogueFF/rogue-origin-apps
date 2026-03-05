@@ -1,5 +1,5 @@
 import { useGatewayStore } from '../store/gateway';
-import { AGENT_GLYPHS } from '../data/mock';
+import { AGENT_GLYPHS } from '../lib/constants';
 
 export function MobileFleet() {
   const agents = useGatewayStore((s) => s.agents);
