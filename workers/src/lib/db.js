@@ -13,7 +13,7 @@ const VALID_TABLES = new Set([
   'sops', 'sop_requests', 'sop_settings',
   // Consignment module tables
   'consignment_partners', 'consignment_strains', 'consignment_intakes',
-  'consignment_sales', 'consignment_payments',
+  'consignment_sales', 'consignment_payments', 'consignment_pricing',
   // Complaints module
   'complaints',
 ]);

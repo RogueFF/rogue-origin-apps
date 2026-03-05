@@ -437,6 +437,21 @@ CREATE TABLE IF NOT EXISTS consignment_payments (
 CREATE INDEX IF NOT EXISTS idx_consignment_payments_partner ON consignment_payments(partner_id);
 CREATE INDEX IF NOT EXISTS idx_consignment_payments_date ON consignment_payments(date);
 
+CREATE TABLE IF NOT EXISTS consignment_pricing (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  partner_id INTEGER REFERENCES consignment_partners(id),
+  grade TEXT NOT NULL CHECK(grade IN ('tops', 'smalls')),
+  price_per_lb REAL NOT NULL,
+  effective_date TEXT NOT NULL DEFAULT (date('now')),
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(partner_id, grade, effective_date)
+);
+
+-- Global default pricing
+INSERT OR IGNORE INTO consignment_pricing (partner_id, grade, price_per_lb, effective_date) VALUES
+  (NULL, 'tops', 150.00, '2026-01-01'),
+  (NULL, 'smalls', 50.00, '2026-01-01');
+
 -- Seed initial strains
 INSERT OR IGNORE INTO consignment_strains (name) VALUES
   ('Alium OG'),
