@@ -441,6 +441,7 @@ CREATE INDEX IF NOT EXISTS idx_consignment_payments_date ON consignment_payments
 INSERT OR IGNORE INTO consignment_strains (name) VALUES
   ('Alium OG'),
   ('Bubba Kush'),
+  ('Cake Berry Brulee'),
   ('Critical Berries'),
   ('Lemon Octane'),
   ('Orange Fritter'),
@@ -450,7 +451,7 @@ INSERT OR IGNORE INTO consignment_strains (name) VALUES
   ('Sour Lifter'),
   ('Sour Special Sauce'),
   ('Sour Suver Haze'),
-  ('Super Sour Space Candy'),
+  ('Super Sour Space'),
   ('White CBG');
 
 -- ============================================
