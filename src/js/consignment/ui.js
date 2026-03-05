@@ -217,7 +217,69 @@ export function renderPartnerDetail(detail, container, onClose) {
           <div class="bar-hint">Physical inventory vs financial liability</div>
         </div>
       ` : ''}
-      
+
+      ${d.reconciliation && d.reconciliation.lines && d.reconciliation.lines.length > 0 ? `
+        <div class="detail-section">
+          <h3><i class="ph-duotone ph-chart-bar"></i> Sales Reconciliation</h3>
+          <div class="recon-grade-section">
+            <h4>Tops — \$${fmt(d.reconciliation.summary.tops.revenue)}</h4>
+            <div class="recon-table">
+              <div class="recon-table-header">
+                <span>Strain</span>
+                <span>Intaked</span>
+                <span>Sold</span>
+                <span>Remaining</span>
+                <span>Revenue</span>
+              </div>
+              ${d.reconciliation.lines.filter(l => l.type === 'tops').map(l => `
+                <div class="recon-table-row">
+                  <span class="recon-strain">${esc(l.strain)}</span>
+                  <span>${l.total_intake.toFixed(1)}</span>
+                  <span class="recon-sold">${l.total_sold.toFixed(1)}</span>
+                  <span>${l.remaining.toFixed(1)}</span>
+                  <span class="recon-revenue">\$${fmt(l.sold_revenue)}</span>
+                </div>
+              `).join('') || '<div class="empty-hint">No tops</div>'}
+            </div>
+          </div>
+          <div class="recon-grade-section">
+            <h4>Smalls — \$${fmt(d.reconciliation.summary.smalls.revenue)}</h4>
+            <div class="recon-table">
+              <div class="recon-table-header">
+                <span>Strain</span>
+                <span>Intaked</span>
+                <span>Sold</span>
+                <span>Remaining</span>
+                <span>Revenue</span>
+              </div>
+              ${d.reconciliation.lines.filter(l => l.type === 'smalls').map(l => `
+                <div class="recon-table-row">
+                  <span class="recon-strain">${esc(l.strain)}</span>
+                  <span>${l.total_intake.toFixed(1)}</span>
+                  <span class="recon-sold">${l.total_sold.toFixed(1)}</span>
+                  <span>${l.remaining.toFixed(1)}</span>
+                  <span class="recon-revenue">\$${fmt(l.sold_revenue)}</span>
+                </div>
+              `).join('') || '<div class="empty-hint">No smalls</div>'}
+            </div>
+          </div>
+          <div class="recon-totals">
+            <div class="recon-total-row">
+              <span>Total Revenue</span>
+              <strong>\$${fmt(d.reconciliation.summary.total_revenue)}</strong>
+            </div>
+            <div class="recon-total-row">
+              <span>Total Paid</span>
+              <strong class="positive">\$${fmt(d.reconciliation.summary.total_paid)}</strong>
+            </div>
+            <div class="recon-total-row recon-balance">
+              <span>Balance Owed</span>
+              <strong class="${d.reconciliation.summary.balance_owed > 0 ? 'warning' : ''}">\$${fmt(d.reconciliation.summary.balance_owed)}</strong>
+            </div>
+          </div>
+        </div>
+      ` : ''}
+
       ${d.inventory.length > 0 ? `
         <div class="detail-section">
           <h3><i class="ph-duotone ph-package"></i> Current Inventory</h3>
@@ -420,6 +482,12 @@ export function populateStrainDropdown(strains, selectEl) {
     opt.textContent = s.name;
     selectEl.appendChild(opt);
   });
+  // Add "new strain" option
+  const addOpt = document.createElement('option');
+  addOpt.value = '__add_new__';
+  addOpt.textContent = '+ Add new strain...';
+  addOpt.style.fontStyle = 'italic';
+  selectEl.appendChild(addOpt);
 }
 
 export function populatePartnerDropdown(partners, selectEl) {
