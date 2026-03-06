@@ -3820,7 +3820,8 @@
             
             const matchingSop = sops.find(s => {
               const t = (s.title || '').toLowerCase();
-              const hasRef = t.includes('#' + refNum) || t.includes('# ' + refNum);
+              const refRx = new RegExp('#\\s*' + refNum + '(?!\\d)');
+              const hasRef = refRx.test(t);
               if (!hasRef) return false;
               if (refVer) return t.includes('v.' + refVer) || t.includes('v' + refVer);
               return true;
