@@ -1,14 +1,11 @@
 import { useState } from 'react';
 import { useGatewayStore } from '../store/gateway';
-import { activities as mockActivities } from '../data/mock';
 
 export function MobileFeed() {
   const notifications = useGatewayStore((s) => s.notifications);
   const [filter, setFilter] = useState('all');
 
-  const feed = notifications.length > 0
-    ? notifications.map(n => ({ id: n.id, type: n.type, title: n.title, body: n.body, timestamp: n.timestamp }))
-    : mockActivities.map(a => ({ id: a.id, type: a.type, title: a.title, body: a.body, timestamp: a.timestamp }));
+  const feed = notifications.map(n => ({ id: n.id, type: n.type, title: n.title, body: n.body, timestamp: n.timestamp }));
 
   const types = ['all', 'briefing', 'production', 'alert', 'toast'];
   const filtered = filter === 'all' ? feed : feed.filter(f => f.type === filter);
