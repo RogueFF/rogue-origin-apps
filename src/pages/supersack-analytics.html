@@ -598,8 +598,8 @@
     const s = state.startDate, e = state.endDate;
     try {
       const [summary, history] = await Promise.all([
-        fetchJSON(`${SS_API}?action=summary&start=${s}&end=${e}&group_by=day`),
-        fetchJSON(`${SS_API}?action=history&start=${s}&end=${e}`),
+        fetchJSON(`${SS_API}?action=summary&start=${s}&end=${e}&group_by=day&complete=true`),
+        fetchJSON(`${SS_API}?action=history&start=${s}&end=${e}&complete=true`),
       ]);
       state.summaryData = summary;
       state.historyData = history;
