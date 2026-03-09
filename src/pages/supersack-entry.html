@@ -540,6 +540,7 @@
   <h1><span>◆</span> <span data-i18n="title">Supersack Tracker</span></h1>
   <div style="display:flex;align-items:center;gap:8px">
     <span class="header-date" id="header-date"></span>
+    <a href="supersack-analytics.html" style="font-size:11px;color:var(--text-dim);text-decoration:none;font-family:var(--font-ui);font-weight:500;padding:4px 10px;border-radius:6px;border:1px solid rgba(102,137,113,0.15);transition:all 0.2s" onmouseover="this.style.color='var(--green)';this.style.borderColor='var(--green)'" onmouseout="this.style.color='var(--text-dim)';this.style.borderColor='rgba(102,137,113,0.15)'">📊</a>
     <button id="lang-toggle" style="background:var(--gold-dim);border:1px solid rgba(228,170,79,0.3);border-radius:6px;color:var(--gold);font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;font-family:var(--font-ui)">ES</button>
   </div>
 </div>
@@ -703,7 +704,7 @@
 
   const POOL_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/pool';
   const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
-  const MC_API = 'https://mission-control-api.roguefamilyfarms.workers.dev/api';
+  const SS_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/supersack';
   const LBS_TO_GRAMS = 453.592;
   const SACK_WEIGHT = 37;
 
@@ -1094,15 +1095,26 @@
         });
       });
 
-      // Sort by date descending
-      allEntries.sort((a, b) => b.date - a.date);
+      // Deduplicate: if two identical supersack changes on the same day, keep only the first
+      const seen = new Set();
+      const dedupedEntries = allEntries.filter(e => {
+        if (e.unit !== 'sacks') return true; // only dedup supersack entries
+        const dayKey = e.date.toISOString().slice(0, 10);
+        const key = `${e.name}|${e.action}|${e.amount}|${dayKey}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
 
-      if (allEntries.length === 0) {
+      // Sort by date descending
+      dedupedEntries.sort((a, b) => b.date - a.date);
+
+      if (dedupedEntries.length === 0) {
         container.innerHTML = '<div style="color:var(--text-faint);font-size:13px;text-align:center;padding:12px">No recent changes</div>';
         return;
       }
 
-      container.innerHTML = allEntries.slice(0, 20).map(e => {
+      container.innerHTML = dedupedEntries.slice(0, 20).map(e => {
         const isSubtract = e.action === 'subtract';
         const sign = isSubtract ? '−' : '+';
         const cls = isSubtract ? 'subtract' : 'add';
@@ -1190,9 +1202,9 @@
       if (!r.success) poolErrors.push('Trim: ' + (r.error || 'failed'));
     }
 
-    // 4. Save summary to D1 (best-effort — endpoint may not exist yet)
+    // 4. Save to D1 supersack_entries table
     try {
-      const summaryRes = await fetch(`${MC_API}/supersack/submit`, {
+      await fetch(`${SS_API}?action=submit`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           date, supersack_count: sackCount, biomass_lbs: biomass,
@@ -1201,8 +1213,9 @@
           strains: Object.fromEntries(Object.entries(strainData).map(([k, v]) => [k, v.sacks])),
         }),
       });
-      if (!summaryRes.ok) console.info('[Supersack] D1 summary save skipped (endpoint not deployed)');
-    } catch {}
+    } catch (e) {
+      console.warn('[Supersack] D1 save failed:', e.message);
+    }
 
     submitBtn.disabled = false;
     submitBtn.classList.remove('saving');
