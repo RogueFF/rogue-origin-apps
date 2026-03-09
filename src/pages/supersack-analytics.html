@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Supersack Analytics — Rogue Origin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=JetBrains+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #141816;
+      --bg-warm: #1a1f16;
+      --card: rgba(26, 30, 27, 0.85);
+      --card-border: rgba(102, 137, 113, 0.15);
+      --glass: rgba(255, 255, 255, 0.05);
+      --text: #e8e4dc;
+      --text-dim: rgba(232,228,220,0.55);
+      --text-faint: rgba(232,228,220,0.25);
+      --green: #668971;
+      --green-dim: rgba(102, 137, 113, 0.15);
+      --green-glow: rgba(102, 137, 113, 0.25);
+      --gold: #e4aa4f;
+      --gold-dim: rgba(228, 170, 79, 0.15);
+      --gold-text: #e4aa4f;
+      --red: #c45c4a;
+      --blue: #62758d;
+      --brown: #8b7355;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --radius-lg: 16px;
+      --shadow: 0 4px 8px rgba(0,0,0,0.4);
+      --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+      --font-display: 'DM Serif Display', serif;
+      --font-ui: 'Outfit', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+    body {
+      font-family: var(--font-ui);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      -webkit-tap-highlight-color: transparent;
+      background-image:
+        radial-gradient(ellipse at 20% 0%, rgba(102, 137, 113, 0.06) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 100%, rgba(228, 170, 79, 0.04) 0%, transparent 60%);
+    }
+
+    /* RO Home Button */
+    .ro-home-btn{position:fixed;top:12px;left:12px;z-index:9999;width:36px;height:36px;border-radius:50%;background:rgba(26,26,26,.8);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;text-decoration:none;transition:all .2s ease;border:1px solid rgba(255,255,255,.1)}
+    .ro-home-btn:hover{background:rgba(26,26,26,1);transform:scale(1.1)}
+    .ro-home-btn svg{width:18px;height:18px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+    /* Header */
+    .header {
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(26, 30, 27, 0.6);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+    .header h1 {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 400;
+      letter-spacing: 0.01em;
+      color: var(--text);
+    }
+    .header h1 span.accent { color: var(--gold); }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .header-link {
+      font-size: 11px;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-family: var(--font-ui);
+      font-weight: 500;
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--card-border);
+      transition: all 0.2s;
+    }
+    .header-link:hover { color: var(--green); border-color: var(--green); }
+    .lang-btn {
+      background: var(--gold-dim);
+      border: 1px solid rgba(228,170,79,0.3);
+      border-radius: 6px;
+      color: var(--gold);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      cursor: pointer;
+      font-family: var(--font-ui);
+    }
+
+    /* Main */
+    .main { padding: 16px 20px; max-width: 900px; margin: 0 auto; }
+
+    /* Date Controls */
+    .date-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 16px;
+      align-items: center;
+    }
+    .preset-btn {
+      background: var(--green-dim);
+      border: 1px solid rgba(102, 137, 113, 0.3);
+      border-radius: var(--radius-sm);
+      color: var(--green);
+      font-family: var(--font-ui);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 8px 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      min-height: 44px;
+    }
+    .preset-btn:active { transform: scale(0.97); }
+    .preset-btn.active {
+      background: var(--green);
+      color: var(--bg);
+      border-color: var(--green);
+    }
+    .date-input {
+      background: var(--bg-warm);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      padding: 8px 10px;
+      outline: none;
+      transition: border-color 0.2s;
+      min-height: 44px;
+      width: 140px;
+    }
+    .date-input:focus { border-color: var(--green); box-shadow: 0 0 0 2px var(--green-dim); }
+    .date-sep { color: var(--text-faint); font-size: 13px; }
+
+    /* Cards */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 12px;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      box-shadow: var(--shadow);
+    }
+    .card-title {
+      font-family: var(--font-ui);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--green);
+      margin-bottom: 12px;
+    }
+
+    /* KPI Grid */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    @media (min-width: 600px) {
+      .kpi-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+    .kpi-card {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 14px;
+      text-align: center;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      box-shadow: var(--shadow);
+    }
+    .kpi-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--green);
+      margin-bottom: 6px;
+      font-family: var(--font-ui);
+    }
+    .kpi-value {
+      font-size: 28px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      color: var(--text);
+      line-height: 1.1;
+    }
+    .kpi-sub {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 4px;
+      font-family: var(--font-ui);
+    }
+
+    /* Chart containers */
+    .chart-wrap {
+      position: relative;
+      width: 100%;
+      min-height: 250px;
+    }
+    .chart-wrap canvas { max-height: 350px; }
+
+    /* Chart grid for side-by-side on desktop */
+    .chart-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    @media (min-width: 700px) {
+      .chart-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    /* Inventory table */
+    .inv-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .inv-table th {
+      text-align: left;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--card-border);
+      font-family: var(--font-ui);
+    }
+    .inv-table td {
+      padding: 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      font-family: var(--font-mono);
+      font-size: 13px;
+    }
+    .inv-table tr:last-child td { border-bottom: none; }
+
+    /* Loading / Error states */
+    .loading-msg {
+      color: var(--text-faint);
+      font-size: 13px;
+      text-align: center;
+      padding: 24px;
+      font-family: var(--font-ui);
+    }
+    .error-msg {
+      color: var(--red);
+      font-size: 13px;
+      text-align: center;
+      padding: 16px;
+      font-family: var(--font-ui);
+    }
+
+    /* Section header */
+    .section-title {
+      font-family: var(--font-display);
+      font-size: 16px;
+      color: var(--text);
+      margin: 20px 0 10px;
+    }
+
+    /* Depletion bars */
+    .depletion-bar-bg {
+      height: 8px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+    .depletion-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.5s ease;
+    }
+
+    /* Cost card values */
+    .cost-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+    .cost-item {
+      text-align: center;
+      padding: 10px;
+      background: rgba(255,255,255,0.02);
+      border-radius: var(--radius-sm);
+    }
+    .cost-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+    }
+    .cost-value {
+      font-size: 22px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+    }
+
+    /* Touch feedback */
+    @media (hover: none) {
+      .preset-btn:active, .lang-btn:active { transform: scale(0.93); }
+    }
+  </style>
+</head>
+<body>
+
+<a href="ops-hub.html" class="ro-home-btn" title="Operations Hub"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></a>
+
+<div class="header">
+  <h1><span class="accent">&#9670;</span> <span data-i18n="title">Supersack Analytics</span></h1>
+  <div class="header-right">
+    <a href="supersack-entry.html" class="header-link" data-i18n="entryLink">Entry</a>
+    <button id="lang-toggle" class="lang-btn">ES</button>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- Date Range Controls -->
+  <div class="date-controls">
+    <button class="preset-btn" data-preset="today" data-i18n="today">Today</button>
+    <button class="preset-btn" data-preset="week" data-i18n="thisWeek">This Week</button>
+    <button class="preset-btn active" data-preset="month" data-i18n="thisMonth">This Month</button>
+    <button class="preset-btn" data-preset="30" data-i18n="last30">Last 30 Days</button>
+    <button class="preset-btn" data-preset="all" data-i18n="allTime">All Time</button>
+    <input type="date" class="date-input" id="date-start">
+    <span class="date-sep">-</span>
+    <input type="date" class="date-input" id="date-end">
+  </div>
+
+  <!-- KPI Cards -->
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label" data-i18n="kpiTotalSacks">Total Sacks</div>
+      <div class="kpi-value" id="kpi-sacks">--</div>
+      <div class="kpi-sub" data-i18n="kpiOpened">opened</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label" data-i18n="kpiAvgDay">Avg / Day</div>
+      <div class="kpi-value" id="kpi-avg-day">--</div>
+      <div class="kpi-sub" data-i18n="kpiSacksDay">sacks/day</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label" data-i18n="kpiRawProcessed">Raw Processed</div>
+      <div class="kpi-value" id="kpi-raw">--</div>
+      <div class="kpi-sub">lbs</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label" data-i18n="kpiAvgYield">Avg Yield %</div>
+      <div class="kpi-value" id="kpi-yield">--</div>
+      <div class="kpi-sub" data-i18n="kpiTopsSmalls">tops + smalls</div>
+    </div>
+  </div>
+
+  <!-- Charts Row 1 -->
+  <div class="chart-grid">
+    <div class="card">
+      <div class="card-title" data-i18n="chartSacksDay">Supersacks / Day</div>
+      <div class="chart-wrap"><canvas id="chart-sacks-day"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title" data-i18n="chartYield">Material Yield Breakdown</div>
+      <div class="chart-wrap"><canvas id="chart-yield"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Charts Row 2 -->
+  <div class="chart-grid">
+    <div class="card">
+      <div class="card-title" data-i18n="chartStrain">Strain Comparison</div>
+      <div class="chart-wrap"><canvas id="chart-strain"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title" data-i18n="chartRate">Production Rate (lbs/hr)</div>
+      <div class="chart-wrap"><canvas id="chart-rate"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Inventory + Projections -->
+  <div class="section-title" data-i18n="sectionInventory">Remaining Inventory & Projections</div>
+  <div class="card" id="inventory-card">
+    <div class="card-title" data-i18n="currentInventory">Current Inventory by Strain</div>
+    <div class="loading-msg" data-i18n="loading">Loading...</div>
+  </div>
+
+  <!-- Production Rate + Cost Metrics -->
+  <div class="section-title" data-i18n="sectionCost">Production Rate & Cost Metrics</div>
+  <div class="card" id="cost-card">
+    <div class="card-title" data-i18n="laborMetrics">Labor & Cost Metrics</div>
+    <div class="loading-msg" data-i18n="loading">Loading...</div>
+  </div>
+
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ── i18n ──
+  const LANG = {
+    en: {
+      title: 'Supersack Analytics', entryLink: 'Entry', today: 'Today',
+      thisWeek: 'This Week', thisMonth: 'This Month', last30: 'Last 30 Days',
+      allTime: 'All Time', kpiTotalSacks: 'Total Sacks', kpiOpened: 'opened',
+      kpiAvgDay: 'Avg / Day', kpiSacksDay: 'sacks/day',
+      kpiRawProcessed: 'Raw Processed', kpiAvgYield: 'Avg Yield %',
+      kpiTopsSmalls: 'tops + smalls', chartSacksDay: 'Supersacks / Day',
+      chartYield: 'Material Yield Breakdown', chartStrain: 'Strain Comparison',
+      chartRate: 'Production Rate (lbs/hr)', sectionInventory: 'Remaining Inventory & Projections',
+      currentInventory: 'Current Inventory by Strain', sectionCost: 'Production Rate & Cost Metrics',
+      laborMetrics: 'Labor & Cost Metrics', loading: 'Loading...',
+      strain: 'Strain', sacks: 'Sacks', daysSupply: 'Days Supply',
+      projYield: 'Proj. Yield (lbs)', depletes: 'Depletes',
+      noData: 'No data for selected range', lbsHr: 'Lbs / Hr',
+      lbsTrimmer: 'Lbs / Trimmer', costLb: 'Cost / Lb', totalLabor: 'Total Labor',
+      movingAvg: '7-day avg', tops: 'Tops', smalls: 'Smalls',
+      biomass: 'Biomass', trim: 'Trim', waste: 'Waste',
+      topsP: 'Tops %', smallsP: 'Smalls %', wasteP: 'Waste %',
+      never: 'N/A', errorLoad: 'Failed to load data',
+    },
+    es: {
+      title: 'Analisis de Supersacos', entryLink: 'Entrada', today: 'Hoy',
+      thisWeek: 'Esta Semana', thisMonth: 'Este Mes', last30: 'Ultimos 30 Dias',
+      allTime: 'Todo', kpiTotalSacks: 'Total Sacos', kpiOpened: 'abiertos',
+      kpiAvgDay: 'Prom / Dia', kpiSacksDay: 'sacos/dia',
+      kpiRawProcessed: 'Bruto Procesado', kpiAvgYield: 'Rendimiento %',
+      kpiTopsSmalls: 'tops + smalls', chartSacksDay: 'Supersacos / Dia',
+      chartYield: 'Desglose de Materiales', chartStrain: 'Comparacion por Variedad',
+      chartRate: 'Tasa de Produccion (lbs/hr)', sectionInventory: 'Inventario Restante y Proyecciones',
+      currentInventory: 'Inventario Actual por Variedad', sectionCost: 'Tasa de Produccion y Costos',
+      laborMetrics: 'Metricas de Labor y Costo', loading: 'Cargando...',
+      strain: 'Variedad', sacks: 'Sacos', daysSupply: 'Dias Restantes',
+      projYield: 'Rend. Proy. (lbs)', depletes: 'Se Agota',
+      noData: 'Sin datos para el rango seleccionado', lbsHr: 'Lbs / Hr',
+      lbsTrimmer: 'Lbs / Podador', costLb: 'Costo / Lb', totalLabor: 'Labor Total',
+      movingAvg: 'Prom. 7 dias', tops: 'Tops', smalls: 'Smalls',
+      biomass: 'Biomasa', trim: 'Recorte', waste: 'Desperdicio',
+      topsP: 'Tops %', smallsP: 'Smalls %', wasteP: 'Desperdicio %',
+      never: 'N/A', errorLoad: 'Error al cargar datos',
+    }
+  };
+  let currentLang = localStorage.getItem('supersack-lang') || 'en';
+  const t = (key) => LANG[currentLang][key] || key;
+
+  function applyLang() {
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      if (LANG[currentLang][key]) el.textContent = LANG[currentLang][key];
+    });
+    document.getElementById('lang-toggle').textContent = currentLang === 'en' ? 'ES' : 'EN';
+    // Re-render charts with translated labels if they exist
+    if (state.summaryData) renderCharts();
+    if (state.inventoryData) renderInventory();
+    if (state.costData) renderCostCard();
+  }
+
+  document.getElementById('lang-toggle').addEventListener('click', () => {
+    currentLang = currentLang === 'en' ? 'es' : 'en';
+    localStorage.setItem('supersack-lang', currentLang);
+    applyLang();
+  });
+
+  // ── APIs ──
+  const SS_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/supersack';
+  const POOL_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/pool';
+  const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
+
+  // ── State ──
+  const state = {
+    startDate: '', endDate: '', activePreset: 'month',
+    summaryData: null, historyData: null, inventoryData: null, costData: null,
+  };
+
+  // ── Chart instances ──
+  let chartSacks = null, chartYield = null, chartStrain = null, chartRate = null;
+
+  // ── Chart.js defaults ──
+  Chart.defaults.color = 'rgba(232,228,220,0.55)';
+  Chart.defaults.borderColor = 'rgba(102, 137, 113, 0.1)';
+  Chart.defaults.font.family = "'Outfit', system-ui, sans-serif";
+  Chart.defaults.font.size = 11;
+
+  // ── Helpers ──
+  function todayStr() { return new Date().toLocaleDateString('en-CA'); }
+  function fmt(n, dec = 0) { return n == null ? '--' : Number(n).toLocaleString(undefined, { maximumFractionDigits: dec }); }
+
+  function getPresetDates(preset) {
+    const today = new Date();
+    const end = todayStr();
+    let start;
+    switch (preset) {
+      case 'today':
+        start = end; break;
+      case 'week': {
+        const d = new Date(today);
+        d.setDate(d.getDate() - d.getDay());
+        start = d.toLocaleDateString('en-CA');
+        break;
+      }
+      case 'month':
+        start = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-01';
+        break;
+      case '30': {
+        const d = new Date(today);
+        d.setDate(d.getDate() - 30);
+        start = d.toLocaleDateString('en-CA');
+        break;
+      }
+      case 'all':
+        start = '2025-01-01'; break;
+      default:
+        start = end;
+    }
+    return { start, end };
+  }
+
+  function movingAverage(arr, window = 7) {
+    return arr.map((_, i) => {
+      const slice = arr.slice(Math.max(0, i - window + 1), i + 1);
+      return slice.reduce((a, b) => a + b, 0) / slice.length;
+    });
+  }
+
+  // ── Date Controls ──
+  const dateStart = document.getElementById('date-start');
+  const dateEnd = document.getElementById('date-end');
+  const presetBtns = document.querySelectorAll('.preset-btn');
+
+  function setPreset(preset) {
+    state.activePreset = preset;
+    const { start, end } = getPresetDates(preset);
+    state.startDate = start;
+    state.endDate = end;
+    dateStart.value = start;
+    dateEnd.value = end;
+    presetBtns.forEach(b => b.classList.toggle('active', b.dataset.preset === preset));
+    loadAllData();
+  }
+
+  presetBtns.forEach(btn => {
+    btn.addEventListener('click', () => setPreset(btn.dataset.preset));
+  });
+
+  dateStart.addEventListener('change', () => {
+    state.startDate = dateStart.value;
+    state.activePreset = null;
+    presetBtns.forEach(b => b.classList.remove('active'));
+    loadAllData();
+  });
+  dateEnd.addEventListener('change', () => {
+    state.endDate = dateEnd.value;
+    state.activePreset = null;
+    presetBtns.forEach(b => b.classList.remove('active'));
+    loadAllData();
+  });
+
+  // ── Data Loading ──
+  async function fetchJSON(url) {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const raw = await r.json();
+    return raw.data || raw;
+  }
+
+  async function loadAllData() {
+    const s = state.startDate, e = state.endDate;
+    try {
+      const [summary, history] = await Promise.all([
+        fetchJSON(`${SS_API}?action=summary&start=${s}&end=${e}&group_by=day`),
+        fetchJSON(`${SS_API}?action=history&start=${s}&end=${e}`),
+      ]);
+      state.summaryData = summary;
+      state.historyData = history;
+      renderKPIs();
+      renderCharts();
+    } catch (err) {
+      console.error('Load error:', err);
+      document.getElementById('kpi-sacks').textContent = '--';
+      document.getElementById('kpi-avg-day').textContent = '--';
+      document.getElementById('kpi-raw').textContent = '--';
+      document.getElementById('kpi-yield').textContent = '--';
+    }
+
+    // Inventory (independent)
+    loadInventory();
+    // Production/cost (independent)
+    loadCostData();
+  }
+
+  async function loadInventory() {
+    const card = document.getElementById('inventory-card');
+    try {
+      const r = await fetch(`${POOL_API}?action=get_supersack_variants`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({}),
+      });
+      const raw = await r.json();
+      state.inventoryData = (raw.data || raw).variants || [];
+      renderInventory();
+    } catch (err) {
+      console.error('Inventory error:', err);
+      card.innerHTML = `<div class="card-title" data-i18n="currentInventory">${t('currentInventory')}</div><div class="error-msg">${t('errorLoad')}</div>`;
+    }
+  }
+
+  async function loadCostData() {
+    const card = document.getElementById('cost-card');
+    try {
+      const data = await fetchJSON(`${PROD_API}?action=dashboard&start=${state.startDate}&end=${state.endDate}`);
+      state.costData = data;
+      renderCostCard();
+    } catch (err) {
+      console.error('Cost data error:', err);
+      card.innerHTML = `<div class="card-title" data-i18n="laborMetrics">${t('laborMetrics')}</div><div class="error-msg">${t('errorLoad')}</div>`;
+    }
+  }
+
+  // ── KPI Rendering ──
+  function renderKPIs() {
+    const periods = state.summaryData?.periods || [];
+    if (!periods.length) {
+      ['kpi-sacks', 'kpi-avg-day', 'kpi-raw', 'kpi-yield'].forEach(id => {
+        document.getElementById(id).textContent = '--';
+      });
+      return;
+    }
+
+    const totalSacks = periods.reduce((s, p) => s + (p.total_sacks || 0), 0);
+    const totalRaw = periods.reduce((s, p) => s + (p.total_raw || 0), 0);
+    const totalTops = periods.reduce((s, p) => s + (p.total_tops || 0), 0);
+    const totalSmalls = periods.reduce((s, p) => s + (p.total_smalls || 0), 0);
+    const daysWorked = periods.filter(p => p.total_sacks > 0).length || 1;
+    const avgYield = totalRaw > 0 ? ((totalTops + totalSmalls) / totalRaw * 100) : 0;
+
+    document.getElementById('kpi-sacks').textContent = fmt(totalSacks);
+    document.getElementById('kpi-avg-day').textContent = fmt(totalSacks / daysWorked, 1);
+    document.getElementById('kpi-raw').textContent = fmt(totalRaw);
+    document.getElementById('kpi-yield').textContent = fmt(avgYield, 1) + '%';
+  }
+
+  // ── Chart Rendering ──
+  const COLORS = {
+    tops: '#668971', smalls: '#e4aa4f', biomass: '#62758d',
+    trim: '#8b7355', waste: '#c45c4a',
+  };
+
+  function destroyCharts() {
+    [chartSacks, chartYield, chartStrain, chartRate].forEach(c => c && c.destroy());
+    chartSacks = chartYield = chartStrain = chartRate = null;
+  }
+
+  function renderCharts() {
+    destroyCharts();
+    const periods = state.summaryData?.periods || [];
+    const strains = state.summaryData?.strains || [];
+
+    // ── Sacks/Day line chart ──
+    const labels = periods.map(p => p.period);
+    const sacksData = periods.map(p => p.total_sacks || 0);
+    const ma = movingAverage(sacksData, 7);
+
+    chartSacks = new Chart(document.getElementById('chart-sacks-day'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: t('kpiTotalSacks'),
+            data: sacksData,
+            borderColor: COLORS.tops,
+            backgroundColor: 'rgba(102, 137, 113, 0.1)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: sacksData.length > 30 ? 0 : 3,
+            pointBackgroundColor: COLORS.tops,
+          },
+          {
+            label: t('movingAvg'),
+            data: ma,
+            borderColor: COLORS.smalls,
+            borderDash: [5, 3],
+            pointRadius: 0,
+            tension: 0.4,
+            fill: false,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { boxWidth: 12, padding: 10 } } },
+        scales: {
+          x: { ticks: { maxTicksLimit: 8, maxRotation: 0 } },
+          y: { beginAtZero: true }
+        }
+      }
+    });
+
+    // ── Yield stacked bar ──
+    chartYield = new Chart(document.getElementById('chart-yield'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: t('tops'), data: periods.map(p => p.total_tops || 0), backgroundColor: COLORS.tops },
+          { label: t('smalls'), data: periods.map(p => p.total_smalls || 0), backgroundColor: COLORS.smalls },
+          { label: t('biomass'), data: periods.map(p => p.total_biomass || 0), backgroundColor: COLORS.biomass },
+          { label: t('trim'), data: periods.map(p => p.total_trim || 0), backgroundColor: COLORS.trim },
+          { label: t('waste'), data: periods.map(p => p.total_waste || 0), backgroundColor: COLORS.waste },
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { boxWidth: 12, padding: 10 } } },
+        scales: {
+          x: { stacked: true, ticks: { maxTicksLimit: 8, maxRotation: 0 } },
+          y: { stacked: true, beginAtZero: true }
+        }
+      }
+    });
+
+    // ── Strain comparison horizontal bar ──
+    if (strains.length) {
+      const strainLabels = strains.map(s => {
+        const name = s.strain || 'Unknown';
+        return name.length > 25 ? name.substring(0, 22) + '...' : name;
+      });
+      const strainRaw = strains.map(s => s.total_raw || 1);
+      chartStrain = new Chart(document.getElementById('chart-strain'), {
+        type: 'bar',
+        data: {
+          labels: strainLabels,
+          datasets: [
+            {
+              label: t('topsP'),
+              data: strains.map((s, i) => ((s.total_tops || 0) / strainRaw[i] * 100)),
+              backgroundColor: COLORS.tops,
+            },
+            {
+              label: t('smallsP'),
+              data: strains.map((s, i) => ((s.total_smalls || 0) / strainRaw[i] * 100)),
+              backgroundColor: COLORS.smalls,
+            },
+            {
+              label: t('wasteP'),
+              data: strains.map((s, i) => ((s.total_waste || 0) / strainRaw[i] * 100)),
+              backgroundColor: COLORS.waste,
+            },
+          ]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { labels: { boxWidth: 12, padding: 10 } } },
+          scales: {
+            x: { stacked: true, max: 100, ticks: { callback: v => v + '%' } },
+            y: { stacked: true }
+          }
+        }
+      });
+    }
+
+    // ── Production rate chart (from history data) ──
+    renderRateChart();
+  }
+
+  function renderRateChart() {
+    const entries = state.historyData?.entries || [];
+    if (!entries.length) return;
+
+    // Group by date, compute lbs processed per day
+    const byDate = {};
+    entries.forEach(e => {
+      if (!byDate[e.date]) byDate[e.date] = { raw: 0, sacks: 0 };
+      byDate[e.date].raw += e.raw_lbs || 0;
+      byDate[e.date].sacks += e.sacks_opened || 0;
+    });
+
+    const dates = Object.keys(byDate).sort();
+    // Estimate lbs/hr: assume 7.5 effective hours per day
+    const HOURS_PER_DAY = 7.5;
+    const rateData = dates.map(d => byDate[d].raw > 0 ? (byDate[d].raw / HOURS_PER_DAY) : 0);
+
+    chartRate = new Chart(document.getElementById('chart-rate'), {
+      type: 'line',
+      data: {
+        labels: dates,
+        datasets: [{
+          label: t('lbsHr'),
+          data: rateData,
+          borderColor: COLORS.smalls,
+          backgroundColor: 'rgba(228, 170, 79, 0.1)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: rateData.length > 30 ? 0 : 3,
+          pointBackgroundColor: COLORS.smalls,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { boxWidth: 12, padding: 10 } } },
+        scales: {
+          x: { ticks: { maxTicksLimit: 8, maxRotation: 0 } },
+          y: { beginAtZero: true }
+        }
+      }
+    });
+  }
+
+  // ── Inventory Rendering ──
+  function renderInventory() {
+    const card = document.getElementById('inventory-card');
+    const variants = state.inventoryData || [];
+    const periods = state.summaryData?.periods || [];
+
+    // Compute avg daily usage per strain from summary
+    const daysWorked = periods.filter(p => p.total_sacks > 0).length || 1;
+    const strainUsage = {};
+    const strainYields = {};
+    (state.summaryData?.strains || []).forEach(s => {
+      const name = s.strain || 'Unknown';
+      strainUsage[name] = (s.total_sacks || 0) / daysWorked;
+      const raw = s.total_raw || 1;
+      strainYields[name] = {
+        topsRate: (s.total_tops || 0) / (s.total_sacks || 1),
+        smallsRate: (s.total_smalls || 0) / (s.total_sacks || 1),
+      };
+    });
+
+    // Total avg daily across all strains
+    const totalAvgDaily = Object.values(strainUsage).reduce((a, b) => a + b, 0) || 1;
+
+    if (!variants.length) {
+      card.innerHTML = `<div class="card-title" data-i18n="currentInventory">${t('currentInventory')}</div><div class="loading-msg">${t('noData')}</div>`;
+      return;
+    }
+
+    let html = `<div class="card-title">${t('currentInventory')}</div>`;
+    html += `<div style="overflow-x:auto"><table class="inv-table"><thead><tr>`;
+    html += `<th>${t('strain')}</th><th>${t('sacks')}</th><th>${t('daysSupply')}</th><th>${t('projYield')}</th><th>${t('depletes')}</th>`;
+    html += `</tr></thead><tbody>`;
+
+    variants.forEach(v => {
+      const name = v.title || 'Unknown';
+      const qty = v.quantity || 0;
+      const usage = strainUsage[name] || totalAvgDaily;
+      const daysLeft = usage > 0 ? Math.round(qty / usage) : Infinity;
+      const daysStr = daysLeft === Infinity ? t('never') : daysLeft;
+
+      const yields = strainYields[name] || { topsRate: 0, smallsRate: 0 };
+      const projTops = (qty * yields.topsRate).toFixed(0);
+      const projSmalls = (qty * yields.smallsRate).toFixed(0);
+
+      // Depletion date
+      let depleteStr = t('never');
+      if (daysLeft !== Infinity && daysLeft < 9999) {
+        const d = new Date();
+        d.setDate(d.getDate() + daysLeft);
+        depleteStr = d.toLocaleDateString('en-CA');
+      }
+
+      // Bar color based on days
+      const barPct = Math.min(100, (daysLeft / 60) * 100);
+      const barColor = daysLeft < 7 ? 'var(--red)' : daysLeft < 21 ? 'var(--gold)' : 'var(--green)';
+
+      html += `<tr>`;
+      html += `<td style="font-family:var(--font-ui);font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</td>`;
+      html += `<td>${fmt(qty)}</td>`;
+      html += `<td>${daysStr}<div class="depletion-bar-bg"><div class="depletion-bar-fill" style="width:${barPct}%;background:${barColor}"></div></div></td>`;
+      html += `<td style="font-size:11px"><span style="color:var(--green)">${projTops}t</span> / <span style="color:var(--gold)">${projSmalls}s</span></td>`;
+      html += `<td style="font-size:11px">${depleteStr}</td>`;
+      html += `</tr>`;
+    });
+
+    html += `</tbody></table></div>`;
+    card.innerHTML = html;
+  }
+
+  // ── Cost Card Rendering ──
+  function renderCostCard() {
+    const card = document.getElementById('cost-card');
+    const data = state.costData;
+
+    if (!data) {
+      card.innerHTML = `<div class="card-title">${t('laborMetrics')}</div><div class="loading-msg">${t('noData')}</div>`;
+      return;
+    }
+
+    // Try to extract production metrics from the dashboard response
+    // The dashboard API format may vary - handle gracefully
+    const summary = data.summary || data;
+    const totalOutput = summary.total_tops_lbs != null
+      ? (summary.total_tops_lbs || 0) + (summary.total_smalls_lbs || 0)
+      : (state.summaryData?.periods || []).reduce((s, p) => s + (p.total_tops || 0) + (p.total_smalls || 0), 0);
+
+    const totalHours = summary.total_hours || 0;
+    const totalLabor = summary.total_labor_cost || 0;
+    const avgTrimmers = summary.avg_trimmers || summary.avg_effective_trimmers || 0;
+
+    const lbsHr = totalHours > 0 ? (totalOutput / totalHours) : 0;
+    const lbsTrimmer = avgTrimmers > 0 ? (totalOutput / avgTrimmers) : 0;
+    const costLb = totalOutput > 0 ? (totalLabor / totalOutput) : 0;
+
+    let html = `<div class="card-title">${t('laborMetrics')}</div>`;
+    html += `<div class="cost-grid">`;
+    html += `<div class="cost-item"><div class="cost-label">${t('lbsHr')}</div><div class="cost-value" style="color:var(--green)">${fmt(lbsHr, 1)}</div></div>`;
+    html += `<div class="cost-item"><div class="cost-label">${t('lbsTrimmer')}</div><div class="cost-value" style="color:var(--gold)">${fmt(lbsTrimmer, 1)}</div></div>`;
+    html += `<div class="cost-item"><div class="cost-label">${t('costLb')}</div><div class="cost-value" style="color:var(--red)">$${fmt(costLb, 2)}</div></div>`;
+    html += `<div class="cost-item"><div class="cost-label">${t('totalLabor')}</div><div class="cost-value" style="color:var(--blue)">$${fmt(totalLabor)}</div></div>`;
+    html += `</div>`;
+
+    card.innerHTML = html;
+  }
+
+  // ── Init ──
+  applyLang();
+  setPreset('month');
+
+})();
+</script>
+</body>
+</html>
