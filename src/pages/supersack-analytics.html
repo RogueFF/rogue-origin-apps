@@ -674,7 +674,7 @@
 
   function renderCharts() {
     destroyCharts();
-    const periods = state.summaryData?.periods || [];
+    const periods = (state.summaryData?.periods || []).slice().reverse(); // oldest first
     const strains = state.summaryData?.strains || [];
 
     // ── Sacks/Day line chart ──
