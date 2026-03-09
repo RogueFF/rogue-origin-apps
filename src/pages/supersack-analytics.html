@@ -938,21 +938,18 @@
     const periods = state.summaryData?.periods || [];
 
     // Compute avg daily usage per strain from summary
-    const daysWorked = periods.filter(p => p.total_sacks > 0).length || 1;
+    const daysWorked = periods.filter(p => p.total_sacks > 0).length;
+    const hasCompleteData = daysWorked > 0;
     const strainUsage = {};
     const strainYields = {};
     (state.summaryData?.strains || []).forEach(s => {
       const name = s.strain || 'Unknown';
-      strainUsage[name] = (s.total_sacks || 0) / daysWorked;
-      const raw = s.total_raw || 1;
+      strainUsage[name] = hasCompleteData ? (s.total_sacks || 0) / daysWorked : 0;
       strainYields[name] = {
-        topsRate: (s.total_tops || 0) / (s.total_sacks || 1),
-        smallsRate: (s.total_smalls || 0) / (s.total_sacks || 1),
+        topsRate: (s.total_sacks || 0) > 0 ? (s.total_tops || 0) / s.total_sacks : 0,
+        smallsRate: (s.total_sacks || 0) > 0 ? (s.total_smalls || 0) / s.total_sacks : 0,
       };
     });
-
-    // Total avg daily across all strains
-    const totalAvgDaily = Object.values(strainUsage).reduce((a, b) => a + b, 0) || 1;
 
     if (!variants.length) {
       card.innerHTML = `<div class="card-title" data-i18n="currentInventory">${t('currentInventory')}</div><div class="loading-msg">${t('noData')}</div>`;
@@ -967,25 +964,26 @@
     variants.forEach(v => {
       const name = v.title || 'Unknown';
       const qty = v.quantity || 0;
-      const usage = strainUsage[name] || totalAvgDaily;
-      const daysLeft = usage > 0 ? Math.round(qty / usage) : Infinity;
-      const daysStr = daysLeft === Infinity ? t('never') : daysLeft;
+      const usage = strainUsage[name] || 0;
+      const daysLeft = (hasCompleteData && usage > 0) ? Math.round(qty / usage) : null;
+      const daysStr = daysLeft != null ? daysLeft : t('never');
 
       const yields = strainYields[name] || { topsRate: 0, smallsRate: 0 };
-      const projTops = (qty * yields.topsRate).toFixed(0);
-      const projSmalls = (qty * yields.smallsRate).toFixed(0);
+      const hasProjData = hasCompleteData && (yields.topsRate > 0 || yields.smallsRate > 0);
+      const projTops = hasProjData ? (qty * yields.topsRate).toFixed(0) : '--';
+      const projSmalls = hasProjData ? (qty * yields.smallsRate).toFixed(0) : '--';
 
       // Depletion date
       let depleteStr = t('never');
-      if (daysLeft !== Infinity && daysLeft < 9999) {
+      if (daysLeft != null && daysLeft < 9999) {
         const d = new Date();
         d.setDate(d.getDate() + daysLeft);
         depleteStr = d.toLocaleDateString('en-CA');
       }
 
       // Bar color based on days
-      const barPct = Math.min(100, (daysLeft / 60) * 100);
-      const barColor = daysLeft < 7 ? 'var(--red)' : daysLeft < 21 ? 'var(--gold)' : 'var(--green)';
+      const barPct = daysLeft != null ? Math.min(100, (daysLeft / 60) * 100) : 0;
+      const barColor = daysLeft != null ? (daysLeft < 7 ? 'var(--red)' : daysLeft < 21 ? 'var(--gold)' : 'var(--green)') : 'var(--text-faint)';
 
       html += `<tr>`;
       html += `<td style="font-family:var(--font-ui);font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</td>`;
