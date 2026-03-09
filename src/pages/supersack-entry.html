@@ -928,7 +928,7 @@
     const isToday = date === todayStr();
     const selectedDate = new Date(date + 'T12:00:00');
     const prevDate = new Date(selectedDate); prevDate.setDate(selectedDate.getDate() - 1);
-    const [scoreboardRes, dashboardRes, supersackRes, smallsPoolRes, topsPoolRes] = await Promise.allSettled([
+    const [scoreboardRes, dashboardRes, supersackRes, smallsPoolRes, topsPoolRes, trimPoolRes] = await Promise.allSettled([
       // Always use scoreboard — supports ?date= param for historical data
       isToday
         ? fetch(`${PROD_API}?action=scoreboard`).then(r => r.json())
@@ -942,6 +942,9 @@
       }).then(r => r.json()),
       fetch(`${POOL_API}?action=list_products`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"poolType":"tops"}',
+      }).then(r => r.json()),
+      fetch(`${POOL_API}?action=list_products`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"poolType":"trim"}',
       }).then(r => r.json()),
     ]);
 
@@ -982,9 +985,9 @@
     }
 
     // Pool products (biomass/trim)
-    for (const res of [smallsPoolRes, topsPoolRes]) {
+    for (const res of [smallsPoolRes, topsPoolRes, trimPoolRes]) {
       if (res.status === 'fulfilled') {
-        const poolType = res === smallsPoolRes ? 'smalls' : 'tops';
+        const poolType = res === smallsPoolRes ? 'smalls' : res === topsPoolRes ? 'tops' : 'trim';
         (res.value.products || []).forEach(p => {
           if (!poolProducts.find(x => x.id === p.id)) {
             p._poolType = poolType; p._unit = 'g';
