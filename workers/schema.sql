@@ -475,3 +475,26 @@ CREATE TABLE IF NOT EXISTS complaints (
 CREATE INDEX IF NOT EXISTS idx_complaints_date ON complaints(complaint_date);
 CREATE INDEX IF NOT EXISTS idx_complaints_status ON complaints(status);
 CREATE INDEX IF NOT EXISTS idx_complaints_customer ON complaints(customer);
+
+-- ============================================
+-- SUPERSACK TRACKING
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS supersack_entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  date TEXT NOT NULL,
+  strain TEXT NOT NULL,
+  sacks_opened INTEGER NOT NULL DEFAULT 0,
+  tops_lbs REAL NOT NULL DEFAULT 0,
+  smalls_lbs REAL NOT NULL DEFAULT 0,
+  biomass_lbs REAL NOT NULL DEFAULT 0,
+  trim_lbs REAL NOT NULL DEFAULT 0,
+  waste_lbs REAL NOT NULL DEFAULT 0,
+  raw_lbs REAL NOT NULL DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(date, strain)
+);
+
+CREATE INDEX IF NOT EXISTS idx_supersack_date ON supersack_entries(date);
+CREATE INDEX IF NOT EXISTS idx_supersack_strain ON supersack_entries(strain);
