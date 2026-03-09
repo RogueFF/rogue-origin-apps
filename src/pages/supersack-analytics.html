@@ -398,6 +398,12 @@
     </div>
   </div>
 
+  <!-- Sacks / Operator -->
+  <div class="card">
+    <div class="card-title" data-i18n="chartSacksOp">Supersacks / Operator / Day</div>
+    <div class="chart-wrap"><canvas id="chart-sacks-op"></canvas></div>
+  </div>
+
   <!-- Inventory + Projections -->
   <div class="section-title" data-i18n="sectionInventory">Remaining Inventory & Projections</div>
   <div class="card" id="inventory-card">
@@ -435,6 +441,8 @@
       projYield: 'Proj. Yield (lbs)', depletes: 'Depletes',
       noData: 'No data for selected range', lbsHr: 'Lbs / Hr',
       lbsTrimmer: 'Lbs / Trimmer', costLb: 'Cost / Lb', totalLabor: 'Total Labor',
+      chartSacksOp: 'Supersacks / Operator / Day',
+      sacksOp: 'Sacks/Operator', operators: 'Operators',
       movingAvg: '7-day avg', tops: 'Tops', smalls: 'Smalls',
       biomass: 'Biomass', trim: 'Trim', waste: 'Waste',
       topsP: 'Tops %', smallsP: 'Smalls %', wasteP: 'Waste %',
@@ -455,6 +463,8 @@
       projYield: 'Rend. Proy. (lbs)', depletes: 'Se Agota',
       noData: 'Sin datos para el rango seleccionado', lbsHr: 'Lbs / Hr',
       lbsTrimmer: 'Lbs / Podador', costLb: 'Costo / Lb', totalLabor: 'Labor Total',
+      chartSacksOp: 'Supersacos / Operador / Dia',
+      sacksOp: 'Sacos/Operador', operators: 'Operadores',
       movingAvg: 'Prom. 7 dias', tops: 'Tops', smalls: 'Smalls',
       biomass: 'Biomasa', trim: 'Recorte', waste: 'Desperdicio',
       topsP: 'Tops %', smallsP: 'Smalls %', wasteP: 'Desperdicio %',
@@ -494,7 +504,7 @@
   };
 
   // ── Chart instances ──
-  let chartSacks = null, chartYield = null, chartStrain = null, chartRate = null;
+  let chartSacks = null, chartYield = null, chartStrain = null, chartRate = null, chartSacksOp = null;
 
   // ── Chart.js defaults ──
   Chart.defaults.color = 'rgba(232,228,220,0.55)';
@@ -668,8 +678,8 @@
   };
 
   function destroyCharts() {
-    [chartSacks, chartYield, chartStrain, chartRate].forEach(c => c && c.destroy());
-    chartSacks = chartYield = chartStrain = chartRate = null;
+    [chartSacks, chartYield, chartStrain, chartRate, chartSacksOp].forEach(c => c && c.destroy());
+    chartSacks = chartYield = chartStrain = chartRate = chartSacksOp = null;
   }
 
   function renderCharts() {
@@ -787,6 +797,9 @@
 
     // ── Production rate chart (from history data) ──
     renderRateChart();
+
+    // ── Sacks/Operator chart (needs crew data per date) ──
+    renderSacksPerOperator(periods);
   }
 
   function renderRateChart() {
@@ -841,6 +854,78 @@
         scales: {
           x: { ticks: { maxTicksLimit: 8, maxRotation: 0 } },
           y: { beginAtZero: true }
+        }
+      }
+    });
+  }
+
+  // ── Sacks per Operator chart ──
+  async function renderSacksPerOperator(periods) {
+    if (!periods.length) return;
+
+    const dates = periods.map(p => p.period);
+    const sacksPerDay = periods.map(p => p.total_sacks || 0);
+
+    // Fetch crew counts per date from production API
+    const crewPerDay = [];
+    for (const date of dates) {
+      try {
+        const data = await fetchJSON(`${PROD_API}?action=getProduction&date=${date}`);
+        const rows = data.production || [];
+        // Avg operators = avg (trimmers + buckers) across active slots
+        const activeSlots = rows.filter(r => (r.trimmers1 || 0) + (r.trimmers2 || 0) + (r.buckers1 || 0) + (r.buckers2 || 0) > 0);
+        if (activeSlots.length > 0) {
+          const totalOps = activeSlots.reduce((s, r) =>
+            s + (r.effectiveTrimmers1 || r.trimmers1 || 0) + (r.effectiveTrimmers2 || r.trimmers2 || 0)
+              + (r.buckers1 || 0) + (r.buckers2 || 0), 0);
+          crewPerDay.push(totalOps / activeSlots.length);
+        } else {
+          crewPerDay.push(0);
+        }
+      } catch {
+        crewPerDay.push(0);
+      }
+    }
+
+    const sacksOpData = sacksPerDay.map((s, i) => crewPerDay[i] > 0 ? +(s / crewPerDay[i]).toFixed(2) : 0);
+    const ptRadius = dates.length > 30 ? 0 : 4;
+
+    chartSacksOp = new Chart(document.getElementById('chart-sacks-op'), {
+      type: 'bar',
+      data: {
+        labels: dates,
+        datasets: [
+          {
+            label: t('sacksOp'),
+            data: sacksOpData,
+            backgroundColor: 'rgba(102, 137, 113, 0.6)',
+            borderColor: COLORS.tops,
+            borderWidth: 1,
+            borderRadius: 4,
+            yAxisID: 'y',
+          },
+          {
+            label: t('operators'),
+            data: crewPerDay.map(c => +c.toFixed(1)),
+            type: 'line',
+            borderColor: COLORS.smalls,
+            backgroundColor: 'transparent',
+            tension: 0.3,
+            pointRadius: ptRadius,
+            pointBackgroundColor: COLORS.smalls,
+            borderDash: [5, 3],
+            yAxisID: 'y1',
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { boxWidth: 12, padding: 10 } } },
+        scales: {
+          x: { ticks: { maxTicksLimit: 8, maxRotation: 0 } },
+          y: { beginAtZero: true, position: 'left', title: { display: true, text: t('sacksOp'), font: { size: 10 } } },
+          y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: t('operators'), font: { size: 10 } } },
         }
       }
     });
