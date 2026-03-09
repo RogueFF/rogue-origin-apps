@@ -796,28 +796,41 @@
     // Group by date, compute lbs processed per day
     const byDate = {};
     entries.forEach(e => {
-      if (!byDate[e.date]) byDate[e.date] = { raw: 0, sacks: 0 };
+      if (!byDate[e.date]) byDate[e.date] = { raw: 0, sacks: 0, tops: 0, smalls: 0 };
       byDate[e.date].raw += e.raw_lbs || 0;
       byDate[e.date].sacks += e.sacks_opened || 0;
+      byDate[e.date].tops += e.tops_lbs || 0;
+      byDate[e.date].smalls += e.smalls_lbs || 0;
     });
 
     const dates = Object.keys(byDate).sort();
     // Estimate lbs/hr: assume 7.5 effective hours per day
     const HOURS_PER_DAY = 7.5;
-    const rateData = dates.map(d => byDate[d].raw > 0 ? (byDate[d].raw / HOURS_PER_DAY) : 0);
+    const topsRate = dates.map(d => byDate[d].tops > 0 ? (byDate[d].tops / HOURS_PER_DAY) : 0);
+    const smallsRate = dates.map(d => byDate[d].smalls > 0 ? (byDate[d].smalls / HOURS_PER_DAY) : 0);
+    const ptRadius = dates.length > 30 ? 0 : 3;
 
     chartRate = new Chart(document.getElementById('chart-rate'), {
       type: 'line',
       data: {
         labels: dates,
         datasets: [{
-          label: t('lbsHr'),
-          data: rateData,
+          label: t('tops') + ' /hr',
+          data: topsRate,
+          borderColor: COLORS.tops,
+          backgroundColor: 'rgba(102, 137, 113, 0.1)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: ptRadius,
+          pointBackgroundColor: COLORS.tops,
+        }, {
+          label: t('smalls') + ' /hr',
+          data: smallsRate,
           borderColor: COLORS.smalls,
           backgroundColor: 'rgba(228, 170, 79, 0.1)',
           fill: true,
           tension: 0.3,
-          pointRadius: rateData.length > 30 ? 0 : 3,
+          pointRadius: ptRadius,
           pointBackgroundColor: COLORS.smalls,
         }]
       },
