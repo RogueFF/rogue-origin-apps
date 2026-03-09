@@ -98,7 +98,7 @@ async function submit(body, env) {
 
 /** Query history for date range */
 async function history(params, env) {
-  const { start, end, strain } = params;
+  const { start, end, strain, complete } = params;
   const db = env.DB;
 
   let sql = 'SELECT * FROM supersack_entries WHERE 1=1';
@@ -107,6 +107,7 @@ async function history(params, env) {
   if (start) { sql += ' AND date >= ?'; binds.push(start); }
   if (end) { sql += ' AND date <= ?'; binds.push(end); }
   if (strain) { sql += ' AND strain = ?'; binds.push(strain); }
+  if (complete === 'true') { sql += ' AND (biomass_lbs > 0 OR trim_lbs > 0)'; }
 
   sql += ' ORDER BY date DESC, strain';
 
@@ -116,12 +117,14 @@ async function history(params, env) {
 
 /** Aggregated summary for date range */
 async function summary(params, env) {
-  const { start, end, strain, group_by = 'day' } = params;
+  const { start, end, strain, group_by = 'day', complete } = params;
   const db = env.DB;
 
   const groupExpr = group_by === 'month' ? "strftime('%Y-%m', date)"
     : group_by === 'week' ? "strftime('%Y-W%W', date)"
     : 'date';
+
+  const completeFilter = complete === 'true' ? ' AND (biomass_lbs > 0 OR trim_lbs > 0)' : '';
 
   let sql = `
     SELECT ${groupExpr} as period,
@@ -134,7 +137,7 @@ async function summary(params, env) {
       SUM(waste_lbs) as total_waste,
       COUNT(DISTINCT date) as days_worked,
       COUNT(DISTINCT strain) as strain_count
-    FROM supersack_entries WHERE 1=1`;
+    FROM supersack_entries WHERE 1=1${completeFilter}`;
   const binds = [];
 
   if (start) { sql += ' AND date >= ?'; binds.push(start); }
@@ -156,7 +159,7 @@ async function summary(params, env) {
       SUM(trim_lbs) as total_trim,
       SUM(waste_lbs) as total_waste,
       COUNT(DISTINCT date) as days_worked
-    FROM supersack_entries WHERE 1=1`;
+    FROM supersack_entries WHERE 1=1${completeFilter}`;
   const strainBinds = [];
 
   if (start) { strainSql += ' AND date >= ?'; strainBinds.push(start); }
