@@ -54,6 +54,7 @@
         <button class="header-btn" onclick="openSettingsModal()" aria-label="Settings"><i class="ph-duotone ph-gear"></i></button>
         <button class="header-btn" onclick="openRequestsModal()" id="requestsBtn" aria-label="Requests"><i class="ph-duotone ph-clipboard-text"></i> Requests <span class="request-badge" id="requestBadge" style="display:none;">0</span></button>
         <button class="header-btn" onclick="refresh()" aria-label="Refresh"><i class="ph-duotone ph-arrows-clockwise"></i></button>
+        <button class="header-btn" onclick="openWebImportModal()"><i class="ph-duotone ph-globe"></i> <span data-i18n="webImport">Import</span></button>
         <button class="header-btn primary" onclick="openCreateModal()"><i class="ph-duotone ph-plus"></i> New SOP</button>
       </div>
     </header>
@@ -93,6 +94,9 @@
         <i class="ph-bold ph-plus"></i>
       </button>
       <div class="fab-menu" id="fabMenu" style="display:none;">
+        <button class="fab-item" onclick="openWebImportModal();toggleFabMenu()">
+          <i class="ph-duotone ph-globe"></i><span data-i18n="webImport">Import from Web</span>
+        </button>
         <button class="fab-item" onclick="openCreateModal();toggleFabMenu()">
           <i class="ph-duotone ph-plus"></i><span data-i18n="createSOP">New SOP</span>
         </button>
@@ -103,6 +107,69 @@
         <button class="fab-item" onclick="openSettingsModal();toggleFabMenu()">
           <i class="ph-duotone ph-gear"></i><span>Settings</span>
         </button>
+      </div>
+    </div>
+    <!-- Web Import Modal -->
+    <div class="modal" id="webImportModal">
+      <div class="modal-box" style="max-width:540px;">
+        <div class="modal-header">
+          <h2><i class="ph-duotone ph-globe"></i> <span data-i18n="webImport">Import from Web</span></h2>
+          <button class="modal-close" onclick="closeModal('webImportModal')">&times;</button>
+        </div>
+
+        <!-- Step 1: Input -->
+        <div id="importStep1" class="modal-body" style="padding:20px;">
+          <div style="margin-bottom:16px;">
+            <label style="font-weight:600;margin-bottom:6px;display:block;" data-i18n="importEquipment">What equipment or machine?</label>
+            <input type="text" id="importQuery" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--bg);color:var(--text);" placeholder="e.g., Twister T4 Trimmer, Grove Bags heat sealer" maxlength="500">
+            <small style="color:var(--text-muted);margin-top:4px;display:block;" data-i18n="importEquipmentHint">Enter the name, make, or model of the machinery</small>
+          </div>
+          <div style="margin-bottom:16px;">
+            <label style="font-weight:600;margin-bottom:6px;display:block;" data-i18n="importTopic">Document Type</label>
+            <select id="importTopic" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--bg);color:var(--text);">
+              <option value="maintenance" data-i18n="importTopicMaintenance">Maintenance</option>
+              <option value="setup" data-i18n="importTopicSetup">Setup / Installation</option>
+              <option value="tpm" data-i18n="importTopicTPM">TPM (Total Productive Maintenance)</option>
+              <option value="cleaning" data-i18n="importTopicCleaning">Cleaning</option>
+              <option value="troubleshooting" data-i18n="importTopicTroubleshooting">Troubleshooting</option>
+              <option value="operation" data-i18n="importTopicOperation">Operation</option>
+              <option value="safety" data-i18n="importTopicSafety">Safety</option>
+            </select>
+          </div>
+          <div style="margin-bottom:16px;">
+            <label style="font-weight:600;margin-bottom:6px;display:block;" data-i18n="importDeptLabel">Department (optional)</label>
+            <select id="importDept" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--bg);color:var(--text);">
+              <option value="">—</option>
+            </select>
+          </div>
+          <div style="margin-bottom:20px;">
+            <label style="font-weight:600;margin-bottom:6px;display:block;" data-i18n="importInstructions">Special Instructions (optional)</label>
+            <textarea id="importInstructions" rows="2" maxlength="500" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text);resize:vertical;" placeholder="e.g., Focus on daily maintenance, Include lubrication schedule"></textarea>
+          </div>
+          <button class="header-btn primary" onclick="startWebImport()" style="width:100%;padding:12px;font-size:15px;">
+            <i class="ph-duotone ph-magnifying-glass"></i> <span data-i18n="importGenerate">Generate SOP</span>
+          </button>
+        </div>
+
+        <!-- Step 2: Processing -->
+        <div id="importStep2" class="modal-body" style="display:none;padding:40px 20px;text-align:center;">
+          <div class="spinner" style="margin:0 auto 20px;"></div>
+          <p id="importProgressText" style="font-size:16px;font-weight:600;color:var(--text);" data-i18n="importSearching">Searching for documentation...</p>
+          <p style="color:var(--text-muted);font-size:13px;margin-top:8px;" data-i18n="importWait">This may take 20-40 seconds</p>
+        </div>
+
+        <!-- Step 3: Preview -->
+        <div id="importStep3" class="modal-body" style="display:none;padding:20px;">
+          <div id="importPreviewContent"></div>
+          <div style="display:flex;gap:10px;margin-top:20px;">
+            <button class="header-btn" onclick="resetWebImport()" style="flex:1;padding:10px;">
+              <i class="ph-duotone ph-arrow-counter-clockwise"></i> <span data-i18n="importTryAgain">Try Again</span>
+            </button>
+            <button class="header-btn primary" onclick="acceptWebImport()" style="flex:1;padding:10px;">
+              <i class="ph-duotone ph-pencil-simple"></i> <span data-i18n="importEditSOP">Edit & Customize</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </main>
@@ -648,6 +715,7 @@
     let currentRequestTab = 'pending';
     let appLang = 'en';
     let isLoading = false;
+    let importedSopData = null;
 
     // Wizard mode state
     let currentWizardStep = 0;
@@ -795,7 +863,31 @@
         of: 'of',
         allDepts: 'All Departments',
         allTags: 'All Tags',
-        all: 'All'
+        all: 'All',
+        webImport: 'Import from Web',
+        importEquipment: 'What equipment or machine?',
+        importEquipmentHint: 'Enter the name, make, or model of the machinery',
+        importTopic: 'Document Type',
+        importTopicMaintenance: 'Maintenance',
+        importTopicSetup: 'Setup / Installation',
+        importTopicTPM: 'TPM (Total Productive Maintenance)',
+        importTopicCleaning: 'Cleaning',
+        importTopicTroubleshooting: 'Troubleshooting',
+        importTopicOperation: 'Operation',
+        importTopicSafety: 'Safety',
+        importDeptLabel: 'Department (optional)',
+        importInstructions: 'Special Instructions (optional)',
+        importSearching: 'Searching for documentation...',
+        importReading: 'Reading manufacturer sources...',
+        importGenerating: 'Generating bilingual SOP...',
+        importWait: 'This may take 20-40 seconds',
+        importGenerate: 'Generate SOP',
+        importTryAgain: 'Try Again',
+        importEditSOP: 'Edit & Customize',
+        importEquipmentRequired: 'Please enter equipment name',
+        importFailed: 'Import failed',
+        importSuccess: 'SOP imported! Review and edit before saving.',
+        importSources: 'Sources'
       },
       es: {
         addMedia: 'Agregar Media',
@@ -884,7 +976,31 @@
         of: 'de',
         allDepts: 'Todos los Departamentos',
         allTags: 'Todas las Etiquetas',
-        all: 'Todos'
+        all: 'Todos',
+        webImport: 'Importar desde Web',
+        importEquipment: '¿Qué equipo o máquina?',
+        importEquipmentHint: 'Ingrese el nombre, marca o modelo de la maquinaria',
+        importTopic: 'Tipo de Documento',
+        importTopicMaintenance: 'Mantenimiento',
+        importTopicSetup: 'Instalación / Configuración',
+        importTopicTPM: 'TPM (Mantenimiento Productivo Total)',
+        importTopicCleaning: 'Limpieza',
+        importTopicTroubleshooting: 'Solución de Problemas',
+        importTopicOperation: 'Operación',
+        importTopicSafety: 'Seguridad',
+        importDeptLabel: 'Departamento (opcional)',
+        importInstructions: 'Instrucciones Especiales (opcional)',
+        importSearching: 'Buscando documentación...',
+        importReading: 'Leyendo fuentes del fabricante...',
+        importGenerating: 'Generando SOP bilingüe...',
+        importWait: 'Esto puede tomar 20-40 segundos',
+        importGenerate: 'Generar SOP',
+        importTryAgain: 'Intentar de Nuevo',
+        importEditSOP: 'Editar y Personalizar',
+        importEquipmentRequired: 'Ingrese el nombre del equipo',
+        importFailed: 'Importación fallida',
+        importSuccess: 'SOP importado! Revise y edite antes de guardar.',
+        importSources: 'Fuentes'
       }
     };
 
@@ -3307,6 +3423,175 @@
       }
     }
     
+    // =====================================================
+    // Web Import Functions
+    // =====================================================
+
+    function openWebImportModal() {
+      resetWebImport();
+      // Populate department dropdown from settings
+      const deptSelect = document.getElementById('importDept');
+      deptSelect.innerHTML = '<option value="">—</option>';
+      settings.departments.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.name;
+        opt.textContent = d.name;
+        deptSelect.appendChild(opt);
+      });
+      openModal('webImportModal');
+    }
+
+    function showImportStep(n) {
+      document.getElementById('importStep1').style.display = n === 1 ? '' : 'none';
+      document.getElementById('importStep2').style.display = n === 2 ? '' : 'none';
+      document.getElementById('importStep3').style.display = n === 3 ? '' : 'none';
+    }
+
+    async function startWebImport() {
+      const query = document.getElementById('importQuery').value.trim();
+      if (!query) {
+        showToast(t('importEquipmentRequired'), 'error');
+        return;
+      }
+
+      showImportStep(2);
+      const progressEl = document.getElementById('importProgressText');
+      progressEl.textContent = t('importSearching');
+
+      const timer1 = setTimeout(() => { progressEl.textContent = t('importReading'); }, 5000);
+      const timer2 = setTimeout(() => { progressEl.textContent = t('importGenerating'); }, 15000);
+
+      try {
+        const response = await fetch(API_URL + '?action=webImport', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + (localStorage.getItem('ro_api_password') || ''),
+          },
+          body: JSON.stringify({
+            query: query,
+            topic: document.getElementById('importTopic').value,
+            dept: document.getElementById('importDept').value,
+            instructions: document.getElementById('importInstructions').value.trim()
+          })
+        });
+
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+
+        const raw = await response.json();
+        const data = raw.data || raw;
+
+        if (data.success && data.sop) {
+          importedSopData = data.sop;
+          showImportPreview(data.sop);
+          showImportStep(3);
+        } else {
+          showToast(data.error || t('importFailed'), 'error');
+          showImportStep(1);
+        }
+      } catch (err) {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+        showToast(t('importFailed') + ': ' + err.message, 'error');
+        showImportStep(1);
+      }
+    }
+
+    function showImportPreview(sop) {
+      const stepsHtml = sop.steps.map((step, i) => {
+        const badges = (step.safety ? '<span style="background:var(--danger);color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;margin-left:6px;">Safety</span>' : '') +
+                       (step.quality ? '<span style="background:var(--ro-green);color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;margin-left:6px;">Quality</span>' : '');
+        return '<div style="padding:10px 0;border-bottom:1px solid var(--border);">' +
+          '<div style="font-weight:600;font-size:14px;"><span style="color:var(--text-muted);margin-right:6px;">' + (i+1) + '.</span>' + (step.title || '') + badges + '</div>' +
+          '<div style="font-size:13px;color:var(--text-muted);margin-top:4px;">' + (step.description || '').substring(0, 150) + (step.description && step.description.length > 150 ? '...' : '') + '</div>' +
+        '</div>';
+      }).join('');
+
+      const sourcesHtml = (sop.sourceUrls && sop.sourceUrls.length) ?
+        '<div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--border);">' +
+        '<strong style="font-size:12px;color:var(--text-muted);">' + t('importSources') + ':</strong>' +
+        sop.sourceUrls.map(u => '<div style="margin-top:4px;"><a href="' + u + '" target="_blank" rel="noopener" style="font-size:12px;color:var(--ro-green);word-break:break-all;">' + u + '</a></div>').join('') +
+        '</div>' : '';
+
+      document.getElementById('importPreviewContent').innerHTML =
+        '<div style="margin-bottom:14px;">' +
+          '<h3 style="margin:0 0 4px;font-size:18px;">' + (sop.title || '') + '</h3>' +
+          '<span style="background:var(--ro-green);color:#fff;padding:2px 10px;border-radius:10px;font-size:12px;">' + (sop.dept || 'Maintenance') + '</span>' +
+          '<span style="color:var(--text-muted);font-size:13px;margin-left:10px;">' + sop.steps.length + ' ' + t('steps') + '</span>' +
+        '</div>' +
+        '<div style="font-size:14px;color:var(--text-muted);margin-bottom:14px;">' + (sop.description || '') + '</div>' +
+        '<div style="max-height:300px;overflow-y:auto;">' + stepsHtml + '</div>' +
+        sourcesHtml;
+    }
+
+    function resetWebImport() {
+      importedSopData = null;
+      showImportStep(1);
+      const queryEl = document.getElementById('importQuery');
+      if (queryEl) queryEl.value = '';
+      const instrEl = document.getElementById('importInstructions');
+      if (instrEl) instrEl.value = '';
+    }
+
+    function acceptWebImport() {
+      if (!importedSopData) return;
+      const sop = importedSopData;
+
+      closeModal('webImportModal');
+
+      // Populate edit modal as a new draft
+      currentSopId = null;
+      editingSteps = sop.steps.map(step => ({
+        title: step.title || '',
+        title_es: step.title_es || '',
+        description: step.description || '',
+        desc_es: step.desc_es || '',
+        image: '',
+        safety: !!step.safety,
+        quality: !!step.quality
+      }));
+      editingLinkedSops = [];
+
+      window.sopTranslations = {
+        title_en: sop.title || '',
+        title_es: sop.title_es || '',
+        desc_en: sop.description || '',
+        desc_es: sop.desc_es || ''
+      };
+
+      document.getElementById('modalTitle').innerHTML = '<i class="ph-duotone ph-globe"></i> ' + t('editSOP');
+      document.getElementById('sopTitle').value = sop.title || '';
+
+      // Set department
+      const sopDeptEl = document.getElementById('sopDept');
+      if (sop.dept && !Array.from(sopDeptEl.options).some(o => o.value === sop.dept)) {
+        const opt = document.createElement('option');
+        opt.value = sop.dept;
+        opt.textContent = sop.dept;
+        sopDeptEl.appendChild(opt);
+      }
+      sopDeptEl.value = sop.dept || '';
+
+      document.getElementById('sopDocNum').value = '';
+      document.getElementById('sopRevision').value = '1.0';
+      document.getElementById('sopStatus').value = 'draft';
+      document.getElementById('sopDesc').value = sop.description || '';
+
+      // Clear tags
+      settings.tags.forEach(tag => {
+        const cb = document.getElementById('tag_' + tag.name);
+        if (cb) cb.checked = false;
+      });
+
+      renderSteps();
+      renderEditLinkedSops();
+      openModal('editModal');
+
+      showToast(t('importSuccess'), 'success');
+      importedSopData = null;
+    }
+
     // Detect if text is likely Spanish based on common words
     function detectLanguage(text) {
       if (!text) return 'en';
