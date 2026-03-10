@@ -25,6 +25,7 @@ import { handlePoolD1 } from './handlers/pool-d1.js';
 import { handlePoolRequest } from './handlers/pool.js';
 import { handleSupersackD1 } from './handlers/supersack-d1.js';
 import { handleMediaR2 } from './handlers/media-r2.js';
+import { handleTpmD1 } from './handlers/tpm-d1.js';
 import { corsHeaders, handleCors } from './lib/cors.js';
 import { jsonResponse, errorResponse } from './lib/response.js';
 import { ApiError } from './lib/errors.js';
@@ -79,6 +80,8 @@ export default {
         response = await handleMediaR2(request, env);
       } else if (path.startsWith('/api/supersack')) {
         response = await handleSupersackD1(request, env, ctx);
+      } else if (path.startsWith('/api/tpm')) {
+        response = await handleTpmD1(request, env, ctx);
       } else if (path.startsWith('/api/pool-bins')) {
         response = await handlePoolD1(request, env, ctx);
       } else if (path.startsWith('/api/pool')) {
@@ -90,7 +93,7 @@ export default {
           success: true,
           message: 'Rogue Origin API - Cloudflare Workers',
           version: '1.0.0',
-          endpoints: ['/api/production', '/api/orders', '/api/barcode', '/api/kanban', '/api/sop', '/api/consignment', '/api/complaints', '/api/supersack', '/api/pool', '/api/media']
+          endpoints: ['/api/production', '/api/orders', '/api/barcode', '/api/kanban', '/api/sop', '/api/consignment', '/api/complaints', '/api/supersack', '/api/pool', '/api/media', '/api/tpm']
         });
       } else {
         response = errorResponse('Not found', 'NOT_FOUND', 404);
