@@ -535,7 +535,7 @@ Search for official manufacturer documentation, maintenance manuals, setup guide
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
-        'anthropic-version': '2025-04-14',
+        'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
