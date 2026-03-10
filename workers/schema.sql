@@ -498,3 +498,31 @@ CREATE TABLE IF NOT EXISTS supersack_entries (
 
 CREATE INDEX IF NOT EXISTS idx_supersack_date ON supersack_entries(date);
 CREATE INDEX IF NOT EXISTS idx_supersack_strain ON supersack_entries(strain);
+
+-- ============================================
+-- TPM CARDS (T-Card Builder)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS tpm_cards (
+  id TEXT PRIMARY KEY,
+  frequency TEXT NOT NULL DEFAULT 'daily',
+  title_en TEXT,
+  title_es TEXT,
+  equipment TEXT NOT NULL,
+  shift TEXT,
+  desc_en TEXT,
+  desc_es TEXT,
+  instr_en TEXT,
+  instr_es TEXT,
+  ppe TEXT DEFAULT '[]',
+  hazards TEXT DEFAULT '[]',
+  materials_en TEXT,
+  materials_es TEXT,
+  warning_en TEXT,
+  warning_es TEXT,
+  status TEXT DEFAULT 'needs_review',
+  created_by TEXT,
+  reviewed_by TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT
+);
