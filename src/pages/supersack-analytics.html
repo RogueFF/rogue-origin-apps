@@ -639,8 +639,40 @@
   async function loadCostData() {
     const card = document.getElementById('cost-card');
     try {
-      const data = await fetchJSON(`${PROD_API}?action=dashboard&start=${state.startDate}&end=${state.endDate}`);
-      state.costData = data;
+      const periods = state.summaryData?.periods || [];
+      const dates = periods.filter(p => p.total_sacks > 0).map(p => p.period);
+      if (!dates.length) { state.costData = null; renderCostCard(); return; }
+
+      // Fetch production data per date for crew/hours
+      let totalOperatorHours = 0, totalLaborCost = 0, totalTrimmers = 0, daysWithCrew = 0;
+      const HOURLY_RATE = 16.50; // Oregon min wage estimate
+      const HOURS_PER_DAY = 7.5;
+
+      for (const date of dates) {
+        try {
+          const data = await fetchJSON(`${PROD_API}?action=getProduction&date=${date}`);
+          const rows = data.production || [];
+          const activeSlots = rows.filter(r => (r.trimmers1 || 0) + (r.trimmers2 || 0) + (r.buckers1 || 0) + (r.buckers2 || 0) > 0);
+          if (activeSlots.length > 0) {
+            const avgOps = activeSlots.reduce((s, r) =>
+              s + (r.effectiveTrimmers1 || r.trimmers1 || 0) + (r.effectiveTrimmers2 || r.trimmers2 || 0)
+                + (r.buckers1 || 0) + (r.buckers2 || 0), 0) / activeSlots.length;
+            totalTrimmers += avgOps;
+            totalOperatorHours += avgOps * HOURS_PER_DAY;
+            totalLaborCost += avgOps * HOURS_PER_DAY * HOURLY_RATE;
+            daysWithCrew++;
+          }
+        } catch { /* skip */ }
+      }
+
+      const totalOutput = periods.reduce((s, p) => s + (p.total_tops || 0) + (p.total_smalls || 0), 0);
+      state.costData = {
+        totalOutput,
+        totalHours: totalOperatorHours,
+        totalLabor: totalLaborCost,
+        avgTrimmers: daysWithCrew > 0 ? totalTrimmers / daysWithCrew : 0,
+        daysWorked: dates.length,
+      };
       renderCostCard();
     } catch (err) {
       console.error('Cost data error:', err);
@@ -1003,32 +1035,21 @@
     const card = document.getElementById('cost-card');
     const data = state.costData;
 
-    if (!data) {
+    if (!data || !data.totalOutput) {
       card.innerHTML = `<div class="card-title">${t('laborMetrics')}</div><div class="loading-msg">${t('noData')}</div>`;
       return;
     }
 
-    // Try to extract production metrics from the dashboard response
-    // The dashboard API format may vary - handle gracefully
-    const summary = data.summary || data;
-    const totalOutput = summary.total_tops_lbs != null
-      ? (summary.total_tops_lbs || 0) + (summary.total_smalls_lbs || 0)
-      : (state.summaryData?.periods || []).reduce((s, p) => s + (p.total_tops || 0) + (p.total_smalls || 0), 0);
-
-    const totalHours = summary.total_hours || 0;
-    const totalLabor = summary.total_labor_cost || 0;
-    const avgTrimmers = summary.avg_trimmers || summary.avg_effective_trimmers || 0;
-
-    const lbsHr = totalHours > 0 ? (totalOutput / totalHours) : 0;
-    const lbsTrimmer = avgTrimmers > 0 ? (totalOutput / avgTrimmers) : 0;
-    const costLb = totalOutput > 0 ? (totalLabor / totalOutput) : 0;
+    const lbsHr = data.totalHours > 0 ? (data.totalOutput / data.totalHours) : 0;
+    const lbsTrimmer = data.avgTrimmers > 0 ? (data.totalOutput / data.avgTrimmers / data.daysWorked) : 0;
+    const costLb = data.totalOutput > 0 ? (data.totalLabor / data.totalOutput) : 0;
 
     let html = `<div class="card-title">${t('laborMetrics')}</div>`;
     html += `<div class="cost-grid">`;
     html += `<div class="cost-item"><div class="cost-label">${t('lbsHr')}</div><div class="cost-value" style="color:var(--green)">${fmt(lbsHr, 1)}</div></div>`;
     html += `<div class="cost-item"><div class="cost-label">${t('lbsTrimmer')}</div><div class="cost-value" style="color:var(--gold)">${fmt(lbsTrimmer, 1)}</div></div>`;
     html += `<div class="cost-item"><div class="cost-label">${t('costLb')}</div><div class="cost-value" style="color:var(--red)">$${fmt(costLb, 2)}</div></div>`;
-    html += `<div class="cost-item"><div class="cost-label">${t('totalLabor')}</div><div class="cost-value" style="color:var(--blue)">$${fmt(totalLabor)}</div></div>`;
+    html += `<div class="cost-item"><div class="cost-label">${t('totalLabor')}</div><div class="cost-value" style="color:var(--blue)">$${fmt(data.totalLabor)}</div></div>`;
     html += `</div>`;
 
     card.innerHTML = html;
