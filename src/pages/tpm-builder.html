@@ -225,9 +225,7 @@
       font-size: 15px;
       font-weight: 700;
       line-height: 1.3;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      word-break: break-word;
     }
 
     .card-row-equip {
@@ -2270,8 +2268,8 @@
       };
       currentStep = 2; // Skip frequency for edit
       showScreen('wizard');
-      updateWizard();
       populateFormFromCardData();
+      updateWizard();
       loadEquipmentList();
     }
 
@@ -2292,8 +2290,8 @@
       };
       currentStep = 2;
       showScreen('wizard');
-      updateWizard();
       populateFormFromCardData();
+      updateWizard();
       loadEquipmentList();
     }
 
@@ -2388,8 +2386,8 @@
       if (currentStep >= 2 && currentStep <= 5) syncCardDataFromForm();
       if (currentStep < 6) {
         currentStep++;
-        updateWizard();
         if (currentStep === 2 || currentStep === 3 || currentStep === 5) populateFormFromCardData();
+        updateWizard();
       }
     }
 
@@ -2397,8 +2395,8 @@
       if (currentStep >= 2 && currentStep <= 5) syncCardDataFromForm();
       if (currentStep > 1) {
         currentStep--;
-        updateWizard();
         if (currentStep === 2 || currentStep === 3 || currentStep === 5) populateFormFromCardData();
+        updateWizard();
       }
     }
 
