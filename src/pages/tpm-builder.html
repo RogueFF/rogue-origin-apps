@@ -1308,16 +1308,44 @@
     }
 
     /* ========================================
+       DESKTOP PREVIEW PANEL (hidden on mobile)
+       ======================================== */
+    .wizard-layout { display: contents; }
+    .wizard-form-col { display: contents; }
+    .wizard-preview-col { display: none; }
+    .view-layout { display: contents; }
+    .view-card-col { display: contents; }
+    .view-actions-col { display: contents; }
+    .start-toolbar { display: contents; }
+
+    /* ========================================
        TABLET (768px+)
        ======================================== */
     @media (min-width: 768px) {
       .screen { padding: 24px; }
 
-      .freq-cards {
-        flex-direction: row;
+      .freq-cards { flex-direction: row; }
+      .freq-card { flex: 1; }
+
+      .start-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 16px;
       }
 
-      .freq-card { flex: 1; }
+      .start-toolbar .filter-chips {
+        flex: 1;
+        margin-bottom: 0;
+      }
+
+      .start-toolbar .create-btn {
+        width: auto;
+        white-space: nowrap;
+        padding: 14px 28px;
+        margin-bottom: 0;
+        flex-shrink: 0;
+      }
 
       .card-list {
         display: grid;
@@ -1325,19 +1353,11 @@
         gap: 12px;
       }
 
-      .action-buttons {
-        flex-direction: row;
-      }
-
+      .action-buttons { flex-direction: row; }
       .action-buttons .btn-action { flex: 1; }
-
       .wizard-nav .btn-action { max-width: 200px; }
-
       .checkbox-grid { gap: 10px; }
-
-      .preview-card-wrap {
-        max-width: 386px;
-      }
+      .preview-card-wrap { max-width: 386px; }
     }
 
     /* ========================================
@@ -1345,21 +1365,134 @@
        ======================================== */
     @media (min-width: 1024px) {
       .screen {
-        max-width: 960px;
-        padding: 32px;
+        max-width: 1200px;
+        padding: 32px 40px;
       }
 
       .app-header {
-        padding: 0 32px;
+        padding: 0 40px;
       }
 
       .card-list {
         grid-template-columns: 1fr 1fr 1fr;
       }
 
+      .card-row {
+        padding: 16px 20px;
+      }
+
+      .card-row-title { font-size: 16px; }
+      .card-row-equip { font-size: 14px; }
+
+      /* ── Wizard: side-by-side form + preview ── */
+      .wizard-layout {
+        display: grid;
+        grid-template-columns: 1fr 380px;
+        gap: 32px;
+        align-items: flex-start;
+      }
+
+      .wizard-form-col {
+        display: block;
+        min-width: 0;
+      }
+
+      .wizard-preview-col {
+        display: block;
+        position: sticky;
+        top: calc(var(--header-height) + 24px);
+      }
+
+      .desktop-preview-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+      }
+
+      .desktop-preview-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .desktop-preview-tabs {
+        display: flex;
+        gap: 0;
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1.5px solid var(--border);
+      }
+
+      .desktop-preview-tabs .preview-tab {
+        padding: 8px 16px;
+        font-size: 13px;
+        min-height: auto;
+        border-radius: 0;
+      }
+
+      .desktop-preview-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      }
+
+      .desktop-preview-card .preview-card-wrap {
+        max-width: 100%;
+      }
+
       .wizard-step {
-        max-width: 700px;
-        margin: 0 auto;
+        max-width: none;
+        margin: 0;
+      }
+
+      /* Bilingual fields side by side on desktop */
+      .bilingual-pair {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+
+      /* ── View: side-by-side card + actions ── */
+      .view-layout {
+        display: grid;
+        grid-template-columns: 400px 1fr;
+        gap: 32px;
+        align-items: flex-start;
+      }
+
+      .view-card-col { display: block; }
+
+      .view-actions-col {
+        display: block;
+        position: sticky;
+        top: calc(var(--header-height) + 24px);
+      }
+
+      .view-actions-col .action-buttons {
+        flex-direction: column;
+      }
+    }
+
+    /* ========================================
+       WIDE DESKTOP (1400px+)
+       ======================================== */
+    @media (min-width: 1400px) {
+      .screen {
+        max-width: 1400px;
+      }
+
+      .card-list {
+        grid-template-columns: 1fr 1fr 1fr 1fr;
+      }
+
+      .wizard-layout {
+        grid-template-columns: 1fr 420px;
+        gap: 40px;
       }
     }
 
@@ -1395,14 +1528,15 @@
        START SCREEN
        ═══════════════════════════════════════ -->
   <div id="startScreen" class="screen active">
-    <button class="create-btn" onclick="startNewCard()" data-i18n="createNew">+ Create New Card</button>
-
-    <div class="filter-chips" id="filterChips">
-      <button class="filter-chip active" data-filter="all" onclick="setFilter('all')" data-i18n="filterAll">All</button>
-      <button class="filter-chip" data-filter="daily" onclick="setFilter('daily')" data-i18n="filterDaily">Daily</button>
-      <button class="filter-chip" data-filter="weekly" onclick="setFilter('weekly')" data-i18n="filterWeekly">Weekly</button>
-      <button class="filter-chip" data-filter="monthly" onclick="setFilter('monthly')" data-i18n="filterMonthly">Monthly</button>
-      <button class="filter-chip" data-filter="needs_review" onclick="setFilter('needs_review')" data-i18n="filterNeedsReview">Needs Review</button>
+    <div class="start-toolbar">
+      <div class="filter-chips" id="filterChips">
+        <button class="filter-chip active" data-filter="all" onclick="setFilter('all')" data-i18n="filterAll">All</button>
+        <button class="filter-chip" data-filter="daily" onclick="setFilter('daily')" data-i18n="filterDaily">Daily</button>
+        <button class="filter-chip" data-filter="weekly" onclick="setFilter('weekly')" data-i18n="filterWeekly">Weekly</button>
+        <button class="filter-chip" data-filter="monthly" onclick="setFilter('monthly')" data-i18n="filterMonthly">Monthly</button>
+        <button class="filter-chip" data-filter="needs_review" onclick="setFilter('needs_review')" data-i18n="filterNeedsReview">Needs Review</button>
+      </div>
+      <button class="create-btn" onclick="startNewCard()" data-i18n="createNew">+ Create New Card</button>
     </div>
 
     <div class="card-list" id="cardList"></div>
@@ -1412,6 +1546,8 @@
        WIZARD SCREEN
        ═══════════════════════════════════════ -->
   <div id="wizardScreen" class="screen">
+    <div class="wizard-layout">
+    <div class="wizard-form-col">
     <div class="wizard-top">
       <button class="wizard-back" onclick="wizardBack()" aria-label="Back">&#8592;</button>
       <div>
@@ -1615,6 +1751,22 @@
         <button class="btn-action" onclick="prevStep()" data-i18n="backToEdit">Back to Edit</button>
       </div>
     </div>
+    </div><!-- /.wizard-form-col -->
+
+    <!-- Desktop live preview panel -->
+    <div class="wizard-preview-col" id="wizardPreviewCol">
+      <div class="desktop-preview-header">
+        <span class="desktop-preview-title">Live Preview</span>
+        <div class="desktop-preview-tabs">
+          <button class="preview-tab active" onclick="setDesktopPreviewSide('front')">Front</button>
+          <button class="preview-tab" onclick="setDesktopPreviewSide('back')">Back</button>
+        </div>
+      </div>
+      <div class="desktop-preview-card">
+        <div class="preview-card-wrap" id="desktopPreviewContent"></div>
+      </div>
+    </div>
+    </div><!-- /.wizard-layout -->
   </div>
 
   <!-- ═══════════════════════════════════════
@@ -1626,18 +1778,21 @@
       <div class="view-title" id="viewTitle"></div>
     </div>
 
-    <div class="preview-tabs">
-      <button class="preview-tab active" onclick="showViewSide('front')" data-i18n="front">Front</button>
-      <button class="preview-tab" onclick="showViewSide('back')" data-i18n="back">Back</button>
+    <div class="view-layout">
+      <div class="view-card-col">
+        <div class="preview-tabs">
+          <button class="preview-tab active" onclick="showViewSide('front')" data-i18n="front">Front</button>
+          <button class="preview-tab" onclick="showViewSide('back')" data-i18n="back">Back</button>
+        </div>
+        <div class="preview-container">
+          <div class="preview-card-wrap" id="viewContent"></div>
+        </div>
+      </div>
+      <div class="view-actions-col">
+        <div id="viewStatusBadge" style="text-align:center; margin-bottom: 12px;"></div>
+        <div class="action-buttons" id="viewActions"></div>
+      </div>
     </div>
-
-    <div class="preview-container">
-      <div class="preview-card-wrap" id="viewContent"></div>
-    </div>
-
-    <div id="viewStatusBadge" style="text-align:center; margin-bottom: 12px;"></div>
-
-    <div class="action-buttons" id="viewActions"></div>
   </div>
 
   <!-- ═══════════════════════════════════════
@@ -1937,6 +2092,7 @@
     let viewingCard = null;
     let previewSide = 'front';
     let viewSide = 'front';
+    let desktopPreviewSide = 'front';
 
     let cardData = {
       frequency: 'daily',
@@ -2189,6 +2345,9 @@
       if (currentStep === 4) renderCheckboxGrids();
       if (currentStep === 5) updateWarningPreview();
       if (currentStep === 6) renderPreview();
+
+      // Update desktop live preview
+      updateDesktopPreview();
 
       window.scrollTo(0, 0);
     }
@@ -2558,6 +2717,32 @@
       tabs[0].classList.toggle('active', side === 'front');
       tabs[1].classList.toggle('active', side === 'back');
       renderPreview();
+    }
+
+    // ── Desktop Live Preview ──
+    function updateDesktopPreview() {
+      var container = document.getElementById('desktopPreviewContent');
+      if (!container) return;
+      // Only update if visible (desktop)
+      var col = document.getElementById('wizardPreviewCol');
+      if (!col || col.offsetParent === null) return;
+
+      syncCardDataFromForm();
+      if (desktopPreviewSide === 'front') {
+        container.innerHTML = buildFront(cardData);
+      } else {
+        container.innerHTML = buildBack(cardData);
+      }
+    }
+
+    function setDesktopPreviewSide(side) {
+      desktopPreviewSide = side;
+      var tabs = document.querySelectorAll('#wizardPreviewCol .preview-tab');
+      if (tabs.length >= 2) {
+        tabs[0].classList.toggle('active', side === 'front');
+        tabs[1].classList.toggle('active', side === 'back');
+      }
+      updateDesktopPreview();
     }
 
     // ── Save ──
@@ -3166,6 +3351,13 @@
       applyTranslations();
       updateWizardLabels();
       loadCards();
+
+      // Live preview: update desktop preview on any form input
+      var debounceTimer = null;
+      document.getElementById('wizardScreen').addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(updateDesktopPreview, 300);
+      });
     });
   </script>
 </body>
