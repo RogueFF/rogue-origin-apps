@@ -469,6 +469,125 @@ async function migrateFromSheets(env) {
   });
 }
 
+/**
+ * Web Import — Search web and generate bilingual SOP via Claude
+ */
+async function webImport(body, env) {
+  const apiKey = env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw createError('INTERNAL_ERROR', 'Anthropic API key not configured');
+
+  const { query, topic, dept, instructions } = body.body || body;
+
+  if (!query || typeof query !== 'string' || query.trim().length < 2)
+    throw createError('VALIDATION_ERROR', 'Machine name/description is required');
+  if (query.length > 500)
+    throw createError('VALIDATION_ERROR', 'Query too long (max 500 chars)');
+  if (instructions && instructions.length > 500)
+    throw createError('VALIDATION_ERROR', 'Instructions too long (max 500 chars)');
+
+  const topicLabel = topic || 'maintenance';
+
+  const systemPrompt = `You are an SOP (Standard Operating Procedure) generator for Rogue Origin, a hemp processing facility in Southern Oregon with a bilingual (EN/ES) workforce.
+
+Your task:
+1. Search the web for official manuals, maintenance guides, TPM documents, or procedure pages related to the specified equipment/machinery
+2. Find the most authoritative and detailed sources (manufacturer sites, official docs preferred)
+3. Synthesize the information into a structured, actionable SOP
+
+Output ONLY valid JSON with this exact structure:
+{
+  "title": "English title (action-oriented, under 10 words)",
+  "title_es": "Spanish title",
+  "dept": "one of: Operations, Production, Quality, Safety, Maintenance, Equipment",
+  "description": "English description (2-3 sentences summarizing the procedure). Include source URLs at the end.",
+  "desc_es": "Spanish description (same content translated)",
+  "sourceUrls": ["url1", "url2"],
+  "steps": [
+    {
+      "title": "English step title (action verb + object, e.g. 'Inspect Belt Tension')",
+      "title_es": "Spanish step title",
+      "description": "English step description (specific, measurable, includes values/specs from source docs)",
+      "desc_es": "Spanish step description",
+      "safety": true or false,
+      "quality": true or false
+    }
+  ]
+}
+
+Rules:
+- Extract 5-15 concrete steps. Fewer well-defined steps over many vague ones.
+- Step titles start with action verbs (Inspect, Verify, Adjust, Clean, Replace, Connect, Lubricate, etc.)
+- Include specific measurements, tolerances, part numbers, torque specs, temperatures from source documents
+- safety=true for steps involving: electrical work, moving parts, chemicals, PPE, lockout/tagout, hot surfaces, elevated work, confined spaces
+- quality=true for steps that are inspection, measurement, verification, or testing checkpoints
+- For equipment maintenance: include pre-work safety checks and post-work verification steps
+- dept should be your best guess based on content (default to "${dept || 'Maintenance'}")
+- sourceUrls: include the URLs of pages you referenced (up to 3)
+- Do NOT include any text outside the JSON object`;
+
+  const userMessage = `Find ${topicLabel} information for: ${query.trim()}${instructions ? '\n\nAdditional context: ' + instructions.trim() : ''}
+
+Search for official manufacturer documentation, maintenance manuals, setup guides, or TPM procedures for this equipment. Generate a detailed SOP from the best sources you find.`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2025-01-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4096,
+        system: systemPrompt,
+        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }],
+        messages: [{ role: 'user', content: userMessage }],
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error('Anthropic API error: ' + err);
+    }
+
+    const result = await response.json();
+
+    // Extract text content from response (skip web_search_tool_result blocks)
+    let sopText = '';
+    for (const block of (result.content || [])) {
+      if (block.type === 'text') sopText += block.text;
+    }
+
+    if (!sopText) throw new Error('No text response from AI');
+
+    // Parse JSON — try direct parse first, then regex extraction
+    let sop;
+    try {
+      sop = JSON.parse(sopText.trim());
+    } catch {
+      const jsonMatch = sopText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        sop = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error('Could not parse AI response as JSON');
+      }
+    }
+
+    // Validate required fields
+    if (!sop.title || !sop.steps || !Array.isArray(sop.steps) || sop.steps.length === 0) {
+      throw new Error('AI generated incomplete SOP data');
+    }
+
+    return successResponse({ success: true, sop });
+  } catch (err) {
+    return successResponse({
+      success: false,
+      error: 'SOP generation failed: ' + err.message,
+    });
+  }
+}
+
 export async function handleSopD1(request, env) {
   const action = getAction(request);
   const body = request.method === 'POST' ? await parseBody(request) : {};
@@ -486,6 +605,7 @@ export async function handleSopD1(request, env) {
     deleteRequest: () => deleteRequest(body, env),
     saveSettings: () => saveSettings(body, env),
     anthropic: () => anthropic(body, env),
+    webImport: () => webImport(body, env),
     migrate: () => migrateFromSheets(env),
   };
 
