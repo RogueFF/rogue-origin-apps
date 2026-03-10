@@ -16,6 +16,8 @@ const VALID_TABLES = new Set([
   'consignment_sales', 'consignment_payments',
   // Complaints module
   'complaints',
+  // TPM module
+  'tpm_cards',
 ]);
 
 /**
