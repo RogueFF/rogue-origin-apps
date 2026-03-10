@@ -1,0 +1,3170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>TPM Card Builder</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Serif+Display&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/shared-base.css">
+  <style>
+    /* ========================================
+       CSS VARIABLES & OVERRIDES
+       ======================================== */
+    :root {
+      /* Brand colors (fallbacks if shared-base.css doesn't load) */
+      --ro-green: #668971;
+      --ro-gold: #e4aa4f;
+      --danger: #c45c4a;
+      --info: #62758d;
+      --bg: #faf8f5;
+      --bg-card: #ffffff;
+      --bg-warm: #f5f2ed;
+      --text: #2d3a32;
+      --text-muted: #7a8a7e;
+      --border: rgba(102, 137, 113, 0.2);
+      --header-bg: #2d3a2e;
+      --header-text: #faf8f4;
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+      /* TPM-specific */
+      --freq-daily: #668971;
+      --freq-weekly: #62758d;
+      --freq-monthly: #e4aa4f;
+      --header-height: 56px;
+      --toast-bg: #2d3a2e;
+    }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ========================================
+       STICKY HEADER
+       ======================================== */
+    .app-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--header-bg);
+      color: var(--header-text);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 16px;
+      height: var(--header-height);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+
+    .app-header img {
+      height: 32px;
+      width: 32px;
+      border-radius: 6px;
+    }
+
+    .app-header h1 {
+      font-size: 18px;
+      font-weight: 700;
+      flex: 1;
+    }
+
+    .lang-toggle {
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.25);
+      color: #fff;
+      font-family: 'Outfit', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      min-height: 56px;
+      min-width: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+
+    .lang-toggle:active {
+      background: rgba(255,255,255,0.25);
+    }
+
+    /* ========================================
+       SCREEN MANAGEMENT
+       ======================================== */
+    .screen {
+      display: none;
+      padding: 16px;
+      padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+      max-width: 800px;
+      margin: 0 auto;
+      animation: fadeInUp 0.25s ease;
+    }
+
+    .screen.active {
+      display: block;
+    }
+
+    /* ========================================
+       START SCREEN
+       ======================================== */
+    .create-btn {
+      width: 100%;
+      padding: 18px 24px;
+      background: var(--ro-green);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-family: 'Outfit', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      cursor: pointer;
+      min-height: 56px;
+      margin-bottom: 16px;
+      transition: background 0.2s;
+    }
+
+    .create-btn:active {
+      background: #4a6b54;
+    }
+
+    /* Filter Chips */
+    .filter-chips {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 8px;
+      margin-bottom: 16px;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+
+    .filter-chips::-webkit-scrollbar { display: none; }
+
+    .filter-chip {
+      flex-shrink: 0;
+      padding: 10px 18px;
+      border-radius: 24px;
+      border: 1.5px solid var(--border);
+      background: var(--bg-card);
+      font-family: 'Outfit', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .filter-chip.active {
+      color: #fff;
+      border-color: transparent;
+    }
+
+    .filter-chip.active[data-filter="all"] { background: var(--text); }
+    .filter-chip.active[data-filter="daily"] { background: var(--freq-daily); }
+    .filter-chip.active[data-filter="weekly"] { background: var(--freq-weekly); }
+    .filter-chip.active[data-filter="monthly"] { background: var(--freq-monthly); }
+    .filter-chip.active[data-filter="needs_review"] { background: var(--danger); }
+
+    /* Card List */
+    .card-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .card-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      cursor: pointer;
+      min-height: 56px;
+      transition: box-shadow 0.2s;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .card-row::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      border-radius: 10px 0 0 10px;
+    }
+
+    .card-row.freq-daily::before { background: var(--freq-daily); }
+    .card-row.freq-weekly::before { background: var(--freq-weekly); }
+    .card-row.freq-monthly::before { background: var(--freq-monthly); }
+
+    .card-row:active {
+      box-shadow: var(--shadow-md);
+    }
+
+    .card-row-info {
+      flex: 1;
+      min-width: 0;
+      padding-left: 8px;
+    }
+
+    .card-row-title {
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.3;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .card-row-equip {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .card-row-badges {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 12px;
+      white-space: nowrap;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .badge-daily { background: rgba(102,137,113,0.15); color: var(--freq-daily); }
+    .badge-weekly { background: rgba(98,117,141,0.15); color: var(--freq-weekly); }
+    .badge-monthly { background: rgba(228,170,79,0.15); color: #9A7A2E; }
+    .badge-needs-review { background: rgba(228,170,79,0.15); color: #9A7A2E; }
+    .badge-approved { background: rgba(102,137,113,0.15); color: var(--freq-daily); }
+
+    .empty-state {
+      text-align: center;
+      padding: 48px 24px;
+      color: var(--text-muted);
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+      opacity: 0.5;
+    }
+
+    .empty-state-text {
+      font-size: 16px;
+      font-weight: 500;
+    }
+
+    /* ========================================
+       WIZARD SCREEN
+       ======================================== */
+    .wizard-top {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .wizard-back {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      width: 56px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 22px;
+      color: var(--text);
+      flex-shrink: 0;
+    }
+
+    .wizard-back:active { background: var(--bg-warm); }
+
+    .wizard-step-label {
+      font-size: 16px;
+      font-weight: 700;
+      flex: 1;
+    }
+
+    .wizard-step-sub {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    /* Progress Dots */
+    .progress-dots {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    .progress-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--border);
+      transition: all 0.3s;
+    }
+
+    .progress-dot.completed {
+      background: var(--freq-daily);
+      transform: scale(1);
+    }
+
+    .progress-dot.current {
+      transform: scale(1.3);
+      box-shadow: 0 0 0 3px rgba(102,137,113,0.3);
+    }
+
+    /* Wizard Steps */
+    .wizard-step {
+      display: none;
+      animation: fadeInUp 0.2s ease;
+    }
+
+    .wizard-step.active { display: block; }
+
+    /* Step 1: Frequency Cards */
+    .freq-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .freq-card {
+      padding: 24px 20px;
+      border-radius: 14px;
+      border: 2px solid transparent;
+      cursor: pointer;
+      min-height: 80px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      color: #fff;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+
+    .freq-card:active {
+      transform: scale(0.97);
+    }
+
+    .freq-card-daily { background: var(--freq-daily); }
+    .freq-card-weekly { background: var(--freq-weekly); }
+    .freq-card-monthly { background: var(--freq-monthly); }
+
+    .freq-card-icon {
+      font-size: 32px;
+      flex-shrink: 0;
+    }
+
+    .freq-card-label {
+      font-size: 20px;
+      font-weight: 800;
+    }
+
+    .freq-card-sub {
+      font-size: 14px;
+      opacity: 0.85;
+      font-weight: 400;
+    }
+
+    /* Form Fields */
+    .form-group {
+      margin-bottom: 18px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+
+    .form-label-secondary {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    .form-input,
+    .form-textarea {
+      width: 100%;
+      padding: 14px 16px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-family: 'Outfit', sans-serif;
+      font-size: 16px;
+      background: var(--bg-card);
+      color: var(--text);
+      min-height: 56px;
+      transition: border-color 0.2s;
+    }
+
+    .form-input:focus,
+    .form-textarea:focus {
+      outline: none;
+      border-color: var(--ro-green);
+      box-shadow: 0 0 0 3px rgba(102,137,113,0.15);
+    }
+
+    .form-textarea {
+      min-height: 100px;
+      resize: vertical;
+      line-height: 1.5;
+    }
+
+    .form-textarea-sm {
+      min-height: 72px;
+      font-size: 14px;
+      background: var(--bg-warm);
+      border-style: dashed;
+    }
+
+    .translate-row {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+
+    .translate-row .form-textarea,
+    .translate-row .form-input {
+      flex: 1;
+    }
+
+    .translate-btn {
+      flex-shrink: 0;
+      width: 56px;
+      height: 56px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      background: var(--bg-card);
+      cursor: pointer;
+      font-size: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      transition: all 0.2s;
+    }
+
+    .translate-btn:active {
+      background: var(--bg-warm);
+    }
+
+    .translate-btn.loading {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
+    .translate-btn.loading::after {
+      content: '';
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--border);
+      border-top-color: var(--ro-green);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      position: absolute;
+    }
+
+    /* Step 4: Checkbox Grids */
+    .checkbox-section-title {
+      font-size: 15px;
+      font-weight: 800;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text);
+    }
+
+    .checkbox-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      cursor: pointer;
+      min-height: 56px;
+      background: var(--bg-card);
+      transition: all 0.15s;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .checkbox-item:active {
+      transform: scale(0.97);
+    }
+
+    .checkbox-item.checked {
+      border-color: var(--ro-green);
+      background: rgba(102,137,113,0.08);
+    }
+
+    .checkbox-item.checked.hazard-checked {
+      border-color: var(--danger);
+      background: rgba(196,92,74,0.08);
+    }
+
+    .checkbox-box {
+      width: 24px;
+      height: 24px;
+      border: 2px solid var(--border);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 800;
+      flex-shrink: 0;
+      color: transparent;
+      transition: all 0.15s;
+    }
+
+    .checkbox-item.checked .checkbox-box {
+      background: var(--ro-green);
+      border-color: var(--ro-green);
+      color: #fff;
+    }
+
+    .checkbox-item.checked.hazard-checked .checkbox-box {
+      background: var(--danger);
+      border-color: var(--danger);
+    }
+
+    .checkbox-label {
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+
+    /* Other Specify Input */
+    .other-specify {
+      grid-column: 1 / -1;
+      display: none;
+    }
+
+    .other-specify.visible { display: block; }
+
+    .other-specify input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1.5px dashed var(--border);
+      border-radius: 8px;
+      font-family: 'Outfit', sans-serif;
+      font-size: 14px;
+      background: var(--bg-warm);
+      color: var(--text);
+      min-height: 44px;
+    }
+
+    .other-specify input:focus {
+      outline: none;
+      border-color: var(--ro-green);
+    }
+
+    /* Warning Preview */
+    .warning-preview {
+      margin-top: 12px;
+      background: rgba(196,92,74,0.08);
+      border: 1.5px solid var(--danger);
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--danger);
+      text-align: center;
+      min-height: 44px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .warning-preview.visible { display: flex; }
+
+    /* Step 6: Preview */
+    .preview-tabs {
+      display: flex;
+      gap: 0;
+      margin-bottom: 16px;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1.5px solid var(--border);
+    }
+
+    .preview-tab {
+      flex: 1;
+      padding: 14px;
+      text-align: center;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      background: var(--bg-card);
+      border: none;
+      color: var(--text-muted);
+      min-height: 56px;
+      transition: all 0.2s;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    .preview-tab.active {
+      background: var(--ro-green);
+      color: #fff;
+    }
+
+    .preview-container {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      overflow-x: auto;
+      margin-bottom: 16px;
+    }
+
+    .preview-card-wrap {
+      max-width: 386px;
+      margin: 0 auto;
+    }
+
+    /* Action Buttons */
+    .action-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .btn-action {
+      width: 100%;
+      padding: 16px 24px;
+      border-radius: 12px;
+      font-family: 'Outfit', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      min-height: 56px;
+      border: 1.5px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text);
+      transition: all 0.2s;
+    }
+
+    .btn-action:active { transform: scale(0.98); }
+
+    .btn-action.primary {
+      background: var(--ro-green);
+      color: #fff;
+      border-color: var(--ro-green);
+    }
+
+    .btn-action.primary:active { background: #4a6b54; }
+
+    .btn-action.danger {
+      color: var(--danger);
+      border-color: var(--danger);
+    }
+
+    .btn-action.approve-btn {
+      background: var(--ro-gold);
+      color: #fff;
+      border-color: var(--ro-gold);
+    }
+
+    /* Wizard Nav Buttons */
+    .wizard-nav {
+      display: flex;
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    .wizard-nav .btn-action { flex: 1; }
+
+    /* ========================================
+       VIEW SCREEN
+       ======================================== */
+    .view-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .view-title {
+      font-size: 18px;
+      font-weight: 800;
+      flex: 1;
+    }
+
+    .view-status {
+      font-size: 13px;
+    }
+
+    /* ========================================
+       TOAST
+       ======================================== */
+    .toast {
+      position: fixed;
+      bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--toast-bg);
+      color: #fff;
+      padding: 14px 24px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+      z-index: 1000;
+      opacity: 0;
+      transition: all 0.3s ease;
+      max-width: calc(100vw - 32px);
+      text-align: center;
+    }
+
+    .toast.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ========================================
+       T-CARD STYLES (shared screen + print)
+       ======================================== */
+    .tcard-front { padding: 0; }
+    .tcard-back { padding: 0; background: #faf9f7; }
+
+    .tcard-header-bar {
+      color: #fff;
+      font-weight: 800;
+      font-size: 14px;
+      text-align: center;
+      padding: 6px 10px;
+      border: 1px solid #333;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .tcard-component-bar {
+      color: #fff;
+      font-weight: 700;
+      font-size: 12px;
+      text-align: center;
+      padding: 5px 10px;
+      border: 1px solid #333;
+      border-top: none;
+    }
+
+    .tcard-meta-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border: 1px solid #333;
+      border-top: none;
+    }
+
+    .tcard-meta-cell {
+      font-size: 11px;
+      padding: 4px 8px;
+      border-right: 1px solid #333;
+    }
+
+    .tcard-meta-cell:last-child { border-right: none; }
+    .tcard-meta-cell strong { font-weight: 700; }
+
+    .tcard-section {
+      border: 1px solid #333;
+      border-top: none;
+      padding: 8px 10px;
+      min-height: 50px;
+    }
+
+    .tcard-section-label {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #4a6b53;
+      margin-bottom: 4px;
+    }
+
+    .tcard-section-text {
+      font-size: 11.5px;
+      line-height: 1.45;
+      color: var(--text);
+      white-space: pre-line;
+    }
+
+    .tcard-instruction { min-height: 60px; }
+
+    .tcard-warning-bar {
+      background: rgba(196,92,74,0.1);
+      border: 1px solid var(--danger);
+      border-top: none;
+      padding: 6px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--danger);
+      text-align: center;
+    }
+
+    .tcard-yellow-tag {
+      border: 1px solid #333;
+      border-top: none;
+      padding: 6px 10px;
+      font-size: 11px;
+      text-align: center;
+      background: #fffbe6;
+      color: #7a6520;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .tcard-yellow-tag .tag-icon {
+      display: inline-block;
+      width: 16px;
+      height: 22px;
+      background: var(--ro-gold);
+      border-radius: 2px 2px 2px 8px;
+      flex-shrink: 0;
+    }
+
+    .tcard-footer-bar {
+      border: 1px solid #333;
+      border-top: none;
+      padding: 4px 10px;
+      font-size: 10px;
+      color: var(--text-muted);
+      text-align: center;
+      background: #f9f8f6;
+    }
+
+    /* Back */
+    .tcard-back-header {
+      color: #fff;
+      font-weight: 800;
+      font-size: 11px;
+      text-align: center;
+      padding: 5px 10px;
+      border: 1px solid #333;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .ppe-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border: 1px solid #333;
+      border-top: none;
+    }
+
+    .ppe-item {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-bottom: 1px solid #ccc;
+      border-right: 1px solid #ccc;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      min-height: 24px;
+    }
+
+    .ppe-item:nth-child(even) { border-right: none; }
+    .ppe-item:nth-last-child(-n+2) { border-bottom: none; }
+
+    .ppe-check {
+      width: 14px;
+      height: 14px;
+      border: 1.5px solid #999;
+      border-radius: 2px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      flex-shrink: 0;
+    }
+
+    .ppe-check.checked {
+      background: var(--ro-green);
+      border-color: #4a6b53;
+      color: #fff;
+      font-weight: 800;
+    }
+
+    .hazard-section-header {
+      color: #fff;
+      font-weight: 800;
+      font-size: 11px;
+      text-align: center;
+      padding: 5px 10px;
+      border: 1px solid #333;
+      border-top: none;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .hazard-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border: 1px solid #333;
+      border-top: none;
+    }
+
+    .hazard-item {
+      font-size: 10.5px;
+      padding: 3px 8px;
+      border-bottom: 1px solid #ccc;
+      border-right: 1px solid #ccc;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      min-height: 22px;
+    }
+
+    .hazard-item:nth-child(even) { border-right: none; }
+    .hazard-item:nth-last-child(-n+2) { border-bottom: none; }
+
+    .hazard-check {
+      width: 13px;
+      height: 13px;
+      border: 1.5px solid #999;
+      border-radius: 2px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      flex-shrink: 0;
+    }
+
+    .hazard-check.checked {
+      background: var(--danger);
+      border-color: #a0483a;
+      color: #fff;
+      font-weight: 800;
+    }
+
+    .materials-header {
+      color: #fff;
+      font-weight: 800;
+      font-size: 11px;
+      text-align: center;
+      padding: 5px 10px;
+      border: 1px solid #333;
+      border-top: none;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .materials-box {
+      border: 1px solid #333;
+      border-top: none;
+      padding: 8px 10px;
+      font-size: 11px;
+      line-height: 1.45;
+      min-height: 40px;
+      white-space: pre-line;
+    }
+
+    .back-card-id {
+      font-size: 9px;
+      color: var(--text-muted);
+      text-align: right;
+      margin-top: 6px;
+    }
+
+    /* Frequency-colored headers */
+    .freq-color-daily { background: var(--freq-daily); }
+    .freq-color-weekly { background: var(--freq-weekly); }
+    .freq-color-monthly { background: var(--freq-monthly); }
+
+    /* ========================================
+       IMAGE UPLOAD & ANNOTATION
+       ======================================== */
+    .image-upload-area {
+      margin-top: 8px;
+      margin-bottom: 12px;
+    }
+
+    .image-upload-btns {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-upload {
+      flex: 1;
+      padding: 12px 16px;
+      border: 1.5px dashed var(--border);
+      border-radius: 10px;
+      background: var(--bg-warm);
+      font-family: 'Outfit', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+
+    .btn-upload:active {
+      background: var(--border);
+    }
+
+    .image-preview {
+      position: relative;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1.5px solid var(--border);
+      margin-bottom: 8px;
+    }
+
+    .image-preview img {
+      width: 100%;
+      display: block;
+      max-height: 200px;
+      object-fit: contain;
+      background: #f0f0f0;
+    }
+
+    .image-preview-actions {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      display: flex;
+      gap: 6px;
+    }
+
+    .img-action-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      border: none;
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+
+    .img-action-btn.danger { background: rgba(196,92,74,0.85); }
+
+    /* Annotation overlay */
+    .annotation-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.85);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px;
+    }
+
+    .annotation-modal-box {
+      background: var(--bg-card);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 700px;
+      max-height: 95vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .annotation-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .annotation-close {
+      width: 40px;
+      height: 40px;
+      border: none;
+      background: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: var(--text-muted);
+      border-radius: 8px;
+    }
+
+    .annotation-close:active { background: var(--bg-warm); }
+
+    .annotation-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      background: var(--bg-warm);
+      flex-wrap: wrap;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .annotation-toolbar .tool-group,
+    .annotation-toolbar .color-group {
+      display: flex;
+      gap: 4px;
+    }
+
+    .annotation-toolbar .tool-divider {
+      width: 1px;
+      height: 32px;
+      background: var(--border);
+      margin: 0 4px;
+    }
+
+    .annotation-toolbar .tool-btn {
+      width: 44px;
+      height: 44px;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      background: var(--bg-card);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      color: var(--text-muted);
+      transition: all 0.15s;
+      font-family: sans-serif;
+    }
+
+    .annotation-toolbar .tool-btn:active,
+    .annotation-toolbar .tool-btn.active {
+      background: var(--ro-green);
+      border-color: var(--ro-green);
+      color: #fff;
+    }
+
+    .annotation-toolbar .color-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 3px solid transparent;
+      cursor: pointer;
+      transition: all 0.15s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+
+    .annotation-toolbar .color-btn.active {
+      border-color: var(--text);
+      box-shadow: 0 0 0 2px var(--bg-card), 0 2px 6px rgba(0,0,0,0.3);
+    }
+
+    .canvas-container {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #1a1a1a;
+      overflow: hidden;
+      min-height: 250px;
+      position: relative;
+      touch-action: none;
+    }
+
+    #annotationCanvas {
+      max-width: 100%;
+      max-height: 100%;
+      cursor: crosshair;
+      touch-action: none;
+    }
+
+    .annotation-modal-footer {
+      display: flex;
+      gap: 10px;
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    .annotation-modal-footer .btn-action { flex: 1; }
+
+    /* T-Card image display */
+    .tcard-section-image {
+      margin-top: 6px;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .tcard-section-image img {
+      width: 100%;
+      display: block;
+      max-height: 150px;
+      object-fit: contain;
+    }
+
+    /* ========================================
+       PRINT LAYOUT
+       ======================================== */
+    .print-pages { display: none; }
+
+    @media print {
+      .app-header, .screen, .toast { display: none !important; }
+      body { background: #fff; }
+      .print-pages { display: block !important; }
+
+      .print-card-page {
+        width: 7.5in;
+        height: 10in;
+        page-break-after: always;
+        padding: 0;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        padding-top: 0.2in;
+      }
+
+      .print-card-page:last-child { page-break-after: auto; }
+
+      .print-card-page .tcard-front,
+      .print-card-page .tcard-back {
+        width: 3.86in;
+        height: 9.3in;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .tcard-header-bar { font-size: 22px; padding: 10px 14px; }
+      .tcard-component-bar { font-size: 15px; padding: 8px 14px; }
+      .tcard-meta-cell { font-size: 13px; padding: 8px 10px; }
+      .tcard-section { padding: 12px 14px; flex: 1; }
+      .tcard-section-label { font-size: 13px; margin-bottom: 6px; }
+      .tcard-section-text { font-size: 13px; line-height: 1.55; }
+      .tcard-warning-bar { font-size: 13px; padding: 8px 14px; }
+      .tcard-yellow-tag { font-size: 11px; padding: 6px 10px; }
+      .tcard-yellow-tag .tag-icon { width: 12px; height: 18px; }
+      .tcard-footer-bar { font-size: 10px; padding: 6px 14px; }
+
+      .tcard-back-header { font-size: 14px; padding: 10px 14px; }
+      .ppe-item { font-size: 13px; padding: 8px 10px; min-height: 32px; }
+      .ppe-check { width: 18px; height: 18px; font-size: 13px; }
+      .hazard-section-header { font-size: 14px; padding: 10px 14px; }
+      .hazard-item { font-size: 12px; padding: 7px 10px; min-height: 30px; }
+      .hazard-check { width: 17px; height: 17px; font-size: 12px; }
+      .materials-header { font-size: 14px; padding: 10px 14px; }
+      .materials-box { font-size: 13px; padding: 12px 14px; min-height: 40px; line-height: 1.55; flex: 1; }
+      .back-card-id { font-size: 9px; margin-top: auto; padding: 8px 0; }
+
+      .tcard-section-image img { max-height: 2in; }
+
+      .tcard-back { background: #f6f5f2 !important; }
+      .ppe-check.checked, .hazard-check.checked, .tcard-header-bar,
+      .tcard-component-bar, .tcard-back-header, .hazard-section-header,
+      .materials-header, .tcard-warning-bar, .tcard-yellow-tag, .tcard-yellow-tag .tag-icon {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    }
+
+    @page {
+      size: letter portrait;
+      margin: 0.5in;
+    }
+
+    /* ========================================
+       TABLET (768px+)
+       ======================================== */
+    @media (min-width: 768px) {
+      .screen { padding: 24px; }
+
+      .freq-cards {
+        flex-direction: row;
+      }
+
+      .freq-card { flex: 1; }
+
+      .card-list {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+      .action-buttons {
+        flex-direction: row;
+      }
+
+      .action-buttons .btn-action { flex: 1; }
+
+      .wizard-nav .btn-action { max-width: 200px; }
+
+      .checkbox-grid { gap: 10px; }
+
+      .preview-card-wrap {
+        max-width: 386px;
+      }
+    }
+
+    /* ========================================
+       DESKTOP (1024px+)
+       ======================================== */
+    @media (min-width: 1024px) {
+      .screen {
+        max-width: 960px;
+        padding: 32px;
+      }
+
+      .app-header {
+        padding: 0 32px;
+      }
+
+      .card-list {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+
+      .wizard-step {
+        max-width: 700px;
+        margin: 0 auto;
+      }
+    }
+
+    /* ========================================
+       ANIMATIONS
+       ======================================== */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Hidden file inputs for image upload -->
+  <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none;" onchange="handleImageInput(this)">
+  <input type="file" id="fileInput" accept="image/*" style="display:none;" onchange="handleImageInput(this)">
+
+  <!-- ═══════════════════════════════════════
+       HEADER
+       ═══════════════════════════════════════ -->
+  <header class="app-header">
+    <img src="../assets/ro-logo-square.png" alt="RO">
+    <h1 data-i18n="appTitle">TPM Cards</h1>
+    <button class="lang-toggle" onclick="toggleLang()" aria-label="Toggle language">EN</button>
+  </header>
+
+  <!-- ═══════════════════════════════════════
+       START SCREEN
+       ═══════════════════════════════════════ -->
+  <div id="startScreen" class="screen active">
+    <button class="create-btn" onclick="startNewCard()" data-i18n="createNew">+ Create New Card</button>
+
+    <div class="filter-chips" id="filterChips">
+      <button class="filter-chip active" data-filter="all" onclick="setFilter('all')" data-i18n="filterAll">All</button>
+      <button class="filter-chip" data-filter="daily" onclick="setFilter('daily')" data-i18n="filterDaily">Daily</button>
+      <button class="filter-chip" data-filter="weekly" onclick="setFilter('weekly')" data-i18n="filterWeekly">Weekly</button>
+      <button class="filter-chip" data-filter="monthly" onclick="setFilter('monthly')" data-i18n="filterMonthly">Monthly</button>
+      <button class="filter-chip" data-filter="needs_review" onclick="setFilter('needs_review')" data-i18n="filterNeedsReview">Needs Review</button>
+    </div>
+
+    <div class="card-list" id="cardList"></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       WIZARD SCREEN
+       ═══════════════════════════════════════ -->
+  <div id="wizardScreen" class="screen">
+    <div class="wizard-top">
+      <button class="wizard-back" onclick="wizardBack()" aria-label="Back">&#8592;</button>
+      <div>
+        <div class="wizard-step-label" id="wizardStepLabel"></div>
+        <div class="wizard-step-sub" id="wizardStepSub"></div>
+      </div>
+    </div>
+
+    <div class="progress-dots" id="progressDots">
+      <div class="progress-dot" data-step="1"></div>
+      <div class="progress-dot" data-step="2"></div>
+      <div class="progress-dot" data-step="3"></div>
+      <div class="progress-dot" data-step="4"></div>
+      <div class="progress-dot" data-step="5"></div>
+      <div class="progress-dot" data-step="6"></div>
+    </div>
+
+    <!-- Step 1: Frequency -->
+    <div class="wizard-step" id="step1">
+      <div class="freq-cards">
+        <div class="freq-card freq-card-daily" onclick="selectFrequency('daily')">
+          <div class="freq-card-icon">&#9728;</div>
+          <div>
+            <div class="freq-card-label" data-i18n="freqDaily">Daily</div>
+            <div class="freq-card-sub" data-i18n="freqDailySub">Every shift</div>
+          </div>
+        </div>
+        <div class="freq-card freq-card-weekly" onclick="selectFrequency('weekly')">
+          <div class="freq-card-icon">&#128197;</div>
+          <div>
+            <div class="freq-card-label" data-i18n="freqWeekly">Weekly</div>
+            <div class="freq-card-sub" data-i18n="freqWeeklySub">Once per week</div>
+          </div>
+        </div>
+        <div class="freq-card freq-card-monthly" onclick="selectFrequency('monthly')">
+          <div class="freq-card-icon">&#128198;</div>
+          <div>
+            <div class="freq-card-label" data-i18n="freqMonthly">Monthly</div>
+            <div class="freq-card-sub" data-i18n="freqMonthlySub">Once per month</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2: Title & Equipment -->
+    <div class="wizard-step" id="step2">
+      <div class="form-group">
+        <label class="form-label" data-i18n="labelEquipment">Equipment</label>
+        <input class="form-input" id="fieldEquipment" list="equipmentList" placeholder="" data-i18n-placeholder="placeholderEquipment">
+        <datalist id="equipmentList"></datalist>
+      </div>
+      <div class="form-group">
+        <label class="form-label" data-i18n="labelShift">Shift</label>
+        <input class="form-input" id="fieldShift" placeholder="" data-i18n-placeholder="placeholderShift">
+      </div>
+      <div class="form-group">
+        <label class="form-label" id="titleLabelPrimary"></label>
+        <div class="translate-row">
+          <textarea class="form-textarea" id="fieldTitlePrimary" rows="2" data-i18n-placeholder="placeholderTitle"></textarea>
+          <button class="translate-btn" onclick="translateField('title')" title="Translate" aria-label="Translate title">&#127760;</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label form-label-secondary" id="titleLabelSecondary"></label>
+        <textarea class="form-textarea form-textarea-sm" id="fieldTitleSecondary" rows="2"></textarea>
+      </div>
+
+      <div class="wizard-nav">
+        <button class="btn-action" onclick="prevStep()" data-i18n="back">Back</button>
+        <button class="btn-action primary" onclick="nextStep()" data-i18n="next">Next</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Description & Instruction -->
+    <div class="wizard-step" id="step3">
+      <div class="form-group">
+        <label class="form-label" id="descLabelPrimary"></label>
+        <div class="translate-row">
+          <textarea class="form-textarea" id="fieldDescPrimary" rows="3" data-i18n-placeholder="placeholderDesc"></textarea>
+          <button class="translate-btn" onclick="translateField('desc')" title="Translate" aria-label="Translate description">&#127760;</button>
+        </div>
+        <div class="image-upload-area" id="descImageArea">
+          <div class="image-preview" id="descImagePreview" style="display:none;">
+            <img id="descImageImg">
+            <div class="image-preview-actions">
+              <button class="img-action-btn" onclick="openAnnotation('desc')" title="Annotate">&#9998;</button>
+              <button class="img-action-btn danger" onclick="removeImage('desc')" title="Remove">&times;</button>
+            </div>
+          </div>
+          <div class="image-upload-btns" id="descImageBtns">
+            <button class="btn-upload" onclick="captureImage('desc')">&#128247; <span data-i18n="cameraBtn">Camera</span></button>
+            <button class="btn-upload" onclick="pickImage('desc')">&#128193; <span data-i18n="uploadBtn">Upload</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label form-label-secondary" id="descLabelSecondary"></label>
+        <textarea class="form-textarea form-textarea-sm" id="fieldDescSecondary" rows="2"></textarea>
+      </div>
+
+      <div class="form-group" style="margin-top: 24px;">
+        <label class="form-label" id="instrLabelPrimary"></label>
+        <div class="translate-row">
+          <textarea class="form-textarea" id="fieldInstrPrimary" rows="3" data-i18n-placeholder="placeholderInstr"></textarea>
+          <button class="translate-btn" onclick="translateField('instr')" title="Translate" aria-label="Translate instruction">&#127760;</button>
+        </div>
+        <div class="image-upload-area" id="instrImageArea">
+          <div class="image-preview" id="instrImagePreview" style="display:none;">
+            <img id="instrImageImg">
+            <div class="image-preview-actions">
+              <button class="img-action-btn" onclick="openAnnotation('instr')" title="Annotate">&#9998;</button>
+              <button class="img-action-btn danger" onclick="removeImage('instr')" title="Remove">&times;</button>
+            </div>
+          </div>
+          <div class="image-upload-btns" id="instrImageBtns">
+            <button class="btn-upload" onclick="captureImage('instr')">&#128247; <span data-i18n="cameraBtn">Camera</span></button>
+            <button class="btn-upload" onclick="pickImage('instr')">&#128193; <span data-i18n="uploadBtn">Upload</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label form-label-secondary" id="instrLabelSecondary"></label>
+        <textarea class="form-textarea form-textarea-sm" id="fieldInstrSecondary" rows="2"></textarea>
+      </div>
+
+      <div class="wizard-nav">
+        <button class="btn-action" onclick="prevStep()" data-i18n="back">Back</button>
+        <button class="btn-action primary" onclick="nextStep()" data-i18n="next">Next</button>
+      </div>
+    </div>
+
+    <!-- Step 4: PPE & Hazards -->
+    <div class="wizard-step" id="step4">
+      <div class="checkbox-section-title" data-i18n="ppeTitle">PPE Requirements</div>
+      <div class="checkbox-grid" id="ppeGrid"></div>
+      <div class="other-specify" id="ppeOtherSpecify">
+        <input type="text" id="ppeOtherText" data-i18n-placeholder="otherSpecify" placeholder="Specify other:" oninput="cardData.ppe_other = this.value">
+      </div>
+
+      <div class="checkbox-section-title" data-i18n="hazardsTitle">Safety Hazards</div>
+      <div class="checkbox-grid" id="hazardsGrid"></div>
+      <div class="other-specify" id="hazardOtherSpecify">
+        <input type="text" id="hazardOtherText" data-i18n-placeholder="otherSpecify" placeholder="Specify other:" oninput="cardData.hazard_other = this.value">
+      </div>
+
+      <div class="wizard-nav">
+        <button class="btn-action" onclick="prevStep()" data-i18n="back">Back</button>
+        <button class="btn-action primary" onclick="nextStep()" data-i18n="next">Next</button>
+      </div>
+    </div>
+
+    <!-- Step 5: Materials & Warning -->
+    <div class="wizard-step" id="step5">
+      <div class="form-group">
+        <label class="form-label" id="matLabelPrimary"></label>
+        <div class="translate-row">
+          <textarea class="form-textarea" id="fieldMatPrimary" rows="3" data-i18n-placeholder="placeholderMat"></textarea>
+          <button class="translate-btn" onclick="translateField('materials')" title="Translate" aria-label="Translate materials">&#127760;</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label form-label-secondary" id="matLabelSecondary"></label>
+        <textarea class="form-textarea form-textarea-sm" id="fieldMatSecondary" rows="2"></textarea>
+      </div>
+
+      <div class="form-group" style="margin-top: 24px;">
+        <label class="form-label" id="warnLabelPrimary"></label>
+        <span class="form-label-secondary" data-i18n="warnHelper"> - Leave blank if no specific warning needed</span>
+        <div class="translate-row">
+          <textarea class="form-textarea" id="fieldWarnPrimary" rows="2" oninput="updateWarningPreview()" data-i18n-placeholder="placeholderWarn"></textarea>
+          <button class="translate-btn" onclick="translateField('warning')" title="Translate" aria-label="Translate warning">&#127760;</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label form-label-secondary" id="warnLabelSecondary"></label>
+        <textarea class="form-textarea form-textarea-sm" id="fieldWarnSecondary" rows="2" oninput="updateWarningPreview()"></textarea>
+      </div>
+
+      <div class="warning-preview" id="warningPreview"></div>
+
+      <div class="wizard-nav">
+        <button class="btn-action" onclick="prevStep()" data-i18n="back">Back</button>
+        <button class="btn-action primary" onclick="nextStep()" data-i18n="next">Next</button>
+      </div>
+    </div>
+
+    <!-- Step 6: Preview & Save -->
+    <div class="wizard-step" id="step6">
+      <div class="preview-tabs">
+        <button class="preview-tab active" onclick="showPreviewSide('front')" data-i18n="front">Front</button>
+        <button class="preview-tab" onclick="showPreviewSide('back')" data-i18n="back">Back</button>
+      </div>
+
+      <div class="preview-container">
+        <div class="preview-card-wrap" id="previewContent"></div>
+      </div>
+
+      <div class="action-buttons">
+        <button class="btn-action primary" onclick="saveAndPrint()" data-i18n="saveAndPrint">Save & Print</button>
+        <button class="btn-action" onclick="saveCard(false)" data-i18n="saveOnly">Save</button>
+        <button class="btn-action" onclick="prevStep()" data-i18n="backToEdit">Back to Edit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       VIEW CARD SCREEN
+       ═══════════════════════════════════════ -->
+  <div id="viewScreen" class="screen">
+    <div class="view-header">
+      <button class="wizard-back" onclick="showScreen('start')" aria-label="Back">&#8592;</button>
+      <div class="view-title" id="viewTitle"></div>
+    </div>
+
+    <div class="preview-tabs">
+      <button class="preview-tab active" onclick="showViewSide('front')" data-i18n="front">Front</button>
+      <button class="preview-tab" onclick="showViewSide('back')" data-i18n="back">Back</button>
+    </div>
+
+    <div class="preview-container">
+      <div class="preview-card-wrap" id="viewContent"></div>
+    </div>
+
+    <div id="viewStatusBadge" style="text-align:center; margin-bottom: 12px;"></div>
+
+    <div class="action-buttons" id="viewActions"></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       PRINT CONTAINER
+       ═══════════════════════════════════════ -->
+  <div class="print-pages" id="printPages"></div>
+
+  <!-- ═══════════════════════════════════════
+       TOAST
+       ═══════════════════════════════════════ -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Annotation Editor Modal -->
+  <div class="annotation-overlay" id="annotationOverlay" style="display:none;">
+    <div class="annotation-modal-box">
+      <div class="annotation-modal-header">
+        <span style="font-weight:700;font-size:16px;">Edit Image</span>
+        <button class="annotation-close" onclick="closeAnnotation()">&times;</button>
+      </div>
+      <div class="annotation-toolbar" id="annotationToolbar">
+        <div class="tool-group">
+          <button class="tool-btn active" data-tool="arrow" onclick="selectTool('arrow')" title="Arrow">&#10132;</button>
+          <button class="tool-btn" data-tool="circle" onclick="selectTool('circle')" title="Circle">&#9711;</button>
+          <button class="tool-btn" data-tool="rect" onclick="selectTool('rect')" title="Rectangle">&#9645;</button>
+          <button class="tool-btn" data-tool="freehand" onclick="selectTool('freehand')" title="Draw">&#9999;</button>
+          <button class="tool-btn" data-tool="text" onclick="selectTool('text')" title="Text">T</button>
+        </div>
+        <div class="tool-divider"></div>
+        <div class="color-group">
+          <button class="color-btn active" data-color="#e53935" onclick="selectColor('#e53935')" style="background:#e53935;"></button>
+          <button class="color-btn" data-color="#fdd835" onclick="selectColor('#fdd835')" style="background:#fdd835;"></button>
+          <button class="color-btn" data-color="#43a047" onclick="selectColor('#43a047')" style="background:#43a047;"></button>
+          <button class="color-btn" data-color="#1e88e5" onclick="selectColor('#1e88e5')" style="background:#1e88e5;"></button>
+          <button class="color-btn" data-color="#ffffff" onclick="selectColor('#ffffff')" style="background:#ffffff;border:2px solid #ccc;"></button>
+        </div>
+        <div class="tool-divider"></div>
+        <div class="tool-group">
+          <button class="tool-btn" onclick="annotationUndo()" title="Undo">&#8630;</button>
+          <button class="tool-btn" onclick="annotationRedo()" title="Redo">&#8631;</button>
+        </div>
+      </div>
+      <div class="canvas-container" id="canvasContainer">
+        <canvas id="annotationCanvas"></canvas>
+      </div>
+      <div class="annotation-modal-footer">
+        <button class="btn-action" onclick="closeAnnotation()">Cancel</button>
+        <button class="btn-action primary" onclick="saveAnnotation()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       JAVASCRIPT
+       ═══════════════════════════════════════ -->
+  <script>
+    // ── Constants ──
+    const API_URL = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/tpm';
+    const MEDIA_URL = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/media';
+
+    const ALL_PPE = ['Goggles', 'Gloves', 'Face Shield', 'Apron', 'Add. Hearing', 'Other'];
+    const ALL_HAZARDS = ['Fire', 'Slip / Trip', 'Shock', 'Pinch Point', 'Ergo', 'Hand Safety', 'Eye Safety', 'Laceration', 'Other', 'Head Safety'];
+
+    const FREQ_COLORS = {
+      daily: '#668971',
+      weekly: '#62758d',
+      monthly: '#e4aa4f'
+    };
+
+    // ── Translations ──
+    const translations = {
+      en: {
+        appTitle: 'TPM Cards',
+        createNew: '+ Create New Card',
+        filterAll: 'All',
+        filterDaily: 'Daily',
+        filterWeekly: 'Weekly',
+        filterMonthly: 'Monthly',
+        filterNeedsReview: 'Needs Review',
+        freqDaily: 'Daily',
+        freqDailySub: 'Every shift',
+        freqWeekly: 'Weekly',
+        freqWeeklySub: 'Once per week',
+        freqMonthly: 'Monthly',
+        freqMonthlySub: 'Once per month',
+        labelEquipment: 'Equipment',
+        placeholderEquipment: 'e.g. T-Zero, Conveyor #2',
+        labelShift: 'Shift',
+        placeholderShift: 'e.g. Pre-shift, During, After',
+        placeholderTitle: 'e.g. Clean Conveyor Belt, Inspect Decortication Rollers',
+        placeholderDesc: 'e.g. Clean and inspect the conveyor belt for debris and damage',
+        placeholderInstr: 'e.g. 1. Turn off equipment\n2. Remove debris\n3. Wipe down surfaces\n4. Inspect for wear',
+        placeholderMat: 'e.g. Cloth, brush, cleaning solution, wrench set',
+        placeholderWarn: 'e.g. Do not operate while cleaning. Lock out/tag out required.',
+        otherSpecify: 'Specify other:',
+        titleEN: 'Title (English)',
+        titleES: 'Title (Spanish)',
+        descEN: 'Description (English)',
+        descES: 'Description (Spanish)',
+        instrEN: 'Instruction (English)',
+        instrES: 'Instruction (Spanish)',
+        matEN: 'Materials / Equipment (English)',
+        matES: 'Materials / Equipment (Spanish)',
+        warnEN: 'Warning (English)',
+        warnES: 'Warning (Spanish)',
+        warnHelper: ' - Leave blank if no specific warning needed',
+        ppeTitle: 'PPE Requirements',
+        hazardsTitle: 'Safety Hazards',
+        front: 'Front',
+        back: 'Back',
+        backToEdit: 'Back to Edit',
+        saveAndPrint: 'Save & Print',
+        saveOnly: 'Save',
+        next: 'Next',
+        cancel: 'Cancel',
+        edit: 'Edit',
+        duplicate: 'Duplicate',
+        print: 'Print',
+        approve: 'Approve',
+        delete: 'Delete',
+        cardSaved: 'Card saved successfully',
+        cardUpdated: 'Card updated successfully',
+        cardApproved: 'Card approved',
+        cardDeleted: 'Card deleted',
+        errorSaving: 'Error saving card',
+        errorLoading: 'Error loading cards',
+        errorTranslating: 'Translation failed',
+        emptyState: 'No TPM cards yet',
+        emptyStateSub: 'Tap "Create New Card" to get started',
+        emptyFilter: 'No cards match this filter',
+        needsReview: 'Needs Review',
+        approved: 'Approved',
+        reviewerPrompt: 'Enter reviewer name:',
+        step1Label: 'Frequency',
+        step1Sub: 'How often is this task performed?',
+        step2Label: 'Title & Equipment',
+        step2Sub: 'What is being inspected?',
+        step3Label: 'Description & Instruction',
+        step3Sub: 'What to do and how to do it',
+        step4Label: 'PPE & Hazards',
+        step4Sub: 'Safety requirements',
+        step5Label: 'Materials & Warning',
+        step5Sub: 'What you need and any warnings',
+        step6Label: 'Preview',
+        step6Sub: 'Review your card before saving',
+        yellowTag: 'Create a Yellow Tag if an abnormality is found',
+        description: 'Description',
+        instruction: 'Instruction',
+        ppeGoggles: 'Goggles',
+        ppeGloves: 'Gloves',
+        ppeFaceShield: 'Face Shield',
+        ppeApron: 'Apron',
+        ppeHearing: 'Add. Hearing',
+        ppeOther: 'Other',
+        hazFire: 'Fire',
+        hazSlipTrip: 'Slip / Trip',
+        hazShock: 'Shock',
+        hazPinchPoint: 'Pinch Point',
+        hazErgo: 'Ergo',
+        hazHandSafety: 'Hand Safety',
+        hazEyeSafety: 'Eye Safety',
+        hazLaceration: 'Laceration',
+        hazOther: 'Other',
+        hazHeadSafety: 'Head Safety',
+        dailyTPM: 'Daily TPM',
+        weeklyTPM: 'Weekly TPM',
+        monthlyTPM: 'Monthly TPM',
+        ppeRequirements: 'PPE Requirements',
+        safetyHazards: 'Safety Hazards',
+        materialsEquipment: 'Materials / Equipment',
+        confirmDelete: 'Are you sure you want to delete this card?',
+        cameraBtn: 'Camera',
+        uploadBtn: 'Upload',
+      },
+      es: {
+        appTitle: 'Tarjetas TPM',
+        createNew: '+ Crear Nueva Tarjeta',
+        filterAll: 'Todas',
+        filterDaily: 'Diario',
+        filterWeekly: 'Semanal',
+        filterMonthly: 'Mensual',
+        filterNeedsReview: 'Necesita Revision',
+        freqDaily: 'Diario',
+        freqDailySub: 'Cada turno',
+        freqWeekly: 'Semanal',
+        freqWeeklySub: 'Una vez por semana',
+        freqMonthly: 'Mensual',
+        freqMonthlySub: 'Una vez por mes',
+        labelEquipment: 'Equipo',
+        placeholderEquipment: 'ej. T-Zero, Transportador #2',
+        labelShift: 'Turno',
+        placeholderShift: 'ej. Pre-turno, Durante, Despues',
+        placeholderTitle: 'ej. Limpiar Banda Transportadora, Inspeccionar Rodillos',
+        placeholderDesc: 'ej. Limpiar e inspeccionar la banda transportadora',
+        placeholderInstr: 'ej. 1. Apagar equipo\n2. Quitar escombros\n3. Limpiar superficies\n4. Inspeccionar desgaste',
+        placeholderMat: 'ej. Trapo, cepillo, solucion de limpieza, juego de llaves',
+        placeholderWarn: 'ej. No operar durante limpieza. Se requiere bloqueo/etiquetado.',
+        otherSpecify: 'Especifique otro:',
+        titleEN: 'Titulo (Ingles)',
+        titleES: 'Titulo (Espanol)',
+        descEN: 'Descripcion (Ingles)',
+        descES: 'Descripcion (Espanol)',
+        instrEN: 'Instruccion (Ingles)',
+        instrES: 'Instruccion (Espanol)',
+        matEN: 'Materiales / Equipo (Ingles)',
+        matES: 'Materiales / Equipo (Espanol)',
+        warnEN: 'Advertencia (Ingles)',
+        warnES: 'Advertencia (Espanol)',
+        warnHelper: ' - Dejar en blanco si no hay advertencia',
+        ppeTitle: 'Requisitos de EPP',
+        hazardsTitle: 'Peligros de Seguridad',
+        front: 'Frente',
+        back: 'Reverso',
+        backToEdit: 'Volver a Editar',
+        saveAndPrint: 'Guardar e Imprimir',
+        saveOnly: 'Guardar',
+        next: 'Siguiente',
+        cancel: 'Cancelar',
+        edit: 'Editar',
+        duplicate: 'Duplicar',
+        print: 'Imprimir',
+        approve: 'Aprobar',
+        delete: 'Eliminar',
+        cardSaved: 'Tarjeta guardada exitosamente',
+        cardUpdated: 'Tarjeta actualizada exitosamente',
+        cardApproved: 'Tarjeta aprobada',
+        cardDeleted: 'Tarjeta eliminada',
+        errorSaving: 'Error al guardar tarjeta',
+        errorLoading: 'Error al cargar tarjetas',
+        errorTranslating: 'Error en traduccion',
+        emptyState: 'No hay tarjetas TPM',
+        emptyStateSub: 'Toca "Crear Nueva Tarjeta" para comenzar',
+        emptyFilter: 'No hay tarjetas con este filtro',
+        needsReview: 'Necesita Revision',
+        approved: 'Aprobado',
+        reviewerPrompt: 'Ingrese el nombre del revisor:',
+        step1Label: 'Frecuencia',
+        step1Sub: 'Con que frecuencia se realiza esta tarea?',
+        step2Label: 'Titulo y Equipo',
+        step2Sub: 'Que se esta inspeccionando?',
+        step3Label: 'Descripcion e Instruccion',
+        step3Sub: 'Que hacer y como hacerlo',
+        step4Label: 'EPP y Peligros',
+        step4Sub: 'Requisitos de seguridad',
+        step5Label: 'Materiales y Advertencia',
+        step5Sub: 'Lo que necesitas y advertencias',
+        step6Label: 'Vista Previa',
+        step6Sub: 'Revisa tu tarjeta antes de guardar',
+        yellowTag: 'Crear una Etiqueta Amarilla si se encuentra una anomalia',
+        description: 'Descripcion',
+        instruction: 'Instruccion',
+        ppeGoggles: 'Lentes',
+        ppeGloves: 'Guantes',
+        ppeFaceShield: 'Careta',
+        ppeApron: 'Mandil',
+        ppeHearing: 'Proteccion Auditiva',
+        ppeOther: 'Otro',
+        hazFire: 'Fuego',
+        hazSlipTrip: 'Resbalon / Tropiezo',
+        hazShock: 'Descarga',
+        hazPinchPoint: 'Punto de Pellizco',
+        hazErgo: 'Ergonomico',
+        hazHandSafety: 'Seguridad de Manos',
+        hazEyeSafety: 'Seguridad Ocular',
+        hazLaceration: 'Laceracion',
+        hazOther: 'Otro',
+        hazHeadSafety: 'Seguridad de Cabeza',
+        dailyTPM: 'TPM Diario',
+        weeklyTPM: 'TPM Semanal',
+        monthlyTPM: 'TPM Mensual',
+        ppeRequirements: 'Requisitos de EPP',
+        safetyHazards: 'Peligros de Seguridad',
+        materialsEquipment: 'Materiales / Equipo',
+        confirmDelete: 'Esta seguro que desea eliminar esta tarjeta?',
+        cameraBtn: 'Camara',
+        uploadBtn: 'Subir',
+      }
+    };
+
+    // PPE/Hazard translation keys
+    const PPE_KEYS = {
+      'Goggles': 'ppeGoggles', 'Gloves': 'ppeGloves', 'Face Shield': 'ppeFaceShield',
+      'Apron': 'ppeApron', 'Add. Hearing': 'ppeHearing', 'Other': 'ppeOther'
+    };
+    const HAZARD_KEYS = {
+      'Fire': 'hazFire', 'Slip / Trip': 'hazSlipTrip', 'Shock': 'hazShock',
+      'Pinch Point': 'hazPinchPoint', 'Ergo': 'hazErgo', 'Hand Safety': 'hazHandSafety',
+      'Eye Safety': 'hazEyeSafety', 'Laceration': 'hazLaceration', 'Other': 'hazOther',
+      'Head Safety': 'hazHeadSafety'
+    };
+
+    // ── State ──
+    let appLang = 'en';
+    let allCards = [];
+    let activeFilter = 'all';
+    let currentStep = 1;
+    let editingCard = null; // null = new, object = editing
+    let viewingCard = null;
+    let previewSide = 'front';
+    let viewSide = 'front';
+
+    let cardData = {
+      frequency: 'daily',
+      title_en: '', title_es: '',
+      equipment: '', shift: '',
+      desc_en: '', desc_es: '',
+      instr_en: '', instr_es: '',
+      desc_image: '', instr_image: '',
+      ppe: [], hazards: [],
+      materials_en: '', materials_es: '',
+      warning_en: '', warning_es: '',
+      ppe_other: '', hazard_other: '',
+    };
+
+    // ── Image & Annotation State ──
+    let activeImageField = null; // 'desc' or 'instr'
+    let annotationCanvas = null;
+    let annotationCtx = null;
+    let annotationImage = null;
+    let annotationTool = 'arrow';
+    let annotationColor = '#e53935';
+    let isDrawing = false;
+    let drawStart = null;
+    let freehandPoints = [];
+    let drawHistory = [];
+    let redoHistory = [];
+    let annotationField = null; // which field is being annotated
+    let lastSavedState = null; // Image element of last saved state
+
+    // ── Translation helper ──
+    function t(key) {
+      return translations[appLang][key] || translations['en'][key] || key;
+    }
+
+    function otherLang() { return appLang === 'en' ? 'es' : 'en'; }
+
+    function toggleLang() {
+      appLang = appLang === 'en' ? 'es' : 'en';
+      document.querySelector('.lang-toggle').textContent = appLang.toUpperCase();
+      document.documentElement.lang = appLang;
+      applyTranslations();
+      updateWizardLabels();
+      renderCardList();
+      // Re-render preview if on step 6
+      if (currentStep === 6) syncCardDataFromForm();
+    }
+
+    function applyTranslations() {
+      document.querySelectorAll('[data-i18n]').forEach(function(el) {
+        var key = el.getAttribute('data-i18n');
+        if (translations[appLang][key]) {
+          el.textContent = translations[appLang][key];
+        }
+      });
+      document.querySelectorAll('[data-i18n-placeholder]').forEach(function(el) {
+        var key = el.getAttribute('data-i18n-placeholder');
+        if (translations[appLang][key]) {
+          el.placeholder = translations[appLang][key];
+        }
+      });
+    }
+
+    // ── Screen Management ──
+    function showScreen(name) {
+      document.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
+      document.getElementById(name + 'Screen').classList.add('active');
+      window.scrollTo(0, 0);
+      if (name === 'start') loadCards();
+    }
+
+    // ── Card List / Browse ──
+    async function loadCards() {
+      try {
+        var res = await fetch(API_URL + '?action=getCards');
+        var data = await res.json();
+        allCards = data.cards || [];
+      } catch (e) {
+        allCards = [];
+        console.error('Failed to load cards:', e);
+      }
+      renderCardList();
+    }
+
+    function setFilter(f) {
+      activeFilter = f;
+      document.querySelectorAll('.filter-chip').forEach(function(c) {
+        c.classList.toggle('active', c.getAttribute('data-filter') === f);
+      });
+      renderCardList();
+    }
+
+    function renderCardList() {
+      var list = document.getElementById('cardList');
+      var filtered = allCards;
+
+      if (activeFilter === 'needs_review') {
+        filtered = allCards.filter(function(c) { return c.status === 'needs_review'; });
+      } else if (activeFilter !== 'all') {
+        filtered = allCards.filter(function(c) { return c.frequency === activeFilter; });
+      }
+
+      if (filtered.length === 0) {
+        var msg = allCards.length === 0 ? t('emptyState') : t('emptyFilter');
+        var sub = allCards.length === 0 ? t('emptyStateSub') : '';
+        list.innerHTML = '<div class="empty-state">' +
+          '<div class="empty-state-icon">&#128203;</div>' +
+          '<div class="empty-state-text">' + msg + '</div>' +
+          (sub ? '<div style="color:var(--text-muted);font-size:14px;margin-top:8px;">' + sub + '</div>' : '') +
+          '</div>';
+        return;
+      }
+
+      list.innerHTML = filtered.map(function(card) {
+        var title = getCardField(card, 'title');
+        var freqLabel = t('filter' + capitalize(card.frequency));
+        var statusLabel = card.status === 'approved' ? t('approved') : t('needsReview');
+        var statusClass = card.status === 'approved' ? 'badge-approved' : 'badge-needs-review';
+        var freqClass = 'badge-' + card.frequency;
+
+        return '<div class="card-row freq-' + card.frequency + '" onclick="viewCard(\'' + card.id + '\')">' +
+          '<div class="card-row-info">' +
+            '<div class="card-row-title">' + escapeHtml(title) + '</div>' +
+            '<div class="card-row-equip">' + escapeHtml(card.equipment) + '</div>' +
+          '</div>' +
+          '<div class="card-row-badges">' +
+            '<span class="badge ' + freqClass + '">' + freqLabel + '</span>' +
+            '<span class="badge ' + statusClass + '">' + statusLabel + '</span>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    function getCardField(card, field) {
+      var primary = card[field + '_' + appLang];
+      var fallback = card[field + '_' + otherLang()];
+      return primary || fallback || '';
+    }
+
+    // ── New Card Wizard ──
+    function startNewCard() {
+      editingCard = null;
+      cardData = {
+        frequency: 'daily',
+        title_en: '', title_es: '',
+        equipment: '', shift: '',
+        desc_en: '', desc_es: '',
+        instr_en: '', instr_es: '',
+        desc_image: '', instr_image: '',
+        ppe: [], hazards: [],
+        materials_en: '', materials_es: '',
+        warning_en: '', warning_es: '',
+        ppe_other: '', hazard_other: '',
+      };
+      currentStep = 1;
+      showScreen('wizard');
+      updateWizard();
+      loadEquipmentList();
+    }
+
+    function editCard(card) {
+      editingCard = card;
+      cardData = {
+        id: card.id,
+        frequency: card.frequency || 'daily',
+        title_en: card.title_en || '', title_es: card.title_es || '',
+        equipment: card.equipment || '', shift: card.shift || '',
+        desc_en: card.desc_en || '', desc_es: card.desc_es || '',
+        instr_en: card.instr_en || '', instr_es: card.instr_es || '',
+        desc_image: card.desc_image || '', instr_image: card.instr_image || '',
+        ppe: Array.isArray(card.ppe) ? card.ppe.slice() : [],
+        hazards: Array.isArray(card.hazards) ? card.hazards.slice() : [],
+        materials_en: card.materials_en || '', materials_es: card.materials_es || '',
+        warning_en: card.warning_en || '', warning_es: card.warning_es || '',
+        ppe_other: card.ppe_other || '', hazard_other: card.hazard_other || '',
+      };
+      currentStep = 2; // Skip frequency for edit
+      showScreen('wizard');
+      updateWizard();
+      populateFormFromCardData();
+      loadEquipmentList();
+    }
+
+    function duplicateCard(card) {
+      editingCard = null;
+      cardData = {
+        frequency: card.frequency || 'daily',
+        title_en: card.title_en || '', title_es: card.title_es || '',
+        equipment: card.equipment || '', shift: card.shift || '',
+        desc_en: card.desc_en || '', desc_es: card.desc_es || '',
+        instr_en: card.instr_en || '', instr_es: card.instr_es || '',
+        desc_image: card.desc_image || '', instr_image: card.instr_image || '',
+        ppe: Array.isArray(card.ppe) ? card.ppe.slice() : [],
+        hazards: Array.isArray(card.hazards) ? card.hazards.slice() : [],
+        materials_en: card.materials_en || '', materials_es: card.materials_es || '',
+        warning_en: card.warning_en || '', warning_es: card.warning_es || '',
+        ppe_other: card.ppe_other || '', hazard_other: card.hazard_other || '',
+      };
+      currentStep = 2;
+      showScreen('wizard');
+      updateWizard();
+      populateFormFromCardData();
+      loadEquipmentList();
+    }
+
+    async function loadEquipmentList() {
+      try {
+        var res = await fetch(API_URL + '?action=getEquipment');
+        var data = await res.json();
+        var dl = document.getElementById('equipmentList');
+        dl.innerHTML = (data.equipment || []).map(function(e) {
+          return '<option value="' + escapeHtml(e) + '">';
+        }).join('');
+      } catch (e) {
+        console.error('Failed to load equipment list:', e);
+      }
+    }
+
+    // ── Wizard Navigation ──
+    function updateWizard() {
+      // Update progress dots
+      var dots = document.querySelectorAll('.progress-dot');
+      var freqColor = FREQ_COLORS[cardData.frequency] || FREQ_COLORS.daily;
+
+      dots.forEach(function(dot, i) {
+        var step = i + 1;
+        dot.classList.remove('current', 'completed');
+        dot.style.background = '';
+        dot.style.boxShadow = '';
+
+        if (step < currentStep) {
+          dot.classList.add('completed');
+          dot.style.background = freqColor;
+        } else if (step === currentStep) {
+          dot.classList.add('current');
+          dot.style.background = freqColor;
+          dot.style.boxShadow = '0 0 0 3px ' + freqColor + '44';
+        }
+      });
+
+      // Show current step
+      for (var i = 1; i <= 6; i++) {
+        var el = document.getElementById('step' + i);
+        if (el) el.classList.toggle('active', i === currentStep);
+      }
+
+      // Update step label
+      updateWizardLabels();
+
+      // Render step-specific content
+      if (currentStep === 4) renderCheckboxGrids();
+      if (currentStep === 5) updateWarningPreview();
+      if (currentStep === 6) renderPreview();
+
+      window.scrollTo(0, 0);
+    }
+
+    function updateWizardLabels() {
+      var labelEl = document.getElementById('wizardStepLabel');
+      var subEl = document.getElementById('wizardStepSub');
+      if (labelEl) labelEl.textContent = t('step' + currentStep + 'Label');
+      if (subEl) subEl.textContent = t('step' + currentStep + 'Sub');
+
+      // Update bilingual field labels
+      var pri = appLang;
+      var sec = otherLang();
+
+      setTextById('titleLabelPrimary', t('title' + pri.toUpperCase()));
+      setTextById('titleLabelSecondary', t('title' + sec.toUpperCase()));
+      setTextById('descLabelPrimary', t('desc' + pri.toUpperCase()));
+      setTextById('descLabelSecondary', t('desc' + sec.toUpperCase()));
+      setTextById('instrLabelPrimary', t('instr' + pri.toUpperCase()));
+      setTextById('instrLabelSecondary', t('instr' + sec.toUpperCase()));
+      setTextById('matLabelPrimary', t('mat' + pri.toUpperCase()));
+      setTextById('matLabelSecondary', t('mat' + sec.toUpperCase()));
+      setTextById('warnLabelPrimary', t('warn' + pri.toUpperCase()));
+      setTextById('warnLabelSecondary', t('warn' + sec.toUpperCase()));
+    }
+
+    function setTextById(id, text) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = text;
+    }
+
+    function selectFrequency(freq) {
+      cardData.frequency = freq;
+      nextStep();
+    }
+
+    function nextStep() {
+      if (currentStep >= 2 && currentStep <= 5) syncCardDataFromForm();
+      if (currentStep < 6) {
+        currentStep++;
+        updateWizard();
+        if (currentStep === 2 || currentStep === 3 || currentStep === 5) populateFormFromCardData();
+      }
+    }
+
+    function prevStep() {
+      if (currentStep >= 2 && currentStep <= 5) syncCardDataFromForm();
+      if (currentStep > 1) {
+        currentStep--;
+        updateWizard();
+        if (currentStep === 2 || currentStep === 3 || currentStep === 5) populateFormFromCardData();
+      }
+    }
+
+    function wizardBack() {
+      if (currentStep === 1) {
+        showScreen('start');
+      } else {
+        prevStep();
+      }
+    }
+
+    // ── Form Sync ──
+    function syncCardDataFromForm() {
+      var pri = appLang;
+      var sec = otherLang();
+
+      if (currentStep === 2) {
+        cardData.equipment = val('fieldEquipment');
+        cardData.shift = val('fieldShift');
+        cardData['title_' + pri] = val('fieldTitlePrimary');
+        cardData['title_' + sec] = val('fieldTitleSecondary');
+      }
+      if (currentStep === 3) {
+        cardData['desc_' + pri] = val('fieldDescPrimary');
+        cardData['desc_' + sec] = val('fieldDescSecondary');
+        cardData['instr_' + pri] = val('fieldInstrPrimary');
+        cardData['instr_' + sec] = val('fieldInstrSecondary');
+      }
+      if (currentStep === 4) {
+        cardData.ppe_other = val('ppeOtherText');
+        cardData.hazard_other = val('hazardOtherText');
+      }
+      if (currentStep === 5) {
+        cardData['materials_' + pri] = val('fieldMatPrimary');
+        cardData['materials_' + sec] = val('fieldMatSecondary');
+        cardData['warning_' + pri] = val('fieldWarnPrimary');
+        cardData['warning_' + sec] = val('fieldWarnSecondary');
+      }
+    }
+
+    function populateFormFromCardData() {
+      var pri = appLang;
+      var sec = otherLang();
+
+      if (currentStep === 2) {
+        setVal('fieldEquipment', cardData.equipment);
+        setVal('fieldShift', cardData.shift);
+        setVal('fieldTitlePrimary', cardData['title_' + pri]);
+        setVal('fieldTitleSecondary', cardData['title_' + sec]);
+      }
+      if (currentStep === 3) {
+        setVal('fieldDescPrimary', cardData['desc_' + pri]);
+        setVal('fieldDescSecondary', cardData['desc_' + sec]);
+        setVal('fieldInstrPrimary', cardData['instr_' + pri]);
+        setVal('fieldInstrSecondary', cardData['instr_' + sec]);
+        // Restore image previews
+        if (cardData.desc_image) showImagePreview('desc', cardData.desc_image);
+        else hideImagePreview('desc');
+        if (cardData.instr_image) showImagePreview('instr', cardData.instr_image);
+        else hideImagePreview('instr');
+      }
+      if (currentStep === 5) {
+        setVal('fieldMatPrimary', cardData['materials_' + pri]);
+        setVal('fieldMatSecondary', cardData['materials_' + sec]);
+        setVal('fieldWarnPrimary', cardData['warning_' + pri]);
+        setVal('fieldWarnSecondary', cardData['warning_' + sec]);
+        updateWarningPreview();
+      }
+    }
+
+    function val(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+    function setVal(id, v) { var el = document.getElementById(id); if (el) el.value = v || ''; }
+
+    // ── PPE & Hazards Checkbox Grids ──
+    function renderCheckboxGrids() {
+      var ppeGrid = document.getElementById('ppeGrid');
+      ppeGrid.innerHTML = ALL_PPE.map(function(name) {
+        var checked = cardData.ppe.indexOf(name) >= 0;
+        var label = t(PPE_KEYS[name] || name);
+        return '<div class="checkbox-item' + (checked ? ' checked' : '') + '" onclick="togglePPE(this, \'' + name + '\')">' +
+          '<div class="checkbox-box">' + (checked ? '&#10003;' : '') + '</div>' +
+          '<div class="checkbox-label">' + escapeHtml(label) + '</div>' +
+        '</div>';
+      }).join('');
+
+      var hazGrid = document.getElementById('hazardsGrid');
+      hazGrid.innerHTML = ALL_HAZARDS.map(function(name) {
+        var checked = cardData.hazards.indexOf(name) >= 0;
+        var label = t(HAZARD_KEYS[name] || name);
+        return '<div class="checkbox-item' + (checked ? ' checked hazard-checked' : '') + '" onclick="toggleHazard(this, \'' + escapeAttr(name) + '\')">' +
+          '<div class="checkbox-box">' + (checked ? '&#10003;' : '') + '</div>' +
+          '<div class="checkbox-label">' + escapeHtml(label) + '</div>' +
+        '</div>';
+      }).join('');
+
+      // Restore "Other" specify inputs
+      updateOtherVisibility('ppe');
+      updateOtherVisibility('hazard');
+      setVal('ppeOtherText', cardData.ppe_other);
+      setVal('hazardOtherText', cardData.hazard_other);
+    }
+
+    function togglePPE(el, name) {
+      var idx = cardData.ppe.indexOf(name);
+      if (idx >= 0) {
+        cardData.ppe.splice(idx, 1);
+        el.classList.remove('checked');
+        el.querySelector('.checkbox-box').innerHTML = '';
+      } else {
+        cardData.ppe.push(name);
+        el.classList.add('checked');
+        el.querySelector('.checkbox-box').innerHTML = '&#10003;';
+      }
+      updateOtherVisibility('ppe');
+    }
+
+    function toggleHazard(el, name) {
+      var idx = cardData.hazards.indexOf(name);
+      if (idx >= 0) {
+        cardData.hazards.splice(idx, 1);
+        el.classList.remove('checked', 'hazard-checked');
+        el.querySelector('.checkbox-box').innerHTML = '';
+      } else {
+        cardData.hazards.push(name);
+        el.classList.add('checked', 'hazard-checked');
+        el.querySelector('.checkbox-box').innerHTML = '&#10003;';
+      }
+      updateOtherVisibility('hazard');
+    }
+
+    function updateOtherVisibility(type) {
+      if (type === 'ppe') {
+        var show = cardData.ppe.indexOf('Other') >= 0;
+        var el = document.getElementById('ppeOtherSpecify');
+        if (el) el.classList.toggle('visible', show);
+        if (!show) { cardData.ppe_other = ''; setVal('ppeOtherText', ''); }
+      } else {
+        var show = cardData.hazards.indexOf('Other') >= 0;
+        var el = document.getElementById('hazardOtherSpecify');
+        if (el) el.classList.toggle('visible', show);
+        if (!show) { cardData.hazard_other = ''; setVal('hazardOtherText', ''); }
+      }
+    }
+
+    // ── Warning Preview ──
+    function updateWarningPreview() {
+      var pri = val('fieldWarnPrimary');
+      var sec = val('fieldWarnSecondary');
+      var text = pri || sec || '';
+      var preview = document.getElementById('warningPreview');
+      if (text) {
+        preview.textContent = text;
+        preview.classList.add('visible');
+      } else {
+        preview.classList.remove('visible');
+      }
+    }
+
+    // ── Translation ──
+    async function translateField(field) {
+      var pri = appLang;
+      var sec = otherLang();
+
+      var fieldMap = {
+        title: { primary: 'fieldTitlePrimary', secondary: 'fieldTitleSecondary' },
+        desc: { primary: 'fieldDescPrimary', secondary: 'fieldDescSecondary' },
+        instr: { primary: 'fieldInstrPrimary', secondary: 'fieldInstrSecondary' },
+        materials: { primary: 'fieldMatPrimary', secondary: 'fieldMatSecondary' },
+        warning: { primary: 'fieldWarnPrimary', secondary: 'fieldWarnSecondary' },
+      };
+
+      var map = fieldMap[field];
+      if (!map) return;
+
+      var sourceText = val(map.primary);
+      if (!sourceText.trim()) return;
+
+      // Find the translate button near the primary field
+      var primaryEl = document.getElementById(map.primary);
+      var btn = primaryEl ? primaryEl.parentElement.querySelector('.translate-btn') : null;
+
+      try {
+        if (btn) { btn.classList.add('loading'); btn.textContent = ''; }
+
+        var res = await fetch(API_URL + '?action=translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: sourceText, from: pri, to: sec })
+        });
+        var data = await res.json();
+        if (data.translated) {
+          setVal(map.secondary, data.translated);
+        }
+      } catch (e) {
+        showToast(t('errorTranslating'));
+        console.error('Translation failed:', e);
+      } finally {
+        if (btn) { btn.classList.remove('loading'); btn.textContent = '\u{1F310}'; }
+      }
+    }
+
+    // ── T-Card Rendering ──
+    function getFreqColorClass(freq) {
+      return 'freq-color-' + (freq || 'daily');
+    }
+
+    function getFreqLabel(freq) {
+      var map = { daily: 'dailyTPM', weekly: 'weeklyTPM', monthly: 'monthlyTPM' };
+      return t(map[freq] || 'dailyTPM');
+    }
+
+    function buildFront(card) {
+      var freq = card.frequency || 'daily';
+      var colorClass = getFreqColorClass(freq);
+      var title = getCardField(card, 'title');
+      var desc = getCardField(card, 'desc');
+      var instr = getCardField(card, 'instr');
+      var warning = getCardField(card, 'warning');
+      var freqLabel = getFreqLabel(freq);
+
+      var warningHtml = warning
+        ? '<div class="tcard-warning-bar">' + escapeHtml(warning) + '</div>'
+        : '';
+
+      var descImg = card.desc_image
+        ? '<div class="tcard-section-image"><img src="' + escapeHtml(card.desc_image) + '"></div>'
+        : '';
+
+      var instrImg = card.instr_image
+        ? '<div class="tcard-section-image"><img src="' + escapeHtml(card.instr_image) + '"></div>'
+        : '';
+
+      return '<div class="tcard-front">' +
+        '<div class="tcard-header-bar ' + colorClass + '">' + escapeHtml(freqLabel) + '</div>' +
+        '<div class="tcard-component-bar ' + colorClass + '">' + escapeHtml(title) + '</div>' +
+        '<div class="tcard-meta-row">' +
+          '<div class="tcard-meta-cell"><strong>Equip. #</strong> ' + escapeHtml(card.equipment || '') + '</div>' +
+          '<div class="tcard-meta-cell"><strong>Shift:</strong> ' + escapeHtml(card.shift || '') + '</div>' +
+        '</div>' +
+        '<div class="tcard-section">' +
+          '<div class="tcard-section-label">' + t('description') + '</div>' +
+          '<div class="tcard-section-text">' + escapeHtml(desc) + '</div>' +
+          descImg +
+        '</div>' +
+        '<div class="tcard-section tcard-instruction">' +
+          '<div class="tcard-section-label">' + t('instruction') + '</div>' +
+          '<div class="tcard-section-text">' + escapeHtml(instr) + '</div>' +
+          instrImg +
+        '</div>' +
+        warningHtml +
+        '<div class="tcard-yellow-tag"><span class="tag-icon"></span> ' + t('yellowTag') + '</div>' +
+        '<div class="tcard-footer-bar">' + escapeHtml(card.id || 'NEW') + ' &bull; v1.0 &bull; Rogue Origin</div>' +
+      '</div>';
+    }
+
+    function buildBack(card) {
+      var freq = card.frequency || 'daily';
+      var colorClass = getFreqColorClass(freq);
+      var ppeList = Array.isArray(card.ppe) ? card.ppe : [];
+      var hazardList = Array.isArray(card.hazards) ? card.hazards : [];
+      var materials = getCardField(card, 'materials');
+
+      // PPE
+      var ppeHtml = '';
+      ALL_PPE.forEach(function(name) {
+        var checked = ppeList.indexOf(name) >= 0;
+        var mark = checked ? '\u2713' : '';
+        var cls = checked ? ' checked' : '';
+        var label = name;
+        if (name === 'Other' && checked && card.ppe_other) label = 'Other: ' + card.ppe_other;
+        ppeHtml += '<div class="ppe-item"><span class="ppe-check' + cls + '">' + mark + '</span> ' + escapeHtml(label) + '</div>';
+      });
+
+      // Hazards
+      var hazHtml = '';
+      ALL_HAZARDS.forEach(function(name) {
+        var checked = hazardList.indexOf(name) >= 0;
+        var mark = checked ? '\u2713' : '';
+        var cls = checked ? ' checked' : '';
+        var label = name;
+        if (name === 'Other' && checked && card.hazard_other) label = 'Other: ' + card.hazard_other;
+        hazHtml += '<div class="hazard-item"><span class="hazard-check' + cls + '">' + mark + '</span> ' + escapeHtml(label) + '</div>';
+      });
+
+      return '<div class="tcard-back">' +
+        '<div class="tcard-back-header ' + colorClass + '">' + t('ppeRequirements') + '</div>' +
+        '<div class="ppe-grid">' + ppeHtml + '</div>' +
+        '<div class="hazard-section-header ' + colorClass + '">' + t('safetyHazards') + '</div>' +
+        '<div class="hazard-grid">' + hazHtml + '</div>' +
+        '<div class="materials-header ' + colorClass + '">' + t('materialsEquipment') + '</div>' +
+        '<div class="materials-box">' + escapeHtml(materials) + '</div>' +
+        '<div class="back-card-id">' + escapeHtml(card.id || 'NEW') + ' &bull; v1.0</div>' +
+      '</div>';
+    }
+
+    // ── Preview (Step 6) ──
+    function renderPreview() {
+      syncCardDataFromForm();
+      var container = document.getElementById('previewContent');
+      if (previewSide === 'front') {
+        container.innerHTML = buildFront(cardData);
+      } else {
+        container.innerHTML = buildBack(cardData);
+      }
+    }
+
+    function showPreviewSide(side) {
+      previewSide = side;
+      document.querySelectorAll('#step6 .preview-tab').forEach(function(tab) {
+        tab.classList.toggle('active', tab.textContent.toLowerCase().replace(/\s/g,'') === side ||
+          (side === 'front' && tab === document.querySelector('#step6 .preview-tab:first-child')) ||
+          (side === 'back' && tab === document.querySelector('#step6 .preview-tab:last-child')));
+      });
+      // Simpler: just use position
+      var tabs = document.querySelectorAll('#step6 .preview-tab');
+      tabs[0].classList.toggle('active', side === 'front');
+      tabs[1].classList.toggle('active', side === 'back');
+      renderPreview();
+    }
+
+    // ── Save ──
+    async function saveCard(shouldPrint) {
+      syncCardDataFromForm();
+
+      var action = cardData.id ? 'updateCard' : 'createCard';
+      var toastMsg = cardData.id ? t('cardUpdated') : t('cardSaved');
+
+      try {
+        var res = await fetch(API_URL + '?action=' + action, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ card: cardData })
+        });
+        var data = await res.json();
+
+        if (data.success) {
+          showToast(toastMsg);
+          if (data.id) cardData.id = data.id;
+
+          if (shouldPrint) {
+            printCard(cardData);
+          }
+
+          showScreen('start');
+        } else {
+          showToast(t('errorSaving'));
+        }
+      } catch (e) {
+        showToast(t('errorSaving'));
+        console.error('Save failed:', e);
+      }
+    }
+
+    async function saveAndPrint() {
+      await saveCard(true);
+    }
+
+    // ── Delete ──
+    async function deleteCard(id) {
+      if (!confirm(t('confirmDelete'))) return;
+      try {
+        var res = await fetch(API_URL + '?action=deleteCard', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: id })
+        });
+        var data = await res.json();
+        if (data.success) {
+          showToast(t('cardDeleted'));
+          showScreen('start');
+        }
+      } catch (e) {
+        console.error('Delete failed:', e);
+      }
+    }
+
+    // ── View Card ──
+    function viewCard(id) {
+      var card = allCards.find(function(c) { return c.id === id; });
+      if (!card) return;
+      viewingCard = card;
+      viewSide = 'front';
+
+      document.getElementById('viewTitle').textContent = getCardField(card, 'title');
+      renderViewContent();
+
+      // Status badge
+      var statusBadge = document.getElementById('viewStatusBadge');
+      var statusLabel = card.status === 'approved' ? t('approved') : t('needsReview');
+      var statusClass = card.status === 'approved' ? 'badge-approved' : 'badge-needs-review';
+      statusBadge.innerHTML = '<span class="badge ' + statusClass + '" style="font-size:13px;padding:6px 16px;">' + statusLabel + '</span>';
+
+      // Action buttons
+      var actions = document.getElementById('viewActions');
+      var btns = '';
+      btns += '<button class="btn-action" onclick="editCard(viewingCard)">' + t('edit') + '</button>';
+      btns += '<button class="btn-action" onclick="duplicateCard(viewingCard)">' + t('duplicate') + '</button>';
+      btns += '<button class="btn-action" onclick="printCard(viewingCard)">' + t('print') + '</button>';
+      if (card.status === 'needs_review') {
+        btns += '<button class="btn-action approve-btn" onclick="approveCard(\'' + card.id + '\')">' + t('approve') + '</button>';
+      }
+      btns += '<button class="btn-action danger" onclick="deleteCard(\'' + card.id + '\')">' + t('delete') + '</button>';
+      actions.innerHTML = btns;
+
+      showScreen('view');
+    }
+
+    function renderViewContent() {
+      var container = document.getElementById('viewContent');
+      if (viewSide === 'front') {
+        container.innerHTML = buildFront(viewingCard);
+      } else {
+        container.innerHTML = buildBack(viewingCard);
+      }
+    }
+
+    function showViewSide(side) {
+      viewSide = side;
+      var tabs = document.querySelectorAll('#viewScreen .preview-tab');
+      tabs[0].classList.toggle('active', side === 'front');
+      tabs[1].classList.toggle('active', side === 'back');
+      renderViewContent();
+    }
+
+    // ── Approve ──
+    async function approveCard(id) {
+      var reviewer = prompt(t('reviewerPrompt'));
+      if (reviewer === null) return;
+      if (!reviewer.trim()) return;
+
+      try {
+        var res = await fetch(API_URL + '?action=approveCard', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: id, reviewed_by: reviewer.trim() })
+        });
+        var data = await res.json();
+        if (data.success) {
+          showToast(t('cardApproved'));
+          // Update local state
+          if (viewingCard && viewingCard.id === id) {
+            viewingCard.status = 'approved';
+            viewingCard.reviewed_by = reviewer.trim();
+            viewCard(id); // Re-render
+          }
+          // Refresh list
+          loadCards();
+        }
+      } catch (e) {
+        console.error('Approve failed:', e);
+      }
+    }
+
+    // ── Print ──
+    function printCard(card) {
+      var container = document.getElementById('printPages');
+      container.innerHTML = '';
+
+      // Front page
+      var fp = document.createElement('div');
+      fp.className = 'print-card-page';
+      fp.innerHTML = buildFront(card);
+      container.appendChild(fp);
+
+      // Back page
+      var bp = document.createElement('div');
+      bp.className = 'print-card-page';
+      bp.innerHTML = buildBack(card);
+      container.appendChild(bp);
+
+      // Small delay for rendering, then print
+      setTimeout(function() { window.print(); }, 200);
+    }
+
+    // ── Toast ──
+    function showToast(msg) {
+      var toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.add('visible');
+      setTimeout(function() {
+        toast.classList.remove('visible');
+      }, 3000);
+    }
+
+    // ── Utilities ──
+    function escapeHtml(str) {
+      if (!str) return '';
+      var div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function escapeAttr(str) {
+      return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    }
+
+    function capitalize(s) {
+      return s.charAt(0).toUpperCase() + s.slice(1);
+    }
+
+    // ── Image Upload ──
+    function captureImage(field) {
+      activeImageField = field;
+      document.getElementById('cameraInput').click();
+    }
+
+    function pickImage(field) {
+      activeImageField = field;
+      document.getElementById('fileInput').click();
+    }
+
+    async function handleImageInput(input) {
+      var file = input.files && input.files[0];
+      if (!file || !activeImageField) return;
+
+      try {
+        showToast('Processing image...');
+        var blob = await compressImageToBlob(file, 1200, 0.8);
+
+        // Upload to R2
+        var url = await uploadImageToR2(blob);
+        cardData[activeImageField + '_image'] = url;
+        showImagePreview(activeImageField, url);
+        showToast('Image added');
+      } catch (e) {
+        showToast('Failed to process image');
+        console.error('Image upload error:', e);
+      }
+
+      input.value = '';
+      activeImageField = null;
+    }
+
+    function compressImageToBlob(file, maxSize, quality) {
+      return new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+          var img = new Image();
+          img.onload = function() {
+            var canvas = document.createElement('canvas');
+            var w = img.width;
+            var h = img.height;
+
+            if (w > h) {
+              if (w > maxSize) { h = Math.round(h * maxSize / w); w = maxSize; }
+            } else {
+              if (h > maxSize) { w = Math.round(w * maxSize / h); h = maxSize; }
+            }
+
+            canvas.width = w;
+            canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+
+            canvas.toBlob(function(blob) {
+              if (blob) resolve(blob);
+              else reject(new Error('Compression failed'));
+            }, 'image/jpeg', quality);
+          };
+          img.onerror = function() { reject(new Error('Failed to load image')); };
+          img.src = e.target.result;
+        };
+        reader.onerror = function() { reject(new Error('Failed to read file')); };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function uploadImageToR2(blob) {
+      return new Promise(function(resolve, reject) {
+        var formData = new FormData();
+        formData.append('file', blob, 'tpm-' + Date.now() + '.jpg');
+
+        var xhr = new XMLHttpRequest();
+        xhr.addEventListener('load', function() {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              var resp = JSON.parse(xhr.responseText);
+              if (resp.success && resp.url) resolve(resp.url);
+              else reject(new Error(resp.error || 'Upload failed'));
+            } catch (e) { reject(new Error('Invalid response')); }
+          } else {
+            reject(new Error('Upload failed (HTTP ' + xhr.status + ')'));
+          }
+        });
+        xhr.addEventListener('error', function() { reject(new Error('Network error')); });
+        xhr.timeout = 60000;
+        xhr.addEventListener('timeout', function() { reject(new Error('Upload timed out')); });
+        xhr.open('POST', MEDIA_URL + '?action=upload');
+        xhr.send(formData);
+      });
+    }
+
+    function showImagePreview(field, url) {
+      var preview = document.getElementById(field + 'ImagePreview');
+      var img = document.getElementById(field + 'ImageImg');
+      var btns = document.getElementById(field + 'ImageBtns');
+      if (preview && img) {
+        img.src = url;
+        preview.style.display = 'block';
+      }
+      if (btns) btns.style.display = 'none';
+    }
+
+    function hideImagePreview(field) {
+      var preview = document.getElementById(field + 'ImagePreview');
+      var btns = document.getElementById(field + 'ImageBtns');
+      if (preview) preview.style.display = 'none';
+      if (btns) btns.style.display = 'flex';
+    }
+
+    function removeImage(field) {
+      cardData[field + '_image'] = '';
+      hideImagePreview(field);
+    }
+
+    // ── Annotation Editor ──
+    function openAnnotation(field) {
+      annotationField = field;
+      var url = cardData[field + '_image'];
+      if (!url) return;
+
+      document.getElementById('annotationOverlay').style.display = 'flex';
+      annotationTool = 'arrow';
+      annotationColor = '#e53935';
+      drawHistory = [];
+      redoHistory = [];
+
+      // Reset tool/color active states
+      document.querySelectorAll('.annotation-toolbar .tool-btn[data-tool]').forEach(function(btn) {
+        btn.classList.toggle('active', btn.getAttribute('data-tool') === 'arrow');
+      });
+      document.querySelectorAll('.annotation-toolbar .color-btn').forEach(function(btn) {
+        btn.classList.toggle('active', btn.getAttribute('data-color') === '#e53935');
+      });
+
+      initAnnotationCanvas(url);
+    }
+
+    function closeAnnotation() {
+      document.getElementById('annotationOverlay').style.display = 'none';
+      annotationField = null;
+      annotationImage = null;
+      drawHistory = [];
+      redoHistory = [];
+      // Remove event listeners
+      var canvas = document.getElementById('annotationCanvas');
+      if (canvas) {
+        canvas.removeEventListener('mousedown', handleDrawStart);
+        canvas.removeEventListener('mousemove', handleDrawMove);
+        canvas.removeEventListener('mouseup', handleDrawEnd);
+        canvas.removeEventListener('touchstart', handleTouchStart);
+        canvas.removeEventListener('touchmove', handleTouchMove);
+        canvas.removeEventListener('touchend', handleTouchEnd);
+      }
+    }
+
+    function initAnnotationCanvas(imageSrc) {
+      annotationCanvas = document.getElementById('annotationCanvas');
+      annotationCtx = annotationCanvas.getContext('2d');
+
+      annotationImage = new Image();
+      if (!imageSrc.startsWith('data:')) {
+        annotationImage.crossOrigin = 'anonymous';
+      }
+
+      annotationImage.onload = function() {
+        var container = document.getElementById('canvasContainer');
+        var maxW = container.clientWidth - 20;
+        var maxH = container.clientHeight - 20;
+        var w = annotationImage.width;
+        var h = annotationImage.height;
+
+        if (w > maxW) { h = h * (maxW / w); w = maxW; }
+        if (h > maxH) { w = w * (maxH / h); h = maxH; }
+
+        annotationCanvas.width = w;
+        annotationCanvas.height = h;
+        annotationCtx.drawImage(annotationImage, 0, 0, w, h);
+        saveAnnotationHistory();
+        setupAnnotationEvents();
+      };
+      annotationImage.src = imageSrc;
+    }
+
+    function setupAnnotationEvents() {
+      var canvas = annotationCanvas;
+      canvas.addEventListener('mousedown', handleDrawStart);
+      canvas.addEventListener('mousemove', handleDrawMove);
+      canvas.addEventListener('mouseup', handleDrawEnd);
+      canvas.addEventListener('mouseleave', handleDrawEnd);
+      canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+      canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+      canvas.addEventListener('touchend', handleTouchEnd);
+    }
+
+    function getCanvasCoords(e) {
+      var rect = annotationCanvas.getBoundingClientRect();
+      var scaleX = annotationCanvas.width / rect.width;
+      var scaleY = annotationCanvas.height / rect.height;
+      return {
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY
+      };
+    }
+
+    function getTouchCoords(e) {
+      var touch = e.touches[0] || e.changedTouches[0];
+      var rect = annotationCanvas.getBoundingClientRect();
+      var scaleX = annotationCanvas.width / rect.width;
+      var scaleY = annotationCanvas.height / rect.height;
+      return {
+        x: (touch.clientX - rect.left) * scaleX,
+        y: (touch.clientY - rect.top) * scaleY
+      };
+    }
+
+    function handleTouchStart(e) {
+      e.preventDefault();
+      var fakeEvent = { clientX: 0, clientY: 0 };
+      var touch = e.touches[0];
+      fakeEvent.clientX = touch.clientX;
+      fakeEvent.clientY = touch.clientY;
+      handleDrawStart(fakeEvent);
+    }
+
+    function handleTouchMove(e) {
+      e.preventDefault();
+      var touch = e.touches[0];
+      handleDrawMove({ clientX: touch.clientX, clientY: touch.clientY });
+    }
+
+    function handleTouchEnd(e) {
+      handleDrawEnd();
+    }
+
+    function handleDrawStart(e) {
+      if (annotationTool === 'text') {
+        handleTextPlace(e);
+        return;
+      }
+      isDrawing = true;
+      drawStart = getCanvasCoords(e);
+      freehandPoints = [drawStart];
+
+      if (annotationTool === 'freehand') {
+        annotationCtx.beginPath();
+        annotationCtx.moveTo(drawStart.x, drawStart.y);
+        annotationCtx.strokeStyle = annotationColor;
+        annotationCtx.lineWidth = 3;
+        annotationCtx.lineCap = 'round';
+        annotationCtx.lineJoin = 'round';
+      }
+    }
+
+    function handleDrawMove(e) {
+      if (!isDrawing) return;
+      var pos = getCanvasCoords(e);
+
+      if (annotationTool === 'freehand') {
+        annotationCtx.lineTo(pos.x, pos.y);
+        annotationCtx.stroke();
+        freehandPoints.push(pos);
+      } else {
+        redrawFromHistory();
+        drawShape(drawStart, pos, true);
+      }
+    }
+
+    function handleDrawEnd() {
+      if (!isDrawing) return;
+      isDrawing = false;
+      if (annotationTool === 'freehand') {
+        annotationCtx.closePath();
+      }
+      saveAnnotationHistory();
+      redoHistory = [];
+    }
+
+    function drawShape(start, end, preview) {
+      annotationCtx.save();
+      annotationCtx.strokeStyle = annotationColor;
+      annotationCtx.fillStyle = annotationColor;
+      annotationCtx.lineWidth = 3;
+      annotationCtx.lineCap = 'round';
+
+      if (annotationTool === 'arrow') {
+        drawArrowShape(start, end);
+      } else if (annotationTool === 'circle') {
+        drawCircleShape(start, end);
+      } else if (annotationTool === 'rect') {
+        drawRectShape(start, end);
+      }
+
+      annotationCtx.restore();
+    }
+
+    function drawArrowShape(start, end) {
+      var headLen = 15;
+      var dx = end.x - start.x;
+      var dy = end.y - start.y;
+      var angle = Math.atan2(dy, dx);
+
+      annotationCtx.beginPath();
+      annotationCtx.moveTo(start.x, start.y);
+      annotationCtx.lineTo(end.x, end.y);
+      annotationCtx.stroke();
+
+      annotationCtx.beginPath();
+      annotationCtx.moveTo(end.x, end.y);
+      annotationCtx.lineTo(end.x - headLen * Math.cos(angle - Math.PI / 6), end.y - headLen * Math.sin(angle - Math.PI / 6));
+      annotationCtx.lineTo(end.x - headLen * Math.cos(angle + Math.PI / 6), end.y - headLen * Math.sin(angle + Math.PI / 6));
+      annotationCtx.closePath();
+      annotationCtx.fill();
+    }
+
+    function drawCircleShape(start, end) {
+      var rx = Math.abs(end.x - start.x) / 2;
+      var ry = Math.abs(end.y - start.y) / 2;
+      var cx = Math.min(start.x, end.x) + rx;
+      var cy = Math.min(start.y, end.y) + ry;
+      annotationCtx.beginPath();
+      annotationCtx.ellipse(cx, cy, Math.max(rx, 1), Math.max(ry, 1), 0, 0, Math.PI * 2);
+      annotationCtx.stroke();
+    }
+
+    function drawRectShape(start, end) {
+      var x = Math.min(start.x, end.x);
+      var y = Math.min(start.y, end.y);
+      annotationCtx.strokeRect(x, y, Math.abs(end.x - start.x), Math.abs(end.y - start.y));
+    }
+
+    function handleTextPlace(e) {
+      var pos = getCanvasCoords(e);
+      var text = prompt(appLang === 'es' ? 'Ingrese texto:' : 'Enter text:');
+      if (!text) return;
+
+      annotationCtx.save();
+      annotationCtx.font = 'bold 18px sans-serif';
+      var metrics = annotationCtx.measureText(text);
+      var pad = 4;
+      annotationCtx.fillStyle = 'rgba(255,255,255,0.85)';
+      annotationCtx.fillRect(pos.x - pad, pos.y - 16 - pad, metrics.width + pad * 2, 20 + pad * 2);
+      annotationCtx.fillStyle = annotationColor;
+      annotationCtx.fillText(text, pos.x, pos.y);
+      annotationCtx.restore();
+
+      saveAnnotationHistory();
+      redoHistory = [];
+    }
+
+    function selectTool(tool) {
+      annotationTool = tool;
+      document.querySelectorAll('.annotation-toolbar .tool-btn[data-tool]').forEach(function(btn) {
+        btn.classList.toggle('active', btn.getAttribute('data-tool') === tool);
+      });
+    }
+
+    function selectColor(color) {
+      annotationColor = color;
+      document.querySelectorAll('.annotation-toolbar .color-btn').forEach(function(btn) {
+        btn.classList.toggle('active', btn.getAttribute('data-color') === color);
+      });
+    }
+
+    function saveAnnotationHistory() {
+      var dataUrl = annotationCanvas.toDataURL('image/png');
+      drawHistory.push(dataUrl);
+      if (drawHistory.length > 30) drawHistory.shift();
+      // Pre-load for fast preview redraw
+      lastSavedState = new Image();
+      lastSavedState.src = dataUrl;
+    }
+
+    function redrawFromHistory() {
+      if (lastSavedState) {
+        annotationCtx.clearRect(0, 0, annotationCanvas.width, annotationCanvas.height);
+        annotationCtx.drawImage(lastSavedState, 0, 0);
+      }
+    }
+
+    function annotationUndo() {
+      if (drawHistory.length <= 1) return;
+      redoHistory.push(drawHistory.pop());
+      var prev = drawHistory[drawHistory.length - 1];
+      var img = new Image();
+      img.onload = function() {
+        annotationCtx.clearRect(0, 0, annotationCanvas.width, annotationCanvas.height);
+        annotationCtx.drawImage(img, 0, 0);
+      };
+      img.src = prev;
+    }
+
+    function annotationRedo() {
+      if (redoHistory.length === 0) return;
+      var next = redoHistory.pop();
+      drawHistory.push(next);
+      var img = new Image();
+      img.onload = function() {
+        annotationCtx.clearRect(0, 0, annotationCanvas.width, annotationCanvas.height);
+        annotationCtx.drawImage(img, 0, 0);
+      };
+      img.src = next;
+    }
+
+    async function saveAnnotation() {
+      if (!annotationField) return;
+      try {
+        showToast('Saving annotated image...');
+        var blob = await new Promise(function(resolve) {
+          annotationCanvas.toBlob(resolve, 'image/jpeg', 0.85);
+        });
+        var url = await uploadImageToR2(blob);
+        cardData[annotationField + '_image'] = url;
+        showImagePreview(annotationField, url);
+        closeAnnotation();
+        showToast('Image saved');
+      } catch (e) {
+        showToast('Failed to save image');
+        console.error('Annotation save error:', e);
+      }
+    }
+
+    // ── Init ──
+    document.addEventListener('DOMContentLoaded', function() {
+      applyTranslations();
+      updateWizardLabels();
+      loadCards();
+    });
+  </script>
+</body>
+</html>
