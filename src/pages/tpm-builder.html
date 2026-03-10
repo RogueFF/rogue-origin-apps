@@ -58,10 +58,12 @@
       box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     }
 
-    .app-header img {
-      height: 32px;
-      width: 32px;
-      border-radius: 6px;
+    .header-badge {
+      height: 38px;
+      width: 38px;
+      border-radius: 50%;
+      object-fit: cover;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.25);
     }
 
     .app-header h1 {
@@ -1384,9 +1386,9 @@
        HEADER
        ═══════════════════════════════════════ -->
   <header class="app-header">
-    <img src="../assets/ro-logo-square.png" alt="RO">
     <h1 data-i18n="appTitle">TPM Cards</h1>
     <button class="lang-toggle" onclick="toggleLang()" aria-label="Toggle language">EN</button>
+    <img src="../assets/ro-logo-horizontal.png" alt="Rogue Origin" class="header-badge">
   </header>
 
   <!-- ═══════════════════════════════════════
