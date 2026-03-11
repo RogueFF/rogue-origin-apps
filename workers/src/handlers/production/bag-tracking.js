@@ -80,6 +80,21 @@ function parseHumanTimestamp(timestamp) {
   return null;
 }
 
+function resolveTimerCrew(scoreboardData) {
+  const currentEffectiveTrimmers =
+    scoreboardData.currentHourEffectiveTrimmers ||
+    scoreboardData.currentHourTrimmers ||
+    0;
+  if (currentEffectiveTrimmers > 0) {
+    return currentEffectiveTrimmers;
+  }
+
+  return (
+    scoreboardData.lastHourEffectiveTrimmers ||
+    scoreboardData.lastHourTrimmers ||
+    0
+  );
+}
 /**
  * Calculate total break minutes that fall within a time window.
  * Break times are in PST (America/Los_Angeles).
@@ -153,14 +168,7 @@ async function getBagTimerData(env, date = null) {
 
     const { getScoreboardData } = await import('./scoreboard.js');
     const scoreboardData = await getScoreboardData(env, today);
-    result.currentTrimmers = scoreboardData.currentHourTrimmers || scoreboardData.lastHourTrimmers || 0;
-    const currentHourRates = (scoreboardData.hourlyRates || []);
-    if (currentHourRates.length > 0) {
-      const lastRate = currentHourRates[currentHourRates.length - 1];
-      if (lastRate.effectiveTrimmers) {
-        result.currentTrimmers = lastRate.effectiveTrimmers;
-      }
-    }
+    result.currentTrimmers = resolveTimerCrew(scoreboardData);
     result.targetRate = scoreboardData.targetRate || 1.0;
 
     const bagWeightLbs = 11.0231;
@@ -446,9 +454,11 @@ async function debugBags(env) {
 }
 
 export {
+  resolveTimerCrew,
   getBagTimerData,
   logBag,
   logPause,
   logResume,
   debugBags,
 };
+
