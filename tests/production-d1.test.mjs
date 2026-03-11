@@ -20,6 +20,7 @@ import {
   calculateStreak,
   calculateDailyProjection,
 } from '../workers/src/lib/production-helpers.js';
+import { resolveTimerCrew } from '../workers/src/handlers/production/bag-tracking.js';
 
 // ---------------------------------------------------------------------------
 // Helpers to build fake DB rows
@@ -1091,5 +1092,44 @@ describe('Dynamic slot alongside standard slot with overlapping times', () => {
       timeSlots.indexOf('7:00 AM – 8:00 AM') < timeSlots.indexOf('7:44 AM – 8:00 AM'),
       '7:00 AM slot must sort before 7:44 AM slot',
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 15. Timer crew fallback logic
+// ---------------------------------------------------------------------------
+
+describe('resolveTimerCrew', () => {
+  it('uses current-hour crew when the current hour has been entered', () => {
+    const crew = resolveTimerCrew({
+      currentHourTrimmers: 10,
+      currentHourEffectiveTrimmers: 9.5,
+      lastHourTrimmers: 6,
+      lastHourEffectiveTrimmers: 5.5,
+    });
+
+    assert.equal(crew, 9.5);
+  });
+
+  it('falls back to the previous completed hour when current hour is not updated', () => {
+    const crew = resolveTimerCrew({
+      currentHourTrimmers: 0,
+      currentHourEffectiveTrimmers: 0,
+      lastHourTrimmers: 10,
+      lastHourEffectiveTrimmers: 8.5,
+    });
+
+    assert.equal(crew, 8.5);
+  });
+
+  it('falls back to raw previous-hour crew when no effective crew is stored', () => {
+    const crew = resolveTimerCrew({
+      currentHourTrimmers: 0,
+      currentHourEffectiveTrimmers: 0,
+      lastHourTrimmers: 10,
+      lastHourEffectiveTrimmers: 0,
+    });
+
+    assert.equal(crew, 10);
   });
 });
