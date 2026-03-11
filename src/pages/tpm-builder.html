@@ -1917,6 +1917,8 @@
         errorSaving: 'Error saving card',
         errorLoading: 'Error loading cards',
         errorTranslating: 'Translation failed',
+        translatingCard: 'Translating card...',
+        translationComplete: 'Translation complete',
         emptyState: 'No TPM cards yet',
         emptyStateSub: 'Tap "Create New Card" to get started',
         emptyFilter: 'No cards match this filter',
@@ -2020,6 +2022,8 @@
         errorSaving: 'Error al guardar tarjeta',
         errorLoading: 'Error al cargar tarjetas',
         errorTranslating: 'Error en traduccion',
+        translatingCard: 'Traduciendo tarjeta...',
+        translationComplete: 'Traduccion completa',
         emptyState: 'No hay tarjetas TPM',
         emptyStateSub: 'Toca "Crear Nueva Tarjeta" para comenzar',
         emptyFilter: 'No hay tarjetas con este filtro',
@@ -2145,12 +2149,38 @@
         if (currentStep === 4) renderCheckboxGrids();
         if (currentStep === 6) renderPreview();
         updateDesktopPreview();
+
+        // Auto-translate cardData if target language is empty
+        if (cardNeedsTranslation(cardData, appLang)) {
+          autoTranslateCard(cardData, appLang).then(function(ok) {
+            if (ok) {
+              if (currentStep === 2 || currentStep === 3 || currentStep === 5) populateFormFromCardData();
+              if (currentStep === 6) renderPreview();
+              updateDesktopPreview();
+            }
+          });
+        }
       }
 
       // Re-render view screen T-Card
-      if (viewingCard && document.getElementById('viewScreen').classList.contains('active')) {
+      var viewActive = viewingCard && document.getElementById('viewScreen').classList.contains('active');
+      if (viewActive) {
         document.getElementById('viewTitle').textContent = getCardField(viewingCard, 'title');
         renderViewContent();
+
+        // Auto-translate viewed card if target language is empty
+        if (cardNeedsTranslation(viewingCard, appLang)) {
+          autoTranslateCard(viewingCard, appLang).then(function(ok) {
+            if (ok) {
+              // Update in allCards array too
+              var idx = allCards.findIndex(function(c) { return c.id === viewingCard.id; });
+              if (idx >= 0) allCards[idx] = viewingCard;
+              document.getElementById('viewTitle').textContent = getCardField(viewingCard, 'title');
+              renderViewContent();
+              renderCardList();
+            }
+          });
+        }
       }
     }
 
@@ -2612,6 +2642,53 @@
       } finally {
         if (btn) { btn.classList.remove('loading'); btn.textContent = '\u{1F310}'; }
       }
+    }
+
+    // ── Batch Translation (auto-translate whole card) ──
+    function cardNeedsTranslation(card, lang) {
+      var fields = ['title', 'desc', 'instr', 'materials', 'warning'];
+      var other = lang === 'en' ? 'es' : 'en';
+      var hasSource = false;
+      var hasTarget = false;
+      for (var i = 0; i < fields.length; i++) {
+        if (card[fields[i] + '_' + other]) hasSource = true;
+        if (card[fields[i] + '_' + lang]) hasTarget = true;
+      }
+      return hasSource && !hasTarget;
+    }
+
+    async function autoTranslateCard(card, toLang) {
+      var fromLang = toLang === 'en' ? 'es' : 'en';
+      showToast(t('translatingCard'));
+
+      try {
+        var res = await fetch(API_URL + '?action=translateBatch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ card: card, from: fromLang, to: toLang })
+        });
+        var data = await res.json();
+        if (data.success && data.translations) {
+          // Apply translations to card object
+          for (var key in data.translations) {
+            card[key] = data.translations[key];
+          }
+          // Save translations to D1
+          if (card.id) {
+            await fetch(API_URL + '?action=updateCard', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ card: card })
+            });
+          }
+          showToast(t('translationComplete'));
+          return true;
+        }
+      } catch (e) {
+        console.error('Batch translate failed:', e);
+        showToast(t('errorTranslating'));
+      }
+      return false;
     }
 
     // ── T-Card Rendering ──
