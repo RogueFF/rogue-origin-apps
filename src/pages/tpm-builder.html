@@ -2128,14 +2128,30 @@
     function otherLang() { return appLang === 'en' ? 'es' : 'en'; }
 
     function toggleLang() {
+      // Sync current form values before swapping
+      var wizardActive = document.getElementById('wizardScreen').classList.contains('active');
+      if (wizardActive && currentStep >= 2 && currentStep <= 5) syncCardDataFromForm();
+
       appLang = appLang === 'en' ? 'es' : 'en';
       document.querySelector('.lang-toggle').textContent = appLang.toUpperCase();
       document.documentElement.lang = appLang;
       applyTranslations();
       updateWizardLabels();
       renderCardList();
-      // Re-render preview if on step 6
-      if (currentStep === 6) syncCardDataFromForm();
+
+      // Re-populate wizard fields with swapped primary/secondary
+      if (wizardActive) {
+        if (currentStep === 2 || currentStep === 3 || currentStep === 5) populateFormFromCardData();
+        if (currentStep === 4) renderCheckboxGrids();
+        if (currentStep === 6) renderPreview();
+        updateDesktopPreview();
+      }
+
+      // Re-render view screen T-Card
+      if (viewingCard && document.getElementById('viewScreen').classList.contains('active')) {
+        document.getElementById('viewTitle').textContent = getCardField(viewingCard, 'title');
+        renderViewContent();
+      }
     }
 
     function applyTranslations() {
