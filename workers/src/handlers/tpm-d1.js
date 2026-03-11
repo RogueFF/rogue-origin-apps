@@ -149,6 +149,66 @@ async function translateCard(body, env) {
   return successResponse({ success: true, translated });
 }
 
+// ── BATCH TRANSLATE all card fields ──
+async function translateCardBatch(body, env) {
+  const { card, from, to } = body;
+  if (!card || !from || !to) throw createError('VALIDATION_ERROR', 'card, from, and to are required');
+
+  const apiKey = env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw createError('CONFIG_ERROR', 'ANTHROPIC_API_KEY not set');
+
+  // Collect all non-empty source fields
+  const fields = ['title', 'desc', 'instr', 'materials', 'warning'];
+  const toTranslate = {};
+  for (const f of fields) {
+    const val = card[f + '_' + from];
+    if (val && val.trim()) toTranslate[f] = val;
+  }
+
+  if (Object.keys(toTranslate).length === 0) {
+    return successResponse({ success: true, translations: {} });
+  }
+
+  const langNames = { en: 'English', es: 'Spanish' };
+  const fieldList = Object.entries(toTranslate)
+    .map(([key, val]) => `[${key}]\n${val}`)
+    .join('\n\n');
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2048,
+      messages: [{
+        role: 'user',
+        content: `Translate the following ${langNames[from]} fields to ${langNames[to]}. This is for TPM (Total Productive Maintenance) cards used in a hemp processing facility. Keep it concise, clear, and appropriate for floor workers.\n\nReturn ONLY the translations in the exact same format with [field_name] headers. Do not add any extra text.\n\n${fieldList}`
+      }]
+    })
+  });
+
+  const result = await response.json();
+  const rawText = result.content?.[0]?.text || '';
+
+  // Parse response back into field map
+  const translations = {};
+  const regex = /\[(\w+)\]\s*\n([\s\S]*?)(?=\n\[\w+\]|$)/g;
+  let match;
+  while ((match = regex.exec(rawText)) !== null) {
+    const key = match[1].trim();
+    const val = match[2].trim();
+    if (fields.includes(key) && val) {
+      translations[key + '_' + to] = val;
+    }
+  }
+
+  return successResponse({ success: true, translations });
+}
+
 // ── GET unique equipment list ──
 async function getEquipment(env) {
   const rows = await query(env.DB, 'SELECT DISTINCT equipment FROM tpm_cards ORDER BY equipment');
@@ -170,6 +230,7 @@ export async function handleTpmD1(request, env) {
     deleteCard: () => deleteCard(body, env),
     approveCard: () => approveCard(body, env),
     translate: () => translateCard(body, env),
+    translateBatch: () => translateCardBatch(body, env),
     test: () => successResponse({ success: true, message: 'TPM API OK' }),
   };
 
