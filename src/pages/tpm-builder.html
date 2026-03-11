@@ -732,6 +732,200 @@
     }
 
     /* ========================================
+       AI GENERATE SCREEN
+       ======================================== */
+    .generate-form {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .generate-header {
+      text-align: center;
+      margin-bottom: 8px;
+    }
+
+    .generate-header h2 {
+      font-family: 'DM Serif Display', serif;
+      font-size: 22px;
+      margin: 0 0 4px;
+    }
+
+    .generate-header p {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin: 0;
+    }
+
+    .generate-btn {
+      width: 100%;
+      padding: 18px 24px;
+      background: linear-gradient(135deg, var(--ro-gold) 0%, #d4942f 100%);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-family: 'Outfit', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      cursor: pointer;
+      min-height: 56px;
+      margin-bottom: 8px;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .generate-btn:active {
+      transform: scale(0.98);
+    }
+
+    .generate-btn:disabled {
+      opacity: 0.6;
+      pointer-events: none;
+    }
+
+    .generate-btn .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2.5px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    .ai-create-btn {
+      width: 100%;
+      padding: 18px 24px;
+      background: linear-gradient(135deg, var(--ro-gold) 0%, #d4942f 100%);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-family: 'Outfit', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      min-height: 52px;
+      margin-bottom: 16px;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .ai-create-btn:active {
+      transform: scale(0.98);
+    }
+
+    /* Generated cards review */
+    .gen-card-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .gen-card-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      background: var(--bg-card);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .gen-card-item.excluded {
+      opacity: 0.4;
+      background: var(--bg-warm);
+    }
+
+    .gen-card-check {
+      width: 22px;
+      height: 22px;
+      border: 2px solid var(--ro-green);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.15s;
+    }
+
+    .gen-card-item:not(.excluded) .gen-card-check {
+      background: var(--ro-green);
+      color: #fff;
+    }
+
+    .gen-card-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .gen-card-title {
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.3;
+      word-break: break-word;
+    }
+
+    .gen-card-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .gen-card-freq {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .gen-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .gen-actions button {
+      flex: 1;
+      padding: 16px;
+      border: none;
+      border-radius: 12px;
+      font-family: 'Outfit', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      min-height: 52px;
+    }
+
+    .gen-save-btn {
+      background: var(--ro-green);
+      color: #fff;
+    }
+
+    .gen-cancel-btn {
+      background: var(--bg-warm);
+      color: var(--text);
+      border: 1.5px solid var(--border) !important;
+    }
+
+    .gen-summary {
+      text-align: center;
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    /* ========================================
        TOAST
        ======================================== */
     .toast {
@@ -1535,9 +1729,61 @@
         <button class="filter-chip" data-filter="needs_review" onclick="setFilter('needs_review')" data-i18n="filterNeedsReview">Needs Review</button>
       </div>
       <button class="create-btn" onclick="startNewCard()" data-i18n="createNew">+ Create New Card</button>
+      <button class="ai-create-btn" onclick="showScreen('generate')" data-i18n="aiGenerate">&#x2728; AI Generate Cards</button>
     </div>
 
     <div class="card-list" id="cardList"></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       AI GENERATE SCREEN
+       ═══════════════════════════════════════ -->
+  <div id="generateScreen" class="screen">
+    <div class="wizard-top">
+      <button class="wizard-back" onclick="showScreen('start')" aria-label="Back">&#8592;</button>
+      <div>
+        <div class="wizard-step-label" data-i18n="aiGenerate">AI Generate Cards</div>
+        <div class="wizard-step-sub" data-i18n="aiGenerateSub">Enter machine details to auto-create TPM cards</div>
+      </div>
+    </div>
+
+    <div class="generate-form" id="generateForm">
+      <div class="generate-header">
+        <h2 data-i18n="aiGenerateTitle">Generate TPM Cards</h2>
+        <p data-i18n="aiGenerateDesc">Enter your machine info and AI will create a full set of maintenance cards</p>
+      </div>
+
+      <label class="form-label" data-i18n="machineName">Machine Name *</label>
+      <input class="form-input" id="genMachineName" type="text" placeholder="e.g. T-Zero, Conveyor, Decorticator" data-i18n-placeholder="machineNamePH">
+
+      <label class="form-label" data-i18n="machineYear">Year (optional)</label>
+      <input class="form-input" id="genMachineYear" type="text" placeholder="e.g. 2023" data-i18n-placeholder="machineYearPH">
+
+      <label class="form-label" data-i18n="machineModel">Model (optional)</label>
+      <input class="form-input" id="genMachineModel" type="text" placeholder="e.g. T-Zero 500, Model XR-200" data-i18n-placeholder="machineModelPH">
+
+      <label class="form-label" data-i18n="machineSpecifics">Additional Details</label>
+      <textarea class="form-textarea" id="genSpecifics" rows="4" placeholder="e.g. Has conveyor belt, tumbler, blade system. Used for hemp fiber processing. Runs 8 hours/day." data-i18n-placeholder="machineSpecificsPH"></textarea>
+
+      <button class="generate-btn" id="genSubmitBtn" onclick="submitGenerate()">
+        <span data-i18n="generateNow">Generate Cards</span>
+      </button>
+    </div>
+
+    <!-- Review generated cards -->
+    <div id="genReview" style="display:none;">
+      <div class="generate-header">
+        <h2 data-i18n="reviewGenerated">Review Generated Cards</h2>
+        <p class="gen-summary" id="genSummary"></p>
+      </div>
+
+      <div class="gen-card-list" id="genCardList"></div>
+
+      <div class="gen-actions">
+        <button class="gen-cancel-btn" onclick="cancelGenerate()" data-i18n="cancel">Cancel</button>
+        <button class="gen-save-btn" id="genSaveBtn" onclick="saveGeneratedCards()" data-i18n="saveSelected">Save Selected</button>
+      </div>
+    </div>
   </div>
 
   <!-- ═══════════════════════════════════════
@@ -1965,6 +2211,26 @@
         confirmDelete: 'Are you sure you want to delete this card?',
         cameraBtn: 'Camera',
         uploadBtn: 'Upload',
+        aiGenerate: 'AI Generate Cards',
+        aiGenerateSub: 'Enter machine details to auto-create TPM cards',
+        aiGenerateTitle: 'Generate TPM Cards',
+        aiGenerateDesc: 'Enter your machine info and AI will create a full set of maintenance cards',
+        machineName: 'Machine Name *',
+        machineYear: 'Year (optional)',
+        machineModel: 'Model (optional)',
+        machineSpecifics: 'Additional Details',
+        machineNamePH: 'e.g. T-Zero, Conveyor, Decorticator',
+        machineYearPH: 'e.g. 2023',
+        machineModelPH: 'e.g. T-Zero 500, Model XR-200',
+        machineSpecificsPH: 'e.g. Has conveyor belt, tumbler, blade system. Used for hemp fiber processing.',
+        generateNow: 'Generate Cards',
+        generating: 'Generating cards...',
+        reviewGenerated: 'Review Generated Cards',
+        saveSelected: 'Save Selected',
+        genSummaryText: '{count} cards generated - tap to include/exclude',
+        cardsSaved: '{count} cards saved!',
+        noCardsSelected: 'No cards selected',
+        errorGenerating: 'Error generating cards',
       },
       es: {
         appTitle: 'Tarjetas TPM',
@@ -2070,6 +2336,26 @@
         confirmDelete: 'Esta seguro que desea eliminar esta tarjeta?',
         cameraBtn: 'Camara',
         uploadBtn: 'Subir',
+        aiGenerate: 'Generar Tarjetas con IA',
+        aiGenerateSub: 'Ingrese detalles de la maquina para crear tarjetas TPM',
+        aiGenerateTitle: 'Generar Tarjetas TPM',
+        aiGenerateDesc: 'Ingrese la informacion de su maquina y la IA creara un conjunto completo de tarjetas de mantenimiento',
+        machineName: 'Nombre de Maquina *',
+        machineYear: 'Ano (opcional)',
+        machineModel: 'Modelo (opcional)',
+        machineSpecifics: 'Detalles Adicionales',
+        machineNamePH: 'ej. T-Zero, Transportador, Decorticador',
+        machineYearPH: 'ej. 2023',
+        machineModelPH: 'ej. T-Zero 500, Modelo XR-200',
+        machineSpecificsPH: 'ej. Tiene banda transportadora, tambor, sistema de cuchillas. Usado para procesamiento de fibra de canamo.',
+        generateNow: 'Generar Tarjetas',
+        generating: 'Generando tarjetas...',
+        reviewGenerated: 'Revisar Tarjetas Generadas',
+        saveSelected: 'Guardar Seleccionadas',
+        genSummaryText: '{count} tarjetas generadas - toca para incluir/excluir',
+        cardsSaved: '{count} tarjetas guardadas!',
+        noCardsSelected: 'No hay tarjetas seleccionadas',
+        errorGenerating: 'Error al generar tarjetas',
       }
     };
 
@@ -2689,6 +2975,130 @@
         showToast(t('errorTranslating'));
       }
       return false;
+    }
+
+    // ── AI Generate Cards ──
+    var generatedCards = [];
+
+    async function submitGenerate() {
+      var name = document.getElementById('genMachineName').value.trim();
+      if (!name) { showToast(t('machineName')); return; }
+
+      var btn = document.getElementById('genSubmitBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> ' + t('generating');
+
+      try {
+        var res = await fetch(API_URL + '?action=generateCards', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            machine_name: name,
+            machine_year: document.getElementById('genMachineYear').value.trim(),
+            machine_model: document.getElementById('genMachineModel').value.trim(),
+            specifics: document.getElementById('genSpecifics').value.trim(),
+            language: appLang
+          })
+        });
+        var data = await res.json();
+        if (data.success && data.cards) {
+          generatedCards = data.cards.map(function(c, i) { c._selected = true; c._index = i; return c; });
+          showGenerateReview();
+        } else {
+          showToast(t('errorGenerating'));
+        }
+      } catch (e) {
+        console.error('Generate failed:', e);
+        showToast(t('errorGenerating'));
+      }
+
+      btn.disabled = false;
+      btn.innerHTML = '<span data-i18n="generateNow">' + t('generateNow') + '</span>';
+    }
+
+    function showGenerateReview() {
+      document.getElementById('generateForm').style.display = 'none';
+      document.getElementById('genReview').style.display = 'block';
+      renderGenCardList();
+    }
+
+    function cancelGenerate() {
+      generatedCards = [];
+      document.getElementById('generateForm').style.display = 'flex';
+      document.getElementById('genReview').style.display = 'none';
+      document.getElementById('genMachineName').value = '';
+      document.getElementById('genMachineYear').value = '';
+      document.getElementById('genMachineModel').value = '';
+      document.getElementById('genSpecifics').value = '';
+      showScreen('start');
+    }
+
+    function toggleGenCard(index) {
+      generatedCards[index]._selected = !generatedCards[index]._selected;
+      renderGenCardList();
+    }
+
+    function renderGenCardList() {
+      var container = document.getElementById('genCardList');
+      var selected = generatedCards.filter(function(c) { return c._selected; }).length;
+      document.getElementById('genSummary').textContent = t('genSummaryText').replace('{count}', generatedCards.length);
+
+      var html = '';
+      for (var i = 0; i < generatedCards.length; i++) {
+        var c = generatedCards[i];
+        var title = c['title_' + appLang] || c.title_en || c.title_es || 'Untitled';
+        var freqColor = c.frequency === 'weekly' ? 'var(--freq-weekly)' : c.frequency === 'monthly' ? 'var(--freq-monthly)' : 'var(--freq-daily)';
+        var freqLabel = c.frequency === 'weekly' ? t('freqWeekly') : c.frequency === 'monthly' ? t('freqMonthly') : t('freqDaily');
+        var excluded = c._selected ? '' : ' excluded';
+        var check = c._selected ? '&#10003;' : '';
+
+        html += '<div class="gen-card-item' + excluded + '" onclick="toggleGenCard(' + i + ')">';
+        html += '<div class="gen-card-check">' + check + '</div>';
+        html += '<div class="gen-card-info"><div class="gen-card-title">' + escapeHtml(title) + '</div>';
+        html += '<div class="gen-card-meta">' + escapeHtml(c.shift || '') + '</div></div>';
+        html += '<span class="gen-card-freq" style="background:' + freqColor + '">' + freqLabel + '</span>';
+        html += '</div>';
+      }
+      container.innerHTML = html;
+
+      document.getElementById('genSaveBtn').textContent = t('saveSelected') + ' (' + selected + ')';
+    }
+
+    async function saveGeneratedCards() {
+      var toSave = generatedCards.filter(function(c) { return c._selected; });
+      if (toSave.length === 0) { showToast(t('noCardsSelected')); return; }
+
+      // Clean up internal props
+      var clean = toSave.map(function(c) {
+        var card = {};
+        for (var k in c) {
+          if (k[0] !== '_') card[k] = c[k];
+        }
+        return card;
+      });
+
+      var btn = document.getElementById('genSaveBtn');
+      btn.disabled = true;
+
+      try {
+        var res = await fetch(API_URL + '?action=bulkCreate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cards: clean })
+        });
+        var data = await res.json();
+        if (data.success) {
+          showToast(t('cardsSaved').replace('{count}', clean.length));
+          cancelGenerate();
+        } else {
+          showToast(t('errorSaving'));
+        }
+      } catch (e) {
+        console.error('Bulk save failed:', e);
+        showToast(t('errorSaving'));
+      }
+
+      btn.disabled = false;
     }
 
     // ── T-Card Rendering ──
