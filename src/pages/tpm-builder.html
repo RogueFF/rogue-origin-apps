@@ -1592,6 +1592,30 @@
     .signoff-sheet .signoff-period-col { width: auto; }
 
     @media print {
+      .signoff-print-page {
+        width: 100%;
+        min-height: 7.5in;
+        page-break-after: always;
+      }
+
+      .signoff-sheet th,
+      .signoff-sheet td {
+        padding: 7px 6px;
+        font-size: 10px;
+      }
+
+      .signoff-sheet .signoff-title {
+        font-size: 16px;
+        padding: 10px 12px;
+      }
+
+      .signoff-sheet .signoff-id-col { width: 8%; }
+      .signoff-sheet .signoff-machine-col { width: 18%; }
+      .signoff-sheet .signoff-title-col { width: 30%; }
+      .signoff-sheet .signoff-shift-col { width: 10%; }
+    }
+
+    @media print {
       .app-header, .screen, .toast { display: none !important; }
       body { background: #fff; }
       .print-pages { display: block !important; }
@@ -1652,7 +1676,7 @@
     }
 
     @page {
-      size: letter portrait;
+      size: letter landscape;
       margin: 0.5in;
     }
 
