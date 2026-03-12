@@ -2,14 +2,33 @@ import { query, queryOne, insert, update, deleteRows } from '../lib/db.js';
 import { successResponse, parseBody, getAction } from '../lib/response.js';
 import { createError } from '../lib/errors.js';
 
+function parseJsonArray(value) {
+  try {
+    const parsed = JSON.parse(value || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeCard(row) {
+  if (!row) return row;
+  return {
+    ...row,
+    desc_image: row.desc_image || '',
+    instr_image: row.instr_image || '',
+    ppe_other: row.ppe_other || '',
+    hazard_other: row.hazard_other || '',
+    ppe: parseJsonArray(row.ppe),
+    hazards: parseJsonArray(row.hazards),
+  };
+}
+
+
 // ── GET all cards ──
 async function getCards(env) {
   const rows = await query(env.DB, 'SELECT * FROM tpm_cards ORDER BY created_at DESC');
-  const cards = rows.map(row => ({
-    ...row,
-    ppe: JSON.parse(row.ppe || '[]'),
-    hazards: JSON.parse(row.hazards || '[]'),
-  }));
+  const cards = rows.map(normalizeCard);
   return successResponse({ success: true, cards });
 }
 
@@ -19,9 +38,7 @@ async function getCard(body, env) {
   if (!id) throw createError('VALIDATION_ERROR', 'Card ID is required');
   const row = await queryOne(env.DB, 'SELECT * FROM tpm_cards WHERE id = ?', [id]);
   if (!row) throw createError('NOT_FOUND', 'Card not found');
-  row.ppe = JSON.parse(row.ppe || '[]');
-  row.hazards = JSON.parse(row.hazards || '[]');
-  return successResponse({ success: true, card: row });
+  return successResponse({ success: true, card: normalizeCard(row) });
 }
 
 // ── CREATE card ──
@@ -44,8 +61,12 @@ async function createCard(body, env) {
     desc_es: c.desc_es || '',
     instr_en: c.instr_en || '',
     instr_es: c.instr_es || '',
+    desc_image: c.desc_image || '',
+    instr_image: c.instr_image || '',
     ppe: JSON.stringify(c.ppe || []),
+    ppe_other: c.ppe_other || '',
     hazards: JSON.stringify(c.hazards || []),
+    hazard_other: c.hazard_other || '',
     materials_en: c.materials_en || '',
     materials_es: c.materials_es || '',
     warning_en: c.warning_en || '',
@@ -79,8 +100,12 @@ async function updateCard(body, env) {
     desc_es: c.desc_es || '',
     instr_en: c.instr_en || '',
     instr_es: c.instr_es || '',
+    desc_image: c.desc_image || '',
+    instr_image: c.instr_image || '',
     ppe: JSON.stringify(c.ppe || []),
+    ppe_other: c.ppe_other || '',
     hazards: JSON.stringify(c.hazards || []),
+    hazard_other: c.hazard_other || '',
     materials_en: c.materials_en || '',
     materials_es: c.materials_es || '',
     warning_en: c.warning_en || '',
@@ -109,11 +134,12 @@ async function approveCard(body, env) {
   if (!id) throw createError('VALIDATION_ERROR', 'Card ID is required');
 
   const now = new Date().toISOString();
-  await update(env.DB, 'tpm_cards', {
+  const changes = await update(env.DB, 'tpm_cards', {
     status: 'approved',
     reviewed_by: reviewer,
     updated_at: now,
   }, 'id = ?', [id]);
+  if (changes === 0) throw createError('NOT_FOUND', 'Card not found');
 
   return successResponse({ success: true, message: 'Card approved' });
 }
@@ -349,8 +375,12 @@ async function bulkCreateCards(body, env) {
       desc_es: c.desc_es || '',
       instr_en: c.instr_en || '',
       instr_es: c.instr_es || '',
+      desc_image: c.desc_image || '',
+      instr_image: c.instr_image || '',
       ppe: JSON.stringify(c.ppe || []),
+      ppe_other: c.ppe_other || '',
       hazards: JSON.stringify(c.hazards || []),
+      hazard_other: c.hazard_other || '',
       materials_en: c.materials_en || '',
       materials_es: c.materials_es || '',
       warning_en: c.warning_en || '',
