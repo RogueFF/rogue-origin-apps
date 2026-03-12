@@ -648,41 +648,32 @@
   async function loadCostData() {
     const card = document.getElementById('cost-card');
     try {
-      const periods = state.summaryData?.periods || [];
-      const dates = periods.filter(p => p.total_sacks > 0).map(p => p.period);
-      if (!dates.length) { state.costData = null; renderCostCard(); return; }
+      const start = state.startDate;
+      const end = state.endDate;
+      const dashboard = await fetchJSON(`${PROD_API}?action=dashboard&start=${start}&end=${end}`);
+      const daily = dashboard.daily || [];
 
-      // Fetch production data per date for crew/hours
-      let totalOperatorHours = 0, totalLaborCost = 0, totalTrimmers = 0, daysWithCrew = 0;
-      const HOURLY_RATE = 16.50; // Oregon min wage estimate
-      const HOURS_PER_DAY = 7.5;
+      if (!daily.length) { state.costData = null; renderCostCard(); return; }
 
-      for (const date of dates) {
-        try {
-          const data = await fetchJSON(`${PROD_API}?action=getProduction&date=${date}`);
-          const rows = data.production || [];
-          const activeSlots = rows.filter(r => (r.trimmers1 || 0) + (r.trimmers2 || 0) + (r.buckers1 || 0) + (r.buckers2 || 0) > 0);
-          if (activeSlots.length > 0) {
-            const avgOps = activeSlots.reduce((s, r) =>
-              s + (r.effectiveTrimmers1 || r.trimmers1 || 0) + (r.effectiveTrimmers2 || r.trimmers2 || 0)
-                + (r.buckers1 || 0) + (r.buckers2 || 0), 0) / activeSlots.length;
-            totalTrimmers += avgOps;
-            totalOperatorHours += avgOps * HOURS_PER_DAY;
-            totalLaborCost += avgOps * HOURS_PER_DAY * HOURLY_RATE;
-            daysWithCrew++;
-          }
-        } catch { /* skip */ }
-      }
+      const totalTops = daily.reduce((s, d) => s + (d.totalTops || 0), 0);
+      const totalSmalls = daily.reduce((s, d) => s + (d.totalSmalls || 0), 0);
+      const totalLabor = daily.reduce((s, d) => s + (d.laborCost || 0), 0);
+      const totalOperatorHours = daily.reduce((s, d) => s + (d.operatorHours || 0), 0);
+      const totalTrimmerHours = daily.reduce((s, d) => s + (d.trimmerHours || 0), 0);
+      const totalTopsLaborCost = daily.reduce((s, d) => s + ((d.topsCostPerLb || 0) * (d.totalTops || 0)), 0);
+      const totalSmallsLaborCost = daily.reduce((s, d) => s + ((d.smallsCostPerLb || 0) * (d.totalSmalls || 0)), 0);
+      const daysWorked = daily.filter(d => (d.totalTops || 0) > 0 || (d.totalSmalls || 0) > 0).length || daily.length;
 
-      const totalTops = periods.reduce((s, p) => s + (p.total_tops || 0), 0);
-      const totalSmalls = periods.reduce((s, p) => s + (p.total_smalls || 0), 0);
       state.costData = {
         totalTops,
         totalSmalls,
         totalHours: totalOperatorHours,
-        totalLabor: totalLaborCost,
-        avgTrimmers: daysWithCrew > 0 ? totalTrimmers / daysWithCrew : 0,
-        daysWorked: dates.length,
+        totalLabor,
+        totalTopsLaborCost,
+        totalSmallsLaborCost,
+        totalTrimmerHours,
+        avgTrimmers: daysWorked > 0 ? (totalTrimmerHours / 7.5) / daysWorked : 0,
+        daysWorked,
       };
       renderCostCard();
     } catch (err) {
@@ -1099,7 +1090,7 @@
     const smallsHr = data.totalHours > 0 ? (data.totalSmalls / data.totalHours) : 0;
     const topsTrimmer = data.avgTrimmers > 0 ? (data.totalTops / data.avgTrimmers / data.daysWorked) : 0;
     const smallsTrimmer = data.avgTrimmers > 0 ? (data.totalSmalls / data.avgTrimmers / data.daysWorked) : 0;
-    const costLb = data.totalTops > 0 ? (data.totalLabor / data.totalTops) : 0;
+    const costLb = data.totalTops > 0 ? (data.totalTopsLaborCost / data.totalTops) : 0;
 
     let html = `<div class="card-title">${t('laborMetrics')}</div>`;
     html += `<div class="cost-grid">`;
