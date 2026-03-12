@@ -3772,12 +3772,12 @@
       var machineLabel = getSignoffMachineLabel(cards);
       var title = getFreqLabel(freq) + ' Signoff Log';
       var generated = formatDateLabel(new Date());
-      var rows = cards.map(function(card) {
+      var rows = cards.map(function(card, index) {
         var cells = periods.map(function() {
           return '<td class="signoff-period-col"></td>';
         }).join('');
         return '<tr>' +
-          '<td class="signoff-id-col">' + escapeHtml(card.id || '') + '</td>' +
+          '<td class="signoff-id-col">' + String(index + 1) + '</td>' +
           '<td class="signoff-machine-col">' + escapeHtml(card.equipment || '') + '</td>' +
           '<td class="signoff-title-col">' + escapeHtml(getCardField(card, 'title')) + '</td>' +
           '<td class="signoff-shift-col">' + escapeHtml(card.shift || t('signoffOperator')) + '</td>' +
