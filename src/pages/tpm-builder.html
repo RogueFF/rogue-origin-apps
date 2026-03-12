@@ -1700,24 +1700,33 @@
 
     @media print {
       .app-header, .screen, .toast { display: none !important; }
-      body { background: #fff; }
-      .print-pages { display: block !important; }
+      html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff;
+      }
+
+      .print-pages {
+        display: block !important;
+        margin: 0;
+        padding: 0;
+      }
 
       .print-card-page {
         width: 7.5in;
         height: 10in;
         page-break-after: always;
         padding: 0;
-        display: flex;
-        justify-content: center;
-        align-items: flex-start;
-        padding-top: 0.2in;
+        position: relative;
       }
 
       .print-card-page:last-child { page-break-after: auto; }
 
       .print-card-page .tcard-front,
       .print-card-page .tcard-back {
+        position: absolute;
+        top: 0.2in;
+        left: 1.82in;
         width: 3.86in;
         height: 9.3in;
         padding: 0;
