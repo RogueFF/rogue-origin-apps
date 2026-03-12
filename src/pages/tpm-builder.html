@@ -1058,7 +1058,12 @@
     /* ========================================
        T-CARD STYLES (shared screen + print)
        ======================================== */
-    .tcard-front { padding: 0; }
+    .tcard-front {
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
     .tcard-back { padding: 0; background: #faf9f7; }
 
     .tcard-header-bar {
@@ -1103,6 +1108,9 @@
       border-top: none;
       padding: 8px 10px;
       min-height: 50px;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
     }
 
     .tcard-section-label {
@@ -1119,6 +1127,12 @@
       line-height: 1.45;
       color: var(--text);
       white-space: pre-line;
+      overflow-wrap: anywhere;
+    }
+
+    .tcard-description,
+    .tcard-instruction {
+      flex: 1 1 0;
     }
 
     .tcard-instruction { min-height: 60px; }
@@ -1166,6 +1180,75 @@
       color: var(--text-muted);
       text-align: center;
       background: #f9f8f6;
+    }
+
+    .tcard-front.tcard-dense .tcard-component-bar {
+      font-size: 11px;
+      padding: 4px 8px;
+    }
+
+    .tcard-front.tcard-dense .tcard-meta-cell {
+      font-size: 10px;
+      padding: 3px 7px;
+    }
+
+    .tcard-front.tcard-dense .tcard-section {
+      padding: 6px 8px;
+    }
+
+    .tcard-front.tcard-dense .tcard-section-label {
+      font-size: 9px;
+      margin-bottom: 3px;
+    }
+
+    .tcard-front.tcard-dense .tcard-section-text {
+      font-size: 10.5px;
+      line-height: 1.3;
+    }
+
+    .tcard-front.tcard-dense .tcard-warning-bar,
+    .tcard-front.tcard-dense .tcard-yellow-tag,
+    .tcard-front.tcard-dense .tcard-footer-bar {
+      font-size: 10px;
+      padding-top: 5px;
+      padding-bottom: 5px;
+    }
+
+    .tcard-front.tcard-compact .tcard-header-bar {
+      font-size: 13px;
+      padding: 5px 8px;
+    }
+
+    .tcard-front.tcard-compact .tcard-component-bar {
+      font-size: 10px;
+      padding: 4px 8px;
+    }
+
+    .tcard-front.tcard-compact .tcard-meta-cell {
+      font-size: 9.5px;
+      padding: 3px 6px;
+    }
+
+    .tcard-front.tcard-compact .tcard-section {
+      padding: 5px 7px;
+    }
+
+    .tcard-front.tcard-compact .tcard-section-label {
+      font-size: 8.5px;
+      margin-bottom: 2px;
+    }
+
+    .tcard-front.tcard-compact .tcard-section-text {
+      font-size: 9.6px;
+      line-height: 1.2;
+    }
+
+    .tcard-front.tcard-compact .tcard-warning-bar,
+    .tcard-front.tcard-compact .tcard-yellow-tag,
+    .tcard-front.tcard-compact .tcard-footer-bar {
+      font-size: 9.5px;
+      padding-top: 4px;
+      padding-bottom: 4px;
     }
 
     /* Back */
@@ -3466,6 +3549,7 @@
       var instr = getCardField(card, 'instr');
       var warning = getCardField(card, 'warning');
       var freqLabel = getFreqLabel(freq);
+      var densityClass = getFrontDensityClass(card, desc, instr, warning);
 
       var warningHtml = warning
         ? '<div class="tcard-warning-bar">' + escapeHtml(warning) + '</div>'
@@ -3479,14 +3563,14 @@
         ? '<div class="tcard-section-image"><img src="' + escapeHtml(card.instr_image) + '"></div>'
         : '';
 
-      return '<div class="tcard-front">' +
+      return '<div class="tcard-front ' + densityClass + '">' +
         '<div class="tcard-header-bar ' + colorClass + '">' + escapeHtml(freqLabel) + '</div>' +
         '<div class="tcard-component-bar ' + colorClass + '">' + escapeHtml(title) + '</div>' +
         '<div class="tcard-meta-row">' +
           '<div class="tcard-meta-cell"><strong>Equip. #</strong> ' + escapeHtml(card.equipment || '') + '</div>' +
           '<div class="tcard-meta-cell"><strong>Shift:</strong> ' + escapeHtml(card.shift || '') + '</div>' +
         '</div>' +
-        '<div class="tcard-section">' +
+        '<div class="tcard-section tcard-description">' +
           '<div class="tcard-section-label">' + t('description') + '</div>' +
           '<div class="tcard-section-text">' + escapeHtml(desc) + '</div>' +
           descImg +
@@ -3500,6 +3584,15 @@
         '<div class="tcard-yellow-tag"><span class="tag-icon"></span> ' + t('yellowTag') + '</div>' +
         '<div class="tcard-footer-bar">' + escapeHtml(card.id || 'NEW') + ' &bull; v1.0 &bull; Rogue Origin</div>' +
       '</div>';
+    }
+
+    function getFrontDensityClass(card, desc, instr, warning) {
+      var totalLength = String(desc || '').length + String(instr || '').length + String(warning || '').length;
+      if (card.desc_image) totalLength += 180;
+      if (card.instr_image) totalLength += 180;
+      if (totalLength > 900) return 'tcard-compact';
+      if (totalLength > 620) return 'tcard-dense';
+      return '';
     }
 
     function buildBack(card) {
