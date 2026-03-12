@@ -448,6 +448,7 @@
       projYield: 'Proj. Yield (lbs)', depletes: 'Depletes',
       noData: 'No data for selected range', lbsHr: 'Lbs / Hr',
       lbsTrimmer: 'Lbs / Trimmer', costLb: 'Cost / Tops Lb', totalLabor: 'Total Labor',
+      topsLabor: 'Tops Labor', smallsLabor: 'Smalls Labor',
       topsHr: 'Tops / Hr', smallsHr: 'Smalls / Hr', topsTrimmer: 'Tops / Trimmer', smallsTrimmer: 'Smalls / Trimmer',
       chartSacksOp: 'Supersacks / Operator / Day',
       sacksOp: 'Sacks/Operator', operators: 'Operators',
@@ -471,6 +472,7 @@
       projYield: 'Rend. Proy. (lbs)', depletes: 'Se Agota',
       noData: 'Sin datos para el rango seleccionado', lbsHr: 'Lbs / Hr',
       lbsTrimmer: 'Lbs / Podador', costLb: 'Costo / Lb Tops', totalLabor: 'Labor Total',
+      topsLabor: 'Labor Tops', smallsLabor: 'Labor Smalls',
       topsHr: 'Tops / Hr', smallsHr: 'Smalls / Hr', topsTrimmer: 'Tops / Podador', smallsTrimmer: 'Smalls / Podador',
       chartSacksOp: 'Supersacos / Operador / Dia',
       sacksOp: 'Sacos/Operador', operators: 'Operadores',
@@ -1099,6 +1101,8 @@
     html += `<div class="cost-item"><div class="cost-label">${t('topsTrimmer')}</div><div class="cost-value" style="color:var(--green)">${fmt(topsTrimmer, 1)}</div></div>`;
     html += `<div class="cost-item"><div class="cost-label">${t('smallsTrimmer')}</div><div class="cost-value" style="color:var(--gold)">${fmt(smallsTrimmer, 1)}</div></div>`;
     html += `<div class="cost-item"><div class="cost-label">${t('costLb')}</div><div class="cost-value" style="color:var(--red)">$${fmt(costLb, 2)}</div></div>`;
+    html += `<div class="cost-item"><div class="cost-label">${t('topsLabor')}</div><div class="cost-value" style="color:var(--green)">$${fmt(data.totalTopsLaborCost)}</div></div>`;
+    html += `<div class="cost-item"><div class="cost-label">${t('smallsLabor')}</div><div class="cost-value" style="color:var(--gold)">$${fmt(data.totalSmallsLaborCost)}</div></div>`;
     html += `<div class="cost-item"><div class="cost-label">${t('totalLabor')}</div><div class="cost-value" style="color:var(--blue)">$${fmt(data.totalLabor)}</div></div>`;
     html += `</div>`;
 
