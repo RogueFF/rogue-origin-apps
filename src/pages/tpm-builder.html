@@ -175,6 +175,72 @@
     .filter-chip.active[data-filter="monthly"] { background: var(--freq-monthly); }
     .filter-chip.active[data-filter="needs_review"] { background: var(--danger); }
 
+    .browse-tools {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .browse-secondary {
+      display: grid;
+      gap: 10px;
+    }
+
+    .machine-filter-wrap {
+      display: grid;
+      gap: 6px;
+    }
+
+    .machine-filter-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+
+    .machine-filter-select {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      background: var(--bg-card);
+      color: var(--text);
+      font-family: 'Outfit', sans-serif;
+      font-size: 15px;
+      min-height: 48px;
+    }
+
+    .selection-toolbar {
+      display: none;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      padding: 12px 14px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+
+    .selection-toolbar.visible {
+      display: flex;
+    }
+
+    .selection-summary {
+      flex: 1;
+      min-width: 180px;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .selection-toolbar .btn-action {
+      width: auto;
+      min-height: 46px;
+      padding: 12px 18px;
+      margin-bottom: 0;
+    }
+
     /* Card List */
     .card-list {
       display: flex;
@@ -213,6 +279,43 @@
 
     .card-row:active {
       box-shadow: var(--shadow-md);
+    }
+
+    .card-row.selection-mode {
+      padding-left: 56px;
+    }
+
+    .card-row.selected {
+      border-color: rgba(102,137,113,0.45);
+      box-shadow: 0 0 0 2px rgba(102,137,113,0.08);
+    }
+
+    .card-row-check {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 28px;
+      height: 28px;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+      color: transparent;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    .card-row.selection-mode .card-row-check {
+      display: flex;
+    }
+
+    .card-row.selected .card-row-check {
+      background: var(--ro-green);
+      border-color: var(--ro-green);
+      color: #fff;
     }
 
     .card-row-info {
@@ -1435,6 +1538,59 @@
        ======================================== */
     .print-pages { display: none; }
 
+    .signoff-print-page {
+      display: block;
+      page-break-after: always;
+    }
+
+    .signoff-print-page:last-child {
+      page-break-after: auto;
+    }
+
+    .signoff-sheet {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      background: #fff;
+    }
+
+    .signoff-sheet th,
+    .signoff-sheet td {
+      border: 1px solid #333;
+      padding: 6px 5px;
+      font-size: 11px;
+      line-height: 1.25;
+      vertical-align: top;
+      word-wrap: break-word;
+    }
+
+    .signoff-sheet thead th {
+      background: #f2eee7;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .signoff-sheet .signoff-title {
+      background: #2d3a2e;
+      color: #fff;
+      text-align: left;
+      font-size: 15px;
+      letter-spacing: 0.5px;
+      padding: 10px 12px;
+    }
+
+    .signoff-sheet .signoff-meta {
+      background: #f8f5ef;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .signoff-sheet .signoff-id-col { width: 9%; }
+    .signoff-sheet .signoff-machine-col { width: 17%; }
+    .signoff-sheet .signoff-title-col { width: 26%; }
+    .signoff-sheet .signoff-shift-col { width: 12%; }
+    .signoff-sheet .signoff-period-col { width: auto; }
+
     @media print {
       .app-header, .screen, .toast { display: none !important; }
       body { background: #fff; }
@@ -1488,7 +1644,8 @@
       .tcard-back { background: #f6f5f2 !important; }
       .ppe-check.checked, .hazard-check.checked, .tcard-header-bar,
       .tcard-component-bar, .tcard-back-header, .hazard-section-header,
-      .materials-header, .tcard-warning-bar, .tcard-yellow-tag, .tcard-yellow-tag .tag-icon {
+      .materials-header, .tcard-warning-bar, .tcard-yellow-tag, .tcard-yellow-tag .tag-icon,
+      .signoff-sheet thead th, .signoff-sheet .signoff-title, .signoff-sheet .signoff-meta {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }
@@ -1520,23 +1677,34 @@
       .freq-card { flex: 1; }
 
       .start-toolbar {
-        display: flex;
-        align-items: center;
+        display: grid;
         gap: 16px;
         margin-bottom: 16px;
       }
 
       .start-toolbar .filter-chips {
-        flex: 1;
         margin-bottom: 0;
       }
 
-      .start-toolbar .create-btn {
+      .browse-tools {
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        align-items: end;
+      }
+
+      .browse-secondary {
+        grid-template-columns: minmax(240px, 320px) auto auto;
+        align-items: end;
+      }
+
+      .start-toolbar .create-btn,
+      .start-toolbar .ai-create-btn {
         width: auto;
         white-space: nowrap;
-        padding: 14px 28px;
         margin-bottom: 0;
-        flex-shrink: 0;
+      }
+
+      .ai-create-btn {
+        min-height: 56px;
       }
 
       .card-list {
@@ -1721,15 +1889,32 @@
        ═══════════════════════════════════════ -->
   <div id="startScreen" class="screen active">
     <div class="start-toolbar">
-      <div class="filter-chips" id="filterChips">
-        <button class="filter-chip active" data-filter="all" onclick="setFilter('all')" data-i18n="filterAll">All</button>
-        <button class="filter-chip" data-filter="daily" onclick="setFilter('daily')" data-i18n="filterDaily">Daily</button>
-        <button class="filter-chip" data-filter="weekly" onclick="setFilter('weekly')" data-i18n="filterWeekly">Weekly</button>
-        <button class="filter-chip" data-filter="monthly" onclick="setFilter('monthly')" data-i18n="filterMonthly">Monthly</button>
-        <button class="filter-chip" data-filter="needs_review" onclick="setFilter('needs_review')" data-i18n="filterNeedsReview">Needs Review</button>
+      <div class="browse-tools">
+        <div class="filter-chips" id="filterChips">
+          <button class="filter-chip active" data-filter="all" onclick="setFilter('all')" data-i18n="filterAll">All</button>
+          <button class="filter-chip" data-filter="daily" onclick="setFilter('daily')" data-i18n="filterDaily">Daily</button>
+          <button class="filter-chip" data-filter="weekly" onclick="setFilter('weekly')" data-i18n="filterWeekly">Weekly</button>
+          <button class="filter-chip" data-filter="monthly" onclick="setFilter('monthly')" data-i18n="filterMonthly">Monthly</button>
+          <button class="filter-chip" data-filter="needs_review" onclick="setFilter('needs_review')" data-i18n="filterNeedsReview">Needs Review</button>
+        </div>
+        <button class="create-btn" onclick="startNewCard()" data-i18n="createNew">+ Create New Card</button>
+        <button class="ai-create-btn" onclick="showScreen('generate')" data-i18n="aiGenerate">&#x2728; AI Generate Cards</button>
       </div>
-      <button class="create-btn" onclick="startNewCard()" data-i18n="createNew">+ Create New Card</button>
-      <button class="ai-create-btn" onclick="showScreen('generate')" data-i18n="aiGenerate">&#x2728; AI Generate Cards</button>
+      <div class="browse-secondary">
+        <label class="machine-filter-wrap">
+          <span class="machine-filter-label" data-i18n="machineFilterLabel">Machine</span>
+          <select class="machine-filter-select" id="machineFilterSelect" onchange="setMachineFilter(this.value)">
+            <option value="all" data-i18n="machineFilterAll">All Machines</option>
+          </select>
+        </label>
+        <button class="btn-action" type="button" id="signoffModeBtn" onclick="toggleSignoffMode()" data-i18n="selectCards">Select Cards</button>
+        <button class="btn-action primary" type="button" id="printSignoffBtn" onclick="printSelectedSignoff()" data-i18n="printSignoff">Print Signoff</button>
+      </div>
+      <div class="selection-toolbar" id="selectionToolbar">
+        <div class="selection-summary" id="selectionSummary"></div>
+        <button class="btn-action" type="button" onclick="clearSignoffSelection()" data-i18n="clearSelection">Clear</button>
+        <button class="btn-action" type="button" onclick="toggleSignoffMode(false)" data-i18n="cancelSelection">Done</button>
+      </div>
     </div>
 
     <div class="card-list" id="cardList"></div>
@@ -2115,6 +2300,21 @@
         filterWeekly: 'Weekly',
         filterMonthly: 'Monthly',
         filterNeedsReview: 'Needs Review',
+        machineFilterLabel: 'Machine',
+        machineFilterAll: 'All Machines',
+        selectCards: 'Select Cards',
+        cancelSelection: 'Done Selecting',
+        clearSelection: 'Clear',
+        printSignoff: 'Print Signoff',
+        signoffSelected: '{count} cards selected for signoff',
+        signoffNoCards: 'Select at least one card for the signoff sheet',
+        signoffRole: 'Role',
+        signoffOperator: 'Operator',
+        signoffMaintenance: 'Maintenance',
+        signoffWeekOf: 'Week of',
+        signoffYear: 'Year',
+        signoffGenerated: 'Generated',
+        signoffMachineMixed: 'Multiple Machines',
         freqDaily: 'Daily',
         freqDailySub: 'Every shift',
         freqWeekly: 'Weekly',
@@ -2240,6 +2440,21 @@
         filterWeekly: 'Semanal',
         filterMonthly: 'Mensual',
         filterNeedsReview: 'Necesita Revision',
+        machineFilterLabel: 'Maquina',
+        machineFilterAll: 'Todas las Maquinas',
+        selectCards: 'Seleccionar Tarjetas',
+        cancelSelection: 'Terminar Seleccion',
+        clearSelection: 'Limpiar',
+        printSignoff: 'Imprimir Registro',
+        signoffSelected: '{count} tarjetas seleccionadas para registro',
+        signoffNoCards: 'Seleccione al menos una tarjeta para imprimir el registro',
+        signoffRole: 'Rol',
+        signoffOperator: 'Operador',
+        signoffMaintenance: 'Mantenimiento',
+        signoffWeekOf: 'Semana de',
+        signoffYear: 'Ano',
+        signoffGenerated: 'Generado',
+        signoffMachineMixed: 'Multiples Maquinas',
         freqDaily: 'Diario',
         freqDailySub: 'Cada turno',
         freqWeekly: 'Semanal',
@@ -2375,6 +2590,9 @@
     let appLang = 'en';
     let allCards = [];
     let activeFilter = 'all';
+    let activeMachineFilter = 'all';
+    let signoffMode = false;
+    let signoffSelection = {};
     let currentStep = 1;
     let editingCard = null; // null = new, object = editing
     let viewingCard = null;
@@ -2483,6 +2701,8 @@
           el.placeholder = translations[appLang][key];
         }
       });
+      renderMachineFilterOptions();
+      updateSelectionToolbar();
     }
 
     // ── Screen Management ──
@@ -2503,6 +2723,9 @@
         allCards = [];
         console.error('Failed to load cards:', e);
       }
+      syncSignoffSelection();
+      renderMachineFilterOptions();
+      updateSelectionToolbar();
       renderCardList();
     }
 
@@ -2514,15 +2737,101 @@
       renderCardList();
     }
 
+    function setMachineFilter(value) {
+      activeMachineFilter = value || 'all';
+      renderCardList();
+    }
+
+    function getFilteredCards() {
+      return allCards.filter(function(card) {
+        var matchesFreq = activeFilter === 'all'
+          ? true
+          : activeFilter === 'needs_review'
+            ? card.status === 'needs_review'
+            : card.frequency === activeFilter;
+        var machine = normalizeMachine(card.equipment);
+        var matchesMachine = activeMachineFilter === 'all' || machine === activeMachineFilter;
+        return matchesFreq && matchesMachine;
+      });
+    }
+
+    function renderMachineFilterOptions() {
+      var select = document.getElementById('machineFilterSelect');
+      if (!select) return;
+
+      var machines = [];
+      var seen = {};
+      allCards.forEach(function(card) {
+        var machine = normalizeMachine(card.equipment);
+        if (!machine || seen[machine]) return;
+        seen[machine] = true;
+        machines.push(machine);
+      });
+      machines.sort(function(a, b) { return a.localeCompare(b); });
+
+      if (activeMachineFilter !== 'all' && machines.indexOf(activeMachineFilter) === -1) {
+        activeMachineFilter = 'all';
+      }
+
+      var options = '<option value="all">' + escapeHtml(t('machineFilterAll')) + '</option>';
+      machines.forEach(function(machine) {
+        var selected = machine === activeMachineFilter ? ' selected' : '';
+        options += '<option value="' + escapeAttr(machine) + '"' + selected + '>' + escapeHtml(machine) + '</option>';
+      });
+      select.innerHTML = options;
+      select.value = activeMachineFilter;
+    }
+
+    function toggleSignoffMode(forceState) {
+      signoffMode = typeof forceState === 'boolean' ? forceState : !signoffMode;
+      updateSelectionToolbar();
+      renderCardList();
+    }
+
+    function updateSelectionToolbar() {
+      var toolbar = document.getElementById('selectionToolbar');
+      var summary = document.getElementById('selectionSummary');
+      var modeBtn = document.getElementById('signoffModeBtn');
+      var printBtn = document.getElementById('printSignoffBtn');
+      var count = getSelectedCards().length;
+
+      if (toolbar) toolbar.classList.toggle('visible', signoffMode);
+      if (summary) summary.textContent = t('signoffSelected').replace('{count}', count);
+      if (modeBtn) modeBtn.textContent = signoffMode ? t('cancelSelection') : t('selectCards');
+      if (printBtn) {
+        printBtn.disabled = count === 0;
+        printBtn.style.opacity = count === 0 ? '0.55' : '1';
+      }
+    }
+
+    function toggleCardSelection(id) {
+      if (signoffSelection[id]) delete signoffSelection[id];
+      else signoffSelection[id] = true;
+      updateSelectionToolbar();
+      renderCardList();
+    }
+
+    function clearSignoffSelection() {
+      signoffSelection = {};
+      updateSelectionToolbar();
+      renderCardList();
+    }
+
+    function syncSignoffSelection() {
+      var valid = {};
+      allCards.forEach(function(card) {
+        if (signoffSelection[card.id]) valid[card.id] = true;
+      });
+      signoffSelection = valid;
+    }
+
+    function getSelectedCards() {
+      return allCards.filter(function(card) { return !!signoffSelection[card.id]; });
+    }
+
     function renderCardList() {
       var list = document.getElementById('cardList');
-      var filtered = allCards;
-
-      if (activeFilter === 'needs_review') {
-        filtered = allCards.filter(function(c) { return c.status === 'needs_review'; });
-      } else if (activeFilter !== 'all') {
-        filtered = allCards.filter(function(c) { return c.frequency === activeFilter; });
-      }
+      var filtered = getFilteredCards();
 
       if (filtered.length === 0) {
         var msg = allCards.length === 0 ? t('emptyState') : t('emptyFilter');
@@ -2541,8 +2850,14 @@
         var statusLabel = card.status === 'approved' ? t('approved') : t('needsReview');
         var statusClass = card.status === 'approved' ? 'badge-approved' : 'badge-needs-review';
         var freqClass = 'badge-' + card.frequency;
+        var selected = !!signoffSelection[card.id];
+        var rowClass = 'card-row freq-' + card.frequency + (signoffMode ? ' selection-mode' : '') + (selected ? ' selected' : '');
+        var onClick = signoffMode
+          ? "toggleCardSelection('" + escapeAttr(card.id) + "')"
+          : "viewCard('" + escapeAttr(card.id) + "')";
 
-        return '<div class="card-row freq-' + card.frequency + '" onclick="viewCard(\'' + card.id + '\')">' +
+        return '<div class="' + rowClass + '" onclick="' + onClick + '">' +
+          '<div class="card-row-check">&#10003;</div>' +
           '<div class="card-row-info">' +
             '<div class="card-row-title">' + escapeHtml(title) + '</div>' +
             '<div class="card-row-equip">' + escapeHtml(card.equipment) + '</div>' +
@@ -3398,6 +3713,125 @@
 
       // Small delay for rendering, then print
       setTimeout(function() { window.print(); }, 200);
+    }
+
+    function printSelectedSignoff() {
+      var selected = getSelectedCards();
+      if (selected.length === 0) {
+        showToast(t('signoffNoCards'));
+        return;
+      }
+
+      var container = document.getElementById('printPages');
+      container.innerHTML = buildSignoffPages(selected);
+      setTimeout(function() { window.print(); }, 200);
+    }
+
+    function buildSignoffPages(cards) {
+      var grouped = { daily: [], weekly: [], monthly: [] };
+      cards.forEach(function(card) {
+        var freq = card.frequency || 'daily';
+        if (!grouped[freq]) grouped[freq] = [];
+        grouped[freq].push(card);
+      });
+
+      var html = '';
+      ['daily', 'weekly', 'monthly'].forEach(function(freq) {
+        if (!grouped[freq] || grouped[freq].length === 0) return;
+        html += buildSignoffPage(freq, grouped[freq]);
+      });
+      return html;
+    }
+
+    function buildSignoffPage(freq, cards) {
+      var periods = getSignoffPeriods(freq);
+      var machineLabel = getSignoffMachineLabel(cards);
+      var title = getFreqLabel(freq) + ' Signoff Log';
+      var generated = formatDateLabel(new Date());
+      var rows = cards.map(function(card) {
+        var cells = periods.map(function() {
+          return '<td class="signoff-period-col"></td>';
+        }).join('');
+        return '<tr>' +
+          '<td class="signoff-id-col">' + escapeHtml(card.id || '') + '</td>' +
+          '<td class="signoff-machine-col">' + escapeHtml(card.equipment || '') + '</td>' +
+          '<td class="signoff-title-col">' + escapeHtml(getCardField(card, 'title')) + '</td>' +
+          '<td class="signoff-shift-col">' + escapeHtml(card.shift || t('signoffOperator')) + '</td>' +
+          cells +
+        '</tr>';
+      }).join('');
+
+      return '<div class="signoff-print-page">' +
+        '<table class="signoff-sheet">' +
+          '<thead>' +
+            '<tr><th class="signoff-title" colspan="' + (4 + periods.length) + '">' + escapeHtml(title) + '</th></tr>' +
+            '<tr>' +
+              '<th class="signoff-meta" colspan="2">' + escapeHtml(t('machineFilterLabel')) + ': ' + escapeHtml(machineLabel) + '</th>' +
+              '<th class="signoff-meta" colspan="2">' + escapeHtml(t('signoffGenerated')) + ': ' + escapeHtml(generated) + '</th>' +
+              '<th class="signoff-meta" colspan="' + periods.length + '">' + escapeHtml(getPeriodMetaLabel(freq)) + '</th>' +
+            '</tr>' +
+            '<tr>' +
+              '<th class="signoff-id-col">T-Card #</th>' +
+              '<th class="signoff-machine-col">' + escapeHtml(t('labelEquipment')) + '</th>' +
+              '<th class="signoff-title-col">Component</th>' +
+              '<th class="signoff-shift-col">' + escapeHtml(t('signoffRole')) + '</th>' +
+              periods.map(function(period) { return '<th class="signoff-period-col">' + escapeHtml(period) + '</th>'; }).join('') +
+            '</tr>' +
+          '</thead>' +
+          '<tbody>' + rows + '</tbody>' +
+        '</table>' +
+      '</div>';
+    }
+
+    function getSignoffPeriods(freq) {
+      if (freq === 'daily') return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      if (freq === 'weekly') {
+        var start = startOfWeek(new Date());
+        var labels = [];
+        for (var i = 0; i < 8; i++) {
+          var d = new Date(start);
+          d.setDate(start.getDate() + (i * 7));
+          labels.push((d.getMonth() + 1) + '/' + d.getDate());
+        }
+        return labels;
+      }
+      return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    }
+
+    function getPeriodMetaLabel(freq) {
+      if (freq === 'weekly') return t('signoffWeekOf') + ': ' + getSignoffPeriods(freq)[0];
+      if (freq === 'monthly') return t('signoffYear') + ': ' + String(new Date().getFullYear());
+      return t('signoffOperator') + ' / ' + t('signoffMaintenance');
+    }
+
+    function getSignoffMachineLabel(cards) {
+      var seen = {};
+      var names = [];
+      cards.forEach(function(card) {
+        var machine = normalizeMachine(card.equipment);
+        if (!machine || seen[machine]) return;
+        seen[machine] = true;
+        names.push(machine);
+      });
+      if (names.length === 1) return names[0];
+      return t('signoffMachineMixed');
+    }
+
+    function normalizeMachine(value) {
+      return String(value || '').trim();
+    }
+
+    function startOfWeek(date) {
+      var start = new Date(date);
+      var day = start.getDay();
+      var diff = day === 0 ? -6 : 1 - day;
+      start.setDate(start.getDate() + diff);
+      start.setHours(0, 0, 0, 0);
+      return start;
+    }
+
+    function formatDateLabel(date) {
+      return (date.getMonth() + 1) + '/' + date.getDate() + '/' + date.getFullYear();
     }
 
     // ── Toast ──
