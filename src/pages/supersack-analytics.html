@@ -259,6 +259,33 @@
       font-size: 13px;
     }
     .inv-table tr:last-child td { border-bottom: none; }
+    .inventory-summary {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .inventory-stat {
+      padding: 10px 12px;
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-sm);
+      background: rgba(255,255,255,0.02);
+    }
+    .inventory-stat-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+      font-family: var(--font-ui);
+    }
+    .inventory-stat-value {
+      font-size: 22px;
+      line-height: 1.1;
+      font-family: var(--font-mono);
+      color: var(--text);
+    }
 
     /* Loading / Error states */
     .loading-msg {
@@ -442,7 +469,7 @@
       kpiTopsSmalls: 'tops only', chartSacksDay: 'Supersacks / Day',
       chartYield: 'Yield Composition', chartYieldSub: 'Percent of raw material by day', chartStrain: 'Strain Comparison',
       chartRate: 'Production Rate (lbs/hr)', sectionInventory: 'Remaining Inventory & Projections',
-      currentInventory: 'Current Inventory by Strain', sectionCost: 'Production Rate & Cost Metrics',
+      currentInventory: 'Current Inventory by Strain', totalInventory: 'Total Supersacks', totalDaysLeft: 'Total Days Left', sectionCost: 'Production Rate & Cost Metrics',
       laborMetrics: 'Labor & Cost Metrics', loading: 'Loading...',
       strain: 'Strain', sacks: 'Sacks', daysSupply: 'Days Supply',
       projYield: 'Proj. Yield (lbs)', depletes: 'Depletes',
@@ -466,7 +493,7 @@
       kpiTopsSmalls: 'solo tops', chartSacksDay: 'Supersacos / Dia',
       chartYield: 'Composicion del Rendimiento', chartYieldSub: 'Porcentaje del material bruto por dia', chartStrain: 'Comparacion por Variedad',
       chartRate: 'Tasa de Produccion (lbs/hr)', sectionInventory: 'Inventario Restante y Proyecciones',
-      currentInventory: 'Inventario Actual por Variedad', sectionCost: 'Tasa de Produccion y Costos',
+      currentInventory: 'Inventario Actual por Variedad', totalInventory: 'Supersacos Totales', totalDaysLeft: 'Dias Totales Restantes', sectionCost: 'Tasa de Produccion y Costos',
       laborMetrics: 'Metricas de Labor y Costo', loading: 'Cargando...',
       strain: 'Variedad', sacks: 'Sacos', daysSupply: 'Dias Restantes',
       projYield: 'Rend. Proy. (lbs)', depletes: 'Se Agota',
@@ -1036,7 +1063,15 @@
       return;
     }
 
+    const totalInventory = variants.reduce((sum, v) => sum + (v.quantity || 0), 0);
+    const totalUsagePerDay = variants.reduce((sum, v) => sum + (strainUsage[v.title || 'Unknown'] || 0), 0);
+    const totalDaysLeft = (hasCompleteData && totalUsagePerDay > 0) ? Math.round(totalInventory / totalUsagePerDay) : null;
+
     let html = `<div class="card-title">${t('currentInventory')}</div>`;
+    html += `<div class="inventory-summary">`;
+    html += `<div class="inventory-stat"><div class="inventory-stat-label">${t('totalInventory')}</div><div class="inventory-stat-value">${fmt(totalInventory)}</div></div>`;
+    html += `<div class="inventory-stat"><div class="inventory-stat-label">${t('totalDaysLeft')}</div><div class="inventory-stat-value">${totalDaysLeft != null ? fmt(totalDaysLeft) : t('never')}</div></div>`;
+    html += `</div>`;
     html += `<div style="overflow-x:auto"><table class="inv-table"><thead><tr>`;
     html += `<th>${t('strain')}</th><th>${t('sacks')}</th><th>${t('daysSupply')}</th><th>${t('projYield')}</th><th>${t('depletes')}</th>`;
     html += `</tr></thead><tbody>`;
