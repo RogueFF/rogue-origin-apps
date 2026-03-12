@@ -374,9 +374,9 @@
       <div class="kpi-sub">lbs</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-label" data-i18n="kpiAvgYield">Avg Yield %</div>
+      <div class="kpi-label" data-i18n="kpiAvgYield">Avg Tops Yield %</div>
       <div class="kpi-value" id="kpi-yield">--</div>
-      <div class="kpi-sub" data-i18n="kpiTopsSmalls">tops + smalls</div>
+      <div class="kpi-sub" data-i18n="kpiTopsSmalls">tops only</div>
     </div>
   </div>
 
@@ -438,8 +438,8 @@
       thisWeek: 'This Week', thisMonth: 'This Month', last30: 'Last 30 Days',
       allTime: 'All Time', kpiTotalSacks: 'Total Sacks', kpiOpened: 'opened',
       kpiAvgDay: 'Avg / Day', kpiSacksDay: 'sacks/day',
-      kpiRawProcessed: 'Raw Processed', kpiAvgYield: 'Avg Yield %',
-      kpiTopsSmalls: 'tops + smalls', chartSacksDay: 'Supersacks / Day',
+      kpiRawProcessed: 'Raw Processed', kpiAvgYield: 'Avg Tops Yield %',
+      kpiTopsSmalls: 'tops only', chartSacksDay: 'Supersacks / Day',
       chartYield: 'Yield Composition', chartYieldSub: 'Percent of raw material by day', chartStrain: 'Strain Comparison',
       chartRate: 'Production Rate (lbs/hr)', sectionInventory: 'Remaining Inventory & Projections',
       currentInventory: 'Current Inventory by Strain', sectionCost: 'Production Rate & Cost Metrics',
@@ -447,7 +447,8 @@
       strain: 'Strain', sacks: 'Sacks', daysSupply: 'Days Supply',
       projYield: 'Proj. Yield (lbs)', depletes: 'Depletes',
       noData: 'No data for selected range', lbsHr: 'Lbs / Hr',
-      lbsTrimmer: 'Lbs / Trimmer', costLb: 'Cost / Lb', totalLabor: 'Total Labor',
+      lbsTrimmer: 'Lbs / Trimmer', costLb: 'Cost / Tops Lb', totalLabor: 'Total Labor',
+      topsHr: 'Tops / Hr', smallsHr: 'Smalls / Hr', topsTrimmer: 'Tops / Trimmer', smallsTrimmer: 'Smalls / Trimmer',
       chartSacksOp: 'Supersacks / Operator / Day',
       sacksOp: 'Sacks/Operator', operators: 'Operators',
       movingAvg: '7-day avg', tops: 'Tops', smalls: 'Smalls',
@@ -460,8 +461,8 @@
       thisWeek: 'Esta Semana', thisMonth: 'Este Mes', last30: 'Ultimos 30 Dias',
       allTime: 'Todo', kpiTotalSacks: 'Total Sacos', kpiOpened: 'abiertos',
       kpiAvgDay: 'Prom / Dia', kpiSacksDay: 'sacos/dia',
-      kpiRawProcessed: 'Bruto Procesado', kpiAvgYield: 'Rendimiento %',
-      kpiTopsSmalls: 'tops + smalls', chartSacksDay: 'Supersacos / Dia',
+      kpiRawProcessed: 'Bruto Procesado', kpiAvgYield: 'Rend. Prom. Tops %',
+      kpiTopsSmalls: 'solo tops', chartSacksDay: 'Supersacos / Dia',
       chartYield: 'Composicion del Rendimiento', chartYieldSub: 'Porcentaje del material bruto por dia', chartStrain: 'Comparacion por Variedad',
       chartRate: 'Tasa de Produccion (lbs/hr)', sectionInventory: 'Inventario Restante y Proyecciones',
       currentInventory: 'Inventario Actual por Variedad', sectionCost: 'Tasa de Produccion y Costos',
@@ -469,7 +470,8 @@
       strain: 'Variedad', sacks: 'Sacos', daysSupply: 'Dias Restantes',
       projYield: 'Rend. Proy. (lbs)', depletes: 'Se Agota',
       noData: 'Sin datos para el rango seleccionado', lbsHr: 'Lbs / Hr',
-      lbsTrimmer: 'Lbs / Podador', costLb: 'Costo / Lb', totalLabor: 'Labor Total',
+      lbsTrimmer: 'Lbs / Podador', costLb: 'Costo / Lb Tops', totalLabor: 'Labor Total',
+      topsHr: 'Tops / Hr', smallsHr: 'Smalls / Hr', topsTrimmer: 'Tops / Podador', smallsTrimmer: 'Smalls / Podador',
       chartSacksOp: 'Supersacos / Operador / Dia',
       sacksOp: 'Sacos/Operador', operators: 'Operadores',
       movingAvg: 'Prom. 7 dias', tops: 'Tops', smalls: 'Smalls',
@@ -672,9 +674,11 @@
         } catch { /* skip */ }
       }
 
-      const totalOutput = periods.reduce((s, p) => s + (p.total_tops || 0) + (p.total_smalls || 0), 0);
+      const totalTops = periods.reduce((s, p) => s + (p.total_tops || 0), 0);
+      const totalSmalls = periods.reduce((s, p) => s + (p.total_smalls || 0), 0);
       state.costData = {
-        totalOutput,
+        totalTops,
+        totalSmalls,
         totalHours: totalOperatorHours,
         totalLabor: totalLaborCost,
         avgTrimmers: daysWithCrew > 0 ? totalTrimmers / daysWithCrew : 0,
@@ -700,9 +704,8 @@
     const totalSacks = periods.reduce((s, p) => s + (p.total_sacks || 0), 0);
     const totalRaw = periods.reduce((s, p) => s + (p.total_raw || 0), 0);
     const totalTops = periods.reduce((s, p) => s + (p.total_tops || 0), 0);
-    const totalSmalls = periods.reduce((s, p) => s + (p.total_smalls || 0), 0);
     const daysWorked = periods.filter(p => p.total_sacks > 0).length || 1;
-    const avgYield = totalRaw > 0 ? ((totalTops + totalSmalls) / totalRaw * 100) : 0;
+    const avgYield = totalRaw > 0 ? (totalTops / totalRaw * 100) : 0;
 
     document.getElementById('kpi-sacks').textContent = fmt(totalSacks);
     document.getElementById('kpi-avg-day').textContent = fmt(totalSacks / daysWorked, 1);
@@ -1087,19 +1090,23 @@
     const card = document.getElementById('cost-card');
     const data = state.costData;
 
-    if (!data || !data.totalOutput) {
+    if (!data || (!data.totalTops && !data.totalSmalls)) {
       card.innerHTML = `<div class="card-title">${t('laborMetrics')}</div><div class="loading-msg">${t('noData')}</div>`;
       return;
     }
 
-    const lbsHr = data.totalHours > 0 ? (data.totalOutput / data.totalHours) : 0;
-    const lbsTrimmer = data.avgTrimmers > 0 ? (data.totalOutput / data.avgTrimmers / data.daysWorked) : 0;
-    const costLb = data.totalOutput > 0 ? (data.totalLabor / data.totalOutput) : 0;
+    const topsHr = data.totalHours > 0 ? (data.totalTops / data.totalHours) : 0;
+    const smallsHr = data.totalHours > 0 ? (data.totalSmalls / data.totalHours) : 0;
+    const topsTrimmer = data.avgTrimmers > 0 ? (data.totalTops / data.avgTrimmers / data.daysWorked) : 0;
+    const smallsTrimmer = data.avgTrimmers > 0 ? (data.totalSmalls / data.avgTrimmers / data.daysWorked) : 0;
+    const costLb = data.totalTops > 0 ? (data.totalLabor / data.totalTops) : 0;
 
     let html = `<div class="card-title">${t('laborMetrics')}</div>`;
     html += `<div class="cost-grid">`;
-    html += `<div class="cost-item"><div class="cost-label">${t('lbsHr')}</div><div class="cost-value" style="color:var(--green)">${fmt(lbsHr, 1)}</div></div>`;
-    html += `<div class="cost-item"><div class="cost-label">${t('lbsTrimmer')}</div><div class="cost-value" style="color:var(--gold)">${fmt(lbsTrimmer, 1)}</div></div>`;
+    html += `<div class="cost-item"><div class="cost-label">${t('topsHr')}</div><div class="cost-value" style="color:var(--green)">${fmt(topsHr, 1)}</div></div>`;
+    html += `<div class="cost-item"><div class="cost-label">${t('smallsHr')}</div><div class="cost-value" style="color:var(--gold)">${fmt(smallsHr, 1)}</div></div>`;
+    html += `<div class="cost-item"><div class="cost-label">${t('topsTrimmer')}</div><div class="cost-value" style="color:var(--green)">${fmt(topsTrimmer, 1)}</div></div>`;
+    html += `<div class="cost-item"><div class="cost-label">${t('smallsTrimmer')}</div><div class="cost-value" style="color:var(--gold)">${fmt(smallsTrimmer, 1)}</div></div>`;
     html += `<div class="cost-item"><div class="cost-label">${t('costLb')}</div><div class="cost-value" style="color:var(--red)">$${fmt(costLb, 2)}</div></div>`;
     html += `<div class="cost-item"><div class="cost-label">${t('totalLabor')}</div><div class="cost-value" style="color:var(--blue)">$${fmt(data.totalLabor)}</div></div>`;
     html += `</div>`;
