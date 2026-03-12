@@ -1676,7 +1676,7 @@
     }
 
     @page {
-      size: letter landscape;
+      size: letter portrait;
       margin: 0.5in;
     }
 
@@ -3779,9 +3779,43 @@
         return;
       }
 
-      var container = document.getElementById('printPages');
-      container.innerHTML = buildSignoffPages(selected);
-      setTimeout(function() { window.print(); }, 200);
+      var printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        showToast('Allow pop-ups to print the signoff sheet');
+        return;
+      }
+
+      printWindow.document.open();
+      printWindow.document.write(
+        '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>TPM Signoff</title>' +
+        '<style>' + getSignoffPrintStyles() + '</style>' +
+        '</head><body>' + buildSignoffPages(selected) + '</body></html>'
+      );
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(function() {
+        printWindow.print();
+        printWindow.close();
+      }, 250);
+    }
+
+    function getSignoffPrintStyles() {
+      return [
+        '@page { size: letter landscape; margin: 0.5in; }',
+        'body { margin: 0; background: #fff; color: #2d3a32; font-family: Outfit, sans-serif; }',
+        '.signoff-print-page { width: 100%; min-height: 7.5in; page-break-after: always; }',
+        '.signoff-print-page:last-child { page-break-after: auto; }',
+        '.signoff-sheet { width: 100%; border-collapse: collapse; table-layout: fixed; background: #fff; }',
+        '.signoff-sheet th, .signoff-sheet td { border: 1px solid #333; padding: 7px 6px; font-size: 10px; line-height: 1.25; vertical-align: top; word-wrap: break-word; }',
+        '.signoff-sheet thead th { background: #f2eee7; font-weight: 800; text-transform: uppercase; -webkit-print-color-adjust: exact; print-color-adjust: exact; }',
+        '.signoff-sheet .signoff-title { background: #2d3a2e; color: #fff; text-align: left; font-size: 16px; letter-spacing: 0.5px; padding: 10px 12px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }',
+        '.signoff-sheet .signoff-meta { background: #f8f5ef; font-size: 11px; font-weight: 700; -webkit-print-color-adjust: exact; print-color-adjust: exact; }',
+        '.signoff-sheet .signoff-id-col { width: 8%; }',
+        '.signoff-sheet .signoff-machine-col { width: 18%; }',
+        '.signoff-sheet .signoff-title-col { width: 30%; }',
+        '.signoff-sheet .signoff-shift-col { width: 10%; }',
+        '.signoff-sheet .signoff-period-col { width: auto; }'
+      ].join('');
     }
 
     function buildSignoffPages(cards) {
