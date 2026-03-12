@@ -264,7 +264,7 @@ async function generateCards(body, env) {
 Machine: ${machineDesc}
 ${specifics ? `Additional details: ${specifics}` : ''}
 
-Generate comprehensive TPM maintenance cards for this machine. Include cards for:
+Generate a lean but complete TPM starter set for this machine. Include exactly one card for each of these categories:
 - Daily pre-shift inspections
 - Daily during-operation checks
 - Daily end-of-shift tasks
@@ -285,7 +285,7 @@ For each card provide ALL of the following fields in ${langName}:
 - materials: tools/materials needed
 - warning: safety warnings (or empty string if none)
 
-Return ONLY a valid JSON array of card objects. No markdown, no explanation. Example format:
+Return ONLY a valid JSON array of 7 card objects. No markdown, no explanation. Keep each field concise and practical for floor use. Example format:
 [
   {
     "frequency": "daily",
@@ -301,7 +301,7 @@ Return ONLY a valid JSON array of card objects. No markdown, no explanation. Exa
   }
 ]
 
-Generate 12-25 cards covering all maintenance frequencies. Be specific to the actual machine type and its components.`;
+Generate exactly 7 cards total, one per category above. Be specific to the actual machine type and its components.`;
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -312,7 +312,7 @@ Generate 12-25 cards covering all maintenance frequencies. Be specific to the ac
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 8192,
+      max_tokens: 4096,
       messages: [{ role: 'user', content: prompt }]
     })
   });
