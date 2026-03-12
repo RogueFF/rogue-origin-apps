@@ -1936,6 +1936,7 @@
       </div>
       <div class="selection-toolbar" id="selectionToolbar">
         <div class="selection-summary" id="selectionSummary"></div>
+        <button class="btn-action primary" type="button" id="printCardsBtn" onclick="printSelectedCards()" data-i18n="printCards">Print Cards</button>
         <button class="btn-action" type="button" onclick="clearSignoffSelection()" data-i18n="clearSelection">Clear</button>
         <button class="btn-action" type="button" onclick="toggleSignoffMode(false)" data-i18n="cancelSelection">Done</button>
       </div>
@@ -2330,6 +2331,7 @@
         cancelSelection: 'Done Selecting',
         clearSelection: 'Clear',
         printSignoff: 'Print Signoff',
+        printCards: 'Print Cards',
         signoffSelected: '{count} cards selected for signoff',
         signoffNoCards: 'Select at least one card for the signoff sheet',
         signoffRole: 'Role',
@@ -2470,6 +2472,7 @@
         cancelSelection: 'Terminar Seleccion',
         clearSelection: 'Limpiar',
         printSignoff: 'Imprimir Registro',
+        printCards: 'Imprimir Tarjetas',
         signoffSelected: '{count} tarjetas seleccionadas para registro',
         signoffNoCards: 'Seleccione al menos una tarjeta para imprimir el registro',
         signoffRole: 'Rol',
@@ -2817,6 +2820,7 @@
       var summary = document.getElementById('selectionSummary');
       var modeBtn = document.getElementById('signoffModeBtn');
       var printBtn = document.getElementById('printSignoffBtn');
+      var printCardsBtn = document.getElementById('printCardsBtn');
       var count = getSelectedCards().length;
 
       if (toolbar) toolbar.classList.toggle('visible', signoffMode);
@@ -2825,6 +2829,10 @@
       if (printBtn) {
         printBtn.disabled = count === 0;
         printBtn.style.opacity = count === 0 ? '0.55' : '1';
+      }
+      if (printCardsBtn) {
+        printCardsBtn.disabled = count === 0;
+        printCardsBtn.style.opacity = count === 0 ? '0.55' : '1';
       }
     }
 
@@ -3736,6 +3744,31 @@
       container.appendChild(bp);
 
       // Small delay for rendering, then print
+      setTimeout(function() { window.print(); }, 200);
+    }
+
+    function printSelectedCards() {
+      var selected = getSelectedCards();
+      if (selected.length === 0) {
+        showToast(t('signoffNoCards'));
+        return;
+      }
+
+      var container = document.getElementById('printPages');
+      container.innerHTML = '';
+
+      selected.forEach(function(card) {
+        var frontPage = document.createElement('div');
+        frontPage.className = 'print-card-page';
+        frontPage.innerHTML = buildFront(card);
+        container.appendChild(frontPage);
+
+        var backPage = document.createElement('div');
+        backPage.className = 'print-card-page';
+        backPage.innerHTML = buildBack(card);
+        container.appendChild(backPage);
+      });
+
       setTimeout(function() { window.print(); }, 200);
     }
 
