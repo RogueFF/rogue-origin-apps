@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Supersack Analytics — Rogue Origin</title>
+  <title>Supersack Analytics &mdash; Rogue Origin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=JetBrains+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -167,8 +167,14 @@
       color: var(--green);
       margin-bottom: 12px;
     }
+    .card-subtitle {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin: -6px 0 12px;
+      font-family: var(--font-ui);
+    }
 
-    /* KPI Grid */
+
     .kpi-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
@@ -381,7 +387,8 @@
       <div class="chart-wrap"><canvas id="chart-sacks-day"></canvas></div>
     </div>
     <div class="card">
-      <div class="card-title" data-i18n="chartYield">Material Yield Breakdown</div>
+      <div class="card-title" data-i18n="chartYield">Yield Composition</div>
+      <div class="card-subtitle" data-i18n="chartYieldSub">Percent of raw material by day</div>
       <div class="chart-wrap"><canvas id="chart-yield"></canvas></div>
     </div>
   </div>
@@ -424,7 +431,7 @@
 (function() {
   'use strict';
 
-  // ── i18n ──
+  // -- i18n --
   const LANG = {
     en: {
       title: 'Supersack Analytics', entryLink: 'Entry', today: 'Today',
@@ -433,7 +440,7 @@
       kpiAvgDay: 'Avg / Day', kpiSacksDay: 'sacks/day',
       kpiRawProcessed: 'Raw Processed', kpiAvgYield: 'Avg Yield %',
       kpiTopsSmalls: 'tops + smalls', chartSacksDay: 'Supersacks / Day',
-      chartYield: 'Material Yield Breakdown', chartStrain: 'Strain Comparison',
+      chartYield: 'Yield Composition', chartYieldSub: 'Percent of raw material by day', chartStrain: 'Strain Comparison',
       chartRate: 'Production Rate (lbs/hr)', sectionInventory: 'Remaining Inventory & Projections',
       currentInventory: 'Current Inventory by Strain', sectionCost: 'Production Rate & Cost Metrics',
       laborMetrics: 'Labor & Cost Metrics', loading: 'Loading...',
@@ -455,7 +462,7 @@
       kpiAvgDay: 'Prom / Dia', kpiSacksDay: 'sacos/dia',
       kpiRawProcessed: 'Bruto Procesado', kpiAvgYield: 'Rendimiento %',
       kpiTopsSmalls: 'tops + smalls', chartSacksDay: 'Supersacos / Dia',
-      chartYield: 'Desglose de Materiales', chartStrain: 'Comparacion por Variedad',
+      chartYield: 'Composicion del Rendimiento', chartYieldSub: 'Porcentaje del material bruto por dia', chartStrain: 'Comparacion por Variedad',
       chartRate: 'Tasa de Produccion (lbs/hr)', sectionInventory: 'Inventario Restante y Proyecciones',
       currentInventory: 'Inventario Actual por Variedad', sectionCost: 'Tasa de Produccion y Costos',
       laborMetrics: 'Metricas de Labor y Costo', loading: 'Cargando...',
@@ -492,27 +499,27 @@
     applyLang();
   });
 
-  // ── APIs ──
+  // -- APIs --
   const SS_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/supersack';
   const POOL_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/pool';
   const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
 
-  // ── State ──
+  // -- State --
   const state = {
     startDate: '', endDate: '', activePreset: 'month',
     summaryData: null, historyData: null, inventoryData: null, costData: null,
   };
 
-  // ── Chart instances ──
+  // -- Chart instances --
   let chartSacks = null, chartYield = null, chartStrain = null, chartRate = null, chartSacksOp = null;
 
-  // ── Chart.js defaults ──
+  // -- Chart.js defaults --
   Chart.defaults.color = 'rgba(232,228,220,0.55)';
   Chart.defaults.borderColor = 'rgba(102, 137, 113, 0.1)';
   Chart.defaults.font.family = "'Outfit', system-ui, sans-serif";
   Chart.defaults.font.size = 11;
 
-  // ── Helpers ──
+  // -- Helpers --
   function todayStr() { return new Date().toLocaleDateString('en-CA'); }
   function fmt(n, dec = 0) { return n == null ? '--' : Number(n).toLocaleString(undefined, { maximumFractionDigits: dec }); }
 
@@ -553,7 +560,7 @@
     });
   }
 
-  // ── Date Controls ──
+  // -- Date Controls --
   const dateStart = document.getElementById('date-start');
   const dateEnd = document.getElementById('date-end');
   const presetBtns = document.querySelectorAll('.preset-btn');
@@ -586,7 +593,7 @@
     loadAllData();
   });
 
-  // ── Data Loading ──
+  // -- Data Loading --
   async function fetchJSON(url) {
     const r = await fetch(url);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -680,7 +687,7 @@
     }
   }
 
-  // ── KPI Rendering ──
+  // -- KPI Rendering --
   function renderKPIs() {
     const periods = state.summaryData?.periods || [];
     if (!periods.length) {
@@ -703,7 +710,7 @@
     document.getElementById('kpi-yield').textContent = fmt(avgYield, 1) + '%';
   }
 
-  // ── Chart Rendering ──
+  // -- Chart Rendering --
   const COLORS = {
     tops: '#668971', smalls: '#e4aa4f', biomass: '#62758d',
     trim: '#8b7355', waste: '#c45c4a',
@@ -719,7 +726,7 @@
     const periods = (state.summaryData?.periods || []).slice().reverse(); // oldest first
     const strains = state.summaryData?.strains || [];
 
-    // ── Sacks/Day line chart ──
+    // -- Sacks/Day line chart --
     const labels = periods.map(p => p.period);
     const sacksData = periods.map(p => p.total_sacks || 0);
     const ma = movingAverage(sacksData, 7);
@@ -760,32 +767,77 @@
         }
       }
     });
-
-    // ── Yield stacked bar ──
+    // -- Yield composition (100% stacked) --
     chartYield = new Chart(document.getElementById('chart-yield'), {
       type: 'bar',
       data: {
         labels,
         datasets: [
-          { label: t('tops'), data: periods.map(p => p.total_tops || 0), backgroundColor: COLORS.tops },
-          { label: t('smalls'), data: periods.map(p => p.total_smalls || 0), backgroundColor: COLORS.smalls },
-          { label: t('biomass'), data: periods.map(p => p.total_biomass || 0), backgroundColor: COLORS.biomass },
-          { label: t('trim'), data: periods.map(p => p.total_trim || 0), backgroundColor: COLORS.trim },
-          { label: t('waste'), data: periods.map(p => p.total_waste || 0), backgroundColor: COLORS.waste },
+          {
+            label: t('tops'),
+            data: periods.map(p => p.total_raw > 0 ? ((p.total_tops || 0) / p.total_raw * 100) : 0),
+            rawData: periods.map(p => p.total_tops || 0),
+            backgroundColor: COLORS.tops,
+          },
+          {
+            label: t('smalls'),
+            data: periods.map(p => p.total_raw > 0 ? ((p.total_smalls || 0) / p.total_raw * 100) : 0),
+            rawData: periods.map(p => p.total_smalls || 0),
+            backgroundColor: COLORS.smalls,
+          },
+          {
+            label: t('biomass'),
+            data: periods.map(p => p.total_raw > 0 ? ((p.total_biomass || 0) / p.total_raw * 100) : 0),
+            rawData: periods.map(p => p.total_biomass || 0),
+            backgroundColor: COLORS.biomass,
+          },
+          {
+            label: t('trim'),
+            data: periods.map(p => p.total_raw > 0 ? ((p.total_trim || 0) / p.total_raw * 100) : 0),
+            rawData: periods.map(p => p.total_trim || 0),
+            backgroundColor: COLORS.trim,
+          },
+          {
+            label: t('waste'),
+            data: periods.map(p => p.total_raw > 0 ? ((p.total_waste || 0) / p.total_raw * 100) : 0),
+            rawData: periods.map(p => p.total_waste || 0),
+            backgroundColor: COLORS.waste,
+          },
         ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { labels: { boxWidth: 12, padding: 10 } } },
+        plugins: {
+          legend: { labels: { boxWidth: 12, padding: 10 } },
+          tooltip: {
+            callbacks: {
+              label(context) {
+                const pct = context.parsed.y || 0;
+                const lbs = context.dataset.rawData?.[context.dataIndex] || 0;
+                return `${context.dataset.label}: ${fmt(pct, 1)}% (${fmt(lbs, 1)} lbs)`;
+              },
+              footer(items) {
+                const idx = items[0]?.dataIndex;
+                const raw = idx != null ? (periods[idx]?.total_raw || 0) : 0;
+                return `Raw: ${fmt(raw, 1)} lbs`;
+              }
+            }
+          }
+        },
         scales: {
           x: { stacked: true, ticks: { maxTicksLimit: 8, maxRotation: 0 } },
-          y: { stacked: true, beginAtZero: true }
+          y: {
+            stacked: true,
+            beginAtZero: true,
+            max: 100,
+            ticks: { callback: v => v + '%' }
+          }
         }
       }
     });
 
-    // ── Strain comparison horizontal bar ──
+    // -- Strain comparison horizontal bar --
     if (strains.length) {
       const strainLabels = strains.map(s => {
         const name = s.strain || 'Unknown';
@@ -827,10 +879,10 @@
       });
     }
 
-    // ── Production rate chart (from history data) ──
+    // -- Production rate chart (from history data) --
     renderRateChart();
 
-    // ── Sacks/Operator chart (needs crew data per date) ──
+    // -- Sacks/Operator chart (needs crew data per date) --
     renderSacksPerOperator(periods);
   }
 
@@ -891,7 +943,7 @@
     });
   }
 
-  // ── Sacks per Operator chart ──
+  // -- Sacks per Operator chart --
   async function renderSacksPerOperator(periods) {
     if (!periods.length) return;
 
@@ -963,7 +1015,7 @@
     });
   }
 
-  // ── Inventory Rendering ──
+  // -- Inventory Rendering --
   function renderInventory() {
     const card = document.getElementById('inventory-card');
     const variants = state.inventoryData || [];
@@ -1030,7 +1082,7 @@
     card.innerHTML = html;
   }
 
-  // ── Cost Card Rendering ──
+  // -- Cost Card Rendering --
   function renderCostCard() {
     const card = document.getElementById('cost-card');
     const data = state.costData;
@@ -1055,7 +1107,7 @@
     card.innerHTML = html;
   }
 
-  // ── Init ──
+  // -- Init --
   applyLang();
   setPreset('month');
 
@@ -1063,3 +1115,4 @@
 </script>
 </body>
 </html>
+
