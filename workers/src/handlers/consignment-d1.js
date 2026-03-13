@@ -16,6 +16,7 @@ const CONSIGNMENT_WRITE_ACTIONS = new Set([
   'saveConsignmentPayment',
   'deleteConsignmentPartner', 'deleteConsignmentIntake',
   'deleteConsignmentSale', 'deleteConsignmentPayment',
+  'syncConsignmentFromPool',
 ]);
 
 export async function handleConsignmentD1(request, env, ctx) {
@@ -77,6 +78,10 @@ export async function handleConsignmentD1(request, env, ctx) {
       return deleteSale(db, body);
     case 'deleteConsignmentPayment':
       return deletePayment(db, body);
+
+    // === POOL SYNC ===
+    case 'syncConsignmentFromPool':
+      return syncFromPool(db, env);
 
     default:
       throw createError('NOT_FOUND', `Unknown consignment action: ${action}`);
@@ -555,4 +560,140 @@ async function deletePayment(db, body) {
   if (!id) throw createError('VALIDATION_ERROR', 'Payment ID is required');
   await execute(db, 'DELETE FROM consignment_payments WHERE id = ?', [id]);
   return successResponse({ success: true });
+}
+
+// ─── POOL SYNC ──────────────────────────────────────────
+
+async function syncFromPool(db, env) {
+  const poolApiUrl = env.POOL_INVENTORY_API_URL;
+  const poolApiKey = env.POOL_INVENTORY_API_KEY;
+
+  if (!poolApiUrl || !poolApiKey) {
+    throw createError('VALIDATION_ERROR', 'Pool API URL and key must be configured');
+  }
+
+  // Step A: Fetch all vendor products from pool API
+  const listRes = await fetch(poolApiUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    redirect: 'follow',
+    body: JSON.stringify({ action: 'list_vendor_products', apiKey: poolApiKey })
+  });
+  const listData = await listRes.json();
+  const products = listData.products || [];
+
+  // Step B: For each product, fetch variants and build pool inventory map
+  // Map key: `${vendorName}|${strain}|${type}` -> quantity in lbs
+  const poolMap = new Map();
+
+  for (const product of products) {
+    const varRes = await fetch(poolApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      redirect: 'follow',
+      body: JSON.stringify({ action: 'get_vendor_variants', apiKey: poolApiKey, productId: product.id })
+    });
+    const varData = await varRes.json();
+    const variants = varData.variants || [];
+
+    // Strip "[VENDOR] " prefix from product title to get strain name
+    const strain = product.title.replace(/^\[.*?\]\s*/, '');
+
+    for (const variant of variants) {
+      const vendorName = variant.vendorName || '';
+      const rawType = variant.flowerType || '';
+      const type = rawType.charAt(0).toLowerCase() + rawType.slice(1).toLowerCase(); // "Smalls" -> "smalls", "Tops" -> "tops"
+      const quantityGrams = Math.max(0, variant.quantity || 0); // negative -> 0
+      const quantityLbs = quantityGrams / 453.592;
+
+      const key = `${vendorName}|${strain}|${type}`;
+      const existing = poolMap.get(key) || { vendorName, strain, type, lbs: 0 };
+      existing.lbs += quantityLbs;
+      poolMap.set(key, existing);
+    }
+  }
+
+  // Step D: Get all consignment partners from DB
+  const partners = await query(db, 'SELECT * FROM consignment_partners');
+
+  // Step E: Build vendor name -> partner ID mapping (fuzzy match)
+  const vendorToPartner = new Map();
+  const unmatched = [];
+
+  const vendorNames = [...new Set([...poolMap.values()].map(v => v.vendorName))];
+  for (const vendorName of vendorNames) {
+    const vendorLower = vendorName.toLowerCase();
+    let matched = false;
+    for (const partner of partners) {
+      const nameMatch = partner.name && vendorLower.includes(partner.name.toLowerCase());
+      const contactMatch = partner.contact_name && vendorLower.includes(partner.contact_name.toLowerCase());
+      if (nameMatch || contactMatch) {
+        vendorToPartner.set(vendorName, partner.id);
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) {
+      unmatched.push(vendorName);
+    }
+  }
+
+  // Step F & G: Compare pool vs expected and create sales where needed
+  const salesCreated = [];
+  let skipped = 0;
+
+  for (const [, entry] of poolMap) {
+    const partnerId = vendorToPartner.get(entry.vendorName);
+    if (!partnerId) continue; // unmatched vendor, already tracked
+
+    const { strain, type, lbs: poolLbs } = entry;
+
+    // Get expected inventory from DB
+    const inv = await queryOne(db, `
+      SELECT
+        COALESCE((SELECT SUM(weight_lbs) FROM consignment_intakes WHERE partner_id = ? AND strain = ? AND type = ?), 0) -
+        COALESCE((SELECT SUM(weight_lbs) FROM consignment_sales WHERE partner_id = ? AND strain = ? AND type = ?), 0)
+        as expected
+    `, [partnerId, strain, type, partnerId, strain, type]);
+
+    const expected = inv?.expected || 0;
+    const sold = expected - poolLbs;
+
+    if (sold > 0.1) {
+      // Get intake price
+      const priceRow = await queryOne(db, `
+        SELECT price_per_lb FROM consignment_intakes
+        WHERE partner_id = ? AND strain = ? AND type = ?
+        ORDER BY date DESC LIMIT 1
+      `, [partnerId, strain, type]);
+
+      const today = new Date().toISOString().split('T')[0];
+      await execute(db, `
+        INSERT INTO consignment_sales (partner_id, date, strain, type, weight_lbs, sale_price_per_lb, channel, notes)
+        VALUES (?, ?, ?, ?, ?, ?, 'pool_sync', ?)
+      `, [partnerId, today, strain, type, sold, priceRow?.price_per_lb || null,
+          `Pool sync: ${poolLbs.toFixed(1)} lbs in pool (expected ${expected.toFixed(1)} lbs)`]);
+
+      salesCreated.push({
+        partner: entry.vendorName,
+        strain,
+        type,
+        sold_lbs: Math.round(sold * 100) / 100,
+        pool_lbs: Math.round(poolLbs * 100) / 100,
+        expected_lbs: Math.round(expected * 100) / 100
+      });
+    } else {
+      skipped++;
+    }
+  }
+
+  return successResponse({
+    success: true,
+    data: {
+      synced: salesCreated.length,
+      details: salesCreated,
+      skipped,
+      unmatched
+    }
+  });
 }

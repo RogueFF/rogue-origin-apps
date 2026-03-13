@@ -179,6 +179,7 @@ function setupEventListeners() {
   });
   el('btn-inventory-count')?.addEventListener('click', () => ui.openModal('count-modal'));
   el('btn-record-payment')?.addEventListener('click', () => ui.openModal('payment-modal'));
+  el('btn-sync-pool')?.addEventListener('click', handleSyncFromPool);
   el('btn-add-partner')?.addEventListener('click', () => ui.openModal('partner-modal'));
 
   // Modal close buttons
@@ -407,6 +408,42 @@ async function handlePartnerSubmit(e) {
   } catch (err) {
     ui.showToast(err.message || 'Failed to save partner — please retry', 'error');
     refreshAll();
+  }
+}
+
+async function handleSyncFromPool() {
+  const btn = el('btn-sync-pool');
+  if (!btn) return;
+
+  // Disable button and show loading state
+  btn.classList.add('syncing');
+  btn.querySelector('.quick-action-label').textContent = 'Syncing...';
+  trackUserAction();
+
+  try {
+    const result = await api.syncFromPool();
+    const d = result.data || result;
+
+    if (d.synced > 0) {
+      const lines = d.details.map(s =>
+        `${s.strain} ${s.type}: ${s.sold_lbs.toFixed(1)} lbs sold`
+      ).join('\n');
+      ui.showToast(`Synced! ${d.synced} sale${d.synced > 1 ? 's' : ''} recorded`);
+    } else {
+      ui.showToast('Already in sync — no changes needed');
+    }
+
+    if (d.unmatched && d.unmatched.length > 0) {
+      ui.showToast(`Warning: ${d.unmatched.join(', ')} not matched to partners`, 'warning');
+    }
+
+    detailCache.clear();
+    refreshAll();
+  } catch (err) {
+    ui.showToast(err.message || 'Sync failed — check connection', 'error');
+  } finally {
+    btn.classList.remove('syncing');
+    btn.querySelector('.quick-action-label').textContent = 'Sync from Pool';
   }
 }
 
