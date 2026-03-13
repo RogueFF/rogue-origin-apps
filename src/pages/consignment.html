@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/duotone/style.css">
 
   <link rel="stylesheet" href="../css/shared-base.css">
-  <link rel="stylesheet" href="../css/consignment.css?v=22">
+  <link rel="stylesheet" href="../css/consignment.css?v=23">
 </head>
 <body class="auth-required">
   <!-- RO Home Button -->
@@ -132,6 +132,13 @@
           </div>
           <div class="quick-action-label">Record Payment</div>
           <div class="quick-action-hint">Pay partner balance</div>
+        </button>
+        <button id="btn-sync-pool" class="quick-action-card sync">
+          <div class="quick-action-icon">
+            <i class="ph-duotone ph-arrows-counter-clockwise"></i>
+          </div>
+          <div class="quick-action-label">Sync from Pool</div>
+          <div class="quick-action-hint">Update inventory from vendor pool</div>
         </button>
       </div>
     </section>
@@ -431,6 +438,6 @@
   </script>
 
   <!-- App (handles theme toggle, clock, all functionality) -->
-  <script type="module" src="../js/consignment/main.js?v=14"></script>
+  <script type="module" src="../js/consignment/main.js?v=15"></script>
 </body>
 </html>
