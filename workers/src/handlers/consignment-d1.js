@@ -122,11 +122,36 @@ async function getPartners(db) {
       SELECT MAX(date) as last_date FROM consignment_intakes WHERE partner_id = ?
     `, [p.id]);
 
+    // Inventory value: on-hand lbs per strain/type * most recent intake price
+    const invValue = await queryOne(db, `
+      SELECT COALESCE(SUM(sub.on_hand * sub.price), 0) as total
+      FROM (
+        SELECT inv.strain, inv.type, inv.on_hand,
+          COALESCE((SELECT i.price_per_lb FROM consignment_intakes i
+            WHERE i.partner_id = ? AND i.strain = inv.strain AND i.type = inv.type
+            ORDER BY i.date DESC LIMIT 1), 0) as price
+        FROM (
+          SELECT strain, type,
+            COALESCE(SUM(intake_lbs), 0) - COALESCE(SUM(sale_lbs), 0) as on_hand
+          FROM (
+            SELECT strain, type, weight_lbs as intake_lbs, 0 as sale_lbs FROM consignment_intakes WHERE partner_id = ?
+            UNION ALL
+            SELECT strain, type, 0 as intake_lbs, weight_lbs as sale_lbs FROM consignment_sales WHERE partner_id = ?
+          )
+          GROUP BY strain, type
+          HAVING on_hand > 0
+        ) inv
+      ) sub
+    `, [p.id, p.id, p.id]);
+
     const totalOwed = (owedResult?.total_owed || 0) - (payments?.total || 0);
+    const inventoryValue = invValue?.total || 0;
 
     return {
       ...p,
       balance_owed: Math.max(0, totalOwed),
+      inventory_value: inventoryValue,
+      total_owed: Math.max(0, totalOwed) + inventoryValue,
       inventory_lbs: inv?.on_hand || 0,
       last_intake_date: lastIntake?.last_date || null,
       last_payment_date: payments?.last_date || null,
@@ -158,7 +183,7 @@ async function getPartnerDetail(db, partnerId) {
   }
   const totalPayments = payments.reduce((sum, p) => sum + p.amount, 0);
 
-  // Inventory by strain+type
+  // Inventory by strain+type with value
   const inventory = await query(db, `
     SELECT strain, type,
       COALESCE(SUM(intake_lbs), 0) - COALESCE(SUM(sale_lbs), 0) as on_hand_lbs
@@ -172,6 +197,21 @@ async function getPartnerDetail(db, partnerId) {
     ORDER BY strain, type
   `, [partnerId, partnerId]);
 
+  // Enrich inventory with price and calculate total inventory value
+  let inventoryValue = 0;
+  for (const item of inventory) {
+    const priceRow = await queryOne(db, `
+      SELECT price_per_lb FROM consignment_intakes
+      WHERE partner_id = ? AND strain = ? AND type = ?
+      ORDER BY date DESC LIMIT 1
+    `, [partnerId, item.strain, item.type]);
+    item.price_per_lb = priceRow?.price_per_lb || 0;
+    item.value = item.on_hand_lbs * item.price_per_lb;
+    inventoryValue += item.value;
+  }
+
+  const salesBalance = Math.max(0, totalOwed - totalPayments);
+
   return successResponse({
     success: true,
     data: {
@@ -180,7 +220,9 @@ async function getPartnerDetail(db, partnerId) {
       sales,
       payments,
       inventory,
-      balance_owed: Math.max(0, totalOwed - totalPayments),
+      balance_owed: salesBalance,
+      inventory_value: inventoryValue,
+      total_owed: salesBalance + inventoryValue,
       total_paid: totalPayments,
     }
   });
