@@ -152,3 +152,7 @@ export function deleteSale(id) {
 export function deletePayment(id) {
   return queueablePost('deleteConsignmentPayment', { id });
 }
+
+export function syncFromPool() {
+  return apiPost('syncConsignmentFromPool', {});
+}

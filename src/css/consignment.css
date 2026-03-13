@@ -807,6 +807,32 @@ html[data-theme='light'] .inventory-bar {
   color: #62758d;
 }
 
+.quick-action-card.sync {
+  border-bottom-color: rgba(98, 117, 141, 0.6);
+}
+
+.quick-action-card.sync:hover {
+  border-bottom-width: 3px;
+}
+
+.quick-action-card.sync .quick-action-icon {
+  color: #62758d;
+}
+
+.quick-action-card.syncing {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.quick-action-card.syncing .quick-action-icon i {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .quick-action-label {
   font-size: 16px;
   font-weight: 600;
@@ -2389,6 +2415,10 @@ html[data-theme='light'] .quick-action-label {
 
 html[data-theme='light'] .quick-action-hint {
   color: rgba(45, 58, 46, 0.5);
+}
+
+html[data-theme='light'] .quick-action-card.sync:hover {
+  background: rgba(98, 117, 141, 0.06);
 }
 
 /* Consignment Summary */
