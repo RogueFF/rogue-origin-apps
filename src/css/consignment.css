@@ -476,6 +476,47 @@ html[data-theme='light'] .section-number {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   CONSIGNMENT SUMMARY — Aggregate totals strip
+   ═══════════════════════════════════════════════════════════ */
+
+.consignment-summary {
+  display: flex;
+  gap: 24px;
+  padding: 16px 20px;
+  background: rgba(26, 30, 27, 0.7);
+  border: 1px solid rgba(102, 137, 113, 0.15);
+  border-radius: 8px;
+  margin-bottom: 16px;
+  grid-column: 1 / -1;
+}
+
+.summary-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.summary-label {
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.summary-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.summary-value.owed {
+  color: #e4aa4f;
+}
+
+/* ═══════════════════════════════════════════════════════════
    PARTNER CARDS — Inventory-first layout
    ═══════════════════════════════════════════════════════════ */
 
@@ -1177,7 +1218,7 @@ html[data-theme='light'] .inventory-bar {
 
 .inv-table-header {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
   padding: 8px 12px;
   background: rgba(255, 255, 255, 0.03);
   font-size: 10px;
@@ -2110,6 +2151,11 @@ body.auth-required .main {
     font-size: 20px;
   }
 
+  .consignment-summary {
+    flex-wrap: wrap;
+    gap: 12px 20px;
+  }
+
   .partner-cards {
     grid-template-columns: 1fr;
   }
@@ -2343,6 +2389,24 @@ html[data-theme='light'] .quick-action-label {
 
 html[data-theme='light'] .quick-action-hint {
   color: rgba(45, 58, 46, 0.5);
+}
+
+/* Consignment Summary */
+html[data-theme='light'] .consignment-summary {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+html[data-theme='light'] .summary-label {
+  color: rgba(45, 58, 46, 0.5);
+}
+
+html[data-theme='light'] .summary-value {
+  color: #2d3a2e;
+}
+
+html[data-theme='light'] .summary-value.owed {
+  color: #c48a2a;
 }
 
 /* Partner Cards */

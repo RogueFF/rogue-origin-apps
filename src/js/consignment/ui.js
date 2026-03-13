@@ -24,15 +24,42 @@ export function renderPartnerCards(partners, container, onCardClick) {
     return;
   }
 
+  // Compute aggregate totals across all partners
+  const totalOwedAll = partners.reduce((s, p) => s + (p.total_owed || 0), 0);
+  const totalInventoryLbs = partners.reduce((s, p) => s + (p.inventory_lbs || 0), 0);
+  const totalInventoryValue = partners.reduce((s, p) => s + (p.inventory_value || 0), 0);
+
+  if (totalOwedAll > 0 || totalInventoryLbs > 0) {
+    const summary = document.createElement('div');
+    summary.className = 'consignment-summary';
+    summary.innerHTML = `
+      <div class="summary-stat">
+        <span class="summary-label">Total Owed</span>
+        <span class="summary-value owed">\$${fmtWhole(totalOwedAll)}</span>
+      </div>
+      <div class="summary-stat">
+        <span class="summary-label">Inventory Value</span>
+        <span class="summary-value">\$${fmtWhole(totalInventoryValue)}</span>
+      </div>
+      <div class="summary-stat">
+        <span class="summary-label">Total On Hand</span>
+        <span class="summary-value">${totalInventoryLbs.toFixed(1)} lbs</span>
+      </div>
+    `;
+    container.appendChild(summary);
+  }
+
   // Sort by inventory descending — highest inventory first
   const sorted = [...partners].sort((a, b) => (b.inventory_lbs || 0) - (a.inventory_lbs || 0));
   const maxInventory = sorted[0]?.inventory_lbs || 1;
 
   sorted.forEach((p, idx) => {
-    const balanceClass = p.balance_owed <= 0 ? 'low' : p.balance_owed > 5000 ? 'high' : p.balance_owed > 1000 ? 'medium' : 'low';
+    const totalOwed = p.total_owed || 0;
+    const owedClass = totalOwed <= 0 ? 'low' : totalOwed > 10000 ? 'high' : totalOwed > 3000 ? 'medium' : 'low';
     const inventoryDisplay = p.inventory_lbs > 0 ? p.inventory_lbs.toFixed(1) + ' lbs' : '0 lbs';
     const isDominant = idx === 0 && sorted.length > 1;
     const pct = Math.min(100, ((p.inventory_lbs || 0) / maxInventory) * 100);
+    const invValue = p.inventory_value || 0;
 
     const card = document.createElement('div');
     card.className = 'partner-card' + (isDominant ? ' partner-card--dominant' : '');
@@ -43,12 +70,12 @@ export function renderPartnerCards(partners, container, onCardClick) {
         <i class="ph-duotone ph-caret-right card-expand-icon"></i>
       </div>
       <div class="card-hero-number">${inventoryDisplay}</div>
-      <div class="card-hero-label">on hand</div>
+      <div class="card-hero-label">on hand${invValue > 0 ? ' · $' + fmtWhole(invValue) + ' value' : ''}</div>
       <div class="card-strains" id="strains-${p.id}"></div>
       <div class="inventory-bar"><div class="inventory-bar-fill" style="width: ${pct}%"></div></div>
       <div class="card-bottom-row">
         <span>${p.last_intake_date ? 'Last intake: ' + fmtDate(p.last_intake_date) : 'No intakes'}</span>
-        <span class="card-balance ${balanceClass}">${p.balance_owed > 0 ? '$' + fmt(p.balance_owed) + ' owed' : 'Settled'}</span>
+        <span class="card-balance ${owedClass}">${totalOwed > 0 ? '$' + fmtWhole(totalOwed) + ' owed' : 'Settled'}</span>
       </div>
     `;
 
@@ -170,7 +197,9 @@ export function renderPartnerDetail(detail, container, onClose) {
   const totalIntakeLbs = d.intakes.reduce((s, i) => s + i.weight_lbs, 0);
   const totalSoldLbs = d.sales.reduce((s, i) => s + i.weight_lbs, 0);
   const onHandLbs = d.inventory.reduce((s, i) => s + i.on_hand_lbs, 0);
-  
+  const inventoryValue = d.inventory_value || 0;
+  const totalOwed = d.total_owed || 0;
+
   container.innerHTML = `
     <div class="detail-header">
       <div>
@@ -184,39 +213,39 @@ export function renderPartnerDetail(detail, container, onClose) {
         <button class="close-detail-btn" aria-label="Close">&times;</button>
       </div>
     </div>
-    
+
     <div class="detail-body">
+      ${totalOwed > 0 ? `
+      <div class="total-owed-banner">
+        <div class="total-owed-row">
+          <span class="total-owed-label">Total Owed</span>
+          <span class="total-owed-amount">\$${fmtWhole(totalOwed)}</span>
+        </div>
+        <div class="total-owed-breakdown">
+          <span><i class="ph-duotone ph-package"></i> Inventory: \$${fmtWhole(inventoryValue)}</span>
+          <span><i class="ph-duotone ph-receipt"></i> Unpaid sales: \$${fmtWhole(d.balance_owed)}</span>
+        </div>
+      </div>
+      ` : ''}
+
       <div class="detail-stats">
         <div class="detail-stat">
-          <div class="stat-label">Balance Owed</div>
-          <div class="stat-value ${d.balance_owed > 0 ? 'warning' : ''}">\$${fmt(d.balance_owed)}</div>
+          <div class="stat-label">Inventory Value</div>
+          <div class="stat-value ${inventoryValue > 0 ? 'warning' : ''}">\$${fmtWhole(inventoryValue)}</div>
         </div>
         <div class="detail-stat">
-          <div class="stat-label">Total Paid</div>
-          <div class="stat-value positive">\$${fmt(d.total_paid)}</div>
+          <div class="stat-label">Unpaid Sales</div>
+          <div class="stat-value ${d.balance_owed > 0 ? 'warning' : ''}">\$${fmt(d.balance_owed)}</div>
         </div>
         <div class="detail-stat">
           <div class="stat-label">In Stock</div>
           <div class="stat-value">${onHandLbs.toFixed(1)} <small>lbs</small></div>
         </div>
         <div class="detail-stat">
-          <div class="stat-label">Total Purchased</div>
-          <div class="stat-value">${totalIntakeLbs.toFixed(1)} <small>lbs</small></div>
+          <div class="stat-label">Total Paid</div>
+          <div class="stat-value positive">\$${fmtWhole(d.total_paid)}</div>
         </div>
       </div>
-      
-      ${d.balance_owed > 0 && onHandLbs > 0 ? `
-        <div class="stock-vs-owed-bar">
-          <div class="bar-label">
-            <span><strong>${onHandLbs.toFixed(1)} lbs</strong> in stock</span>
-            <span><strong>\$${fmt(d.balance_owed)}</strong> owed</span>
-          </div>
-          <div class="bar-track">
-            <div class="bar-fill bar-stock" style="width: ${Math.min(100, (onHandLbs / (onHandLbs + (d.balance_owed / 100))) * 100)}%"></div>
-          </div>
-          <div class="bar-hint">Physical inventory vs financial liability</div>
-        </div>
-      ` : ''}
       
       ${d.inventory.length > 0 ? `
         <div class="detail-section">
@@ -226,14 +255,22 @@ export function renderPartnerDetail(detail, container, onClose) {
               <span>Strain</span>
               <span>Type</span>
               <span>On Hand</span>
+              <span>Value</span>
             </div>
             ${d.inventory.map(i => `
               <div class="inv-table-row">
                 <span class="inv-strain">${esc(i.strain)}</span>
                 <span class="inv-type type-${i.type}">${i.type}</span>
                 <span class="inv-lbs">${i.on_hand_lbs.toFixed(1)} lbs</span>
+                <span class="inv-value">\$${fmtWhole(i.value || 0)}</span>
               </div>
             `).join('')}
+            <div class="inv-table-row inv-table-total">
+              <span class="inv-strain"><strong>Total</strong></span>
+              <span></span>
+              <span class="inv-lbs"><strong>${onHandLbs.toFixed(1)} lbs</strong></span>
+              <span class="inv-value"><strong>\$${fmtWhole(inventoryValue)}</strong></span>
+            </div>
           </div>
         </div>
       ` : ''}
@@ -473,6 +510,11 @@ function esc(str) {
 function fmt(num) {
   if (num == null || isNaN(num)) return '0.00';
   return Number(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtWhole(num) {
+  if (num == null || isNaN(num)) return '0';
+  return Number(num).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
 function fmtDate(dateStr) {
