@@ -136,7 +136,25 @@ async function getScoreboardData(env, date = null) {
   }
   result.strain = activeStrain;
 
-  const targetRate = await getEffectiveTargetRate(env, 2, timeSlotMultipliers, activeStrain);
+  // Build strain-specific target rate map for all strains worked today
+  const uniqueStrains = [...new Set(rows.map(r => r.strain).filter(s => s && s.trim() !== ''))];
+  const strainTargetRates = new Map();
+  
+  for (const strain of uniqueStrains) {
+    const rate = await getEffectiveTargetRate(env, 2, timeSlotMultipliers, strain);
+    strainTargetRates.set(strain, rate);
+  }
+
+  // Helper to get target rate for a given strain
+  const getTargetRateForStrain = (strain) => {
+    if (!strain || strain.trim() === '') {
+      return 0.85; // Default baseline for rows without strain
+    }
+    return strainTargetRates.get(strain) || 0.85;
+  };
+
+  // Active strain's target rate (for display)
+  const targetRate = getTargetRateForStrain(activeStrain);
   result.targetRate = targetRate;
 
   let totalLbs = 0;
@@ -154,23 +172,25 @@ async function getScoreboardData(env, date = null) {
 
   if (lastCompletedHourIndex >= 0) {
     const lastRow = rows[lastCompletedHourIndex];
+    const lastRowTargetRate = getTargetRateForStrain(lastRow.strain);
     result.lastHourLbs = lastRow.tops;
     result.lastHourSmalls = lastRow.smalls;
     result.lastHourTrimmers = lastRow.rawTrimmers;
     result.lastHourEffectiveTrimmers = lastRow.trimmers;
     result.lastHourBuckers = lastRow.buckers || 0;
     result.lastHourMultiplier = lastRow.multiplier;
-    result.lastHourTarget = lastRow.trimmers * targetRate * lastRow.multiplier;
+    result.lastHourTarget = lastRow.trimmers * lastRowTargetRate * lastRow.multiplier;
     result.lastTimeSlot = lastRow.timeSlot;
   }
 
   if (currentHourIndex >= 0) {
     const currentRow = rows[currentHourIndex];
+    const currentRowTargetRate = getTargetRateForStrain(currentRow.strain);
     result.currentHourTrimmers = currentRow.rawTrimmers;
     result.currentHourEffectiveTrimmers = currentRow.trimmers;
     result.currentHourBuckers = currentRow.buckers || 0;
     result.currentHourMultiplier = currentRow.multiplier;
-    result.currentHourTarget = currentRow.trimmers * targetRate * currentRow.multiplier;
+    result.currentHourTarget = currentRow.trimmers * currentRowTargetRate * currentRow.multiplier;
     result.currentTimeSlot = currentRow.timeSlot;
   }
 
@@ -190,7 +210,9 @@ async function getScoreboardData(env, date = null) {
   for (let i = 0; i <= lastCompletedHourIndex && i < rows.length; i++) {
     const row = rows[i];
     if (row.trimmers > 0 && row.tops > 0) {
-      const hourTarget = row.trimmers * targetRate * row.multiplier;
+      // Use strain-specific target rate for this hour
+      const rowTargetRate = getTargetRateForStrain(row.strain);
+      const hourTarget = row.trimmers * rowTargetRate * row.multiplier;
       totalTarget += hourTarget;
 
       const pct = hourTarget > 0 ? (row.tops / hourTarget) * 100 : 0;
@@ -213,7 +235,7 @@ async function getScoreboardData(env, date = null) {
       hourlyRates.push({
         timeSlot: row.timeSlot,
         rate,
-        target: targetRate,
+        target: rowTargetRate, // Use row-specific target rate
         trimmers: row.rawTrimmers,
         effectiveTrimmers: row.trimmers,
         buckers: row.buckers,
@@ -253,6 +275,9 @@ async function getExtendedDailyData(days, env) {
   cutoff.setDate(cutoff.getDate() - days);
   const cutoffStr = formatDatePT(cutoff, 'yyyy-MM-dd');
 
+  // Fetch smalls inspector count config
+  const smallsInspectorCount = (await getConfig(env, 'labor.smalls_inspector_count')) ?? 1;
+
   const rows = await query(env.DB, `
     SELECT production_date,
            SUM(tops_lbs1) as total_tops,
@@ -289,6 +314,10 @@ async function getExtendedDailyData(days, env) {
     const tzeroHours = r.tzero_hours || 0;
     const waterspiderHours = r.hours_with_data || 0;
 
+    // Smalls inspector: fixed count for every hour of production
+    const hoursWithData = r.hours_with_data || 0;
+    const smallsInspectorHours = smallsInspectorCount * hoursWithData;
+
     const topsRatio = totalLbs > 0 ? totalTops / totalLbs : 1;
     const smallsRatio = totalLbs > 0 ? totalSmalls / totalLbs : 0;
 
@@ -297,7 +326,10 @@ async function getExtendedDailyData(days, env) {
     const smallsSharedHours = sharedHours * smallsRatio;
 
     const topsLaborHours = trimmerHours + topsSharedHours;
-    const smallsLaborHours = smallsSharedHours;
+    let smallsLaborHours = smallsSharedHours;
+    
+    // Add inspector hours DIRECTLY to smalls labor (100% attribution)
+    smallsLaborHours += smallsInspectorHours;
 
     const topsLaborCost = topsLaborHours * TOTAL_LABOR_COST_PER_HOUR;
     const smallsLaborCost = smallsLaborHours * TOTAL_LABOR_COST_PER_HOUR;
@@ -307,7 +339,7 @@ async function getExtendedDailyData(days, env) {
     const smallsCostPerLb = totalSmalls > 0 ? smallsLaborCost / totalSmalls : 0;
     const blendedCostPerLb = totalLbs > 0 ? totalLaborCost / totalLbs : 0;
 
-    const totalOperatorHours = buckerHours + trimmerHours + tzeroHours + waterspiderHours;
+    const totalOperatorHours = buckerHours + trimmerHours + tzeroHours + waterspiderHours + smallsInspectorHours;
 
     return {
       date: new Date(r.production_date),
@@ -458,6 +490,11 @@ async function dashboard(params, env) {
   const todayTZeroHours = todayOperatorData?.tzero_hours || 0;
   const todayWaterspiderHours = todayOperatorData?.hours_with_data || 0;
 
+  // Smalls inspector: fixed count for every hour of production
+  const smallsInspectorCount = (await getConfig(env, 'labor.smalls_inspector_count')) ?? 1;
+  const todayHoursWithData = todayOperatorData?.hours_with_data || 0;
+  const todaySmallsInspectorHours = smallsInspectorCount * todayHoursWithData;
+
   const todayTopsRatio = todayTotalLbs > 0 ? todayTops / todayTotalLbs : 1;
   const todaySmallsRatio = todayTotalLbs > 0 ? todaySmalls / todayTotalLbs : 0;
 
@@ -466,7 +503,10 @@ async function dashboard(params, env) {
   const todaySmallsSharedHours = todaySharedHours * todaySmallsRatio;
 
   const todayTopsLaborHours = todayTrimmerHours + todayTopsSharedHours;
-  const todaySmallsLaborHours = todaySmallsSharedHours;
+  let todaySmallsLaborHours = todaySmallsSharedHours;
+  
+  // Add inspector hours DIRECTLY to smalls labor (100% attribution)
+  todaySmallsLaborHours += todaySmallsInspectorHours;
 
   const todayTopsLaborCost = todayTopsLaborHours * TOTAL_LABOR_COST_PER_HOUR;
   const todaySmallsLaborCost = todaySmallsLaborHours * TOTAL_LABOR_COST_PER_HOUR;
@@ -476,7 +516,7 @@ async function dashboard(params, env) {
   const todaySmallsCostPerLb = todaySmalls > 0 ? todaySmallsLaborCost / todaySmalls : 0;
   const todayBlendedCostPerLb = todayTotalLbs > 0 ? todayTotalLaborCost / todayTotalLbs : 0;
 
-  const todayTotalOperatorHours = todayBuckerHours + todayTrimmerHours + todayTZeroHours + todayWaterspiderHours;
+  const todayTotalOperatorHours = todayBuckerHours + todayTrimmerHours + todayTZeroHours + todayWaterspiderHours + todaySmallsInspectorHours;
 
   const hoursWithData = todayOperatorData?.hours_with_data || 0;
 
