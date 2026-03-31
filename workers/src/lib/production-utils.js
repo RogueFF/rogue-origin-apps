@@ -139,63 +139,45 @@ async function incrementDataVersion(env) {
 // ===== EFFECTIVE TARGET RATE =====
 
 async function getEffectiveTargetRate(env, days = 7, timeSlotMultipliers = null, strain = null) {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 30);
-  const cutoffStr = formatDatePT(cutoff, 'yyyy-MM-dd');
-
-  // Try strain-specific query first if strain is provided
-  if (strain && strain.trim() !== '') {
-    const strainSlots = await query(env.DB, `
-      SELECT production_date, time_slot, tops_lbs1, trimmers_line1
-      FROM monthly_production
-      WHERE production_date >= ?
-        AND tops_lbs1 > 0 AND trimmers_line1 > 0
-        AND cultivar1 = ?
-      ORDER BY production_date
-    `, [cutoffStr, strain]);
-
-    const strainDates = [...new Set(strainSlots.map(s => s.production_date))].sort().slice(-days);
-    const strainDateSet = new Set(strainDates);
-
-    let strainTotalTops = 0;
-    let strainTotalEffectiveTrimmerHours = 0;
-
-    for (const slot of strainSlots) {
-      if (strainDateSet.has(slot.production_date)) {
-        strainTotalTops += slot.tops_lbs1;
-        strainTotalEffectiveTrimmerHours += slot.trimmers_line1 * getTimeSlotMultiplier(slot.time_slot, timeSlotMultipliers);
-      }
-    }
-
-    // If we have data for this strain, use it
-    if (strainTotalEffectiveTrimmerHours > 0) {
-      return strainTotalTops / strainTotalEffectiveTrimmerHours;
-    }
+  // NEW BEHAVIOR (2026-03-31):
+  // - Use ALL available data for a strain (ongoing cumulative average)
+  // - NO global fallback — each strain's target is based solely on its own history
+  // - If no strain data exists, return baseline default (0.85 lbs/hr)
+  
+  if (!strain || strain.trim() === '') {
+    // No strain provided → return default baseline
+    return 0.85;
   }
 
-  // Fall back to global average (unfiltered)
-  const slots = await query(env.DB, `
-    SELECT production_date, time_slot, tops_lbs1, trimmers_line1
+  // Query ALL available data for this strain (no date cutoff)
+  const strainSlots = await query(env.DB, `
+    SELECT time_slot, tops_lbs1, trimmers_line1
     FROM monthly_production
-    WHERE production_date >= ?
-      AND tops_lbs1 > 0 AND trimmers_line1 > 0
-    ORDER BY production_date
-  `, [cutoffStr]);
+    WHERE tops_lbs1 > 0 AND trimmers_line1 > 0
+      AND cultivar1 = ?
+    ORDER BY production_date, time_slot
+  `, [strain]);
 
-  const dates = [...new Set(slots.map(s => s.production_date))].sort().slice(-days);
-  const dateSet = new Set(dates);
-
-  let totalTops = 0;
-  let totalEffectiveTrimmerHours = 0;
-
-  for (const slot of slots) {
-    if (dateSet.has(slot.production_date)) {
-      totalTops += slot.tops_lbs1;
-      totalEffectiveTrimmerHours += slot.trimmers_line1 * getTimeSlotMultiplier(slot.time_slot, timeSlotMultipliers);
-    }
+  if (!strainSlots || strainSlots.length === 0) {
+    // New cultivar with no data yet → return default baseline
+    return 0.85;
   }
 
-  return totalEffectiveTrimmerHours > 0 ? totalTops / totalEffectiveTrimmerHours : 1.0;
+  // Calculate cumulative average across ALL data for this strain
+  let strainTotalTops = 0;
+  let strainTotalEffectiveTrimmerHours = 0;
+
+  for (const slot of strainSlots) {
+    strainTotalTops += slot.tops_lbs1;
+    strainTotalEffectiveTrimmerHours += slot.trimmers_line1 * getTimeSlotMultiplier(slot.time_slot, timeSlotMultipliers);
+  }
+
+  if (strainTotalEffectiveTrimmerHours > 0) {
+    return strainTotalTops / strainTotalEffectiveTrimmerHours;
+  }
+
+  // Shouldn't reach here, but fallback to default
+  return 0.85;
 }
 
 export {
