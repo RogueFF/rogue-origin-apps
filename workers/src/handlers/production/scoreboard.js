@@ -46,6 +46,7 @@ async function getScoreboardData(env, date = null) {
     currentHourMultiplier: 1.0,
     targetRate: 0,
     strain: '',
+    usingStrainRate: false,
     todayLbs: 0,
     todayTarget: 0,
     todayPercentage: 0,
@@ -156,6 +157,9 @@ async function getScoreboardData(env, date = null) {
   // Active strain's target rate (for display)
   const targetRate = getTargetRateForStrain(activeStrain);
   result.targetRate = targetRate;
+  
+  // Flag whether we're using strain-specific data (vs baseline default)
+  result.usingStrainRate = activeStrain && strainTargetRates.has(activeStrain);
 
   let totalLbs = 0;
   let hoursWorked = 0;
