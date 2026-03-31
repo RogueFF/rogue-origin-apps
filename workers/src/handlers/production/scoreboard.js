@@ -240,6 +240,7 @@ async function getScoreboardData(env, date = null) {
         timeSlot: row.timeSlot,
         rate,
         target: rowTargetRate, // Use row-specific target rate
+        strain: row.strain || '', // Include strain for tooltip display
         trimmers: row.rawTrimmers,
         effectiveTrimmers: row.trimmers,
         buckers: row.buckers,
