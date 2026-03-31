@@ -189,6 +189,19 @@
                   var pct = h.target > 0 ? ((h.rate / h.target) * 100) : 0;
                   var pctStr = Math.round(pct) + '% of target';
                   var lines = [];
+                  
+                  // Strain abbreviation (if present)
+                  if (h.strain) {
+                    var strainAbbr = h.strain
+                      .replace('2025 - ', '')
+                      .replace(' / Sungrown', '')
+                      .replace('Lifter', 'LFT')
+                      .replace('Legendary Platinum OG', 'LPOG')
+                      .replace('Lemon Cookie Dough', 'LCD')
+                      .replace('Purple Frosty', 'PF');
+                    lines.push('🌿 ' + strainAbbr);
+                  }
+                  
                   lines.push(h.lbs.toFixed(1) + ' lbs  →  ' + pctStr);
                   lines.push(h.rate.toFixed(2) + ' lbs/trimmer/hr');
 
