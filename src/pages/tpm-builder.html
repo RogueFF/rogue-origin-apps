@@ -1722,11 +1722,21 @@
 
       .print-card-page:last-child { page-break-after: auto; }
 
-      .print-card-page .tcard-front,
-      .print-card-page .tcard-back {
+      .print-card-page .tcard-front {
         position: absolute;
         top: 0.2in;
         left: 1.82in;
+        width: 3.86in;
+        height: 9.3in;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .print-card-page .tcard-back {
+        position: absolute;
+        top: 0.2in;
+        left: 2.82in;  /* Shifted for short-edge flip alignment */
         width: 3.86in;
         height: 9.3in;
         padding: 0;
