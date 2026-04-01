@@ -1765,10 +1765,16 @@
 
     @page {
       size: letter portrait;
-      margin-top: 0.95in;      /* Centers 9.1in card vertically: (11 - 9.1) / 2 */
-      margin-bottom: 0.95in;
+      margin-top: 1.0in;       /* Slightly more top margin to prevent footer cutoff */
+      margin-bottom: 0.9in;
       margin-left: 2.32in;     /* Centers 3.86in card horizontally: (8.5 - 3.86) / 2 */
       margin-right: 2.32in;
+    }
+
+    /* Duplex offset correction for back pages (Epson ET5850) */
+    @page :left {
+      margin-left: 2.22in;     /* Back page: shift left 0.1in to compensate for duplex offset */
+      margin-right: 2.42in;
     }
 
     /* ========================================
