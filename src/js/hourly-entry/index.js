@@ -704,19 +704,22 @@ function initializeUI() {
   }
 
   // Back to timeline button
-  document.getElementById('back-to-timeline').addEventListener('click', () => {
+  document.getElementById('back-to-timeline').addEventListener('click', async () => {
+    await ensureSaved();
     showView('timeline');
   });
 
   // Prev/Next navigation
-  document.getElementById('prev-slot').addEventListener('click', () => {
+  document.getElementById('prev-slot').addEventListener('click', async () => {
     if (currentSlotIndex > 0) {
+      await ensureSaved();
       openEditor(currentSlotIndex - 1);
     }
   });
 
-  document.getElementById('next-slot').addEventListener('click', () => {
+  document.getElementById('next-slot').addEventListener('click', async () => {
     if (currentSlotIndex < TIME_SLOTS.length - 1) {
+      await ensureSaved();
       openEditor(currentSlotIndex + 1);
     }
   });
@@ -1344,6 +1347,18 @@ function scheduleAutoSave() {
   updateStepGuide();
 
   saveTimeout = setTimeout(() => saveEntry(), 1000);
+}
+
+/**
+ * Force any pending autosave to complete immediately.
+ * Call before navigation to avoid losing unsaved changes.
+ */
+async function ensureSaved() {
+  if (saveTimeout) {
+    clearTimeout(saveTimeout);
+    saveTimeout = null;
+    await saveEntry();
+  }
 }
 
 function handleEnterKey(currentFieldId) {
