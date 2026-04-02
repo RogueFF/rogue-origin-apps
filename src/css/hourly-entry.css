@@ -3101,6 +3101,31 @@ body {
   color: var(--gold);
 }
 
+.cumulative-target-display {
+  text-align: center;
+  padding: 16px;
+  margin-top: 12px;
+  background: rgba(102, 137, 113, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(102, 137, 113, 0.3);
+}
+
+.cumulative-target-display .target-label {
+  display: block;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cumulative-target-display .target-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 22px;
+  font-weight: 500;
+  color: rgba(213, 172, 91, 0.9);
+}
+
 /* Save Indicator */
 .save-indicator {
   text-align: center;
