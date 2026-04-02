@@ -1338,9 +1338,19 @@ function updateStepGuide() {
       cumulativeActual += slotTops;
     }
     
-    // Display as "actual / target"
+    // Check if current hour has production entered
+    const currentSlotKey = TIME_SLOTS[currentSlotIndex];
+    const currentSlotData = dayData[currentSlotKey] || {};
+    const currentSlotTops = (currentSlotData.tops1 || 0) + (currentSlotData.tops2 || 0);
+    const currentHourHasProduction = currentSlotTops > 0;
+    
+    // Display as "actual / target" or "-- / target" if current hour incomplete
     if (cumulativeTarget > 0) {
-      cumulativeTargetEl.textContent = `${cumulativeActual.toFixed(1)} / ${cumulativeTarget.toFixed(1)} lbs`;
+      if (currentHourHasProduction) {
+        cumulativeTargetEl.textContent = `${cumulativeActual.toFixed(1)} / ${cumulativeTarget.toFixed(1)} lbs`;
+      } else {
+        cumulativeTargetEl.textContent = `-- / ${cumulativeTarget.toFixed(1)} lbs`;
+      }
     } else {
       cumulativeTargetEl.textContent = '-- / -- lbs';
     }
