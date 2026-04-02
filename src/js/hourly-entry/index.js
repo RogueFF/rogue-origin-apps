@@ -304,6 +304,7 @@ let dayData = {};
 let cultivarOptions = [];
 let saveTimeout = null;
 let targetRate = 0.9; // Default, will be updated from API
+let dailyTargetFromBackend = 0; // Backend-calculated daily target (matches scoreboard)
 let originalCrewData = null; // Track original crew for modification detection
 let pendingSaveData = null; // Track failed save for retry
 let isSaving = false; // Prevent concurrent saves
@@ -1513,26 +1514,40 @@ async function loadDayData(date) {
   showLoading(true);
 
   try {
-    const response = await fetch(`${API_URL}?action=getProduction&date=${date}`);
-    const result = await response.json();
-    const data = result.data || result;
+    // Fetch both production data and scoreboard data in parallel
+    const [productionResponse, scoreboardResponse] = await Promise.all([
+      fetch(`${API_URL}?action=getProduction&date=${date}`),
+      fetch(`${API_URL}?action=scoreboard&date=${date}`)
+    ]);
+
+    const productionResult = await productionResponse.json();
+    const productionData = productionResult.data || productionResult;
+
+    const scoreboardResult = await scoreboardResponse.json();
+    const scoreboardWrapper = scoreboardResult.data || scoreboardResult;
+    const scoreboardData = scoreboardWrapper.scoreboard || {};
 
     dayData = {};
 
     // Handle D1 format: production array
-    if (data.production && Array.isArray(data.production)) {
-      data.production.forEach((row) => {
+    if (productionData.production && Array.isArray(productionData.production)) {
+      productionData.production.forEach((row) => {
         dayData[row.timeSlot] = row;
       });
     }
     // Handle Sheets format: slots object
-    else if (data.slots && typeof data.slots === 'object') {
-      dayData = data.slots;
+    else if (productionData.slots && typeof productionData.slots === 'object') {
+      dayData = productionData.slots;
     }
 
-    // Get target rate if available
-    if (data.targetRate) {
-      targetRate = data.targetRate;
+    // Get target rate from production response
+    if (productionData.targetRate) {
+      targetRate = productionData.targetRate;
+    }
+
+    // Get backend-calculated daily target from scoreboard (matches scoreboard display)
+    if (scoreboardData.todayTarget !== undefined) {
+      dailyTargetFromBackend = scoreboardData.todayTarget;
     }
 
     renderTimeline();
@@ -1578,31 +1593,24 @@ function populateCultivarSelects() {
 
 function updateTimelineSummary() {
   let totalTops = 0;
-  let totalTarget = 0;
   let hoursLogged = 0;
 
-  // For today, exclude current hour from target (data entered at END of hour)
+  // For today, exclude current hour from totals (data entered at END of hour)
   const isToday = currentDate === formatDateLocal(new Date());
   const currentSlot = isToday ? getCurrentTimeSlot() : null;
 
   Object.entries(dayData).forEach(([slot, row]) => {
     const rowTops = (row.tops1 || 0) + (row.tops2 || 0);
-    const hasCrew = (row.trimmers1 > 0) || (row.trimmers2 > 0);
     
     // Only count hours with production entered (excludes current hour with crew but no production)
     if (rowTops > 0 && slot !== currentSlot) {
       totalTops += rowTops;
       hoursLogged++;
-      
-      // Calculate target for this completed hour
-      const slotKey = row.timeSlot || slot;
-      const effective = getEffectiveTrimmers(slotKey, row);
-      const effectiveTotal = effective.effectiveTrimmers1 + effective.effectiveTrimmers2;
-      const multiplier = getSlotMultiplier(slotKey);
-      totalTarget += effectiveTotal * targetRate * multiplier;
     }
   });
 
+  // Use backend-calculated target (matches scoreboard exactly - includes strain-specific rates)
+  const totalTarget = dailyTargetFromBackend;
   const percentage = totalTarget > 0 ? Math.round((totalTops / totalTarget) * 100) : 0;
 
   document.getElementById('timeline-total').textContent = `${totalTops.toFixed(1)} lbs`;
