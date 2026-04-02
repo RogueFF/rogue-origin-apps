@@ -1307,6 +1307,34 @@ function updateStepGuide() {
       : '';
     hourlyTargetEl.textContent = hourlyTarget > 0 ? `${hourlyTarget.toFixed(1)} lbs${effNote}` : '-- lbs';
   }
+
+  // Calculate and update cumulative target (sum of all hourly targets up to current slot)
+  const cumulativeTargetEl = document.getElementById('cumulative-target-value');
+  if (cumulativeTargetEl) {
+    let cumulativeTarget = 0;
+    
+    // Sum targets for all visible slots up to and including current slot
+    for (let i = 0; i <= currentSlotIndex && i < TIME_SLOTS.length; i++) {
+      const slotKey = TIME_SLOTS[i];
+      const slotData = dayData[slotKey] || {};
+      
+      // Skip slots before shift start (for today only)
+      const isToday = currentDate === formatDateLocal(new Date());
+      if (isToday && !isSlotVisible(slotKey)) {
+        continue;
+      }
+      
+      // Calculate target for this slot using effective trimmers
+      const slotEffective = getEffectiveTrimmers(slotKey, slotData);
+      const slotEffectiveTotal = slotEffective.effectiveTrimmers1 + slotEffective.effectiveTrimmers2;
+      const slotMultiplier = getSlotMultiplier(slotKey);
+      const slotTarget = slotEffectiveTotal * targetRate * slotMultiplier;
+      
+      cumulativeTarget += slotTarget;
+    }
+    
+    cumulativeTargetEl.textContent = cumulativeTarget > 0 ? `${cumulativeTarget.toFixed(1)} lbs` : '-- lbs';
+  }
 }
 
 function collectFormData() {
