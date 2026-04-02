@@ -1587,14 +1587,14 @@ function updateTimelineSummary() {
 
   Object.entries(dayData).forEach(([slot, row]) => {
     const rowTops = (row.tops1 || 0) + (row.tops2 || 0);
-    totalTops += rowTops;
-    if (rowTops > 0 || row.trimmers1 > 0) {
+    const hasCrew = (row.trimmers1 > 0) || (row.trimmers2 > 0);
+    
+    // Only count hours with production entered (excludes current hour with crew but no production)
+    if (rowTops > 0 && slot !== currentSlot) {
+      totalTops += rowTops;
       hoursLogged++;
-      // Skip current hour for target calculation (still being worked on)
-      if (slot === currentSlot) {
-        return; // Don't add to target - hour not complete
-      }
-      // Calculate target using effective trimmers (accounts for mid-hour crew changes)
+      
+      // Calculate target for this completed hour
       const slotKey = row.timeSlot || slot;
       const effective = getEffectiveTrimmers(slotKey, row);
       const effectiveTotal = effective.effectiveTrimmers1 + effective.effectiveTrimmers2;
