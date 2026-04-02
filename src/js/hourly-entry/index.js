@@ -1312,8 +1312,9 @@ function updateStepGuide() {
   const cumulativeTargetEl = document.getElementById('cumulative-target-value');
   if (cumulativeTargetEl) {
     let cumulativeTarget = 0;
+    let cumulativeActual = 0;
     
-    // Sum targets for all visible slots up to and including current slot
+    // Sum targets and actuals for all visible slots up to and including current slot
     for (let i = 0; i <= currentSlotIndex && i < TIME_SLOTS.length; i++) {
       const slotKey = TIME_SLOTS[i];
       const slotData = dayData[slotKey] || {};
@@ -1331,9 +1332,18 @@ function updateStepGuide() {
       const slotTarget = slotEffectiveTotal * targetRate * slotMultiplier;
       
       cumulativeTarget += slotTarget;
+      
+      // Add actual production from this slot
+      const slotTops = (slotData.tops1 || 0) + (slotData.tops2 || 0);
+      cumulativeActual += slotTops;
     }
     
-    cumulativeTargetEl.textContent = cumulativeTarget > 0 ? `${cumulativeTarget.toFixed(1)} lbs` : '-- lbs';
+    // Display as "actual / target"
+    if (cumulativeTarget > 0) {
+      cumulativeTargetEl.textContent = `${cumulativeActual.toFixed(1)} / ${cumulativeTarget.toFixed(1)} lbs`;
+    } else {
+      cumulativeTargetEl.textContent = '-- / -- lbs';
+    }
   }
 }
 
