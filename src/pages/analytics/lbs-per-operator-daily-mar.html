@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Lbs per Operator – Daily (March 2026)</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #F8F8F8; font-family: Arial, Helvetica, sans-serif; padding: 20px; }
+  .container { margin: 0 auto; }
+  h1 { text-align: center; font-size: 22px; margin-bottom: 24px; color: #222; }
+  .chart-section { background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 16px; margin-bottom: 24px; position: relative; }
+  .chart-section h2 { font-size: 16px; color: #333; margin-bottom: 12px; }
+  .monthly-avg { position: absolute; top: 14px; right: 18px; background: #F0F4FF; border: 1px solid #B0BEC5; border-radius: 4px; padding: 6px 14px; font-size: 16px; font-weight: bold; color: #333; z-index: 1; }
+  .legend-bar { display: flex; gap: 18px; justify-content: center; margin-bottom: 18px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #333; }
+  .legend-swatch { width: 16px; height: 16px; border-radius: 3px; }
+  .chart-wrap { overflow-x: auto; }
+  canvas { display: block; }
+  @media print {
+    .chart-wrap { overflow: visible; }
+    body { padding: 5px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Lbs per Operator – Daily by Strain</h1>
+
+  <div class="legend-bar">
+    <div class="legend-item"><div class="legend-swatch" style="background:#E53935"></div>Lifter</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:#1E88E5"></div>Platinum OG / Godfather OG</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:#43A047"></div>Lemon CD</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:#9E9E9E"></div>Unknown</div>
+  </div>
+
+  <div class="chart-section">
+    <h2>February 2026</h2>
+    <div class="monthly-avg" id="febAvg"></div>
+    <div class="chart-wrap"><canvas id="febChart" height="500"></canvas></div>
+  </div>
+  <div class="chart-section">
+    <h2>March 2026</h2>
+    <div class="monthly-avg" id="marAvg"></div>
+    <div class="chart-wrap"><canvas id="marChart" width="3960" height="500"></canvas></div>
+  </div>
+</div>
+
+<script>
+const allData = [
+  {"production_date":"2026-02-02","cultivar1":"2025 - Lifter (Early Harvest) / Sungrown","totalLbs":156.7,"total_crew":139},
+  {"production_date":"2026-02-03","cultivar1":"2025 - Lifter (Early Harvest) / Sungrown","totalLbs":153.2,"total_crew":154},
+  {"production_date":"2026-02-04","cultivar1":"2025 - Lifter (Early Harvest) / Sungrown","totalLbs":150.5,"total_crew":158},
+  {"production_date":"2026-02-05","cultivar1":"2025 - Lifter (Early Harvest) / Sungrown","totalLbs":279.7,"total_crew":181},
+  {"production_date":"2026-02-06","cultivar1":"","totalLbs":159.1,"total_crew":173},
+  {"production_date":"2026-02-09","cultivar1":"2025 - Lifter (Early Harvest) / Sungrown","totalLbs":133.5,"total_crew":163},
+  {"production_date":"2026-02-10","cultivar1":"2025 - Lifter (Early Harvest) / Sungrown","totalLbs":197.4,"total_crew":192},
+  {"production_date":"2026-02-11","cultivar1":"2025 - Lifter (Early Harvest) / Sungrown","totalLbs":173.3,"total_crew":165},
+  {"production_date":"2026-02-12","cultivar1":"2025 - Lifter (Early Harvest) / Sungrown","totalLbs":165.9,"total_crew":181},
+  {"production_date":"2026-02-13","cultivar1":"2025 - Lifter (Early Harvest) / Sungrown","totalLbs":130.3,"total_crew":97},
+  {"production_date":"2026-02-16","cultivar1":"2025 - Lifter (Early Harvest) / Sungrown","totalLbs":178.3,"total_crew":171},
+  {"production_date":"2026-02-17","cultivar1":"2025 - Lifter (Early Harvest) / Sungrown","totalLbs":175,"total_crew":169},
+  {"production_date":"2026-02-18","cultivar1":"2025 - Lifter (Early Harvest) / Sungrown","totalLbs":196,"total_crew":176},
+  {"production_date":"2026-02-19","cultivar1":"2025 - Godfather OG / Sungrown","totalLbs":146.6,"total_crew":162},
+  {"production_date":"2026-02-20","cultivar1":"2025 - Godfather OG / Sungrown","totalLbs":196.8,"total_crew":185},
+  {"production_date":"2026-02-23","cultivar1":"2025 - Godfather OG / Sungrown","totalLbs":201,"total_crew":181},
+  {"production_date":"2026-02-24","cultivar1":"2025 - Lifter (Early Harvest) / Sungrown","totalLbs":154,"total_crew":167},
+  {"production_date":"2026-02-25","cultivar1":"2025 - Lifter (Early Harvest) / Sungrown","totalLbs":250.7,"total_crew":192},
+  {"production_date":"2026-02-26","cultivar1":"2025 - Lifter / Sungrown","totalLbs":228.5,"total_crew":186},
+  {"production_date":"2026-02-27","cultivar1":"2025 - Lifter / Sungrown","totalLbs":176.1,"total_crew":154},
+  {"production_date":"2026-03-02","cultivar1":"2025 - Lifter / Sungrown","totalLbs":217,"total_crew":165},
+  {"production_date":"2026-03-03","cultivar1":"2025 - Lifter / Sungrown","totalLbs":186.4,"total_crew":161},
+  {"production_date":"2026-03-04","cultivar1":"2025 - Lifter / Sungrown","totalLbs":240.3,"total_crew":179},
+  {"production_date":"2026-03-05","cultivar1":"2025 - Lifter / Sungrown","totalLbs":147.7,"total_crew":135},
+  {"production_date":"2026-03-06","cultivar1":"2025 - Lifter / Sungrown","totalLbs":164.9,"total_crew":152},
+  {"production_date":"2026-03-09","cultivar1":"","totalLbs":183.1,"total_crew":161},
+  {"production_date":"2026-03-10","cultivar1":"2025 - Lifter / Sungrown","totalLbs":211.4,"total_crew":162},
+  {"production_date":"2026-03-11","cultivar1":"2025 - Lifter / Sungrown","totalLbs":501.3,"total_crew":153},
+  {"production_date":"2026-03-12","cultivar1":"2025 - Lifter / Sungrown","totalLbs":183.8,"total_crew":138},
+  {"production_date":"2026-03-13","cultivar1":"2025 - Lifter / Sungrown","totalLbs":178.6,"total_crew":162},
+  {"production_date":"2026-03-16","cultivar1":"2025 - Lifter / Sungrown","totalLbs":191.9,"total_crew":154},
+  {"production_date":"2026-03-17","cultivar1":"","totalLbs":189.7,"total_crew":160},
+  {"production_date":"2026-03-18","cultivar1":"2025 - Lifter / Sungrown","totalLbs":245.8,"total_crew":156},
+  {"production_date":"2026-03-19","cultivar1":"2025 - Lifter / Sungrown","totalLbs":219.7,"total_crew":166},
+  {"production_date":"2026-03-20","cultivar1":"2025 - Lifter / Sungrown","totalLbs":197.2,"total_crew":133},
+  {"production_date":"2026-03-23","cultivar1":"","totalLbs":154.6,"total_crew":128},
+  {"production_date":"2026-03-24","cultivar1":"2025 - Lifter / Sungrown","totalLbs":195.9,"total_crew":133},
+  {"production_date":"2026-03-25","cultivar1":"2025 - Lifter / Sungrown","totalLbs":206.4,"total_crew":146},
+  {"production_date":"2026-03-26","cultivar1":"2025 - Legendary Platinum OG / Sungrown","totalLbs":157,"total_crew":159},
+  {"production_date":"2026-03-27","cultivar1":"2025 - Lifter / Sungrown","totalLbs":207.9,"total_crew":148},
+  {"production_date":"2026-03-30","cultivar1":"2025 - Lifter / Sungrown","totalLbs":119,"total_crew":142},
+  {"production_date":"2026-03-31","cultivar1":"","totalLbs":157.7,"total_crew":165}
+];
+
+function strainColor(cultivar) {
+  const c = (cultivar || '').toLowerCase();
+  if (c.includes('lifter')) return '#E53935';
+  if (c.includes('platinum') || c.includes('godfather')) return '#1E88E5';
+  if (c.includes('lemon')) return '#43A047';
+  return '#9E9E9E';
+}
+
+function shortDate(d) {
+  const p = d.split('-');
+  return parseInt(p[1]) + '/' + parseInt(p[2]);
+}
+
+const feb = allData.filter(d => d.production_date.startsWith('2026-02'));
+const mar = allData.filter(d => d.production_date.startsWith('2026-03'));
+
+function lbsPerOp(d) { return +(d.totalLbs / d.total_crew).toFixed(2); }
+
+function monthlyAvg(data) {
+  const vals = data.map(d => lbsPerOp(d));
+  return (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2);
+}
+
+const BAR_WIDTH = 180;
+
+function buildChart(canvasId, avgId, monthLabel, data) {
+  const avg = monthlyAvg(data);
+  document.getElementById(avgId).textContent = monthLabel + ' Avg: ' + avg + ' lbs/op';
+
+  const canvas = document.getElementById(canvasId);
+  canvas.width = Math.max(data.length * BAR_WIDTH, 800);
+
+  const labels = data.map(d => shortDate(d.production_date));
+  const values = data.map(d => lbsPerOp(d));
+  const colors = data.map(d => strainColor(d.cultivar1));
+
+  const dataMax = Math.max(...values);
+  const yMax = Math.ceil((dataMax + 0.2) * 5) / 5; // round up to nearest 0.2
+
+  const ctx = canvas.getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Lbs per Operator',
+        data: values,
+        backgroundColor: colors,
+        borderColor: colors,
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: false,
+      maintainAspectRatio: false,
+      layout: {
+        padding: { top: 30, right: 40, bottom: 10, left: 10 }
+      },
+      plugins: {
+        legend: { display: false },
+        datalabels: {
+          anchor: 'end',
+          align: 'top',
+          font: { size: 10, weight: 'bold' },
+          formatter: v => v.toFixed(2)
+        }
+      },
+      scales: {
+        x: {
+          type: 'category',
+          ticks: { font: { size: 10 }, maxRotation: 45, minRotation: 0, autoSkip: false, callback: function(val, index) { return this.getLabelForValue(val); } },
+          grid: { display: false }
+        },
+        y: {
+          min: 0,
+          max: yMax,
+          ticks: { font: { size: 11 }, stepSize: 0.2 },
+          title: { display: true, text: 'Lbs per Operator', font: { size: 12 } }
+        }
+      }
+    },
+    plugins: [ChartDataLabels]
+  });
+}
+
+buildChart('marChart', 'marAvg', 'Mar', mar);
+</script>
+<script>setTimeout(() => { document.body.classList.add('ready'); }, 2000);</script>
+</body>
+</html>

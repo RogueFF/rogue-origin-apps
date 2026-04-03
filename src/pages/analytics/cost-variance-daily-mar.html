@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Daily Cost Variance – Predictability (March 2026)</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #F8F8F8; font-family: Arial, Helvetica, sans-serif; padding: 20px; }
+  .container { margin: 0 auto; }
+  h1 { text-align: center; font-size: 22px; margin-bottom: 24px; color: #222; }
+  .chart-section { background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 16px; margin-bottom: 24px; position: relative; }
+  .chart-section h2 { font-size: 16px; color: #333; margin-bottom: 12px; }
+  .monthly-avg { position: absolute; top: 14px; right: 18px; background: #F0F4FF; border: 1px solid #B0BEC5; border-radius: 4px; padding: 6px 14px; font-size: 16px; font-weight: bold; color: #333; z-index: 1; }
+  .chart-wrap { overflow-x: auto; }
+  canvas { display: block; }
+  @media print {
+    .chart-wrap { overflow: visible; }
+    body { padding: 5px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Daily Cost Variance — Predictability</h1>
+  <div class="chart-section">
+    <h2>February 2026</h2>
+    <div class="monthly-avg" id="febAvg"></div>
+    <div class="chart-wrap"><canvas id="febChart" height="500"></canvas></div>
+  </div>
+  <div class="chart-section">
+    <h2>March 2026</h2>
+    <div class="monthly-avg" id="marAvg"></div>
+    <div class="chart-wrap"><canvas id="marChart" width="3960" height="500"></canvas></div>
+  </div>
+</div>
+
+<script>
+const allDays = [
+  {date:"2026-02-02",costPerLb:26.27,totalLbs:156.7},
+  {date:"2026-02-03",costPerLb:29.44,totalLbs:153.2},
+  {date:"2026-02-04",costPerLb:30.66,totalLbs:150.5},
+  {date:"2026-02-05",costPerLb:18.84,totalLbs:279.7},
+  {date:"2026-02-06",costPerLb:31.81,totalLbs:159.1},
+  {date:"2026-02-09",costPerLb:35.94,totalLbs:133.5},
+  {date:"2026-02-10",costPerLb:28.16,totalLbs:197.4},
+  {date:"2026-02-11",costPerLb:27.99,totalLbs:173.3},
+  {date:"2026-02-12",costPerLb:31.77,totalLbs:165.9},
+  {date:"2026-02-13",costPerLb:22.34,totalLbs:130.3},
+  {date:"2026-02-16",costPerLb:28.09,totalLbs:178.3},
+  {date:"2026-02-17",costPerLb:28.32,totalLbs:175},
+  {date:"2026-02-18",costPerLb:28.63,totalLbs:196},
+  {date:"2026-02-19",costPerLb:32.55,totalLbs:146.6},
+  {date:"2026-02-20",costPerLb:27.58,totalLbs:196.8},
+  {date:"2026-02-23",costPerLb:26.22,totalLbs:201},
+  {date:"2026-02-24",costPerLb:34.73,totalLbs:154},
+  {date:"2026-02-25",costPerLb:22.17,totalLbs:250.7},
+  {date:"2026-02-26",costPerLb:23.64,totalLbs:228.5},
+  {date:"2026-02-27",costPerLb:25.91,totalLbs:176.1},
+  {date:"2026-03-02",costPerLb:22.35,totalLbs:217},
+  {date:"2026-03-03",costPerLb:25.46,totalLbs:186.4},
+  {date:"2026-03-04",costPerLb:21.71,totalLbs:240.3},
+  {date:"2026-03-05",costPerLb:27.52,totalLbs:147.7},
+  {date:"2026-03-06",costPerLb:27.35,totalLbs:164.9},
+  {date:"2026-03-09",costPerLb:25.92,totalLbs:183.1},
+  {date:"2026-03-10",costPerLb:22.57,totalLbs:211.4},
+  {date:"2026-03-11",costPerLb:10.36,totalLbs:501.3},
+  {date:"2026-03-12",costPerLb:24.68,totalLbs:183.8},
+  {date:"2026-03-13",costPerLb:29.21,totalLbs:178.6},
+  {date:"2026-03-16",costPerLb:23.77,totalLbs:191.9},
+  {date:"2026-03-17",costPerLb:27.23,totalLbs:189.7},
+  {date:"2026-03-18",costPerLb:18.77,totalLbs:245.8},
+  {date:"2026-03-19",costPerLb:24.11,totalLbs:219.7},
+  {date:"2026-03-20",costPerLb:22.74,totalLbs:197.2},
+  {date:"2026-03-23",costPerLb:27.64,totalLbs:154.6},
+  {date:"2026-03-24",costPerLb:24.49,totalLbs:195.9},
+  {date:"2026-03-25",costPerLb:23.50,totalLbs:206.4},
+  {date:"2026-03-26",costPerLb:29.89,totalLbs:157},
+  {date:"2026-03-27",costPerLb:23.46,totalLbs:207.9},
+  {date:"2026-03-30",costPerLb:38.78,totalLbs:119},
+  {date:"2026-03-31",costPerLb:54.88,totalLbs:157.7}
+];
+
+// 7-day rolling baseline and variance %
+function calcVariance(days) {
+  return days.map((day, idx) => {
+    const start = Math.max(0, idx - 7);
+    const window = days.slice(start, idx);
+    if (window.length === 0) return { ...day, variance: null, baseline: null };
+    const baseline = window.reduce((s, d) => s + d.costPerLb, 0) / window.length;
+    const variance = ((day.costPerLb - baseline) / baseline) * 100;
+    return { ...day, variance: +variance.toFixed(1), baseline: +baseline.toFixed(2) };
+  });
+}
+
+const allWithVariance = calcVariance(allDays);
+const febData = allWithVariance.filter(d => d.date.startsWith('2026-02') && d.variance !== null);
+const marData = allWithVariance.filter(d => d.date.startsWith('2026-03'));
+
+function shortDate(d) {
+  const p = d.split('-');
+  return parseInt(p[1]) + '/' + parseInt(p[2]);
+}
+
+function varianceColor(v) {
+  const abs = Math.abs(v);
+  if (abs <= 5) return '#4CAF50';
+  if (abs <= 10) return '#FFC107';
+  return '#E53935';
+}
+
+function avgAbsVariance(data) {
+  const vals = data.filter(d => d.variance !== null).map(d => Math.abs(d.variance));
+  if (vals.length === 0) return '0.0';
+  return (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1);
+}
+
+const BAR_WIDTH = 180;
+
+function buildChart(canvasId, avgId, monthLabel, data) {
+  const avgVar = avgAbsVariance(data);
+  document.getElementById(avgId).textContent = monthLabel + ' Avg Variance: \u00B1' + avgVar + '%';
+
+  const canvas = document.getElementById(canvasId);
+  canvas.width = Math.max(data.length * BAR_WIDTH, 800);
+
+  const labels = data.map(d => shortDate(d.date));
+  const variances = data.map(d => d.variance);
+  const colors = variances.map(v => varianceColor(v));
+
+  const absMax = Math.max(...variances.map(v => Math.abs(v)));
+  const yBound = Math.ceil((absMax + 5) / 5) * 5;
+
+  const ctx = canvas.getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Cost Variance %',
+        data: variances,
+        backgroundColor: colors,
+        borderColor: colors,
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: false,
+      maintainAspectRatio: false,
+      layout: {
+        padding: { top: 30, right: 40, bottom: 10, left: 10 }
+      },
+      plugins: {
+        legend: { display: false },
+        datalabels: {
+          anchor: function(ctx) {
+            return ctx.dataset.data[ctx.dataIndex] >= 0 ? 'end' : 'start';
+          },
+          align: function(ctx) {
+            return ctx.dataset.data[ctx.dataIndex] >= 0 ? 'top' : 'bottom';
+          },
+          font: { size: 9, weight: 'bold' },
+          formatter: function(v) { return (v > 0 ? '+' : '') + v.toFixed(1) + '%'; }
+        }
+      },
+      scales: {
+        x: {
+          type: 'category',
+          ticks: { font: { size: 10 }, maxRotation: 45, minRotation: 0, autoSkip: false, callback: function(val, index) { return this.getLabelForValue(val); } },
+          grid: { display: false }
+        },
+        y: {
+          min: -yBound,
+          max: yBound,
+          ticks: {
+            font: { size: 11 },
+            stepSize: 5,
+            callback: function(v) { return v + '%'; }
+          },
+          title: { display: true, text: 'Variance from 7-Day Baseline', font: { size: 12 } },
+          grid: {
+            color: function(ctx) {
+              return ctx.tick.value === 0 ? '#333' : '#E0E0E0';
+            },
+            lineWidth: function(ctx) {
+              return ctx.tick.value === 0 ? 2 : 1;
+            }
+          }
+        }
+      }
+    },
+    plugins: [ChartDataLabels]
+  });
+}
+
+buildChart('marChart', 'marAvg', 'Mar', marData);
+</script>
+<script>setTimeout(() => { document.body.classList.add('ready'); }, 2000);</script>
+</body>
+</html>
