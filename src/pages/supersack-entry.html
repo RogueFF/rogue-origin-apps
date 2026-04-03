@@ -578,8 +578,12 @@
     </div>
   </div>
 
-  <!-- Submit -->
-  <button class="submit-btn" id="submit-btn" data-i18n="submit">Submit & Update Pools</button>
+  <!-- Submit / Edit Buttons -->
+  <div style="display:flex;gap:8px;flex-direction:column">
+    <button class="submit-btn" id="submit-btn" data-i18n="submit">Submit & Update Pools</button>
+    <button class="submit-btn" id="edit-btn" style="display:none;background:var(--green-dim);color:var(--green);border:1px solid var(--green)">✏️ Edit Entry</button>
+    <button class="submit-btn" id="cancel-btn" style="display:none;background:var(--card);color:var(--text-dim);border:1px solid var(--card-border)">Cancel</button>
+  </div>
   <div class="status-msg" id="status-msg"></div>
 
   <!-- Auto-Pulled Production -->
@@ -714,6 +718,8 @@
   let smallsLbs = 0;
   let poolProducts = [];
   let config = JSON.parse(localStorage.getItem('supersack-config') || '{}');
+  let editMode = false;
+  let originalEntry = null; // stores old values for delta calculation
 
   // Elements
   const dateInput = document.getElementById('date-input');
@@ -724,6 +730,8 @@
   const topsEl = document.getElementById('tops-value');
   const smallsEl = document.getElementById('smalls-value');
   const submitBtn = document.getElementById('submit-btn');
+  const editBtn = document.getElementById('edit-btn');
+  const cancelBtn = document.getElementById('cancel-btn');
   const statusMsg = document.getElementById('status-msg');
 
   function todayStr() { return new Date().toLocaleDateString('en-CA'); }
@@ -738,9 +746,16 @@
     headerDate.textContent = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   }
 
-  dateInput.addEventListener('change', () => { updateHeaderDate(); loadAll(); });
-  document.getElementById('today-btn').addEventListener('click', () => {
-    dateInput.value = todayStr(); updateHeaderDate(); loadAll();
+  dateInput.addEventListener('change', async () => { 
+    updateHeaderDate(); 
+    await checkExistingEntry();
+    loadAll(); 
+  });
+  document.getElementById('today-btn').addEventListener('click', async () => {
+    dateInput.value = todayStr(); 
+    updateHeaderDate(); 
+    await checkExistingEntry();
+    loadAll();
   });
 
   biomassInput.addEventListener('input', recalc);
@@ -1140,6 +1155,110 @@
     }
   }
 
+  // Lock/unlock form for edit mode
+  function lockForm() {
+    document.querySelectorAll('.counter-btn, .mini-btn').forEach(el => {
+      el.disabled = true;
+      el.style.opacity = '0.5';
+      el.style.cursor = 'not-allowed';
+    });
+    document.querySelectorAll('.weight-input').forEach(el => {
+      el.disabled = true;
+      el.style.opacity = '0.5';
+    });
+    submitBtn.style.display = 'none';
+    editBtn.style.display = 'block';
+    cancelBtn.style.display = 'none';
+    dateInput.disabled = false;
+  }
+
+  function unlockForm() {
+    document.querySelectorAll('.counter-btn, .mini-btn').forEach(el => {
+      el.disabled = false;
+      el.style.opacity = '1';
+      el.style.cursor = 'pointer';
+    });
+    document.querySelectorAll('.weight-input').forEach(el => {
+      el.disabled = false;
+      el.style.opacity = '1';
+    });
+    editBtn.style.display = 'none';
+    submitBtn.style.display = 'block';
+    submitBtn.textContent = editMode ? t('submit') : t('submit');
+    cancelBtn.style.display = editMode ? 'block' : 'none';
+    dateInput.disabled = editMode;
+  }
+
+  function captureCurrentState() {
+    return {
+      strains: Object.fromEntries(Object.entries(strainData).map(([k, v]) => [k, v.sacks])),
+      biomass: parseFloat(biomassInput.value) || 0,
+      trim: parseFloat(trimInput.value) || 0,
+    };
+  }
+
+  async function checkExistingEntry() {
+    const date = dateInput.value;
+    editMode = false;
+    originalEntry = null;
+
+    try {
+      const res = await fetch(`${SS_API}?action=history&start=${date}&end=${date}`);
+      const data = await res.json();
+      const entries = data.entries || [];
+
+      if (entries.length === 0) {
+        // No existing entry — unlock form, clear state
+        unlockForm();
+        biomassInput.value = '';
+        trimInput.value = '';
+        statusMsg.textContent = '';
+        return;
+      }
+
+      // Existing entry found — pre-fill and lock
+      const totalBio = entries.reduce((sum, e) => sum + (e.biomass_lbs || 0), 0);
+      const totalTrim = entries.reduce((sum, e) => sum + (e.trim_lbs || 0), 0);
+
+      biomassInput.value = totalBio.toFixed(1);
+      trimInput.value = totalTrim.toFixed(1);
+
+      // Set sack counts per strain
+      entries.forEach(e => {
+        if (strainData[e.strain]) {
+          strainData[e.strain].sacks = e.sacks_opened || 0;
+        }
+      });
+
+      renderStrainCounters();
+      recalc();
+      lockForm();
+      
+      statusMsg.textContent = `✓ Entry saved for ${date}`;
+      statusMsg.className = 'status-msg success';
+    } catch (err) {
+      console.error('[checkExistingEntry] Failed:', err);
+      unlockForm();
+    }
+  }
+
+  // Edit mode handlers
+  editBtn.addEventListener('click', () => {
+    editMode = true;
+    originalEntry = captureCurrentState();
+    unlockForm();
+    statusMsg.textContent = '✏️ Editing entry - changes will adjust inventory';
+    statusMsg.className = 'status-msg';
+    submitBtn.textContent = 'Update Entry';
+  });
+
+  cancelBtn.addEventListener('click', async () => {
+    editMode = false;
+    originalEntry = null;
+    await checkExistingEntry();
+    statusMsg.textContent = '';
+  });
+
   async function updatePool(productId, operation, amount, note, isSupersack) {
     if (!productId) return { success: false, error: 'No product mapped' };
     try {
@@ -1174,7 +1293,7 @@
   // Submit — per-strain supersack updates
   submitBtn.addEventListener('click', async () => {
     const sackCount = totalSacks();
-    if (sackCount === 0) { setStatus('Enter supersack count first', 'error'); return; }
+    if (sackCount === 0 && !editMode) { setStatus('Enter supersack count first', 'error'); return; }
 
     submitBtn.disabled = true;
     submitBtn.textContent = 'Saving...';
@@ -1184,25 +1303,83 @@
     const trim = parseFloat(trimInput.value) || 0;
     const date = dateInput.value;
     let poolErrors = [];
+    let changesSummary = [];
 
-    // 1. Subtract supersacks per strain
-    for (const [name, s] of Object.entries(strainData)) {
-      if (s.sacks > 0 && s.productId) {
-        const r = await updatePool(s.productId, 'subtract', s.sacks, `[Supersack Tracker] ${s.sacks} supersacks opened — ${name} (${date})`, true);
-        if (!r.success) poolErrors.push(`${name}: ${r.error || 'failed'}`);
+    if (editMode && originalEntry) {
+      // EDIT MODE: Calculate and apply deltas
+      
+      // 1. Supersack deltas per strain
+      for (const [name, s] of Object.entries(strainData)) {
+        const oldSacks = originalEntry.strains[name] || 0;
+        const newSacks = s.sacks;
+        const delta = newSacks - oldSacks;
+
+        if (delta !== 0 && s.productId) {
+          const operation = delta > 0 ? 'subtract' : 'add'; // reversed logic: if increased, subtract more; if decreased, add back
+          const amount = Math.abs(delta);
+          const note = `[Supersack Tracker] Correction: ${name} ${delta > 0 ? '+' : ''}${delta} sacks (${date})`;
+          
+          const r = await updatePool(s.productId, operation, amount, note, true);
+          if (!r.success) {
+            poolErrors.push(`${name}: ${r.error || 'failed'}`);
+          } else {
+            changesSummary.push(`${name}: ${oldSacks}→${newSacks} sacks`);
+          }
+        }
       }
-    }
 
-    // 2. Add biomass to pool
-    if (config.biomass && biomass > 0) {
-      const r = await updatePool(config.biomass, 'add', biomass, `[Supersack Tracker] Biomass +${biomass} lbs (${date})`);
-      if (!r.success) poolErrors.push('Biomass: ' + (r.error || 'failed'));
-    }
+      // 2. Biomass delta
+      const bioDelta = biomass - originalEntry.biomass;
+      if (Math.abs(bioDelta) > 0.1 && config.biomass) {
+        const operation = bioDelta > 0 ? 'add' : 'subtract';
+        const amount = Math.abs(bioDelta);
+        const note = `[Supersack Tracker] Biomass correction ${bioDelta > 0 ? '+' : ''}${bioDelta.toFixed(1)} lbs (${date})`;
+        
+        const r = await updatePool(config.biomass, operation, amount, note);
+        if (!r.success) {
+          poolErrors.push('Biomass: ' + (r.error || 'failed'));
+        } else {
+          changesSummary.push(`Biomass: ${originalEntry.biomass.toFixed(1)}→${biomass.toFixed(1)} lbs`);
+        }
+      }
 
-    // 3. Add trim to pool
-    if (config.trim && trim > 0) {
-      const r = await updatePool(config.trim, 'add', trim, `[Supersack Tracker] Trim +${trim} lbs (${date})`);
-      if (!r.success) poolErrors.push('Trim: ' + (r.error || 'failed'));
+      // 3. Trim delta
+      const trimDelta = trim - originalEntry.trim;
+      if (Math.abs(trimDelta) > 0.1 && config.trim) {
+        const operation = trimDelta > 0 ? 'add' : 'subtract';
+        const amount = Math.abs(trimDelta);
+        const note = `[Supersack Tracker] Trim correction ${trimDelta > 0 ? '+' : ''}${trimDelta.toFixed(1)} lbs (${date})`;
+        
+        const r = await updatePool(config.trim, operation, amount, note);
+        if (!r.success) {
+          poolErrors.push('Trim: ' + (r.error || 'failed'));
+        } else {
+          changesSummary.push(`Trim: ${originalEntry.trim.toFixed(1)}→${trim.toFixed(1)} lbs`);
+        }
+      }
+
+    } else {
+      // NEW ENTRY MODE: Original logic
+      
+      // 1. Subtract supersacks per strain
+      for (const [name, s] of Object.entries(strainData)) {
+        if (s.sacks > 0 && s.productId) {
+          const r = await updatePool(s.productId, 'subtract', s.sacks, `[Supersack Tracker] ${s.sacks} supersacks opened — ${name} (${date})`, true);
+          if (!r.success) poolErrors.push(`${name}: ${r.error || 'failed'}`);
+        }
+      }
+
+      // 2. Add biomass to pool
+      if (config.biomass && biomass > 0) {
+        const r = await updatePool(config.biomass, 'add', biomass, `[Supersack Tracker] Biomass +${biomass} lbs (${date})`);
+        if (!r.success) poolErrors.push('Biomass: ' + (r.error || 'failed'));
+      }
+
+      // 3. Add trim to pool
+      if (config.trim && trim > 0) {
+        const r = await updatePool(config.trim, 'add', trim, `[Supersack Tracker] Trim +${trim} lbs (${date})`);
+        if (!r.success) poolErrors.push('Trim: ' + (r.error || 'failed'));
+      }
     }
 
     // 4. Save to D1 supersack_entries table
@@ -1229,8 +1406,22 @@
       setTimeout(() => submitBtn.classList.remove('error'), 2000);
     } else {
       submitBtn.textContent = '✓ Saved';
-      setStatus('Pools updated + data saved', 'success');
-      setTimeout(() => { submitBtn.textContent = 'Submit & Update Pools'; }, 2000);
+      
+      if (editMode && changesSummary.length > 0) {
+        setStatus('✓ Updated: ' + changesSummary.join(', '), 'success');
+      } else {
+        setStatus('Pools updated + data saved', 'success');
+      }
+      
+      // Return to locked state after successful save
+      editMode = false;
+      originalEntry = null;
+      
+      setTimeout(async () => {
+        submitBtn.textContent = 'Submit & Update Pools';
+        await checkExistingEntry();
+        loadRecentChanges();
+      }, 2000);
     }
   });
 
@@ -1243,7 +1434,7 @@
   // Init
   initDate();
   applyLang();
-  loadAll();
+  checkExistingEntry().then(() => loadAll());
 })();
 </script>
 </body>
