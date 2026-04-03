@@ -1334,14 +1334,21 @@ function updateStepGuide() {
       cumulativeTarget += slotTarget;
       
       // Add actual production from this slot
-      const slotTops = (slotData.tops1 || 0) + (slotData.tops2 || 0);
-      cumulativeActual += slotTops;
+      // For current slot (in editor), use form values instead of saved dayData
+      if (i === currentSlotIndex) {
+        const formTops1 = parseFloat(document.getElementById('tops1').value) || 0;
+        const formTops2 = parseFloat(document.getElementById('tops2').value) || 0;
+        cumulativeActual += formTops1 + formTops2;
+      } else {
+        const slotTops = (slotData.tops1 || 0) + (slotData.tops2 || 0);
+        cumulativeActual += slotTops;
+      }
     }
     
-    // Check if current hour has production entered
-    const currentSlotKey = TIME_SLOTS[currentSlotIndex];
-    const currentSlotData = dayData[currentSlotKey] || {};
-    const currentSlotTops = (currentSlotData.tops1 || 0) + (currentSlotData.tops2 || 0);
+    // Check if current hour has production entered (use form values for live update)
+    const formTops1 = parseFloat(document.getElementById('tops1').value) || 0;
+    const formTops2 = parseFloat(document.getElementById('tops2').value) || 0;
+    const currentSlotTops = formTops1 + formTops2;
     const currentHourHasProduction = currentSlotTops > 0;
     
     // Display as "actual / target" or "-- / target" if current hour incomplete
