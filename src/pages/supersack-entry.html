@@ -963,26 +963,56 @@
       }).then(r => r.json()),
     ]);
 
-    // Build per-strain production from scoreboard (today) or dashboard (past dates)
+    // Build per-strain production from scoreboard hourly data
     const perStrainProd = {}; // { strainTitle: { tops, smalls } }
     if (scoreboardRes.status === 'fulfilled') {
-      // Scoreboard format (works for both today and historical via ?date= param)
       const sb = scoreboardRes.value.scoreboard || scoreboardRes.value || {};
       const hours = sb.hourlyRates || [];
-      // Sum tops/smalls from hourly data (most accurate source)
-      let totalTops = 0, totalSmalls = 0;
-      hours.forEach(h => {
-        totalTops += (h.lbs || 0);
-        totalSmalls += (h.smalls || 0);
-      });
-      // Fallback to scoreboard totals if no hourly breakdown
-      if (hours.length === 0) {
-        totalTops = sb.todayLbs || 0;
-        totalSmalls = sb.todaySmalls || 0;
+      
+      if (hours.length > 0) {
+        // Group production by strain from hourly data
+        const strainTotals = {};
+        hours.forEach(h => {
+          const strain = h.strain || sb.strain || 'Unknown';
+          if (!strainTotals[strain]) {
+            strainTotals[strain] = { tops: 0, smalls: 0 };
+          }
+          strainTotals[strain].tops += (h.lbs || 0);
+          strainTotals[strain].smalls += (h.smalls || 0);
+        });
+        
+        // Fuzzy match strain names to supersack variant titles
+        for (const [strain, totals] of Object.entries(strainTotals)) {
+          // Try exact match first
+          if (supersackMap[strain]) {
+            perStrainProd[strain] = totals;
+            continue;
+          }
+          
+          // Fuzzy match: find supersack variant containing this strain name
+          const matchingVariant = Object.keys(supersackMap).find(title => 
+            title.toLowerCase().includes(strain.toLowerCase().trim())
+          );
+          
+          if (matchingVariant) {
+            perStrainProd[matchingVariant] = totals;
+          } else {
+            // No match found — use original strain name
+            perStrainProd[strain] = totals;
+          }
+        }
+      } else {
+        // Fallback to single strain if no hourly data
+        const strain = sb.strain || 'Unknown';
+        const matchingVariant = Object.keys(supersackMap).find(title => 
+          title.toLowerCase().includes(strain.toLowerCase().trim())
+        ) || strain;
+        
+        perStrainProd[matchingVariant] = {
+          tops: sb.todayLbs || 0,
+          smalls: sb.todaySmalls || 0
+        };
       }
-      // Use the scoreboard strain (single strain per day — Lifter variants are the same)
-      const strain = sb.strain || 'Unknown';
-      perStrainProd[strain] = { tops: totalTops, smalls: totalSmalls };
     }
 
     // Supersack variants (Shopify inventory)
