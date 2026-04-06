@@ -1,0 +1,37 @@
+name: Weekly SQDCP Production Charts
+
+on:
+  schedule:
+    # Every Monday at 6:00 AM PST (14:00 UTC)
+    - cron: '3 14 * * 1'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  generate-and-email:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install matplotlib numpy
+
+      - name: Generate charts and email
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: |
+          python scripts/generate_production_charts.py \
+            --email \
+            --output "$GITHUB_WORKSPACE/production_charts.pdf"
+
+      - name: Upload PDF artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: production-charts
+          path: production_charts.pdf
+          retention-days: 30
