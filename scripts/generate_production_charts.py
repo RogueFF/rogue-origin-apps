@@ -26,7 +26,7 @@ import argparse
 
 API_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production'
 EMAIL_TO = 'Roguefamilyfarms@gmail.com'
-EMAIL_FROM = 'reports@roguefamilyfarms.com'
+EMAIL_FROM = 'Rogue Origin Reports <onboarding@resend.dev>'
 
 # ── FETCH LIVE DATA ──────────────────────────────────────────────────────────
 
@@ -433,9 +433,14 @@ def send_email(pdf_path, resend_key):
         method='POST'
     )
 
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        result = json.loads(resp.read().decode())
-        print(f'Email sent: {result.get("id", "ok")}')
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            result = json.loads(resp.read().decode())
+            print(f'Email sent: {result.get("id", "ok")}')
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        print(f'Resend API error {e.code}: {body}')
+        sys.exit(1)
 
 
 # ── MAIN ─────────────────────────────────────────────────────────────────────
