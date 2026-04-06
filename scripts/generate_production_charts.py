@@ -25,7 +25,7 @@ import argparse
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 
 API_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production'
-EMAIL_TO = 'Roguefamilyfarms@gmail.com'
+EMAIL_TO = 'roguefamilyfarms@gmail.com'
 EMAIL_FROM = 'Rogue Origin Reports <onboarding@resend.dev>'
 
 # ── FETCH LIVE DATA ──────────────────────────────────────────────────────────
@@ -405,6 +405,7 @@ def generate_pdf(daily, output_path):
 def send_email(pdf_path, resend_key):
     """Send PDF via Resend API."""
     import base64
+    import requests
 
     with open(pdf_path, 'rb') as f:
         pdf_b64 = base64.b64encode(f.read()).decode()
@@ -412,34 +413,29 @@ def send_email(pdf_path, resend_key):
     today = datetime.now().strftime('%B %d, %Y')
     filename = os.path.basename(pdf_path)
 
-    payload = json.dumps({
-        'from': EMAIL_FROM,
-        'to': [EMAIL_TO],
-        'subject': f'SQDCP Production Charts - {today}',
-        'html': f'<p>Weekly production charts attached for the SQDCP board.</p><p>Generated {today}.</p>',
-        'attachments': [{
-            'filename': filename,
-            'content': pdf_b64,
-        }]
-    }).encode()
-
-    req = urllib.request.Request(
+    resp = requests.post(
         'https://api.resend.com/emails',
-        data=payload,
         headers={
             'Authorization': f'Bearer {resend_key}',
             'Content-Type': 'application/json',
         },
-        method='POST'
+        json={
+            'from': EMAIL_FROM,
+            'to': [EMAIL_TO],
+            'subject': f'SQDCP Production Charts - {today}',
+            'html': f'<p>Weekly production charts attached for the SQDCP board.</p><p>Generated {today}.</p>',
+            'attachments': [{
+                'filename': filename,
+                'content': pdf_b64,
+            }]
+        },
+        timeout=30
     )
 
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            result = json.loads(resp.read().decode())
-            print(f'Email sent: {result.get("id", "ok")}')
-    except urllib.error.HTTPError as e:
-        body = e.read().decode()
-        print(f'Resend API error {e.code}: {body}')
+    if resp.status_code == 200:
+        print(f'Email sent: {resp.json().get("id", "ok")}')
+    else:
+        print(f'Resend API error {resp.status_code}: {resp.text}')
         sys.exit(1)
 
 
