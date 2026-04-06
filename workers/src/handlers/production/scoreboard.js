@@ -303,7 +303,19 @@ async function getExtendedDailyData(days, env) {
                THEN 1
                ELSE NULL
              END
-           ) as hours_with_data
+           ) as hours_with_data,
+           (SELECT m2.cultivar1 FROM monthly_production m2
+            WHERE m2.production_date = monthly_production.production_date
+              AND m2.cultivar1 IS NOT NULL AND m2.cultivar1 != ''
+            GROUP BY m2.cultivar1 ORDER BY COUNT(*) DESC LIMIT 1
+           ) as dominant_cultivar,
+           MAX(
+             CASE
+               WHEN (buckers_line1 + trimmers_line1 + tzero_line1) > 0 AND tops_lbs1 > 0
+               THEN trimmers_line1 + buckers_line1 + tzero_line1
+               ELSE 0
+             END
+           ) as peak_crew
     FROM monthly_production
     WHERE production_date >= ?
     GROUP BY production_date
@@ -358,6 +370,8 @@ async function getExtendedDailyData(days, env) {
       costPerLb: blendedCostPerLb,
       topsCostPerLb,
       smallsCostPerLb,
+      cultivar: r.dominant_cultivar || '',
+      totalCrew: r.peak_crew || 0,
     };
   });
 }
@@ -625,6 +639,8 @@ async function dashboard(params, env) {
       costPerLb: Math.round(d.costPerLb * 100) / 100,
       topsCostPerLb: Math.round(d.topsCostPerLb * 100) / 100,
       smallsCostPerLb: Math.round(d.smallsCostPerLb * 100) / 100,
+      cultivar: d.cultivar || '',
+      totalCrew: d.totalCrew || 0,
     })),
     fallback: showingFallback ? {
       active: true,
