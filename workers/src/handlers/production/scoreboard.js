@@ -359,7 +359,7 @@ async function getExtendedDailyData(days, env) {
     const totalOperatorHours = buckerHours + trimmerHours + tzeroHours + waterspiderHours + smallsInspectorHours;
 
     return {
-      date: new Date(r.production_date),
+      date: new Date(r.production_date + 'T12:00:00'),
       totalTops,
       totalSmalls,
       avgRate: trimmerHours > 0 ? totalTops / trimmerHours : 0,
