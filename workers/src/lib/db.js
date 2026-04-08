@@ -18,6 +18,11 @@ const VALID_TABLES = new Set([
   'complaints',
   // TPM module
   'tpm_cards',
+  // Seed-to-sale tracking module
+  'tracking_locations', 'tracking_lots', 'tracking_lot_lineage',
+  'tracking_stage_transitions', 'tracking_observations',
+  'tracking_environmental', 'tracking_inputs',
+  'tracking_planting_passes', 'tracking_replants',
 ]);
 
 /**
