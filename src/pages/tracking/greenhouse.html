@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Greenhouse Tracking</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../css/shared-base.css">
+  <style>
+    /* ========================================
+       GREENHOUSE FORM — MOBILE-FIRST
+       ======================================== */
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .app-shell {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+
+    /* --- TOP BAR --- */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background: var(--header-bg);
+      color: var(--header-text);
+      flex-shrink: 0;
+      gap: 8px;
+    }
+
+    .top-bar a.back-link {
+      color: var(--header-text);
+      text-decoration: none;
+      font-size: 22px;
+      line-height: 1;
+      padding: 4px;
+      min-width: 32px;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+    }
+
+    .top-bar .title {
+      font-family: var(--font-display);
+      font-size: 20px;
+      white-space: nowrap;
+    }
+
+    .top-bar-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .crew-select {
+      font-family: var(--font-ui);
+      font-size: 14px;
+      padding: 4px 6px;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.12);
+      color: var(--header-text);
+      min-height: 36px;
+      max-width: 110px;
+    }
+
+    .crew-select option {
+      background: var(--header-bg);
+      color: var(--header-text);
+    }
+
+    .crew-custom {
+      font-family: var(--font-ui);
+      font-size: 14px;
+      padding: 4px 6px;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.12);
+      color: var(--header-text);
+      min-height: 36px;
+      width: 90px;
+    }
+
+    .crew-custom::placeholder {
+      color: rgba(255,255,255,0.5);
+    }
+
+    .lang-toggle {
+      font-family: var(--font-ui);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--ro-gold);
+      background: transparent;
+      color: var(--ro-gold);
+      cursor: pointer;
+      min-height: 36px;
+      min-width: 40px;
+    }
+
+    /* --- TAB BAR --- */
+    .tab-bar {
+      display: flex;
+      background: var(--bg-card);
+      border-bottom: 2px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 12px 4px;
+      font-family: var(--font-ui);
+      font-size: 15px;
+      font-weight: 600;
+      text-align: center;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      position: relative;
+      min-height: 52px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      transition: color 0.15s ease;
+    }
+
+    .tab-btn .tab-icon {
+      font-size: 20px;
+    }
+
+    .tab-btn.active {
+      color: var(--ro-green);
+    }
+
+    .tab-btn.active::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 12px;
+      right: 12px;
+      height: 3px;
+      background: var(--ro-green);
+      border-radius: 3px 3px 0 0;
+    }
+
+    /* --- TAB CONTENT --- */
+    .tab-content {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 16px 12px;
+    }
+
+    .tab-pane {
+      display: none;
+    }
+
+    .tab-pane.active {
+      display: block;
+      animation: fadeIn 0.15s ease;
+    }
+
+    /* --- FORM ELEMENTS --- */
+    label.field-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .field-group {
+      margin-bottom: 14px;
+    }
+
+    select.form-input,
+    input.form-input,
+    textarea.form-input {
+      width: 100%;
+      font-family: var(--font-ui);
+      font-size: 18px;
+      padding: 10px 12px;
+      border: 2px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--bg-card);
+      color: var(--text);
+      min-height: 48px;
+      transition: border-color 0.15s ease;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    select.form-input {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235a6b5f' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 36px;
+    }
+
+    input.form-input:focus,
+    select.form-input:focus,
+    textarea.form-input:focus {
+      border-color: var(--ro-green);
+      outline: none;
+      box-shadow: 0 0 0 3px var(--green-dim);
+    }
+
+    textarea.form-input {
+      resize: vertical;
+      min-height: 72px;
+    }
+
+    /* Number inputs — extra large for gloved hands */
+    input[type="number"].form-input {
+      font-size: 24px;
+      font-weight: 600;
+      text-align: center;
+      padding: 12px;
+    }
+
+    /* --- TOGGLE BUTTONS (Action selector) --- */
+    .toggle-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .toggle-btn {
+      flex: 1;
+      font-family: var(--font-ui);
+      font-size: 16px;
+      font-weight: 600;
+      padding: 14px 8px;
+      border: 2px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      cursor: pointer;
+      text-align: center;
+      min-height: 52px;
+      transition: all 0.15s ease;
+    }
+
+    .toggle-btn.selected {
+      border-color: var(--ro-green);
+      background: var(--green-dim);
+      color: var(--ro-green);
+    }
+
+    .toggle-btn.selected-warning {
+      border-color: var(--warning);
+      background: var(--gold-dim);
+      color: #8a6d20;
+    }
+
+    /* --- SEVERITY BUTTONS --- */
+    .severity-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .severity-btn {
+      flex: 1;
+      font-family: var(--font-ui);
+      font-size: 14px;
+      font-weight: 600;
+      padding: 12px 6px;
+      border: 2px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      cursor: pointer;
+      text-align: center;
+      min-height: 48px;
+      transition: all 0.15s ease;
+    }
+
+    .severity-btn[data-severity="info"].selected {
+      border-color: var(--info);
+      background: rgba(98, 117, 141, 0.12);
+      color: var(--info);
+    }
+
+    .severity-btn[data-severity="warning"].selected {
+      border-color: var(--warning);
+      background: var(--gold-dim);
+      color: #8a6d20;
+    }
+
+    .severity-btn[data-severity="critical"].selected {
+      border-color: var(--danger);
+      background: var(--danger-dim);
+      color: var(--danger);
+    }
+
+    /* --- SUBMIT BUTTON --- */
+    .submit-btn {
+      width: 100%;
+      font-family: var(--font-ui);
+      font-size: 18px;
+      font-weight: 700;
+      padding: 14px;
+      border: none;
+      border-radius: var(--radius-md);
+      background: var(--ro-green);
+      color: #fff;
+      cursor: pointer;
+      min-height: 56px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: opacity 0.15s ease;
+      margin-top: 6px;
+    }
+
+    .submit-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .submit-btn:active:not(:disabled) {
+      opacity: 0.85;
+      transform: scale(0.98);
+    }
+
+    /* --- PHOTO BUTTON --- */
+    .photo-btn {
+      width: 100%;
+      font-family: var(--font-ui);
+      font-size: 16px;
+      font-weight: 600;
+      padding: 12px;
+      border: 2px dashed var(--border);
+      border-radius: var(--radius-md);
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      cursor: pointer;
+      min-height: 48px;
+      text-align: center;
+      transition: border-color 0.15s ease;
+    }
+
+    .photo-btn.has-photo {
+      border-color: var(--ro-green);
+      color: var(--ro-green);
+      border-style: solid;
+    }
+
+    .photo-preview {
+      margin-top: 8px;
+      display: none;
+    }
+
+    .photo-preview img {
+      max-width: 100%;
+      max-height: 120px;
+      border-radius: var(--radius-sm);
+      object-fit: cover;
+    }
+
+    /* --- RECENT ACTIVITY --- */
+    .recent-section {
+      margin-top: 20px;
+      border-top: 1px solid var(--border-light);
+      padding-top: 12px;
+    }
+
+    .recent-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .recent-list {
+      list-style: none;
+    }
+
+    .recent-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border-light);
+      font-size: 14px;
+      animation: fadeInUp 0.2s ease;
+    }
+
+    .recent-item:last-child {
+      border-bottom: none;
+    }
+
+    .recent-time {
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      margin-left: 8px;
+    }
+
+    .recent-detail {
+      color: var(--text);
+    }
+
+    .recent-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-left: 6px;
+    }
+
+    .recent-badge.watered {
+      background: var(--green-dim);
+      color: var(--ro-green);
+    }
+
+    .recent-badge.no-action {
+      background: var(--gold-dim);
+      color: #8a6d20;
+    }
+
+    .recent-badge.info {
+      background: rgba(98, 117, 141, 0.12);
+      color: var(--info);
+    }
+
+    .recent-badge.warning {
+      background: var(--gold-dim);
+      color: #8a6d20;
+    }
+
+    .recent-badge.critical {
+      background: var(--danger-dim);
+      color: var(--danger);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 16px;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--ro-green);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    /* --- SUCCESS OVERLAY --- */
+    .success-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(102, 137, 113, 0.92);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+
+    .success-overlay.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .success-check {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 44px;
+      color: var(--ro-green);
+      transform: scale(0.5);
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .success-overlay.show .success-check {
+      transform: scale(1);
+    }
+
+    /* --- INLINE UNIT LABEL --- */
+    .input-with-unit {
+      position: relative;
+    }
+
+    .input-with-unit .unit-label {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    .input-with-unit input {
+      padding-right: 44px;
+    }
+
+    /* --- LANDSCAPE TWEAKS --- */
+    @media (max-height: 500px) and (orientation: landscape) {
+      .field-group {
+        margin-bottom: 8px;
+      }
+
+      .tab-content {
+        padding: 10px;
+      }
+
+      .submit-btn {
+        min-height: 48px;
+        padding: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="app-shell">
+  <!-- TOP BAR -->
+  <div class="top-bar">
+    <a href="index.html" class="back-link" aria-label="Back">&larr;</a>
+    <span class="title" data-i18n="pageTitle">Greenhouse</span>
+    <div class="top-bar-right">
+      <select class="crew-select" id="crewSelect" aria-label="Crew member">
+        <option value="">--</option>
+        <option value="Koa">Koa</option>
+        <option value="Worker 1">Worker 1</option>
+        <option value="Worker 2">Worker 2</option>
+        <option value="__other__">Other...</option>
+      </select>
+      <input type="text" class="crew-custom hidden" id="crewCustom" placeholder="Name" aria-label="Custom name">
+      <button class="lang-toggle" id="langToggle" aria-label="Toggle language">ES</button>
+    </div>
+  </div>
+
+  <!-- TAB BAR -->
+  <div class="tab-bar" role="tablist">
+    <button class="tab-btn active" role="tab" aria-selected="true" data-tab="water">
+      <span class="tab-icon">💧</span>
+      <span data-i18n="tabWater">Water</span>
+    </button>
+    <button class="tab-btn" role="tab" aria-selected="false" data-tab="reading">
+      <span class="tab-icon">🌡️</span>
+      <span data-i18n="tabReading">Reading</span>
+    </button>
+    <button class="tab-btn" role="tab" aria-selected="false" data-tab="note">
+      <span class="tab-icon">📝</span>
+      <span data-i18n="tabNote">Note</span>
+    </button>
+  </div>
+
+  <!-- TAB CONTENT -->
+  <div class="tab-content">
+
+    <!-- ===== TAB: WATER ===== -->
+    <div class="tab-pane active" id="pane-water" role="tabpanel">
+      <div class="field-group">
+        <label class="field-label" for="waterBatch" data-i18n="labelBatch">Batch</label>
+        <select class="form-input" id="waterBatch">
+          <option value="" data-i18n="optSelectBatch">Select batch...</option>
+        </select>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" for="waterWeight" data-i18n="labelWeight">Weight</label>
+        <div class="input-with-unit">
+          <input type="number" class="form-input" id="waterWeight" inputmode="decimal" step="0.1" min="0" placeholder="0.0">
+          <span class="unit-label">lbs</span>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" data-i18n="labelAction">Action</label>
+        <div class="toggle-group">
+          <button type="button" class="toggle-btn selected" data-action="watered" data-i18n="actionWatered">Watered</button>
+          <button type="button" class="toggle-btn" data-action="no_action" data-i18n="actionNoAction">No Action</button>
+        </div>
+      </div>
+
+      <button class="submit-btn" id="submitWater" data-i18n="btnSubmit">SUBMIT</button>
+
+      <div class="recent-section">
+        <div class="recent-title" data-i18n="recentActivity">Recent Activity</div>
+        <ul class="recent-list" id="recentWater">
+          <li class="empty-state" data-i18n="emptyRecent">No recent entries</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ===== TAB: GH READING ===== -->
+    <div class="tab-pane" id="pane-reading" role="tabpanel">
+      <div class="field-group">
+        <label class="field-label" for="readingTemp" data-i18n="labelTemp">Temp</label>
+        <div class="input-with-unit">
+          <input type="number" class="form-input" id="readingTemp" inputmode="decimal" step="0.1" min="0" max="150" placeholder="72">
+          <span class="unit-label">&deg;F</span>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" for="readingRH" data-i18n="labelRH">RH</label>
+        <div class="input-with-unit">
+          <input type="number" class="form-input" id="readingRH" inputmode="numeric" step="1" min="0" max="100" placeholder="65">
+          <span class="unit-label">%</span>
+        </div>
+      </div>
+
+      <button class="submit-btn" id="submitReading" data-i18n="btnSubmit">SUBMIT</button>
+
+      <div class="recent-section">
+        <div class="recent-title" data-i18n="todayReadings">Today's Readings</div>
+        <ul class="recent-list" id="recentReadings">
+          <li class="empty-state" data-i18n="emptyRecent">No recent entries</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ===== TAB: NOTE ===== -->
+    <div class="tab-pane" id="pane-note" role="tabpanel">
+      <div class="field-group">
+        <label class="field-label" for="noteBatch" data-i18n="labelBatchOptional">Batch (optional)</label>
+        <select class="form-input" id="noteBatch">
+          <option value="" data-i18n="optNone">None</option>
+        </select>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" for="noteText" data-i18n="labelNote">Note</label>
+        <textarea class="form-input" id="noteText" rows="3" placeholder=""></textarea>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" data-i18n="labelSeverity">Severity</label>
+        <div class="severity-group">
+          <button type="button" class="severity-btn selected" data-severity="info" data-i18n="sevInfo">Info</button>
+          <button type="button" class="severity-btn" data-severity="warning" data-i18n="sevWarning">Warning</button>
+          <button type="button" class="severity-btn" data-severity="critical" data-i18n="sevCritical">Critical</button>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <button type="button" class="photo-btn" id="photoBtn" data-i18n="btnPhoto">📷 Add Photo</button>
+        <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none">
+        <div class="photo-preview" id="photoPreview">
+          <img id="photoThumb" src="" alt="Photo preview">
+        </div>
+      </div>
+
+      <button class="submit-btn" id="submitNote" data-i18n="btnSubmit">SUBMIT</button>
+
+      <div class="recent-section">
+        <div class="recent-title" data-i18n="recentNotes">Recent Notes</div>
+        <ul class="recent-list" id="recentNotes">
+          <li class="empty-state" data-i18n="emptyRecent">No recent entries</li>
+        </ul>
+      </div>
+    </div>
+
+  </div><!-- /tab-content -->
+</div><!-- /app-shell -->
+
+<!-- SUCCESS OVERLAY -->
+<div class="success-overlay" id="successOverlay">
+  <div class="success-check">&#10003;</div>
+</div>
+
+<script type="module">
+  // ========================================
+  // GREENHOUSE TRACKING — CORE LOGIC
+  // ========================================
+
+  const API_URL = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/tracking';
+  const MEDIA_URL = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/media';
+
+  // --- Bilingual Labels ---
+  const labels = {
+    en: {
+      pageTitle: 'Greenhouse',
+      tabWater: 'Water',
+      tabReading: 'Reading',
+      tabNote: 'Note',
+      labelBatch: 'Batch',
+      labelBatchOptional: 'Batch (optional)',
+      labelWeight: 'Weight',
+      labelAction: 'Action',
+      labelTemp: 'Temp',
+      labelRH: 'RH',
+      labelNote: 'Note',
+      labelSeverity: 'Severity',
+      actionWatered: 'Watered',
+      actionNoAction: 'No Action',
+      sevInfo: 'Info',
+      sevWarning: 'Warning',
+      sevCritical: 'Critical',
+      btnSubmit: 'SUBMIT',
+      btnPhoto: '📷 Add Photo',
+      btnPhotoAdded: '📷 Photo Added',
+      optSelectBatch: 'Select batch...',
+      optNone: 'None',
+      recentActivity: 'Recent Activity',
+      todayReadings: "Today's Readings",
+      recentNotes: 'Recent Notes',
+      emptyRecent: 'No recent entries',
+      errorNoCrew: 'Select a crew member first',
+      errorNoBatch: 'Select a batch',
+      errorNoWeight: 'Enter weight',
+      errorNoTemp: 'Enter temperature',
+      errorNoRH: 'Enter humidity',
+      errorNoNote: 'Enter a note',
+      submitting: 'Submitting...',
+      langButton: 'ES'
+    },
+    es: {
+      pageTitle: 'Invernadero',
+      tabWater: 'Riego',
+      tabReading: 'Lectura',
+      tabNote: 'Nota',
+      labelBatch: 'Lote',
+      labelBatchOptional: 'Lote (opcional)',
+      labelWeight: 'Peso',
+      labelAction: 'Acción',
+      labelTemp: 'Temp',
+      labelRH: 'HR',
+      labelNote: 'Nota',
+      labelSeverity: 'Severidad',
+      actionWatered: 'Regado',
+      actionNoAction: 'Sin Acción',
+      sevInfo: 'Info',
+      sevWarning: 'Aviso',
+      sevCritical: 'Crítico',
+      btnSubmit: 'ENVIAR',
+      btnPhoto: '📷 Agregar Foto',
+      btnPhotoAdded: '📷 Foto Agregada',
+      optSelectBatch: 'Seleccionar lote...',
+      optNone: 'Ninguno',
+      recentActivity: 'Actividad Reciente',
+      todayReadings: 'Lecturas de Hoy',
+      recentNotes: 'Notas Recientes',
+      emptyRecent: 'Sin entradas recientes',
+      errorNoCrew: 'Seleccione un miembro del equipo',
+      errorNoBatch: 'Seleccione un lote',
+      errorNoWeight: 'Ingrese el peso',
+      errorNoTemp: 'Ingrese la temperatura',
+      errorNoRH: 'Ingrese la humedad',
+      errorNoNote: 'Ingrese una nota',
+      submitting: 'Enviando...',
+      langButton: 'EN'
+    }
+  };
+
+  let lang = localStorage.getItem('tracking_lang') || 'en';
+  const t = (key) => (labels[lang] && labels[lang][key]) || labels.en[key] || key;
+
+  // --- State ---
+  let lots = [];
+  let greenhouseLocationId = null;
+  let selectedWaterAction = 'watered';
+  let selectedSeverity = 'info';
+  let photoFile = null;
+
+  // --- DOM Refs ---
+  const $ = (sel) => document.querySelector(sel);
+  const $$ = (sel) => document.querySelectorAll(sel);
+
+  // ========================================
+  // LANGUAGE
+  // ========================================
+  function applyLanguage() {
+    $$('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      const text = t(key);
+      if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+        el.placeholder = text;
+      } else if (el.tagName === 'OPTION') {
+        el.textContent = text;
+      } else {
+        el.textContent = text;
+      }
+    });
+    $('#langToggle').textContent = t('langButton');
+    document.documentElement.lang = lang;
+  }
+
+  $('#langToggle').addEventListener('click', () => {
+    lang = lang === 'en' ? 'es' : 'en';
+    localStorage.setItem('tracking_lang', lang);
+    applyLanguage();
+  });
+
+  // ========================================
+  // CREW NAME
+  // ========================================
+  const crewSelect = $('#crewSelect');
+  const crewCustom = $('#crewCustom');
+
+  function getCrewName() {
+    if (crewSelect.value === '__other__') {
+      return crewCustom.value.trim();
+    }
+    return crewSelect.value;
+  }
+
+  function restoreCrew() {
+    const saved = localStorage.getItem('tracking_crew_name') || '';
+    const options = Array.from(crewSelect.options).map(o => o.value);
+    if (options.includes(saved)) {
+      crewSelect.value = saved;
+    } else if (saved) {
+      crewSelect.value = '__other__';
+      crewCustom.value = saved;
+      crewCustom.classList.remove('hidden');
+    }
+  }
+
+  function persistCrew() {
+    const name = getCrewName();
+    if (name) localStorage.setItem('tracking_crew_name', name);
+  }
+
+  crewSelect.addEventListener('change', () => {
+    if (crewSelect.value === '__other__') {
+      crewCustom.classList.remove('hidden');
+      crewCustom.focus();
+    } else {
+      crewCustom.classList.add('hidden');
+    }
+    persistCrew();
+  });
+
+  crewCustom.addEventListener('input', persistCrew);
+  restoreCrew();
+
+  // ========================================
+  // TABS
+  // ========================================
+  $$('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.tab;
+      $$('.tab-btn').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
+      btn.classList.add('active');
+      btn.setAttribute('aria-selected', 'true');
+      $$('.tab-pane').forEach(p => p.classList.remove('active'));
+      $(`#pane-${tab}`).classList.add('active');
+    });
+  });
+
+  // ========================================
+  // TOGGLE BUTTONS (Water action)
+  // ========================================
+  $$('#pane-water .toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      $$('#pane-water .toggle-btn').forEach(b => {
+        b.classList.remove('selected', 'selected-warning');
+      });
+      selectedWaterAction = btn.dataset.action;
+      if (selectedWaterAction === 'watered') {
+        btn.classList.add('selected');
+      } else {
+        btn.classList.add('selected-warning');
+      }
+    });
+  });
+
+  // ========================================
+  // SEVERITY BUTTONS (Note)
+  // ========================================
+  $$('.severity-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      $$('.severity-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedSeverity = btn.dataset.severity;
+    });
+  });
+
+  // ========================================
+  // PHOTO CAPTURE
+  // ========================================
+  $('#photoBtn').addEventListener('click', () => {
+    $('#photoInput').click();
+  });
+
+  $('#photoInput').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    photoFile = file;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      $('#photoThumb').src = ev.target.result;
+      $('#photoPreview').style.display = 'block';
+      $('#photoBtn').classList.add('has-photo');
+      $('#photoBtn').textContent = t('btnPhotoAdded');
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // ========================================
+  // SUCCESS FLASH
+  // ========================================
+  function showSuccess() {
+    const overlay = $('#successOverlay');
+    overlay.classList.add('show');
+    setTimeout(() => overlay.classList.remove('show'), 900);
+  }
+
+  // ========================================
+  // API HELPERS
+  // ========================================
+  async function apiGet(params) {
+    const url = new URL(API_URL);
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null) url.searchParams.set(k, v);
+    });
+    const res = await fetch(url.toString());
+    const json = await res.json();
+    return json.data || json;
+  }
+
+  async function apiPost(action, body) {
+    const url = `${API_URL}?action=${action}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Request failed');
+    return json.data || json;
+  }
+
+  async function uploadPhoto(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    const url = `${MEDIA_URL}?action=upload&folder=tracking`;
+    const res = await fetch(url, { method: 'POST', body: formData });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Upload failed');
+    const data = json.data || json;
+    return data.key || data.url || data.path;
+  }
+
+  // ========================================
+  // LOAD DATA
+  // ========================================
+  async function loadLots() {
+    try {
+      const data = await apiGet({ action: 'listLots', current_stage: 'germination' });
+      lots = Array.isArray(data) ? data : (data.lots || []);
+      populateBatchDropdowns();
+    } catch (err) {
+      console.error('Failed to load lots:', err);
+    }
+  }
+
+  function populateBatchDropdowns() {
+    ['waterBatch', 'noteBatch'].forEach(id => {
+      const sel = $(`#${id}`);
+      const isOptional = id === 'noteBatch';
+      // Keep first option
+      while (sel.options.length > 1) sel.remove(1);
+      lots.forEach(lot => {
+        const opt = document.createElement('option');
+        opt.value = lot.id || lot.lot_id;
+        opt.textContent = `${lot.cultivar_name || lot.cultivar || ''} — ${lot.batch_code || lot.lot_identifier || lot.id}`;
+        sel.appendChild(opt);
+      });
+    });
+  }
+
+  let greenhouseLocLoaded = false;
+  async function loadGreenhouseLocation() {
+    if (greenhouseLocLoaded) return;
+    try {
+      const data = await apiGet({ action: 'listLocations', type: 'greenhouse' });
+      const locs = Array.isArray(data) ? data : (data.locations || []);
+      if (locs.length > 0) {
+        greenhouseLocationId = locs[0].id || locs[0].location_id;
+      }
+      greenhouseLocLoaded = true;
+    } catch (err) {
+      console.error('Failed to load greenhouse location:', err);
+    }
+  }
+
+  // ========================================
+  // RECENT ACTIVITY LOADERS
+  // ========================================
+  function timeAgo(isoStr) {
+    if (!isoStr) return '';
+    const d = new Date(isoStr);
+    const now = new Date();
+    const mins = Math.floor((now - d) / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return d.toLocaleDateString();
+  }
+
+  function formatTime(isoStr) {
+    if (!isoStr) return '';
+    const d = new Date(isoStr);
+    return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+
+  async function loadRecentWater() {
+    const lotId = $('#waterBatch').value;
+    if (!lotId) {
+      $('#recentWater').innerHTML = `<li class="empty-state">${t('emptyRecent')}</li>`;
+      return;
+    }
+    try {
+      const data = await apiGet({ action: 'listObservations', lot_id: lotId, observation_type: 'watering' });
+      const obs = (Array.isArray(data) ? data : (data.observations || [])).slice(0, 5);
+      if (obs.length === 0) {
+        $('#recentWater').innerHTML = `<li class="empty-state">${t('emptyRecent')}</li>`;
+        return;
+      }
+      $('#recentWater').innerHTML = obs.map(o => {
+        const action = (o.content || '').toLowerCase().includes('no action') ? 'no_action' : 'watered';
+        const badgeClass = action === 'watered' ? 'watered' : 'no-action';
+        const badgeText = action === 'watered' ? t('actionWatered') : t('actionNoAction');
+        const weight = o.metadata ? (JSON.parse(o.metadata).weight_lbs || '') : '';
+        return `<li class="recent-item">
+          <span class="recent-detail">${weight ? weight + ' lbs' : ''}<span class="recent-badge ${badgeClass}">${badgeText}</span></span>
+          <span class="recent-time">${timeAgo(o.observed_at || o.created_at)}</span>
+        </li>`;
+      }).join('');
+    } catch (err) {
+      console.error('Failed to load recent water:', err);
+    }
+  }
+
+  async function loadRecentReadings() {
+    if (!greenhouseLocationId) return;
+    const today = new Date().toISOString().split('T')[0];
+    try {
+      const data = await apiGet({ action: 'listReadings', location_id: greenhouseLocationId, date_from: today });
+      const readings = (Array.isArray(data) ? data : (data.readings || [])).slice(0, 10);
+      if (readings.length === 0) {
+        $('#recentReadings').innerHTML = `<li class="empty-state">${t('emptyRecent')}</li>`;
+        return;
+      }
+      $('#recentReadings').innerHTML = readings.map(r => {
+        return `<li class="recent-item">
+          <span class="recent-detail">${r.temp_f || r.temperature_f || '—'}°F &nbsp; ${r.humidity_pct || r.humidity || '—'}%</span>
+          <span class="recent-time">${formatTime(r.recorded_at || r.created_at)}</span>
+        </li>`;
+      }).join('');
+    } catch (err) {
+      console.error('Failed to load readings:', err);
+    }
+  }
+
+  async function loadRecentNotes() {
+    const today = new Date().toISOString().split('T')[0];
+    try {
+      const data = await apiGet({ action: 'listObservations', observation_type: 'general', date_from: today });
+      const obs = (Array.isArray(data) ? data : (data.observations || [])).slice(0, 5);
+      if (obs.length === 0) {
+        $('#recentNotes').innerHTML = `<li class="empty-state">${t('emptyRecent')}</li>`;
+        return;
+      }
+      $('#recentNotes').innerHTML = obs.map(o => {
+        const sev = o.severity || 'info';
+        return `<li class="recent-item">
+          <span class="recent-detail">${escapeHtml(truncate(o.content || '', 60))}<span class="recent-badge ${sev}">${t('sev' + capitalize(sev))}</span></span>
+          <span class="recent-time">${timeAgo(o.observed_at || o.created_at)}</span>
+        </li>`;
+      }).join('');
+    } catch (err) {
+      console.error('Failed to load notes:', err);
+    }
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function truncate(str, len) {
+    return str.length > len ? str.slice(0, len) + '...' : str;
+  }
+
+  function capitalize(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  }
+
+  // ========================================
+  // FORM VALIDATION FLASH
+  // ========================================
+  function flashError(msg) {
+    // Brief alert — could be replaced with a toast
+    alert(msg);
+  }
+
+  // ========================================
+  // SUBMIT HANDLERS
+  // ========================================
+
+  // --- Water ---
+  $('#submitWater').addEventListener('click', async () => {
+    const crew = getCrewName();
+    if (!crew) return flashError(t('errorNoCrew'));
+    const lotId = $('#waterBatch').value;
+    if (!lotId) return flashError(t('errorNoBatch'));
+    const weight = parseFloat($('#waterWeight').value);
+    if (!weight && weight !== 0) return flashError(t('errorNoWeight'));
+
+    const btn = $('#submitWater');
+    btn.disabled = true;
+    btn.textContent = t('submitting');
+
+    try {
+      await apiPost('logWatering', {
+        lot_id: lotId,
+        weight_lbs: weight,
+        action: selectedWaterAction,
+        logged_by: crew
+      });
+      showSuccess();
+      $('#waterWeight').value = '';
+      loadRecentWater();
+    } catch (err) {
+      flashError(err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = t('btnSubmit');
+    }
+  });
+
+  // --- GH Reading ---
+  $('#submitReading').addEventListener('click', async () => {
+    const crew = getCrewName();
+    if (!crew) return flashError(t('errorNoCrew'));
+    const temp = parseFloat($('#readingTemp').value);
+    if (isNaN(temp)) return flashError(t('errorNoTemp'));
+    const rh = parseFloat($('#readingRH').value);
+    if (isNaN(rh)) return flashError(t('errorNoRH'));
+
+    await loadGreenhouseLocation();
+    if (!greenhouseLocationId) {
+      return flashError('No greenhouse location configured');
+    }
+
+    const btn = $('#submitReading');
+    btn.disabled = true;
+    btn.textContent = t('submitting');
+
+    try {
+      await apiPost('recordReading', {
+        location_id: greenhouseLocationId,
+        source: 'manual',
+        temp_f: temp,
+        humidity_pct: rh,
+        logged_by: crew
+      });
+      showSuccess();
+      $('#readingTemp').value = '';
+      $('#readingRH').value = '';
+      loadRecentReadings();
+    } catch (err) {
+      flashError(err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = t('btnSubmit');
+    }
+  });
+
+  // --- Note ---
+  $('#submitNote').addEventListener('click', async () => {
+    const crew = getCrewName();
+    if (!crew) return flashError(t('errorNoCrew'));
+    const content = $('#noteText').value.trim();
+    if (!content) return flashError(t('errorNoNote'));
+
+    const btn = $('#submitNote');
+    btn.disabled = true;
+    btn.textContent = t('submitting');
+
+    try {
+      let photoUrls = [];
+      if (photoFile) {
+        const key = await uploadPhoto(photoFile);
+        photoUrls.push(key);
+      }
+
+      const body = {
+        observation_type: 'general',
+        content: content,
+        severity: selectedSeverity,
+        logged_by: crew
+      };
+
+      const lotId = $('#noteBatch').value;
+      if (lotId) body.lot_id = lotId;
+      if (photoUrls.length > 0) body.photo_urls = JSON.stringify(photoUrls);
+
+      await apiPost('createObservation', body);
+      showSuccess();
+
+      // Reset form
+      $('#noteText').value = '';
+      photoFile = null;
+      $('#photoBtn').classList.remove('has-photo');
+      $('#photoBtn').textContent = t('btnPhoto');
+      $('#photoPreview').style.display = 'none';
+      $('#photoInput').value = '';
+
+      loadRecentNotes();
+    } catch (err) {
+      flashError(err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = t('btnSubmit');
+    }
+  });
+
+  // ========================================
+  // BATCH CHANGE -> RELOAD RECENT
+  // ========================================
+  $('#waterBatch').addEventListener('change', loadRecentWater);
+
+  // ========================================
+  // INIT
+  // ========================================
+  async function init() {
+    applyLanguage();
+    loadLots();
+    loadGreenhouseLocation().then(() => {
+      loadRecentReadings();
+    });
+    loadRecentNotes();
+  }
+
+  init();
+</script>
+</body>
+</html>
