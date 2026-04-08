@@ -129,14 +129,14 @@ async function logWatering(request, env) {
 
 async function logWeeklyCheck(request, env) {
   const body = await request.json();
-  const { location_id, height_inches, growth_rating, pest_pressure, pest_type, moisture_rating, photo_urls, notes, logged_by } = body;
+  const { location_id, week_number, height_inches, growth_rating, pest_pressure, pest_type, moisture_rating, photo_urls, notes, logged_by } = body;
 
   if (!location_id) {
     throw new ApiError('Missing required field: location_id', 'BAD_REQUEST', 400);
   }
 
   const id = generateId();
-  const metadata = JSON.stringify({ height_inches, growth_rating, pest_pressure, pest_type, moisture_rating });
+  const metadata = JSON.stringify({ week_number, height_inches, growth_rating, pest_pressure, pest_type, moisture_rating });
 
   await env.DB.prepare(`
     INSERT INTO tracking_observations (id, location_id, observation_type, content, photo_urls, logged_by, metadata)
@@ -153,11 +153,12 @@ async function logSapAnalysis(request, env) {
   const { farm_name, photo_urls, notes, logged_by } = body;
 
   const id = generateId();
+  const photoUrlsStr = photo_urls ? (typeof photo_urls === 'string' ? photo_urls : JSON.stringify(photo_urls)) : null;
 
   await env.DB.prepare(`
     INSERT INTO tracking_observations (id, observation_type, content, photo_urls, logged_by, metadata)
     VALUES (?, 'sap_analysis', ?, ?, ?, ?)
-  `).bind(id, notes || null, photo_urls || null, logged_by || null, farm_name ? JSON.stringify({ farm_name }) : null).run();
+  `).bind(id, notes || null, photoUrlsStr, logged_by || null, farm_name ? JSON.stringify({ farm_name }) : null).run();
 
   return jsonResponse({
     observation: { id, observation_type: 'sap_analysis', content: notes, photo_urls, logged_by }
