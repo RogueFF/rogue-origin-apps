@@ -245,6 +245,7 @@ async function splitLot(request, env) {
   }
 
   const children = [];
+  const statements = [];
 
   for (const split of splits) {
     const childId = generateId();
@@ -252,7 +253,7 @@ async function splitLot(request, env) {
     const transitionId = generateId();
 
     // Create child lot inheriting from parent
-    await env.DB.prepare(`
+    statements.push(env.DB.prepare(`
       INSERT INTO tracking_lots (id, cultivar, seed_source, seed_lot_number, quantity, unit, germ_method, current_stage, current_location_id, notes)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
@@ -260,26 +261,26 @@ async function splitLot(request, env) {
       split.quantity, split.unit || parent.unit, parent.germ_method,
       parent.current_stage, split.location_id || parent.current_location_id,
       split.notes || null
-    ).run();
+    ));
 
     // Create lineage record
-    await env.DB.prepare(`
+    statements.push(env.DB.prepare(`
       INSERT INTO tracking_lot_lineage (id, parent_lot_id, child_lot_id, quantity, unit, reason, notes)
       VALUES (?, ?, ?, ?, ?, 'split', ?)
     `).bind(
       lineageId, parent_lot_id, childId, split.quantity,
       split.unit || parent.unit, split.notes || null
-    ).run();
+    ));
 
     // Create stage transition for child
-    await env.DB.prepare(`
+    statements.push(env.DB.prepare(`
       INSERT INTO tracking_stage_transitions (id, lot_id, from_stage, to_stage, quantity_in, quantity_out, unit, location_id, notes)
       VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?)
     `).bind(
       transitionId, childId, parent.current_stage, split.quantity, split.quantity,
       split.unit || parent.unit, split.location_id || parent.current_location_id,
       `Split from lot ${parent_lot_id}`
-    ).run();
+    ));
 
     children.push({
       id: childId, cultivar: parent.cultivar, quantity: split.quantity,
@@ -289,9 +290,11 @@ async function splitLot(request, env) {
   }
 
   // Reduce parent quantity
-  await env.DB.prepare(`
+  statements.push(env.DB.prepare(`
     UPDATE tracking_lots SET quantity = quantity - ?, updated_at = datetime('now') WHERE id = ?
-  `).bind(totalSplitQty, parent_lot_id).run();
+  `).bind(totalSplitQty, parent_lot_id));
+
+  await env.DB.batch(statements);
 
   return jsonResponse({ children });
 }
@@ -315,31 +318,34 @@ async function mergeLots(request, env) {
 
   const target = targets[0];
   let totalMerged = 0;
+  const statements = [];
 
   for (const source of sources) {
     const lineageId = generateId();
 
     // Create lineage record (parent=source, child=target)
-    await env.DB.prepare(`
+    statements.push(env.DB.prepare(`
       INSERT INTO tracking_lot_lineage (id, parent_lot_id, child_lot_id, quantity, unit, reason, notes)
       VALUES (?, ?, ?, ?, ?, 'merge', ?)
     `).bind(
       lineageId, source.lot_id, target_lot_id, source.quantity,
       target.unit, notes || null
-    ).run();
+    ));
 
     // Reduce source lot quantity
-    await env.DB.prepare(`
+    statements.push(env.DB.prepare(`
       UPDATE tracking_lots SET quantity = quantity - ?, updated_at = datetime('now') WHERE id = ?
-    `).bind(source.quantity, source.lot_id).run();
+    `).bind(source.quantity, source.lot_id));
 
     totalMerged += source.quantity;
   }
 
   // Increase target lot quantity
-  await env.DB.prepare(`
+  statements.push(env.DB.prepare(`
     UPDATE tracking_lots SET quantity = quantity + ?, updated_at = datetime('now') WHERE id = ?
-  `).bind(totalMerged, target_lot_id).run();
+  `).bind(totalMerged, target_lot_id));
+
+  await env.DB.batch(statements);
 
   return jsonResponse({ merged: true });
 }

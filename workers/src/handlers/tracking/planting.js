@@ -72,14 +72,16 @@ async function logReplant(request, env) {
 
   const id = generateId();
 
-  await env.DB.prepare(`
+  const statements = [];
+
+  statements.push(env.DB.prepare(`
     INSERT INTO tracking_replants (id, lot_id, location_id, row_data, trays_used, source_lot_id, logged_by, notes)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     id, lot_id, location_id, row_data,
     trays_used || null, source_lot_id || null,
     logged_by || null, notes || null
-  ).run();
+  ));
 
   // If source_lot_id provided, create lineage record and update quantities
   if (source_lot_id) {
@@ -90,22 +92,24 @@ async function logReplant(request, env) {
       const lineageId = generateId();
 
       // Create lineage record: parent=source_lot, child=target lot
-      await env.DB.prepare(`
+      statements.push(env.DB.prepare(`
         INSERT INTO tracking_lot_lineage (id, parent_lot_id, child_lot_id, quantity, unit, reason, notes)
         VALUES (?, ?, ?, ?, 'plants', 'replant', ?)
-      `).bind(lineageId, source_lot_id, lot_id, totalCount, notes || null).run();
+      `).bind(lineageId, source_lot_id, lot_id, totalCount, notes || null));
 
       // Reduce source lot quantity
-      await env.DB.prepare(`
+      statements.push(env.DB.prepare(`
         UPDATE tracking_lots SET quantity = quantity - ?, updated_at = datetime('now') WHERE id = ?
-      `).bind(totalCount, source_lot_id).run();
+      `).bind(totalCount, source_lot_id));
 
       // Increase target lot quantity
-      await env.DB.prepare(`
+      statements.push(env.DB.prepare(`
         UPDATE tracking_lots SET quantity = quantity + ?, updated_at = datetime('now') WHERE id = ?
-      `).bind(totalCount, lot_id).run();
+      `).bind(totalCount, lot_id));
     }
   }
+
+  await env.DB.batch(statements);
 
   return jsonResponse({
     replant: { id, lot_id, location_id, row_data, trays_used, source_lot_id, logged_by, notes }
