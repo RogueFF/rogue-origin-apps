@@ -796,7 +796,9 @@
   // WEEKLY ZONE CHECK — CORE LOGIC
   // ========================================
 
-  const API_URL = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/tracking';
+  const API_URL = window.location.hostname === 'localhost'
+    ? 'http://localhost:8787/api/tracking'
+    : 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/tracking';
   const MEDIA_URL = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/media';
 
   // --- Bilingual Labels ---
@@ -911,7 +913,7 @@
     }
   };
 
-  let lang = localStorage.getItem('tracking_lang') || 'en';
+  let lang = localStorage.getItem('ro-lang') || 'en';
   const t = (key) => (labels[lang] && labels[lang][key]) || labels.en[key] || key;
 
   // --- State ---
@@ -948,7 +950,7 @@
 
   $('#langToggle').addEventListener('click', () => {
     lang = lang === 'en' ? 'es' : 'en';
-    localStorage.setItem('tracking_lang', lang);
+    localStorage.setItem('ro-lang', lang);
     applyLanguage();
   });
 
