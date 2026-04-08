@@ -591,7 +591,7 @@
             <div class="tree-item${editingId === loc.id ? ' selected' : ''}" data-id="${loc.id}">
               <div class="tree-item-info">
                 <span class="tree-item-name">${esc(loc.name)}</span>
-                <span class="tree-item-type">${esc(loc.location_type)}</span>
+                <span class="tree-item-type">${esc(loc.type)}</span>
                 ${cap ? `<span class="tree-item-cap">${esc(cap)}</span>` : ''}
               </div>
               <div class="tree-actions">
@@ -617,7 +617,7 @@
       for (const loc of locs) {
         const opt = document.createElement('option');
         opt.value = loc.id;
-        opt.textContent = `${loc.name} (${loc.location_type})`;
+        opt.textContent = `${loc.name} (${loc.type})`;
         sel.appendChild(opt);
       }
       sel.value = currentVal;
@@ -628,7 +628,7 @@
       e.preventDefault();
       const payload = {
         name: document.getElementById('loc-name').value.trim(),
-        location_type: document.getElementById('loc-type').value,
+        type: document.getElementById('loc-type').value,
         capacity: document.getElementById('loc-capacity').value ? Number(document.getElementById('loc-capacity').value) : null,
         capacity_unit: document.getElementById('loc-cap-unit').value.trim() || null,
         parent_id: document.getElementById('loc-parent').value || null,
@@ -641,10 +641,10 @@
       try {
         if (editingId) {
           payload.id = editingId;
-          await apiFetch('upsertLocation', 'POST', payload);
+          await apiFetch('updateLocation', 'POST', payload);
           toast(t('updated'), 'success');
         } else {
-          await apiFetch('upsertLocation', 'POST', payload);
+          await apiFetch('createLocation', 'POST', payload);
           toast(t('saved'), 'success');
         }
         resetForm();
@@ -664,7 +664,7 @@
       editingId = id;
       document.getElementById('edit-id').value = id;
       document.getElementById('loc-name').value = loc.name || '';
-      document.getElementById('loc-type').value = loc.location_type || '';
+      document.getElementById('loc-type').value = loc.type || '';
       document.getElementById('loc-capacity').value = loc.capacity ?? '';
       document.getElementById('loc-cap-unit').value = loc.capacity_unit || '';
       document.getElementById('loc-parent').value = loc.parent_id || '';
