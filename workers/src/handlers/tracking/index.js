@@ -7,11 +7,14 @@ import { jsonResponse, errorResponse } from '../../lib/response.js';
 import { ApiError } from '../../lib/errors.js';
 import * as lots from './lots.js';
 import * as locations from './locations.js';
+import * as weather from './weather.js';
 
 const locationActions = [
   'listLocations', 'getLocation', 'createLocation',
   'updateLocation', 'deleteLocation', 'seedLocations'
 ];
+
+const weatherActions = ['pullWeather'];
 
 export async function handleTrackingD1(request, env, ctx) {
   const url = new URL(request.url);
@@ -23,6 +26,10 @@ export async function handleTrackingD1(request, env, ctx) {
 
   if (locationActions.includes(action)) {
     return locations.handle(action, request, env);
+  }
+
+  if (weatherActions.includes(action)) {
+    return weather.handle(action, request, env);
   }
 
   return lots.handle(action, request, env);
