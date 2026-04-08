@@ -578,6 +578,7 @@
           <option value="drying">Drying</option>
           <option value="curing">Curing</option>
           <option value="processing">Processing</option>
+          <option value="finished">Finished</option>
         </select>
         <input type="text" id="filter-cultivar" placeholder="Search cultivar..." oninput="debouncedLoadLots()">
       </div>
@@ -623,6 +624,7 @@
             <option value="drying">Drying</option>
             <option value="curing">Curing</option>
             <option value="processing">Processing</option>
+            <option value="finished">Finished</option>
           </select>
         </div>
         <div class="form-group">
@@ -1226,7 +1228,7 @@
       document.getElementById('tr-qty-in').value = lot.quantity;
       document.getElementById('tr-qty-out').value = lot.quantity;
       // Pre-select next logical stage
-      const stages = ['germination','transplant','field','harvest','drying','curing','processing'];
+      const stages = ['germination','transplant','field','harvest','drying','curing','processing','finished'];
       const nextIdx = stages.indexOf(lot.current_stage) + 1;
       if (nextIdx < stages.length) {
         document.getElementById('tr-to').value = stages[nextIdx];
@@ -1240,11 +1242,14 @@
       const btn = document.getElementById('tr-submit');
       btn.disabled = true;
 
+      const lotId = document.getElementById('tr-lot-id').value;
+      const lot = lots.find(l => l.id === lotId);
       const payload = {
-        lot_id: document.getElementById('tr-lot-id').value,
+        lot_id: lotId,
         to_stage: document.getElementById('tr-to').value,
         quantity_in: Number(document.getElementById('tr-qty-in').value) || null,
         quantity_out: Number(document.getElementById('tr-qty-out').value) || null,
+        unit: lot ? lot.unit : null,
         location_id: document.getElementById('tr-location').value || null,
         logged_by: document.getElementById('tr-logged-by').value.trim() || null,
         notes: document.getElementById('tr-notes').value.trim() || null,

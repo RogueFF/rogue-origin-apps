@@ -1052,10 +1052,11 @@
         return;
       }
       $('#recentWater').innerHTML = obs.map(o => {
-        const action = (o.content || '').toLowerCase().includes('no action') ? 'no_action' : 'watered';
+        const meta = JSON.parse(o.metadata || '{}');
+        const action = meta.action || 'watered';
         const badgeClass = action === 'watered' ? 'watered' : 'no-action';
         const badgeText = action === 'watered' ? t('actionWatered') : t('actionNoAction');
-        const weight = o.metadata ? (JSON.parse(o.metadata).weight_lbs || '') : '';
+        const weight = meta.weight_lbs || '';
         return `<li class="recent-item">
           <span class="recent-detail">${weight ? weight + ' lbs' : ''}<span class="recent-badge ${badgeClass}">${badgeText}</span></span>
           <span class="recent-time">${timeAgo(o.observed_at || o.created_at)}</span>

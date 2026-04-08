@@ -38,13 +38,24 @@ export async function pullDailyWeather(env) {
   ).first();
   const locationId = locRow ? locRow.id : null;
 
-  const id = generateId();
+  // Check for existing weather_api entry for this date to prevent duplicates
+  const existing = await env.DB.prepare(
+    `SELECT id FROM tracking_environmental WHERE source = 'weather_api' AND recorded_at = ? LIMIT 1`
+  ).bind(recordedAt).first();
 
-  await env.DB.prepare(
-    `INSERT INTO tracking_environmental
-       (id, location_id, source, temp_f, humidity_pct, precip_in, wind_mph, recorded_at, logged_by)
-     VALUES (?, ?, 'weather_api', ?, ?, ?, ?, ?, NULL)`
-  ).bind(id, locationId, temp_f, humidity_pct, precip_in, wind_mph, recordedAt).run();
+  if (existing) {
+    // Update existing entry instead of inserting a duplicate
+    await env.DB.prepare(
+      `UPDATE tracking_environmental SET temp_f = ?, humidity_pct = ?, precip_in = ?, wind_mph = ?, location_id = ? WHERE id = ?`
+    ).bind(temp_f, humidity_pct, precip_in, wind_mph, locationId, existing.id).run();
+  } else {
+    const id = generateId();
+    await env.DB.prepare(
+      `INSERT INTO tracking_environmental
+         (id, location_id, source, temp_f, humidity_pct, precip_in, wind_mph, recorded_at, logged_by)
+       VALUES (?, ?, 'weather_api', ?, ?, ?, ?, ?, NULL)`
+    ).bind(id, locationId, temp_f, humidity_pct, precip_in, wind_mph, recordedAt).run();
+  }
 
   return {
     pulled: true,
