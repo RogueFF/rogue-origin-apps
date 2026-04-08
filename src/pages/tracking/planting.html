@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Planting Tracking</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../css/shared-base.css">
+  <style>
+    /* ========================================
+       PLANTING FORM — MOBILE-FIRST
+       ======================================== */
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .app-shell {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+
+    /* --- TOP BAR --- */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background: var(--header-bg);
+      color: var(--header-text);
+      flex-shrink: 0;
+      gap: 8px;
+    }
+
+    .top-bar a.back-link {
+      color: var(--header-text);
+      text-decoration: none;
+      font-size: 22px;
+      line-height: 1;
+      padding: 4px;
+      min-width: 32px;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+    }
+
+    .top-bar .title {
+      font-family: var(--font-display);
+      font-size: 20px;
+      white-space: nowrap;
+    }
+
+    .top-bar-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .crew-select {
+      font-family: var(--font-ui);
+      font-size: 14px;
+      padding: 4px 6px;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.12);
+      color: var(--header-text);
+      min-height: 36px;
+      max-width: 110px;
+    }
+
+    .crew-select option {
+      background: var(--header-bg);
+      color: var(--header-text);
+    }
+
+    .crew-custom {
+      font-family: var(--font-ui);
+      font-size: 14px;
+      padding: 4px 6px;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.12);
+      color: var(--header-text);
+      min-height: 36px;
+      width: 90px;
+    }
+
+    .crew-custom::placeholder {
+      color: rgba(255,255,255,0.5);
+    }
+
+    .lang-toggle {
+      font-family: var(--font-ui);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--ro-gold);
+      background: transparent;
+      color: var(--ro-gold);
+      cursor: pointer;
+      min-height: 36px;
+      min-width: 40px;
+    }
+
+    /* --- TAB BAR --- */
+    .tab-bar {
+      display: flex;
+      background: var(--bg-card);
+      border-bottom: 2px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 12px 4px;
+      font-family: var(--font-ui);
+      font-size: 15px;
+      font-weight: 600;
+      text-align: center;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      position: relative;
+      min-height: 52px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      transition: color 0.15s ease;
+    }
+
+    .tab-btn .tab-icon {
+      font-size: 20px;
+    }
+
+    .tab-btn.active {
+      color: var(--ro-green);
+    }
+
+    .tab-btn.active::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 12px;
+      right: 12px;
+      height: 3px;
+      background: var(--ro-green);
+      border-radius: 3px 3px 0 0;
+    }
+
+    /* --- TAB CONTENT --- */
+    .tab-content {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 16px 12px;
+    }
+
+    .tab-pane {
+      display: none;
+    }
+
+    .tab-pane.active {
+      display: block;
+      animation: fadeIn 0.15s ease;
+    }
+
+    /* --- FORM ELEMENTS --- */
+    label.field-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .field-group {
+      margin-bottom: 14px;
+    }
+
+    select.form-input,
+    input.form-input,
+    textarea.form-input {
+      width: 100%;
+      font-family: var(--font-ui);
+      font-size: 18px;
+      padding: 10px 12px;
+      border: 2px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--bg-card);
+      color: var(--text);
+      min-height: 48px;
+      transition: border-color 0.15s ease;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    select.form-input {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235a6b5f' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 36px;
+    }
+
+    input.form-input:focus,
+    select.form-input:focus,
+    textarea.form-input:focus {
+      border-color: var(--ro-green);
+      outline: none;
+      box-shadow: 0 0 0 3px var(--green-dim);
+    }
+
+    textarea.form-input {
+      resize: vertical;
+      min-height: 72px;
+    }
+
+    /* Number inputs — extra large for gloved hands */
+    input[type="number"].form-input {
+      font-size: 24px;
+      font-weight: 600;
+      text-align: center;
+      padding: 12px;
+    }
+
+    /* --- ROW ENTRY GRID (3-row replacement inputs) --- */
+    .row-inputs {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+
+    .row-input-block {
+      text-align: center;
+    }
+
+    .row-input-block .row-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    /* --- REPLANT ROW ENTRY --- */
+    .replant-row {
+      display: grid;
+      grid-template-columns: 48px 1fr 1fr;
+      gap: 8px;
+      align-items: end;
+      margin-bottom: 8px;
+      animation: fadeInUp 0.2s ease;
+    }
+
+    .replant-row .row-num-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .replant-row input[type="number"].form-input {
+      font-size: 20px;
+    }
+
+    .replant-row select.form-input {
+      font-size: 14px;
+      min-height: 48px;
+    }
+
+    .add-row-btn {
+      width: 100%;
+      font-family: var(--font-ui);
+      font-size: 15px;
+      font-weight: 600;
+      padding: 10px;
+      border: 2px dashed var(--border);
+      border-radius: var(--radius-md);
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      min-height: 48px;
+      text-align: center;
+      transition: border-color 0.15s ease, color 0.15s ease;
+      margin-bottom: 14px;
+    }
+
+    .add-row-btn:active {
+      border-color: var(--ro-green);
+      color: var(--ro-green);
+    }
+
+    /* --- SUBMIT BUTTON --- */
+    .submit-btn {
+      width: 100%;
+      font-family: var(--font-ui);
+      font-size: 18px;
+      font-weight: 700;
+      padding: 14px;
+      border: none;
+      border-radius: var(--radius-md);
+      background: var(--ro-green);
+      color: #fff;
+      cursor: pointer;
+      min-height: 56px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: opacity 0.15s ease;
+      margin-top: 6px;
+    }
+
+    .submit-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .submit-btn:active:not(:disabled) {
+      opacity: 0.85;
+      transform: scale(0.98);
+    }
+
+    /* --- RUNNING TOTALS --- */
+    .totals-section {
+      margin-top: 20px;
+      border-top: 1px solid var(--border-light);
+      padding-top: 12px;
+    }
+
+    .totals-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .totals-list {
+      list-style: none;
+    }
+
+    .totals-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border-light);
+      font-size: 14px;
+      font-family: var(--font-mono);
+    }
+
+    .totals-item:last-child {
+      border-bottom: none;
+    }
+
+    .totals-item .pass-label {
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+
+    .totals-item .pass-counts {
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .totals-item.total-row {
+      font-weight: 700;
+      color: var(--ro-green);
+      border-top: 2px solid var(--border);
+      padding-top: 8px;
+      margin-top: 4px;
+    }
+
+    .totals-item.total-row .pass-label {
+      color: var(--ro-green);
+      font-weight: 700;
+    }
+
+    .replant-summary {
+      font-size: 14px;
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    .replant-summary .reason-tag {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin: 2px 2px;
+      background: var(--green-dim);
+      color: var(--ro-green);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 16px;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    .no-lot-msg {
+      text-align: center;
+      padding: 20px 16px;
+      color: var(--warning);
+      font-size: 15px;
+      font-weight: 600;
+      background: var(--gold-dim);
+      border-radius: var(--radius-md);
+      margin-bottom: 14px;
+    }
+
+    .pass-auto-label {
+      font-size: 14px;
+      color: var(--text-secondary);
+      font-weight: 500;
+      margin-left: 8px;
+    }
+
+    /* --- SUCCESS OVERLAY --- */
+    .success-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(102, 137, 113, 0.92);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+
+    .success-overlay.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .success-check {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 44px;
+      color: var(--ro-green);
+      transform: scale(0.5);
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .success-overlay.show .success-check {
+      transform: scale(1);
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--ro-green);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    /* --- LANDSCAPE TWEAKS --- */
+    @media (max-height: 500px) and (orientation: landscape) {
+      .field-group {
+        margin-bottom: 8px;
+      }
+
+      .tab-content {
+        padding: 10px;
+      }
+
+      .submit-btn {
+        min-height: 48px;
+        padding: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="app-shell">
+  <!-- TOP BAR -->
+  <div class="top-bar">
+    <a href="index.html" class="back-link" aria-label="Back">&larr;</a>
+    <span class="title" data-i18n="pageTitle">Planting</span>
+    <div class="top-bar-right">
+      <select class="crew-select" id="crewSelect" aria-label="Crew member">
+        <option value="">--</option>
+        <option value="Koa">Koa</option>
+        <option value="Worker 1">Worker 1</option>
+        <option value="Worker 2">Worker 2</option>
+        <option value="__other__">Other...</option>
+      </select>
+      <input type="text" class="crew-custom hidden" id="crewCustom" placeholder="Name" aria-label="Custom name">
+      <button class="lang-toggle" id="langToggle" aria-label="Toggle language">ES</button>
+    </div>
+  </div>
+
+  <!-- TAB BAR -->
+  <div class="tab-bar" role="tablist">
+    <button class="tab-btn active" role="tab" aria-selected="true" data-tab="pass">
+      <span class="tab-icon">🌱</span>
+      <span data-i18n="tabPass">Planting Pass</span>
+    </button>
+    <button class="tab-btn" role="tab" aria-selected="false" data-tab="replant">
+      <span class="tab-icon">🔄</span>
+      <span data-i18n="tabReplant">Re-plant</span>
+    </button>
+  </div>
+
+  <!-- TAB CONTENT -->
+  <div class="tab-content">
+
+    <!-- ===== TAB: PLANTING PASS ===== -->
+    <div class="tab-pane active" id="pane-pass" role="tabpanel">
+      <div class="field-group">
+        <label class="field-label" for="passZone" data-i18n="labelZone">Zone</label>
+        <select class="form-input" id="passZone">
+          <option value="" data-i18n="optSelectZone">Select zone...</option>
+        </select>
+      </div>
+
+      <div id="passNoLot" class="no-lot-msg hidden" data-i18n="noActiveLot">No active lot at this zone</div>
+
+      <div id="passFormFields">
+        <div class="field-group">
+          <label class="field-label" data-i18n="labelPass">Pass #</label>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <input type="number" class="form-input" id="passNumber" inputmode="numeric" min="1" value="1" style="max-width:100px;">
+            <span class="pass-auto-label" id="passAutoLabel" data-i18n="autoIncrement">(auto)</span>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" data-i18n="labelReplacements">Replacements</label>
+          <div class="row-inputs">
+            <div class="row-input-block">
+              <div class="row-label" data-i18n="labelRow1">Row 1</div>
+              <input type="number" class="form-input" id="passRow1" inputmode="numeric" min="0" placeholder="0">
+            </div>
+            <div class="row-input-block">
+              <div class="row-label" data-i18n="labelRow2">Row 2</div>
+              <input type="number" class="form-input" id="passRow2" inputmode="numeric" min="0" placeholder="0">
+            </div>
+            <div class="row-input-block">
+              <div class="row-label" data-i18n="labelRow3">Row 3</div>
+              <input type="number" class="form-input" id="passRow3" inputmode="numeric" min="0" placeholder="0">
+            </div>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="passReason" data-i18n="labelReason">Reason</label>
+          <select class="form-input" id="passReason">
+            <option value="Crickets" data-i18n="reasonCrickets">Crickets</option>
+            <option value="Ungerminated" data-i18n="reasonUngerminated">Ungerminated</option>
+            <option value="Depth" data-i18n="reasonDepth">Depth</option>
+            <option value="Other" data-i18n="reasonOther">Other</option>
+          </select>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="passNotes" data-i18n="labelNotes">Notes (optional)</label>
+          <textarea class="form-input" id="passNotes" rows="2" placeholder=""></textarea>
+        </div>
+
+        <button class="submit-btn" id="submitPass" data-i18n="btnSubmit">SUBMIT</button>
+      </div>
+
+      <div class="totals-section" id="passTotals">
+        <div class="totals-title" data-i18n="runningTotals">Running Totals</div>
+        <ul class="totals-list" id="passTotalsList">
+          <li class="empty-state" data-i18n="emptyPasses">No passes logged yet</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ===== TAB: RE-PLANT ===== -->
+    <div class="tab-pane" id="pane-replant" role="tabpanel">
+      <div class="field-group">
+        <label class="field-label" for="replantZone" data-i18n="labelZone">Zone</label>
+        <select class="form-input" id="replantZone">
+          <option value="" data-i18n="optSelectZone">Select zone...</option>
+        </select>
+      </div>
+
+      <div id="replantNoLot" class="no-lot-msg hidden" data-i18n="noActiveLot">No active lot at this zone</div>
+
+      <div id="replantFormFields">
+        <div class="field-group">
+          <label class="field-label" data-i18n="labelRows">Rows</label>
+          <div id="replantRows"></div>
+          <button type="button" class="add-row-btn" id="addRowBtn" data-i18n="btnAddRow">+ Add Row</button>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="replantTrays" data-i18n="labelTraysUsed">Trays Used</label>
+          <input type="number" class="form-input" id="replantTrays" inputmode="numeric" min="0" placeholder="0">
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="replantNotes" data-i18n="labelNotes">Notes (optional)</label>
+          <textarea class="form-input" id="replantNotes" rows="2" placeholder=""></textarea>
+        </div>
+
+        <button class="submit-btn" id="submitReplant" data-i18n="btnSubmit">SUBMIT</button>
+      </div>
+
+      <div class="totals-section" id="replantTotals">
+        <div class="totals-title" data-i18n="totalReplants">Total Re-plants</div>
+        <div id="replantSummary" class="replant-summary">
+          <span class="empty-state" data-i18n="emptyReplants">No re-plants logged yet</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /tab-content -->
+</div><!-- /app-shell -->
+
+<!-- SUCCESS OVERLAY -->
+<div class="success-overlay" id="successOverlay">
+  <div class="success-check">&#10003;</div>
+</div>
+
+<script type="module">
+  // ========================================
+  // PLANTING TRACKING — CORE LOGIC
+  // ========================================
+
+  const API_URL = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/tracking';
+
+  // --- Bilingual Labels ---
+  const labels = {
+    en: {
+      pageTitle: 'Planting',
+      tabPass: 'Planting Pass',
+      tabReplant: 'Re-plant',
+      labelZone: 'Zone',
+      labelPass: 'Pass #',
+      labelReplacements: 'Replacements',
+      labelRow1: 'Row 1',
+      labelRow2: 'Row 2',
+      labelRow3: 'Row 3',
+      labelReason: 'Reason',
+      labelNotes: 'Notes (optional)',
+      labelRows: 'Rows',
+      labelTraysUsed: 'Trays Used',
+      reasonCrickets: 'Crickets',
+      reasonUngerminated: 'Ungerminated',
+      reasonDepth: 'Depth',
+      reasonMoisture: 'Moisture',
+      reasonOther: 'Other',
+      btnSubmit: 'SUBMIT',
+      btnAddRow: '+ Add Row',
+      optSelectZone: 'Select zone...',
+      runningTotals: 'Running Totals',
+      totalReplants: 'Total Re-plants',
+      emptyPasses: 'No passes logged yet',
+      emptyReplants: 'No re-plants logged yet',
+      noActiveLot: 'No active lot at this zone',
+      autoIncrement: '(auto)',
+      errorNoCrew: 'Select a crew member first',
+      errorNoZone: 'Select a zone',
+      errorNoLot: 'No active lot at this zone',
+      errorNoRows: 'Add at least one row with a count',
+      submitting: 'Submitting...',
+      langButton: 'ES',
+      passLabel: 'Pass',
+      totalLabel: 'TOTAL',
+      rowLabel: 'Row',
+      countLabel: 'Count',
+      replantTotal: 'total re-plants',
+      labelRowNum: 'Row'
+    },
+    es: {
+      pageTitle: 'Plantaci\u00f3n',
+      tabPass: 'Pasada',
+      tabReplant: 'Re-plantar',
+      labelZone: 'Zona',
+      labelPass: 'Pasada #',
+      labelReplacements: 'Reemplazos',
+      labelRow1: 'Fila 1',
+      labelRow2: 'Fila 2',
+      labelRow3: 'Fila 3',
+      labelReason: 'Raz\u00f3n',
+      labelNotes: 'Notas (opcional)',
+      labelRows: 'Filas',
+      labelTraysUsed: 'Bandejas Usadas',
+      reasonCrickets: 'Grillos',
+      reasonUngerminated: 'Sin Germinar',
+      reasonDepth: 'Profundidad',
+      reasonMoisture: 'Humedad',
+      reasonOther: 'Otro',
+      btnSubmit: 'ENVIAR',
+      btnAddRow: '+ Agregar Fila',
+      optSelectZone: 'Seleccionar zona...',
+      runningTotals: 'Totales Acumulados',
+      totalReplants: 'Total Re-plantados',
+      emptyPasses: 'Sin pasadas registradas',
+      emptyReplants: 'Sin re-plantados registrados',
+      noActiveLot: 'No hay lote activo en esta zona',
+      autoIncrement: '(auto)',
+      errorNoCrew: 'Seleccione un miembro del equipo',
+      errorNoZone: 'Seleccione una zona',
+      errorNoLot: 'No hay lote activo en esta zona',
+      errorNoRows: 'Agregue al menos una fila con cantidad',
+      submitting: 'Enviando...',
+      langButton: 'EN',
+      passLabel: 'Pasada',
+      totalLabel: 'TOTAL',
+      rowLabel: 'Fila',
+      countLabel: 'Cantidad',
+      replantTotal: 'total re-plantados',
+      labelRowNum: 'Fila'
+    }
+  };
+
+  let lang = localStorage.getItem('tracking_lang') || 'en';
+  const t = (key) => (labels[lang] && labels[lang][key]) || labels.en[key] || key;
+
+  // --- State ---
+  let zones = [];
+  let activeLotByZone = {}; // zone_id -> lot object
+  let passLotId = null;
+  let passLocationId = null;
+  let replantLotId = null;
+  let replantLocationId = null;
+  let replantRowCount = 3;
+
+  // --- DOM Refs ---
+  const $ = (sel) => document.querySelector(sel);
+  const $$ = (sel) => document.querySelectorAll(sel);
+
+  // ========================================
+  // LANGUAGE
+  // ========================================
+  function applyLanguage() {
+    $$('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      const text = t(key);
+      if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+        el.placeholder = text;
+      } else if (el.tagName === 'OPTION') {
+        el.textContent = text;
+      } else {
+        el.textContent = text;
+      }
+    });
+    $('#langToggle').textContent = t('langButton');
+    document.documentElement.lang = lang;
+    // Re-render replant row labels
+    $$('.replant-row .row-num-label').forEach((el, i) => {
+      el.textContent = `${t('labelRowNum')} ${i + 1}`;
+    });
+  }
+
+  $('#langToggle').addEventListener('click', () => {
+    lang = lang === 'en' ? 'es' : 'en';
+    localStorage.setItem('tracking_lang', lang);
+    applyLanguage();
+  });
+
+  // ========================================
+  // CREW NAME
+  // ========================================
+  const crewSelect = $('#crewSelect');
+  const crewCustom = $('#crewCustom');
+
+  function getCrewName() {
+    if (crewSelect.value === '__other__') {
+      return crewCustom.value.trim();
+    }
+    return crewSelect.value;
+  }
+
+  function restoreCrew() {
+    const saved = localStorage.getItem('tracking_crew_name') || '';
+    const options = Array.from(crewSelect.options).map(o => o.value);
+    if (options.includes(saved)) {
+      crewSelect.value = saved;
+    } else if (saved) {
+      crewSelect.value = '__other__';
+      crewCustom.value = saved;
+      crewCustom.classList.remove('hidden');
+    }
+  }
+
+  function persistCrew() {
+    const name = getCrewName();
+    if (name) localStorage.setItem('tracking_crew_name', name);
+  }
+
+  crewSelect.addEventListener('change', () => {
+    if (crewSelect.value === '__other__') {
+      crewCustom.classList.remove('hidden');
+      crewCustom.focus();
+    } else {
+      crewCustom.classList.add('hidden');
+    }
+    persistCrew();
+  });
+
+  crewCustom.addEventListener('input', persistCrew);
+  restoreCrew();
+
+  // ========================================
+  // TABS
+  // ========================================
+  $$('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.tab;
+      $$('.tab-btn').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
+      btn.classList.add('active');
+      btn.setAttribute('aria-selected', 'true');
+      $$('.tab-pane').forEach(p => p.classList.remove('active'));
+      $(`#pane-${tab}`).classList.add('active');
+    });
+  });
+
+  // ========================================
+  // SUCCESS FLASH
+  // ========================================
+  function showSuccess() {
+    const overlay = $('#successOverlay');
+    overlay.classList.add('show');
+    setTimeout(() => overlay.classList.remove('show'), 900);
+  }
+
+  // ========================================
+  // API HELPERS
+  // ========================================
+  async function apiGet(params) {
+    const url = new URL(API_URL);
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null) url.searchParams.set(k, v);
+    });
+    const res = await fetch(url.toString());
+    const json = await res.json();
+    return json.data || json;
+  }
+
+  async function apiPost(action, body) {
+    const url = `${API_URL}?action=${action}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Request failed');
+    return json.data || json;
+  }
+
+  // ========================================
+  // FLASH ERROR
+  // ========================================
+  function flashError(msg) {
+    alert(msg);
+  }
+
+  // ========================================
+  // LOAD ZONES
+  // ========================================
+  async function loadZones() {
+    try {
+      const data = await apiGet({ action: 'listLocations', type: 'zone' });
+      zones = Array.isArray(data) ? data : (data.locations || []);
+      populateZoneDropdowns();
+      // Restore last selected zone
+      const lastZone = localStorage.getItem('tracking_last_zone') || '';
+      if (lastZone) {
+        $('#passZone').value = lastZone;
+        $('#replantZone').value = lastZone;
+        onZoneChange('pass');
+        onZoneChange('replant');
+      }
+    } catch (err) {
+      console.error('Failed to load zones:', err);
+    }
+  }
+
+  function populateZoneDropdowns() {
+    ['passZone', 'replantZone'].forEach(id => {
+      const sel = $(`#${id}`);
+      while (sel.options.length > 1) sel.remove(1);
+      zones.forEach(z => {
+        const opt = document.createElement('option');
+        opt.value = z.id || z.location_id;
+        opt.textContent = z.name || z.label || z.id;
+        sel.appendChild(opt);
+      });
+    });
+  }
+
+  // ========================================
+  // ZONE -> LOT RESOLUTION
+  // ========================================
+  async function resolveLotForZone(zoneId) {
+    if (!zoneId) return null;
+    // Check cache
+    if (activeLotByZone[zoneId] !== undefined) return activeLotByZone[zoneId];
+
+    try {
+      const data = await apiGet({ action: 'listLots', current_stage: 'planted', location_id: zoneId });
+      let lots = Array.isArray(data) ? data : (data.lots || []);
+      // If no "planted" lot, try "planting" stage
+      if (lots.length === 0) {
+        const data2 = await apiGet({ action: 'listLots', location_id: zoneId });
+        lots = Array.isArray(data2) ? data2 : (data2.lots || []);
+        // Filter to active stages
+        lots = lots.filter(l => ['germination', 'planted', 'seedling', 'vegetative', 'active'].includes(l.current_stage));
+      }
+      activeLotByZone[zoneId] = lots.length > 0 ? lots[0] : null;
+      return activeLotByZone[zoneId];
+    } catch (err) {
+      console.error('Failed to resolve lot for zone:', err);
+      return null;
+    }
+  }
+
+  async function onZoneChange(tab) {
+    const zoneId = tab === 'pass' ? $('#passZone').value : $('#replantZone').value;
+    localStorage.setItem('tracking_last_zone', zoneId);
+
+    if (!zoneId) {
+      if (tab === 'pass') {
+        passLotId = null;
+        passLocationId = null;
+        $('#passNoLot').classList.add('hidden');
+        $('#passFormFields').style.display = '';
+      } else {
+        replantLotId = null;
+        replantLocationId = null;
+        $('#replantNoLot').classList.add('hidden');
+        $('#replantFormFields').style.display = '';
+      }
+      return;
+    }
+
+    const lot = await resolveLotForZone(zoneId);
+
+    if (tab === 'pass') {
+      passLocationId = zoneId;
+      if (lot) {
+        passLotId = lot.id || lot.lot_id;
+        $('#passNoLot').classList.add('hidden');
+        $('#passFormFields').style.display = '';
+        loadPassTotals();
+        autoIncrementPass();
+      } else {
+        passLotId = null;
+        $('#passNoLot').classList.remove('hidden');
+        $('#passFormFields').style.display = 'none';
+      }
+    } else {
+      replantLocationId = zoneId;
+      if (lot) {
+        replantLotId = lot.id || lot.lot_id;
+        $('#replantNoLot').classList.add('hidden');
+        $('#replantFormFields').style.display = '';
+        loadReplantTotals();
+      } else {
+        replantLotId = null;
+        $('#replantNoLot').classList.remove('hidden');
+        $('#replantFormFields').style.display = 'none';
+      }
+    }
+  }
+
+  $('#passZone').addEventListener('change', () => {
+    activeLotByZone = {}; // Clear cache when zone changes
+    onZoneChange('pass');
+  });
+  $('#replantZone').addEventListener('change', () => {
+    activeLotByZone = {};
+    onZoneChange('replant');
+  });
+
+  // ========================================
+  // AUTO-INCREMENT PASS NUMBER
+  // ========================================
+  async function autoIncrementPass() {
+    if (!passLotId) return;
+    try {
+      const data = await apiGet({ action: 'getPlantingPasses', lot_id: passLotId });
+      const passes = data.passes || (Array.isArray(data) ? data : []);
+      const maxPass = passes.reduce((max, p) => Math.max(max, p.pass_number || 0), 0);
+      $('#passNumber').value = maxPass + 1;
+    } catch (err) {
+      console.error('Failed to auto-increment pass:', err);
+      $('#passNumber').value = 1;
+    }
+  }
+
+  // ========================================
+  // LOAD PLANTING PASS TOTALS
+  // ========================================
+  async function loadPassTotals() {
+    if (!passLotId) {
+      $('#passTotalsList').innerHTML = `<li class="empty-state">${t('emptyPasses')}</li>`;
+      return;
+    }
+
+    try {
+      const data = await apiGet({ action: 'getPlantingPasses', lot_id: passLotId });
+      const passes = data.passes || (Array.isArray(data) ? data : []);
+
+      if (passes.length === 0) {
+        $('#passTotalsList').innerHTML = `<li class="empty-state">${t('emptyPasses')}</li>`;
+        return;
+      }
+
+      let grandTotal = 0;
+      let html = '';
+
+      passes.forEach(p => {
+        const r1 = p.row_1_replacements || 0;
+        const r2 = p.row_2_replacements || 0;
+        const r3 = p.row_3_replacements || 0;
+        const sum = r1 + r2 + r3;
+        grandTotal += sum;
+        html += `<li class="totals-item">
+          <span class="pass-label">${t('passLabel')} ${p.pass_number}</span>
+          <span class="pass-counts">R1:${r1} R2:${r2} R3:${r3} = ${sum}</span>
+        </li>`;
+      });
+
+      html += `<li class="totals-item total-row">
+        <span class="pass-label">${t('totalLabel')}</span>
+        <span class="pass-counts">${grandTotal} ${t('labelReplacements').toLowerCase()}</span>
+      </li>`;
+
+      $('#passTotalsList').innerHTML = html;
+    } catch (err) {
+      console.error('Failed to load pass totals:', err);
+    }
+  }
+
+  // ========================================
+  // LOAD REPLANT TOTALS
+  // ========================================
+  async function loadReplantTotals() {
+    if (!replantLotId) {
+      $('#replantSummary').innerHTML = `<span class="empty-state">${t('emptyReplants')}</span>`;
+      return;
+    }
+
+    try {
+      const data = await apiGet({ action: 'getReplants', lot_id: replantLotId });
+      const replants = data.replants || (Array.isArray(data) ? data : []);
+
+      if (replants.length === 0) {
+        $('#replantSummary').innerHTML = `<span class="empty-state">${t('emptyReplants')}</span>`;
+        return;
+      }
+
+      let totalCount = 0;
+      const byReason = {};
+
+      replants.forEach(r => {
+        let rows;
+        try { rows = JSON.parse(r.row_data || '[]'); } catch { rows = []; }
+        rows.forEach(row => {
+          const count = row.count || 0;
+          totalCount += count;
+          const reason = row.reason || 'Other';
+          byReason[reason] = (byReason[reason] || 0) + count;
+        });
+      });
+
+      let html = `<strong>${totalCount}</strong> ${t('replantTotal')}`;
+      const reasonTags = Object.entries(byReason)
+        .sort((a, b) => b[1] - a[1])
+        .map(([reason, count]) => `<span class="reason-tag">${count} ${reason.toLowerCase()}</span>`)
+        .join(' ');
+
+      if (reasonTags) {
+        html += `<br>${reasonTags}`;
+      }
+
+      $('#replantSummary').innerHTML = html;
+    } catch (err) {
+      console.error('Failed to load replant totals:', err);
+    }
+  }
+
+  // ========================================
+  // REPLANT ROW MANAGEMENT
+  // ========================================
+  function createReplantRow(rowNum) {
+    const div = document.createElement('div');
+    div.className = 'replant-row';
+    div.innerHTML = `
+      <div>
+        <div class="row-num-label">${t('labelRowNum')} ${rowNum}</div>
+        <input type="number" class="form-input" inputmode="numeric" min="0" placeholder="0" data-field="count">
+      </div>
+      <div style="grid-column: span 2;">
+        <select class="form-input" data-field="reason">
+          <option value="Crickets">${t('reasonCrickets')}</option>
+          <option value="Ungerminated">${t('reasonUngerminated')}</option>
+          <option value="Moisture">${t('reasonMoisture')}</option>
+          <option value="Other">${t('reasonOther')}</option>
+        </select>
+      </div>
+    `;
+    return div;
+  }
+
+  function initReplantRows() {
+    const container = $('#replantRows');
+    container.innerHTML = '';
+    replantRowCount = 3;
+    for (let i = 1; i <= 3; i++) {
+      container.appendChild(createReplantRow(i));
+    }
+  }
+
+  $('#addRowBtn').addEventListener('click', () => {
+    replantRowCount++;
+    const container = $('#replantRows');
+    container.appendChild(createReplantRow(replantRowCount));
+    // Scroll the new row into view
+    const lastRow = container.lastElementChild;
+    lastRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+
+  function getReplantRowData() {
+    const rows = [];
+    $$('#replantRows .replant-row').forEach((el, i) => {
+      const count = parseInt(el.querySelector('[data-field="count"]').value) || 0;
+      const reason = el.querySelector('[data-field="reason"]').value;
+      if (count > 0) {
+        rows.push({ row: i + 1, count, reason });
+      }
+    });
+    return rows;
+  }
+
+  // ========================================
+  // SUBMIT: PLANTING PASS
+  // ========================================
+  $('#submitPass').addEventListener('click', async () => {
+    const crew = getCrewName();
+    if (!crew) return flashError(t('errorNoCrew'));
+    if (!$('#passZone').value) return flashError(t('errorNoZone'));
+    if (!passLotId) return flashError(t('errorNoLot'));
+
+    const passNumber = parseInt($('#passNumber').value) || 1;
+    const r1 = parseInt($('#passRow1').value) || 0;
+    const r2 = parseInt($('#passRow2').value) || 0;
+    const r3 = parseInt($('#passRow3').value) || 0;
+    const reason = $('#passReason').value;
+    const notes = $('#passNotes').value.trim();
+
+    const btn = $('#submitPass');
+    btn.disabled = true;
+    btn.textContent = t('submitting');
+
+    try {
+      await apiPost('logPlantingPass', {
+        lot_id: passLotId,
+        location_id: passLocationId,
+        pass_number: passNumber,
+        row_1_replacements: r1,
+        row_2_replacements: r2,
+        row_3_replacements: r3,
+        reason,
+        logged_by: crew,
+        notes: notes || null
+      });
+
+      showSuccess();
+
+      // Reset form
+      $('#passRow1').value = '';
+      $('#passRow2').value = '';
+      $('#passRow3').value = '';
+      $('#passNotes').value = '';
+
+      // Reload totals and auto-increment
+      activeLotByZone = {};
+      loadPassTotals();
+      autoIncrementPass();
+    } catch (err) {
+      flashError(err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = t('btnSubmit');
+    }
+  });
+
+  // ========================================
+  // SUBMIT: REPLANT
+  // ========================================
+  $('#submitReplant').addEventListener('click', async () => {
+    const crew = getCrewName();
+    if (!crew) return flashError(t('errorNoCrew'));
+    if (!$('#replantZone').value) return flashError(t('errorNoZone'));
+    if (!replantLotId) return flashError(t('errorNoLot'));
+
+    const rowData = getReplantRowData();
+    if (rowData.length === 0) return flashError(t('errorNoRows'));
+
+    const traysUsed = parseInt($('#replantTrays').value) || 0;
+    const notes = $('#replantNotes').value.trim();
+
+    const btn = $('#submitReplant');
+    btn.disabled = true;
+    btn.textContent = t('submitting');
+
+    try {
+      await apiPost('logReplant', {
+        lot_id: replantLotId,
+        location_id: replantLocationId,
+        row_data: JSON.stringify(rowData),
+        trays_used: traysUsed,
+        source_lot_id: null,
+        logged_by: crew,
+        notes: notes || null
+      });
+
+      showSuccess();
+
+      // Reset form
+      initReplantRows();
+      $('#replantTrays').value = '';
+      $('#replantNotes').value = '';
+
+      // Reload totals
+      activeLotByZone = {};
+      loadReplantTotals();
+    } catch (err) {
+      flashError(err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = t('btnSubmit');
+    }
+  });
+
+  // ========================================
+  // INIT
+  // ========================================
+  async function init() {
+    applyLanguage();
+    initReplantRows();
+    loadZones();
+  }
+
+  init();
+</script>
+</body>
+</html>
