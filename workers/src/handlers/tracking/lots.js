@@ -140,7 +140,7 @@ async function updateLot(request, env) {
     throw new ApiError('Missing id', 'BAD_REQUEST', 400);
   }
 
-  const allowedFields = ['cultivar', 'seed_source', 'seed_lot_number', 'quantity', 'unit', 'germ_method', 'current_stage', 'current_location_id', 'is_replant', 'notes'];
+  const allowedFields = ['cultivar', 'seed_source', 'seed_lot_number', 'quantity', 'unit', 'germ_method', 'is_replant', 'notes'];
   const updates = [];
   const params = [];
 
@@ -324,6 +324,24 @@ async function mergeLots(request, env) {
   const target = targets[0];
   let totalMerged = 0;
   const statements = [];
+
+  // Validate each source lot has sufficient quantity before building batch
+  for (const source of sources) {
+    const { results: sourceLots } = await env.DB.prepare(
+      'SELECT * FROM tracking_lots WHERE id = ?'
+    ).bind(source.lot_id).all();
+
+    if (sourceLots.length === 0) {
+      throw new ApiError(`Source lot ${source.lot_id} not found`, 'NOT_FOUND', 404);
+    }
+
+    if (sourceLots[0].quantity < source.quantity) {
+      throw new ApiError(
+        `Source lot ${source.lot_id} has insufficient quantity (${sourceLots[0].quantity} available, ${source.quantity} requested)`,
+        'BAD_REQUEST', 400
+      );
+    }
+  }
 
   for (const source of sources) {
     const lineageId = generateId();

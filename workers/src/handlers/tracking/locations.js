@@ -127,74 +127,98 @@ async function deleteLocation(request, env) {
     throw new ApiError('Missing id', 'BAD_REQUEST', 400);
   }
 
+  // Check for child locations
+  const children = await env.DB.prepare(
+    'SELECT COUNT(*) as count FROM tracking_locations WHERE parent_id = ?'
+  ).bind(id).first();
+
+  if (children.count > 0) {
+    throw new ApiError(
+      `Cannot delete: ${children.count} child location(s) depend on this location. Reassign or delete them first.`,
+      'BAD_REQUEST', 400
+    );
+  }
+
+  // Check for lots currently at this location
+  const lots = await env.DB.prepare(
+    'SELECT COUNT(*) as count FROM tracking_lots WHERE current_location_id = ?'
+  ).bind(id).first();
+
+  if (lots.count > 0) {
+    throw new ApiError(
+      `Cannot delete: ${lots.count} lot(s) are currently at this location. Move them first.`,
+      'BAD_REQUEST', 400
+    );
+  }
+
   await env.DB.prepare('DELETE FROM tracking_locations WHERE id = ?').bind(id).run();
   return jsonResponse({ deleted: true });
 }
 
 async function seedLocations(request, env) {
-  let count = 0;
+  // Idempotency guard: don't re-seed if locations already exist
+  const existing = await env.DB.prepare('SELECT COUNT(*) as count FROM tracking_locations').first();
+  if (existing.count > 0) {
+    return jsonResponse({ seeded: false, message: 'Locations already exist. Delete existing locations first or use the form to add new ones.' });
+  }
+
+  const statements = [];
 
   // Farm
   const farmId = generateId();
-  await env.DB.prepare(
+  statements.push(env.DB.prepare(
     'INSERT INTO tracking_locations (id, name, type) VALUES (?, ?, ?)'
-  ).bind(farmId, 'Mcloughlin Farm', 'farm').run();
-  count++;
+  ).bind(farmId, 'Mcloughlin Farm', 'farm'));
 
   // Greenhouse 1
   const ghId = generateId();
-  await env.DB.prepare(
+  statements.push(env.DB.prepare(
     'INSERT INTO tracking_locations (id, name, type, parent_id) VALUES (?, ?, ?, ?)'
-  ).bind(ghId, 'Greenhouse 1', 'greenhouse', farmId).run();
-  count++;
+  ).bind(ghId, 'Greenhouse 1', 'greenhouse', farmId));
 
   // Fields A-N with zone children
   const fieldLetters = 'ABCDEFGHIJKLMN'.split('');
   for (const letter of fieldLetters) {
     const fieldId = generateId();
-    await env.DB.prepare(
+    statements.push(env.DB.prepare(
       'INSERT INTO tracking_locations (id, name, type, parent_id) VALUES (?, ?, ?, ?)'
-    ).bind(fieldId, `Field ${letter}`, 'field', farmId).run();
-    count++;
+    ).bind(fieldId, `Field ${letter}`, 'field', farmId));
 
     const zoneId = generateId();
-    await env.DB.prepare(
+    statements.push(env.DB.prepare(
       'INSERT INTO tracking_locations (id, name, type, capacity, capacity_unit, parent_id) VALUES (?, ?, ?, ?, ?, ?)'
-    ).bind(zoneId, `Field ${letter} Zone 1`, 'zone', 1750, 'plants', fieldId).run();
-    count++;
+    ).bind(zoneId, `Field ${letter} Zone 1`, 'zone', 1750, 'plants', fieldId));
   }
 
   // Upper Barn with 4 rooms
   const upperBarnId = generateId();
-  await env.DB.prepare(
+  statements.push(env.DB.prepare(
     'INSERT INTO tracking_locations (id, name, type, parent_id) VALUES (?, ?, ?, ?)'
-  ).bind(upperBarnId, 'Upper Barn', 'barn', farmId).run();
-  count++;
+  ).bind(upperBarnId, 'Upper Barn', 'barn', farmId));
 
   for (let i = 1; i <= 4; i++) {
     const roomId = generateId();
-    await env.DB.prepare(
+    statements.push(env.DB.prepare(
       'INSERT INTO tracking_locations (id, name, type, parent_id) VALUES (?, ?, ?, ?)'
-    ).bind(roomId, `Upper Barn Room ${i}`, 'barn_room', upperBarnId).run();
-    count++;
+    ).bind(roomId, `Upper Barn Room ${i}`, 'barn_room', upperBarnId));
   }
 
   // Bottom Barn with Side A Zone 1-3 and Side B Zone 1-3
   const bottomBarnId = generateId();
-  await env.DB.prepare(
+  statements.push(env.DB.prepare(
     'INSERT INTO tracking_locations (id, name, type, parent_id) VALUES (?, ?, ?, ?)'
-  ).bind(bottomBarnId, 'Bottom Barn', 'barn', farmId).run();
-  count++;
+  ).bind(bottomBarnId, 'Bottom Barn', 'barn', farmId));
 
   for (const side of ['A', 'B']) {
     for (let z = 1; z <= 3; z++) {
       const roomId = generateId();
-      await env.DB.prepare(
+      statements.push(env.DB.prepare(
         'INSERT INTO tracking_locations (id, name, type, parent_id) VALUES (?, ?, ?, ?)'
-      ).bind(roomId, `Side ${side} Zone ${z}`, 'barn_room', bottomBarnId).run();
-      count++;
+      ).bind(roomId, `Side ${side} Zone ${z}`, 'barn_room', bottomBarnId));
     }
   }
 
-  return jsonResponse({ seeded: true, count });
+  await env.DB.batch(statements);
+
+  return jsonResponse({ seeded: true, count: statements.length });
 }
