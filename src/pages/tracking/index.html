@@ -368,7 +368,9 @@
   // ========================================
   //  CONFIG
   // ========================================
-  const API_URL = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/tracking';
+  const API_URL = window.location.hostname === 'localhost'
+    ? 'http://localhost:8787/api/tracking'
+    : 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/tracking';
 
   // ========================================
   //  BILINGUAL
@@ -543,20 +545,27 @@
     const items = [];
 
     (observations || []).forEach(obs => {
+      const type = obs.observation_type || 'observation';
+      const content = obs.content || '';
+      const desc = type !== 'observation' ? `${type}: ${content}` : (content || 'Observation');
       items.push({
         time: obs.observed_at || obs.created_at || '',
         icon: '\u{1F4CB}',
-        desc: obs.category ? `${obs.category}: ${obs.notes || ''}` : (obs.notes || 'Observation'),
+        desc,
         by: obs.logged_by || ''
       });
     });
 
     (readings || []).forEach(rd => {
       if (rd.source === 'weather_api') return; // skip weather in feed
+      const parts = [];
+      if (rd.temp_f != null) parts.push(`${rd.temp_f}\u00B0F`);
+      if (rd.humidity_pct != null) parts.push(`${rd.humidity_pct}% RH`);
+      const desc = parts.length ? `GH Reading: ${parts.join(' / ')}` : 'Reading';
       items.push({
         time: rd.recorded_at || rd.created_at || '',
         icon: '\u{1F321}',
-        desc: rd.reading_type ? `${rd.reading_type}: ${rd.value}${rd.unit || ''}` : 'Reading',
+        desc,
         by: rd.logged_by || ''
       });
     });
@@ -605,36 +614,22 @@
       return;
     }
 
-    // Find most recent readings by type
-    const latest = {};
-    readings.forEach(r => {
-      const type = (r.reading_type || '').toLowerCase();
-      if (!latest[type] || (r.recorded_at || '') > (latest[type].recorded_at || '')) {
-        latest[type] = r;
-      }
-    });
+    // The data comes from tracking_environmental with columns: temp_f, humidity_pct, precip_in, wind_mph
+    // Take the most recent reading
+    const r = readings[0];
 
-    const temp = latest['temperature'] || latest['temp'] || latest['air_temp'];
-    const humidity = latest['humidity'] || latest['relative_humidity'];
-    const precip = latest['precipitation'] || latest['precip'] || latest['rainfall'];
-    const wind = latest['wind_speed'] || latest['wind'];
-
-    if (!temp && !humidity && !precip && !wind) {
+    if (!r.temp_f && !r.humidity_pct && !r.precip_in && !r.wind_mph) {
       el.innerHTML = `<span class="feed-empty">${t('noWeather')}</span>`;
       return;
     }
 
     let html = '<div class="weather-grid">';
-    if (temp) {
-      html += `<span class="weather-big">${temp.value}${temp.unit || '\u00B0F'}</span>`;
-    } else {
-      html += '<span class="weather-big">--</span>';
-    }
+    html += `<span class="weather-big">${r.temp_f != null ? Math.round(r.temp_f) + '\u00B0F' : '--'}</span>`;
     html += '<div>';
-    if (humidity) html += `<div class="weather-detail">\u{1F4A7} ${humidity.value}${humidity.unit || '%'} humidity</div>`;
-    if (precip)  html += `<div class="weather-detail">\u{1F327} ${precip.value}${precip.unit || ' in'} precip</div>`;
-    if (wind)    html += `<div class="weather-detail">\u{1F4A8} ${wind.value}${wind.unit || ' mph'} wind</div>`;
-    if (!humidity && !precip && !wind) html += `<div class="weather-detail">No additional details</div>`;
+    if (r.humidity_pct != null) html += `<div class="weather-detail">\u{1F4A7} ${r.humidity_pct}% humidity</div>`;
+    if (r.precip_in != null)   html += `<div class="weather-detail">\u{1F327} ${r.precip_in} in precip</div>`;
+    if (r.wind_mph != null)    html += `<div class="weather-detail">\u{1F4A8} ${r.wind_mph} mph wind</div>`;
+    if (r.humidity_pct == null && r.precip_in == null && r.wind_mph == null) html += `<div class="weather-detail">No additional details</div>`;
     html += '</div></div>';
     el.innerHTML = html;
   }
