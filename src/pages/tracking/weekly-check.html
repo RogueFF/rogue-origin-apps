@@ -1,0 +1,1405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Weekly Zone Check</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../css/shared-base.css">
+  <style>
+    /* ========================================
+       WEEKLY CHECK FORM — MOBILE-FIRST
+       ======================================== */
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .app-shell {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+
+    /* --- TOP BAR --- */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background: var(--header-bg);
+      color: var(--header-text);
+      flex-shrink: 0;
+      gap: 8px;
+    }
+
+    .top-bar a.back-link {
+      color: var(--header-text);
+      text-decoration: none;
+      font-size: 22px;
+      line-height: 1;
+      padding: 4px;
+      min-width: 32px;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+    }
+
+    .top-bar .title {
+      font-family: var(--font-display);
+      font-size: 20px;
+      white-space: nowrap;
+    }
+
+    .top-bar-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .crew-select {
+      font-family: var(--font-ui);
+      font-size: 14px;
+      padding: 4px 6px;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.12);
+      color: var(--header-text);
+      min-height: 36px;
+      max-width: 110px;
+    }
+
+    .crew-select option {
+      background: var(--header-bg);
+      color: var(--header-text);
+    }
+
+    .crew-custom {
+      font-family: var(--font-ui);
+      font-size: 14px;
+      padding: 4px 6px;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.12);
+      color: var(--header-text);
+      min-height: 36px;
+      width: 90px;
+    }
+
+    .crew-custom::placeholder {
+      color: rgba(255,255,255,0.5);
+    }
+
+    .lang-toggle {
+      font-family: var(--font-ui);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--ro-gold);
+      background: transparent;
+      color: var(--ro-gold);
+      cursor: pointer;
+      min-height: 36px;
+      min-width: 40px;
+    }
+
+    /* --- TAB BAR --- */
+    .tab-bar {
+      display: flex;
+      background: var(--bg-card);
+      border-bottom: 2px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 12px 4px;
+      font-family: var(--font-ui);
+      font-size: 15px;
+      font-weight: 600;
+      text-align: center;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      position: relative;
+      min-height: 52px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      transition: color 0.15s ease;
+    }
+
+    .tab-btn .tab-icon {
+      font-size: 20px;
+    }
+
+    .tab-btn.active {
+      color: var(--ro-green);
+    }
+
+    .tab-btn.active::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 12px;
+      right: 12px;
+      height: 3px;
+      background: var(--ro-green);
+      border-radius: 3px 3px 0 0;
+    }
+
+    /* --- TAB CONTENT --- */
+    .tab-content {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 16px 12px;
+    }
+
+    .tab-pane {
+      display: none;
+    }
+
+    .tab-pane.active {
+      display: block;
+      animation: fadeIn 0.15s ease;
+    }
+
+    /* --- FORM ELEMENTS --- */
+    label.field-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .field-group {
+      margin-bottom: 14px;
+    }
+
+    select.form-input,
+    input.form-input,
+    textarea.form-input {
+      width: 100%;
+      font-family: var(--font-ui);
+      font-size: 18px;
+      padding: 10px 12px;
+      border: 2px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--bg-card);
+      color: var(--text);
+      min-height: 48px;
+      transition: border-color 0.15s ease;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    select.form-input {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235a6b5f' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 36px;
+    }
+
+    input.form-input:focus,
+    select.form-input:focus,
+    textarea.form-input:focus {
+      border-color: var(--ro-green);
+      outline: none;
+      box-shadow: 0 0 0 3px var(--green-dim);
+    }
+
+    textarea.form-input {
+      resize: vertical;
+      min-height: 72px;
+    }
+
+    /* Number inputs — extra large for gloved hands */
+    input[type="number"].form-input {
+      font-size: 24px;
+      font-weight: 600;
+      text-align: center;
+      padding: 12px;
+    }
+
+    /* --- INLINE UNIT LABEL --- */
+    .input-with-unit {
+      position: relative;
+    }
+
+    .input-with-unit .unit-label {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    .input-with-unit input {
+      padding-right: 44px;
+    }
+
+    /* --- TOGGLE BUTTONS (button groups) --- */
+    .toggle-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .toggle-btn {
+      flex: 1;
+      font-family: var(--font-ui);
+      font-size: 16px;
+      font-weight: 600;
+      padding: 14px 8px;
+      border: 2px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      cursor: pointer;
+      text-align: center;
+      min-height: 52px;
+      transition: all 0.15s ease;
+    }
+
+    .toggle-btn.selected {
+      border-color: var(--ro-green);
+      background: var(--green-dim);
+      color: var(--ro-green);
+    }
+
+    .toggle-btn.selected-warning {
+      border-color: var(--warning);
+      background: var(--gold-dim);
+      color: #8a6d20;
+    }
+
+    .toggle-btn.selected-danger {
+      border-color: var(--danger);
+      background: var(--danger-dim);
+      color: var(--danger);
+    }
+
+    /* --- GROWTH RATING CIRCLES --- */
+    .growth-rating-group {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      padding: 8px 0;
+    }
+
+    .growth-circle {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      border: 3px solid var(--border);
+      background: var(--bg-card);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-ui);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-muted);
+      transition: all 0.15s ease;
+      min-width: 52px;
+      min-height: 52px;
+    }
+
+    .growth-circle:active {
+      transform: scale(0.92);
+    }
+
+    .growth-circle.selected {
+      color: #fff;
+      border-color: transparent;
+    }
+
+    .growth-circle[data-rating="1"].selected {
+      background: #c45c4a;
+      border-color: #c45c4a;
+    }
+
+    .growth-circle[data-rating="2"].selected {
+      background: #d98c3b;
+      border-color: #d98c3b;
+    }
+
+    .growth-circle[data-rating="3"].selected {
+      background: #d4b83e;
+      border-color: #d4b83e;
+    }
+
+    .growth-circle[data-rating="4"].selected {
+      background: #7fbf6b;
+      border-color: #7fbf6b;
+    }
+
+    .growth-circle[data-rating="5"].selected {
+      background: #4a9e5c;
+      border-color: #4a9e5c;
+    }
+
+    .growth-label {
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 6px;
+    }
+
+    /* --- PHOTO BUTTON --- */
+    .photo-btn {
+      width: 100%;
+      font-family: var(--font-ui);
+      font-size: 16px;
+      font-weight: 600;
+      padding: 12px;
+      border: 2px dashed var(--border);
+      border-radius: var(--radius-md);
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      cursor: pointer;
+      min-height: 48px;
+      text-align: center;
+      transition: border-color 0.15s ease;
+    }
+
+    .photo-btn.has-photo {
+      border-color: var(--ro-green);
+      color: var(--ro-green);
+      border-style: solid;
+    }
+
+    .photo-preview {
+      margin-top: 8px;
+      display: none;
+    }
+
+    .photo-preview img {
+      max-width: 100%;
+      max-height: 120px;
+      border-radius: var(--radius-sm);
+      object-fit: cover;
+    }
+
+    /* --- SUBMIT BUTTON --- */
+    .submit-btn {
+      width: 100%;
+      font-family: var(--font-ui);
+      font-size: 18px;
+      font-weight: 700;
+      padding: 14px;
+      border: none;
+      border-radius: var(--radius-md);
+      background: var(--ro-green);
+      color: #fff;
+      cursor: pointer;
+      min-height: 56px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: opacity 0.15s ease;
+      margin-top: 6px;
+    }
+
+    .submit-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .submit-btn:active:not(:disabled) {
+      opacity: 0.85;
+      transform: scale(0.98);
+    }
+
+    /* --- PREVIOUS WEEKS TABLE --- */
+    .history-section {
+      margin-top: 20px;
+      border-top: 1px solid var(--border-light);
+      padding-top: 12px;
+    }
+
+    .history-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .history-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--font-ui);
+      font-size: 13px;
+    }
+
+    .history-table th {
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      padding: 6px 4px;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .history-table td {
+      padding: 8px 4px;
+      border-bottom: 1px solid var(--border-light);
+      color: var(--text);
+      vertical-align: middle;
+    }
+
+    .history-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .growth-dot {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      vertical-align: middle;
+    }
+
+    .growth-dot.g1 { background: #c45c4a; }
+    .growth-dot.g2 { background: #d98c3b; }
+    .growth-dot.g3 { background: #d4b83e; }
+    .growth-dot.g4 { background: #7fbf6b; }
+    .growth-dot.g5 { background: #4a9e5c; }
+
+    .pest-tag {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .pest-tag.none {
+      background: var(--green-dim);
+      color: var(--ro-green);
+    }
+
+    .pest-tag.low {
+      background: var(--gold-dim);
+      color: #8a6d20;
+    }
+
+    .pest-tag.moderate {
+      background: rgba(217, 140, 59, 0.15);
+      color: #b06a1f;
+    }
+
+    .pest-tag.heavy {
+      background: var(--danger-dim);
+      color: var(--danger);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 16px;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--ro-green);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    /* --- UPLOAD AREA (Sap Analysis) --- */
+    .upload-btn {
+      width: 100%;
+      font-family: var(--font-ui);
+      font-size: 16px;
+      font-weight: 600;
+      padding: 20px 12px;
+      border: 2px dashed var(--border);
+      border-radius: var(--radius-md);
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      cursor: pointer;
+      min-height: 56px;
+      text-align: center;
+      transition: border-color 0.15s ease;
+    }
+
+    .upload-btn.has-file {
+      border-color: var(--ro-green);
+      color: var(--ro-green);
+      border-style: solid;
+    }
+
+    .upload-filename {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 6px;
+      text-align: center;
+      display: none;
+    }
+
+    /* --- SUCCESS OVERLAY --- */
+    .success-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(102, 137, 113, 0.92);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+
+    .success-overlay.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .success-check {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 44px;
+      color: var(--ro-green);
+      transform: scale(0.5);
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .success-overlay.show .success-check {
+      transform: scale(1);
+    }
+
+    /* --- PEST TYPE CONDITIONAL --- */
+    .pest-type-group {
+      display: none;
+      animation: fadeIn 0.15s ease;
+    }
+
+    .pest-type-group.visible {
+      display: block;
+    }
+
+    /* --- LANDSCAPE TWEAKS --- */
+    @media (max-height: 500px) and (orientation: landscape) {
+      .field-group {
+        margin-bottom: 8px;
+      }
+
+      .tab-content {
+        padding: 10px;
+      }
+
+      .submit-btn {
+        min-height: 48px;
+        padding: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="app-shell">
+  <!-- TOP BAR -->
+  <div class="top-bar">
+    <a href="index.html" class="back-link" aria-label="Back">&larr;</a>
+    <span class="title" data-i18n="pageTitle">Weekly Check</span>
+    <div class="top-bar-right">
+      <select class="crew-select" id="crewSelect" aria-label="Crew member">
+        <option value="">--</option>
+        <option value="Koa">Koa</option>
+        <option value="Worker 1">Worker 1</option>
+        <option value="Worker 2">Worker 2</option>
+        <option value="__other__">Other...</option>
+      </select>
+      <input type="text" class="crew-custom hidden" id="crewCustom" placeholder="Name" aria-label="Custom name">
+      <button class="lang-toggle" id="langToggle" aria-label="Toggle language">ES</button>
+    </div>
+  </div>
+
+  <!-- TAB BAR -->
+  <div class="tab-bar" role="tablist">
+    <button class="tab-btn active" role="tab" aria-selected="true" data-tab="check">
+      <span class="tab-icon">🌿</span>
+      <span data-i18n="tabCheck">Zone Check</span>
+    </button>
+    <button class="tab-btn" role="tab" aria-selected="false" data-tab="sap">
+      <span class="tab-icon">🧪</span>
+      <span data-i18n="tabSap">Sap Analysis</span>
+    </button>
+  </div>
+
+  <!-- TAB CONTENT -->
+  <div class="tab-content">
+
+    <!-- ===== TAB: ZONE CHECK ===== -->
+    <div class="tab-pane active" id="pane-check" role="tabpanel">
+      <div class="field-group">
+        <label class="field-label" for="checkZone" data-i18n="labelZone">Zone</label>
+        <select class="form-input" id="checkZone">
+          <option value="" data-i18n="optSelectZone">Select zone...</option>
+        </select>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" for="checkWeek" data-i18n="labelWeek">Week #</label>
+        <input type="number" class="form-input" id="checkWeek" inputmode="numeric" min="1" max="53" style="max-width: 120px;">
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" for="checkHeight" data-i18n="labelHeight">Avg Height</label>
+        <div class="input-with-unit">
+          <input type="number" class="form-input" id="checkHeight" inputmode="decimal" step="0.5" min="0" placeholder="0">
+          <span class="unit-label">in</span>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" data-i18n="labelGrowth">Growth Rating</label>
+        <div class="growth-rating-group">
+          <button type="button" class="growth-circle" data-rating="1">1</button>
+          <button type="button" class="growth-circle" data-rating="2">2</button>
+          <button type="button" class="growth-circle" data-rating="3">3</button>
+          <button type="button" class="growth-circle" data-rating="4">4</button>
+          <button type="button" class="growth-circle" data-rating="5">5</button>
+        </div>
+        <div class="growth-label">
+          <span data-i18n="growthStressed">Stressed</span>
+          <span data-i18n="growthThriving">Thriving</span>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" data-i18n="labelPest">Pest Pressure</label>
+        <div class="toggle-group" id="pestGroup">
+          <button type="button" class="toggle-btn selected" data-pest="none" data-i18n="pestNone">None</button>
+          <button type="button" class="toggle-btn" data-pest="low" data-i18n="pestLow">Low</button>
+          <button type="button" class="toggle-btn" data-pest="moderate" data-i18n="pestModerate">Med</button>
+          <button type="button" class="toggle-btn" data-pest="heavy" data-i18n="pestHeavy">Heavy</button>
+        </div>
+      </div>
+
+      <div class="field-group pest-type-group" id="pestTypeGroup">
+        <label class="field-label" for="pestType" data-i18n="labelPestType">Pest Type</label>
+        <select class="form-input" id="pestType">
+          <option value="Crickets" data-i18n="pestCrickets">Crickets</option>
+          <option value="Aphids" data-i18n="pestAphids">Aphids</option>
+          <option value="Mites" data-i18n="pestMites">Mites</option>
+          <option value="Grasshoppers" data-i18n="pestGrasshoppers">Grasshoppers</option>
+          <option value="Other" data-i18n="pestOther">Other</option>
+        </select>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" data-i18n="labelMoisture">Moisture</label>
+        <div class="toggle-group" id="moistureGroup">
+          <button type="button" class="toggle-btn" data-moisture="dry" data-i18n="moistureDry">Dry</button>
+          <button type="button" class="toggle-btn selected" data-moisture="good" data-i18n="moistureGood">Good</button>
+          <button type="button" class="toggle-btn" data-moisture="saturated" data-i18n="moistureSaturated">Saturated</button>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <button type="button" class="photo-btn" id="photoBtn" data-i18n="btnPhoto">📷 Add Photo</button>
+        <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none">
+        <div class="photo-preview" id="photoPreview">
+          <img id="photoThumb" src="" alt="Photo preview">
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" for="checkNotes" data-i18n="labelNotes">Notes</label>
+        <textarea class="form-input" id="checkNotes" rows="2" placeholder=""></textarea>
+      </div>
+
+      <button class="submit-btn" id="submitCheck" data-i18n="btnSubmit">SUBMIT</button>
+
+      <!-- Previous Weeks -->
+      <div class="history-section" id="historySection">
+        <div class="history-title" data-i18n="previousWeeks">Previous Weeks</div>
+        <div id="historyContent">
+          <div class="empty-state" data-i18n="emptyHistory">Select a zone to see history</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== TAB: SAP ANALYSIS ===== -->
+    <div class="tab-pane" id="pane-sap" role="tabpanel">
+      <div class="field-group">
+        <label class="field-label" for="sapFarm" data-i18n="labelFarm">Farm</label>
+        <select class="form-input" id="sapFarm">
+          <option value="" data-i18n="optSelectFarm">Select farm...</option>
+        </select>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" data-i18n="labelUpload">Upload Report (PDF or Image)</label>
+        <button type="button" class="upload-btn" id="uploadBtn" data-i18n="btnUpload">📄 Tap to Upload File</button>
+        <input type="file" id="uploadInput" accept=".pdf,image/*" style="display:none">
+        <div class="upload-filename" id="uploadFilename"></div>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" for="sapNotes" data-i18n="labelNotes">Notes</label>
+        <textarea class="form-input" id="sapNotes" rows="3" placeholder=""></textarea>
+      </div>
+
+      <button class="submit-btn" id="submitSap" data-i18n="btnSubmitSap">SUBMIT SAP ANALYSIS</button>
+    </div>
+
+  </div><!-- /tab-content -->
+</div><!-- /app-shell -->
+
+<!-- SUCCESS OVERLAY -->
+<div class="success-overlay" id="successOverlay">
+  <div class="success-check">&#10003;</div>
+</div>
+
+<script type="module">
+  // ========================================
+  // WEEKLY ZONE CHECK — CORE LOGIC
+  // ========================================
+
+  const API_URL = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/tracking';
+  const MEDIA_URL = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/media';
+
+  // --- Bilingual Labels ---
+  const labels = {
+    en: {
+      pageTitle: 'Weekly Check',
+      tabCheck: 'Zone Check',
+      tabSap: 'Sap Analysis',
+      labelZone: 'Zone',
+      labelWeek: 'Week #',
+      labelHeight: 'Avg Height',
+      labelGrowth: 'Growth Rating',
+      labelPest: 'Pest Pressure',
+      labelPestType: 'Pest Type',
+      labelMoisture: 'Moisture',
+      labelNotes: 'Notes',
+      labelFarm: 'Farm',
+      labelUpload: 'Upload Report (PDF or Image)',
+      growthStressed: 'Stressed',
+      growthThriving: 'Thriving',
+      pestNone: 'None',
+      pestLow: 'Low',
+      pestModerate: 'Med',
+      pestHeavy: 'Heavy',
+      pestCrickets: 'Crickets',
+      pestAphids: 'Aphids',
+      pestMites: 'Mites',
+      pestGrasshoppers: 'Grasshoppers',
+      pestOther: 'Other',
+      moistureDry: 'Dry',
+      moistureGood: 'Good',
+      moistureSaturated: 'Saturated',
+      btnPhoto: '📷 Add Photo',
+      btnPhotoAdded: '📷 Photo Added',
+      btnUpload: '📄 Tap to Upload File',
+      btnFileAdded: '📄 File Selected',
+      btnSubmit: 'SUBMIT',
+      btnSubmitSap: 'SUBMIT SAP ANALYSIS',
+      optSelectZone: 'Select zone...',
+      optSelectFarm: 'Select farm...',
+      previousWeeks: 'Previous Weeks',
+      emptyHistory: 'Select a zone to see history',
+      noHistory: 'No previous checks',
+      errorNoCrew: 'Select a crew member first',
+      errorNoZone: 'Select a zone',
+      errorNoHeight: 'Enter average height',
+      errorNoGrowth: 'Select a growth rating',
+      errorNoFarm: 'Select a farm',
+      errorNoFile: 'Upload a file',
+      submitting: 'Submitting...',
+      uploading: 'Uploading...',
+      langButton: 'ES',
+      weekAbbr: 'Wk',
+      heightAbbr: 'Ht',
+      growthAbbr: 'Growth',
+      pestAbbr: 'Pest',
+      moistureAbbr: 'Moist'
+    },
+    es: {
+      pageTitle: 'Chequeo Semanal',
+      tabCheck: 'Chequeo de Zona',
+      tabSap: 'Análisis de Savia',
+      labelZone: 'Zona',
+      labelWeek: 'Semana #',
+      labelHeight: 'Altura Promedio',
+      labelGrowth: 'Calificación de Crecimiento',
+      labelPest: 'Presión de Plagas',
+      labelPestType: 'Tipo de Plaga',
+      labelMoisture: 'Humedad',
+      labelNotes: 'Notas',
+      labelFarm: 'Granja',
+      labelUpload: 'Subir Reporte (PDF o Imagen)',
+      growthStressed: 'Estresado',
+      growthThriving: 'Próspero',
+      pestNone: 'Ninguna',
+      pestLow: 'Baja',
+      pestModerate: 'Media',
+      pestHeavy: 'Alta',
+      pestCrickets: 'Grillos',
+      pestAphids: 'Áfidos',
+      pestMites: 'Ácaros',
+      pestGrasshoppers: 'Saltamontes',
+      pestOther: 'Otro',
+      moistureDry: 'Seco',
+      moistureGood: 'Bueno',
+      moistureSaturated: 'Saturado',
+      btnPhoto: '📷 Agregar Foto',
+      btnPhotoAdded: '📷 Foto Agregada',
+      btnUpload: '📄 Toca para Subir Archivo',
+      btnFileAdded: '📄 Archivo Seleccionado',
+      btnSubmit: 'ENVIAR',
+      btnSubmitSap: 'ENVIAR ANÁLISIS DE SAVIA',
+      optSelectZone: 'Seleccionar zona...',
+      optSelectFarm: 'Seleccionar granja...',
+      previousWeeks: 'Semanas Anteriores',
+      emptyHistory: 'Seleccione una zona para ver historial',
+      noHistory: 'Sin chequeos previos',
+      errorNoCrew: 'Seleccione un miembro del equipo',
+      errorNoZone: 'Seleccione una zona',
+      errorNoHeight: 'Ingrese la altura promedio',
+      errorNoGrowth: 'Seleccione una calificación de crecimiento',
+      errorNoFarm: 'Seleccione una granja',
+      errorNoFile: 'Suba un archivo',
+      submitting: 'Enviando...',
+      uploading: 'Subiendo...',
+      langButton: 'EN',
+      weekAbbr: 'Sem',
+      heightAbbr: 'Alt',
+      growthAbbr: 'Crec',
+      pestAbbr: 'Plaga',
+      moistureAbbr: 'Hum'
+    }
+  };
+
+  let lang = localStorage.getItem('tracking_lang') || 'en';
+  const t = (key) => (labels[lang] && labels[lang][key]) || labels.en[key] || key;
+
+  // --- State ---
+  let zones = [];
+  let farms = [];
+  let selectedGrowthRating = 0;
+  let selectedPestPressure = 'none';
+  let selectedMoisture = 'good';
+  let photoFile = null;
+  let uploadFile = null;
+
+  // --- DOM Refs ---
+  const $ = (sel) => document.querySelector(sel);
+  const $$ = (sel) => document.querySelectorAll(sel);
+
+  // ========================================
+  // LANGUAGE
+  // ========================================
+  function applyLanguage() {
+    $$('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      const text = t(key);
+      if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+        el.placeholder = text;
+      } else if (el.tagName === 'OPTION') {
+        el.textContent = text;
+      } else {
+        el.textContent = text;
+      }
+    });
+    $('#langToggle').textContent = t('langButton');
+    document.documentElement.lang = lang;
+  }
+
+  $('#langToggle').addEventListener('click', () => {
+    lang = lang === 'en' ? 'es' : 'en';
+    localStorage.setItem('tracking_lang', lang);
+    applyLanguage();
+  });
+
+  // ========================================
+  // CREW NAME
+  // ========================================
+  const crewSelect = $('#crewSelect');
+  const crewCustom = $('#crewCustom');
+
+  function getCrewName() {
+    if (crewSelect.value === '__other__') {
+      return crewCustom.value.trim();
+    }
+    return crewSelect.value;
+  }
+
+  function restoreCrew() {
+    const saved = localStorage.getItem('tracking_crew_name') || '';
+    const options = Array.from(crewSelect.options).map(o => o.value);
+    if (options.includes(saved)) {
+      crewSelect.value = saved;
+    } else if (saved) {
+      crewSelect.value = '__other__';
+      crewCustom.value = saved;
+      crewCustom.classList.remove('hidden');
+    }
+  }
+
+  function persistCrew() {
+    const name = getCrewName();
+    if (name) localStorage.setItem('tracking_crew_name', name);
+  }
+
+  crewSelect.addEventListener('change', () => {
+    if (crewSelect.value === '__other__') {
+      crewCustom.classList.remove('hidden');
+      crewCustom.focus();
+    } else {
+      crewCustom.classList.add('hidden');
+    }
+    persistCrew();
+  });
+
+  crewCustom.addEventListener('input', persistCrew);
+  restoreCrew();
+
+  // ========================================
+  // TABS
+  // ========================================
+  $$('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.tab;
+      $$('.tab-btn').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
+      btn.classList.add('active');
+      btn.setAttribute('aria-selected', 'true');
+      $$('.tab-pane').forEach(p => p.classList.remove('active'));
+      $(`#pane-${tab}`).classList.add('active');
+    });
+  });
+
+  // ========================================
+  // WEEK NUMBER AUTO-CALC
+  // ========================================
+  function getCurrentWeekNumber() {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), 0, 1);
+    const diff = now - start;
+    const oneWeek = 7 * 24 * 60 * 60 * 1000;
+    return Math.ceil(diff / oneWeek);
+  }
+
+  $('#checkWeek').value = getCurrentWeekNumber();
+
+  // ========================================
+  // GROWTH RATING CIRCLES
+  // ========================================
+  $$('.growth-circle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      $$('.growth-circle').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedGrowthRating = parseInt(btn.dataset.rating);
+    });
+  });
+
+  // ========================================
+  // PEST PRESSURE BUTTONS
+  // ========================================
+  $$('#pestGroup .toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      $$('#pestGroup .toggle-btn').forEach(b => b.classList.remove('selected', 'selected-warning', 'selected-danger'));
+      selectedPestPressure = btn.dataset.pest;
+      if (selectedPestPressure === 'none') {
+        btn.classList.add('selected');
+      } else if (selectedPestPressure === 'heavy') {
+        btn.classList.add('selected-danger');
+      } else {
+        btn.classList.add('selected-warning');
+      }
+      // Show/hide pest type dropdown
+      if (selectedPestPressure !== 'none') {
+        $('#pestTypeGroup').classList.add('visible');
+      } else {
+        $('#pestTypeGroup').classList.remove('visible');
+      }
+    });
+  });
+
+  // ========================================
+  // MOISTURE BUTTONS
+  // ========================================
+  $$('#moistureGroup .toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      $$('#moistureGroup .toggle-btn').forEach(b => b.classList.remove('selected', 'selected-warning'));
+      selectedMoisture = btn.dataset.moisture;
+      if (selectedMoisture === 'good') {
+        btn.classList.add('selected');
+      } else {
+        btn.classList.add('selected-warning');
+      }
+    });
+  });
+
+  // ========================================
+  // PHOTO CAPTURE
+  // ========================================
+  $('#photoBtn').addEventListener('click', () => {
+    $('#photoInput').click();
+  });
+
+  $('#photoInput').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    photoFile = file;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      $('#photoThumb').src = ev.target.result;
+      $('#photoPreview').style.display = 'block';
+      $('#photoBtn').classList.add('has-photo');
+      $('#photoBtn').textContent = t('btnPhotoAdded');
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // ========================================
+  // FILE UPLOAD (Sap Analysis)
+  // ========================================
+  $('#uploadBtn').addEventListener('click', () => {
+    $('#uploadInput').click();
+  });
+
+  $('#uploadInput').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    uploadFile = file;
+    $('#uploadBtn').classList.add('has-file');
+    $('#uploadBtn').textContent = t('btnFileAdded');
+    $('#uploadFilename').textContent = file.name;
+    $('#uploadFilename').style.display = 'block';
+  });
+
+  // ========================================
+  // SUCCESS FLASH
+  // ========================================
+  function showSuccess() {
+    const overlay = $('#successOverlay');
+    overlay.classList.add('show');
+    setTimeout(() => overlay.classList.remove('show'), 900);
+  }
+
+  // ========================================
+  // API HELPERS
+  // ========================================
+  async function apiGet(params) {
+    const url = new URL(API_URL);
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null) url.searchParams.set(k, v);
+    });
+    const res = await fetch(url.toString());
+    const json = await res.json();
+    return json.data || json;
+  }
+
+  async function apiPost(action, body) {
+    const url = `${API_URL}?action=${action}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Request failed');
+    return json.data || json;
+  }
+
+  async function uploadMedia(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    const url = `${MEDIA_URL}?action=upload&folder=tracking`;
+    const res = await fetch(url, { method: 'POST', body: formData });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Upload failed');
+    const data = json.data || json;
+    return data.key || data.url || data.path;
+  }
+
+  // ========================================
+  // FLASH ERROR
+  // ========================================
+  function flashError(msg) {
+    alert(msg);
+  }
+
+  // ========================================
+  // LOAD ZONES
+  // ========================================
+  async function loadZones() {
+    try {
+      const data = await apiGet({ action: 'listLocations', type: 'zone' });
+      zones = Array.isArray(data) ? data : (data.locations || []);
+      const sel = $('#checkZone');
+      while (sel.options.length > 1) sel.remove(1);
+      zones.forEach(z => {
+        const opt = document.createElement('option');
+        opt.value = z.id || z.location_id;
+        opt.textContent = z.name || z.label || z.id;
+        sel.appendChild(opt);
+      });
+      // Restore last selected zone
+      const lastZone = localStorage.getItem('tracking_last_zone') || '';
+      if (lastZone) {
+        sel.value = lastZone;
+        if (sel.value === lastZone) loadHistory(lastZone);
+      }
+    } catch (err) {
+      console.error('Failed to load zones:', err);
+    }
+  }
+
+  // ========================================
+  // LOAD FARMS
+  // ========================================
+  async function loadFarms() {
+    try {
+      const data = await apiGet({ action: 'listLocations', type: 'farm' });
+      farms = Array.isArray(data) ? data : (data.locations || []);
+      const sel = $('#sapFarm');
+      while (sel.options.length > 1) sel.remove(1);
+      farms.forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f.name || f.label || f.id;
+        opt.textContent = f.name || f.label || f.id;
+        sel.appendChild(opt);
+      });
+    } catch (err) {
+      console.error('Failed to load farms:', err);
+    }
+  }
+
+  // ========================================
+  // ZONE CHANGE -> LOAD HISTORY
+  // ========================================
+  $('#checkZone').addEventListener('change', () => {
+    const zoneId = $('#checkZone').value;
+    localStorage.setItem('tracking_last_zone', zoneId);
+    if (zoneId) {
+      loadHistory(zoneId);
+    } else {
+      $('#historyContent').innerHTML = `<div class="empty-state">${t('emptyHistory')}</div>`;
+    }
+  });
+
+  // ========================================
+  // LOAD PREVIOUS WEEKS HISTORY
+  // ========================================
+  async function loadHistory(zoneId) {
+    if (!zoneId) return;
+    try {
+      const data = await apiGet({
+        action: 'listObservations',
+        location_id: zoneId,
+        observation_type: 'weekly_check'
+      });
+      const obs = (Array.isArray(data) ? data : (data.observations || [])).slice(0, 4);
+
+      if (obs.length === 0) {
+        $('#historyContent').innerHTML = `<div class="empty-state">${t('noHistory')}</div>`;
+        return;
+      }
+
+      let html = `<table class="history-table">
+        <thead><tr>
+          <th>${t('weekAbbr')}</th>
+          <th>${t('heightAbbr')}</th>
+          <th>${t('growthAbbr')}</th>
+          <th>${t('pestAbbr')}</th>
+          <th>${t('moistureAbbr')}</th>
+        </tr></thead><tbody>`;
+
+      obs.forEach(o => {
+        let meta = {};
+        try { meta = JSON.parse(o.metadata || '{}'); } catch {}
+        const week = meta.week_number || '—';
+        const height = meta.height_inches ? meta.height_inches + '"' : '—';
+        const growth = meta.growth_rating || 0;
+        const pest = meta.pest_pressure || 'none';
+        const moisture = meta.moisture_rating || '—';
+
+        const growthHtml = growth > 0
+          ? `<span class="growth-dot g${growth}"></span>`
+          : '—';
+
+        const pestClass = pest.toLowerCase();
+        const pestLabel = t('pest' + capitalize(pestClass)) || pest;
+
+        html += `<tr>
+          <td>${week}</td>
+          <td>${height}</td>
+          <td>${growthHtml}</td>
+          <td><span class="pest-tag ${pestClass}">${pestLabel}</span></td>
+          <td>${capitalize(moisture)}</td>
+        </tr>`;
+      });
+
+      html += '</tbody></table>';
+      $('#historyContent').innerHTML = html;
+    } catch (err) {
+      console.error('Failed to load history:', err);
+      $('#historyContent').innerHTML = `<div class="empty-state">${t('noHistory')}</div>`;
+    }
+  }
+
+  function capitalize(str) {
+    if (!str) return '';
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  }
+
+  // ========================================
+  // SUBMIT: WEEKLY CHECK
+  // ========================================
+  $('#submitCheck').addEventListener('click', async () => {
+    const crew = getCrewName();
+    if (!crew) return flashError(t('errorNoCrew'));
+    const zoneId = $('#checkZone').value;
+    if (!zoneId) return flashError(t('errorNoZone'));
+    const height = parseFloat($('#checkHeight').value);
+    if (!height && height !== 0) return flashError(t('errorNoHeight'));
+    if (!selectedGrowthRating) return flashError(t('errorNoGrowth'));
+
+    const btn = $('#submitCheck');
+    btn.disabled = true;
+    btn.textContent = t('submitting');
+
+    try {
+      // Upload photo if present
+      let photoUrls = [];
+      if (photoFile) {
+        const key = await uploadMedia(photoFile);
+        photoUrls.push(key);
+      }
+
+      const pestType = selectedPestPressure !== 'none' ? $('#pestType').value : null;
+
+      await apiPost('logWeeklyCheck', {
+        location_id: zoneId,
+        week_number: parseInt($('#checkWeek').value),
+        height_inches: height,
+        growth_rating: selectedGrowthRating,
+        pest_pressure: selectedPestPressure,
+        pest_type: pestType,
+        moisture_rating: selectedMoisture,
+        photo_urls: photoUrls,
+        notes: $('#checkNotes').value.trim(),
+        logged_by: crew
+      });
+
+      showSuccess();
+      persistCrew();
+
+      // Reset form
+      $('#checkHeight').value = '';
+      $('#checkNotes').value = '';
+      $$('.growth-circle').forEach(b => b.classList.remove('selected'));
+      selectedGrowthRating = 0;
+      photoFile = null;
+      $('#photoPreview').style.display = 'none';
+      $('#photoBtn').classList.remove('has-photo');
+      $('#photoBtn').textContent = t('btnPhoto');
+      $('#photoInput').value = '';
+
+      // Reload history
+      loadHistory(zoneId);
+    } catch (err) {
+      console.error('Submit failed:', err);
+      flashError(err.message || 'Submit failed');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = t('btnSubmit');
+    }
+  });
+
+  // ========================================
+  // SUBMIT: SAP ANALYSIS
+  // ========================================
+  $('#submitSap').addEventListener('click', async () => {
+    const crew = getCrewName();
+    if (!crew) return flashError(t('errorNoCrew'));
+    const farmName = $('#sapFarm').value;
+    if (!farmName) return flashError(t('errorNoFarm'));
+    if (!uploadFile) return flashError(t('errorNoFile'));
+
+    const btn = $('#submitSap');
+    btn.disabled = true;
+    btn.textContent = t('uploading');
+
+    try {
+      const key = await uploadMedia(uploadFile);
+
+      await apiPost('logSapAnalysis', {
+        farm_name: farmName,
+        photo_urls: [key],
+        notes: $('#sapNotes').value.trim(),
+        logged_by: crew
+      });
+
+      showSuccess();
+      persistCrew();
+
+      // Reset form
+      uploadFile = null;
+      $('#uploadBtn').classList.remove('has-file');
+      $('#uploadBtn').textContent = t('btnUpload');
+      $('#uploadFilename').style.display = 'none';
+      $('#uploadFilename').textContent = '';
+      $('#uploadInput').value = '';
+      $('#sapNotes').value = '';
+    } catch (err) {
+      console.error('Sap submit failed:', err);
+      flashError(err.message || 'Submit failed');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = t('btnSubmitSap');
+    }
+  });
+
+  // ========================================
+  // INIT
+  // ========================================
+  applyLanguage();
+  loadZones();
+  loadFarms();
+</script>
+
+</body>
+</html>
