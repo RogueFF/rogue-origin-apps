@@ -108,22 +108,24 @@ async function createLot(request, env) {
   const lotId = generateId();
   const transitionId = generateId();
 
-  await env.DB.prepare(`
-    INSERT INTO tracking_lots (id, cultivar, seed_source, seed_lot_number, quantity, unit, germ_method, current_stage, current_location_id, notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'germination', ?, ?)
-  `).bind(
-    lotId, cultivar, seed_source || null, seed_lot_number || null,
-    quantity, unit, germ_method || null, current_location_id || null, notes || null
-  ).run();
+  const statements = [
+    env.DB.prepare(`
+      INSERT INTO tracking_lots (id, cultivar, seed_source, seed_lot_number, quantity, unit, germ_method, current_stage, current_location_id, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'germination', ?, ?)
+    `).bind(
+      lotId, cultivar, seed_source || null, seed_lot_number || null,
+      quantity, unit, germ_method || null, current_location_id || null, notes || null
+    ),
+    env.DB.prepare(`
+      INSERT INTO tracking_stage_transitions (id, lot_id, from_stage, to_stage, quantity_in, quantity_out, unit, location_id, logged_by, notes)
+      VALUES (?, ?, NULL, 'germination', ?, ?, ?, ?, ?, ?)
+    `).bind(
+      transitionId, lotId, quantity, quantity, unit,
+      current_location_id || null, null, 'Lot created'
+    ),
+  ];
 
-  // Initial stage transition
-  await env.DB.prepare(`
-    INSERT INTO tracking_stage_transitions (id, lot_id, from_stage, to_stage, quantity_in, quantity_out, unit, location_id, logged_by, notes)
-    VALUES (?, ?, NULL, 'germination', ?, ?, ?, ?, ?, ?)
-  `).bind(
-    transitionId, lotId, quantity, quantity, unit,
-    current_location_id || null, null, 'Lot created'
-  ).run();
+  await env.DB.batch(statements);
 
   return jsonResponse({
     lot: { id: lotId, cultivar, seed_source, seed_lot_number, quantity, unit, germ_method, current_stage: 'germination', current_location_id, notes }
@@ -183,17 +185,7 @@ async function transitionStage(request, env) {
   const lot = lots[0];
   const transitionId = generateId();
 
-  // Create transition record
-  await env.DB.prepare(`
-    INSERT INTO tracking_stage_transitions (id, lot_id, from_stage, to_stage, quantity_in, quantity_out, unit, location_id, logged_by, notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    transitionId, lot_id, lot.current_stage, to_stage,
-    quantity_in || null, quantity_out || null, unit || null,
-    location_id || null, logged_by || null, notes || null
-  ).run();
-
-  // Update lot
+  // Update lot fields
   const updateFields = ["current_stage = ?", "updated_at = datetime('now')"];
   const updateParams = [to_stage];
 
@@ -208,9 +200,22 @@ async function transitionStage(request, env) {
 
   updateParams.push(lot_id);
 
-  await env.DB.prepare(`
-    UPDATE tracking_lots SET ${updateFields.join(', ')} WHERE id = ?
-  `).bind(...updateParams).run();
+  // Batch: transition record + lot update
+  const statements = [
+    env.DB.prepare(`
+      INSERT INTO tracking_stage_transitions (id, lot_id, from_stage, to_stage, quantity_in, quantity_out, unit, location_id, logged_by, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      transitionId, lot_id, lot.current_stage, to_stage,
+      quantity_in || null, quantity_out || null, unit || null,
+      location_id || null, logged_by || null, notes || null
+    ),
+    env.DB.prepare(`
+      UPDATE tracking_lots SET ${updateFields.join(', ')} WHERE id = ?
+    `).bind(...updateParams),
+  ];
+
+  await env.DB.batch(statements);
 
   return jsonResponse({
     transition: {
