@@ -1,0 +1,1442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/png" href="/rogue-origin-apps/favicon.png">
+  <meta name="theme-color" content="#668971">
+  <title>Lot Management</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../css/shared-base.css">
+
+  <style>
+    /* ── Page layout ── */
+    .page-header {
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: var(--space-sm) var(--space-md);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: var(--space-xs);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .page-header h1 {
+      font-family: var(--font-display);
+      font-size: 1.4rem;
+      margin: 0;
+    }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: var(--space-xs);
+    }
+    .header-actions a,
+    .header-actions button {
+      background: none;
+      border: 1px solid rgba(255,255,255,.25);
+      color: var(--header-text);
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-ui);
+      font-size: 0.82rem;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background .2s;
+    }
+    .header-actions a:hover,
+    .header-actions button:hover {
+      background: rgba(255,255,255,.1);
+      transform: none;
+      box-shadow: none;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: var(--space-md);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-md);
+    }
+
+    /* ── Cards / Sections ── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-md);
+      box-shadow: var(--shadow-sm);
+    }
+    .card h2 {
+      font-family: var(--font-display);
+      font-size: 1.15rem;
+      margin-bottom: var(--space-sm);
+      color: var(--ro-green);
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 18px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-ui);
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s, opacity .2s;
+    }
+    .btn-primary { background: var(--ro-green); color: #fff; }
+    .btn-primary:hover { opacity: .88; transform: none; box-shadow: none; }
+    .btn-gold { background: var(--ro-gold); color: #fff; }
+    .btn-gold:hover { opacity: .88; transform: none; box-shadow: none; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-danger:hover { opacity: .88; transform: none; box-shadow: none; }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .btn-outline:hover { background: var(--green-dim); transform: none; box-shadow: none; }
+    .btn-sm { padding: 6px 12px; font-size: 0.82rem; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* ── Form ── */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: var(--space-sm);
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .form-group.full-width { grid-column: 1 / -1; }
+    .form-group.span-2 { grid-column: span 2; }
+    .form-group label {
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-ui);
+      font-size: 0.9rem;
+      background: var(--bg);
+      color: var(--text);
+      transition: border-color .2s;
+    }
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      border-color: var(--ro-green);
+      outline: none;
+    }
+    .form-group textarea { resize: vertical; min-height: 60px; }
+    .form-buttons {
+      grid-column: 1 / -1;
+      display: flex;
+      gap: var(--space-xs);
+      margin-top: var(--space-xs);
+    }
+
+    /* ── Filter bar ── */
+    .filter-bar {
+      display: flex;
+      gap: var(--space-sm);
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: var(--space-sm);
+    }
+    .filter-bar select,
+    .filter-bar input {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-ui);
+      font-size: 0.85rem;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .filter-bar select:focus,
+    .filter-bar input:focus {
+      border-color: var(--ro-green);
+      outline: none;
+    }
+
+    /* ── Table ── */
+    .table-wrap { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--font-ui);
+      font-size: 0.88rem;
+    }
+    thead th {
+      text-align: left;
+      padding: 10px 12px;
+      background: var(--bg-warm);
+      color: var(--text-secondary);
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 2px solid var(--border);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    thead th:hover { color: var(--ro-green); }
+    thead th .sort-arrow { font-size: 0.7rem; margin-left: 4px; opacity: 0.5; }
+    thead th.sorted .sort-arrow { opacity: 1; color: var(--ro-green); }
+    tbody tr {
+      border-bottom: 1px solid var(--border-light);
+      cursor: pointer;
+      transition: background .15s;
+    }
+    tbody tr:nth-child(even) { background: var(--bg-warm); }
+    tbody tr:hover { background: var(--green-dim); }
+    tbody tr.expanded { background: var(--green-dim); border-bottom: none; }
+    tbody td {
+      padding: 10px 12px;
+      vertical-align: middle;
+    }
+
+    /* ── Stage badges ── */
+    .stage-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 99px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: capitalize;
+      white-space: nowrap;
+    }
+    .stage-germination { background: #d4edda; color: #256637; }
+    .stage-transplant  { background: #cce5ff; color: #004085; }
+    .stage-field       { background: #e7dcc6; color: #6b5635; }
+    .stage-harvest     { background: #fff3cd; color: #856404; }
+    .stage-drying      { background: #f5e6d3; color: #8a6d3b; }
+    .stage-curing      { background: #e8d5c4; color: #6d4c2e; }
+    .stage-processing  { background: #d6d8db; color: #383d41; }
+
+    /* ── Detail panel ── */
+    .detail-row td { padding: 0; }
+    .detail-panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-top: none;
+      border-radius: 0 0 var(--radius-md) var(--radius-md);
+      padding: var(--space-md);
+      animation: slideDown .2s ease;
+    }
+    @keyframes slideDown {
+      from { opacity: 0; max-height: 0; }
+      to { opacity: 1; max-height: 2000px; }
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-md);
+    }
+    .detail-info {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 4px 12px;
+      font-size: 0.88rem;
+      align-content: start;
+    }
+    .detail-info dt {
+      font-weight: 600;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+    .detail-info dd { margin: 0; }
+
+    .detail-actions {
+      display: flex;
+      gap: var(--space-xs);
+      margin: var(--space-sm) 0;
+      flex-wrap: wrap;
+    }
+
+    /* ── Lineage ── */
+    .lineage-section {
+      margin-top: var(--space-sm);
+      padding-top: var(--space-sm);
+      border-top: 1px solid var(--border-light);
+    }
+    .lineage-section h4 {
+      font-family: var(--font-display);
+      font-size: 0.95rem;
+      color: var(--ro-green);
+      margin-bottom: 8px;
+    }
+    .lineage-list {
+      list-style: none;
+      padding: 0;
+      font-size: 0.85rem;
+      font-family: var(--font-ui);
+    }
+    .lineage-list li {
+      padding: 4px 0;
+      color: var(--text-secondary);
+    }
+    .lineage-list li span.lot-ref {
+      color: var(--ro-green);
+      font-weight: 600;
+    }
+
+    /* ── Timeline ── */
+    .timeline-section {
+      margin-top: var(--space-sm);
+      padding-top: var(--space-sm);
+      border-top: 1px solid var(--border-light);
+    }
+    .timeline-section h4 {
+      font-family: var(--font-display);
+      font-size: 0.95rem;
+      color: var(--ro-green);
+      margin-bottom: 12px;
+    }
+    .timeline {
+      position: relative;
+      padding-left: 28px;
+    }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 8px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--border);
+    }
+    .timeline-entry {
+      position: relative;
+      padding: 8px 14px;
+      margin-bottom: 8px;
+      background: var(--bg-warm);
+      border-radius: var(--radius-sm);
+      font-size: 0.84rem;
+    }
+    .timeline-entry::before {
+      content: '';
+      position: absolute;
+      left: -24px;
+      top: 14px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 2px solid var(--bg-card);
+    }
+    .timeline-entry.type-transition::before { background: var(--ro-green); }
+    .timeline-entry.type-observation::before { background: var(--info); }
+    .timeline-entry.type-input::before { background: var(--ro-gold); }
+    .timeline-entry.type-lineage::before { background: #9b59b6; }
+    .timeline-entry .tl-date {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+    .timeline-entry .tl-type {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-left: 8px;
+    }
+    .timeline-entry .tl-desc {
+      margin-top: 4px;
+      color: var(--text);
+    }
+    .timeline-entry .tl-by {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.5);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-card {
+      background: var(--bg-card);
+      border-radius: var(--radius-md);
+      padding: var(--space-md);
+      box-shadow: var(--shadow-lg);
+      width: 90%;
+      max-width: 520px;
+      max-height: 85vh;
+      overflow-y: auto;
+      position: relative;
+    }
+    .modal-card h3 {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      color: var(--ro-green);
+      margin-bottom: var(--space-sm);
+    }
+    .modal-close {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: none;
+      border: none;
+      font-size: 1.2rem;
+      cursor: pointer;
+      color: var(--text-muted);
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    .modal-close:hover {
+      background: var(--danger-dim);
+      color: var(--danger);
+      transform: none;
+      box-shadow: none;
+    }
+
+    /* ── Split rows ── */
+    .split-rows { display: flex; flex-direction: column; gap: var(--space-xs); }
+    .split-row {
+      display: grid;
+      grid-template-columns: 1fr 2fr auto;
+      gap: var(--space-xs);
+      align-items: end;
+    }
+    .split-row .form-group { margin: 0; }
+
+    /* ── Merge checkboxes ── */
+    .merge-source {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+      margin-bottom: 6px;
+      font-size: 0.88rem;
+    }
+    .merge-source input[type="number"] {
+      width: 80px;
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-ui);
+      font-size: 0.85rem;
+    }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 12px 20px;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-ui);
+      font-size: 0.88rem;
+      font-weight: 500;
+      color: #fff;
+      z-index: 9999;
+      animation: fadeInUp .3s ease;
+      pointer-events: none;
+      max-width: 360px;
+    }
+    .toast.success { background: var(--ro-green); }
+    .toast.error { background: var(--danger); }
+    .toast.info { background: var(--info); }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Spinner ── */
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Empty state ── */
+    .empty-state {
+      text-align: center;
+      padding: var(--space-lg) var(--space-md);
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .form-grid { grid-template-columns: 1fr 1fr; }
+      .detail-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 600px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .form-group.span-2 { grid-column: span 1; }
+      main { padding: var(--space-sm); }
+      .page-header { padding: var(--space-xs) var(--space-sm); }
+      .page-header h1 { font-size: 1.15rem; }
+      .filter-bar { flex-direction: column; align-items: stretch; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="page-header">
+    <h1 id="page-title">Lot Management</h1>
+    <div class="header-actions">
+      <button id="lang-toggle" onclick="toggleLang()" aria-label="Toggle language">ES</button>
+      <a href="setup.html" id="link-setup">Setup</a>
+      <a href="../index.html" id="link-hub">Hub</a>
+    </div>
+  </header>
+
+  <main>
+    <!-- Create Lot Form -->
+    <section class="card" id="create-section">
+      <h2 id="create-heading">Create Lot</h2>
+      <form id="create-form" class="form-grid" onsubmit="handleCreate(event)">
+        <div class="form-group">
+          <label for="f-cultivar" id="lbl-cultivar">Cultivar</label>
+          <input type="text" id="f-cultivar" required>
+        </div>
+        <div class="form-group">
+          <label for="f-seed-source" id="lbl-seed-source">Seed Source</label>
+          <input type="text" id="f-seed-source" placeholder="Vendor name">
+        </div>
+        <div class="form-group">
+          <label for="f-lot-number" id="lbl-lot-number">Lot #</label>
+          <input type="text" id="f-lot-number" placeholder="Vendor lot #">
+        </div>
+        <div class="form-group">
+          <label for="f-quantity" id="lbl-quantity">Quantity</label>
+          <input type="number" id="f-quantity" value="840" min="1" required>
+        </div>
+        <div class="form-group">
+          <label for="f-unit" id="lbl-unit">Unit</label>
+          <select id="f-unit" required>
+            <option value="seeds">Seeds</option>
+            <option value="plants">Plants</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="f-germ" id="lbl-germ">Germ Method</label>
+          <select id="f-germ">
+            <option value="">--</option>
+            <option value="Plant Tape">Plant Tape</option>
+            <option value="Plugs">Plugs</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="f-location" id="lbl-location">Target Location</label>
+          <select id="f-location">
+            <option value="">--</option>
+          </select>
+        </div>
+        <div class="form-group span-2">
+          <label for="f-notes" id="lbl-notes">Notes</label>
+          <textarea id="f-notes" rows="2"></textarea>
+        </div>
+        <div class="form-buttons">
+          <button type="submit" class="btn btn-primary" id="create-btn">Create Lot</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Active Lots Table -->
+    <section class="card">
+      <h2 id="table-heading">Active Lots</h2>
+      <div class="filter-bar">
+        <select id="filter-stage" onchange="loadLots()">
+          <option value="">All Stages</option>
+          <option value="germination">Germination</option>
+          <option value="transplant">Transplant</option>
+          <option value="field">Field</option>
+          <option value="harvest">Harvest</option>
+          <option value="drying">Drying</option>
+          <option value="curing">Curing</option>
+          <option value="processing">Processing</option>
+        </select>
+        <input type="text" id="filter-cultivar" placeholder="Search cultivar..." oninput="debouncedLoadLots()">
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr id="table-header">
+              <th data-col="cultivar">Cultivar <span class="sort-arrow">&#9650;</span></th>
+              <th data-col="id">Batch # <span class="sort-arrow">&#9650;</span></th>
+              <th data-col="current_stage">Stage <span class="sort-arrow">&#9650;</span></th>
+              <th data-col="current_location_id">Location <span class="sort-arrow">&#9650;</span></th>
+              <th data-col="quantity">Qty <span class="sort-arrow">&#9650;</span></th>
+              <th data-col="unit">Unit <span class="sort-arrow">&#9650;</span></th>
+              <th data-col="created_at">Age <span class="sort-arrow">&#9650;</span></th>
+            </tr>
+          </thead>
+          <tbody id="lots-body">
+            <tr><td colspan="7" class="empty-state" id="loading-msg">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- Transition Modal -->
+  <div class="modal-overlay" id="modal-transition">
+    <div class="modal-card">
+      <button class="modal-close" onclick="closeModal('modal-transition')">&times;</button>
+      <h3 id="modal-transition-title">Stage Transition</h3>
+      <form class="form-grid" onsubmit="handleTransition(event)" style="grid-template-columns:1fr 1fr;">
+        <input type="hidden" id="tr-lot-id">
+        <div class="form-group">
+          <label id="lbl-tr-from">From Stage</label>
+          <input type="text" id="tr-from" disabled>
+        </div>
+        <div class="form-group">
+          <label for="tr-to" id="lbl-tr-to">To Stage</label>
+          <select id="tr-to" required>
+            <option value="germination">Germination</option>
+            <option value="transplant">Transplant</option>
+            <option value="field">Field</option>
+            <option value="harvest">Harvest</option>
+            <option value="drying">Drying</option>
+            <option value="curing">Curing</option>
+            <option value="processing">Processing</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="tr-qty-in" id="lbl-tr-qty-in">Qty In</label>
+          <input type="number" id="tr-qty-in" min="0">
+        </div>
+        <div class="form-group">
+          <label for="tr-qty-out" id="lbl-tr-qty-out">Qty Out</label>
+          <input type="number" id="tr-qty-out" min="0">
+        </div>
+        <div class="form-group">
+          <label for="tr-location" id="lbl-tr-location">Location</label>
+          <select id="tr-location">
+            <option value="">-- same --</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="tr-logged-by" id="lbl-tr-logged-by">Logged By</label>
+          <input type="text" id="tr-logged-by">
+        </div>
+        <div class="form-group full-width">
+          <label for="tr-notes" id="lbl-tr-notes">Notes</label>
+          <textarea id="tr-notes" rows="2"></textarea>
+        </div>
+        <div class="form-buttons">
+          <button type="submit" class="btn btn-primary" id="tr-submit">Transition</button>
+          <button type="button" class="btn btn-outline" onclick="closeModal('modal-transition')">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Split Modal -->
+  <div class="modal-overlay" id="modal-split">
+    <div class="modal-card">
+      <button class="modal-close" onclick="closeModal('modal-split')">&times;</button>
+      <h3 id="modal-split-title">Split Lot</h3>
+      <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:12px;">
+        <span id="split-parent-info"></span>
+      </p>
+      <input type="hidden" id="sp-lot-id">
+      <div class="split-rows" id="split-rows">
+        <!-- dynamically populated -->
+      </div>
+      <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addSplitRow()">+ Add Split</button>
+      <div class="form-buttons" style="margin-top:12px;">
+        <button type="button" class="btn btn-primary" id="sp-submit" onclick="handleSplit()">Split</button>
+        <button type="button" class="btn btn-outline" onclick="closeModal('modal-split')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Merge Modal -->
+  <div class="modal-overlay" id="modal-merge">
+    <div class="modal-card">
+      <button class="modal-close" onclick="closeModal('modal-merge')">&times;</button>
+      <h3 id="modal-merge-title">Merge into this Lot</h3>
+      <input type="hidden" id="mg-target-id">
+      <div id="merge-sources">
+        <!-- dynamically populated -->
+      </div>
+      <div class="form-group full-width" style="margin-top:8px;">
+        <label for="mg-notes" id="lbl-mg-notes">Notes</label>
+        <textarea id="mg-notes" rows="2"></textarea>
+      </div>
+      <div class="form-buttons" style="margin-top:12px;">
+        <button type="button" class="btn btn-primary" id="mg-submit" onclick="handleMerge()">Merge</button>
+        <button type="button" class="btn btn-outline" onclick="closeModal('modal-merge')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    // ── Config ──
+    const API_BASE = window.location.hostname === 'localhost'
+      ? 'http://localhost:8787/api/tracking'
+      : 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/tracking';
+
+    // ── Bilingual ──
+    const labels = {
+      en: {
+        pageTitle: 'Lot Management',
+        createHeading: 'Create Lot',
+        cultivar: 'Cultivar',
+        seedSource: 'Seed Source',
+        lotNumber: 'Lot #',
+        quantity: 'Quantity',
+        unit: 'Unit',
+        germMethod: 'Germ Method',
+        targetLocation: 'Target Location',
+        notes: 'Notes',
+        createBtn: 'Create Lot',
+        tableHeading: 'Active Lots',
+        allStages: 'All Stages',
+        searchCultivar: 'Search cultivar...',
+        colCultivar: 'Cultivar',
+        colBatch: 'Batch #',
+        colStage: 'Stage',
+        colLocation: 'Location',
+        colQty: 'Qty',
+        colUnit: 'Unit',
+        colAge: 'Age',
+        days: 'd',
+        loading: 'Loading...',
+        empty: 'No lots found.',
+        lotCreated: 'Lot created successfully.',
+        transitionTitle: 'Stage Transition',
+        fromStage: 'From Stage',
+        toStage: 'To Stage',
+        qtyIn: 'Qty In',
+        qtyOut: 'Qty Out',
+        location: 'Location',
+        loggedBy: 'Logged By',
+        transition: 'Transition',
+        transitioned: 'Stage transition recorded.',
+        splitTitle: 'Split Lot',
+        splitBtn: 'Split',
+        split: 'Split',
+        splitDone: 'Lot split successfully.',
+        mergeTitle: 'Merge into this Lot',
+        mergeBtn: 'Merge',
+        mergeDone: 'Lots merged successfully.',
+        cancel: 'Cancel',
+        same: '-- same --',
+        parents: 'Parents',
+        children: 'Children',
+        noLineage: 'No lineage records.',
+        timeline: 'Timeline',
+        noHistory: 'No history yet.',
+        transitionType: 'Transition',
+        observationType: 'Observation',
+        inputType: 'Input',
+        lineageType: 'Lineage',
+        error: 'Something went wrong.',
+        langToggle: 'ES',
+        hub: 'Hub',
+        setup: 'Setup',
+        stageTransition: 'Stage Transition',
+        splitLot: 'Split Lot',
+        mergeLots: 'Merge Into',
+        seedSource_ph: 'Vendor name',
+        lotNumber_ph: 'Vendor lot #',
+        availableQty: 'Available',
+        qtyToMerge: 'Qty to merge',
+        addSplit: '+ Add Split',
+      },
+      es: {
+        pageTitle: 'Gestion de Lotes',
+        createHeading: 'Crear Lote',
+        cultivar: 'Cultivar',
+        seedSource: 'Fuente de Semilla',
+        lotNumber: 'Lote #',
+        quantity: 'Cantidad',
+        unit: 'Unidad',
+        germMethod: 'Metodo de Germinacion',
+        targetLocation: 'Ubicacion Destino',
+        notes: 'Notas',
+        createBtn: 'Crear Lote',
+        tableHeading: 'Lotes Activos',
+        allStages: 'Todas las Etapas',
+        searchCultivar: 'Buscar cultivar...',
+        colCultivar: 'Cultivar',
+        colBatch: 'Lote #',
+        colStage: 'Etapa',
+        colLocation: 'Ubicacion',
+        colQty: 'Cant',
+        colUnit: 'Unidad',
+        colAge: 'Edad',
+        days: 'd',
+        loading: 'Cargando...',
+        empty: 'No se encontraron lotes.',
+        lotCreated: 'Lote creado exitosamente.',
+        transitionTitle: 'Transicion de Etapa',
+        fromStage: 'Desde Etapa',
+        toStage: 'A Etapa',
+        qtyIn: 'Cant Entrada',
+        qtyOut: 'Cant Salida',
+        location: 'Ubicacion',
+        loggedBy: 'Registrado Por',
+        transition: 'Transicionar',
+        transitioned: 'Transicion de etapa registrada.',
+        splitTitle: 'Dividir Lote',
+        splitBtn: 'Dividir',
+        split: 'Dividir',
+        splitDone: 'Lote dividido exitosamente.',
+        mergeTitle: 'Fusionar en este Lote',
+        mergeBtn: 'Fusionar',
+        mergeDone: 'Lotes fusionados exitosamente.',
+        cancel: 'Cancelar',
+        same: '-- mismo --',
+        parents: 'Padres',
+        children: 'Hijos',
+        noLineage: 'Sin registros de linaje.',
+        timeline: 'Linea de Tiempo',
+        noHistory: 'Sin historial aun.',
+        transitionType: 'Transicion',
+        observationType: 'Observacion',
+        inputType: 'Insumo',
+        lineageType: 'Linaje',
+        error: 'Algo salio mal.',
+        langToggle: 'EN',
+        hub: 'Hub',
+        setup: 'Config',
+        stageTransition: 'Transicion',
+        splitLot: 'Dividir',
+        mergeLots: 'Fusionar',
+        seedSource_ph: 'Nombre del proveedor',
+        lotNumber_ph: 'Lote del proveedor',
+        availableQty: 'Disponible',
+        qtyToMerge: 'Cant a fusionar',
+        addSplit: '+ Agregar Division',
+      }
+    };
+
+    let lang = localStorage.getItem('ro-lang') || 'en';
+    const t = (key) => labels[lang][key] || key;
+
+    // ── State ──
+    let lots = [];
+    let locations = [];
+    let locationMap = {};
+    let expandedLotId = null;
+    let sortCol = 'created_at';
+    let sortDir = 'desc';
+    let debounceTimer = null;
+
+    // ── Init ──
+    applyLang();
+    loadLocations().then(() => loadLots());
+
+    // Expose to global scope for onclick handlers
+    window.toggleLang = toggleLang;
+    window.handleCreate = handleCreate;
+    window.loadLots = loadLots;
+    window.debouncedLoadLots = debouncedLoadLots;
+    window.closeModal = closeModal;
+    window.openTransitionModal = openTransitionModal;
+    window.openSplitModal = openSplitModal;
+    window.openMergeModal = openMergeModal;
+    window.handleTransition = handleTransition;
+    window.handleSplit = handleSplit;
+    window.handleMerge = handleMerge;
+    window.addSplitRow = addSplitRow;
+
+    // ── Language ──
+    function toggleLang() {
+      lang = lang === 'en' ? 'es' : 'en';
+      localStorage.setItem('ro-lang', lang);
+      applyLang();
+      renderTable();
+    }
+
+    function applyLang() {
+      document.documentElement.lang = lang;
+      document.getElementById('page-title').textContent = t('pageTitle');
+      document.getElementById('lang-toggle').textContent = t('langToggle');
+      document.getElementById('link-hub').textContent = t('hub');
+      document.getElementById('link-setup').textContent = t('setup');
+      document.getElementById('create-heading').textContent = t('createHeading');
+      document.getElementById('lbl-cultivar').textContent = t('cultivar');
+      document.getElementById('lbl-seed-source').textContent = t('seedSource');
+      document.getElementById('lbl-lot-number').textContent = t('lotNumber');
+      document.getElementById('lbl-quantity').textContent = t('quantity');
+      document.getElementById('lbl-unit').textContent = t('unit');
+      document.getElementById('lbl-germ').textContent = t('germMethod');
+      document.getElementById('lbl-location').textContent = t('targetLocation');
+      document.getElementById('lbl-notes').textContent = t('notes');
+      document.getElementById('create-btn').textContent = t('createBtn');
+      document.getElementById('table-heading').textContent = t('tableHeading');
+      document.getElementById('filter-stage').options[0].textContent = t('allStages');
+      document.getElementById('filter-cultivar').placeholder = t('searchCultivar');
+      document.getElementById('f-seed-source').placeholder = t('seedSource_ph');
+      document.getElementById('f-lot-number').placeholder = t('lotNumber_ph');
+      // Table headers
+      const cols = ['colCultivar','colBatch','colStage','colLocation','colQty','colUnit','colAge'];
+      const ths = document.querySelectorAll('#table-header th');
+      ths.forEach((th, i) => {
+        if (cols[i]) {
+          th.childNodes[0].textContent = t(cols[i]) + ' ';
+        }
+      });
+      // Modal labels
+      document.getElementById('modal-transition-title').textContent = t('transitionTitle');
+      document.getElementById('lbl-tr-from').textContent = t('fromStage');
+      document.getElementById('lbl-tr-to').textContent = t('toStage');
+      document.getElementById('lbl-tr-qty-in').textContent = t('qtyIn');
+      document.getElementById('lbl-tr-qty-out').textContent = t('qtyOut');
+      document.getElementById('lbl-tr-location').textContent = t('location');
+      document.getElementById('lbl-tr-logged-by').textContent = t('loggedBy');
+      document.getElementById('lbl-tr-notes').textContent = t('notes');
+      document.getElementById('tr-submit').textContent = t('transition');
+      document.getElementById('modal-split-title').textContent = t('splitTitle');
+      document.getElementById('sp-submit').textContent = t('splitBtn');
+      document.getElementById('modal-merge-title').textContent = t('mergeTitle');
+      document.getElementById('mg-submit').textContent = t('mergeBtn');
+      document.getElementById('lbl-mg-notes').textContent = t('notes');
+    }
+
+    // ── API helpers ──
+    async function apiFetch(action, method = 'GET', body = null, extraParams = '') {
+      const opts = {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+      };
+      if (body) opts.body = JSON.stringify(body);
+      const sep = '?';
+      const url = `${API_BASE}${sep}action=${action}${extraParams}`;
+      const res = await fetch(url, opts);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      const raw = await res.json();
+      return raw.data || raw;
+    }
+
+    // ── Load locations ──
+    async function loadLocations() {
+      try {
+        const data = await apiFetch('listLocations');
+        locations = data.locations || [];
+        locationMap = {};
+        locations.forEach(l => locationMap[l.id] = l);
+        populateLocationDropdowns();
+      } catch (err) {
+        console.error('Load locations failed:', err);
+      }
+    }
+
+    function populateLocationDropdowns() {
+      // Create form — filter to greenhouse type
+      const createSel = document.getElementById('f-location');
+      createSel.innerHTML = '<option value="">--</option>';
+      locations
+        .filter(l => l.location_type === 'greenhouse' || l.location_type === 'zone')
+        .forEach(l => {
+          const opt = document.createElement('option');
+          opt.value = l.id;
+          opt.textContent = `${l.name} (${l.location_type})`;
+          createSel.appendChild(opt);
+        });
+
+      // Transition modal — all locations
+      populateLocationSelect('tr-location', true);
+    }
+
+    function populateLocationSelect(selectId, includeAll) {
+      const sel = document.getElementById(selectId);
+      sel.innerHTML = `<option value="">${t('same')}</option>`;
+      const locs = includeAll ? locations : locations.filter(l => l.location_type === 'greenhouse' || l.location_type === 'zone');
+      locs.forEach(l => {
+        const opt = document.createElement('option');
+        opt.value = l.id;
+        opt.textContent = `${l.name} (${l.location_type})`;
+        sel.appendChild(opt);
+      });
+    }
+
+    function locationName(id) {
+      if (!id) return '--';
+      const loc = locationMap[id];
+      return loc ? loc.name : id.substring(0, 8);
+    }
+
+    // ── Load lots ──
+    async function loadLots() {
+      const stage = document.getElementById('filter-stage').value;
+      const cultivar = document.getElementById('filter-cultivar').value.trim();
+      let params = '';
+      if (stage) params += `&current_stage=${encodeURIComponent(stage)}`;
+      if (cultivar) params += `&cultivar=${encodeURIComponent(cultivar)}`;
+
+      try {
+        const data = await apiFetch('listLots', 'GET', null, params);
+        lots = data.lots || [];
+        sortLots();
+        renderTable();
+      } catch (err) {
+        console.error('Load lots failed:', err);
+        document.getElementById('lots-body').innerHTML =
+          `<tr><td colspan="7" class="empty-state">${t('error')}</td></tr>`;
+      }
+    }
+
+    function debouncedLoadLots() {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(loadLots, 300);
+    }
+
+    // ── Sort ──
+    function sortLots() {
+      lots.sort((a, b) => {
+        let va = a[sortCol] ?? '';
+        let vb = b[sortCol] ?? '';
+        if (sortCol === 'quantity') { va = Number(va); vb = Number(vb); }
+        if (va < vb) return sortDir === 'asc' ? -1 : 1;
+        if (va > vb) return sortDir === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    // Table header click for sorting
+    document.getElementById('table-header').addEventListener('click', (e) => {
+      const th = e.target.closest('th');
+      if (!th) return;
+      const col = th.dataset.col;
+      if (!col) return;
+      if (sortCol === col) {
+        sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortCol = col;
+        sortDir = 'asc';
+      }
+      // Update arrows
+      document.querySelectorAll('#table-header th').forEach(h => h.classList.remove('sorted'));
+      th.classList.add('sorted');
+      th.querySelector('.sort-arrow').innerHTML = sortDir === 'asc' ? '&#9650;' : '&#9660;';
+      sortLots();
+      renderTable();
+    });
+
+    // ── Render table ──
+    function renderTable() {
+      const tbody = document.getElementById('lots-body');
+      if (!lots.length) {
+        tbody.innerHTML = `<tr><td colspan="7" class="empty-state">${t('empty')}</td></tr>`;
+        return;
+      }
+
+      let html = '';
+      for (const lot of lots) {
+        const age = daysSince(lot.created_at);
+        const isExpanded = expandedLotId === lot.id;
+        html += `<tr class="${isExpanded ? 'expanded' : ''}" data-id="${lot.id}" onclick="toggleDetail('${lot.id}')">
+          <td>${esc(lot.cultivar)}</td>
+          <td style="font-family:var(--font-mono);font-size:0.8rem;">${esc(lot.id.substring(0, 8))}</td>
+          <td><span class="stage-badge stage-${lot.current_stage}">${esc(lot.current_stage)}</span></td>
+          <td>${esc(locationName(lot.current_location_id))}</td>
+          <td>${lot.quantity}</td>
+          <td>${esc(lot.unit)}</td>
+          <td>${age}${t('days')}</td>
+        </tr>`;
+        if (isExpanded) {
+          html += `<tr class="detail-row"><td colspan="7"><div class="detail-panel" id="detail-${lot.id}"><div class="empty-state">${t('loading')}</div></div></td></tr>`;
+        }
+      }
+      tbody.innerHTML = html;
+
+      // If a lot is expanded, load its details
+      if (expandedLotId) {
+        loadLotDetail(expandedLotId);
+      }
+    }
+
+    // Expose toggleDetail globally
+    window.toggleDetail = function(id) {
+      if (expandedLotId === id) {
+        expandedLotId = null;
+      } else {
+        expandedLotId = id;
+      }
+      renderTable();
+    };
+
+    // ── Lot detail ──
+    async function loadLotDetail(id) {
+      const panel = document.getElementById(`detail-${id}`);
+      if (!panel) return;
+
+      try {
+        const [lotData, historyData] = await Promise.all([
+          apiFetch('getLot', 'GET', null, `&id=${id}`),
+          apiFetch('getLotHistory', 'GET', null, `&lot_id=${id}`)
+        ]);
+
+        const lot = lotData.lot;
+        const lineage = lotData.lineage || { parents: [], children: [] };
+        const history = historyData.history || [];
+
+        let html = `<div class="detail-grid">`;
+
+        // Left — info
+        html += `<div>
+          <dl class="detail-info">
+            <dt>${t('cultivar')}</dt><dd>${esc(lot.cultivar)}</dd>
+            <dt>${t('seedSource')}</dt><dd>${esc(lot.seed_source || '--')}</dd>
+            <dt>${t('lotNumber')}</dt><dd>${esc(lot.seed_lot_number || '--')}</dd>
+            <dt>${t('quantity')}</dt><dd>${lot.quantity} ${esc(lot.unit)}</dd>
+            <dt>${t('germMethod')}</dt><dd>${esc(lot.germ_method || '--')}</dd>
+            <dt>${t('location')}</dt><dd>${esc(locationName(lot.current_location_id))}</dd>
+            <dt>${t('notes')}</dt><dd>${esc(lot.notes || '--')}</dd>
+          </dl>
+
+          <div class="detail-actions">
+            <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); openTransitionModal('${lot.id}')">${t('stageTransition')}</button>
+            <button class="btn btn-gold btn-sm" onclick="event.stopPropagation(); openSplitModal('${lot.id}')">${t('splitLot')}</button>
+            <button class="btn btn-outline btn-sm" onclick="event.stopPropagation(); openMergeModal('${lot.id}')">${t('mergeLots')}</button>
+          </div>`;
+
+        // Lineage
+        html += `<div class="lineage-section"><h4>${t('parents')} / ${t('children')}</h4>`;
+        if (!lineage.parents.length && !lineage.children.length) {
+          html += `<p style="font-size:0.85rem;color:var(--text-muted);">${t('noLineage')}</p>`;
+        } else {
+          html += '<ul class="lineage-list">';
+          for (const p of lineage.parents) {
+            html += `<li><span class="lot-ref">${esc(p.parent_cultivar || p.parent_lot_id.substring(0,8))}</span> (${p.quantity} ${esc(p.unit || '')}) &#8594; [this lot]</li>`;
+          }
+          for (const c of lineage.children) {
+            html += `<li>[this lot] &#8594; <span class="lot-ref">${esc(c.child_cultivar || c.child_lot_id.substring(0,8))}</span> (${c.quantity} ${esc(c.unit || '')})</li>`;
+          }
+          html += '</ul>';
+        }
+        html += `</div></div>`;
+
+        // Right — timeline
+        html += `<div class="timeline-section"><h4>${t('timeline')}</h4>`;
+        if (!history.length) {
+          html += `<p style="font-size:0.85rem;color:var(--text-muted);">${t('noHistory')}</p>`;
+        } else {
+          html += '<div class="timeline">';
+          for (const ev of history) {
+            const typeClass = `type-${ev.type}`;
+            const typeLabel = t(`${ev.type}Type`) || ev.type;
+            const desc = formatTimelineEntry(ev);
+            const date = ev.event_date ? new Date(ev.event_date).toLocaleString() : '';
+            const by = ev.logged_by ? `${ev.logged_by}` : '';
+
+            html += `<div class="timeline-entry ${typeClass}">
+              <span class="tl-date">${esc(date)}</span>
+              <span class="tl-type">${esc(typeLabel)}</span>
+              <div class="tl-desc">${desc}</div>
+              ${by ? `<div class="tl-by">${esc(by)}</div>` : ''}
+            </div>`;
+          }
+          html += '</div>';
+        }
+        html += `</div></div>`;
+
+        panel.innerHTML = html;
+      } catch (err) {
+        console.error('Load lot detail failed:', err);
+        panel.innerHTML = `<div class="empty-state">${t('error')}</div>`;
+      }
+    }
+
+    function formatTimelineEntry(ev) {
+      switch (ev.type) {
+        case 'transition':
+          return esc(`${ev.from_stage || '(new)'} → ${ev.to_stage}${ev.quantity_in ? ` | In: ${ev.quantity_in}` : ''}${ev.quantity_out ? ` Out: ${ev.quantity_out}` : ''}${ev.notes ? ' — ' + ev.notes : ''}`);
+        case 'observation':
+          return esc(`[${ev.observation_type || ''}${ev.severity ? '/' + ev.severity : ''}] ${ev.content || ''}`);
+        case 'input':
+          return esc(`${ev.input_type || ''}: ${ev.product_name || ''} ${ev.amount || ''} ${ev.unit || ''}${ev.notes ? ' — ' + ev.notes : ''}`);
+        case 'lineage':
+          return esc(`${ev.reason || ''}: ${ev.quantity || ''} ${ev.unit || ''}${ev.notes ? ' — ' + ev.notes : ''}`);
+        default:
+          return esc(ev.notes || '');
+      }
+    }
+
+    // ── Create lot ──
+    async function handleCreate(e) {
+      e.preventDefault();
+      const btn = document.getElementById('create-btn');
+      btn.disabled = true;
+      btn.innerHTML = `<span class="spinner"></span>`;
+
+      const payload = {
+        cultivar: document.getElementById('f-cultivar').value.trim(),
+        seed_source: document.getElementById('f-seed-source').value.trim() || null,
+        seed_lot_number: document.getElementById('f-lot-number').value.trim() || null,
+        quantity: Number(document.getElementById('f-quantity').value),
+        unit: document.getElementById('f-unit').value,
+        germ_method: document.getElementById('f-germ').value || null,
+        current_location_id: document.getElementById('f-location').value || null,
+        notes: document.getElementById('f-notes').value.trim() || null,
+      };
+
+      try {
+        await apiFetch('createLot', 'POST', payload);
+        toast(t('lotCreated'), 'success');
+        document.getElementById('create-form').reset();
+        document.getElementById('f-quantity').value = '840';
+        await loadLots();
+      } catch (err) {
+        console.error('Create lot failed:', err);
+        toast(err.message || t('error'), 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = t('createBtn');
+      }
+    }
+
+    // ── Transition modal ──
+    function openTransitionModal(lotId) {
+      const lot = lots.find(l => l.id === lotId);
+      if (!lot) return;
+      document.getElementById('tr-lot-id').value = lotId;
+      document.getElementById('tr-from').value = lot.current_stage;
+      document.getElementById('tr-qty-in').value = lot.quantity;
+      document.getElementById('tr-qty-out').value = lot.quantity;
+      // Pre-select next logical stage
+      const stages = ['germination','transplant','field','harvest','drying','curing','processing'];
+      const nextIdx = stages.indexOf(lot.current_stage) + 1;
+      if (nextIdx < stages.length) {
+        document.getElementById('tr-to').value = stages[nextIdx];
+      }
+      populateLocationSelect('tr-location', true);
+      openModal('modal-transition');
+    }
+
+    async function handleTransition(e) {
+      e.preventDefault();
+      const btn = document.getElementById('tr-submit');
+      btn.disabled = true;
+
+      const payload = {
+        lot_id: document.getElementById('tr-lot-id').value,
+        to_stage: document.getElementById('tr-to').value,
+        quantity_in: Number(document.getElementById('tr-qty-in').value) || null,
+        quantity_out: Number(document.getElementById('tr-qty-out').value) || null,
+        location_id: document.getElementById('tr-location').value || null,
+        logged_by: document.getElementById('tr-logged-by').value.trim() || null,
+        notes: document.getElementById('tr-notes').value.trim() || null,
+      };
+
+      try {
+        await apiFetch('transitionStage', 'POST', payload);
+        toast(t('transitioned'), 'success');
+        closeModal('modal-transition');
+        await loadLots();
+      } catch (err) {
+        console.error('Transition failed:', err);
+        toast(err.message || t('error'), 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // ── Split modal ──
+    function openSplitModal(lotId) {
+      const lot = lots.find(l => l.id === lotId);
+      if (!lot) return;
+      document.getElementById('sp-lot-id').value = lotId;
+      document.getElementById('split-parent-info').textContent =
+        `${lot.cultivar} — ${lot.quantity} ${lot.unit} (${t('availableQty')})`;
+      document.getElementById('split-rows').innerHTML = '';
+      addSplitRow();
+      openModal('modal-split');
+    }
+
+    function addSplitRow() {
+      const container = document.getElementById('split-rows');
+      const idx = container.children.length;
+      const div = document.createElement('div');
+      div.className = 'split-row';
+      div.innerHTML = `
+        <div class="form-group">
+          <label>${t('quantity')}</label>
+          <input type="number" class="sp-qty" min="1" required>
+        </div>
+        <div class="form-group">
+          <label>${t('location')}</label>
+          <select class="sp-loc">
+            <option value="">${t('same')}</option>
+            ${locations.map(l => `<option value="${l.id}">${esc(l.name)} (${esc(l.location_type)})</option>`).join('')}
+          </select>
+        </div>
+        ${idx > 0 ? `<button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()" style="margin-bottom:4px;">&times;</button>` : '<div></div>'}
+      `;
+      container.appendChild(div);
+    }
+
+    async function handleSplit() {
+      const btn = document.getElementById('sp-submit');
+      btn.disabled = true;
+
+      const parentId = document.getElementById('sp-lot-id').value;
+      const rows = document.querySelectorAll('#split-rows .split-row');
+      const splits = [];
+      for (const row of rows) {
+        const qty = Number(row.querySelector('.sp-qty').value);
+        const loc = row.querySelector('.sp-loc').value;
+        if (qty > 0) {
+          splits.push({ quantity: qty, location_id: loc || null });
+        }
+      }
+
+      if (!splits.length) {
+        btn.disabled = false;
+        return;
+      }
+
+      try {
+        await apiFetch('splitLot', 'POST', { parent_lot_id: parentId, splits });
+        toast(t('splitDone'), 'success');
+        closeModal('modal-split');
+        expandedLotId = null;
+        await loadLots();
+      } catch (err) {
+        console.error('Split failed:', err);
+        toast(err.message || t('error'), 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // ── Merge modal ──
+    function openMergeModal(targetId) {
+      document.getElementById('mg-target-id').value = targetId;
+      document.getElementById('mg-notes').value = '';
+      const container = document.getElementById('merge-sources');
+
+      // Show all other lots of the same cultivar as potential merge sources
+      const target = lots.find(l => l.id === targetId);
+      const candidates = lots.filter(l => l.id !== targetId && l.cultivar === (target ? target.cultivar : ''));
+
+      if (!candidates.length) {
+        container.innerHTML = `<p style="font-size:0.85rem;color:var(--text-muted);">No other lots of the same cultivar available to merge.</p>`;
+      } else {
+        container.innerHTML = candidates.map(l => `
+          <div class="merge-source" data-lot-id="${l.id}">
+            <input type="checkbox" class="mg-check" id="mg-${l.id}">
+            <label for="mg-${l.id}" style="flex:1;cursor:pointer;">
+              ${esc(l.cultivar)} (${esc(l.id.substring(0,8))}) — ${l.quantity} ${esc(l.unit)}
+            </label>
+            <input type="number" class="mg-qty" min="1" max="${l.quantity}" value="${l.quantity}" style="width:80px;">
+          </div>
+        `).join('');
+      }
+
+      openModal('modal-merge');
+    }
+
+    async function handleMerge() {
+      const btn = document.getElementById('mg-submit');
+      btn.disabled = true;
+
+      const targetId = document.getElementById('mg-target-id').value;
+      const notes = document.getElementById('mg-notes').value.trim() || null;
+      const sources = [];
+
+      document.querySelectorAll('#merge-sources .merge-source').forEach(row => {
+        const checked = row.querySelector('.mg-check').checked;
+        if (checked) {
+          sources.push({
+            lot_id: row.dataset.lotId,
+            quantity: Number(row.querySelector('.mg-qty').value)
+          });
+        }
+      });
+
+      if (!sources.length) {
+        btn.disabled = false;
+        return;
+      }
+
+      try {
+        await apiFetch('mergeLots', 'POST', { target_lot_id: targetId, sources, notes });
+        toast(t('mergeDone'), 'success');
+        closeModal('modal-merge');
+        expandedLotId = null;
+        await loadLots();
+      } catch (err) {
+        console.error('Merge failed:', err);
+        toast(err.message || t('error'), 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // ── Modal helpers ──
+    function openModal(id) {
+      document.getElementById(id).classList.add('open');
+    }
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('open');
+    }
+    // Close on overlay click
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) overlay.classList.remove('open');
+      });
+    });
+    // Close on Escape
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+      }
+    });
+
+    // ── Utilities ──
+    function daysSince(dateStr) {
+      if (!dateStr) return 0;
+      const created = new Date(dateStr);
+      const now = new Date();
+      return Math.floor((now - created) / (1000 * 60 * 60 * 24));
+    }
+
+    function toast(msg, type = 'info') {
+      const el = document.createElement('div');
+      el.className = `toast ${type}`;
+      el.textContent = msg;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 3000);
+    }
+
+    function esc(str) {
+      if (str === null || str === undefined) return '';
+      const d = document.createElement('div');
+      d.textContent = String(str);
+      return d.innerHTML;
+    }
+  </script>
+</body>
+</html>
