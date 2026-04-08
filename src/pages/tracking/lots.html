@@ -957,11 +957,11 @@
       const createSel = document.getElementById('f-location');
       createSel.innerHTML = '<option value="">--</option>';
       locations
-        .filter(l => l.location_type === 'greenhouse' || l.location_type === 'zone')
+        .filter(l => l.type === 'greenhouse' || l.type === 'zone')
         .forEach(l => {
           const opt = document.createElement('option');
           opt.value = l.id;
-          opt.textContent = `${l.name} (${l.location_type})`;
+          opt.textContent = `${l.name} (${l.type})`;
           createSel.appendChild(opt);
         });
 
@@ -972,11 +972,11 @@
     function populateLocationSelect(selectId, includeAll) {
       const sel = document.getElementById(selectId);
       sel.innerHTML = `<option value="">${t('same')}</option>`;
-      const locs = includeAll ? locations : locations.filter(l => l.location_type === 'greenhouse' || l.location_type === 'zone');
+      const locs = includeAll ? locations : locations.filter(l => l.type === 'greenhouse' || l.type === 'zone');
       locs.forEach(l => {
         const opt = document.createElement('option');
         opt.value = l.id;
-        opt.textContent = `${l.name} (${l.location_type})`;
+        opt.textContent = `${l.name} (${l.type})`;
         sel.appendChild(opt);
       });
     }
@@ -1289,7 +1289,7 @@
           <label>${t('location')}</label>
           <select class="sp-loc">
             <option value="">${t('same')}</option>
-            ${locations.map(l => `<option value="${l.id}">${esc(l.name)} (${esc(l.location_type)})</option>`).join('')}
+            ${locations.map(l => `<option value="${l.id}">${esc(l.name)} (${esc(l.type)})</option>`).join('')}
           </select>
         </div>
         ${idx > 0 ? `<button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()" style="margin-bottom:4px;">&times;</button>` : '<div></div>'}
