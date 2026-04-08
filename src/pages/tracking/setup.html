@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/png" href="/rogue-origin-apps/favicon.png">
+  <meta name="theme-color" content="#668971">
+  <title>Field Tracking — Setup</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../css/shared-base.css">
+
+  <style>
+    /* ── Page layout ── */
+    .page-header {
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: var(--space-sm) var(--space-md);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: var(--space-xs);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .page-header h1 {
+      font-family: var(--font-display);
+      font-size: 1.4rem;
+      margin: 0;
+    }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: var(--space-xs);
+    }
+    .header-actions a,
+    .header-actions button {
+      background: none;
+      border: 1px solid rgba(255,255,255,.25);
+      color: var(--header-text);
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-ui);
+      font-size: 0.82rem;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background .2s;
+    }
+    .header-actions a:hover,
+    .header-actions button:hover {
+      background: rgba(255,255,255,.1);
+      transform: none;
+      box-shadow: none;
+    }
+
+    main {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: var(--space-md);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-md);
+    }
+
+    /* ── Cards / Sections ── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-md);
+      box-shadow: var(--shadow-sm);
+    }
+    .card h2 {
+      font-family: var(--font-display);
+      font-size: 1.15rem;
+      margin-bottom: var(--space-sm);
+      color: var(--ro-green);
+    }
+
+    /* ── Seed section ── */
+    #seed-section {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+      flex-wrap: wrap;
+    }
+    #seed-section p {
+      color: var(--text-secondary);
+      font-size: 0.88rem;
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 18px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-ui);
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s, opacity .2s;
+    }
+    .btn-primary {
+      background: var(--ro-green);
+      color: #fff;
+    }
+    .btn-primary:hover { opacity: .88; transform: none; box-shadow: none; }
+    .btn-gold {
+      background: var(--ro-gold);
+      color: #fff;
+    }
+    .btn-gold:hover { opacity: .88; transform: none; box-shadow: none; }
+    .btn-danger {
+      background: var(--danger);
+      color: #fff;
+    }
+    .btn-danger:hover { opacity: .88; transform: none; box-shadow: none; }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .btn-outline:hover { background: var(--green-dim); transform: none; box-shadow: none; }
+    .btn:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+    }
+
+    /* ── Tree view ── */
+    .tree-empty {
+      color: var(--text-muted);
+      font-style: italic;
+      padding: var(--space-sm) 0;
+    }
+    .tree-list {
+      list-style: none;
+      padding-left: 0;
+    }
+    .tree-list .tree-list {
+      padding-left: 22px;
+      border-left: 2px solid var(--border-light);
+      margin-left: 8px;
+    }
+    .tree-item {
+      padding: 6px 10px;
+      margin: 2px 0;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-xs);
+      cursor: pointer;
+      transition: background .15s;
+      font-size: 0.9rem;
+    }
+    .tree-item:hover {
+      background: var(--green-dim);
+    }
+    .tree-item.selected {
+      background: var(--green-dim);
+      border-left: 3px solid var(--ro-green);
+    }
+    .tree-item-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .tree-item-name {
+      font-weight: 500;
+    }
+    .tree-item-type {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      background: var(--bg-warm);
+      padding: 2px 8px;
+      border-radius: 99px;
+      white-space: nowrap;
+    }
+    .tree-item-cap {
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+    .tree-actions {
+      display: flex;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .tree-actions button {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px 6px;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      transition: background .15s, color .15s;
+    }
+    .tree-actions button:hover {
+      background: var(--danger-dim);
+      color: var(--danger);
+      transform: none;
+      box-shadow: none;
+    }
+    .tree-actions .edit-btn:hover {
+      background: var(--gold-dim);
+      color: var(--ro-gold-text);
+    }
+
+    /* ── Form ── */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-sm);
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .form-group.full-width {
+      grid-column: 1 / -1;
+    }
+    .form-group label {
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-ui);
+      font-size: 0.9rem;
+      background: var(--bg);
+      color: var(--text);
+      transition: border-color .2s;
+    }
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      border-color: var(--ro-green);
+      outline: none;
+    }
+    .form-group textarea {
+      resize: vertical;
+      min-height: 60px;
+    }
+    .form-buttons {
+      grid-column: 1 / -1;
+      display: flex;
+      gap: var(--space-xs);
+      margin-top: var(--space-xs);
+    }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 12px 20px;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-ui);
+      font-size: 0.88rem;
+      font-weight: 500;
+      color: #fff;
+      z-index: 9999;
+      animation: fadeInUp .3s ease;
+      pointer-events: none;
+      max-width: 360px;
+    }
+    .toast.success { background: var(--ro-green); }
+    .toast.error { background: var(--danger); }
+    .toast.info { background: var(--info); }
+
+    /* ── Spinner ── */
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+      main {
+        padding: var(--space-sm);
+      }
+      .page-header {
+        padding: var(--space-xs) var(--space-sm);
+      }
+      .page-header h1 {
+        font-size: 1.15rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="page-header">
+    <h1 id="page-title">Location Setup</h1>
+    <div class="header-actions">
+      <button id="lang-toggle" onclick="toggleLang()" aria-label="Toggle language">ES</button>
+      <a href="../index.html">Hub</a>
+    </div>
+  </header>
+
+  <main>
+    <!-- Seed Defaults -->
+    <section class="card" id="seed-section">
+      <button class="btn btn-gold" id="seed-btn" onclick="seedLocations()">
+        &#x1F331; <span id="seed-btn-text">Seed Default Locations</span>
+      </button>
+      <p id="seed-desc">Creates greenhouse, fields A-N, upper barn (4 rooms), bottom barn (6 rooms).</p>
+    </section>
+
+    <!-- Location Tree -->
+    <section class="card">
+      <h2 id="tree-heading">Locations</h2>
+      <div id="location-tree">
+        <p class="tree-empty" id="tree-empty-msg">Loading...</p>
+      </div>
+    </section>
+
+    <!-- Add / Edit Form -->
+    <section class="card">
+      <h2 id="form-heading">Add Location</h2>
+      <form id="location-form" class="form-grid" onsubmit="handleSubmit(event)">
+        <input type="hidden" id="edit-id" value="">
+
+        <div class="form-group">
+          <label for="loc-name" id="lbl-name">Name</label>
+          <input type="text" id="loc-name" required>
+        </div>
+
+        <div class="form-group">
+          <label for="loc-type" id="lbl-type">Type</label>
+          <select id="loc-type" required>
+            <option value="">--</option>
+            <option value="farm">Farm</option>
+            <option value="greenhouse">Greenhouse</option>
+            <option value="field">Field</option>
+            <option value="zone">Zone</option>
+            <option value="barn">Barn</option>
+            <option value="barn_room">Barn Room</option>
+            <option value="cure_room">Cure Room</option>
+            <option value="processing">Processing</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="loc-capacity" id="lbl-capacity">Capacity</label>
+          <input type="number" id="loc-capacity" min="0" step="any">
+        </div>
+
+        <div class="form-group">
+          <label for="loc-cap-unit" id="lbl-cap-unit">Capacity Unit</label>
+          <input type="text" id="loc-cap-unit" placeholder="sqft, plants, lbs...">
+        </div>
+
+        <div class="form-group">
+          <label for="loc-parent" id="lbl-parent">Parent Location</label>
+          <select id="loc-parent">
+            <option value="">— None (top-level) —</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="loc-notes" id="lbl-notes">Notes</label>
+          <input type="text" id="loc-notes">
+        </div>
+
+        <div class="form-buttons">
+          <button type="submit" class="btn btn-primary" id="submit-btn">Save</button>
+          <button type="button" class="btn btn-outline" id="cancel-btn" onclick="cancelEdit()" style="display:none;">Cancel</button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <script type="module">
+    // ── Config ──
+    const API_BASE = window.location.hostname === 'localhost'
+      ? 'http://localhost:8787/api/tracking'
+      : 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/tracking';
+
+    // ── Bilingual ──
+    const labels = {
+      en: {
+        pageTitle: 'Location Setup',
+        seedBtn: 'Seed Default Locations',
+        seedDesc: 'Creates greenhouse, fields A-N, upper barn (4 rooms), bottom barn (6 rooms).',
+        treeHeading: 'Locations',
+        treeEmpty: 'No locations found. Seed defaults or add one below.',
+        loading: 'Loading...',
+        formHeadingAdd: 'Add Location',
+        formHeadingEdit: 'Edit Location',
+        name: 'Name',
+        type: 'Type',
+        capacity: 'Capacity',
+        capUnit: 'Capacity Unit',
+        parent: 'Parent Location',
+        notes: 'Notes',
+        noneParent: '— None (top-level) —',
+        save: 'Save',
+        cancel: 'Cancel',
+        delete: 'Del',
+        edit: 'Edit',
+        seeding: 'Seeding...',
+        seeded: 'Default locations seeded!',
+        saved: 'Location saved.',
+        updated: 'Location updated.',
+        deleted: 'Location deleted.',
+        confirmDelete: 'Delete this location?',
+        error: 'Something went wrong.',
+        langToggle: 'ES',
+        hub: 'Hub',
+      },
+      es: {
+        pageTitle: 'Configuración de Ubicaciones',
+        seedBtn: 'Crear Ubicaciones Predeterminadas',
+        seedDesc: 'Crea invernadero, campos A-N, granero superior (4 cuartos), granero inferior (6 cuartos).',
+        treeHeading: 'Ubicaciones',
+        treeEmpty: 'No se encontraron ubicaciones. Cree las predeterminadas o agregue una abajo.',
+        loading: 'Cargando...',
+        formHeadingAdd: 'Agregar Ubicación',
+        formHeadingEdit: 'Editar Ubicación',
+        name: 'Nombre',
+        type: 'Tipo',
+        capacity: 'Capacidad',
+        capUnit: 'Unidad de Capacidad',
+        parent: 'Ubicación Padre',
+        notes: 'Notas',
+        noneParent: '— Ninguno (nivel superior) —',
+        save: 'Guardar',
+        cancel: 'Cancelar',
+        delete: 'Elim',
+        edit: 'Editar',
+        seeding: 'Creando...',
+        seeded: '¡Ubicaciones predeterminadas creadas!',
+        saved: 'Ubicación guardada.',
+        updated: 'Ubicación actualizada.',
+        deleted: 'Ubicación eliminada.',
+        confirmDelete: '¿Eliminar esta ubicación?',
+        error: 'Algo salió mal.',
+        langToggle: 'EN',
+        hub: 'Hub',
+      }
+    };
+
+    let lang = localStorage.getItem('ro-lang') || 'en';
+    const t = (key) => labels[lang][key] || key;
+
+    // ── State ──
+    let locations = [];
+    let editingId = null;
+
+    // ── Init ──
+    applyLang();
+    loadLocations();
+
+    // Expose to global scope for onclick handlers
+    window.toggleLang = toggleLang;
+    window.seedLocations = seedLocations;
+    window.handleSubmit = handleSubmit;
+    window.cancelEdit = cancelEdit;
+    window.editLocation = editLocation;
+    window.deleteLocation = deleteLocation;
+
+    // ── Language ──
+    function toggleLang() {
+      lang = lang === 'en' ? 'es' : 'en';
+      localStorage.setItem('ro-lang', lang);
+      applyLang();
+    }
+
+    function applyLang() {
+      document.documentElement.lang = lang;
+      document.getElementById('page-title').textContent = t('pageTitle');
+      document.getElementById('lang-toggle').textContent = t('langToggle');
+      document.getElementById('seed-btn-text').textContent = t('seedBtn');
+      document.getElementById('seed-desc').textContent = t('seedDesc');
+      document.getElementById('tree-heading').textContent = t('treeHeading');
+      document.getElementById('form-heading').textContent = editingId ? t('formHeadingEdit') : t('formHeadingAdd');
+      document.getElementById('lbl-name').textContent = t('name');
+      document.getElementById('lbl-type').textContent = t('type');
+      document.getElementById('lbl-capacity').textContent = t('capacity');
+      document.getElementById('lbl-cap-unit').textContent = t('capUnit');
+      document.getElementById('lbl-parent').textContent = t('parent');
+      document.getElementById('lbl-notes').textContent = t('notes');
+      document.getElementById('submit-btn').textContent = t('save');
+      document.getElementById('cancel-btn').textContent = t('cancel');
+      // Update parent dropdown first option
+      const parentSel = document.getElementById('loc-parent');
+      if (parentSel.options.length > 0) {
+        parentSel.options[0].textContent = t('noneParent');
+      }
+      // Re-render tree to update button labels
+      if (locations.length) renderTree(locations);
+    }
+
+    // ── API helpers ──
+    async function apiFetch(action, method = 'GET', body = null) {
+      const opts = {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+      };
+      if (body) opts.body = JSON.stringify(body);
+      const sep = API_BASE.includes('?') ? '&' : '?';
+      const res = await fetch(`${API_BASE}${sep}action=${action}`, opts);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      return res.json();
+    }
+
+    // ── Load locations ──
+    async function loadLocations() {
+      try {
+        const data = await apiFetch('listLocations');
+        locations = data.locations || data.data?.locations || [];
+        renderTree(locations);
+        populateParentDropdown(locations);
+      } catch (err) {
+        console.error('Load locations failed:', err);
+        document.getElementById('location-tree').innerHTML =
+          `<p class="tree-empty">${t('treeEmpty')}</p>`;
+      }
+    }
+
+    // ── Seed ──
+    async function seedLocations() {
+      const btn = document.getElementById('seed-btn');
+      btn.disabled = true;
+      btn.innerHTML = `<span class="spinner"></span> ${t('seeding')}`;
+      try {
+        await apiFetch('seedLocations', 'POST');
+        toast(t('seeded'), 'success');
+        await loadLocations();
+      } catch (err) {
+        console.error('Seed failed:', err);
+        toast(err.message || t('error'), 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `&#x1F331; <span id="seed-btn-text">${t('seedBtn')}</span>`;
+      }
+    }
+
+    // ── Render tree ──
+    function renderTree(locs) {
+      const container = document.getElementById('location-tree');
+      if (!locs.length) {
+        container.innerHTML = `<p class="tree-empty">${t('treeEmpty')}</p>`;
+        return;
+      }
+
+      // Build parent->children map
+      const byParent = {};
+      const byId = {};
+      for (const loc of locs) {
+        byId[loc.id] = loc;
+        const pid = loc.parent_id || '__root__';
+        if (!byParent[pid]) byParent[pid] = [];
+        byParent[pid].push(loc);
+      }
+
+      function buildList(parentId) {
+        const children = byParent[parentId];
+        if (!children || !children.length) return '';
+        let html = `<ul class="tree-list">`;
+        for (const loc of children) {
+          const cap = loc.capacity ? `${loc.capacity} ${loc.capacity_unit || ''}`.trim() : '';
+          html += `<li>
+            <div class="tree-item${editingId === loc.id ? ' selected' : ''}" data-id="${loc.id}">
+              <div class="tree-item-info">
+                <span class="tree-item-name">${esc(loc.name)}</span>
+                <span class="tree-item-type">${esc(loc.location_type)}</span>
+                ${cap ? `<span class="tree-item-cap">${esc(cap)}</span>` : ''}
+              </div>
+              <div class="tree-actions">
+                <button class="edit-btn" onclick="editLocation('${loc.id}')" title="${t('edit')}">${t('edit')}</button>
+                <button onclick="deleteLocation('${loc.id}')" title="${t('delete')}">${t('delete')}</button>
+              </div>
+            </div>
+            ${buildList(loc.id)}
+          </li>`;
+        }
+        html += `</ul>`;
+        return html;
+      }
+
+      container.innerHTML = buildList('__root__');
+    }
+
+    // ── Parent dropdown ──
+    function populateParentDropdown(locs) {
+      const sel = document.getElementById('loc-parent');
+      const currentVal = sel.value;
+      sel.innerHTML = `<option value="">${t('noneParent')}</option>`;
+      for (const loc of locs) {
+        const opt = document.createElement('option');
+        opt.value = loc.id;
+        opt.textContent = `${loc.name} (${loc.location_type})`;
+        sel.appendChild(opt);
+      }
+      sel.value = currentVal;
+    }
+
+    // ── Form submit ──
+    async function handleSubmit(e) {
+      e.preventDefault();
+      const payload = {
+        name: document.getElementById('loc-name').value.trim(),
+        location_type: document.getElementById('loc-type').value,
+        capacity: document.getElementById('loc-capacity').value ? Number(document.getElementById('loc-capacity').value) : null,
+        capacity_unit: document.getElementById('loc-cap-unit').value.trim() || null,
+        parent_id: document.getElementById('loc-parent').value || null,
+        notes: document.getElementById('loc-notes').value.trim() || null,
+      };
+
+      const btn = document.getElementById('submit-btn');
+      btn.disabled = true;
+
+      try {
+        if (editingId) {
+          payload.id = editingId;
+          await apiFetch('upsertLocation', 'POST', payload);
+          toast(t('updated'), 'success');
+        } else {
+          await apiFetch('upsertLocation', 'POST', payload);
+          toast(t('saved'), 'success');
+        }
+        resetForm();
+        await loadLocations();
+      } catch (err) {
+        console.error('Save failed:', err);
+        toast(err.message || t('error'), 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // ── Edit ──
+    function editLocation(id) {
+      const loc = locations.find(l => l.id === id);
+      if (!loc) return;
+      editingId = id;
+      document.getElementById('edit-id').value = id;
+      document.getElementById('loc-name').value = loc.name || '';
+      document.getElementById('loc-type').value = loc.location_type || '';
+      document.getElementById('loc-capacity').value = loc.capacity ?? '';
+      document.getElementById('loc-cap-unit').value = loc.capacity_unit || '';
+      document.getElementById('loc-parent').value = loc.parent_id || '';
+      document.getElementById('loc-notes').value = loc.notes || '';
+      document.getElementById('form-heading').textContent = t('formHeadingEdit');
+      document.getElementById('cancel-btn').style.display = '';
+      document.getElementById('location-form').scrollIntoView({ behavior: 'smooth' });
+      renderTree(locations);
+    }
+
+    // ── Delete ──
+    async function deleteLocation(id) {
+      if (!confirm(t('confirmDelete'))) return;
+      try {
+        await apiFetch('deleteLocation', 'POST', { id });
+        toast(t('deleted'), 'success');
+        if (editingId === id) resetForm();
+        await loadLocations();
+      } catch (err) {
+        console.error('Delete failed:', err);
+        toast(err.message || t('error'), 'error');
+      }
+    }
+
+    // ── Reset form ──
+    function resetForm() {
+      editingId = null;
+      document.getElementById('location-form').reset();
+      document.getElementById('edit-id').value = '';
+      document.getElementById('form-heading').textContent = t('formHeadingAdd');
+      document.getElementById('cancel-btn').style.display = 'none';
+    }
+
+    function cancelEdit() {
+      resetForm();
+      renderTree(locations);
+    }
+
+    // ── Toast ──
+    function toast(msg, type = 'info') {
+      const el = document.createElement('div');
+      el.className = `toast ${type}`;
+      el.textContent = msg;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 3000);
+    }
+
+    // ── Escape HTML ──
+    function esc(str) {
+      if (!str) return '';
+      const d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+  </script>
+</body>
+</html>
