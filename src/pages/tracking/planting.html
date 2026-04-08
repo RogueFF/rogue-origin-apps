@@ -928,14 +928,13 @@
     if (activeLotByZone[zoneId] !== undefined) return activeLotByZone[zoneId];
 
     try {
-      const data = await apiGet({ action: 'listLots', current_stage: 'planted', current_location_id: zoneId });
+      // First try: lot in "field" stage at this zone (most common)
+      const data = await apiGet({ action: 'listLots', current_stage: 'field', current_location_id: zoneId });
       let lots = Array.isArray(data) ? data : (data.lots || []);
-      // If no "planted" lot, try "planting" stage
+      // Fallback: lot in "transplant" stage (being planted right now)
       if (lots.length === 0) {
-        const data2 = await apiGet({ action: 'listLots', current_location_id: zoneId });
+        const data2 = await apiGet({ action: 'listLots', current_stage: 'transplant', current_location_id: zoneId });
         lots = Array.isArray(data2) ? data2 : (data2.lots || []);
-        // Filter to active stages
-        lots = lots.filter(l => ['germination', 'planted', 'seedling', 'vegetative', 'active'].includes(l.current_stage));
       }
       activeLotByZone[zoneId] = lots.length > 0 ? lots[0] : null;
       return activeLotByZone[zoneId];
