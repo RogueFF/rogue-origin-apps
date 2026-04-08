@@ -48,6 +48,14 @@ export default {
     } catch (e) {
       console.error(`[Cron] Complaints sync failed: ${e.message}`);
     }
+
+    try {
+      const { pullDailyWeather } = await import('./handlers/tracking/weather.js');
+      await pullDailyWeather(env);
+      console.log('[Cron] Weather data pulled');
+    } catch (e) {
+      console.error(`[Cron] Weather pull failed: ${e.message}`);
+    }
   },
 
   async fetch(request, env, ctx) {
