@@ -963,6 +963,20 @@
       }).then(r => r.json()),
     ]);
 
+    // Supersack variants (Shopify inventory) — must be built before scoreboard processing
+    const supersackMap = {}; // { title: variant }
+    poolProducts = [];
+    if (supersackRes.status === 'fulfilled') {
+      (supersackRes.value.variants || []).forEach(v => {
+        supersackMap[v.title] = v;
+        poolProducts.push({
+          id: v.id, title: v.title, poolValue: (v.quantity || 0),
+          _unit: 'sacks', _inventoryItemId: v.inventoryItemId,
+          _locationId: v.locationId, _poolType: 'supersack',
+        });
+      });
+    }
+
     // Build per-strain production from scoreboard hourly data
     const perStrainProd = {}; // { strainTitle: { tops, smalls } }
     if (scoreboardRes.status === 'fulfilled') {
@@ -1013,20 +1027,6 @@
           smalls: sb.todaySmalls || 0
         };
       }
-    }
-
-    // Supersack variants (Shopify inventory)
-    const supersackMap = {}; // { title: variant }
-    poolProducts = [];
-    if (supersackRes.status === 'fulfilled') {
-      (supersackRes.value.variants || []).forEach(v => {
-        supersackMap[v.title] = v;
-        poolProducts.push({
-          id: v.id, title: v.title, poolValue: (v.quantity || 0),
-          _unit: 'sacks', _inventoryItemId: v.inventoryItemId,
-          _locationId: v.locationId, _poolType: 'supersack',
-        });
-      });
     }
 
     // Pool products (biomass/trim)
