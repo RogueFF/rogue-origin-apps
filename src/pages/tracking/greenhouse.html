@@ -530,6 +530,80 @@
       padding-right: 44px;
     }
 
+    /* --- WEIGHT GUIDANCE --- */
+    .weight-guidance {
+      margin-top: 6px;
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-ui);
+      font-size: 15px;
+      font-weight: 600;
+      text-align: center;
+      display: none;
+    }
+
+    .weight-guidance.needs-water {
+      display: block;
+      background: rgba(102, 137, 113, 0.15);
+      color: var(--ro-green);
+      border: 2px solid var(--ro-green);
+    }
+
+    .weight-guidance.ok {
+      display: block;
+      background: rgba(228, 170, 79, 0.1);
+      color: var(--ro-gold);
+    }
+
+    /* --- FEED CYCLE --- */
+    .feed-group .feed-btn {
+      font-size: 14px;
+      flex: 1;
+    }
+
+    .feed-hint {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-align: center;
+      margin-top: 4px;
+      font-style: italic;
+    }
+
+    /* --- SOP REFERENCE --- */
+    .sop-ref {
+      margin-top: 12px;
+      padding: 10px 12px;
+      background: rgba(102, 137, 113, 0.06);
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(102, 137, 113, 0.15);
+    }
+
+    .sop-ref-title {
+      font-family: var(--font-ui);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+
+    .sop-table {
+      width: 100%;
+      font-family: var(--font-ui);
+      font-size: 13px;
+    }
+
+    .sop-table td {
+      padding: 2px 0;
+    }
+
+    .sop-table td:last-child {
+      text-align: right;
+      font-weight: 600;
+      font-family: var(--font-mono);
+    }
+
     /* --- LANDSCAPE TWEAKS --- */
     @media (max-height: 500px) and (orientation: landscape) {
       .field-group {
@@ -558,11 +632,8 @@
       <select class="crew-select" id="crewSelect" aria-label="Crew member">
         <option value="">--</option>
         <option value="Koa">Koa</option>
-        <option value="Worker 1">Worker 1</option>
-        <option value="Worker 2">Worker 2</option>
-        <option value="__other__">Other...</option>
+        <option value="Nico">Nico</option>
       </select>
-      <input type="text" class="crew-custom hidden" id="crewCustom" placeholder="Name" aria-label="Custom name">
       <button class="lang-toggle" id="langToggle" aria-label="Toggle language">ES</button>
     </div>
   </div>
@@ -596,22 +667,45 @@
       </div>
 
       <div class="field-group">
+        <label class="field-label" data-i18n="labelStage">Stage</label>
+        <div class="toggle-group">
+          <button type="button" class="toggle-btn stage-btn selected" data-stage="pre_sprout" data-i18n="stagePreSprout">Pre-Sprout (D1-4)</button>
+          <button type="button" class="toggle-btn stage-btn" data-stage="post_sprout" data-i18n="stagePostSprout">Sprouted (D5+)</button>
+        </div>
+      </div>
+
+      <div class="field-group">
         <label class="field-label" for="waterWeight" data-i18n="labelWeight">Weight</label>
         <div class="input-with-unit">
           <input type="number" class="form-input" id="waterWeight" inputmode="decimal" step="0.1" min="0" placeholder="0.0">
           <span class="unit-label">lbs</span>
         </div>
+        <!-- Auto-guidance based on weight + stage -->
+        <div class="weight-guidance" id="weightGuidance"></div>
       </div>
 
-      <div class="field-group">
-        <label class="field-label" data-i18n="labelAction">Action</label>
-        <div class="toggle-group">
-          <button type="button" class="toggle-btn selected" data-action="watered" data-i18n="actionWatered">Watered</button>
-          <button type="button" class="toggle-btn" data-action="no_action" data-i18n="actionNoAction">No Action</button>
+      <div class="field-group" id="feedGroup" style="display:none">
+        <label class="field-label" data-i18n="labelFeed">Feed Cycle</label>
+        <div class="toggle-group feed-group">
+          <button type="button" class="toggle-btn feed-btn" data-feed="full_feed" data-i18n="feedFull">Feed</button>
+          <button type="button" class="toggle-btn feed-btn" data-feed="flush" data-i18n="feedFlush">Flush</button>
+          <button type="button" class="toggle-btn feed-btn" data-feed="bio_feed" data-i18n="feedBio">Bio</button>
         </div>
+        <div class="feed-hint" id="feedHint" data-i18n="feedHintFull">SuperThrive + Kelp + Myco</div>
       </div>
 
       <button class="submit-btn" id="submitWater" data-i18n="btnSubmit">SUBMIT</button>
+
+      <!-- SOP Quick Reference -->
+      <div class="sop-ref">
+        <div class="sop-ref-title" data-i18n="sopRef">SOP Reference</div>
+        <table class="sop-table">
+          <tr><td data-i18n="sopDry">Dry tray</td><td>4-4.5 lbs</td></tr>
+          <tr><td data-i18n="sopPreWater">Pre-sprout: water at</td><td>12 lbs</td></tr>
+          <tr><td data-i18n="sopPostWater">Sprouted: water at</td><td>7 lbs</td></tr>
+          <tr><td data-i18n="sopTarget">Target wet weight</td><td>14-15 lbs</td></tr>
+        </table>
+      </div>
 
       <div class="recent-section">
         <div class="recent-title" data-i18n="recentActivity">Recent Activity</div>
@@ -723,6 +817,19 @@
       labelRH: 'RH',
       labelNote: 'Note',
       labelSeverity: 'Severity',
+      labelStage: 'Stage',
+      stagePreSprout: 'Pre-Sprout (D1-4)',
+      stagePostSprout: 'Sprouted (D5+)',
+      labelFeed: 'Feed Cycle',
+      feedFull: 'Feed',
+      feedFlush: 'Flush',
+      feedBio: 'Bio',
+      feedHintFull: 'SuperThrive + Kelp + Myco',
+      sopRef: 'SOP Reference',
+      sopDry: 'Dry tray',
+      sopPreWater: 'Pre-sprout: water at',
+      sopPostWater: 'Sprouted: water at',
+      sopTarget: 'Target wet weight',
       actionWatered: 'Watered',
       actionNoAction: 'No Action',
       sevInfo: 'Info',
@@ -759,6 +866,19 @@
       labelRH: 'HR',
       labelNote: 'Nota',
       labelSeverity: 'Severidad',
+      labelStage: 'Etapa',
+      stagePreSprout: 'Pre-Brote (D1-4)',
+      stagePostSprout: 'Brotado (D5+)',
+      labelFeed: 'Ciclo de Alimentación',
+      feedFull: 'Alimento',
+      feedFlush: 'Enjuague',
+      feedBio: 'Bio',
+      feedHintFull: 'SuperThrive + Kelp + Myco',
+      sopRef: 'Referencia SOP',
+      sopDry: 'Bandeja seca',
+      sopPreWater: 'Pre-brote: regar a',
+      sopPostWater: 'Brotado: regar a',
+      sopTarget: 'Peso húmedo objetivo',
       actionWatered: 'Regado',
       actionNoAction: 'Sin Acción',
       sevInfo: 'Info',
@@ -792,6 +912,8 @@
   let greenhouseLocationId = null;
   let selectedWaterAction = 'watered';
   let selectedSeverity = 'info';
+  let selectedStage = 'pre_sprout';
+  let selectedFeed = null;
   let photoFile = null;
 
   // --- DOM Refs ---
@@ -827,12 +949,8 @@
   // CREW NAME
   // ========================================
   const crewSelect = $('#crewSelect');
-  const crewCustom = $('#crewCustom');
 
   function getCrewName() {
-    if (crewSelect.value === '__other__') {
-      return crewCustom.value.trim();
-    }
     return crewSelect.value;
   }
 
@@ -841,29 +959,13 @@
     const options = Array.from(crewSelect.options).map(o => o.value);
     if (options.includes(saved)) {
       crewSelect.value = saved;
-    } else if (saved) {
-      crewSelect.value = '__other__';
-      crewCustom.value = saved;
-      crewCustom.classList.remove('hidden');
     }
-  }
-
-  function persistCrew() {
-    const name = getCrewName();
-    if (name) localStorage.setItem('tracking_crew_name', name);
   }
 
   crewSelect.addEventListener('change', () => {
-    if (crewSelect.value === '__other__') {
-      crewCustom.classList.remove('hidden');
-      crewCustom.focus();
-    } else {
-      crewCustom.classList.add('hidden');
-    }
-    persistCrew();
+    if (crewSelect.value) localStorage.setItem('tracking_crew_name', crewSelect.value);
   });
 
-  crewCustom.addEventListener('input', persistCrew);
   restoreCrew();
 
   // ========================================
@@ -881,19 +983,68 @@
   });
 
   // ========================================
-  // TOGGLE BUTTONS (Water action)
+  // STAGE TOGGLE (Pre-sprout / Sprouted)
   // ========================================
-  $$('#pane-water .toggle-btn').forEach(btn => {
+  $$('.stage-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      $$('#pane-water .toggle-btn').forEach(b => {
-        b.classList.remove('selected', 'selected-warning');
-      });
-      selectedWaterAction = btn.dataset.action;
-      if (selectedWaterAction === 'watered') {
-        btn.classList.add('selected');
-      } else {
-        btn.classList.add('selected-warning');
-      }
+      $$('.stage-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedStage = btn.dataset.stage;
+      updateWeightGuidance();
+    });
+  });
+
+  // ========================================
+  // WEIGHT GUIDANCE (auto-determines action)
+  // ========================================
+  const THRESHOLDS = {
+    pre_sprout: 12,  // Days 1-4: water when ≤ 12 lbs
+    post_sprout: 7   // Day 5+: water when ≤ 7 lbs
+  };
+
+  function updateWeightGuidance() {
+    const weight = parseFloat($('#waterWeight').value);
+    const guidance = $('#weightGuidance');
+    const feedGroup = $('#feedGroup');
+
+    if (isNaN(weight) || weight <= 0) {
+      guidance.style.display = 'none';
+      feedGroup.style.display = 'none';
+      selectedWaterAction = 'watered';
+      return;
+    }
+
+    const threshold = THRESHOLDS[selectedStage];
+    if (weight <= threshold) {
+      guidance.className = 'weight-guidance needs-water';
+      guidance.textContent = lang === 'es' ? `≤ ${threshold} lbs — REGAR AHORA` : `≤ ${threshold} lbs — WATER NOW`;
+      feedGroup.style.display = 'block';
+      selectedWaterAction = 'watered';
+    } else {
+      guidance.className = 'weight-guidance ok';
+      guidance.textContent = lang === 'es' ? `> ${threshold} lbs — No regar` : `> ${threshold} lbs — OK, don't water`;
+      feedGroup.style.display = 'none';
+      selectedWaterAction = 'no_action';
+    }
+  }
+
+  $('#waterWeight').addEventListener('input', updateWeightGuidance);
+
+  // ========================================
+  // FEED CYCLE TOGGLE
+  // ========================================
+  const feedHints = {
+    full_feed: { en: 'SuperThrive + Kelp + Myco', es: 'SuperThrive + Kelp + Myco' },
+    flush: { en: 'Pure water only', es: 'Solo agua pura' },
+    bio_feed: { en: 'Kelp + Bacillus + Myco', es: 'Kelp + Bacillus + Myco' }
+  };
+
+  $$('.feed-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      $$('.feed-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedFeed = btn.dataset.feed;
+      $('#feedHint').textContent = feedHints[selectedFeed][lang];
     });
   });
 
@@ -1055,10 +1206,14 @@
         const meta = JSON.parse(o.metadata || '{}');
         const action = meta.action || 'watered';
         const badgeClass = action === 'watered' ? 'watered' : 'no-action';
-        const badgeText = action === 'watered' ? t('actionWatered') : t('actionNoAction');
         const weight = meta.weight_lbs || '';
+        const feed = meta.feed_type;
+        const feedLabel = feed === 'full_feed' ? 'Feed' : feed === 'flush' ? 'Flush' : feed === 'bio_feed' ? 'Bio' : '';
+        const detail = action === 'watered'
+          ? `${weight} lbs → ${feedLabel}`
+          : `${weight} lbs — OK`;
         return `<li class="recent-item">
-          <span class="recent-detail">${weight ? weight + ' lbs' : ''}<span class="recent-badge ${badgeClass}">${badgeText}</span></span>
+          <span class="recent-detail">${detail}<span class="recent-badge ${badgeClass}">${feedLabel || (action === 'watered' ? '💧' : '✓')}</span></span>
           <span class="recent-time">${timeAgo(o.observed_at || o.created_at)}</span>
         </li>`;
       }).join('');
@@ -1142,7 +1297,12 @@
     const lotId = $('#waterBatch').value;
     if (!lotId) return flashError(t('errorNoBatch'));
     const weight = parseFloat($('#waterWeight').value);
-    if (!weight && weight !== 0) return flashError(t('errorNoWeight'));
+    if (isNaN(weight) || weight <= 0) return flashError(t('errorNoWeight'));
+
+    // If watering, require feed selection
+    if (selectedWaterAction === 'watered' && !selectedFeed) {
+      return flashError(lang === 'es' ? 'Seleccione el ciclo de alimentación' : 'Select feed cycle');
+    }
 
     const btn = $('#submitWater');
     btn.disabled = true;
@@ -1153,10 +1313,16 @@
         lot_id: lotId,
         weight_lbs: weight,
         action: selectedWaterAction,
+        stage: selectedStage,
+        feed_type: selectedWaterAction === 'watered' ? selectedFeed : null,
         logged_by: crew
       });
       showSuccess();
       $('#waterWeight').value = '';
+      $('#weightGuidance').style.display = 'none';
+      $('#feedGroup').style.display = 'none';
+      $$('.feed-btn').forEach(b => b.classList.remove('selected'));
+      selectedFeed = null;
       loadRecentWater();
     } catch (err) {
       flashError(err.message);
