@@ -113,68 +113,12 @@
     }
 
     /* --- TAB BAR --- */
-    .tab-bar {
-      display: flex;
-      background: var(--bg-card);
-      border-bottom: 2px solid var(--border);
-      flex-shrink: 0;
-    }
-
-    .tab-btn {
-      flex: 1;
-      padding: 12px 4px;
-      font-family: var(--font-ui);
-      font-size: 15px;
-      font-weight: 600;
-      text-align: center;
-      border: none;
-      background: transparent;
-      color: var(--text-secondary);
-      cursor: pointer;
-      position: relative;
-      min-height: 52px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 2px;
-      transition: color 0.15s ease;
-    }
-
-    .tab-btn .tab-icon {
-      font-size: 20px;
-    }
-
-    .tab-btn.active {
-      color: var(--ro-green);
-    }
-
-    .tab-btn.active::after {
-      content: '';
-      position: absolute;
-      bottom: -2px;
-      left: 12px;
-      right: 12px;
-      height: 3px;
-      background: var(--ro-green);
-      border-radius: 3px 3px 0 0;
-    }
-
-    /* --- TAB CONTENT --- */
+    /* --- CONTENT AREA --- */
     .tab-content {
       flex: 1;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
       padding: 16px 12px;
-    }
-
-    .tab-pane {
-      display: none;
-    }
-
-    .tab-pane.active {
-      display: block;
-      animation: fadeIn 0.15s ease;
     }
 
     /* --- FORM ELEMENTS --- */
@@ -530,6 +474,49 @@
       padding-right: 44px;
     }
 
+    /* --- SIDE-BY-SIDE FIELDS --- */
+    .field-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .field-half {
+      flex: 1;
+    }
+
+    /* --- EXPAND BUTTON --- */
+    .expand-btn {
+      width: 100%;
+      padding: 10px;
+      margin: 8px 0;
+      background: transparent;
+      border: 1px dashed rgba(102, 137, 113, 0.4);
+      border-radius: var(--radius-sm);
+      color: var(--ro-green);
+      font-family: var(--font-ui);
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    .expand-btn:active {
+      background: rgba(102, 137, 113, 0.08);
+    }
+
+    .expand-btn.expanded {
+      border-style: solid;
+      background: rgba(102, 137, 113, 0.05);
+    }
+
+    .note-section {
+      padding: 8px 0;
+    }
+
+    .note-section.hidden {
+      display: none;
+    }
+
     /* --- WEIGHT GUIDANCE --- */
     .weight-guidance {
       margin-top: 6px;
@@ -624,117 +611,65 @@
     </div>
   </div>
 
-  <!-- TAB BAR -->
-  <div class="tab-bar" role="tablist">
-    <button class="tab-btn active" role="tab" aria-selected="true" data-tab="water">
-      <span class="tab-icon">💧</span>
-      <span data-i18n="tabWater">Water</span>
-    </button>
-    <button class="tab-btn" role="tab" aria-selected="false" data-tab="reading">
-      <span class="tab-icon">🌡️</span>
-      <span data-i18n="tabReading">Reading</span>
-    </button>
-    <button class="tab-btn" role="tab" aria-selected="false" data-tab="note">
-      <span class="tab-icon">📝</span>
-      <span data-i18n="tabNote">Note</span>
-    </button>
-  </div>
+  <!-- SINGLE PAGE CONTENT -->
+  <div class="tab-content" style="overflow-y:auto">
 
-  <!-- TAB CONTENT -->
-  <div class="tab-content">
+    <!-- ===== WATERING (core) ===== -->
+    <div class="field-group">
+      <label class="field-label" for="waterBatch" data-i18n="labelBatch">Batch</label>
+      <select class="form-input" id="waterBatch">
+        <option value="" data-i18n="optSelectBatch">Select batch...</option>
+      </select>
+    </div>
 
-    <!-- ===== TAB: WATER ===== -->
-    <div class="tab-pane active" id="pane-water" role="tabpanel">
-      <div class="field-group">
-        <label class="field-label" for="waterBatch" data-i18n="labelBatch">Batch</label>
-        <select class="form-input" id="waterBatch">
-          <option value="" data-i18n="optSelectBatch">Select batch...</option>
-        </select>
-      </div>
-
-      <div class="field-group">
-        <label class="field-label" data-i18n="labelStage">Stage</label>
-        <div class="toggle-group">
-          <button type="button" class="toggle-btn stage-btn selected" data-stage="pre_sprout" data-i18n="stagePreSprout">Pre-Sprout</button>
-          <button type="button" class="toggle-btn stage-btn" data-stage="post_sprout" data-i18n="stagePostSprout">Sprouted</button>
-        </div>
-      </div>
-
-      <div class="field-group">
-        <label class="field-label" for="waterWeight" data-i18n="labelWeight">Weight</label>
-        <div class="input-with-unit">
-          <input type="number" class="form-input" id="waterWeight" inputmode="decimal" step="0.1" min="0" placeholder="0.0">
-          <span class="unit-label">lbs</span>
-        </div>
-        <!-- Auto-guidance based on weight + stage -->
-        <div class="weight-guidance" id="weightGuidance"></div>
-      </div>
-
-      <button class="submit-btn" id="submitWater" data-i18n="btnSubmit">SUBMIT</button>
-
-      <!-- SOP Quick Reference -->
-      <div class="sop-ref">
-        <div class="sop-ref-title" data-i18n="sopRef">SOP Reference</div>
-        <table class="sop-table">
-          <tr><td data-i18n="sopDry">Dry tray</td><td>4-4.5 lbs</td></tr>
-          <tr><td data-i18n="sopPreWater">Pre-sprout: water at</td><td>12 lbs</td></tr>
-          <tr><td data-i18n="sopPostWater">Sprouted: water at</td><td>7 lbs</td></tr>
-          <tr><td data-i18n="sopTarget">Target wet weight</td><td>14-15 lbs</td></tr>
-        </table>
-      </div>
-
-      <div class="recent-section">
-        <div class="recent-title" data-i18n="recentActivity">Recent Activity</div>
-        <ul class="recent-list" id="recentWater">
-          <li class="empty-state" data-i18n="emptyRecent">No recent entries</li>
-        </ul>
+    <div class="field-group">
+      <label class="field-label" data-i18n="labelStage">Stage</label>
+      <div class="toggle-group">
+        <button type="button" class="toggle-btn stage-btn selected" data-stage="pre_sprout" data-i18n="stagePreSprout">Pre-Sprout</button>
+        <button type="button" class="toggle-btn stage-btn" data-stage="post_sprout" data-i18n="stagePostSprout">Sprouted</button>
       </div>
     </div>
 
-    <!-- ===== TAB: GH READING ===== -->
-    <div class="tab-pane" id="pane-reading" role="tabpanel">
-      <div class="field-group">
+    <div class="field-group">
+      <label class="field-label" for="waterWeight" data-i18n="labelWeight">Weight</label>
+      <div class="input-with-unit">
+        <input type="number" class="form-input" id="waterWeight" inputmode="decimal" step="0.1" min="0" placeholder="0.0">
+        <span class="unit-label">lbs</span>
+      </div>
+      <div class="weight-guidance" id="weightGuidance"></div>
+    </div>
+
+    <!-- ===== TEMP / RH (optional, inline) ===== -->
+    <div class="field-row">
+      <div class="field-group field-half">
         <label class="field-label" for="readingTemp" data-i18n="labelTemp">Temp</label>
         <div class="input-with-unit">
-          <input type="number" class="form-input" id="readingTemp" inputmode="decimal" step="0.1" min="0" max="150" placeholder="72">
+          <input type="number" class="form-input" id="readingTemp" inputmode="decimal" step="0.1" min="0" max="150" placeholder="—">
           <span class="unit-label">&deg;F</span>
         </div>
       </div>
-
-      <div class="field-group">
+      <div class="field-group field-half">
         <label class="field-label" for="readingRH" data-i18n="labelRH">RH</label>
         <div class="input-with-unit">
-          <input type="number" class="form-input" id="readingRH" inputmode="numeric" step="1" min="0" max="100" placeholder="65">
+          <input type="number" class="form-input" id="readingRH" inputmode="numeric" step="1" min="0" max="100" placeholder="—">
           <span class="unit-label">%</span>
         </div>
       </div>
-
-      <button class="submit-btn" id="submitReading" data-i18n="btnSubmit">SUBMIT</button>
-
-      <div class="recent-section">
-        <div class="recent-title" data-i18n="todayReadings">Today's Readings</div>
-        <ul class="recent-list" id="recentReadings">
-          <li class="empty-state" data-i18n="emptyRecent">No recent entries</li>
-        </ul>
-      </div>
     </div>
 
-    <!-- ===== TAB: NOTE ===== -->
-    <div class="tab-pane" id="pane-note" role="tabpanel">
+    <button class="submit-btn" id="submitWater" data-i18n="btnSubmit">SUBMIT</button>
+
+    <!-- ===== ADD NOTE (expandable) ===== -->
+    <button type="button" class="expand-btn" id="expandNote">
+      <span data-i18n="btnAddNote">+ Add Note / Photo</span>
+    </button>
+
+    <div class="note-section hidden" id="noteSection">
       <div class="field-group">
-        <label class="field-label" for="noteBatch" data-i18n="labelBatchOptional">Batch (optional)</label>
-        <select class="form-input" id="noteBatch">
-          <option value="" data-i18n="optNone">None</option>
-        </select>
+        <textarea class="form-input" id="noteText" rows="2" placeholder="" data-i18n-placeholder="notePlaceholder"></textarea>
       </div>
 
       <div class="field-group">
-        <label class="field-label" for="noteText" data-i18n="labelNote">Note</label>
-        <textarea class="form-input" id="noteText" rows="3" placeholder=""></textarea>
-      </div>
-
-      <div class="field-group">
-        <label class="field-label" data-i18n="labelSeverity">Severity</label>
         <div class="severity-group">
           <button type="button" class="severity-btn selected" data-severity="info" data-i18n="sevInfo">Info</button>
           <button type="button" class="severity-btn" data-severity="warning" data-i18n="sevWarning">Warning</button>
@@ -743,24 +678,34 @@
       </div>
 
       <div class="field-group">
-        <button type="button" class="photo-btn" id="photoBtn" data-i18n="btnPhoto">📷 Add Photo</button>
+        <button type="button" class="photo-btn" id="photoBtn" data-i18n="btnPhoto">📷 Photo</button>
         <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none">
         <div class="photo-preview" id="photoPreview">
           <img id="photoThumb" src="" alt="Photo preview">
         </div>
       </div>
-
-      <button class="submit-btn" id="submitNote" data-i18n="btnSubmit">SUBMIT</button>
-
-      <div class="recent-section">
-        <div class="recent-title" data-i18n="recentNotes">Recent Notes</div>
-        <ul class="recent-list" id="recentNotes">
-          <li class="empty-state" data-i18n="emptyRecent">No recent entries</li>
-        </ul>
-      </div>
     </div>
 
-  </div><!-- /tab-content -->
+    <!-- SOP Quick Reference -->
+    <div class="sop-ref">
+      <div class="sop-ref-title" data-i18n="sopRef">SOP Reference</div>
+      <table class="sop-table">
+        <tr><td data-i18n="sopDry">Dry tray</td><td>4-4.5 lbs</td></tr>
+        <tr><td data-i18n="sopPreWater">Pre-sprout: water at</td><td>12 lbs</td></tr>
+        <tr><td data-i18n="sopPostWater">Sprouted: water at</td><td>7 lbs</td></tr>
+        <tr><td data-i18n="sopTarget">Target wet weight</td><td>14-15 lbs</td></tr>
+      </table>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="recent-section">
+      <div class="recent-title" data-i18n="recentActivity">Recent Activity</div>
+      <ul class="recent-list" id="recentWater">
+        <li class="empty-state" data-i18n="emptyRecent">No recent entries</li>
+      </ul>
+    </div>
+
+  </div><!-- /content -->
 </div><!-- /app-shell -->
 
 <!-- SUCCESS OVERLAY -->
@@ -782,9 +727,8 @@
   const labels = {
     en: {
       pageTitle: 'Greenhouse',
-      tabWater: 'Water',
-      tabReading: 'Reading',
-      tabNote: 'Note',
+      btnAddNote: '+ Add Note / Photo',
+      notePlaceholder: 'What do you see?',
       labelBatch: 'Batch',
       labelBatchOptional: 'Batch (optional)',
       labelWeight: 'Weight',
@@ -807,8 +751,10 @@
       sevWarning: 'Warning',
       sevCritical: 'Critical',
       btnSubmit: 'SUBMIT',
-      btnPhoto: '📷 Add Photo',
-      btnPhotoAdded: '📷 Photo Added',
+      btnAddNote: '+ Add Note / Photo',
+      notePlaceholder: 'What do you see?',
+      btnPhoto: '📷 Photo',
+      btnPhotoAdded: '📷 Added',
       optSelectBatch: 'Select batch...',
       optNone: 'None',
       recentActivity: 'Recent Activity',
@@ -826,9 +772,8 @@
     },
     es: {
       pageTitle: 'Invernadero',
-      tabWater: 'Riego',
-      tabReading: 'Lectura',
-      tabNote: 'Nota',
+      btnAddNote: '+ Agregar Nota / Foto',
+      notePlaceholder: '¿Qué ves?',
       labelBatch: 'Lote',
       labelBatchOptional: 'Lote (opcional)',
       labelWeight: 'Peso',
@@ -851,8 +796,10 @@
       sevWarning: 'Aviso',
       sevCritical: 'Crítico',
       btnSubmit: 'ENVIAR',
-      btnPhoto: '📷 Agregar Foto',
-      btnPhotoAdded: '📷 Foto Agregada',
+      btnAddNote: '+ Agregar Nota / Foto',
+      notePlaceholder: '¿Qué ves?',
+      btnPhoto: '📷 Foto',
+      btnPhotoAdded: '📷 Agregada',
       optSelectBatch: 'Seleccionar lote...',
       optNone: 'Ninguno',
       recentActivity: 'Actividad Reciente',
@@ -934,17 +881,13 @@
   restoreCrew();
 
   // ========================================
-  // TABS
+  // EXPAND NOTE SECTION
   // ========================================
-  $$('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const tab = btn.dataset.tab;
-      $$('.tab-btn').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
-      btn.classList.add('active');
-      btn.setAttribute('aria-selected', 'true');
-      $$('.tab-pane').forEach(p => p.classList.remove('active'));
-      $(`#pane-${tab}`).classList.add('active');
-    });
+  $('#expandNote').addEventListener('click', () => {
+    const section = $('#noteSection');
+    const btn = $('#expandNote');
+    section.classList.toggle('hidden');
+    btn.classList.toggle('expanded');
   });
 
   // ========================================
@@ -1083,17 +1026,13 @@
   }
 
   function populateBatchDropdowns() {
-    ['waterBatch', 'noteBatch'].forEach(id => {
-      const sel = $(`#${id}`);
-      const isOptional = id === 'noteBatch';
-      // Keep first option
-      while (sel.options.length > 1) sel.remove(1);
-      lots.forEach(lot => {
-        const opt = document.createElement('option');
-        opt.value = lot.id || lot.lot_id;
-        opt.textContent = `${lot.cultivar_name || lot.cultivar || ''} — ${lot.batch_code || lot.lot_identifier || lot.id}`;
-        sel.appendChild(opt);
-      });
+    const sel = $('#waterBatch');
+    while (sel.options.length > 1) sel.remove(1);
+    lots.forEach(lot => {
+      const opt = document.createElement('option');
+      opt.value = lot.id || lot.lot_id;
+      opt.textContent = `${lot.cultivar_name || lot.cultivar || ''} — ${lot.batch_code || lot.lot_identifier || lot.id}`;
+      sel.appendChild(opt);
     });
   }
 
@@ -1162,48 +1101,6 @@
     }
   }
 
-  async function loadRecentReadings() {
-    if (!greenhouseLocationId) return;
-    const today = new Date().toISOString().split('T')[0];
-    try {
-      const data = await apiGet({ action: 'listReadings', location_id: greenhouseLocationId, date_from: today });
-      const readings = (Array.isArray(data) ? data : (data.readings || [])).slice(0, 10);
-      if (readings.length === 0) {
-        $('#recentReadings').innerHTML = `<li class="empty-state">${t('emptyRecent')}</li>`;
-        return;
-      }
-      $('#recentReadings').innerHTML = readings.map(r => {
-        return `<li class="recent-item">
-          <span class="recent-detail">${r.temp_f || r.temperature_f || '—'}°F &nbsp; ${r.humidity_pct || r.humidity || '—'}%</span>
-          <span class="recent-time">${formatTime(r.recorded_at || r.created_at)}</span>
-        </li>`;
-      }).join('');
-    } catch (err) {
-      console.error('Failed to load readings:', err);
-    }
-  }
-
-  async function loadRecentNotes() {
-    const today = new Date().toISOString().split('T')[0];
-    try {
-      const data = await apiGet({ action: 'listObservations', observation_type: 'general', date_from: today });
-      const obs = (Array.isArray(data) ? data : (data.observations || [])).slice(0, 5);
-      if (obs.length === 0) {
-        $('#recentNotes').innerHTML = `<li class="empty-state">${t('emptyRecent')}</li>`;
-        return;
-      }
-      $('#recentNotes').innerHTML = obs.map(o => {
-        const sev = o.severity || 'info';
-        return `<li class="recent-item">
-          <span class="recent-detail">${escapeHtml(truncate(o.content || '', 60))}<span class="recent-badge ${sev}">${t('sev' + capitalize(sev))}</span></span>
-          <span class="recent-time">${timeAgo(o.observed_at || o.created_at)}</span>
-        </li>`;
-      }).join('');
-    } catch (err) {
-      console.error('Failed to load notes:', err);
-    }
-  }
-
   function escapeHtml(str) {
     const div = document.createElement('div');
     div.textContent = str;
@@ -1214,23 +1111,16 @@
     return str.length > len ? str.slice(0, len) + '...' : str;
   }
 
-  function capitalize(str) {
-    return str.charAt(0).toUpperCase() + str.slice(1);
-  }
-
   // ========================================
   // FORM VALIDATION FLASH
   // ========================================
   function flashError(msg) {
-    // Brief alert — could be replaced with a toast
     alert(msg);
   }
 
   // ========================================
-  // SUBMIT HANDLERS
+  // UNIFIED SUBMIT — watering + optional reading + optional note/photo
   // ========================================
-
-  // --- Water ---
   $('#submitWater').addEventListener('click', async () => {
     const crew = getCrewName();
     if (!crew) return flashError(t('errorNoCrew'));
@@ -1244,6 +1134,7 @@
     btn.textContent = t('submitting');
 
     try {
+      // 1. Always log the watering event
       await apiPost('logWatering', {
         lot_id: lotId,
         weight_lbs: weight,
@@ -1251,97 +1142,62 @@
         stage: selectedStage,
         logged_by: crew
       });
-      showSuccess();
-      $('#waterWeight').value = '';
-      $('#weightGuidance').style.display = 'none';
-      loadRecentWater();
-    } catch (err) {
-      flashError(err.message);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = t('btnSubmit');
-    }
-  });
 
-  // --- GH Reading ---
-  $('#submitReading').addEventListener('click', async () => {
-    const crew = getCrewName();
-    if (!crew) return flashError(t('errorNoCrew'));
-    const temp = parseFloat($('#readingTemp').value);
-    if (isNaN(temp)) return flashError(t('errorNoTemp'));
-    const rh = parseFloat($('#readingRH').value);
-    if (isNaN(rh)) return flashError(t('errorNoRH'));
-
-    await loadGreenhouseLocation();
-    if (!greenhouseLocationId) {
-      return flashError('No greenhouse location configured');
-    }
-
-    const btn = $('#submitReading');
-    btn.disabled = true;
-    btn.textContent = t('submitting');
-
-    try {
-      await apiPost('recordReading', {
-        location_id: greenhouseLocationId,
-        source: 'manual',
-        temp_f: temp,
-        humidity_pct: rh,
-        logged_by: crew
-      });
-      showSuccess();
-      $('#readingTemp').value = '';
-      $('#readingRH').value = '';
-      loadRecentReadings();
-    } catch (err) {
-      flashError(err.message);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = t('btnSubmit');
-    }
-  });
-
-  // --- Note ---
-  $('#submitNote').addEventListener('click', async () => {
-    const crew = getCrewName();
-    if (!crew) return flashError(t('errorNoCrew'));
-    const content = $('#noteText').value.trim();
-    if (!content) return flashError(t('errorNoNote'));
-
-    const btn = $('#submitNote');
-    btn.disabled = true;
-    btn.textContent = t('submitting');
-
-    try {
-      let photoUrls = [];
-      if (photoFile) {
-        const key = await uploadPhoto(photoFile);
-        photoUrls.push(key);
+      // 2. If temp or RH filled in, also log a reading
+      const temp = parseFloat($('#readingTemp').value);
+      const rh = parseFloat($('#readingRH').value);
+      if (!isNaN(temp) || !isNaN(rh)) {
+        await loadGreenhouseLocation();
+        if (greenhouseLocationId) {
+          await apiPost('recordReading', {
+            location_id: greenhouseLocationId,
+            source: 'manual',
+            temp_f: isNaN(temp) ? null : temp,
+            humidity_pct: isNaN(rh) ? null : rh,
+            logged_by: crew
+          });
+        }
       }
 
-      const body = {
-        observation_type: 'general',
-        content: content,
-        severity: selectedSeverity,
-        logged_by: crew
-      };
+      // 3. If note or photo added, also log an observation
+      const noteText = $('#noteText').value.trim();
+      if (noteText || photoFile) {
+        let photoUrls = [];
+        if (photoFile) {
+          const key = await uploadPhoto(photoFile);
+          photoUrls.push(key);
+        }
 
-      const lotId = $('#noteBatch').value;
-      if (lotId) body.lot_id = lotId;
-      if (photoUrls.length > 0) body.photo_urls = JSON.stringify(photoUrls);
+        const noteBody = {
+          lot_id: lotId,
+          observation_type: 'general',
+          content: noteText || (photoFile ? 'Photo' : ''),
+          severity: selectedSeverity,
+          logged_by: crew
+        };
+        if (photoUrls.length > 0) noteBody.photo_urls = JSON.stringify(photoUrls);
 
-      await apiPost('createObservation', body);
+        await apiPost('createObservation', noteBody);
+      }
+
       showSuccess();
 
       // Reset form
+      $('#waterWeight').value = '';
+      $('#readingTemp').value = '';
+      $('#readingRH').value = '';
+      $('#weightGuidance').style.display = 'none';
       $('#noteText').value = '';
       photoFile = null;
       $('#photoBtn').classList.remove('has-photo');
       $('#photoBtn').textContent = t('btnPhoto');
       $('#photoPreview').style.display = 'none';
-      $('#photoInput').value = '';
+      if ($('#photoInput')) $('#photoInput').value = '';
+      // Collapse note section
+      $('#noteSection').classList.add('hidden');
+      $('#expandNote').classList.remove('expanded');
 
-      loadRecentNotes();
+      loadRecentWater();
     } catch (err) {
       flashError(err.message);
     } finally {
@@ -1361,10 +1217,7 @@
   async function init() {
     applyLanguage();
     loadLots();
-    loadGreenhouseLocation().then(() => {
-      loadRecentReadings();
-    });
-    loadRecentNotes();
+    loadGreenhouseLocation();
   }
 
   init();
