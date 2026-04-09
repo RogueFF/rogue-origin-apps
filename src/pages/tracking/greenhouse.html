@@ -555,20 +555,6 @@
       color: var(--ro-gold);
     }
 
-    /* --- FEED CYCLE --- */
-    .feed-group .feed-btn {
-      font-size: 14px;
-      flex: 1;
-    }
-
-    .feed-hint {
-      font-size: 12px;
-      color: var(--text-muted);
-      text-align: center;
-      margin-top: 4px;
-      font-style: italic;
-    }
-
     /* --- SOP REFERENCE --- */
     .sop-ref {
       margin-top: 12px;
@@ -669,8 +655,8 @@
       <div class="field-group">
         <label class="field-label" data-i18n="labelStage">Stage</label>
         <div class="toggle-group">
-          <button type="button" class="toggle-btn stage-btn selected" data-stage="pre_sprout" data-i18n="stagePreSprout">Pre-Sprout (D1-4)</button>
-          <button type="button" class="toggle-btn stage-btn" data-stage="post_sprout" data-i18n="stagePostSprout">Sprouted (D5+)</button>
+          <button type="button" class="toggle-btn stage-btn selected" data-stage="pre_sprout" data-i18n="stagePreSprout">Pre-Sprout</button>
+          <button type="button" class="toggle-btn stage-btn" data-stage="post_sprout" data-i18n="stagePostSprout">Sprouted</button>
         </div>
       </div>
 
@@ -682,16 +668,6 @@
         </div>
         <!-- Auto-guidance based on weight + stage -->
         <div class="weight-guidance" id="weightGuidance"></div>
-      </div>
-
-      <div class="field-group" id="feedGroup" style="display:none">
-        <label class="field-label" data-i18n="labelFeed">Feed Cycle</label>
-        <div class="toggle-group feed-group">
-          <button type="button" class="toggle-btn feed-btn" data-feed="full_feed" data-i18n="feedFull">Feed</button>
-          <button type="button" class="toggle-btn feed-btn" data-feed="flush" data-i18n="feedFlush">Flush</button>
-          <button type="button" class="toggle-btn feed-btn" data-feed="bio_feed" data-i18n="feedBio">Bio</button>
-        </div>
-        <div class="feed-hint" id="feedHint" data-i18n="feedHintFull">SuperThrive + Kelp + Myco</div>
       </div>
 
       <button class="submit-btn" id="submitWater" data-i18n="btnSubmit">SUBMIT</button>
@@ -818,13 +794,8 @@
       labelNote: 'Note',
       labelSeverity: 'Severity',
       labelStage: 'Stage',
-      stagePreSprout: 'Pre-Sprout (D1-4)',
-      stagePostSprout: 'Sprouted (D5+)',
-      labelFeed: 'Feed Cycle',
-      feedFull: 'Feed',
-      feedFlush: 'Flush',
-      feedBio: 'Bio',
-      feedHintFull: 'SuperThrive + Kelp + Myco',
+      stagePreSprout: 'Pre-Sprout',
+      stagePostSprout: 'Sprouted',
       sopRef: 'SOP Reference',
       sopDry: 'Dry tray',
       sopPreWater: 'Pre-sprout: water at',
@@ -867,13 +838,8 @@
       labelNote: 'Nota',
       labelSeverity: 'Severidad',
       labelStage: 'Etapa',
-      stagePreSprout: 'Pre-Brote (D1-4)',
-      stagePostSprout: 'Brotado (D5+)',
-      labelFeed: 'Ciclo de Alimentación',
-      feedFull: 'Alimento',
-      feedFlush: 'Enjuague',
-      feedBio: 'Bio',
-      feedHintFull: 'SuperThrive + Kelp + Myco',
+      stagePreSprout: 'Pre-Brote',
+      stagePostSprout: 'Brotado',
       sopRef: 'Referencia SOP',
       sopDry: 'Bandeja seca',
       sopPreWater: 'Pre-brote: regar a',
@@ -913,7 +879,6 @@
   let selectedWaterAction = 'watered';
   let selectedSeverity = 'info';
   let selectedStage = 'pre_sprout';
-  let selectedFeed = null;
   let photoFile = null;
 
   // --- DOM Refs ---
@@ -1005,11 +970,9 @@
   function updateWeightGuidance() {
     const weight = parseFloat($('#waterWeight').value);
     const guidance = $('#weightGuidance');
-    const feedGroup = $('#feedGroup');
 
     if (isNaN(weight) || weight <= 0) {
       guidance.style.display = 'none';
-      feedGroup.style.display = 'none';
       selectedWaterAction = 'watered';
       return;
     }
@@ -1018,35 +981,16 @@
     if (weight <= threshold) {
       guidance.className = 'weight-guidance needs-water';
       guidance.textContent = lang === 'es' ? `≤ ${threshold} lbs — REGAR AHORA` : `≤ ${threshold} lbs — WATER NOW`;
-      feedGroup.style.display = 'block';
       selectedWaterAction = 'watered';
     } else {
       guidance.className = 'weight-guidance ok';
       guidance.textContent = lang === 'es' ? `> ${threshold} lbs — No regar` : `> ${threshold} lbs — OK, don't water`;
-      feedGroup.style.display = 'none';
       selectedWaterAction = 'no_action';
     }
   }
 
   $('#waterWeight').addEventListener('input', updateWeightGuidance);
 
-  // ========================================
-  // FEED CYCLE TOGGLE
-  // ========================================
-  const feedHints = {
-    full_feed: { en: 'SuperThrive + Kelp + Myco', es: 'SuperThrive + Kelp + Myco' },
-    flush: { en: 'Pure water only', es: 'Solo agua pura' },
-    bio_feed: { en: 'Kelp + Bacillus + Myco', es: 'Kelp + Bacillus + Myco' }
-  };
-
-  $$('.feed-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      $$('.feed-btn').forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
-      selectedFeed = btn.dataset.feed;
-      $('#feedHint').textContent = feedHints[selectedFeed][lang];
-    });
-  });
 
   // ========================================
   // SEVERITY BUTTONS (Note)
@@ -1207,13 +1151,9 @@
         const action = meta.action || 'watered';
         const badgeClass = action === 'watered' ? 'watered' : 'no-action';
         const weight = meta.weight_lbs || '';
-        const feed = meta.feed_type;
-        const feedLabel = feed === 'full_feed' ? 'Feed' : feed === 'flush' ? 'Flush' : feed === 'bio_feed' ? 'Bio' : '';
-        const detail = action === 'watered'
-          ? `${weight} lbs → ${feedLabel}`
-          : `${weight} lbs — OK`;
+        const badge = action === 'watered' ? '💧' : '✓ OK';
         return `<li class="recent-item">
-          <span class="recent-detail">${detail}<span class="recent-badge ${badgeClass}">${feedLabel || (action === 'watered' ? '💧' : '✓')}</span></span>
+          <span class="recent-detail">${weight} lbs <span class="recent-badge ${badgeClass}">${badge}</span></span>
           <span class="recent-time">${timeAgo(o.observed_at || o.created_at)}</span>
         </li>`;
       }).join('');
@@ -1299,11 +1239,6 @@
     const weight = parseFloat($('#waterWeight').value);
     if (isNaN(weight) || weight <= 0) return flashError(t('errorNoWeight'));
 
-    // If watering, require feed selection
-    if (selectedWaterAction === 'watered' && !selectedFeed) {
-      return flashError(lang === 'es' ? 'Seleccione el ciclo de alimentación' : 'Select feed cycle');
-    }
-
     const btn = $('#submitWater');
     btn.disabled = true;
     btn.textContent = t('submitting');
@@ -1314,15 +1249,11 @@
         weight_lbs: weight,
         action: selectedWaterAction,
         stage: selectedStage,
-        feed_type: selectedWaterAction === 'watered' ? selectedFeed : null,
         logged_by: crew
       });
       showSuccess();
       $('#waterWeight').value = '';
       $('#weightGuidance').style.display = 'none';
-      $('#feedGroup').style.display = 'none';
-      $$('.feed-btn').forEach(b => b.classList.remove('selected'));
-      selectedFeed = null;
       loadRecentWater();
     } catch (err) {
       flashError(err.message);
