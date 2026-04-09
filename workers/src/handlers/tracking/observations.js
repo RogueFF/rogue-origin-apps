@@ -108,14 +108,14 @@ async function getObservation(request, env) {
 
 async function logWatering(request, env) {
   const body = await request.json();
-  const { lot_id, weight_lbs, action, logged_by } = body;
+  const { lot_id, weight_lbs, action, stage, feed_type, logged_by } = body;
 
   if (!lot_id) {
     throw new ApiError('Missing required field: lot_id', 'BAD_REQUEST', 400);
   }
 
   const id = generateId();
-  const metadata = JSON.stringify({ weight_lbs, action });
+  const metadata = JSON.stringify({ weight_lbs, action, stage, feed_type });
 
   await env.DB.prepare(`
     INSERT INTO tracking_observations (id, lot_id, observation_type, logged_by, metadata)
