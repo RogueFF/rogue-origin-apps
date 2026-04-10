@@ -42,16 +42,25 @@ async function submit(body, env) {
 
   const db = env.DB;
 
-  // Per-strain sack counts from the tracker
+  // Per-strain data from the tracker
   if (strains && typeof strains === 'object') {
-    const strainEntries = Object.entries(strains).filter(([, count]) => count > 0);
-    const totalSacks = strainEntries.reduce((sum, [, count]) => sum + count, 0);
+    // Support both formats: { strain: sackCount } (legacy) and { strain: { sacks, tops, smalls } } (v2)
+    const normalized = Object.entries(strains).map(([name, val]) => {
+      if (typeof val === 'object' && val !== null) {
+        return [name, val.sacks || 0, val.tops ?? null, val.smalls ?? null];
+      }
+      return [name, val, null, null]; // legacy: sack count only
+    }).filter(([, sacks]) => sacks > 0);
 
-    for (const [strain, sacks] of strainEntries) {
+    const totalSacks = normalized.reduce((sum, [, sacks]) => sum + sacks, 0);
+
+    for (const [strain, sacks, perStrainTops, perStrainSmalls] of normalized) {
       const ratio = sacks / totalSacks;
       const raw = sacks * SACK_WEIGHT;
-      const strainTops = tops_lbs * ratio;
-      const strainSmalls = smalls_lbs * ratio;
+      // Use per-strain production data when available, otherwise ratio-split totals
+      const strainTops = perStrainTops != null ? perStrainTops : tops_lbs * ratio;
+      const strainSmalls = perStrainSmalls != null ? perStrainSmalls : smalls_lbs * ratio;
+      // Biomass/trim always ratio-split (no per-strain data for these)
       const strainBio = biomass_lbs * ratio;
       const strainTrim = trim_lbs * ratio;
       const strainWaste = Math.max(0, raw - strainTops - strainSmalls - strainBio - strainTrim);
@@ -71,7 +80,7 @@ async function submit(body, env) {
       `).bind(date, strain, sacks, strainTops, strainSmalls, strainBio, strainTrim, strainWaste, raw).run();
     }
 
-    return successResponse({ success: true, entries: strainEntries.length });
+    return successResponse({ success: true, entries: normalized.length });
   }
 
   // Single-strain fallback
