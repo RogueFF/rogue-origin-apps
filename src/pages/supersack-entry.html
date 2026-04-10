@@ -485,6 +485,34 @@
       font-family: var(--font-ui); font-style: italic;
     }
 
+    /* Inline edit for recent changes */
+    .change-edit-btn {
+      background: none; border: none; color: var(--text-faint); font-size: 14px;
+      cursor: pointer; padding: 6px; border-radius: 6px; transition: all 0.15s;
+      flex-shrink: 0; line-height: 1;
+    }
+    .change-edit-btn:hover { color: var(--gold); background: var(--gold-dim); }
+    .change-edit-btn:active { transform: scale(0.9); }
+    .change-edit-input {
+      width: 64px; text-align: right; font-size: 15px; font-weight: 700;
+      background: var(--bg-warm); border: 1px solid var(--gold);
+      border-radius: 6px; color: var(--gold); padding: 4px 8px;
+      font-family: var(--font-mono); outline: none;
+      box-shadow: 0 0 0 2px var(--gold-dim);
+    }
+    .change-edit-actions {
+      display: flex; gap: 4px; margin-top: 4px; justify-content: flex-end;
+    }
+    .change-save-btn, .change-cancel-btn {
+      padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
+      cursor: pointer; border: none; font-family: var(--font-ui); transition: all 0.15s;
+    }
+    .change-save-btn { background: var(--green); color: white; }
+    .change-save-btn:active { transform: scale(0.95); }
+    .change-cancel-btn { background: var(--card); color: var(--text-dim); border: 1px solid var(--card-border); }
+    .change-row.editing { background: var(--gold-dim); border-radius: var(--radius-sm); margin: 0 -8px; padding: 10px 8px; }
+    .change-row.saving { opacity: 0.5; pointer-events: none; }
+
     /* Hide number input spinners */
     input[type=number]::-webkit-inner-spin-button,
     input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
@@ -1116,6 +1144,10 @@
           unit: 'sacks',
           remaining: e.newValue != null ? `${e.newValue} remaining` : '',
           note: e.note || '',
+          fullNote: e.note || '',
+          productId: e.variantId || null,
+          poolType: 'supersack',
+          isSupersack: true,
           date: d,
           dateStr: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
           timeStr: d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
@@ -1137,6 +1169,10 @@
           unit: unit,
           remaining: '',
           note: (e.note || '').replace('[Supersack Tracker] ', ''),
+          fullNote: e.note || '',
+          productId: e.productId || null,
+          poolType: e.poolType || null,
+          isSupersack: false,
           date: d,
           dateStr: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
           timeStr: d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
@@ -1167,16 +1203,27 @@
         const sign = isSubtract ? '−' : '+';
         const cls = isSubtract ? 'subtract' : 'add';
         const noteHtml = e.note ? `<div class="change-note">${e.note}</div>` : '';
+        const editable = (e.fullNote || '').includes('Supersack Tracker') || e.isSupersack;
+        const entryData = editable ? JSON.stringify({
+          name: e.name, action: e.action, amount: e.amount, unit: e.unit,
+          productId: e.productId, poolType: e.poolType, isSupersack: e.isSupersack,
+        }).replace(/"/g, '&quot;') : '';
+        const pencilHtml = editable
+          ? '<button class="change-edit-btn" onclick="window._editChange(this)" title="Edit">&#9998;</button>'
+          : '';
         return `
-          <div class="change-row">
+          <div class="change-row" ${editable ? `data-entry="${entryData}"` : ''}>
             <div class="change-info">
               <div class="change-strain">${e.name}</div>
               <div class="change-date">${e.dateStr} · ${e.timeStr}</div>
               ${noteHtml}
             </div>
-            <div style="text-align:right">
-              <div class="change-amount ${cls}">${sign}${e.amount} ${e.unit}</div>
-              ${e.remaining ? `<div class="change-remaining">${e.remaining}</div>` : ''}
+            <div style="text-align:right;display:flex;align-items:center;gap:6px">
+              <div>
+                <div class="change-amount ${cls}">${sign}${e.amount} ${e.unit}</div>
+                ${e.remaining ? `<div class="change-remaining">${e.remaining}</div>` : ''}
+              </div>
+              ${pencilHtml}
             </div>
           </div>`;
       }).join('');
@@ -1460,6 +1507,114 @@
     statusMsg.className = 'status-msg ' + (type || '');
     if (type === 'success') setTimeout(() => { statusMsg.textContent = ''; }, 4000);
   }
+
+  // Inline edit for recent changes
+  window._editChange = function(btn) {
+    const row = btn.closest('.change-row');
+    if (!row || row.classList.contains('editing')) return;
+    const entry = JSON.parse(row.dataset.entry);
+    const amountEl = row.querySelector('.change-amount');
+    const amountParent = amountEl.parentElement;
+    const sign = entry.action === 'subtract' ? '−' : '+';
+
+    row.classList.add('editing');
+    row._originalAmountHtml = amountParent.innerHTML;
+    row._entry = entry;
+
+    amountParent.innerHTML = `
+      <div>
+        <div style="display:flex;align-items:center;gap:4px;justify-content:flex-end">
+          <span style="font-family:var(--font-mono);font-size:15px;font-weight:700;color:var(--text-dim)">${sign}</span>
+          <input type="number" class="change-edit-input" value="${entry.amount}" step="${entry.isSupersack ? '1' : '0.1'}" min="0" inputmode="${entry.isSupersack ? 'numeric' : 'decimal'}">
+          <span style="font-size:11px;color:var(--text-faint)">${entry.unit}</span>
+        </div>
+        <div class="change-edit-actions">
+          <button class="change-cancel-btn" onclick="window._cancelEdit(this)">✕</button>
+          <button class="change-save-btn" onclick="window._saveEdit(this)">Save</button>
+        </div>
+      </div>`;
+
+    const pencil = row.querySelector('.change-edit-btn');
+    if (pencil) pencil.style.display = 'none';
+    const input = row.querySelector('.change-edit-input');
+    input.focus();
+    input.select();
+  };
+
+  window._cancelEdit = function(btn) {
+    const row = btn.closest('.change-row');
+    row.classList.remove('editing');
+    const container = row.querySelector('.change-edit-input').closest('div').parentElement;
+    container.innerHTML = row._originalAmountHtml;
+    const pencil = row.querySelector('.change-edit-btn');
+    if (pencil) pencil.style.display = '';
+  };
+
+  window._saveEdit = async function(btn) {
+    const row = btn.closest('.change-row');
+    const input = row.querySelector('.change-edit-input');
+    const newAmount = parseFloat(input.value);
+    const entry = row._entry;
+
+    if (isNaN(newAmount) || newAmount < 0) return;
+    if (newAmount === entry.amount) { window._cancelEdit(btn); return; }
+
+    row.classList.add('saving');
+    const delta = newAmount - entry.amount;
+
+    // Find the product to update
+    let productId = entry.productId;
+    if (entry.isSupersack && !productId) {
+      const match = poolProducts.find(p =>
+        p._poolType === 'supersack' && p.title.toLowerCase().includes(entry.name.toLowerCase())
+      );
+      productId = match?.id || null;
+    }
+    if (!productId && !entry.isSupersack) {
+      if (/biomass/i.test(entry.name)) productId = config.biomass;
+      else if (/trim/i.test(entry.name)) productId = config.trim;
+    }
+
+    if (!productId) {
+      row.classList.remove('saving', 'editing');
+      const container = row.querySelector('.change-edit-input').closest('div').parentElement;
+      container.innerHTML = row._originalAmountHtml;
+      const pencil = row.querySelector('.change-edit-btn');
+      if (pencil) pencil.style.display = '';
+      setStatus('Could not find pool product to update', 'error');
+      return;
+    }
+
+    // Calculate correction direction
+    let operation;
+    if (entry.isSupersack) {
+      // Supersacks: original was 'subtract' (opened). More = subtract more, less = add back.
+      operation = delta > 0 ? 'subtract' : 'add';
+    } else {
+      // Pool items (biomass/trim): original was 'add'. More = add more, less = subtract.
+      operation = delta > 0 ? 'add' : 'subtract';
+    }
+
+    const note = `[Supersack Tracker] Correction: ${entry.name} ${entry.amount}→${newAmount} ${entry.unit}`;
+    const result = await updatePool(productId, operation, Math.abs(delta), note, entry.isSupersack);
+
+    row.classList.remove('saving');
+
+    if (result.success) {
+      row.classList.remove('editing');
+      row.style.background = 'rgba(102, 137, 113, 0.15)';
+      row.style.transition = 'background 0.3s';
+      setTimeout(() => { row.style.background = ''; }, 1500);
+      setTimeout(() => loadRecentChanges(), 1000);
+    } else {
+      row.classList.remove('editing');
+      const container = row.querySelector('.change-edit-input').closest('div').parentElement;
+      container.innerHTML = row._originalAmountHtml;
+      const pencil = row.querySelector('.change-edit-btn');
+      if (pencil) pencil.style.display = '';
+      setStatus('Correction failed: ' + (result.error || 'unknown'), 'error');
+    }
+  };
 
   // Init
   initDate();
