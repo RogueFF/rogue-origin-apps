@@ -1467,7 +1467,7 @@
           date, supersack_count: sackCount, biomass_lbs: biomass,
           trim_lbs: trim, tops_lbs: topsLbs, smalls_lbs: smallsLbs,
           waste_lbs: Math.max(0, (sackCount * SACK_WEIGHT) - topsLbs - smallsLbs - biomass - trim),
-          strains: Object.fromEntries(Object.entries(strainData).map(([k, v]) => [k, v.sacks])),
+          strains: Object.fromEntries(Object.entries(strainData).map(([k, v]) => [k, { sacks: v.sacks, tops: v.tops, smalls: v.smalls }])),
         }),
       });
     } catch (e) {
