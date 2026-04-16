@@ -1,7 +1,8 @@
 /**
- * Scale Reader for Brecknell GP100
+ * Scale Reader for OHAUS Defender 5000 (100 lb x 0.005 lb)
  *
- * Reads weight from USB scale, displays locally, and pushes to cloud API.
+ * Reads weight from RS-232 scale (via USB-serial adapter), displays locally,
+ * and pushes to cloud API.
  *
  * Usage:
  *   npm start              - Connect to real scale
@@ -18,16 +19,47 @@ const CONFIG = {
   port: 3000,
   apiUrl: 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production?action=scaleWeight',
   pushInterval: 500,      // Push to API every 500ms
-  serialBaud: 9600,       // Brecknell GP100 default
+  serialBaud: 9600,       // OHAUS Defender 5000 default (8-N-1)
+  pollInterval: 500,      // How often to request a weight reading (ms)
   stationId: 'line1',
-  targetWeight: 5.0,      // kg
+  targetWeight: 5.0,      // kg (displayed/stored in kg; scale reads lb)
 };
+
+const LB_TO_KG = 0.453592;
 
 // State
 let currentWeight = 0;
 let isConnected = false;
 let useMock = process.argv.includes('--mock');
 let serialPort = null;
+
+// Parse one line of OHAUS Defender 5000 output.
+// Expected formats (stable readings):
+//   "    12.345 lb G"   gross
+//   "    12.345 lb N"   net
+//   "    12.345 lb"     (no G/N suffix)
+//   "    12.345 kg G"   if indicator is configured for kg
+// Unstable readings carry a '?' suffix; we still accept them so the live
+// display tracks the bag as it fills.
+// Returns { kg, raw, unit, stable } or null if the line is not a weight reading.
+function parseOhausLine(line) {
+  if (!line || !line.trim()) return null;
+
+  const match = line.match(/(-?\d+(?:\.\d+)?)\s*(lb|kg)\b/i);
+  if (!match) return null;
+
+  const raw = parseFloat(match[1]);
+  const unit = match[2].toLowerCase();
+  const stable = !/\?/.test(line);
+
+  const kg = unit === 'lb' ? raw * LB_TO_KG : raw;
+  return {
+    kg: Math.max(0, Math.round(kg * 1000) / 1000),
+    raw,
+    unit,
+    stable,
+  };
+}
 
 // Express app
 const app = express();
@@ -136,13 +168,14 @@ function initSerialPort() {
       console.log(`  Connected to scale on ${comPort}\n`);
       isConnected = true;
 
-      // Poll scale for weight every 500ms (Brecknell/NCI protocol)
+      // Poll scale for weight (OHAUS Print command: 'P' requests a stable reading).
+      // If the indicator is set to Continuous/Auto-Print, these requests are ignored
+      // and we simply parse the unsolicited stream.
       setInterval(() => {
         if (serialPort.isOpen) {
-          // Send weight request command (NCI protocol: 'W' or 'P')
-          serialPort.write('W\r\n');
+          serialPort.write('P\r\n');
         }
-      }, 500);
+      }, CONFIG.pollInterval);
     });
 
     serialPort.on('data', (data) => {
@@ -154,22 +187,11 @@ function initSerialPort() {
       buffer = lines.pop() || ''; // Keep incomplete line in buffer
 
       for (const line of lines) {
-        if (!line.trim()) continue;
-        // Brecknell GP100 format: "  4.72 kg" or "    2.4lb"
-        // Parse the weight value from the response
-        const match = line.match(/([\d.]+)\s*(kg|lb)/i);
-        if (match) {
-          let weight = parseFloat(match[1]);
-          const unit = match[2].toLowerCase();
+        const parsed = parseOhausLine(line);
+        if (parsed === null) continue;
 
-          // Convert lbs to kg if needed
-          if (unit === 'lb') {
-            weight = weight * 0.453592;
-          }
-
-          currentWeight = Math.max(0, Math.round(weight * 100) / 100);
-          console.log(`  Weight: ${currentWeight.toFixed(2)} kg (${match[1]} ${unit})`);
-        }
+        currentWeight = parsed.kg;
+        console.log(`  Weight: ${parsed.kg.toFixed(3)} kg  (raw: ${parsed.raw.toFixed(3)} ${parsed.unit}${parsed.stable ? '' : ' ?'})`);
       }
     });
 
