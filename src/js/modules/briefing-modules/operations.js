@@ -3,31 +3,23 @@
  * Fetches production data and generates human-readable briefing segments
  */
 
-import { API_URL } from '../config.js';
+import { makeApi } from '../../shared/api.js';
 import { formatDateInput } from '../utils.js';
 
-/**
- * Fetch scoreboard data from API
- */
+const api = makeApi('production');
+
 async function fetchScoreboard() {
   try {
-    const response = await fetch(`${API_URL}?action=scoreboard`);
-    const raw = await response.json();
-    return raw.data || raw;
+    return await api.get('scoreboard');
   } catch (e) {
     console.warn('Operations briefing: scoreboard fetch failed', e);
     return null;
   }
 }
 
-/**
- * Fetch dashboard summary for a date range
- */
 async function fetchDashboard(startDate, endDate) {
   try {
-    const response = await fetch(`${API_URL}?action=dashboard&start=${startDate}&end=${endDate}`);
-    const raw = await response.json();
-    return raw.data || raw;
+    return await api.get('dashboard', { start: startDate, end: endDate });
   } catch (e) {
     console.warn('Operations briefing: dashboard fetch failed', e);
     return null;
