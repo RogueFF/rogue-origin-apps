@@ -6,7 +6,7 @@
  */
 
 const KEY = 'ro-lang';
-const LEGACY_KEYS = ['barcodeLang', 'kanbanLang', 'sopAppLang', 'lang', 'language'];
+const LEGACY_KEYS = ['barcodeLang', 'kanbanLang', 'sopAppLang', 'supersack-lang', 'lang', 'language'];
 
 let labels = { en: {}, es: {} };
 let currentLang = null;
@@ -74,4 +74,7 @@ if (typeof window !== 'undefined') {
   window.toggleLang = toggleLang;
   window.getLang = getLang;
   window.registerLabels = registerLabels;
+  // Dispatch once on module load so pages that rendered during parse
+  // (before this module executed) can re-sync to the correct language.
+  document.dispatchEvent(new CustomEvent('ro:langchange', { detail: { lang: currentLang } }));
 }

@@ -716,23 +716,19 @@
     enterCount: 'Ingrese la cantidad de supersacos primero', loading: 'cargando...',
     mappingSaved: 'Mapeo guardado', today: 'Hoy',
   }};
-  let currentLang = localStorage.getItem('supersack-lang') || 'en';
-
   function applyLang() {
-    const t = LANG[currentLang];
+    const l = (window.getLang && window.getLang()) || 'en';
+    const t = LANG[l];
     document.querySelectorAll('[data-i18n]').forEach(el => {
       const key = el.getAttribute('data-i18n');
       if (t[key]) el.textContent = t[key];
     });
-    document.getElementById('lang-toggle').textContent = currentLang === 'en' ? 'ES' : 'EN';
+    document.getElementById('lang-toggle').textContent = l === 'en' ? 'ES' : 'EN';
     document.getElementById('today-btn').textContent = t.today;
   }
 
-  document.getElementById('lang-toggle').addEventListener('click', () => {
-    currentLang = currentLang === 'en' ? 'es' : 'en';
-    localStorage.setItem('supersack-lang', currentLang);
-    applyLang();
-  });
+  document.getElementById('lang-toggle').addEventListener('click', () => window.toggleLang());
+  document.addEventListener('ro:langchange', applyLang);
 
   const POOL_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/pool';
   const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
@@ -1622,5 +1618,6 @@
   checkExistingEntry().then(() => loadAll());
 })();
 </script>
+<script type="module" src="../js/shared/i18n.js"></script>
 </body>
 </html>
