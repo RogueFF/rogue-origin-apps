@@ -3,6 +3,7 @@
  */
 
 import { makeApi } from '../shared/api.js';
+import { showToast } from '../shared/toast.js';
 
 const api = makeApi('pool');
 
@@ -443,21 +444,4 @@ function closeModal(modal) {
   modal.classList.remove('active');
 }
 
-/**
- * Toast notifications
- */
-function showToast(message, type = 'success') {
-  const container = document.getElementById('toastContainer');
-  const toast = document.createElement('div');
-  toast.className = `toast ${type}`;
-  toast.innerHTML = `
-    <i class="ph-duotone ph-${type === 'success' ? 'check-circle' : 'x-circle'}"></i>
-    <span class="toast-message">${message}</span>
-  `;
-  
-  container.appendChild(toast);
-  
-  setTimeout(() => {
-    toast.remove();
-  }, 3000);
-}
+// Toast notifications: showToast is imported from ../shared/toast.js.
