@@ -1257,7 +1257,7 @@
     });
     editBtn.style.display = 'none';
     submitBtn.style.display = 'block';
-    submitBtn.textContent = LANG[currentLang].submit;
+    submitBtn.textContent = LANG[(window.getLang && window.getLang()) || 'en'].submit;
     cancelBtn.style.display = editMode ? 'block' : 'none';
     dateInput.disabled = editMode;
   }
