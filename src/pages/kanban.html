@@ -361,7 +361,6 @@ var sortDirection = 'asc';
 var previewCard = null;
 var previewSide = 'front';
 var previewColor = 'green';
-var currentLang = 'en';
 
 // API Configuration for GitHub Pages
 var API_URL = 'https://script.google.com/macros/s/AKfycbzVxbQLZVr21vnINQi9b8LphvLnJNQW76Fmd1aDd6dgDvZEq-GiB3aVXcxP-e6rat_X/exec';
@@ -500,16 +499,10 @@ var translations = {
   }
 };
 
-function t(key) {
-  return translations[currentLang][key] || translations['en'][key] || key;
-}
-
-function toggleLang() {
-  currentLang = currentLang === 'en' ? 'es' : 'en';
+document.addEventListener('ro:langchange', function() {
   updateAllText();
   filter();
-  try { localStorage.setItem('kanbanLang', currentLang); } catch(e) {}
-}
+});
 
 function toggleDarkMode() {
   document.body.classList.toggle('dark-mode');
@@ -522,18 +515,10 @@ function toggleDarkMode() {
 var filterDebounceTimer = null;
 
 function init() {
-  try {
-    var savedLang = localStorage.getItem('kanbanLang');
-    if (savedLang) currentLang = savedLang;
-    var savedDark = localStorage.getItem('kanbanDarkMode');
-    if (savedDark === 'true') {
-      document.body.classList.add('dark-mode');
-      var btn = document.getElementById('darkModeBtn');
-      if (btn) btn.textContent = '<i class="ph-duotone ph-sun"></i>';
-    }
-  } catch(e) {}
-  loadCustomOptions();
+  // Language + dark-mode handled by shared/i18n.js and shared/theme.js.
+  window.registerLabels(translations);
   updateAllText();
+  loadCustomOptions();
   setupImageDrop();
   load();
 }
@@ -639,10 +624,11 @@ function clearImageUrl() {
 
 function updateAllText() {
   try {
+    var t = window.t || function(k){return k;};
     document.querySelector('.brand h1').textContent = t('title');
     document.querySelector('.brand p').textContent = t('subtitle');
     var langBtn = document.getElementById('langBtn');
-    if (langBtn) langBtn.textContent = currentLang === 'en' ? '<i class="ph-duotone ph-translate"></i> Español' : '<i class="ph-duotone ph-translate"></i> English';
+    if (langBtn) langBtn.textContent = window.getLang() === 'en' ? '<i class="ph-duotone ph-translate"></i> Español' : '<i class="ph-duotone ph-translate"></i> English';
     var loadingP = document.querySelector('#loading p');
     if (loadingP) loadingP.textContent = t('loading');
     var emptyH3 = document.querySelector('#empty h3');
@@ -2266,8 +2252,9 @@ function checkFirstVisit() {
 // Call on page load
 setTimeout(checkFirstVisit, 1000);
 
-init();
+document.addEventListener('DOMContentLoaded', init);
 </script>
+  <script type="module" src="../js/shared/i18n.js"></script>
   <script src="../js/sw-register.js" async></script>
 </body>
 </html>
