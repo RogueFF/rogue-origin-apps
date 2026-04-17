@@ -2351,10 +2351,7 @@
        ═══════════════════════════════════════ -->
   <div class="print-pages" id="printPages"></div>
 
-  <!-- ═══════════════════════════════════════
-       TOAST
-       ═══════════════════════════════════════ -->
-  <div class="toast" id="toast"></div>
+  <!-- Toast is injected by src/js/shared/toast.js -->
 
   <!-- Annotation Editor Modal -->
   <div class="annotation-overlay" id="annotationOverlay" style="display:none;">
@@ -4032,15 +4029,7 @@
       return (date.getMonth() + 1) + '/' + date.getDate() + '/' + date.getFullYear();
     }
 
-    // ── Toast ──
-    function showToast(msg) {
-      var toast = document.getElementById('toast');
-      toast.textContent = msg;
-      toast.classList.add('visible');
-      setTimeout(function() {
-        toast.classList.remove('visible');
-      }, 3000);
-    }
+    // Toast: showToast is provided by src/js/shared/toast.js (window global).
 
     // ── Utilities ──
     function escapeHtml(str) {
@@ -4493,5 +4482,6 @@
       });
     });
   </script>
+  <script type="module" src="../js/shared/toast.js"></script>
 </body>
 </html>
