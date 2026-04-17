@@ -658,8 +658,6 @@ const commandPaletteItems = [
   { label: 'Dashboard', action: () => switchView('dashboard'), icon: 'grid', shortcut: '' },
   { label: 'Supply Kanban', action: () => switchView('kanban'), icon: 'columns', shortcut: '' },
   { label: 'Scoreboard', action: () => switchView('scoreboard'), icon: 'chart', shortcut: '' },
-  { label: 'Command Center', action: () => { window.location.href = 'command-center.html'; }, icon: 'terminal', shortcut: '' },
-  { label: 'Command Center v2', action: () => { window.location.href = 'command-center-v2.html'; }, icon: 'terminal', shortcut: '' },
   { label: 'Barcode Printer', action: () => switchView('barcode'), icon: 'barcode', shortcut: '' },
   { label: 'SOP Manager', action: () => switchView('sop'), icon: 'clipboard', shortcut: '' },
   { label: 'Orders', action: () => switchView('orders'), icon: 'bag', shortcut: '' },
