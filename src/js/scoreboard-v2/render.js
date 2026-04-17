@@ -1,7 +1,7 @@
 /**
  * ScoreboardRender.js
  * Main render orchestration for scoreboard UI updates
- * Dependencies: ScoreboardState, ScoreboardDOM, ScoreboardI18n, ScoreboardChart
+ * Dependencies: ScoreboardState, ScoreboardDOM, shared/i18n (window.t), ScoreboardChart
  */
 (function(window) {
   'use strict';
@@ -30,7 +30,7 @@
       if (!data) return;
 
       const currentLang = (window.ScoreboardState && window.ScoreboardState.currentLang) || 'en';
-      const t = window.ScoreboardI18n ? window.ScoreboardI18n.t : function(key) { return key; };
+      const t = typeof window.t === 'function' ? window.t : function(key) { return key; };
 
       // Apply shift adjustment if exists (use raw API target, don't compound)
       if (window.ScoreboardState && window.ScoreboardState.shiftAdjustment) {
@@ -129,8 +129,7 @@
           lhp.classList.add('text-red');
         } else {
           // On pace - use i18n translation
-          var I18n = window.ScoreboardI18n;
-          lhp.textContent = I18n ? I18n.t('onPace') : 'On pace';
+          lhp.textContent = typeof window.t === 'function' ? window.t('onPace') : 'On pace';
           lhp.classList.add('text-gold');
         }
       } else if (lhp) {
@@ -509,7 +508,7 @@
       const pill = safeGetEl('currentOrderPill');
       const summary = safeGetEl('currentOrderSummary');
       const detail = safeGetEl('currentOrderDetail');
-      const t = window.ScoreboardI18n ? window.ScoreboardI18n.t : function(key) { return key; };
+      const t = typeof window.t === 'function' ? window.t : function(key) { return key; };
 
       if (!pill || !summary) return;
 
@@ -617,7 +616,7 @@
       const pill = safeGetEl(type + 'OrderPill');
       const summary = safeGetEl(type + 'OrderSummary');
       const detail = safeGetEl(type + 'OrderDetail');
-      const t = window.ScoreboardI18n ? window.ScoreboardI18n.t : function(key) { return key; };
+      const t = typeof window.t === 'function' ? window.t : function(key) { return key; };
 
       if (!pill || !summary) return;
 
