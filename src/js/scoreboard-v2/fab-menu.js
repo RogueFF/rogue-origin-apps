@@ -6,7 +6,6 @@
   'use strict';
 
   var DOM = window.ScoreboardDOM;
-  var I18n = window.ScoreboardI18n;
 
   // Module state
   var state = {

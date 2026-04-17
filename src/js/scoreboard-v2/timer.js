@@ -378,8 +378,7 @@
     document.body.classList.add('timer-' + colorClass);
 
     var currentLang = State ? State.currentLang : 'en';
-    var I18n = window.ScoreboardI18n;
-    var t = (I18n && I18n.translations) || {};
+    var t = typeof window.t === 'function' ? window.t : function(k) { return k; };
 
     // Show paused state during manual pause, breaks, or after hours
     if (isManuallyPaused) {
@@ -392,11 +391,11 @@
         var pausedStr = (State.totalPausedSeconds > 0) ? ' · ' + (currentLang === 'es' ? 'Pausado' : 'Paused') + ' ' + formatTime(State.totalPausedSeconds) : '';
         tv.textContent = formatTime(displaySec);
         tv.className = 'timer-value neutral';
-        tl.textContent = (t[currentLang] && t[currentLang].shiftEnded || 'SHIFT ENDED') + pausedStr;
+        tl.textContent = (t('shiftEnded') || 'SHIFT ENDED') + pausedStr;
       } else {
         tv.textContent = formatTime(displaySec);
         tv.className = 'timer-value yellow';
-        tl.textContent = (t[currentLang] && t[currentLang].onBreak);
+        tl.textContent = t('onBreak');
       }
     } else {
       var showTime = State.debugMode || effectiveTarget > 0 || elapsedSec > 0;
@@ -404,8 +403,8 @@
       tv.className = 'timer-value ' + (colorClass === 'neutral' ? '' : colorClass);
       var isOT = State.debugState === 'red' || isOvertime;
       var elapsedLabel = currentLang === 'es' ? 'transcurrido' : 'elapsed';
-      var overtimeLabel = t[currentLang] && t[currentLang].overtime;
-      var remainingLabel = t[currentLang] && t[currentLang].remaining;
+      var overtimeLabel = t('overtime');
+      var remainingLabel = t('remaining');
       tl.textContent = (effectiveTarget === 0 && elapsedSec > 0 && !State.debugMode) ?
         elapsedLabel :
         isOT ? overtimeLabel : remainingLabel;
@@ -477,7 +476,7 @@
           vsTargetEl.textContent = dm + ' min';
           vsTargetEl.className = 'timer-stat-value negative';
         } else {
-          vsTargetEl.textContent = (window.ScoreboardI18n ? window.ScoreboardI18n.t('onPace') : 'On pace');
+          vsTargetEl.textContent = (typeof window.t === 'function' ? window.t('onPace') : 'On pace');
           vsTargetEl.className = 'timer-stat-value';
         }
       } else {
