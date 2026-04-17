@@ -351,7 +351,6 @@
     let stats = {};
     let currentFilter = '';
     let currentSearch = '';
-    let lang = localStorage.getItem('ro-lang') || 'en';
     let currentComplaint = null;
     let editingId = null;
 
@@ -492,7 +491,7 @@
       }
     };
 
-    const t = (key) => labels[lang]?.[key] || key;
+    const t = (key) => (window.t ? window.t(key) : labels.en?.[key]) || key;
 
     // ═══════════════════════════════════════════════════
     // UTILITIES
@@ -1011,9 +1010,7 @@
       if (searchInput) searchInput.placeholder = t('search_placeholder');
     }
 
-    function toggleLang() {
-      lang = lang === 'en' ? 'es' : 'en';
-      localStorage.setItem('ro-lang', lang);
+    document.addEventListener('ro:langchange', () => {
       updateUI();
       renderComplaints();
       if (stats.monthly_trend) {
@@ -1021,7 +1018,7 @@
         renderStatusDonut();
         renderTypeBreakdown();
       }
-    }
+    });
 
     document.addEventListener('ro:themechange', (e) => {
       const icon = document.querySelector('#dark-mode-toggle i');
@@ -1038,7 +1035,8 @@
     // ═══════════════════════════════════════════════════
 
     async function init() {
-      // Theme handled by shared/theme.js. Sync icon to current theme.
+      // Theme + language handled by shared/theme.js + shared/i18n.js.
+      window.registerLabels(labels);
       const icon = document.querySelector('#dark-mode-toggle i');
       if (icon) {
         const theme = document.documentElement.getAttribute('data-theme');
@@ -1115,5 +1113,6 @@
     });
   </script>
   <script type="module" src="../js/shared/theme.js"></script>
+  <script type="module" src="../js/shared/i18n.js"></script>
 </body>
 </html>
