@@ -170,7 +170,6 @@
     var selectedCultivar = '';
     var lastPrintedProduct = null;
     var sizeOrder = ['1 OZ', '1/4 LB', '1/2 LB', '1 LB', '10 LB', '5KG', '10KG'];
-    var currentLang = 'en';
     var searchDebounceTimer = null;
 
     // Translations - English and Spanish
@@ -259,34 +258,11 @@
       }
     };
 
-    function t(key) {
-      return translations[currentLang][key] || translations['en'][key] || key;
-    }
-
-    function updateAllText() {
-      // Update all data-i18n elements
-      document.querySelectorAll('[data-i18n]').forEach(function(el) {
-        var key = el.getAttribute('data-i18n');
-        el.textContent = t(key);
-      });
-      // Update all data-i18n-placeholder elements
-      document.querySelectorAll('[data-i18n-placeholder]').forEach(function(el) {
-        var key = el.getAttribute('data-i18n-placeholder');
-        el.placeholder = t(key);
-      });
-      // Update language button
-      var langBtn = document.getElementById('langBtn');
+    document.addEventListener('ro:langchange', function(e) {
       var langText = document.getElementById('langText');
-      if (langText) langText.textContent = currentLang === 'en' ? 'Español' : 'English';
-    }
-
-    function toggleLang() {
-      currentLang = currentLang === 'en' ? 'es' : 'en';
-      try { localStorage.setItem('barcodeLang', currentLang); } catch(e) {}
-      updateAllText();
-      // Rebuild cultivar dropdown with new language
+      if (langText) langText.textContent = e.detail.lang === 'en' ? 'Español' : 'English';
       populateCultivarDropdown();
-    }
+    });
 
     function toggleDarkMode() {
       document.body.classList.toggle('dark-mode');
@@ -301,21 +277,10 @@
     }
 
     function initSettings() {
-      // Load language preference
-      try {
-        var savedLang = localStorage.getItem('barcodeLang');
-        if (savedLang) currentLang = savedLang;
-        var savedDark = localStorage.getItem('barcodeDarkMode');
-        if (savedDark === 'true') {
-          document.body.classList.add('dark-mode');
-          var btn = document.getElementById('darkModeBtn');
-          if (btn) {
-            var icon = btn.querySelector('i');
-            if (icon) icon.className = 'ph ph-sun';
-          }
-        }
-      } catch(e) {}
-      updateAllText();
+      // Language + dark-mode handled by shared/i18n.js and shared/theme.js.
+      window.registerLabels(translations);
+      var langText = document.getElementById('langText');
+      if (langText) langText.textContent = window.getLang() === 'en' ? 'Español' : 'English';
     }
 
     // API Configuration
@@ -680,6 +645,7 @@
       if (e.target.className && e.target.className.indexOf('modal') >= 0) e.target.style.display = 'none';
     };
   </script>
+  <script type="module" src="../js/shared/i18n.js"></script>
   <script src="../js/sw-register.js" async></script>
 </body>
 </html>
