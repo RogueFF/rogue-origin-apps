@@ -69,9 +69,9 @@ function updateDisplay(data) {
     statusText.textContent = labels[lang].disconnected;
   }
 
-  // Update weight value
-  weightEl.textContent = weight.toFixed(2);
-  targetWeightEl.textContent = targetWeight.toFixed(2);
+  // Display in grams (API delivers kg)
+  weightEl.textContent = Math.round(weight * 1000);
+  targetWeightEl.textContent = Math.round(targetWeight * 1000);
 
   // Calculate ring offset (0 = full, circumference = empty)
   const offset = RING_CIRCUMFERENCE * (1 - percentComplete / 100);

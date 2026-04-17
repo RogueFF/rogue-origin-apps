@@ -3523,7 +3523,7 @@ function renderScale(scaleData) {
     }
     if (scaleLabel) {
       const ofLabel = LABELS[currentLang]?.scaleOf || 'of';
-      scaleLabel.textContent = `${ofLabel} 5.0 kg`;
+      scaleLabel.textContent = `${ofLabel} 5000 g`;
     }
     if (scaleRing) {
       scaleRing.style.strokeDashoffset = RING_CIRCUMFERENCE;
@@ -3553,16 +3553,16 @@ function renderScale(scaleData) {
     statusDot.classList.toggle('stale', isStale);
   }
 
-  // Update weight value
+  // Update weight value (display in grams; API delivers kg)
   if (weightEl) {
-    weightEl.textContent = isStale ? '—' : weight.toFixed(2) + ' kg';
+    weightEl.textContent = isStale ? '—' : Math.round(weight * 1000) + ' g';
     weightEl.className = 'scale-value ' + colorClass;
   }
 
   // Update label
   if (scaleLabel) {
     const ofLabel = LABELS[currentLang]?.scaleOf || 'of';
-    scaleLabel.textContent = `${ofLabel} ${targetWeight.toFixed(1)} kg`;
+    scaleLabel.textContent = `${ofLabel} ${Math.round(targetWeight * 1000)} g`;
   }
 
   // Update circular ring progress
