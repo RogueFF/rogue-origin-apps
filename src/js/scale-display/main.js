@@ -10,7 +10,6 @@
   var Config = window.ScoreboardConfig;
   var State = window.ScoreboardState;
   var DOM = window.ScoreboardDOM;
-  var I18n = window.ScoreboardI18n;
   var API = window.ScoreboardAPI;
   var Scale = window.ScoreboardScale;
   var Timer = window.ScoreboardTimer;

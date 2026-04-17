@@ -5,24 +5,31 @@
 (function(window) {
   'use strict';
 
-  const LANG_STORAGE_KEY = 'scaleDisplayLang';
+  // Language state mirrors the shared i18n module (localStorage 'ro-lang').
   let currentLang = 'en';
 
+  function readSharedLang() {
+    if (typeof window.getLang === 'function') {
+      return window.getLang() || 'en';
+    }
+    const fallback = localStorage.getItem('ro-lang');
+    return fallback === 'es' ? 'es' : 'en';
+  }
+
   /**
-   * Initialize language from localStorage
+   * Initialize language from shared i18n
    */
   function initLanguage() {
-    const saved = localStorage.getItem(LANG_STORAGE_KEY);
-    currentLang = (saved === 'es') ? 'es' : 'en';
+    currentLang = readSharedLang();
 
     console.log('[ScaleDisplayLayout] Language initialized:', currentLang);
 
     // Update UI
     updateLangButton();
 
-    // Apply translations via ScoreboardI18n
-    if (window.ScoreboardI18n && window.ScoreboardI18n.setLang) {
-      window.ScoreboardI18n.setLang(currentLang);
+    // Apply translations via shared i18n
+    if (typeof window.setLang === 'function') {
+      window.setLang(currentLang);
     }
   }
 
@@ -31,16 +38,15 @@
    */
   function toggleLanguage() {
     currentLang = (currentLang === 'en') ? 'es' : 'en';
-    localStorage.setItem(LANG_STORAGE_KEY, currentLang);
 
     console.log('[ScaleDisplayLayout] Language toggled to:', currentLang);
 
     // Update UI
     updateLangButton();
 
-    // Apply translations via ScoreboardI18n
-    if (window.ScoreboardI18n && window.ScoreboardI18n.setLang) {
-      window.ScoreboardI18n.setLang(currentLang);
+    // Apply translations via shared i18n (handles localStorage + DOM)
+    if (typeof window.setLang === 'function') {
+      window.setLang(currentLang);
     }
   }
 
