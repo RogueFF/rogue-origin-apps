@@ -14,10 +14,9 @@
   var POLL_INTERVAL = 250; // 250ms polling for instant scale feel
   var API_URL = (Config && Config.apiUrl) || 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
   var RING_CIRCUMFERENCE = 2 * Math.PI * 95; // ~597, matches timer ring
-  var KG_TO_LBS = 2.20462;
 
-  // Unit preference (stored in localStorage)
-  var currentUnit = localStorage.getItem('scaleUnit') || 'kg';
+  // Display unit is grams. API delivers kg, we render kg * 1000.
+  function fmtGrams(kg) { return Math.round((kg || 0) * 1000) + ' g'; }
 
   /**
    * Fetch scale weight from API
@@ -54,21 +53,6 @@
   }
 
   /**
-   * Toggle between kg and lbs
-   */
-  function toggleUnit() {
-    currentUnit = currentUnit === 'kg' ? 'lbs' : 'kg';
-    localStorage.setItem('scaleUnit', currentUnit);
-
-    var unitBtn = document.getElementById('unitToggle');
-    if (unitBtn) {
-      unitBtn.textContent = currentUnit;
-    }
-
-    renderScale(); // Re-render with new unit
-  }
-
-  /**
    * Render scale weight display (circular ring)
    */
   function renderScale() {
@@ -98,8 +82,7 @@
         weightEl.className = 'scale-value stale';
       }
       if (scaleLabel) {
-        var displayTarget = currentUnit === 'lbs' ? 5.0 * KG_TO_LBS : 5.0;
-        scaleLabel.textContent = 'of ' + displayTarget.toFixed(1) + ' ' + currentUnit;
+        scaleLabel.textContent = 'of ' + fmtGrams(5.0);
       }
       if (scaleRing) {
         scaleRing.style.strokeDashoffset = RING_CIRCUMFERENCE; // Empty ring
@@ -134,22 +117,15 @@
       statusDot.classList.toggle('stale', isStale);
     }
 
-    // Update weight value (convert if needed)
+    // Update weight value (always grams)
     if (weightEl) {
-      if (isStale) {
-        weightEl.textContent = '—';
-      } else {
-        var displayWeight = currentUnit === 'lbs' ? weight * KG_TO_LBS : weight;
-        var displayTarget = currentUnit === 'lbs' ? targetWeight * KG_TO_LBS : targetWeight;
-        weightEl.textContent = displayWeight.toFixed(2) + ' ' + currentUnit;
-      }
+      weightEl.textContent = isStale ? '—' : fmtGrams(weight);
       weightEl.className = 'scale-value ' + colorClass;
     }
 
-    // Update label
+    // Update label (target in grams)
     if (scaleLabel) {
-      var displayTarget = currentUnit === 'lbs' ? targetWeight * KG_TO_LBS : targetWeight;
-      scaleLabel.textContent = 'of ' + displayTarget.toFixed(1) + ' ' + currentUnit;
+      scaleLabel.textContent = 'of ' + fmtGrams(targetWeight);
     }
 
     // Update circular ring progress
@@ -189,11 +165,11 @@
   function init() {
     console.log('Scale module initializing...');
 
-    // Set up unit toggle button
+    // Unit toggle is no longer needed (display is grams-only).
+    // Hide the button if it exists in the DOM.
     var unitBtn = document.getElementById('unitToggle');
     if (unitBtn) {
-      unitBtn.textContent = currentUnit;
-      unitBtn.addEventListener('click', toggleUnit);
+      unitBtn.style.display = 'none';
     }
 
     // Initial poll
@@ -215,7 +191,6 @@
     loadScaleWeight: loadScaleWeight,
     renderScale: renderScale,
     pollScale: pollScale,
-    toggleUnit: toggleUnit,
   };
 
 })(window);
