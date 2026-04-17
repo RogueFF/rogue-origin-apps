@@ -6,9 +6,7 @@
  */
 
 const KEY = 'ro-theme';
-// Note: index.html still uses its own modules/theme.js with key "theme";
-// that key is NOT migrated so both storages coexist until that module is unified.
-const LEGACY_KEYS = ['sopDarkMode', 'darkMode', 'kanbanDarkMode', 'barcodeDarkMode'];
+const LEGACY_KEYS = ['theme', 'sopDarkMode', 'darkMode', 'kanbanDarkMode', 'barcodeDarkMode'];
 
 function readStored() {
   const current = localStorage.getItem(KEY);
