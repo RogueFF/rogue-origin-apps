@@ -10,7 +10,6 @@
   var State = window.ScoreboardState;
   var DOM = window.ScoreboardDOM;
   var API = window.ScoreboardAPI;
-  var I18n = window.ScoreboardI18n;
   var Timer = window.ScoreboardTimer;
   var Render = window.ScoreboardRender;
   var Chart = window.ScoreboardChart;
@@ -219,8 +218,8 @@
    * @param {string} lang - Language code ('en' or 'es')
    */
   function setLanguage(lang) {
-    if (I18n) {
-      I18n.setLang(lang);
+    if (typeof window.setLang === 'function') {
+      window.setLang(lang);
     }
     if (State) {
       State.currentLang = lang;
