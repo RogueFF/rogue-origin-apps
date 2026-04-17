@@ -328,6 +328,7 @@
     </div>
   </main>
 
+  <script type="module" src="../js/shared/toast.js"></script>
   <script>
     // KPI Definitions with Phosphor duotone icons
     var kpiDefinitions = [
@@ -1039,27 +1040,6 @@
       showToast('Error loading data: ' + (e.message || e), 'error');
     }
 
-    // Toast notification system
-    function showToast(message, type, duration) {
-      type = type || 'info';
-      duration = duration || 4000;
-      var container = document.getElementById('toastContainer');
-      if (!container) {
-        container = document.createElement('div');
-        container.id = 'toastContainer';
-        container.className = 'toast-container';
-        document.body.appendChild(container);
-      }
-      var toast = document.createElement('div');
-      toast.className = 'toast ' + type;
-      toast.textContent = message;
-      container.appendChild(toast);
-      setTimeout(function() {
-        toast.classList.add('hiding');
-        setTimeout(function() { toast.remove(); }, 300);
-      }, duration);
-    }
-    
     function showSkeletons(show) {
       // KPI cards
       document.querySelectorAll('.kpi-card').forEach(function(card) {
