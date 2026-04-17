@@ -2,7 +2,9 @@
  * Pool Inventory Management - Main App
  */
 
-const API_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/pool';
+import { makeApi } from '../shared/api.js';
+
+const api = makeApi('pool');
 
 // State
 const state = {
@@ -121,18 +123,14 @@ function initForms() {
     const notes = document.getElementById('intakeNotes').value;
     
     try {
-      await fetch(`${API_BASE}?action=recordTransaction`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          binId,
-          type: 'intake',
-          weight_lbs: weight,
-          source_ref: source || null,
-          notes: notes || null
-        })
+      await api.post('recordTransaction', {
+        binId,
+        type: 'intake',
+        weight_lbs: weight,
+        source_ref: source || null,
+        notes: notes || null
       });
-      
+
       showToast('Intake recorded successfully', 'success');
       closeModal(document.getElementById('intakeModal'));
       loadDashboard();
@@ -157,20 +155,16 @@ function initForms() {
     const packageCount = parseInt(document.getElementById('packageCount').value) || null;
     
     try {
-      await fetch(`${API_BASE}?action=recordTransaction`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          binId,
-          type: 'dispense',
-          weight_lbs: weight,
-          source_ref: source || null,
-          package_size: packageSize || null,
-          package_count: packageCount,
-          notes: notes || null
-        })
+      await api.post('recordTransaction', {
+        binId,
+        type: 'dispense',
+        weight_lbs: weight,
+        source_ref: source || null,
+        package_size: packageSize || null,
+        package_count: packageCount,
+        notes: notes || null
       });
-      
+
       showToast('Dispense recorded successfully', 'success');
       closeModal(document.getElementById('dispenseModal'));
       loadDashboard();
@@ -192,15 +186,11 @@ async function loadDashboard() {
   refreshBtn.classList.add('spinning');
   
   try {
-    // Fetch dashboard summary
-    const dashResponse = await fetch(`${API_BASE}?action=getDashboard`);
-    const dashData = await dashResponse.json();
-    
-    // Fetch all balances
-    const balanceResponse = await fetch(`${API_BASE}?action=getAllBalances`);
-    const balanceData = await balanceResponse.json();
-    
-    // Update state
+    const [dashData, balanceData] = await Promise.all([
+      api.get('getDashboard'),
+      api.get('getAllBalances'),
+    ]);
+
     state.balances = balanceData.balances || [];
     state.recentActivity = dashData.recentTransactions || [];
     
@@ -347,13 +337,10 @@ function renderActivity() {
  */
 async function showBinDetail(binId) {
   try {
-    // Fetch bin details
-    const binResponse = await fetch(`${API_BASE}?action=getBin&binId=${binId}`);
-    const binData = await binResponse.json();
-    
-    // Fetch transactions
-    const txResponse = await fetch(`${API_BASE}?action=getTransactions&binId=${binId}&limit=20`);
-    const txData = await txResponse.json();
+    const [binData, txData] = await Promise.all([
+      api.get('getBin', { binId }),
+      api.get('getTransactions', { binId, limit: 20 }),
+    ]);
     
     // Render modal
     const bin = binData.bin;

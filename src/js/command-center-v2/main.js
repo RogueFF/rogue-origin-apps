@@ -5,9 +5,12 @@
  * @module CommandCenterV2
  */
 
+import { makeApi } from '../shared/api.js';
+
+const api = makeApi('production');
+
 // ===== CONFIGURATION =====
 const CONFIG = {
-  API_URL: 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production',
   POLL_INTERVAL: 30000,
   TIMER_TICK: 1000,
   TIMER_RING_CIRCUMFERENCE: 534,
@@ -126,11 +129,7 @@ async function fetchData() {
   setConnectionStatus('connecting');
 
   try {
-    const response = await fetch(`${CONFIG.API_URL}?action=scoreboard`);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-    const raw = await response.json();
-    const data = raw.data || raw;
+    const data = await api.get('scoreboard');
 
     state.fetchLatency = Math.round(performance.now() - fetchStart);
     state.scoreboard = data.scoreboard || null;
