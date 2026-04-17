@@ -50,8 +50,8 @@
       </div>
     </div>
     
-    <div id="message" class="message"></div>
-    
+    <!-- Toast messages are injected by src/js/shared/toast.js -->
+
     <!-- Cultivar Selector -->
     <div class="cultivar-selector">
       <div class="cultivar-label"><i class="ph-duotone ph-plant" style="margin-right:6px"></i> <span data-i18n="selectCultivar">Select Cultivar</span></div>
@@ -634,20 +634,15 @@
       a.click();
     }
     
-    function showMessage(text, type) {
-      var m = document.getElementById('message');
-      m.textContent = text;
-      m.className = 'message ' + type;
-      m.style.display = 'block';
-      setTimeout(function() { m.style.display = 'none'; }, 3000);
-    }
-    
+    // showMessage is provided by src/js/shared/toast.js (window.showMessage alias for showToast).
+
     window.onclick = function(e) {
       if (e.target.className && e.target.className.indexOf('modal') >= 0) e.target.style.display = 'none';
     };
   </script>
   <script type="module" src="../js/shared/i18n.js"></script>
   <script type="module" src="../js/shared/theme.js"></script>
+  <script type="module" src="../js/shared/toast.js"></script>
   <script src="../js/sw-register.js" async></script>
 </body>
 </html>
