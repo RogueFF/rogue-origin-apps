@@ -990,7 +990,7 @@
     // INITIALIZATION
     // ========================================
     document.addEventListener('DOMContentLoaded', async () => {
-      initTheme();
+      updateThemeIcon(document.documentElement.getAttribute('data-theme') || 'light');
       setTodayDates();
       await loadInitialData();
     });
@@ -1001,24 +1001,11 @@
       document.getElementById('payment-date').value = today;
     }
 
-    function initTheme() {
-      const savedTheme = localStorage.getItem('theme') || 'light';
-      document.documentElement.setAttribute('data-theme', savedTheme);
-      updateThemeIcon(savedTheme);
-    }
-
-    function toggleTheme() {
-      const current = document.documentElement.getAttribute('data-theme');
-      const newTheme = current === 'light' ? 'dark' : 'light';
-      document.documentElement.setAttribute('data-theme', newTheme);
-      localStorage.setItem('theme', newTheme);
-      updateThemeIcon(newTheme);
-    }
-
     function updateThemeIcon(theme) {
       const icon = document.getElementById('theme-icon');
-      icon.className = theme === 'light' ? 'ph ph-moon' : 'ph ph-sun';
+      if (icon) icon.className = theme === 'light' ? 'ph ph-moon' : 'ph ph-sun';
     }
+    document.addEventListener('ro:themechange', e => updateThemeIcon(e.detail.theme));
 
     // ========================================
     // DATA LOADING
@@ -3915,6 +3902,7 @@
   <!-- END LEGACY INLINE SCRIPT -->
 
   <!-- ES6 Modular Architecture (2026-01-20) -->
+  <script type="module" src="../js/shared/theme.js"></script>
   <script type="module" src="../js/orders/index.js"></script>
 
   <script src="../js/sw-register.js" async></script>
