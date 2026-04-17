@@ -5,8 +5,9 @@
  * @module CommandCenter
  */
 
-// API Configuration
-const API_URL = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
+import { makeApi } from '../shared/api.js';
+
+const api = makeApi('production');
 const POLL_INTERVAL = 30000; // 30 seconds
 const TIMER_TICK_INTERVAL = 1000; // 1 second for timer countdown
 const MAX_RETRY_ATTEMPTS = 3;
@@ -168,16 +169,13 @@ function setupEventListeners() {
   // ===== DATA FETCHING =====
   async function fetchData() {
     try {
-      const response = await fetch(`${CONFIG.API_URL}?action=scoreboard`);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      
-      const data = await response.json();
+      const data = await api.get('scoreboard');
       state.data = data;
       state.lastUpdate = new Date();
-      
+
       updateUI(data);
       checkAlerts(data);
-      
+
     } catch (error) {
       console.error('[Command Center] Fetch error:', error);
       showSystemError();
