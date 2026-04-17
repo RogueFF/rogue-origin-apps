@@ -23,8 +23,11 @@
   <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=optional" rel="stylesheet">
 
-  <!-- Scripts: Lazy loaded by modules when needed -->
-  <!-- Chart.js and other libraries are loaded on-demand -->
+  <!-- Libraries: Chart.js, Sortable, Phosphor icons. Pinned versions match sw.js precache for instant SW cache hits. -->
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+  <script defer src="https://unpkg.com/@phosphor-icons/web"></script>
   
   <!-- Critical CSS: Loaded synchronously -->
   <link rel="stylesheet" href="../css/shared-base.css">
@@ -397,9 +400,8 @@
     // Detect environment: Apps Script or GitHub Pages
     var isAppsScript = typeof google !== 'undefined' && google.script && google.script.run;
     
-    Chart.defaults.font.family = 'Inter, system-ui, sans-serif';
-
     document.addEventListener('DOMContentLoaded', function() {
+      Chart.defaults.font.family = 'Inter, system-ui, sans-serif';
       loadSettings();
       updateDarkModeUI();
       // Re-sync icon/label and re-render charts whenever the shared theme toggles
