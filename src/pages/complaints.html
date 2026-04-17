@@ -335,11 +335,7 @@
     </div>
   </div>
 
-  <!-- Toast -->
-  <div id="toast" class="toast">
-    <i class="ph-duotone ph-check-circle"></i>
-    <span class="toast-message" id="toast-message">Success</span>
-  </div>
+  <!-- Toast is injected by src/js/shared/toast.js -->
 
   <script>
     // ═══════════════════════════════════════════════════
@@ -970,15 +966,7 @@
     // UI UTILITIES
     // ═══════════════════════════════════════════════════
 
-    function showToast(msg, type = 'success') {
-      const toast = document.getElementById('toast');
-      const icon = toast.querySelector('i');
-      toast.className = `toast ${type}`;
-      icon.className = type === 'success' ? 'ph-duotone ph-check-circle' : 'ph-duotone ph-x-circle';
-      document.getElementById('toast-message').textContent = msg;
-      toast.classList.add('show');
-      setTimeout(() => toast.classList.remove('show'), 3500);
-    }
+    // showToast is provided by src/js/shared/toast.js (window global).
 
     function switchView(view) {
       document.querySelectorAll('.view-nav-btn').forEach(btn => {
@@ -1114,5 +1102,6 @@
   </script>
   <script type="module" src="../js/shared/theme.js"></script>
   <script type="module" src="../js/shared/i18n.js"></script>
+  <script type="module" src="../js/shared/toast.js"></script>
 </body>
 </html>
