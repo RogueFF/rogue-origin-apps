@@ -3852,39 +3852,9 @@
     // ========================================
     // UTILITIES
     // ========================================
-    function showToast(message, type = 'success') {
-      const container = document.getElementById('toast-container');
-      const toast = document.createElement('div');
-      toast.className = `toast ${type}`;
-
-      // Icon based on type
-      let icon = '';
-      if (type === 'success') {
-        icon = '<i class="ph ph-check-circle toast-icon"></i>';
-      } else if (type === 'error') {
-        icon = '<i class="ph ph-x-circle toast-icon"></i>';
-      } else if (type === 'warning') {
-        icon = '<i class="ph ph-warning-circle toast-icon"></i>';
-      } else if (type === 'info') {
-        icon = '<i class="ph ph-info toast-icon"></i>';
-      }
-
-      toast.innerHTML = `
-        ${icon}
-        <div class="toast-message">${message}</div>
-        <button class="toast-close" onclick="this.parentElement.remove()">
-          <i class="ph ph-x"></i>
-        </button>
-      `;
-
-      container.appendChild(toast);
-
-      // Auto remove after 4 seconds
-      setTimeout(() => {
-        toast.classList.add('removing');
-        setTimeout(() => toast.remove(), 300);
-      }, 4000);
-    }
+    // showToast is provided by js/orders/index.js (which imports the richer
+    // module from js/orders/ui/toast.js and exposes it as window.showToast).
+    // Inline callers resolve through the global.
 
     function formatNumber(num) {
       return parseFloat(num || 0).toLocaleString('en-US', {
