@@ -26,6 +26,7 @@ const CONFIG = {
 };
 
 const LB_TO_KG = 0.453592;
+const OZ_TO_KG = 0.0283495;
 
 // State
 let currentWeight = 0;
@@ -34,29 +35,46 @@ let useMock = process.argv.includes('--mock');
 let serialPort = null;
 
 // Parse one line of OHAUS Defender 5000 output.
-// Expected formats (stable readings):
-//   "    12.345 lb G"   gross
-//   "    12.345 lb N"   net
-//   "    12.345 lb"     (no G/N suffix)
-//   "    12.345 kg G"   if indicator is configured for kg
+// Each Print (P\r\n) returns up to 4 lines, e.g.:
+//   "          4     g     "    no marker  (displayed value)
+//   "          4     g    G"    Gross
+//   "         4     g    N"     Net   ← preferred when scale is tared
+//   "          0     g    T"    Tare  ← MUST be ignored, not a current reading
+// Indicator unit may be g, kg, lb, or oz depending on configuration.
 // Unstable readings carry a '?' suffix; we still accept them so the live
 // display tracks the bag as it fills.
-// Returns { kg, raw, unit, stable } or null if the line is not a weight reading.
+// Returns { kg, raw, unit, marker, stable } or null if the line should be skipped.
 function parseOhausLine(line) {
   if (!line || !line.trim()) return null;
 
-  const match = line.match(/(-?\d+(?:\.\d+)?)\s*(lb|kg)\b/i);
+  // Match number + unit. Order matters: kg before g so "kg" wins over "g".
+  const match = line.match(/(-?\d+(?:\.\d+)?)\s*(kg|lb|oz|g)\b/i);
   if (!match) return null;
+
+  // Detect line type marker (G=gross, N=net, T=tare). Anything else = unmarked.
+  const markerMatch = line.match(/\b([GNT])\s*$/);
+  const marker = markerMatch ? markerMatch[1] : '';
+
+  // Tare lines report the tare offset, not current weight — never use as reading.
+  if (marker === 'T') return null;
 
   const raw = parseFloat(match[1]);
   const unit = match[2].toLowerCase();
   const stable = !/\?/.test(line);
 
-  const kg = unit === 'lb' ? raw * LB_TO_KG : raw;
+  let kg;
+  switch (unit) {
+    case 'kg': kg = raw; break;
+    case 'g':  kg = raw / 1000; break;
+    case 'lb': kg = raw * LB_TO_KG; break;
+    case 'oz': kg = raw * OZ_TO_KG; break;
+  }
+
   return {
     kg: Math.max(0, Math.round(kg * 1000) / 1000),
     raw,
     unit,
+    marker,
     stable,
   };
 }
