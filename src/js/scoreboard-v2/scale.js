@@ -8,7 +8,6 @@
   var Config = window.ScoreboardConfig;
   var State = window.ScoreboardState;
   var DOM = window.ScoreboardDOM;
-  var I18n = window.ScoreboardI18n;
 
   // Scale-specific config
   var POLL_INTERVAL = 250; // 250ms polling for instant scale feel
@@ -83,8 +82,8 @@
     var scalePanel = document.getElementById('scale-panel');
 
     // Update header with i18n
-    if (scaleHeader && I18n && I18n.t) {
-      scaleHeader.textContent = I18n.t('scaleWeight') || 'Live Scale';
+    if (scaleHeader && typeof window.t === 'function') {
+      scaleHeader.textContent = window.t('scaleWeight') || 'Live Scale';
     }
 
     if (!scaleData) {
