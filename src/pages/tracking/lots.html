@@ -839,8 +839,10 @@
       }
     };
 
-    let lang = localStorage.getItem('ro-lang') || 'en';
-    const t = (key) => labels[lang][key] || key;
+    const t = (key) => {
+      const l = (window.getLang && window.getLang()) || 'en';
+      return (labels[l] && labels[l][key]) || labels.en[key] || key;
+    };
 
     // ── State ──
     let lots = [];
@@ -855,8 +857,7 @@
     applyLang();
     loadLocations().then(() => loadLots());
 
-    // Expose to global scope for onclick handlers
-    window.toggleLang = toggleLang;
+    // Expose to global scope for onclick handlers (toggleLang from shared/i18n.js)
     window.handleCreate = handleCreate;
     window.loadLots = loadLots;
     window.debouncedLoadLots = debouncedLoadLots;
@@ -870,15 +871,9 @@
     window.addSplitRow = addSplitRow;
 
     // ── Language ──
-    function toggleLang() {
-      lang = lang === 'en' ? 'es' : 'en';
-      localStorage.setItem('ro-lang', lang);
-      applyLang();
-      renderTable();
-    }
+    document.addEventListener('ro:langchange', () => { applyLang(); renderTable(); });
 
     function applyLang() {
-      document.documentElement.lang = lang;
       document.getElementById('page-title').textContent = t('pageTitle');
       document.getElementById('lang-toggle').textContent = t('langToggle');
       document.getElementById('link-hub').textContent = t('hub');
@@ -1443,5 +1438,6 @@
       return d.innerHTML;
     }
   </script>
+  <script type="module" src="../../js/shared/i18n.js"></script>
 </body>
 </html>
