@@ -264,23 +264,24 @@
       populateCultivarDropdown();
     });
 
-    function toggleDarkMode() {
-      document.body.classList.toggle('dark-mode');
-      var isDark = document.body.classList.contains('dark-mode');
-      try { localStorage.setItem('barcodeDarkMode', isDark ? 'true' : 'false'); } catch(e) {}
-
+    document.addEventListener('ro:themechange', function(e) {
       var btn = document.getElementById('darkModeBtn');
       if (btn) {
         var icon = btn.querySelector('i');
-        if (icon) icon.className = isDark ? 'ph ph-sun' : 'ph ph-moon';
+        if (icon) icon.className = e.detail.theme === 'dark' ? 'ph ph-sun' : 'ph ph-moon';
       }
-    }
+    });
 
     function initSettings() {
       // Language + dark-mode handled by shared/i18n.js and shared/theme.js.
       window.registerLabels(translations);
       var langText = document.getElementById('langText');
       if (langText) langText.textContent = window.getLang() === 'en' ? 'Español' : 'English';
+      var btn = document.getElementById('darkModeBtn');
+      if (btn) {
+        var icon = btn.querySelector('i');
+        if (icon) icon.className = document.documentElement.getAttribute('data-theme') === 'dark' ? 'ph ph-sun' : 'ph ph-moon';
+      }
     }
 
     // API Configuration
@@ -646,6 +647,7 @@
     };
   </script>
   <script type="module" src="../js/shared/i18n.js"></script>
+  <script type="module" src="../js/shared/theme.js"></script>
   <script src="../js/sw-register.js" async></script>
 </body>
 </html>

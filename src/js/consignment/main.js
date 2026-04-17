@@ -260,8 +260,8 @@ function setupEventListeners() {
   // Refresh button
   el('btn-refresh')?.addEventListener('click', refreshAll);
 
-  // Dark mode toggle
-  el('btn-dark-mode')?.addEventListener('click', toggleDarkMode);
+  // Dark mode toggle (shared/theme.js exposes window.toggleTheme)
+  el('btn-dark-mode')?.addEventListener('click', () => window.toggleTheme());
 
   // Quick intake from partner card
   document.addEventListener('quickIntake', (e) => {
@@ -489,15 +489,6 @@ function trackUserAction() {
   lastUserAction = Date.now();
 }
 
-function toggleDarkMode() {
-  const html = document.documentElement;
-  const current = html.getAttribute('data-theme');
-  const next = current === 'dark' ? 'light' : 'dark';
-  html.setAttribute('data-theme', next);
-  localStorage.setItem('theme', next);
-  updateThemeButton(next);
-}
-
 const MOON_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8.5a5.5 5.5 0 1 1-5-7 4.5 4.5 0 0 0 5 7z"/></svg>';
 const SUN_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="3"/><line x1="8" y1="1" x2="8" y2="3"/><line x1="8" y1="13" x2="8" y2="15"/><line x1="1" y1="8" x2="3" y2="8"/><line x1="13" y1="8" x2="15" y2="8"/><line x1="3.05" y1="3.05" x2="4.46" y2="4.46"/><line x1="11.54" y1="11.54" x2="12.95" y2="12.95"/><line x1="3.05" y1="12.95" x2="4.46" y2="11.54"/><line x1="11.54" y1="4.46" x2="12.95" y2="3.05"/></svg>';
 
@@ -507,6 +498,8 @@ function updateThemeButton(theme) {
   if (icon) icon.innerHTML = theme === 'dark' ? MOON_SVG : SUN_SVG;
   if (label) label.textContent = theme === 'dark' ? 'Dark' : 'Light';
 }
+
+document.addEventListener('ro:themechange', (e) => updateThemeButton(e.detail.theme));
 
 function updateClock() {
   const clockEl = el('clock');
@@ -533,19 +526,12 @@ function updateClock() {
   if (headerTime) headerTime.style.display = 'block';
 }
 
-// Load saved theme and initialize theme button
-const savedTheme = localStorage.getItem('theme');
-if (savedTheme) {
-  document.documentElement.setAttribute('data-theme', savedTheme);
-  updateThemeButton(savedTheme);
-}
+// Initial sync (shared/theme.js applies on its own load; ensure button matches)
+updateThemeButton(document.documentElement.getAttribute('data-theme') || 'light');
 
 // Start clock
 setInterval(updateClock, 1000);
 updateClock();
-
-// Expose toggleTheme to global scope for inline onclick handler
-window.toggleTheme = toggleDarkMode;
 
 // ─── COMMAND PALETTE ────────────────────────────────────
 

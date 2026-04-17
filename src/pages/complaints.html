@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="dark" data-theme-default="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -1023,23 +1023,10 @@
       }
     }
 
-    function toggleDarkMode() {
-      const html = document.documentElement;
-      const body = document.body;
+    document.addEventListener('ro:themechange', (e) => {
       const icon = document.querySelector('#dark-mode-toggle i');
-
-      if (html.getAttribute('data-theme') === 'dark') {
-        html.setAttribute('data-theme', 'light');
-        body.classList.remove('dark-mode');
-        icon.className = 'ph-duotone ph-moon';
-        localStorage.setItem('ro-theme', 'light');
-      } else {
-        html.setAttribute('data-theme', 'dark');
-        body.classList.add('dark-mode');
-        icon.className = 'ph-duotone ph-sun';
-        localStorage.setItem('ro-theme', 'dark');
-      }
-    }
+      if (icon) icon.className = e.detail.theme === 'dark' ? 'ph-duotone ph-sun' : 'ph-duotone ph-moon';
+    });
 
     function toggleSidebar() {
       const sidebar = document.getElementById('sidebar');
@@ -1051,13 +1038,12 @@
     // ═══════════════════════════════════════════════════
 
     async function init() {
-      const savedTheme = localStorage.getItem('ro-theme');
-      if (savedTheme === 'light') {
-        document.documentElement.setAttribute('data-theme', 'light');
-        document.body.classList.remove('dark-mode');
-        document.querySelector('#dark-mode-toggle i').className = 'ph-duotone ph-moon';
+      // Theme handled by shared/theme.js. Sync icon to current theme.
+      const icon = document.querySelector('#dark-mode-toggle i');
+      if (icon) {
+        const theme = document.documentElement.getAttribute('data-theme');
+        icon.className = theme === 'dark' ? 'ph-duotone ph-sun' : 'ph-duotone ph-moon';
       }
-
       updateUI();
       await refreshAll();
     }
@@ -1128,5 +1114,6 @@
       });
     });
   </script>
+  <script type="module" src="../js/shared/theme.js"></script>
 </body>
 </html>
