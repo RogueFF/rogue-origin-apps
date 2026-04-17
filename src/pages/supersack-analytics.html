@@ -509,26 +509,25 @@
       never: 'N/A', errorLoad: 'Error al cargar datos',
     }
   };
-  let currentLang = localStorage.getItem('supersack-lang') || 'en';
-  const t = (key) => LANG[currentLang][key] || key;
+  const t = (key) => {
+    const l = (window.getLang && window.getLang()) || 'en';
+    return (LANG[l] && LANG[l][key]) || LANG.en[key] || key;
+  };
 
   function applyLang() {
+    const l = (window.getLang && window.getLang()) || 'en';
     document.querySelectorAll('[data-i18n]').forEach(el => {
       const key = el.getAttribute('data-i18n');
-      if (LANG[currentLang][key]) el.textContent = LANG[currentLang][key];
+      if (LANG[l][key]) el.textContent = LANG[l][key];
     });
-    document.getElementById('lang-toggle').textContent = currentLang === 'en' ? 'ES' : 'EN';
-    // Re-render charts with translated labels if they exist
+    document.getElementById('lang-toggle').textContent = l === 'en' ? 'ES' : 'EN';
     if (state.summaryData) renderCharts();
     if (state.inventoryData) renderInventory();
     if (state.costData) renderCostCard();
   }
 
-  document.getElementById('lang-toggle').addEventListener('click', () => {
-    currentLang = currentLang === 'en' ? 'es' : 'en';
-    localStorage.setItem('supersack-lang', currentLang);
-    applyLang();
-  });
+  document.getElementById('lang-toggle').addEventListener('click', () => window.toggleLang());
+  document.addEventListener('ro:langchange', applyLang);
 
   // -- APIs --
   const SS_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/supersack';
@@ -1150,6 +1149,7 @@
 
 })();
 </script>
+<script type="module" src="../js/shared/i18n.js"></script>
 </body>
 </html>
 
