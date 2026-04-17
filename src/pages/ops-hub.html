@@ -28,6 +28,9 @@
   
   <!-- Critical CSS: Loaded synchronously -->
   <link rel="stylesheet" href="../css/shared-base.css">
+
+  <!-- Shared theme helper (applies theme + dispatches ro:themechange) -->
+  <script type="module" src="../js/shared/theme.js"></script>
   
   <!-- Non-critical CSS: Deferred for faster initial render -->
   <link rel="preload" href="../css/ops-hub.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -379,8 +382,14 @@
     var editMode = false, kpiSortable, widgetSortable;
     var currentView = 'dashboard';
     var sidebarCollapsed = false;
-    var darkMode = false;
     var dailyTarget = 200; // Daily production target in lbs
+
+    // Theme state is managed by src/js/shared/theme.js (localStorage key 'ro-theme').
+    // This helper reads the live theme from the DOM so chart colors stay in sync.
+    function isDarkMode() {
+      return document.documentElement.getAttribute('data-theme') === 'dark'
+        || document.body.classList.contains('dark-mode');
+    }
     
     // API Configuration for GitHub Pages
     var API_URL = 'https://script.google.com/macros/s/REDACTED-AI-API-ID/exec';
@@ -392,7 +401,13 @@
 
     document.addEventListener('DOMContentLoaded', function() {
       loadSettings();
-      applyDarkMode();
+      updateDarkModeUI();
+      // Re-sync icon/label and re-render charts whenever the shared theme toggles
+      document.addEventListener('ro:themechange', function() {
+        updateDarkModeUI();
+        if (data) renderCharts();
+        if (data) renderTrimmersChart();
+      });
       initTargetInput();
       renderKPICards();
       renderKPIToggles();
@@ -443,20 +458,15 @@
       document.getElementById('sidebar').classList.toggle('mobile-open');
     }
     
-    function toggleDarkMode() {
-      darkMode = !darkMode;
-      document.body.classList.toggle('dark-mode', darkMode);
-      updateDarkModeUI();
-      saveSettings();
-      // Re-render charts with new colors
-      if (data) renderCharts();
-      if (data) renderTrimmersChart();
-    }
-    
+    // toggleDarkMode() is provided by src/js/shared/theme.js (window.toggleDarkMode).
+    // The button's onclick="toggleDarkMode()" resolves to that shared global.
+    // Side effects (icon swap + chart re-render) run via the ro:themechange listener.
+
     function updateDarkModeUI() {
       var icon = document.getElementById('darkModeIcon');
       var label = document.getElementById('darkModeLabel');
-      if (darkMode) {
+      if (!icon || !label) return;
+      if (isDarkMode()) {
         icon.className = 'ph-duotone ph-sun';
         label.textContent = 'Light';
       } else {
@@ -527,8 +537,13 @@
           document.getElementById('sidebar').classList.add('collapsed');
           document.body.classList.add('sidebar-collapsed');
         }
+        // One-time migration: move legacy roHubSettingsV2.darkMode to shared 'ro-theme' key.
         if (s.darkMode !== undefined) {
-          darkMode = s.darkMode;
+          if (typeof window.setTheme === 'function') {
+            window.setTheme(s.darkMode ? 'dark' : 'light');
+          }
+          delete s.darkMode;
+          localStorage.setItem('roHubSettingsV2', JSON.stringify(s));
         }
         if (s.dailyTarget !== undefined) {
           dailyTarget = s.dailyTarget;
@@ -540,13 +555,9 @@
       applyWidgetVisibility();
     }
     
-    function applyDarkMode() {
-      document.body.classList.toggle('dark-mode', darkMode);
-      updateDarkModeUI();
-    }
-
     function saveSettings() {
-      var s = { kpiVisibility: {}, kpiOrder: [], widgetVisibility: {}, sidebarCollapsed: sidebarCollapsed, darkMode: darkMode, dailyTarget: dailyTarget };
+      // Note: darkMode is intentionally NOT persisted here; shared/theme.js owns 'ro-theme'.
+      var s = { kpiVisibility: {}, kpiOrder: [], widgetVisibility: {}, sidebarCollapsed: sidebarCollapsed, dailyTarget: dailyTarget };
       kpiDefinitions.forEach(function(k) {
         s.kpiVisibility[k.id] = k.visible;
         s.kpiOrder.push(k.id);
@@ -870,10 +881,11 @@
       
       // Get chart colors based on dark mode
       function getChartColors() {
+        var dark = isDarkMode();
         return {
-          grid: darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)',
-          text: darkMode ? '#a8b5a9' : '#5a6b5f',
-          labelBg: darkMode ? '#252b22' : '#fff'
+          grid: dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)',
+          text: dark ? '#a8b5a9' : '#5a6b5f',
+          labelBg: dark ? '#252b22' : '#fff'
         };
       }
       
@@ -1191,8 +1203,9 @@
       
       try {
         // Update chart colors for dark mode
-        var chartTextColor = darkMode ? '#a8b5a9' : '#5a6b5f';
-        var chartGridColor = darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)';
+        var dark = isDarkMode();
+        var chartTextColor = dark ? '#a8b5a9' : '#5a6b5f';
+        var chartGridColor = dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)';
         
         [hourlyChart, rateChart, dailyChart, dailyRateChart, trimmersChart].forEach(function(chart) {
           if (chart && chart.options && chart.options.scales) {
