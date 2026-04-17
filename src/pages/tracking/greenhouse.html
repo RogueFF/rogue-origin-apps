@@ -817,8 +817,10 @@
     }
   };
 
-  let lang = localStorage.getItem('ro-lang') || 'en';
-  const t = (key) => (labels[lang] && labels[lang][key]) || labels.en[key] || key;
+  const t = (key) => {
+    const l = (window.getLang && window.getLang()) || 'en';
+    return (labels[l] && labels[l][key]) || labels.en[key] || key;
+  };
 
   // --- State ---
   let lots = [];
@@ -841,21 +843,15 @@
       const text = t(key);
       if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
         el.placeholder = text;
-      } else if (el.tagName === 'OPTION') {
-        el.textContent = text;
       } else {
         el.textContent = text;
       }
     });
     $('#langToggle').textContent = t('langButton');
-    document.documentElement.lang = lang;
   }
 
-  $('#langToggle').addEventListener('click', () => {
-    lang = lang === 'en' ? 'es' : 'en';
-    localStorage.setItem('ro-lang', lang);
-    applyLanguage();
-  });
+  $('#langToggle').addEventListener('click', () => window.toggleLang());
+  document.addEventListener('ro:langchange', applyLanguage);
 
   // ========================================
   // CREW NAME
@@ -1215,12 +1211,14 @@
   // INIT
   // ========================================
   async function init() {
+    if (window.registerLabels) window.registerLabels(labels);
     applyLanguage();
     loadLots();
     loadGreenhouseLocation();
   }
 
-  init();
+  document.addEventListener('DOMContentLoaded', init);
 </script>
+<script type="module" src="../../js/shared/i18n.js"></script>
 </body>
 </html>
