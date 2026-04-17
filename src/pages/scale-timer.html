@@ -228,7 +228,7 @@
         </svg>
         <div class="ring-center">
           <div class="ring-value scale-value stale" id="scaleWeight">&mdash;</div>
-          <div class="ring-label" id="scaleLabel">of 5.0 kg</div>
+          <div class="ring-label" id="scaleLabel">of 5000 g</div>
         </div>
         <div class="status-dot" id="scaleStatusDot"></div>
       </div>
@@ -304,7 +304,7 @@
       if (!data) {
         if (dot) { dot.classList.remove('connected'); }
         if (wEl) { wEl.textContent = '\u2014'; wEl.className = 'ring-value scale-value stale'; }
-        if (lbl) { lbl.textContent = 'of 5.0 kg'; }
+        if (lbl) { lbl.textContent = 'of 5000 g'; }
         if (ring) {
           ring.style.strokeDashoffset = RING_CIRCUMFERENCE;
           ring.classList.remove('filling', 'near-target', 'at-target', 'stale');
@@ -326,8 +326,8 @@
       console.log(`Scale render: weight=${weight.toFixed(2)}, pct=${pct.toFixed(1)}%, cls=${cls}, stale=${stale}`);
 
       if (dot) { dot.classList.toggle('connected', !stale); }
-      if (wEl) { wEl.textContent = stale ? '\u2014' : weight.toFixed(2) + ' kg'; wEl.className = 'ring-value scale-value ' + cls; }
-      if (lbl) { lbl.textContent = 'of ' + target.toFixed(1) + ' kg'; }
+      if (wEl) { wEl.textContent = stale ? '\u2014' : Math.round(weight * 1000) + ' g'; wEl.className = 'ring-value scale-value ' + cls; }
+      if (lbl) { lbl.textContent = 'of ' + Math.round(target * 1000) + ' g'; }
       if (ring) {
         const p = stale ? 0 : Math.min(1, pct / 100);
         ring.style.strokeDashoffset = RING_CIRCUMFERENCE * (1 - p);
