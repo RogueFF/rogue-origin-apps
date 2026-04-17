@@ -464,8 +464,10 @@
       }
     };
 
-    let lang = localStorage.getItem('ro-lang') || 'en';
-    const t = (key) => labels[lang][key] || key;
+    const t = (key) => {
+      const l = (window.getLang && window.getLang()) || 'en';
+      return (labels[l] && labels[l][key]) || labels.en[key] || key;
+    };
 
     // ── State ──
     let locations = [];
@@ -475,8 +477,7 @@
     applyLang();
     loadLocations();
 
-    // Expose to global scope for onclick handlers
-    window.toggleLang = toggleLang;
+    // Expose to global scope for onclick handlers (toggleLang from shared/i18n.js)
     window.seedLocations = seedLocations;
     window.handleSubmit = handleSubmit;
     window.cancelEdit = cancelEdit;
@@ -484,14 +485,9 @@
     window.deleteLocation = deleteLocation;
 
     // ── Language ──
-    function toggleLang() {
-      lang = lang === 'en' ? 'es' : 'en';
-      localStorage.setItem('ro-lang', lang);
-      applyLang();
-    }
+    document.addEventListener('ro:langchange', applyLang);
 
     function applyLang() {
-      document.documentElement.lang = lang;
       document.getElementById('page-title').textContent = t('pageTitle');
       document.getElementById('lang-toggle').textContent = t('langToggle');
       document.getElementById('seed-btn-text').textContent = t('seedBtn');
@@ -720,5 +716,6 @@
       return d.innerHTML;
     }
   </script>
+  <script type="module" src="../../js/shared/i18n.js"></script>
 </body>
 </html>
