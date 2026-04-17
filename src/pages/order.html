@@ -53,30 +53,10 @@
     <p style="margin-top: 8px;">&copy; 2026 Rogue Origin. Premium Oregon Hemp.</p>
   </footer>
 
+<script type="module" src="../js/shared/toast.js"></script>
 <script>
 (function() {
   const API_URL = 'https://script.google.com/macros/s/REDACTED-WHOLESALE-API-ID/exec';
-
-  // Toast notification system
-  function showToast(message, type, duration) {
-    type = type || 'info';
-    duration = duration || 4000;
-    let container = document.getElementById('toastContainer');
-    if (!container) {
-      container = document.createElement('div');
-      container.id = 'toastContainer';
-      container.className = 'toast-container';
-      document.body.appendChild(container);
-    }
-    const toast = document.createElement('div');
-    toast.className = 'toast ' + type;
-    toast.textContent = message;
-    container.appendChild(toast);
-    setTimeout(function() {
-      toast.classList.add('hiding');
-      setTimeout(function() { toast.remove(); }, 300);
-    }, duration);
-  }
 
   // Get order ID from URL
   function getOrderId() {
