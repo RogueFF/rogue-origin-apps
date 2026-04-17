@@ -1,15 +1,33 @@
 /**
- * Theme Module
- * Handles dark/light theme toggling and Chart.js theme integration
+ * Theme Module (Dashboard)
+ *
+ * Thin adapter over `../shared/theme.js` (the canonical theme module).
+ * Storage, persistence, and DOM application (data-theme attribute,
+ * body.dark-mode class, `ro:themechange` event) all live in shared/theme.js.
+ *
+ * This module layers dashboard-specific concerns on top:
+ *   - Chart.js default-color updates (updateChartTheme)
+ *   - Theme toggle button icon/label swap (updateThemeUI)
+ *   - Sync to the modules state store (isDarkMode/setDarkMode)
+ *
+ * A `ro:themechange` listener (wired below) keeps chart colors, the state
+ * store, and the toggle button in sync whenever the theme flips — regardless
+ * of who initiated the flip (header button, command palette, another tab).
  */
 
-import { isDarkMode, setDarkMode } from './state.js';
+import { setDarkMode } from './state.js';
+import {
+  getTheme as sharedGetTheme,
+  setTheme as sharedSetTheme,
+  toggleTheme as sharedToggleTheme,
+  initTheme as sharedInitTheme
+} from '../shared/theme.js';
 
 // SVG Icons for theme toggle
 const MOON_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8.5a5.5 5.5 0 1 1-5-7 4.5 4.5 0 0 0 5 7z"/></svg>';
 const SUN_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="3"/><line x1="8" y1="1" x2="8" y2="3"/><line x1="8" y1="13" x2="8" y2="15"/><line x1="1" y1="8" x2="3" y2="8"/><line x1="13" y1="8" x2="15" y2="8"/><line x1="3.05" y1="3.05" x2="4.46" y2="4.46"/><line x1="11.54" y1="11.54" x2="12.95" y2="12.95"/><line x1="3.05" y1="12.95" x2="4.46" y2="11.54"/><line x1="11.54" y1="4.46" x2="12.95" y2="3.05"/></svg>';
 
-// Theme color configurations
+// Theme color configurations used by Chart.js defaults
 const THEME_COLORS = {
   dark: {
     text: 'rgba(255,255,255,0.4)',
@@ -78,7 +96,7 @@ export function updateChartTheme(theme) {
 }
 
 /**
- * Update theme toggle button icon and label
+ * Update theme toggle button icon and label.
  * @param {string} theme - 'dark' or 'light'
  */
 function updateToggleButton(theme) {
@@ -93,14 +111,11 @@ function updateToggleButton(theme) {
 }
 
 /**
- * Update theme UI elements
+ * Update dashboard-specific theme UI pieces (button icon/label, mobile theme-color meta).
+ * The core data-theme attribute + body.dark-mode class are handled by shared/theme.js.
  * @param {string} theme - 'dark' or 'light'
  */
 export function updateThemeUI(theme) {
-  // Set data-theme attribute on document root
-  document.documentElement.setAttribute('data-theme', theme);
-
-  // Update toggle button icon/label
   updateToggleButton(theme);
 
   // Update meta theme-color for mobile browsers
@@ -111,67 +126,69 @@ export function updateThemeUI(theme) {
 }
 
 /**
- * Toggle between light and dark themes
+ * Toggle between light and dark themes.
+ * Persistence + DOM + event dispatch is handled by shared/theme.js.
+ * The `ro:themechange` listener below handles chart + state + UI sync.
  * @returns {string} The new theme ('dark' or 'light')
  */
 export function toggleTheme() {
-  const currentlyDark = isDarkMode();
-  const newTheme = currentlyDark ? 'light' : 'dark';
-
-  // Update state
-  setDarkMode(!currentlyDark);
-
-  // Update UI
-  updateThemeUI(newTheme);
-
-  // Update Chart.js colors
-  updateChartTheme(newTheme);
-
-  // Persist to localStorage
-  localStorage.setItem('theme', newTheme);
-
-  return newTheme;
+  sharedToggleTheme();
+  return sharedGetTheme();
 }
 
 /**
- * Initialize theme based on saved preference, defaulting to dark
- */
-export function initTheme() {
-  // Check localStorage first
-  const savedTheme = localStorage.getItem('theme');
-
-  // Default to dark if no preference saved
-  const theme = savedTheme || 'dark';
-
-  // Update state
-  setDarkMode(theme === 'dark');
-
-  // Apply theme
-  updateThemeUI(theme);
-  updateChartTheme(theme);
-
-  // Listen for system theme changes (only if no saved preference)
-  if (!savedTheme && window.matchMedia) {
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
-      // Only auto-switch if user hasn't set a preference
-      if (!localStorage.getItem('theme')) {
-        const newTheme = e.matches ? 'dark' : 'light';
-        setDarkMode(e.matches);
-        updateThemeUI(newTheme);
-        updateChartTheme(newTheme);
-      }
-    });
-  }
-
-  return theme;
-}
-
-/**
- * Legacy alias for toggleTheme
+ * Legacy alias kept for backwards compatibility with older call sites.
  * @deprecated Use toggleTheme() instead
  */
 export function toggleDarkMode() {
   return toggleTheme();
+}
+
+/**
+ * Initialize dashboard theme. shared/theme.js auto-initializes on its own
+ * script load, so this call is idempotent — we just make sure dashboard-
+ * specific UI (state store, chart defaults, icon) is in sync with whatever
+ * shared/theme.js resolved to.
+ */
+export function initTheme() {
+  // shared/theme.js auto-initializes on its module load. If for some reason
+  // that has not happened yet (e.g. a test harness imports this module
+  // directly), kick it off with the page's default.
+  if (!document.documentElement.getAttribute('data-theme')) {
+    const pageDefault = document.documentElement.getAttribute('data-theme-default');
+    sharedInitTheme(pageDefault === 'dark' ? 'dark' : 'light');
+  }
+
+  const theme = sharedGetTheme();
+
+  // Re-apply via shared.setTheme so body.dark-mode class is forced back in
+  // sync. loadSettings() in settings.js toggles this class from its own
+  // (stale) localStorage store and can leave it disagreeing with the real
+  // theme attribute; this re-apply is the authoritative reconciliation.
+  sharedSetTheme(theme);
+
+  // State store + dashboard-specific UI are then synced by the
+  // ro:themechange listener below (fired by sharedSetTheme above).
+  // Call them directly too as a safety net for this initial pass.
+  setDarkMode(theme === 'dark');
+  updateThemeUI(theme);
+  updateChartTheme(theme);
+
+  return theme;
+}
+
+// ===== ro:themechange LISTENER =====
+// shared/theme.js dispatches this event whenever the theme changes. Wire
+// dashboard-specific side-effects here so ANY code path (header button,
+// command palette, programmatic setTheme, system dark-mode change) keeps
+// chart colors + state store + toggle button in sync.
+if (typeof document !== 'undefined') {
+  document.addEventListener('ro:themechange', function(e) {
+    const theme = (e && e.detail && e.detail.theme) || sharedGetTheme();
+    setDarkMode(theme === 'dark');
+    updateThemeUI(theme);
+    updateChartTheme(theme);
+  });
 }
 
 // Export theme colors for external use if needed
