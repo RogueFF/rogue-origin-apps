@@ -2711,7 +2711,10 @@
     };
 
     // ── State ──
-    let appLang = 'en';
+    // Language is managed by shared/i18n.js. We mirror the current lang into
+    // `appLang` so the wizard's render helpers (which read it synchronously)
+    // keep working without threading getLang() through every call site.
+    let appLang = (typeof window !== 'undefined' && window.getLang && window.getLang()) || 'en';
     let allCards = [];
     let activeFilter = 'all';
     let activeMachineFilter = 'all';
@@ -2759,14 +2762,29 @@
 
     function otherLang() { return appLang === 'en' ? 'es' : 'en'; }
 
-    function toggleLang() {
-      // Sync current form values before swapping
-      var wizardActive = document.getElementById('wizardScreen').classList.contains('active');
+    // Shared i18n module (shared/i18n.js) owns the language state + localStorage +
+    // `[data-i18n*]` DOM walking. This listener handles the wizard-specific side
+    // effects that a bare attribute-walker can't: form sync, preview re-render,
+    // checkbox grid relayout, and the auto-translate API call.
+    //
+    // The `.lang-toggle` button's inline onclick calls the shared window.toggleLang,
+    // which mutates state and dispatches `ro:langchange`. We also respond to the
+    // initial event fired on module load so pages rendered mid-parse re-sync.
+    document.addEventListener('ro:langchange', function(e) {
+      var nextLang = (e && e.detail && e.detail.lang) || 'en';
+
+      // Sync current form values BEFORE flipping appLang so values land in the
+      // correct _en/_es field on cardData.
+      var wizardActive = document.getElementById('wizardScreen') &&
+                         document.getElementById('wizardScreen').classList.contains('active');
       if (wizardActive && currentStep >= 2 && currentStep <= 5) syncCardDataFromForm();
 
-      appLang = appLang === 'en' ? 'es' : 'en';
-      document.querySelector('.lang-toggle').textContent = appLang.toUpperCase();
-      document.documentElement.lang = appLang;
+      appLang = nextLang;
+      var btn = document.querySelector('.lang-toggle');
+      if (btn) btn.textContent = appLang.toUpperCase();
+      // shared/i18n.js already walks [data-i18n*] and sets documentElement.lang.
+      // applyTranslations() runs our extra hooks (machine filter options, toolbar)
+      // that the shared walker doesn't know about.
       applyTranslations();
       updateWizardLabels();
       renderCardList();
@@ -2791,7 +2809,8 @@
       }
 
       // Re-render view screen T-Card
-      var viewActive = viewingCard && document.getElementById('viewScreen').classList.contains('active');
+      var viewActive = viewingCard && document.getElementById('viewScreen') &&
+                       document.getElementById('viewScreen').classList.contains('active');
       if (viewActive) {
         document.getElementById('viewTitle').textContent = getCardField(viewingCard, 'title');
         renderViewContent();
@@ -2810,7 +2829,7 @@
           });
         }
       }
-    }
+    });
 
     function applyTranslations() {
       document.querySelectorAll('[data-i18n]').forEach(function(el) {
@@ -4481,6 +4500,12 @@
 
     // ── Init ──
     document.addEventListener('DOMContentLoaded', function() {
+      // Sync button label with whatever language shared/i18n.js restored from
+      // localStorage (the module's initial `ro:langchange` event will also fire
+      // shortly after and re-render everything; this just avoids a brief flash
+      // when Spanish is the stored lang).
+      var langBtn = document.querySelector('.lang-toggle');
+      if (langBtn) langBtn.textContent = appLang.toUpperCase();
       applyTranslations();
       updateWizardLabels();
       loadCards();
@@ -4493,5 +4518,7 @@
       });
     });
   </script>
+
+  <script type="module" src="../js/shared/i18n.js"></script>
 </body>
 </html>
