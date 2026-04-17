@@ -3,7 +3,11 @@
  * Two-view architecture: Timeline (list) and Editor (full-screen)
  */
 
-const API_URL = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
+import { makeApi } from '../shared/api.js';
+
+const productionApi = makeApi('production');
+const barcodeApi = makeApi('barcode');
+const poolApi = makeApi('pool');
 
 // Default time slots (will be dynamically updated based on shift start)
 let TIME_SLOTS = [
@@ -458,9 +462,7 @@ async function loadShiftStart() {
 
   // Sync with API (may have been set from scoreboard) - pass current date to avoid timezone issues
   try {
-    const response = await fetch(`${API_URL}?action=getShiftStart&date=${todayISO}`);
-    const result = await response.json();
-    const data = result.data || result;
+    const data = await productionApi.get('getShiftStart', { date: todayISO });
 
     if (data.success && data.shiftAdjustment) {
       const apiStartTime = new Date(data.shiftAdjustment.manualStartTime);
@@ -512,16 +514,9 @@ async function setShiftStart(time = null) {
 
   // Sync to API (so scoreboard sees it)
   try {
-    const response = await fetch(`${API_URL}?action=setShiftStart`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        time: time ? startTime.toISOString() : null, // null = server time
-      }),
+    const data = await productionApi.post('setShiftStart', {
+      time: time ? startTime.toISOString() : null, // null = server time
     });
-
-    const result = await response.json();
-    const data = result.data || result;
 
     if (data.success && data.shiftAdjustment) {
       // Update with server-confirmed time
@@ -1495,13 +1490,7 @@ async function saveEntry(retryData = null) {
   showSaveIndicator('saving');
 
   try {
-    const response = await fetch(`${API_URL}?action=addProduction`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-
-    const result = await response.json();
+    const result = await productionApi.post('addProduction', data);
 
     if (!result.success) {
       throw new Error(result.message || 'Save failed');
@@ -1570,16 +1559,11 @@ async function loadDayData(date) {
 
   try {
     // Fetch both production data and scoreboard data in parallel
-    const [productionResponse, scoreboardResponse] = await Promise.all([
-      fetch(`${API_URL}?action=getProduction&date=${date}`),
-      fetch(`${API_URL}?action=scoreboard&date=${date}`)
+    const [productionData, scoreboardWrapper] = await Promise.all([
+      productionApi.get('getProduction', { date }),
+      productionApi.get('scoreboard', { date })
     ]);
 
-    const productionResult = await productionResponse.json();
-    const productionData = productionResult.data || productionResult;
-
-    const scoreboardResult = await scoreboardResponse.json();
-    const scoreboardWrapper = scoreboardResult.data || scoreboardResult;
     const scoreboardData = scoreboardWrapper.scoreboard || {};
 
     dayData = {};
@@ -1616,9 +1600,7 @@ async function loadDayData(date) {
 
 async function loadCultivars() {
   try {
-    const response = await fetch(`${API_URL}?action=getCultivars`);
-    const result = await response.json();
-    const data = result.data || result;
+    const data = await productionApi.get('getCultivars');
 
     // Filter to only 2025 cultivars
     cultivarOptions = (data.cultivars || []).filter(c => c.startsWith('2025'));
@@ -2186,9 +2168,6 @@ setTimeout(() => initTutorial(), 500);
 // BARCODE PRINTER
 // ===================
 
-const BARCODE_API_URL = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/barcode';
-const POOL_API_URL = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/pool';
-
 let barcodeProducts = []; // Products loaded from barcode API
 let poolProducts = []; // Products loaded from Pool API
 let currentPoolType = 'smalls'; // Current pool type selection (smalls or tops)
@@ -2223,9 +2202,7 @@ async function initBarcodeCard() {
  */
 async function loadBarcodeProducts() {
   try {
-    const response = await fetch(`${BARCODE_API_URL}?action=products`);
-    const result = await response.json();
-    const data = result.data || result;
+    const data = await barcodeApi.get('products');
     barcodeProducts = data.products || [];
   } catch (error) {
     console.error('Failed to load barcode products:', error);
@@ -2572,13 +2549,7 @@ function initBagCompleteButton() {
     btnText.textContent = 'Logging...';
 
     try {
-      const response = await fetch(`${API_URL}?action=logBag`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ size: '5 kg.' })
-      });
-
-      if (!response.ok) throw new Error('Failed to log bag');
+      await productionApi.post('logBag', { size: '5 kg.' });
 
       btnText.textContent = '✓ Logged!';
       btn.classList.add('success');
@@ -2619,15 +2590,9 @@ async function loadPoolProducts(force = false) {
   }
 
   try {
-    const response = await fetch(`${POOL_API_URL}?action=list_products`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        poolType: currentPoolType
-      })
+    const result = await poolApi.post('list_products', {
+      poolType: currentPoolType
     });
-
-    const result = await response.json();
     poolProducts = result.products || [];
 
     // Update cache
@@ -3151,19 +3116,13 @@ function initPoolUpdateButton() {
       updateBtn.disabled = true;
       updateBtn.textContent = LABELS[currentLang].updating || 'Updating...';
 
-      const response = await fetch(`${POOL_API_URL}?action=update_pool`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          productId,
-          operation: currentOperation,
-          amount: amountGrams,
-          note,
-          poolType: currentPoolType
-        })
+      const result = await poolApi.post('update_pool', {
+        productId,
+        operation: currentOperation,
+        amount: amountGrams,
+        note,
+        poolType: currentPoolType
       });
-
-      const result = await response.json();
 
       if (result.success) {
         // Update with actual server value (in case it differs)
@@ -3319,19 +3278,13 @@ function initQuickAddButtons() {
       btn.innerHTML = `<span class="quick-add-weight">${LABELS[currentLang].updating || 'Updating...'}</span>`;
 
       try {
-        const response = await fetch(`${POOL_API_URL}?action=update_pool`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            productId,
-            operation: 'add',
-            amount: amountGrams,
-            note,
-            poolType: currentPoolType
-          })
+        const result = await poolApi.post('update_pool', {
+          productId,
+          operation: 'add',
+          amount: amountGrams,
+          note,
+          poolType: currentPoolType
         });
-
-        const result = await response.json();
 
         if (result.success) {
           const actualNewValue = result.newValue || result.data?.newValue || optimisticNewValue;
@@ -3401,15 +3354,9 @@ async function loadRecentChanges() {
   if (!listEl) return;
 
   try {
-    const response = await fetch(`${POOL_API_URL}?action=get_recent_changes`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        count: 10
-      })
+    const result = await poolApi.post('get_recent_changes', {
+      count: 10
     });
-
-    const result = await response.json();
     const entries = result.entries || [];
 
     if (entries.length === 0) {
@@ -3491,10 +3438,7 @@ function initScale() {
  */
 async function loadScaleData() {
   try {
-    const response = await fetch(`${API_URL}?action=scaleWeight`);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const result = await response.json();
-    const data = result.data || result;
+    const data = await productionApi.get('scaleWeight');
     renderScale(data);
   } catch (error) {
     // Show stale state on error
@@ -3873,15 +3817,7 @@ function initBagTimer() {
  */
 async function checkBagTimerVersion() {
   try {
-    const response = await fetch(`${API_URL}?action=version`);
-    if (!response.ok) {
-      // Version endpoint failed, fall back to full fetch
-      loadBagTimerData();
-      return;
-    }
-
-    const result = await response.json();
-    const data = result.data || result;
+    const data = await productionApi.get('version');
     const currentVersion = data.version;
 
     // First check or version changed - fetch full data
@@ -3903,13 +3839,7 @@ async function checkBagTimerVersion() {
  */
 async function checkProductionVersion() {
   try {
-    const response = await fetch(`${API_URL}?action=version`);
-    if (!response.ok) {
-      return; // Silently fail, don't disrupt UI
-    }
-
-    const result = await response.json();
-    const data = result.data || result;
+    const data = await productionApi.get('version');
     const currentVersion = data.version;
 
     // First check or version changed - reload production data
@@ -3939,10 +3869,8 @@ async function checkProductionVersion() {
 async function syncShiftStartFromAPI() {
   try {
     const todayISO = formatDateLocal(new Date());
-    const response = await fetch(`${API_URL}?action=getShiftStart&date=${todayISO}`);
-    const result = await response.json();
-    const data = result.data || result;
-    
+    const data = await productionApi.get('getShiftStart', { date: todayISO });
+
     if (data.shiftAdjustment?.manualStartTime) {
       const apiStartTime = new Date(data.shiftAdjustment.manualStartTime);
       
@@ -3964,20 +3892,7 @@ async function syncShiftStartFromAPI() {
  */
 async function loadBagTimerData() {
   try {
-    const response = await fetch(`${API_URL}?action=scoreboard`);
-
-    // Handle rate limiting gracefully
-    if (response.status === 429) {
-      console.warn('Rate limited, will retry on next interval');
-      return; // Don't update UI, keep current data
-    }
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const result = await response.json();
-    const data = result.data || result;
+    const data = await productionApi.get('scoreboard');
 
     const timer = data.timer || {};
 
