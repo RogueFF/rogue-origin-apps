@@ -852,6 +852,10 @@
     var btn = DOM ? DOM.get('manualBtn') : document.getElementById('manualBtn');
     if (!btn) return;
 
+    // Mark busy so the scale-weight gate doesn't toggle disabled while
+    // the API call is in flight.
+    btn.dataset.busy = 'true';
+
     // Disable button and show loading state
     btn.disabled = true;
     btn.classList.add('loading');
@@ -872,7 +876,9 @@
 
           // Reset button after 2 seconds
           setTimeout(function() {
-            btn.disabled = false;
+            delete btn.dataset.busy;
+            // Defer to current gate state — next scale poll will reaffirm.
+            btn.disabled = btn.dataset.gated === 'true';
             btn.classList.remove('success');
             if (btnText) btnText.textContent = originalText;
           }, 2000);
@@ -925,7 +931,8 @@
 
         // Reset button after 3 seconds
         setTimeout(function() {
-          btn.disabled = false;
+          delete btn.dataset.busy;
+          btn.disabled = btn.dataset.gated === 'true';
           btn.classList.remove('error');
           if (btnText) btnText.textContent = originalText;
         }, 3000);
