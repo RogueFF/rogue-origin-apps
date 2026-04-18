@@ -18,6 +18,37 @@
   // Display unit is grams. API delivers kg, we render kg * 1000.
   function fmtGrams(kg) { return Math.round((kg || 0) * 1000) + ' g'; }
 
+  // Bag-complete button gating.
+  // Target gross weight = 5000g product + 136.08g Grove Bag = 5136.08g
+  // Acceptable window: -30g squish tolerance, +90.72g overage cap (= 0.2 lb)
+  var BAG_GATE_MIN_GRAMS = 5196;
+  var BAG_GATE_MAX_GRAMS = 5317;
+
+  function gateBagButton(scaleData) {
+    var btn = document.getElementById('manualBtn');
+    if (!btn) return;
+
+    // Scale offline → leave button enabled so production isn't halted.
+    var isStale = !scaleData || scaleData.isStale !== false;
+    if (isStale) {
+      btn.dataset.gated = 'false';
+      if (!btn.dataset.busy) btn.disabled = false;
+      btn.removeAttribute('title');
+      btn.removeAttribute('aria-disabled');
+      return;
+    }
+
+    var grams = Math.round((scaleData.weight || 0) * 1000);
+    var inRange = grams >= BAG_GATE_MIN_GRAMS && grams <= BAG_GATE_MAX_GRAMS;
+    btn.dataset.gated = String(!inRange);
+    // Don't toggle disabled mid-API-call — the click handler owns it then.
+    if (!btn.dataset.busy) btn.disabled = !inRange;
+    btn.setAttribute('aria-disabled', String(!inRange));
+    btn.title = inRange
+      ? ''
+      : 'Scale reads ' + grams + ' g — bag must be ' + BAG_GATE_MIN_GRAMS + '–' + BAG_GATE_MAX_GRAMS + ' g (with bag) to log.';
+  }
+
   /**
    * Fetch scale weight from API
    * @param {Function} onSuccess - Called with scale data
@@ -91,6 +122,7 @@
         scalePanel.classList.remove('filling', 'near-target', 'at-target', 'stale');
         scalePanel.classList.add('stale');
       }
+      gateBagButton(null);
       return;
     }
 
@@ -142,6 +174,8 @@
       scalePanel.classList.remove('filling', 'near-target', 'at-target', 'stale');
       scalePanel.classList.add(colorClass);
     }
+
+    gateBagButton(scaleData);
   }
 
   /**
