@@ -2567,6 +2567,7 @@ function initBagCompleteButton() {
   registerListener(btn, 'click', async () => {
     if (btn.disabled) return;
 
+    btn.dataset.busy = 'true';
     btn.disabled = true;
     const originalText = btnText.textContent;
     btnText.textContent = 'Logging...';
@@ -2591,14 +2592,17 @@ function initBagCompleteButton() {
       setTimeout(() => {
         btnText.textContent = originalText;
         btn.classList.remove('success');
-        btn.disabled = false;
+        delete btn.dataset.busy;
+        // Let the next scale poll re-evaluate the gate.
+        btn.disabled = btn.dataset.gated === 'true';
       }, 2000);
     } catch (error) {
       console.error('Error logging bag:', error);
       btnText.textContent = '✗ Failed — tap to retry';
       setTimeout(() => {
         btnText.textContent = originalText;
-        btn.disabled = false;
+        delete btn.dataset.busy;
+        btn.disabled = btn.dataset.gated === 'true';
       }, 3000);
     }
   });
@@ -3529,6 +3533,7 @@ function renderScale(scaleData) {
       scaleRing.style.strokeDashoffset = RING_CIRCUMFERENCE;
       scaleRing.setAttribute('class', 'scale-ring-progress stale');
     }
+    gateBagCompleteButton(null);
     return;
   }
 
@@ -3569,9 +3574,40 @@ function renderScale(scaleData) {
   if (scaleRing) {
     const progress = isStale ? 0 : Math.min(1, percent / 100);
     const offset = RING_CIRCUMFERENCE * (1 - progress);
-    scaleRing.style.strokeDashoffset = offset;
     scaleRing.setAttribute('class', 'scale-ring-progress ' + colorClass);
+    scaleRing.style.strokeDashoffset = offset;
   }
+
+  gateBagCompleteButton(scaleData);
+}
+
+// Bag-complete button gating (mirrors scoreboard scale.js).
+// Target gross = 5000g product + 136.08g Grove Bag.
+// Acceptable window: -30g squish, +90.72g overage cap.
+const BAG_GATE_MIN_GRAMS = 5196;
+const BAG_GATE_MAX_GRAMS = 5317;
+
+function gateBagCompleteButton(scaleData) {
+  const btn = document.getElementById('bag-complete-btn');
+  if (!btn) return;
+
+  // Scale offline → keep button enabled so production isn't halted.
+  const isStale = !scaleData || scaleData.isStale !== false;
+  if (isStale) {
+    btn.dataset.gated = 'false';
+    if (btn.disabled && !btn.dataset.busy) btn.disabled = false;
+    btn.removeAttribute('title');
+    return;
+  }
+
+  const grams = Math.round((scaleData.weight || 0) * 1000);
+  const inRange = grams >= BAG_GATE_MIN_GRAMS && grams <= BAG_GATE_MAX_GRAMS;
+  btn.dataset.gated = String(!inRange);
+  // Don't toggle off mid-API-call (handler sets data-busy when posting).
+  if (!btn.dataset.busy) btn.disabled = !inRange;
+  btn.title = inRange
+    ? ''
+    : `Scale reads ${grams} g — bag must be ${BAG_GATE_MIN_GRAMS}–${BAG_GATE_MAX_GRAMS} g (with bag) to log.`;
 }
 
 // Break schedule (PST) - must match scoreboard config
