@@ -157,24 +157,44 @@ async function summary(params, env) {
 
   const result = await db.prepare(sql).bind(...binds).all();
 
-  // Per-strain totals
+  // Per-strain totals.
+  // effective_days_worked weights each day by this strain's share of that day's
+  // sacks (e.g. half-day on Lifter while Sour Lifter ran the other half = 0.5
+  // for each), so the projection answers "if we ran this strain full-time at
+  // the rate we've actually been opening its sacks per full day, how long?"
+  // — instead of diluting by all calendar days the strain wasn't worked.
   let strainSql = `
-    SELECT strain,
-      SUM(sacks_opened) as total_sacks,
-      SUM(raw_lbs) as total_raw,
-      SUM(tops_lbs) as total_tops,
-      SUM(smalls_lbs) as total_smalls,
-      SUM(biomass_lbs) as total_biomass,
-      SUM(trim_lbs) as total_trim,
-      SUM(waste_lbs) as total_waste,
-      COUNT(DISTINCT date) as days_worked
-    FROM supersack_entries WHERE 1=1${completeFilter}`;
+    WITH daily_totals AS (
+      SELECT date, SUM(sacks_opened) as day_total
+      FROM supersack_entries WHERE 1=1${completeFilter}`;
   const strainBinds = [];
 
+  // CTE filters (date range only — we want the full day's sack total across all strains)
   if (start) { strainSql += ' AND date >= ?'; strainBinds.push(start); }
   if (end) { strainSql += ' AND date <= ?'; strainBinds.push(end); }
 
-  strainSql += ' GROUP BY strain ORDER BY total_sacks DESC';
+  strainSql += `
+      GROUP BY date
+    )
+    SELECT e.strain,
+      SUM(e.sacks_opened) as total_sacks,
+      SUM(e.raw_lbs) as total_raw,
+      SUM(e.tops_lbs) as total_tops,
+      SUM(e.smalls_lbs) as total_smalls,
+      SUM(e.biomass_lbs) as total_biomass,
+      SUM(e.trim_lbs) as total_trim,
+      SUM(e.waste_lbs) as total_waste,
+      COUNT(DISTINCT e.date) as days_worked,
+      SUM(CAST(e.sacks_opened AS REAL) / NULLIF(d.day_total, 0)) as effective_days_worked
+    FROM supersack_entries e
+    JOIN daily_totals d ON e.date = d.date
+    WHERE 1=1${completeFilter}`;
+
+  // Main query filters (same date range, applied via aliased column)
+  if (start) { strainSql += ' AND e.date >= ?'; strainBinds.push(start); }
+  if (end) { strainSql += ' AND e.date <= ?'; strainBinds.push(end); }
+
+  strainSql += ' GROUP BY e.strain ORDER BY total_sacks DESC';
 
   const strainResult = await db.prepare(strainSql).bind(...strainBinds).all();
 

@@ -1043,14 +1043,18 @@
     const variants = state.inventoryData || [];
     const periods = state.summaryData?.periods || [];
 
-    // Compute avg daily usage per strain from summary
+    // Per-strain "if we ran this strain full-time" rate. effective_days_worked
+    // sums each day's fraction of sacks attributed to this strain (half-day on
+    // Lifter while Sour Lifter runs the other half = 0.5 each), so a strain
+    // that was rarely worked isn't diluted by calendar days it sat idle.
     const daysWorked = periods.filter(p => p.total_sacks > 0).length;
     const hasCompleteData = daysWorked > 0;
     const strainUsage = {};
     const strainYields = {};
     (state.summaryData?.strains || []).forEach(s => {
       const name = s.strain || 'Unknown';
-      strainUsage[name] = hasCompleteData ? (s.total_sacks || 0) / daysWorked : 0;
+      const effDays = s.effective_days_worked || 0;
+      strainUsage[name] = effDays > 0 ? (s.total_sacks || 0) / effDays : 0;
       strainYields[name] = {
         topsRate: (s.total_sacks || 0) > 0 ? (s.total_tops || 0) / s.total_sacks : 0,
         smallsRate: (s.total_sacks || 0) > 0 ? (s.total_smalls || 0) / s.total_sacks : 0,
@@ -1063,8 +1067,13 @@
     }
 
     const totalInventory = variants.reduce((sum, v) => sum + (v.quantity || 0), 0);
-    const totalUsagePerDay = variants.reduce((sum, v) => sum + (strainUsage[v.title || 'Unknown'] || 0), 0);
-    const totalDaysLeft = (hasCompleteData && totalUsagePerDay > 0) ? Math.round(totalInventory / totalUsagePerDay) : null;
+    // "Total days left" uses the global daily throughput (sum of all strains' sacks
+    // ÷ days worked), not the sum of per-strain full-time rates — those would
+    // double-count capacity since strains share the same line time.
+    const totalDailyThroughput = hasCompleteData
+      ? (state.summaryData?.strains || []).reduce((sum, s) => sum + (s.total_sacks || 0), 0) / daysWorked
+      : 0;
+    const totalDaysLeft = totalDailyThroughput > 0 ? Math.round(totalInventory / totalDailyThroughput) : null;
 
     let html = `<div class="card-title">${t('currentInventory')}</div>`;
     html += `<div class="inventory-summary">`;
