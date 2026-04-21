@@ -46,32 +46,31 @@ bags. Keep this posted near the scale station.
 
 ## Setting the bag size / Seleccionar el tamaño de bolsa
 
-**The UNIT key on the scale is the size selector.** There is no
-separate control in the app — the app watches the scale's unit and
-shows the matching button.
+**Only the manager changes the bag size.** On the main scoreboard there
+is a small pill above the Log Bag button:
 
-> La tecla **UNIT** en la báscula es el selector de tamaño. No hay un
-> control separado en la aplicación — la aplicación observa la unidad
-> de la báscula y muestra el botón correspondiente.
+```
+[ 5 KG ] [ 10 LB ]
+```
 
-### To pack 5 kg bags:
-1. Press **UNIT** on the indicator until the display shows **`g`**.
-2. On the scoreboard, the **5 KG Bag Complete** button appears within
-   ~5 seconds. The 10 lb button disappears.
+Tap **5 KG** or **10 LB** to set the mode for the whole facility. All
+scoreboards, tablets, and hourly-entry screens update within ~5
+seconds — the matching Log Bag button appears; the other disappears.
 
-### Para empacar bolsas de 5 kg:
-1. Presiona **UNIT** en el indicador hasta que la pantalla muestre
-   **`g`**.
-2. En el tablero, el botón **5 KG Bag Complete** aparece en ~5
-   segundos. El botón de 10 lb desaparece.
+Operators do **not** change this. If you think it's set wrong, ask the
+manager.
 
-### To pack 10 lb bags:
-1. Press **UNIT** until the display shows **`lb`**.
-2. The scoreboard swaps to the **10 LB Bag Complete** button.
-
-### Para empacar bolsas de 10 lb:
-1. Presiona **UNIT** hasta que la pantalla muestre **`lb`**.
-2. El tablero cambia al botón **10 LB Bag Complete**.
+> Solo el gerente cambia el tamaño de bolsa. En el tablero principal
+> hay una píldora pequeña sobre el botón Log Bag:
+>
+> `[ 5 KG ] [ 10 LB ]`
+>
+> Presiona **5 KG** o **10 LB** para establecer el modo en toda la
+> instalación. Todos los tableros, tabletas y pantallas de entrada por
+> hora se actualizan en ~5 segundos.
+>
+> Los operadores **no** cambian esto. Si crees que está mal, pregúntale
+> al gerente.
 
 ---
 
@@ -114,27 +113,23 @@ shows the matching button.
 
 ---
 
-## Switching sizes mid-day / Cambio de tamaño durante el día
+## Switching sizes mid-day (manager only) / Cambio de tamaño durante el día (solo gerente)
 
-1. Finish the bag you're currently filling.
-2. Log it (tap the button).
-3. Remove it from the scale.
-4. Press **UNIT** on the indicator to switch to the new unit.
-5. Wait ~5 seconds — the scoreboard will swap buttons.
-6. Start filling the new size.
-
-**No app-side toggle needed.** The scale's UNIT key is the only switch.
+1. Confirm the crew has finished the current size's last bag and it's
+   logged.
+2. On the main scoreboard, tap the **[ 5 KG ] [ 10 LB ]** pill to
+   select the new size.
+3. Wait ~5 seconds — all stations swap their Log Bag button.
+4. Announce the switch to the crew so they know the new size is active.
 
 ### EN ESPAÑOL:
-1. Termina la bolsa que estás llenando.
-2. Regístrala (presiona el botón).
-3. Retírala de la báscula.
-4. Presiona **UNIT** en el indicador para cambiar a la nueva unidad.
-5. Espera ~5 segundos — el tablero cambiará los botones.
-6. Comienza a llenar el nuevo tamaño.
-
-**No se necesita toggle en la aplicación.** La tecla UNIT de la
-báscula es el único control.
+1. Confirma que el equipo terminó la última bolsa del tamaño actual y
+   que esté registrada.
+2. En el tablero principal, presiona la píldora **[ 5 KG ] [ 10 LB ]**
+   para seleccionar el nuevo tamaño.
+3. Espera ~5 segundos — todas las estaciones cambian el botón Log Bag.
+4. Anúnciale al equipo el cambio para que sepan que el nuevo tamaño
+   está activo.
 
 ---
 
@@ -151,26 +146,24 @@ La información del botón te dice el peso actual y el rango requerido.
 Agrega o retira un poco de producto hasta que el botón se active.
 
 ### Both buttons are showing.
-**Cause 1:** the scale is disconnected. Check that the USB cable from
-the scale is plugged into the computer. Restart the scale reader if
-needed (ask the manager).
+Shouldn't happen with the manager-toggle design. If it does, it usually
+means the scoreboard just loaded and hasn't finished fetching state
+yet. Wait 5-10 seconds and refresh (`Ctrl+Shift+R`). If both remain,
+ask the manager.
 
-**Cause 2:** the scoreboard just loaded and hasn't received the unit
-yet. Wait 5-10 seconds.
-
-**Causa 1:** la báscula está desconectada. Revisa que el cable USB esté
-conectado. Reinicia el lector si es necesario (pide ayuda al gerente).
-
-**Causa 2:** el tablero apenas cargó. Espera 5-10 segundos.
+No debería pasar con el diseño de toggle del gerente. Si pasa,
+normalmente significa que el tablero apenas cargó. Espera 5-10 segundos
+y actualiza. Si siguen los dos, pregúntale al gerente.
 
 ### The wrong button is showing.
-Check the scale's display. Is the unit (`g` or `lb`) what you expect?
-If not, press **UNIT** on the indicator until it matches the size
-you're packing.
+The manager set the wrong mode, or hasn't switched it yet. Find the
+manager — they'll tap the **[ 5 KG ] [ 10 LB ]** pill on the main
+scoreboard. Don't try to force the bag through — the counts will be
+wrong.
 
-Revisa la pantalla de la báscula. ¿La unidad (`g` o `lb`) es la que
-esperas? Si no, presiona **UNIT** en el indicador hasta que coincida
-con el tamaño que estás empacando.
+El gerente puso el modo incorrecto o no lo ha cambiado. Busca al
+gerente — presionará la píldora **[ 5 KG ] [ 10 LB ]** en el tablero
+principal. No fuerces la bolsa — los conteos saldrán mal.
 
 ### Scale shows 0 but there's a bag on it.
 The scale may be tared (offset). Press **TARE** on the indicator to

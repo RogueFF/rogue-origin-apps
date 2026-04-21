@@ -363,6 +363,7 @@ INSERT OR IGNORE INTO system_config (key, value, value_type, category, descripti
 ('production.fallback_daily_goal', '66', 'number', 'production', 'Fallback daily goal when calculation fails'),
 ('production.bag_weight_lbs', '11.0231', 'number', 'production', '5kg bag weight converted to lbs'),
 ('production.target_bag_weight_kg', '5.0', 'number', 'production', 'Target bag weight in kg for scale'),
+('production.bag_mode', '5kg', 'string', 'production', 'Current facility bag mode (5kg or 10lb) — drives which bag-size button appears on scoreboards and tablets'),
 ('schedule.time_slot_multipliers', '{"7:00 AM – 8:00 AM":1.0,"8:00 AM – 9:00 AM":1.0,"9:00 AM – 10:00 AM":0.83,"10:00 AM – 11:00 AM":1.0,"11:00 AM – 12:00 PM":1.0,"12:30 PM – 1:00 PM":0.5,"1:00 PM – 2:00 PM":1.0,"2:00 PM – 3:00 PM":1.0,"2:30 PM – 3:00 PM":0.5,"3:00 PM – 4:00 PM":0.83,"4:00 PM – 4:30 PM":0.33,"3:00 PM – 3:30 PM":0.5}', 'json', 'schedule', 'Time slot multipliers for break-adjusted targets'),
 ('schedule.normal_hours', '8.5', 'number', 'schedule', 'Normal productive work hours per day'),
 ('schedule.shift_start', '07:00', 'string', 'schedule', 'Shift start time (HH:MM)'),

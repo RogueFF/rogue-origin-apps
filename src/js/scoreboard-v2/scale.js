@@ -45,34 +45,37 @@
     btn.removeAttribute('aria-disabled');
   }
 
-  function applyUnitVisibility(btn5, btn10, unit) {
-    // Missing/unknown unit or stale scale → show both (safe fallback, don't halt production).
-    var show5 = true;
-    var show10 = true;
-    if (unit === 'lb') {
-      show5 = false;
-    } else if (unit === 'g' || unit === 'kg') {
-      show10 = false;
-    }
-    if (btn5) btn5.style.display = show5 ? '' : 'none';
-    if (btn10) btn10.style.display = show10 ? '' : 'none';
-  }
-
   function gateBagButton(scaleData) {
-    var btn5 = document.getElementById('manualBtn');
-    var btn10 = document.getElementById('manualBtn10lb');
+    var btn5 = DOM && DOM.get ? DOM.get('manualBtn') : document.getElementById('manualBtn');
+    if (!btn5) btn5 = document.getElementById('manualBtn');
+    var btn10 = DOM && DOM.get ? DOM.get('manualBtn10lb') : document.getElementById('manualBtn10lb');
+    if (!btn10) btn10 = document.getElementById('manualBtn10lb');
     if (!btn5 && !btn10) return;
 
-    // Scale offline → leave buttons enabled and both visible so production isn't halted.
+    // Visibility is driven by the app-side bag_mode setting (toggle on v2 scoreboard).
+    // scaleData.bagMode is the source of truth; fallback to '5kg' if absent.
+    var mode = (scaleData && scaleData.bagMode) || '5kg';
+    if (mode === '10lb') {
+      if (btn5) btn5.style.display = 'none';
+      if (btn10) btn10.style.display = '';
+    } else {
+      if (btn5) btn5.style.display = '';
+      if (btn10) btn10.style.display = 'none';
+    }
+
+    // Keep the toggle pills (if present) in sync with backend truth.
+    var p5 = document.getElementById('bagMode5kgBtn');
+    var p10 = document.getElementById('bagMode10lbBtn');
+    if (p5) p5.classList.toggle('active', mode === '5kg');
+    if (p10) p10.classList.toggle('active', mode === '10lb');
+
+    // Scale offline → enable the visible button so production isn't halted.
     var isStale = !scaleData || scaleData.isStale !== false;
     if (isStale) {
-      applyUnitVisibility(btn5, btn10, undefined);
       if (btn5) clearGate(btn5);
       if (btn10) clearGate(btn10);
       return;
     }
-
-    applyUnitVisibility(btn5, btn10, scaleData.unit);
 
     var grams = Math.round((scaleData.weight || 0) * 1000);
 
