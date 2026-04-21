@@ -52,25 +52,23 @@
     if (!btn10) btn10 = document.getElementById('manualBtn10lb');
     if (!btn5 && !btn10) return;
 
-    // Scale offline → leave buttons enabled so production isn't halted.
-    // Failsafe: show BOTH buttons when stale so operator can still log bags.
-    var isStale = !scaleData || scaleData.isStale !== false;
-    if (isStale) {
-      if (btn5) { btn5.style.display = ''; clearGate(btn5); }
-      if (btn10) { btn10.style.display = ''; clearGate(btn10); }
-      return;
-    }
-
-    var unit = scaleData.unit;
-    if (unit === 'lb') {
+    // Visibility is driven by the app-side bag_mode setting (toggle on v2 scoreboard).
+    // scaleData.bagMode is the source of truth; fallback to '5kg' if absent.
+    var mode = (scaleData && scaleData.bagMode) || '5kg';
+    if (mode === '10lb') {
       if (btn5) btn5.style.display = 'none';
       if (btn10) btn10.style.display = '';
-    } else if (unit === 'g' || unit === 'kg') {
-      if (btn5) btn5.style.display = '';
-      if (btn10) btn10.style.display = 'none';
     } else {
       if (btn5) btn5.style.display = '';
-      if (btn10) btn10.style.display = '';
+      if (btn10) btn10.style.display = 'none';
+    }
+
+    // Scale offline → enable the visible button so production isn't halted.
+    var isStale = !scaleData || scaleData.isStale !== false;
+    if (isStale) {
+      if (btn5) clearGate(btn5);
+      if (btn10) clearGate(btn10);
+      return;
     }
 
     var grams = Math.round((scaleData.weight || 0) * 1000);
