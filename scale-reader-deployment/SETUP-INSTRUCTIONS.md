@@ -247,6 +247,43 @@ at login. The manual `start-scale-reader.bat` still works.
 
 ---
 
+## Training / demo mode (no real scale needed)
+
+You can demo the full workflow without a physical scale — useful for
+training sessions or screenshots. Open a Command Prompt and run:
+
+```
+cd C:\Users\Koasm\Desktop\Dev\rogue-origin-apps\scale-reader-deployment
+node index.js --mock --mock-demo
+```
+
+What happens:
+- Weight cycles 0 → target → 0 automatically (simulates bag fills).
+- Unit rotates between `g` and `lb` every 90 seconds.
+- Each time the unit rotates, the scoreboard/tablet swaps buttons.
+- Everything else (cloud push, local display at http://localhost:3000)
+  behaves exactly like a real scale.
+
+Leave it running on a second monitor during training so the crew can see
+the button swap happen live. Press `Ctrl+C` to stop.
+
+**Note:** the mock pushes data to the real cloud backend like a real
+station. If you're running this at the same time as a real station on
+the floor, the real scale's weight and the mock weight will overwrite
+each other (last write wins). Do training demos either after hours or
+on a separate stationId.
+
+---
+
+## Operator SOP
+
+For the production floor procedure on how to fill, log, and switch
+between bag sizes, see `OPERATOR-SOP.md` in this same folder. That doc
+is intended to be posted at the scale station — print it or display it
+on a phone/tablet.
+
+---
+
 ## Questions
 
 Contact Aidan. Include the console window contents if something's going
