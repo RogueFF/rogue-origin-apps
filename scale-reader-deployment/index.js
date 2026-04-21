@@ -137,26 +137,43 @@ async function pushToCloud() {
 // Start cloud push interval
 setInterval(pushToCloud, CONFIG.pushInterval);
 
-// Mock mode: simulate weight changes
+// Mock mode: simulate weight changes. `--mock-demo` also rotates unit
+// every 90s so the UI can be demo'd without touching the real scale.
 if (useMock) {
-  console.log('  Mock mode: Weight will simulate filling a bag\n');
+  const rotateUnits = process.argv.includes('--mock-demo');
+  console.log('  Mock mode: Weight will simulate filling a bag');
+  if (rotateUnits) {
+    console.log('  Demo mode: unit will rotate between g and lb every 90s\n');
+  } else {
+    console.log('');
+  }
   isConnected = true;
+
+  // Per-unit target weights (kg under the hood — cloud stays in kg).
+  // In grams mode we aim for a 5kg bag; in lb mode, ~10.3 lb (10lb + bag + overage).
+  const TARGETS = { g: 5.2, lb: 4.67 };
+  currentUnit = 'g';
+
+  if (rotateUnits) {
+    setInterval(() => {
+      currentUnit = currentUnit === 'g' ? 'lb' : 'g';
+      console.log(`  [demo] unit switched to ${currentUnit}`);
+    }, 90 * 1000);
+  }
 
   let direction = 1;
   setInterval(() => {
-    // Simulate weight going 0 -> 5 -> 0 (bag cycle)
+    const top = TARGETS[currentUnit] + 0.02;
     currentWeight += direction * 0.05;
 
-    if (currentWeight >= 5.1) {
-      // Bag removed (simulate taking it off scale)
+    if (currentWeight >= top) {
       direction = -1;
     } else if (currentWeight <= 0) {
-      // New bag started
       direction = 1;
       currentWeight = 0;
     }
 
-    currentWeight = Math.max(0, Math.round(currentWeight * 100) / 100);
+    currentWeight = Math.max(0, Math.round(currentWeight * 1000) / 1000);
   }, 100);
 
 } else {
