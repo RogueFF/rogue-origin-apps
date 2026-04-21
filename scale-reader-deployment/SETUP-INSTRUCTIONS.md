@@ -112,17 +112,13 @@ Once you've confirmed it works, press `Ctrl+C` to stop.
 ## Step 5.5 — Verify the bag-logging workflow
 
 The scale drives two different bag SKUs: **5 kg bags** and **10 lb bags**.
-The indicator's **UNIT** key is the switch — whichever unit is displayed
-on the scale tells the app which bag you're packing.
+Which button appears is controlled by a **[ 5 KG | 10 LB ]** pill
+toggle on the main scoreboard — the manager sets it, and all stations
+sync within ~5 seconds.
 
-- Scale shows **g** or **kg** → 5 kg workflow, only the **5 KG Bag
-  Complete** button appears
-- Scale shows **lb** → 10 lb workflow, only the **10 LB Bag Complete**
-  button appears
-
-Each button only becomes clickable when the weight is inside the correct
-window (bag + product gross weight). Outside the window, the button is
-greyed out.
+Each button only becomes clickable when the weight is inside the
+correct window (bag + product gross weight). Outside the window, the
+button is greyed out.
 
 **To test on the station PC:**
 
@@ -130,18 +126,18 @@ greyed out.
 2. Open http://localhost:3000 in a browser — you should see live grams.
 3. On a second browser tab, open the scoreboard:
    https://rogueff.github.io/rogue-origin-apps/scoreboard-v2.html
-4. With the scale in **grams** mode: place a full 5kg bag on the scale
-   (~5,200 g total). The 5 KG Bag Complete button should appear and
-   become clickable.
-5. On the indicator, press **UNIT** until the display changes to **lb**.
-   Within a few seconds the scoreboard should swap: 5 KG button hides,
-   10 LB Bag Complete appears.
-6. Put a full 10 lb bag on (~10.3 lb). The 10 LB button should become
+4. Above the Log Bag button is a pill: **[ 5 KG ]  [ 10 LB ]**. Make
+   sure **5 KG** is highlighted.
+5. Place a full 5kg bag on the scale (~5,200 g total). The **5 KG Bag
+   Complete** button should appear and become clickable.
+6. Tap **10 LB** on the pill toggle. Within ~5 seconds the button swaps
+   to **10 LB Bag Complete** on this device and any other scoreboards,
+   tablets, or hourly-entry screens.
+7. Put a full 10 lb bag on (~10.3 lb). The 10 LB button should become
    clickable.
 
-If the buttons don't swap when you change the indicator unit, the scale
-reader isn't forwarding the unit correctly — grab the console output and
-ping the manager.
+If the pill toggle doesn't appear on the scoreboard, a CSS or JS load
+order is off — grab the browser console output and ping the manager.
 
 ---
 
@@ -190,13 +186,10 @@ background whenever the computer is on.
   inside it.
 
 **Switching between 5 kg and 10 lb bags during the day:**
-The operator at the scale presses the **UNIT** key on the OHAUS
-indicator. That's it — the scoreboard, tablet, and hourly-entry page all
-detect the unit change within ~5 seconds and show the matching Log Bag
-button. No app-side toggle needed.
-
-- Packing 5 kg bags → indicator shows **g** (grams)
-- Packing 10 lb bags → indicator shows **lb** (pounds)
+**Only the manager** changes this. On the main scoreboard there's a
+pill above the Log Bag button: **[ 5 KG ]  [ 10 LB ]**. Tap to swap
+the mode — all stations (scoreboards, tablets, hourly-entry) update
+within ~5 seconds and show the matching Log Bag button.
 
 The "Bags Today" counter keeps the two totals separate:
 `5kg · N | 10lb · M`.
@@ -224,18 +217,16 @@ issue on your own time — nothing blocks the crew.
 **Reader exits immediately at startup:** likely a Node.js version issue.
 Confirm with `node --version` — needs v18 or newer.
 
-**Buttons don't swap when changing the indicator's UNIT key:** the scale
-reader isn't forwarding the unit field. Check the console window — each
-weight line should show the unit (`raw: 5000.000 g` or
-`raw: 10.250 lb`). If it only shows grams regardless of what the
-indicator displays, restart the scale reader (`Ctrl+C` then run
-`start-scale-reader.bat` again).
+**Buttons don't swap when manager taps the pill toggle:** this would
+mean the backend isn't saving the new mode, or the stations aren't
+polling for updates. Open the browser console on the scoreboard and
+check for errors on the `setBagMode` fetch. Hard-refresh all stations
+(`Ctrl+Shift+R`) if they look stuck.
 
-**Both buttons appear at the same time:** either the scale is
-disconnected (offline failsafe — both buttons stay enabled so production
-can't halt) or the backend hasn't picked up the unit yet (check
-`http://localhost:3000` — connection status at the top should be
-green).
+**Both buttons appear at the same time:** normally shouldn't happen
+(the manager toggle is unambiguous). If it does, hard-refresh; if it
+persists, check that the backend migration for `bag_mode` ran (ask the
+manager).
 
 ---
 
@@ -259,8 +250,9 @@ node index.js --mock --mock-demo
 
 What happens:
 - Weight cycles 0 → target → 0 automatically (simulates bag fills).
-- Unit rotates between `g` and `lb` every 90 seconds.
-- Each time the unit rotates, the scoreboard/tablet swaps buttons.
+- `bag_mode` flips between `5kg` and `10lb` every 90 seconds via the
+  backend API (simulating a manager tapping the pill toggle).
+- Each flip, all scoreboards and tablets swap which Log Bag button shows.
 - Everything else (cloud push, local display at http://localhost:3000)
   behaves exactly like a real scale.
 

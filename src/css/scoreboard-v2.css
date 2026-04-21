@@ -4173,3 +4173,42 @@ html.tv-mode .cycle-bars-target-label { font-size: 11px; }
   .debug-panel,
   .debug-indicator { display: none !important; }
 }
+
+/* ============================================================
+   BAG MODE TOGGLE — manager-only; drives 5kg vs 10lb button vis
+   ============================================================ */
+.bag-mode-toggle {
+  display: inline-flex;
+  gap: 0;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  margin: 8px 0;
+}
+.bag-mode-pill {
+  padding: 8px 18px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #b8b3a8;
+  font-family: 'Manrope', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.bag-mode-pill:hover {
+  color: #e8e4dc;
+}
+.bag-mode-pill.active {
+  background: var(--ro-green, #668971);
+  color: #fff;
+}
+.bag-mode-pill:focus-visible {
+  outline: 2px solid var(--ro-gold, #e4aa4f);
+  outline-offset: 2px;
+}

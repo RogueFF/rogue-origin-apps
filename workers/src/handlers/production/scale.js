@@ -3,9 +3,11 @@
  */
 
 import { successResponse, errorResponse } from '../../lib/response.js';
+import { getConfig, setConfig } from '../../lib/production-utils.js';
+import { incrementDataVersion } from './bag-tracking.js';
 
-// Normalize whatever the scale reader sends into a short canonical tag.
-// Frontend uses 'lb' / 'kg' / 'g' to decide which bag-size button to show.
+// Scale unit tag (kept as metadata on readings for debug/audit — no longer
+// drives button visibility).
 function normalizeUnit(raw) {
   if (!raw) return 'g';
   const u = String(raw).toLowerCase().trim();
@@ -15,22 +17,50 @@ function normalizeUnit(raw) {
   return 'g';
 }
 
+// Current facility bag mode = app-side toggle. Only values: '5kg' | '10lb'.
+const BAG_MODE_KEY = 'production.bag_mode';
+function normalizeBagMode(raw) {
+  const m = String(raw || '').toLowerCase().trim();
+  if (m === '10lb' || m === '10 lb' || m === '10lbs') return '10lb';
+  return '5kg';
+}
+
+async function getBagMode(env) {
+  const v = await getConfig(env, BAG_MODE_KEY);
+  return normalizeBagMode(v);
+}
+
+async function setBagMode(body, env) {
+  const mode = normalizeBagMode(body.mode);
+  try {
+    await setConfig(env, BAG_MODE_KEY, mode, body.updatedBy || 'scoreboard');
+    await incrementDataVersion(env);
+    return successResponse({ success: true, bagMode: mode });
+  } catch (error) {
+    console.error('Error setting bag mode:', error);
+    return errorResponse('Failed to update bag mode', 'INTERNAL_ERROR', 500);
+  }
+}
+
 async function getScaleWeight(params, env) {
   const stationId = params.stationId || 'line1';
   const STALE_THRESHOLD_MS = 3000;
 
   try {
-    // COALESCE handles deployments that haven't run the unit-column migration yet
-    const result = await env.DB.prepare(
-      `SELECT weight, target_weight, COALESCE(unit, 'g') AS unit, updated_at
-       FROM scale_readings WHERE station_id = ?`
-    ).bind(stationId).first();
+    const [result, bagMode] = await Promise.all([
+      env.DB.prepare(
+        `SELECT weight, target_weight, COALESCE(unit, 'g') AS unit, updated_at
+         FROM scale_readings WHERE station_id = ?`
+      ).bind(stationId).first(),
+      getBagMode(env),
+    ]);
 
     if (!result) {
       return successResponse({
         weight: 0,
         targetWeight: 5.0,
         unit: 'g',
+        bagMode,
         percentComplete: 0,
         stationId,
         updatedAt: null,
@@ -49,6 +79,7 @@ async function getScaleWeight(params, env) {
       weight: result.weight,
       targetWeight: result.target_weight,
       unit: result.unit,
+      bagMode,
       percentComplete,
       stationId,
       updatedAt: updatedAt.toISOString(),
@@ -88,4 +119,4 @@ async function setScaleWeight(body, env) {
   }
 }
 
-export { getScaleWeight, setScaleWeight };
+export { getScaleWeight, setScaleWeight, getBagMode, setBagMode };
