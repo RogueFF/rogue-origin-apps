@@ -19,34 +19,55 @@
   function fmtGrams(kg) { return Math.round((kg || 0) * 1000) + ' g'; }
 
   // Bag-complete button gating.
-  // Target gross weight = 5000g product + 136.08g Grove Bag = 5136.08g
+  // 5kg: Target gross weight = 5000g product + 136.08g Grove Bag = 5136.08g
   // Acceptable window: -30g squish tolerance, +90.72g overage cap (= 0.2 lb)
   var BAG_GATE_MIN_GRAMS = 5196;
   var BAG_GATE_MAX_GRAMS = 5317;
 
-  function gateBagButton(scaleData) {
-    var btn = document.getElementById('manualBtn');
-    if (!btn) return;
+  // 10lb: gross weight window for a 10lb bag (incl. Grove Bag tare).
+  var BAG10LB_GATE_MIN_GRAMS = 4642;
+  var BAG10LB_GATE_MAX_GRAMS = 4763;
 
-    // Scale offline → leave button enabled so production isn't halted.
-    var isStale = !scaleData || scaleData.isStale !== false;
-    if (isStale) {
-      btn.dataset.gated = 'false';
-      if (!btn.dataset.busy) btn.disabled = false;
-      btn.removeAttribute('title');
-      btn.removeAttribute('aria-disabled');
-      return;
-    }
-
-    var grams = Math.round((scaleData.weight || 0) * 1000);
-    var inRange = grams >= BAG_GATE_MIN_GRAMS && grams <= BAG_GATE_MAX_GRAMS;
+  function applyGate(btn, inRange, grams, minG, maxG) {
     btn.dataset.gated = String(!inRange);
     // Don't toggle disabled mid-API-call — the click handler owns it then.
     if (!btn.dataset.busy) btn.disabled = !inRange;
     btn.setAttribute('aria-disabled', String(!inRange));
     btn.title = inRange
       ? ''
-      : 'Scale reads ' + grams + ' g — bag must be ' + BAG_GATE_MIN_GRAMS + '–' + BAG_GATE_MAX_GRAMS + ' g (with bag) to log.';
+      : 'Scale reads ' + grams + ' g — bag must be ' + minG + '–' + maxG + ' g (with bag) to log.';
+  }
+
+  function clearGate(btn) {
+    btn.dataset.gated = 'false';
+    if (!btn.dataset.busy) btn.disabled = false;
+    btn.removeAttribute('title');
+    btn.removeAttribute('aria-disabled');
+  }
+
+  function gateBagButton(scaleData) {
+    var btn5 = document.getElementById('manualBtn');
+    var btn10 = document.getElementById('manualBtn10lb');
+    if (!btn5 && !btn10) return;
+
+    // Scale offline → leave buttons enabled so production isn't halted.
+    var isStale = !scaleData || scaleData.isStale !== false;
+    if (isStale) {
+      if (btn5) clearGate(btn5);
+      if (btn10) clearGate(btn10);
+      return;
+    }
+
+    var grams = Math.round((scaleData.weight || 0) * 1000);
+
+    if (btn5) {
+      var in5kg = grams >= BAG_GATE_MIN_GRAMS && grams <= BAG_GATE_MAX_GRAMS;
+      applyGate(btn5, in5kg, grams, BAG_GATE_MIN_GRAMS, BAG_GATE_MAX_GRAMS);
+    }
+    if (btn10) {
+      var in10lb = grams >= BAG10LB_GATE_MIN_GRAMS && grams <= BAG10LB_GATE_MAX_GRAMS;
+      applyGate(btn10, in10lb, grams, BAG10LB_GATE_MIN_GRAMS, BAG10LB_GATE_MAX_GRAMS);
+    }
   }
 
   /**
