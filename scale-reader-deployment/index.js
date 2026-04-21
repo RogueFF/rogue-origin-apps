@@ -30,6 +30,7 @@ const OZ_TO_KG = 0.0283495;
 
 // State
 let currentWeight = 0;
+let currentUnit = 'g';        // Source unit from the indicator — drives bag-size button visibility downstream
 let isConnected = false;
 let useMock = process.argv.includes('--mock');
 let serialPort = null;
@@ -88,6 +89,7 @@ app.use(express.json());
 app.get('/api/weight', (req, res) => {
   res.json({
     weight: currentWeight,
+    unit: currentUnit,
     targetWeight: CONFIG.targetWeight,
     percentComplete: Math.min(100, Math.round((currentWeight / CONFIG.targetWeight) * 100)),
     isConnected,
@@ -119,6 +121,7 @@ async function pushToCloud() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         weight: currentWeight,
+        unit: currentUnit,
         stationId: CONFIG.stationId,
       }),
     });
@@ -209,6 +212,7 @@ function initSerialPort() {
         if (parsed === null) continue;
 
         currentWeight = parsed.kg;
+        currentUnit = parsed.unit;  // source unit drives which bag-size button shows downstream
         console.log(`  Weight: ${parsed.kg.toFixed(3)} kg  (raw: ${parsed.raw.toFixed(3)} ${parsed.unit}${parsed.stable ? '' : ' ?'})`);
       }
     });

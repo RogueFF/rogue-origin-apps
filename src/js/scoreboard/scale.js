@@ -46,16 +46,31 @@
   }
 
   function gateBagButton(scaleData) {
-    var btn5 = document.getElementById('manualBtn');
-    var btn10 = document.getElementById('manualBtn10lb');
+    var btn5 = DOM && DOM.get ? DOM.get('manualBtn') : document.getElementById('manualBtn');
+    if (!btn5) btn5 = document.getElementById('manualBtn');
+    var btn10 = DOM && DOM.get ? DOM.get('manualBtn10lb') : document.getElementById('manualBtn10lb');
+    if (!btn10) btn10 = document.getElementById('manualBtn10lb');
     if (!btn5 && !btn10) return;
 
     // Scale offline → leave buttons enabled so production isn't halted.
+    // Failsafe: show BOTH buttons when stale so operator can still log bags.
     var isStale = !scaleData || scaleData.isStale !== false;
     if (isStale) {
-      if (btn5) clearGate(btn5);
-      if (btn10) clearGate(btn10);
+      if (btn5) { btn5.style.display = ''; clearGate(btn5); }
+      if (btn10) { btn10.style.display = ''; clearGate(btn10); }
       return;
+    }
+
+    var unit = scaleData.unit;
+    if (unit === 'lb') {
+      if (btn5) btn5.style.display = 'none';
+      if (btn10) btn10.style.display = '';
+    } else if (unit === 'g' || unit === 'kg') {
+      if (btn5) btn5.style.display = '';
+      if (btn10) btn10.style.display = 'none';
+    } else {
+      if (btn5) btn5.style.display = '';
+      if (btn10) btn10.style.display = '';
     }
 
     var grams = Math.round((scaleData.weight || 0) * 1000);
