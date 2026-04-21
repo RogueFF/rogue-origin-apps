@@ -327,8 +327,13 @@ CREATE TABLE IF NOT EXISTS scale_readings (
   station_id TEXT PRIMARY KEY DEFAULT 'line1',
   weight REAL NOT NULL DEFAULT 0,
   target_weight REAL DEFAULT 5.0,
+  unit TEXT DEFAULT 'g',
   updated_at TEXT DEFAULT (datetime('now'))
 );
+
+-- Migration for existing deployments (no-op if column already exists):
+-- wrangler d1 execute rogue-origin-db --remote \
+--   --command="ALTER TABLE scale_readings ADD COLUMN unit TEXT DEFAULT 'g'"
 
 -- Initialize default station
 INSERT OR IGNORE INTO scale_readings (station_id, weight, target_weight, updated_at)
