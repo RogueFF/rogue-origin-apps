@@ -64,7 +64,7 @@ git pull
 line with the correct path. If the repo isn't on this PC yet, clone it
 first with `git clone https://github.com/RogueFF/rogue-origin-apps.git`.
 
-**During active development:** If Aidan tells you to test a specific
+**During active development:** If the manager tells you to test a specific
 feature branch, use `git checkout <branch-name>` in place of
 `git checkout master`. Otherwise `master` is the right target.
 
@@ -103,7 +103,7 @@ confirm the display tracks it.
 
 **If you see "NO DATA RECEIVED" or connection errors:** the COM port is
 wrong or the indicator isn't in the right output mode. Press `Ctrl+C` and
-contact Aidan before continuing.
+contact the manager before continuing.
 
 Once you've confirmed it works, press `Ctrl+C` to stop.
 
@@ -141,7 +141,7 @@ greyed out.
 
 If the buttons don't swap when you change the indicator unit, the scale
 reader isn't forwarding the unit correctly — grab the console output and
-ping Aidan.
+ping the manager.
 
 ---
 
@@ -286,5 +286,5 @@ on a phone/tablet.
 
 ## Questions
 
-Contact Aidan. Include the console window contents if something's going
-wrong.
+Contact the manager. Include the console window contents if something's
+going wrong.
