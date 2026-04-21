@@ -26,18 +26,18 @@ bags. Keep this posted near the scale station.
 1. Verify the scale is powered on. Display should show `0.000 g` or
    `0.000 lb` with nothing on it.
 2. Confirm the scoreboard (TV / tablet / phone) shows a **green** scale
-   connection dot. Red dot = scale offline, tell Aidan.
+   connection dot. Red dot = scale offline, tell the manager.
 3. Place a known test weight (e.g. a 5 lb dumbbell) on the scale.
    Display should match within ±3 g / ±0.005 lb. If it doesn't, tell
-   Aidan — calibration may be needed.
+   the manager — calibration may be needed.
 4. Remove the test weight. Confirm display returns to 0.
 
 **EN ESPAÑOL:**
 1. Verifica que la báscula esté encendida. Debe mostrar `0.000 g` o
    `0.000 lb` sin nada encima.
 2. Confirma que el tablero (TV / tableta / teléfono) muestre un punto
-   **verde** de conexión. Punto rojo = báscula desconectada, avisa a
-   Aidan.
+   **verde** de conexión. Punto rojo = báscula desconectada, avisa al
+   gerente.
 3. Coloca una pesa de prueba conocida (ej. una pesa de 5 lb). La
    pantalla debe coincidir ±3 g / ±0.005 lb.
 4. Retira la pesa. La pantalla debe volver a 0.
@@ -153,13 +153,13 @@ Agrega o retira un poco de producto hasta que el botón se active.
 ### Both buttons are showing.
 **Cause 1:** the scale is disconnected. Check that the USB cable from
 the scale is plugged into the computer. Restart the scale reader if
-needed (ask Aidan or IT).
+needed (ask the manager).
 
 **Cause 2:** the scoreboard just loaded and hasn't received the unit
 yet. Wait 5-10 seconds.
 
 **Causa 1:** la báscula está desconectada. Revisa que el cable USB esté
-conectado. Reinicia el lector si es necesario (pide ayuda a Aidan).
+conectado. Reinicia el lector si es necesario (pide ayuda al gerente).
 
 **Causa 2:** el tablero apenas cargó. Espera 5-10 segundos.
 
@@ -197,7 +197,7 @@ bolsas sobrepeso — afectan el inventario.
 
 ### The scoreboard froze.
 Refresh the page (pull down on tablet, or Ctrl+Shift+R on the computer).
-If it's still frozen after a refresh, ask Aidan.
+If it's still frozen after a refresh, ask the manager.
 
 Actualiza la página (desliza hacia abajo en la tableta, o Ctrl+Shift+R
 en la computadora). Si sigue congelado, pide ayuda.
@@ -229,6 +229,6 @@ No necesitas apagar la báscula ni cerrar sesión.
 
 ## Questions / Preguntas
 
-Ask Aidan. Show him the scale indicator and the scoreboard if something
-looks wrong. / Pregunta a Aidan. Muéstrale el indicador de la báscula
-y el tablero si algo se ve mal.
+Ask the manager. Show them the scale indicator and the scoreboard if
+something looks wrong. / Pregunta al gerente. Muéstrale el indicador
+de la báscula y el tablero si algo se ve mal.
