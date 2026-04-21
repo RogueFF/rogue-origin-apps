@@ -23,29 +23,19 @@ const BAG10LB_MAX_G = 4763;
 // A "btn" here is a plain object { disabled, gated, busy, title, hidden }.
 function makeBtn() { return { disabled: false, gated: false, busy: false, title: '', hidden: false }; }
 
-// Unit-based visibility rule (the contract all 3 UIs implement):
-//   unit === 'lb'         → hide 5kg, show 10lb
-//   unit === 'kg' | 'g'   → hide 10lb, show 5kg
-//   unit missing/unknown  → show BOTH (backward-compat)
-//   stale/offline         → show BOTH (failsafe)
+// Visibility rule: driven by app-side bag_mode (toggle on scoreboard v2).
+//   bagMode === '10lb'  → hide 5kg, show 10lb
+//   bagMode === '5kg'   → hide 10lb, show 5kg
+//   bagMode missing     → fallback to 5kg
+// Scale offline/stale does NOT change visibility (mode is app-owned, not scale-owned).
 function applyVisibility({ btn5, btn10, scaleData }) {
-  const isStale = !scaleData || scaleData.isStale !== false;
-  if (isStale) {
-    if (btn5)  btn5.hidden = false;
-    if (btn10) btn10.hidden = false;
-    return;
-  }
-  const unit = (scaleData.unit || '').toLowerCase();
-  if (unit === 'lb') {
+  const mode = (scaleData && scaleData.bagMode) || '5kg';
+  if (mode === '10lb') {
     if (btn5)  btn5.hidden = true;
     if (btn10) btn10.hidden = false;
-  } else if (unit === 'kg' || unit === 'g') {
+  } else {
     if (btn5)  btn5.hidden = false;
     if (btn10) btn10.hidden = true;
-  } else {
-    // unknown / missing → show both
-    if (btn5)  btn5.hidden = false;
-    if (btn10) btn10.hidden = false;
   }
 }
 
@@ -292,88 +282,78 @@ function eq(a, b, label) { assert(a === b, `${label}  (got ${JSON.stringify(a)},
 })();
 
 // ============================================================
-// GROUP 8 — unit-based button visibility
+// GROUP 8 — bag_mode-based button visibility
 // ============================================================
-(function group8_unitVisibility() {
-  // lb mode — only 10lb button visible
-  (function lbMode() {
+(function group8_bagModeVisibility() {
+  // bagMode='10lb' → only 10lb button visible
+  (function tenLbMode() {
     const btn5 = makeBtn(); const btn10 = makeBtn();
-    applyVisibility({ btn5, btn10, scaleData: { weight: 4.672, unit: 'lb', isStale: false } });
-    eq(btn5.hidden,  true,  'unit=lb: 5kg hidden');
-    eq(btn10.hidden, false, 'unit=lb: 10lb visible');
+    applyVisibility({ btn5, btn10, scaleData: { weight: 4.672, bagMode: '10lb', isStale: false } });
+    eq(btn5.hidden,  true,  "bagMode='10lb': 5kg hidden");
+    eq(btn10.hidden, false, "bagMode='10lb': 10lb visible");
   })();
 
-  // grams mode — only 5kg button visible
-  (function gramsMode() {
+  // bagMode='5kg' → only 5kg button visible
+  (function fiveKgMode() {
     const btn5 = makeBtn(); const btn10 = makeBtn();
-    applyVisibility({ btn5, btn10, scaleData: { weight: 5.227, unit: 'g', isStale: false } });
-    eq(btn5.hidden,  false, 'unit=g: 5kg visible');
-    eq(btn10.hidden, true,  'unit=g: 10lb hidden');
+    applyVisibility({ btn5, btn10, scaleData: { weight: 5.227, bagMode: '5kg', isStale: false } });
+    eq(btn5.hidden,  false, "bagMode='5kg': 5kg visible");
+    eq(btn10.hidden, true,  "bagMode='5kg': 10lb hidden");
   })();
 
-  // kg mode — only 5kg visible
-  (function kgMode() {
-    const btn5 = makeBtn(); const btn10 = makeBtn();
-    applyVisibility({ btn5, btn10, scaleData: { weight: 5.227, unit: 'kg', isStale: false } });
-    eq(btn5.hidden,  false, 'unit=kg: 5kg visible');
-    eq(btn10.hidden, true,  'unit=kg: 10lb hidden');
-  })();
-
-  // unknown unit (oz, empty, null, undefined) — show both (fallback)
-  (function unknownUnit() {
-    for (const u of ['oz', '', null, undefined]) {
-      const btn5 = makeBtn(); const btn10 = makeBtn();
-      applyVisibility({ btn5, btn10, scaleData: { weight: 3.0, unit: u, isStale: false } });
-      eq(btn5.hidden,  false, `unit=${JSON.stringify(u)}: 5kg visible (fallback)`);
-      eq(btn10.hidden, false, `unit=${JSON.stringify(u)}: 10lb visible (fallback)`);
-    }
-  })();
-
-  // stale/offline — both visible regardless of unit (failsafe)
-  (function staleShowsBoth() {
-    for (const data of [null, { unit: 'lb', isStale: true }, { unit: 'g', isStale: true }]) {
+  // bagMode missing → fallback to 5kg (safer default)
+  (function missingMode() {
+    for (const data of [{ weight: 3.0, isStale: false }, { weight: 3.0, bagMode: undefined, isStale: false }, null]) {
       const btn5 = makeBtn(); const btn10 = makeBtn();
       applyVisibility({ btn5, btn10, scaleData: data });
-      eq(btn5.hidden,  false, `stale (${JSON.stringify(data)}): 5kg visible`);
-      eq(btn10.hidden, false, `stale (${JSON.stringify(data)}): 10lb visible`);
+      eq(btn5.hidden,  false, `missing bagMode (${JSON.stringify(data)}): 5kg visible (fallback)`);
+      eq(btn10.hidden, true,  `missing bagMode (${JSON.stringify(data)}): 10lb hidden (fallback)`);
     }
   })();
 
-  // Case-insensitive: LB, KG should also work if backend forgets to lowercase
-  (function caseInsensitive() {
+  // Scale offline does NOT change visibility (mode is app-side, not scale-side)
+  (function staleIgnoresMode() {
     const btn5 = makeBtn(); const btn10 = makeBtn();
-    applyVisibility({ btn5, btn10, scaleData: { weight: 4.672, unit: 'LB', isStale: false } });
-    eq(btn5.hidden,  true,  'unit=LB (uppercase): 5kg hidden');
-    eq(btn10.hidden, false, 'unit=LB (uppercase): 10lb visible');
+    applyVisibility({ btn5, btn10, scaleData: { weight: 0, bagMode: '10lb', isStale: true } });
+    eq(btn5.hidden,  true,  "stale + bagMode='10lb': 5kg still hidden (mode is app-owned)");
+    eq(btn10.hidden, false, "stale + bagMode='10lb': 10lb still visible");
   })();
 })();
 
 // ============================================================
-// GROUP 9 — unit + weight combined (full integration)
+// GROUP 9 — bagMode + weight combined (full integration)
 // ============================================================
 (function group9_combined() {
-  // Scale in lb mode, at 10lb target weight → 10lb button visible AND enabled
+  // 10lb mode, at 10lb target weight → 10lb button visible AND enabled
   const btn5a = makeBtn(); const btn10a = makeBtn();
-  applyVisibility({ btn5: btn5a, btn10: btn10a, scaleData: { weight: 4.672, unit: 'lb', isStale: false } });
+  applyVisibility({ btn5: btn5a, btn10: btn10a, scaleData: { weight: 4.672, bagMode: '10lb', isStale: false } });
   gate({ btn5: btn5a, btn10: btn10a, scaleData: { weight: 4.672, isStale: false } });
-  eq(btn5a.hidden,   true,  'lb mode @ 4672g: 5kg hidden');
-  eq(btn10a.hidden,  false, 'lb mode @ 4672g: 10lb visible');
-  eq(btn10a.disabled,false, 'lb mode @ 4672g: 10lb enabled (in range)');
+  eq(btn5a.hidden,   true,  '10lb mode @ 4672g: 5kg hidden');
+  eq(btn10a.hidden,  false, '10lb mode @ 4672g: 10lb visible');
+  eq(btn10a.disabled,false, '10lb mode @ 4672g: 10lb enabled (in range)');
 
-  // Scale in lb mode but below 10lb window → 10lb visible but DISABLED
+  // 10lb mode but below 10lb window → 10lb visible but DISABLED
   const btn5b = makeBtn(); const btn10b = makeBtn();
-  applyVisibility({ btn5: btn5b, btn10: btn10b, scaleData: { weight: 2.000, unit: 'lb', isStale: false } });
+  applyVisibility({ btn5: btn5b, btn10: btn10b, scaleData: { weight: 2.000, bagMode: '10lb', isStale: false } });
   gate({ btn5: btn5b, btn10: btn10b, scaleData: { weight: 2.000, isStale: false } });
-  eq(btn10b.hidden,  false, 'lb mode @ 2000g: 10lb visible');
-  eq(btn10b.disabled,true,  'lb mode @ 2000g: 10lb disabled (under range)');
+  eq(btn10b.hidden,  false, '10lb mode @ 2000g: 10lb visible');
+  eq(btn10b.disabled,true,  '10lb mode @ 2000g: 10lb disabled (under range)');
 
-  // Scale in grams mode, at 5kg target → 5kg visible AND enabled
+  // 5kg mode at 5kg target → 5kg visible AND enabled
   const btn5c = makeBtn(); const btn10c = makeBtn();
-  applyVisibility({ btn5: btn5c, btn10: btn10c, scaleData: { weight: 5.227, unit: 'g', isStale: false } });
+  applyVisibility({ btn5: btn5c, btn10: btn10c, scaleData: { weight: 5.227, bagMode: '5kg', isStale: false } });
   gate({ btn5: btn5c, btn10: btn10c, scaleData: { weight: 5.227, isStale: false } });
-  eq(btn5c.hidden,   false, 'g mode @ 5227g: 5kg visible');
-  eq(btn10c.hidden,  true,  'g mode @ 5227g: 10lb hidden');
-  eq(btn5c.disabled, false, 'g mode @ 5227g: 5kg enabled (in range)');
+  eq(btn5c.hidden,   false, '5kg mode @ 5227g: 5kg visible');
+  eq(btn10c.hidden,  true,  '5kg mode @ 5227g: 10lb hidden');
+  eq(btn5c.disabled, false, '5kg mode @ 5227g: 5kg enabled (in range)');
+
+  // Manager switched to 10lb but there's still a 5kg bag on the scale (5227g)
+  // → 10lb button is visible but DISABLED (weight is outside 10lb window)
+  const btn5d = makeBtn(); const btn10d = makeBtn();
+  applyVisibility({ btn5: btn5d, btn10: btn10d, scaleData: { weight: 5.227, bagMode: '10lb', isStale: false } });
+  gate({ btn5: btn5d, btn10: btn10d, scaleData: { weight: 5.227, isStale: false } });
+  eq(btn10d.hidden,  false, '10lb mode w/ 5kg weight: 10lb visible');
+  eq(btn10d.disabled,true,  '10lb mode w/ 5kg weight: 10lb disabled (wrong weight for mode)');
 })();
 
 // ============================================================

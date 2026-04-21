@@ -137,33 +137,48 @@ async function pushToCloud() {
 // Start cloud push interval
 setInterval(pushToCloud, CONFIG.pushInterval);
 
-// Mock mode: simulate weight changes. `--mock-demo` also rotates unit
-// every 90s so the UI can be demo'd without touching the real scale.
+// Mock mode: simulate weight changes. `--mock-demo` also flips the
+// facility's bag_mode via the API every 90s so you can watch the
+// scoreboard buttons swap without touching the real scale.
 if (useMock) {
-  const rotateUnits = process.argv.includes('--mock-demo');
+  const demoMode = process.argv.includes('--mock-demo');
   console.log('  Mock mode: Weight will simulate filling a bag');
-  if (rotateUnits) {
-    console.log('  Demo mode: unit will rotate between g and lb every 90s\n');
+  if (demoMode) {
+    console.log('  Demo mode: bag_mode will flip via API every 90s (5kg ↔ 10lb)\n');
   } else {
     console.log('');
   }
   isConnected = true;
 
-  // Per-unit target weights (kg under the hood — cloud stays in kg).
-  // In grams mode we aim for a 5kg bag; in lb mode, ~10.3 lb (10lb + bag + overage).
-  const TARGETS = { g: 5.2, lb: 4.67 };
+  // Per-mode target weights (kg). 5kg bag = 5.2kg gross; 10lb bag = 4.67kg gross.
+  const TARGETS = { '5kg': 5.2, '10lb': 4.67 };
+  let demoBagMode = '5kg';
   currentUnit = 'g';
 
-  if (rotateUnits) {
-    setInterval(() => {
-      currentUnit = currentUnit === 'g' ? 'lb' : 'g';
-      console.log(`  [demo] unit switched to ${currentUnit}`);
-    }, 90 * 1000);
+  // Flip the facility bag mode via the backend API. This is how a manager
+  // would do it from the scoreboard — we just automate the tap.
+  async function flipBagMode() {
+    demoBagMode = demoBagMode === '5kg' ? '10lb' : '5kg';
+    try {
+      const url = CONFIG.apiUrl.replace('action=scaleWeight', 'action=setBagMode');
+      await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: demoBagMode, updatedBy: 'mock-demo' }),
+      });
+      console.log(`  [demo] bag_mode switched to ${demoBagMode}`);
+    } catch (e) {
+      console.error(`  [demo] failed to flip bag_mode:`, e.message);
+    }
+  }
+
+  if (demoMode) {
+    setInterval(flipBagMode, 90 * 1000);
   }
 
   let direction = 1;
   setInterval(() => {
-    const top = TARGETS[currentUnit] + 0.02;
+    const top = TARGETS[demoBagMode] + 0.02;
     currentWeight += direction * 0.05;
 
     if (currentWeight >= top) {

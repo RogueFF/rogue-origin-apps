@@ -3664,22 +3664,11 @@ function clearBagGate(btn) {
 }
 
 function setBagButtonVisibility(btn5, btn10, scaleData) {
-  // Stale/missing scale or missing unit → show both as failsafe so production can't halt.
-  const isStale = !scaleData || scaleData.isStale !== false;
-  const unit = scaleData && scaleData.unit;
-  let show5 = true;
-  let show10 = true;
-  if (!isStale && unit) {
-    if (unit === 'lb') {
-      show5 = false;
-      show10 = true;
-    } else if (unit === 'g' || unit === 'kg') {
-      show5 = true;
-      show10 = false;
-    }
-  }
-  if (btn5) btn5.style.display = show5 ? '' : 'none';
-  if (btn10) btn10.style.display = show10 ? '' : 'none';
+  // Visibility driven by app-side bag_mode (toggle lives on scoreboard v2).
+  // Fallback to '5kg' if scaleData or bagMode missing.
+  const mode = (scaleData && scaleData.bagMode) || '5kg';
+  if (btn5) btn5.style.display = mode === '10lb' ? 'none' : '';
+  if (btn10) btn10.style.display = mode === '10lb' ? '' : 'none';
 }
 
 function gateBagCompleteButton(scaleData) {

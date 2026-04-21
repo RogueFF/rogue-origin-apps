@@ -229,6 +229,34 @@
     },
 
     /**
+     * Set the facility bag mode (5kg or 10lb). Only called from the manager's
+     * toggle on scoreboard v2. Bumps data version so other stations sync.
+     */
+    setBagMode: function(mode) {
+      const apiUrl = this.getApiUrl();
+      fetch(`${apiUrl}?action=setBagMode`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: mode }),
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(raw) {
+          const resp = raw.data || raw;
+          if (window.ScoreboardState) window.ScoreboardState.bagMode = resp.bagMode || mode;
+          // Optimistic local UI update — the scale poll will reaffirm shortly
+          if (window.ScoreboardScale && window.ScoreboardScale.renderScale) {
+            window.ScoreboardScale.renderScale();
+          }
+          // Update pill-active state
+          var p5 = document.getElementById('bagMode5kgBtn');
+          var p10 = document.getElementById('bagMode10lbBtn');
+          if (p5) p5.classList.toggle('active', (resp.bagMode || mode) === '5kg');
+          if (p10) p10.classList.toggle('active', (resp.bagMode || mode) === '10lb');
+        })
+        .catch(function(e) { console.error('setBagMode failed:', e); });
+    },
+
+    /**
      * Log timer pause
      * @param {Object} data - Pause data {reason: string}
      * @param {Function} onSuccess - Success callback
