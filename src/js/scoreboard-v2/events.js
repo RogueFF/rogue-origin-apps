@@ -190,7 +190,14 @@
     const manualBtn = el('manualBtn');
     if (manualBtn) {
       manualBtn.addEventListener('click', function() {
-        if (window.logManualEntry) window.logManualEntry();
+        if (window.logManualEntry) window.logManualEntry({ size: '5kg' });
+      });
+    }
+
+    const manualBtn10lb = el('manualBtn10lb');
+    if (manualBtn10lb) {
+      manualBtn10lb.addEventListener('click', function() {
+        if (window.logManualEntry10lb) window.logManualEntry10lb();
       });
     }
 
