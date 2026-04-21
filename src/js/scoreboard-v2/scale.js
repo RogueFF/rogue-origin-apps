@@ -45,18 +45,34 @@
     btn.removeAttribute('aria-disabled');
   }
 
+  function applyUnitVisibility(btn5, btn10, unit) {
+    // Missing/unknown unit or stale scale → show both (safe fallback, don't halt production).
+    var show5 = true;
+    var show10 = true;
+    if (unit === 'lb') {
+      show5 = false;
+    } else if (unit === 'g' || unit === 'kg') {
+      show10 = false;
+    }
+    if (btn5) btn5.style.display = show5 ? '' : 'none';
+    if (btn10) btn10.style.display = show10 ? '' : 'none';
+  }
+
   function gateBagButton(scaleData) {
     var btn5 = document.getElementById('manualBtn');
     var btn10 = document.getElementById('manualBtn10lb');
     if (!btn5 && !btn10) return;
 
-    // Scale offline → leave buttons enabled so production isn't halted.
+    // Scale offline → leave buttons enabled and both visible so production isn't halted.
     var isStale = !scaleData || scaleData.isStale !== false;
     if (isStale) {
+      applyUnitVisibility(btn5, btn10, undefined);
       if (btn5) clearGate(btn5);
       if (btn10) clearGate(btn10);
       return;
     }
+
+    applyUnitVisibility(btn5, btn10, scaleData.unit);
 
     var grams = Math.round((scaleData.weight || 0) * 1000);
 

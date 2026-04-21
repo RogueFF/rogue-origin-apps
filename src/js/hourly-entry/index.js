@@ -3663,10 +3663,31 @@ function clearBagGate(btn) {
   btn.removeAttribute('aria-disabled');
 }
 
+function setBagButtonVisibility(btn5, btn10, scaleData) {
+  // Stale/missing scale or missing unit → show both as failsafe so production can't halt.
+  const isStale = !scaleData || scaleData.isStale !== false;
+  const unit = scaleData && scaleData.unit;
+  let show5 = true;
+  let show10 = true;
+  if (!isStale && unit) {
+    if (unit === 'lb') {
+      show5 = false;
+      show10 = true;
+    } else if (unit === 'g' || unit === 'kg') {
+      show5 = true;
+      show10 = false;
+    }
+  }
+  if (btn5) btn5.style.display = show5 ? '' : 'none';
+  if (btn10) btn10.style.display = show10 ? '' : 'none';
+}
+
 function gateBagCompleteButton(scaleData) {
   const btn5 = document.getElementById('bag-complete-btn');
   const btn10 = document.getElementById('bag-complete-btn-10lb');
   if (!btn5 && !btn10) return;
+
+  setBagButtonVisibility(btn5, btn10, scaleData);
 
   // Scale offline → keep buttons enabled so production isn't halted.
   const isStale = !scaleData || scaleData.isStale !== false;
