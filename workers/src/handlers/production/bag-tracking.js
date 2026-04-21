@@ -272,6 +272,10 @@ async function getBagTimerData(env, date = null) {
     }
 
     if (todayBags.length > 1) {
+      // NOTE: sort mutates only todayBags; bagSizes is no longer parallel
+      // after this point. Cycle-history calc below uses indices into todayBags
+      // only, so parallelism isn't needed. If future code needs sized cycles,
+      // sort them together as {date,size} tuples before this point.
       todayBags.sort((a, b) => a - b);
       const cycleTimes = [];
       for (let i = 1; i < todayBags.length; i++) {

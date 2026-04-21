@@ -197,6 +197,8 @@ const LABELS = {
     waiting: 'Waiting to Start',
     liveScale: 'Live Scale',
     scaleOf: 'of',
+    bagComplete: '5KG Bag Complete',
+    bag10lbComplete: '10 LB Bag Complete',
   },
   es: {
     title: 'Entrada por Hora',

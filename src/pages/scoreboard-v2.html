@@ -579,7 +579,8 @@
 
       <!-- Bag Stats Row -->
       <div class="timer-stats">
-        <div class="timer-stat"><span class="timer-stat-label" id="bagsTodayLabel">Bags Today</span><span class="timer-stat-value" id="bagsToday">0</span></div>
+        <!-- #bagsToday retained as hidden total fallback for any legacy consumer -->
+        <div class="timer-stat"><span class="timer-stat-label" id="bagsTodayLabel">Bags Today</span><span class="timer-stat-value">5kg&nbsp;·&nbsp;<span id="bags5kgToday">0</span>&nbsp;|&nbsp;10lb&nbsp;·&nbsp;<span id="bags10lbToday">0</span><span id="bagsToday" hidden>0</span></span></div>
         <div class="timer-stat"><span class="timer-stat-label" id="avgTodayLabel">Avg Today</span><span class="timer-stat-value" id="avgToday">--:--</span></div>
         <div class="timer-stat"><span class="timer-stat-label" id="vsTargetLabel">vs Target</span><span class="timer-stat-value" id="vsTarget">—</span></div>
       </div>
@@ -587,6 +588,7 @@
       <!-- Button Row -->
       <div class="timer-btn-row">
         <button class="manual-btn" id="manualBtn"><span class="icon"><i class="ph-duotone ph-package"></i></span><span id="manualBtnText">5KG Bag Complete</span></button>
+        <button class="manual-btn" id="manualBtn10lb"><span class="icon"><i class="ph-duotone ph-package"></i></span><span id="manualBtn10lbText">10 LB Bag Complete</span></button>
         <button class="pause-btn" id="pauseBtn"><i class="ph-duotone ph-pause"></i></button>
       </div>
 
