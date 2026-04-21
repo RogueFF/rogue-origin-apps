@@ -451,8 +451,13 @@
     var timerTargetTime = DOM ? DOM.get('timerTargetTime') : document.getElementById('timerTargetTime');
     var timerTrimmers = DOM ? DOM.get('timerTrimmers') : document.getElementById('timerTrimmers');
     var bagsTodayEl = DOM ? DOM.get('bagsToday') : document.getElementById('bagsToday');
+    var bags5kgTodayEl = DOM ? DOM.get('bags5kgToday') : document.getElementById('bags5kgToday');
+    var bags10lbTodayEl = DOM ? DOM.get('bags10lbToday') : document.getElementById('bags10lbToday');
     var avgTodayEl = DOM ? DOM.get('avgToday') : document.getElementById('avgToday');
     var vsTargetEl = DOM ? DOM.get('vsTarget') : document.getElementById('vsTarget');
+
+    var bags5kgToday = (timerData && timerData.bags5kgToday != null) ? timerData.bags5kgToday : bagsToday;
+    var bags10lbToday = (timerData && timerData.bags10lbToday) || 0;
 
     if (timerTargetTime) {
       timerTargetTime.textContent = effectiveTarget > 0 ? formatTime(effectiveTarget) : '--:--';
@@ -462,6 +467,12 @@
     }
     if (bagsTodayEl) {
       bagsTodayEl.textContent = bagsToday;
+    }
+    if (bags5kgTodayEl) {
+      bags5kgTodayEl.textContent = bags5kgToday;
+    }
+    if (bags10lbTodayEl) {
+      bags10lbTodayEl.textContent = bags10lbToday;
     }
     if (avgTodayEl) {
       avgTodayEl.textContent = avgSecToday > 0 ? formatTime(avgSecToday) : '--:--';
@@ -486,14 +497,18 @@
       }
     }
 
-    // Update button color to match timer state
-    var btn = DOM ? DOM.get('manualBtn') : document.getElementById('manualBtn');
-    if (btn) {
+    // Update button color to match timer state (applies to both size buttons)
+    var colorTargets = [
+      DOM ? DOM.get('manualBtn') : document.getElementById('manualBtn'),
+      DOM ? DOM.get('manualBtn10lb') : document.getElementById('manualBtn10lb')
+    ];
+    colorTargets.forEach(function(btn) {
+      if (!btn) return;
       btn.classList.remove('btn-green', 'btn-yellow', 'btn-red', 'btn-neutral');
       if (!btn.classList.contains('success')) {
         btn.classList.add('btn-' + colorClass);
       }
-    }
+    });
   }
 
   /**
@@ -841,15 +856,22 @@
   }
 
   /**
-   * Log a manual bag entry (5kg bag complete button)
+   * Log a manual bag entry. Accepts options { size: '5kg' | '10lb' }.
+   * Called without args = legacy 5kg behavior.
    */
-  function logManualEntry() {
+  function logManualEntry(options) {
     if (!API || !API.logBag) {
       console.warn('API.logBag not available');
       return;
     }
 
-    var btn = DOM ? DOM.get('manualBtn') : document.getElementById('manualBtn');
+    var size = (options && options.size) || '5kg';
+    var is10lb = size === '10lb';
+    var btnId = is10lb ? 'manualBtn10lb' : 'manualBtn';
+    var btnTextId = is10lb ? 'manualBtn10lbText' : 'manualBtnText';
+    var defaultLabel = is10lb ? '10 LB Bag Complete' : '5KG Bag Complete';
+
+    var btn = DOM ? DOM.get(btnId) : document.getElementById(btnId);
     if (!btn) return;
 
     // Mark busy so the scale-weight gate doesn't toggle disabled while
@@ -859,12 +881,12 @@
     // Disable button and show loading state
     btn.disabled = true;
     btn.classList.add('loading');
-    var btnText = DOM ? DOM.get('manualBtnText') : document.getElementById('manualBtnText');
-    var originalText = btnText ? btnText.textContent : '5KG Bag Complete';
+    var btnText = DOM ? DOM.get(btnTextId) : document.getElementById(btnTextId);
+    var originalText = btnText ? btnText.textContent : defaultLabel;
     if (btnText) btnText.textContent = 'Logging...';
 
     API.logBag(
-      {},
+      { size: size },
       function(result) {
         if (result && result.success) {
           console.debug('Manual bag logged:', result);
@@ -940,6 +962,10 @@
     );
   }
 
+  function logManualEntry10lb() {
+    return logManualEntry({ size: '10lb' });
+  }
+
   // Export public API
   window.ScoreboardTimer = {
     formatTime: formatTime,
@@ -957,11 +983,13 @@
     resumeTimer: resumeTimer,
     applyPauseState: applyPauseState,
     toggleTimerFullscreen: toggleTimerFullscreen,
-    logManualEntry: logManualEntry
+    logManualEntry: logManualEntry,
+    logManualEntry10lb: logManualEntry10lb
   };
 
   // Expose global functions for inline handlers and event listeners
   window.toggleTimerFullscreen = toggleTimerFullscreen;
   window.logManualEntry = logManualEntry;
+  window.logManualEntry10lb = logManualEntry10lb;
 
 })(window);

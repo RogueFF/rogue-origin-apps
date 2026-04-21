@@ -53,7 +53,7 @@ TODAY'S PRODUCTION:
 - Strain: ${scoreboardData.strain || 'Unknown'}
 
 CREW: ${scoreboardData.currentHourTrimmers || 0} trimmers
-BAGS: ${timerData.bags5kgToday || 0} (5kg) today
+BAGS: ${timerData.bags5kgToday || 0} (5kg), ${timerData.bags10lbToday || 0} (10lb) today
 
 Be concise and helpful. Support English and Spanish.`;
 
