@@ -206,19 +206,6 @@
       pauseBtn.addEventListener('click', handlePauseClick);
     }
 
-    // Bag mode pill toggle — only on v2 scoreboard; other UIs follow
-    function wireBagModePill(btnId, mode) {
-      var btn = el(btnId);
-      if (!btn) return;
-      btn.addEventListener('click', function() {
-        if (window.ScoreboardAPI && window.ScoreboardAPI.setBagMode) {
-          window.ScoreboardAPI.setBagMode(mode);
-        }
-      });
-    }
-    wireBagModePill('bagMode5kgBtn', '5kg');
-    wireBagModePill('bagMode10lbBtn', '10lb');
-
     // Cycle History Controls — use event delegation for reliability
     document.addEventListener('click', function(e) {
       var btn = e.target.closest('.cycle-nav-btn');
