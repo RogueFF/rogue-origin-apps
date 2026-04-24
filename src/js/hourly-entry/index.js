@@ -201,6 +201,8 @@ const LABELS = {
     waiting: 'Waiting to Start',
     liveScale: 'Live Scale',
     scaleOf: 'of',
+    bagComplete: '5KG Bag Complete',
+    bag10lbComplete: '10 LB Bag Complete',
   },
   es: {
     title: 'Entrada por Hora',
@@ -297,6 +299,8 @@ const LABELS = {
     waiting: 'Esperando Inicio',
     liveScale: 'Báscula en Vivo',
     scaleOf: 'de',
+    bagComplete: 'Bolsa 5KG Lista',
+    bag10lbComplete: 'Bolsa de 10 LB Completa',
   },
 };
 
@@ -2195,6 +2199,7 @@ async function initBarcodeCard() {
   initBarcodeTabs();
   initScannerTab();
   initBagCompleteButton();
+  initBagComplete10lbButton();
 }
 
 /**
@@ -2544,6 +2549,7 @@ function initBagCompleteButton() {
   registerListener(btn, 'click', async () => {
     if (btn.disabled) return;
 
+    btn.dataset.busy = 'true';
     btn.disabled = true;
     const originalText = btnText.textContent;
     btnText.textContent = 'Logging...';
@@ -2562,14 +2568,67 @@ function initBagCompleteButton() {
       setTimeout(() => {
         btnText.textContent = originalText;
         btn.classList.remove('success');
-        btn.disabled = false;
+        delete btn.dataset.busy;
+        // Let the next scale poll re-evaluate the gate.
+        btn.disabled = btn.dataset.gated === 'true';
       }, 2000);
     } catch (error) {
       console.error('Error logging bag:', error);
       btnText.textContent = '✗ Failed — tap to retry';
       setTimeout(() => {
         btnText.textContent = originalText;
-        btn.disabled = false;
+        delete btn.dataset.busy;
+        btn.disabled = btn.dataset.gated === 'true';
+      }, 3000);
+    }
+  });
+}
+
+/**
+ * Initialize the 10 LB Bag Complete button (sibling of 5kg handler, size: '10lb')
+ */
+function initBagComplete10lbButton() {
+  const btn = document.getElementById('bag-complete-btn-10lb');
+  const btnText = document.getElementById('bag-complete-text-10lb');
+  if (!btn) return;
+
+  registerListener(btn, 'click', async () => {
+    if (btn.disabled) return;
+
+    btn.dataset.busy = 'true';
+    btn.disabled = true;
+    const originalText = btnText.textContent;
+    btnText.textContent = 'Logging...';
+
+    try {
+      const response = await fetch(`${API_URL}?action=logBag`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ size: '10lb' })
+      });
+
+      if (!response.ok) throw new Error('Failed to log bag');
+
+      btnText.textContent = '✓ Logged!';
+      btn.classList.add('success');
+
+      if (typeof loadBagTimer === 'function') {
+        loadBagTimer();
+      }
+
+      setTimeout(() => {
+        btnText.textContent = originalText;
+        btn.classList.remove('success');
+        delete btn.dataset.busy;
+        btn.disabled = btn.dataset.gated === 'true';
+      }, 2000);
+    } catch (error) {
+      console.error('Error logging 10lb bag:', error);
+      btnText.textContent = '✗ Failed — tap to retry';
+      setTimeout(() => {
+        btnText.textContent = originalText;
+        delete btn.dataset.busy;
+        btn.disabled = btn.dataset.gated === 'true';
       }, 3000);
     }
   });
@@ -3467,12 +3526,13 @@ function renderScale(scaleData) {
     }
     if (scaleLabel) {
       const ofLabel = LABELS[currentLang]?.scaleOf || 'of';
-      scaleLabel.textContent = `${ofLabel} 5.0 kg`;
+      scaleLabel.textContent = `${ofLabel} 5000 g`;
     }
     if (scaleRing) {
       scaleRing.style.strokeDashoffset = RING_CIRCUMFERENCE;
       scaleRing.setAttribute('class', 'scale-ring-progress stale');
     }
+    gateBagCompleteButton(null);
     return;
   }
 
@@ -3497,24 +3557,88 @@ function renderScale(scaleData) {
     statusDot.classList.toggle('stale', isStale);
   }
 
-  // Update weight value
+  // Update weight value (display in grams; API delivers kg)
   if (weightEl) {
-    weightEl.textContent = isStale ? '—' : weight.toFixed(2) + ' kg';
+    weightEl.textContent = isStale ? '—' : Math.round(weight * 1000) + ' g';
     weightEl.className = 'scale-value ' + colorClass;
   }
 
   // Update label
   if (scaleLabel) {
     const ofLabel = LABELS[currentLang]?.scaleOf || 'of';
-    scaleLabel.textContent = `${ofLabel} ${targetWeight.toFixed(1)} kg`;
+    scaleLabel.textContent = `${ofLabel} ${Math.round(targetWeight * 1000)} g`;
   }
 
   // Update circular ring progress
   if (scaleRing) {
     const progress = isStale ? 0 : Math.min(1, percent / 100);
     const offset = RING_CIRCUMFERENCE * (1 - progress);
-    scaleRing.style.strokeDashoffset = offset;
     scaleRing.setAttribute('class', 'scale-ring-progress ' + colorClass);
+    scaleRing.style.strokeDashoffset = offset;
+  }
+
+  gateBagCompleteButton(scaleData);
+}
+
+// Bag-complete button gating (mirrors scoreboard scale.js).
+// 5kg: target gross = 5000g product + 136.08g Grove Bag.
+// Acceptable window: -30g squish, +90.72g overage cap.
+const BAG_GATE_MIN_GRAMS = 5196;
+const BAG_GATE_MAX_GRAMS = 5317;
+
+// 10lb: gross weight window for a 10lb bag (incl. Grove Bag tare).
+const BAG10LB_GATE_MIN_GRAMS = 4642;
+const BAG10LB_GATE_MAX_GRAMS = 4763;
+
+function applyBagGate(btn, inRange, grams, minG, maxG) {
+  btn.dataset.gated = String(!inRange);
+  // Don't toggle off mid-API-call (handler sets data-busy when posting).
+  if (!btn.dataset.busy) btn.disabled = !inRange;
+  btn.setAttribute('aria-disabled', String(!inRange));
+  btn.title = inRange
+    ? ''
+    : `Scale reads ${grams} g — bag must be ${minG}–${maxG} g (with bag) to log.`;
+}
+
+function clearBagGate(btn) {
+  btn.dataset.gated = 'false';
+  if (!btn.dataset.busy) btn.disabled = false;
+  btn.removeAttribute('title');
+  btn.removeAttribute('aria-disabled');
+}
+
+function setBagButtonVisibility(btn5, btn10, scaleData) {
+  // Visibility driven by app-side bag_mode (toggle lives on scoreboard v2).
+  // Fallback to '5kg' if scaleData or bagMode missing.
+  const mode = (scaleData && scaleData.bagMode) || '5kg';
+  if (btn5) btn5.style.display = mode === '10lb' ? 'none' : '';
+  if (btn10) btn10.style.display = mode === '10lb' ? '' : 'none';
+}
+
+function gateBagCompleteButton(scaleData) {
+  const btn5 = document.getElementById('bag-complete-btn');
+  const btn10 = document.getElementById('bag-complete-btn-10lb');
+  if (!btn5 && !btn10) return;
+
+  setBagButtonVisibility(btn5, btn10, scaleData);
+
+  // Scale offline → keep buttons enabled so production isn't halted.
+  const isStale = !scaleData || scaleData.isStale !== false;
+  if (isStale) {
+    if (btn5) clearBagGate(btn5);
+    if (btn10) clearBagGate(btn10);
+    return;
+  }
+
+  const grams = Math.round((scaleData.weight || 0) * 1000);
+
+  if (btn5) {
+    const in5kg = grams >= BAG_GATE_MIN_GRAMS && grams <= BAG_GATE_MAX_GRAMS;
+    applyBagGate(btn5, in5kg, grams, BAG_GATE_MIN_GRAMS, BAG_GATE_MAX_GRAMS);
+  }
+  if (btn10) {
+    const in10lb = grams >= BAG10LB_GATE_MIN_GRAMS && grams <= BAG10LB_GATE_MAX_GRAMS;
+    applyBagGate(btn10, in10lb, grams, BAG10LB_GATE_MIN_GRAMS, BAG10LB_GATE_MAX_GRAMS);
   }
 }
 
@@ -3896,11 +4020,21 @@ async function loadBagTimerData() {
 
     const timer = data.timer || {};
 
-    // Store bags today count
+    // Store bags today count (total kept for avg-rate math / legacy consumers)
     timerBagsToday = timer.bagsToday || 0;
+    const bags5kgToday = (timer.bags5kgToday != null) ? timer.bags5kgToday : timerBagsToday;
+    const bags10lbToday = timer.bags10lbToday || 0;
     const bagsTodayEl = document.getElementById('bags-today');
     if (bagsTodayEl) {
       bagsTodayEl.textContent = timerBagsToday;
+    }
+    const bags5kgTodayEl = document.getElementById('bags5kgToday');
+    if (bags5kgTodayEl) {
+      bags5kgTodayEl.textContent = bags5kgToday;
+    }
+    const bags10lbTodayEl = document.getElementById('bags10lbToday');
+    if (bags10lbTodayEl) {
+      bags10lbTodayEl.textContent = bags10lbToday;
     }
 
     // Store last bag timestamp for countdown

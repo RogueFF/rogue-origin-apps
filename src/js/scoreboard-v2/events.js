@@ -190,7 +190,14 @@
     const manualBtn = el('manualBtn');
     if (manualBtn) {
       manualBtn.addEventListener('click', function() {
-        if (window.logManualEntry) window.logManualEntry();
+        if (window.logManualEntry) window.logManualEntry({ size: '5kg' });
+      });
+    }
+
+    const manualBtn10lb = el('manualBtn10lb');
+    if (manualBtn10lb) {
+      manualBtn10lb.addEventListener('click', function() {
+        if (window.logManualEntry10lb) window.logManualEntry10lb();
       });
     }
 
@@ -198,6 +205,19 @@
     if (pauseBtn) {
       pauseBtn.addEventListener('click', handlePauseClick);
     }
+
+    // Bag mode pill toggle — only on v2 scoreboard; other UIs follow
+    function wireBagModePill(btnId, mode) {
+      var btn = el(btnId);
+      if (!btn) return;
+      btn.addEventListener('click', function() {
+        if (window.ScoreboardAPI && window.ScoreboardAPI.setBagMode) {
+          window.ScoreboardAPI.setBagMode(mode);
+        }
+      });
+    }
+    wireBagModePill('bagMode5kgBtn', '5kg');
+    wireBagModePill('bagMode10lbBtn', '10lb');
 
     // Cycle History Controls — use event delegation for reliability
     document.addEventListener('click', function(e) {

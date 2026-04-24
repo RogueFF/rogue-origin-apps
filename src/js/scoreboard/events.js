@@ -176,6 +176,11 @@
       manualBtn.addEventListener('click', logManualEntry);
     }
 
+    const manualBtn10lb = el('manualBtn10lb');
+    if (manualBtn10lb) {
+      manualBtn10lb.addEventListener('click', logManualEntry10lb);
+    }
+
     const pauseBtn = el('pauseBtn');
     if (pauseBtn) {
       pauseBtn.addEventListener('click', handlePauseClick);
