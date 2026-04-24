@@ -3626,3 +3626,42 @@ input[type="number"] {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ============================================================
+   BAG MODE TOGGLE — manager-only; drives 5kg vs 10lb across stations
+   ============================================================ */
+.bag-mode-toggle {
+  display: inline-flex;
+  gap: 0;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  margin: 8px 0;
+}
+.bag-mode-pill {
+  padding: 8px 18px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #5a5a5a;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.bag-mode-pill:hover {
+  color: #1a1a1a;
+}
+.bag-mode-pill.active {
+  background: var(--ro-green, #668971);
+  color: #fff;
+}
+.bag-mode-pill:focus-visible {
+  outline: 2px solid var(--ro-gold, #e4aa4f);
+  outline-offset: 2px;
+}

@@ -2200,6 +2200,7 @@ async function initBarcodeCard() {
   initScannerTab();
   initBagCompleteButton();
   initBagComplete10lbButton();
+  initBagModeToggle();
 }
 
 /**
@@ -2601,13 +2602,7 @@ function initBagComplete10lbButton() {
     btnText.textContent = 'Logging...';
 
     try {
-      const response = await fetch(`${API_URL}?action=logBag`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ size: '10lb' })
-      });
-
-      if (!response.ok) throw new Error('Failed to log bag');
+      await productionApi.post('logBag', { size: '10lb' });
 
       btnText.textContent = '✓ Logged!';
       btn.classList.add('success');
@@ -2632,6 +2627,38 @@ function initBagComplete10lbButton() {
       }, 3000);
     }
   });
+}
+
+/**
+ * Bag mode toggle (5kg / 10lb). Manager-only — drives which Log Bag button
+ * appears on every station. Backend `production.bag_mode` config row is the
+ * single source of truth; we POST and let the next scale poll reaffirm.
+ */
+function initBagModeToggle() {
+  const p5 = document.getElementById('bagMode5kgBtn');
+  const p10 = document.getElementById('bagMode10lbBtn');
+  if (!p5 || !p10) return;
+
+  function setActive(mode) {
+    p5.classList.toggle('active', mode === '5kg');
+    p10.classList.toggle('active', mode === '10lb');
+  }
+
+  async function pickMode(mode) {
+    setActive(mode);
+    if (typeof setBagButtonVisibilityForMode === 'function') {
+      setBagButtonVisibilityForMode(mode);
+    }
+    try {
+      await productionApi.post('setBagMode', { mode });
+    } catch (err) {
+      console.error('setBagMode failed:', err);
+      // Next scale poll will visually revert if the write didn't land.
+    }
+  }
+
+  registerListener(p5, 'click', () => pickMode('5kg'));
+  registerListener(p10, 'click', () => pickMode('10lb'));
 }
 
 /**
@@ -3608,9 +3635,17 @@ function clearBagGate(btn) {
 }
 
 function setBagButtonVisibility(btn5, btn10, scaleData) {
-  // Visibility driven by app-side bag_mode (toggle lives on scoreboard v2).
+  // Visibility driven by app-side bag_mode (toggle lives on hourly-entry).
   // Fallback to '5kg' if scaleData or bagMode missing.
   const mode = (scaleData && scaleData.bagMode) || '5kg';
+  setBagButtonVisibilityForMode(mode, btn5, btn10);
+}
+
+// Toggle visibility for a given mode without needing scaleData. Used by the
+// pill click handler for optimistic UI before the next scale poll lands.
+function setBagButtonVisibilityForMode(mode, btn5, btn10) {
+  btn5 = btn5 || document.getElementById('bag-complete-btn');
+  btn10 = btn10 || document.getElementById('bag-complete-btn-10lb');
   if (btn5) btn5.style.display = mode === '10lb' ? 'none' : '';
   if (btn10) btn10.style.display = mode === '10lb' ? '' : 'none';
 }
@@ -3621,6 +3656,13 @@ function gateBagCompleteButton(scaleData) {
   if (!btn5 && !btn10) return;
 
   setBagButtonVisibility(btn5, btn10, scaleData);
+
+  // Sync pill-active state with backend truth on every poll.
+  const mode = (scaleData && scaleData.bagMode) || '5kg';
+  const p5 = document.getElementById('bagMode5kgBtn');
+  const p10 = document.getElementById('bagMode10lbBtn');
+  if (p5) p5.classList.toggle('active', mode === '5kg');
+  if (p10) p10.classList.toggle('active', mode === '10lb');
 
   // Scale offline → keep buttons enabled so production isn't halted.
   const isStale = !scaleData || scaleData.isStale !== false;

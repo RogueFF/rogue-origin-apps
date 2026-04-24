@@ -587,13 +587,9 @@
         <div class="timer-stat"><span class="timer-stat-label" id="vsTargetLabel">vs Target</span><span class="timer-stat-value" id="vsTarget">—</span></div>
       </div>
 
-      <!-- Bag Mode Toggle: manager-only, drives which Log Bag button shows across all stations -->
-      <div class="bag-mode-toggle" role="group" aria-label="Bag size mode">
-        <button type="button" class="bag-mode-pill active" id="bagMode5kgBtn" data-mode="5kg">5 KG</button>
-        <button type="button" class="bag-mode-pill" id="bagMode10lbBtn" data-mode="10lb">10 LB</button>
-      </div>
-
       <!-- Button Row -->
+      <!-- Bag mode (5kg vs 10lb) toggle lives on the manager's hourly-entry view, not here. -->
+      <!-- Scoreboard is read-only for floor workers; it shows whichever button the manager set. -->
       <div class="timer-btn-row">
         <button class="manual-btn" id="manualBtn"><span class="icon"><i class="ph-duotone ph-package"></i></span><span id="manualBtnText">5KG Bag Complete</span></button>
         <button class="manual-btn" id="manualBtn10lb"><span class="icon"><i class="ph-duotone ph-package"></i></span><span id="manualBtn10lbText">10 LB Bag Complete</span></button>
