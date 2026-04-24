@@ -3,8 +3,7 @@
  */
 
 import { successResponse, errorResponse } from '../../lib/response.js';
-import { getConfig, setConfig } from '../../lib/production-utils.js';
-import { incrementDataVersion } from './bag-tracking.js';
+import { getConfig, setConfig, incrementDataVersion } from '../../lib/production-utils.js';
 
 // Scale unit tag (kept as metadata on readings for debug/audit — no longer
 // drives button visibility).
