@@ -16,7 +16,7 @@ import { handleGetConfig, handleSetConfig, handleTestConfig } from './config.js'
 import { analyzeStrain } from './strain.js';
 import { inventoryWebhook } from './inventory.js';
 import { setShiftStart, getShiftStart } from './shift.js';
-import { getScaleWeight, setScaleWeight } from './scale.js';
+import { getScaleWeight, setScaleWeight, setBagMode } from './scale.js';
 import { migrateFromSheets, checkSheet } from './migrate.js';
 
 async function test(env) {
@@ -73,6 +73,8 @@ export async function handleProductionD1(request, env, ctx) {
           return await setScaleWeight(body, env);
         }
         return await getScaleWeight(params, env);
+      case 'setBagMode':
+        return await setBagMode(body, env);
       case 'inventoryWebhook':
       case 'webhook':
         return await inventoryWebhook(body, env, request);

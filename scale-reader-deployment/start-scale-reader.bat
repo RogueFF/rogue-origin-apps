@@ -26,10 +26,10 @@ if not exist node_modules (
 )
 
 :: Start the scale reader
-echo Starting scale reader...
+echo Starting scale reader on COM4...
 echo Press Ctrl+C to stop.
 echo.
-npm start
+node index.js COM4
 
 :: If it crashes, wait and restart
 echo.
@@ -40,5 +40,5 @@ goto :restart
 
 :restart
 echo Restarting...
-npm start
+node index.js COM4
 goto :restart
