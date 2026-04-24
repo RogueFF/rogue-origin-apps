@@ -234,26 +234,43 @@
      */
     setBagMode: function(mode) {
       const apiUrl = this.getApiUrl();
+
+      // Optimistic update FIRST — flip the pill + scale.js visibility immediately
+      // so the manager doesn't see a "reverts to 5kg" flash before the POST returns.
+      if (window.ScoreboardState) {
+        if (!window.ScoreboardState.scaleData) window.ScoreboardState.scaleData = {};
+        window.ScoreboardState.scaleData.bagMode = mode;
+      }
+      var p5 = document.getElementById('bagMode5kgBtn');
+      var p10 = document.getElementById('bagMode10lbBtn');
+      if (p5) p5.classList.toggle('active', mode === '5kg');
+      if (p10) p10.classList.toggle('active', mode === '10lb');
+      if (window.ScoreboardScale && window.ScoreboardScale.renderScale) {
+        window.ScoreboardScale.renderScale();
+      }
+
       fetch(`${apiUrl}?action=setBagMode`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode: mode }),
       })
-        .then(function(r) { return r.json(); })
+        .then(function(r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        })
         .then(function(raw) {
           const resp = raw.data || raw;
-          if (window.ScoreboardState) window.ScoreboardState.bagMode = resp.bagMode || mode;
-          // Optimistic local UI update — the scale poll will reaffirm shortly
-          if (window.ScoreboardScale && window.ScoreboardScale.renderScale) {
-            window.ScoreboardScale.renderScale();
+          // Reaffirm with backend truth (in case server normalized differently).
+          if (window.ScoreboardState && window.ScoreboardState.scaleData) {
+            window.ScoreboardState.scaleData.bagMode = resp.bagMode || mode;
           }
-          // Update pill-active state
-          var p5 = document.getElementById('bagMode5kgBtn');
-          var p10 = document.getElementById('bagMode10lbBtn');
-          if (p5) p5.classList.toggle('active', (resp.bagMode || mode) === '5kg');
-          if (p10) p10.classList.toggle('active', (resp.bagMode || mode) === '10lb');
         })
-        .catch(function(e) { console.error('setBagMode failed:', e); });
+        .catch(function(e) {
+          console.error('setBagMode failed:', e);
+          // POST failed — the next scale poll will reflect actual backend state,
+          // which will visually "undo" the optimistic flip if the write didn't
+          // land. Operator sees the reversion and can retry.
+        });
     },
 
     /**
