@@ -139,11 +139,13 @@ function getBreakMinutesInWindow(startTime, endTime) {
 async function getBagTimerData(env, date = null) {
   const result = {
     lastBagTime: null,
+    lastBagSize: '5kg',          // drives which target cycle time we return
     secondsSinceLastBag: 0,
     targetSeconds: 0,
     avgSecondsToday: 0,
     bagsToday: 0,
     bags5kgToday: 0,
+    bags10lbToday: 0,
     currentTrimmers: 0,
     targetRate: 0,
     cycleHistory: [],
@@ -153,6 +155,7 @@ async function getBagTimerData(env, date = null) {
     const today = date || formatDatePT(new Date(), 'yyyy-MM-dd');
     const now = date ? new Date(date + 'T23:59:59') : new Date();
 
+    // Fetch BOTH 5kg and 10lb bags — callers split by size below.
     const bags = await query(env.DB, `
       SELECT timestamp, size, sku, flow_run_id
       FROM inventory_adjustments
@@ -162,6 +165,10 @@ async function getBagTimerData(env, date = null) {
           OR lower(size) LIKE '%5 kg%'
           OR lower(sku) LIKE '%5-KG%'
           OR lower(sku) LIKE '%-5KG-%'
+          OR lower(size) LIKE '%10lb%'
+          OR lower(size) LIKE '%10 lb%'
+          OR lower(sku) LIKE '%10-LB%'
+          OR lower(sku) LIKE '%-10LB-%'
         )
       ORDER BY timestamp ASC
     `, [today]);
@@ -171,32 +178,25 @@ async function getBagTimerData(env, date = null) {
     result.currentTrimmers = resolveTimerCrew(scoreboardData);
     result.targetRate = scoreboardData.targetRate || 1.0;
 
-    const bagWeightLbs = 11.0231;
-    const teamRateLbsPerHour = result.currentTrimmers * result.targetRate;
-    if (teamRateLbsPerHour > 0) {
-      const baseTargetSeconds = Math.round((bagWeightLbs / teamRateLbsPerHour) * 3600);
+    // Target cycle time depends on bag size (11.02 lb for 5kg vs 10 lb for 10lb).
+    // We need to know the last bag's size before we can finalize target, so
+    // target calc moved below the dedup loop.
+    const BAG_WEIGHTS_LBS = { '5kg': 11.0231, '10lb': 10.0 };
 
-      const currentTimeSlot = scoreboardData.currentTimeSlot || '';
-      const timeSlotMultipliers = (await getConfig(env, 'schedule.time_slot_multipliers')) ?? TIME_SLOT_MULTIPLIERS;
-      const hourMultiplier = getTimeSlotMultiplier(currentTimeSlot, timeSlotMultipliers);
-
-      if (hourMultiplier > 0 && hourMultiplier < 1.0) {
-        result.targetSeconds = Math.round(baseTargetSeconds / hourMultiplier);
-      } else {
-        result.targetSeconds = baseTargetSeconds;
-      }
-    }
-
-    if (!bags || bags.length === 0) {
-      return result;
-    }
+    const classifyBagSize = (row) => {
+      const sizeStr = (row.size || '').toLowerCase();
+      const skuStr = (row.sku || '').toLowerCase();
+      if (/10\s*lb/.test(sizeStr) || /-?10lb-?/.test(skuStr)) return '10lb';
+      return '5kg';
+    };
 
     const todayBags = [];
+    const bagSizes = [];  // parallel array to todayBags
     const seenFlowRunIds = new Set();
     const seenTimestamps = new Map();
     let lastBag = null;
 
-    for (const row of bags) {
+    for (const row of bags || []) {
       const rowDate = new Date(row.timestamp);
       if (isNaN(rowDate.getTime())) continue;
 
@@ -232,23 +232,50 @@ async function getBagTimerData(env, date = null) {
       }
       if (isDuplicate) continue;
 
+      const bagSize = classifyBagSize(row);
       seenTimestamps.set(row.timestamp, rowDate);
       todayBags.push(rowDate);
+      bagSizes.push(bagSize);
 
       if (!lastBag || rowDate > lastBag.time) {
-        lastBag = { time: rowDate, size: row.size };
+        lastBag = { time: rowDate, size: bagSize };
       }
     }
 
+    // Target = (bagWeightLbs / teamRateLbsPerHour) * 3600, adjusted for time-slot multiplier.
+    // Use last logged bag's size; fall back to 5kg before any bags are logged today.
+    const targetSize = lastBag ? lastBag.size : '5kg';
+    const bagWeightLbs = BAG_WEIGHTS_LBS[targetSize] || BAG_WEIGHTS_LBS['5kg'];
+    const teamRateLbsPerHour = result.currentTrimmers * result.targetRate;
+    if (teamRateLbsPerHour > 0) {
+      const baseTargetSeconds = Math.round((bagWeightLbs / teamRateLbsPerHour) * 3600);
+      const currentTimeSlot = scoreboardData.currentTimeSlot || '';
+      const timeSlotMultipliers = (await getConfig(env, 'schedule.time_slot_multipliers')) ?? TIME_SLOT_MULTIPLIERS;
+      const hourMultiplier = getTimeSlotMultiplier(currentTimeSlot, timeSlotMultipliers);
+      result.targetSeconds = (hourMultiplier > 0 && hourMultiplier < 1.0)
+        ? Math.round(baseTargetSeconds / hourMultiplier)
+        : baseTargetSeconds;
+    }
+
+    if (!todayBags.length) {
+      return result;
+    }
+
     result.bagsToday = todayBags.length;
-    result.bags5kgToday = todayBags.length;
+    result.bags5kgToday = bagSizes.filter((s) => s === '5kg').length;
+    result.bags10lbToday = bagSizes.filter((s) => s === '10lb').length;
 
     if (lastBag) {
       result.lastBagTime = lastBag.time.toISOString();
+      result.lastBagSize = lastBag.size;
       result.secondsSinceLastBag = Math.floor((now - lastBag.time) / 1000);
     }
 
     if (todayBags.length > 1) {
+      // NOTE: sort mutates only todayBags; bagSizes is no longer parallel
+      // after this point. Cycle-history calc below uses indices into todayBags
+      // only, so parallelism isn't needed. If future code needs sized cycles,
+      // sort them together as {date,size} tuples before this point.
       todayBags.sort((a, b) => a - b);
       const cycleTimes = [];
       for (let i = 1; i < todayBags.length; i++) {
@@ -336,31 +363,37 @@ async function getBagTimerData(env, date = null) {
 // ===== ACTION HANDLERS =====
 
 async function logBag(body, env) {
-  const size = body.size || '5 kg.';
+  // Normalize size: accept "5kg", "5 kg", "5 kg.", "10lb", "10 lb", etc.
+  const rawSize = (body.size || '5kg').toString().toLowerCase();
+  const is10lb = /10\s*lb/.test(rawSize);
+  const normalizedSize = is10lb ? '10lb' : '5kg';
+  const sizeDisplay = is10lb ? '10 lb.' : '5 kg.';
+  const bagWeightKg = is10lb ? 4.5359 : 5.0;
+
   const now = new Date();
-  const sku = 'MANUAL-5KG-BAG';
-  const flowRunId = `MANUAL-5KG-${now.toISOString()}`;
+  const sku = is10lb ? 'MANUAL-10LB-BAG' : 'MANUAL-5KG-BAG';
+  const flowRunId = `MANUAL-${normalizedSize.toUpperCase()}-${now.toISOString()}`;
 
   // Write to inventory_adjustments (where bag timer reads from)
   await insert(env.DB, 'inventory_adjustments', {
     timestamp: now.toISOString(),
-    size: '5kg',
+    size: normalizedSize,
     sku: sku,
-    product_name: 'Manual 5KG Bag Scan',
+    product_name: `Manual ${sizeDisplay.trim()} Bag Scan`,
     flow_run_id: flowRunId,
   });
 
   // Also write to production_tracking for legacy tracking
   await insert(env.DB, 'production_tracking', {
     timestamp: now.toISOString(),
-    bag_type: size,
-    weight: size.includes('5') ? 5 : 0,
+    bag_type: sizeDisplay,
+    weight: bagWeightKg,
     source: 'manual',
   });
 
   await incrementDataVersion(env);
 
-  return successResponse({ timestamp: now.toISOString(), size });
+  return successResponse({ timestamp: now.toISOString(), size: normalizedSize });
 }
 
 async function logPause(body, env) {

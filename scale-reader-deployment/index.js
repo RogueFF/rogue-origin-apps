@@ -1,7 +1,8 @@
 /**
- * Scale Reader for Brecknell GP100
+ * Scale Reader for OHAUS Defender 5000 (100 lb x 0.005 lb)
  *
- * Reads weight from USB scale, displays locally, and pushes to cloud API.
+ * Reads weight from RS-232 scale (via USB-serial adapter), displays locally,
+ * and pushes to cloud API.
  *
  * Usage:
  *   npm start              - Connect to real scale
@@ -18,16 +19,66 @@ const CONFIG = {
   port: 3000,
   apiUrl: 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production?action=scaleWeight',
   pushInterval: 500,      // Push to API every 500ms
-  serialBaud: 9600,       // Brecknell GP100 default
+  serialBaud: 9600,       // OHAUS Defender 5000 default (8-N-1)
+  pollInterval: 500,      // How often to request a weight reading (ms)
   stationId: 'line1',
-  targetWeight: 5.0,      // kg
+  targetWeight: 5.0,      // kg (displayed/stored in kg; scale reads lb)
 };
+
+const LB_TO_KG = 0.453592;
+const OZ_TO_KG = 0.0283495;
 
 // State
 let currentWeight = 0;
+let currentUnit = 'g';        // Source unit from the indicator — drives bag-size button visibility downstream
 let isConnected = false;
 let useMock = process.argv.includes('--mock');
 let serialPort = null;
+
+// Parse one line of OHAUS Defender 5000 output.
+// Each Print (P\r\n) returns up to 4 lines, e.g.:
+//   "          4     g     "    no marker  (displayed value)
+//   "          4     g    G"    Gross
+//   "         4     g    N"     Net   ← preferred when scale is tared
+//   "          0     g    T"    Tare  ← MUST be ignored, not a current reading
+// Indicator unit may be g, kg, lb, or oz depending on configuration.
+// Unstable readings carry a '?' suffix; we still accept them so the live
+// display tracks the bag as it fills.
+// Returns { kg, raw, unit, marker, stable } or null if the line should be skipped.
+function parseOhausLine(line) {
+  if (!line || !line.trim()) return null;
+
+  // Match number + unit. Order matters: kg before g so "kg" wins over "g".
+  const match = line.match(/(-?\d+(?:\.\d+)?)\s*(kg|lb|oz|g)\b/i);
+  if (!match) return null;
+
+  // Detect line type marker (G=gross, N=net, T=tare). Anything else = unmarked.
+  const markerMatch = line.match(/\b([GNT])\s*$/);
+  const marker = markerMatch ? markerMatch[1] : '';
+
+  // Tare lines report the tare offset, not current weight — never use as reading.
+  if (marker === 'T') return null;
+
+  const raw = parseFloat(match[1]);
+  const unit = match[2].toLowerCase();
+  const stable = !/\?/.test(line);
+
+  let kg;
+  switch (unit) {
+    case 'kg': kg = raw; break;
+    case 'g':  kg = raw / 1000; break;
+    case 'lb': kg = raw * LB_TO_KG; break;
+    case 'oz': kg = raw * OZ_TO_KG; break;
+  }
+
+  return {
+    kg: Math.max(0, Math.round(kg * 1000) / 1000),
+    raw,
+    unit,
+    marker,
+    stable,
+  };
+}
 
 // Express app
 const app = express();
@@ -38,6 +89,7 @@ app.use(express.json());
 app.get('/api/weight', (req, res) => {
   res.json({
     weight: currentWeight,
+    unit: currentUnit,
     targetWeight: CONFIG.targetWeight,
     percentComplete: Math.min(100, Math.round((currentWeight / CONFIG.targetWeight) * 100)),
     isConnected,
@@ -69,6 +121,7 @@ async function pushToCloud() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         weight: currentWeight,
+        unit: currentUnit,
         stationId: CONFIG.stationId,
       }),
     });
@@ -84,26 +137,58 @@ async function pushToCloud() {
 // Start cloud push interval
 setInterval(pushToCloud, CONFIG.pushInterval);
 
-// Mock mode: simulate weight changes
+// Mock mode: simulate weight changes. `--mock-demo` also flips the
+// facility's bag_mode via the API every 90s so you can watch the
+// scoreboard buttons swap without touching the real scale.
 if (useMock) {
-  console.log('  Mock mode: Weight will simulate filling a bag\n');
+  const demoMode = process.argv.includes('--mock-demo');
+  console.log('  Mock mode: Weight will simulate filling a bag');
+  if (demoMode) {
+    console.log('  Demo mode: bag_mode will flip via API every 90s (5kg ↔ 10lb)\n');
+  } else {
+    console.log('');
+  }
   isConnected = true;
+
+  // Per-mode target weights (kg). 5kg bag = 5.2kg gross; 10lb bag = 4.67kg gross.
+  const TARGETS = { '5kg': 5.2, '10lb': 4.67 };
+  let demoBagMode = '5kg';
+  currentUnit = 'g';
+
+  // Flip the facility bag mode via the backend API. This is how a manager
+  // would do it from the scoreboard — we just automate the tap.
+  async function flipBagMode() {
+    demoBagMode = demoBagMode === '5kg' ? '10lb' : '5kg';
+    try {
+      const url = CONFIG.apiUrl.replace('action=scaleWeight', 'action=setBagMode');
+      await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: demoBagMode, updatedBy: 'mock-demo' }),
+      });
+      console.log(`  [demo] bag_mode switched to ${demoBagMode}`);
+    } catch (e) {
+      console.error(`  [demo] failed to flip bag_mode:`, e.message);
+    }
+  }
+
+  if (demoMode) {
+    setInterval(flipBagMode, 90 * 1000);
+  }
 
   let direction = 1;
   setInterval(() => {
-    // Simulate weight going 0 -> 5 -> 0 (bag cycle)
+    const top = TARGETS[demoBagMode] + 0.02;
     currentWeight += direction * 0.05;
 
-    if (currentWeight >= 5.1) {
-      // Bag removed (simulate taking it off scale)
+    if (currentWeight >= top) {
       direction = -1;
     } else if (currentWeight <= 0) {
-      // New bag started
       direction = 1;
       currentWeight = 0;
     }
 
-    currentWeight = Math.max(0, Math.round(currentWeight * 100) / 100);
+    currentWeight = Math.max(0, Math.round(currentWeight * 1000) / 1000);
   }, 100);
 
 } else {
@@ -136,13 +221,14 @@ function initSerialPort() {
       console.log(`  Connected to scale on ${comPort}\n`);
       isConnected = true;
 
-      // Poll scale for weight every 500ms (Brecknell/NCI protocol)
+      // Poll scale for weight (OHAUS Print command: 'P' requests a stable reading).
+      // If the indicator is set to Continuous/Auto-Print, these requests are ignored
+      // and we simply parse the unsolicited stream.
       setInterval(() => {
         if (serialPort.isOpen) {
-          // Send weight request command (NCI protocol: 'W' or 'P')
-          serialPort.write('W\r\n');
+          serialPort.write('P\r\n');
         }
-      }, 500);
+      }, CONFIG.pollInterval);
     });
 
     serialPort.on('data', (data) => {
@@ -154,22 +240,12 @@ function initSerialPort() {
       buffer = lines.pop() || ''; // Keep incomplete line in buffer
 
       for (const line of lines) {
-        if (!line.trim()) continue;
-        // Brecknell GP100 format: "  4.72 kg" or "    2.4lb"
-        // Parse the weight value from the response
-        const match = line.match(/([\d.]+)\s*(kg|lb)/i);
-        if (match) {
-          let weight = parseFloat(match[1]);
-          const unit = match[2].toLowerCase();
+        const parsed = parseOhausLine(line);
+        if (parsed === null) continue;
 
-          // Convert lbs to kg if needed
-          if (unit === 'lb') {
-            weight = weight * 0.453592;
-          }
-
-          currentWeight = Math.max(0, Math.round(weight * 100) / 100);
-          console.log(`  Weight: ${currentWeight.toFixed(2)} kg (${match[1]} ${unit})`);
-        }
+        currentWeight = parsed.kg;
+        currentUnit = parsed.unit;  // source unit drives which bag-size button shows downstream
+        console.log(`  Weight: ${parsed.kg.toFixed(3)} kg  (raw: ${parsed.raw.toFixed(3)} ${parsed.unit}${parsed.stable ? '' : ' ?'})`);
       }
     });
 

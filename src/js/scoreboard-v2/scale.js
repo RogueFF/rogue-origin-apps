@@ -13,10 +13,80 @@
   var POLL_INTERVAL = 250; // 250ms polling for instant scale feel
   var API_URL = (Config && Config.apiUrl) || 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
   var RING_CIRCUMFERENCE = 2 * Math.PI * 95; // ~597, matches timer ring
-  var KG_TO_LBS = 2.20462;
 
-  // Unit preference (stored in localStorage)
-  var currentUnit = localStorage.getItem('scaleUnit') || 'kg';
+  // Display unit is grams. API delivers kg, we render kg * 1000.
+  function fmtGrams(kg) { return Math.round((kg || 0) * 1000) + ' g'; }
+
+  // Bag-complete button gating.
+  // 5kg: Target gross weight = 5000g product + 136.08g Grove Bag = 5136.08g
+  // Acceptable window: -30g squish tolerance, +90.72g overage cap (= 0.2 lb)
+  var BAG_GATE_MIN_GRAMS = 5196;
+  var BAG_GATE_MAX_GRAMS = 5317;
+
+  // 10lb: gross weight window for a 10lb bag (incl. Grove Bag tare).
+  var BAG10LB_GATE_MIN_GRAMS = 4642;
+  var BAG10LB_GATE_MAX_GRAMS = 4763;
+
+  function applyGate(btn, inRange, grams, minG, maxG) {
+    btn.dataset.gated = String(!inRange);
+    // Don't toggle disabled mid-API-call — the click handler owns it then.
+    if (!btn.dataset.busy) btn.disabled = !inRange;
+    btn.setAttribute('aria-disabled', String(!inRange));
+    btn.title = inRange
+      ? ''
+      : 'Scale reads ' + grams + ' g — bag must be ' + minG + '–' + maxG + ' g (with bag) to log.';
+  }
+
+  function clearGate(btn) {
+    btn.dataset.gated = 'false';
+    if (!btn.dataset.busy) btn.disabled = false;
+    btn.removeAttribute('title');
+    btn.removeAttribute('aria-disabled');
+  }
+
+  function gateBagButton(scaleData) {
+    var btn5 = DOM && DOM.get ? DOM.get('manualBtn') : document.getElementById('manualBtn');
+    if (!btn5) btn5 = document.getElementById('manualBtn');
+    var btn10 = DOM && DOM.get ? DOM.get('manualBtn10lb') : document.getElementById('manualBtn10lb');
+    if (!btn10) btn10 = document.getElementById('manualBtn10lb');
+    if (!btn5 && !btn10) return;
+
+    // Visibility is driven by the app-side bag_mode setting (toggle on v2 scoreboard).
+    // scaleData.bagMode is the source of truth; fallback to '5kg' if absent.
+    var mode = (scaleData && scaleData.bagMode) || '5kg';
+    if (mode === '10lb') {
+      if (btn5) btn5.style.display = 'none';
+      if (btn10) btn10.style.display = '';
+    } else {
+      if (btn5) btn5.style.display = '';
+      if (btn10) btn10.style.display = 'none';
+    }
+
+    // Keep the toggle pills (if present) in sync with backend truth.
+    var p5 = document.getElementById('bagMode5kgBtn');
+    var p10 = document.getElementById('bagMode10lbBtn');
+    if (p5) p5.classList.toggle('active', mode === '5kg');
+    if (p10) p10.classList.toggle('active', mode === '10lb');
+
+    // Scale offline → enable the visible button so production isn't halted.
+    var isStale = !scaleData || scaleData.isStale !== false;
+    if (isStale) {
+      if (btn5) clearGate(btn5);
+      if (btn10) clearGate(btn10);
+      return;
+    }
+
+    var grams = Math.round((scaleData.weight || 0) * 1000);
+
+    if (btn5) {
+      var in5kg = grams >= BAG_GATE_MIN_GRAMS && grams <= BAG_GATE_MAX_GRAMS;
+      applyGate(btn5, in5kg, grams, BAG_GATE_MIN_GRAMS, BAG_GATE_MAX_GRAMS);
+    }
+    if (btn10) {
+      var in10lb = grams >= BAG10LB_GATE_MIN_GRAMS && grams <= BAG10LB_GATE_MAX_GRAMS;
+      applyGate(btn10, in10lb, grams, BAG10LB_GATE_MIN_GRAMS, BAG10LB_GATE_MAX_GRAMS);
+    }
+  }
 
   /**
    * Fetch scale weight from API
@@ -53,21 +123,6 @@
   }
 
   /**
-   * Toggle between kg and lbs
-   */
-  function toggleUnit() {
-    currentUnit = currentUnit === 'kg' ? 'lbs' : 'kg';
-    localStorage.setItem('scaleUnit', currentUnit);
-
-    var unitBtn = document.getElementById('unitToggle');
-    if (unitBtn) {
-      unitBtn.textContent = currentUnit;
-    }
-
-    renderScale(); // Re-render with new unit
-  }
-
-  /**
    * Render scale weight display (circular ring)
    */
   function renderScale() {
@@ -97,8 +152,7 @@
         weightEl.className = 'scale-value stale';
       }
       if (scaleLabel) {
-        var displayTarget = currentUnit === 'lbs' ? 5.0 * KG_TO_LBS : 5.0;
-        scaleLabel.textContent = 'of ' + displayTarget.toFixed(1) + ' ' + currentUnit;
+        scaleLabel.textContent = 'of ' + fmtGrams(5.0);
       }
       if (scaleRing) {
         scaleRing.style.strokeDashoffset = RING_CIRCUMFERENCE; // Empty ring
@@ -107,6 +161,7 @@
         scalePanel.classList.remove('filling', 'near-target', 'at-target', 'stale');
         scalePanel.classList.add('stale');
       }
+      gateBagButton(null);
       return;
     }
 
@@ -133,22 +188,15 @@
       statusDot.classList.toggle('stale', isStale);
     }
 
-    // Update weight value (convert if needed)
+    // Update weight value (always grams)
     if (weightEl) {
-      if (isStale) {
-        weightEl.textContent = '—';
-      } else {
-        var displayWeight = currentUnit === 'lbs' ? weight * KG_TO_LBS : weight;
-        var displayTarget = currentUnit === 'lbs' ? targetWeight * KG_TO_LBS : targetWeight;
-        weightEl.textContent = displayWeight.toFixed(2) + ' ' + currentUnit;
-      }
+      weightEl.textContent = isStale ? '—' : fmtGrams(weight);
       weightEl.className = 'scale-value ' + colorClass;
     }
 
-    // Update label
+    // Update label (target in grams)
     if (scaleLabel) {
-      var displayTarget = currentUnit === 'lbs' ? targetWeight * KG_TO_LBS : targetWeight;
-      scaleLabel.textContent = 'of ' + displayTarget.toFixed(1) + ' ' + currentUnit;
+      scaleLabel.textContent = 'of ' + fmtGrams(targetWeight);
     }
 
     // Update circular ring progress
@@ -165,6 +213,8 @@
       scalePanel.classList.remove('filling', 'near-target', 'at-target', 'stale');
       scalePanel.classList.add(colorClass);
     }
+
+    gateBagButton(scaleData);
   }
 
   /**
@@ -188,11 +238,11 @@
   function init() {
     console.log('Scale module initializing...');
 
-    // Set up unit toggle button
+    // Unit toggle is no longer needed (display is grams-only).
+    // Hide the button if it exists in the DOM.
     var unitBtn = document.getElementById('unitToggle');
     if (unitBtn) {
-      unitBtn.textContent = currentUnit;
-      unitBtn.addEventListener('click', toggleUnit);
+      unitBtn.style.display = 'none';
     }
 
     // Initial poll
@@ -214,7 +264,6 @@
     loadScaleWeight: loadScaleWeight,
     renderScale: renderScale,
     pollScale: pollScale,
-    toggleUnit: toggleUnit,
   };
 
 })(window);
