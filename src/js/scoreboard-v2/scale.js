@@ -62,12 +62,6 @@
       if (btn10) btn10.style.display = 'none';
     }
 
-    // Keep the toggle pills (if present) in sync with backend truth.
-    var p5 = document.getElementById('bagMode5kgBtn');
-    var p10 = document.getElementById('bagMode10lbBtn');
-    if (p5) p5.classList.toggle('active', mode === '5kg');
-    if (p10) p10.classList.toggle('active', mode === '10lb');
-
     // Scale offline → enable the visible button so production isn't halted.
     var isStale = !scaleData || scaleData.isStale !== false;
     if (isStale) {

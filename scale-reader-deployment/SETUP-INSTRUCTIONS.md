@@ -124,19 +124,19 @@ button is greyed out.
 
 1. Leave the scale reader running (from Step 5).
 2. Open http://localhost:3000 in a browser — you should see live grams.
-3. On a second browser tab, open the scoreboard:
-   https://rogueff.github.io/rogue-origin-apps/scoreboard-v2.html
+3. On a second browser tab, open the manager's hourly-entry page:
+   https://rogueff.github.io/rogue-origin-apps/hourly-entry.html
 4. Above the Log Bag button is a pill: **[ 5 KG ]  [ 10 LB ]**. Make
    sure **5 KG** is highlighted.
 5. Place a full 5kg bag on the scale (~5,200 g total). The **5 KG Bag
    Complete** button should appear and become clickable.
-6. Tap **10 LB** on the pill toggle. Within ~5 seconds the button swaps
-   to **10 LB Bag Complete** on this device and any other scoreboards,
-   tablets, or hourly-entry screens.
+6. Tap **10 LB** on the pill toggle. Within ~5 seconds the button
+   swaps to **10 LB Bag Complete** on this device and any open
+   scoreboard TVs / tablets.
 7. Put a full 10 lb bag on (~10.3 lb). The 10 LB button should become
    clickable.
 
-If the pill toggle doesn't appear on the scoreboard, a CSS or JS load
+If the pill toggle doesn't appear on hourly-entry, a CSS or JS load
 order is off — grab the browser console output and ping the manager.
 
 ---
@@ -186,10 +186,14 @@ background whenever the computer is on.
   inside it.
 
 **Switching between 5 kg and 10 lb bags during the day:**
-**Only the manager** changes this. On the main scoreboard there's a
-pill above the Log Bag button: **[ 5 KG ]  [ 10 LB ]**. Tap to swap
-the mode — all stations (scoreboards, tablets, hourly-entry) update
-within ~5 seconds and show the matching Log Bag button.
+**Only the manager** changes this. The toggle lives on the
+**Floor Manager / Hourly Entry** page — a pill above the Log Bag
+button: **[ 5 KG ]  [ 10 LB ]**. Tap to swap the mode. All stations
+(scoreboard TVs, other tablets, hourly-entry screens) update within
+~5 seconds and show the matching Log Bag button.
+
+The scoreboard TV is read-only for floor workers — it follows whatever
+the manager set.
 
 The "Bags Today" counter keeps the two totals separate:
 `5kg · N | 10lb · M`.

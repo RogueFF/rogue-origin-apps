@@ -46,28 +46,37 @@ bags. Keep this posted near the scale station.
 
 ## Setting the bag size / Seleccionar el tamaño de bolsa
 
-**Only the manager changes the bag size.** On the main scoreboard there
-is a small pill above the Log Bag button:
+**Only the manager changes the bag size.** The toggle lives on the
+**Floor Manager / Hourly Entry** page (manager's tablet or phone) —
+above the Log Bag button:
 
 ```
 [ 5 KG ] [ 10 LB ]
 ```
 
 Tap **5 KG** or **10 LB** to set the mode for the whole facility. All
-scoreboards, tablets, and hourly-entry screens update within ~5
-seconds — the matching Log Bag button appears; the other disappears.
+scoreboards (TVs), other tablets, and hourly-entry screens update
+within ~5 seconds — the matching Log Bag button appears on every
+station, the other disappears.
+
+The **scoreboard TV is read-only for floor workers.** It shows the
+current bag size but cannot change it.
 
 Operators do **not** change this. If you think it's set wrong, ask the
 manager.
 
-> Solo el gerente cambia el tamaño de bolsa. En el tablero principal
-> hay una píldora pequeña sobre el botón Log Bag:
+> Solo el gerente cambia el tamaño de bolsa. El control está en la
+> página **Floor Manager / Hourly Entry** (tableta o teléfono del
+> gerente) — arriba del botón Log Bag:
 >
 > `[ 5 KG ] [ 10 LB ]`
 >
 > Presiona **5 KG** o **10 LB** para establecer el modo en toda la
-> instalación. Todos los tableros, tabletas y pantallas de entrada por
-> hora se actualizan en ~5 segundos.
+> instalación. Todos los tableros (TVs), otras tabletas y pantallas
+> de entrada por hora se actualizan en ~5 segundos.
+>
+> El **tablero TV es solo de lectura para los trabajadores**. Muestra
+> el tamaño de bolsa actual pero no lo puede cambiar.
 >
 > Los operadores **no** cambian esto. Si crees que está mal, pregúntale
 > al gerente.
@@ -117,16 +126,16 @@ manager.
 
 1. Confirm the crew has finished the current size's last bag and it's
    logged.
-2. On the main scoreboard, tap the **[ 5 KG ] [ 10 LB ]** pill to
-   select the new size.
+2. On the Floor Manager / Hourly Entry page, tap the
+   **[ 5 KG ] [ 10 LB ]** pill to select the new size.
 3. Wait ~5 seconds — all stations swap their Log Bag button.
 4. Announce the switch to the crew so they know the new size is active.
 
 ### EN ESPAÑOL:
 1. Confirma que el equipo terminó la última bolsa del tamaño actual y
    que esté registrada.
-2. En el tablero principal, presiona la píldora **[ 5 KG ] [ 10 LB ]**
-   para seleccionar el nuevo tamaño.
+2. En la página Floor Manager / Hourly Entry, presiona la píldora
+   **[ 5 KG ] [ 10 LB ]** para seleccionar el nuevo tamaño.
 3. Espera ~5 segundos — todas las estaciones cambian el botón Log Bag.
 4. Anúnciale al equipo el cambio para que sepan que el nuevo tamaño
    está activo.
