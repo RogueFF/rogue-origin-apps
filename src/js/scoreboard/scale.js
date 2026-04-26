@@ -62,11 +62,23 @@
       if (btn10) btn10.style.display = 'none';
     }
 
-    // Scale offline → enable the visible button so production isn't halted.
+    // Scale offline → disable buttons (strict gate). Operator must have a
+    // working scale to log bags so weights are always verified.
     var isStale = !scaleData || scaleData.isStale !== false;
     if (isStale) {
-      if (btn5) clearGate(btn5);
-      if (btn10) clearGate(btn10);
+      var staleMsg = 'Scale offline — bag cannot be logged until scale reconnects.';
+      if (btn5) {
+        btn5.dataset.gated = 'true';
+        if (!btn5.dataset.busy) btn5.disabled = true;
+        btn5.setAttribute('aria-disabled', 'true');
+        btn5.title = staleMsg;
+      }
+      if (btn10) {
+        btn10.dataset.gated = 'true';
+        if (!btn10.dataset.busy) btn10.disabled = true;
+        btn10.setAttribute('aria-disabled', 'true');
+        btn10.title = staleMsg;
+      }
       return;
     }
 

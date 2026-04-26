@@ -3664,11 +3664,18 @@ function gateBagCompleteButton(scaleData) {
   if (p5) p5.classList.toggle('active', mode === '5kg');
   if (p10) p10.classList.toggle('active', mode === '10lb');
 
-  // Scale offline → keep buttons enabled so production isn't halted.
+  // Scale offline → disable buttons (strict gate). No logging without
+  // a verified weight reading.
   const isStale = !scaleData || scaleData.isStale !== false;
   if (isStale) {
-    if (btn5) clearBagGate(btn5);
-    if (btn10) clearBagGate(btn10);
+    const staleMsg = 'Scale offline — bag cannot be logged until scale reconnects.';
+    [btn5, btn10].forEach(btn => {
+      if (!btn) return;
+      btn.dataset.gated = 'true';
+      if (!btn.dataset.busy) btn.disabled = true;
+      btn.setAttribute('aria-disabled', 'true');
+      btn.title = staleMsg;
+    });
     return;
   }
 
