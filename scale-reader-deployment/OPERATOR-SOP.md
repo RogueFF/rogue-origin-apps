@@ -164,6 +164,17 @@ No debería pasar con el diseño de toggle del gerente. Si pasa,
 normalmente significa que el tablero apenas cargó. Espera 5-10 segundos
 y actualiza. Si siguen los dos, pregúntale al gerente.
 
+### The Log button is greyed out and the tooltip says "Scale offline".
+The scale reader on the station PC isn't pushing weight to the cloud.
+You can't log bags until that's fixed. Tell the manager. Possible
+causes: USB cable unplugged, station PC turned off, scale-reader
+program closed, or network down at the station.
+
+El programa lector de la báscula en la PC de la estación no está
+enviando peso a la nube. No puedes registrar bolsas hasta que se
+arregle. Avísale al gerente. Posibles causas: cable USB desconectado,
+PC apagada, programa cerrado, o sin internet en la estación.
+
 ### The wrong button is showing.
 The manager set the wrong mode, or hasn't switched it yet. Find the
 manager — they'll tap the **[ 5 KG ] [ 10 LB ]** pill on the main
