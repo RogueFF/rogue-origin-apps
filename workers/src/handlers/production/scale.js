@@ -31,8 +31,18 @@ async function getBagMode(env) {
 
 async function setBagMode(body, env) {
   const mode = normalizeBagMode(body.mode);
+  const updatedBy = body.updatedBy || 'hourly-entry';
   try {
-    await setConfig(env, BAG_MODE_KEY, mode, body.updatedBy || 'scoreboard');
+    // Upsert so this works even if the schema migration didn't seed the row.
+    // Bypasses setConfig() which is UPDATE-only.
+    await env.DB.prepare(
+      `INSERT INTO system_config (key, value, value_type, category, description, updated_at, updated_by)
+       VALUES (?, ?, 'string', 'production', 'Current facility bag mode (5kg or 10lb)', datetime('now'), ?)
+       ON CONFLICT(key) DO UPDATE SET
+         value = excluded.value,
+         updated_at = excluded.updated_at,
+         updated_by = excluded.updated_by`
+    ).bind(BAG_MODE_KEY, mode, updatedBy).run();
     await incrementDataVersion(env);
     return successResponse({ success: true, bagMode: mode });
   } catch (error) {
