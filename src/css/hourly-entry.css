@@ -3665,3 +3665,26 @@ input[type="number"] {
   outline: 2px solid var(--ro-gold, #e4aa4f);
   outline-offset: 2px;
 }
+
+/* ============================================================
+   DISABLED LOG BAG BUTTON — visual feedback when out of range
+   or scale is offline. Hover the button for a tooltip explaining
+   why it's disabled.
+   ============================================================ */
+.manual-btn:disabled,
+.manual-btn[aria-disabled="true"] {
+  opacity: 0.4;
+  filter: grayscale(0.7);
+  cursor: not-allowed;
+  pointer-events: auto; /* keep tooltip working on hover */
+  border-color: rgba(120, 120, 120, 0.3) !important;
+  color: rgba(180, 180, 180, 0.7) !important;
+  background: rgba(80, 80, 80, 0.1) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+.manual-btn:disabled:hover,
+.manual-btn[aria-disabled="true"]:hover {
+  background: rgba(80, 80, 80, 0.1) !important;
+  transform: none !important;
+}
