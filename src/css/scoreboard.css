@@ -3420,3 +3420,17 @@ html.tv-mode .expand-hint {
     display: block;
   }
 }
+
+/* Disabled Log Bag button (out of range or scale offline) */
+.manual-btn:disabled,
+.manual-btn[aria-disabled="true"] {
+  opacity: 0.4;
+  filter: grayscale(0.7);
+  cursor: not-allowed;
+  pointer-events: auto;
+  border-color: rgba(120, 120, 120, 0.3) !important;
+  color: rgba(180, 180, 180, 0.7) !important;
+  background: rgba(80, 80, 80, 0.1) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
