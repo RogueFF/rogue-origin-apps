@@ -56,8 +56,14 @@ function clearGate(btn) {
 function gate({ btn5, btn10, scaleData }) {
   const isStale = !scaleData || scaleData.isStale !== false;
   if (isStale) {
-    if (btn5)  clearGate(btn5);
-    if (btn10) clearGate(btn10);
+    // Strict mode: stale scale disables both buttons. Production can't log
+    // without a verified weight reading.
+    [btn5, btn10].forEach(btn => {
+      if (!btn) return;
+      btn.gated = true;
+      if (!btn.busy) btn.disabled = true;
+      btn.title = 'Scale offline — bag cannot be logged until scale reconnects.';
+    });
     return;
   }
   const grams = Math.round((scaleData.weight || 0) * 1000);
@@ -105,8 +111,8 @@ function eq(a, b, label) { assert(a === b, `${label}  (got ${JSON.stringify(a)},
 // ============================================================
 (function group1_5kgBoundaries() {
   const cases = [
-    { w: null,       stale: true,  want5: false, label: '5kg: no data → enabled (failsafe)' },
-    { w: 5.226,      stale: true,  want5: false, label: '5kg: stale data → enabled (failsafe)' },
+    { w: null,       stale: true,  want5: true,  label: '5kg: no data → disabled (strict gate)' },
+    { w: 5.226,      stale: true,  want5: true,  label: '5kg: stale data → disabled (strict gate)' },
     { w: 0,          stale: false, want5: true,  label: '5kg: empty scale → disabled' },
     { w: 5.000,      stale: false, want5: true,  label: '5kg: filling to 5000g (product-only) → disabled (bag not on)' },
     { w: 5.195,      stale: false, want5: true,  label: '5kg: 1g below min (5195g) → disabled' },
@@ -129,7 +135,7 @@ function eq(a, b, label) { assert(a === b, `${label}  (got ${JSON.stringify(a)},
 // ============================================================
 (function group2_10lbBoundaries() {
   const cases = [
-    { w: null,   stale: true,  want10: false, label: '10lb: no data → enabled (failsafe)' },
+    { w: null,   stale: true,  want10: true,  label: '10lb: no data → disabled (strict gate)' },
     { w: 0,      stale: false, want10: true,  label: '10lb: empty → disabled' },
     { w: 4.641,  stale: false, want10: true,  label: '10lb: 1g below min (4641g) → disabled' },
     { w: 4.642,  stale: false, want10: false, label: '10lb: at min (4642g) → enabled' },
@@ -164,11 +170,12 @@ function eq(a, b, label) { assert(a === b, `${label}  (got ${JSON.stringify(a)},
     eq(btn10.disabled, c.want10, `mutex (${c.label}) — 10lb.disabled`);
   }
 
-  // Scale offline: both should be enabled (failsafe)
+  // Scale offline (strict mode): both should be disabled — production can't
+  // log without a verified weight reading.
   const btn5 = makeBtn(); const btn10 = makeBtn();
   gate({ btn5, btn10, scaleData: null });
-  eq(btn5.disabled,  false, 'mutex (scale offline) — 5kg enabled');
-  eq(btn10.disabled, false, 'mutex (scale offline) — 10lb enabled');
+  eq(btn5.disabled,  true, 'mutex (scale offline) — 5kg disabled (strict)');
+  eq(btn10.disabled, true, 'mutex (scale offline) — 10lb disabled (strict)');
 })();
 
 // ============================================================
