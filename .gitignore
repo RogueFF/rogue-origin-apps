@@ -80,3 +80,8 @@ test-results/
 Wed, Feb  4, 2026  3:04:39 PM
 tools/pdf-test/output/
 tools/pdf-test/node_modules/
+
+# Wrangler dev vars (Cloudflare Workers local secrets)
+.dev.vars*
+!.dev.vars.example
+!.env.example

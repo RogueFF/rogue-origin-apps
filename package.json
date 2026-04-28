@@ -24,7 +24,9 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "lint:dashboard": "eslint src/js/modules/",
-    "lint:scoreboard": "eslint src/js/scoreboard/"
+    "lint:scoreboard": "eslint src/js/scoreboard/",
+    "deploy": "wrangler deploy",
+    "preview": "wrangler dev"
   },
   "repository": {
     "type": "git",
@@ -40,6 +42,7 @@
   "homepage": "https://github.com/rogueff/rogue-origin-apps#readme",
   "devDependencies": {
     "@playwright/test": "^1.58.2",
-    "eslint": "^9.39.2"
+    "eslint": "^9.39.2",
+    "wrangler": "^4.81.1"
   }
 }
