@@ -43,4 +43,7 @@ ALLOWED_ORIGINS = "https://rogueff.github.io,http://localhost:3000,http://localh
 
 # Cron Triggers
 [triggers]
-crons = ["0 14 * * *"]  # 6 AM PST = 14:00 UTC
+crons = [
+  "0 14 * * *",   # Daily 6 AM PT (14:00 UTC during PST) — complaints + weather
+  "0 17 * * 5",   # Friday 9 AM PT (17:00 UTC during PST) — Friday cart Telegram reminder
+]
