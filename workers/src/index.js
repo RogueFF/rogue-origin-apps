@@ -32,29 +32,41 @@ import { jsonResponse, errorResponse } from './lib/response.js';
 import { ApiError } from './lib/errors.js';
 
 export default {
-  // Cron Trigger — runs daily at 6 AM PST (14:00 UTC)
+  // Cron Triggers — multiple cron patterns dispatched by inspecting event.cron
   async scheduled(event, env, ctx) {
-    const { handleComplaintsD1 } = await import('./handlers/complaints-d1.js');
-    const db = env.DB;
-    try {
-      // Build a fake request for the sync handler
-      const request = new Request('https://internal/api/complaints?action=sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      const result = await handleComplaintsD1(request, env, ctx);
-      const data = await result.json();
-      console.log(`[Cron] Complaints sync: imported=${data.imported}, skipped=${data.skipped}`);
-    } catch (e) {
-      console.error(`[Cron] Complaints sync failed: ${e.message}`);
+    const cronPattern = event.cron;
+
+    // Daily 6 AM PT: complaints sync + weather pull
+    if (cronPattern === '0 14 * * *') {
+      const { handleComplaintsD1 } = await import('./handlers/complaints-d1.js');
+      try {
+        const request = new Request('https://internal/api/complaints?action=sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        const result = await handleComplaintsD1(request, env, ctx);
+        const data = await result.json();
+        console.log(`[Cron] Complaints sync: imported=${data.imported}, skipped=${data.skipped}`);
+      } catch (e) {
+        console.error(`[Cron] Complaints sync failed: ${e.message}`);
+      }
+
+      try {
+        const { pullDailyWeather } = await import('./handlers/tracking/weather.js');
+        await pullDailyWeather(env);
+        console.log('[Cron] Weather data pulled');
+      } catch (e) {
+        console.error(`[Cron] Weather pull failed: ${e.message}`);
+      }
     }
 
-    try {
-      const { pullDailyWeather } = await import('./handlers/tracking/weather.js');
-      await pullDailyWeather(env);
-      console.log('[Cron] Weather data pulled');
-    } catch (e) {
-      console.error(`[Cron] Weather pull failed: ${e.message}`);
+    // Friday 9 AM PT: Friday cart reminder via Telegram
+    if (cronPattern === '0 17 * * 5') {
+      try {
+        await sendFridayCartReminder(env);
+      } catch (e) {
+        console.error(`[Cron] Friday cart reminder failed: ${e.message}`);
+      }
     }
   },
 
@@ -150,3 +162,62 @@ export default {
     }
   }
 };
+
+/**
+ * Friday cart reminder — queries the kanban_cart, formats a Markdown summary,
+ * and posts to Telegram if TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID secrets are set.
+ * If the secrets aren't configured yet, falls back to console.log so the cron
+ * doesn't error and we still see what would have been sent.
+ */
+async function sendFridayCartReminder(env) {
+  const rows = await env.DB.prepare(`
+    SELECT c.qty, c.note, k.item, k.supplier
+    FROM kanban_cart c JOIN kanban_cards k ON k.id = c.card_id
+    ORDER BY k.supplier, k.item
+  `).all().then(r => r.results || []);
+
+  let body;
+  if (rows.length === 0) {
+    body = '*Friday Cart — empty* ✅\n\nNothing to reorder this week.';
+  } else {
+    const byVendor = {};
+    for (const r of rows) {
+      const v = r.supplier || '(Unspecified)';
+      if (!byVendor[v]) byVendor[v] = [];
+      byVendor[v].push(r);
+    }
+    const lines = [`*Friday Cart — ${rows.length} item${rows.length === 1 ? '' : 's'} pending*`, ''];
+    for (const vendor of Object.keys(byVendor).sort()) {
+      lines.push(`*${vendor}* (${byVendor[vendor].length})`);
+      for (const r of byVendor[vendor]) {
+        lines.push(`• ${r.qty}× ${r.item}`);
+      }
+      lines.push('');
+    }
+    lines.push('Open: https://rogueff.github.io/rogue-origin-apps/src/pages/kanban.html');
+    body = lines.join('\n');
+  }
+
+  const token = env.TELEGRAM_BOT_TOKEN;
+  const chatId = env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) {
+    console.log('[Cron][Friday cart] TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID not set — message would be:\n' + body);
+    return;
+  }
+
+  const tgRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: body,
+      parse_mode: 'Markdown',
+      disable_web_page_preview: true,
+    }),
+  });
+  if (!tgRes.ok) {
+    const err = await tgRes.text();
+    throw new Error(`Telegram API error ${tgRes.status}: ${err.slice(0, 200)}`);
+  }
+  console.log(`[Cron][Friday cart] Sent reminder (${rows.length} items)`);
+}

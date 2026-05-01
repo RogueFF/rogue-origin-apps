@@ -501,6 +501,105 @@ async function markOrdered(body, env) {
 }
 
 /**
+ * Bulk analytics for all cards that have any order history. Cards without
+ * orders are simply absent from the response. Lets the frontend annotate
+ * every card without making N requests.
+ * Returns { byCardId: { [cardId]: { orderCount, lastOrderedAt, daysSinceLastOrder, avgGapDays } } }
+ */
+async function getAllAnalytics(env) {
+  // For each cardId mentioned in any order, get the list of ordered_at timestamps
+  const rows = await query(env.DB, `
+    SELECT
+      CAST(json_extract(value, '$.cardId') AS INTEGER) AS cardId,
+      ordered_at AS orderedAt
+    FROM kanban_orders, json_each(items_json)
+    ORDER BY cardId, ordered_at ASC
+  `);
+
+  const byCardId = {};
+  const now = Date.now();
+  for (const row of rows) {
+    const id = row.cardId;
+    if (!byCardId[id]) byCardId[id] = { _ts: [] };
+    byCardId[id]._ts.push(Date.parse(row.orderedAt + 'Z'));
+  }
+  for (const id of Object.keys(byCardId)) {
+    const ts = byCardId[id]._ts;
+    const last = ts[ts.length - 1];
+    let avg = null;
+    if (ts.length >= 2) {
+      let sum = 0;
+      for (let i = 1; i < ts.length; i++) sum += (ts[i] - ts[i - 1]) / 86400000;
+      avg = Math.round(sum / (ts.length - 1));
+    }
+    byCardId[id] = {
+      orderCount: ts.length,
+      lastOrderedAt: new Date(last).toISOString(),
+      daysSinceLastOrder: Math.floor((now - last) / 86400000),
+      avgGapDays: avg,
+    };
+  }
+
+  return successResponse({ success: true, byCardId });
+}
+
+/**
+ * Per-card reorder analytics: when last ordered, how often, how many times.
+ * Query params: ?cardId=X (required)
+ * Returns lastOrderedAt, daysSinceLastOrder, avgGapDays, orderCount.
+ */
+async function getCardAnalytics(request, env) {
+  const params = getQueryParams(request);
+  const cardId = Number(params.cardId);
+  if (!cardId || cardId < 1) {
+    throw createError('VALIDATION_ERROR', 'cardId query param required');
+  }
+
+  const rows = await query(env.DB, `
+    SELECT ordered_at FROM kanban_orders
+    WHERE EXISTS (
+      SELECT 1 FROM json_each(items_json)
+      WHERE CAST(json_extract(value, '$.cardId') AS INTEGER) = ?
+    )
+    ORDER BY ordered_at ASC
+  `, [cardId]);
+
+  if (rows.length === 0) {
+    return successResponse({
+      success: true,
+      cardId,
+      orderCount: 0,
+      lastOrderedAt: null,
+      daysSinceLastOrder: null,
+      avgGapDays: null,
+    });
+  }
+
+  const timestamps = rows.map(r => Date.parse(r.ordered_at + 'Z'));
+  const lastTs = timestamps[timestamps.length - 1];
+  const now = Date.now();
+  const daysSince = Math.floor((now - lastTs) / 86400000);
+
+  let avgGap = null;
+  if (timestamps.length >= 2) {
+    const gaps = [];
+    for (let i = 1; i < timestamps.length; i++) {
+      gaps.push((timestamps[i] - timestamps[i - 1]) / 86400000);
+    }
+    avgGap = Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length);
+  }
+
+  return successResponse({
+    success: true,
+    cardId,
+    orderCount: rows.length,
+    lastOrderedAt: rows[rows.length - 1].ordered_at,
+    daysSinceLastOrder: daysSince,
+    avgGapDays: avgGap,
+  });
+}
+
+/**
  * Get historical orders, optionally filtered.
  * Query params: ?cardId=X | ?vendor=Y | ?limit=N (default 50)
  */
@@ -575,6 +674,8 @@ export async function handleKanbanD1(request, env) {
     removeFromCart: () => removeFromCart(body, env),
     markOrdered: () => markOrdered(body, env),
     getOrderHistory: () => getOrderHistory(request, env),
+    getCardAnalytics: () => getCardAnalytics(request, env),
+    getAllAnalytics: () => getAllAnalytics(env),
   };
 
   if (!action || !actions[action]) {
