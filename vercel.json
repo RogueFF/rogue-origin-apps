@@ -36,10 +36,6 @@
       "destination": "/api/barcode/index.js"
     },
     {
-      "source": "/api/kanban",
-      "destination": "/api/kanban/index.js"
-    },
-    {
       "source": "/api/sop",
       "destination": "/api/sop/index.js"
     },
