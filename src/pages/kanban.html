@@ -451,6 +451,16 @@
       color: var(--text-muted);
     }
     .cart-row-remove:hover { color: #bd4a28; border-color: #bd4a28; }
+    .card-analytics {
+      font-size: 11px;
+      padding: 4px 10px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(0,0,0,0.02);
+    }
+    .card-analytics i { font-size: 13px; }
   </style>
 
   <div id="toasts"></div>
@@ -794,6 +804,7 @@ function onLoad(r, preserveFilters) {
   allCards = r.cards;
   updateSuppliers();
   refreshCartBadge();
+  loadAnalytics();
 
   if (preserveFilters) {
     document.getElementById('search').value = savedSearchQuery;
@@ -877,8 +888,9 @@ function renderGrid() {
       '</div></div></div>' +
       '<img class="card-preview-logo" src="' + logoUrl + '">' +
       '</div>' +
+      analyticsBadge(c) +
       '<div class="card-actions">' +
-      '<button class="reorder" onclick="reorder(' + c.id + ')" title="Reorder" aria-label="Reorder ' + esc(c.item) + '"><i class="ph-duotone ph-shopping-cart"></i></button>' +
+      '<button class="reorder" onclick="reorder(' + c.id + ')" title="Add to Friday Cart" aria-label="Add ' + esc(c.item) + ' to Friday cart"><i class="ph-duotone ph-shopping-cart"></i></button>' +
       '<button class="preview-btn" onclick="preview(' + c.id + ')" title="Preview" aria-label="Preview ' + esc(c.item) + '"><i class="ph-duotone ph-eye"></i></button>' +
       '<button class="edit-btn" onclick="openEdit(' + c.id + ')" title="Edit" aria-label="Edit ' + esc(c.item) + '"><i class="ph-duotone ph-pencil-simple"></i></button>' +
       '<button class="del" onclick="del(' + c.id + ')" title="Delete" aria-label="Delete ' + esc(c.item) + '"><i class="ph-duotone ph-trash"></i></button>' +
@@ -1209,6 +1221,35 @@ function cartOpenAll(vendor) {
         else toast('Opened ' + items.length + ' tab' + (items.length === 1 ? '' : 's'), 'ok');
       }, items.length * 80 + 200);
     });
+}
+
+// Per-card reorder analytics (loaded once after cards, then re-rendered)
+var cardAnalytics = {};
+
+function loadAnalytics() {
+  fetch(API_URL + '?action=getAllAnalytics')
+    .then(function(r) { return r.json(); })
+    .then(function(r) {
+      if (!r.success) return;
+      cardAnalytics = r.byCardId || {};
+      // Re-render to inject badges (cheap — same allCards, same filters)
+      render();
+    })
+    .catch(function() {}); // silent — non-critical
+}
+
+function analyticsBadge(c) {
+  var a = cardAnalytics[c.id];
+  if (!a) return '';
+  var overdue = a.avgGapDays && a.daysSinceLastOrder > a.avgGapDays;
+  var color = overdue ? '#f59e0b' : 'var(--text-muted)';
+  var title = a.avgGapDays
+    ? 'Reorder cycle: avg ' + a.avgGapDays + ' days (' + a.orderCount + ' order' + (a.orderCount === 1 ? '' : 's') + ')'
+    : 'Ordered ' + a.orderCount + ' time' + (a.orderCount === 1 ? '' : 's');
+  return '<div class="card-analytics" style="color:' + color + '" title="' + esc(title) + '">' +
+         '<i class="ph-duotone ph-clock-counter-clockwise"></i> Last ordered ' + a.daysSinceLastOrder + 'd ago' +
+         (a.avgGapDays ? ' · avg ' + a.avgGapDays + 'd' : '') +
+         '</div>';
 }
 
 function cartMarkOrdered(vendor) {
