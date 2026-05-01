@@ -32,12 +32,18 @@ import { jsonResponse, errorResponse } from './lib/response.js';
 import { ApiError } from './lib/errors.js';
 
 export default {
-  // Cron Triggers — multiple cron patterns dispatched by inspecting event.cron
+  // Cron Triggers — multiple cron patterns dispatched by inspecting event.cron.
+  // Match on day-of-week field (5th cron token) so we don't break if Cloudflare
+  // ever normalizes whitespace differently than the wrangler.toml literal.
   async scheduled(event, env, ctx) {
-    const cronPattern = event.cron;
+    const cronPattern = (event.cron || '').trim();
+    const tokens = cronPattern.split(/\s+/);
+    const dow = tokens[4]; // day-of-week field, '*' for daily, '5' for Friday
+    const isFridayCron = dow === '5';
+    const isDailyCron = dow === '*';
 
     // Daily 6 AM PT: complaints sync + weather pull
-    if (cronPattern === '0 14 * * *') {
+    if (isDailyCron) {
       const { handleComplaintsD1 } = await import('./handlers/complaints-d1.js');
       try {
         const request = new Request('https://internal/api/complaints?action=sync', {
@@ -61,7 +67,7 @@ export default {
     }
 
     // Friday 9 AM PT: Friday cart reminder via Telegram
-    if (cronPattern === '0 17 * * 5') {
+    if (isFridayCron) {
       try {
         await sendFridayCartReminder(env);
       } catch (e) {
