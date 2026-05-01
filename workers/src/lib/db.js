@@ -9,7 +9,7 @@ const VALID_TABLES = new Set([
   'coa_index', 'products', 'monthly_production', 'production_tracking',
   'inventory_adjustments', 'pause_log', 'shift_adjustments', 'data_version',
   'scale_readings', 'payment_shipment_links', 'system_config',
-  'kanban_cards', 'kanban_columns', 'sop_documents', 'sop_sections',
+  'kanban_cards', 'kanban_cart', 'kanban_orders', 'kanban_columns', 'sop_documents', 'sop_sections',
   'sops', 'sop_requests', 'sop_settings',
   // Consignment module tables
   'consignment_partners', 'consignment_strains', 'consignment_intakes',
