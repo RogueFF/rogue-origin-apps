@@ -58,7 +58,7 @@
     <div class="toolbar-inner">
       <div class="filters">
         <input type="text" id="search" placeholder="Search items..." oninput="filter()" style="width:240px">
-        <select id="supplierFilter" onchange="filter()"><option value="">All Suppliers</option></select>
+        <div id="supplierTabs" class="supplier-tabs" role="tablist"></div>
       </div>
       <div class="toolbar-right">
         <div class="stats-inline">
@@ -507,6 +507,52 @@
       border-radius: 8px;
       overflow: hidden;
     }
+    .supplier-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    .supplier-tab {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--text-muted);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.12s, color 0.12s, border-color 0.12s;
+    }
+    .supplier-tab:hover {
+      background: var(--bg);
+      color: inherit;
+    }
+    .supplier-tab.active {
+      background: var(--green);
+      color: #fff;
+      border-color: var(--green);
+    }
+    .supplier-tab-count {
+      display: inline-block;
+      min-width: 18px;
+      height: 18px;
+      line-height: 18px;
+      padding: 0 6px;
+      border-radius: 9px;
+      background: var(--border);
+      color: var(--text-muted);
+      font-size: 10px;
+      font-weight: 700;
+      text-align: center;
+    }
+    .supplier-tab.active .supplier-tab-count {
+      background: rgba(255,255,255,0.25);
+      color: #fff;
+    }
     .card-analytics {
       font-size: 11px;
       padding: 4px 10px;
@@ -864,7 +910,8 @@ function onLoad(r, preserveFilters) {
 
   if (preserveFilters) {
     document.getElementById('search').value = savedSearchQuery;
-    document.getElementById('supplierFilter').value = savedSupplierFilter;
+    activeSupplierFilter = savedSupplierFilter;
+    updateSuppliers(); // re-render tabs with restored active state
   }
 
   filter();
@@ -886,13 +933,41 @@ function onErr(e) {
   toast('Error: ' + e, 'err');
 }
 
+// Active supplier filter — '' means All. Case-insensitive match against c.supplier.
+var activeSupplierFilter = '';
+
 function updateSuppliers() {
-  var s = {};
-  allCards.forEach(function(c) { if (c.supplier) s[c.supplier] = 1; });
-  var sel = document.getElementById('supplierFilter');
-  sel.innerHTML = '<option value="">All Suppliers</option>';
-  Object.keys(s).forEach(function(k) { sel.innerHTML += '<option>' + esc(k) + '</option>'; });
-  document.getElementById('suppliers').textContent = Object.keys(s).length;
+  // Case-insensitive dedup so "ULINE" and "Uline" merge into one tab.
+  // Display label = first-seen casing of that vendor.
+  var seen = {};
+  var counts = {};
+  allCards.forEach(function(c) {
+    if (!c.supplier) return;
+    var key = c.supplier.toLowerCase();
+    if (!seen[key]) seen[key] = c.supplier;
+    counts[key] = (counts[key] || 0) + 1;
+  });
+  var keys = Object.keys(seen).sort(function(a, b) {
+    return seen[a].localeCompare(seen[b]);
+  });
+
+  var html = '<button class="supplier-tab' + (activeSupplierFilter === '' ? ' active' : '') + '" role="tab" onclick="setSupplierTab(\'\')">' +
+             'All<span class="supplier-tab-count">' + allCards.length + '</span></button>';
+  keys.forEach(function(k) {
+    var label = seen[k];
+    var active = activeSupplierFilter.toLowerCase() === k ? ' active' : '';
+    var safe = JSON.stringify(label).replace(/"/g, '&quot;');
+    html += '<button class="supplier-tab' + active + '" role="tab" onclick="setSupplierTab(' + safe + ')">' +
+            esc(label) + '<span class="supplier-tab-count">' + counts[k] + '</span></button>';
+  });
+  document.getElementById('supplierTabs').innerHTML = html;
+  document.getElementById('suppliers').textContent = keys.length;
+}
+
+function setSupplierTab(supplier) {
+  activeSupplierFilter = supplier || '';
+  updateSuppliers(); // re-render to flip the active state
+  filter();
 }
 
 function filter() {
@@ -903,10 +978,10 @@ function filter() {
 
 function performFilter() {
   var q = document.getElementById('search').value.toLowerCase();
-  var sup = document.getElementById('supplierFilter').value;
+  var sup = activeSupplierFilter.toLowerCase();
   filtered = allCards.filter(function(c) {
     var match = c.item.toLowerCase().indexOf(q) >= 0 || c.supplier.toLowerCase().indexOf(q) >= 0 || c.crumbtrail.toLowerCase().indexOf(q) >= 0;
-    var matchSup = !sup || c.supplier === sup;
+    var matchSup = !sup || c.supplier.toLowerCase() === sup;
     return match && matchSup;
   });
   document.getElementById('total').textContent = allCards.length;
@@ -1026,7 +1101,7 @@ function refresh() { toast('Refreshing...', 'ok'); load(); }
 function openAdd() {
   savedScrollPos = window.scrollY || document.documentElement.scrollTop || 0;
   savedSearchQuery = document.getElementById('search').value;
-  savedSupplierFilter = document.getElementById('supplierFilter').value;
+  savedSupplierFilter = activeSupplierFilter;
   document.getElementById('modalTitle').innerHTML = '<i class="ph-duotone ph-plus" style="margin-right:8px"></i> Add Card';
   document.getElementById('editId').value = '';
   document.getElementById('editItem').value = '';
@@ -1044,7 +1119,7 @@ function openAdd() {
 function openEdit(id) {
   savedScrollPos = window.scrollY || document.documentElement.scrollTop || 0;
   savedSearchQuery = document.getElementById('search').value;
-  savedSupplierFilter = document.getElementById('supplierFilter').value;
+  savedSupplierFilter = activeSupplierFilter;
   var c = allCards.find(function(x) { return x.id === id; });
   if (!c) return;
   document.getElementById('modalTitle').innerHTML = '<i class="ph-duotone ph-pencil-simple" style="margin-right:8px"></i> Edit Card';
@@ -1371,7 +1446,7 @@ function del(id) {
   if (!confirm(t('confirmDelete'))) return;
   savedScrollPos = window.scrollY || document.documentElement.scrollTop || 0;
   savedSearchQuery = document.getElementById('search').value;
-  savedSupplierFilter = document.getElementById('supplierFilter').value;
+  savedSupplierFilter = activeSupplierFilter;
   show('loading');
   
   fetch(API_URL + '?action=delete', {
