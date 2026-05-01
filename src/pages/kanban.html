@@ -451,6 +451,62 @@
       color: var(--text-muted);
     }
     .cart-row-remove:hover { color: #bd4a28; border-color: #bd4a28; }
+    .cart-tabs {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      padding: 4px 4px 0 4px;
+      border-bottom: 2px solid var(--border);
+      margin-bottom: 12px;
+    }
+    .cart-tab {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-bottom: none;
+      border-radius: 8px 8px 0 0;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--text-muted);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: -2px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .cart-tab:hover {
+      background: var(--bg);
+      color: inherit;
+    }
+    .cart-tab.active {
+      background: var(--bg);
+      color: inherit;
+      border-color: var(--border);
+      border-bottom: 2px solid var(--bg);
+    }
+    .cart-tab-count {
+      display: inline-block;
+      min-width: 18px;
+      height: 18px;
+      line-height: 18px;
+      padding: 0 6px;
+      border-radius: 9px;
+      background: var(--border);
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-align: center;
+    }
+    .cart-tab.active .cart-tab-count {
+      background: var(--green);
+      color: #fff;
+    }
+    .cart-tab-panel {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
     .card-analytics {
       font-size: 11px;
       padding: 4px 10px;
@@ -1123,6 +1179,10 @@ function openCart() {
 function closeCart() { hide('cartModal'); }
 
 // Render cart contents grouped by vendor
+// Cart state — populated by loadCart, used by renderCartTabs/renderCartVendor
+var cartData = { cart: {}, count: 0 };
+var activeCartVendor = null;
+
 function loadCart() {
   var container = document.getElementById('cartContents');
   var emptyEl = document.getElementById('cartEmpty');
@@ -1136,44 +1196,73 @@ function loadCart() {
         container.innerHTML = '<p style="color:#bd4a28">Error: ' + esc(r.error || 'unknown') + '</p>';
         return;
       }
+      cartData = r;
       if (r.count === 0) {
         container.innerHTML = '';
+        activeCartVendor = null;
         emptyEl.style.display = 'block';
         return;
       }
-      var html = '';
-      Object.keys(r.cart).sort().forEach(function(vendor) {
-        var items = r.cart[vendor];
-        html += '<div class="cart-vendor-section">';
-        html += '<div class="cart-vendor-head">';
-        html += '<div><span class="cart-vendor-name">' + esc(vendor) + '</span>';
-        html += '<span class="cart-vendor-count">' + items.length + ' item' + (items.length === 1 ? '' : 's') + '</span></div>';
-        html += '<div class="cart-vendor-actions">';
-        html += '<button class="btn btn-outline" onclick="cartOpenAll(' + JSON.stringify(vendor).replace(/"/g, '&quot;') + ')"><i class="ph-duotone ph-arrow-square-out"></i> Open all in tabs</button>';
-        html += '<button class="btn btn-green" onclick="cartMarkOrdered(' + JSON.stringify(vendor).replace(/"/g, '&quot;') + ')"><i class="ph-duotone ph-check"></i> Mark all ordered</button>';
-        html += '</div></div>';
-        items.forEach(function(it) {
-          var thumb = it.picture && sanitizeImageUrl(it.picture)
-            ? '<img src="' + esc(sanitizeImageUrl(it.picture)) + '" onerror="this.outerHTML=\'📦\'">'
-            : '📦';
-          html += '<div class="cart-row">';
-          html += '<div class="cart-row-img">' + thumb + '</div>';
-          html += '<div><div class="cart-row-item">' + esc(it.item) + '</div>';
-          if (it.crumbtrail) html += '<div class="cart-row-loc">' + esc(it.crumbtrail) + '</div>';
-          html += '</div>';
-          html += '<input type="number" class="cart-qty-input" value="' + it.qty + '" min="1" onchange="cartUpdateQty(' + it.cardId + ', this.value)">';
-          if (it.url) html += '<a class="cart-row-link" href="' + esc(it.url) + '" target="_blank" rel="noopener" title="Open product page"><i class="ph-duotone ph-arrow-square-out"></i></a>';
-          else html += '<span></span>';
-          html += '<button class="cart-row-remove" onclick="cartRemove(' + it.cardId + ')" title="Remove"><i class="ph-duotone ph-x"></i></button>';
-          html += '</div>';
-        });
-        html += '</div>';
-      });
-      container.innerHTML = html;
+      var vendors = Object.keys(r.cart).sort();
+      // If active vendor was emptied (e.g., just marked ordered), pick the first remaining
+      if (!activeCartVendor || vendors.indexOf(activeCartVendor) === -1) {
+        activeCartVendor = vendors[0];
+      }
+      renderCart();
     })
     .catch(function(e) {
       container.innerHTML = '<p style="color:#bd4a28">Error: ' + esc(e.message) + '</p>';
     });
+}
+
+function renderCart() {
+  var container = document.getElementById('cartContents');
+  var vendors = Object.keys(cartData.cart).sort();
+  var html = '<div class="cart-tabs" role="tablist">';
+  vendors.forEach(function(v) {
+    var count = cartData.cart[v].length;
+    var active = v === activeCartVendor ? ' active' : '';
+    var safe = JSON.stringify(v).replace(/"/g, '&quot;');
+    html += '<button class="cart-tab' + active + '" role="tab" onclick="setCartTab(' + safe + ')">' +
+            esc(v) + '<span class="cart-tab-count">' + count + '</span></button>';
+  });
+  html += '</div>';
+  html += '<div class="cart-tab-panel">' + renderCartVendor(activeCartVendor) + '</div>';
+  container.innerHTML = html;
+}
+
+function renderCartVendor(vendor) {
+  var items = cartData.cart[vendor] || [];
+  if (items.length === 0) return '<p style="color:var(--text-muted);padding:20px;text-align:center">No items for ' + esc(vendor) + '.</p>';
+  var safe = JSON.stringify(vendor).replace(/"/g, '&quot;');
+  var html = '<div class="cart-vendor-head">';
+  html += '<div><span class="cart-vendor-name">' + esc(vendor) + '</span>';
+  html += '<span class="cart-vendor-count">' + items.length + ' item' + (items.length === 1 ? '' : 's') + '</span></div>';
+  html += '<div class="cart-vendor-actions">';
+  html += '<button class="btn btn-outline" onclick="cartOpenAll(' + safe + ')"><i class="ph-duotone ph-arrow-square-out"></i> Open all in tabs</button>';
+  html += '<button class="btn btn-green" onclick="cartMarkOrdered(' + safe + ')"><i class="ph-duotone ph-check"></i> Mark all ordered</button>';
+  html += '</div></div>';
+  items.forEach(function(it) {
+    var thumb = it.picture && sanitizeImageUrl(it.picture)
+      ? '<img src="' + esc(sanitizeImageUrl(it.picture)) + '" onerror="this.outerHTML=\'📦\'">'
+      : '📦';
+    html += '<div class="cart-row">';
+    html += '<div class="cart-row-img">' + thumb + '</div>';
+    html += '<div><div class="cart-row-item">' + esc(it.item) + '</div>';
+    if (it.crumbtrail) html += '<div class="cart-row-loc">' + esc(it.crumbtrail) + '</div>';
+    html += '</div>';
+    html += '<input type="number" class="cart-qty-input" value="' + it.qty + '" min="1" onchange="cartUpdateQty(' + it.cardId + ', this.value)">';
+    if (it.url) html += '<a class="cart-row-link" href="' + esc(it.url) + '" target="_blank" rel="noopener" title="Open product page"><i class="ph-duotone ph-arrow-square-out"></i></a>';
+    else html += '<span></span>';
+    html += '<button class="cart-row-remove" onclick="cartRemove(' + it.cardId + ')" title="Remove"><i class="ph-duotone ph-x"></i></button>';
+    html += '</div>';
+  });
+  return html;
+}
+
+function setCartTab(vendor) {
+  activeCartVendor = vendor;
+  renderCart();
 }
 
 function cartUpdateQty(cardId, qty) {
