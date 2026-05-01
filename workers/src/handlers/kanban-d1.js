@@ -3,9 +3,9 @@
  * Migrated from Google Sheets to Cloudflare D1
  */
 
-import { query, queryOne, insert, update, deleteRows } from '../lib/db.js';
+import { query, queryOne, insert, update, deleteRows, execute } from '../lib/db.js';
 import { readSheet } from '../lib/sheets.js';
-import { successResponse, parseBody, getAction } from '../lib/response.js';
+import { successResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
 import { createError } from '../lib/errors.js';
 
 const SHEET_NAME = '12.12 Supplies';
@@ -361,6 +361,201 @@ async function migrateFromSheets(env) {
   });
 }
 
+// =====================================================================
+// FRIDAY CART + ORDER HISTORY (Phase 2)
+// See RogueFamilyFarms/docs/plans/2026-05-01-kanban-cart-design.md
+// =====================================================================
+
+/**
+ * Get current cart, JOINed with cards, grouped by vendor (supplier).
+ * Empty cart → { success: true, cart: {}, count: 0 }
+ */
+async function getCart(env) {
+  const rows = await query(env.DB, `
+    SELECT c.id AS cartId, c.card_id AS cardId, c.qty, c.added_at AS addedAt,
+           c.added_by AS addedBy, c.note,
+           k.item, k.supplier, k.url, k.picture, k.crumbtrail, k.order_qty AS orderQty,
+           k.delivery_time AS deliveryTime, k.price
+    FROM kanban_cart c
+    JOIN kanban_cards k ON k.id = c.card_id
+    ORDER BY k.supplier, c.added_at
+  `);
+
+  const cart = {};
+  for (const r of rows) {
+    const vendor = r.supplier || '(Unspecified)';
+    if (!cart[vendor]) cart[vendor] = [];
+    cart[vendor].push(r);
+  }
+
+  return successResponse({ success: true, cart, count: rows.length });
+}
+
+/**
+ * Add a card to the cart (UPSERT — re-queueing the same card bumps qty).
+ * Body: { cardId, qty?, note? }
+ */
+async function addToCart(body, env) {
+  const cardId = Number(body.cardId);
+  if (!cardId || cardId < 1) {
+    throw createError('VALIDATION_ERROR', 'cardId is required (positive integer)');
+  }
+  const qty = Math.max(1, Math.floor(Number(body.qty) || 1));
+  const note = body.note ? String(body.note).slice(0, 500) : null;
+  const addedBy = body.addedBy ? String(body.addedBy).slice(0, 100) : null;
+
+  // Verify card exists
+  const card = await queryOne(env.DB, 'SELECT id FROM kanban_cards WHERE id = ?', [cardId]);
+  if (!card) throw createError('NOT_FOUND', `Card ${cardId} not found`);
+
+  // UPSERT: if card_id already in cart, bump qty; else insert new row
+  await execute(env.DB, `
+    INSERT INTO kanban_cart (card_id, qty, added_by, note)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(card_id) DO UPDATE SET
+      qty = qty + excluded.qty,
+      added_at = datetime('now'),
+      added_by = COALESCE(excluded.added_by, added_by),
+      note = COALESCE(excluded.note, note)
+  `, [cardId, qty, addedBy, note]);
+
+  const cartRow = await queryOne(env.DB, `
+    SELECT c.id AS cartId, c.card_id AS cardId, c.qty, c.note, k.item, k.supplier
+    FROM kanban_cart c JOIN kanban_cards k ON k.id = c.card_id
+    WHERE c.card_id = ?
+  `, [cardId]);
+
+  return successResponse({ success: true, cartItem: cartRow });
+}
+
+/**
+ * Set the qty on a cart row.
+ * Body: { cardId, qty }
+ */
+async function updateCartQty(body, env) {
+  const cardId = Number(body.cardId);
+  const qty = Math.max(1, Math.floor(Number(body.qty)));
+  if (!cardId || cardId < 1) throw createError('VALIDATION_ERROR', 'cardId required');
+  if (!qty || qty < 1) throw createError('VALIDATION_ERROR', 'qty must be >= 1');
+
+  const changes = await update(env.DB, 'kanban_cart', { qty }, 'card_id = ?', [cardId]);
+  if (changes === 0) throw createError('NOT_FOUND', 'Cart entry not found');
+  return successResponse({ success: true });
+}
+
+/**
+ * Remove a card from the cart.
+ * Body: { cardId }
+ */
+async function removeFromCart(body, env) {
+  const cardId = Number(body.cardId);
+  if (!cardId || cardId < 1) throw createError('VALIDATION_ERROR', 'cardId required');
+
+  const changes = await deleteRows(env.DB, 'kanban_cart', 'card_id = ?', [cardId]);
+  if (changes === 0) throw createError('NOT_FOUND', 'Cart entry not found');
+  return successResponse({ success: true });
+}
+
+/**
+ * Move a vendor's cart items into kanban_orders and clear them from cart.
+ * Atomic via D1 batch (no transactions across separate awaits — see design doc).
+ * Body: { vendor, placedBy? }
+ */
+async function markOrdered(body, env) {
+  const vendor = body.vendor ? String(body.vendor).trim() : null;
+  if (!vendor) throw createError('VALIDATION_ERROR', 'vendor is required');
+  const placedBy = body.placedBy ? String(body.placedBy).slice(0, 100) : null;
+
+  // Read what we're about to order (snapshot)
+  const items = await query(env.DB, `
+    SELECT c.card_id AS cardId, c.qty, k.item
+    FROM kanban_cart c JOIN kanban_cards k ON k.id = c.card_id
+    WHERE k.supplier = ?
+    ORDER BY k.item
+  `, [vendor]);
+
+  if (items.length === 0) {
+    throw createError('NOT_FOUND', `No cart items for vendor "${vendor}"`);
+  }
+
+  const itemsJson = JSON.stringify(items.map(r => ({ cardId: r.cardId, item: r.item, qty: r.qty })));
+
+  // Atomic batch: insert order row + delete cart rows for this vendor
+  const result = await env.DB.batch([
+    env.DB.prepare(
+      'INSERT INTO kanban_orders (vendor, placed_by, items_json) VALUES (?, ?, ?)'
+    ).bind(vendor, placedBy, itemsJson),
+    env.DB.prepare(
+      'DELETE FROM kanban_cart WHERE card_id IN (SELECT id FROM kanban_cards WHERE supplier = ?)'
+    ).bind(vendor),
+  ]);
+
+  const orderId = result[0]?.meta?.last_row_id;
+  return successResponse({
+    success: true,
+    orderId,
+    vendor,
+    itemCount: items.length,
+    items,
+  });
+}
+
+/**
+ * Get historical orders, optionally filtered.
+ * Query params: ?cardId=X | ?vendor=Y | ?limit=N (default 50)
+ */
+async function getOrderHistory(request, env) {
+  const params = getQueryParams(request);
+  const limit = Math.min(500, Math.max(1, parseInt(params.limit) || 50));
+  const vendor = params.vendor ? String(params.vendor).trim() : null;
+  const cardId = params.cardId ? Number(params.cardId) : null;
+
+  let sql, args;
+  if (cardId) {
+    // Card-specific history: filter on JSON contents
+    sql = `
+      SELECT id, vendor, ordered_at AS orderedAt, placed_by AS placedBy, items_json AS itemsJson
+      FROM kanban_orders
+      WHERE EXISTS (
+        SELECT 1 FROM json_each(items_json)
+        WHERE CAST(json_extract(value, '$.cardId') AS INTEGER) = ?
+      )
+      ORDER BY ordered_at DESC
+      LIMIT ?
+    `;
+    args = [cardId, limit];
+  } else if (vendor) {
+    sql = `
+      SELECT id, vendor, ordered_at AS orderedAt, placed_by AS placedBy, items_json AS itemsJson
+      FROM kanban_orders
+      WHERE vendor = ?
+      ORDER BY ordered_at DESC
+      LIMIT ?
+    `;
+    args = [vendor, limit];
+  } else {
+    sql = `
+      SELECT id, vendor, ordered_at AS orderedAt, placed_by AS placedBy, items_json AS itemsJson
+      FROM kanban_orders
+      ORDER BY ordered_at DESC
+      LIMIT ?
+    `;
+    args = [limit];
+  }
+
+  const rows = await query(env.DB, sql, args);
+  // Parse items_json on the way out
+  const orders = rows.map(r => ({
+    id: r.id,
+    vendor: r.vendor,
+    orderedAt: r.orderedAt,
+    placedBy: r.placedBy,
+    items: r.itemsJson ? JSON.parse(r.itemsJson) : [],
+  }));
+
+  return successResponse({ success: true, orders, count: orders.length });
+}
+
 export async function handleKanbanD1(request, env) {
   const action = getAction(request);
   const body = request.method === 'POST' ? await parseBody(request) : {};
@@ -373,6 +568,13 @@ export async function handleKanbanD1(request, env) {
     delete: () => deleteCard(body, env),
     fetchProduct: () => fetchProduct(body),
     migrate: () => migrateFromSheets(env),
+    // Phase 2: Friday cart + order history
+    getCart: () => getCart(env),
+    addToCart: () => addToCart(body, env),
+    updateCartQty: () => updateCartQty(body, env),
+    removeFromCart: () => removeFromCart(body, env),
+    markOrdered: () => markOrdered(body, env),
+    getOrderHistory: () => getOrderHistory(request, env),
   };
 
   if (!action || !actions[action]) {
