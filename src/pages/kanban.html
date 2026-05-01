@@ -932,10 +932,16 @@ function renderList() {
     '<th>' + t('orderQty') + '</th>' +
     '<th>' + t('delivery') + '</th>' +
     '<th onclick="sortBy(\'price\')">' + t('price') + sortIcon('price') + '</th>' +
+    '<th>Last Ordered</th>' +
     '<th>' + t('actions') + '</th></tr></thead><tbody>';
   sorted.forEach(function(c) {
+    var a = cardAnalytics[c.id];
+    var analyticsCell = a
+      ? '<span style="font-size:11px;color:' + (a.avgGapDays && a.daysSinceLastOrder > a.avgGapDays ? '#f59e0b' : 'var(--text-muted)') + '" title="' + esc(a.avgGapDays ? 'Reorder cycle: avg ' + a.avgGapDays + 'd over ' + a.orderCount + ' orders' : a.orderCount + ' order' + (a.orderCount === 1 ? '' : 's')) + '">' + a.daysSinceLastOrder + 'd ago' + (a.avgGapDays ? ' · avg ' + a.avgGapDays + 'd' : '') + '</span>'
+      : '<span style="color:var(--text-muted);font-size:11px">—</span>';
     html += '<tr><td class="name">' + esc(c.item) + '</td><td>' + esc(c.supplier) + '</td><td style="font-size:11px">' + esc(c.crumbtrail) + '</td>' +
       '<td>' + esc(c.orderQty) + '</td><td>' + esc(c.deliveryTime) + '</td><td class="price">' + esc(c.price) + '</td>' +
+      '<td>' + analyticsCell + '</td>' +
       '<td><button class="btn" style="padding:4px 8px;font-size:11px;background:var(--gold-dim);color:var(--gold)" onclick="reorder(' + c.id + ')"><i class="ph-duotone ph-shopping-cart"></i></button> <button class="btn btn-indoor" style="padding:4px 8px;font-size:11px" onclick="preview(' + c.id + ')"><i class="ph-duotone ph-eye"></i></button> <button class="btn btn-indoor" style="padding:4px 8px;font-size:11px" onclick="openEdit(' + c.id + ')"><i class="ph-duotone ph-pencil-simple"></i></button> <button class="btn" style="padding:4px 8px;font-size:11px;background:rgba(201,85,61,0.12);color:#c9553d" onclick="del(' + c.id + ')"><i class="ph-duotone ph-trash"></i></button></td></tr>';
   });
   html += '</tbody></table>';
