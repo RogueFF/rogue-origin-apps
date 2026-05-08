@@ -116,7 +116,7 @@ async function history(params, env) {
   if (start) { sql += ' AND date >= ?'; binds.push(start); }
   if (end) { sql += ' AND date <= ?'; binds.push(end); }
   if (strain) { sql += ' AND strain = ?'; binds.push(strain); }
-  if (complete === 'true') { sql += ' AND (biomass_lbs > 0 OR trim_lbs > 0)'; }
+  if (complete === 'true') { sql += ' AND biomass_lbs > 0 AND trim_lbs > 0'; }
 
   sql += ' ORDER BY date DESC, strain';
 
@@ -133,7 +133,7 @@ async function summary(params, env) {
     : group_by === 'week' ? "strftime('%Y-W%W', date)"
     : 'date';
 
-  const completeFilter = complete === 'true' ? ' AND (biomass_lbs > 0 OR trim_lbs > 0)' : '';
+  const completeFilter = complete === 'true' ? ' AND biomass_lbs > 0 AND trim_lbs > 0' : '';
 
   let sql = `
     SELECT ${groupExpr} as period,

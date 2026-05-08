@@ -705,6 +705,7 @@
     saving: 'Saving...', saved: '✓ Saved', poolsUpdated: 'Pools updated + data saved',
     enterCount: 'Enter supersack count first', loading: 'loading...',
     mappingSaved: 'Mapping saved', today: 'Today',
+    zeroWeights: 'Enter biomass and trim weights — zero is treated as missing data',
   }, es: {
     title: 'Rastreador de Supersacos', supersacksOpened: 'Supersacos Abiertos',
     waterSpiderEntry: 'Entrada del Water Spider', biomass: 'Biomasa (recorte)',
@@ -715,6 +716,7 @@
     saving: 'Guardando...', saved: '✓ Guardado', poolsUpdated: 'Pools actualizados + datos guardados',
     enterCount: 'Ingrese la cantidad de supersacos primero', loading: 'cargando...',
     mappingSaved: 'Mapeo guardado', today: 'Hoy',
+    zeroWeights: 'Ingrese pesos de biomasa y recorte — cero se trata como datos faltantes',
   }};
   function applyLang() {
     const l = (window.getLang && window.getLang()) || 'en';
@@ -1368,12 +1370,18 @@
     const sackCount = totalSacks();
     if (sackCount === 0 && !editMode) { setStatus('Enter supersack count first', 'error'); return; }
 
+    const biomass = parseFloat(biomassInput.value) || 0;
+    const trim = parseFloat(trimInput.value) || 0;
+    if (sackCount > 0 && biomass === 0 && trim === 0) {
+      const l = (window.getLang && window.getLang()) || 'en';
+      setStatus(LANG[l].zeroWeights, 'error');
+      return;
+    }
+
     submitBtn.disabled = true;
     submitBtn.textContent = 'Saving...';
     submitBtn.classList.add('saving');
 
-    const biomass = parseFloat(biomassInput.value) || 0;
-    const trim = parseFloat(trimInput.value) || 0;
     const date = dateInput.value;
     let poolErrors = [];
     let changesSummary = [];
