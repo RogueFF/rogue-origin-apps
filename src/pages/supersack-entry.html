@@ -360,12 +360,40 @@
 
     /* Strain counter rows */
     .strain-row {
-      display: flex; align-items: center; justify-content: space-between;
+      display: flex; flex-direction: column; gap: 8px;
       padding: 12px 8px; border-bottom: 1px solid rgba(102, 137, 113, 0.08);
       border-radius: var(--radius-sm);
       margin: 0 -8px;
       transition: background 0.15s;
     }
+    .strain-row-main {
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .strain-row-weights {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+      padding: 0 2px 2px;
+    }
+    .strain-weight-input {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--bg-warm); border: 1px solid var(--card-border);
+      border-radius: var(--radius-sm); padding: 4px 8px;
+    }
+    .strain-weight-input label {
+      font-size: 10px; font-weight: 600; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: 0.05em;
+      font-family: var(--font-ui);
+      flex-shrink: 0;
+    }
+    .strain-weight-input input {
+      flex: 1; min-width: 0; width: 100%;
+      background: transparent; border: none; outline: none;
+      font-size: 14px; font-weight: 600; color: var(--gold-text);
+      font-family: var(--font-mono);
+      text-align: right;
+    }
+    .strain-weight-input input::-webkit-outer-spin-button,
+    .strain-weight-input input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .strain-weight-unit { font-size: 10px; color: var(--text-faint); flex-shrink: 0; }
     .strain-row:hover { background: rgba(102, 137, 113, 0.06); }
     .strain-row:last-child { border-bottom: none; }
     .strain-name {
@@ -591,20 +619,9 @@
     </div>
   </div>
 
-  <!-- Manual Inputs -->
-  <div class="card">
-    <div class="card-title" data-i18n="waterSpiderEntry">Water Spider Entry</div>
-    <div class="input-group">
-      <label class="input-label" data-i18n="biomass">Biomass (trim)</label>
-      <input type="number" class="weight-input" id="biomass-input" placeholder="0.0" min="0" step="0.1" inputmode="decimal">
-      <div class="input-unit">lbs</div>
-    </div>
-    <div class="input-group">
-      <label class="input-label" data-i18n="premiumTrim">Premium #1 Trim</label>
-      <input type="number" class="weight-input" id="trim-input" placeholder="0.0" min="0" step="0.1" inputmode="decimal">
-      <div class="input-unit">lbs</div>
-    </div>
-  </div>
+  <!-- Day Totals (auto from per-strain) — hidden inputs used by submit handler -->
+  <input type="hidden" id="biomass-input" value="0">
+  <input type="hidden" id="trim-input" value="0">
 
   <!-- Submit / Edit Buttons -->
   <div style="display:flex;gap:8px;flex-direction:column">
@@ -706,6 +723,7 @@
     enterCount: 'Enter supersack count first', loading: 'loading...',
     mappingSaved: 'Mapping saved', today: 'Today',
     zeroWeights: 'Enter biomass and trim weights — zero is treated as missing data',
+    bioShort: 'Bio', trimShort: 'Trim',
   }, es: {
     title: 'Rastreador de Supersacos', supersacksOpened: 'Supersacos Abiertos',
     waterSpiderEntry: 'Entrada del Water Spider', biomass: 'Biomasa (recorte)',
@@ -717,6 +735,7 @@
     enterCount: 'Ingrese la cantidad de supersacos primero', loading: 'cargando...',
     mappingSaved: 'Mapeo guardado', today: 'Hoy',
     zeroWeights: 'Ingrese pesos de biomasa y recorte — cero se trata como datos faltantes',
+    bioShort: 'Bio', trimShort: 'Recorte',
   }};
   function applyLang() {
     const l = (window.getLang && window.getLang()) || 'en';
@@ -802,39 +821,77 @@
       return;
     }
 
+    const lang = (window.getLang && window.getLang()) || 'en';
+    const bioLabel = LANG[lang].bioShort;
+    const trimLabel = LANG[lang].trimShort;
+
     container.innerHTML = strains.map(name => {
       const s = strainData[name];
       const shortName = name.replace(/^\d{4} - /, '').replace(/ \/ Sungrown$/, '');
+      const weightsRow = s.sacks > 0 ? `
+        <div class="strain-row-weights">
+          <div class="strain-weight-input">
+            <label>${bioLabel}</label>
+            <input type="number" value="${s.biomass || ''}" placeholder="0.0" min="0" step="0.1" inputmode="decimal"
+              onchange="window._strainSetBio('${name}', this.value)"
+              onclick="this.select()">
+            <span class="strain-weight-unit">lbs</span>
+          </div>
+          <div class="strain-weight-input">
+            <label>${trimLabel}</label>
+            <input type="number" value="${s.trim || ''}" placeholder="0.0" min="0" step="0.1" inputmode="decimal"
+              onchange="window._strainSetTrim('${name}', this.value)"
+              onclick="this.select()">
+            <span class="strain-weight-unit">lbs</span>
+          </div>
+        </div>` : '';
       return `
         <div class="strain-row" data-strain="${name}">
-          <div class="strain-name">
-            ${shortName}
-            <div class="strain-production">
-              <span style="color:var(--text-faint)">${s.poolValue || 0} sacks remaining</span>
+          <div class="strain-row-main">
+            <div class="strain-name">
+              ${shortName}
+              <div class="strain-production">
+                <span style="color:var(--text-faint)">${s.poolValue || 0} sacks remaining</span>
+              </div>
+            </div>
+            <div class="strain-counter">
+              <button class="mini-btn" onclick="window._strainDec('${name}')">−</button>
+              <input type="number" value="${s.sacks}" min="0" inputmode="numeric"
+                onchange="window._strainSet('${name}', this.value)"
+                onclick="this.select()">
+              <button class="mini-btn" onclick="window._strainInc('${name}')">+</button>
             </div>
           </div>
-          <div class="strain-counter">
-            <button class="mini-btn" onclick="window._strainDec('${name}')">−</button>
-            <input type="number" value="${s.sacks}" min="0" inputmode="numeric"
-              onchange="window._strainSet('${name}', this.value)"
-              onclick="this.select()">
-            <button class="mini-btn" onclick="window._strainInc('${name}')">+</button>
-          </div>
+          ${weightsRow}
         </div>`;
     }).join('');
   }
 
   // Strain counter controls (exposed to window for inline handlers)
   window._strainInc = (name) => { strainData[name].sacks++; renderStrainCounters(); recalc(); };
-  window._strainDec = (name) => { if (strainData[name].sacks > 0) strainData[name].sacks--; renderStrainCounters(); recalc(); };
-  window._strainSet = (name, val) => { strainData[name].sacks = Math.max(0, parseInt(val) || 0); renderStrainCounters(); recalc(); };
+  window._strainDec = (name) => {
+    if (strainData[name].sacks > 0) strainData[name].sacks--;
+    if (strainData[name].sacks === 0) { strainData[name].biomass = 0; strainData[name].trim = 0; }
+    renderStrainCounters(); recalc();
+  };
+  window._strainSet = (name, val) => {
+    strainData[name].sacks = Math.max(0, parseInt(val) || 0);
+    if (strainData[name].sacks === 0) { strainData[name].biomass = 0; strainData[name].trim = 0; }
+    renderStrainCounters(); recalc();
+  };
+  window._strainSetBio = (name, val) => { strainData[name].biomass = Math.max(0, parseFloat(val) || 0); recalc(); };
+  window._strainSetTrim = (name, val) => { strainData[name].trim = Math.max(0, parseFloat(val) || 0); recalc(); };
 
   // Recalculate totals + per-strain averages
   function recalc() {
     const sackCount = totalSacks();
     const raw = sackCount * SACK_WEIGHT;
-    const biomass = parseFloat(biomassInput.value) || 0;
-    const trim = parseFloat(trimInput.value) || 0;
+
+    // Day-total biomass/trim derived from per-strain values
+    const biomass = Object.values(strainData).reduce((sum, s) => sum + (s.biomass || 0), 0);
+    const trim = Object.values(strainData).reduce((sum, s) => sum + (s.trim || 0), 0);
+    biomassInput.value = biomass;
+    trimInput.value = trim;
 
     // Totals from all strains
     topsLbs = Object.values(strainData).reduce((sum, s) => sum + s.tops, 0);
@@ -1069,8 +1126,14 @@
     }
 
     // Build strainData — merge production with supersack variants
-    const oldSacks = {}; // Preserve user-entered sack counts
-    Object.entries(strainData).forEach(([name, s]) => { if (s.sacks > 0) oldSacks[name] = s.sacks; });
+    const oldSacks = {};    // Preserve user-entered sack counts
+    const oldBio = {};      // Preserve user-entered per-strain biomass
+    const oldTrim = {};     // Preserve user-entered per-strain trim
+    Object.entries(strainData).forEach(([name, s]) => {
+      if (s.sacks > 0) oldSacks[name] = s.sacks;
+      if (s.biomass) oldBio[name] = s.biomass;
+      if (s.trim) oldTrim[name] = s.trim;
+    });
 
     // Build 2-day per-strain history from dashboard strainSnapshot
     const strainHistory = {}; // { strainTitle: { tops, smalls, totalLbs, daysWorked } }
@@ -1089,6 +1152,8 @@
       const hist = strainHistory[strain];
       strainData[strain] = {
         sacks: oldSacks[strain] || 0,
+        biomass: oldBio[strain] || 0,
+        trim: oldTrim[strain] || 0,
         tops: prod.tops,
         smalls: prod.smalls,
         // 2-day history for averages (falls back to today-only)
@@ -1231,15 +1296,12 @@
   }
 
   // Lock/unlock form for edit mode
+  const LOCKABLE_SELECTOR = '.counter-btn, .mini-btn, .strain-counter input, .strain-weight-input input';
   function lockForm() {
-    document.querySelectorAll('.counter-btn, .mini-btn').forEach(el => {
+    document.querySelectorAll(LOCKABLE_SELECTOR).forEach(el => {
       el.disabled = true;
       el.style.opacity = '0.5';
-      el.style.cursor = 'not-allowed';
-    });
-    document.querySelectorAll('.weight-input').forEach(el => {
-      el.disabled = true;
-      el.style.opacity = '0.5';
+      if (el.tagName === 'BUTTON') el.style.cursor = 'not-allowed';
     });
     submitBtn.style.display = 'none';
     editBtn.style.display = 'block';
@@ -1248,14 +1310,10 @@
   }
 
   function unlockForm() {
-    document.querySelectorAll('.counter-btn, .mini-btn').forEach(el => {
+    document.querySelectorAll(LOCKABLE_SELECTOR).forEach(el => {
       el.disabled = false;
       el.style.opacity = '1';
-      el.style.cursor = 'pointer';
-    });
-    document.querySelectorAll('.weight-input').forEach(el => {
-      el.disabled = false;
-      el.style.opacity = '1';
+      if (el.tagName === 'BUTTON') el.style.cursor = 'pointer';
     });
     editBtn.style.display = 'none';
     submitBtn.style.display = 'block';
@@ -1291,17 +1349,12 @@
         return;
       }
 
-      // Existing entry found — pre-fill and lock
-      const totalBio = entries.reduce((sum, e) => sum + (e.biomass_lbs || 0), 0);
-      const totalTrim = entries.reduce((sum, e) => sum + (e.trim_lbs || 0), 0);
-
-      biomassInput.value = totalBio.toFixed(1);
-      trimInput.value = totalTrim.toFixed(1);
-
-      // Set sack counts per strain
+      // Existing entry found — pre-fill per-strain values and lock
       entries.forEach(e => {
         if (strainData[e.strain]) {
           strainData[e.strain].sacks = e.sacks_opened || 0;
+          strainData[e.strain].biomass = Math.round((e.biomass_lbs || 0) * 10) / 10;
+          strainData[e.strain].trim = Math.round((e.trim_lbs || 0) * 10) / 10;
         }
       });
 
@@ -1471,7 +1524,7 @@
           date, supersack_count: sackCount, biomass_lbs: biomass,
           trim_lbs: trim, tops_lbs: topsLbs, smalls_lbs: smallsLbs,
           waste_lbs: Math.max(0, (sackCount * SACK_WEIGHT) - topsLbs - smallsLbs - biomass - trim),
-          strains: Object.fromEntries(Object.entries(strainData).map(([k, v]) => [k, { sacks: v.sacks, tops: v.tops, smalls: v.smalls }])),
+          strains: Object.fromEntries(Object.entries(strainData).map(([k, v]) => [k, { sacks: v.sacks, tops: v.tops, smalls: v.smalls, biomass: v.biomass || 0, trim: v.trim || 0 }])),
         }),
       });
     } catch (e) {

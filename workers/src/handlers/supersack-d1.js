@@ -44,25 +44,28 @@ async function submit(body, env) {
 
   // Per-strain data from the tracker
   if (strains && typeof strains === 'object') {
-    // Support both formats: { strain: sackCount } (legacy) and { strain: { sacks, tops, smalls } } (v2)
+    // Support three formats:
+    //   { strain: sackCount }                                              (legacy)
+    //   { strain: { sacks, tops, smalls } }                                (v2 — per-strain tops/smalls)
+    //   { strain: { sacks, tops, smalls, biomass, trim } }                 (v3 — per-strain everything)
     const normalized = Object.entries(strains).map(([name, val]) => {
       if (typeof val === 'object' && val !== null) {
-        return [name, val.sacks || 0, val.tops ?? null, val.smalls ?? null];
+        return [name, val.sacks || 0, val.tops ?? null, val.smalls ?? null, val.biomass ?? null, val.trim ?? null];
       }
-      return [name, val, null, null]; // legacy: sack count only
+      return [name, val, null, null, null, null]; // legacy: sack count only
     }).filter(([, sacks]) => sacks > 0);
 
     const totalSacks = normalized.reduce((sum, [, sacks]) => sum + sacks, 0);
 
-    for (const [strain, sacks, perStrainTops, perStrainSmalls] of normalized) {
+    for (const [strain, sacks, perStrainTops, perStrainSmalls, perStrainBio, perStrainTrim] of normalized) {
       const ratio = sacks / totalSacks;
       const raw = sacks * SACK_WEIGHT;
-      // Use per-strain production data when available, otherwise ratio-split totals
+      // Use per-strain values when supplied; otherwise ratio-split the day-totals.
+      // Per-strain entry eliminates the multi-strain attribution error.
       const strainTops = perStrainTops != null ? perStrainTops : tops_lbs * ratio;
       const strainSmalls = perStrainSmalls != null ? perStrainSmalls : smalls_lbs * ratio;
-      // Biomass/trim always ratio-split (no per-strain data for these)
-      const strainBio = biomass_lbs * ratio;
-      const strainTrim = trim_lbs * ratio;
+      const strainBio = perStrainBio != null ? perStrainBio : biomass_lbs * ratio;
+      const strainTrim = perStrainTrim != null ? perStrainTrim : trim_lbs * ratio;
       const strainWaste = Math.max(0, raw - strainTops - strainSmalls - strainBio - strainTrim);
 
       await db.prepare(`
@@ -116,7 +119,7 @@ async function history(params, env) {
   if (start) { sql += ' AND date >= ?'; binds.push(start); }
   if (end) { sql += ' AND date <= ?'; binds.push(end); }
   if (strain) { sql += ' AND strain = ?'; binds.push(strain); }
-  if (complete === 'true') { sql += ' AND biomass_lbs > 0 AND trim_lbs > 0'; }
+  if (complete === 'true') { sql += ' AND biomass_lbs > 0 AND trim_lbs > 0 AND (tops_lbs + smalls_lbs + biomass_lbs + trim_lbs) <= raw_lbs * 1.5'; }
 
   sql += ' ORDER BY date DESC, strain';
 
@@ -133,7 +136,7 @@ async function summary(params, env) {
     : group_by === 'week' ? "strftime('%Y-W%W', date)"
     : 'date';
 
-  const completeFilter = complete === 'true' ? ' AND biomass_lbs > 0 AND trim_lbs > 0' : '';
+  const completeFilter = complete === 'true' ? ' AND biomass_lbs > 0 AND trim_lbs > 0 AND (tops_lbs + smalls_lbs + biomass_lbs + trim_lbs) <= raw_lbs * 1.5' : '';
 
   let sql = `
     SELECT ${groupExpr} as period,

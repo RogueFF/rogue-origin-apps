@@ -259,6 +259,15 @@
       font-size: 13px;
     }
     .inv-table tr:last-child td { border-bottom: none; }
+    .thin-sample-badge {
+      display: inline-block; font-size: 9px; font-weight: 600;
+      color: var(--gold); background: rgba(228, 170, 79, 0.12);
+      border: 1px solid rgba(228, 170, 79, 0.35);
+      padding: 1px 5px; border-radius: 4px;
+      margin-left: 4px; text-transform: uppercase; letter-spacing: 0.05em;
+      font-family: var(--font-ui);
+      vertical-align: middle;
+    }
     .inventory-summary {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1049,15 +1058,19 @@
     // that was rarely worked isn't diluted by calendar days it sat idle.
     const daysWorked = periods.filter(p => p.total_sacks > 0).length;
     const hasCompleteData = daysWorked > 0;
+    const MIN_SACKS_FOR_PREDICTION = 10;
     const strainUsage = {};
     const strainYields = {};
     (state.summaryData?.strains || []).forEach(s => {
       const name = s.strain || 'Unknown';
       const effDays = s.effective_days_worked || 0;
-      strainUsage[name] = effDays > 0 ? (s.total_sacks || 0) / effDays : 0;
+      const sacks = s.total_sacks || 0;
+      strainUsage[name] = effDays > 0 ? sacks / effDays : 0;
       strainYields[name] = {
-        topsRate: (s.total_sacks || 0) > 0 ? (s.total_tops || 0) / s.total_sacks : 0,
-        smallsRate: (s.total_sacks || 0) > 0 ? (s.total_smalls || 0) / s.total_sacks : 0,
+        topsRate: sacks > 0 ? (s.total_tops || 0) / sacks : 0,
+        smallsRate: sacks > 0 ? (s.total_smalls || 0) / sacks : 0,
+        sacks,
+        thinSample: sacks > 0 && sacks < MIN_SACKS_FOR_PREDICTION,
       };
     });
 
@@ -1091,10 +1104,13 @@
       const daysLeft = (hasCompleteData && usage > 0) ? Math.round(qty / usage) : null;
       const daysStr = daysLeft != null ? daysLeft : t('never');
 
-      const yields = strainYields[name] || { topsRate: 0, smallsRate: 0 };
+      const yields = strainYields[name] || { topsRate: 0, smallsRate: 0, thinSample: false };
       const hasProjData = hasCompleteData && (yields.topsRate > 0 || yields.smallsRate > 0);
       const projTops = hasProjData ? (qty * yields.topsRate).toFixed(0) : '--';
       const projSmalls = hasProjData ? (qty * yields.smallsRate).toFixed(0) : '--';
+      const thinBadge = (hasProjData && yields.thinSample)
+        ? `<span class="thin-sample-badge" title="Only ${yields.sacks} sacks of clean data — projection is directional, not predictive">⚠ thin</span>`
+        : '';
 
       // Depletion date
       let depleteStr = t('never');
@@ -1112,7 +1128,7 @@
       html += `<td style="font-family:var(--font-ui);font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</td>`;
       html += `<td>${fmt(qty)}</td>`;
       html += `<td>${daysStr}<div class="depletion-bar-bg"><div class="depletion-bar-fill" style="width:${barPct}%;background:${barColor}"></div></div></td>`;
-      html += `<td style="font-size:11px"><span style="color:var(--green)">${projTops}t</span> / <span style="color:var(--gold)">${projSmalls}s</span></td>`;
+      html += `<td style="font-size:11px"><span style="color:var(--green)">${projTops}t</span> / <span style="color:var(--gold)">${projSmalls}s</span>${thinBadge}</td>`;
       html += `<td style="font-size:11px">${depleteStr}</td>`;
       html += `</tr>`;
     });
