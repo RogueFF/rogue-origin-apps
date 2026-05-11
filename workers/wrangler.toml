@@ -46,4 +46,5 @@ ALLOWED_ORIGINS = "https://rogueff.github.io,http://localhost:3000,http://localh
 crons = [
   "0 14 * * *",   # Daily 6 AM PT (14:00 UTC during PST) — complaints + weather
   "0 17 * * 5",   # Friday 9 AM PT (17:00 UTC during PST) — Friday cart Telegram reminder
+  "0 14 * * 1",   # Monday 6 AM PT (14:00 UTC during PST) — supersack QA, silent when clean
 ]
