@@ -38,8 +38,9 @@ export default {
   async scheduled(event, env, ctx) {
     const cronPattern = (event.cron || '').trim();
     const tokens = cronPattern.split(/\s+/);
-    const dow = tokens[4]; // day-of-week field, '*' for daily, '5' for Friday
+    const dow = tokens[4]; // day-of-week field, '*' for daily, '1' for Monday, '5' for Friday
     const isFridayCron = dow === '5';
+    const isMondayCron = dow === '1';
     const isDailyCron = dow === '*';
 
     // Daily 6 AM PT: complaints sync + weather pull
@@ -74,6 +75,15 @@ export default {
         console.error(`[Cron] Friday cart reminder failed: ${e.message}`);
       }
     }
+
+    // Monday 6 AM PT: supersack data-quality check (TG ping only if anomalies)
+    if (isMondayCron) {
+      try {
+        await sendSupersackQAAlert(env);
+      } catch (e) {
+        console.error(`[Cron] Supersack QA check failed: ${e.message}`);
+      }
+    }
   },
 
   async fetch(request, env, ctx) {
@@ -105,6 +115,9 @@ export default {
         response = await handleConsignmentD1(request, env, ctx);
       } else if (path.startsWith('/api/media')) {
         response = await handleMediaR2(request, env);
+      } else if (path.startsWith('/api/supersack-qa')) {
+        const { handleSupersackQA } = await import('./handlers/supersack-qa.js');
+        response = await handleSupersackQA(request, env, ctx);
       } else if (path.startsWith('/api/supersack')) {
         response = await handleSupersackD1(request, env, ctx);
       } else if (path.startsWith('/api/tpm')) {
@@ -226,4 +239,42 @@ async function sendFridayCartReminder(env) {
     throw new Error(`Telegram API error ${tgRes.status}: ${err.slice(0, 200)}`);
   }
   console.log(`[Cron][Friday cart] Sent reminder (${rows.length} items)`);
+}
+
+/**
+ * Supersack data-quality check — pings Telegram only when the last 7 days
+ * contain rows that are silently excluded from analytics (missing one weight,
+ * or over-attributed multi-strain rows above 1.3× raw). Silent when clean.
+ */
+async function sendSupersackQAAlert(env) {
+  const { runSupersackQACheck } = await import('./handlers/supersack-qa.js');
+  const report = await runSupersackQACheck(env);
+
+  if (!report.hasAnomalies) {
+    console.log('[Cron][Supersack QA] No anomalies in last 7 days — silent');
+    return;
+  }
+
+  const token = env.TELEGRAM_BOT_TOKEN;
+  const chatId = env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) {
+    console.log('[Cron][Supersack QA] TELEGRAM creds not set — message would be:\n' + report.markdown);
+    return;
+  }
+
+  const tgRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: report.markdown,
+      parse_mode: 'Markdown',
+      disable_web_page_preview: true,
+    }),
+  });
+  if (!tgRes.ok) {
+    const err = await tgRes.text();
+    throw new Error(`Telegram API error ${tgRes.status}: ${err.slice(0, 200)}`);
+  }
+  console.log(`[Cron][Supersack QA] Alerted: ${report.counts.missingWeights} missing weights, ${report.counts.overAttributed} over-attributed`);
 }
