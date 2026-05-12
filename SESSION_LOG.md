@@ -6,6 +6,16 @@ History of significant changes to this repo, written by `/close`. Companion to t
 
 ---
 
+## 2026-05-12 — Weekly supersack QA cron, silent when clean
+
+- `workers/src/handlers/supersack-qa.js` (new): hard SQL anomaly checks against `supersack_entries` for the last 7 days — rows missing biomass or trim (silent-drop case), rows over-attributed >1.3× raw. Returns `{hasAnomalies: false}` when clean, markdown body when issues exist.
+- `workers/src/index.js`: Monday cron dispatch (`isMondayCron`) + `sendSupersackQAAlert()` that pings Telegram only when anomalies exist + new `/api/supersack-qa` GET route returning the same report as JSON for manual spot-checks.
+- `workers/wrangler.toml`: third cron entry `0 14 * * 1` (Monday 6 AM PT during PST, 7 AM PDT).
+- First live run surfaced 3 missing-weight rows from 5/7 (Godfather OG / Passion Fruit OG / Purple Frosty — 11 sacks total) that had been silently excluded from analytics since entry.
+- Wiki context: wiki/seasons/2026/journal/2026-05-12.md
+
+---
+
 ## 2026-05-11 — Supersack analytics cleanup + per-strain bio/trim entry
 
 - `workers/src/handlers/supersack-d1.js`: tighten analytics `complete=true` filter to `bio>0 AND trim>0 AND outputs ≤ 1.3× raw`; extend submit() to accept per-strain `biomass`/`trim` alongside per-strain `tops`/`smalls`, fall back to ratio-split when not supplied
