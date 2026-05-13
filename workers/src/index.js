@@ -33,15 +33,18 @@ import { ApiError } from './lib/errors.js';
 
 export default {
   // Cron Triggers — multiple cron patterns dispatched by inspecting event.cron.
-  // Match on day-of-week field (5th cron token) so we don't break if Cloudflare
+  // Match on day-of-week + minute fields so we don't break if Cloudflare
   // ever normalizes whitespace differently than the wrangler.toml literal.
   async scheduled(event, env, ctx) {
     const cronPattern = (event.cron || '').trim();
     const tokens = cronPattern.split(/\s+/);
-    const dow = tokens[4]; // day-of-week field, '*' for daily, '1' for Monday, '5' for Friday
+    const minute = tokens[0]; // minute field, '0' for once-per-hour daily, '*/5' for every 5 min
+    const dow = tokens[4];    // day-of-week field, '*' for daily, '1' for Monday, '5' for Friday
     const isFridayCron = dow === '5';
     const isMondayCron = dow === '1';
-    const isDailyCron = dow === '*';
+    // isDailyCron requires minute='0' so the */5 ingest cron doesn't accidentally trigger it
+    const isDailyCron = dow === '*' && minute === '0';
+    const isFiveMinCron = minute === '*/5';
 
     // Daily 6 AM PT: complaints sync + weather pull
     if (isDailyCron) {
@@ -82,6 +85,16 @@ export default {
         await sendSupersackQAAlert(env);
       } catch (e) {
         console.error(`[Cron] Supersack QA check failed: ${e.message}`);
+      }
+    }
+
+    // Every 5 min: JD Operations Center telemetry ingest (Field Ops Tracking, Phase 1)
+    if (isFiveMinCron) {
+      try {
+        const { handleJDIngestCron } = await import('./handlers/jd-ingest.js');
+        await handleJDIngestCron(event, env, ctx);
+      } catch (e) {
+        console.error(`[Cron] JD ingest failed: ${e.message}`);
       }
     }
   },
