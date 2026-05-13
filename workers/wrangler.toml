@@ -25,6 +25,11 @@ name = "rogue-origin-api"
 # - ORDERS_PASSWORD
 # - POOL_INVENTORY_API_URL (Pool Inventory Service base URL)
 # - POOL_INVENTORY_API_KEY (Pool Inventory Service API key)
+# - JD_CLIENT_ID                 (John Deere developer app client ID)
+# - JD_CLIENT_SECRET             (John Deere developer app client secret)
+# - JD_REFRESH_TOKEN             (long-lived OAuth refresh token)
+# - JD_ORG_ID                    (Rogue Family Farms Operations Center org ID)
+# - JD_ENV                       ("sandbox" | "production"; flip when prod approved)
 
 # D1 Database
 [[d1_databases]]
@@ -47,4 +52,5 @@ crons = [
   "0 14 * * *",   # Daily 6 AM PT (14:00 UTC during PST) — complaints + weather
   "0 17 * * 5",   # Friday 9 AM PT (17:00 UTC during PST) — Friday cart Telegram reminder
   "0 14 * * 1",   # Monday 6 AM PT (14:00 UTC during PST) — supersack QA, silent when clean
+  "*/5 * * * *",  # Every 5 min — JD Operations Center telemetry ingest (Field Ops Tracking system, Phase 1)
 ]
