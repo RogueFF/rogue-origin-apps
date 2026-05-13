@@ -88,3 +88,6 @@ tools/pdf-test/node_modules/
 
 # Reconciliation backups
 .backups/
+
+# Generated SQL files from JD boundary cache + future ad-hoc scripts
+workers/scripts/_generated/*.sql
