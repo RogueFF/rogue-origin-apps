@@ -6,6 +6,23 @@ History of significant changes to this repo, written by `/close`. Companion to t
 
 ---
 
+## 2026-05-13 — Field Ops Tracking Phase 1: JD Operations Center ingest plumbing
+
+- `workers/migrations/0006-jd-telemetry-tables.sql` (new): 7 D1 tables for the field-ops tracking system — `jd_position_breadcrumb`, `jd_machine_states`, `jd_machine_alerts` (raw 5-min telemetry), `zone_op_actuals`, `zone_op_idle_periods` (derived), `alerts_sent` (dedup), `field_boundaries_cache` (zone polygons). Applied to local + remote D1 via direct `--file` execution because the remote `d1_migrations` tracker is out of sync with the actual schema state (pre-existing condition — production tables exist but were never tracked by wrangler migrations).
+- `workers/src/lib/jd-api.js` (new): JDApi client wrapping OAuth 2.0 refresh-token flow + Bearer-authed REST calls. Env-var-based sandbox/production switching via `JD_ENV`. Auto-refreshes access tokens with 60s safety margin; respects refresh-token rotation.
+- `workers/src/lib/jd-endpoints.js` (new): functional wrappers around JD endpoints — `listOrganizations`, `listMachines`, `getMachineState`, `getMachineLocationHistory`, `listMachineAlerts`, `listBoundaries`. Each returns shape-normalized snake_case objects ready for D1 binding; raw JD response preserved as `raw` for forensic inspection.
+- `workers/src/handlers/jd-ingest.js` (new): 5-min cron handler that polls each machine in `JD_ORG_ID` for current state, recent location breadcrumbs (6-min window), and any new DTC alerts. Per-machine, per-endpoint try/catch — a transient failure on one machine doesn't abort the run. Uses `INSERT OR IGNORE` on alerts (UNIQUE on `jd_alert_id`) for re-poll dedup.
+- `workers/src/index.js`: wired JD ingest into `scheduled()` via lazy import (matches existing handler-import pattern). Tightened `isDailyCron` from `dow === '*'` to `dow === '*' && minute === '0'` so the new `*/5 * * * *` cron doesn't accidentally trigger the daily complaints-sync + weather-pull blocks. New `isFiveMinCron = minute === '*/5'`.
+- `workers/wrangler.toml`: added `*/5 * * * *` cron trigger + `JD_CLIENT_ID`/`JD_CLIENT_SECRET`/`JD_REFRESH_TOKEN`/`JD_ORG_ID`/`JD_ENV` to the required-secrets comment block.
+- `workers/scripts/jd-oauth-helper.mjs` (new): standalone Node helper to run the one-time OAuth code → refresh-token exchange. Listens on `http://localhost:9090/callback`, prints refresh_token to stdout. Operator stashes via `wrangler secret put JD_REFRESH_TOKEN`.
+- `workers/scripts/jd-list-orgs.mjs` (new): one-shot discovery to print accessible orgs after OAuth completes (find `JD_ORG_ID`).
+- `workers/scripts/jd-cache-boundaries.mjs` (new): emits SQL upsert file (gitignored, written to `scripts/_generated/`) with all current zone polygons from JD; operator applies via wrangler whenever convenient. Decoupling fetch from apply lets the operator handle wrangler-config concerns (the `REDACTED-D1-OPS-ID` placeholder workflow) however they normally do.
+- `.gitignore`: exclude `workers/scripts/_generated/*.sql`.
+- Phase 1 done at the code level. Operator still needs to run the OAuth flow (Phase 0 prereq), stash 5 secrets, deploy, and watch the first live ingest before Task 11 closes. Phase 2 (zone-op derivation engine + daily report Routine + MCP `field_prep_daily_data` tool + alert rules) is next.
+- Wiki context: wiki/seasons/2026/journal/2026-05-13.md
+
+---
+
 ## 2026-05-12 — Weekly supersack QA cron, silent when clean
 
 - `workers/src/handlers/supersack-qa.js` (new): hard SQL anomaly checks against `supersack_entries` for the last 7 days — rows missing biomass or trim (silent-drop case), rows over-attributed >1.3× raw. Returns `{hasAnomalies: false}` when clean, markdown body when issues exist.
