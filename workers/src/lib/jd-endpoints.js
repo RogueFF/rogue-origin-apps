@@ -92,3 +92,30 @@ export async function listMachineAlerts(api, machineId) {
     raw: a,
   }));
 }
+
+/**
+ * GET /organizations/{orgId}/boundaries — field/zone polygons.
+ *
+ * Returns normalized rows ready for the field_boundaries_cache table.
+ * Flattens JD's nested multipolygons.rings.points structure into a single
+ * GeoJSON Polygon (first ring of first multipolygon). Multi-ring / holed
+ * fields and true multipolygons can be added in a Phase 2 refinement; for
+ * v1 the simple polygon is sufficient for point-in-polygon zone detection.
+ */
+export async function listBoundaries(api, orgId) {
+  const d = await api.get(`/organizations/${orgId}/boundaries`);
+  return (d.values || []).map(b => {
+    const firstRing = b.multipolygons?.[0]?.rings?.[0]?.points || [];
+    // GeoJSON convention is [longitude, latitude] pairs.
+    const coords = firstRing.map(p => [p.lon, p.lat]);
+    const geojson = JSON.stringify({ type: 'Polygon', coordinates: [coords] });
+
+    return {
+      jd_field_id: b.id,
+      name: b.name,
+      acres: b.area?.measurement ?? null,
+      geojson,
+      raw: b,
+    };
+  });
+}
