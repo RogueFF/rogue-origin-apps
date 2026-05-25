@@ -155,21 +155,13 @@ async function getBagTimerData(env, date = null) {
     const today = date || formatDatePT(new Date(), 'yyyy-MM-dd');
     const now = date ? new Date(date + 'T23:59:59') : new Date();
 
-    // Fetch BOTH 5kg and 10lb bags — callers split by size below.
+    // Read true bag completions from production_tracking. Only logBag() and
+    // sheets-migration write here, so we avoid Shopify inventory webhook rows
+    // whose product SKUs happen to contain "10-LB" / "5-KG".
     const bags = await query(env.DB, `
-      SELECT timestamp, size, sku, flow_run_id
-      FROM inventory_adjustments
+      SELECT timestamp, bag_type
+      FROM production_tracking
       WHERE date(datetime(timestamp, '-8 hours')) = ?
-        AND (
-          lower(size) LIKE '%5kg%'
-          OR lower(size) LIKE '%5 kg%'
-          OR lower(sku) LIKE '%5-KG%'
-          OR lower(sku) LIKE '%-5KG-%'
-          OR lower(size) LIKE '%10lb%'
-          OR lower(size) LIKE '%10 lb%'
-          OR lower(sku) LIKE '%10-LB%'
-          OR lower(sku) LIKE '%-10LB-%'
-        )
       ORDER BY timestamp ASC
     `, [today]);
 
@@ -184,16 +176,12 @@ async function getBagTimerData(env, date = null) {
     const BAG_WEIGHTS_LBS = { '5kg': 11.0231, '10lb': 10.0 };
 
     const classifyBagSize = (row) => {
-      const sizeStr = (row.size || '').toLowerCase();
-      const skuStr = (row.sku || '').toLowerCase();
-      if (/10\s*lb/.test(sizeStr) || /-?10lb-?/.test(skuStr)) return '10lb';
-      return '5kg';
+      const t = String(row.bag_type || '').toLowerCase();
+      return /10\s*lb/.test(t) ? '10lb' : '5kg';
     };
 
     const todayBags = [];
     const bagSizes = [];  // parallel array to todayBags
-    const seenFlowRunIds = new Set();
-    const seenTimestamps = new Map();
     let lastBag = null;
 
     for (const row of bags || []) {
@@ -205,35 +193,7 @@ async function getBagTimerData(env, date = null) {
         continue;
       }
 
-      if (row.flow_run_id && seenFlowRunIds.has(row.flow_run_id)) {
-        console.log(`Skipping duplicate flow_run_id: ${row.flow_run_id} at ${row.timestamp}`);
-        continue;
-      }
-      if (row.flow_run_id) {
-        seenFlowRunIds.add(row.flow_run_id);
-      }
-
-      let isDuplicate = false;
-      if (row.flow_run_id && row.flow_run_id.includes('T') && row.flow_run_id.includes('Z')) {
-        const match = row.flow_run_id.match(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)/);
-        if (match) {
-          const embeddedTimestamp = match[1];
-          const embeddedDate = new Date(embeddedTimestamp);
-
-          for (const [seenTs, seenDate] of seenTimestamps.entries()) {
-            const timeDiffSec = Math.abs((embeddedDate - seenDate) / 1000);
-            if (timeDiffSec < 10) {
-              console.log(`Skipping duplicate: flow_run_id contains ${embeddedTimestamp}, matches existing bag at ${seenTs}`);
-              isDuplicate = true;
-              break;
-            }
-          }
-        }
-      }
-      if (isDuplicate) continue;
-
       const bagSize = classifyBagSize(row);
-      seenTimestamps.set(row.timestamp, rowDate);
       todayBags.push(rowDate);
       bagSizes.push(bagSize);
 
