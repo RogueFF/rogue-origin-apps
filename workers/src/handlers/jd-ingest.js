@@ -1,7 +1,7 @@
 /**
  * JD Operations Center telemetry ingest — 5-min cron handler.
  *
- * Called from src/index.js scheduled() on the `*/5 * * * *` trigger.
+ * Called from src/index.js scheduled() on the every-5-minute cron trigger.
  * Polls each machine in JD_ORG_ID for current state, recent location
  * breadcrumbs, and any new DTC alerts. Writes raw rows to D1.
  *
