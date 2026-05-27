@@ -36,11 +36,9 @@ export function extractPassword(request, body = {}) {
     return body.password;
   }
 
-  // Query param
-  const url = new URL(request.url);
-  if (url.searchParams.has('password')) {
-    return url.searchParams.get('password');
-  }
+  // NOTE: query-param passwords (?password=) are intentionally NOT accepted —
+  // they leak into access logs, browser history, and Referer headers. Send the
+  // password in the POST body or the Authorization header instead.
 
   // Authorization header
   const authHeader = request.headers.get('authorization');

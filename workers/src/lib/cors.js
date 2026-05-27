@@ -53,13 +53,24 @@ export function corsHeaders(env, request) {
   const origin = request ? request.headers.get('Origin') : null;
   const allowedOrigin = getAllowedOrigin(origin, env);
 
-  return {
-    'Access-Control-Allow-Origin': allowedOrigin || '*',
+  const headers = {
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Max-Age': '86400',
-    ...(allowedOrigin && allowedOrigin !== '*' ? { 'Vary': 'Origin' } : {}),
   };
+
+  // Emit Access-Control-Allow-Origin only for the wildcard (no Origin header /
+  // non-browser caller) or an allow-listed origin. A disallowed *browser* origin
+  // gets NO ACAO header, so the browser blocks it — instead of the old
+  // `|| '*'` fallback that silently allowed every origin.
+  if (allowedOrigin === '*') {
+    headers['Access-Control-Allow-Origin'] = '*';
+  } else if (allowedOrigin) {
+    headers['Access-Control-Allow-Origin'] = allowedOrigin;
+    headers['Vary'] = 'Origin';
+  }
+
+  return headers;
 }
 
 /**

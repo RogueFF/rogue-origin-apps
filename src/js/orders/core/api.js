@@ -187,8 +187,12 @@ function sleep(ms) {
  * @returns {Promise<Object>} { success, sessionToken, expiresIn } or { success: false, error }
  */
 export async function validatePassword(password) {
-  const url = `${API_URL}?action=validatePassword&password=${encodeURIComponent(password)}`;
-  const response = await fetch(url);
+  // POST password in body (text/plain = no preflight) — keeps it out of the URL.
+  const response = await fetch(`${API_URL}?action=validatePassword`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ password })
+  });
   const raw = await response.json();
   return raw.data || raw;
 }
