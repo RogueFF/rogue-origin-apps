@@ -10,8 +10,7 @@ History of significant changes to this repo, written by `/close`. Companion to t
 
 - `workers/src/handlers/supersack-d1.js` — new `tops_remaining` action + pure `projectFinishedTops()` (projects finished tops from raw inventory; 5-min cache + 24h stale fallback)
 - Security: login password moved from URL query → POST body (`orders/index.js`, `lib/auth.js`, 4 frontend sites); CORS `|| '*'` fallback fixed + `rogueorigin.com` allow-listed (`lib/cors.js`, `wrangler.toml`); generic client error on the endpoint
-- `docs/technical/SUPERSACK_ANALYTICS.md` + `SUPERSACK_TOPS_REMAINING.md` — layered architecture + formula docs
-- `docs/plans/2026-05-27-supersack-tops-remaining-api-design.md` — endpoint design doc
+- Architecture/formula + design docs (`SUPERSACK_ANALYTICS.md`, `SUPERSACK_TOPS_REMAINING.md`, `2026-05-27-supersack-tops-remaining-api-design.md`) — **relocated to the wiki repo's `docs/` (technical/ + plans/)** the same day; they live in the second brain, not this repo
 - Note: not yet deployed — `wrangler deploy` must precede the frontend push (login depends on it)
 - Wiki context: wiki/seasons/2026/journal/2026-05-27.md
 
