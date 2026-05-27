@@ -242,7 +242,7 @@ const BLACKLISTED_BAGS = [
 **Key Changes**:
 - Base URL: `https://rogue-origin-api.roguefamilyfarms.workers.dev/api`
 - Workers code in `workers/` directory
-- D1 database: `rogue-origin-db` (ID: `REDACTED-D1-OPS-ID`)
+- D1 database: `rogue-origin-db` (ID: `31397aa4-aa8c-47c4-965d-d51d36be8b13`)
 - Feature flags in `index.js` control Sheets vs D1 per handler
 - Response wrapper pattern: `{ success: true, data: {...} }`
 

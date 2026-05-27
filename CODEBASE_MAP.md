@@ -192,7 +192,7 @@ orders/
 '#c45c4a'  // danger
 
 // D1 Database ID
-'REDACTED-D1-OPS-ID'
+'31397aa4-aa8c-47c4-965d-d51d36be8b13'
 
 // Sheet IDs
 Production: 'REDACTED-PRODUCTION-SHEET-ID'

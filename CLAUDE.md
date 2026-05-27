@@ -142,7 +142,7 @@ rogue-origin-apps/
 | **Production Sheet** | `REDACTED-PRODUCTION-SHEET-ID` |
 | **Orders Sheet** | `REDACTED-ORDERS-SHEET-ID` |
 | **Barcode Sheet** | `REDACTED-BARCODE-SHEET-ID` |
-| **D1 Database** | `rogue-origin-db` (ID: `REDACTED-D1-OPS-ID`) |
+| **D1 Database** | `rogue-origin-db` (ID: `31397aa4-aa8c-47c4-965d-d51d36be8b13`) |
 
 ### Brand Colors
 ```css
