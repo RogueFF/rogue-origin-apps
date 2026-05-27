@@ -3,10 +3,11 @@
  * Manages supersack_entries table for historical tracking + analytics.
  *
  * Actions:
- *   submit   (POST) — upsert supersack entry per date+strain
- *   history  (GET)  — query date range, returns daily entries
- *   summary  (GET)  — aggregated KPIs for a date range (by day/week/month)
- *   backfill (POST) — one-time backfill from pool API + production data
+ *   submit         (POST) — upsert supersack entry per date+strain
+ *   history        (GET)  — query date range, returns daily entries
+ *   summary        (GET)  — aggregated KPIs for a date range (by day/week/month)
+ *   tops_remaining (GET)  — projected finished tops (lbs) in current raw inventory
+ *   backfill       (POST) — one-time backfill from pool API + production data
  */
 
 import { successResponse, errorResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
@@ -27,6 +28,8 @@ export async function handleSupersackD1(request, env, ctx) {
       return await history(params, env);
     case 'summary':
       return await summary(params, env);
+    case 'tops_remaining':
+      return await topsRemaining(request, env, ctx);
     case 'backfill':
       return await backfill(body, env);
     default:
@@ -205,6 +208,144 @@ async function summary(params, env) {
     periods: result.results,
     strains: strainResult.results,
   });
+}
+
+/**
+ * Projected finished tops (lbs) sitting in current raw supersack inventory.
+ *
+ * Answers: "given the raw supersacks on hand right now, how many pounds of
+ * finished tops will they produce?" — for a public website widget.
+ *
+ *   GET /api/supersack?action=tops_remaining
+ *   → { finished_tops_lbs, as_of, inventory_sacks }
+ *
+ * Yield rates come from D1 (all clean history); current counts come from the
+ * Shopify pool via the same GAS proxy /api/pool uses. Result is edge-cached for
+ * 5 minutes so public traffic doesn't hammer the GAS/Shopify quota — inventory
+ * only changes a couple times a day.
+ */
+async function topsRemaining(request, env, ctx) {
+  const cache = caches.default;
+  // Canonical keys — one entry each regardless of how the client formats the URL.
+  const freshKey = new Request('https://cache.local/supersack/tops_remaining');       // 5-min hot cache
+  const lastGoodKey = new Request('https://cache.local/supersack/tops_remaining-lg');  // 24-h outage fallback
+
+  const hit = await cache.match(freshKey);
+  if (hit) return hit;
+
+  if (!env.POOL_INVENTORY_API_URL || !env.POOL_INVENTORY_API_KEY) {
+    return errorResponse('Pool inventory API not configured', 'CONFIG_ERROR', 500);
+  }
+
+  try {
+    // 1. Per-strain measured tops/sack from all clean history. Same "clean" filter
+    //    the summary action uses (drops missing-weight + over-attributed rows).
+    const stats = await env.DB.prepare(`
+      SELECT strain,
+             SUM(sacks_opened) AS sacks,
+             SUM(tops_lbs)     AS tops
+      FROM supersack_entries
+      WHERE biomass_lbs > 0 AND trim_lbs > 0
+        AND (tops_lbs + smalls_lbs + biomass_lbs + trim_lbs) <= raw_lbs * 1.3
+      GROUP BY strain
+      HAVING SUM(sacks_opened) > 0
+    `).all().then(r => r.results || []);
+
+    // 2. Current inventory from the Shopify pool (via the GAS proxy).
+    const r = await fetch(env.POOL_INVENTORY_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'get_supersack_variants', apiKey: env.POOL_INVENTORY_API_KEY }),
+      redirect: 'follow',
+    });
+    const data = JSON.parse(await r.text());
+    if (data.error) throw new Error(data.error);
+    const variants = data.variants || [];
+
+    // 3. Project.
+    const { finished_tops_lbs, inventory_sacks } = projectFinishedTops(stats, variants);
+    const payload = { finished_tops_lbs, as_of: new Date().toISOString(), inventory_sacks };
+
+    const resp = new Response(JSON.stringify(payload), {
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300' },
+    });
+    if (ctx && ctx.waitUntil) {
+      ctx.waitUntil(cache.put(freshKey, resp.clone()));
+      // Stash a long-lived copy so a later GAS/D1 hiccup can serve a stale-but-real number.
+      ctx.waitUntil(cache.put(lastGoodKey, new Response(JSON.stringify(payload), {
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=86400' },
+      })));
+    }
+    return resp;
+  } catch (e) {
+    // Log the detail server-side; don't echo upstream internals to the client.
+    console.error('[supersack tops_remaining] compute failed:', e?.message || e);
+    // Live compute failed — serve the last known good value (flagged stale) if we have one.
+    const stale = await cache.match(lastGoodKey);
+    if (stale) {
+      const headers = new Headers(stale.headers);
+      headers.set('X-Stale', 'true');
+      return new Response(stale.body, { status: 200, headers });
+    }
+    return errorResponse('Inventory temporarily unavailable', 'EXTERNAL_API_ERROR', 502);
+  }
+}
+
+/**
+ * Pure projection logic — no I/O, unit-testable.
+ *
+ * @param {Array<{strain:string, sacks:number, tops:number}>} strainStats
+ *        Per-strain clean-history totals.
+ * @param {Array<{title:string, quantity:number}>} inventory
+ *        Current supersack counts (titles match strain names exactly).
+ *
+ * Rate per cultivar:
+ *   - has clean history AND rate not a HIGH anomaly → its own measured rate
+ *   - no history, OR rate is a high anomaly         → the floor
+ * Floor = lowest trusted (non-high-anomaly) rate. High-anomaly = above the
+ * robust upper fence (median + 3 × scaled MAD). Conservative / high-only:
+ * suspiciously-LOW rates are trusted as-is so the estimate never over-promises.
+ */
+export function projectFinishedTops(strainStats, inventory) {
+  const rateMap = new Map();
+  for (const s of strainStats) {
+    const sacks = Number(s.sacks) || 0;
+    const tops = Number(s.tops) || 0;
+    if (sacks > 0) rateMap.set(s.strain, tops / sacks);
+  }
+
+  const rates = [...rateMap.values()];
+
+  // High-side outlier fence — only meaningful with enough cultivars and spread.
+  let upperFence = Infinity;
+  if (rates.length >= 5) {
+    const med = median(rates);
+    const mad = median(rates.map(r => Math.abs(r - med))) * 1.4826;
+    if (mad > 0) upperFence = med + 3 * mad;
+  }
+
+  const trusted = rates.filter(r => r <= upperFence);
+  const floor = trusted.length ? Math.min(...trusted) : 0;
+
+  let tops = 0;
+  let inventory_sacks = 0;
+  for (const v of inventory) {
+    const qty = Number(v.quantity) || 0;
+    if (qty <= 0) continue;
+    const own = rateMap.get(v.title);
+    const rate = (own != null && own <= upperFence) ? own : floor;
+    tops += qty * rate;
+    inventory_sacks += qty;
+  }
+
+  return { finished_tops_lbs: Math.round(tops), inventory_sacks, floor_rate: floor };
+}
+
+function median(arr) {
+  const a = [...arr].sort((x, y) => x - y);
+  const n = a.length;
+  if (n === 0) return 0;
+  return n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2;
 }
 
 /** One-time backfill from pool API change logs + monthly_production */
