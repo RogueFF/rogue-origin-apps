@@ -56,8 +56,12 @@ export async function handleLogin(event) {
   loginBtn.textContent = 'Validating...';
 
   try {
-    const url = `${API_URL}?action=validatePassword&password=${encodeURIComponent(enteredPassword)}`;
-    const response = await fetch(url);
+    // POST password in body (text/plain = no preflight) — keeps it out of the URL.
+    const response = await fetch(`${API_URL}?action=validatePassword`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ password: enteredPassword })
+    });
     const raw = await response.json();
     const result = raw.data || raw;
 
