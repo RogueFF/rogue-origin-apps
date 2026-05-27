@@ -48,7 +48,7 @@
 **Cloudflare D1 (Primary - SQLite):**
 - Type: Edge SQLite database
 - Connection: Configured in `workers/wrangler.toml` with binding name `DB`
-- Database ID: `REDACTED-D1-OPS-ID`
+- Database ID: `31397aa4-aa8c-47c4-965d-d51d36be8b13`
 - Schema: `workers/schema.sql` (15 tables)
 - Tables:
   - **Production:** `inventory_adjustments` (from Shopify webhooks), `monthly_production` (hourly snapshots), `pause_log`, `shift_adjustments`, `scale_readings`
