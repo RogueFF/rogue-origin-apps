@@ -28,8 +28,13 @@ import { migrateFromSheets, migratePaymentLinks } from './migrate.js';
 
 // ===== AUTHENTICATION =====
 
-async function validatePassword(params, env) {
-  const password = params.password || '';
+async function validatePassword(params, body, env) {
+  // Password comes from the POST body (text/plain) so it never rides in the URL,
+  // logs, or browser history. params.password is a transitional fallback for
+  // stale service-worker-cached clients still doing the old GET login.
+  // TODO(2026-07-01): drop the params.password fallback — by then cached clients
+  // have rolled over and the leaky query-string path can be retired for good.
+  const password = body.password || params.password || '';
 
   // Use constant-time comparison from auth.js
   authValidatePassword(password, env, 'orders-validatePassword');
@@ -75,7 +80,7 @@ export async function handleOrdersD1(request, env) {
   }
 
   const actions = {
-    validatePassword: () => validatePassword(params, env),
+    validatePassword: () => validatePassword(params, body, env),
     getCustomers: () => getCustomers(env),
     saveCustomer: () => saveCustomer(body, env),
     deleteCustomer: () => deleteCustomer(body, env),
