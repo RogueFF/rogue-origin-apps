@@ -6,6 +6,17 @@ History of significant changes to this repo, written by `/close`. Companion to t
 
 ---
 
+## 2026-05-27 — add supersack tops_remaining API + security hardening + analytics docs
+
+- `workers/src/handlers/supersack-d1.js` — new `tops_remaining` action + pure `projectFinishedTops()` (projects finished tops from raw inventory; 5-min cache + 24h stale fallback)
+- Security: login password moved from URL query → POST body (`orders/index.js`, `lib/auth.js`, 4 frontend sites); CORS `|| '*'` fallback fixed + `rogueorigin.com` allow-listed (`lib/cors.js`, `wrangler.toml`); generic client error on the endpoint
+- `docs/technical/SUPERSACK_ANALYTICS.md` + `SUPERSACK_TOPS_REMAINING.md` — layered architecture + formula docs
+- `docs/plans/2026-05-27-supersack-tops-remaining-api-design.md` — endpoint design doc
+- Note: not yet deployed — `wrangler deploy` must precede the frontend push (login depends on it)
+- Wiki context: wiki/seasons/2026/journal/2026-05-27.md
+
+---
+
 ## 2026-05-13 — Field Ops Tracking Phase 1: JD Operations Center ingest plumbing
 
 - `workers/migrations/0006-jd-telemetry-tables.sql` (new): 7 D1 tables for the field-ops tracking system — `jd_position_breadcrumb`, `jd_machine_states`, `jd_machine_alerts` (raw 5-min telemetry), `zone_op_actuals`, `zone_op_idle_periods` (derived), `alerts_sent` (dedup), `field_boundaries_cache` (zone polygons). Applied to local + remote D1 via direct `--file` execution because the remote `d1_migrations` tracker is out of sync with the actual schema state (pre-existing condition — production tables exist but were never tracked by wrangler migrations).
