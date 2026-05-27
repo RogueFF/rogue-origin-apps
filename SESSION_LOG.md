@@ -6,6 +6,17 @@ History of significant changes to this repo, written by `/close`. Companion to t
 
 ---
 
+## 2026-05-27 — D1 placeholder cleanup in docs + delete obsolete overfill script
+
+- `CLAUDE.md`, `CODEBASE_MAP.md`, `docs/FEATURES_CHANGELOG.md`, `.planning/codebase/INTEGRATIONS.md` — replaced `REDACTED-D1-OPS-ID` placeholder with real D1 UUID `31397aa4-aa8c-47c4-965d-d51d36be8b13` (commit `1583c2ee`)
+- `scripts/make_overfill_sheet.py` — deleted; one-shot tool no longer needed, recoverable from git history (commit `d1531841`)
+- `SESSION_LOG.md` — this entry
+- **Caveat:** the docs commit (`1583c2ee`) conflicts with the morning session's "kept real D1 ID out of git" decision. HEAD of `workers/wrangler.toml` still has the placeholder; the real UUID I saw was a working-tree edit from the parallel deploy session. Inconsistency resolves cleanly once the parallel session commits `wrangler.toml`'s real ID.
+- Not pushed by this /close — parallel deploy session controls the push order (see todo: Deploy supersack + security work)
+- Wiki context: wiki/seasons/2026/journal/2026-05-27.md
+
+---
+
 ## 2026-05-27 — add supersack tops_remaining API + security hardening + analytics docs
 
 - `workers/src/handlers/supersack-d1.js` — new `tops_remaining` action + pure `projectFinishedTops()` (projects finished tops from raw inventory; 5-min cache + 24h stale fallback)
