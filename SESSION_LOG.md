@@ -6,6 +6,22 @@ History of significant changes to this repo, written by `/close`. Companion to t
 
 ---
 
+## 2026-05-28 — Health/quality audit + security fixes + scoreboard v1→v2 migration
+
+Full read-only audit of the repo (4 parallel agents), then a batch of fixes and three follow-up loops closed. 10 commits (`86cf69e7..e7c8bbc3`); two worker deploys (`bcb1efdd` final).
+
+- **Audit:** `docs/reports/2026-05-28-health-quality-audit.md` — frontend, backend, secret-sweep, hygiene. Backend auth gap (most write/AI endpoints unauthenticated) documented; AI key-burn accepted (covered by a $5 spend cap); write-endpoint login deferred then dropped by owner.
+- **Security fixes (deployed):** escaped two stored-XSS sinks in `src/js/hourly-entry/index.js`; routed the worker global catch through `formatError()` and fixed 8 handler-internal catches that leaked raw `err.message` (`workers/src/handlers/{sop-d1,kanban-d1,pool,production/hourly-entry,production/strain,production/bag-tracking,orders/scoreboard-queue}.js`); scrubbed the dead Atlas Bearer token from `docs/atlas-notifications-contract.md`.
+- **D1 id:** committed the real `database_id` to `workers/wrangler.toml` (`e066fc7b`) — closes the long-standing placeholder/real-ID inconsistency.
+- **ops-hub retired:** deleted `src/pages/ops-hub.html` + `src/css/ops-hub.css`; repointed all 14 app home buttons → `index.html`; cleaned SW precache.
+- **Dead-path repairs:** `pool.html` + `scale-display.html` favicon/logo/icon paths; `scoreboard{,-v2}/api.js` stale `vercel.app` fallback → `workers.dev`; dropped a nonexistent `legacy/dashboard.js` from SW precache.
+- **Scoreboard v1→v2 migration:** made `scoreboard-v2` canonical everywhere (index iframe + `appUrls`, `scale-display` 7 modules, sibling nav, SW precache → v3.18, eslint/package lint refs); **deleted v1** `src/pages/scoreboard.html` + `src/js/scoreboard/`. scale-display verified byte-level drop-in on v2 modules.
+- **Repo hygiene:** `.gitignore` — added `worktrees/` (never actually ignored), removed a duplicate block + a stray pasted timestamp; deleted Windows `nul`/`C:tmp` artifacts + stale empty worktree dir.
+- **Deploy note:** API deploys must use `npx wrangler deploy -c workers/wrangler.toml --env=""` — a bare `cd workers && wrangler deploy` can pick up the root `wrangler.jsonc` (a different, assets worker) and fail.
+- Wiki context: wiki/seasons/2026/journal/2026-05-28.md
+
+---
+
 ## 2026-05-27 — D1 placeholder cleanup in docs + delete obsolete overfill script
 
 - `CLAUDE.md`, `CODEBASE_MAP.md`, `docs/FEATURES_CHANGELOG.md`, `.planning/codebase/INTEGRATIONS.md` — replaced `REDACTED-D1-OPS-ID` placeholder with real D1 UUID `31397aa4-aa8c-47c4-965d-d51d36be8b13` (commit `1583c2ee`)
