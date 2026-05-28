@@ -35,7 +35,7 @@ name = "rogue-origin-api"
 [[d1_databases]]
 binding = "DB"
 database_name = "rogue-origin-db"
-database_id = "REDACTED-D1-OPS-ID"
+database_id = "31397aa4-aa8c-47c4-965d-d51d36be8b13"
 
 # R2 Storage (SOP media)
 [[r2_buckets]]
