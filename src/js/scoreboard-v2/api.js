@@ -80,7 +80,7 @@
     getApiUrl: function() {
       const config = window.ScoreboardConfig;
       return (config && config.API_URL) ||
-        'https://rogue-origin-apps-master.vercel.app/api/production';
+        'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
     },
 
     /**
@@ -90,7 +90,7 @@
     getWholesaleApiUrl: function() {
       const config = window.ScoreboardConfig;
       return (config && config.WHOLESALE_API_URL) ||
-        'https://rogue-origin-apps-master.vercel.app/api/orders';
+        'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/orders';
     },
 
     /**

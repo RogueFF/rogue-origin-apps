@@ -1,7 +1,7 @@
 // Service Worker for Rogue Origin Operations Hub
-// Version 3.16 - Auto-update: no hard refresh needed
+// Version 3.17 - Auto-update: no hard refresh needed
 
-const CACHE_VERSION = 'ro-ops-v3.16';
+const CACHE_VERSION = 'ro-ops-v3.17';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
@@ -37,7 +37,6 @@ const STATIC_ASSETS = [
   '/rogue-origin-apps/src/js/modules/index.js',
   '/rogue-origin-apps/src/js/modules/navigation.js',
   '/rogue-origin-apps/src/js/shared/api-cache.js',
-  '/rogue-origin-apps/src/js/legacy/dashboard.js',
 
   // PWA manifest
   '/rogue-origin-apps/manifest.json',
