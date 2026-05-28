@@ -3,7 +3,7 @@ const { test, expect } = require('@playwright/test');
 test.describe('Scoreboard iframe CSS verification', () => {
   test('should check if CSS changes are deployed', async ({ page }) => {
     // Go directly to scoreboard page to check CSS
-    await page.goto('https://rogueff.github.io/rogue-origin-apps/src/pages/scoreboard.html');
+    await page.goto('https://rogueff.github.io/rogue-origin-apps/src/pages/scoreboard-v2.html');
     await page.waitForLoadState('networkidle');
 
     // Add iframe-embed class to body (simulating iframe mode)

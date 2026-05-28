@@ -16,7 +16,7 @@ const { chromium } = require('playwright');
 
   try {
     console.log('1. Loading scoreboard...');
-    await page.goto('https://rogueff.github.io/rogue-origin-apps/src/pages/scoreboard.html');
+    await page.goto('https://rogueff.github.io/rogue-origin-apps/src/pages/scoreboard-v2.html');
     await page.waitForTimeout(10000);
 
     // Get timer value before break

@@ -43,7 +43,7 @@ export const widgetDefinitions = [
 // App URLs for embedded iframes
 export const appUrls = {
   kanban: 'https://rogueff.github.io/rogue-origin-apps/src/pages/kanban.html',
-  scoreboard: 'https://rogueff.github.io/rogue-origin-apps/src/pages/scoreboard.html',
+  scoreboard: 'https://rogueff.github.io/rogue-origin-apps/src/pages/scoreboard-v2.html',
   barcode: 'https://rogueff.github.io/rogue-origin-apps/src/pages/barcode.html',
   sop: 'https://rogueff.github.io/rogue-origin-apps/src/pages/sop-manager.html',
   orders: 'https://rogueff.github.io/rogue-origin-apps/src/pages/orders.html'

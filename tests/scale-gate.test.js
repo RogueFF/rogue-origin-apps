@@ -19,7 +19,7 @@ const BAG5KG_MAX_G  = 5317;
 const BAG10LB_MIN_G = 4642;
 const BAG10LB_MAX_G = 4763;
 
-// ===== Pure gate model mirroring src/js/scoreboard/scale.js applyGate/gateBagButton =====
+// ===== Pure gate model mirroring src/js/scoreboard-v2/scale.js applyGate/gateBagButton =====
 // A "btn" here is a plain object { disabled, gated, busy, title, hidden }.
 function makeBtn() { return { disabled: false, gated: false, busy: false, title: '', hidden: false }; }
 
