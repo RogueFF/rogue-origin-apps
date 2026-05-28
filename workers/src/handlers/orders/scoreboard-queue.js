@@ -107,7 +107,7 @@ async function getScoreboardOrderQueue(env) {
     });
   } catch (error) {
     console.error('[getScoreboardOrderQueue] Error:', error.message);
-    throw createError('INTERNAL_ERROR', error.message);
+    throw createError('INTERNAL_ERROR', 'Failed to load scoreboard order queue');
   }
 }
 
