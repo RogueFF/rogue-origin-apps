@@ -11,7 +11,7 @@ Read-only audit of `rogue-origin-apps` (public GitHub repo, GitHub Pages + Cloud
 | Item | State |
 |------|-------|
 | `wrangler.toml` real D1 id | ✅ **Committed** (`e066fc7b`, not pushed) — closes the SESSION_LOG inconsistency |
-| H2 error-message leak | ✅ **Fixed** — `index.js` global catch now routes through `formatError()`; one change covers every handler. Lint-clean. Takes effect on `wrangler deploy`. |
+| H2 error-message leak | ✅ **Fixed & deployed** (worker version `b900315d`) — `index.js` global catch now routes through `formatError()`, so any exception that *propagates to the worker's global catch* returns a generic message instead of raw `error.message`. Lint-clean; API smoke-tested healthy post-deploy. **Residual:** handler-*internal* try/catch blocks that return `err.message` in a 200 body bypass the global catch — `sop-d1.js:586` (`'SOP generation failed: ' + err.message`) still leaks. One-line follow-up, not yet shipped. |
 | H3 strain-name XSS | ✅ **Fixed** — `hourly-entry/index.js:2276,2279` wrapped in `escapeHtml()`. Takes effect on push. |
 | H4 product-name XSS | ✅ **Fixed** — `hourly-entry/index.js:2830,2833` wrapped in `escapeHtml()`. Takes effect on push. |
 | C2 AI key-burn | 🟡 **Accepted/mitigated** — the Anthropic key has a **$5 hard spend cap**, so financial blast radius is $5. Rate-limiting infra judged disproportionate. Residual risk = temporary AI-feature DoS if someone exhausts $5. |
