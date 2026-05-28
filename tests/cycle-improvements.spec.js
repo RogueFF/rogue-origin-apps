@@ -3,7 +3,7 @@ const { test, expect } = require('@playwright/test');
 test.describe('Today\'s Cycles Improvements', () => {
   test('should verify all cycle card enhancements', async ({ page, browserName }) => {
     // Navigate to scoreboard
-    await page.goto('https://rogueff.github.io/rogue-origin-apps/src/pages/scoreboard.html');
+    await page.goto('https://rogueff.github.io/rogue-origin-apps/src/pages/scoreboard-v2.html');
     await page.waitForLoadState('networkidle');
 
     console.log('🔍 Testing cycle improvements...\n');
@@ -156,7 +156,7 @@ test.describe('Today\'s Cycles Improvements', () => {
   });
 
   test('should verify scrollbar styling', async ({ page, browserName }) => {
-    await page.goto('https://rogueff.github.io/rogue-origin-apps/src/pages/scoreboard.html');
+    await page.goto('https://rogueff.github.io/rogue-origin-apps/src/pages/scoreboard-v2.html');
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(5000);
 
@@ -203,7 +203,7 @@ test.describe('Today\'s Cycles Improvements', () => {
     // Set mobile viewport
     await page.setViewportSize({ width: 375, height: 667 }); // iPhone SE
 
-    await page.goto('https://rogueff.github.io/rogue-origin-apps/src/pages/scoreboard.html');
+    await page.goto('https://rogueff.github.io/rogue-origin-apps/src/pages/scoreboard-v2.html');
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(5000);
 

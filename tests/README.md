@@ -56,7 +56,7 @@ node quick-visual-test.js
 
 **Pages tested:**
 - index.html (Main Dashboard)
-- scoreboard.html (Production Scoreboard) - Verifies file size < 150KB
+- scoreboard-v2.html (Production Scoreboard) - Verifies file size < 150KB
 - kanban.html (Supply Kanban)
 - barcode.html (Label Printer)
 - orders.html (Wholesale Orders)

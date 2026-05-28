@@ -24,7 +24,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "lint:dashboard": "eslint src/js/modules/",
-    "lint:scoreboard": "eslint src/js/scoreboard/",
+    "lint:scoreboard": "eslint src/js/scoreboard-v2/",
     "deploy": "wrangler deploy",
     "preview": "wrangler dev"
   },

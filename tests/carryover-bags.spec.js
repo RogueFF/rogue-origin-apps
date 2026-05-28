@@ -3,7 +3,7 @@ const { test, expect } = require('@playwright/test');
 test.describe('Carryover bag tracking and one-click start button', () => {
   test('should verify carryover tracking is working', async ({ page }) => {
     // Navigate to scoreboard
-    await page.goto('https://rogueff.github.io/rogue-origin-apps/src/pages/scoreboard.html');
+    await page.goto('https://rogueff.github.io/rogue-origin-apps/src/pages/scoreboard-v2.html');
     await page.waitForLoadState('networkidle');
 
     console.log('Page loaded, waiting for data...');
@@ -106,7 +106,7 @@ test.describe('Carryover bag tracking and one-click start button', () => {
 
   test('should verify one-click start button', async ({ page }) => {
     // Navigate to scoreboard
-    await page.goto('https://rogueff.github.io/rogue-origin-apps/src/pages/scoreboard.html');
+    await page.goto('https://rogueff.github.io/rogue-origin-apps/src/pages/scoreboard-v2.html');
     await page.waitForLoadState('networkidle');
 
     console.log('Checking start button behavior...');
@@ -158,7 +158,7 @@ test.describe('Carryover bag tracking and one-click start button', () => {
   });
 
   test('should check cycle time display formats', async ({ page }) => {
-    await page.goto('https://rogueff.github.io/rogue-origin-apps/src/pages/scoreboard.html');
+    await page.goto('https://rogueff.github.io/rogue-origin-apps/src/pages/scoreboard-v2.html');
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(5000);
 

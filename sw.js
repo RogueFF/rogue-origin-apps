@@ -1,7 +1,7 @@
 // Service Worker for Rogue Origin Operations Hub
-// Version 3.17 - Auto-update: no hard refresh needed
+// Version 3.18 - Auto-update: no hard refresh needed
 
-const CACHE_VERSION = 'ro-ops-v3.17';
+const CACHE_VERSION = 'ro-ops-v3.18';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
@@ -13,7 +13,7 @@ const STATIC_ASSETS = [
   // HTML pages
   '/rogue-origin-apps/',
   '/rogue-origin-apps/src/pages/index.html',
-  '/rogue-origin-apps/src/pages/scoreboard.html',
+  '/rogue-origin-apps/src/pages/scoreboard-v2.html',
   '/rogue-origin-apps/src/pages/sop-manager.html',
   '/rogue-origin-apps/src/pages/kanban.html',
   '/rogue-origin-apps/src/pages/barcode.html',
@@ -29,7 +29,7 @@ const STATIC_ASSETS = [
   '/rogue-origin-apps/src/css/kanban.css',
   '/rogue-origin-apps/src/css/order.css',
   '/rogue-origin-apps/src/css/orders.css',
-  '/rogue-origin-apps/src/css/scoreboard.css',
+  '/rogue-origin-apps/src/css/scoreboard-v2.css',
   '/rogue-origin-apps/src/css/scale-display.css',
   '/rogue-origin-apps/src/css/sop-manager.css',
 
