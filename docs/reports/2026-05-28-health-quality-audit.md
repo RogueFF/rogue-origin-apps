@@ -11,12 +11,12 @@ Read-only audit of `rogue-origin-apps` (public GitHub repo, GitHub Pages + Cloud
 | Item | State |
 |------|-------|
 | `wrangler.toml` real D1 id | ✅ **Committed** (`e066fc7b`, not pushed) — closes the SESSION_LOG inconsistency |
-| H2 error-message leak | ✅ **Fixed & deployed** (worker version `b900315d`) — `index.js` global catch now routes through `formatError()`, so any exception that *propagates to the worker's global catch* returns a generic message instead of raw `error.message`. Lint-clean; API smoke-tested healthy post-deploy. **Residual:** handler-*internal* try/catch blocks that return `err.message` in a 200 body bypass the global catch — `sop-d1.js:586` (`'SOP generation failed: ' + err.message`) still leaks. One-line follow-up, not yet shipped. |
+| H2 error-message leak | ✅ **Fixed & deployed** (worker `b900315d`, then `28db2637`) — `index.js` global catch routes through `formatError()` (covers exceptions propagating to the global catch), and `sop-d1.js:586` (the SOP-gen internal catch) now logs detail server-side + returns a generic client message. Lint-clean; API healthy post-deploy. **Known follow-up (LOW):** the same `err.message`-to-client pattern exists in ~7 other handler-internal catches — `sop-d1.js:338`, `kanban-d1.js:282`, `production/{hourly-entry.js:234, strain.js:250, bag-tracking.js:445}`, `orders/scoreboard-queue.js:110`, `pool.js:76`. Error strings (not secrets) on an internal tool; left in place since the specific messages are often useful for debugging. Sweep on request. |
+| H5 Atlas token | ✅ **Scrubbed** — token removed from `atlas-notifications-contract.md` (owner confirms it's dead/unused, so no rotation needed). Still present in git history; not worth a history rewrite for a dead token. |
 | H3 strain-name XSS | ✅ **Fixed** — `hourly-entry/index.js:2276,2279` wrapped in `escapeHtml()`. Takes effect on push. |
 | H4 product-name XSS | ✅ **Fixed** — `hourly-entry/index.js:2830,2833` wrapped in `escapeHtml()`. Takes effect on push. |
 | C2 AI key-burn | 🟡 **Accepted/mitigated** — the Anthropic key has a **$5 hard spend cap**, so financial blast radius is $5. Rate-limiting infra judged disproportionate. Residual risk = temporary AI-feature DoS if someone exhausts $5. |
 | C1 / H1 write-endpoint auth | ⏸️ **Deferred** — real fix requires adding a login to no-login floor tools (multi-app frontend project + UX change). Tracked as follow-up, not rushed. |
-| H5 Atlas token | ⏳ **Owner action** — rotate the token + scrub from git history (I can't rotate it). |
 
 ## TL;DR
 
