@@ -1,7 +1,7 @@
 // Service Worker for Rogue Origin Operations Hub
-// Version 3.15 - Auto-update: no hard refresh needed
+// Version 3.16 - Auto-update: no hard refresh needed
 
-const CACHE_VERSION = 'ro-ops-v3.15';
+const CACHE_VERSION = 'ro-ops-v3.16';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
@@ -19,7 +19,6 @@ const STATIC_ASSETS = [
   '/rogue-origin-apps/src/pages/barcode.html',
   '/rogue-origin-apps/src/pages/orders.html',
   '/rogue-origin-apps/src/pages/order.html',
-  '/rogue-origin-apps/src/pages/ops-hub.html',
   '/rogue-origin-apps/src/pages/scale-display.html',
 
   // CSS files
@@ -28,7 +27,6 @@ const STATIC_ASSETS = [
   '/rogue-origin-apps/src/css/ai-chat.css',
   '/rogue-origin-apps/src/css/barcode.css',
   '/rogue-origin-apps/src/css/kanban.css',
-  '/rogue-origin-apps/src/css/ops-hub.css',
   '/rogue-origin-apps/src/css/order.css',
   '/rogue-origin-apps/src/css/orders.css',
   '/rogue-origin-apps/src/css/scoreboard.css',
