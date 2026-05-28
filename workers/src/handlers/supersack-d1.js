@@ -242,18 +242,8 @@ async function topsRemaining(request, env, ctx) {
   }
 
   try {
-    // 1. Per-strain measured tops/sack from all clean history. Same "clean" filter
-    //    the summary action uses (drops missing-weight + over-attributed rows).
-    const stats = await env.DB.prepare(`
-      SELECT strain,
-             SUM(sacks_opened) AS sacks,
-             SUM(tops_lbs)     AS tops
-      FROM supersack_entries
-      WHERE biomass_lbs > 0 AND trim_lbs > 0
-        AND (tops_lbs + smalls_lbs + biomass_lbs + trim_lbs) <= raw_lbs * 1.3
-      GROUP BY strain
-      HAVING SUM(sacks_opened) > 0
-    `).all().then(r => r.results || []);
+    // 1. Per-strain measured tops/sack (tops-only filter — see getStrainTopsRates).
+    const stats = await getStrainTopsRates(env);
 
     // 2. Current inventory from the Shopify pool (via the GAS proxy).
     const r = await fetch(env.POOL_INVENTORY_API_URL, {
@@ -293,6 +283,32 @@ async function topsRemaining(request, env, ctx) {
     }
     return errorResponse('Inventory temporarily unavailable', 'EXTERNAL_API_ERROR', 502);
   }
+}
+
+/**
+ * Per-strain measured tops/sack — the rate source for BOTH tops_remaining and
+ * tops_breakdown (shared so they can never drift).
+ *
+ * Tops-only by design. For a *tops* projection the only trustworthy signals are
+ * sacks_opened and tops_lbs — both entered per-strain, per-day. Biomass/trim are
+ * logged episodically (one entry when a bag is weighed, spanning several days), so
+ * the dashboard's per-day biomass-balance "clean" filter wrongly discards ~25–65%
+ * of valid tops days on multi-day strains (and drops some cultivars to the floor
+ * entirely). We instead rate tops on every day that has real tops, guarded only
+ * against physically-impossible rows (tops > half the raw weight — a data-entry
+ * typo; true tops yield is ~10–15% of raw). Biomass correctness is irrelevant here.
+ */
+async function getStrainTopsRates(env) {
+  return env.DB.prepare(`
+    SELECT strain,
+           SUM(sacks_opened) AS sacks,
+           SUM(tops_lbs)     AS tops
+    FROM supersack_entries
+    WHERE tops_lbs > 0 AND sacks_opened > 0
+      AND tops_lbs <= raw_lbs * 0.5
+    GROUP BY strain
+    HAVING SUM(sacks_opened) > 0
+  `).all().then(r => r.results || []);
 }
 
 /** Raw JSON response (no {data:…} envelope — this endpoint has a fixed public contract). */
@@ -346,17 +362,7 @@ async function topsBreakdown(request, env, ctx) {
   }
 
   try {
-    // Same clean-history filter as tops_remaining / summary.
-    const stats = await env.DB.prepare(`
-      SELECT strain,
-             SUM(sacks_opened) AS sacks,
-             SUM(tops_lbs)     AS tops
-      FROM supersack_entries
-      WHERE biomass_lbs > 0 AND trim_lbs > 0
-        AND (tops_lbs + smalls_lbs + biomass_lbs + trim_lbs) <= raw_lbs * 1.3
-      GROUP BY strain
-      HAVING SUM(sacks_opened) > 0
-    `).all().then(r => r.results || []);
+    const stats = await getStrainTopsRates(env);
 
     const r = await fetch(env.POOL_INVENTORY_API_URL, {
       method: 'POST',
