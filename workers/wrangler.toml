@@ -25,6 +25,7 @@ name = "rogue-origin-api"
 # - ORDERS_PASSWORD
 # - POOL_INVENTORY_API_URL (Pool Inventory Service base URL)
 # - POOL_INVENTORY_API_KEY (Pool Inventory Service API key)
+# - BREAKDOWN_API_KEY        (Bearer token for supersack tops_breakdown — per-cultivar yield IP; share with web team out-of-band)
 # - JD_CLIENT_ID                 (John Deere developer app client ID)
 # - JD_CLIENT_SECRET             (John Deere developer app client secret)
 # - JD_REFRESH_TOKEN             (long-lived OAuth refresh token)

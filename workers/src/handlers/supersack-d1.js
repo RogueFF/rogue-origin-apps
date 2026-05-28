@@ -6,11 +6,13 @@
  *   submit         (POST) — upsert supersack entry per date+strain
  *   history        (GET)  — query date range, returns daily entries
  *   summary        (GET)  — aggregated KPIs for a date range (by day/week/month)
- *   tops_remaining (GET)  — projected finished tops (lbs) in current raw inventory
+ *   tops_remaining (GET)  — projected finished tops (lbs) in current raw inventory (public)
+ *   tops_breakdown (GET)  — per-cultivar projection (Bearer auth; competitively sensitive)
  *   backfill       (POST) — one-time backfill from pool API + production data
  */
 
 import { successResponse, errorResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
+import { constantTimeEqual } from '../lib/auth.js';
 
 const SACK_WEIGHT = 37;
 
@@ -30,6 +32,8 @@ export async function handleSupersackD1(request, env, ctx) {
       return await summary(params, env);
     case 'tops_remaining':
       return await topsRemaining(request, env, ctx);
+    case 'tops_breakdown':
+      return await topsBreakdown(request, env, ctx);
     case 'backfill':
       return await backfill(body, env);
     default:
@@ -291,6 +295,126 @@ async function topsRemaining(request, env, ctx) {
   }
 }
 
+/** Raw JSON response (no {data:…} envelope — this endpoint has a fixed public contract). */
+function rawJson(obj, status, extraHeaders) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { 'Content-Type': 'application/json', ...(extraHeaders || {}) },
+  });
+}
+
+/**
+ * tops_breakdown — per-cultivar version of tops_remaining. Same projection math
+ * (via projectFinishedTops), but exposes each cultivar's rate/source/projection
+ * so the website can route tops to the right retail product.
+ *
+ * Sensitive (per-strain inventory + yield rates = IP), so unlike tops_remaining
+ * it requires a Bearer token (BREAKDOWN_API_KEY) and is never served `*` CORS.
+ * Caching mirrors tops_remaining (5-min fresh + 24-h stale fallback) with one
+ * twist: the Cache API won't persist a `private` response, so we store a
+ * `public` copy server-side (never edge-reachable) and hand the client a
+ * `private` copy so no shared proxy caches an authed payload.
+ */
+async function topsBreakdown(request, env, ctx) {
+  // --- Auth FIRST: unauthorized callers do no work and never touch the cache. ---
+  const expected = env.BREAKDOWN_API_KEY;
+  if (!expected) {
+    console.error('[supersack tops_breakdown] BREAKDOWN_API_KEY not configured');
+    return rawJson({ error: 'unauthorized' }, 401);
+  }
+  const authHeader = request.headers.get('authorization') || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  if (!token || !constantTimeEqual(token, expected)) {
+    return rawJson({ error: 'unauthorized' }, 401);
+  }
+
+  const cache = caches.default;
+  const freshKey = new Request('https://cache.local/supersack/tops_breakdown');       // 5-min hot cache
+  const lastGoodKey = new Request('https://cache.local/supersack/tops_breakdown-lg');  // 24-h outage fallback
+
+  // Cache hit: stored copy is `public` (so the Cache API kept it) — re-stamp
+  // `private` before handing it back so intermediaries don't cache it.
+  const hit = await cache.match(freshKey);
+  if (hit) {
+    const h = new Headers(hit.headers);
+    h.set('Cache-Control', 'private, max-age=300');
+    return new Response(hit.body, { status: 200, headers: h });
+  }
+
+  if (!env.POOL_INVENTORY_API_URL || !env.POOL_INVENTORY_API_KEY) {
+    return rawJson({ error: 'Inventory temporarily unavailable' }, 502);
+  }
+
+  try {
+    // Same clean-history filter as tops_remaining / summary.
+    const stats = await env.DB.prepare(`
+      SELECT strain,
+             SUM(sacks_opened) AS sacks,
+             SUM(tops_lbs)     AS tops
+      FROM supersack_entries
+      WHERE biomass_lbs > 0 AND trim_lbs > 0
+        AND (tops_lbs + smalls_lbs + biomass_lbs + trim_lbs) <= raw_lbs * 1.3
+      GROUP BY strain
+      HAVING SUM(sacks_opened) > 0
+    `).all().then(r => r.results || []);
+
+    const r = await fetch(env.POOL_INVENTORY_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'get_supersack_variants', apiKey: env.POOL_INVENTORY_API_KEY }),
+      redirect: 'follow',
+    });
+    const data = JSON.parse(await r.text());
+    if (data.error) throw new Error(data.error);
+    const variants = data.variants || [];
+
+    const { floor_rate, upper_fence, cultivars } = projectFinishedTops(stats, variants);
+    // Totals derived from the rounded per-cultivar rows so the response is
+    // internally self-checkable (consumer can re-sum and match exactly).
+    const total_finished_tops_lbs = Math.round(
+      cultivars.reduce((s, c) => s + c.projected_finished_tops_lbs, 0)
+    );
+    const total_inventory_sacks = cultivars.reduce((s, c) => s + c.inventory_sacks, 0);
+
+    const payload = {
+      as_of: new Date().toISOString(),
+      floor_rate_lbs_per_sack: floor_rate,
+      anomaly_fence_lbs_per_sack: upper_fence,
+      total_finished_tops_lbs,
+      total_inventory_sacks,
+      // Inventory is one atomic batch fetch — there's no per-cultivar partial
+      // failure mode, so this is always empty (kept for contract stability).
+      partial_failures: [],
+      cultivars,
+    };
+    const body = JSON.stringify(payload);
+
+    if (ctx && ctx.waitUntil) {
+      // Stored copies are `public` so caches.default actually persists them
+      // (it silently drops `private`/`no-store`). These keys are synthetic and
+      // never reachable from the edge, so storing them public is not a leak.
+      ctx.waitUntil(cache.put(freshKey, new Response(body, {
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300' },
+      })));
+      ctx.waitUntil(cache.put(lastGoodKey, new Response(body, {
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=86400' },
+      })));
+    }
+
+    return rawJson(payload, 200, { 'Cache-Control': 'private, max-age=300' });
+  } catch (e) {
+    console.error('[supersack tops_breakdown] compute failed:', e?.message || e);
+    const stale = await cache.match(lastGoodKey);
+    if (stale) {
+      const h = new Headers(stale.headers);
+      h.set('X-Stale', 'true');
+      h.set('Cache-Control', 'private, max-age=0');
+      return new Response(stale.body, { status: 200, headers: h });
+    }
+    return rawJson({ error: 'Inventory temporarily unavailable' }, 502);
+  }
+}
+
 /**
  * Pure projection logic — no I/O, unit-testable.
  *
@@ -308,9 +432,11 @@ async function topsRemaining(request, env, ctx) {
  */
 export function projectFinishedTops(strainStats, inventory) {
   const rateMap = new Map();
+  const sacksMap = new Map();          // strain → clean-history sack count
   for (const s of strainStats) {
     const sacks = Number(s.sacks) || 0;
     const tops = Number(s.tops) || 0;
+    sacksMap.set(s.strain, sacks);
     if (sacks > 0) rateMap.set(s.strain, tops / sacks);
   }
 
@@ -327,18 +453,54 @@ export function projectFinishedTops(strainStats, inventory) {
   const trusted = rates.filter(r => r <= upperFence);
   const floor = trusted.length ? Math.min(...trusted) : 0;
 
+  const r2 = x => Math.round(x * 100) / 100;   // rate display: 2 dp
+  const r1 = x => Math.round(x * 10) / 10;     // projected lbs: 1 dp
+  const floorR = r2(floor);
+
   let tops = 0;
   let inventory_sacks = 0;
+  const cultivars = [];
   for (const v of inventory) {
     const qty = Number(v.quantity) || 0;
     if (qty <= 0) continue;
     const own = rateMap.get(v.title);
+
+    // --- public rollup math (unchanged: full precision, raw floor/own) ---
     const rate = (own != null && own <= upperFence) ? own : floor;
     tops += qty * rate;
     inventory_sacks += qty;
+
+    // --- per-cultivar breakdown (display-rounded + self-consistent) ---
+    // measured/effective are rounded so consumers can recompute
+    // projected = round(qty × effective, 1) exactly. Floor branches set
+    // effective === floorR so invariant "effective == floor" holds verbatim.
+    let measured, effective, rate_source;
+    if (own == null) {
+      measured = null; effective = floorR; rate_source = 'floor_unknown_cultivar';
+    } else if (own <= upperFence) {
+      measured = r2(own); effective = r2(own); rate_source = 'own';
+    } else {
+      measured = r2(own); effective = floorR; rate_source = 'floor_anomaly_high';
+    }
+    cultivars.push({
+      cultivar_name: v.title,
+      shopify_variant_id: v.id || null,
+      inventory_sacks: qty,
+      measured_rate_lbs_per_sack: measured,
+      effective_rate_lbs_per_sack: effective,
+      rate_source,
+      clean_history_sacks: sacksMap.get(v.title) || 0,
+      projected_finished_tops_lbs: r1(qty * effective),
+    });
   }
 
-  return { finished_tops_lbs: Math.round(tops), inventory_sacks, floor_rate: floor };
+  return {
+    finished_tops_lbs: Math.round(tops),   // unchanged — tops_remaining relies on this
+    inventory_sacks,                        // unchanged
+    floor_rate: floorR,
+    upper_fence: upperFence === Infinity ? null : r2(upperFence),
+    cultivars,
+  };
 }
 
 function median(arr) {
