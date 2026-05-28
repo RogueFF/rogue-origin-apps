@@ -7,7 +7,7 @@ import { createError } from './errors.js';
 /**
  * Constant-time string comparison (prevents timing attacks)
  */
-function constantTimeEqual(a, b) {
+export function constantTimeEqual(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') {
     return false;
   }
