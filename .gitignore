@@ -70,14 +70,11 @@ test-results/
 
 # Git worktrees
 .worktrees/
+worktrees/
 .vercel
 .env*.local
 .wrangler/
 
-# Git worktrees
-.worktrees/
-.worktrees/
-Wed, Feb  4, 2026  3:04:39 PM
 tools/pdf-test/output/
 tools/pdf-test/node_modules/
 
