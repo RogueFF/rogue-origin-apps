@@ -14,7 +14,6 @@
 | Kanban | `src/pages/kanban.html` | inline | `src/css/kanban.css` |
 | Barcode | `src/pages/barcode.html` | inline | `src/css/barcode.css` |
 | Hourly Entry | `src/pages/hourly-entry.html` | `src/js/hourly-entry/index.js` | `src/css/hourly-entry.css` |
-| Ops Hub | `src/pages/ops-hub.html` | inline | `src/css/ops-hub.css` |
 
 ### Backend Handlers
 | Feature | D1 Handler | Sheets Handler | Active Backend |
