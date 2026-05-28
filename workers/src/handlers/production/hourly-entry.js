@@ -231,7 +231,7 @@ async function addProduction(body, env) {
   }
   } catch (error) {
     console.error('addProduction error:', error);
-    return errorResponse(`Failed to add production: ${error.message}`, 'INTERNAL_ERROR', 500);
+    return errorResponse('Failed to add production', 'INTERNAL_ERROR', 500);
   }
 }
 

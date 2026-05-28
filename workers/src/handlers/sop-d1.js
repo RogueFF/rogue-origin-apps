@@ -335,7 +335,8 @@ async function anthropic(body, env) {
     const result = await response.json();
     return successResponse(result);
   } catch (err) {
-    throw createError('INTERNAL_ERROR', err.message);
+    console.error('[sop] anthropic request failed:', err);
+    throw createError('INTERNAL_ERROR', 'AI request failed');
   }
 }
 

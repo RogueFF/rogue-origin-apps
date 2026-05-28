@@ -277,9 +277,10 @@ async function fetchProduct(body) {
 
     return successResponse(result);
   } catch (err) {
+    console.error('[kanban] product info fetch failed:', err);
     return successResponse({
       success: false,
-      error: 'Could not fetch product info: ' + err.message,
+      error: 'Could not fetch product info',
     });
   }
 }

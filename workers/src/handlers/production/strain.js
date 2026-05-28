@@ -247,7 +247,7 @@ async function analyzeStrain(params, env) {
     });
   } catch (error) {
     console.error('Error analyzing strain:', error);
-    return errorResponse(`Failed to analyze strain: ${error.message}`, 'INTERNAL_ERROR', 500);
+    return errorResponse('Failed to analyze strain', 'INTERNAL_ERROR', 500);
   }
 }
 
