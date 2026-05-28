@@ -581,9 +581,12 @@ Search for official manufacturer documentation, maintenance manuals, setup guide
 
     return successResponse({ success: true, sop });
   } catch (err) {
+    // Log the detail server-side (visible via `wrangler tail`); return a generic
+    // message so unexpected internals don't leak to the client.
+    console.error('[sop] SOP generation failed:', err);
     return successResponse({
       success: false,
-      error: 'SOP generation failed: ' + err.message,
+      error: 'SOP generation failed. Please try again or check the logs.',
     });
   }
 }
