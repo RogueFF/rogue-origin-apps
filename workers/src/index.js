@@ -29,7 +29,7 @@ import { handleTpmD1 } from './handlers/tpm-d1.js';
 import { handleTrackingD1 } from './handlers/tracking/index.js';
 import { corsHeaders, handleCors } from './lib/cors.js';
 import { jsonResponse, errorResponse } from './lib/response.js';
-import { ApiError } from './lib/errors.js';
+import { formatError } from './lib/errors.js';
 
 export default {
   // Cron Triggers — multiple cron patterns dispatched by inspecting event.cron.
@@ -167,19 +167,11 @@ export default {
       });
 
     } catch (error) {
-      console.error('Unhandled error:', error);
-
-      // Handle ApiError instances
-      let response;
-      if (error instanceof ApiError) {
-        response = errorResponse(error.message, error.code, error.statusCode, error.details);
-      } else {
-        response = errorResponse(
-          error.message || 'Internal server error',
-          'INTERNAL_ERROR',
-          500
-        );
-      }
+      // formatError surfaces ApiError messages (validation/auth/not-found) but
+      // returns a generic message for unexpected errors so internals never leak
+      // to clients. Applies to every handler routed above.
+      const { message, code, status, details } = formatError(error);
+      const response = errorResponse(message, code, status, details);
 
       // Add CORS headers
       const headers = new Headers(response.headers);
