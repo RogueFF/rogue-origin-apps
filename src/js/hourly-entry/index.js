@@ -2273,10 +2273,10 @@ function renderCustomDropdownOptions(dropdown, cultivars, selectedValue, filter 
     .map(
       (cultivar) => `
       <div class="custom-select-option${cultivar === selectedValue ? ' selected' : ''}" 
-           data-value="${cultivar}" 
+           data-value="${escapeHtml(cultivar)}"
            role="option"
            aria-selected="${cultivar === selectedValue}">
-        ${cultivar}
+        ${escapeHtml(cultivar)}
       </div>
     `
     )
@@ -2827,10 +2827,10 @@ function renderScannerDropdownOptions(dropdown, products, selectedValue, filter 
       <div class="custom-select-option${product.id === selectedValue ? ' selected' : ''}"
            data-value="${product.id}"
            data-pool-value="${product.poolValue}"
-           data-title="${displayName}"
+           data-title="${escapeHtml(displayName)}"
            role="option"
            aria-selected="${product.id === selectedValue}">
-        <span class="option-name">${displayName}</span>
+        <span class="option-name">${escapeHtml(displayName)}</span>
         <span class="option-weight">${weightDisplay}</span>
       </div>
     `;
