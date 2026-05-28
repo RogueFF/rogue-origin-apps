@@ -1,7 +1,7 @@
 # Atlas Notifications — API Contract
 
 **Endpoint:** POST http://100.65.60.42:9400/notify
-**Auth:** Bearer REDACTED-ATLAS-TOKEN
+**Auth:** Bearer <ATLAS_NOTIFICATIONS_TOKEN>  <!-- removed from source; the prior token was unused/dead. Store any real token as a secret, never in this doc. -->
 **Creds:** /home/[user]/.credentials/atlas-notifications.json
 
 ## Types
