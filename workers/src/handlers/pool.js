@@ -73,6 +73,7 @@ export async function handlePoolRequest(request, env) {
 
   } catch (error) {
     if (error.status) throw error;
-    throw createError('EXTERNAL_API_ERROR', `Pool API request failed: ${error.message}`);
+    console.error('[pool] upstream request failed:', error);
+    throw createError('EXTERNAL_API_ERROR', 'Pool API request failed');
   }
 }

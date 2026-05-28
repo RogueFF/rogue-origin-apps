@@ -442,7 +442,8 @@ async function debugBags(env) {
       ptResults: todayBagsPT,
     });
   } catch (error) {
-    return errorResponse('Debug failed: ' + error.message);
+    console.error('[bag-tracking] debug failed:', error);
+    return errorResponse('Debug failed');
   }
 }
 
