@@ -68,8 +68,8 @@ describe('Baseline Tests - All Pages Load', () => {
     expect(criticalErrors.length).toBeLessThan(6);
   });
 
-  test('scoreboard.html loads without errors', async () => {
-    await page.goto(`${BASE_URL}/scoreboard.html`, { waitUntil: 'networkidle2' });
+  test('scoreboard-v2.html loads without errors', async () => {
+    await page.goto(`${BASE_URL}/scoreboard-v2.html`, { waitUntil: 'networkidle2' });
 
     const title = await page.title();
     expect(title).toBe('Production Scoreboard');
@@ -157,7 +157,7 @@ describe('Baseline Tests - All Pages Load', () => {
   test('All pages load within 3 seconds', async () => {
     const pages = [
       'index.html',
-      'scoreboard.html',
+      'scoreboard-v2.html',
       'kanban.html',
       'barcode.html',
       'orders.html',

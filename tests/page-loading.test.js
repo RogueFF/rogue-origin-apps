@@ -78,7 +78,7 @@ describe('Individual Page Loading Tests', () => {
 
   describe('Scoreboard Page', () => {
     beforeEach(async () => {
-      await page.goto(`${BASE_URL}/scoreboard.html`, { waitUntil: 'networkidle2' });
+      await page.goto(`${BASE_URL}/scoreboard-v2.html`, { waitUntil: 'networkidle2' });
     });
 
     test('Page loads successfully', async () => {
@@ -116,7 +116,7 @@ describe('Individual Page Loading Tests', () => {
 
     test('Page file size is optimized (< 150KB)', async () => {
       const fs = require('fs');
-      const filePath = path.resolve(__dirname, '../src/pages/scoreboard.html');
+      const filePath = path.resolve(__dirname, '../src/pages/scoreboard-v2.html');
       const stats = fs.statSync(filePath);
       const fileSizeInKB = stats.size / 1024;
 
@@ -222,7 +222,7 @@ describe('Individual Page Loading Tests', () => {
     test('All pages load external CSS correctly', async () => {
       const pages = [
         { file: 'kanban.html', css: 'kanban.css' },
-        { file: 'scoreboard.html', css: 'scoreboard.css' },
+        { file: 'scoreboard-v2.html', css: 'scoreboard.css' },
         { file: 'barcode.html', css: 'barcode.css' },
         { file: 'orders.html', css: 'orders.css' },
         { file: 'sop-manager.html', css: 'sop-manager.css' }

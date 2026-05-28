@@ -9,7 +9,7 @@ const { chromium } = require('playwright');
   try {
     // Navigate to scoreboard
     console.log('1. Navigating to scoreboard...');
-    await page.goto('https://rogueff.github.io/rogue-origin-apps/src/pages/scoreboard.html');
+    await page.goto('https://rogueff.github.io/rogue-origin-apps/src/pages/scoreboard-v2.html');
 
     // Wait for order queue API call
     console.log('2. Waiting for order queue to load...');

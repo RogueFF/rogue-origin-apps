@@ -121,16 +121,25 @@ export default [
   },
   {
     // Special config for scoreboard files
-    files: ['src/js/scoreboard/**/*.js'],
+    files: ['src/js/scoreboard-v2/**/*.js'],
     languageOptions: {
       globals: {
-        // Scoreboard-specific globals
+        // Scoreboard-specific globals (IIFE modules attach these to window)
         ScoreboardState: 'readonly',
         ScoreboardTimer: 'readonly',
         ScoreboardAPI: 'readonly',
-        ScoreboardRender: 'readonly',
-        ScoreboardShiftStart: 'readonly',
+        ScoreboardAPICache: 'readonly',
+        ScoreboardChart: 'readonly',
+        ScoreboardConfig: 'readonly',
+        ScoreboardCycle: 'readonly',
         ScoreboardDOM: 'readonly',
+        ScoreboardDebug: 'readonly',
+        ScoreboardEvents: 'readonly',
+        ScoreboardFABMenu: 'readonly',
+        ScoreboardRender: 'readonly',
+        ScoreboardScale: 'readonly',
+        ScoreboardShiftStart: 'readonly',
+        ScoreboardUtils: 'readonly',
         confetti: 'readonly'
       }
     }
