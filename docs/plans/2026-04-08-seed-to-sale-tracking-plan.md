@@ -1,5 +1,7 @@
 # Seed-to-Sale Tracking — Implementation Plan (Phase 1: Germination → Planting)
 
+> ⛔ **DISCONTINUED (2026-05-29).** The "Field Tracking Hub" built from this plan was retired and fully torn down: frontend (`src/pages/tracking/`), backend handlers (`workers/src/handlers/tracking/`), the `/api/tracking` route, the daily weather auto-pull, and all 9 `tracking_*` D1 tables (dropped via migration `0007-drop-tracking-tables.sql`). Never went live — only dev test data existed. This document is kept for historical reference only. Not to be confused with the separate JD "Field Ops Tracking" telemetry system, which remains active.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Build a tracking system for hemp lots from seed through transplant/establishment, with mobile forms for greenhouse workers and field crew, weather auto-pull, and data stored in Cloudflare D1.
