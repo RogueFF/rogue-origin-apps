@@ -2,112 +2,207 @@
  * Thin functional wrappers around the JD Operations Center REST API.
  * Each function takes a JDApi instance + parameters, returns shape-normalized data.
  *
+ * HATEOAS: every resource is reached by following a HAL `links[].uri` from the
+ * one above it (catalog -> organizations -> machines -> per-machine telemetry),
+ * never by constructing a path. JD's production certification inspects live
+ * traffic for exactly this navigation pattern.
+ *
+ * UNVERIFIED FIELD MAPPINGS: the response field names below are derived from
+ * JD's published OpenAPI specs + community SDKs, NOT yet confirmed against live
+ * responses — every data endpoint 403s until JD connects this app to an org.
+ * Each mapping therefore falls back across candidate keys and always preserves
+ * `raw`, so the first real responses can be diffed and the mappings locked down.
+ *
+ * Pagination (`nextPage` links) is deferred to the certification-hardening pass;
+ * at single-org / handful-of-machines scale the first page is the whole result.
+ *
  * Phase 1, Tasks 5-7 of the Field Ops Tracking system.
  */
 
-/**
- * GET /organizations — list orgs this OAuth grant has access to.
- * Use jd-list-orgs.mjs to discover the org ID, then stash as JD_ORG_ID secret.
- */
-export async function listOrganizations(api) {
-  const data = await api.get('/organizations');
-  return (data.values || []).map(o => ({
-    id: o.id,
-    name: o.name,
-    type: o.type,
-    raw: o,
-  }));
-}
-
-/**
- * GET /organizations/{orgId}/machines — list machines in an org.
- */
-export async function listMachines(api, orgId) {
-  const data = await api.get(`/organizations/${orgId}/machines`);
-  return (data.values || []).map(m => ({
-    id: m.id,
-    name: m.name,
-    vin: m.vin,
-    category: m.category,
-    model: m.model,
-    raw: m,
-  }));
-}
+import { findLink } from './jd-api.js';
 
 // JD returns state in UPPER_SNAKE; normalize to lowercase tokens we use throughout.
 const STATE_MAP = { WORKING: 'working', IDLE: 'idle', TRANSPORT: 'transport', OFF: 'off' };
 
 /**
- * GET /machines/{machineId}/engineState — current engine state snapshot.
- * Returns normalized {engine_hours, fuel_level_pct, fuel_rate_lph, state, raw}.
- *
- * Note: JD field names may differ slightly in sandbox vs production. If the
- * raw response doesn't carry expected keys, inspect `raw` and update mapping.
+ * Catalog rel `organizations` -> orgs this OAuth grant can see.
+ * Each org keeps its `links` so callers can follow per-org rels (machines,
+ * boundaries, ...). Use jd-list-orgs.mjs to discover the org ID for JD_ORG_ID.
  */
-export async function getMachineState(api, machineId) {
-  const d = await api.get(`/machines/${machineId}/engineState`);
+export async function listOrganizations(api) {
+  const catalog = await api.getCatalog();
+  const url = findLink(catalog, 'organizations');
+  if (!url) throw new Error('JD API catalog has no `organizations` link');
+  const data = await api.get(url);
+  return (data.values || []).map((o) => ({
+    id: o.id,
+    name: o.name,
+    type: o.type,
+    links: o.links || [],
+    raw: o,
+  }));
+}
+
+/**
+ * Resolve a single org (with its HAL links) by id. HATEOAS-friendly: we find it
+ * in the organizations collection rather than hand-building `/organizations/{id}`.
+ */
+export async function getOrganization(api, orgId) {
+  const orgs = await listOrganizations(api);
+  const org = orgs.find((o) => String(o.id) === String(orgId));
+  if (!org) {
+    const seen = orgs.map((o) => o.id).join(', ') || 'none';
+    throw new Error(`JD org ${orgId} not visible to this grant (saw: ${seen})`);
+  }
+  return org;
+}
+
+/**
+ * Follow an org's `machines` link -> machines in that org.
+ * Legacy /platform advertises the rel as `machines`; the modern Equipment API
+ * uses `equipment` — follow whichever this org exposes.
+ * Each machine keeps `id`, `principalId` (the telemetry key), and its `links`.
+ *
+ * @param {Object} org  an org object from listOrganizations/getOrganization (carries `links`)
+ */
+export async function listMachines(api, org) {
+  const url = findLink(org, 'machines') || findLink(org, 'equipment');
+  if (!url) throw new Error(`JD org ${org?.id} has no \`machines\`/\`equipment\` link`);
+  const data = await api.get(url);
+  return (data.values || []).map((m) => ({
+    id: m.id,
+    principalId: m.principalId ?? m.id,
+    name: m.name ?? m.equipmentName ?? null,
+    vin: m.vin ?? m.serialNumber ?? null,
+    category: m.category ?? m.equipmentType ?? null,
+    model: m.model ?? m.modelName ?? null,
+    links: m.links || [],
+    raw: m,
+  }));
+}
+
+/**
+ * Last-known engine hours for a machine. Follows the machine's `engineHours`
+ * link (?lastKnown=true). The value comes back under `reading` — the original
+ * code looked for `engineHours`, which doesn't exist on this resource.
+ * (If machines don't expose this rel, the catalog-level `lastKnownEngineHours`
+ * rel is the fallback to wire up once we can see real responses.)
+ * Returns { value: number|null, raw }.
+ */
+async function getEngineHours(api, machine) {
+  const url = findLink(machine, 'engineHours');
+  if (!url) return { value: null, raw: null };
+  const d = await api.get(url, { lastKnown: true });
+  const latest = Array.isArray(d.values) ? d.values[d.values.length - 1] : d;
+  const value = latest?.reading ?? latest?.value ?? latest?.engineHours ?? null;
+  return { value: value != null ? Number(value) : null, raw: d };
+}
+
+/**
+ * Latest device state report (live operational state + fuel) for a machine.
+ * Follows the machine's `deviceStateReports` link. There is no `engineState`
+ * endpoint on /platform — that was the bug in the original code.
+ * Returns { state, fuel_level_pct, fuel_rate_lph, raw }.
+ */
+async function getDeviceState(api, machine) {
+  const url = findLink(machine, 'deviceStateReports');
+  if (!url) return { state: 'unknown', fuel_level_pct: null, fuel_rate_lph: null, raw: null };
+  const d = await api.get(url);
+  const reports = d.values || (Array.isArray(d) ? d : [d]);
+  const latest = reports[reports.length - 1] || {};
+  const rawState = latest.state ?? latest.machineState ?? latest.deviceState;
   return {
-    engine_hours: d.engineHours ?? null,
-    fuel_level_pct: d.fuelLevel ?? null,
-    fuel_rate_lph: d.fuelRate ?? null,
-    state: STATE_MAP[d.state] || 'unknown',
+    state: STATE_MAP[rawState] || 'unknown',
+    fuel_level_pct: latest.fuelLevel ?? latest.remainingFuelPercent ?? latest.fuelLevelPercent ?? null,
+    fuel_rate_lph: latest.fuelRate ?? latest.fuelConsumptionRate ?? null,
     raw: d,
   };
 }
 
 /**
- * GET /machines/{machineId}/locationHistory?startDate=...
- * Returns array of breadcrumbs in normalized shape.
+ * Current engine/operational snapshot for a machine, assembled from two HAL
+ * resources (engineHours + deviceStateReports). Returns the same normalized
+ * shape the ingest cron + jd_machine_states table already expect.
  *
- * @param {string} machineId
- * @param {Object} opts
- * @param {string} [opts.since]  ISO8601 timestamp lower bound; defaults to last 6 min
+ * @param {Object} machine  a machine object from listMachines (carries `links`)
  */
-export async function getMachineLocationHistory(api, machineId, { since } = {}) {
+export async function getMachineState(api, machine) {
+  const [hours, device] = await Promise.all([
+    getEngineHours(api, machine),
+    getDeviceState(api, machine),
+  ]);
+  return {
+    engine_hours: hours.value,
+    fuel_level_pct: device.fuel_level_pct,
+    fuel_rate_lph: device.fuel_rate_lph,
+    state: device.state,
+    raw: { engineHours: hours.raw, deviceState: device.raw },
+  };
+}
+
+/**
+ * Location breadcrumbs for a machine since a timestamp. Follows the machine's
+ * `locationHistory` link with a startDate param. Field fixes vs original:
+ * timestamp is `eventTimestamp` (not `eventTime`) and lat/lon are nested under
+ * a `point` object.
+ *
+ * @param {Object} machine  a machine object from listMachines
+ * @param {Object} opts
+ * @param {string} [opts.since]  ISO8601 lower bound
+ */
+export async function getMachineLocationHistory(api, machine, { since } = {}) {
+  const url = findLink(machine, 'locationHistory');
+  if (!url) return [];
   const params = {};
   if (since) params.startDate = since;
-  const d = await api.get(`/machines/${machineId}/locationHistory`, params);
-  return (d.values || []).map(p => ({
-    ts: p.eventTime,
-    lat: p.latitude,
-    lon: p.longitude,
-    speed_kmh: p.speed ?? null,
-    heading_deg: p.heading ?? null,
+  const d = await api.get(url, params);
+  return (d.values || []).map((p) => ({
+    ts: p.eventTimestamp ?? p.eventTime ?? p.timestamp ?? null,
+    lat: p.point?.lat ?? p.latitude ?? p.lat ?? null,
+    lon: p.point?.lon ?? p.longitude ?? p.lon ?? null,
+    speed_kmh: p.speed ?? p.groundSpeed ?? null,
+    heading_deg: p.heading ?? p.bearing ?? null,
     raw: p,
   }));
 }
 
 /**
- * GET /machines/{machineId}/alerts — DTC fault codes for a machine.
+ * DTC fault-code alerts for a machine. Follows the machine's `alerts` link.
+ * `description` may arrive as `definition` on this resource.
+ *
+ * @param {Object} machine  a machine object from listMachines
  */
-export async function listMachineAlerts(api, machineId) {
-  const d = await api.get(`/machines/${machineId}/alerts`);
-  return (d.values || []).map(a => ({
+export async function listMachineAlerts(api, machine) {
+  const url = findLink(machine, 'alerts');
+  if (!url) return [];
+  const d = await api.get(url);
+  return (d.values || []).map((a) => ({
     jd_alert_id: a.id,
-    ts: a.alertTime,
+    ts: a.alertTime ?? a.eventTimestamp ?? a.time ?? null,
     spn: a.spn ?? null,
     fmi: a.fmi ?? null,
     severity: (a.severity || '').toLowerCase() || null,
-    description: a.description || null,
+    description: a.description ?? a.definition ?? null,
     raw: a,
   }));
 }
 
 /**
- * GET /organizations/{orgId}/boundaries — field/zone polygons.
+ * Field/zone boundary polygons for an org. Follows the org's `boundaries` link.
+ * Flattens JD's nested multipolygons.rings.points into a single GeoJSON Polygon
+ * (first ring of first multipolygon) — sufficient for point-in-polygon zone
+ * detection in v1. Multi-ring / holed fields are a Phase 2 refinement.
  *
- * Returns normalized rows ready for the field_boundaries_cache table.
- * Flattens JD's nested multipolygons.rings.points structure into a single
- * GeoJSON Polygon (first ring of first multipolygon). Multi-ring / holed
- * fields and true multipolygons can be added in a Phase 2 refinement; for
- * v1 the simple polygon is sufficient for point-in-polygon zone detection.
+ * @param {Object} org  an org object from listOrganizations/getOrganization
  */
-export async function listBoundaries(api, orgId) {
-  const d = await api.get(`/organizations/${orgId}/boundaries`);
-  return (d.values || []).map(b => {
+export async function listBoundaries(api, org) {
+  const url = findLink(org, 'boundaries');
+  if (!url) throw new Error(`JD org ${org?.id} has no \`boundaries\` link`);
+  const d = await api.get(url);
+  return (d.values || []).map((b) => {
     const firstRing = b.multipolygons?.[0]?.rings?.[0]?.points || [];
     // GeoJSON convention is [longitude, latitude] pairs.
-    const coords = firstRing.map(p => [p.lon, p.lat]);
+    const coords = firstRing.map((p) => [p.lon, p.lat]);
     const geojson = JSON.stringify({ type: 'Polygon', coordinates: [coords] });
 
     return {
