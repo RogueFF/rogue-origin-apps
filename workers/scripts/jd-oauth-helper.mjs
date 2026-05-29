@@ -39,8 +39,10 @@ const AUTH_ENDPOINT = 'https://signin.johndeere.com/oauth2/aus78tnlaysMraFhC1t7/
 const TOKEN_ENDPOINT = 'https://signin.johndeere.com/oauth2/aus78tnlaysMraFhC1t7/v1/token';
 
 // Broad read scopes — refine after first prod-data observation if needed.
-// `offline_access` is required to get a refresh_token back.
-const SCOPES = 'ag1 ag2 ag3 eq1 eq2 offline_access';
+// `org1`/`org2` authorize /organizations (the API entry point); without them
+// JD's gateway returns 403 ext_authz_denied on every call. `offline_access`
+// is required to get a refresh_token back.
+const SCOPES = 'ag1 ag2 ag3 eq1 eq2 org1 org2 offline_access';
 
 const state = Math.random().toString(36).slice(2);
 
