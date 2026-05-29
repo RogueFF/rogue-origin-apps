@@ -20,7 +20,7 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { JDApi } from '../src/lib/jd-api.js';
-import { listBoundaries } from '../src/lib/jd-endpoints.js';
+import { getOrganization, listBoundaries } from '../src/lib/jd-endpoints.js';
 
 const env = {
   JD_ENV: process.env.JD_ENV || 'sandbox',
@@ -35,7 +35,9 @@ if (!orgId) {
 }
 
 const api = new JDApi(env);
-const boundaries = await listBoundaries(api, orgId);
+// HATEOAS: resolve the org object (with its links), then follow its `boundaries` link.
+const org = await getOrganization(api, orgId);
+const boundaries = await listBoundaries(api, org);
 
 console.log(`Fetched ${boundaries.length} boundaries from JD (${env.JD_ENV}).`);
 

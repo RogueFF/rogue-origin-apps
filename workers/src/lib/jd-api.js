@@ -34,6 +34,7 @@ export class JDApi {
 
     this.accessToken = null;
     this.accessTokenExpiresAt = 0;
+    this._catalog = null;
   }
 
   async refresh() {
@@ -69,10 +70,14 @@ export class JDApi {
     }
   }
 
-  async get(path, params = {}) {
+  // `target` may be an absolute URL (as returned in a HAL `links[].uri`) or a
+  // path relative to baseUrl. HATEOAS navigation hands us absolute URIs to
+  // follow; only the root catalog is fetched by relative path (get('')).
+  async get(target, params = {}) {
     await this.ensureFreshToken();
 
-    const url = new URL(this.baseUrl + path);
+    const base = /^https?:\/\//i.test(target) ? target : this.baseUrl + target;
+    const url = new URL(base);
     for (const [k, v] of Object.entries(params)) {
       if (v != null) url.searchParams.set(k, String(v));
     }
@@ -87,8 +92,29 @@ export class JDApi {
 
     if (!resp.ok) {
       const text = await resp.text();
-      throw new Error(`JD GET ${path} failed ${resp.status}: ${text}`);
+      throw new Error(`JD GET ${target} failed ${resp.status}: ${text}`);
     }
     return resp.json();
   }
+
+  // Root ApiCatalog (HAL), cached per-instance so each link-following hop
+  // doesn't refetch it. This is the one endpoint that answers before the app
+  // is connected to an org, so it's the entry point for all navigation.
+  async getCatalog() {
+    if (!this._catalog) {
+      this._catalog = await this.get('');
+    }
+    return this._catalog;
+  }
+}
+
+/**
+ * Find a HAL link by rel on a JD resource; returns its absolute URI or null.
+ * JD resources carry `links: [{ rel, uri }, ...]`. Following these is what
+ * "HATEOAS navigation" means — we never hand-build resource paths.
+ */
+export function findLink(resource, rel) {
+  const links = resource?.links || [];
+  const match = links.find((l) => l.rel === rel);
+  return match ? match.uri : null;
 }
