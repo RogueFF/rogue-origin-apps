@@ -904,6 +904,7 @@ function onLoad(r, preserveFilters) {
   hide('loading');
   if (!r.success) { toast(r.error, 'err'); return; }
   allCards = r.cards;
+  handleFlagParam();   // QR deep-link: queue a card if opened via ?flag=<id>
   updateSuppliers();
   refreshCartBadge();
   loadAnalytics();
@@ -1229,6 +1230,28 @@ function reorder(id) {
       }
     })
     .catch(function(e) { toast('Error: ' + e.message, 'err'); });
+}
+
+// QR deep-link handler. A bin/stack label QR encodes
+//   .../kanban.html?flag=<cardId>
+// Scanning it with a phone camera opens this page and instantly queues that
+// card in the Friday cart — one scan, no typing. Runs once per page load,
+// after allCards is populated (called from onLoad).
+var flagHandled = false;
+function handleFlagParam() {
+  if (flagHandled) return;
+  var params = new URLSearchParams(window.location.search);
+  var raw = params.get('flag');
+  if (!raw) return;
+  flagHandled = true;
+  // Strip ?flag from the URL so a refresh doesn't re-queue the item.
+  params.delete('flag');
+  var qs = params.toString();
+  history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : ''));
+  var id = parseInt(raw, 10);
+  var c = id ? allCards.find(function(x) { return x.id === id; }) : null;
+  if (!c) { toast('Scanned item not found (flag ' + esc(raw) + ')', 'err'); return; }
+  reorder(id); // adds to Friday cart + toasts + refreshes the badge
 }
 
 // Update the toolbar badge with current cart count
