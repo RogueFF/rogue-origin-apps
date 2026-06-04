@@ -1,7 +1,7 @@
 // Service Worker for Rogue Origin Operations Hub
-// Version 3.18 - Auto-update: no hard refresh needed
+// Version 3.19 - Auto-update: no hard refresh needed (ship updated card QR)
 
-const CACHE_VERSION = 'ro-ops-v3.18';
+const CACHE_VERSION = 'ro-ops-v3.19';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
