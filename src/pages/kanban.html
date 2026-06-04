@@ -1587,7 +1587,9 @@ function renderPreview() {
 
 function cardHtml(c, color, side, size) {
   var qrSize = (size === 'full' || size === 'shop-letter' || size === 'shop-portrait' || size === 'sticker-4x8' || size === 'sticker-4x4') ? '400x400' : '200x200';
-  var qr = c.url ? 'https://api.qrserver.com/v1/create-qr-code/?size=' + qrSize + '&data=' + encodeURIComponent(c.url) : '';
+  // QR deep-links to the Friday cart (scan = add this card to the order), not the vendor product page.
+  var flagUrl = 'https://rogueff.github.io/rogue-origin-apps/src/pages/kanban.html?flag=' + c.id;
+  var qr = c.id ? 'https://api.qrserver.com/v1/create-qr-code/?size=' + qrSize + '&data=' + encodeURIComponent(flagUrl) : '';
   var logoUrl = '../assets/ro-logo-horizontal.png';
 
   // Sticker sizes: QR on front, no back needed
