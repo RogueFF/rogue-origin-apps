@@ -216,6 +216,9 @@
           <label class="form-label">Select Cards to Print</label>
           <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
             <input type="text" id="printSearch" placeholder="Search cards..." oninput="filterPrintCards()" style="flex:1">
+            <select id="printVendor" onchange="selectVendorPrint(this.value)" title="Select every card from one vendor" style="padding:6px 8px;font-size:12px;max-width:170px">
+              <option value="">By vendor&hellip;</option>
+            </select>
             <button class="btn btn-outline" style="padding:6px 12px;font-size:12px" onclick="selectAllPrint(true)">Select All</button>
             <button class="btn btn-outline" style="padding:6px 12px;font-size:12px" onclick="selectAllPrint(false)">Deselect All</button>
           </div>
@@ -1669,9 +1672,31 @@ var printSelections = {};
 function openPrint() {
   document.getElementById('printSearch').value = '';
   printSelections = {};
+  buildPrintVendorOptions();
   buildPrintCardList('');
   updatePrintCount();
   show('printModal');
+}
+
+// Populate the "By vendor" dropdown with each supplier + its card count.
+function buildPrintVendorOptions() {
+  var sel = document.getElementById('printVendor');
+  if (!sel) return;
+  var counts = {};
+  allCards.forEach(function(c) { if (c.supplier) counts[c.supplier] = (counts[c.supplier] || 0) + 1; });
+  var vendors = Object.keys(counts).sort();
+  sel.innerHTML = '<option value="">By vendor…</option>' +
+    vendors.map(function(v) { return '<option value="' + esc(v) + '">' + esc(v) + ' (' + counts[v] + ')</option>'; }).join('');
+}
+
+// One-click: select every card from one vendor, ready to print.
+function selectVendorPrint(vendor) {
+  if (!vendor) return;
+  printSelections = {};
+  allCards.forEach(function(c) { if (c.supplier === vendor) printSelections[c.id] = true; });
+  document.getElementById('printSearch').value = vendor;   // filter the list to that vendor
+  buildPrintCardList(vendor);
+  updatePrintCount();
 }
 
 function buildPrintCardList(searchTerm) {
