@@ -684,6 +684,8 @@ var translations = {
     item: 'Item',
     supplier: 'Supplier',
     orderQty: 'Order Qty',
+    reorderAt: 'Reorder At',
+    fillTo: 'Fill To',
     delivery: 'Delivery',
     price: 'Price',
     location: 'Location',
@@ -723,6 +725,8 @@ var translations = {
     item: 'Artículo',
     supplier: 'Proveedor',
     orderQty: 'Cantidad',
+    reorderAt: 'Pedir a',
+    fillTo: 'Llenar a',
     delivery: 'Entrega',
     price: 'Precio',
     location: 'Ubicación',
@@ -1160,7 +1164,8 @@ function saveCard() {
     crumbtrail: document.getElementById('editLoc').value.trim(),
     url: document.getElementById('editUrl').value.trim(),
     picture: document.getElementById('editPic').value.trim(),
-    orderWhen: 'Green Card Signal',
+    // Preserve existing reorder point (stored in orderWhen) when editing; default for new cards.
+    orderWhen: (function(){ var _id = document.getElementById('editId').value; if (_id) { var _ex = (allCards || []).find(function(x){ return x.id === parseInt(_id, 10); }); if (_ex && _ex.orderWhen) return _ex.orderWhen; } return 'Green Card Signal'; })(),
     imageFile: ''
   };
   if (!data.item) { toast('Item name required', 'err'); return; }
@@ -1643,9 +1648,9 @@ function cardHtml(c, color, side, size) {
       '<div class="full-loc">' + esc(c.crumbtrail) + '</div>' +
       '<div class="full-img">' + (c.picture && sanitizeImageUrl(c.picture) ? '<img src="' + esc(sanitizeImageUrl(c.picture)) + '" onerror="this.outerHTML=\'📷\'">' : '📷') + '</div>' +
       '<div class="full-fields">' +
+      '<div class="full-field"><small>' + t('reorderAt') + '</small><span>' + esc(c.orderWhen || '-') + '</span></div>' +
+      '<div class="full-field"><small>' + t('fillTo') + '</small><span>' + esc(c.orderQty || '-') + '</span></div>' +
       '<div class="full-field"><small>' + t('supplier') + '</small><span>' + esc(c.supplier || '-') + '</span></div>' +
-      '<div class="full-field"><small>' + t('orderQty') + '</small><span>' + esc(c.orderQty || '-') + '</span></div>' +
-      '<div class="full-field"><small>' + t('delivery') + '</small><span>' + esc(c.deliveryTime || '-') + '</span></div>' +
       '</div>' +
       '<div class="full-bottom">' +
       '<div class="full-qr">' + (qr ? '<img src="' + qr + '">' : 'No URL') + '</div>' +
