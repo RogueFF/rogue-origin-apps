@@ -1,7 +1,7 @@
 // Service Worker for Rogue Origin Operations Hub
-// Version 3.21 - Full-sheet kanban cards: single-sided portrait layout
+// Version 3.22 - Kanban cards: Reorder At / Fill To (Min/Max par levels)
 
-const CACHE_VERSION = 'ro-ops-v3.21';
+const CACHE_VERSION = 'ro-ops-v3.22';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
