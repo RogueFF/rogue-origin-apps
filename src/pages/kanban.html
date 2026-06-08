@@ -1215,11 +1215,22 @@ function parseQty(text) {
   return m ? Math.max(1, parseInt(m[0], 10)) : 1;
 }
 
+// Suggested order quantity = one cycle = Fill To (orderQty) - Reorder At (orderWhen).
+// You scan at the reorder line with ~Min still on hand, so ordering (Fill - Min) refills to par.
+// Legacy cards whose orderWhen has no number (e.g. "Green Card Signal") keep their full orderQty.
+function cartQtyFor(c) {
+  var par = parseQty(c.orderQty);
+  if (/\d/.test(String(c.orderWhen || ''))) {
+    return Math.max(1, par - parseQty(c.orderWhen));
+  }
+  return par;
+}
+
 // Add a card to the Friday cart (replaces the old "open URL in new tab")
 function reorder(id) {
   var c = allCards.find(function(x) { return x.id === id; });
   if (!c) return;
-  var qty = parseQty(c.orderQty);
+  var qty = cartQtyFor(c);
   fetch(API_URL + '?action=addToCart', {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },

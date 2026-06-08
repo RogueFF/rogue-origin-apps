@@ -1,7 +1,7 @@
 // Service Worker for Rogue Origin Operations Hub
-// Version 3.22 - Kanban cards: Reorder At / Fill To (Min/Max par levels)
+// Version 3.23 - Cart suggests one cycle (Fill - Reorder) when scanning to reorder
 
-const CACHE_VERSION = 'ro-ops-v3.22';
+const CACHE_VERSION = 'ro-ops-v3.23';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
