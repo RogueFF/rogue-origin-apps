@@ -6,6 +6,18 @@ History of significant changes to this repo, written by `/close`. Companion to t
 
 ---
 
+## 2026-06-09 — Build the supply-reorder kanban (Min/Max cards + cart logic)
+
+Lean supply-reorder kanban for the Uline boxes + consumables. 4 feat commits (`4ee67df4..fd2c98bc`); SW cache `v3.20→v3.24`. Card data (Par/Min levels, crumbtrail fixes) was set in D1 via the API, not in this repo.
+
+- **Full-sheet card → single-sided portrait kanban card** (`src/pages/kanban.html`): centered title, big photo, 3 fields, front QR + price; 1 page per card (was front+back). Dropped `full` from the on-screen preview dropdown (preview has no per-size CSS, so it was never size-accurate).
+- **Min/Max model on the cards:** `orderQty` = Fill To (par), `orderWhen` = Reorder At (min) — no schema migration. The full card **and a new `shop-letter` (11×8.5 landscape) branch** show **Reorder At / Fill To / Supplier + scan QR**. Added bilingual `reorderAt`/`fillTo` i18n keys.
+- **Cart suggests one cycle (`cartQtyFor`):** scanning / adding to cart now defaults qty to Fill − Reorder (`orderQty − orderWhen`), not full par; legacy cards with a non-numeric `orderWhen` ("Green Card Signal") keep their full `orderQty`.
+- **Bugfix:** the edit form hardcoded `orderWhen: 'Green Card Signal'` on every save (would silently wipe the reorder point) — now preserves the existing value.
+- Wiki context: wiki/seasons/2026/journal/2026-06-09.md
+
+---
+
 ## 2026-05-28 — Health/quality audit + security fixes + scoreboard v1→v2 migration
 
 Full read-only audit of the repo (4 parallel agents), then a batch of fixes and three follow-up loops closed. 10 commits (`86cf69e7..e7c8bbc3`); two worker deploys (`bcb1efdd` final).
