@@ -1,7 +1,7 @@
 // Service Worker for Rogue Origin Operations Hub
-// Version 3.23 - Cart suggests one cycle (Fill - Reorder) when scanning to reorder
+// Version 3.24 - Shop-letter card: Reorder At / Fill To + scan QR (landscape shelf card)
 
-const CACHE_VERSION = 'ro-ops-v3.23';
+const CACHE_VERSION = 'ro-ops-v3.24';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
