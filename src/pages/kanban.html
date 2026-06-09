@@ -1689,6 +1689,25 @@ function cardHtml(c, color, side, size) {
       '<img class="kanban-logo" src="' + logoUrl + '"></div>';
   }
   
+  // Shop-letter (11x8.5 landscape): big shelf card - Reorder At / Fill To + photo + scan QR
+  if (size === 'shop-letter') {
+    return '<div class="kanban ' + color + '"><div class="kanban-border"></div><div class="kanban-inner"></div>' +
+      '<div class="kanban-content">' +
+      '<div class="kanban-header"><h3>' + esc(c.item) + '</h3></div>' +
+      '<div class="kanban-loc">' + esc(c.crumbtrail) + '</div>' +
+      '<div class="kanban-body">' +
+      '<div class="kanban-left">' +
+      '<div class="kanban-field"><small>' + t('reorderAt') + '</small><span>' + esc(c.orderWhen || '-') + '</span></div>' +
+      '<div class="kanban-field"><small>' + t('fillTo') + '</small><span>' + esc(c.orderQty || '-') + '</span></div>' +
+      '<div class="kanban-field"><small>' + t('supplier') + '</small><span>' + esc(c.supplier || '-') + '</span></div>' +
+      '</div>' +
+      '<div class="kanban-mid"><div class="kanban-img">' + (c.picture && sanitizeImageUrl(c.picture) ? '<img src="' + esc(sanitizeImageUrl(c.picture)) + '" onerror="this.outerHTML=\'📷\'">' : '📷') + '</div>' +
+      '<div class="kanban-price">' + esc(c.price || '$0') + '</div></div>' +
+      '<div class="kanban-qrcol"><div class="kanban-qr">' + (qr ? '<img src="' + qr + '">' : 'No URL') + '</div><div class="shop-scan">' + t('scanToOrder') + '</div></div>' +
+      '</div>' +
+      '</div><img class="kanban-logo" src="' + logoUrl + '"></div>';
+  }
+
   return '<div class="kanban ' + color + '"><div class="kanban-border"></div><div class="kanban-inner"></div>' +
     '<div class="kanban-content"><div class="kanban-header"><h3>' + esc(c.item) + '</h3></div>' +
     '<div class="kanban-loc">' + esc(c.crumbtrail) + '</div>' +
@@ -1929,7 +1948,7 @@ function getPrintCSS(size) {
       '.kanban-back h3{font-size:36px;margin-bottom:20px}' +
       '.kanban-qr{width:150px;height:150px}';
   } else if (size === 'shop-letter') {
-    // 11" x 8.5" landscape shop card - maximum visibility for shop floor
+    // 11" x 8.5" landscape shop card - Reorder At / Fill To + photo + scan QR
     return '@page{size:letter landscape;margin:0.25in}*{box-sizing:border-box;margin:0;padding:0}' +
       'body{font-family:system-ui,sans-serif;background:#faf8f5;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
       '.page{page-break-after:always;width:10.5in;height:8in;margin:0;display:flex;justify-content:center;align-items:center;box-sizing:border-box}' +
@@ -1939,24 +1958,23 @@ function getPrintCSS(size) {
       '.kanban{background:#e8e4de !important;color:#2d3a2e !important}' +
       '.kanban-border{position:absolute;inset:0;border:8px solid #8f9263;border-radius:12px}' +
       '.kanban-inner{position:absolute;inset:26px;border:6px solid #8f9263;border-radius:10px}' +
-      '.kanban-content{height:100%;display:flex;flex-direction:column;padding:40px 50px}' +
-      '.kanban-header{border-bottom:5px solid currentColor;padding-bottom:16px;margin-bottom:12px}' +
-      '.kanban-header h3{text-transform:uppercase;margin:0;font-weight:700;letter-spacing:2px;font-size:56px}' +
-      '.kanban-loc{text-align:right;font-weight:700;font-size:32px;margin-bottom:10px}' +
-      '.kanban-body{flex:1;display:flex;gap:40px;align-items:center}' +
-      '.kanban-left{flex:1;display:flex;flex-direction:column;justify-content:center;gap:20px}' +
-      '.kanban-field{margin-bottom:0}' +
-      '.kanban-field small{text-transform:uppercase;opacity:0.8;display:block;font-weight:600;font-size:20px;margin-bottom:6px}' +
-      '.kanban-field span{font-weight:700;font-size:44px}' +
-      '.kanban-right{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:20px}' +
-      '.kanban-img{background:#fff;border-radius:12px;border:6px solid #8f9263;display:flex;align-items:center;justify-content:center;overflow:hidden;width:320px;height:240px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.kanban-content{height:100%;display:flex;flex-direction:column;padding:34px 46px 26px 46px}' +
+      '.kanban-header{border-bottom:5px solid currentColor;padding-bottom:12px;margin-bottom:4px}' +
+      '.kanban-header h3{text-transform:uppercase;margin:0;font-weight:700;letter-spacing:2px;font-size:48px}' +
+      '.kanban-loc{text-align:right;font-weight:700;font-size:26px;margin-bottom:4px}' +
+      '.kanban-body{flex:1;display:flex;gap:26px;align-items:center;justify-content:space-between}' +
+      '.kanban-left{display:flex;flex-direction:column;justify-content:center;gap:20px;flex-shrink:0;padding-left:78px}' +
+      '.kanban-field small{text-transform:uppercase;opacity:0.8;display:block;font-weight:600;font-size:18px;margin-bottom:3px}' +
+      '.kanban-field span{font-weight:800;font-size:50px;line-height:1}' +
+      '.kanban-mid{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;flex:1}' +
+      '.kanban-img{background:#fff;border-radius:12px;border:6px solid #8f9263;display:flex;align-items:center;justify-content:center;overflow:hidden;width:295px;height:220px;font-size:90px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
       '.kanban-img img{width:100%;height:100%;object-fit:contain}' +
-      '.kanban-price{background:#8f9263;border-radius:30px;font-weight:700;color:#faf8f5;padding:16px 60px;font-size:42px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-      '.kanban-logo{position:absolute;border-radius:50%;bottom:40px;left:40px;width:80px;height:80px}' +
-      '.kanban-back{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center}' +
-      '.kanban-back h3{text-transform:uppercase;font-weight:700;letter-spacing:3px;font-size:72px;margin-bottom:50px}' +
-      '.kanban-qr{background:#fff;border-radius:14px;border:6px solid #e4aa4f;display:flex;align-items:center;justify-content:center;width:380px;height:380px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.kanban-price{background:#8f9263;border-radius:30px;font-weight:700;color:#faf8f5;padding:12px 42px;font-size:34px;white-space:nowrap;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.kanban-qrcol{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;flex-shrink:0}' +
+      '.kanban-qr{background:#fff;border-radius:12px;border:5px solid #8f9263;display:flex;align-items:center;justify-content:center;width:185px;height:185px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
       '.kanban-qr img{width:92%;height:92%}' +
+      '.shop-scan{text-transform:uppercase;font-weight:700;font-size:18px;letter-spacing:1px;text-align:center}' +
+      '.kanban-logo{position:absolute;border-radius:50%;bottom:30px;left:38px;width:58px;height:58px}' +
       '.no-print{padding:12px;background:#1a1f16;color:#fff;position:fixed;top:0;left:0;right:0;z-index:100}' +
       '.no-print button{padding:10px 20px;border:none;border-radius:6px;cursor:pointer;margin-right:8px}' +
       '@media print{.no-print{display:none}.print-wrapper{padding-top:0 !important}body{background:#fff}}';
