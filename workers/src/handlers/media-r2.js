@@ -25,6 +25,15 @@ function isVideo(mime) {
   return mime.startsWith('video/');
 }
 
+// Sanitize a caller-supplied folder/prefix into a safe R2 key segment, e.g. "orders/123".
+function sanitizeFolder(s) {
+  return String(s || '')
+    .replace(/[^a-zA-Z0-9/_-]/g, '')
+    .replace(/\/+/g, '/')
+    .replace(/^\/+|\/+$/g, '')
+    .slice(0, 80);
+}
+
 export async function handleMediaR2(request, env) {
   const url = new URL(request.url);
   const action = url.searchParams.get('action');
@@ -49,7 +58,30 @@ export async function handleMediaR2(request, env) {
     return handleServe(request, env, url);
   }
 
-  return errorResponse('Invalid action. Use ?action=upload, ?action=create-upload-url, or ?action=serve', 'BAD_REQUEST', 400);
+  if (action === 'list') {
+    return handleList(request, env, url);
+  }
+
+  return errorResponse('Invalid action. Use ?action=upload, list, create-upload-url, or serve', 'BAD_REQUEST', 400);
+}
+
+// List objects under a folder prefix (e.g. ?action=list&prefix=orders/123), newest first.
+async function handleList(request, env, url) {
+  const prefix = sanitizeFolder(url.searchParams.get('prefix'));
+  if (!prefix) {
+    return errorResponse('Missing or invalid "prefix" parameter', 'BAD_REQUEST', 400);
+  }
+  const listing = await env.MEDIA_BUCKET.list({ prefix: prefix + '/', limit: 500 });
+  const origin = new URL(request.url).origin;
+  const items = (listing.objects || [])
+    .map(o => ({
+      key: o.key,
+      url: `${origin}/api/media?action=serve&key=${encodeURIComponent(o.key)}`,
+      uploaded: o.uploaded,
+      size: o.size,
+    }))
+    .sort((a, b) => new Date(b.uploaded) - new Date(a.uploaded));
+  return jsonResponse({ success: true, count: items.length, items });
 }
 
 async function handleUpload(request, env) {
@@ -80,10 +112,11 @@ async function handleUpload(request, env) {
     return errorResponse(`File too large (${limitMB}MB limit for ${isVideo(mime) ? 'video' : 'images'})`, 'BAD_REQUEST', 400);
   }
 
-  // Generate unique key
+  // Generate unique key. Optional "folder" field groups uploads, e.g. orders/<id>; defaults to sop.
   const timestamp = Date.now();
   const rand = Math.random().toString(36).slice(2, 10);
-  const key = `sop/${timestamp}-${rand}.${ext}`;
+  const folder = sanitizeFolder(formData.get('folder')) || 'sop';
+  const key = `${folder}/${timestamp}-${rand}.${ext}`;
 
   // Upload to R2 (stream to avoid memory limits on large files)
   await env.MEDIA_BUCKET.put(key, file.stream(), {
