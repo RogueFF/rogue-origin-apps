@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Order Photos — Quick Button | Rogue Origin</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{--green:#668971;--dark:#1f2a20;--gold:#e4aa4f;--paper:#faf8f5;--muted:#6b7468}
+  body{font-family:system-ui,'Segoe UI',sans-serif;background:var(--paper);color:var(--dark);line-height:1.5;
+       padding:28px 18px 60px}
+  .wrap{max-width:640px;margin:0 auto}
+  header{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+  header img{width:44px;height:44px;border-radius:50%}
+  header h1{font-size:21px;font-weight:800}
+  .lead{color:var(--muted);font-size:15px;margin-bottom:24px}
+  .drop{background:#fff;border:1px solid #e7e3dc;border-radius:14px;padding:24px;text-align:center;
+        box-shadow:0 1px 3px rgba(0,0,0,.04);margin-bottom:22px}
+  .bm{display:inline-flex;align-items:center;gap:10px;background:var(--gold);color:var(--dark);
+      font-weight:800;font-size:18px;text-decoration:none;padding:14px 26px;border-radius:12px;cursor:grab;
+      box-shadow:0 2px 6px rgba(0,0,0,.12)}
+  .bm:active{cursor:grabbing}
+  .drag-note{margin-top:14px;color:var(--muted);font-size:14px}
+  .drag-note b{color:var(--dark)}
+  h2{font-size:15px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:24px 0 10px}
+  ol{margin:0 0 8px 22px} ol li{margin-bottom:9px;font-size:15px}
+  ol li b{color:var(--dark)}
+  .fallback{background:#fff;border:1px solid #e7e3dc;border-radius:12px;padding:16px;margin-top:8px}
+  .fallback p{font-size:14px;color:var(--muted);margin-bottom:10px}
+  code{display:block;background:#1d231c;color:#e8e4d6;font-family:ui-monospace,Menlo,Consolas,monospace;
+       font-size:11px;line-height:1.5;padding:12px 14px;border-radius:8px;white-space:pre-wrap;word-break:break-all;
+       max-height:120px;overflow:auto}
+  button.copy{margin-top:10px;background:var(--green);color:#fff;border:none;border-radius:8px;
+              padding:9px 16px;font-weight:700;font-size:14px;cursor:pointer}
+  .info{margin-top:22px;font-size:13px;color:var(--muted);border-top:1px solid #e7e3dc;padding-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="../assets/ro-logo-horizontal.png" alt="">
+    <h1>Order Photos — Quick Button</h1>
+  </header>
+  <p class="lead">A one-click button for your bookmarks bar. While viewing any order in Shopify, click it and the order's packed-photos open automatically — no typing.</p>
+
+  <div class="drop">
+    <a id="bm" class="bm" href="#" onclick="return false">📷 Order Photos</a>
+    <div class="drag-note">↑ <b>Drag this button up to your bookmarks bar.</b><br>(Don't click it here — it only works on a Shopify order page.)</div>
+  </div>
+
+  <h2>How to use it</h2>
+  <ol>
+    <li><b>Drag</b> the gold button above onto your browser's <b>bookmarks bar</b> (if the bar is hidden, press <b>Ctrl/⌘ + Shift + B</b> to show it).</li>
+    <li>Open an order in <b>Shopify admin</b>.</li>
+    <li>Click <b>📷 Order Photos</b> in your bookmarks bar. It reads the order # off the page, lets you confirm it, then opens that order's photos in a new tab.</li>
+  </ol>
+
+  <h2>Can't drag it?</h2>
+  <div class="fallback">
+    <p>Make a new bookmark manually, name it "Order Photos," and paste this as the URL/address:</p>
+    <code id="code"></code>
+    <button class="copy" id="copyBtn">Copy code</button>
+  </div>
+
+  <p class="info">This button only reads the order number from the page you're already on and opens our photo lookup — it doesn't connect to Shopify or change anything. Read-only.</p>
+</div>
+
+<script>
+  // The bookmarklet. Reads "#1234" from the Shopify page title, confirms via a prompt,
+  // then opens the read-only order-photo lookup for that order in a new tab.
+  var BM = "javascript:(function(){var m=(document.title||'').match(/#(\\d+)/);var g=m?m[1]:'';var v=prompt('Order # to view photos:',g);if(v){v=v.replace(/[^0-9A-Za-z_-]/g,'');window.open('https://rogueff.github.io/rogue-origin-apps/src/pages/capture.html?view=1&order='+encodeURIComponent(v),'_blank');}})();";
+  document.getElementById('bm').href = BM;
+  document.getElementById('code').textContent = BM;
+  document.getElementById('copyBtn').addEventListener('click', function(){
+    var b=this;
+    navigator.clipboard.writeText(BM).then(function(){ b.textContent='Copied ✓'; setTimeout(function(){b.textContent='Copy code';},1800); })
+      .catch(function(){ b.textContent='Press Ctrl/⌘+C'; });
+  });
+</script>
+</body>
+</html>
