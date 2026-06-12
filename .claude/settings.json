@@ -8,6 +8,18 @@
         "hooks": [
           {
             "type": "command",
+            "command": "python \"C:/Users/Koasm/Documents/RogueFamilyFarms/scripts/memory/status/reindex_catchup.py\"",
+            "timeout": 30,
+            "statusMessage": "Catching the memory index up to HEAD..."
+          },
+          {
+            "type": "command",
+            "command": "python \"C:/Users/Koasm/Documents/RogueFamilyFarms/scripts/memory/status/heartbeat.py\"",
+            "timeout": 10,
+            "statusMessage": "Memory heartbeat..."
+          },
+          {
+            "type": "command",
             "command": "python \"C:/Users/Koasm/Documents/RogueFamilyFarms/scripts/memory/capture/injector.py\"",
             "timeout": 10,
             "statusMessage": "Injecting recent session summaries..."
