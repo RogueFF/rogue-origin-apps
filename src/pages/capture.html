@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Order Photo — Rogue Origin</title>
+<link rel="manifest" href="/rogue-origin-apps/capture-manifest.json">
+<meta name="theme-color" content="#668971">
+<link rel="icon" type="image/png" href="/rogue-origin-apps/favicon.png">
+<link rel="apple-touch-icon" href="/rogue-origin-apps/assets/icon-apple-touch.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Order Photo">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   :root { --green:#668971; --dark:#1f2a20; --gold:#e4aa4f; --paper:#faf8f5; --muted:#6b7468; }
@@ -46,18 +54,18 @@
 <div class="wrap">
   <header>
     <img src="../assets/ro-logo-horizontal.png" alt="">
-    <h1>Order Photo</h1>
+    <h1 id="appTitle">Order Photo</h1>
   </header>
 
   <div class="card">
     <div id="orderEntry">
-      <label>Which order?</label>
+      <label>Shopify order #</label>
       <div class="order-row">
-        <input id="orderInput" type="text" inputmode="text" autocapitalize="characters"
-               placeholder="e.g. 1042" autocomplete="off">
+        <input id="orderInput" type="text" inputmode="numeric" autocapitalize="off"
+               placeholder="#1042" autocomplete="off">
         <button class="btn-secondary" id="setBtn">Set</button>
       </div>
-      <p class="hint">Scan an order's QR to skip this step — it fills the order in automatically.</p>
+      <p class="hint" id="entryHint">Enter the Shopify order number, then take photos of the packed order.</p>
     </div>
 
     <div id="orderShown" style="display:none">
@@ -78,7 +86,7 @@
       <span id="count" class="empty"></span>
     </div>
     <div class="grid" id="grid"></div>
-    <p class="empty" id="galleryEmpty">No photos yet — take the first one.</p>
+    <p class="empty" id="galleryEmpty">No photos on this order yet.</p>
   </div>
 </div>
 
@@ -153,9 +161,18 @@
       .catch(function(){ /* non-critical */ });
   }
 
-  // Dynamic QR: ?order=1042 pre-fills + locks the order. Static QR: no param -> ask for it.
+  // ?view=1  -> read-only lookup for office/CS (no camera, just find an order + see its photos).
+  // ?order=1042 -> pre-fill + lock the order (e.g. a per-order QR). Otherwise ask for the order #.
   (function init(){
-    var p = new URLSearchParams(location.search).get('order');
+    var params = new URLSearchParams(location.search);
+    var viewOnly = params.get('view') === '1' || params.get('view') === 'true';
+    if(viewOnly){
+      $('appTitle').textContent = 'Order Photos';
+      $('shootBtn').style.display = 'none';
+      $('cam').remove();
+      $('entryHint').textContent = 'Look up an order to see its photos.';
+    }
+    var p = params.get('order');
     if(p){ setOrder(p); } else { $('orderInput').focus(); }
   })();
 </script>

@@ -1,7 +1,7 @@
 // Service Worker for Rogue Origin Operations Hub
-// Version 3.24 - Shop-letter card: Reorder At / Fill To + scan QR (landscape shelf card)
+// Version 3.25 - Order Photo tool (capture.html): installable PWA + read-only lookup mode
 
-const CACHE_VERSION = 'ro-ops-v3.24';
+const CACHE_VERSION = 'ro-ops-v3.25';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';

@@ -1,0 +1,17 @@
+{
+  "name": "Order Photo — Rogue Origin",
+  "short_name": "Order Photo",
+  "description": "Photograph an order at the MTO line; stored centrally on the order.",
+  "start_url": "/rogue-origin-apps/src/pages/capture.html",
+  "scope": "/rogue-origin-apps/src/pages/",
+  "display": "standalone",
+  "background_color": "#faf8f5",
+  "theme_color": "#668971",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/rogue-origin-apps/assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/rogue-origin-apps/assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/rogue-origin-apps/assets/icon-apple-touch.png", "sizes": "180x180", "type": "image/png" }
+  ],
+  "categories": ["business", "productivity"]
+}

@@ -1,5 +1,36 @@
 {
   "env": {
     "PYTHONIOENCODING": "utf-8"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"C:/Users/Koasm/Documents/RogueFamilyFarms/scripts/memory/capture/injector.py\"",
+            "timeout": 10,
+            "statusMessage": "Injecting recent session summaries..."
+          },
+          {
+            "type": "command",
+            "command": "python \"C:/Users/Koasm/Documents/RogueFamilyFarms/scripts/memory/constraints/injector.py\"",
+            "timeout": 10,
+            "statusMessage": "Injecting active constraints..."
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"C:/Users/Koasm/Documents/RogueFamilyFarms/scripts/memory\" && python -m lib.trampoline \"C:/Users/Koasm/Documents/RogueFamilyFarms/scripts/memory/capture/worker.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
   }
 }
