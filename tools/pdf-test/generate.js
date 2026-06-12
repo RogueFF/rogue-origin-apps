@@ -19,9 +19,11 @@ const { PDFDocument } = require('pdf-lib');
 const fs = require('fs');
 const path = require('path');
 
-const CHROMIUM = '/usr/bin/chromium-browser';
+const CHROMIUM = process.env.CHROMIUM || '/usr/bin/chromium-browser';
 const SERVER_URL = process.env.SERVER_URL || 'http://localhost:8765';
-const FIXTURE_PATH = path.resolve(__dirname, 'fixture-sop.json');
+const FIXTURE_PATH = process.env.FIXTURE_PATH
+  ? path.resolve(process.env.FIXTURE_PATH)
+  : path.resolve(__dirname, 'fixture-sop.json');
 const OUTPUT_DIR = path.resolve(__dirname, 'output');
 
 async function generatePDF() {
@@ -137,7 +139,7 @@ async function generatePDF() {
       margin: { top: 0, right: 0, bottom: 0, left: 0 },
     });
     
-    const pdfPath = path.join(OUTPUT_DIR, 'SOP-QA-TEST-001.pdf');
+    const pdfPath = path.join(OUTPUT_DIR, `SOP-${(fixture.docNum || 'OUTPUT')}.pdf`);
     fs.writeFileSync(pdfPath, pdfBuffer);
     console.log('   ✓ PDF saved:', pdfPath, `(${(pdfBuffer.length / 1024).toFixed(1)} KB)\n`);
     
