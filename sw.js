@@ -1,7 +1,7 @@
 // Service Worker for Rogue Origin Operations Hub
-// Version 3.25 - Order Photo tool (capture.html): installable PWA + read-only lookup mode
+// Version 3.26 - Kanban QR codes on shop, shop-portrait, shop-small card sizes
 
-const CACHE_VERSION = 'ro-ops-v3.25';
+const CACHE_VERSION = 'ro-ops-v3.26';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
