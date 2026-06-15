@@ -1512,8 +1512,12 @@ function preview(id) {
   show('previewModal');
 }
 
+// Locked default print size for Sticker Mule cards (the one that fits the bins).
+// To switch the locked size, change this to 'sticker-4x8' (8" x 4").
+var STICKER_DEFAULT_SIZE = 'sticker-4x4';
+
 // Filter size dropdown based on supplier
-// Sticker Mule cards can ONLY use sticker sizes, other cards cannot use sticker sizes
+// Sticker Mule cards are LOCKED to the default sticker size; other cards cannot use sticker sizes
 function filterSizeOptions(selectId, isStickerMule) {
   var select = document.getElementById(selectId);
   if (!select) return;
@@ -1525,10 +1529,11 @@ function filterSizeOptions(selectId, isStickerMule) {
     var isStickerSize = opt.value.indexOf('sticker-') === 0;
 
     if (isStickerMule) {
-      // Sticker Mule: only show sticker sizes
-      opt.hidden = !isStickerSize;
-      opt.disabled = !isStickerSize;
-      if (isStickerSize && !firstVisibleValue) firstVisibleValue = opt.value;
+      // Sticker Mule: locked to the single default sticker size
+      var isDefaultSticker = (opt.value === STICKER_DEFAULT_SIZE);
+      opt.hidden = !isDefaultSticker;
+      opt.disabled = !isDefaultSticker;
+      if (isDefaultSticker && !firstVisibleValue) firstVisibleValue = opt.value;
     } else {
       // Other suppliers: hide sticker sizes
       opt.hidden = isStickerSize;
