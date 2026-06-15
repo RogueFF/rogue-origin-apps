@@ -1,7 +1,7 @@
 // Service Worker for Rogue Origin Operations Hub
-// Version 3.27 - Lock Sticker Mule card prints to the default sticker size (4x4.45)
+// Version 3.28 - Per-card sticker print sizes: RO 10LB prints 8x4, others 4x4.45
 
-const CACHE_VERSION = 'ro-ops-v3.27';
+const CACHE_VERSION = 'ro-ops-v3.28';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
