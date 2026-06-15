@@ -1508,19 +1508,27 @@ function preview(id) {
   previewColor = 'green';
   updatePreviewBtns();
   renderPreview();
-  filterSizeOptions('previewPrintSize', previewCard.supplier === 'Sticker Mule');
+  filterSizeOptions('previewPrintSize', previewCard.supplier === 'Sticker Mule', stickerSizeForCard(previewCard));
   show('previewModal');
 }
 
-// Locked default print size for Sticker Mule cards (the one that fits the bins).
-// To switch the locked size, change this to 'sticker-4x8' (8" x 4").
+// Locked sticker print size for Sticker Mule cards, per card.
+// Default fits the standard bins (4" x 4.45"); cards listed here use the larger 8" x 4".
 var STICKER_DEFAULT_SIZE = 'sticker-4x4';
+var STICKER_SIZE_BY_ID = { 102: 'sticker-4x8' }; // #102 RO 10LB (9x4) -> 8x4 card
+
+function stickerSizeForCard(card) {
+  return (card && STICKER_SIZE_BY_ID[card.id]) || STICKER_DEFAULT_SIZE;
+}
 
 // Filter size dropdown based on supplier
-// Sticker Mule cards are LOCKED to the default sticker size; other cards cannot use sticker sizes
-function filterSizeOptions(selectId, isStickerMule) {
+// Sticker Mule cards are locked to their per-card sticker size; other cards cannot use sticker sizes
+function filterSizeOptions(selectId, isStickerMule, lockedSize) {
   var select = document.getElementById(selectId);
   if (!select) return;
+  // lockedSize: restrict Sticker Mule cards to exactly this one sticker size.
+  // null = mixed-size batch, leave all sticker sizes available.
+  if (typeof lockedSize === 'undefined') lockedSize = STICKER_DEFAULT_SIZE;
 
   var options = select.querySelectorAll('option');
   var firstVisibleValue = null;
@@ -1529,11 +1537,11 @@ function filterSizeOptions(selectId, isStickerMule) {
     var isStickerSize = opt.value.indexOf('sticker-') === 0;
 
     if (isStickerMule) {
-      // Sticker Mule: locked to the single default sticker size
-      var isDefaultSticker = (opt.value === STICKER_DEFAULT_SIZE);
-      opt.hidden = !isDefaultSticker;
-      opt.disabled = !isDefaultSticker;
-      if (isDefaultSticker && !firstVisibleValue) firstVisibleValue = opt.value;
+      // Sticker Mule: sticker sizes only; locked to one when lockedSize is set
+      var show = lockedSize ? (opt.value === lockedSize) : isStickerSize;
+      opt.hidden = !show;
+      opt.disabled = !show;
+      if (show && !firstVisibleValue) firstVisibleValue = opt.value;
     } else {
       // Other suppliers: hide sticker sizes
       opt.hidden = isStickerSize;
@@ -1854,8 +1862,15 @@ function updatePrintCount() {
   var selectedCards = allCards.filter(function(c) { return selectedIds.indexOf(c.id) >= 0; });
   var allStickerMule = selectedCards.length > 0 && selectedCards.every(function(c) { return c.supplier === 'Sticker Mule'; });
 
-  // Filter size options based on selected cards' supplier
-  filterSizeOptions('printSize', allStickerMule);
+  // Filter size options based on selected cards' supplier (per-card locked sticker size)
+  var lockedStickerSize = null;
+  if (allStickerMule) {
+    var sizeSet = {};
+    selectedCards.forEach(function(c) { sizeSet[stickerSizeForCard(c)] = true; });
+    var sizeKeys = Object.keys(sizeSet);
+    lockedStickerSize = sizeKeys.length === 1 ? sizeKeys[0] : null; // mixed -> allow both
+  }
+  filterSizeOptions('printSize', allStickerMule, lockedStickerSize);
 
   var side = document.getElementById('printSide').value;
   var size = document.getElementById('printSize').value;
