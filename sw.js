@@ -1,7 +1,7 @@
 // Service Worker for Rogue Origin Operations Hub
-// Version 3.26 - Kanban QR codes on shop, shop-portrait, shop-small card sizes
+// Version 3.27 - Lock Sticker Mule card prints to the default sticker size (4x4.45)
 
-const CACHE_VERSION = 'ro-ops-v3.26';
+const CACHE_VERSION = 'ro-ops-v3.27';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
