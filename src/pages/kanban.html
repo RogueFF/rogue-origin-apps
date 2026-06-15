@@ -1217,11 +1217,14 @@ function parseQty(text) {
 
 // Suggested order quantity = one cycle = Fill To (orderQty) - Reorder At (orderWhen).
 // You scan at the reorder line with ~Min still on hand, so ordering (Fill - Min) refills to par.
+// When orderQty <= orderWhen (e.g. 3-week cycle cards where both are equal), orderQty IS the
+// order amount directly — don't subtract.
 // Legacy cards whose orderWhen has no number (e.g. "Green Card Signal") keep their full orderQty.
 function cartQtyFor(c) {
   var par = parseQty(c.orderQty);
   if (/\d/.test(String(c.orderWhen || ''))) {
-    return Math.max(1, par - parseQty(c.orderWhen));
+    var toOrder = par - parseQty(c.orderWhen);
+    return toOrder > 0 ? toOrder : par;
   }
   return par;
 }

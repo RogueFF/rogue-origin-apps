@@ -1,7 +1,7 @@
-// Service Worker for Rogue Origin Operations Hub
-// Version 3.28 - Per-card sticker print sizes: RO 10LB prints 8x4, others 4x4.45
+﻿// Service Worker for Rogue Origin Operations Hub
+// Version 3.29 - Fix cartQtyFor: sticker cards (orderQty=orderWhen) now add correct qty not 1
 
-const CACHE_VERSION = 'ro-ops-v3.28';
+const CACHE_VERSION = 'ro-ops-v3.29';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
@@ -379,3 +379,4 @@ self.addEventListener('unhandledrejection', (event) => {
 });
 
 console.log('[SW v3.15] Service Worker loaded - auto-update enabled');
+
