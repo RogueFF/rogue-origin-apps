@@ -791,16 +791,16 @@
     headerDate.textContent = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   }
 
-  dateInput.addEventListener('change', async () => { 
-    updateHeaderDate(); 
-    await checkExistingEntry();
-    loadAll(); 
+  dateInput.addEventListener('change', async () => {
+    updateHeaderDate();
+    await loadAll();          // load this date's strains first...
+    await checkExistingEntry(); // ...then pre-fill saved counts into them
   });
   document.getElementById('today-btn').addEventListener('click', async () => {
-    dateInput.value = todayStr(); 
-    updateHeaderDate(); 
-    await checkExistingEntry();
-    loadAll();
+    dateInput.value = todayStr();
+    updateHeaderDate();
+    await loadAll();          // load this date's strains first...
+    await checkExistingEntry(); // ...then pre-fill saved counts into them
   });
 
   biomassInput.addEventListener('input', recalc);
@@ -1676,7 +1676,7 @@
   // Init
   initDate();
   applyLang();
-  checkExistingEntry().then(() => loadAll());
+  loadAll().then(() => checkExistingEntry()); // load strains first, then pre-fill saved counts
 })();
 </script>
 <script type="module" src="../js/shared/i18n.js"></script>
