@@ -322,6 +322,29 @@ async function getExtendedDailyData(days, env) {
     ORDER BY production_date
   `, [cutoffStr]);
 
+  // Per-strain breakdown, so a day with more than one cultivar doesn't get
+  // silently collapsed down to just the dominant one (see `cultivar` below).
+  const cultivarRows = await query(env.DB, `
+    SELECT production_date, cultivar1 as cultivar,
+           SUM(tops_lbs1) as tops, SUM(smalls_lbs1) as smalls
+    FROM monthly_production
+    WHERE production_date >= ? AND cultivar1 IS NOT NULL AND cultivar1 != ''
+    GROUP BY production_date, cultivar1
+  `, [cutoffStr]);
+
+  const cultivarsByDate = new Map();
+  for (const cr of cultivarRows) {
+    if (!cultivarsByDate.has(cr.production_date)) cultivarsByDate.set(cr.production_date, []);
+    cultivarsByDate.get(cr.production_date).push({
+      cultivar: cr.cultivar,
+      tops: Math.round((cr.tops || 0) * 10) / 10,
+      smalls: Math.round((cr.smalls || 0) * 10) / 10,
+    });
+  }
+  for (const list of cultivarsByDate.values()) {
+    list.sort((a, b) => (b.tops + b.smalls) - (a.tops + a.smalls));
+  }
+
   return rows.map(r => {
     const totalTops = r.total_tops || 0;
     const totalSmalls = r.total_smalls || 0;
@@ -371,6 +394,7 @@ async function getExtendedDailyData(days, env) {
       topsCostPerLb,
       smallsCostPerLb,
       cultivar: r.dominant_cultivar || '',
+      cultivars: cultivarsByDate.get(r.production_date) || [],
       totalCrew: r.peak_crew || 0,
     };
   });
@@ -640,6 +664,7 @@ async function dashboard(params, env) {
       topsCostPerLb: Math.round(d.topsCostPerLb * 100) / 100,
       smallsCostPerLb: Math.round(d.smallsCostPerLb * 100) / 100,
       cultivar: d.cultivar || '',
+      cultivars: d.cultivars || [],
       totalCrew: d.totalCrew || 0,
     })),
     fallback: showingFallback ? {
