@@ -151,7 +151,7 @@ async function getEffectiveTargetRate(env, days = 7, timeSlotMultipliers = null,
 
   // Query ALL available data for this strain (no date cutoff)
   const strainSlots = await query(env.DB, `
-    SELECT time_slot, tops_lbs1, trimmers_line1, effective_trimmers_line1
+    SELECT production_date, time_slot, tops_lbs1, trimmers_line1, effective_trimmers_line1
     FROM monthly_production
     WHERE tops_lbs1 > 0 AND trimmers_line1 > 0
       AND cultivar1 = ?
@@ -163,6 +163,26 @@ async function getEffectiveTargetRate(env, days = 7, timeSlotMultipliers = null,
     return 0.85;
   }
 
+  // Dedup: if a date has two rows for the same end-hour (e.g. a slot
+  // re-opened with a slightly different start time after a correction),
+  // keep only the one with more tops — same rule scoreboard.js's live view
+  // uses. Checked 60 days of real data: this pairing happens every few days,
+  // and so far the "other" row has always had 0 tops (so it's already
+  // excluded by the WHERE clause above) — but nothing structurally stops a
+  // future pair from both having real tops and getting summed twice.
+  const getEndHour = (ts) => {
+    const parts = (ts || '').replace(/[-–—]/g, '–').split('–');
+    return parts.length > 1 ? parts[1].trim() : (ts || '').trim();
+  };
+  const dedupedByKey = new Map();
+  for (const slot of strainSlots) {
+    const key = `${slot.production_date}|${getEndHour(slot.time_slot)}`;
+    const existing = dedupedByKey.get(key);
+    if (!existing || slot.tops_lbs1 > existing.tops_lbs1) {
+      dedupedByKey.set(key, slot);
+    }
+  }
+
   // Calculate cumulative average across ALL data for this strain.
   // Use effective_trimmers_line1 (weighted for mid-hour crew changes) when
   // set, same as the live scoreboard's actual-rate calc in scoreboard.js —
@@ -171,7 +191,7 @@ async function getEffectiveTargetRate(env, days = 7, timeSlotMultipliers = null,
   let strainTotalTops = 0;
   let strainTotalEffectiveTrimmerHours = 0;
 
-  for (const slot of strainSlots) {
+  for (const slot of dedupedByKey.values()) {
     const effectiveTrimmers = slot.effective_trimmers_line1 != null ? slot.effective_trimmers_line1 : slot.trimmers_line1;
     strainTotalTops += slot.tops_lbs1;
     strainTotalEffectiveTrimmerHours += effectiveTrimmers * getTimeSlotMultiplier(slot.time_slot, timeSlotMultipliers);
