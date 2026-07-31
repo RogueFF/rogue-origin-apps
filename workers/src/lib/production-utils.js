@@ -151,7 +151,7 @@ async function getEffectiveTargetRate(env, days = 7, timeSlotMultipliers = null,
 
   // Query ALL available data for this strain (no date cutoff)
   const strainSlots = await query(env.DB, `
-    SELECT time_slot, tops_lbs1, trimmers_line1
+    SELECT time_slot, tops_lbs1, trimmers_line1, effective_trimmers_line1
     FROM monthly_production
     WHERE tops_lbs1 > 0 AND trimmers_line1 > 0
       AND cultivar1 = ?
@@ -163,13 +163,18 @@ async function getEffectiveTargetRate(env, days = 7, timeSlotMultipliers = null,
     return 0.85;
   }
 
-  // Calculate cumulative average across ALL data for this strain
+  // Calculate cumulative average across ALL data for this strain.
+  // Use effective_trimmers_line1 (weighted for mid-hour crew changes) when
+  // set, same as the live scoreboard's actual-rate calc in scoreboard.js —
+  // otherwise this baseline and the number it's compared against are on two
+  // different trimmer-hour bases.
   let strainTotalTops = 0;
   let strainTotalEffectiveTrimmerHours = 0;
 
   for (const slot of strainSlots) {
+    const effectiveTrimmers = slot.effective_trimmers_line1 != null ? slot.effective_trimmers_line1 : slot.trimmers_line1;
     strainTotalTops += slot.tops_lbs1;
-    strainTotalEffectiveTrimmerHours += slot.trimmers_line1 * getTimeSlotMultiplier(slot.time_slot, timeSlotMultipliers);
+    strainTotalEffectiveTrimmerHours += effectiveTrimmers * getTimeSlotMultiplier(slot.time_slot, timeSlotMultipliers);
   }
 
   if (strainTotalEffectiveTrimmerHours > 0) {
