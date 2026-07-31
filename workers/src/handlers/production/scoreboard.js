@@ -315,7 +315,8 @@ async function getExtendedDailyData(days, env) {
                THEN trimmers_line1 + buckers_line1 + tzero_line1
                ELSE 0
              END
-           ) as peak_crew
+           ) as peak_crew,
+           GROUP_CONCAT(DISTINCT NULLIF(qc, '')) as notes
     FROM monthly_production
     WHERE production_date >= ?
     GROUP BY production_date
@@ -372,6 +373,7 @@ async function getExtendedDailyData(days, env) {
       smallsCostPerLb,
       cultivar: r.dominant_cultivar || '',
       totalCrew: r.peak_crew || 0,
+      notes: r.notes || '',
     };
   });
 }
@@ -612,6 +614,7 @@ async function dashboard(params, env) {
     lbs: h.lbs,
     tops: h.lbs,
     smalls: h.smalls || 0,
+    notes: h.notes || '',
   })) : [];
 
   const strainSnapshot = await getStrainSummary(env, 7, 5);
@@ -641,6 +644,7 @@ async function dashboard(params, env) {
       smallsCostPerLb: Math.round(d.smallsCostPerLb * 100) / 100,
       cultivar: d.cultivar || '',
       totalCrew: d.totalCrew || 0,
+      notes: d.notes || '',
     })),
     fallback: showingFallback ? {
       active: true,
