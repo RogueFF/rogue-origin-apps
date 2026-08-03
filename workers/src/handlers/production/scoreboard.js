@@ -6,10 +6,12 @@ import { query, queryOne } from '../../lib/db.js';
 import { successResponse, errorResponse } from '../../lib/response.js';
 import { validateDate } from '../../lib/validate.js';
 import {
-  ALL_TIME_SLOTS,
   TIME_SLOT_MULTIPLIERS,
   TIMEZONE,
   getTimeSlotMultiplier,
+  getEndHour,
+  buildSortedRows,
+  findHourIndices,
   calculateDailyProjection,
 } from '../../lib/production-helpers.js';
 import {
@@ -20,7 +22,6 @@ import {
   getConfig,
   getEffectiveTargetRate,
 } from '../../lib/production-utils.js';
-import { parseSlotTimeToMinutes } from '../../lib/production-helpers.js';
 
 // ===== SCOREBOARD DATA =====
 
@@ -69,65 +70,25 @@ async function getScoreboardData(env, date = null) {
 
   if (todayRows.length === 0) return result;
 
-  const rowsBySlot = {};
-  // Dedup: if two rows share the same end-hour (e.g. "7:01 AM – 8:00 AM" and "7:02 AM – 8:00 AM"),
-  // keep the one with more tops lbs (the more complete entry). Key by normalized end-hour.
-  const getEndHour = (ts) => {
-    const parts = (ts || '').replace(/[-–—]/g, '–').split('–');
-    return parts.length > 1 ? parts[1].trim() : (ts || '').trim();
-  };
+  // Row-building (slot merge + chronological sort) is production-helpers.js's
+  // own tested implementation (see tests/production-d1.test.mjs) — it
+  // intentionally keeps every raw slot, duplicates included, since other
+  // callers may want to see them all. The live scoreboard specifically wants
+  // one row per real-world hour, so dedupe on top of its output (keep
+  // whichever duplicate has more tops) rather than inside the shared builder.
+  const { rows: rawRows } = buildSortedRows(todayRows, null, timeSlotMultipliers);
 
-  todayRows.forEach(r => {
-    const slot = (r.time_slot || '').replace(/[-–—]/g, '–');
-    const endKey = getEndHour(slot);
-    const rawTrimmers = r.trimmers_line1 || 0;
-    const effectiveTrimmers = r.effective_trimmers_line1 != null ? r.effective_trimmers_line1 : rawTrimmers;
-    const entry = {
-      timeSlot: r.time_slot || '',
-      tops: r.tops_lbs1 || 0,
-      smalls: r.smalls_lbs1 || 0,
-      trimmers: effectiveTrimmers,
-      rawTrimmers,
-      buckers: r.buckers_line1 || 0,
-      strain: r.cultivar1 || '',
-      multiplier: getTimeSlotMultiplier(r.time_slot, timeSlotMultipliers),
-      notes: r.qc || '',
-    };
-    // If we already have an entry for this end-hour, keep the one with more data
-    const existing = rowsBySlot[endKey];
-    if (!existing || entry.tops > existing.tops) {
-      rowsBySlot[endKey] = entry;
-    }
-  });
-
-  const allSlotsFromDB = todayRows.map(r => getEndHour((r.time_slot || '').replace(/[-–—]/g, '–')));
-  const uniqueSlots = [...new Set([...ALL_TIME_SLOTS.map(s => getEndHour(s.replace(/[-–—]/g, '–'))), ...allSlotsFromDB])];
-
-  const parseSlotStart = (ts) => {
-    const m = (ts || '').match(/^(\d{1,2}):(\d{2})\s*(AM|PM)/i);
-    if (!m) return 9999;
-    let h = parseInt(m[1]), min = parseInt(m[2]);
-    if (m[3].toUpperCase() === 'PM' && h !== 12) h += 12;
-    if (m[3].toUpperCase() === 'AM' && h === 12) h = 0;
-    return h * 60 + min;
-  };
-  uniqueSlots.sort((a, b) => parseSlotStart(a) - parseSlotStart(b));
-
-  const rows = uniqueSlots
-    .map(slot => rowsBySlot[slot])
-    .filter(r => r !== undefined);
-
-  let lastCompletedHourIndex = -1;
-  let currentHourIndex = -1;
-
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    if (row.tops > 0) {
-      lastCompletedHourIndex = i;
-    } else if (row.trimmers > 0 && row.tops === 0) {
-      currentHourIndex = i;
+  const bestByEndHour = new Map();
+  for (const row of rawRows) {
+    const key = getEndHour(row.timeSlot);
+    const existing = bestByEndHour.get(key);
+    if (!existing || row.tops > existing.tops) {
+      bestByEndHour.set(key, row);
     }
   }
+  const rows = rawRows.filter(row => bestByEndHour.get(getEndHour(row.timeSlot)) === row);
+
+  const { lastCompletedHourIndex, currentHourIndex } = findHourIndices(rows);
 
   let activeStrain = '';
   if (currentHourIndex >= 0 && rows[currentHourIndex].strain) {
