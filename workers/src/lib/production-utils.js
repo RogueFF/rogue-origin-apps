@@ -7,6 +7,7 @@ import {
   TIME_SLOT_MULTIPLIERS,
   TIMEZONE,
   getTimeSlotMultiplier,
+  getEndHour,
 } from './production-helpers.js';
 
 // ===== CONSTANTS =====
@@ -166,14 +167,11 @@ async function getEffectiveTargetRate(env, days = 7, timeSlotMultipliers = null,
   // Dedup: if a date has two rows for the same end-hour (e.g. a slot
   // re-opened with a slightly different start time after a correction),
   // keep only the one with more tops — same rule scoreboard.js's live view
-  // uses. Checked 60 days of real data: this pairing happens every few days,
-  // and so far the "other" row has always had 0 tops (so it's already
-  // excluded by the WHERE clause above) — but nothing structurally stops a
-  // future pair from both having real tops and getting summed twice.
-  const getEndHour = (ts) => {
-    const parts = (ts || '').replace(/[-–—]/g, '–').split('–');
-    return parts.length > 1 ? parts[1].trim() : (ts || '').trim();
-  };
+  // uses (both now share getEndHour from production-helpers.js). Checked 60
+  // days of real data: this pairing happens every few days, and so far the
+  // "other" row has always had 0 tops (so it's already excluded by the
+  // WHERE clause above) — but nothing structurally stops a future pair from
+  // both having real tops and getting summed twice.
   const dedupedByKey = new Map();
   for (const slot of strainSlots) {
     const key = `${slot.production_date}|${getEndHour(slot.time_slot)}`;
