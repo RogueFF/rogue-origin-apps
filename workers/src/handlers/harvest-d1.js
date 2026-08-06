@@ -17,9 +17,12 @@
  * - GET  ?action=logs&zone=&event_type=&limit=            - Raw rows (JSON)
  *
  * Supersack tags (see docs/plans/2026-08-06-supersack-tag-design.md):
- * - GET  ?action=sack_print                              - Lot picker for takedown (HTML)
- * - POST ?action=sack_print_run  (session_id,cultivar,qty) - Allocate + print labels (HTML)
- * - GET  ?action=sack_label&id=26-0847                   - Reprint one label, SAME serial (HTML)
+ * - GET  ?action=sack_print                              - Lot picker, starts a takedown session (HTML)
+ * - POST ?action=sack_session_start (session_id,cultivar) - Enter the session screen (HTML)
+ * - GET  ?action=sack_session&session_id=&cultivar=      - The session screen itself (HTML)
+ * - POST ?action=sack_alloc      (session_id,cultivar,qty) - Allocate serial(s) (JSON, called by fetch)
+ * - POST ?action=sack_void       (sack_id)               - Void a mis-printed tag (JSON)
+ * - GET  ?action=sack_label&id=|ids=                     - Label sheet; reprint reuses SAME serial (HTML)
  * - POST ?action=sack_weigh      (sack_id,tops,smalls)   - Record weights at bucking (HTML)
  * - GET  ?action=sacks&...                               - Raw sack rows (JSON)
  * The scan target /s/<sack_id> is routed in index.js and handled by
@@ -44,7 +47,7 @@ const PUBLIC_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev';
 
 const HTML_ACTIONS = new Set([
   'enter', 'headcount', 'barn_intake', 'barn_log',
-  'sack_print', 'sack_print_run', 'sack_label', 'sack_weigh',
+  'sack_print', 'sack_session_start', 'sack_session', 'sack_label', 'sack_weigh',
 ]);
 
 export async function handleHarvestD1(request, env, ctx) {
@@ -68,8 +71,10 @@ export async function handleHarvestD1(request, env, ctx) {
           return await handleBarnLog(db, env, ctx, body);
         case 'sack_print':
           return await handleSackPrintForm(db, env);
-        case 'sack_print_run':
-          return await handleSackPrintRun(db, env, ctx, body);
+        case 'sack_session_start':
+          return await handleSackSession(db, env, body);
+        case 'sack_session':
+          return await handleSackSession(db, env, params);
         case 'sack_label':
           return await handleSackLabel(db, env, params);
         case 'sack_weigh':
@@ -90,6 +95,10 @@ export async function handleHarvestD1(request, env, ctx) {
       return await getLogs(db, env, params);
     case 'sacks':
       return await getSacks(db, env, params);
+    case 'sack_alloc':
+      return await handleSackAlloc(db, env, ctx, body);
+    case 'sack_void':
+      return await handleSackVoid(db, env, ctx, body);
     default:
       throw createError('NOT_FOUND', `Unknown harvest action: ${action}`);
   }
@@ -300,40 +309,80 @@ async function getRecentLots(db, isTest) {
   `, [isTest, LOT_PICKER_DAYS]);
 }
 
-async function handleSackPrintRun(db, env, ctx, body) {
-  const sessionId = parseInt(body.session_id, 10);
-  const qty = parseInt(body.qty, 10);
-  const cultivar = (body.cultivar || '').trim().substring(0, 60);
+/**
+ * The takedown session screen. Picked once per lot, then it stays up while the
+ * worker fills sack after sack — the PRINT TAG button allocates and prints
+ * without navigating, so nobody loses their place mid-rack with gloves on.
+ */
+async function handleSackSession(db, env, input) {
+  const sessionId = parseInt(input.session_id, 10);
+  const cultivar = String(input.cultivar || '').trim().substring(0, 60);
 
   if (!Number.isInteger(sessionId) || sessionId <= 0) {
     throw createError('VALIDATION_ERROR', 'Pick which lot is coming down before printing.');
-  }
-  if (!Number.isInteger(qty) || qty < 1 || qty > MAX_PRINT_QTY) {
-    throw createError('VALIDATION_ERROR', `Quantity must be between 1 and ${MAX_PRINT_QTY}.`);
   }
   if (!cultivar) {
     throw createError('VALIDATION_ERROR', 'Cultivar is required — it prints on the tag.');
   }
 
+  const lot = await requireLot(db, sessionId);
+  const isTest = isTestMode(env) ? 1 : 0;
+  const stats = await getLotTagStats(db, sessionId, isTest);
+
+  return renderPage(`Takedown — ${lot.zone}`, sackSessionBody({ lot, cultivar, stats }));
+}
+
+async function requireLot(db, sessionId) {
   const lot = await queryOne(db, `SELECT * FROM harvest_scan_log WHERE id = ? AND event_type = 'enter'`, [sessionId]);
   if (!lot) throw createError('NOT_FOUND', `No harvest lot found for session ${sessionId}.`);
+  return lot;
+}
 
+// Voided tags are excluded from the count — they were never a sack.
+async function getLotTagStats(db, sessionId, isTest) {
+  const row = await queryOne(db, `
+    SELECT COUNT(*) AS printed,
+           MAX(CASE WHEN voided_at IS NULL THEN sack_id END) AS last_sack_id
+    FROM harvest_sacks
+    WHERE zone_session_id = ? AND is_test = ? AND voided_at IS NULL
+  `, [sessionId, isTest]);
+  return { printed: row?.printed || 0, lastSackId: row?.last_sack_id || null };
+}
+
+/**
+ * Allocate serial(s). Called by fetch() from the session screen, so it answers
+ * JSON — the screen updates in place rather than navigating to the labels.
+ */
+async function handleSackAlloc(db, env, ctx, body) {
+  const sessionId = parseInt(body.session_id, 10);
+  const cultivar = String(body.cultivar || '').trim().substring(0, 60);
+  const qty = parseInt(body.qty, 10) || 1;
+
+  if (!Number.isInteger(sessionId) || sessionId <= 0) {
+    throw createError('VALIDATION_ERROR', 'Missing lot.');
+  }
+  if (!cultivar) throw createError('VALIDATION_ERROR', 'Missing cultivar.');
+  if (qty < 1 || qty > MAX_PRINT_QTY) {
+    throw createError('VALIDATION_ERROR', `Quantity must be between 1 and ${MAX_PRINT_QTY}.`);
+  }
+
+  const lot = await requireLot(db, sessionId);
   const isTest = isTestMode(env) ? 1 : 0;
   const season = getSeason();
   const harvestDate = String(lot.occurred_at).substring(0, 10);
 
-  // Serial allocation is MAX+1 per season. The UNIQUE(season, serial) index
-  // means a concurrent print run fails loudly rather than silently issuing two
-  // physical tags with the same number.
+  // MAX+1 per season. The UNIQUE(season, serial) index means two simultaneous
+  // allocations fail loudly rather than silently issuing two physical tags
+  // carrying the same number.
   const row = await queryOne(db, `SELECT COALESCE(MAX(serial), 0) AS max_serial FROM harvest_sacks WHERE season = ?`, [season]);
   const startSerial = (row?.max_serial || 0) + 1;
 
-  const sacks = [];
+  const ids = [];
   const statements = [];
   for (let i = 0; i < qty; i++) {
     const serial = startSerial + i;
     const sackId = formatSackId(season, serial);
-    sacks.push({ sack_id: sackId, zone: lot.zone, cultivar, cut_number: lot.cut_number, harvest_date: harvestDate });
+    ids.push(sackId);
     statements.push({
       sql: `INSERT INTO harvest_sacks
               (sack_id, season, serial, zone, cultivar, cut_number, harvest_date, zone_session_id, is_test)
@@ -343,24 +392,62 @@ async function handleSackPrintRun(db, env, ctx, body) {
   }
   await transaction(db, statements);
 
+  const stats = await getLotTagStats(db, sessionId, isTest);
+
   ctx.waitUntil(sendTelegramMessage(env, {
     chatId: env.TELEGRAM_TEST_CHAT_ID,
-    text: `🏷️ Printed ${qty} sack tag${qty === 1 ? '' : 's'} — *${cultivar}* ${lot.zone} cut ${lot.cut_number}\n${sacks[0].sack_id} → ${sacks[sacks.length - 1].sack_id}`,
+    text: `🏷️ ${qty} sack tag${qty === 1 ? '' : 's'} — *${cultivar}* ${lot.zone} cut ${lot.cut_number} (${ids[0]}${qty > 1 ? `–${ids[ids.length - 1]}` : ''}). ${stats.printed} for this lot.`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
-  return renderLabelSheet(sacks, { sessionId, cultivar });
+  return successResponse({ success: true, ids, printed: stats.printed, last_sack_id: stats.lastSackId });
+}
+
+/**
+ * Void a tag — the double-tap case: two serials issued, one sack. Voided
+ * serials are never reused; a gap in the sequence is safe, a duplicate is not.
+ */
+async function handleSackVoid(db, env, ctx, body) {
+  const sackId = String(body.sack_id || '').trim();
+  const sack = await queryOne(db, `SELECT * FROM harvest_sacks WHERE sack_id = ?`, [sackId]);
+  if (!sack) throw createError('NOT_FOUND', `No sack found with ID "${sackId}".`);
+  if (sack.opened_at) {
+    throw createError('VALIDATION_ERROR', `Sack ${sackId} already has weights recorded — it can't be voided.`);
+  }
+
+  await execute(db, `UPDATE harvest_sacks SET voided_at = datetime('now') WHERE sack_id = ? AND voided_at IS NULL`, [sackId]);
+
+  const isTest = isTestMode(env) ? 1 : 0;
+  const stats = await getLotTagStats(db, sack.zone_session_id, isTest);
+
+  ctx.waitUntil(sendTelegramMessage(env, {
+    chatId: env.TELEGRAM_TEST_CHAT_ID,
+    text: `🚫 Voided tag *${sackId}* (${sack.cultivar || '?'} ${sack.zone}). ${stats.printed} for this lot.`,
+  }).catch(e => console.error('[harvest][telegram]', e)));
+
+  return successResponse({ success: true, voided: sackId, printed: stats.printed, last_sack_id: stats.lastSackId });
 }
 
 // Reprint path — looks the sack up and reuses its EXISTING serial. Never
 // allocates a new one: two physical tags carrying different IDs for the same
 // sack is unrecoverable once they're in the barn.
 async function handleSackLabel(db, env, params) {
-  const sackId = String(params.id || '').trim();
-  const sack = await queryOne(db, `SELECT * FROM harvest_sacks WHERE sack_id = ?`, [sackId]);
-  if (!sack) throw createError('NOT_FOUND', `No sack found with ID "${sackId}".`);
+  // ?id= for a single reprint, ?ids=a,b,c for a freshly-allocated run. The
+  // session screen loads this into a hidden iframe, which prints itself.
+  const raw = String(params.ids || params.id || '').trim();
+  const ids = raw.split(',').map(s => s.trim()).filter(Boolean).slice(0, MAX_PRINT_QTY);
+  if (!ids.length) throw createError('VALIDATION_ERROR', 'No sack ID given.');
+
+  const placeholders = ids.map(() => '?').join(',');
+  const rows = await query(db, `SELECT * FROM harvest_sacks WHERE sack_id IN (${placeholders})`, ids);
+  if (!rows.length) throw createError('NOT_FOUND', `No sack found with ID "${ids[0]}".`);
+
+  // Preserve the requested order (SQL IN doesn't guarantee it).
+  const byId = new Map(rows.map(r => [r.sack_id, r]));
+  const sacks = ids.map(id => byId.get(id)).filter(Boolean);
+
   // ?preview=1 renders without firing the print dialog — for eyeballing a
   // label (or checking a long cultivar name fits) before committing paper.
-  return renderLabelSheet([sack], null, { autoPrint: params.preview !== '1' });
+  return renderLabelSheet(sacks, null, { autoPrint: params.preview !== '1' });
 }
 
 async function handleSackWeigh(db, env, ctx, body) {
@@ -463,13 +550,16 @@ async function getSacks(db, env, params) {
   }
   if (opened === 'true') sql += ' AND opened_at IS NOT NULL';
   if (opened === 'false') sql += ' AND opened_at IS NULL';
+  if (params.include_voided !== 'true') sql += ' AND voided_at IS NULL';
 
   sql += ' ORDER BY serial DESC LIMIT ?';
   binds.push(limit);
 
   const rows = await query(db, sql, binds);
   const totals = await queryOne(db, `
-    SELECT COUNT(*) AS total, SUM(CASE WHEN opened_at IS NOT NULL THEN 1 ELSE 0 END) AS opened
+    SELECT SUM(CASE WHEN voided_at IS NULL THEN 1 ELSE 0 END) AS total,
+           SUM(CASE WHEN opened_at IS NOT NULL THEN 1 ELSE 0 END) AS opened,
+           SUM(CASE WHEN voided_at IS NOT NULL THEN 1 ELSE 0 END) AS voided
     FROM harvest_sacks WHERE is_test = ?
   `, [isTest]);
 
@@ -496,8 +586,32 @@ function renderPage(title, bodyHtml, status = 200) {
   a.btn.alt { background: #3a5f4c; }
   .footer { margin-top: 28px; font-size: 0.9rem; }
   .footer a { color: #9fc2ac; }
-  select, input[type=number] { font-size: 1.2rem; padding: 12px; width: 100%; box-sizing: border-box; margin: 8px 0 16px; border-radius: 8px; border: none; }
+  select, input[type=number], input[type=text], input:not([type]) { font-size: 1.2rem; padding: 12px; width: 100%; box-sizing: border-box; margin: 8px 0 16px; border-radius: 8px; border: none; }
   label { font-size: 1rem; color: #cfe3d6; }
+
+  /* Takedown session screen — big targets, gloves on, one job per press. */
+  .lot { border-left: 4px solid #2f7a4f; padding-left: 12px; margin-bottom: 22px; }
+  .lot-cultivar { font-size: 1.7rem; font-weight: 700; line-height: 1.15; }
+  .lot-meta { color: #9fc2ac; margin-top: 2px; }
+  .bigbtn {
+    display: block; width: 100%; min-height: 150px; font-size: 2.1rem; font-weight: 800;
+    letter-spacing: 0.04em; background: #2f7a4f; color: #fff; border: none; border-radius: 14px;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .bigbtn:active { background: #276843; }
+  .bigbtn:disabled { background: #3a5f4c; color: #cfe3d6; }
+  .status { margin-top: 18px; font-size: 1.05rem; }
+  .status strong { font-size: 1.25rem; }
+  .last { color: #cfe3d6; margin-top: 6px; }
+  .lastActions { margin-top: 10px; display: flex; gap: 10px; }
+  a.mini { display: inline-block; padding: 10px 16px; background: #3a5f4c; color: #fff;
+           text-decoration: none; border-radius: 8px; font-size: 0.95rem; }
+  a.mini.danger { background: #7a3a3a; }
+  .batch { margin-top: 26px; color: #9fc2ac; }
+  .batch summary { cursor: pointer; padding: 8px 0; }
+  .batchrow { display: flex; gap: 10px; align-items: center; }
+  .batchrow input { margin: 0; max-width: 110px; }
+  .batchrow .btn { margin: 0; white-space: nowrap; padding: 12px 18px; font-size: 1rem; }
 </style>
 </head>
 <body>
@@ -597,7 +711,7 @@ function sackPrintFormBody(lots) {
   return `
 <h1>Print Sack Tags</h1>
 <p class="note">Pick the lot that's <strong>coming down now</strong> — not the zone being cut today. Material bags ~10 days after it was cut.</p>
-<form method="POST" action="?action=sack_print_run" onsubmit="this.querySelector('button').disabled=true">
+<form method="POST" action="?action=sack_session_start" onsubmit="this.querySelector('button').disabled=true">
   <label for="session_id">Lot coming down</label>
   <select id="session_id" name="session_id" required>${options}</select>
   <label for="cultivar">Cultivar</label>
@@ -605,10 +719,133 @@ function sackPrintFormBody(lots) {
   <datalist id="cultivars">
     <option value="Sour Lifter"><option value="Lifter"><option value="Berry Bliss">
   </datalist>
-  <label for="qty">How many sacks?</label>
-  <input id="qty" name="qty" type="number" min="1" max="${MAX_PRINT_QTY}" value="1" required>
-  <button class="btn" type="submit">Print tags</button>
+  <button class="btn" type="submit">Start takedown →</button>
 </form>`;
+}
+
+/**
+ * The screen the worker actually lives on during a takedown. Quantity is
+ * deliberately NOT asked up front — you don't know how many sacks a rack
+ * yields until it's empty, and pre-printing leaves orphan serials that can end
+ * up on the next rack's sacks.
+ */
+function sackSessionBody({ lot, cultivar, stats }) {
+  const q = `session_id=${lot.id}&cultivar=${encodeURIComponent(cultivar)}`;
+  return `
+<div class="lot">
+  <div class="lot-cultivar">${escapeHtml(cultivar)}</div>
+  <div class="lot-meta">${escapeHtml(lot.zone)} · Cut ${escapeHtml(String(lot.cut_number ?? '?'))} · cut ${escapeHtml(formatTagDate(String(lot.occurred_at).substring(0, 10)))}</div>
+</div>
+
+<button id="printBtn" class="bigbtn">PRINT TAG</button>
+
+<div class="status">
+  <div id="count"><strong>${stats.printed}</strong> tag${stats.printed === 1 ? '' : 's'} printed for this lot</div>
+  <div id="last" class="last">${stats.lastSackId ? `Last: <strong>#&nbsp;${escapeHtml(stats.lastSackId)}</strong>` : 'No tags printed yet'}</div>
+  <div id="lastActions" class="lastActions" ${stats.lastSackId ? '' : 'hidden'}>
+    <a id="reprintLink" class="mini" href="#">Reprint</a>
+    <a id="voidLink" class="mini danger" href="#">Void</a>
+  </div>
+</div>
+
+<details class="batch">
+  <summary>Print several at once</summary>
+  <p class="note">Only if you're tagging a batch of already-filled sacks. Extra tags with no sack must be voided, or the lot count drifts.</p>
+  <div class="batchrow">
+    <input id="batchQty" type="number" min="2" max="${MAX_PRINT_QTY}" value="5">
+    <button id="batchBtn" class="btn">Print batch</button>
+  </div>
+</details>
+
+<div class="footer"><a href="?action=sack_print">← Change lot</a> · <a href="?action=sacks&limit=20">View tags →</a></div>
+
+<iframe id="printFrame" title="print" style="position:absolute;width:0;height:0;border:0;left:-9999px"></iframe>
+
+<script>
+(function () {
+  var Q = '${q}';
+  var btn = document.getElementById('printBtn');
+  var batchBtn = document.getElementById('batchBtn');
+  var frame = document.getElementById('printFrame');
+  var countEl = document.getElementById('count');
+  var lastEl = document.getElementById('last');
+  var actions = document.getElementById('lastActions');
+  var reprint = document.getElementById('reprintLink');
+  var voidLink = document.getElementById('voidLink');
+  var lastId = ${stats.lastSackId ? JSON.stringify(stats.lastSackId) : 'null'};
+  var busy = false;
+
+  function setBusy(b, label) {
+    busy = b;
+    btn.disabled = b; batchBtn.disabled = b;
+    btn.textContent = b ? (label || 'PRINTING…') : 'PRINT TAG';
+  }
+
+  function refresh(data) {
+    var n = data.printed;
+    countEl.innerHTML = '<strong>' + n + '</strong> tag' + (n === 1 ? '' : 's') + ' printed for this lot';
+    lastId = data.last_sack_id;
+    if (lastId) {
+      lastEl.innerHTML = 'Last: <strong>#&nbsp;' + lastId + '</strong>';
+      actions.hidden = false;
+      reprint.href = '?action=sack_label&id=' + encodeURIComponent(lastId);
+    } else {
+      lastEl.textContent = 'No tags printed yet';
+      actions.hidden = true;
+    }
+  }
+
+  function print(ids) { frame.src = '?action=sack_label&ids=' + encodeURIComponent(ids.join(',')); }
+
+  function alloc(qty) {
+    if (busy) return;           // guards the double-tap: two serials, one sack
+    setBusy(true);
+    fetch('?action=sack_alloc', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: ${lot.id}, cultivar: ${JSON.stringify(cultivar)}, qty: qty })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.success) throw new Error(d.error || 'Print failed');
+        print(d.ids); refresh(d); setBusy(false);
+      })
+      .catch(function (e) {
+        setBusy(false);
+        alert('Could not print: ' + e.message + '\\n\\nNothing was tagged — try again.');
+      });
+  }
+
+  btn.addEventListener('click', function () { alloc(1); });
+  batchBtn.addEventListener('click', function () {
+    var n = parseInt(document.getElementById('batchQty').value, 10);
+    if (n >= 2) alloc(n);
+  });
+
+  reprint.addEventListener('click', function (e) {
+    e.preventDefault();
+    if (lastId) print([lastId]);
+  });
+
+  voidLink.addEventListener('click', function (e) {
+    e.preventDefault();
+    if (!lastId || busy) return;
+    if (!confirm('Void tag # ' + lastId + '?\\n\\nUse this if a tag printed with no sack to put it on. The number is retired, not reused.')) return;
+    setBusy(true, 'VOIDING…');
+    fetch('?action=sack_void', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sack_id: lastId })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.success) throw new Error(d.error || 'Void failed');
+        refresh(d); setBusy(false);
+      })
+      .catch(function (e) { setBusy(false); alert('Could not void: ' + e.message); });
+  });
+})();
+</script>`;
 }
 
 /**
