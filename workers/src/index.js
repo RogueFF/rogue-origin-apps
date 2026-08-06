@@ -29,7 +29,7 @@ import { handleSupersackD1 } from './handlers/supersack-d1.js';
 import { handleMediaR2 } from './handlers/media-r2.js';
 import { handleTpmD1 } from './handlers/tpm-d1.js';
 import { handleIrrigationD1 } from './handlers/irrigation-d1.js';
-import { handleHarvestD1, handleSackScan } from './handlers/harvest-d1.js';
+import { handleHarvestD1, handleSackScan, handleZoneScan } from './handlers/harvest-d1.js';
 import { corsHeaders, handleCors } from './lib/cors.js';
 import { jsonResponse, errorResponse } from './lib/response.js';
 import { formatError } from './lib/errors.js';
@@ -138,6 +138,10 @@ export default {
         // Supersack tag QR target — deliberately short so the encoded URL stays
         // compact, keeping the printed QR low-version and easy to scan.
         response = await handleSackScan(request, env, ctx);
+      } else if (path.startsWith('/z/')) {
+        // Zone-sign QR target (/z/Z4). Short for the same reason — these are
+        // laminated and staked outdoors all season and can't be re-printed cheaply.
+        response = await handleZoneScan(request, env, ctx);
       } else if (path.startsWith('/api/pool-bins')) {
         response = await handlePoolD1(request, env, ctx);
       } else if (path.startsWith('/api/pool')) {
