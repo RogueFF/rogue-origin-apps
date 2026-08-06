@@ -35,6 +35,7 @@ import { query, queryOne, execute, transaction } from '../lib/db.js';
 import { successResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
 import { createError, formatError } from '../lib/errors.js';
 import { VALID_ZONES, normalizeZone } from '../lib/zones.js';
+import { cultivarsFor, isMultiCultivar } from '../lib/zone-cultivars.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
 
 const DEBOUNCE_MS = 5 * 60 * 1000;       // re-scanning the same active zone within this window is a no-op
@@ -105,6 +106,48 @@ export async function handleHarvestD1(request, env, ctx) {
 }
 
 /**
+ * GET /z/<zone> — the zone-sign QR target, e.g. /z/Z4. Same behaviour as
+ * ?action=enter, but the short path keeps the printed QR low-version with
+ * chunky modules. These signs are laminated and staked outdoors for a whole
+ * season, so scan robustness against dust, glare and fading matters more than
+ * anywhere else in the system — and the URL can't be changed after printing.
+ */
+export async function handleZoneScan(request, env, ctx) {
+  try {
+    const url = new URL(request.url);
+    const zone = normalizeZone(url.pathname.replace(/^\/z\//, '').trim());
+    if (!zone || !VALID_ZONES.has(zone)) {
+      throw createError('VALIDATION_ERROR', `Unknown zone "${zone ?? ''}". Check the QR code and try again.`);
+    }
+
+    const params = { zone };
+    const picked = url.searchParams.get('cultivar');
+    if (url.searchParams.get('test_cut')) params.test_cut = url.searchParams.get('test_cut');
+
+    const options = cultivarsFor(zone);
+    if (isMultiCultivar(zone) && !picked) {
+      // Trial / split zone: a lot is zone x cultivar x cut, so we can't open a
+      // session until we know which cultivar is being cut. One sign per zone
+      // with a picker beats a separate QR per cultivar — no wrong code to scan.
+      return renderPage(`${zone} — pick cultivar`, cultivarPickerBody(zone, options));
+    }
+    if (picked) {
+      if (!options.includes(picked)) {
+        throw createError('VALIDATION_ERROR', `"${picked}" isn't planted in ${zone}.`);
+      }
+      params.cultivar = picked;
+    } else {
+      params.cultivar = options[0] || null;   // single-cultivar zone: auto-fill
+    }
+
+    return await handleEnter(env.DB, env, ctx, params);
+  } catch (e) {
+    const { message, status } = formatError(e);
+    return errorPage(message, status);
+  }
+}
+
+/**
  * GET /s/<sack_id> — the QR scan target. Routed separately in index.js so the
  * encoded URL stays short: a shorter payload means a lower-version QR with
  * bigger modules, which is what survives a scuffed label in barn lighting.
@@ -153,9 +196,16 @@ async function handleEnter(db, env, ctx, params) {
   const active = await getActiveSession(db, isTest);
   const now = new Date();
 
+  // Cultivar comes from the picker (multi-cultivar zones) or auto-fills from
+  // the planting record. A lot is zone x cultivar x cut throughout.
+  const cultivar = params.cultivar || cultivarsFor(zone)[0] || null;
+
   // Idempotency guard: a phone refresh/back-button/link-preview re-hitting
-  // the same zone's URL moments later shouldn't open a second session.
-  if (active && active.zone === zone && (now - parseSqliteUtc(active.occurred_at)) < DEBOUNCE_MS) {
+  // the same zone's URL moments later shouldn't open a second session. Keyed on
+  // cultivar too, so switching cultivar inside one trial zone still opens a new
+  // lot rather than being swallowed as a duplicate scan.
+  if (active && active.zone === zone && active.cultivar === cultivar &&
+      (now - parseSqliteUtc(active.occurred_at)) < DEBOUNCE_MS) {
     return renderPage('Already entered', alreadyEnteredBody(active));
   }
 
@@ -163,21 +213,26 @@ async function handleEnter(db, env, ctx, params) {
     await execute(db, `UPDATE harvest_scan_log SET closed_at = datetime('now') WHERE id = ?`, [active.id]);
   }
 
-  const cutNumber = await computeCutNumber(db, zone, season, isTest, params.test_cut);
+  const cutNumber = await computeCutNumber(db, zone, cultivar, season, isTest, params.test_cut);
 
   const result = await execute(db, `
-    INSERT INTO harvest_scan_log (event_type, zone, season, cut_number, is_test)
-    VALUES ('enter', ?, ?, ?, ?)
-  `, [zone, season, cutNumber, isTest]);
+    INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, is_test)
+    VALUES ('enter', ?, ?, ?, ?, ?)
+  `, [zone, cultivar, season, cutNumber, isTest]);
   const sessionId = result.lastRowId;
 
-  const prevNote = active ? `Previous zone *${active.zone}* auto-closed.` : 'No prior zone was open.';
+  const prevNote = active
+    ? `Previous lot *${active.zone}${active.cultivar ? ` ${active.cultivar}` : ''}* auto-closed.`
+    : 'No prior zone was open.';
   ctx.waitUntil(sendTelegramMessage(env, {
     chatId: env.TELEGRAM_TEST_CHAT_ID,
-    text: `🌿 Entered *${zone}* — Cut ${cutNumber}\n${prevNote}`,
+    text: `🌿 Entered *${zone}*${cultivar ? ` — ${cultivar}` : ''} — Cut ${cutNumber}\n${prevNote}`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
-  return renderPage(`Entered ${zone}`, enterBody({ zone, cutNumber, sessionId, prevZone: active ? active.zone : null }));
+  return renderPage(`Entered ${zone}`, enterBody({
+    zone, cultivar, cutNumber, sessionId,
+    prevZone: active ? `${active.zone}${active.cultivar ? ` ${active.cultivar}` : ''}` : null,
+  }));
 }
 
 async function getActiveSession(db, isTest) {
@@ -188,23 +243,27 @@ async function getActiveSession(db, isTest) {
   `, [isTest]);
 }
 
-async function getLastClosedSession(db, zone, season, isTest) {
+async function getLastClosedSession(db, zone, cultivar, season, isTest) {
   return queryOne(db, `
     SELECT * FROM harvest_scan_log
-    WHERE event_type = 'enter' AND zone = ? AND season = ? AND closed_at IS NOT NULL AND is_test = ?
+    WHERE event_type = 'enter' AND zone = ? AND cultivar IS ? AND season = ?
+      AND closed_at IS NOT NULL AND is_test = ?
     ORDER BY closed_at DESC, id DESC LIMIT 1
-  `, [zone, season, isTest]);
+  `, [zone, cultivar, season, isTest]);
 }
 
-// Same-day grace window: a zone re-entered within CUT_RESUME_GRACE_HOURS of
-// its last close is a resumption of the same cut, not a new one — fixes the
-// gap where a crew finishes part of a zone, works elsewhere, then returns
+// Same-day grace window: a lot re-entered within CUT_RESUME_GRACE_HOURS of its
+// last close is a resumption of the same cut, not a new one — fixes the gap
+// where a crew finishes part of a zone, works elsewhere, then returns
 // same-shift (see 2025 log: "Finished Z8, partial Z7, partial Z5").
-async function computeCutNumber(db, zone, season, isTest, testCutParam) {
+//
+// Keyed on (zone, cultivar): in a trial zone, Z10 "Lemon" cut 1 is independent
+// of Z10 "Rocket Sauce" cut 1.
+async function computeCutNumber(db, zone, cultivar, season, isTest, testCutParam) {
   const forced = parseInt(testCutParam, 10);
   if (Number.isInteger(forced) && forced >= 1 && forced <= 9) return forced;
 
-  const last = await getLastClosedSession(db, zone, season, isTest);
+  const last = await getLastClosedSession(db, zone, cultivar, season, isTest);
   if (!last) return 1;
 
   const hoursSinceClose = (Date.now() - parseSqliteUtc(last.closed_at).getTime()) / (1000 * 60 * 60);
@@ -300,7 +359,7 @@ async function handleSackPrintForm(db, env) {
 // newest first, with how long the material has been drying.
 async function getRecentLots(db, isTest) {
   return query(db, `
-    SELECT id, zone, cut_number, occurred_at,
+    SELECT id, zone, cultivar, cut_number, occurred_at,
            CAST(julianday('now') - julianday(occurred_at) AS INTEGER) AS days_since_cut
     FROM harvest_scan_log
     WHERE event_type = 'enter' AND is_test = ?
@@ -501,6 +560,7 @@ async function getStatus(db, env) {
     active_zone: active ? {
       id: active.id,
       zone: active.zone,
+      cultivar: active.cultivar,
       cut_number: active.cut_number,
       occurred_at: active.occurred_at,
       headcount: active.headcount,
@@ -612,6 +672,12 @@ function renderPage(title, bodyHtml, status = 200) {
   .batchrow { display: flex; gap: 10px; align-items: center; }
   .batchrow input { margin: 0; max-width: 110px; }
   .batchrow .btn { margin: 0; white-space: nowrap; padding: 12px 18px; font-size: 1rem; }
+  .hint { color: #9fc2ac; font-size: 0.85rem; font-weight: normal; }
+
+  /* Cultivar picker — trial zones can hold 15 cultivars, so a single column of
+     full-width targets beats a cramped grid for a gloved thumb. */
+  .cvgrid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 14px; }
+  a.cvbtn { padding: 20px 14px; font-size: 1.15rem; text-align: left; }
 </style>
 </head>
 <body>
@@ -639,11 +705,26 @@ function headcountGrid(zone, sessionId) {
   return `${cells}<a class="btn alt" href="?zone=${zone}&action=headcount&session_id=${sessionId}&count=13">13+</a>`;
 }
 
-function enterBody({ zone, cutNumber, sessionId, prevZone }) {
+/**
+ * Cultivar picker — shown after scanning a trial/split zone's sign, before the
+ * session opens. Big tap targets: this is a gloved thumb in a field.
+ */
+function cultivarPickerBody(zone, options) {
+  const buttons = options.map(cv =>
+    `<a class="btn cvbtn" href="/z/${encodeURIComponent(zone)}?cultivar=${encodeURIComponent(cv)}">${escapeHtml(cv)}</a>`
+  ).join('');
+  return `
+<h1>${escapeHtml(zone)}</h1>
+<p class="sub">${options.length} cultivars planted here</p>
+<p class="note">Which one are you cutting?</p>
+<div class="cvgrid">${buttons}</div>`;
+}
+
+function enterBody({ zone, cultivar, cutNumber, sessionId, prevZone }) {
   return `
 <h1>✅ Entered ${zone}</h1>
-<p class="sub">Cut ${cutNumber}</p>
-${prevZone ? `<p class="note">Previous zone <strong>${prevZone}</strong> auto-closed.</p>` : `<p class="note">No prior zone was open.</p>`}
+<p class="sub">${cultivar ? `${escapeHtml(cultivar)} · ` : ''}Cut ${cutNumber}</p>
+${prevZone ? `<p class="note">Previous lot <strong>${escapeHtml(prevZone)}</strong> auto-closed.</p>` : `<p class="note">No prior zone was open.</p>`}
 <p class="note">How many cutters here now?</p>
 <div class="grid">${headcountGrid(zone, sessionId)}</div>
 <div class="footer"><a href="?action=logs&zone=${zone}">View log →</a></div>`;
@@ -652,7 +733,7 @@ ${prevZone ? `<p class="note">Previous zone <strong>${prevZone}</strong> auto-cl
 function alreadyEnteredBody(active) {
   return `
 <h1>Already entered ${active.zone}</h1>
-<p class="sub">Cut ${active.cut_number}</p>
+<p class="sub">${active.cultivar ? `${escapeHtml(active.cultivar)} · ` : ''}Cut ${active.cut_number}</p>
 <p class="note">Entered at ${active.occurred_at} UTC — scan again in a few minutes if you meant to re-enter.</p>
 <p class="note">How many cutters here now?</p>
 <div class="grid">${headcountGrid(active.zone, active.id)}</div>`;
@@ -672,7 +753,7 @@ function barnIntakeFormBody(active) {
     `<option value="${z}" ${active && active.zone === z ? 'selected' : ''}>${z}</option>`
   ).join('');
   const activeNote = active
-    ? `<p class="note">Currently active zone: <strong>${active.zone}</strong> (cut ${active.cut_number})</p>`
+    ? `<p class="note">Currently active: <strong>${active.zone}${active.cultivar ? ` · ${escapeHtml(active.cultivar)}` : ''}</strong> (cut ${active.cut_number})</p>`
     : `<p class="note">No zone is currently open — pick one below.</p>`;
   return `
 <h1>Barn Intake</h1>
@@ -704,9 +785,12 @@ function sackPrintFormBody(lots) {
   }
 
   const options = lots.map(l => {
-    const label = `${l.zone} · cut ${l.cut_number} · cut ${String(l.occurred_at).substring(0, 10)} — ${l.days_since_cut}d drying`;
-    return `<option value="${l.id}">${escapeHtml(label)}</option>`;
+    const cv = l.cultivar || '';
+    const label = `${l.zone}${cv ? ` · ${cv}` : ''} · cut ${l.cut_number} · cut ${String(l.occurred_at).substring(0, 10)} — ${l.days_since_cut}d drying`;
+    return `<option value="${l.id}" data-cultivar="${escapeHtml(cv)}">${escapeHtml(label)}</option>`;
   }).join('');
+
+  const firstCv = lots[0]?.cultivar || '';
 
   return `
 <h1>Print Sack Tags</h1>
@@ -714,13 +798,21 @@ function sackPrintFormBody(lots) {
 <form method="POST" action="?action=sack_session_start" onsubmit="this.querySelector('button').disabled=true">
   <label for="session_id">Lot coming down</label>
   <select id="session_id" name="session_id" required>${options}</select>
-  <label for="cultivar">Cultivar</label>
-  <input id="cultivar" name="cultivar" list="cultivars" required autocomplete="off" placeholder="e.g. Sour Lifter">
-  <datalist id="cultivars">
-    <option value="Sour Lifter"><option value="Lifter"><option value="Berry Bliss">
-  </datalist>
+  <label for="cultivar">Cultivar <span class="hint">(from the lot — change only if wrong)</span></label>
+  <input id="cultivar" name="cultivar" required autocomplete="off" value="${escapeHtml(firstCv)}" placeholder="e.g. Sour Lifter">
   <button class="btn" type="submit">Start takedown →</button>
-</form>`;
+</form>
+<script>
+  // Cultivar was captured at the zone scan, so it carries through rather than
+  // being retyped at takedown — one less place to introduce a mismatch.
+  (function () {
+    var sel = document.getElementById('session_id'), cv = document.getElementById('cultivar');
+    sel.addEventListener('change', function () {
+      var v = sel.options[sel.selectedIndex].getAttribute('data-cultivar');
+      if (v) cv.value = v;
+    });
+  })();
+</script>`;
 }
 
 /**
