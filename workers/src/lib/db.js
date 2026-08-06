@@ -18,6 +18,8 @@ const VALID_TABLES = new Set([
   'complaints',
   // TPM module
   'tpm_cards',
+  // Irrigation reporting
+  'irrigation_log',
 ]);
 
 /**

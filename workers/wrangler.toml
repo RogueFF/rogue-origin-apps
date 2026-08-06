@@ -31,6 +31,9 @@ name = "rogue-origin-api"
 # - JD_REFRESH_TOKEN             (long-lived OAuth refresh token)
 # - JD_ORG_ID                    (Rogue Family Farms Operations Center org ID)
 # - JD_ENV                       ("sandbox" | "production"; flip when prod approved)
+# - TELEGRAM_TEST_CHAT_ID        (Telegram TEST chat id for harvest-tracking scans —
+#                                  same bot as TELEGRAM_BOT_TOKEN, separate test group.
+#                                  See wiki/operations/plans/2026-07-06-seed-to-sale-harvest-tracking.md)
 
 # D1 Database
 [[d1_databases]]
