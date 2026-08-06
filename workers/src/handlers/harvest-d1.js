@@ -44,6 +44,13 @@ const HEADCOUNT_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1); // 1-12, 
 
 const MAX_PRINT_QTY = 40;                // sanity cap on one print run
 const LOT_PICKER_DAYS = 45;              // how far back the takedown lot picker looks
+
+// Drying window, used only to sanity-check the takedown lot pick (advisory,
+// never blocking). 10 days/batch confirmed by Koa 2026-08-04; the min/max are
+// generous bounds around it, not targets.
+const DRY_DAYS_TYPICAL = 10;
+const DRY_DAYS_MIN = 6;
+const DRY_DAYS_MAX = 21;
 const PUBLIC_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev';
 
 const HTML_ACTIONS = new Set([
@@ -355,17 +362,65 @@ async function handleSackPrintForm(db, env) {
   return renderPage('Print Sack Tags', sackPrintFormBody(lots));
 }
 
-// Candidate lots for takedown: zone-entry sessions from the last ~45 days,
-// newest first, with how long the material has been drying.
+/**
+ * Candidate lots for takedown, ordered by how likely each is to be the one
+ * actually coming down.
+ *
+ * The takedown lot pick is the highest-stakes single input in the system: pick
+ * wrong and every sack off that rack carries the wrong lineage, and nobody
+ * finds out until analysis months later. The physical defence is the coloured
+ * tape marking lot boundaries in the barn — this query exists to make the
+ * screen agree with what the tape says, and to argue when it doesn't.
+ *
+ * Ready-first ordering, then longest-drying: a lot at the right age with no
+ * sacks yet is almost always the answer; a lot cut two days ago almost never is.
+ */
 async function getRecentLots(db, isTest) {
   return query(db, `
-    SELECT id, zone, cultivar, cut_number, occurred_at,
-           CAST(julianday('now') - julianday(occurred_at) AS INTEGER) AS days_since_cut
-    FROM harvest_scan_log
-    WHERE event_type = 'enter' AND is_test = ?
-      AND julianday('now') - julianday(occurred_at) <= ?
-    ORDER BY occurred_at DESC
+    SELECT
+      l.id, l.zone, l.cultivar, l.cut_number, l.occurred_at,
+      CAST(julianday('now') - julianday(l.occurred_at) AS INTEGER) AS days_since_cut,
+      COALESCE((
+        SELECT COUNT(*) FROM harvest_sacks s
+        WHERE s.zone_session_id = l.id AND s.is_test = l.is_test AND s.voided_at IS NULL
+      ), 0) AS sacks_printed,
+      (
+        SELECT MAX(s.printed_at) FROM harvest_sacks s
+        WHERE s.zone_session_id = l.id AND s.is_test = l.is_test AND s.voided_at IS NULL
+      ) AS last_printed_at
+    FROM harvest_scan_log l
+    WHERE l.event_type = 'enter' AND l.is_test = ?
+      AND julianday('now') - julianday(l.occurred_at) <= ?
+    ORDER BY
+      CASE
+        WHEN CAST(julianday('now') - julianday(l.occurred_at) AS INTEGER) < ${DRY_DAYS_MIN} THEN 3  -- too green
+        WHEN COALESCE((SELECT COUNT(*) FROM harvest_sacks s
+                       WHERE s.zone_session_id = l.id AND s.is_test = l.is_test
+                         AND s.voided_at IS NULL), 0) > 0 THEN 2                                    -- already started
+        WHEN CAST(julianday('now') - julianday(l.occurred_at) AS INTEGER) > ${DRY_DAYS_MAX} THEN 1  -- overdue
+        ELSE 0                                                                                      -- ready, untouched
+      END,
+      l.occurred_at ASC
   `, [isTest, LOT_PICKER_DAYS]);
+}
+
+/**
+ * How plausible is it that this lot is the one physically coming down now?
+ * Advisory only — the operator can always override, because the tape and their
+ * eyes beat our heuristic. We warn, we don't block.
+ */
+function lotPlausibility(lot) {
+  const d = lot.days_since_cut;
+  if (d < DRY_DAYS_MIN) {
+    return { level: 'green', note: `only ${d}d drying — too green to be coming down (dry cycle ~${DRY_DAYS_TYPICAL}d)` };
+  }
+  if (lot.sacks_printed > 0) {
+    return { level: 'started', note: `${lot.sacks_printed} sack${lot.sacks_printed === 1 ? '' : 's'} already tagged from this lot` };
+  }
+  if (d > DRY_DAYS_MAX) {
+    return { level: 'old', note: `${d}d drying — past the usual window, check this is right` };
+  }
+  return { level: 'ready', note: `${d}d drying — ready` };
 }
 
 /**
@@ -678,6 +733,24 @@ function renderPage(title, bodyHtml, status = 200) {
      full-width targets beats a cramped grid for a gloved thumb. */
   .cvgrid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 14px; }
   a.cvbtn { padding: 20px 14px; font-size: 1.15rem; text-align: left; }
+
+  /* Takedown lot picker — the highest-stakes input in the system, so each
+     candidate carries its own plausibility rather than being one line in a
+     dropdown the operator scrolls past. */
+  .lotlist { display: grid; gap: 10px; margin: 14px 0 20px; }
+  label.lot { display: flex; gap: 12px; align-items: flex-start; padding: 14px;
+              background: #1b3123; border: 1px solid #2c4a36; border-radius: 10px; cursor: pointer; }
+  label.lot input { margin: 3px 0 0; width: auto; flex: none; transform: scale(1.4); }
+  label.lot:has(input:checked) { border-color: #4a9d6a; background: #21402c; }
+  label.lot.green { opacity: 0.72; }
+  .lotbody { display: block; min-width: 0; }
+  .lothead { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 1.1rem; }
+  .lotmeta { display: block; color: #9fc2ac; font-size: 0.88rem; margin-top: 4px; }
+  .badge { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.06em;
+           padding: 3px 7px; border-radius: 4px; white-space: nowrap; }
+  .badge.ok   { background: #2f7a4f; color: #fff; }
+  .badge.warn { background: #8a6d1f; color: #fff; }
+  .badge.bad  { background: #7a3a3a; color: #fff; }
 </style>
 </head>
 <body>
@@ -784,34 +857,80 @@ function sackPrintFormBody(lots) {
 <p class="note">No harvest lots recorded in the last ${LOT_PICKER_DAYS} days, so there's nothing to take down yet. Scan a zone QR to open a lot first.</p>`;
   }
 
-  const options = lots.map(l => {
+  const BADGE = {
+    ready:   { cls: 'ok',    text: 'READY' },
+    started: { cls: 'warn',  text: 'STARTED' },
+    green:   { cls: 'bad',   text: 'TOO GREEN' },
+    old:     { cls: 'warn',  text: 'OVERDUE' },
+  };
+
+  // Pre-select ONLY when the best candidate is genuinely plausible. If the top
+  // of the list is overdue/green/already-started, pre-filling it would make the
+  // dangerous option the default — force a deliberate choice instead.
+  const topIsReady = lots.length > 0 && lotPlausibility(lots[0]).level === 'ready';
+
+  const cards = lots.map((l, i) => {
+    const p = lotPlausibility(l);
+    const b = BADGE[p.level];
     const cv = l.cultivar || '';
-    const label = `${l.zone}${cv ? ` · ${cv}` : ''} · cut ${l.cut_number} · cut ${String(l.occurred_at).substring(0, 10)} — ${l.days_since_cut}d drying`;
-    return `<option value="${l.id}" data-cultivar="${escapeHtml(cv)}">${escapeHtml(label)}</option>`;
+    return `
+    <label class="lot ${p.level}">
+      <input type="radio" name="session_id" value="${l.id}"
+             data-cultivar="${escapeHtml(cv)}" data-level="${p.level}"
+             data-desc="${escapeHtml(`${l.zone}${cv ? ` · ${cv}` : ''} cut ${l.cut_number}`)}"
+             data-note="${escapeHtml(p.note)}" ${i === 0 && topIsReady ? 'checked' : ''} required>
+      <span class="lotbody">
+        <span class="lothead">
+          <strong>${escapeHtml(l.zone)}${cv ? ` · ${escapeHtml(cv)}` : ''}</strong>
+          <span class="badge ${b.cls}">${b.text}</span>
+        </span>
+        <span class="lotmeta">Cut ${l.cut_number} · cut ${escapeHtml(String(l.occurred_at).substring(0, 10))} · ${escapeHtml(p.note)}</span>
+      </span>
+    </label>`;
   }).join('');
 
-  const firstCv = lots[0]?.cultivar || '';
+  const firstCv = topIsReady ? (lots[0].cultivar || '') : '';
 
   return `
 <h1>Print Sack Tags</h1>
-<p class="note">Pick the lot that's <strong>coming down now</strong> — not the zone being cut today. Material bags ~10 days after it was cut.</p>
-<form method="POST" action="?action=sack_session_start" onsubmit="this.querySelector('button').disabled=true">
-  <label for="session_id">Lot coming down</label>
-  <select id="session_id" name="session_id" required>${options}</select>
+<p class="note">Pick the lot that's <strong>coming down now</strong> — match it against the tape on the rack. This is not the zone being cut today; material bags ~${DRY_DAYS_TYPICAL} days after it was cut.</p>
+
+<form method="POST" action="?action=sack_session_start" id="lotForm">
+  <div class="lotlist">${cards}</div>
   <label for="cultivar">Cultivar <span class="hint">(from the lot — change only if wrong)</span></label>
   <input id="cultivar" name="cultivar" required autocomplete="off" value="${escapeHtml(firstCv)}" placeholder="e.g. Sour Lifter">
   <button class="btn" type="submit">Start takedown →</button>
 </form>
+
 <script>
+(function () {
+  var form = document.getElementById('lotForm');
+  var cv = document.getElementById('cultivar');
+
+  function selected() { return form.querySelector('input[name=session_id]:checked'); }
+
   // Cultivar was captured at the zone scan, so it carries through rather than
-  // being retyped at takedown — one less place to introduce a mismatch.
-  (function () {
-    var sel = document.getElementById('session_id'), cv = document.getElementById('cultivar');
-    sel.addEventListener('change', function () {
-      var v = sel.options[sel.selectedIndex].getAttribute('data-cultivar');
-      if (v) cv.value = v;
-    });
-  })();
+  // being retyped at takedown — one less place for a mismatch.
+  form.addEventListener('change', function (e) {
+    if (e.target.name !== 'session_id') return;
+    var v = e.target.getAttribute('data-cultivar');
+    if (v) cv.value = v;
+  });
+
+  // Advisory guard, never a block: the tape and the operator's eyes beat our
+  // heuristic, so an implausible pick asks for confirmation and then proceeds.
+  form.addEventListener('submit', function (e) {
+    var r = selected();
+    if (!r) return;
+    var lvl = r.getAttribute('data-level');
+    if (lvl === 'green' || lvl === 'old') {
+      var msg = r.getAttribute('data-desc') + '\\n' + r.getAttribute('data-note') +
+                '\\n\\nTag sacks against this lot anyway?';
+      if (!confirm(msg)) { e.preventDefault(); return; }
+    }
+    form.querySelector('button').disabled = true;
+  });
+})();
 </script>`;
 }
 
