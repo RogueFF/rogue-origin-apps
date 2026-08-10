@@ -114,6 +114,12 @@ async function analyzeStrain(params, env) {
     const matchedVariants = [...new Set(rows.map(r => r.cultivar1))];
 
     const dateMap = {};
+    // Per-variant accumulation: the strain param fuzzy-matches (e.g. "Lifter"
+    // also matches "Sour Lifter"), so the totals below are a blend across
+    // every matchedVariant. This map lets us also report each variant's own
+    // numbers, so a caller that wants pure "Lifter" isn't stuck guessing at
+    // how much of the blend came from "Sour Lifter".
+    const variantMap = {};
     let totalTops = 0;
     let totalSmalls = 0;
     let totalTrimmerHours = 0;
@@ -141,6 +147,26 @@ async function analyzeStrain(params, env) {
       dateMap[date].buckerHours += row.buckers_line1 || 0;
       dateMap[date].tzeroHours += row.tzero_line1 || 0;
       dateMap[date].hours++;
+
+      const variant = row.cultivar1;
+      if (!variantMap[variant]) {
+        variantMap[variant] = {
+          tops: 0,
+          smalls: 0,
+          trimmerHours: 0,
+          buckerHours: 0,
+          tzeroHours: 0,
+          hours: 0,
+          dates: new Set(),
+        };
+      }
+      variantMap[variant].tops += row.tops_lbs1 || 0;
+      variantMap[variant].smalls += row.smalls_lbs1 || 0;
+      variantMap[variant].trimmerHours += row.trimmers_line1 || 0;
+      variantMap[variant].buckerHours += row.buckers_line1 || 0;
+      variantMap[variant].tzeroHours += row.tzero_line1 || 0;
+      variantMap[variant].hours++;
+      variantMap[variant].dates.add(date);
 
       totalTops += row.tops_lbs1 || 0;
       totalSmalls += row.smalls_lbs1 || 0;
@@ -172,6 +198,41 @@ async function analyzeStrain(params, env) {
 
     const crewHours = totalTrimmerHours + totalBuckerHours + totalTZeroHours;
     const avgRate = crewHours > 0 ? totalLbs / crewHours : 0;
+
+    // Same cost/rate formulas as the blended summary above, applied per matched
+    // variant — lets a caller pull "Lifter" alone back out of a "Lifter" search
+    // that fuzzy-matched "Sour Lifter" too.
+    const byVariant = Object.entries(variantMap)
+      .map(([variant, v]) => {
+        const vTotalLbs = v.tops + v.smalls;
+        const vTopsRatio = vTotalLbs > 0 ? v.tops / vTotalLbs : 0;
+        const vSmallsRatio = vTotalLbs > 0 ? v.smalls / vTotalLbs : 0;
+        const vWaterspiderHours = v.hours;
+        const vSharedHours = v.buckerHours + v.tzeroHours + vWaterspiderHours;
+        const vTopsLaborHours = v.trimmerHours + (vSharedHours * vTopsRatio);
+        const vSmallsLaborHours = vSharedHours * vSmallsRatio;
+        const vTopsLaborCost = vTopsLaborHours * TOTAL_LABOR_COST_PER_HOUR;
+        const vSmallsLaborCost = vSmallsLaborHours * TOTAL_LABOR_COST_PER_HOUR;
+        const vTotalLaborCost = vTopsLaborCost + vSmallsLaborCost;
+        const vCrewHours = v.trimmerHours + v.buckerHours + v.tzeroHours;
+        const vAvgRate = vCrewHours > 0 ? vTotalLbs / vCrewHours : 0;
+
+        return {
+          cultivar: variant,
+          totalLbs: Math.round(vTotalLbs * 10) / 10,
+          tops: Math.round(v.tops * 10) / 10,
+          smalls: Math.round(v.smalls * 10) / 10,
+          topsPercent: Math.round(vTopsRatio * 1000) / 10,
+          smallsPercent: Math.round(vSmallsRatio * 1000) / 10,
+          daysWorked: v.dates.size,
+          productionHours: v.hours,
+          avgRate: Math.round(vAvgRate * 100) / 100,
+          topsCostPerLb: Math.round((v.tops > 0 ? vTopsLaborCost / v.tops : 0) * 100) / 100,
+          smallsCostPerLb: Math.round((v.smalls > 0 ? vSmallsLaborCost / v.smalls : 0) * 100) / 100,
+          totalLaborCost: Math.round(vTotalLaborCost * 100) / 100,
+        };
+      })
+      .sort((a, b) => b.totalLbs - a.totalLbs);
 
     const byDate = Object.keys(dateMap).sort().map(date => {
       const data = dateMap[date];
@@ -206,6 +267,7 @@ async function analyzeStrain(params, env) {
     return successResponse({
       strain,
       matchedVariants,
+      byVariant,
       found: true,
       dateRange: {
         start: cutoffStr,

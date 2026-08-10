@@ -168,6 +168,19 @@ async function addProduction(body, env) {
     else lbs2.smalls = v.value;
   }
 
+  // Crew must be recorded whenever output is recorded — otherwise this hour
+  // becomes invisible to every downstream rate/target/streak calculation,
+  // which all gate on "crew present AND tops present" (they don't gate on
+  // tops alone, since a raw tops number with no headcount can't produce a
+  // rate). See scoreboard.js / production-utils.js's shared crew-present
+  // condition.
+  if ((lbs1.tops > 0 || lbs1.smalls > 0) && crew1.trimmers + crew1.buckers + crew1.tzero === 0) {
+    validations.push('Line 1: enter Buckers, Trimmers, or T-Zero — crew can\'t be blank if Tops or Smalls are recorded');
+  }
+  if ((lbs2.tops > 0 || lbs2.smalls > 0) && crew2.trimmers + crew2.buckers + crew2.tzero === 0) {
+    validations.push('Line 2: enter Buckers, Trimmers, or T-Zero — crew can\'t be blank if Tops or Smalls are recorded');
+  }
+
   if (validations.length > 0) {
     return errorResponse(validations.join('; '), 'VALIDATION_ERROR', 400);
   }

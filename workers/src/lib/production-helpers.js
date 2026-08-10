@@ -82,6 +82,17 @@ function getTimeSlotMultiplier(timeSlot, multipliers = null) {
 }
 
 /**
+ * Normalize a time slot down to just its end-hour (e.g. "7:04 AM – 8:00 AM"
+ * → "8:00 AM"). Used to detect two rows that represent the same real-world
+ * hour logged under slightly different start times — e.g. a slot re-opened
+ * after a correction.
+ */
+function getEndHour(timeSlot) {
+  const parts = (timeSlot || '').replace(/[-–—]/g, '–').split('–');
+  return parts.length > 1 ? parts[1].trim() : (timeSlot || '').trim();
+}
+
+/**
  * Sort time slots chronologically by their start time.
  * Returns a new sorted array (does not mutate input).
  */
@@ -255,6 +266,7 @@ export {
   TIMEZONE,
   parseSlotTimeToMinutes,
   getTimeSlotMultiplier,
+  getEndHour,
   sortSlotsChronologically,
   buildSortedRows,
   findHourIndices,
