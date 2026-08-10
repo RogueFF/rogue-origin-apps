@@ -1535,16 +1535,24 @@ async function saveEntry(retryData = null) {
   } catch (error) {
     console.error('Save error:', error);
     pendingSaveData = data; // Store for retry
-    showSaveIndicator('error');
+    showSaveIndicator('error', error.message);
   } finally {
     isSaving = false;
   }
 }
 
-function showSaveIndicator(state) {
+function showSaveIndicator(state, message) {
   const indicator = document.getElementById('save-indicator');
   indicator.classList.remove('success', 'error', 'saving');
   indicator.classList.add('visible', state);
+
+  // Surface the specific reason (e.g. a validation message like "crew can't
+  // be blank") instead of the generic "Save failed" text, so a rejected save
+  // is actionable rather than a silent dead end.
+  const errorEl = indicator.querySelector('.save-error');
+  if (errorEl) {
+    errorEl.textContent = (state === 'error' && message) ? message : LABELS[currentLang].saveFailed;
+  }
 }
 
 function hideSaveIndicator() {
