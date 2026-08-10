@@ -38,14 +38,11 @@ export default {
     const cronPattern = (event.cron || '').trim();
     const tokens = cronPattern.split(/\s+/);
     const minute = tokens[0]; // minute field, '0' for once-per-hour daily, '*/5' for every 5 min
-    const hour = tokens[1];   // hour field (UTC), lets us tell apart same-shape daily crons
     const dow = tokens[4];    // day-of-week field, '*' for daily, '1' for Monday, '5' for Friday
     const isFridayCron = dow === '5';
     const isMondayCron = dow === '1';
-    // Daily crons share dow='*' minute='0', so also match the hour to keep them distinct
-    // (14:00 UTC = 6 AM PT complaints sync; 02:00 UTC = 7 PM PT workout nudge).
-    const isDailyCron = dow === '*' && minute === '0' && hour === '14';
-    const isWorkoutCron = dow === '*' && minute === '0' && hour === '2';
+    // isDailyCron requires minute='0' so the */5 ingest cron doesn't accidentally trigger it
+    const isDailyCron = dow === '*' && minute === '0';
     const isFiveMinCron = minute === '*/5';
 
     // Daily 6 AM PT: complaints sync + weather pull
@@ -79,15 +76,6 @@ export default {
         await sendSupersackQAAlert(env);
       } catch (e) {
         console.error(`[Cron] Supersack QA check failed: ${e.message}`);
-      }
-    }
-
-    // Daily 7 PM PT: Bell Log workout accountability nudge
-    if (isWorkoutCron) {
-      try {
-        await sendWorkoutNudge(env);
-      } catch (e) {
-        console.error(`[Cron] Workout nudge failed: ${e.message}`);
       }
     }
 
@@ -283,54 +271,4 @@ async function sendSupersackQAAlert(env) {
     throw new Error(`Telegram API error ${tgRes.status}: ${err.slice(0, 200)}`);
   }
   console.log(`[Cron][Supersack QA] Alerted: ${report.counts.missingWeights} missing weights, ${report.counts.overAttributed} over-attributed`);
-}
-
-/**
- * Bell Log workout nudge — a 7 PM PT accountability ping. The app stores its
- * data locally on Koa's device, so the worker can't yet see whether he trained;
- * this is a plain daily nudge (Sunday swaps to a review prompt). If/when Bell Log
- * syncs sessions to D1, this can skip on days already logged and add real stats.
- */
-const BELLLOG_URL = 'https://rogueff.github.io/rogue-origin-apps/workout/';
-async function sendWorkoutNudge(env) {
-  // At 02:00 UTC it is still the same evening in PT (PDT = UTC-7).
-  const pt = new Date(Date.now() - 7 * 3600 * 1000);
-  const isSunday = pt.getUTCDay() === 0;
-
-  let body;
-  if (isSunday) {
-    body = `*Sunday check-in.* That's a wrap on the week. Open Bell Log and look at your Progress tab — streak, weekly volume, and your best reps per move. Set up for next week and let's keep it rolling.\n\n${BELLLOG_URL}`;
-  } else {
-    const nudges = [
-      "Did you get your session in today? If it was a rest day, ignore me. If not — 20 minutes with the bell, then log it.",
-      "Evening check: the 35 is waiting. Even a quick 10-minute round of rope and swings keeps the streak alive.",
-      "No workout logged yet as far as I know. Grab the bell, knock out a set, tap it in.",
-      "Accountability ping. Future you wants the streak intact — go earn it and log it.",
-    ];
-    const pick = nudges[Math.floor(Math.random() * nudges.length)];
-    body = `*Bell Log.* ${pick}\n\n${BELLLOG_URL}`;
-  }
-
-  const token = env.TELEGRAM_BOT_TOKEN;
-  const chatId = env.TELEGRAM_CHAT_ID;
-  if (!token || !chatId) {
-    console.log('[Cron][Workout nudge] TELEGRAM creds not set — message would be:\n' + body);
-    return;
-  }
-
-  const tgRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: body,
-      parse_mode: 'Markdown',
-      disable_web_page_preview: true,
-    }),
-  });
-  if (!tgRes.ok) {
-    const err = await tgRes.text();
-    throw new Error(`Telegram API error ${tgRes.status}: ${err.slice(0, 200)}`);
-  }
-  console.log(`[Cron][Workout nudge] Sent (${isSunday ? 'Sunday review' : 'daily nudge'})`);
 }
