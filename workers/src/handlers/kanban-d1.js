@@ -5,7 +5,7 @@
 
 import { query, queryOne, insert, update, deleteRows, execute } from '../lib/db.js';
 import { readSheet } from '../lib/sheets.js';
-import { sendEmail } from '../lib/gmail.js';
+import { sendEmail } from '../lib/mailer.js';
 import { successResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
 import { createError } from '../lib/errors.js';
 
