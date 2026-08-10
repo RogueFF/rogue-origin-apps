@@ -5,10 +5,25 @@
 
 import { query, queryOne, insert, update, deleteRows, execute } from '../lib/db.js';
 import { readSheet } from '../lib/sheets.js';
+import { sendEmail } from '../lib/gmail.js';
 import { successResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
 import { createError } from '../lib/errors.js';
 
 const SHEET_NAME = '12.12 Supplies';
+
+/**
+ * Vendors whose reordering runs outside the Friday cart. Scanning one of these
+ * cards raises a reorder request and emails the person who handles that vendor,
+ * instead of queueing the item.
+ *
+ * See docs/plans/2026-08-10-grove-reorder-alert-design.md
+ */
+const REORDER_ALERT_VENDORS = ['Grove'];
+
+/** Pure: does this supplier route to a reorder alert rather than the cart? */
+export function isReorderAlertVendor(supplier) {
+  return REORDER_ALERT_VENDORS.includes(String(supplier || '').trim());
+}
 
 function validateCard(data) {
   if (!data.item || typeof data.item !== 'string') {
@@ -395,8 +410,13 @@ async function getCart(env) {
 /**
  * Add a card to the cart (UPSERT — re-queueing the same card bumps qty).
  * Body: { cardId, qty?, note? }
+ *
+ * Returns a discriminated shape so callers can tell the two lanes apart:
+ *   { mode: 'cart',            cartItem: {...} }
+ *   { mode: 'reorder_request', request:  {...} }
+ * The front-end switches on `mode`; see reorder() in src/pages/kanban.html.
  */
-async function addToCart(body, env) {
+async function addToCart(body, env, ctx) {
   const cardId = Number(body.cardId);
   if (!cardId || cardId < 1) {
     throw createError('VALIDATION_ERROR', 'cardId is required (positive integer)');
@@ -405,9 +425,19 @@ async function addToCart(body, env) {
   const note = body.note ? String(body.note).slice(0, 500) : null;
   const addedBy = body.addedBy ? String(body.addedBy).slice(0, 100) : null;
 
-  // Verify card exists
-  const card = await queryOne(env.DB, 'SELECT id FROM kanban_cards WHERE id = ?', [cardId]);
+  // Verify card exists. Selects supplier + item too: supplier decides the lane,
+  // item goes in the alert email.
+  const card = await queryOne(
+    env.DB,
+    'SELECT id, item, supplier FROM kanban_cards WHERE id = ?',
+    [cardId]
+  );
   if (!card) throw createError('NOT_FOUND', `Card ${cardId} not found`);
+
+  // Vendors handled outside the Friday cart never touch kanban_cart.
+  if (isReorderAlertVendor(card.supplier)) {
+    return raiseReorderRequest(card, env, ctx);
+  }
 
   // UPSERT: if card_id already in cart, bump qty; else insert new row
   await execute(env.DB, `
@@ -426,7 +456,262 @@ async function addToCart(body, env) {
     WHERE c.card_id = ?
   `, [cardId]);
 
-  return successResponse({ success: true, cartItem: cartRow });
+  return successResponse({ success: true, mode: 'cart', cartItem: cartRow });
+}
+
+/**
+ * Raise (or find) the open reorder request for a card, then email the handler.
+ *
+ * Ordering is deliberate: the row is committed BEFORE the send is attempted, so
+ * a failed email leaves a visible, retryable record rather than vanishing. The
+ * send itself runs in ctx.waitUntil so the person scanning isn't held up by
+ * Gmail.
+ */
+async function raiseReorderRequest(card, env, ctx) {
+  const existing = await queryOne(
+    env.DB,
+    `SELECT id, requested_at AS requestedAt, notify_state AS notifyState,
+            close_token AS closeToken
+       FROM kanban_reorder_requests
+      WHERE card_id = ? AND status = 'open'`,
+    [card.id]
+  );
+
+  if (existing) {
+    // The partial unique index would reject a second open row anyway, so we
+    // never create a duplicate. But a re-scan is exactly what someone does when
+    // nothing appeared to happen — and if the first notification failed, that
+    // is precisely the case. Retry the send rather than swallowing the scan,
+    // otherwise a failed alert is a permanent dead end: the row stays open, no
+    // scan can ever re-trigger it, and nobody finds out until the shelf is bare.
+    const retried = existing.notifyState !== 'sent';
+    if (retried) {
+      const job = notifyReorderHandler(env, card, existing.id, existing.closeToken);
+      if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(job);
+      else await job;
+    }
+
+    return successResponse({
+      success: true,
+      mode: 'reorder_request',
+      request: {
+        id: existing.id,
+        cardId: card.id,
+        item: card.item,
+        status: 'open',
+        outcome: 'already_open',
+        retried,
+        requestedAt: existing.requestedAt,
+      },
+    });
+  }
+
+  const closeToken = crypto.randomUUID().replace(/-/g, '');
+  const id = await insert(env.DB, 'kanban_reorder_requests', {
+    card_id: card.id,
+    close_token: closeToken,
+  });
+
+  const row = await queryOne(
+    env.DB,
+    'SELECT requested_at AS requestedAt FROM kanban_reorder_requests WHERE id = ?',
+    [id]
+  );
+
+  if (ctx && typeof ctx.waitUntil === 'function') {
+    ctx.waitUntil(notifyReorderHandler(env, card, id, closeToken));
+  } else {
+    // No ctx (direct call / test): don't drop the notification silently.
+    await notifyReorderHandler(env, card, id, closeToken);
+  }
+
+  return successResponse({
+    success: true,
+    mode: 'reorder_request',
+    request: {
+      id,
+      cardId: card.id,
+      item: card.item,
+      status: 'open',
+      outcome: 'created',
+      requestedAt: row?.requestedAt || null,
+    },
+  });
+}
+
+/**
+ * Send the alert and record the outcome on the request row. Never throws — a
+ * send failure must land in notify_state, not bubble out of ctx.waitUntil.
+ */
+async function notifyReorderHandler(env, card, requestId, closeToken) {
+  const confirmUrl =
+    `${env.PUBLIC_API_BASE || 'https://rogue-origin-api.roguefamilyfarms.workers.dev'}` +
+    `/api/kanban?action=reorderRequest&token=${closeToken}`;
+
+  try {
+    await sendEmail(env, {
+      to: env.DAMON_EMAIL,
+      cc: env.REORDER_CC || undefined,
+      subject: `Reorder needed: ${card.item}`,
+      text:
+        `${card.item} (${card.supplier}) was flagged for reorder in the supply closet.\n\n` +
+        `Once you've placed the order, mark it done here:\n${confirmUrl}\n\n` +
+        `Until then, re-scanning this card won't send another email.\n\n` +
+        `— Rogue Origin supply kanban`,
+    });
+
+    await update(
+      env.DB,
+      'kanban_reorder_requests',
+      { notify_state: 'sent', notify_error: null },
+      'id = ?',
+      [requestId]
+    );
+  } catch (e) {
+    console.error('[kanban][reorder-alert]', e);
+    await update(
+      env.DB,
+      'kanban_reorder_requests',
+      { notify_state: 'failed', notify_error: String(e.message || e).slice(0, 500) },
+      'id = ?',
+      [requestId]
+    ).catch(() => {});
+  }
+}
+
+/**
+ * GET ?action=reorderRequest&token=<t>
+ *
+ * Renders a confirmation page and changes NOTHING. Gmail and Outlook prefetch
+ * and security-scan links on delivery, so a state-changing GET here would close
+ * requests nobody acted on. The button below POSTs.
+ */
+async function showReorderRequest(request, env) {
+  const { token } = getQueryParams(request);
+  const row = token
+    ? await queryOne(
+        env.DB,
+        `SELECT r.id, r.status, r.requested_at AS requestedAt, r.closed_at AS closedAt,
+                k.item, k.supplier
+           FROM kanban_reorder_requests r
+           JOIN kanban_cards k ON k.id = r.card_id
+          WHERE r.close_token = ?`,
+        [token]
+      )
+    : null;
+
+  return new Response(reorderConfirmPage(row, token), {
+    headers: { 'Content-Type': 'text/html;charset=utf-8' },
+  });
+}
+
+/**
+ * POST ?action=closeReorderRequest  { token, closedBy? }
+ * Idempotent: closing an already-closed request is a no-op success.
+ */
+async function closeReorderRequest(body, env) {
+  const token = body.token ? String(body.token) : '';
+  if (!token) throw createError('VALIDATION_ERROR', 'token is required');
+
+  const row = await queryOne(
+    env.DB,
+    'SELECT id, status FROM kanban_reorder_requests WHERE close_token = ?',
+    [token]
+  );
+  if (!row) throw createError('NOT_FOUND', 'Reorder request not found');
+
+  if (row.status === 'ordered') {
+    return successResponse({ success: true, alreadyClosed: true });
+  }
+
+  await update(
+    env.DB,
+    'kanban_reorder_requests',
+    {
+      status: 'ordered',
+      closed_at: new Date().toISOString(),
+      closed_by: body.closedBy ? String(body.closedBy).slice(0, 100) : 'email-link',
+    },
+    'id = ?',
+    [row.id]
+  );
+
+  return successResponse({ success: true, alreadyClosed: false });
+}
+
+/** List reorder requests. ?status=open|ordered|all (default open). */
+async function getReorderRequests(request, env) {
+  const { status = 'open' } = getQueryParams(request);
+  const where = status === 'all' ? '' : 'WHERE r.status = ?';
+  const params = status === 'all' ? [] : [status];
+
+  const rows = await query(
+    env.DB,
+    `SELECT r.id, r.card_id AS cardId, r.requested_at AS requestedAt, r.status,
+            r.notify_state AS notifyState, r.notify_error AS notifyError,
+            r.closed_at AS closedAt, r.closed_by AS closedBy,
+            k.item, k.supplier
+       FROM kanban_reorder_requests r
+       JOIN kanban_cards k ON k.id = r.card_id
+       ${where}
+      ORDER BY r.requested_at DESC`,
+    params
+  );
+
+  return successResponse({ success: true, requests: rows, count: rows.length });
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  })[c]);
+}
+
+/** Minimal self-contained confirmation page for the email link. */
+function reorderConfirmPage(row, token) {
+  const shell = (inner) =>
+    `<!DOCTYPE html><html><head><meta charset="utf-8">` +
+    `<meta name="viewport" content="width=device-width,initial-scale=1">` +
+    `<title>Reorder request</title><style>` +
+    `body{font-family:system-ui,sans-serif;background:#faf8f5;color:#1f2a20;` +
+    `display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:24px}` +
+    `.card{background:#fff;border:1px solid #e2ddd3;border-radius:14px;padding:28px;max-width:420px;width:100%;` +
+    `box-shadow:0 1px 3px rgba(0,0,0,.06)}h1{font-size:20px;margin:0 0 6px}` +
+    `p{color:#5d6b5f;line-height:1.5;margin:0 0 18px}` +
+    `button{background:#668971;color:#fff;border:0;border-radius:8px;padding:13px 22px;` +
+    `font-size:16px;font-weight:600;cursor:pointer;width:100%}` +
+    `button:disabled{opacity:.6;cursor:default}.ok{color:#668971;font-weight:600}` +
+    `</style></head><body><div class="card">${inner}</div></body></html>`;
+
+  if (!row) {
+    return shell(
+      `<h1>Link not recognized</h1><p>This reorder link is invalid or has been removed.</p>`
+    );
+  }
+
+  if (row.status === 'ordered') {
+    return shell(
+      `<h1>${escapeHtml(row.item)}</h1>` +
+        `<p class="ok">Already marked as ordered${row.closedAt ? ` on ${escapeHtml(String(row.closedAt).slice(0, 10))}` : ''}.</p>`
+    );
+  }
+
+  return shell(
+    `<h1>${escapeHtml(row.item)}</h1>` +
+      `<p>${escapeHtml(row.supplier)} &middot; requested ${escapeHtml(String(row.requestedAt || '').slice(0, 10))}<br>` +
+      `Mark this as ordered?</p>` +
+      `<button id="b">Yes — I've ordered it</button>` +
+      `<script>document.getElementById('b').onclick=function(){` +
+      `var b=this;b.disabled=true;b.textContent='Saving…';` +
+      `fetch('?action=closeReorderRequest',{method:'POST',` +
+      `headers:{'Content-Type':'text/plain;charset=utf-8'},` +
+      `body:JSON.stringify({token:${JSON.stringify(token)}})})` +
+      `.then(function(r){return r.json()}).then(function(r){` +
+      `b.outerHTML=r.success?'<p class="ok">Marked as ordered. Thanks!</p>':` +
+      `'<p>Something went wrong — try again.</p>'})` +
+      `.catch(function(){b.disabled=false;b.textContent="Yes — I've ordered it"})};` +
+      `<\/script>`
+  );
 }
 
 /**
@@ -656,7 +941,7 @@ async function getOrderHistory(request, env) {
   return successResponse({ success: true, orders, count: orders.length });
 }
 
-export async function handleKanbanD1(request, env) {
+export async function handleKanbanD1(request, env, ctx) {
   const action = getAction(request);
   const body = request.method === 'POST' ? await parseBody(request) : {};
 
@@ -670,13 +955,17 @@ export async function handleKanbanD1(request, env) {
     migrate: () => migrateFromSheets(env),
     // Phase 2: Friday cart + order history
     getCart: () => getCart(env),
-    addToCart: () => addToCart(body, env),
+    addToCart: () => addToCart(body, env, ctx),
     updateCartQty: () => updateCartQty(body, env),
     removeFromCart: () => removeFromCart(body, env),
     markOrdered: () => markOrdered(body, env),
     getOrderHistory: () => getOrderHistory(request, env),
     getCardAnalytics: () => getCardAnalytics(request, env),
     getAllAnalytics: () => getAllAnalytics(env),
+    // Vendor-routed reorder alerts (Grove) — see design doc 2026-08-10
+    reorderRequest: () => showReorderRequest(request, env),
+    closeReorderRequest: () => closeReorderRequest(body, env),
+    getReorderRequests: () => getReorderRequests(request, env),
   };
 
   if (!action || !actions[action]) {
