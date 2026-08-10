@@ -1242,15 +1242,42 @@ function reorder(id) {
   })
     .then(function(r) { return r.json(); })
     .then(function(r) {
-      if (r.success) {
-        var label = qty + '× ' + (c.item || 'item');
-        toast('Added ' + label + ' to Friday cart (now ' + r.cartItem.qty + ')', 'ok');
-        refreshCartBadge();
-      } else {
+      if (!r.success) {
         toast(r.error || 'Failed to add to cart', 'err');
+        return;
       }
+      // Two lanes come back from addToCart. Vendors handled outside the Friday
+      // cart (Grove) return mode:'reorder_request' with no cartItem — switch on
+      // mode rather than assuming the cart shape.
+      if (r.mode === 'reorder_request') {
+        var req = r.request || {};
+        var when = fmtReqDate(req.requestedAt);
+        if (req.outcome === 'already_open') {
+          // Deliberately doesn't claim delivery — the send is fire-and-forget
+          // and its outcome lands in notify_state, not in this response.
+          toast(req.retried
+            ? 'Already requested' + (when ? ' ' + when : '') + ' — retrying the alert to Damon'
+            : 'Already requested' + (when ? ' ' + when : '') + ' — reorder still open', 'ok');
+        } else {
+          toast('Reorder requested — Damon is being notified', 'ok');
+        }
+        return; // nothing entered the cart, so no badge refresh
+      }
+      var label = qty + '× ' + (c.item || 'item');
+      var nowQty = r.cartItem ? r.cartItem.qty : qty;
+      toast('Added ' + label + ' to Friday cart (now ' + nowQty + ')', 'ok');
+      refreshCartBadge();
     })
     .catch(function(e) { toast('Error: ' + e.message, 'err'); });
+}
+
+// "2026-08-10 17:04:22" (SQLite datetime) -> "Aug 10". Falls back to '' so a
+// missing/odd timestamp degrades to "Already requested — ..." rather than NaN.
+function fmtReqDate(ts) {
+  if (!ts) return '';
+  var d = new Date(String(ts).replace(' ', 'T') + (String(ts).indexOf('Z') < 0 ? 'Z' : ''));
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 // QR deep-link handler. A bin/stack label QR encodes
