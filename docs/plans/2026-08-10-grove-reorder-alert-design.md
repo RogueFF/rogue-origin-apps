@@ -156,19 +156,54 @@ outcome lands in `notify_state`, not in the response the scanner sees.
 
 ## 7. Prerequisites (blocking)
 
-None of this is testable end-to-end until these are done. The code ships
-inert — with delegation un-granted, sends fail and rows land in
-`notify_state = 'failed'` rather than throwing.
+The code ships inert: with no transport configured, sends throw and rows land
+in `notify_state = 'failed'` rather than disappearing.
 
-1. **Domain-wide delegation.** A Workspace **super admin** grants the service
-   account's client ID the `https://www.googleapis.com/auth/gmail.send` scope
-   at admin.google.com → Security → API Controls → Domain-wide Delegation.
-2. **`GMAIL_SEND_AS`** — a real mailbox in `rogueorigin.com` to impersonate
-   (`sub:`). Either Koa's or a new `noreply@rogueorigin.com`.
-3. **`DAMON_EMAIL`** and **`REORDER_CC`** — set via `wrangler secret put`.
-   Not in the repo, not in the wiki.
+**Chosen transport: the Apps Script relay.** Setup lives in
+`apps-script/mail-relay/README.md`. Summary:
 
-## 8. Why a new `gmail.js` rather than reusing `sheets.js`
+1. Create the Apps Script project as the account the mail should come *from*,
+   set a `RELAY_SECRET` script property, deploy as a web app with
+   **Execute as: Me** / **Who has access: Anyone**.
+2. Set `MAIL_RELAY_URL`, `MAIL_RELAY_SECRET`, `DAMON_EMAIL`, and optionally
+   `REORDER_CC` via `wrangler secret put`. Not in the repo, not in the wiki.
+
+Setting `MAIL_RELAY_URL` is what selects the transport, so no redeploy is
+needed to switch it on.
+
+**Why not domain-wide delegation** (the `lib/gmail.js` path, still wired):
+every existing Google integration in this repo reads and writes Sheets that are
+**shared directly with the service account** — which is why no `createJWT` in
+the codebase carries a `sub` claim. A service account holds file-sharing
+relationships but **has no mailbox**, so sending as a person requires
+impersonation, and impersonation requires a super-admin domain-wide delegation
+grant. Existing credentials cannot confer it. Apps Script sidesteps the whole
+question by running as the script owner.
+
+To switch to delegation later: enable the Gmail API in the service account's
+Cloud project, grant its numeric client ID the
+`https://www.googleapis.com/auth/gmail.send` scope at admin.google.com →
+Security → Access and data control → API controls → Domain-wide delegation,
+then set `GMAIL_SEND_AS` and `MAIL_TRANSPORT=gmail`. Note `gmail.send` is a
+*sensitive* scope, not a *restricted* one — the broader `https://mail.google.com/`
+scope would require a CASA Tier 2 assessment.
+
+## 8. Mail transports
+
+`lib/mailer.js` is the single entry point and picks a transport from config:
+
+| Transport | Sends as | Needs |
+|---|---|---|
+| `relay` (`lib/mail-relay.js` → Apps Script) | the script owner's address | nothing beyond deploying the script |
+| `gmail` (`lib/gmail.js`) | any mailbox in the domain | super-admin domain-wide delegation |
+
+`MAIL_TRANSPORT` forces one explicitly; otherwise `MAIL_RELAY_URL` wins over
+`GMAIL_SEND_AS`, so a leftover `GMAIL_SEND_AS` can't silently route through a
+transport nobody authorised. With neither set, `sendEmail` **throws** — a
+silent no-op would let an alert vanish without reaching `notify_state`, which
+is the exact failure this feature exists to prevent.
+
+### Why a new `gmail.js` rather than reusing `sheets.js`
 
 The worker already signs Google service-account JWTs with RS256 in production
 (`lib/sheets.js`, and a near-duplicate in `handlers/orders/shared.js`). But
