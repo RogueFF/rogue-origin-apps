@@ -429,7 +429,9 @@ async function addToCart(body, env, ctx) {
   // item goes in the alert email.
   const card = await queryOne(
     env.DB,
-    'SELECT id, item, supplier FROM kanban_cards WHERE id = ?',
+    // order_qty and crumbtrail ride along so the alert can tell the handler how
+    // much to order and where the card lives, without a second lookup.
+    'SELECT id, item, supplier, order_qty, crumbtrail FROM kanban_cards WHERE id = ?',
     [cardId]
   );
   if (!card) throw createError('NOT_FOUND', `Card ${cardId} not found`);
@@ -540,6 +542,30 @@ async function raiseReorderRequest(card, env, ctx) {
 }
 
 /**
+ * Body of the reorder alert. Pure — unit-tested.
+ *
+ * Order quantity leads, because it is the one thing the handler needs in order
+ * to act; the item name alone means looking the amount up somewhere else.
+ * Fields the card happens to be missing are omitted rather than printed empty.
+ */
+export function buildReorderEmailBody(card, confirmUrl) {
+  const facts = [
+    ['Item', card.item],
+    ['Order', card.order_qty],
+    ['Location', card.crumbtrail],
+    ['Supplier', card.supplier],
+  ].filter(([, v]) => v);
+
+  return (
+    `${card.item} was flagged for reorder in the supply closet.\n\n` +
+    facts.map(([k, v]) => `${k}: ${v}`).join('\n') +
+    `\n\nOnce you've placed the order, mark it done here:\n${confirmUrl}\n\n` +
+    `Until then, re-scanning this card won't send another email.\n\n` +
+    `— Rogue Origin supply kanban`
+  );
+}
+
+/**
  * Send the alert and record the outcome on the request row. Never throws — a
  * send failure must land in notify_state, not bubble out of ctx.waitUntil.
  */
@@ -553,11 +579,7 @@ async function notifyReorderHandler(env, card, requestId, closeToken) {
       to: env.DAMON_EMAIL,
       cc: env.REORDER_CC || undefined,
       subject: `Reorder needed: ${card.item}`,
-      text:
-        `${card.item} (${card.supplier}) was flagged for reorder in the supply closet.\n\n` +
-        `Once you've placed the order, mark it done here:\n${confirmUrl}\n\n` +
-        `Until then, re-scanning this card won't send another email.\n\n` +
-        `— Rogue Origin supply kanban`,
+      text: buildReorderEmailBody(card, confirmUrl),
     });
 
     await update(
