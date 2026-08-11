@@ -1,7 +1,8 @@
 # Grove Reorder Alert — Design
 
 **Date:** 2026-08-10
-**Status:** Designed; implemented behind an un-granted prerequisite (see §7)
+**Status:** **Live** as of 2026-08-11. Apps Script relay deployed, all four
+worker secrets set, first successful send verified (`notify_state = 'sent'`).
 
 Scanning the QR on a Grove supply card should alert Damon to reorder, instead of
 adding the item to the Friday cart. Grove reordering runs on its own track and
