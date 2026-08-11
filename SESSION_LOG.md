@@ -6,6 +6,32 @@ History of significant changes to this repo, written by `/close`. Companion to t
 
 ---
 
+## 2026-08-11 — Route Grove kanban scans to a reorder alert instead of the Friday cart
+
+Grove supplies are reordered by Damon on a separate track, so a Grove QR scan now
+raises a logged reorder request and emails him, never touching `kanban_cart`.
+
+- `workers/src/handlers/kanban-d1.js` — Grove branch in `addToCart` (routes on
+  `supplier === 'Grove'`), discriminated `{mode: 'cart' | 'reorder_request'}`
+  response, GET-renders / POST-commits close endpoints, alert body with order
+  quantity + location
+- `workers/migrations/0013-kanban-reorder-requests.sql` — request table; a
+  partial unique index (`WHERE status='open'`) is the dedup rule, and
+  `notify_state` keeps a failed send visible and retryable. Applied to prod D1.
+- `workers/src/lib/mailer.js` + `mail-relay.js` + `gmail.js` — one entry point,
+  two transports. The Apps Script relay is live; the Gmail API path is wired but
+  needs a super-admin domain-wide delegation grant (the service account has
+  credentials but no mailbox).
+- `apps-script/mail-relay/Code.gs` + `README.md` — the relay, deployed
+- `src/pages/kanban.html` — `reorder()` switches on `mode`; it previously
+  dereferenced `r.cartItem.qty` unguarded, which would have thrown for Grove
+  even when the email sent fine
+- `tests/mail-transport.test.mjs`, `tests/reorder-email-body.test.mjs` — 20 new
+  tests (262 total)
+- Wiki context: wiki/seasons/2026/journal/2026-08-11.md
+
+---
+
 ## 2026-06-09 — Build the supply-reorder kanban (Min/Max cards + cart logic)
 
 Lean supply-reorder kanban for the Uline boxes + consumables. 4 feat commits (`4ee67df4..fd2c98bc`); SW cache `v3.20→v3.24`. Card data (Par/Min levels, crumbtrail fixes) was set in D1 via the API, not in this repo.
