@@ -4,16 +4,21 @@
  *
  * WHY THIS EXISTS
  * ---------------
- * Pages load a module entry with a hand-bumped cache buster:
+ * Pages used to load a module entry with a hand-bumped cache buster:
  *
  *     <script type="module" src="../js/modules/index.js?v=6"></script>
  *
- * That query busts the ENTRY ONLY. Every module it imports uses a bare
- * relative specifier (`import { x } from './widgets.js'`), which carries no
- * version at all — so a browser is free to pair a freshly fetched entry with
+ * That query busted the ENTRY ONLY. Every module it imports uses a bare
+ * relative specifier (`import { x } from './widgets.js'`), which carried no
+ * version at all — so a browser was free to pair a freshly fetched entry with
  * a sibling it cached ten minutes ago. When the new entry imports a symbol the
  * cached sibling does not export yet, the named import fails, and a failed
  * named import takes down the ENTIRE module graph. The page renders nothing.
+ *
+ * Worse, several pages (orders.html, barcode.html) had module entries with no
+ * cache buster at all, so those entries were pinned until the HTTP cache
+ * expired — the hand-bump script only ever incremented a ?v= that was already
+ * there, and it could only see files named directly in the HTML.
  *
  * That is not hypothetical: it took the production dashboard down on
  * 2026-08-12 (commit 28af5986, "does not provide an export named
@@ -23,14 +28,25 @@
  *
  * WHAT IT DOES
  * ------------
- * Walks each page's module graph, hashes every file by content, and writes an
- * import map into the page that redirects each specifier to a hashed URL:
+ * Walks each page's module graph, hashes every file by content, and covers
+ * both halves of the graph:
  *
- *     "../js/modules/widgets.js" -> "../js/modules/widgets.js?h=9f3c1a20"
+ *   imported modules  an import map redirects each specifier to a hashed URL
+ *                     "../js/modules/widgets.js"
+ *                       -> "../js/modules/widgets.js?h=9f3c1a20"
+ *
+ *   entry tags        rewritten in place, because an import map governs
+ *                     specifiers inside modules and never a src attribute
+ *                     <script type="module" src="../js/modules/index.js?h=761eddc0">
  *
  * A deploy that changes a module changes its hash, so the URL is one the
  * browser has never seen and cannot answer from cache. Files that did not
  * change keep their URL and stay cached.
+ *
+ * Module entries are therefore on ?h= and no longer on ?v=. Classic <script>
+ * and <link> tags keep ?v=N and remain the pre-commit hook's job — the hook
+ * can see those because they are named directly in the HTML, which is exactly
+ * what it cannot do for an imported module.
  *
  * WHY IMPORT MAPS RATHER THAN HASHED FILENAMES
  * --------------------------------------------
@@ -180,8 +196,18 @@ function buildImportMap(pageFile) {
     const bare = match[1].split('?')[0].split('#')[0];
     if (!isLocalSpecifier(bare)) continue;
     const abs = resolve(pageDir, bare);
-    if (existsSync(abs)) entries.push(abs);
-    else warnings.push(`  missing entry: ${match[1]}  (in ${relative(REPO_ROOT, pageFile)})`);
+    if (existsSync(abs)) {
+      entries.push(abs);
+    } else {
+      // Fatal, not a warning. A module src pointing nowhere is a broken page,
+      // and treating it as a warning would skip the page silently — leaving its
+      // whole graph unhashed while the run still reports success.
+      console.error(
+        `\nstamp-modules: ${relative(REPO_ROOT, pageFile)} references a module entry ` +
+        `that does not exist: ${match[1]}`
+      );
+      process.exit(1);
+    }
   }
 
   if (!entries.length) return { html, map: null, moduleCount: 0 };
@@ -195,7 +221,33 @@ function buildImportMap(pageFile) {
     imports[key] = `${key}?h=${contentHash(file)}`;
   }
 
-  return { html, map: { imports }, moduleCount: graph.size };
+  return { html, map: { imports }, moduleCount: graph.size, pageDir };
+}
+
+/**
+ * Stamp the module ENTRY tags with their own content hash.
+ *
+ * An import map cannot help here — it governs specifiers inside modules, never
+ * a src attribute — so the entry has to be rewritten in place. Several pages
+ * (orders.html, barcode.html) carried module entries with no cache buster at
+ * all, which left them pinned until the HTTP cache expired.
+ *
+ * This REPLACES any existing ?v=N on module entries: one file, one scheme.
+ * Classic <script> and <link> tags keep ?v=N and stay the pre-commit hook's
+ * job — the hook can see them because they are named directly in the HTML,
+ * which is exactly what it cannot do for an imported module.
+ */
+function stampEntries(html, pageDir) {
+  return html.replace(
+    /(<script[^>]*\btype=["']module["'][^>]*\bsrc=["'])([^"']+)(["'])/g,
+    (whole, before, src, after) => {
+      const bare = src.split('?')[0].split('#')[0];
+      if (!isLocalSpecifier(bare)) return whole;
+      const abs = resolve(pageDir, bare);
+      if (!existsSync(abs)) return whole;
+      return `${before}${bare}?h=${contentHash(abs)}${after}`;
+    }
+  );
 }
 
 /** Inject or replace the generated block, immediately above the first module script. */
@@ -241,10 +293,10 @@ let stamped = 0;
 const stale = [];
 
 for (const page of pages) {
-  const { html, map, moduleCount } = buildImportMap(page);
+  const { html, map, moduleCount, pageDir } = buildImportMap(page);
   if (!map) continue;
 
-  const next = applyImportMap(html, map);
+  const next = stampEntries(applyImportMap(html, map), pageDir);
   stamped++;
 
   // A page must end up with exactly one import map. More than one is not
@@ -255,6 +307,22 @@ for (const page of pages) {
     console.error(
       `\nstamp-modules: ${relative(REPO_ROOT, page)} would have ${mapCount} import maps ` +
       '(expected exactly 1). Refusing to write.'
+    );
+    process.exit(1);
+  }
+
+  // Every local module entry must carry a hash. An unstamped entry is pinned
+  // in the browser cache until it expires, which is how orders.html and
+  // barcode.html sat un-bustable for however long they had been that way.
+  const unstamped = [...next.matchAll(
+    /<script[^>]*\btype=["']module["'][^>]*\bsrc=["']([^"']+)["']/g
+  )]
+    .map((m) => m[1])
+    .filter((src) => isLocalSpecifier(src.split('?')[0]) && !/\?h=[0-9a-f]+/.test(src));
+  if (unstamped.length) {
+    console.error(
+      `\nstamp-modules: ${relative(REPO_ROOT, page)} has unstamped module entries: ` +
+      `${unstamped.join(', ')}. Refusing to write.`
     );
     process.exit(1);
   }
