@@ -455,15 +455,36 @@ export function updateKPIValues(totals, prevTotals, targets, rolling, compareMod
   const r = rolling || {};
   const tgt = targets || {};
 
-  setKPI('totalTops', t.totalTops, p?.totalTops, 'lbs', false, tgt.totalTops, r.totalTops);
-  setKPI('totalSmalls', t.totalSmalls, p?.totalSmalls, 'lbs', false, tgt.totalSmalls, r.totalSmalls);
+  // Multi-day ranges carry a rolled-up totals object. Say so on the cards, and
+  // relabel the headcount card — "current trimmers" means nothing over a range.
+  const isAggregate = !!t.isAggregate;
+  const crewLabelEl = document.querySelector('.kpi-card[data-kpi="crew"] .kpi-label');
+  if (crewLabelEl) {
+    crewLabelEl.textContent = isAggregate ? 'Avg Daily Crew' : 'Current Trimmers';
+  }
+  kpiDefinitions.forEach(kpi => {
+    const subEl = document.getElementById(`kpiSub_${kpi.id}`);
+    if (subEl) subEl.textContent = isAggregate ? `${t.days} days` : '';
+  });
+
+  // `targets` and `rollingAverage` are per-day and do not scale with the
+  // requested range, so cumulative cards need them multiplied by the day count
+  // before the ahead/behind styling means anything. Rate and cost/lb cards are
+  // already per-unit and compare directly.
+  const perDay = (value) => {
+    if (typeof value !== 'number' || !isFinite(value)) return null;
+    return isAggregate ? value * t.days : value;
+  };
+
+  setKPI('totalTops', t.totalTops, p?.totalTops, 'lbs', false, perDay(tgt.totalTops), perDay(r.totalTops));
+  setKPI('totalSmalls', t.totalSmalls, p?.totalSmalls, 'lbs', false, perDay(tgt.totalSmalls), perDay(r.totalSmalls));
   setKPI('avgRate', t.avgRate, p?.avgRate, 'rate', false, tgt.avgRate, r.avgRate);
   setKPI('crew', t.trimmers, p?.trimmers, 'num');
-  setKPI('operatorHours', t.operatorHours, p?.operatorHours, 'hrs', false, null, r.operatorHours);
+  setKPI('operatorHours', t.operatorHours, p?.operatorHours, 'hrs', false, null, perDay(r.operatorHours));
   setKPI('costPerLb', t.costPerLb, p?.costPerLb, 'dollar', true, tgt.costPerLb, r.costPerLb);
   setKPI('topsCostPerLb', t.topsCostPerLb, p?.topsCostPerLb, 'dollar', true, null, r.topsCostPerLb);
   setKPI('smallsCostPerLb', t.smallsCostPerLb, p?.smallsCostPerLb, 'dollar', true, null, r.smallsCostPerLb);
-  setKPI('totalLbs', t.totalLbs, p?.totalLbs, 'lbs', false, null, r.totalLbs);
+  setKPI('totalLbs', t.totalLbs, p?.totalLbs, 'lbs', false, null, perDay(r.totalLbs));
   setKPI('maxRate', t.maxRate, p?.maxRate, 'rate');
   setKPI('trimmerHours', t.trimmerHours, p?.trimmerHours, 'hrs');
   setKPI('laborCost', t.laborCost, p?.laborCost, 'dollar', true);
