@@ -1,7 +1,7 @@
 ﻿// Service Worker for Rogue Origin Operations Hub
-// Version 3.33 - Content-hashed module graph via generated import maps
+// Version 3.34 - Module entry tags content-hashed too (?h= replaces ?v= there)
 
-const CACHE_VERSION = 'ro-ops-v3.33';
+const CACHE_VERSION = 'ro-ops-v3.34';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
