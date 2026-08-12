@@ -1,7 +1,7 @@
 ﻿// Service Worker for Rogue Origin Operations Hub
-// Version 3.29 - Fix cartQtyFor: sticker cards (orderQty=orderWhen) now add correct qty not 1
+// Version 3.30 - KPI row follows date range; scoreboard ahead/behind deltas
 
-const CACHE_VERSION = 'ro-ops-v3.29';
+const CACHE_VERSION = 'ro-ops-v3.30';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
