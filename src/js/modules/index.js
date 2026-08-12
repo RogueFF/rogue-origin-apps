@@ -87,6 +87,7 @@ import {
   safeGetEl,
   safeGet,
   safeNumber,
+  getPeriodTotals,
   safeGetChartContext,
   getProductiveMinutesElapsed,
   getProductiveHoursElapsed,
@@ -345,10 +346,14 @@ function renderAll() {
   const compareMode = getCompareMode();
   const compareData = getCompareData();
 
-  if (data.today) {
+  // KPI cards follow the selected date range, not just today. The payload's
+  // `today` block stays today-scoped no matter what range was requested, so
+  // multi-day ranges roll up from `daily`.
+  const periodTotals = getPeriodTotals(data);
+  if (periodTotals) {
     updateKPIValues(
-      data.today,
-      compareMode && compareData ? compareData.today : null,
+      periodTotals,
+      compareMode && compareData ? getPeriodTotals(compareData) : null,
       data.targets || null,
       data.rollingAverage || null,
       !!compareMode
@@ -1351,6 +1356,7 @@ export {
   safeGetEl,
   safeGet,
   safeNumber,
+  getPeriodTotals,
   safeGetChartContext,
   getProductiveMinutesElapsed,
   getProductiveHoursElapsed,

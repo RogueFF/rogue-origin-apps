@@ -87,6 +87,73 @@ export function safeNumber(value, decimals, defaultValue) {
   return decimals !== undefined ? value.toFixed(decimals) : value;
 }
 
+/**
+ * Roll a range of daily rows up into a single totals object shaped like `today`.
+ *
+ * Sums are plain sums. Every derived metric is recomputed from the summed
+ * numerator and denominator — averaging the per-day `avgRate` / `costPerLb`
+ * values gives the wrong answer whenever days differ in size.
+ *
+ * @param {Array<Object>} daily - Daily rows from the dashboard payload
+ * @returns {Object|null} Totals object, or null if there is nothing to roll up
+ */
+export function aggregateDailyTotals(daily) {
+  if (!Array.isArray(daily) || daily.length === 0) return null;
+
+  const num = (v) => (typeof v === 'number' && isFinite(v) ? v : 0);
+  const sum = (key) => daily.reduce((acc, d) => acc + num(d[key]), 0);
+  // Labor dollars attributed to one output stream, recovered from that
+  // stream's cost/lb so the blend can be re-derived across days.
+  const dollars = (rateKey, lbsKey) =>
+    daily.reduce((acc, d) => acc + num(d[rateKey]) * num(d[lbsKey]), 0);
+
+  const totalTops = sum('totalTops');
+  const totalSmalls = sum('totalSmalls');
+  const totalLbs = sum('totalLbs');
+  const trimmerHours = sum('trimmerHours');
+  const operatorHours = sum('operatorHours');
+  const laborCost = sum('laborCost');
+
+  const div = (n, d) => (d > 0 ? n / d : null);
+  const dayRates = daily.map((d) => num(d.avgRate)).filter((r) => r > 0);
+
+  return {
+    isAggregate: true,
+    days: daily.length,
+    totalTops,
+    totalSmalls,
+    totalLbs,
+    trimmerHours,
+    operatorHours,
+    laborCost,
+    avgRate: div(totalTops, trimmerHours),
+    costPerLb: div(laborCost, totalLbs),
+    topsCostPerLb: div(dollars('topsCostPerLb', 'totalTops'), totalTops),
+    smallsCostPerLb: div(dollars('smallsCostPerLb', 'totalSmalls'), totalSmalls),
+    maxRate: dayRates.length ? Math.max(...dayRates) : null,
+    // "Current trimmers" has no meaning over a range — carry average daily
+    // headcount instead; the KPI label swaps to match.
+    trimmers: div(sum('totalCrew'), daily.length)
+  };
+}
+
+/**
+ * Pick the totals object matching the selected date range.
+ *
+ * The payload's `today` block is always today-scoped regardless of the range
+ * requested, so anything spanning more than one day has to be rolled up from
+ * `daily`. For a completed single day the two are identical.
+ *
+ * @param {Object} data - Dashboard payload
+ * @returns {Object|null} Totals for the selected range
+ */
+export function getPeriodTotals(data) {
+  if (!data) return null;
+  const daily = data.daily;
+  if (Array.isArray(daily) && daily.length > 1) return aggregateDailyTotals(daily);
+  return data.today || null;
+}
+
 // ==================== TIME CALCULATIONS ====================
 
 /**

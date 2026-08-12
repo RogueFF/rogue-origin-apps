@@ -32,8 +32,11 @@
       const currentLang = (window.ScoreboardState && window.ScoreboardState.currentLang) || 'en';
       const t = typeof window.t === 'function' ? window.t : function(key) { return key; };
 
-      // Apply shift adjustment if exists (use raw API target, don't compound)
-      if (window.ScoreboardState && window.ScoreboardState.shiftAdjustment) {
+      // Apply shift adjustment if exists (use raw API target, don't compound).
+      // Today's late-start adjustment must not follow us into a historical day —
+      // both the scale factor and the cached raw target belong to today only.
+      const viewingHistorical = !!(window.ScoreboardState && window.ScoreboardState.historicalDate);
+      if (window.ScoreboardState && window.ScoreboardState.shiftAdjustment && !viewingHistorical) {
         var adjustment = window.ScoreboardState.shiftAdjustment;
         data.dailyGoal = adjustment.adjustedDailyGoal || data.dailyGoal;
         // Don't override effectiveHours — API value tracks actual hours worked
@@ -176,28 +179,26 @@
       var _el = safeGetEl('dailyActual'); if (_el) _el.textContent = todayLbs > 0 ? todayLbs.toFixed(1) : '—';
       var _el = safeGetEl('dailyTarget'); if (_el) _el.textContent = todayTarget > 0 ? todayTarget.toFixed(1) : '—';
 
-      const todayDelta = data.todayDelta || 0;
+      // The API does not send todayDelta. Falling back to 0 painted a neutral
+      // "= 0.0 lbs" — reading as dead-on target — whenever the crew was ahead
+      // or behind. Derive it from the same two numbers shown above it.
+      const todayDelta = (typeof data.todayDelta === 'number' && isFinite(data.todayDelta))
+        ? data.todayDelta
+        : (todayLbs - todayTarget);
       const dde = safeGetEl('dailyDelta');
       if (dde && todayTarget > 0) {
-        // When shift ended with zero delta, show actual final result instead of "= 0.0"
-        const effectiveDelta = (shiftEnded && Math.abs(todayDelta) < 0.05) ? (todayLbs - todayTarget) : todayDelta;
-        const da = Math.abs(effectiveDelta).toFixed(1);
-        if (shiftEnded && Math.abs(todayDelta) < 0.05 && Math.abs(effectiveDelta) >= 0.05) {
+        const da = Math.abs(todayDelta).toFixed(1);
+        if (shiftEnded && Math.abs(todayDelta) >= 0.05) {
           // Shift complete — show final result
-          if (effectiveDelta >= 0.05) {
-            dde.textContent = `COMPLETE · +${da} lbs`;
-            dde.className = 'daily-delta positive';
-          } else {
-            dde.textContent = `COMPLETE · -${da} lbs`;
-            dde.className = 'daily-delta negative';
-          }
+          dde.textContent = `COMPLETE · ${todayDelta > 0 ? '+' : '-'}${da} lbs`;
+          dde.className = `daily-delta ${todayDelta > 0 ? 'positive' : 'negative'}`;
         } else if (shiftEnded) {
           dde.textContent = t('shiftEnded');
           dde.className = 'daily-delta positive';
-        } else if (effectiveDelta >= 0.05) {
+        } else if (todayDelta >= 0.05) {
           dde.textContent = `↑ +${da} lbs`;
           dde.className = 'daily-delta positive';
-        } else if (effectiveDelta <= -0.05) {
+        } else if (todayDelta <= -0.05) {
           dde.textContent = `↓ -${da} lbs`;
           dde.className = 'daily-delta negative';
         } else {
@@ -230,7 +231,10 @@
       // Projection
       const projectedTotal = data.projectedTotal || 0;
       const dailyGoal = data.dailyGoal || 0;
-      const projectedDelta = data.projectedDelta || 0;
+      // Same story as todayDelta — not in the payload, derive it locally.
+      const projectedDelta = (typeof data.projectedDelta === 'number' && isFinite(data.projectedDelta))
+        ? data.projectedDelta
+        : (projectedTotal - dailyGoal);
 
       var _el = safeGetEl('projectionLabel');
       if (_el) _el.textContent = shiftEnded ? t('finalTotal') : t('endOfDay');
