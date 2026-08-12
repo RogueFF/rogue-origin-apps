@@ -1,7 +1,8 @@
 ﻿// Service Worker for Rogue Origin Operations Hub
-// Version 3.31 - Wire the four empty data panels (strain/perf/cost/period)
+// Version 3.32 - Revalidate app assets with the origin so ES module siblings
+//                can't be served stale (breaks the whole module graph)
 
-const CACHE_VERSION = 'ro-ops-v3.31';
+const CACHE_VERSION = 'ro-ops-v3.32';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
@@ -83,7 +84,10 @@ self.addEventListener('install', (event) => {
         console.log('[SW] Caching static assets');
         return Promise.allSettled(
           STATIC_ASSETS.map(url =>
-            cache.add(url).catch(err => console.warn('[SW] Failed to cache:', url, err))
+            // Bypass the HTTP cache when seeding a NEW cache version, or the
+            // fresh cache gets populated with the previous deploy's files.
+            cache.add(new Request(url, { cache: 'reload' }))
+              .catch(err => console.warn('[SW] Failed to cache:', url, err))
           )
         );
       }),
@@ -283,7 +287,12 @@ async function cacheFirst(request, cacheName) {
 async function staleWhileRevalidate(request, cacheName) {
   const cachedResponse = await caches.match(request);
 
-  const fetchPromise = fetch(request).then((response) => {
+  // Revalidate against the origin, not the browser's HTTP cache. ES module
+  // imports are unversioned (index.js?v=N only busts the entry point), so a
+  // stale sibling served from the HTTP cache breaks the whole module graph
+  // with "does not provide an export named ...". `no-cache` still sends the
+  // ETag and takes a 304, so this costs a conditional request, not a download.
+  const fetchPromise = fetch(revalidatingRequest(request)).then((response) => {
     if (response.ok) {
       const cache = caches.open(cacheName);
       cache.then(c => c.put(request, response.clone()));
@@ -292,6 +301,18 @@ async function staleWhileRevalidate(request, cacheName) {
   }).catch(() => null);
 
   return cachedResponse || fetchPromise;
+}
+
+/**
+ * Same request, forced to revalidate with the origin. Falls back to the
+ * original request if the Request cannot be reconstructed (opaque/no-cors).
+ */
+function revalidatingRequest(request) {
+  try {
+    return new Request(request, { cache: 'no-cache' });
+  } catch (err) {
+    return request;
+  }
 }
 
 // Cache management - trim caches periodically
