@@ -3,7 +3,7 @@
  * Init, event listeners, auto-refresh, orchestration
  */
 
-import * as api from './api.js?v=6';
+import * as api from './api.js';
 import * as ui from './ui.js?v=11';
 
 let partners = [];

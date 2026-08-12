@@ -3,7 +3,7 @@
  * Handles rendering partner cards, activity feed, modals, and partner detail
  */
 
-import * as api from './api.js?v=6';
+import * as api from './api.js';
 
 // ─── HELPERS ────────────────────────────────────────────
 
