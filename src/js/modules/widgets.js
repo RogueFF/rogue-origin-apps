@@ -510,6 +510,247 @@ export function updateKPIValues(totals, prevTotals, targets, rolling, compareMod
   }
 }
 
+// ==================== DATA PANELS ====================
+//
+// Strain Breakdown, Performance, Cost Analysis and Period Summary. All four
+// read the SAME period totals the KPI row uses, plus `daily[]` — the only
+// payload array that scales with the selected range. `hourly`, `current`,
+// `bagTimer`, `targets`, `rollingAverage` and `strainSnapshot` are all
+// today-scoped or fixed, so a panel fed from them would show identical
+// numbers under every range label.
+
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/** Strip the year prefix and grow-type suffix that every cultivar name carries. */
+const shortCultivar = (name) => String(name || 'Unknown')
+  .replace(/^\d{4}\s*-\s*/, '')
+  .replace(/\s*\/\s*(Sungrown|Greenhouse|Indoor)\s*$/i, '')
+  .trim() || 'Unknown';
+
+const num = (v) => (typeof v === 'number' && isFinite(v) ? v : 0);
+const lbs = (v) => num(v).toFixed(1);
+const money = (v) => `$${num(v).toFixed(2)}`;
+
+/** Build a `.perf-row` label/value pair. Values are pre-formatted strings. */
+const perfRow = (label, value) =>
+  `<div class="perf-row"><span class="perf-label">${esc(label)}</span>` +
+  `<span class="perf-value">${esc(value)}</span></div>`;
+
+function setPanel(id, html, emptyMessage) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = html || `<div class="strain-list-empty">${esc(emptyMessage)}</div>`;
+}
+
+/**
+ * Strain Breakdown — cultivar split for the selected range.
+ *
+ * Built from `daily[].cultivars` rather than `strainSnapshot`: the snapshot is
+ * a fixed top-5 that comes back byte-identical for a 1-day and a 30-day
+ * request, so it would misreport every range but one.
+ */
+function renderStrainBreakdown(daily, periodTops) {
+  const totals = new Map();
+  daily.forEach((day) => {
+    (Array.isArray(day.cultivars) ? day.cultivars : []).forEach((c) => {
+      const key = shortCultivar(c.cultivar);
+      const acc = totals.get(key) || { tops: 0, smalls: 0 };
+      acc.tops += num(c.tops);
+      acc.smalls += num(c.smalls);
+      totals.set(key, acc);
+    });
+  });
+
+  const rows = [...totals.entries()]
+    .map(([name, v]) => ({ name, ...v }))
+    // A cultivar that has been started but not yet weighed contributes a
+    // 0.0 / 0.0 row that reads as broken; the hero already names what is running.
+    .filter((r) => r.tops > 0 || r.smalls > 0)
+    .sort((a, b) => b.tops - a.tops);
+
+  // Per-cultivar figures do not always reconstitute the day total. Show the
+  // remainder rather than letting the breakdown quietly lose pounds.
+  const attributed = rows.reduce((sum, r) => sum + r.tops, 0);
+  const unattributed = num(periodTops) - attributed;
+  if (unattributed >= 0.1) rows.push({ name: 'Unattributed', tops: unattributed, smalls: 0 });
+
+  setPanel('strainList', rows.map((r) =>
+    `<div class="strain-item"><span class="strain-name" title="${esc(r.name)}">${esc(r.name)}</span>` +
+    `<span class="strain-stats"><span class="strain-tops">${lbs(r.tops)}</span>` +
+    `<span class="strain-smalls">${lbs(r.smalls)}</span></span></div>`
+  ).join(''), 'No cultivar data');
+}
+
+/**
+ * Length of an hourly slot in hours, parsed from its "7:02 AM – 8:00 AM" label.
+ *
+ * Slots are not all 60 minutes — the shift opens on a partial hour and lunch
+ * splits one in half. The API's hourly `target` is a flat per-trimmer rate that
+ * does NOT account for this, so a 30-minute slot would otherwise be judged
+ * against a full hour of expected output and always read as a failure.
+ *
+ * @returns {number} Duration in hours, or 1 when the label cannot be parsed
+ */
+function slotHours(label) {
+  const m = String(label || '').match(
+    /(\d{1,2}):(\d{2})\s*(AM|PM)?\s*[–-]\s*(\d{1,2}):(\d{2})\s*(AM|PM)?/i
+  );
+  if (!m) return 1;
+  const to24 = (h, ampm) => {
+    let hour = parseInt(h, 10) % 12;
+    if (/PM/i.test(ampm || '')) hour += 12;
+    return hour;
+  };
+  // A missing meridiem on the start time inherits the end's.
+  const start = to24(m[1], m[3] || m[6]) * 60 + parseInt(m[2], 10);
+  const end = to24(m[4], m[6] || m[3]) * 60 + parseInt(m[5], 10);
+  const mins = end - start;
+  return mins > 0 && mins <= 720 ? mins / 60 : 1;
+}
+
+/**
+ * Performance — how the period's units performed against target.
+ *
+ * Single day: per-hour, from `hourly` (which is always today's hours).
+ * Multi-day: per-day, from `daily`. Labels switch with the branch.
+ *
+ * Best and weakest are picked by attainment, not raw pounds, so a short slot
+ * is not mistaken for a bad one.
+ */
+function renderPerformance(data, daily, totals, dayTarget) {
+  const hourly = Array.isArray(data.hourly) ? data.hourly : [];
+  // A requested date with no production comes back as the last working day with
+  // an empty `hourly`. Fall through to the daily row there, so this panel agrees
+  // with the other three instead of claiming the line never ran.
+  const byHour = daily.length <= 1 && hourly.length > 0;
+  const unitLabel = byHour ? 'hour' : 'day';
+  const multiDay = !byHour;
+
+  const units = byHour
+    ? hourly.map((h) => {
+      const hours = slotHours(h.label);
+      return {
+        name: h.label,
+        lbs: num(h.tops || h.lbs),
+        // Per-trimmer rate → pounds expected from this crew over this slot.
+        target: num(h.target) * num(h.trimmers) * hours,
+        hours
+      };
+    })
+    : daily.map((d) => ({
+      name: d.label || d.date,
+      lbs: num(d.totalTops),
+      target: num(dayTarget),
+      hours: 1
+    }));
+
+  const worked = units.filter((u) => u.lbs > 0);
+  if (!worked.length) return setPanel('perfTable', '', 'No production yet');
+
+  const score = (u) => (u.target > 0 ? u.lbs / u.target : u.lbs);
+  const best = worked.reduce((a, b) => (score(b) > score(a) ? b : a));
+  const weakest = worked.reduce((a, b) => (score(b) < score(a) ? b : a));
+  const atTarget = worked.filter((u) => u.target > 0 && u.lbs >= u.target).length;
+  const withTarget = worked.filter((u) => u.target > 0).length;
+  const periodTarget = multiDay ? num(dayTarget) * daily.length : num(dayTarget);
+  const attainment = periodTarget > 0 ? (num(totals.totalTops) / periodTarget) * 100 : null;
+  const unitsElapsed = worked.reduce((sum, u) => sum + u.hours, 0) || worked.length;
+
+  // Hourly labels are ranges ("7:02 AM – 8:00 AM") and read better trimmed to
+  // their start. Daily labels are ISO dates — the pattern must not touch those.
+  const shortName = (n) => String(n || '')
+    .replace(/\s*[–-]\s*\d{1,2}:\d{2}\s*(AM|PM)?\s*$/i, '').trim() || '—';
+
+  setPanel('perfTable', [
+    perfRow(multiDay ? 'Days worked' : 'Hours logged', multiDay
+      ? String(worked.length)
+      : unitsElapsed.toFixed(1)),
+    perfRow(`Best ${unitLabel}`, `${lbs(best.lbs)} lbs · ${shortName(best.name)}`),
+    worked.length > 1 ? perfRow(`Weakest ${unitLabel}`, `${lbs(weakest.lbs)} lbs · ${shortName(weakest.name)}`) : '',
+    // Qualified as "tops" — Period Summary shows an avg/day over combined lbs,
+    // and two rows labelled "Avg per day" with different numbers is a bug report.
+    perfRow(`Avg tops/${unitLabel}`, `${lbs(num(totals.totalTops) / unitsElapsed)} lbs`),
+    withTarget ? perfRow(`${multiDay ? 'Days' : 'Hours'} at target`, `${atTarget} of ${withTarget}`) : '',
+    attainment != null ? perfRow('Attainment', `${attainment.toFixed(0)}% of ${lbs(periodTarget)} lbs`) : ''
+  ].join(''), 'No production yet');
+}
+
+/**
+ * Cost Analysis — where the labor went. Deliberately carries the two figures
+ * the KPI row does not: cost per operator hour, and the tops/smalls dollar
+ * split that the blended rate hides.
+ */
+function renderCostAnalysis(totals) {
+  const labor = num(totals.laborCost);
+  if (labor <= 0) return setPanel('costTable', '', 'No labor recorded');
+
+  const opHours = num(totals.operatorHours);
+  const topsDollars = num(totals.topsCostPerLb) * num(totals.totalTops);
+  const smallsDollars = num(totals.smallsCostPerLb) * num(totals.totalSmalls);
+
+  setPanel('costTable', [
+    perfRow('Total labor', money(labor)),
+    opHours > 0 ? perfRow('Per operator hour', money(labor / opHours)) : '',
+    perfRow('Blended cost/lb', money(totals.costPerLb)),
+    perfRow('Tops cost/lb', money(totals.topsCostPerLb)),
+    perfRow('Smalls cost/lb', money(totals.smallsCostPerLb)),
+    topsDollars > 0 || smallsDollars > 0
+      ? perfRow('Tops / smalls split', `${money(topsDollars)} · ${money(smallsDollars)}`)
+      : ''
+  ].join(''), 'No labor recorded');
+}
+
+/**
+ * Period Summary — the span and volume of whatever range is selected.
+ */
+function renderPeriodSummary(daily, totals, fallbackActive) {
+  if (!daily.length) return setPanel('periodTable', '', 'No data for this period');
+
+  const first = daily[0].date || daily[0].label;
+  const last = daily[daily.length - 1].date || daily[daily.length - 1].label;
+  const span = daily.length > 1 ? `${first} → ${last}` : String(first || '—');
+  const days = daily.length;
+
+  setPanel('periodTable', [
+    perfRow(days > 1 ? 'Period' : 'Date', span),
+    // The requested range had no production and the API substituted the last
+    // working day; without this the dates above look like a rendering bug.
+    fallbackActive ? perfRow('Source', 'Last working day') : '',
+    perfRow('Days worked', String(days)),
+    perfRow('Total tops', `${lbs(totals.totalTops)} lbs`),
+    perfRow('Total smalls', `${lbs(totals.totalSmalls)} lbs`),
+    perfRow('Combined', `${lbs(totals.totalLbs)} lbs`),
+    days > 1 ? perfRow('Avg combined/day', `${lbs(num(totals.totalLbs) / days)} lbs`) : '',
+    perfRow('Lbs/trimmer/hr', num(totals.avgRate).toFixed(2))
+  ].join(''), 'No data for this period');
+}
+
+/**
+ * Populate the four data panels. Called alongside updateKPIValues so both read
+ * the same period totals — a second source of truth for the same numbers is
+ * how the dashboard came to disagree with its own chart in the first place.
+ *
+ * @param {Object} data - Full dashboard payload
+ * @param {Object} totals - Period totals from getPeriodTotals()
+ */
+export function updateDataWidgets(data, totals) {
+  try {
+    if (!data || !totals) return;
+    const daily = Array.isArray(data.daily) ? data.daily : [];
+    const dayTarget = (data.targets && num(data.targets.totalTops)) || 0;
+
+    const fallbackActive = !!(data.fallback && data.fallback.active);
+
+    renderStrainBreakdown(daily, totals.totalTops);
+    renderPerformance(data, daily, totals, dayTarget);
+    renderCostAnalysis(totals);
+    renderPeriodSummary(daily, totals, fallbackActive);
+  } catch (error) {
+    console.error('Error updating data widgets:', error);
+  }
+}
+
 /**
  * Get the currently expanded KPI id
  * @returns {string|null} The currently expanded KPI id or null

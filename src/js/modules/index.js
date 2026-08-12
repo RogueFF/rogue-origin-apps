@@ -201,6 +201,7 @@ import {
   toggleWidget,
   toggleKPIExpand,
   updateKPIValues,
+  updateDataWidgets,
   getExpandedKPI,
   resetExpandedKPI
 } from './widgets.js';
@@ -358,6 +359,7 @@ function renderAll() {
       data.rollingAverage || null,
       !!compareMode
     );
+    updateDataWidgets(data, periodTotals);
   }
 
   // Update hero section
