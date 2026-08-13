@@ -224,30 +224,53 @@ function buildImportMap(pageFile) {
   return { html, map: { imports }, moduleCount: graph.size, pageDir };
 }
 
+/** Only .js and .css are stamped. See stampAssets for why not images. */
+const STAMPABLE = /\.(js|mjs|css)$/i;
+
 /**
- * Stamp the module ENTRY tags with their own content hash.
+ * Stamp every local .js and .css reference in the page with its content hash —
+ * module entries, classic <script src>, and <link href> alike.
  *
- * An import map cannot help here — it governs specifiers inside modules, never
- * a src attribute — so the entry has to be rewritten in place. Several pages
- * (orders.html, barcode.html) carried module entries with no cache buster at
- * all, which left them pinned until the HTTP cache expired.
+ * An import map cannot reach these: it governs specifiers inside modules, never
+ * a src or href attribute. So each tag is rewritten in place, REPLACING any
+ * existing ?v=N. One file, one scheme, one cache entry.
  *
- * This REPLACES any existing ?v=N on module entries: one file, one scheme.
- * Classic <script> and <link> tags keep ?v=N and stay the pre-commit hook's
- * job — the hook can see them because they are named directly in the HTML,
- * which is exactly what it cannot do for an imported module.
+ * What this fixes beyond tidiness:
+ *
+ *   - Hand-bumped versions drift. scoreboard-v2.html asked for timer.js?v=12
+ *     while scale-display.html asked for timer.js?v=10 — the same file under
+ *     two cache keys, one of them indefinitely stale. A content hash is derived
+ *     from the file, so every page naturally agrees.
+ *   - Some references were never versioned at all: shared-base.css appeared on
+ *     12 pages bare, and sw-register.js on 9. The pre-commit hook could not
+ *     touch them because it only ever incremented a ?v= that already existed.
+ *   - dashboard.css appears twice per page (rel=preload as=style, plus a
+ *     noscript stylesheet). Hashing by resolved file path gives both the same
+ *     URL, so the preload still matches the real request rather than causing a
+ *     second fetch.
+ *
+ * Images, icons and manifest.json are deliberately left alone. Their staleness
+ * is benign, and ro-logo-square.png in particular is preloaded as="image" AND
+ * referenced as a bare <img src> — hashing one occurrence and not the other
+ * would turn one fetch into two.
  */
-function stampEntries(html, pageDir) {
-  return html.replace(
-    /(<script[^>]*\btype=["']module["'][^>]*\bsrc=["'])([^"']+)(["'])/g,
-    (whole, before, src, after) => {
-      const bare = src.split('?')[0].split('#')[0];
-      if (!isLocalSpecifier(bare)) return whole;
-      const abs = resolve(pageDir, bare);
-      if (!existsSync(abs)) return whole;
-      return `${before}${bare}?h=${contentHash(abs)}${after}`;
-    }
-  );
+function stampAssets(html, pageDir) {
+  const stamp = (whole, before, url, after) => {
+    const bare = url.split('?')[0].split('#')[0];
+    if (!isLocalSpecifier(bare) || !STAMPABLE.test(bare)) return whole;
+    const abs = resolve(pageDir, bare);
+    if (!existsSync(abs)) return whole;
+    return `${before}${bare}?h=${contentHash(abs)}${after}`;
+  };
+
+  return html
+    .replace(/(<script[^>]*\bsrc=["'])([^"']+)(["'])/g, stamp)
+    .replace(/(<link[^>]*\bhref=["'])([^"']+)(["'])/g, stamp)
+    // Inline page scripts that build a <script> at runtime. scoreboard-v2.html
+    // lazy-loads debug.js this way, and its hand-written ?v=2 was a second
+    // cache entry for a file the page already loads eagerly. The extension and
+    // existsSync checks keep this from touching anything that is not ours.
+    .replace(/(\.src\s*=\s*["'])([^"']+)(["'])/g, stamp);
 }
 
 /** Inject or replace the generated block, immediately above the first module script. */
@@ -296,7 +319,7 @@ for (const page of pages) {
   const { html, map, moduleCount, pageDir } = buildImportMap(page);
   if (!map) continue;
 
-  const next = stampEntries(applyImportMap(html, map), pageDir);
+  const next = stampAssets(applyImportMap(html, map), pageDir);
   stamped++;
 
   // A page must end up with exactly one import map. More than one is not
@@ -311,18 +334,21 @@ for (const page of pages) {
     process.exit(1);
   }
 
-  // Every local module entry must carry a hash. An unstamped entry is pinned
-  // in the browser cache until it expires, which is how orders.html and
-  // barcode.html sat un-bustable for however long they had been that way.
-  const unstamped = [...next.matchAll(
-    /<script[^>]*\btype=["']module["'][^>]*\bsrc=["']([^"']+)["']/g
-  )]
-    .map((m) => m[1])
-    .filter((src) => isLocalSpecifier(src.split('?')[0]) && !/\?h=[0-9a-f]+/.test(src));
+  // Every local .js and .css reference must carry a hash. An unstamped one is
+  // pinned in the browser cache until it expires — how shared-base.css sat
+  // un-bustable on 12 pages, and orders.html's entries on top of that.
+  const unstamped = [
+    ...[...next.matchAll(/<script[^>]*\bsrc=["']([^"']+)["']/g)].map((m) => m[1]),
+    ...[...next.matchAll(/<link[^>]*\bhref=["']([^"']+)["']/g)].map((m) => m[1]),
+    ...[...next.matchAll(/\.src\s*=\s*["']([^"']+)["']/g)].map((m) => m[1])
+  ].filter((url) => {
+    const bare = url.split('?')[0].split('#')[0];
+    return isLocalSpecifier(bare) && STAMPABLE.test(bare) && !/\?h=[0-9a-f]+/.test(url);
+  });
   if (unstamped.length) {
     console.error(
-      `\nstamp-modules: ${relative(REPO_ROOT, page)} has unstamped module entries: ` +
-      `${unstamped.join(', ')}. Refusing to write.`
+      `\nstamp-modules: ${relative(REPO_ROOT, page)} has unstamped assets: ` +
+      `${[...new Set(unstamped)].join(', ')}. Refusing to write.`
     );
     process.exit(1);
   }

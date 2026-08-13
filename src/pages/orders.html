@@ -26,11 +26,11 @@
   <!-- Phosphor Icons and jsPDF are loaded on-demand -->
 
   <!-- Critical CSS: Loaded synchronously -->
-  <link rel="stylesheet" href="../css/shared-base.css">
+  <link rel="stylesheet" href="../css/shared-base.css?h=036524e3">
   
   <!-- Non-critical CSS: Deferred for faster initial render -->
-  <link rel="preload" href="../css/orders.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link rel="stylesheet" href="../css/orders.css"></noscript>
+  <link rel="preload" href="../css/orders.css?h=7eb1a63d" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/orders.css?h=7eb1a63d"></noscript>
 
   <!-- Authentication is now handled server-side via Vercel Functions -->
   <!-- Password stored securely in Vercel env vars (not in code or Git) -->
@@ -3906,6 +3906,6 @@
   <script type="module" src="../js/shared/theme.js?h=b4816114"></script>
   <script type="module" src="../js/orders/index.js?h=4b923968"></script>
 
-  <script src="../js/sw-register.js" async></script>
+  <script src="../js/sw-register.js?h=49c430f8" async></script>
 </body>
 </html>
