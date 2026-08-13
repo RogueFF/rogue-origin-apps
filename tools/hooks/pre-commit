@@ -36,7 +36,10 @@ if ! command -v node >/dev/null 2>&1; then
   exit 0
 fi
 
-STAMP_OUT=$(node tools/stamp-modules.mjs 2>&1)
+# --staged: hash the index, not the working tree. Without it, unrelated
+# uncommitted edits get baked into the committed HTML, and the file later takes
+# on the hash the page already carries — so the cache never busts.
+STAMP_OUT=$(node tools/stamp-modules.mjs --staged 2>&1)
 if [ $? -ne 0 ]; then
   echo "[stamp-modules] FAILED — commit aborted"
   echo "$STAMP_OUT"
