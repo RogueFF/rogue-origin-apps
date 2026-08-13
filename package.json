@@ -27,8 +27,8 @@
     "lint:scoreboard": "eslint src/js/scoreboard-v2/",
     "deploy": "wrangler deploy",
     "preview": "wrangler dev",
-    "stamp": "node tools/stamp-modules.mjs",
-    "stamp:check": "node tools/stamp-modules.mjs --check"
+    "stamp": "node tools/stamp-modules.mjs --staged",
+    "stamp:check": "node tools/stamp-modules.mjs --staged --check"
   },
   "repository": {
     "type": "git",
