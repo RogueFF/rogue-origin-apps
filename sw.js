@@ -1,17 +1,24 @@
 ﻿// Service Worker for Rogue Origin Operations Hub
-// Version 3.37 - Await runtime cache writes inside respondWith
+// Version 3.38 - Drop the dead .css/.js precache entries
 //
-// NOTE: the .css/.js entries in STATIC_ASSETS below are inert now that asset
-// URLs are content-hashed — a request for dashboard.css?h=2dde7146 cannot match
-// a cache entry keyed on the bare path. Offline therefore depends entirely on
-// the runtime handlers caching the hashed URLs, which is why the cache writes
-// below are wrapped in event.waitUntil: as fire-and-forget promises they were
-// being dropped, and with the precache inert that left NOTHING cached at all.
-// Measured on the live site before the fix: 15 bare entries, 0 hashed.
-// The dead precache entries are left in place (a few wasted fetches on install)
-// rather than trimmed in the same change.
+// Asset URLs in the HTML are content-hashed (see tools/stamp-modules.mjs), so
+// .css and .js are NOT precached — a request for dashboard.css?h=2dde7146 can
+// never match an entry stored under the bare path. STATIC_ASSETS holds only
+// what is still requested bare: HTML pages, the manifest, the offline
+// fallback, and images.
+//
+// Offline for scripts and styles therefore rests entirely on the runtime
+// handlers, which is why their cache writes are awaited inside respondWith
+// rather than fired and forgotten. As fire-and-forget promises they were being
+// dropped, and that went unnoticed only because the bare URLs happened to be
+// precached. Measured live before the fix: 15 bare entries cached, 0 hashed.
+//
+// Note this means a brand-new visitor who goes offline before their second
+// page load has no cached CSS/JS. That was already true — on a first visit the
+// worker is not yet in control when the page's own assets are requested — and
+// precaching bare paths never fixed it, it only looked like it did.
 
-const CACHE_VERSION = 'ro-ops-v3.37';
+const CACHE_VERSION = 'ro-ops-v3.38';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
@@ -31,22 +38,11 @@ const STATIC_ASSETS = [
   '/rogue-origin-apps/src/pages/order.html',
   '/rogue-origin-apps/src/pages/scale-display.html',
 
-  // CSS files
-  '/rogue-origin-apps/src/css/shared-base.css',
-  '/rogue-origin-apps/src/css/dashboard.css',
-  '/rogue-origin-apps/src/css/ai-chat.css',
-  '/rogue-origin-apps/src/css/barcode.css',
-  '/rogue-origin-apps/src/css/kanban.css',
-  '/rogue-origin-apps/src/css/order.css',
-  '/rogue-origin-apps/src/css/orders.css',
-  '/rogue-origin-apps/src/css/scoreboard-v2.css',
-  '/rogue-origin-apps/src/css/scale-display.css',
-  '/rogue-origin-apps/src/css/sop-manager.css',
-
-  // JavaScript files
-  '/rogue-origin-apps/src/js/modules/index.js',
-  '/rogue-origin-apps/src/js/modules/navigation.js',
-  '/rogue-origin-apps/src/js/shared/api-cache.js',
+  // NO .css / .js HERE — those are content-hashed in the HTML now, so a
+  // request for dashboard.css?h=2dde7146 can never match an entry precached
+  // under the bare path. Listing them only cost fetches on install. They are
+  // cached at runtime instead, by Strategy 4 below, keyed on the hashed URL.
+  // Everything still listed here IS requested bare and so still benefits.
 
   // PWA manifest
   '/rogue-origin-apps/manifest.json',
