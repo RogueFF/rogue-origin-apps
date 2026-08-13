@@ -25,11 +25,11 @@
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
 
   <!-- Critical CSS: Loaded synchronously -->
-  <link rel="stylesheet" href="../css/shared-base.css">
+  <link rel="stylesheet" href="../css/shared-base.css?h=036524e3">
   
   <!-- Non-critical CSS: Deferred for faster initial render -->
-  <link rel="preload" href="../css/kanban.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link rel="stylesheet" href="../css/kanban.css"></noscript>
+  <link rel="preload" href="../css/kanban.css?h=3951b889" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/kanban.css?h=3951b889"></noscript>
 </head>
 <body>
   <!-- RO Home Button -->
@@ -2286,7 +2286,7 @@ function printOneCard(card, size) {
     '<div class="no-print"><button onclick="window.print()" style="background:#668971;color:#fff">Print</button>' +
     '<button onclick="window.close()" style="background:#62758d;color:#fff">Close</button>' +
     '<span style="margin-left:12px;color:#8f9263">' + allHtml.length + ' page(s) • ' + size.toUpperCase() + '</span></div>' +
-    '<div class="print-wrapper" style="padding-top:50px">' + allHtml.join('') + '</div>  <script src="../js/sw-register.js" async><\/script></body></html>';
+    '<div class="print-wrapper" style="padding-top:50px">' + allHtml.join('') + '</div>  <script src="../js/sw-register.js?h=49c430f8" async><\/script></body></html>';
   
   var win = window.open('', '_blank');
   win.document.write(html);
@@ -2376,7 +2376,7 @@ function printCards(cards) {
     '<div class="no-print"><button onclick="window.print()" style="background:#668971;color:#fff">Print</button>' +
     '<button onclick="window.close()" style="background:#62758d;color:#fff">Close</button>' +
     '<span style="margin-left:12px;color:#8f9263">' + allHtml.length + ' page(s) • ' + size.toUpperCase() + '</span></div>' +
-    '<div class="print-wrapper" style="padding-top:50px">' + allHtml.join('') + '</div>  <script src="../js/sw-register.js" async><\/script></body></html>';
+    '<div class="print-wrapper" style="padding-top:50px">' + allHtml.join('') + '</div>  <script src="../js/sw-register.js?h=49c430f8" async><\/script></body></html>';
   
   var win = window.open('', '_blank');
   win.document.write(html);
@@ -2967,6 +2967,6 @@ document.addEventListener('DOMContentLoaded', init);
 <!-- module-hashes:end -->
   <script type="module" src="../js/shared/i18n.js?h=6c5893f7"></script>
   <script type="module" src="../js/shared/theme.js?h=b4816114"></script>
-  <script src="../js/sw-register.js" async></script>
+  <script src="../js/sw-register.js?h=49c430f8" async></script>
 </body>
 </html>

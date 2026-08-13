@@ -1,7 +1,14 @@
 ﻿// Service Worker for Rogue Origin Operations Hub
-// Version 3.34 - Module entry tags content-hashed too (?h= replaces ?v= there)
+// Version 3.35 - Every local .js/.css is content-hashed; ?v= is retired.
+//
+// NOTE: the .css/.js entries in STATIC_ASSETS below are now inert — a request
+// for dashboard.css?h=2dde7146 cannot match a cache entry keyed on the bare
+// path. They are harmless (the runtime staleWhileRevalidate handler caches the
+// hashed URLs into STATIC_CACHE on first load, which is what serves offline),
+// but they do cost a handful of wasted fetches on install. Left in place
+// deliberately rather than trimmed in the same change that introduced hashing.
 
-const CACHE_VERSION = 'ro-ops-v3.34';
+const CACHE_VERSION = 'ro-ops-v3.35';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';

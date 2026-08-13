@@ -53,28 +53,28 @@
 <!-- module-hashes:end -->
   <script type="module" src="../js/shared/i18n.js?h=6c5893f7"></script>
   <script type="module" src="../js/scoreboard-v2/i18n-labels.js?h=9d0ef791"></script>
-  <script defer src="../js/scoreboard-v2/config.js?v=4"></script>
-  <script defer src="../js/scoreboard-v2/state.js?v=2"></script>
-  <script defer src="../js/scoreboard-v2/dom.js?v=2"></script>
-  <script defer src="../js/scoreboard-v2/api.js?v=7"></script>
-  <script defer src="../js/scoreboard-v2/timer.js?v=10"></script>
-  <script defer src="../js/scoreboard-v2/cycle-history.js?v=6"></script>
-  <script defer src="../js/scoreboard-v2/chart.js?v=5"></script>
-  <script defer src="../js/scoreboard-v2/render.js?v=9"></script>
-  <script defer src="../js/scoreboard-v2/shift-start.js?v=4"></script>
-  <script defer src="../js/scoreboard-v2/morning-report.js?v=3"></script>
-  <script defer src="../js/scoreboard-v2/scale.js?v=4"></script>
-  <script defer src="../js/scoreboard-v2/debug.js?v=2"></script>
-  <script defer src="../js/scoreboard-v2/events.js?v=6"></script>
-  <script defer src="../js/scoreboard-v2/fab-menu.js?v=1"></script>
-  <script defer src="../js/scoreboard-v2/main.js?v=12"></script>
+  <script defer src="../js/scoreboard-v2/config.js?h=3f363280"></script>
+  <script defer src="../js/scoreboard-v2/state.js?h=01eeeaf7"></script>
+  <script defer src="../js/scoreboard-v2/dom.js?h=6242a8fb"></script>
+  <script defer src="../js/scoreboard-v2/api.js?h=6bebe4ff"></script>
+  <script defer src="../js/scoreboard-v2/timer.js?h=da4870be"></script>
+  <script defer src="../js/scoreboard-v2/cycle-history.js?h=fe53642d"></script>
+  <script defer src="../js/scoreboard-v2/chart.js?h=c59ec199"></script>
+  <script defer src="../js/scoreboard-v2/render.js?h=17d83260"></script>
+  <script defer src="../js/scoreboard-v2/shift-start.js?h=61b34a85"></script>
+  <script defer src="../js/scoreboard-v2/morning-report.js?h=37930b7a"></script>
+  <script defer src="../js/scoreboard-v2/scale.js?h=bcbe7a2f"></script>
+  <script defer src="../js/scoreboard-v2/debug.js?h=62d18cd5"></script>
+  <script defer src="../js/scoreboard-v2/events.js?h=5d236bce"></script>
+  <script defer src="../js/scoreboard-v2/fab-menu.js?h=ef066ffd"></script>
+  <script defer src="../js/scoreboard-v2/main.js?h=bd3ca4dc"></script>
 
   <!-- Critical CSS: Loaded synchronously -->
-  <link rel="stylesheet" href="../css/shared-base.css">
+  <link rel="stylesheet" href="../css/shared-base.css?h=036524e3">
 
   <!-- Non-critical CSS: Deferred for faster initial render -->
-  <link rel="preload" href="../css/scoreboard-v2.css?v=16" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link rel="stylesheet" href="../css/scoreboard-v2.css?v=16"></noscript>
+  <link rel="preload" href="../css/scoreboard-v2.css?h=bd046565" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/scoreboard-v2.css?h=bd046565"></noscript>
 
   <!-- SVG Noise Filter Definition -->
   <style>
@@ -781,7 +781,7 @@
     </div>
   </div>
 
-  <script src="../js/sw-register.js" async></script>
+  <script src="../js/sw-register.js?h=49c430f8" async></script>
 
   <!-- Debug Module: Lazy-loaded on first use -->
   <script>
@@ -795,7 +795,7 @@
             console.log('[Debug] Loading debug module...');
             debugLoadPromise = new Promise(function(resolve, reject) {
               var script = document.createElement('script');
-              script.src = '../js/scoreboard-v2/debug.js?v=2';
+              script.src = '../js/scoreboard-v2/debug.js?h=62d18cd5';
               script.onload = function() {
                 debugLoaded = true;
                 console.log('[Debug] Module loaded successfully');
