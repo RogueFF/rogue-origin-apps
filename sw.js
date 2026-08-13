@@ -1,5 +1,5 @@
 ﻿// Service Worker for Rogue Origin Operations Hub
-// Version 3.36 - Keep runtime cache writes alive (event.waitUntil)
+// Version 3.37 - Await runtime cache writes inside respondWith
 //
 // NOTE: the .css/.js entries in STATIC_ASSETS below are inert now that asset
 // URLs are content-hashed — a request for dashboard.css?h=2dde7146 cannot match
@@ -11,7 +11,7 @@
 // The dead precache entries are left in place (a few wasted fetches on install)
 // rather than trimmed in the same change.
 
-const CACHE_VERSION = 'ro-ops-v3.36';
+const CACHE_VERSION = 'ro-ops-v3.37';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
@@ -303,20 +303,29 @@ async function staleWhileRevalidate(request, cacheName, event) {
   // are content-hashed, so a hit here is already the right bytes; `no-cache`
   // still sends the ETag and takes a 304, costing a conditional request rather
   // than a download.
-  const fetchPromise = fetch(revalidatingRequest(request)).then((response) => {
+  const network = fetch(revalidatingRequest(request)).then(async (response) => {
     if (response.ok) {
-      // The write MUST be kept alive past this handler. Previously it was
-      // fire-and-forget, so the worker could be terminated before the put
-      // landed — which stopped mattering only because the bare URLs happened
-      // to be precached. Content-hashed URLs are never precached, so a dropped
-      // write means nothing is cached at all and the app cannot work offline.
-      const write = caches.open(cacheName).then((c) => c.put(request, response.clone()));
-      if (event && typeof event.waitUntil === 'function') event.waitUntil(write);
+      const cache = await caches.open(cacheName);
+      await cache.put(request, response.clone());
     }
     return response;
   }).catch(() => null);
 
-  return cachedResponse || fetchPromise;
+  // On a MISS the write is awaited before responding. respondWith is still
+  // pending at that point, so the worker is guaranteed to stay alive for it —
+  // whereas a fire-and-forget write (or a waitUntil registered from inside a
+  // late .then) can be dropped when the worker is terminated. That never
+  // showed while bare URLs were precached; with content-hashed URLs, which are
+  // never precached, a dropped write leaves nothing cached and no offline mode.
+  if (!cachedResponse) {
+    // Fall back to a plain fetch rather than resolving respondWith with null,
+    // which would surface as a network error on the page.
+    return (await network) || fetch(request);
+  }
+
+  // On a HIT, serve instantly and let the refresh finish in the background.
+  if (event && typeof event.waitUntil === 'function') event.waitUntil(network);
+  return cachedResponse;
 }
 
 /**
