@@ -1,14 +1,17 @@
 ﻿// Service Worker for Rogue Origin Operations Hub
-// Version 3.35 - Every local .js/.css is content-hashed; ?v= is retired.
+// Version 3.36 - Keep runtime cache writes alive (event.waitUntil)
 //
-// NOTE: the .css/.js entries in STATIC_ASSETS below are now inert — a request
-// for dashboard.css?h=2dde7146 cannot match a cache entry keyed on the bare
-// path. They are harmless (the runtime staleWhileRevalidate handler caches the
-// hashed URLs into STATIC_CACHE on first load, which is what serves offline),
-// but they do cost a handful of wasted fetches on install. Left in place
-// deliberately rather than trimmed in the same change that introduced hashing.
+// NOTE: the .css/.js entries in STATIC_ASSETS below are inert now that asset
+// URLs are content-hashed — a request for dashboard.css?h=2dde7146 cannot match
+// a cache entry keyed on the bare path. Offline therefore depends entirely on
+// the runtime handlers caching the hashed URLs, which is why the cache writes
+// below are wrapped in event.waitUntil: as fire-and-forget promises they were
+// being dropped, and with the precache inert that left NOTHING cached at all.
+// Measured on the live site before the fix: 15 bare entries, 0 hashed.
+// The dead precache entries are left in place (a few wasted fetches on install)
+// rather than trimmed in the same change.
 
-const CACHE_VERSION = 'ro-ops-v3.35';
+const CACHE_VERSION = 'ro-ops-v3.36';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
@@ -170,13 +173,13 @@ self.addEventListener('fetch', (event) => {
 
   // Strategy 2: Cache-First for fonts
   if (url.hostname === 'fonts.gstatic.com' || request.destination === 'font') {
-    event.respondWith(cacheFirst(request, FONT_CACHE));
+    event.respondWith(cacheFirst(request, FONT_CACHE, event));
     return;
   }
 
   // Strategy 3: Cache-First for images
   if (request.destination === 'image' || url.pathname.match(/\.(png|jpg|jpeg|svg|gif|webp)$/)) {
-    event.respondWith(cacheFirst(request, IMAGE_CACHE));
+    event.respondWith(cacheFirst(request, IMAGE_CACHE, event));
     return;
   }
 
@@ -184,7 +187,7 @@ self.addEventListener('fetch', (event) => {
   // Serves cached version instantly, fetches fresh copy in background
   if (request.destination === 'style' || request.destination === 'script' ||
       url.pathname.match(/\.(css|js)$/) || STATIC_ASSETS.includes(url.pathname)) {
-    event.respondWith(staleWhileRevalidate(request, STATIC_CACHE));
+    event.respondWith(staleWhileRevalidate(request, STATIC_CACHE, event));
     return;
   }
 
@@ -193,7 +196,7 @@ self.addEventListener('fetch', (event) => {
       url.hostname.includes('unpkg.com') ||
       url.hostname.includes('fonts.googleapis.com') ||
       url.hostname.includes('js.puter.com')) {
-    event.respondWith(staleWhileRevalidate(request, STATIC_CACHE));
+    event.respondWith(staleWhileRevalidate(request, STATIC_CACHE, event));
     return;
   }
 
@@ -269,7 +272,7 @@ async function networkFirstWithTimeout(request, cacheName, timeout) {
 }
 
 // Cache Strategy: Cache-First
-async function cacheFirst(request, cacheName) {
+async function cacheFirst(request, cacheName, event) {
   const cachedResponse = await caches.match(request);
   if (cachedResponse) {
     return cachedResponse;
@@ -280,7 +283,10 @@ async function cacheFirst(request, cacheName) {
     // Only cache GET requests - POST requests cannot be cached
     if (response.ok && request.method === 'GET') {
       const cache = await caches.open(cacheName);
-      cache.put(request, response.clone());
+      // Same reason as staleWhileRevalidate: keep the write alive past the
+      // handler, or the worker can be terminated before it lands.
+      const write = cache.put(request, response.clone());
+      if (event && typeof event.waitUntil === 'function') event.waitUntil(write);
     }
     return response;
   } catch (error) {
@@ -290,18 +296,22 @@ async function cacheFirst(request, cacheName) {
 }
 
 // Cache Strategy: Stale-While-Revalidate
-async function staleWhileRevalidate(request, cacheName) {
+async function staleWhileRevalidate(request, cacheName, event) {
   const cachedResponse = await caches.match(request);
 
-  // Revalidate against the origin, not the browser's HTTP cache. ES module
-  // imports are unversioned (index.js?v=N only busts the entry point), so a
-  // stale sibling served from the HTTP cache breaks the whole module graph
-  // with "does not provide an export named ...". `no-cache` still sends the
-  // ETag and takes a 304, so this costs a conditional request, not a download.
+  // Revalidate against the origin, not the browser's HTTP cache. Asset URLs
+  // are content-hashed, so a hit here is already the right bytes; `no-cache`
+  // still sends the ETag and takes a 304, costing a conditional request rather
+  // than a download.
   const fetchPromise = fetch(revalidatingRequest(request)).then((response) => {
     if (response.ok) {
-      const cache = caches.open(cacheName);
-      cache.then(c => c.put(request, response.clone()));
+      // The write MUST be kept alive past this handler. Previously it was
+      // fire-and-forget, so the worker could be terminated before the put
+      // landed — which stopped mattering only because the bare URLs happened
+      // to be precached. Content-hashed URLs are never precached, so a dropped
+      // write means nothing is cached at all and the app cannot work offline.
+      const write = caches.open(cacheName).then((c) => c.put(request, response.clone()));
+      if (event && typeof event.waitUntil === 'function') event.waitUntil(write);
     }
     return response;
   }).catch(() => null);
