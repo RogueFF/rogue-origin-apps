@@ -36,6 +36,7 @@ import { successResponse, parseBody, getAction, getQueryParams } from '../lib/re
 import { createError, formatError } from '../lib/errors.js';
 import { VALID_ZONES, normalizeZone } from '../lib/zones.js';
 import { cultivarsFor, isMultiCultivar } from '../lib/zone-cultivars.js';
+import { zoneFacts, plantCountFor, PLANTS_PER_ACRE, PLANT_SPACING_FT } from '../lib/zone-facts.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
 
 const DEBOUNCE_MS = 5 * 60 * 1000;       // re-scanning the same active zone within this window is a no-op
@@ -51,6 +52,33 @@ const LOT_PICKER_DAYS = 45;              // how far back the takedown lot picker
 const DRY_DAYS_TYPICAL = 10;
 const DRY_DAYS_MIN = 6;
 const DRY_DAYS_MAX = 21;
+
+/**
+ * Standing constants for the rollup.
+ *
+ * `value: null` means NOT YET MEASURED. Anything derived from a null constant
+ * renders as pending rather than as a number — a fabricated figure here would
+ * get quoted back as real months later, and the whole point of the ledger is
+ * that its numbers can be trusted. Fill these in and the columns light up with
+ * no code change.
+ */
+const CONSTANTS = {
+  binWeightLbsWet: {
+    value: null,
+    label: '1 bin = ? lbs wet',
+    unblocks: 'wet lbs, wet:dry ratio',
+    how: 'spot-weigh ~10 full bins at season start',
+  },
+  wageRateByRole: {
+    value: null,
+    label: 'harvest wage rate by role',
+    unblocks: 'labor cost, cost/rack, cost/lb',
+    how: 'set by the labor contractor; not the trim crew BASE_WAGE_RATE',
+  },
+  supersackLbs: { value: 37, label: '1 supersack = 37 lbs', unblocks: null, how: 'confirmed 2026-08-03' },
+  binsPerTrailer: { value: 22, label: '1 trailer = 22 bins', unblocks: null, how: 'recalibrate once 2026 trailers run' },
+  plantsPerBin: { value: 1, label: '1 bin = 1 plant', unblocks: null, how: 'recalibrate once real' },
+};
 const PUBLIC_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev';
 
 const HTML_ACTIONS = new Set([
@@ -103,6 +131,8 @@ export async function handleHarvestD1(request, env, ctx) {
       return await getLogs(db, env, params);
     case 'sacks':
       return await getSacks(db, env, params);
+    case 'rollup':
+      return await getRollup(db, env, params);
     case 'sack_alloc':
       return await handleSackAlloc(db, env, ctx, body);
     case 'sack_void':
@@ -679,6 +709,141 @@ async function getSacks(db, env, params) {
   `, [isTest]);
 
   return successResponse({ success: true, season: getSeason(), totals, data: rows });
+}
+
+// ─── ROLLUP LEDGER ──────────────────────────────────────
+// Turns the raw capture stream into one row per LOT (zone x cultivar x cut),
+// joined against the field record (acres, plant date) so the ratios Koa
+// actually wants — grow time, yield/acre, yield/plant, tops:smalls — fall out.
+//
+// Feeds seasons/2026/harvest.md. Deliberately derived, never authored: the raw
+// rows stay in D1 / farm/harvest-log.md per the wiki's §7a raw-vs-derived split.
+
+async function getRollup(db, env, params) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const season = parseInt(params.season, 10) || getSeason();
+
+  const lots = await query(db, `
+    SELECT
+      l.id, l.zone, l.cultivar, l.cut_number, l.occurred_at, l.closed_at, l.headcount,
+      (SELECT COUNT(*) FROM harvest_scan_log b
+        WHERE b.event_type = 'barn_load' AND b.attributed_zone_session_id = l.id AND b.is_test = l.is_test) AS loads,
+      (SELECT COALESCE(SUM(b.bins), 0) FROM harvest_scan_log b
+        WHERE b.event_type = 'barn_load' AND b.attributed_zone_session_id = l.id AND b.is_test = l.is_test) AS bins,
+      (SELECT COUNT(*) FROM harvest_sacks s
+        WHERE s.zone_session_id = l.id AND s.is_test = l.is_test AND s.voided_at IS NULL) AS sacks,
+      (SELECT COUNT(*) FROM harvest_sacks s
+        WHERE s.zone_session_id = l.id AND s.is_test = l.is_test AND s.voided_at IS NULL
+          AND s.opened_at IS NOT NULL) AS sacks_opened,
+      (SELECT COALESCE(SUM(s.tops_lbs), 0) FROM harvest_sacks s
+        WHERE s.zone_session_id = l.id AND s.is_test = l.is_test AND s.voided_at IS NULL) AS tops_lbs,
+      (SELECT COALESCE(SUM(s.smalls_lbs), 0) FROM harvest_sacks s
+        WHERE s.zone_session_id = l.id AND s.is_test = l.is_test AND s.voided_at IS NULL) AS smalls_lbs
+    FROM harvest_scan_log l
+    WHERE l.event_type = 'enter' AND l.season = ? AND l.is_test = ?
+    ORDER BY l.occurred_at ASC
+  `, [season, isTest]);
+
+  const rows = lots.map(l => buildLotRow(l));
+  return successResponse({
+    success: true,
+    season,
+    is_test: !!isTest,
+    generated_at: new Date().toISOString(),
+    constants: summarizeConstants(),
+    plants_per_acre: { value: PLANTS_PER_ACRE, derivation: `43,560 sq ft/ac ÷ (${PLANT_SPACING_FT.inRow} ft × ${PLANT_SPACING_FT.bed} ft)` },
+    totals: rollupTotals(rows),
+    lots: rows,
+  });
+}
+
+function buildLotRow(l) {
+  const facts = zoneFacts(l.zone);
+  const cutDate = String(l.occurred_at).substring(0, 10);
+  const plantDate = facts?.plantDate || null;
+  const acres = facts?.acres ?? null;
+  const plants = plantCountFor(l.zone);
+
+  const growDays = plantDate
+    ? Math.round((new Date(cutDate + 'T00:00:00Z') - new Date(plantDate + 'T00:00:00Z')) / 86400000)
+    : null;
+
+  // Cutter person-hours: headcount x how long the lot stayed open. Only
+  // meaningful once the session is closed, so an in-progress lot reports null
+  // rather than a number that keeps growing.
+  const hoursOpen = l.closed_at
+    ? (parseSqliteUtc(l.closed_at) - parseSqliteUtc(l.occurred_at)) / 3600000
+    : null;
+  const cutterHours = (hoursOpen !== null && l.headcount) ? +(hoursOpen * l.headcount).toFixed(1) : null;
+
+  const tops = round1(l.tops_lbs);
+  const smalls = round1(l.smalls_lbs);
+  const finished = round1(tops + smalls);
+
+  // Yields are only honest once every tagged sack has actually been weighed —
+  // a partially-opened lot would read as a catastrophic yield miss.
+  const complete = l.sacks > 0 && l.sacks_opened === l.sacks;
+
+  return {
+    lot_id: lotId(l),
+    session_id: l.id,
+    zone: l.zone,
+    cultivar: l.cultivar,
+    cut_number: l.cut_number,
+    plant_date: plantDate,
+    plant_date_approx: !!facts?.multiDay,
+    cut_date: cutDate,
+    grow_days: growDays,
+    acres,
+    plants,
+    headcount: l.headcount,
+    cutter_person_hours: cutterHours,
+    loads: l.loads,
+    bins: l.bins,
+    // Blocked on the uncalibrated bin constant — see CONSTANTS.
+    wet_lbs: CONSTANTS.binWeightLbsWet.value === null ? null : round1(l.bins * CONSTANTS.binWeightLbsWet.value),
+    sacks: l.sacks,
+    sacks_opened: l.sacks_opened,
+    tops_lbs: tops,
+    smalls_lbs: smalls,
+    finished_lbs: finished,
+    tops_smalls_ratio: smalls > 0 ? +(tops / smalls).toFixed(2) : null,
+    yield_complete: complete,
+    lbs_per_acre: complete && acres ? round1(finished / acres) : null,
+    lbs_per_plant: complete && plants ? +(finished / plants).toFixed(3) : null,
+  };
+}
+
+function lotId(l) {
+  const cv = (l.cultivar || '').split(/\s+/).map(w => w[0] || '').join('').toUpperCase() || 'XX';
+  return `LOT-${l.season || getSeason()}-${l.zone}-${cv}-C${l.cut_number}`;
+}
+
+function round1(n) {
+  return Math.round((Number(n) || 0) * 10) / 10;
+}
+
+function rollupTotals(rows) {
+  const complete = rows.filter(r => r.yield_complete);
+  const sum = (a, k) => round1(a.reduce((t, r) => t + (r[k] || 0), 0));
+  return {
+    lots: rows.length,
+    lots_with_complete_yield: complete.length,
+    acres: round1(rows.reduce((t, r) => t + (r.acres || 0), 0)),
+    bins: rows.reduce((t, r) => t + (r.bins || 0), 0),
+    sacks: rows.reduce((t, r) => t + (r.sacks || 0), 0),
+    tops_lbs: sum(rows, 'tops_lbs'),
+    smalls_lbs: sum(rows, 'smalls_lbs'),
+    finished_lbs: sum(rows, 'finished_lbs'),
+  };
+}
+
+function summarizeConstants() {
+  const out = {};
+  for (const [k, c] of Object.entries(CONSTANTS)) {
+    out[k] = { value: c.value, label: c.label, pending: c.value === null, unblocks: c.unblocks, how: c.how };
+  }
+  return out;
 }
 
 // ─── HTML RENDERING ─────────────────────────────────────
