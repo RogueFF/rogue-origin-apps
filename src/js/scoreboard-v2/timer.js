@@ -898,8 +898,9 @@
           // Reset button after 2 seconds
           setTimeout(function() {
             delete btn.dataset.busy;
-            // Defer to current gate state — next scale poll will reaffirm.
-            btn.disabled = btn.dataset.gated === 'true';
+            // Always re-enable. The weight window is advisory now (see
+            // scale.js) — only the in-flight API call disables this button.
+            btn.disabled = false;
             btn.classList.remove('success');
             if (btnText) btnText.textContent = originalText;
           }, 2000);
@@ -953,7 +954,8 @@
         // Reset button after 3 seconds
         setTimeout(function() {
           delete btn.dataset.busy;
-          btn.disabled = btn.dataset.gated === 'true';
+          // A failed log must always leave the button pressable to retry.
+          btn.disabled = false;
           btn.classList.remove('error');
           if (btnText) btnText.textContent = originalText;
         }, 3000);

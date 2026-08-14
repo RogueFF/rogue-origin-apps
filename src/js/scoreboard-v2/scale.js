@@ -27,21 +27,30 @@
   var BAG10LB_GATE_MIN_GRAMS = 4642;
   var BAG10LB_GATE_MAX_GRAMS = 4763;
 
+  // The weight window is ADVISORY, not a lock.
+  //
+  // It used to disable the button outside the window, and offline scale meant
+  // no bags could be logged at all. On 2026-08-14 the scale's serial link died
+  // while the reader kept posting 0 g, so the window could never be satisfied
+  // and the floor could not log a single bag — a dead sensor stopped
+  // production. A control that halts work when an instrument fails is worse
+  // than the mis-logged bag it was guarding against, particularly since
+  // logBag records only the bag SIZE and never the scale reading, so pressing
+  // early cannot write a wrong weight anywhere.
+  //
+  // So: `gated` still drives the styling and the tooltip, and the operator can
+  // still see at a glance whether the scale agrees — but the press always goes
+  // through.
   function applyGate(btn, inRange, grams, minG, maxG) {
     btn.dataset.gated = String(!inRange);
-    // Don't toggle disabled mid-API-call — the click handler owns it then.
-    if (!btn.dataset.busy) btn.disabled = !inRange;
-    btn.setAttribute('aria-disabled', String(!inRange));
     btn.title = inRange
       ? ''
-      : 'Scale reads ' + grams + ' g — bag must be ' + minG + '–' + maxG + ' g (with bag) to log.';
+      : 'Scale reads ' + grams + ' g — expected ' + minG + '–' + maxG + ' g (with bag).';
   }
 
   function clearGate(btn) {
     btn.dataset.gated = 'false';
-    if (!btn.dataset.busy) btn.disabled = false;
     btn.removeAttribute('title');
-    btn.removeAttribute('aria-disabled');
   }
 
   function gateBagButton(scaleData) {
@@ -62,21 +71,17 @@
       if (btn10) btn10.style.display = 'none';
     }
 
-    // Scale offline → disable buttons (strict gate). Operator must have a
-    // working scale to log bags so weights are always verified.
+    // Scale offline → flag it, but still let the bag be logged. Losing the
+    // scale must not stop the line; the count is the thing that matters.
     var isStale = !scaleData || scaleData.isStale !== false;
     if (isStale) {
-      var staleMsg = 'Scale offline — bag cannot be logged until scale reconnects.';
+      var staleMsg = 'Scale offline — logging without a weight check.';
       if (btn5) {
         btn5.dataset.gated = 'true';
-        if (!btn5.dataset.busy) btn5.disabled = true;
-        btn5.setAttribute('aria-disabled', 'true');
         btn5.title = staleMsg;
       }
       if (btn10) {
         btn10.dataset.gated = 'true';
-        if (!btn10.dataset.busy) btn10.disabled = true;
-        btn10.setAttribute('aria-disabled', 'true');
         btn10.title = staleMsg;
       }
       return;
