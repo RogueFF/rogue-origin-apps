@@ -53,6 +53,11 @@ const DRY_DAYS_TYPICAL = 10;
 const DRY_DAYS_MIN = 6;
 const DRY_DAYS_MAX = 21;
 
+// Flat field-to-barn round trip. Varies by zone (farther zones take longer) and
+// the per-zone breakdown is expected to fall out of real harvest data — treat
+// this as directional until then. Used only for the implied-driver estimate.
+const ROUND_TRIP_MIN = 12.5;
+
 /**
  * Standing constants for the rollup.
  *
@@ -84,6 +89,7 @@ const PUBLIC_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev';
 const HTML_ACTIONS = new Set([
   'enter', 'headcount', 'barn_intake', 'barn_log',
   'sack_print', 'sack_session_start', 'sack_session', 'sack_label', 'sack_weigh',
+  'crew', 'crew_set',
 ]);
 
 export async function handleHarvestD1(request, env, ctx) {
@@ -115,6 +121,10 @@ export async function handleHarvestD1(request, env, ctx) {
           return await handleSackLabel(db, env, params);
         case 'sack_weigh':
           return await handleSackWeigh(db, env, ctx, body);
+        case 'crew':
+          return await handleCrewForm(db, env);
+        case 'crew_set':
+          return await handleCrewSet(db, env, ctx, body);
       }
     } catch (e) {
       const { message, status } = formatError(e);
@@ -711,6 +721,167 @@ async function getSacks(db, env, params) {
   return successResponse({ success: true, season: getSeason(), totals, data: rows });
 }
 
+// ─── CREW ROSTER ────────────────────────────────────────
+// Drivers, hangers, and the two water-spider roles — everyone the zone scan
+// doesn't already count. Chain of periods, not a daily number: crew size is
+// usually steady but genuinely changes mid-day, so a new roster closes the
+// previous one and person-hours accrue per interval. Update on change, never
+// on a timer.
+
+const CREW_ROLES = [
+  { key: 'drivers',               label: 'Drivers',               where: 'Field ↔ barn' },
+  { key: 'cutter_water_spiders',  label: 'Cutter water spiders',  where: 'Field — bins to trailer' },
+  { key: 'hangers',               label: 'Hangers',               where: 'Barn' },
+  { key: 'hanging_water_spiders', label: 'Hanging water spiders', where: 'Barn — bins to hangers' },
+];
+
+async function getOpenRoster(db, isTest) {
+  return queryOne(db, `
+    SELECT * FROM harvest_crew_roster
+    WHERE effective_to IS NULL AND is_test = ?
+    ORDER BY effective_from DESC, id DESC LIMIT 1
+  `, [isTest]);
+}
+
+async function handleCrewForm(db, env) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const current = await getOpenRoster(db, isTest);
+  return renderPage('Crew', crewFormBody(current));
+}
+
+async function handleCrewSet(db, env, ctx, body) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const current = await getOpenRoster(db, isTest);
+
+  const counts = {};
+  for (const r of CREW_ROLES) {
+    const raw = body[r.key];
+    // Blank means "unchanged" rather than zero — the form pre-fills current
+    // values so an operator changing one role doesn't have to retype the rest.
+    if (raw === undefined || String(raw).trim() === '') {
+      counts[r.key] = current ? current[r.key] : null;
+      continue;
+    }
+    const n = parseInt(raw, 10);
+    if (!Number.isInteger(n) || n < 0 || n > 99) {
+      throw createError('VALIDATION_ERROR', `${r.label} must be a whole number from 0 to 99.`);
+    }
+    counts[r.key] = n;
+  }
+
+  const unchanged = current && CREW_ROLES.every(r => current[r.key] === counts[r.key]);
+  if (unchanged) {
+    return renderPage('Crew', crewConfirmBody(counts, 'No change — roster left as it was.'));
+  }
+
+  if (current) {
+    await execute(db, `UPDATE harvest_crew_roster SET effective_to = datetime('now') WHERE id = ?`, [current.id]);
+  }
+  const note = body.note ? String(body.note).trim().substring(0, 200) : null;
+  await execute(db, `
+    INSERT INTO harvest_crew_roster
+      (season, drivers, cutter_water_spiders, hangers, hanging_water_spiders, note, is_test)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `, [getSeason(), counts.drivers, counts.cutter_water_spiders, counts.hangers,
+      counts.hanging_water_spiders, note, isTest]);
+
+  const summary = CREW_ROLES.map(r => `${r.label}: ${counts[r.key] ?? '—'}`).join(' · ');
+  ctx.waitUntil(sendTelegramMessage(env, {
+    chatId: env.TELEGRAM_TEST_CHAT_ID,
+    text: `👷 Crew updated\n${summary}${note ? `\n_${note}_` : ''}`,
+  }).catch(e => console.error('[harvest][telegram]', e)));
+
+  return renderPage('Crew', crewConfirmBody(counts, 'Crew updated.'));
+}
+
+/**
+ * Person-hours per role across a day.
+ *
+ * Roster periods are clipped to the day's ACTIVE window (first to last capture
+ * event) rather than run against wall-clock. Nobody clocks out, so an open
+ * roster left overnight would otherwise bill 24 hours per person — this makes
+ * over-counting structurally impossible instead of relying on discipline.
+ */
+async function crewPersonHours(db, isTest, dayIso) {
+  const bounds = await queryOne(db, `
+    SELECT MIN(occurred_at) AS first_event, MAX(occurred_at) AS last_event
+    FROM harvest_scan_log WHERE date(occurred_at) = ? AND is_test = ?
+  `, [dayIso, isTest]);
+  if (!bounds?.first_event || !bounds?.last_event) return null;
+
+  const periods = await query(db, `
+    SELECT * FROM harvest_crew_roster
+    WHERE is_test = ?
+      AND date(effective_from) <= ?
+      AND (effective_to IS NULL OR date(effective_to) >= ?)
+    ORDER BY effective_from ASC
+  `, [isTest, dayIso, dayIso]);
+  if (!periods.length) return null;
+
+  const winStart = parseSqliteUtc(bounds.first_event).getTime();
+  const winEnd = parseSqliteUtc(bounds.last_event).getTime();
+  const out = { active_hours: +((winEnd - winStart) / 3600000).toFixed(2) };
+  for (const r of CREW_ROLES) out[r.key] = 0;
+
+  for (const p of periods) {
+    const s = Math.max(parseSqliteUtc(p.effective_from).getTime(), winStart);
+    const e = Math.min(p.effective_to ? parseSqliteUtc(p.effective_to).getTime() : winEnd, winEnd);
+    const hrs = (e - s) / 3600000;
+    if (hrs <= 0) continue;
+    for (const r of CREW_ROLES) out[r.key] += (p[r.key] || 0) * hrs;
+  }
+  for (const r of CREW_ROLES) out[r.key] = +out[r.key].toFixed(1);
+  return out;
+}
+
+/**
+ * Drivers implied by how fast loads actually arrive — free, no capture.
+ *
+ * Measures utilisation, which the roster cannot: if the roster says 3 drivers
+ * but cadence implies 1.8, drivers are idling, and that is the number you want
+ * before staffing a fourth. Roster = payroll, this = throughput.
+ */
+async function impliedDrivers(db, isTest, dayIso, rosteredAvg) {
+  const loads = await query(db, `
+    SELECT occurred_at FROM harvest_scan_log
+    WHERE event_type = 'barn_load' AND date(occurred_at) = ? AND is_test = ?
+    ORDER BY occurred_at ASC
+  `, [dayIso, isTest]);
+  if (loads.length < 3) return null;   // too few gaps to say anything honest
+
+  const t = loads.map(l => parseSqliteUtc(l.occurred_at).getTime());
+  const gaps = [];
+  for (let i = 1; i < t.length; i++) {
+    const g = (t[i] - t[i - 1]) / 60000;
+    if (g > 0 && g < 120) gaps.push(g);      // drop overnight / break-length gaps
+  }
+  if (gaps.length < 2) return null;
+
+  gaps.sort((a, b) => a - b);
+  const medianGap = gaps[Math.floor(gaps.length / 2)];
+
+  // Drivers needed to sustain the observed load cadence. Below 1 means a single
+  // driver keeps up with room to spare — i.e. drivers are not the constraint.
+  const required = ROUND_TRIP_MIN / medianGap;
+
+  return {
+    loads: loads.length,
+    median_gap_min: +medianGap.toFixed(1),
+    round_trip_min: ROUND_TRIP_MIN,
+    drivers_required_for_cadence: +required.toFixed(2),
+    drivers_rostered_avg: rosteredAvg !== null ? +rosteredAvg.toFixed(2) : null,
+    utilisation_pct: rosteredAvg ? Math.round((required / rosteredAvg) * 100) : null,
+    reading: rosteredAvg
+      ? (required / rosteredAvg < 0.5
+          ? 'Drivers have slack — cutting or hanging is the constraint, not transport.'
+          : required / rosteredAvg > 0.9
+            ? 'Drivers are saturated — transport is likely the bottleneck.'
+            : 'Drivers roughly matched to cadence.')
+      : 'No roster set for this day, so utilisation is unknown.',
+    caveat: 'Cadence-derived: idle time between loads reads as fewer drivers needed.',
+  };
+}
+
 // ─── ROLLUP LEDGER ──────────────────────────────────────
 // Turns the raw capture stream into one row per LOT (zone x cultivar x cut),
 // joined against the field record (acres, plant date) so the ratios Koa
@@ -745,11 +916,26 @@ async function getRollup(db, env, params) {
   `, [season, isTest]);
 
   const rows = lots.map(l => buildLotRow(l));
+
+  // Crew is captured per-period, not per-lot — a roster change doesn't line up
+  // with lot boundaries — so it rolls up by day alongside the lots.
+  const days = [...new Set(rows.map(r => r.cut_date))].sort();
+  const crewByDay = [];
+  for (const d of days) {
+    const hours = await crewPersonHours(db, isTest, d);
+    // Time-weighted average drivers on the clock, so utilisation compares like
+    // with like when the roster changed part-way through the day.
+    const rosteredAvg = hours && hours.active_hours > 0 ? hours.drivers / hours.active_hours : null;
+    const implied = await impliedDrivers(db, isTest, d, rosteredAvg);
+    if (hours || implied) crewByDay.push({ date: d, person_hours: hours, driver_utilisation: implied });
+  }
+
   return successResponse({
     success: true,
     season,
     is_test: !!isTest,
     generated_at: new Date().toISOString(),
+    crew_by_day: crewByDay,
     constants: summarizeConstants(),
     plants_per_acre: { value: PLANTS_PER_ACRE, derivation: `43,560 sq ft/ac ÷ (${PLANT_SPACING_FT.inRow} ft × ${PLANT_SPACING_FT.bed} ft)` },
     totals: rollupTotals(rows),
@@ -1010,7 +1196,42 @@ function barnLogConfirmBody({ zone, bins, loadNumber, hasActiveSession }) {
 <h1>Logged: ${bins} bins → ${zone}</h1>
 <p class="sub">Load #${loadNumber} today for ${zone}</p>
 ${hasActiveSession ? '' : `<p class="note">⚠️ No active session was open for ${zone} — logged with no zone-session attribution.</p>`}
-<div class="footer"><a href="?action=barn_intake">Log another load →</a></div>`;
+<div class="footer"><a href="?action=barn_intake">Log another load →</a> · <a href="?action=crew">Crew changed? →</a></div>`;
+}
+
+// ─── CREW ROSTER RENDERING ──────────────────────────────
+
+function crewFormBody(current) {
+  const fields = CREW_ROLES.map(r => `
+  <label for="${r.key}">${r.label} <span class="hint">${r.where}</span></label>
+  <input id="${r.key}" name="${r.key}" type="number" min="0" max="99" inputmode="numeric"
+         value="${current && current[r.key] !== null ? current[r.key] : ''}">`).join('');
+
+  const since = current
+    ? `<p class="note">Current roster, set ${escapeHtml(current.effective_from)} UTC. Change only what changed.</p>`
+    : `<p class="note">No roster set yet today. Fill in who's working.</p>`;
+
+  return `
+<h1>Crew</h1>
+<p class="sub">Update when it changes — not on a schedule</p>
+${since}
+<form method="POST" action="?action=crew_set" onsubmit="this.querySelector('button').disabled=true">
+  ${fields}
+  <label for="note">Note <span class="hint">(optional — e.g. "driver pulled to trim")</span></label>
+  <input id="note" name="note" maxlength="200" autocomplete="off">
+  <button class="btn" type="submit">Save crew</button>
+</form>
+<p class="note"><span class="hint">Cutters aren't here — they're counted by the zone-entry scan.</span></p>`;
+}
+
+function crewConfirmBody(counts, flash) {
+  const rows = CREW_ROLES.map(r =>
+    `<div class="lotmeta"><strong>${r.label}:</strong> ${counts[r.key] ?? '—'} <span class="hint">${r.where}</span></div>`
+  ).join('');
+  return `
+<h1>✅ ${escapeHtml(flash)}</h1>
+<div class="status">${rows}</div>
+<div class="footer"><a href="?action=crew">Change again →</a> · <a href="?action=barn_intake">Barn intake →</a></div>`;
 }
 
 // ─── SUPERSACK TAG RENDERING ────────────────────────────
