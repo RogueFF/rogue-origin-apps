@@ -2578,8 +2578,9 @@ function initBagCompleteButton() {
         btnText.textContent = originalText;
         btn.classList.remove('success');
         delete btn.dataset.busy;
-        // Let the next scale poll re-evaluate the gate.
-        btn.disabled = btn.dataset.gated === 'true';
+        // Always re-enable. The weight window is advisory — only the in-flight
+        // post disables this button.
+        btn.disabled = false;
       }, 2000);
     } catch (error) {
       console.error('Error logging bag:', error);
@@ -2587,7 +2588,8 @@ function initBagCompleteButton() {
       setTimeout(() => {
         btnText.textContent = originalText;
         delete btn.dataset.busy;
-        btn.disabled = btn.dataset.gated === 'true';
+        // A failed log must always leave the button pressable to retry.
+        btn.disabled = false;
       }, 3000);
     }
   });
@@ -2623,7 +2625,8 @@ function initBagComplete10lbButton() {
         btnText.textContent = originalText;
         btn.classList.remove('success');
         delete btn.dataset.busy;
-        btn.disabled = btn.dataset.gated === 'true';
+        // Always re-enable (see note on the 5kg handler above).
+        btn.disabled = false;
       }, 2000);
     } catch (error) {
       console.error('Error logging 10lb bag:', error);
@@ -2631,7 +2634,8 @@ function initBagComplete10lbButton() {
       setTimeout(() => {
         btnText.textContent = originalText;
         delete btn.dataset.busy;
-        btn.disabled = btn.dataset.gated === 'true';
+        // A failed log must always leave the button pressable to retry.
+        btn.disabled = false;
       }, 3000);
     }
   });
@@ -3625,21 +3629,28 @@ const BAG_GATE_MAX_GRAMS = 5317;
 const BAG10LB_GATE_MIN_GRAMS = 4642;
 const BAG10LB_GATE_MAX_GRAMS = 4763;
 
+// The weight window is ADVISORY, not a lock (mirrors scoreboard scale.js).
+//
+// It used to disable the button outside the window, and an offline scale meant
+// no bag could be logged at all. On 2026-08-14 the scale's serial link died
+// while the reader kept posting 0 g, so the window could never be satisfied and
+// the floor could not log a single bag — a dead sensor stopped production. That
+// costs more than the mis-logged bag it guards against, and it guards very
+// little: logBag sends only the bag SIZE, never the scale reading, so pressing
+// early cannot write a wrong weight anywhere.
+//
+// `gated` still drives the styling and tooltip so the operator can see the
+// scale disagrees — the press just always goes through.
 function applyBagGate(btn, inRange, grams, minG, maxG) {
   btn.dataset.gated = String(!inRange);
-  // Don't toggle off mid-API-call (handler sets data-busy when posting).
-  if (!btn.dataset.busy) btn.disabled = !inRange;
-  btn.setAttribute('aria-disabled', String(!inRange));
   btn.title = inRange
     ? ''
-    : `Scale reads ${grams} g — bag must be ${minG}–${maxG} g (with bag) to log.`;
+    : `Scale reads ${grams} g — expected ${minG}–${maxG} g (with bag).`;
 }
 
 function clearBagGate(btn) {
   btn.dataset.gated = 'false';
-  if (!btn.dataset.busy) btn.disabled = false;
   btn.removeAttribute('title');
-  btn.removeAttribute('aria-disabled');
 }
 
 function setBagButtonVisibility(btn5, btn10, scaleData) {
@@ -3672,16 +3683,14 @@ function gateBagCompleteButton(scaleData) {
   if (p5) p5.classList.toggle('active', mode === '5kg');
   if (p10) p10.classList.toggle('active', mode === '10lb');
 
-  // Scale offline → disable buttons (strict gate). No logging without
-  // a verified weight reading.
+  // Scale offline → flag it, but still let the bag be logged. Losing the scale
+  // must not stop the line; the count is the thing that matters.
   const isStale = !scaleData || scaleData.isStale !== false;
   if (isStale) {
-    const staleMsg = 'Scale offline — bag cannot be logged until scale reconnects.';
+    const staleMsg = 'Scale offline — logging without a weight check.';
     [btn5, btn10].forEach(btn => {
       if (!btn) return;
       btn.dataset.gated = 'true';
-      if (!btn.dataset.busy) btn.disabled = true;
-      btn.setAttribute('aria-disabled', 'true');
       btn.title = staleMsg;
     });
     return;

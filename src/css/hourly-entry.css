@@ -3595,6 +3595,18 @@ input[type="number"] {
   background: linear-gradient(135deg, #155a32, #1a6b3c);
 }
 
+/* Weight outside the expected window, or scale offline.
+   ADVISORY ONLY — the button stays fully pressable (see hourly-entry/index.js).
+   A dashed border says "the scale does not agree" without greying the button
+   out, so a dead scale can never stop a bag being logged.
+   Targets .manual-btn: that is the class the bag buttons actually carry
+   (ids bag-complete-btn / bag-complete-btn-10lb) — the .bag-complete-btn
+   rules in this file match nothing. */
+.manual-btn[data-gated="true"]:not(:disabled) {
+  border-style: dashed;
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
 .bag-complete-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
