@@ -4213,7 +4213,18 @@ html.tv-mode .cycle-bars-target-label { font-size: 11px; }
   outline-offset: 2px;
 }
 
-/* Disabled Log Bag button (out of range or scale offline) */
+/* Weight outside the expected window, or scale offline.
+   ADVISORY ONLY — the button stays fully pressable (see scale.js). A tooltip
+   is invisible on a wall display, so the signal goes in the border STYLE, not
+   its colour: the colour is already spoken for by the timer's pace state
+   (.btn-green / .btn-yellow / .btn-red) and an amber border here would be
+   indistinguishable from "behind pace". Dashed = the scale does not agree. */
+.manual-btn[data-gated="true"]:not(:disabled) {
+  border-style: dashed !important;
+  border-width: 2px !important;
+}
+
+/* Disabled Log Bag button — now only while a log is in flight */
 .manual-btn:disabled,
 .manual-btn[aria-disabled="true"] {
   opacity: 0.4;
