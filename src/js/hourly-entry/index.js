@@ -64,14 +64,23 @@ function updateTimeSlots(shiftStart) {
     SLOT_END_MINUTES[slotLabel] = slot.end * 60 + slot.endMin;
   });
 
-  // If custom shift start, adjust the slot that contains it
+  // If custom shift start, adjust the slot that contains it.
+  //
+  // Only the FIRST slot (7:00–8:00 AM) may carry a custom label. That is the
+  // only dynamic form the backend accepts (validateTimeSlot in
+  // workers/src/handlers/production/hourly-entry.js only matches
+  // "H:MM AM - 8:00 AM") and the only one present in historical D1 rows.
+  // Renaming any later slot produced a label that no longer matched the
+  // canonical key the API returns, so the slot rendered empty while its data
+  // sat unreachable in dayData — and saving it would have been rejected 400.
+  // Later starts are handled by getSlotMultiplier's proration instead.
   if (shiftStart) {
     const shiftHour = shiftStart.getHours();
     const shiftMin = shiftStart.getMinutes();
     const shiftMinutes = shiftHour * 60 + shiftMin;
 
-    // Find which slot contains this start time
-    for (let i = 0; i < defaultSlots.length; i++) {
+    // Only slot 0 is eligible for a custom start label
+    for (let i = 0; i < 1; i++) {
       const slot = defaultSlots[i];
       const slotStartMin = slot.start * 60 + slot.startMin;
       const slotEndMin = slot.end * 60 + slot.endMin;
@@ -568,8 +577,45 @@ function updateShiftStartUI() {
  * @param {string} slot - Time slot string
  * @returns {boolean} - True if slot should be shown
  */
+/**
+ * Re-key the first hour onto whatever label the timeline is currently showing.
+ *
+ * The 7:00–8:00 slot is the one slot that may carry a custom start label
+ * ("7:30 AM – 8:00 AM"); the backend stores that form verbatim. So a row can
+ * come back under either the canonical label or a custom one, depending on
+ * whether it was saved before or after "Start Day" was pressed — and the two
+ * drift apart whenever the shift start changes. Without this, the hour renders
+ * empty while its data sits unreachable under the other key.
+ */
+function normalizeFirstSlotKey() {
+  const target = TIME_SLOTS[0];
+  if (!target) return;
+
+  const endsAtEightAM = (key) => /–\s*8:00\s*AM$/i.test(String(key).replace(/[-—]/g, '–').trim());
+
+  Object.keys(dayData).forEach((key) => {
+    if (key === target || !endsAtEightAM(key)) return;
+    const incoming = dayData[key];
+    delete dayData[key];
+    // If both keys somehow carry a row, keep whichever one actually has data.
+    if (!slotHasRecordedData(target)) dayData[target] = incoming;
+  });
+}
+
+function slotHasRecordedData(slot) {
+  const d = dayData[slot];
+  if (!d) return false;
+  return (d.tops1 || 0) > 0 || (d.tops2 || 0) > 0
+    || (d.smalls1 || 0) > 0 || (d.smalls2 || 0) > 0
+    || (d.trimmers1 || 0) > 0 || (d.trimmers2 || 0) > 0;
+}
+
 function isSlotVisible(slot) {
   if (!shiftStartTime) return true; // No start time set, show all
+
+  // Recorded data is ground truth and always wins over the shift-start
+  // heuristic. A late "Start Day" must never hide an hour the crew worked.
+  if (slotHasRecordedData(slot)) return true;
 
   const slotStartMinutes = SLOT_START_MINUTES[slot];
   if (slotStartMinutes === undefined) return true;
@@ -1591,6 +1637,8 @@ async function loadDayData(date) {
       dayData = productionData.slots;
     }
 
+    normalizeFirstSlotKey();
+
     // Get target rate from production response
     if (productionData.targetRate) {
       targetRate = productionData.targetRate;
@@ -1690,6 +1738,10 @@ function getSlotMultiplier(slot) {
   // For today with shift start: may need further reduction
   const isToday = currentDate === formatDateLocal(new Date());
   if (!isToday || !shiftStartTime) return multiplier;
+
+  // Same rule as isSlotVisible: if the hour has recorded data the crew worked
+  // it, so keep its full target rather than zeroing/prorating it away.
+  if (slotHasRecordedData(slot)) return multiplier;
 
   const shiftMin = shiftStartTime.getHours() * 60 + shiftStartTime.getMinutes();
   if (shiftMin >= slotEnd) return 0;
