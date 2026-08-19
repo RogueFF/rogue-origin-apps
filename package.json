@@ -8,7 +8,8 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "playwright test",
+    "test": "node --test tests/*.test.mjs",
+    "test:e2e": "playwright test",
     "test:tutorial": "playwright test kanban-tutorial.spec.js",
     "test:tutorial:ui": "playwright test kanban-tutorial.spec.js --ui",
     "test:tutorial:debug": "playwright test kanban-tutorial.spec.js --debug",
