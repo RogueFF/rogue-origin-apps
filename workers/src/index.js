@@ -3,7 +3,7 @@
  *
  * Routes:
  * - /api/production - Production tracking (D1)
- * - /api/orders - Wholesale orders (D1)
+ * - /api/orders - Consignment auth only (the orders app was retired)
  * - /api/kanban - Kanban board (D1)
  * - /api/sop - Standard operating procedures (D1)
  * - /api/consignment - Consignment inventory tracking (D1)
@@ -15,7 +15,7 @@
  */
 
 import { handleProductionD1 } from './handlers/production-d1.js';
-import { handleOrdersD1 } from './handlers/orders-d1.js';
+import { handleOrdersD1 } from './handlers/orders-auth.js';
 import { handleKanbanD1 } from './handlers/kanban-d1.js';
 import { handleSopD1 } from './handlers/sop-d1.js';
 import { handleConsignmentD1 } from './handlers/consignment-d1.js';

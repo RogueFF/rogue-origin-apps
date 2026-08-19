@@ -196,28 +196,6 @@
   }
 
   /**
-   * Load order queue data from API
-   */
-  function loadOrderQueue() {
-    if (!API || !API.loadOrderQueue) {
-      return;
-    }
-
-    API.loadOrderQueue(
-      function(response) {
-        // State is updated automatically by API.loadOrderQueue
-        // Now render the order queue UI
-        if (Render && Render.renderOrderQueue) {
-          Render.renderOrderQueue();
-        }
-      },
-      function(error) {
-        console.error('Failed to load order queue:', error);
-      }
-    );
-  }
-
-  /**
    * Set the display language
    * @param {string} lang - Language code ('en' or 'es')
    */
@@ -281,9 +259,6 @@
       State.cycleHistory = Cycle.loadLocalCycleHistory();
     }
 
-    // Initialize order queue visibility from localStorage
-    initOrderQueueVisibility();
-
     // Initialize AVG/BEST visibility from localStorage
     initAvgBestVisibility();
 
@@ -314,16 +289,6 @@
     // Initial data load (always fetch on page load)
     loadData();
 
-    // Initial order queue load
-    loadOrderQueue();
-
-    // Register order queue loading interval (less frequent since it changes rarely)
-    var orderQueueInterval = (Config && Config.intervals && Config.intervals.orderQueueRefresh) || 30000; // 30 seconds
-    if (State && State.registerInterval) {
-      State.registerInterval(loadOrderQueue, orderQueueInterval);
-    } else {
-      setInterval(loadOrderQueue, orderQueueInterval);
-    }
 
     // Initial cycle history render
     if (Cycle && Cycle.renderCycleHistory) {
@@ -447,55 +412,6 @@
   }
 
   /**
-   * Toggle order queue visibility
-   */
-  function toggleOrderQueue() {
-    var section = DOM ? DOM.get('orderQueueSection') : document.getElementById('orderQueueSection');
-    var toggleBtn = DOM ? DOM.get('orderQueueToggleBtn') : document.getElementById('orderQueueToggleBtn');
-
-    if (!section) return;
-
-    // Get current state
-    var isVisible = localStorage.getItem('orderQueueVisible') === 'true';
-
-    // Toggle state
-    var newState = !isVisible;
-    localStorage.setItem('orderQueueVisible', newState.toString());
-
-    // Update UI
-    if (newState) {
-      section.style.display = 'flex';
-      if (toggleBtn) toggleBtn.classList.add('active');
-    } else {
-      section.style.display = 'none';
-      if (toggleBtn) toggleBtn.classList.remove('active');
-    }
-
-    console.debug('Order queue toggled:', newState ? 'visible' : 'hidden');
-  }
-
-  /**
-   * Initialize order queue visibility from localStorage
-   */
-  function initOrderQueueVisibility() {
-    var section = DOM ? DOM.get('orderQueueSection') : document.getElementById('orderQueueSection');
-    var toggleBtn = DOM ? DOM.get('orderQueueToggleBtn') : document.getElementById('orderQueueToggleBtn');
-
-    if (!section) return;
-
-    // Default to hidden if not set
-    var isVisible = localStorage.getItem('orderQueueVisible') === 'true';
-
-    if (isVisible) {
-      section.style.display = 'flex';
-      if (toggleBtn) toggleBtn.classList.add('active');
-    } else {
-      section.style.display = 'none';
-      if (toggleBtn) toggleBtn.classList.remove('active');
-    }
-  }
-
-  /**
    * Toggle AVG/BEST stats visibility
    */
   function toggleAvgBest() {
@@ -550,7 +466,6 @@
   window.toggleDatePicker = toggleDatePicker;
   window.loadHistoricalDate = loadHistoricalDate;
   window.clearHistoricalDate = clearHistoricalDate;
-  window.toggleOrderQueue = toggleOrderQueue;
   window.toggleAvgBest = toggleAvgBest;
 
   // Expose timer functions for pause button handlers

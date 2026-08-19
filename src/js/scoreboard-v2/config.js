@@ -15,14 +15,12 @@
   var ScoreboardConfig = {
     // API URLs
     API_URL: API_BASE + '/production',
-    WHOLESALE_API_URL: API_BASE + '/orders',
 
     // Timing intervals (milliseconds)
     intervals: {
       clockRefresh: 1000,       // Update clock every second
       versionCheck: 3000,       // Smart polling: check if data changed every 3 seconds
-      timerRefresh: 1000,       // Update timer display every second
-      orderQueueRefresh: 60000  // Order queue refresh every 60 seconds (was 30s)
+      timerRefresh: 1000        // Update timer display every second
     },
 
     // Work schedule (24-hour format)

@@ -84,16 +84,6 @@
     },
 
     /**
-     * Get Wholesale Orders API URL (separate backend for order management)
-     * @returns {string} Wholesale orders API endpoint URL
-     */
-    getWholesaleApiUrl: function() {
-      const config = window.ScoreboardConfig;
-      return (config && config.WHOLESALE_API_URL) ||
-        'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/orders';
-    },
-
-    /**
      * Load scoreboard data (scoreboard + timer)
      * @param {Function} onSuccess - Callback with response data {scoreboard: ..., timer: ...}
      * @param {Function} onError - Error callback
@@ -398,72 +388,6 @@
           })
           .catch(function(error) {
             console.error('getShiftStart error:', error);
-            if (onError) onError(error);
-          });
-      }
-    },
-
-    /**
-     * Load order queue for scoreboard display
-     * @param {Function} onSuccess - Callback with response data {current: ..., next: ..., queue: ...}
-     * @param {Function} onError - Error callback
-     */
-    loadOrderQueue: function(onSuccess, onError) {
-      if (this.isAppsScript()) {
-        // Running inside Google Apps Script web app
-        google.script.run
-          .withSuccessHandler(function(response) {
-            // Store in state if available
-            if (window.ScoreboardState) {
-              window.ScoreboardState.orderQueue = response;
-            }
-            if (onSuccess) onSuccess(response);
-          })
-          .withFailureHandler(function(error) {
-            console.error('Apps Script loadOrderQueue error:', error);
-            if (onError) onError(error);
-          })
-          .getScoreboardOrderQueue();
-      } else {
-        // Running on GitHub Pages - use fetch API to wholesale orders backend (Vercel)
-        const apiUrl = this.getWholesaleApiUrl();
-
-        // Check for cached order queue data
-        let cachedOrders = null;
-        if (window.ScoreboardState && window.ScoreboardState.orderQueue) {
-          cachedOrders = window.ScoreboardState.orderQueue;
-        }
-
-        fetch(`${apiUrl}?action=getScoreboardOrderQueue`)
-          .then(function(response) {
-            if (!response.ok) {
-              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            return response.json();
-          })
-          .then(function(raw) {
-            // Handle Vercel response wrapper
-            const response = raw.data || raw;
-            // Store in state if available
-            if (window.ScoreboardState) {
-              window.ScoreboardState.orderQueue = response;
-            }
-            if (onSuccess) onSuccess(response);
-          })
-          .catch(function(error) {
-            // Check if this is a rate limit error (429)
-            const isRateLimited = error.message && error.message.includes('429');
-
-            if (isRateLimited) {
-              console.warn('Order queue rate limited, using cached data if available');
-              if (cachedOrders) {
-                // Use existing cached order queue data
-                if (onSuccess) onSuccess(cachedOrders);
-                return;
-              }
-            }
-
-            console.error('Fetch loadOrderQueue error:', error);
             if (onError) onError(error);
           });
       }

@@ -54,28 +54,28 @@
 <!-- module-hashes:end -->
   <script type="module" src="../js/shared/i18n.js?h=6c5893f7"></script>
   <script type="module" src="../js/scoreboard-v2/i18n-labels.js?h=9d0ef791"></script>
-  <script defer src="../js/scoreboard-v2/config.js?h=3f363280"></script>
-  <script defer src="../js/scoreboard-v2/state.js?h=01eeeaf7"></script>
+  <script defer src="../js/scoreboard-v2/config.js?h=083362a4"></script>
+  <script defer src="../js/scoreboard-v2/state.js?h=4be9fd83"></script>
   <script defer src="../js/scoreboard-v2/dom.js?h=6242a8fb"></script>
-  <script defer src="../js/scoreboard-v2/api.js?h=6bebe4ff"></script>
+  <script defer src="../js/scoreboard-v2/api.js?h=581e8c7b"></script>
   <script defer src="../js/scoreboard-v2/timer.js?h=4e543dbc"></script>
   <script defer src="../js/scoreboard-v2/cycle-history.js?h=fe53642d"></script>
   <script defer src="../js/scoreboard-v2/chart.js?h=c59ec199"></script>
-  <script defer src="../js/scoreboard-v2/render.js?h=17d83260"></script>
+  <script defer src="../js/scoreboard-v2/render.js?h=1162baef"></script>
   <script defer src="../js/scoreboard-v2/shift-start.js?h=61b34a85"></script>
   <script defer src="../js/scoreboard-v2/morning-report.js?h=37930b7a"></script>
   <script defer src="../js/scoreboard-v2/scale.js?h=9c932393"></script>
   <script defer src="../js/scoreboard-v2/debug.js?h=62d18cd5"></script>
-  <script defer src="../js/scoreboard-v2/events.js?h=5d236bce"></script>
-  <script defer src="../js/scoreboard-v2/fab-menu.js?h=ef066ffd"></script>
-  <script defer src="../js/scoreboard-v2/main.js?h=bd3ca4dc"></script>
+  <script defer src="../js/scoreboard-v2/events.js?h=38300ba6"></script>
+  <script defer src="../js/scoreboard-v2/fab-menu.js?h=318ac0be"></script>
+  <script defer src="../js/scoreboard-v2/main.js?h=01b4d8dc"></script>
 
   <!-- Critical CSS: Loaded synchronously -->
   <link rel="stylesheet" href="../css/shared-base.css?h=036524e3">
 
   <!-- Non-critical CSS: Deferred for faster initial render -->
-  <link rel="preload" href="../css/scoreboard-v2.css?h=d6e9114b" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link rel="stylesheet" href="../css/scoreboard-v2.css?h=d6e9114b"></noscript>
+  <link rel="preload" href="../css/scoreboard-v2.css?h=a6a362e4" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/scoreboard-v2.css?h=a6a362e4"></noscript>
 
   <!-- SVG Noise Filter Definition -->
   <style>
@@ -201,11 +201,6 @@
     Past Data
   </button>
 
-  <!-- Order Queue Toggle Button (hidden — moved to FAB) -->
-  <button id="orderQueueToggleBtn" class="order-queue-toggle-btn" title="Toggle Order Queue / Alternar Cola de Pedidos">
-    <i class="ph-duotone ph-stack"></i>
-    <span id="orderQueueToggleText">Orders</span>
-  </button>
 
   <!-- Lang / TV / Complaints toggles (hidden — moved to FAB) -->
   <div class="lang-toggle" style="display:none !important">
@@ -377,33 +372,6 @@
         <div class="comparison-pill streak-pill" id="streakPill" style="display:none"><span class="streak-icon"><i class="ph-duotone ph-fire"></i></span><span class="streak-value" id="streakValue">0</span><span class="comparison-label" id="streakLabel">hr streak</span></div>
       </div>
 
-      <!-- Order Queue Section -->
-      <div class="order-queue-section" id="orderQueueSection" style="display:none;">
-        <div class="order-pill" id="currentOrderPill">
-          <div class="order-pill-header">
-            <span class="order-icon">🎯</span>
-            <span class="order-label" id="currentOrderLabel">WORKING ON</span>
-            <span class="order-summary" id="currentOrderSummary">—</span>
-            <span class="expand-icon">▼</span>
-          </div>
-          <div class="order-progress-bar-container" id="currentProgressBarContainer" style="display:none;">
-            <div class="order-progress-bar">
-              <div class="order-progress-fill" id="currentProgressFill" style="width:0%"></div>
-            </div>
-            <span class="order-progress-text" id="currentProgressText">0 / 0 kg</span>
-          </div>
-          <div class="order-detail" id="currentOrderDetail"></div>
-        </div>
-        <div class="order-pill next" id="nextOrderPill">
-          <div class="order-pill-header">
-            <span class="order-icon">⏭</span>
-            <span class="order-label" id="nextOrderLabel">UP NEXT</span>
-            <span class="order-summary" id="nextOrderSummary">—</span>
-            <span class="expand-icon">▼</span>
-          </div>
-          <div class="order-detail" id="nextOrderDetail"></div>
-        </div>
-      </div>
     </div>
 
     <!-- ====== RIGHT INSTRUMENT CLUSTER — Scale, Timer, Stats ====== -->
@@ -835,11 +803,6 @@
       <button class="fab-menu-item" id="fabPastData" role="menuitem">
         <i class="ph-duotone ph-calendar"></i>
         <span>Past Data</span>
-      </button>
-      <button class="fab-menu-item" id="fabOrderQueue" role="menuitem">
-        <i class="ph-duotone ph-package"></i>
-        <span>Order Queue</span>
-        <span class="fab-indicator" id="orderQueueIndicator">OFF</span>
       </button>
       <button class="fab-menu-item" id="fabChart" role="menuitem">
         <i class="ph-duotone ph-chart-bar"></i>
