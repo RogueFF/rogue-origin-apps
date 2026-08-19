@@ -1,0 +1,21 @@
+// Intentionally NOT named `wrangler.jsonc` / `wrangler.toml`.
+// A discoverable root config here shadows every worker config in the repo
+// (workers/wrangler.toml, workers/mission-control): a bare
+// `wrangler deploy` from any of those dirs resolves UP to this file and ships a
+// bindingless ~20 KiB assets worker instead of the intended worker.
+// Keep this name non-standard so wrangler never auto-discovers it.
+// To deploy this assets worker on purpose: `npx wrangler deploy -c wrangler.master.jsonc`
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "rogue-origin-apps-master",
+  "compatibility_date": "2026-04-09",
+  "observability": {
+    "enabled": true
+  },
+  "assets": {
+    "directory": "."
+  },
+  "compatibility_flags": [
+    "nodejs_compat"
+  ]
+}
