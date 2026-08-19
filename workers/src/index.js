@@ -9,6 +9,7 @@
  * - /api/consignment - Consignment inventory tracking (D1)
  * - /api/complaints - Customer complaints tracking (D1)
  * - /api/pool - Shopify pool inventory proxy
+ * - /api/media - Media upload/serve (R2) — used by SOP Manager
  * - /api/irrigation - Irrigation crew reports (D1)
  * - /api/harvest - Harvest zone-entry & barn-intake tracking (D1) [TEST]
  */
@@ -20,6 +21,7 @@ import { handleSopD1 } from './handlers/sop-d1.js';
 import { handleConsignmentD1 } from './handlers/consignment-d1.js';
 import { handleComplaintsD1 } from './handlers/complaints-d1.js';
 import { handlePoolRequest } from './handlers/pool.js';
+import { handleMediaR2 } from './handlers/media-r2.js';
 import { handleSupersackD1 } from './handlers/supersack-d1.js';
 import { handleIrrigationD1 } from './handlers/irrigation-d1.js';
 import { handleHarvestD1, handleSackScan, handleZoneScan } from './handlers/harvest-d1.js';
@@ -112,6 +114,8 @@ export default {
         response = await handleComplaintsD1(request, env, ctx);
       } else if (path.startsWith('/api/consignment')) {
         response = await handleConsignmentD1(request, env, ctx);
+      } else if (path.startsWith('/api/media')) {
+        response = await handleMediaR2(request, env);
       } else if (path.startsWith('/api/supersack-qa')) {
         const { handleSupersackQA } = await import('./handlers/supersack-qa.js');
         response = await handleSupersackQA(request, env, ctx);
@@ -138,7 +142,7 @@ export default {
           success: true,
           message: 'Rogue Origin API - Cloudflare Workers',
           version: '1.0.0',
-          endpoints: ['/api/production', '/api/orders', '/api/kanban', '/api/sop', '/api/consignment', '/api/complaints', '/api/supersack', '/api/pool', '/api/irrigation', '/api/harvest']
+          endpoints: ['/api/production', '/api/orders', '/api/kanban', '/api/sop', '/api/consignment', '/api/complaints', '/api/supersack', '/api/pool', '/api/media', '/api/irrigation', '/api/harvest']
         });
       } else {
         response = errorResponse('Not found', 'NOT_FOUND', 404);
