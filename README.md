@@ -73,7 +73,6 @@ Atlas OS backend:
 - `/api/tasks` — task management (neural task board)
 - `/api/inbox` — decision inbox
 - `/api/briefs` — daily operations briefs
-- `/api/pool` — flower pool bins, intake, dispense
 - `/api/notifications` — desktop notification feed
 - `/api/widgets` — dashboard widget config
 - `/api/github` — GitHub proxy (commits, CI, issues, PRs)
@@ -128,7 +127,6 @@ speak and the fleet registry they write to.
 - `tasks` — task board with status/priority/domain
 - `inbox` — decision items
 - `briefs` — daily operations briefs
-- `bins` / `bin_balances` / `pool_transactions` — flower pool inventory
 - `notifications` — desktop notification queue
 - `agent_files` — agent deliverables and config storage
 
