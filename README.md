@@ -1,5 +1,7 @@
 # Rogue Origin Apps
 
+[![Tests](https://github.com/RogueFF/rogue-origin-apps/actions/workflows/test.yml/badge.svg)](https://github.com/RogueFF/rogue-origin-apps/actions/workflows/test.yml)
+
 Operations hub for [Rogue Origin](https://rogueorigin.com) — a seed-to-sale hemp flower business in Southern Oregon. Production tracking, order management, inventory, compliance, and an AI-assisted operations command center.
 
 **Live:** [rogueff.github.io/rogue-origin-apps](https://rogueff.github.io/rogue-origin-apps)
@@ -168,9 +170,12 @@ git push origin master  # Auto-deploys via GitHub Pages
 
 ### Testing
 ```bash
-npm test                    # Run all tests (node:test)
-npx playwright test         # E2E tests
+npm test                    # Unit tests — node:test, 155 tests, no network or browser
+npm run test:e2e            # End-to-end tests — Playwright (needs browsers + a served app)
+npm run playwright:install  # One-time browser download for the E2E suite
 ```
+
+CI runs `npm test` plus `npm run stamp:check` on every push and pull request.
 
 ---
 
