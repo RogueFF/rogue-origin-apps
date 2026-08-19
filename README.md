@@ -29,7 +29,7 @@ GitHub Pages (Frontend)  ←→  Cloudflare Workers (API)  ←→  Cloudflare D1
 
 | App | Path | Description |
 |-----|------|-------------|
-| **Mission Control** | `mc-v2/` | Command center — agent fleet, task board, production, activity feed (React, in progress) |
+| **Mission Control** | `mc-v2/` | Command center prototype — agent fleet, task board, production feed (React + Vite; not deployed) |
 | **Scoreboard** | `src/pages/scoreboard.html` | Real-time production scoreboard (lbs/hr, crew, targets) |
 | **Pool Inventory** | `src/pages/pool-inventory.html` | Flower inventory by strain, grade, location |
 | **Consignment** | `src/pages/consignment.html` | Partner farm intake → inventory → payment workflow |
@@ -99,7 +99,7 @@ speak and the fleet registry they write to.
 | **Status reporter** | `tools/agents/status.js` | `agentStart` / `agentDone` / `agentError` — writes agent state to `/api/agents` |
 | **Fleet registry** | `workers/mission-control/` | `agents` + `activity` tables — who is running, what they last did |
 | **Notifications** | `tools/atlas-notifications/` | Electron tray app that surfaces briefs and alerts on the desktop |
-| **Kanban reorder monitor** | `tools/kanban-image-check/` | Supply reorder alerts from the kanban order log |
+| **Card image checker** | `tools/kanban-image-check/` | Health-checks kanban card image URLs and auto-repairs recoverable ones |
 
 ---
 
@@ -184,7 +184,7 @@ rogue-origin-apps/
 │   │   ├── src/index.js        # Router + all handlers
 │   │   └── schema.sql          # D1 schema
 │   └── migrations/             # D1 migrations
-├── mc-v2/                      # Mission Control UI (React + Vite, in progress)
+├── mc-v2/                      # Mission Control UI prototype (React + Vite, not deployed)
 ├── tools/                      # Agent status reporter, notifications, build tooling
 ├── tests/                      # Test suite
 ├── scale-reader/               # USB scale integration
