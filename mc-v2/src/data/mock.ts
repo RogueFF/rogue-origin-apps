@@ -13,7 +13,6 @@ export const AGENT_GLYPHS: Record<string, string> = {
   main: '軸',      // axis — orchestrator
   atlas: '軸',
   kiln: '窯',      // kiln — production
-  razor: '刃',     // blade — trading
   meridian: '経',  // meridian — logistics
   hex: '呪',       // spell — code
 };
@@ -49,7 +48,7 @@ export const kpis: KPI[] = [
   { label: 'Crew', value: '6', trend: 'flat' },
   { label: 'Agents', value: '5/5', trend: 'flat' },
   { label: 'Open Tasks', value: '8', trend: 'down' },
-  { label: 'Regime', value: 'Bull' },
+  { label: 'Orders', value: '12' },
 ];
 
 export const sparklineData = [8.2, 9.1, 10.4, 11.8, 12.1, 11.6, 12.4, 13.1, 12.8, 12.1];
@@ -140,7 +139,6 @@ export const activities: Activity[] = [
 export const navItems = [
   { label: 'Dashboard', path: '/', icon: '◆' },
   { label: 'Production', path: '/production', icon: '▣' },
-  { label: 'Trading', path: '/trading', icon: '◈' },
   { label: 'Tasks', path: '/tasks', icon: '☐' },
   { label: 'Monitor', path: '/monitor', icon: '◉' },
   { label: 'System', path: '/system', icon: '⚙' },
@@ -149,5 +147,5 @@ export const navItems = [
 export const upcomingCrons = [
   { label: 'Hourly Pulse', time: '17:00', agent: 'Kiln' },
   { label: 'Nightly Build', time: '02:00', agent: 'Hex' },
-  { label: 'Market Scan', time: '06:00', agent: 'Razor' },
+  { label: 'Morning Report', time: '06:00', agent: 'Kiln' },
 ];

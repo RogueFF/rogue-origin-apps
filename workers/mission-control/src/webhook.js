@@ -2,7 +2,7 @@
  * Webhook Dispatcher — Mission Control → Atlas Notifications
  *
  * Non-blocking webhook that fires POST /notify to atlas-notifications
- * when high-value events occur (briefs, urgent inbox, regime, plays).
+ * when high-value events occur (briefs, urgent inbox).
  *
  * Usage:
  *   import { dispatch } from './webhook.js';
@@ -60,52 +60,10 @@ function mapInboxAlert(body) {
   };
 }
 
-/**
- * Map MC regime signal → atlas-notifications toast format
- */
-function mapRegime(body) {
-  const label = body.label || body.signal;
-  const reasoning = Array.isArray(body.reasoning)
-    ? body.reasoning.join('. ')
-    : (typeof body.reasoning === 'string' ? body.reasoning : '');
-
-  return {
-    type: 'toast',
-    title: `Regime: ${label}`,
-    body: reasoning || `Market regime shifted to ${body.signal}`,
-    priority: 'normal',
-    category: 'regime',
-    data: {
-      signal: body.signal,
-      label: body.label,
-      scores: body.scores,
-      strategy: body.strategy,
-    },
-  };
-}
-
-/**
- * Map MC trade play → atlas-notifications toast format
- */
-function mapPlay(body) {
-  const dir = (body.direction || 'long').toUpperCase();
-  const vehicle = body.vehicle || 'shares';
-  const risk = body.risk_level || 'normal';
-
-  return {
-    type: 'toast',
-    title: `Play: ${dir} ${body.ticker} (${vehicle})`,
-    body: body.thesis || `${dir} ${body.ticker} via ${vehicle}`,
-    priority: risk === 'high' ? 'high' : 'normal',
-    category: 'trade',
-  };
-}
 
 const MAPPERS = {
   briefing: mapBrief,
   alert: mapInboxAlert,
-  regime: mapRegime,
-  play: mapPlay,
 };
 
 /**
@@ -114,7 +72,7 @@ const MAPPERS = {
  * Fails silently (logs errors, never throws to caller).
  *
  * @param {object} env  - Worker env (needs NOTIFY_URL, NOTIFY_TOKEN)
- * @param {string} type - Event type: 'briefing' | 'alert' | 'regime' | 'play'
+ * @param {string} type - Event type: 'briefing' | 'alert'
  * @param {object} payload - MC data structure for the event
  */
 export async function dispatch(env, type, payload) {

@@ -55,7 +55,6 @@ export const CHAT_MAX_MESSAGES = 200;
 export const NAV_ITEMS = [
   { label: 'Dashboard', path: '/', icon: '◆' },
   { label: 'Production', path: '/production', icon: '▣' },
-  { label: 'Trading', path: '/trading', icon: '◈' },
   { label: 'Tasks', path: '/tasks', icon: '☐' },
   { label: 'Monitor', path: '/monitor', icon: '◉' },
   { label: 'System', path: '/system', icon: '⚙' },
@@ -64,5 +63,5 @@ export const NAV_ITEMS = [
 export const FALLBACK_CRONS = [
   { label: 'Hourly Pulse', time: '17:00', agent: 'Kiln' },
   { label: 'Nightly Build', time: '02:00', agent: 'Hex' },
-  { label: 'Market Scan', time: '06:00', agent: 'Razor' },
+  { label: 'Morning Report', time: '06:00', agent: 'Kiln' },
 ];

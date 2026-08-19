@@ -2,9 +2,9 @@
  * Agent Status Reporter — updates agent status in Mission Control API
  * Usage:
  *   const { agentStart, agentDone, agentError } = require('../status');
- *   await agentStart('dealer', 'Scanning 4 positions...');
+ *   await agentStart('kiln', 'Rolling up today's harvest lots...');
  *   // ... do work ...
- *   await agentDone('dealer', 'Last run: 4 scanned, 0 closed');
+ *   await agentDone('kiln', 'Last run: 12 lots, 0 errors');
  */
 
 const API_BASE = 'https://mission-control-api.roguefamilyfarms.workers.dev/api';

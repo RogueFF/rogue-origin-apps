@@ -19,14 +19,6 @@
  * GET  /api/briefs                       Briefs list
  * GET  /api/briefs/latest                Most recent brief
  * POST /api/briefs                       Create a brief
- * GET  /api/positions                    List positions (filter: status=open|closed)
- * POST /api/positions                    Open a new position
- * PATCH /api/positions/:id               Update/close a position
- * GET  /api/portfolio                    Portfolio summary (P&L, win rate, exposure, bankroll)
- * GET  /api/regime                       Get current market regime signal
- * POST /api/regime                       Update regime signal
- * GET  /api/plays                        Get today's trade setups
- * POST /api/plays                        Create a trade setup/play
  * GET  /api/tasks                        List tasks (filter: status, agent, domain, priority)
  * POST /api/tasks                        Create task
  * PATCH /api/tasks/:id                   Update task (status, assignment, priority)
@@ -111,10 +103,6 @@ function matchRoute(method, path) {
     ['GET',  /^\/api\/briefs\/latest$/,          'briefsLatest'],
     ['GET',  /^\/api\/briefs$/,                  'briefsList'],
     ['POST', /^\/api\/briefs$/,                  'briefsCreate'],
-    ['GET',  /^\/api\/positions$/,                'positionsList'],
-    ['POST', /^\/api\/positions$/,                'positionsCreate'],
-    ['PATCH',/^\/api\/positions\/(\d+)$/,         'positionsUpdate'],
-    ['GET',  /^\/api\/portfolio$/,                'portfolio'],
     ['GET',  /^\/api\/tasks\/stats$/,               'tasksStats'],
     ['POST', /^\/api\/tasks\/sync$/,                'tasksSync'],
     ['POST', /^\/api\/tasks\/push-all$/,            'tasksPushAll'],
@@ -129,12 +117,6 @@ function matchRoute(method, path) {
     ['POST', /^\/api\/tasks$/,                      'tasksCreate'],
     ['PATCH',/^\/api\/tasks\/(\d+)$/,               'tasksUpdate'],
     ['DELETE',/^\/api\/tasks\/(\d+)$/,              'tasksDelete'],
-    ['GET',  /^\/api\/regime$/,                       'regimeGet'],
-    ['GET',  /^\/api\/regime\/history$/,             'regimeHistory'],
-    ['POST', /^\/api\/regime$/,                      'regimeUpdate'],
-    ['GET',  /^\/api\/plays$/,                       'playsGet'],
-    ['POST', /^\/api\/plays$/,                       'playsCreate'],
-    ['PATCH',/^\/api\/plays\/(\d+)$/,               'playsUpdate'],
     ['GET',  /^\/api\/widgets$/,                     'widgetsGet'],
     ['POST', /^\/api\/widgets$/,                     'widgetsUpdate'],
     ['GET',  /^\/api\/agents\/([a-z-]+)\/files$/,   'agentFilesList'],
@@ -148,7 +130,6 @@ function matchRoute(method, path) {
     ['GET',  /^\/api\/pool\/dashboard$/,         'poolDashboard'],
     ['GET',  /^\/api\/pool\/transactions$/,      'poolTransactions'],
     ['GET',  /^\/api\/github$/,                  'github'],
-    ['GET',  /^\/api\/prices$/,                  'pricesGet'],
     ['GET',  /^\/api\/chrome-status$/,           'chromeStatus'],
     ['POST', /^\/api\/chrome-status$/,           'chromeStatusUpdate'],
     ['GET',  /^\/api\/notifications$/,           'notificationsList'],
@@ -490,256 +471,6 @@ const handlers = {
     }, 201);
   },
 
-  // GET /api/positions — list positions (filter by status)
-  async positionsList(req, env) {
-    const db = env.DB;
-    const url = new URL(req.url);
-    const status = url.searchParams.get('status');
-    const ticker = url.searchParams.get('ticker');
-    const limit = Math.min(parseInt(url.searchParams.get('limit') || '100'), 500);
-
-    let sql = 'SELECT * FROM positions';
-    const conditions = [];
-    const params = [];
-
-    if (status) { conditions.push('status = ?'); params.push(status); }
-    if (ticker) { conditions.push('ticker = ?'); params.push(ticker.toUpperCase()); }
-
-    if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ');
-    sql += ' ORDER BY entry_date DESC LIMIT ?';
-    params.push(limit);
-
-    const results = await db.prepare(sql).bind(...params).all();
-    return json({ success: true, data: results.results });
-  },
-
-  // POST /api/positions — open a new position
-  async positionsCreate(req, env) {
-    const db = env.DB;
-    const body = await parseBody(req);
-
-    const required = ['ticker', 'direction', 'vehicle', 'entry_price', 'quantity', 'entry_date'];
-    for (const field of required) {
-      if (body[field] === undefined || body[field] === null || body[field] === '') {
-        return err(`Missing required field: ${field}`, 'VALIDATION_ERROR', 400);
-      }
-    }
-
-    const validDirections = ['long', 'short'];
-    if (!validDirections.includes(body.direction)) {
-      return err('Invalid direction. Must be: long, short', 'VALIDATION_ERROR', 400);
-    }
-
-    const validVehicles = ['calls', 'puts', 'shares', 'spread', 'crypto'];
-    if (!validVehicles.includes(body.vehicle)) {
-      return err(`Invalid vehicle. Must be: ${validVehicles.join(', ')}`, 'VALIDATION_ERROR', 400);
-    }
-
-    const result = await db.prepare(
-      `INSERT INTO positions (ticker, direction, vehicle, strike, expiry, entry_price, quantity, entry_date, status, notes, target_price, stop_loss, current_price, current_pnl)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)`
-    ).bind(
-      body.ticker.toUpperCase(),
-      body.direction,
-      body.vehicle,
-      body.strike || null,
-      body.expiry || null,
-      body.entry_price,
-      body.quantity,
-      body.entry_date,
-      body.notes || null,
-      body.target_price || 0,
-      body.stop_loss || 0,
-      body.current_price || null,
-      body.current_pnl || 0
-    ).run();
-
-    const position = await db.prepare('SELECT * FROM positions WHERE id = ?')
-      .bind(result.meta.last_row_id).first();
-
-    return json({ success: true, data: position }, 201);
-  },
-
-  // PATCH /api/positions/:id — update or close a position
-  async positionsUpdate(req, env, params) {
-    const db = env.DB;
-    const id = parseInt(params[0]);
-    const body = await parseBody(req);
-
-    const position = await db.prepare('SELECT * FROM positions WHERE id = ?').bind(id).first();
-    if (!position) return err('Position not found', 'NOT_FOUND', 404);
-
-    const allowed = ['exit_price', 'exit_date', 'status', 'pnl', 'notes', 'target_price', 'stop_loss', 'current_price', 'current_pnl'];
-    const sets = [];
-    const vals = [];
-    for (const key of allowed) {
-      if (body[key] !== undefined) {
-        sets.push(`${key} = ?`);
-        vals.push(body[key]);
-      }
-    }
-
-    // Auto-calculate P&L when closing with an exit_price
-    if (body.status === 'closed' && body.exit_price !== undefined && body.pnl === undefined) {
-      const multiplier = position.vehicle === 'shares' ? 1 : 100; // options = 100x
-      const direction = position.direction === 'long' ? 1 : -1;
-      const calculatedPnl = direction * (body.exit_price - position.entry_price) * position.quantity * multiplier;
-      sets.push('pnl = ?');
-      vals.push(Math.round(calculatedPnl * 100) / 100);
-    }
-
-    // Auto-set exit_date when closing without one
-    if (body.status === 'closed' && !body.exit_date && !position.exit_date) {
-      sets.push('exit_date = ?');
-      vals.push(new Date().toISOString());
-    }
-
-    if (sets.length === 0) return err('No valid fields to update', 'VALIDATION_ERROR', 400);
-
-    vals.push(id);
-    await db.prepare(`UPDATE positions SET ${sets.join(', ')} WHERE id = ?`).bind(...vals).run();
-
-    const updated = await db.prepare('SELECT * FROM positions WHERE id = ?').bind(id).first();
-    return json({ success: true, data: updated });
-  },
-
-  // GET /api/portfolio — portfolio summary
-  async portfolio(_req, env) {
-    const db = env.DB;
-    const STARTING_BANKROLL = 5000;
-
-    // Get all positions
-    const open = await db.prepare(
-      'SELECT * FROM positions WHERE status = ? ORDER BY entry_date DESC'
-    ).bind('open').all();
-    const closed = await db.prepare(
-      'SELECT * FROM positions WHERE status = ? ORDER BY exit_date DESC'
-    ).bind('closed').all();
-
-    const openPositions = open.results;
-    const closedTrades = closed.results;
-
-    // Calculate realized P&L from closed trades
-    const realizedPnl = closedTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
-
-    // Win/loss stats
-    const wins = closedTrades.filter(t => (t.pnl || 0) > 0);
-    const losses = closedTrades.filter(t => (t.pnl || 0) < 0);
-    const totalClosed = closedTrades.length;
-    const winRate = totalClosed > 0 ? Math.round((wins.length / totalClosed) * 10000) / 100 : 0;
-    const avgWinner = wins.length > 0
-      ? Math.round(wins.reduce((s, t) => s + t.pnl, 0) / wins.length * 100) / 100
-      : 0;
-    const avgLoser = losses.length > 0
-      ? Math.round(losses.reduce((s, t) => s + t.pnl, 0) / losses.length * 100) / 100
-      : 0;
-
-    // Open exposure (sum of entry_price * quantity * multiplier)
-    const openExposure = openPositions.reduce((sum, p) => {
-      const multiplier = p.vehicle === 'shares' ? 1 : 100;
-      return sum + (p.entry_price * p.quantity * multiplier);
-    }, 0);
-
-    // Unrealized P&L from open positions
-    const unrealizedPnl = openPositions.reduce((sum, p) => sum + (p.current_pnl || 0), 0);
-
-    // Portfolio value & bankroll
-    const portfolioValue = Math.round((STARTING_BANKROLL + realizedPnl + unrealizedPnl) * 100) / 100;
-    const availableBankroll = Math.round((portfolioValue - openExposure) * 100) / 100;
-
-    // Bankroll rule checks
-    const maxSinglePosition = Math.round(portfolioValue * 0.20 * 100) / 100;
-    const maxExposure = Math.round(portfolioValue * 0.80 * 100) / 100;
-    const cashMinimum = Math.round(portfolioValue * 0.20 * 100) / 100;
-    const exposureCompliant = openExposure <= maxExposure;
-    const cashCompliant = availableBankroll >= cashMinimum;
-
-    return json({
-      success: true,
-      data: {
-        starting_bankroll: STARTING_BANKROLL,
-        portfolio_value: portfolioValue,
-        realized_pnl: Math.round(realizedPnl * 100) / 100,
-        unrealized_pnl: Math.round(unrealizedPnl * 100) / 100,
-        open_exposure: Math.round(openExposure * 100) / 100,
-        available_bankroll: availableBankroll,
-        open_positions: openPositions.length,
-        closed_trades: totalClosed,
-        win_rate: winRate,
-        wins: wins.length,
-        losses: losses.length,
-        avg_winner: avgWinner,
-        avg_loser: avgLoser,
-        expectancy: totalClosed > 0
-          ? Math.round(((winRate / 100 * avgWinner) + ((1 - winRate / 100) * avgLoser)) * 100) / 100
-          : 0,
-        rules: {
-          max_single_position: maxSinglePosition,
-          max_exposure: maxExposure,
-          cash_minimum: cashMinimum,
-          exposure_compliant: exposureCompliant,
-          cash_compliant: cashCompliant,
-        },
-        positions: openPositions,
-      },
-    });
-  },
-
-  // GET /api/regime — current market regime signal
-  async regimeGet(_req, env) {
-    const db = env.DB;
-    const row = await db.prepare(
-      `SELECT * FROM regime_signals ORDER BY created_at DESC LIMIT 1`
-    ).first();
-    if (!row) return json({ success: true, data: null });
-    try { row.data = JSON.parse(row.data || '{}'); } catch { row.data = {}; }
-    try { row.scores = JSON.parse(row.scores || '{}'); } catch { row.scores = {}; }
-    try { row.reasoning = JSON.parse(row.reasoning || '[]'); } catch { row.reasoning = []; }
-    try { row.strategy = JSON.parse(row.strategy || '{}'); } catch { row.strategy = {}; }
-    return json({ success: true, data: row });
-  },
-
-  // POST /api/regime — update regime signal
-  async regimeUpdate(req, env, _params, ctx) {
-    const db = env.DB;
-    const body = await parseBody(req);
-    if (!body.signal) return err('Missing required field: signal', 'VALIDATION_ERROR', 400);
-    await db.prepare(
-      `INSERT INTO regime_signals (signal, label, data, scores, reasoning, strategy, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`
-    ).bind(
-      body.signal,
-      body.label || '',
-      JSON.stringify(body.data || {}),
-      JSON.stringify(body.scores || {}),
-      JSON.stringify(body.reasoning || []),
-      JSON.stringify(body.strategy || {})
-    ).run();
-
-    // Webhook: notify atlas-notifications of regime change
-    if (ctx) ctx.waitUntil(dispatch(env, 'regime', body));
-
-    return json({ success: true, data: { signal: body.signal } }, 201);
-  },
-
-  // GET /api/regime/history — last 30 days of regime signals (one per day)
-  async regimeHistory(_req, env) {
-    const db = env.DB;
-    const rows = await db.prepare(
-      `SELECT signal, label, DATE(created_at) as date, created_at
-       FROM regime_signals
-       WHERE created_at >= datetime('now', '-30 days')
-       ORDER BY created_at DESC`
-    ).all();
-    // Deduplicate to one per day (latest)
-    const byDate = {};
-    for (const r of (rows.results || [])) {
-      if (!byDate[r.date]) byDate[r.date] = r;
-    }
-    const history = Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
-    return json({ success: true, data: history });
-  },
-
   // GET /api/widgets — get cached widget data
   async widgetsGet(_req, env) {
     const db = env.DB;
@@ -764,56 +495,6 @@ const handlers = {
       `INSERT OR REPLACE INTO widgets (key, value, updated_at) VALUES (?, ?, datetime('now'))`
     ).bind(key, value).run();
     return json({ success: true, data: { key: body.key } }, 201);
-  },
-
-  // GET /api/plays — today's trade setups
-  async playsGet(_req, env) {
-    const db = env.DB;
-    const rows = await db.prepare(
-      `SELECT * FROM trade_plays WHERE created_at >= datetime('now', '-24 hours') AND COALESCE(status, 'active') != 'dismissed' ORDER BY created_at DESC`
-    ).all();
-    const plays = (rows.results || []).map(r => {
-      try { r.setup = JSON.parse(r.setup || '{}'); } catch { r.setup = {}; }
-      return r;
-    });
-    return json({ success: true, data: plays });
-  },
-
-  // POST /api/plays — create a trade setup/play
-  async playsCreate(req, env, _params, ctx) {
-    const db = env.DB;
-    const body = await parseBody(req);
-    if (!body.ticker) return err('Missing required field: ticker', 'VALIDATION_ERROR', 400);
-    await db.prepare(
-      `INSERT INTO trade_plays (ticker, direction, vehicle, thesis, setup, risk_level, source_agent, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`
-    ).bind(
-      body.ticker,
-      body.direction || 'long',
-      body.vehicle || 'shares',
-      body.thesis || '',
-      JSON.stringify(body.setup || {}),
-      body.risk_level || 'normal',
-      body.source_agent || 'strategist'
-    ).run();
-
-    // Webhook: notify atlas-notifications of new play
-    if (ctx) ctx.waitUntil(dispatch(env, 'play', body));
-
-    return json({ success: true, data: { ticker: body.ticker } }, 201);
-  },
-
-  // PATCH /api/plays/:id — update play status (dismiss, fill, etc.)
-  async playsUpdate(req, env, params) {
-    const db = env.DB;
-    const id = params[0];
-    const body = await parseBody(req);
-    const allowed = ['active', 'dismissed', 'filled'];
-    if (!body.status || !allowed.includes(body.status)) {
-      return err('Invalid status', 'VALIDATION_ERROR', 400);
-    }
-    await db.prepare(`UPDATE trade_plays SET status = ? WHERE id = ?`).bind(body.status, id).run();
-    return json({ success: true });
   },
 
   // GET /api/agents/:name/files — list all files for an agent
@@ -1469,38 +1150,6 @@ const handlers = {
   async github(req, env) {
     const result = await handleGitHub(req, env);
     return json(result, result.success ? 200 : 500);
-  },
-
-  // GET /api/prices?symbols=MRNA,CSGP,KLAC — Yahoo Finance price proxy
-  async pricesGet(req, env) {
-    const url = new URL(req.url);
-    const symbols = (url.searchParams.get('symbols') || '').split(',').filter(Boolean).slice(0, 20);
-    if (symbols.length === 0) return err('Missing symbols parameter', 'VALIDATION_ERROR', 400);
-
-    const prices = {};
-    const fetches = symbols.map(async (ticker) => {
-      try {
-        const resp = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`, {
-          headers: { 'User-Agent': 'Mozilla/5.0' }
-        });
-        if (resp.ok) {
-          const data = await resp.json();
-          const meta = data?.chart?.result?.[0]?.meta;
-          if (meta) {
-            const price = meta.regularMarketPrice || 0;
-            const prevClose = meta.previousClose || meta.chartPreviousClose || 0;
-            prices[ticker] = {
-              price,
-              prevClose,
-              change: prevClose > 0 ? +(price - prevClose).toFixed(2) : 0,
-              changePct: prevClose > 0 ? +((price - prevClose) / prevClose * 100).toFixed(2) : 0
-            };
-          }
-        }
-      } catch {}
-    });
-    await Promise.all(fetches);
-    return json({ success: true, data: prices, timestamp: new Date().toISOString() });
   },
 
   // GET /api/chrome-status — Chrome process memory/status from D1

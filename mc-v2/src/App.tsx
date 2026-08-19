@@ -14,7 +14,6 @@ import { Particles } from './components/Particles';
 import { AmbientBg } from './components/AmbientBg';
 import { Dashboard } from './views/Dashboard';
 import { Production } from './views/Production';
-import { Trading } from './views/Trading';
 import { MobileDashboard } from './views/MobileDashboard';
 import { MobileFleet } from './views/MobileFleet';
 import { MobileFeed } from './views/MobileFeed';
@@ -79,7 +78,6 @@ function AppShell() {
             <Route path="/chat" element={<MobileChat />} />
             <Route path="/tasks" element={<Tasks />} />
             <Route path="/production" element={<Placeholder title="Production" />} />
-            <Route path="/trading" element={<Placeholder title="Trading" />} />
             <Route path="/monitor" element={<Monitor />} />
             <Route path="/system" element={<System />} />
           </Routes>
@@ -109,7 +107,6 @@ function AppShell() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/production" element={<Production />} />
-            <Route path="/trading" element={<Trading />} />
             <Route path="/tasks" element={<Tasks />} />
             <Route path="/monitor" element={<Monitor />} />
             <Route path="/system" element={<System />} />
