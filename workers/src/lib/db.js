@@ -6,7 +6,7 @@
 // Whitelist of valid table names to prevent SQL injection via dynamic table references
 const VALID_TABLES = new Set([
   'customers', 'orders', 'shipments', 'payments',
-  'products', 'monthly_production', 'production_tracking',
+  'monthly_production', 'production_tracking',
   'inventory_adjustments', 'pause_log', 'shift_adjustments', 'data_version',
   'scale_readings', 'payment_shipment_links', 'system_config',
   'kanban_cards', 'kanban_cart', 'kanban_orders', 'kanban_columns',

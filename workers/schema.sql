@@ -2,20 +2,6 @@
 -- Migration from Google Sheets
 
 -- ============================================
--- BARCODE SYSTEM (Pilot)
--- ============================================
-
-CREATE TABLE IF NOT EXISTS products (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  header TEXT NOT NULL,
-  sku TEXT NOT NULL UNIQUE,
-  barcode TEXT,
-  created_at TEXT DEFAULT (datetime('now'))
-);
-
-CREATE INDEX IF NOT EXISTS idx_products_sku ON products(sku);
-
--- ============================================
 -- KANBAN SYSTEM
 -- ============================================
 
