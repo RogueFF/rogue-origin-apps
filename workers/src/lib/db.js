@@ -22,6 +22,8 @@ const VALID_TABLES = new Set([
   'tpm_cards',
   // Irrigation reporting
   'irrigation_log',
+  // Order blocks — real line items + the production-run queue (0014)
+  'order_items', 'production_runs',
 ]);
 
 /**

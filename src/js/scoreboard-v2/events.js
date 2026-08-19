@@ -6,7 +6,7 @@
 /* global
   toggleMorningReport, clearHistoricalDate, loadHistoricalDate, toggleDatePicker,
   startDayNow, editStartTime, cancelStartTime, confirmStartTime, setLanguage,
-  toggleHelp, toggleOrderQueue, toggleAvgBest, toggleTimerFullscreen,
+  toggleHelp, toggleAvgBest, toggleTimerFullscreen,
   handlePauseClick, selectPauseReason, onCustomReasonInput, closePauseModal,
   confirmPause, toggleDebug, setDebugState, simulateTime, simulateBreak,
   addCycleToHistory, playMariachi, resetDebug
@@ -140,30 +140,6 @@
       helpModal.addEventListener('click', function(event) {
         if (event.target === this) {
           toggleHelp();
-        }
-      });
-    }
-
-    // Order Queue
-    const orderQueueToggleBtn = el('orderQueueToggleBtn');
-    if (orderQueueToggleBtn) {
-      orderQueueToggleBtn.addEventListener('click', toggleOrderQueue);
-    }
-
-    const currentOrderPill = el('currentOrderPill');
-    if (currentOrderPill) {
-      currentOrderPill.addEventListener('click', function() {
-        if (window.ScoreboardRender && window.ScoreboardRender.toggleOrderExpand) {
-          window.ScoreboardRender.toggleOrderExpand('current');
-        }
-      });
-    }
-
-    const nextOrderPill = el('nextOrderPill');
-    if (nextOrderPill) {
-      nextOrderPill.addEventListener('click', function() {
-        if (window.ScoreboardRender && window.ScoreboardRender.toggleOrderExpand) {
-          window.ScoreboardRender.toggleOrderExpand('next');
         }
       });
     }

@@ -22,10 +22,8 @@
     fabStartDay: null,
     fabPastData: null,
     fabMorningReport: null,
-    fabOrderQueue: null,
     fabChart: null,
     fabHelp: null,
-    orderQueueIndicator: null,
     chartIndicator: null
   };
 
@@ -40,10 +38,8 @@
     elements.fabStartDay = document.getElementById('fabStartDay');
     elements.fabPastData = document.getElementById('fabPastData');
     elements.fabMorningReport = document.getElementById('fabMorningReport');
-    elements.fabOrderQueue = document.getElementById('fabOrderQueue');
     elements.fabChart = document.getElementById('fabChart');
     elements.fabHelp = document.getElementById('fabHelp');
-    elements.orderQueueIndicator = document.getElementById('orderQueueIndicator');
     elements.chartIndicator = document.getElementById('chartIndicator');
 
     // Attach event listeners
@@ -66,10 +62,6 @@
 
     if (elements.fabMorningReport) {
       elements.fabMorningReport.addEventListener('click', handleMorningReport);
-    }
-
-    if (elements.fabOrderQueue) {
-      elements.fabOrderQueue.addEventListener('click', handleOrderQueue);
     }
 
     if (elements.fabChart) {
@@ -99,9 +91,6 @@
 
     // Start idle pulse animation
     startIdleTimer();
-
-    // Update order queue indicator on init
-    updateOrderQueueIndicator();
 
     // Update chart indicator on init
     updateChartIndicator();
@@ -255,19 +244,6 @@
   }
 
   /**
-   * Handle Order Queue toggle
-   */
-  function handleOrderQueue() {
-    closeMenu();
-    // Trigger existing order queue toggle
-    if (window.toggleOrderQueue) {
-      window.toggleOrderQueue();
-    }
-    // Update indicator after toggle
-    setTimeout(updateOrderQueueIndicator, 100);
-  }
-
-  /**
    * Handle TV Mode toggle
    */
   function handleTvToggle() {
@@ -315,17 +291,6 @@
     if (window.toggleHelp) {
       window.toggleHelp();
     }
-  }
-
-  /**
-   * Update order queue indicator (ON/OFF)
-   */
-  function updateOrderQueueIndicator() {
-    if (!elements.orderQueueIndicator) return;
-
-    var isVisible = localStorage.getItem('orderQueueVisible') === 'true';
-    elements.orderQueueIndicator.textContent = isVisible ? 'ON' : 'OFF';
-    elements.orderQueueIndicator.classList.toggle('on', isVisible);
   }
 
   /**
@@ -442,7 +407,6 @@
     init: init,
     openMenu: openMenu,
     closeMenu: closeMenu,
-    updateOrderQueueIndicator: updateOrderQueueIndicator,
     updateChartIndicator: updateChartIndicator,
     checkStartDayVisibility: checkStartDayVisibility
   };

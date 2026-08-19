@@ -108,7 +108,6 @@
   --timer-size: 220px;
 }
 
-
 /* ========================================
    KEYFRAME ANIMATIONS
    ======================================== */
@@ -230,7 +229,6 @@
   50% { transform: scale(1.05) translate(-1%, 1%); }
 }
 
-
 /* ========================================
    RESET & BASE
    ======================================== */
@@ -256,7 +254,6 @@ body {
   position: relative;
   transition: background var(--t-dramatic) var(--ease-cinematic);
 }
-
 
 /* ========================================
    NOISE GRAIN OVERLAY (~3% opacity)
@@ -291,7 +288,6 @@ body::after {
   pointer-events: none;
   z-index: -1;
 }
-
 
 /* ========================================
    AMBIENT COLOR SYSTEM
@@ -339,7 +335,6 @@ body.timer-neutral {
   background-image: none;
 }
 
-
 /* ========================================
    SKIP LINK
    ======================================== */
@@ -360,7 +355,6 @@ body.timer-neutral {
   top: 16px;
   outline: 3px solid var(--gold);
 }
-
 
 /* ========================================
    MORNING REPORT (full-screen overlay)
@@ -423,7 +417,6 @@ body.timer-neutral {
 .mr-back-btn:hover {
   background: var(--gold-dim);
 }
-
 
 /* ========================================
    HISTORICAL DATE BANNER
@@ -491,7 +484,6 @@ body.timer-neutral {
 .historical-banner-close:hover {
   background: var(--gold-dim);
 }
-
 
 /* ========================================
    TOP BAR — 60px header, thin, stays out of the way
@@ -610,7 +602,6 @@ body.on-target .hud-header::after {
   margin-top: 2px;
 }
 
-
 /* ========================================
    STATUS BADGE — Header center, gentle pulse
    ======================================== */
@@ -673,7 +664,6 @@ body.on-target .status-badge {
     0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
-
 /* ========================================
    TIME CONTROLS
    ======================================== */
@@ -730,9 +720,6 @@ body.on-target .status-badge {
 
 #morningReportBtn,
 .historical-view-btn,
-.order-queue-toggle-btn {
-  display: none !important;
-}
 
 /* Lang / TV toggle — moved to FAB menu */
 .lang-toggle {
@@ -764,7 +751,6 @@ body.on-target .status-badge {
 .complaints-btn { color: var(--red); }
 .help-btn { display: none !important; }
 
-
 /* ========================================
    COCKPIT LAYOUT — The main stage
    Absolutely positioned regions overlapping
@@ -777,7 +763,6 @@ body.on-target .status-badge {
   bottom: 0;
   overflow: hidden;
 }
-
 
 /* ========================================
    CENTER STAGE — 60% viewport height
@@ -1087,7 +1072,6 @@ body.behind .progress-fill::after { background: var(--red); }
 .daily-numbers { display: none; }
 .daily-progress { display: contents; }
 
-
 /* ========================================
    LEFT INSTRUMENT — Overlapping center-left
    Glass cards, info bar, comparisons
@@ -1265,7 +1249,6 @@ body.behind .progress-fill::after { background: var(--red); }
   opacity: 0.2;
 }
 
-
 /* Info Bar — Horizontal strip */
 .info-bar {
   display: flex;
@@ -1406,110 +1389,15 @@ body.behind .progress-fill::after { background: var(--red); }
   font-size: 18px;
 }
 
-
 /* ========================================
    ORDER QUEUE
    ======================================== */
-.order-queue-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-3);
-  width: 100%;
-}
-
-.order-pill {
-  background: var(--surface);
-  border: 1px solid var(--border-accent);
-  border-radius: var(--r-lg);
-  padding: var(--sp-4) var(--sp-5);
-  cursor: pointer;
-  box-shadow: 
-    0 4px 16px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  transition: all var(--t-normal) var(--ease-spring);
-  overflow: hidden;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
-.order-pill:hover { background: var(--surface-raised); border-color: var(--gold); }
-.order-pill.next { border-color: var(--border-subtle); opacity: 0.65; }
-.order-pill.next:hover { opacity: 1; }
-
-.order-pill-header {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-}
-
-.order-icon { font-size: 16px; }
-.order-label {
-  font-family: var(--font-ui);
-  font-size: 9px;
-  font-weight: 300;
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--gold);
-}
-
-.order-summary {
-  font-family: var(--font-data);
-  font-size: 12px;
-  color: var(--cream-soft);
-  margin-left: auto;
-}
 
 .expand-icon {
   font-size: 10px;
   color: var(--muted);
   transition: transform var(--t-fast);
 }
-
-.order-pill.expanded .expand-icon { transform: rotate(180deg); }
-
-.order-progress-bar-container {
-  margin-top: var(--sp-3);
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-}
-
-.order-progress-bar {
-  flex: 1;
-  height: 3px;
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.order-progress-fill {
-  height: 100%;
-  background: var(--gold);
-  border-radius: 2px;
-  transition: width var(--t-smooth) var(--ease-out);
-}
-
-.order-progress-text {
-  font-family: var(--font-data);
-  font-size: 11px;
-  color: var(--cream-muted);
-  white-space: nowrap;
-}
-
-.order-detail {
-  margin-top: var(--sp-4);
-  padding-top: var(--sp-4);
-  border-top: 1px solid var(--border);
-  display: none;
-  animation: revealDown var(--t-normal) var(--ease-out);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--cream-soft);
-}
-
-.order-pill.expanded .order-detail { display: block; }
-
 
 /* ========================================
    RIGHT INSTRUMENT CLUSTER
@@ -1600,7 +1488,6 @@ body.behind .progress-fill::after { background: var(--red); }
 }
 
 .fullscreen-toggle:hover { color: var(--gold); background: var(--gold-dim); }
-
 
 /* ========================================
    SCALE RING — 200px, metallic bezel, top-right
@@ -1820,7 +1707,6 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 1.5s ease
   letter-spacing: 0.05em;
 }
 
-
 /* ========================================
    BAG STATS — Tight row below rings
    ======================================== */
@@ -1880,7 +1766,6 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 1.5s ease
   text-shadow: 
     0 0 12px rgba(217, 116, 101, 0.12);
 }
-
 
 /* ========================================
    BUTTON ROW — 5KG Bag Complete + Pause
@@ -1950,7 +1835,6 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 1.5s ease
   color: #f97316;
   background: rgba(249, 115, 22, 0.1);
 }
-
 
 /* ========================================
    BOTTOM STRIP — 25vh
@@ -2104,7 +1988,6 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 1.5s ease
 
 .cycle-history.collapsed .cycle-content { display: none; }
 
-
 /* ========================================
    CYCLE HISTORY — All 5 modes
    ======================================== */
@@ -2145,7 +2028,6 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 1.5s ease
   letter-spacing: 0.12em;
   color: var(--cream-muted);
 }
-
 
 /* --- Cycle Donut Mode --- */
 .cycle-donut {
@@ -2271,7 +2153,6 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 1.5s ease
   color: var(--muted);
 }
 
-
 /* --- Cycle Sparkline Mode --- */
 .cycle-sparkline {
   display: flex;
@@ -2339,7 +2220,6 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 1.5s ease
   color: var(--muted);
   margin-top: 4px;
 }
-
 
 /* --- Cycle Chips Mode --- */
 .cycle-chips {
@@ -2426,7 +2306,6 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 1.5s ease
   height: 8px;
   border-radius: 2px;
 }
-
 
 /* --- Cycle Cards Mode --- */
 .cycle-cards {
@@ -2568,7 +2447,6 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 1.5s ease
 .cycle-card.early .cycle-card-progress-bar { background: var(--green); }
 .cycle-card.overtime .cycle-card-progress-bar { background: var(--red); }
 
-
 /* --- Cycle List Mode --- */
 .cycle-list {
   display: flex;
@@ -2647,7 +2525,6 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 1.5s ease
 
 .cycle-item.carryover-badge { border-color: rgba(228, 170, 79, 0.08); }
 
-
 /* ========================================
    CELEBRATION
    ======================================== */
@@ -2687,7 +2564,6 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 1.5s ease
   text-align: center;
   letter-spacing: -0.03em;
 }
-
 
 /* ========================================
    PAUSE MODAL & BANNER
@@ -2843,7 +2719,6 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 1.5s ease
 
 .pause-banner-reason { opacity: 0.85; font-size: 13px; }
 
-
 /* ========================================
    START DAY MODAL
    ======================================== */
@@ -2970,7 +2845,6 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 1.5s ease
 }
 
 .btn-secondary:hover { background: var(--surface-raised); color: var(--cream); }
-
 
 /* ========================================
    HELP MODAL
@@ -3105,7 +2979,6 @@ body.timer-red .timer-ring-glow { opacity: 0.7; animation: glowBreathe 1.5s ease
 .help-dot.green { background: var(--green); }
 .help-dot.yellow { background: var(--yellow); }
 .help-dot.red { background: var(--red); }
-
 
 /* ========================================
    DEBUG PANEL
@@ -3254,7 +3127,6 @@ body.debug-active .debug-indicator { display: block; }
   color: var(--cream-muted);
 }
 
-
 /* ========================================
    FAB MENU
    ======================================== */
@@ -3387,12 +3259,10 @@ body.debug-active .debug-indicator { display: block; }
 
 .fab-backdrop.visible { opacity: 1; visibility: visible; }
 
-
 /* ========================================
    STREAK BADGE (compat)
    ======================================== */
 #streakBadge { display: none; }
-
 
 /* ========================================
    SHIFT ENDED STATE
@@ -3548,7 +3418,6 @@ html.tv-mode .cycle-item { font-size: 20px; padding: 8px 14px; }
 html.tv-mode .cycle-item-num,
 html.tv-mode .cycle-item .cycle-num { font-size: 13px; }
 
-
 /* ========================================
    IFRAME EMBED MODE
    ======================================== */
@@ -3557,7 +3426,6 @@ body.iframe-embed .cockpit { top: 0; }
 body.iframe-embed .lang-toggle { display: none; }
 body.iframe-embed .fab-container { display: none; }
 body.iframe-embed .time-controls { display: none; }
-
 
 /* ========================================
    AMBIENT LAYER (JS-driven)
@@ -3627,7 +3495,6 @@ body .topo-contours {
   /* cockpit class handles layout now */
 }
 
-
 /* ========================================
    TOUCH TARGETS (1024px and below)
    ======================================== */
@@ -3641,15 +3508,10 @@ body .topo-contours {
   .fab-menu-item,
   .cycle-nav-btn,
   .pause-reason-btn,
-  .order-pill {
-    min-height: 44px;
-    min-width: 44px;
-  }
 
   .cycle-nav-btn { width: 44px; height: 44px; }
   .lang-btn { min-width: 44px; min-height: 44px; padding: 8px 12px; }
 }
-
 
 /* ========================================
    HOVER STATES — Disable on touch
@@ -3661,7 +3523,6 @@ body .topo-contours {
   .fab-button:hover { transform: none; }
   .btn-primary:hover { transform: none; }
 }
-
 
 /* ========================================
    FOCUS STATES — Accessibility
@@ -3681,7 +3542,6 @@ a:focus:not(:focus-visible) {
   outline: none;
 }
 
-
 /* ========================================
    LOADING STATES
    ======================================== */
@@ -3690,7 +3550,6 @@ a:focus:not(:focus-visible) {
   animation: breathe 1.5s ease-in-out infinite;
 }
 
-
 /* ========================================
    UTILITY CLASSES
    ======================================== */
@@ -3698,7 +3557,6 @@ a:focus:not(:focus-visible) {
 .visible { display: block !important; }
 .fade-in { animation: fadeIn var(--t-normal) var(--ease-out) forwards; }
 .fade-out { animation: fadeOut var(--t-normal) var(--ease-out) forwards; }
-
 
 /* ========================================
    RESPONSIVE BREAKPOINTS
@@ -3810,7 +3668,6 @@ a:focus:not(:focus-visible) {
   .help-grid { grid-template-columns: 1fr; }
   .hud-center-marker { display: none; }
 }
-
 
 /* ========================================
    PRINT / REDUCED MOTION
