@@ -1,30 +1,22 @@
 /**
  * Orders — Router/Dispatcher
  *
+ * The wholesale-orders UI was retired (see the app-cleanup commit); what remains
+ * is the part two live apps still depend on:
+ *   - validatePassword        — Consignment uses /api/orders as its auth endpoint
+ *   - getScoreboardOrderQueue — the Scoreboard's order-queue panel
+ *
  * Modules:
- *   shared.js          — Drive API helpers, date formatting, constants
- *   customers.js       — getCustomers, saveCustomer, deleteCustomer
- *   master-orders.js   — getMasterOrders, saveMasterOrder, deleteMasterOrder, updateOrderPriority
- *   shipments.js       — getShipments, saveShipment, deleteShipment
- *   payments.js        — getPayments, savePayment, deletePayment, getPaymentLinks, savePaymentLink, deletePaymentLink, getShipmentPaymentStatus
- *   financials.js      — getOrderFinancials, getPriceHistory, updatePriceHistoryForItems
- *   coa.js             — getCOAIndex, syncCOAIndex, getCOAsForStrains, count5kgBagsForStrain
+ *   shared.js           — Drive API helpers, date formatting, constants
+ *   coa.js              — count5kgBagsForStrain (used by scoreboard-queue)
  *   scoreboard-queue.js — getScoreboardOrderQueue
- *   migrate.js         — migrateFromSheets, migratePaymentLinks
  */
 
 import { successResponse, parseBody, getAction, getQueryParams } from '../../lib/response.js';
 import { createError } from '../../lib/errors.js';
-import { validatePassword as authValidatePassword, requireAuth } from '../../lib/auth.js';
+import { validatePassword as authValidatePassword } from '../../lib/auth.js';
 
-import { getCustomers, saveCustomer, deleteCustomer } from './customers.js';
-import { getMasterOrders, saveMasterOrder, deleteMasterOrder, updateOrderPriority } from './master-orders.js';
-import { getShipments, saveShipment, deleteShipment } from './shipments.js';
-import { getPayments, savePayment, deletePayment, getPaymentLinks, savePaymentLink, deletePaymentLink, getShipmentPaymentStatus } from './payments.js';
-import { getOrderFinancials, getPriceHistory } from './financials.js';
-import { getCOAIndex, syncCOAIndex, getCOAsForStrains } from './coa.js';
 import { getScoreboardOrderQueue } from './scoreboard-queue.js';
-import { migrateFromSheets, migratePaymentLinks } from './migrate.js';
 
 // ===== AUTHENTICATION =====
 
@@ -32,8 +24,6 @@ async function validatePassword(params, body, env) {
   // Password comes from the POST body (text/plain) so it never rides in the URL,
   // logs, or browser history. params.password is a transitional fallback for
   // stale service-worker-cached clients still doing the old GET login.
-  // TODO(2026-07-01): drop the params.password fallback — by then cached clients
-  // have rolled over and the leaky query-string path can be retired for good.
   const password = body.password || params.password || '';
 
   // Use constant-time comparison from auth.js
@@ -52,61 +42,23 @@ async function validatePassword(params, body, env) {
 async function test() {
   return successResponse({
     ok: true,
-    message: 'Wholesale Orders API is working (Cloudflare D1)',
+    message: 'Orders API is working (Cloudflare D1)',
     timestamp: new Date().toISOString(),
   });
 }
 
 // ===== MAIN HANDLER =====
 
-// Actions that require authentication (write operations)
-const ORDERS_WRITE_ACTIONS = new Set([
-  'saveCustomer', 'deleteCustomer',
-  'saveMasterOrder', 'deleteMasterOrder', 'updateOrderPriority',
-  'saveShipment', 'deleteShipment',
-  'savePayment', 'deletePayment',
-  'syncCOAIndex', 'migrate', 'migratePaymentLinks',
-  'savePaymentLink', 'deletePaymentLink',
-]);
-
 export async function handleOrdersD1(request, env) {
   const action = getAction(request);
   const params = getQueryParams(request);
   const body = request.method === 'POST' ? await parseBody(request) : {};
 
-  // Require auth for write actions
-  if (ORDERS_WRITE_ACTIONS.has(action)) {
-    requireAuth(request, body, env, `orders-${action}`);
-  }
-
+  // No write actions remain, so there is nothing here to gate behind requireAuth.
   const actions = {
     validatePassword: () => validatePassword(params, body, env),
-    getCustomers: () => getCustomers(env),
-    saveCustomer: () => saveCustomer(body, env),
-    deleteCustomer: () => deleteCustomer(body, env),
-    getMasterOrders: () => getMasterOrders(env),
-    saveMasterOrder: () => saveMasterOrder(body, env),
-    deleteMasterOrder: () => deleteMasterOrder(body, env),
-    updateOrderPriority: () => updateOrderPriority(body, env),
-    getShipments: () => getShipments(params, env),
-    saveShipment: () => saveShipment(body, env),
-    deleteShipment: () => deleteShipment(body, env),
-    getPayments: () => getPayments(params, env),
-    savePayment: () => savePayment(body, env),
-    deletePayment: () => deletePayment(body, env),
-    getPriceHistory: () => getPriceHistory(env),
-    getOrderFinancials: () => getOrderFinancials(params, env),
-    getCOAIndex: () => getCOAIndex(env),
-    syncCOAIndex: () => syncCOAIndex(env),
-    getCOAsForStrains: () => getCOAsForStrains(params, env),
     getScoreboardOrderQueue: () => getScoreboardOrderQueue(env),
     test: () => test(),
-    migrate: () => migrateFromSheets(env),
-    migratePaymentLinks: () => migratePaymentLinks(env),
-    getPaymentLinks: () => getPaymentLinks(params, env),
-    savePaymentLink: () => savePaymentLink(body, env),
-    deletePaymentLink: () => deletePaymentLink(body, env),
-    getShipmentPaymentStatus: () => getShipmentPaymentStatus(params, env),
   };
 
   if (!action || !actions[action]) {

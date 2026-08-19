@@ -10,7 +10,6 @@
  *       closable: boolean  (default: true) – render an X button
  *       icon:     string   (optional) – override Phosphor icon class
  *
- * Also exposes `showMessage` as an alias for legacy callers (e.g. barcode.html).
  */
 
 const STYLE_ID = 'ro-toast-styles';
@@ -203,14 +202,6 @@ export function showToast(message, type = 'info', duration = 3500, options = {})
   return toast;
 }
 
-// Legacy alias for pages that called showMessage(text, type) (e.g. barcode.html).
-export function showMessage(message, type = 'info', duration = 3500, options = {}) {
-  return showToast(message, type, duration, options);
-}
-
 if (typeof window !== 'undefined') {
   window.showToast = showToast;
-  if (typeof window.showMessage !== 'function') {
-    window.showMessage = showMessage;
-  }
 }
