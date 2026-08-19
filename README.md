@@ -29,16 +29,18 @@ GitHub Pages (Frontend)  ←→  Cloudflare Workers (API)  ←→  Cloudflare D1
 
 | App | Path | Description |
 |-----|------|-------------|
-| **Mission Control** | `mc-v2/` | Command center prototype — agent fleet, task board, production feed (React + Vite; not deployed) |
-| **Scoreboard** | `src/pages/scoreboard.html` | Real-time production scoreboard (lbs/hr, crew, targets) |
-| **Pool Inventory** | `src/pages/pool-inventory.html` | Flower inventory by strain, grade, location |
+| **Dashboard** | `src/pages/index.html` | Operations hub — KPIs, widgets, and the shell that embeds Kanban / Scoreboard / SOP |
+| **Scoreboard** | `src/pages/scoreboard-v2.html` | Real-time production scoreboard (lbs/hr, crew, targets, order queue) |
+| **Floor Manager** | `src/pages/hourly-entry.html` | Hourly production entry — crew counts, bag timer, shift adjustments |
+| **Supply Kanban** | `src/pages/kanban.html` | Supply-closet reorder board with vendor carts and reorder alerts |
+| **SOP Manager** | `src/pages/sop-manager.html` | Standard operating procedures with versioning and media |
+| **Complaints** | `src/pages/complaints.html` | Quality management — customer complaint tracking (EN/ES) |
+| **Supersack Tracker** | `src/pages/supersack-entry.html` | Supersack intake and weights |
+| **Supersack Analytics** | `src/pages/supersack-analytics.html` | Yield and cost reporting over supersack data |
+| **Scale Display** | `src/pages/scale-display.html` | Live scale readout for the weighing station |
 | **Consignment** | `src/pages/consignment.html` | Partner farm intake → inventory → payment workflow |
-| **Order Management** | `src/pages/orders.html` | Wholesale order tracking, shipments |
-| **Barcode System** | `src/pages/barcode.html` | Label generation + scanning for bags/boxes |
-| **SOP Manager** | `src/pages/sop-manager.html` | Standard operating procedures with versioning |
-| **Kanban** | `src/pages/kanban.html` | Visual task board |
-| **Complaints** | `src/pages/complaints.html` | Customer complaint tracking |
 | **Scale Reader** | `scale-reader/` | USB scale integration for weighing stations |
+| **Mission Control** | `mc-v2/` | Command center prototype — agent fleet, task board, production feed (React + Vite; not deployed) |
 
 ---
 
@@ -50,12 +52,16 @@ GitHub Pages (Frontend)  ←→  Cloudflare Workers (API)  ←→  Cloudflare D1
 
 Core operations API:
 - `/api/production` — real-time production tracking (scoreboard, dashboard, KPIs)
-- `/api/pool` — flower inventory management
-- `/api/consignment` — partner farm consignment workflow
-- `/api/orders` — wholesale order management
-- `/api/barcode` — barcode/label generation
+- `/api/supersack` — supersack intake, weights, analytics
+- `/api/kanban` — supply reorder board
 - `/api/sop` — SOP versioning
-- `/api/kanban` — task board
+- `/api/media` — SOP media upload/serve (R2)
+- `/api/complaints` — quality management
+- `/api/consignment` — partner farm consignment workflow
+- `/api/pool` — Shopify pool inventory proxy
+- `/api/irrigation` — irrigation log
+- `/api/harvest` — harvest lot ledger
+- `/api/orders` — retained for the Scoreboard's order queue and Consignment auth
 
 ### `mission-control-api`
 **Path:** `workers/mission-control/`
@@ -106,12 +112,15 @@ speak and the fleet registry they write to.
 ## Database Schema
 
 ### Operations DB (`rogue-origin-api`)
-- `production_sessions` / `production_entries` — shift tracking, hourly logs
-- `pool_inventory` — flower inventory by strain/grade/location
-- `consignment_*` — partner intakes, inventory, payments
-- `orders` / `shipments` — wholesale order lifecycle
-- `barcodes` — label tracking
-- `sops` — standard operating procedures
+- `monthly_production` / `shift_adjustments` / `pause_log` — shift tracking, hourly logs
+- `supersack_entries` — supersack intake and weights
+- `inventory_adjustments` — running inventory movements
+- `kanban_cards` / `kanban_orders` / `kanban_reorder_requests` — supply reorder board
+- `sops` / `sop_requests` — standard operating procedures
+- `complaints` — quality management
+- `consignment_*` — partner intakes, sales, payments
+- `orders` / `shipments` — read by the Scoreboard's order-queue panel
+- `harvest_*` / `irrigation_log` — field operations
 
 ### Mission Control DB (`mission-control-api`)
 - `agents` — fleet registry (name, domain, status, color)
@@ -172,10 +181,11 @@ npx playwright test         # E2E tests
 ```
 rogue-origin-apps/
 ├── src/pages/                  # Frontend apps (HTML + JS)
-│   ├── scoreboard.html         # Production scoreboard
-│   ├── consignment.html        # Consignment workflow
-│   ├── pool-inventory.html     # Flower inventory
-│   └── ...                     # Other operational apps
+│   ├── index.html              # Dashboard / operations hub
+│   ├── scoreboard-v2.html      # Production scoreboard
+│   ├── hourly-entry.html       # Floor Manager
+│   ├── kanban.html             # Supply Kanban
+│   └── ...                     # SOP, complaints, supersack, consignment
 ├── workers/                    # Cloudflare Workers
 │   ├── src/                    # Operations API
 │   │   ├── index.js            # Router + handlers
