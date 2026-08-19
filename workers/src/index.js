@@ -4,30 +4,23 @@
  * Routes:
  * - /api/production - Production tracking (D1)
  * - /api/orders - Wholesale orders (D1)
- * - /api/barcode - Barcode/label management (D1)
  * - /api/kanban - Kanban board (D1)
  * - /api/sop - Standard operating procedures (D1)
  * - /api/consignment - Consignment inventory tracking (D1)
  * - /api/complaints - Customer complaints tracking (D1)
- * - /api/pool-bins - Pool bin inventory (D1)
  * - /api/pool - Shopify pool inventory proxy
- * - /api/media - Media upload/serve (R2)
  * - /api/irrigation - Irrigation crew reports (D1)
  * - /api/harvest - Harvest zone-entry & barn-intake tracking (D1) [TEST]
  */
 
 import { handleProductionD1 } from './handlers/production-d1.js';
 import { handleOrdersD1 } from './handlers/orders-d1.js';
-import { handleBarcodeD1 } from './handlers/barcode-d1.js';
 import { handleKanbanD1 } from './handlers/kanban-d1.js';
 import { handleSopD1 } from './handlers/sop-d1.js';
 import { handleConsignmentD1 } from './handlers/consignment-d1.js';
 import { handleComplaintsD1 } from './handlers/complaints-d1.js';
-import { handlePoolD1 } from './handlers/pool-d1.js';
 import { handlePoolRequest } from './handlers/pool.js';
 import { handleSupersackD1 } from './handlers/supersack-d1.js';
-import { handleMediaR2 } from './handlers/media-r2.js';
-import { handleTpmD1 } from './handlers/tpm-d1.js';
 import { handleIrrigationD1 } from './handlers/irrigation-d1.js';
 import { handleHarvestD1, handleSackScan, handleZoneScan } from './handlers/harvest-d1.js';
 import { corsHeaders, handleCors } from './lib/cors.js';
@@ -111,8 +104,6 @@ export default {
         response = await handleProductionD1(request, env, ctx);
       } else if (path.startsWith('/api/orders')) {
         response = await handleOrdersD1(request, env, ctx);
-      } else if (path.startsWith('/api/barcode')) {
-        response = await handleBarcodeD1(request, env, ctx);
       } else if (path.startsWith('/api/kanban')) {
         response = await handleKanbanD1(request, env, ctx);
       } else if (path.startsWith('/api/sop')) {
@@ -121,15 +112,11 @@ export default {
         response = await handleComplaintsD1(request, env, ctx);
       } else if (path.startsWith('/api/consignment')) {
         response = await handleConsignmentD1(request, env, ctx);
-      } else if (path.startsWith('/api/media')) {
-        response = await handleMediaR2(request, env);
       } else if (path.startsWith('/api/supersack-qa')) {
         const { handleSupersackQA } = await import('./handlers/supersack-qa.js');
         response = await handleSupersackQA(request, env, ctx);
       } else if (path.startsWith('/api/supersack')) {
         response = await handleSupersackD1(request, env, ctx);
-      } else if (path.startsWith('/api/tpm')) {
-        response = await handleTpmD1(request, env, ctx);
       } else if (path.startsWith('/api/irrigation')) {
         response = await handleIrrigationD1(request, env, ctx);
       } else if (path.startsWith('/api/harvest')) {
@@ -142,8 +129,6 @@ export default {
         // Zone-sign QR target (/z/Z4). Short for the same reason — these are
         // laminated and staked outdoors all season and can't be re-printed cheaply.
         response = await handleZoneScan(request, env, ctx);
-      } else if (path.startsWith('/api/pool-bins')) {
-        response = await handlePoolD1(request, env, ctx);
       } else if (path.startsWith('/api/pool')) {
         // Shopify pool inventory proxy
         response = await handlePoolRequest(request, env);
@@ -153,7 +138,7 @@ export default {
           success: true,
           message: 'Rogue Origin API - Cloudflare Workers',
           version: '1.0.0',
-          endpoints: ['/api/production', '/api/orders', '/api/barcode', '/api/kanban', '/api/sop', '/api/consignment', '/api/complaints', '/api/supersack', '/api/pool', '/api/media', '/api/tpm', '/api/irrigation', '/api/harvest']
+          endpoints: ['/api/production', '/api/orders', '/api/kanban', '/api/sop', '/api/consignment', '/api/complaints', '/api/supersack', '/api/pool', '/api/irrigation', '/api/harvest']
         });
       } else {
         response = errorResponse('Not found', 'NOT_FOUND', 404);

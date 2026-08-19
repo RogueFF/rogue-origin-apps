@@ -124,7 +124,6 @@
     <div class="nav-item" data-view="kanban" onclick="switchView('kanban')" role="button" tabindex="0" aria-label="Navigate to Supply Kanban" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('kanban')"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="4.5" height="14" rx="1"/><rect x="7.75" y="3" width="4.5" height="14" rx="1"/><rect x="13.5" y="3" width="4.5" height="14" rx="1"/></svg></span><span>Supply Kanban</span></div>
     <div class="nav-item" data-view="scoreboard" onclick="switchView('scoreboard')" role="button" tabindex="0" aria-label="Navigate to Scoreboard" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('scoreboard')"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16V10"/><path d="M8 16V7"/><path d="M12 16V4"/><path d="M16 16V9"/></svg></span><span>Scoreboard</span></div>
     <div class="nav-item" data-view="sop" onclick="switchView('sop')" role="button" tabindex="0" aria-label="Navigate to SOP Manager" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('sop')"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="12" height="15" rx="2"/><path d="M7 2.5h6"/><path d="M7 9l2 2 4-4"/></svg></span><span>SOP Manager</span></div>
-    <div class="nav-item" data-view="orders" onclick="switchView('orders')" role="button" tabindex="0" aria-label="Navigate to Orders" onkeydown="if(event.key==='Enter'||event.key===' ')switchView('orders')"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h12l-1 12H5z"/><path d="M7 6V4a3 3 0 0 1 6 0v2"/></svg></span><span>Orders</span></div>
     <div class="nav-item" onclick="window.location.href='consignment.html'" role="button" tabindex="0" aria-label="Navigate to Consignment" onkeydown="if(event.key==='Enter'||event.key===' ')window.location.href='consignment.html'"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10h4l3-3 2 2 3-3h4"/><path d="M7 13l2 2 4-4"/></svg></span><span>Consignment</span></div>
     <div class="nav-item" onclick="window.location.href='complaints.html'" role="button" tabindex="0" aria-label="Navigate to Complaints" onkeydown="if(event.key==='Enter'||event.key===' ')window.location.href='complaints.html'"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2L2 18h16L10 2z"/><path d="M10 8v4"/><circle cx="10" cy="14.5" r="0.5" fill="currentColor"/></svg></span><span>Complaints</span></div>
     <div class="nav-item" onclick="window.location.href='hourly-entry.html'" role="button" tabindex="0" aria-label="Navigate to Floor Manager" onkeydown="if(event.key==='Enter'||event.key===' ')window.location.href='hourly-entry.html'"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="14" height="14" rx="1"/><path d="M3 8h14"/><path d="M8 8v9"/></svg></span><span>Floor Manager</span></div>
@@ -650,20 +649,6 @@
       </div>
     </div>
 
-    <div class="app-view" id="barcodeView" role="region" aria-label="Barcode Printer application">
-      <div class="app-iframe-container">
-        <button class="app-expand-btn" onclick="openAppNewTab('barcode')" title="Open in new tab" aria-label="Open Barcode Printer in new tab"><i class="ph ph-arrow-square-out" aria-hidden="true"></i></button>
-        <iframe loading="lazy" class="app-iframe" id="barcodeFrame" data-src="https://rogueff.github.io/rogue-origin-apps/src/pages/barcode.html" title="Barcode Printer application"></iframe>
-      </div>
-    </div>
-
-    <div class="app-view" id="ordersView" role="region" aria-label="Orders application">
-      <div class="app-iframe-container">
-        <button class="app-expand-btn" onclick="openAppNewTab('orders')" title="Open in new tab" aria-label="Open Orders in new tab"><i class="ph ph-arrow-square-out" aria-hidden="true"></i></button>
-        <iframe loading="lazy" class="app-iframe" id="ordersFrame" data-src="https://rogueff.github.io/rogue-origin-apps/src/pages/orders.html" title="Orders application"></iframe>
-      </div>
-    </div>
-
     <div class="app-view" id="sopView" role="region" aria-label="SOP Manager application">
       <div class="app-iframe-container">
         <button class="app-expand-btn" onclick="openAppNewTab('sop')" title="Open in new tab" aria-label="Open SOP Manager in new tab"><i class="ph ph-arrow-square-out" aria-hidden="true"></i></button>
@@ -744,11 +729,11 @@
   "imports": {
     "../js/modules/api.js": "../js/modules/api.js?h=12c21c85",
     "../js/modules/charts.js": "../js/modules/charts.js?h=33e3418f",
-    "../js/modules/config.js": "../js/modules/config.js?h=d0d984fe",
+    "../js/modules/config.js": "../js/modules/config.js?h=c29509e7",
     "../js/modules/date.js": "../js/modules/date.js?h=24ed0d01",
     "../js/modules/event-cleanup.js": "../js/modules/event-cleanup.js?h=45869dc0",
     "../js/modules/grid.js": "../js/modules/grid.js?h=7850b9a8",
-    "../js/modules/index.js": "../js/modules/index.js?h=761eddc0",
+    "../js/modules/index.js": "../js/modules/index.js?h=e0bc8d52",
     "../js/modules/install-prompt.js": "../js/modules/install-prompt.js?h=e509b4e7",
     "../js/modules/lazy-loader.js": "../js/modules/lazy-loader.js?h=15a6ae35",
     "../js/modules/memory.js": "../js/modules/memory.js?h=29148f33",
@@ -766,7 +751,7 @@
 }
 </script>
 <!-- module-hashes:end -->
-<script type="module" src="../js/modules/index.js?h=761eddc0"></script>
+<script type="module" src="../js/modules/index.js?h=e0bc8d52"></script>
 
 <!-- Floating Action Button -->
 <button class="ai-chat-fab" onclick="toggleAIChat()" title="AI Assistant" aria-label="Open AI Assistant chat">

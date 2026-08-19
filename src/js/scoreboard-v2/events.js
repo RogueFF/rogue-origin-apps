@@ -3,6 +3,14 @@
  * Centralizes all event listener registration
  * Replaces inline onclick/onchange/oninput handlers with proper addEventListener calls
  */
+/* global
+  toggleMorningReport, clearHistoricalDate, loadHistoricalDate, toggleDatePicker,
+  startDayNow, editStartTime, cancelStartTime, confirmStartTime, setLanguage,
+  toggleHelp, toggleOrderQueue, toggleAvgBest, toggleTimerFullscreen,
+  handlePauseClick, selectPauseReason, onCustomReasonInput, closePauseModal,
+  confirmPause, toggleDebug, setDebugState, simulateTime, simulateBreak,
+  addCycleToHistory, playMariachi, resetDebug
+*/
 (function(window) {
   'use strict';
 

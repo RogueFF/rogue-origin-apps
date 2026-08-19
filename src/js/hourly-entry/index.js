@@ -477,7 +477,10 @@ async function loadShiftStart() {
   try {
     const data = await productionApi.get('getShiftStart', { date: todayISO });
 
-    if (data.success && data.shiftAdjustment) {
+    // No `data.success` guard: successResponse() returns the handler payload
+    // directly and the shift handler does not add a success flag, so gating on
+    // it made this branch dead code — the API value never overrode localStorage.
+    if (data.shiftAdjustment?.manualStartTime) {
       const apiStartTime = new Date(data.shiftAdjustment.manualStartTime);
 
       // Check if API time is for today
@@ -531,7 +534,7 @@ async function setShiftStart(time = null) {
       time: time ? startTime.toISOString() : null, // null = server time
     });
 
-    if (data.success && data.shiftAdjustment) {
+    if (data.shiftAdjustment?.manualStartTime) {
       // Update with server-confirmed time
       const serverTime = new Date(data.shiftAdjustment.manualStartTime);
       shiftStartTime = serverTime;
@@ -4121,7 +4124,12 @@ async function syncShiftStartFromAPI() {
         shiftStartTime = apiStartTime;
         localStorage.setItem('manualShiftStart', apiStartTime.toISOString());
         localStorage.setItem('shiftStartDate', new Date().toDateString());
-        updateStartTimeUI();
+        // Was updateStartTimeUI() — no such function, so this threw and left
+        // the badge hidden while shiftStartTime had already changed underneath
+        // the timeline. Mirror setShiftStart()'s refresh sequence instead.
+        updateTimeSlots(shiftStartTime);
+        updateShiftStartUI();
+        renderTimeline();
       }
     }
   } catch (error) {

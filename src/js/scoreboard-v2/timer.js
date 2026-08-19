@@ -318,12 +318,28 @@
       // Calculates: (yesterday's lastBag → yesterday's shift end) + (today's 7AM → now)
       elapsedSec = getWorkingSecondsCarryOver(State.lastBagTimestamp);
     } else if (!hasShiftStarted && !breakStatus.onBreak && !breakStatus.afterHours) {
-      // No bag in progress and shift hasn't been started - show waiting state
-      // Don't count time until shift is manually started
-      elapsedSec = 0;
-      colorClass = 'neutral';
-      var waitingLabel = Utils.translate('waiting');
-      updateTimerDisplay('--:--', waitingLabel || 'Waiting to Start', colorClass, 0);
+      // No bag in progress and shift hasn't been started - show a neutral
+      // "Waiting to Start" state and stop (don't count time until the shift
+      // is manually started).
+      const waitingLabel = Utils.translate('waiting') || 'Waiting to Start';
+      const wPanel = DOM ? DOM.get('timerPanel') : document.getElementById('timerPanel');
+      const wValue = DOM ? DOM.get('timerValue') : document.getElementById('timerValue');
+      const wLabel = DOM ? DOM.get('timerLabel') : document.getElementById('timerLabel');
+      if (wPanel) {
+        const wFs = wPanel.classList.contains('fullscreen');
+        const wDr = wPanel.classList.contains('dragging');
+        wPanel.className = 'timer-panel neutral' +
+          (wFs ? ' fullscreen' : '') + (wDr ? ' dragging' : '');
+      }
+      document.body.classList.remove('timer-green', 'timer-yellow', 'timer-red', 'timer-neutral');
+      document.body.classList.add('timer-neutral');
+      if (wValue) {
+        wValue.textContent = '--:--';
+        wValue.className = 'timer-value';
+      }
+      if (wLabel) {
+        wLabel.textContent = waitingLabel;
+      }
       return;
     } else if (!breakStatus.onBreak && !breakStatus.afterHours) {
       // No lastBagTimestamp but shift has started - use shift start time as reference
