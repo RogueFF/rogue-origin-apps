@@ -5,8 +5,8 @@
 
 // Whitelist of valid table names to prevent SQL injection via dynamic table references
 const VALID_TABLES = new Set([
-  'customers', 'orders', 'shipments', 'payments', 'price_history',
-  'coa_index', 'products', 'monthly_production', 'production_tracking',
+  'customers', 'orders', 'shipments', 'payments',
+  'products', 'monthly_production', 'production_tracking',
   'inventory_adjustments', 'pause_log', 'shift_adjustments', 'data_version',
   'scale_readings', 'payment_shipment_links', 'system_config',
   'kanban_cards', 'kanban_cart', 'kanban_orders', 'kanban_columns',
@@ -18,8 +18,6 @@ const VALID_TABLES = new Set([
   'consignment_sales', 'consignment_payments',
   // Complaints module
   'complaints',
-  // TPM module
-  'tpm_cards',
   // Irrigation reporting
   'irrigation_log',
   // Order blocks — real line items + the production-run queue (0014)
