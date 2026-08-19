@@ -37,5 +37,5 @@ npm run build  # outputs to dist/
 ## Phase 2 (Planned)
 - Gateway WebSocket client
 - Live data from D1/API
-- Full views (Production, Trading, Tasks, Monitor, System)
+- Full views (Production, Tasks, Monitor, System)
 - Command palette (⌘K)

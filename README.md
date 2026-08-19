@@ -1,6 +1,6 @@
 # Rogue Origin Apps
 
-Operations hub for [Rogue Origin](https://rogueorigin.com) — a seed-to-sale hemp flower business in Southern Oregon. Production tracking, order management, AI-powered mission control, and an autonomous trading desk.
+Operations hub for [Rogue Origin](https://rogueorigin.com) — a seed-to-sale hemp flower business in Southern Oregon. Production tracking, order management, inventory, compliance, and an AI-assisted operations command center.
 
 **Live:** [rogueff.github.io/rogue-origin-apps](https://rogueff.github.io/rogue-origin-apps)
 
@@ -10,10 +10,10 @@ Operations hub for [Rogue Origin](https://rogueorigin.com) — a seed-to-sale he
 
 ```
 GitHub Pages (Frontend)  ←→  Cloudflare Workers (API)  ←→  Cloudflare D1 (Database)
-       ↑                              ↑
-  atlas-os.js                   Two workers:
-  (Mission Control)             • rogue-origin-api (operations)
-                                • mission-control-api (Atlas OS)
+                                              ↑
+                                        Two workers:
+                                        • rogue-origin-api (operations)
+                                        • mission-control-api (command center)
 ```
 
 ### Stack
@@ -29,7 +29,7 @@ GitHub Pages (Frontend)  ←→  Cloudflare Workers (API)  ←→  Cloudflare D1
 
 | App | Path | Description |
 |-----|------|-------------|
-| **Mission Control** | `src/pages/mission-control/` | Atlas OS — agent fleet, trading desk, task board, production, activity feed |
+| **Mission Control** | `mc-v2/` | Command center — agent fleet, task board, production, activity feed (React, in progress) |
 | **Scoreboard** | `src/pages/scoreboard.html` | Real-time production scoreboard (lbs/hr, crew, targets) |
 | **Pool Inventory** | `src/pages/pool-inventory.html` | Flower inventory by strain, grade, location |
 | **Consignment** | `src/pages/consignment.html` | Partner farm intake → inventory → payment workflow |
@@ -56,7 +56,6 @@ Core operations API:
 - `/api/barcode` — barcode/label generation
 - `/api/sop` — SOP versioning
 - `/api/kanban` — task board
-- `/api/prices` — live stock price proxy (Yahoo Finance)
 
 ### `mission-control-api`
 **Path:** `workers/mission-control/`
@@ -66,10 +65,10 @@ Atlas OS backend:
 - `/api/agents` — agent fleet status (register, update, query)
 - `/api/activity` — activity feed (all agent actions logged here)
 - `/api/tasks` — task management (neural task board)
-- `/api/inbox` — Koa's decision inbox
-- `/api/regime` — market regime signal (RED/YELLOW/GREEN)
-- `/api/plays` — trading desk plays (Strategist recommendations)
-- `/api/positions` — portfolio positions (open/closed)
+- `/api/inbox` — decision inbox
+- `/api/briefs` — daily operations briefs
+- `/api/pool` — flower pool bins, intake, dispense
+- `/api/notifications` — desktop notification feed
 - `/api/widgets` — dashboard widget config
 - `/api/github` — GitHub proxy (commits, CI, issues, PRs)
 
@@ -81,7 +80,6 @@ The command center. A single-page app with draggable, resizable windows:
 
 - **Activity Feed** — real-time log of all agent actions
 - **Agent Fleet** — status of every agent (active/idle/error)
-- **Trading Desk** — regime signal, portfolio, positions, plays, trade history, sectors, calendar
 - **Neural Tasks** — interactive task graph with domain clustering
 - **Inbox** — items requiring Koa's decision
 - **Production** — live scoreboard with auto-refresh (60s on shift, 5m off)
@@ -92,38 +90,16 @@ The command center. A single-page app with draggable, resizable windows:
 
 ## Agent Squad
 
-Autonomous agents running on cron, orchestrated by Atlas:
+Long-running agents report into Mission Control. The agents themselves are
+deployed outside this repo; what lives here is the reporting contract they
+speak and the fleet registry they write to.
 
-### Trading Desk Agents
-
-| Agent | Glyph | Schedule | Role |
-|-------|-------|----------|------|
-| **Regime** | 🛡️ | 6:30 AM daily | Market regime classification (RED/YELLOW/GREEN) — SPY, VIX, moving averages |
-| **Wire** | 🔗 | 6:30 AM daily | Market scanning, news, watchlist generation |
-| **Viper** | ⚡ | 6:30 AM daily | Options signals, earnings plays, unusual activity |
-| **Strategist** | ♟️ | Every 30m, 7AM-1PM | Structures plays from Wire+Viper+Regime intelligence |
-| **Analyst** | 💎 | 7:30 AM daily | Validates Strategist plays against regime (scoring, risk flags) |
-| **Dealer** | 🎰 | Every 30m, 7AM-1PM | Position management — entries, exits, stop losses |
-| **Ledger** | 📊 | 1:30 PM daily | Portfolio snapshot, daily P&L, trade journal |
-| **Razor** | 🪒 | 2 PM daily + Fri weekly | Performance auditor — win/loss analysis, strategy drift, evolution proposals |
-
-### System Agents
-
-| Agent | Glyph | Schedule | Role |
-|-------|-------|----------|------|
-| **Friday** | 🔧 | On-demand | Coding agent (Claude Code CLI + Agent Teams) |
-| **Darwin** | 🧬 | 11 PM nightly | System evolution — audits agents, proposes improvements |
-| **Scout** | 🔭 | On-demand | Opportunity scanner (Reddit, deals, events) |
-
-### Agent Data Flow
-
-```
-Wire + Viper → Strategist → Analyst (validates) → Dealer (executes)
-                                                       ↓
-Razor (audits) ← Ledger (snapshots) ← Positions API ←─┘
-      ↓
-Darwin (evolves configs based on Razor findings)
-```
+| Piece | Path | Role |
+|-------|------|------|
+| **Status reporter** | `tools/agents/status.js` | `agentStart` / `agentDone` / `agentError` — writes agent state to `/api/agents` |
+| **Fleet registry** | `workers/mission-control/` | `agents` + `activity` tables — who is running, what they last did |
+| **Notifications** | `tools/atlas-notifications/` | Electron tray app that surfaces briefs and alerts on the desktop |
+| **Kanban reorder monitor** | `tools/kanban-image-check/` | Supply reorder alerts from the kanban order log |
 
 ---
 
@@ -139,12 +115,12 @@ Darwin (evolves configs based on Razor findings)
 
 ### Mission Control DB (`mission-control-api`)
 - `agents` — fleet registry (name, domain, status, color)
-- `activity` — full activity feed (every agent action)
+- `activity` — activity feed (every agent action)
 - `tasks` — task board with status/priority/domain
-- `inbox` — decision items for Koa
-- `regime` — market regime history
-- `trade_plays` — Strategist recommendations (with dismiss/fill status)
-- `positions` — portfolio positions (open/closed, P&L tracking)
+- `inbox` — decision items
+- `briefs` — daily operations briefs
+- `bins` / `bin_balances` / `pool_transactions` — flower pool inventory
+- `notifications` — desktop notification queue
 - `agent_files` — agent deliverables and config storage
 
 ---
@@ -196,7 +172,6 @@ npx playwright test         # E2E tests
 ```
 rogue-origin-apps/
 ├── src/pages/                  # Frontend apps (HTML + JS)
-│   ├── mission-control/        # Atlas OS (atlas-os.js + atlas-os.css)
 │   ├── scoreboard.html         # Production scoreboard
 │   ├── consignment.html        # Consignment workflow
 │   ├── pool-inventory.html     # Flower inventory
@@ -209,7 +184,8 @@ rogue-origin-apps/
 │   │   ├── src/index.js        # Router + all handlers
 │   │   └── schema.sql          # D1 schema
 │   └── migrations/             # D1 migrations
-├── tools/agents/               # Atlas agent squad (see Agent Squad above)
+├── mc-v2/                      # Mission Control UI (React + Vite, in progress)
+├── tools/                      # Agent status reporter, notifications, build tooling
 ├── tests/                      # Test suite
 ├── scale-reader/               # USB scale integration
 ├── docs/                       # Design docs, plans, technical docs
@@ -224,7 +200,6 @@ rogue-origin-apps/
 - **No framework loyalty** — use whatever's best for the job
 - **Ship production-grade** — no "good enough for now"
 - **Agents do the work** — Atlas orchestrates, subagents execute
-- **Every trade teaches** — Razor audits, Darwin evolves, the desk gets sharper
 
 ---
 

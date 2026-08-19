@@ -1,7 +1,6 @@
 import { useGatewayStore } from '../store/gateway';
 import { useChatStore } from '../store/chat';
 import { useScoreboard } from '../lib/production-api';
-import { useRegime, usePortfolio, type RegimeData, type PortfolioData } from '../lib/mc-api';
 import { DepthCard } from '../components/DepthCard';
 import { AGENT_GLYPHS } from '../lib/constants';
 
@@ -166,24 +165,9 @@ export function Dashboard() {
   const notifications = useGatewayStore((s) => s.notifications);
 
   const { data: scoreboard, isError: scoreboardError, isLoading: prodLoading } = useScoreboard();
-  const { data: regimeResp, isLoading: regimeLoading } = useRegime();
-  const { data: portfolioResp, isLoading: portfolioLoading } = usePortfolio();
-
-  const regime = (regimeResp as Record<string, unknown>)?.success
-    ? (regimeResp as Record<string, unknown>).data as RegimeData | null
-    : null;
-  const portfolio = (portfolioResp as Record<string, unknown>)?.success
-    ? (portfolioResp as Record<string, unknown>).data as PortfolioData | null
-    : null;
-
   const prod = scoreboard?.production;
   const isLive = !!prod && !scoreboardError;
   const pct = prod?.percentage ?? 0;
-
-  const regimeColor = regime?.signal === 'GREEN' ? 'var(--accent-green)'
-    : regime?.signal === 'RED' ? 'var(--accent-red)'
-    : regime?.signal === 'YELLOW' ? 'var(--accent-gold)'
-    : 'var(--text-secondary)';
 
   // Build hourly bars from raw scoreboard data
   const hourlyBars: HourlyBar[] = (scoreboard as unknown as { production: { hourlyRates?: HourlyBar[] } })?.production?.hourlyRates?.map(h => ({
@@ -200,8 +184,6 @@ export function Dashboard() {
     { label: 'Rate', value: prod?.rate?.toFixed(1), unit: 'lbs/hr', loading: prodLoading },
     { label: 'Crew', value: prod?.crew != null ? String(prod.crew) : undefined, loading: prodLoading },
     { label: 'Agents', value: `${agents.filter(a => a.status !== 'offline').length}/${agents.length}`, loading: false },
-    { label: 'Trades', value: portfolio?.open_positions != null ? String(portfolio.open_positions) : undefined, loading: portfolioLoading },
-    { label: 'Regime', value: regime?.signal, color: regimeColor, loading: regimeLoading },
   ];
 
   return (
@@ -287,74 +269,6 @@ export function Dashboard() {
             {/* Mini hourly chart */}
             <div style={{ marginTop: 10 }}>
               <HourlyChart hours={hourlyBars} target={prod?.rate ?? 5} totalLbs={prod?.totalLbs} />
-            </div>
-          </DepthCard>
-
-          {/* Regime + Strategy Compact */}
-          <DepthCard className="liquid-glass" style={{
-            borderRadius: 'var(--card-radius)',
-            padding: '14px 16px',
-            borderColor: regime?.signal === 'GREEN' ? 'rgba(0,255,136,0.12)' : regime?.signal === 'RED' ? 'rgba(255,51,68,0.12)' : regime?.signal === 'YELLOW' ? 'rgba(228,170,79,0.12)' : undefined,
-            flex: 1,
-          }}>
-            <SectionLabel>Market Regime</SectionLabel>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-              <div style={{
-                width: 36,
-                height: 36,
-                borderRadius: '50%',
-                background: `${regimeColor}18`,
-                border: `2px solid ${regimeColor}`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontFamily: 'var(--font-stat)',
-                fontSize: 11,
-                fontWeight: 700,
-                color: regimeColor,
-                flexShrink: 0,
-              }}>
-                {regime?.signal || '—'}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.3 }}>
-                  {regime?.label || 'No regime data'}
-                </div>
-                {regime?.strategy?.strategies && (
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-tertiary)', marginTop: 2 }}>
-                    {regime.strategy.strategies}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: 20 }}>
-              <div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 1 }}>SPY</div>
-                <span style={{ fontFamily: 'var(--font-stat)', fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
-                  ${regime?.data?.spy_price?.toFixed(2) ?? '—'}
-                </span>
-              </div>
-              <div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 1 }}>VIX</div>
-                <span style={{ fontFamily: 'var(--font-stat)', fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
-                  {regime?.data?.vix?.toFixed(1) ?? '—'}
-                </span>
-              </div>
-              {portfolio && (
-                <div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 1 }}>P&L</div>
-                  <span style={{
-                    fontFamily: 'var(--font-stat)',
-                    fontSize: 15,
-                    fontWeight: 700,
-                    color: (portfolio.realized_pnl + portfolio.unrealized_pnl) >= 0 ? 'var(--accent-green)' : 'var(--accent-red)',
-                  }}>
-                    {(portfolio.realized_pnl + portfolio.unrealized_pnl) >= 0 ? '+' : ''}${(portfolio.realized_pnl + portfolio.unrealized_pnl).toFixed(0)}
-                  </span>
-                </div>
-              )}
             </div>
           </DepthCard>
         </div>
