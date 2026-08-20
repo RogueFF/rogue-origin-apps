@@ -23,6 +23,14 @@ that shifts as the shift falls behind, and a layout that stays legible from the
 far end of the line. It refreshes itself and keeps working through a dropped
 connection.
 
+### Floor Manager
+
+![Floor Manager](assets/screenshots/floor-manager.png)
+
+Where the line lead logs the hour: crew counts per line, cultivar, and tops and
+smalls weights. The bag timer and pool inventory live on the same screen, so
+nobody switches apps mid-shift. Bilingual, because the floor is.
+
 ### Operations Dashboard
 
 ![Operations Dashboard](assets/screenshots/dashboard.png)
