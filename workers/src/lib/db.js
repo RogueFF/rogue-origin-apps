@@ -20,8 +20,9 @@ const VALID_TABLES = new Set([
   'complaints',
   // Irrigation reporting
   'irrigation_log',
-  // Order blocks — real line items + the production-run queue (0014)
-  'order_items', 'production_runs',
+  // Order blocks — line items, the production-run queue (0014), and the
+  // canonical cultivar dimension the lead-time engine joins through (0017)
+  'order_items', 'production_runs', 'cultivars', 'cultivar_aliases',
 ]);
 
 /**

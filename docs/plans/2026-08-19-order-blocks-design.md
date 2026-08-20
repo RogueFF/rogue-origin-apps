@@ -1,9 +1,9 @@
 # Order Blocks — Wholesale Order Board with Production Queue
 
 **Date:** 2026-08-19
-**Status:** Design agreed, not yet implemented
-**Supersedes:** the card-view stub in `src/js/orders/index.js` (`setView('cards')`)
-**Mockups:** https://claude.ai/code/artifact/25458f4e-2d62-4a37-8822-e88772e7e057
+**Status:** Migrations 0014 + 0017 applied; handlers and UI not yet built
+**Supersedes:** the Wholesale Orders app, retired in `611da09e` (see §2a)
+**Mockups:** concepts https://claude.ai/code/artifact/25458f4e-2d62-4a37-8822-e88772e7e057 · chosen design https://claude.ai/code/artifact/f863924c-e79e-4c9e-a913-79f34fa986d0
 
 ---
 
@@ -39,13 +39,60 @@ Consequences today:
 | # | Decision | Rationale |
 |---|---|---|
 | 1 | **Manual entry now; Shopify sync later.** | No Shopify order ingestion exists anywhere in the repo. `orders.shopify_order_id` / `shopify_order_name` already exist and stay reserved; `order_items.external_line_id` is added so a future sync is idempotent without a second migration. |
-| 2 | **Cultivar picker sourced from the product/SKU table** (36 cultivars, `GET /api/barcode?action=products`). | The hourly-entry list (`getCultivars`, 34 entries) shares only 21 names with it and omits 15 cultivars that have live SKUs — Alium OG, Apple Crisp, Blueve, Bubba Kush, Lemon Octane, Orange Fritter, Pineapple Express, Pineapple Sugar Cookies, Raspberry Bear Claw, Sour Brulee, Sour Special Sauce, Sugar Cookez, Super Sour Space Candy, Trump Blues, White CBG. It also serves junk rows (`"LOG"`, bare `"Lifter"`). Verified by diffing both live endpoints on 2026-08-19. |
+| 2 | ~~Cultivar picker sourced from the product/SKU table.~~ **Superseded same day — see §2a.** Picker now reads a canonical `cultivars` table (42 entries, migration 0017). | The `products` table and `/api/barcode` were retired hours after this decision (commits `611da09e`, `56a4730e`). The reasoning that picked products over the hourly-entry list still holds and is preserved in §2a. |
 | 3 | **Over-commitment is a soft warning**, never a block. | Advisory flag on the card. No allocation table, no available-to-promise math in v1. |
 | 4 | **Board layout: Production Queue.** | A ranked list in the order the floor will actually run it, with a timeline. Chosen over Sorted Grid and Status Lanes. The grid falls out nearly free as a later view toggle; lanes do not, because they require a status vocabulary first. |
 | 5 | **Trimming is sequenced by cultivar lot, with per-order override. Tops and smalls are joint products of one lot, not separate runs.** | See §3 — this is the load-bearing decision. Verified against 45 days of `monthly_production`. |
 | 6 | **Crew size and hours/day are derived from live + trailing-7-day data**, with manual override. | Not typed per quote. See §5. |
 | 7 | **"Awaiting COA" is not a status.** | Inferred from `coa_index` during design; confirmed not a real stage. Dropped from the model and the mockups. |
 | 8 | **Quantities are entered in lb or kg and stored canonically in lb.** | Existing schema is kg (`commitment_kg`, `quantity_kg`); production, harvest and supersacks are all lb; two different conversion constants are already in the tree (`2.205` in `api/orders`, `2.20462` in the GAS estimator). One shared constant, one canonical unit, and the human's original entry preserved verbatim. |
+
+## 2a. Addendum, same day: the cultivar source was retired mid-design
+
+Between the recon that informed this document and its first commit, a parallel
+session retired most of this repo's dead surface area and deployed it. Three of
+those changes land directly on this design:
+
+| Commit | What it removed | Effect here |
+|---|---|---|
+| `611da09e` | The Wholesale Orders UI — `src/pages/orders.html`, all of `src/js/orders/`, and every order CRUD action except `validatePassword` | §8's "add a view to the existing Orders app" is void. There is no app. This becomes a new page. |
+| `f05dae17` | `getScoreboardOrderQueue` and the scoreboard panel that called it | The `estimatedHoursRemaining: 0` stub this design planned to fill no longer exists. Drop that from scope. |
+| `56a4730e` | The `products` table (362 rows) and `/api/barcode` | Decision 2's source is gone. |
+
+**None of this is a setback.** The order, customer and shipment rows all
+survive — verified 1 / 2 / 23 after the cleanup — and building on a clean page
+is simpler than grafting a view onto a half-finished app. Two things change:
+
+**The picker now reads a canonical `cultivars` dimension** (migration 0017),
+seeded from the `products` export in
+`~/Desktop/rogue-scrub-backup/dropped-tables-2026-08-19/ops-products.json`
+unioned with the distinct names in `monthly_production`. 42 canonical
+cultivars, 78 aliases. This is what §11 called a required normalizer and what
+§2 called "the right eventual answer, out of v1 scope" — losing `products`
+simply moved it forward, and it is strictly better than the endpoint it
+replaces. Resurrecting a table that was just deliberately dropped, after its
+rows were exported and its readers deleted, would have been the wrong move.
+
+**The alias map is now load-bearing, and it pays for itself immediately.**
+Joining `monthly_production.cultivar1` through `cultivar_aliases` resolves 28
+cultivars to real trim history. Two results worth recording:
+
+- **Lifter** pools **7,110 trimmer-hours** across `2023 - Lifter / Sungrown`,
+  `2024 - …`, `2025 - …` and `2025 - Lifter (Early Harvest) / …`. Exact-string
+  matching — what `getEffectiveTargetRate` does today — sees only one of those.
+- **Bubba Kush** gains **233 trimmer-hours** where it had none. The catalogue
+  sells "Bubba Kush"; production only ever recorded numbered phenotypes
+  (18, 59 (HT), 66, 66 (HT)). Before the merge, a sellable cultivar with real
+  history would have priced off the farm-average fallback.
+
+All six merges are listed in the migration header so they can be argued with.
+Cultivars under 20 trimmer-hours are excluded from producing a rate — that
+threshold currently catches Sapphire Kush, Fruity Pebbles, Golden Berries and
+Critical Berries, the last of which reports an implausible 0.0% tops share on
+7 hours.
+
+A replacement `getCultivars` endpoint reading this table is now on the v1 list.
+
 
 ## 3. The load-bearing decision: runs, not orders
 
@@ -140,6 +187,13 @@ date, so the cell is evidently tracked somewhere other than the `*_line2` column
 confirming before assuming line 2 is genuinely idle capacity.
 
 ## 4. Data model
+
+> **Implemented.** `0014-order-items.sql` created these tables; `0017-cultivars.sql`
+> then added the `cultivars` / `cultivar_aliases` dimension and repointed both
+> tables at it, replacing the free-text `cultivar TEXT` below with
+> `cultivar_id TEXT NOT NULL REFERENCES cultivars(id)`. Both are applied to
+> `rogue-origin-db`. **The migration files are authoritative** — the SQL in this
+> section is the original sketch, kept for the reasoning around it.
 
 New migration `workers/migrations/0014-order-items.sql`.
 (Note: `0013` is already used twice — `0013-harvest-crew-roster.sql` and
@@ -347,7 +401,7 @@ approach; it already persists to a server and carries no library weight.
 **In v1**
 - `order_items` + `production_runs` migration, `VALID_TABLES` update
 - Item CRUD actions and the queue actions above
-- Fix the `updateShipment` action mismatch
+- ~~Fix the `updateShipment` action mismatch~~ — moot, that handler was deleted (`611da09e`)
 - Rework `getEffectiveTargetRate` to return combined throughput + tops fraction per cultivar;
   fix the line-1-only read and the dead `days` parameter; restate the fallback in combined terms
   and mark fallback-priced runs in the UI
@@ -355,7 +409,8 @@ approach; it already persists to a server and carries no library weight.
 - Derived crew with visible override
 - Queue view with drag-to-rank and recalculating finish dates; surplus byproduct shown per run
 - Order cards with real line items and per-order estimated finish
-- Cultivar picker from the product table
+- Cultivar picker from the `cultivars` table, plus a replacement `getCultivars` endpoint
+  (the old `/api/barcode?action=products` is gone)
 - Soft over-commit flag
 - Migrate `MO-2026-001` (one record) from its notes field into real line items
 
