@@ -668,6 +668,7 @@ const commandPaletteItems = [
   { label: 'Barcode Printer', action: () => switchView('barcode'), icon: 'barcode', shortcut: '' },
   { label: 'SOP Manager', action: () => switchView('sop'), icon: 'clipboard', shortcut: '' },
   { label: 'Orders', action: () => switchView('orders'), icon: 'bag', shortcut: '' },
+  { label: 'Wholesale Orders', action: () => { window.location.href = 'wholesale.html'; }, icon: 'invoice', shortcut: '' },
   { label: 'Consignment', action: () => { window.location.href = 'consignment.html'; }, icon: 'exchange', shortcut: '' },
   { label: 'Floor Manager', action: () => { window.location.href = 'hourly-entry.html'; }, icon: 'floor', shortcut: '' },
   { label: 'Scale Display', action: () => { window.location.href = 'scale-display.html'; }, icon: 'scale', shortcut: '' },
