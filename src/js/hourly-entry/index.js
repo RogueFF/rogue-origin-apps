@@ -6,7 +6,6 @@
 import { makeApi } from '../shared/api.js';
 
 const productionApi = makeApi('production');
-const barcodeApi = makeApi('barcode');
 const poolApi = makeApi('pool');
 
 // Default time slots (will be dynamically updated based on shift start)
@@ -2256,7 +2255,12 @@ const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes cache
  * Called after cultivars are loaded
  */
 async function initBarcodeCard() {
-  await loadBarcodeProducts();
+  // loadBarcodeProducts() used to run here. The barcode/label printer was
+  // retired along with /api/barcode, so the call only produced a 404 and a
+  // console error on every page load. The Printer tab it fed is hidden
+  // ("barcodes deprecated, using pools now"); the Inventory tab below is the
+  // live one. barcodeProducts stays empty, which is exactly what the failing
+  // call left it as.
   populateBarcodeStrainSelect();
   initBarcodePrintButtons();
   initBarcodeTabs();
@@ -2264,19 +2268,6 @@ async function initBarcodeCard() {
   initBagCompleteButton();
   initBagComplete10lbButton();
   initBagModeToggle();
-}
-
-/**
- * Load products from barcode API
- */
-async function loadBarcodeProducts() {
-  try {
-    const data = await barcodeApi.get('products');
-    barcodeProducts = data.products || [];
-  } catch (error) {
-    console.error('Failed to load barcode products:', error);
-    barcodeProducts = [];
-  }
 }
 
 /**
@@ -2624,10 +2615,10 @@ function initBagCompleteButton() {
       btnText.textContent = '✓ Logged!';
       btn.classList.add('success');
 
-      // Reset timer display immediately
-      if (typeof loadBagTimer === 'function') {
-        loadBagTimer();
-      }
+      // Reset timer display immediately. This guarded `loadBagTimer`, which
+      // does not exist, so the guard was never true and the refresh waited on
+      // the 3s version poll instead.
+      loadBagTimerData();
 
       setTimeout(() => {
         btnText.textContent = originalText;
@@ -2672,9 +2663,8 @@ function initBagComplete10lbButton() {
       btnText.textContent = '✓ Logged!';
       btn.classList.add('success');
 
-      if (typeof loadBagTimer === 'function') {
-        loadBagTimer();
-      }
+      // Same as the 5kg handler: refresh now rather than waiting on the poll.
+      loadBagTimerData();
 
       setTimeout(() => {
         btnText.textContent = originalText;
@@ -3315,8 +3305,12 @@ function initPoolUpdateButton() {
     } catch (error) {
       console.error('Pool update error:', error);
 
-      // Revert optimistic update on error
-      poolValueEl.textContent = currentValue.toLocaleString('en-US', { minimumFractionDigits: 1 });
+      // Revert optimistic update on error — both readouts, mirroring the
+      // optimistic write above. This referenced a `poolValueEl` that does not
+      // exist, so the revert threw a ReferenceError instead of running: the
+      // failed value stayed on screen and the error state below never rendered.
+      poolValueGramsEl.textContent = currentValue.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+      poolValueLbsEl.textContent = (currentValue / 453.592).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       if (product) {
         product.poolValue = currentValue;
       }
@@ -4448,8 +4442,16 @@ window.addEventListener('beforeunload', () => {
   if (scaleInterval) clearInterval(scaleInterval);
 });
 
-// Initialize barcode and timer after cultivars load
+// Initialize barcode and timer after cultivars load.
+//
+// This deliberately reassigns the hoisted `loadCultivars` declaration to wrap
+// it. Declaring it as `let` instead — the usual way to satisfy no-func-assign —
+// would break the page: loadCultivars() is called earlier in the file than it
+// is defined and relies on function-declaration hoisting, so a `let` binding
+// would put that call in the temporal dead zone.
+// eslint-disable-next-line no-func-assign
 const originalLoadCultivars = loadCultivars;
+// eslint-disable-next-line no-func-assign
 loadCultivars = async function () {
   await originalLoadCultivars();
   initBarcodeCard();
