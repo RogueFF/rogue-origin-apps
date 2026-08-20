@@ -22,6 +22,7 @@ import { handleSopD1 } from './handlers/sop-d1.js';
 import { handleConsignmentD1 } from './handlers/consignment-d1.js';
 import { handleComplaintsD1 } from './handlers/complaints-d1.js';
 import { handlePoolRequest } from './handlers/pool.js';
+import { logClient } from './lib/client-log.js';
 import { handleMediaR2 } from './handlers/media-r2.js';
 import { handleSupersackD1 } from './handlers/supersack-d1.js';
 import { handleIrrigationD1 } from './handlers/irrigation-d1.js';
@@ -98,6 +99,13 @@ export default {
     // Handle CORS preflight
     if (request.method === 'OPTIONS') {
       return handleCors(request, env);
+    }
+
+    // Record who is calling, so the decision about what to put behind auth is
+    // made from real traffic rather than guesswork. Rollup only, no IPs, runs
+    // in waitUntil, and cannot fail the request. See lib/client-log.js.
+    if (path.startsWith('/api/')) {
+      logClient(request, env, ctx, path, url.searchParams.get('action'));
     }
 
     try {
