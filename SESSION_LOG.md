@@ -6,6 +6,32 @@ History of significant changes to this repo, written by `/close`. Companion to t
 
 ---
 
+## 2026-08-20 — Replace the retired wholesale app with a production queue
+
+The Wholesale Orders app could only express one strain and one kg total per order, so
+multi-cultivar orders lived in a notes field. It was retired mid-design by a parallel
+session; this is its replacement, built around what the floor actually does.
+
+- `workers/migrations/0014-order-items.sql`, `0017-cultivars.sql`, `0018-orders-reset.sql` —
+  real line items, a canonical cultivar dimension with an alias map, and `orders` rebuilt
+  around them with a CHECK on status. All applied to prod D1.
+- `workers/src/lib/wholesale.js`, `work-calendar.js`, `queue-schedule.js` — the pure core.
+  Runs are per CULTIVAR, not per (cultivar, form): 45 days of `monthly_production` show
+  tops and smalls recorded against the same cultivar and the same trimmer count, so a lot
+  is sized by whichever form binds and the other falls out as surplus. The work calendar is
+  a port of the Apps Script `addWorkHours` rewritten as civil-date arithmetic — the original
+  reads `Date.getHours()`, which is Pacific under Sheets but UTC in a Worker.
+- `workers/src/lib/sku.js`, `coverage.js` — SKU parsing for Shopify import (validated against
+  all 362 catalogue rows) and committed-vs-packed coverage.
+- `workers/src/handlers/wholesale-d1.js` — `/api/wholesale`. Deliberately not `/api/orders`,
+  which is now Consignment's login endpoint.
+- `src/pages/wholesale.html`, `src/js/wholesale/*`, `src/css/wholesale.css` — the page. One
+  view: the production queue. Orders are reached from the runs that feed them.
+- `tests/` — 82 new tests, 155 → 237.
+- Wiki context: wiki/seasons/2026/journal/2026-08-20.md
+
+---
+
 ## 2026-08-11 — Route Grove kanban scans to a reorder alert instead of the Friday cart
 
 Grove supplies are reordered by Damon on a separate track, so a Grove QR scan now
