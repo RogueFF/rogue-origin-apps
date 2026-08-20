@@ -90,7 +90,6 @@ GitHub Pages (Frontend)  ←→  Cloudflare Workers (API)  ←→  Cloudflare D1
 | **Scale Display** | `src/pages/scale-display.html` | Live scale readout for the weighing station |
 | **Consignment** | `src/pages/consignment.html` | Partner farm intake → inventory → payment workflow |
 | **Scale Reader** | `scale-reader/` | USB scale integration for weighing stations |
-| **Mission Control** | `mc-v2/` | Command center prototype — agent fleet, task board, production feed (React + Vite; not deployed) |
 
 ---
 
@@ -245,7 +244,6 @@ rogue-origin-apps/
 │   │   ├── src/index.js        # Router + all handlers
 │   │   └── schema.sql          # D1 schema
 │   └── migrations/             # D1 migrations
-├── mc-v2/                      # Mission Control UI prototype (React + Vite, not deployed)
 ├── tools/                      # Agent status reporter, notifications, build tooling
 ├── tests/                      # Test suite
 ├── scale-reader/               # USB scale integration

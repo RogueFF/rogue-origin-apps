@@ -133,7 +133,6 @@ export default [
       '.claude/**',        // local agent config and skill templates, not project code
       '**/.wrangler/**',   // wrangler build cache (also under workers/)
       'Skills/**',         // authored skill catalog
-      'mc-v2/**',          // carries its own eslint config
       'docs/**',
       'tests/**',
       'test-results/**',
