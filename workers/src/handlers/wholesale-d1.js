@@ -18,6 +18,8 @@
  * - POST ?action=saveOrder     - upsert an order and replace its line items
  * - POST ?action=deleteOrder
  * - GET  ?action=getRates      - per-cultivar trim rate + where it came from
+ * - GET  ?action=getQueue      - the production queue: ranked runs + order dates
+ * - POST ?action=saveRunOrder  - persist the run ranking
  * - GET  ?action=test          - health check
  *
  * Design: docs/plans/2026-08-19-order-blocks-design.md
@@ -27,9 +29,11 @@ import { query, queryOne, execute, transaction } from '../lib/db.js';
 import { successResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
 import { createError } from '../lib/errors.js';
 import { requireAuth } from '../lib/auth.js';
-import { toLbs, fromLbs, pickRate } from '../lib/wholesale.js';
+import { toLbs, fromLbs, pickRate, poolDemand } from '../lib/wholesale.js';
+import { scheduleQueue } from '../lib/queue-schedule.js';
+import { formatDatePT } from '../lib/production-utils.js';
 
-const WRITE_ACTIONS = new Set(['saveCustomer', 'deleteCustomer', 'saveOrder', 'deleteOrder']);
+const WRITE_ACTIONS = new Set(['saveCustomer', 'deleteCustomer', 'saveOrder', 'deleteOrder', 'saveRunOrder']);
 
 const ORDER_STATUSES = new Set(['draft', 'open', 'in_production', 'shipped', 'closed']);
 const FORMS = new Set(['tops', 'smalls']);
@@ -68,6 +72,8 @@ export async function handleWholesaleD1(request, env) {
     case 'saveOrder': return saveOrder(db, body);
     case 'deleteOrder': return deleteOrder(db, body);
     case 'getRates': return getRates(db);
+    case 'getQueue': return getQueue(db, params);
+    case 'saveRunOrder': return saveRunOrder(db, body);
     case 'test': return successResponse({ success: true, message: 'Wholesale API operational' });
     default:
       throw createError('NOT_FOUND', `Unknown wholesale action: ${action}`);
@@ -416,6 +422,173 @@ async function getRates(db) {
       }),
     })),
   });
+}
+
+// ─── PRODUCTION QUEUE ──────────────────────────────────
+
+/**
+ * Statuses whose demand is real enough to schedule. A draft is a quote being
+ * built and has not been promised to anyone; scheduling it would let a
+ * hypothetical order push a committed one down the queue.
+ */
+const SCHEDULABLE = ["open", "in_production"];
+
+/**
+ * Crew size, derived from what actually happened rather than typed.
+ *
+ * Trailing seven PRODUCTION days, not calendar days — a week with a holiday in
+ * it would otherwise read as a smaller crew. Prefers effective_trimmers_line1,
+ * which is already weighted for people joining or leaving mid-hour.
+ *
+ * Worth knowing when reading a date off this: across 2026-08-12..19 the real
+ * figure moved between 3.8 and 12.3. A single number cannot be right for every
+ * day, which is exactly why the board shows it and lets it be overridden.
+ */
+async function derivedCrew(db) {
+  const rows = await query(db, `
+    SELECT production_date,
+           AVG(COALESCE(effective_trimmers_line1, trimmers_line1)) AS crew
+    FROM monthly_production
+    WHERE COALESCE(effective_trimmers_line1, trimmers_line1) > 0
+    GROUP BY production_date
+    ORDER BY production_date DESC
+    LIMIT 7
+  `);
+  if (!rows.length) return { crew: 6, basis: "default", days: 0 };
+  const crew = rows.reduce((s, r) => s + r.crew, 0) / rows.length;
+  return { crew: Math.round(crew * 10) / 10, basis: "trailing-7", days: rows.length };
+}
+
+/** Per-cultivar rate table keyed for the scheduler, plus the farm fallback. */
+async function rateTable(db) {
+  const year = new Date().getUTCFullYear();
+  const rows = await query(db, `
+    SELECT a.cultivar_id, a.crop_year,
+           SUM(mp.tops_lbs1 + mp.smalls_lbs1) AS lbs,
+           SUM(mp.tops_lbs1)                  AS tops_lbs,
+           SUM(COALESCE(mp.effective_trimmers_line1, mp.trimmers_line1)) AS hours
+    FROM monthly_production mp
+    JOIN cultivar_aliases a ON a.alias = mp.cultivar1
+    WHERE COALESCE(mp.effective_trimmers_line1, mp.trimmers_line1) > 0
+      AND (mp.tops_lbs1 + mp.smalls_lbs1) > 0
+    GROUP BY a.cultivar_id, a.crop_year
+  `);
+
+  const sameYear = new Map(), allYears = new Map();
+  let fLbs = 0, fTops = 0, fHours = 0;
+  const add = (m, k, r) => {
+    const b = m.get(k) || { lbs: 0, topsLbs: 0, hours: 0 };
+    b.lbs += r.lbs; b.topsLbs += r.tops_lbs; b.hours += r.hours;
+    m.set(k, b);
+  };
+  for (const r of rows) {
+    add(allYears, r.cultivar_id, r);
+    if (r.crop_year === year) add(sameYear, r.cultivar_id, r);
+    fLbs += r.lbs; fTops += r.tops_lbs; fHours += r.hours;
+  }
+  const fallback = fHours > 0
+    ? { ratePerTrimmerHour: fLbs / fHours, topsFraction: fTops / fLbs }
+    : FALLBACK_SEED;
+
+  const rates = {};
+  for (const id of new Set([...allYears.keys(), ...sameYear.keys()])) {
+    rates[id] = pickRate({
+      sameYear: sameYear.get(id) || null,
+      allYears: allYears.get(id) || null,
+      minHours: MIN_RATE_HOURS,
+      fallback,
+    });
+  }
+  return { rates, fallback };
+}
+
+/** Persisted run ranking, pooled runs only. */
+async function savedRank(db) {
+  const rows = await query(db, `
+    SELECT cultivar_id FROM production_runs
+    WHERE dedicated_order_id IS NULL
+    ORDER BY rank
+  `);
+  return rows.map(r => r.cultivar_id);
+}
+
+async function getQueue(db, params) {
+  const items = await query(db, `
+    SELECT i.order_id, i.cultivar_id, i.form, i.qty_lbs
+    FROM order_items i
+    JOIN orders o ON o.id = i.order_id
+    WHERE o.status IN (${SCHEDULABLE.map(() => "?").join(", ")})
+  `, SCHEDULABLE);
+
+  const [{ rates, fallback }, crewInfo, rank, names] = await Promise.all([
+    rateTable(db),
+    derivedCrew(db),
+    savedRank(db),
+    query(db, "SELECT id, name FROM cultivars"),
+  ]);
+
+  const crew = Number(params.crew) > 0 ? Number(params.crew) : crewInfo.crew;
+  const nameOf = new Map(names.map(n => [n.id, n.name]));
+
+  const pools = poolDemand(items.map(i => ({
+    orderId: i.order_id, cultivarId: i.cultivar_id, form: i.form, qtyLbs: i.qty_lbs,
+  })));
+
+  // Pacific wall-clock. The scheduler is timezone-free by construction, so the
+  // one place a timezone appears is here, choosing where the queue begins.
+  const nowPT = formatDatePT(new Date(), "yyyy-MM-dd");
+  const minutesPT = (() => {
+    const hm = new Date().toLocaleTimeString("en-GB", {
+      timeZone: "America/Los_Angeles", hour: "2-digit", minute: "2-digit", hour12: false,
+    }).split(":").map(Number);
+    return hm[0] * 60 + hm[1];
+  })();
+
+  const { runs, orders } = scheduleQueue({
+    pools, rates, crew, rank, fallback,
+    start: { date: nowPT, minutes: minutesPT },
+  });
+
+  return successResponse({
+    success: true,
+    crew,
+    crewBasis: Number(params.crew) > 0 ? "override" : crewInfo.basis,
+    crewDays: crewInfo.days,
+    start: { date: nowPT, minutes: minutesPT },
+    fallback,
+    runs: runs.map(r => ({ ...r, cultivarName: nameOf.get(r.cultivarId) || r.cultivarId })),
+    orders,
+  });
+}
+
+/**
+ * Persist the run ranking.
+ *
+ * Every rank is rewritten rather than a fractional key inserted between two
+ * neighbours. The schema keeps rank as TEXT so fractional indexing stays
+ * available, but with at most a few dozen active cultivars a full rewrite in
+ * one batch is simpler and has no contention worth designing around.
+ */
+async function saveRunOrder(db, body) {
+  const order = Array.isArray(body.order) ? body.order : null;
+  if (!order) throw createError("VALIDATION_ERROR", "order must be an array of cultivar ids");
+
+  const known = await query(db, "SELECT id FROM cultivars");
+  const ids = new Set(known.map(k => k.id));
+  for (const id of order) {
+    if (!ids.has(id)) throw createError("VALIDATION_ERROR", `Unknown cultivar "${id}"`);
+  }
+
+  const stamp = Date.now();
+  const statements = [{ sql: "DELETE FROM production_runs WHERE dedicated_order_id IS NULL", params: [] }];
+  order.forEach((cultivarId, i) => {
+    statements.push({
+      sql: `INSERT INTO production_runs (id, cultivar_id, rank) VALUES (?, ?, ?)`,
+      params: [`PR-${stamp}-${i}`, cultivarId, `a${String(i).padStart(4, "0")}`],
+    });
+  });
+  await transaction(db, statements);
+  return successResponse({ success: true, ranked: order.length });
 }
 
 export { fromLbs };
