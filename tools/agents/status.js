@@ -16,7 +16,7 @@ async function updateAgent(name, status, task) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status, current_task: task }),
     });
-  } catch (_) {
+  } catch {
     // Silent fail — status updates are best-effort, never block the agent
   }
 }

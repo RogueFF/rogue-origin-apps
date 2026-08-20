@@ -31,7 +31,7 @@ const DURATIONS = {
 async function initPopupTheme() {
   try {
     currentTheme = await window.atlas.getTheme();
-  } catch (e) {
+  } catch {
     currentTheme = 'relay';
   }
   document.body.dataset.theme = currentTheme;
@@ -263,7 +263,7 @@ window.atlas.onShowPopup(async (data) => {
   try {
     const settings = await window.atlas.getSettings();
     soundEnabled = settings.soundEnabled !== false;
-  } catch (e) {
+  } catch {
     soundEnabled = true;
   }
 

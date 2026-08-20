@@ -244,7 +244,7 @@
         document.body.classList.add('iframe-embed');
         console.log('Scoreboard running in iframe - embed mode enabled');
       }
-    } catch (e) {
+    } catch {
       // Cross-origin iframe - assume embedded
       document.body.classList.add('iframe-embed');
     }

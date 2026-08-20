@@ -62,7 +62,7 @@ async function autoUpdate() {
     setTimeout(() => {
       try {
         gitPull.kill();
-      } catch (e) {}
+      } catch {}
       console.log('⚠ Git pull timed out - continuing with current version\n');
       resolve();
     }, 10000);

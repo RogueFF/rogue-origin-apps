@@ -263,10 +263,10 @@ python -m http.server
 
 ### Backend Deployment
 
-**Cloudflare Workers:**
+**Cloudflare Workers (rogue-origin-api):**
 ```bash
 cd workers
-npx wrangler deploy
+npm run deploy        # = wrangler deploy --config wrangler.toml --env=""
 
 # Apply D1 schema (one-time)
 npx wrangler d1 execute rogue-origin-db --remote --file=schema.sql
@@ -274,6 +274,24 @@ npx wrangler d1 execute rogue-origin-db --remote --file=schema.sql
 # Set environment variables
 npx wrangler secret put WEBHOOK_SECRET
 ```
+
+> ⚠️ **Always pass `--config wrangler.toml --env=""`** (the `npm run deploy` script does
+> this for you). A bare `npx wrangler deploy` resolves UP the tree and may pick up a
+> different config, deploying a bindingless worker (no `DB` binding) to the production API.
+> The `--env=""` targets the top-level environment where all bindings (D1 `DB`, R2
+> `MEDIA_BUCKET`, `ALLOWED_ORIGINS`, crons) actually live — `--env production` would deploy
+> a binding-less worker. Verify before a real deploy with:
+> ```bash
+> npx wrangler deploy --config wrangler.toml --env="" --dry-run   # must list env.DB
+> ```
+> The root `wrangler.master.jsonc` (an unrelated whole-repo assets worker) is deliberately
+> named so wrangler never auto-discovers it. The frontend deploys separately via `git push`
+> (GitHub Pages), not Cloudflare assets.
+>
+> **Never run a bare `wrangler` command from the repo root.** With no discoverable config
+> there, newer wrangler auto-scaffolds and *recreates* a `wrangler.jsonc` at the root —
+> re-arming the shadow that breaks every worker's bare deploy. Always run wrangler from the
+> specific worker's directory (`workers/`, `workers/mission-control/`, `workers/warroom-api/`).
 
 **Google Apps Script:**
 1. Open Sheet → Extensions → Apps Script

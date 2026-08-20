@@ -325,8 +325,8 @@ let originalCrewData = null; // Track original crew for modification detection
 let pendingSaveData = null; // Track failed save for retry
 let isSaving = false; // Prevent concurrent saves
 let shiftStartTime = null; // Shared shift start time (syncs with scoreboard)
-let isOpeningTimePicker = false; // Track when we're programmatically opening the picker
-let lastTimePickerValue = null; // Track last value to detect real changes
+const isOpeningTimePicker = false; // Track when we're programmatically opening the picker
+const lastTimePickerValue = null; // Track last value to detect real changes
 let crewChangeLog = []; // Track crew changes within current hour: [{minutesMark, trimmers1, trimmers2}]
 
 // Crew fields to track for modifications
@@ -960,11 +960,11 @@ function createSlotElement(slot, currentSlot) {
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       // Skip 2 elements to get to next row same column
-      let target = div.nextElementSibling?.nextElementSibling;
+      const target = div.nextElementSibling?.nextElementSibling;
       if (target && !target.classList.contains('timeline-slot-placeholder')) target.focus();
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      let target = div.previousElementSibling?.previousElementSibling;
+      const target = div.previousElementSibling?.previousElementSibling;
       if (target && !target.classList.contains('timeline-slot-placeholder')) target.focus();
     }
   });
@@ -2234,7 +2234,7 @@ setTimeout(() => initTutorial(), 500);
 // BARCODE PRINTER
 // ===================
 
-let barcodeProducts = []; // Products loaded from barcode API
+const barcodeProducts = []; // Products loaded from barcode API
 let poolProducts = []; // Products loaded from Pool API
 let currentPoolType = 'smalls'; // Current pool type selection (smalls or tops)
 let currentOperation = 'add'; // Current operation selection (add, subtract, set)
@@ -3563,7 +3563,7 @@ let timerBagsToday = 0;
 let lastKnownVersion = null; // For smart polling (bag timer)
 let lastKnownProductionVersion = null; // For smart polling (production data)
 let productionPollInterval = null; // Production data polling interval
-let manualShiftStart = null; // Manual shift start time (synced from server)
+const manualShiftStart = null; // Manual shift start time (synced from server)
 
 // SVG constants (matching scoreboard)
 const RING_CIRCUMFERENCE = 2 * Math.PI * 95; // 597
@@ -3587,7 +3587,7 @@ async function loadScaleData() {
   try {
     const data = await productionApi.get('scaleWeight');
     renderScale(data);
-  } catch (error) {
+  } catch {
     // Show stale state on error
     renderScale(null);
   }
@@ -4097,7 +4097,7 @@ async function checkProductionVersion() {
     
     // Also check for shift start updates (sync across computers)
     await syncShiftStartFromAPI();
-  } catch (error) {
+  } catch {
     // Silent fail - don't spam console or disrupt user
   }
 }
@@ -4126,7 +4126,7 @@ async function syncShiftStartFromAPI() {
         renderTimeline();
       }
     }
-  } catch (error) {
+  } catch {
     // Silent fail
   }
 }
@@ -4449,7 +4449,7 @@ window.addEventListener('beforeunload', () => {
 // would break the page: loadCultivars() is called earlier in the file than it
 // is defined and relies on function-declaration hoisting, so a `let` binding
 // would put that call in the temporal dead zone.
-// eslint-disable-next-line no-func-assign
+ 
 const originalLoadCultivars = loadCultivars;
 // eslint-disable-next-line no-func-assign
 loadCultivars = async function () {

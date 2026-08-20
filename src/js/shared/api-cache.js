@@ -128,7 +128,7 @@
                 localStorage.removeItem(key);
                 removed++;
               }
-            } catch (e) {
+            } catch {
               // Invalid entry, remove it
               localStorage.removeItem(key);
               removed++;

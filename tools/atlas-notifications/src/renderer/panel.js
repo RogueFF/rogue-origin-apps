@@ -33,7 +33,7 @@ const tabIndicator = $('#tab-indicator');
 async function initTheme() {
   try {
     currentTheme = await window.atlas.getTheme();
-  } catch (e) {
+  } catch {
     currentTheme = 'relay';
   }
   applyTheme(currentTheme);
@@ -154,7 +154,7 @@ async function startAmbientSound() {
   try {
     const settings = await window.atlas.getSettings();
     if (settings.soundEnabled === false) return;
-  } catch (e) { /* default to enabled */ }
+  } catch { /* default to enabled */ }
 
   try {
     if (!ambientCtx) {
@@ -203,7 +203,7 @@ async function startAmbientSound() {
     ambientNoise.start();
 
     ambientActive = true;
-  } catch (e) {
+  } catch {
     // Silent fail
   }
 }
@@ -220,9 +220,9 @@ function stopAmbientSound() {
         if (ambientNoise) { ambientNoise.stop(); ambientNoise = null; }
         ambientGain = null;
         ambientActive = false;
-      } catch (e) { /* already stopped */ }
+      } catch { /* already stopped */ }
     }, 600);
-  } catch (e) {
+  } catch {
     ambientActive = false;
   }
 }
@@ -260,7 +260,7 @@ async function updateMissionControl() {
 
     updateLastMessageDisplay();
     updateProductionHUD();
-  } catch (e) {
+  } catch {
     // Silent fail
   }
 }
@@ -563,7 +563,7 @@ $$('.request-btn').forEach(btn => {
       } else {
         throw new Error(result?.error || 'Request failed');
       }
-    } catch (e) {
+    } catch {
       btn.classList.remove('loading');
       btn.classList.add('error');
       label.textContent = '✗';
@@ -623,7 +623,7 @@ async function openSettings() {
     $('#set-token').value = settings.apiToken || '';
     $('#set-sound').dataset.on = settings.soundEnabled !== false ? 'true' : 'false';
     $('#set-autostart').dataset.on = settings.autoStart !== false ? 'true' : 'false';
-  } catch (e) { /* use defaults */ }
+  } catch { /* use defaults */ }
 
   try {
     const tts = await window.atlas.getTtsConfig();
@@ -636,7 +636,7 @@ async function openSettings() {
     if (tts.elevenLabsKey) {
       loadVoices(tts.elevenLabsVoice);
     }
-  } catch (e) { /* use defaults */ }
+  } catch { /* use defaults */ }
 
   // Set theme switcher to current theme
   $$('.theme-btn').forEach(btn => {
@@ -662,7 +662,7 @@ async function loadVoices(selectedId) {
       if (v.voice_id === selectedId) opt.selected = true;
       select.appendChild(opt);
     });
-  } catch (e) {
+  } catch {
     select.innerHTML = '<option value="">No voices found</option>';
   }
 }
@@ -686,7 +686,7 @@ async function saveSettings() {
 
     // Save theme preference
     await window.atlas.setTheme(currentTheme);
-  } catch (e) { /* silent fail */ }
+  } catch { /* silent fail */ }
 
   closeSettings();
 }

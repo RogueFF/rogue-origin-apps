@@ -115,7 +115,7 @@ async function fetchWeight() {
     const response = await fetch('/api/weight');
     const data = await response.json();
     updateDisplay(data);
-  } catch (error) {
+  } catch {
     // Server not responding
     statusEl.classList.remove('connected');
     statusText.textContent = labels[lang].disconnected;
