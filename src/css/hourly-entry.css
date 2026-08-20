@@ -2144,7 +2144,10 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px;
+  /* Left padding clears the floating home button, which is position:fixed at
+     left:12px with z-index:9999 and so paints over the header. At the previous
+     12px the title rendered as "r Manager" — the button covered "Floo". */
+  padding: 8px 12px 8px 56px;
   background: var(--bg-card);
   border-bottom: 1px solid var(--border-color);
   position: sticky;
