@@ -8,6 +8,7 @@
  */
 
 import { state, visibleOrders, fmtLbs, fmtUsd, statusLabel } from './state.js';
+import { humanDate } from './queue.js';
 import { t } from '../shared/i18n.js';
 
 function el(tag, className, text) {
@@ -57,6 +58,21 @@ function card(order) {
   foot.append(el('span', 'lbs', fmtLbs(order.totalLbs)));
   foot.append(el('span', 'usd', fmtUsd(order.totalValue)));
   node.append(foot);
+
+  // The promise date, and which cultivar is holding it up — the number worth
+  // looking at is not the sum of the order's own hours.
+  const sched = state.queue?.orders?.[order.id];
+  if (sched) {
+    const wrap = el('div', 'oc-eta');
+    const line = el('div', 'oc-eta-date');
+    line.append(document.createTextNode(`${t('est_finish')} `));
+    line.append(el('b', null, humanDate(sched.finish.date)));
+    if (sched.estimated) line.append(el('span', 'oc-soft', ` ${t('soft')}`));
+    wrap.append(line);
+    const heldName = state.cultivars.find(c => c.id === sched.heldBy)?.name || sched.heldBy;
+    wrap.append(el('div', 'oc-eta-why', `${t('held_by')} ${heldName}`));
+    node.append(wrap);
+  }
 
   return node;
 }

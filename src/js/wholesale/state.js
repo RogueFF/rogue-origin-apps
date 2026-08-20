@@ -17,6 +17,8 @@ export const state = {
   cultivars: [],
   filter: 'active',   // 'active' | one of STATUSES
   editing: null,      // the order being edited, or null
+  view: 'board',      // 'board' | 'queue'
+  queue: null,        // last getQueue response
 };
 
 /**
