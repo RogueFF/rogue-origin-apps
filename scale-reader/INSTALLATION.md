@@ -42,7 +42,7 @@ This package contains everything needed to run the scale reader on your station 
 
 ### Step 2: Copy Files to Station PC
 
-1. Copy the entire `scale-reader-deployment` folder to:
+1. Copy the entire `scale-reader` folder to:
    ```
    C:\RogueOrigin\scale-reader\
    ```

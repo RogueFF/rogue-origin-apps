@@ -7,7 +7,7 @@ Use this checklist when deploying to the station PC.
 ## 📦 Pre-Deployment (On Your Computer)
 
 - [x] Scale reader package created
-- [x] All files copied to `scale-reader-deployment/`
+- [x] All files copied to `scale-reader/`
 - [x] Documentation complete
 - [x] Tested with real scale (working!)
 
@@ -16,18 +16,18 @@ Use this checklist when deploying to the station PC.
 ## 🚚 Transfer to Station PC
 
 ### Option 1: USB Drive
-- [ ] Copy entire `scale-reader-deployment/` folder to USB drive
+- [ ] Copy entire `scale-reader/` folder to USB drive
 - [ ] Safely eject USB
 - [ ] Plug into station PC
 - [ ] Copy folder to `C:\RogueOrigin\scale-reader\`
 
 ### Option 2: Network Share
-- [ ] Share the `scale-reader-deployment/` folder
+- [ ] Share the `scale-reader/` folder
 - [ ] Access from station PC via network
 - [ ] Copy to `C:\RogueOrigin\scale-reader\`
 
 ### Option 3: Cloud (OneDrive/Dropbox)
-- [ ] Upload `scale-reader-deployment/` folder
+- [ ] Upload `scale-reader/` folder
 - [ ] Download on station PC
 - [ ] Extract to `C:\RogueOrigin\scale-reader\`
 

@@ -236,8 +236,7 @@ Barcode:    'REDACTED-BARCODE-SHEET-ID'
 ├── archive/            Legacy files (kanban, designs, old backups)
 ├── scripts/            Import/migration scripts
 ├── assets/             PWA icons
-├── scale-reader/       USB scale reader app
-├── scale-reader-deployment/  Scale reader deployment package
+├── scale-reader/       OHAUS Defender 5000 reader + install package
 └── sw.js               Service worker
 ```
 

@@ -73,7 +73,7 @@ feature branch, use `git checkout <branch-name>` in place of
 ## Step 4 — Install dependencies
 
 ```
-cd scale-reader-deployment
+cd scale-reader
 npm install
 ```
 
@@ -248,7 +248,7 @@ You can demo the full workflow without a physical scale — useful for
 training sessions or screenshots. Open a Command Prompt and run:
 
 ```
-cd C:\Users\Koasm\Desktop\Dev\rogue-origin-apps\scale-reader-deployment
+cd C:\Users\Koasm\Desktop\Dev\rogue-origin-apps\scale-reader
 node index.js --mock --mock-demo
 ```
 

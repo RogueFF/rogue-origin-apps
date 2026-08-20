@@ -47,7 +47,7 @@ ScaleReader.exe
 ## Directory Structure
 
 ```
-scale-reader-deployment/
+scale-reader/
 ├── launcher.js          ← Main wrapper (auto-update + process management)
 ├── index.js             ← Actual scale reader logic
 ├── package.json         ← Includes pkg config
