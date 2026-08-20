@@ -1,7 +1,7 @@
 # Order Blocks — Wholesale Order Board with Production Queue
 
 **Date:** 2026-08-19
-**Status:** Migrations 0014 + 0017 applied; handlers and UI not yet built
+**Status:** Migrations 0014 / 0017 / 0018 applied; tables empty; handlers and UI not yet built
 **Supersedes:** the Wholesale Orders app, retired in `611da09e` (see §2a)
 **Mockups:** concepts https://claude.ai/code/artifact/25458f4e-2d62-4a37-8822-e88772e7e057 · chosen design https://claude.ai/code/artifact/f863924c-e79e-4c9e-a913-79f34fa986d0
 
@@ -97,6 +97,15 @@ Critical Berries, the last of which reports an implausible 0.0% tops share on
 7 hours.
 
 A replacement `getCultivars` endpoint reading this table is now on the v1 list.
+
+**The old wholesale data was cleared on the operator's call.** `MO-2026-001` and everything
+hanging off it — 23 shipments (1,850 kg / $738,616), 21 payments, 22 payment/shipment links
+and both customers, 69 rows — were exported to
+`~/Desktop/rogue-scrub-backup/orders-reset-2026-08-19/` and deleted. They were all from the
+January 2026 relationship and no longer reflect live business. Consequences worth recording:
+§1's "one live order, migrate it" is void — there is nothing to migrate; the customer table
+starts empty, so the first new order needs a customer created first; and the empty table is
+what made migration 0018 free (see §10, question 1).
 
 
 ## 3. The load-bearing decision: runs, not orders
@@ -422,7 +431,7 @@ approach; it already persists to a server and carries no library weight.
 - Cultivar picker from the `cultivars` table, plus a replacement `getCultivars` endpoint
   (the old `/api/barcode?action=products` is gone)
 - Soft over-commit flag
-- Migrate `MO-2026-001` (one record) from its notes field into real line items
+- ~~Migrate `MO-2026-001` from its notes field~~ — void, the old data was exported and cleared
 
 **Explicitly not in v1**
 - Backfilling `shipments.notes` JSON into `order_items` — hoisting shipment items up to the
@@ -436,18 +445,13 @@ approach; it already persists to a server and carries no library weight.
 
 ## 10. Open questions
 
-1. **Which statuses does the floor actually use, and what happens to `'pending'`?** *Blocks the
-   first handler.* §4 proposes `draft → open → in_production → shipped → closed`, and §6's
-   over-commit query filters `status IN ('open','in_production')`. But the one live row,
-   `MO-2026-001`, is still `'pending'` — the only value the retired frontend ever wrote — and
-   `orders.status` carries no CHECK constraint. So the first `getProductionQueue` and
-   `getOverCommitment` will return **zero rows against real data and look correct doing it**.
-   Pick one before writing either handler:
-   (a) migration 0018 backfills `pending → open` and adds the CHECK — note this means recreating
-   `orders`, which has FK dependents in `shipments`, `payments`, `order_items` and
-   `production_runs`;
-   (b) handlers treat `'pending'` as a synonym for `'open'` and the CHECK waits.
-   Having neither is the trap.
+1. ~~Which statuses does the floor actually use, and what happens to `'pending'`?~~
+   **Resolved by the data reset.** All old wholesale rows were exported and cleared at the
+   operator's request, so no legacy `'pending'` row survives to trip the queries. Migration
+   0018 rebuilt an empty `orders` and locked the vocabulary into a CHECK constraint:
+   `draft | open | in_production | shipped | closed`. Verified on production — an insert of
+   `'pending'` now fails with `CHECK constraint failed`. **These words are still cheap to
+   change while the table is empty**; once real orders exist it costs a backfill.
 2. ~~Do the two lines run in parallel?~~ **Resolved** — zero line-2 activity in 45 days;
    sequential is correct. Re-open if a second line is brought up. See §3.
 3. **Should `getScoreboardOrderQueue`'s `estimatedHoursRemaining`** (currently hardcoded `0` in
