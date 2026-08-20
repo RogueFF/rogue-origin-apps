@@ -1,0 +1,37 @@
+Copyright (c) 2026 Rogue Family Farms. All rights reserved.
+
+This repository is published for viewing and evaluation only.
+
+The source code, documentation, designs, and other materials in this
+repository ("the Software") are the proprietary and confidential property of
+Rogue Family Farms. They are made publicly readable so that prospective
+clients, collaborators, and employers can review the work. Publication does
+not place the Software in the public domain and does not grant any license to
+it.
+
+You MAY:
+
+  - Read, view, and study the Software.
+  - Reference it when evaluating the authors' work, including quoting short
+    excerpts for that purpose with attribution.
+
+You MAY NOT, without prior written permission from Rogue Family Farms:
+
+  - Use the Software, in whole or in part, in any product or service, whether
+    commercial or non-commercial.
+  - Copy, reproduce, modify, adapt, translate, or create derivative works.
+  - Redistribute, publish, sublicense, sell, or otherwise transfer it.
+  - Use it to train, fine-tune, or evaluate machine learning models.
+
+No trademark rights are granted. "Rogue Origin" and "Rogue Family Farms" are
+marks of Rogue Family Farms.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM,
+OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+For licensing enquiries, contact Rogue Family Farms.

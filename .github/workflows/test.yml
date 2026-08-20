@@ -13,10 +13,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # `npm ci` is not usable here: package-lock.json is gitignored, so CI has
-      # no lockfile to install from. Only eslint is actually needed.
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        # `npm ci` installs exactly what package-lock.json pins, so a
+        # dependency cannot drift under CI between runs.
+        run: npm ci --no-audit --no-fund
 
       - name: Lint
         # eslint exits non-zero on errors only, so the ~115 remaining warnings

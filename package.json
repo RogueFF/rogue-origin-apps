@@ -1,8 +1,26 @@
 {
-  "name": "rogue-origin-apps-master",
+  "name": "rogue-origin-apps",
   "version": "1.0.0",
-  "description": "> Hemp processing operations management system for Rogue Origin in Southern Oregon",
-  "main": "sw.js",
+  "private": true,
+  "description": "Operations hub for Rogue Origin — production tracking, inventory, SOPs and supply management for a seed-to-sale hemp flower business in Southern Oregon.",
+  "keywords": [
+    "operations",
+    "manufacturing",
+    "production-tracking",
+    "cloudflare-workers",
+    "hemp"
+  ],
+  "homepage": "https://rogueff.github.io/rogue-origin-apps",
+  "bugs": {
+    "url": "https://github.com/RogueFF/rogue-origin-apps/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RogueFF/rogue-origin-apps.git"
+  },
+  "license": "UNLICENSED",
+  "author": "Rogue Family Farms",
+  "type": "commonjs",
   "directories": {
     "doc": "docs",
     "test": "tests"
@@ -31,18 +49,6 @@
     "stamp": "node tools/stamp-modules.mjs --staged",
     "stamp:check": "node tools/stamp-modules.mjs --staged --check"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/rogueff/rogue-origin-apps.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/rogueff/rogue-origin-apps/issues"
-  },
-  "homepage": "https://github.com/rogueff/rogue-origin-apps#readme",
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "eslint": "^9.39.2",
