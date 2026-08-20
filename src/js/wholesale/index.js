@@ -9,11 +9,11 @@
  * Design: docs/plans/2026-08-19-order-blocks-design.md
  */
 
-import { state, loadAll, STATUSES, statusLabel, option } from './state.js';
-import { renderBoard, renderFilters } from './render.js';
-import { loadQueue, renderQueue } from './queue.js';
+import { state, loadAll, loadCoverage, STATUSES, statusLabel, option } from './state.js';
+import { renderOffQueue } from './render.js';
+import { loadQueue, renderQueue, onOpenOrder } from './queue.js';
 import {
-  openEditor, closeEditor, saveOrder, deleteOrder, addLine,
+  openEditor, closeEditor, saveOrder, deleteOrder, addLine, onBuildStatus,
   fillCustomerSelect, openCustomerModal, closeCustomerModal, saveCustomer,
 } from './editor.js';
 import { registerLabels, t, toggleLang } from '../shared/i18n.js';
@@ -67,6 +67,8 @@ registerLabels({
     queue_note: 'Estimates, not commitments. Built from measured trim rates and the real work calendar — Sunday off, Saturday to noon, breaks removed. It cannot see future crew changes or holidays, and does not model drying, packaging or freight.',
     est_finish: 'est. finish', held_by: 'held by', soft: '(estimated rate)',
     imported: 'imported',
+    completed: 'Not in the queue', none_off_queue: 'Every order is in the queue.',
+    over_packed: 'over what is packed', raw_sacks: 'raw sacks', no_raw: 'no raw sacks',
     unlock_title: 'Password required',
     unlock_help: 'Saving changes needs the operations password — the same one Consignment uses.',
     password: 'Password', unlock: 'Unlock',
@@ -119,6 +121,8 @@ registerLabels({
     queue_note: 'Estimaciones, no compromisos. Calculado con tasas de poda medidas y el calendario real — domingo libre, sábado hasta mediodía, descansos descontados. No prevé cambios de equipo ni feriados, y no modela secado, empaque ni flete.',
     est_finish: 'fin est.', held_by: 'retenido por', soft: '(tasa estimada)',
     imported: 'importado',
+    completed: 'Fuera de la cola', none_off_queue: 'Todos los pedidos están en la cola.',
+    over_packed: 'más de lo empacado', raw_sacks: 'sacos crudos', no_raw: 'sin sacos crudos',
     unlock_title: 'Se requiere contraseña',
     unlock_help: 'Para guardar cambios se necesita la contraseña de operaciones — la misma que usa Consignación.',
     password: 'Contraseña', unlock: 'Desbloquear',
@@ -130,10 +134,14 @@ registerLabels({
   },
 });
 
-function buildStatusOptions() {
+function buildStatusOptions(current) {
   const sel = $('f-status');
   sel.textContent = '';
-  STATUSES.forEach(s => sel.append(option(statusLabel(s), s)));
+  // An older or imported row may hold a status the picker no longer offers
+  // (`draft`). Include it when present, so opening that order does not
+  // silently rewrite its status on the next save.
+  const list = current && !STATUSES.includes(current) ? [current, ...STATUSES] : STATUSES;
+  list.forEach(s => sel.append(option(statusLabel(s), s)));
 }
 
 async function refresh() {
@@ -142,9 +150,12 @@ async function refresh() {
     fillCustomerSelect();
     // The cards show a promise date, which only the queue knows. Fetched
     // alongside rather than on demand so a card never renders a stale one.
-    await loadQueue(Number($('q-crew').value) || undefined);
-    renderBoard();
-    if (state.view === 'queue') renderQueue();
+    await Promise.all([
+      loadQueue(Number($('q-crew').value) || undefined),
+      loadCoverage(),
+    ]);
+    renderQueue();
+    renderOffQueue();
   } catch (e) {
     showToast(`${t('load_failed')}: ${e.message || e}`, 'error');
   }
@@ -159,27 +170,10 @@ function paintLock() {
   btn.title = open ? t('relock') : t('unlock');
 }
 
-function setView(view) {
-  state.view = view;
-  document.querySelectorAll('.view-tab').forEach(tab => {
-    const on = tab.dataset.view === view;
-    tab.classList.toggle('active', on);
-    tab.setAttribute('aria-selected', String(on));
-  });
-  $('board-bar').hidden = view !== 'board';
-  $('board').hidden = view !== 'board';
-  $('queue-bar').hidden = view !== 'queue';
-  $('queue').hidden = view !== 'queue';
-  if (view === 'queue') {
-    // Reload rather than reuse: the queue depends on every open order, so a
-    // stale one here would quietly misprice every date behind it.
-    loadQueue(Number($('q-crew').value) || undefined);
-  }
-}
-
 function wire() {
+  onBuildStatus(buildStatusOptions);
   $('menu-btn').onclick = () => document.getElementById('sidebar').classList.toggle('open');
-  $('lang-toggle').onclick = () => { toggleLang(); buildStatusOptions(); renderBoard(); };
+  $('lang-toggle').onclick = () => { toggleLang(); renderQueue(); renderOffQueue(); };
   $('lock-btn').onclick = async () => {
     if (hasPassword()) {
       forgetPassword();
@@ -192,30 +186,34 @@ function wire() {
   $('dark-mode-toggle').onclick = () => toggleTheme();
   $('refresh-btn').onclick = () => refresh();
 
-  document.querySelectorAll('.chip[data-filter]').forEach(chip => {
-    chip.onclick = () => {
-      state.filter = chip.dataset.filter;
-      renderFilters();
-      renderBoard();
-    };
-  });
-
-  document.querySelectorAll('.view-tab').forEach(tab => {
-    tab.onclick = () => setView(tab.dataset.view);
-  });
-
-  $('q-refresh').onclick = () => loadQueue(Number($('q-crew').value) || undefined);
+  // Recalculate when the crew figure actually changes, rather than behind a
+  // separate button — the whole queue is a function of it, so a stale board
+  // sitting next to an edited number would be misleading.
+  $('q-crew').onchange = () => loadQueue(Number($('q-crew').value) || undefined);
   $('q-reset').onclick = () => { $('q-crew').value = ''; loadQueue(); };
 
   $('btn-new').onclick = () => openEditor(null);
   $('btn-new-customer').onclick = () => openCustomerModal();
 
-  // Cards are buttons, so one delegated listener covers the whole board and
-  // survives re-renders without rebinding.
-  $('board').addEventListener('click', (e) => {
-    const card = e.target.closest('.order-card');
-    if (!card) return;
-    const order = state.orders.find(o => o.id === card.dataset.orderId);
+  // Orders in the queue are reached from their runs; this covers the ones that
+  // have left it.
+  onOpenOrder((orderId) => {
+    const order = state.orders.find(o => o.id === orderId);
+    if (order) openEditor(order);
+  });
+
+  $('done-toggle').onclick = () => {
+    const list = $('done-list');
+    const open = list.hidden;
+    list.hidden = !open;
+    $('done-toggle').setAttribute('aria-expanded', String(open));
+    $('done-toggle').querySelector('.done-caret').textContent = open ? '▾' : '▸';
+  };
+
+  $('done-list').addEventListener('click', (e) => {
+    const row = e.target.closest('.done-row');
+    if (!row) return;
+    const order = state.orders.find(o => o.id === row.dataset.orderId);
     if (order) openEditor(order);
   });
 
@@ -247,8 +245,6 @@ function wire() {
 }
 
 initTheme('dark');
-buildStatusOptions();
-renderFilters();
 wire();
 paintLock();
 refresh();

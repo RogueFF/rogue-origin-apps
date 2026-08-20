@@ -8,17 +8,24 @@ import { makeApi } from '../shared/api.js';
 
 export const api = makeApi('wholesale', { auth: true });
 
-/** Mirrors the CHECK constraint on orders.status (migration 0018). */
-export const STATUSES = ['draft', 'open', 'in_production', 'shipped', 'closed'];
+/**
+ * Mirrors the CHECK constraint on orders.status (migration 0018), minus
+ * `draft`.
+ *
+ * An order is only entered once it is ready to be queued, so there is no
+ * drafting stage to represent. `draft` stays valid in the database — dropping
+ * it would be a migration to remove something harmless, and imported or older
+ * rows may still carry it — it is simply not offered here.
+ */
+export const STATUSES = ['open', 'in_production', 'shipped', 'closed'];
 
 export const state = {
   orders: [],
   customers: [],
   cultivars: [],
-  filter: 'active',   // 'active' | one of STATUSES
   editing: null,      // the order being edited, or null
-  view: 'board',      // 'board' | 'queue'
   queue: null,        // last getQueue response
+  coverage: null,     // last getCoverage response
 };
 
 /**
@@ -51,12 +58,8 @@ export function statusLabel(s) {
   return s === 'in_production' ? 'In production' : s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-/** Orders matching the current filter. "active" hides closed and shipped. */
-export function visibleOrders() {
-  if (state.filter === 'active') {
-    return state.orders.filter(o => o.status !== 'closed' && o.status !== 'shipped');
-  }
-  return state.orders.filter(o => o.status === state.filter);
+export async function loadCoverage() {
+  state.coverage = await api.get('getCoverage');
 }
 
 export async function loadAll() {

@@ -452,192 +452,6 @@
 }
 
 /* ============================================
-   ORDER BOARD
-   ============================================ */
-
-.board-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
-  padding: var(--space-md) var(--space-lg) 0;
-}
-
-.board-filters { display: flex; gap: 6px; flex-wrap: wrap; }
-
-.chip {
-  font-family: var(--font-ui);
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 8px 14px;
-  min-height: 44px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-.chip:hover { color: var(--text); border-color: var(--border-strong); }
-.chip.active {
-  color: var(--ro-green);
-  border-color: var(--ro-green);
-  background: rgba(102, 137, 113, 0.12);
-}
-
-.board-spacer { margin-left: auto; }
-
-.board {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: var(--space-md);
-  padding: var(--space-md) var(--space-lg) var(--space-xl);
-}
-
-/* An explicit display beats the hidden attribute's UA rule, so every element
-   this page toggles with `hidden` needs saying twice. Without these the board
-   renders underneath the queue. */
-.board[hidden],
-.board-bar[hidden] { display: none; }
-
-/* ---- the block ---- */
-
-.order-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  cursor: pointer;
-  text-align: left;
-  font: inherit;
-  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
-}
-.order-card:hover {
-  border-color: var(--border-strong);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-.order-card:focus-visible {
-  outline: 2px solid var(--ro-green);
-  outline-offset: 2px;
-}
-
-/* Status reads as colour AND text. Colour alone fails for roughly 1 in 12 men,
-   and this board is used on a barn tablet in daylight. */
-.order-card::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-}
-.order-card.s-draft::before         { background: var(--text-muted); }
-.order-card.s-open::before          { background: var(--ro-gold); }
-.order-card.s-in_production::before { background: var(--ro-green); }
-.order-card.s-shipped::before       { background: var(--info); }
-.order-card.s-closed::before        { background: var(--border); }
-
-.oc-top {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-sm);
-  padding: 14px 14px 0 17px;
-}
-
-.oc-id {
-  font-family: var(--font-mono);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--text);
-  letter-spacing: 0.01em;
-}
-
-.pill {
-  margin-left: auto;
-  font-family: var(--font-mono);
-  font-size: 0.625rem;
-  font-weight: 600;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  padding: 4px 8px;
-  border-radius: var(--radius-sm);
-  white-space: nowrap;
-  background: rgba(127, 127, 127, 0.14);
-  color: var(--text-muted);
-}
-.pill.s-open          { background: rgba(228, 170, 79, 0.16);  color: var(--ro-gold); }
-.pill.s-in_production { background: rgba(102, 137, 113, 0.20); color: var(--ro-green); }
-.pill.s-shipped       { background: rgba(98, 117, 141, 0.20);  color: var(--info); }
-
-.oc-customer {
-  padding: 2px 17px 12px;
-  font-size: 0.875rem;
-  line-height: 1.35;
-  color: var(--text-secondary);
-}
-.oc-customer strong { display: block; color: var(--text); font-weight: 600; }
-
-.oc-lines {
-  border-top: 1px solid var(--border-light);
-  padding: 10px 17px 11px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.oc-line {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 10px;
-  align-items: baseline;
-  font-size: 0.8125rem;
-}
-.oc-line .cv { color: var(--text); }
-.oc-line .fm {
-  font-family: var(--font-mono);
-  font-size: 0.625rem;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-.oc-line .qt {
-  font-family: var(--font-mono);
-  font-size: 0.8125rem;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  color: var(--text);
-}
-
-.oc-empty {
-  padding: 14px 17px;
-  border-top: 1px solid var(--border-light);
-  font-size: 0.8125rem;
-  color: var(--text-muted);
-  font-style: italic;
-}
-
-.oc-foot {
-  margin-top: auto;
-  border-top: 1px solid var(--border-light);
-  padding: 11px 17px 13px;
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-sm);
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-}
-.oc-foot .lbs { font-size: 0.9375rem; font-weight: 600; color: var(--text); }
-.oc-foot .usd { margin-left: auto; font-size: 0.8125rem; color: var(--text-secondary); }
-.oc-foot .oc-src {
-  font-size: 0.625rem;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
-/* ============================================
    MODAL
    ============================================ */
 
@@ -845,35 +659,26 @@
 }
 
 /* ============================================
-   VIEW TABS
-   ============================================ */
-
-.view-tabs {
-  display: flex;
-  gap: 4px;
-  padding: var(--space-md) var(--space-lg) 0;
-  border-bottom: 1px solid var(--border-light);
-}
-
-.view-tab {
-  font-family: var(--font-ui);
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  padding: 10px 16px;
-  min-height: 44px;
-  cursor: pointer;
-  transition: color 0.2s ease, border-color 0.2s ease;
-}
-.view-tab:hover { color: var(--text); }
-.view-tab.active { color: var(--ro-green); border-bottom-color: var(--ro-green); }
-
-/* ============================================
    QUEUE
    ============================================ */
+
+/* Kept from the retired board: the queue bar still uses both. */
+.chip {
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  min-height: 44px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.chip:hover { color: var(--text); border-color: var(--border-strong); }
+
+.board-spacer { margin-left: auto; }
 
 .queue-bar {
   display: flex;
@@ -1103,6 +908,22 @@
 .oc-soft { color: var(--warning); font-size: 0.6875rem; }
 .oc-eta-why { font-size: 0.6875rem; color: var(--text-muted); }
 
+/* Amber, not red: being short on packed goods mid-season is the normal state,
+   not a failure. Red here would train the operator to ignore it. */
+.oc-short {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 0 17px 12px;
+  padding: 7px 9px;
+  border-radius: var(--radius-sm);
+  background: rgba(228, 170, 79, 0.12);
+  color: var(--warning);
+  font-size: 0.6875rem;
+  line-height: 1.35;
+}
+.oc-short svg { flex: none; margin-top: 2px; }
+
 @media (max-width: 900px) {
   .run-row { grid-template-columns: 30px 1fr; }
   .run-tl {
@@ -1113,7 +934,7 @@
 }
 
 @media (max-width: 768px) {
-  .view-tabs, .queue-bar { padding-left: var(--space-md); padding-right: var(--space-md); }
+  .queue-bar { padding-left: var(--space-md); padding-right: var(--space-md); }
   .queue-view { padding: var(--space-md); }
 }
 
@@ -1169,6 +990,128 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .order-card, .chip, .nav-item { transition: none; }
-  .order-card:hover { transform: none; }
+  .run-row, .chip, .nav-item, .done-row { transition: none; }
+}
+
+/* ============================================
+   RUN COVERAGE
+   ============================================ */
+
+/* Amber, not red. Mid-season the bulk of stock is raw material waiting to be
+   trimmed, so committing past what is packed is the ordinary state — red here
+   would teach the operator to ignore it. The raw sack count travels alongside
+   so "nothing packed yet" reads differently from "nothing to pack". */
+.run-short {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--warning);
+}
+.run-short .rs-icon { font-size: 0.5625rem; }
+
+/* An order reference on a run — the only route to an order still in the queue. */
+.run-order {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--ro-green);
+  background: transparent;
+  border: none;
+  border-bottom: 1px dotted var(--ro-green);
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.run-order:hover { color: var(--text); border-bottom-color: var(--text); }
+.run-order:focus-visible { outline: 2px solid var(--ro-green); outline-offset: 2px; }
+
+/* ============================================
+   COMPLETED ORDERS
+   ============================================ */
+
+.done-section { padding: 0 var(--space-lg) var(--space-xl); }
+
+.done-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 0;
+  min-height: 44px;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--border-light);
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+.done-head:hover { color: var(--text); }
+.done-caret { font-size: 0.75rem; color: var(--text-muted); }
+.done-count {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  padding: 2px 7px;
+}
+
+.done-list { display: flex; flex-direction: column; gap: 2px; }
+.done-list[hidden] { display: none; }
+
+.done-row {
+  display: grid;
+  grid-template-columns: 110px 84px minmax(120px, 1fr) minmax(140px, 2fr) 90px 90px;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 10px 12px;
+  min-height: 44px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  transition: background 0.15s ease;
+}
+.done-row:hover { background: var(--bg-card); border-color: var(--border-light); }
+
+.done-row .dr-id { font-family: var(--font-mono); font-weight: 600; color: var(--text); }
+.done-row .dr-status {
+  font-family: var(--font-mono);
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.done-row .dr-status.s-shipped { color: var(--info); }
+.done-row .dr-cultivars {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.done-row .dr-lbs,
+.done-row .dr-usd {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--text);
+}
+.done-row .dr-usd { color: var(--text-secondary); font-size: 0.75rem; }
+
+.done-empty { margin: 0; padding: 10px 12px; font-size: 0.8125rem; color: var(--text-muted); }
+
+@media (max-width: 900px) {
+  .done-section { padding: 0 var(--space-md) var(--space-lg); }
+  .done-row { grid-template-columns: 1fr 1fr; gap: 4px 12px; }
+  .done-row .dr-cultivars { white-space: normal; }
 }

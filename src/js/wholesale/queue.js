@@ -25,6 +25,17 @@ function el(tag, cls, text) {
   return n;
 }
 
+/** Short lines for a cultivar, worst first. Empty when it is covered. */
+function coverageFor(cultivarId) {
+  return (state.coverage?.coverage || [])
+    .filter(c => c.cultivarId === cultivarId && c.short)
+    .sort((a, b) => b.shortfallLbs - a.shortfallLbs);
+}
+
+/** Set by index.js so this module does not import the editor and cycle. */
+let openOrder = () => {};
+export function onOpenOrder(fn) { openOrder = fn; }
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /** '2026-09-05' -> 'Sat Sep 5'. Parsed as parts, never through Date's local parsing. */
@@ -53,7 +64,7 @@ function span(queue) {
   };
 }
 
-function runRow(run, idx, geom, onDrop) {
+function runRow(run, idx, geom, onDrop, onOrder) {
   const row = el('div', `run-row${run.estimated ? ' estimated' : ''}`);
   row.draggable = true;
   row.dataset.cultivarId = run.cultivarId;
@@ -72,10 +83,37 @@ function runRow(run, idx, geom, onDrop) {
   top.append(el('span', 'run-lot', `${fmtLbs(run.lotLbs)} ${t('lot')}`));
   main.append(top);
 
+  // Orders are reached from the runs that feed them — this is the only route
+  // to an order that is still in the queue, so the refs have to be live.
   const feeds = el('div', 'run-feeds');
   feeds.append(el('span', 'run-pool', t('pooled')));
-  feeds.append(document.createTextNode(run.orderIds.join(', ')));
+  run.orderIds.forEach((oid, i) => {
+    if (i) feeds.append(document.createTextNode(' '));
+    const link = el('button', 'run-order', oid);
+    link.type = 'button';
+    link.dataset.orderId = oid;
+    // Stop the click reaching the row, which is a drag surface.
+    link.addEventListener('click', (e) => { e.stopPropagation(); onOrder(oid); });
+    link.addEventListener('mousedown', (e) => e.stopPropagation());
+    feeds.append(link);
+  });
   main.append(feeds);
+
+  // Coverage is per cultivar and form — which is exactly what a run is, so it
+  // belongs here rather than on an order. Amber, not red: mid-season most
+  // stock is raw, so being short on packed goods is the ordinary state.
+  const cov = coverageFor(run.cultivarId);
+  if (cov.length) {
+    const flag = el('div', 'run-short');
+    const worst = cov[0];
+    flag.append(el('span', 'rs-icon', '▲'));
+    const sacks = worst.rawSacks
+      ? `${worst.rawSacks} ${t('raw_sacks')}`
+      : t('no_raw');
+    flag.append(el('span', null,
+      `${fmtLbs(worst.shortfallLbs)} ${t('over_packed')} · ${sacks}`));
+    main.append(flag);
+  }
 
   const bind = run.binding === 'smalls' ? t('smalls') : t('tops');
   const need = run.binding === 'smalls' ? run.smallsLbs : run.topsLbs;
@@ -148,7 +186,7 @@ export function renderQueue() {
 
   const geom = span(q);
   const list = el('div', 'run-list');
-  q.runs.forEach((run, i) => list.append(runRow(run, i, geom, reorder)));
+  q.runs.forEach((run, i) => list.append(runRow(run, i, geom, reorder, openOrder)));
   wrap.append(list);
 
   const note = el('p', 'queue-note', t('queue_note'));
