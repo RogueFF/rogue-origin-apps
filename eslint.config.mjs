@@ -210,13 +210,12 @@ export default [
     },
   },
   {
-    // Node CLI tooling and the scale readers
+    // Node CLI tooling and the scale reader
     files: [
       'tools/**/*.js',
       'tools/**/*.mjs',
       'scripts/**/*.js',
       'scale-reader/**/*.js',
-      'scale-reader-deployment/**/*.js',
     ],
     languageOptions: {
       globals: nodeGlobals,

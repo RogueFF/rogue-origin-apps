@@ -10,7 +10,7 @@ Live scale weight display for 5kg bag packing station
 This package contains everything needed to run the scale weight reader on your station PC.
 
 ```
-scale-reader-deployment/
+scale-reader/
 ├── index.js                    # Main application
 ├── package.json                # Dependencies
 ├── config.js                   # Configuration (edit COM port here)
