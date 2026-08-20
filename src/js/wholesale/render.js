@@ -1,15 +1,29 @@
 /**
- * Wholesale order board — board rendering.
+ * Wholesale — the completed-orders list.
  *
- * Cards are built with DOM APIs rather than innerHTML: customer names, notes
- * and cultivar names are operator-entered free text, and this page will one day
- * ingest Shopify order data too. textContent removes the injection question
- * instead of answering it with an escaper.
+ * The queue is the page, and orders are reached from the runs that feed them.
+ * But a shipped or closed order has left the queue, so without this it would
+ * be unreachable. Deliberately a compact list rather than cards: this is an
+ * archive to look something up in, not a working surface.
+ *
+ * Built with DOM APIs, not innerHTML — customer names and cultivar names are
+ * operator-entered free text, and this page ingests Shopify data.
  */
 
-import { state, visibleOrders, fmtLbs, fmtUsd, statusLabel } from './state.js';
-import { humanDate } from './queue.js';
+import { state, fmtLbs, fmtUsd, statusLabel } from './state.js';
 import { t } from '../shared/i18n.js';
+
+/**
+ * Statuses the queue schedules. Everything else lands in this list.
+ *
+ * Defined as the COMPLEMENT of the queue rather than as a fixed list of
+ * finished statuses, deliberately: any status that is neither scheduled nor
+ * listed here would leave its orders unreachable, since the queue is now the
+ * only other route to an order. Spelling it this way makes that impossible —
+ * a `draft` row, which nothing creates any more but which older and imported
+ * rows still carry, shows up here rather than vanishing.
+ */
+const QUEUED = ['open', 'in_production'];
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -18,88 +32,39 @@ function el(tag, className, text) {
   return node;
 }
 
-function lineRow(item) {
-  const row = el('div', 'oc-line');
-  row.append(
-    el('span', 'cv', item.cultivarName || item.cultivarId),
-    el('span', 'fm', item.form),
-    el('span', 'qt', item.enteredUnit === 'kg'
-      ? `${item.enteredQty} kg`
-      : fmtLbs(item.qtyLbs)),
-  );
-  return row;
+export function offQueueOrders() {
+  return state.orders.filter(o => !QUEUED.includes(o.status));
 }
 
-function card(order) {
-  const node = el('button', `order-card s-${order.status}`);
+function row(order) {
+  const node = el('button', 'done-row');
   node.type = 'button';
   node.dataset.orderId = order.id;
-  node.setAttribute('aria-label', `${order.id}, ${order.customerName || 'no customer'}, ${statusLabel(order.status)}`);
 
-  const top = el('div', 'oc-top');
-  top.append(el('span', 'oc-id', order.id));
-  top.append(el('span', `pill s-${order.status}`, statusLabel(order.status)));
-  node.append(top);
-
-  const cust = el('div', 'oc-customer');
-  cust.append(el('strong', null, order.customerName || '—'));
-  if (order.paymentTerms) cust.append(document.createTextNode(order.paymentTerms));
-  node.append(cust);
-
-  if (order.items.length) {
-    const lines = el('div', 'oc-lines');
-    order.items.forEach(i => lines.append(lineRow(i)));
-    node.append(lines);
-  } else {
-    node.append(el('div', 'oc-empty', t('no_lines')));
-  }
-
-  const foot = el('div', 'oc-foot');
-  foot.append(el('span', 'lbs', fmtLbs(order.totalLbs)));
-  // An imported order carries no prices by design, so it has no value to show.
-  // Rendering "$0" would state something false rather than nothing.
-  if (order.totalValue > 0) foot.append(el('span', 'usd', fmtUsd(order.totalValue)));
-  else if (order.source === 'shopify') foot.append(el('span', 'usd oc-src', t('imported')));
-  node.append(foot);
-
-  // The promise date, and which cultivar is holding it up — the number worth
-  // looking at is not the sum of the order's own hours.
-  const sched = state.queue?.orders?.[order.id];
-  if (sched) {
-    const wrap = el('div', 'oc-eta');
-    const line = el('div', 'oc-eta-date');
-    line.append(document.createTextNode(`${t('est_finish')} `));
-    line.append(el('b', null, humanDate(sched.finish.date)));
-    if (sched.estimated) line.append(el('span', 'oc-soft', ` ${t('soft')}`));
-    wrap.append(line);
-    const heldName = state.cultivars.find(c => c.id === sched.heldBy)?.name || sched.heldBy;
-    wrap.append(el('div', 'oc-eta-why', `${t('held_by')} ${heldName}`));
-    node.append(wrap);
-  }
-
+  node.append(el('span', 'dr-id', order.id));
+  node.append(el('span', `dr-status s-${order.status}`, statusLabel(order.status)));
+  node.append(el('span', 'dr-customer', order.customerName || '—'));
+  node.append(el('span', 'dr-cultivars',
+    order.items.map(i => i.cultivarName || i.cultivarId).join(', ') || t('no_lines')));
+  node.append(el('span', 'dr-lbs', fmtLbs(order.totalLbs)));
+  node.append(el('span', 'dr-usd',
+    order.totalValue > 0
+      ? fmtUsd(order.totalValue)
+      : (order.source === 'shopify' ? t('imported') : '')));
   return node;
 }
 
-export function renderBoard() {
-  const board = document.getElementById('board');
-  board.textContent = '';
+export function renderOffQueue() {
+  const list = document.getElementById('done-list');
+  const count = document.getElementById('done-count');
+  const orders = offQueueOrders();
 
-  const orders = visibleOrders();
+  count.textContent = orders.length ? String(orders.length) : '';
+  list.textContent = '';
+
   if (!orders.length) {
-    const empty = el('div', 'empty-state');
-    empty.append(el('i', 'ph-duotone ph-package'));
-    empty.append(el('p', null, state.orders.length ? t('none_match') : t('no_orders')));
-    board.append(empty);
+    list.append(el('p', 'done-empty', t('none_off_queue')));
     return;
   }
-
-  orders.forEach(o => board.append(card(o)));
-}
-
-export function renderFilters() {
-  document.querySelectorAll('.chip[data-filter]').forEach(chip => {
-    const on = chip.dataset.filter === state.filter;
-    chip.classList.toggle('active', on);
-    chip.setAttribute('aria-pressed', String(on));
-  });
+  orders.forEach(o => list.append(row(o)));
 }

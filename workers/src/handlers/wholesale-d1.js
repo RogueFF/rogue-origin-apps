@@ -19,6 +19,7 @@
  * - POST ?action=deleteOrder
  * - GET  ?action=getRates      - per-cultivar trim rate + where it came from
  * - GET  ?action=getQueue      - the production queue: ranked runs + order dates
+ * - GET  ?action=getCoverage    - committed vs packed inventory, per cultivar
  * - POST ?action=saveRunOrder  - persist the run ranking
  * - POST ?action=importOrder   - create an order from Shopify SKUs (bot entry point)
  * - GET  ?action=test          - health check
@@ -33,6 +34,7 @@ import { requireAuth } from '../lib/auth.js';
 import { toLbs, fromLbs, pickRate, poolDemand } from '../lib/wholesale.js';
 import { scheduleQueue } from '../lib/queue-schedule.js';
 import { parseSku } from '../lib/sku.js';
+import { summarizeInventory, assessCoverage } from '../lib/coverage.js';
 import { formatDatePT } from '../lib/production-utils.js';
 
 const WRITE_ACTIONS = new Set(['saveCustomer', 'deleteCustomer', 'saveOrder', 'deleteOrder', 'saveRunOrder', 'importOrder']);
@@ -75,6 +77,7 @@ export async function handleWholesaleD1(request, env) {
     case 'deleteOrder': return deleteOrder(db, body);
     case 'getRates': return getRates(db);
     case 'getQueue': return getQueue(db, params);
+    case 'getCoverage': return getCoverage(db);
     case 'saveRunOrder': return saveRunOrder(db, body);
     case 'importOrder': return importOrder(db, body);
     case 'test': return successResponse({ success: true, message: 'Wholesale API operational' });
@@ -593,6 +596,93 @@ async function saveRunOrder(db, body) {
   });
   await transaction(db, statements);
   return successResponse({ success: true, ranked: order.length });
+}
+
+// ─── COVERAGE ──────────────────────────────────────────
+
+/**
+ * Committed pounds against packed inventory, per cultivar and form.
+ *
+ * "Short" here is not an alarm. Through most of a season the bulk of inventory
+ * is raw material waiting to be trimmed, so having committed more than is
+ * currently packed is the ordinary state. What the operator needs to tell apart
+ * is *nothing packed yet* from *nothing to pack*, which is why the raw sack
+ * count travels with every shortfall.
+ *
+ * Raw sacks are reported as a count and never projected into pounds — that
+ * projection lives in supersack-d1 (`tops_breakdown`), auth-gated and cached,
+ * and a second copy of the math here would drift from it.
+ */
+async function getCoverage(db) {
+  const demandRows = await query(db, `
+    SELECT i.cultivar_id, i.form, SUM(i.qty_lbs) AS committed
+    FROM order_items i
+    JOIN orders o ON o.id = i.order_id
+    WHERE o.status IN (${SCHEDULABLE.map(() => "?").join(", ")})
+    GROUP BY i.cultivar_id, i.form
+  `, SCHEDULABLE);
+
+  if (!demandRows.length) {
+    return successResponse({ success: true, coverage: [], byOrder: {}, skippedSkus: [] });
+  }
+
+  // Latest count per (sku, location) — an adjustment feed carries a running
+  // total, so anything but the newest row per pair double-counts.
+  const invRows = await query(db, `
+    WITH latest AS (
+      SELECT sku, location, new_total_available,
+             ROW_NUMBER() OVER (PARTITION BY sku, location ORDER BY timestamp DESC, id DESC) rn
+      FROM inventory_adjustments
+      WHERE sku IS NOT NULL AND sku != ''
+    )
+    SELECT sku, SUM(new_total_available) AS units
+    FROM latest WHERE rn = 1
+    GROUP BY sku
+  `);
+
+  const prefixRows = await query(db,
+    "SELECT id, name, sku_prefix FROM cultivars WHERE sku_prefix IS NOT NULL AND sku_prefix != ''");
+  const prefixMap = {};
+  const nameOf = new Map();
+  for (const r of prefixRows) prefixMap[r.sku_prefix.toUpperCase()] = r.id;
+  for (const r of await query(db, "SELECT id, name FROM cultivars")) nameOf.set(r.id, r.name);
+
+  const inv = summarizeInventory(invRows.map(r => ({ sku: r.sku, units: r.units })), prefixMap);
+
+  const coverage = assessCoverage(
+    demandRows.map(r => ({ cultivarId: r.cultivar_id, form: r.form, committedLbs: r.committed })),
+    inv,
+  ).map(c => ({ ...c, cultivarName: nameOf.get(c.cultivarId) || c.cultivarId }));
+
+  // Which orders touch a short line, so a card can flag itself without the
+  // client having to re-derive the join.
+  const shortKeys = new Set(coverage.filter(c => c.short).map(c => `${c.cultivarId}|${c.form}`));
+  const byOrder = {};
+  if (shortKeys.size) {
+    const lines = await query(db, `
+      SELECT i.order_id, i.cultivar_id, i.form
+      FROM order_items i
+      JOIN orders o ON o.id = i.order_id
+      WHERE o.status IN (${SCHEDULABLE.map(() => "?").join(", ")})
+    `, SCHEDULABLE);
+    for (const l of lines) {
+      if (!shortKeys.has(`${l.cultivar_id}|${l.form}`)) continue;
+      (byOrder[l.order_id] ||= []).push({
+        cultivarId: l.cultivar_id,
+        cultivarName: nameOf.get(l.cultivar_id) || l.cultivar_id,
+        form: l.form,
+      });
+    }
+  }
+
+  return successResponse({
+    success: true,
+    coverage: coverage.sort((a, b) => b.shortfallLbs - a.shortfallLbs),
+    byOrder,
+    // Surfaced rather than swallowed: a SKU nobody can parse is inventory that
+    // silently is not being counted.
+    skippedSkus: [...new Set(inv.skipped)],
+  });
 }
 
 // ─── SHOPIFY IMPORT ────────────────────────────────────

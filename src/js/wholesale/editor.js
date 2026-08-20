@@ -11,6 +11,10 @@ import { t } from '../shared/i18n.js';
 import { showToast } from '../shared/toast.js';
 import { ensureUnlocked } from './auth.js';
 
+/** Set by index.js — rebuilds the status picker for the order being opened. */
+let buildStatus = () => {};
+export function onBuildStatus(fn) { buildStatus = fn; }
+
 const $ = (id) => document.getElementById(id);
 
 function blankLine() {
@@ -25,8 +29,9 @@ export function openEditor(order) {
   state.editing = order || null;
 
   $('modal-title').textContent = order ? order.id : t('new_order');
+  buildStatus(order?.status);
   $('f-customer').value = order?.customerId || '';
-  $('f-status').value = order?.status || 'draft';
+  $('f-status').value = order?.status || 'open';
   $('f-date').value = order?.orderDate || new Date().toISOString().slice(0, 10);
   $('f-terms').value = order?.paymentTerms || '';
   $('f-notes').value = order?.notes || '';
