@@ -8,6 +8,46 @@ Operations hub for [Rogue Origin](https://rogueorigin.com) — a seed-to-sale he
 
 ---
 
+## What it looks like
+
+These are the screens the crew actually works from, running live.
+
+### Production Scoreboard
+
+![Production Scoreboard](assets/screenshots/scoreboard.png)
+
+A wall display on the production floor. The day's running total sits against
+the goal, with the current hour's pace, the 5 kg bag timer, and lbs-per-trimmer
+for every hour worked. It is built to be read across a room — large type, colour
+that shifts as the shift falls behind, and a layout that stays legible from the
+far end of the line. It refreshes itself and keeps working through a dropped
+connection.
+
+### Operations Dashboard
+
+![Operations Dashboard](assets/screenshots/dashboard.png)
+
+The hub. It embeds the other apps as panes so the whole operation is one tab,
+and adds date-range comparison across the metrics that matter to a shift.
+
+### Supply Kanban
+
+![Supply Kanban](assets/screenshots/supply-kanban.png)
+
+The supply closet as a reorder board. Each card carries its supplier, shelf
+location, order quantity and product photo; carts group a week's reordering by
+vendor so one person can place them all in a sitting.
+
+### SOP Manager
+
+![SOP Manager](assets/screenshots/sop-manager.png)
+
+Standard operating procedures with drafts, departments, tags and embedded
+media — versioned, searchable, and bilingual, so a procedure can be pulled up
+at the station where it is being done.
+
+---
+
 ## Architecture
 
 ```
