@@ -143,7 +143,7 @@ function getUserFriendlyErrorMessage(error) {
     }
     
     return errorMessage;
-  } catch (e) {
+  } catch {
     return 'An unexpected error occurred. Please refresh the page.';
   }
 }

@@ -86,7 +86,7 @@ function buildProduction(flags) {
   if (flags.hourly) {
     try {
       hourly = JSON.parse(flags.hourly);
-    } catch (e) {
+    } catch {
       console.error('Warning: Failed to parse --hourly JSON. Using empty array.');
     }
   }
@@ -117,7 +117,7 @@ function buildBriefing(title, flags) {
   if (flags.segments) {
     try {
       segments = JSON.parse(flags.segments);
-    } catch (e) {
+    } catch {
       console.error('Error: Failed to parse --segments JSON.');
       process.exit(1);
     }

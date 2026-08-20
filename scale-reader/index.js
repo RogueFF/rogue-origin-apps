@@ -26,7 +26,7 @@ const CONFIG = {
 // State
 let currentWeight = 0;
 let isConnected = false;
-let useMock = process.argv.includes('--mock');
+const useMock = process.argv.includes('--mock');
 let serialPort = null;
 
 // Weight debouncing - prevents oscillation from noisy serial data
@@ -83,7 +83,7 @@ async function pushToCloud() {
     if (!response.ok) {
       console.error('API push failed:', response.status);
     }
-  } catch (error) {
+  } catch {
     // Silently fail - local display still works
   }
 }
@@ -174,7 +174,7 @@ function initSerialPort() {
             weight = weight * 0.453592;
           }
 
-          let rawWeight = Math.max(0, Math.round(weight * 100) / 100);
+          const rawWeight = Math.max(0, Math.round(weight * 100) / 100);
 
           // Debouncing logic to prevent oscillation
           if (rawWeight === 0 || rawWeight < 0.05) {

@@ -96,7 +96,7 @@ const SCHEDULE = {
   evening: { hour: 16, minute: 30 }
 };
 
-let lastBriefing = {};
+const lastBriefing = {};
 let schedulerInterval = null;
 let enabled = true;
 

@@ -42,7 +42,7 @@ function createApiServer(port, onNotification, apiToken) {
     try {
       const notif = onNotification(payload);
       res.json({ success: true, id: notif.id });
-    } catch (err) {
+    } catch {
       res.status(500).json({ error: 'Failed to process notification' });
     }
   });

@@ -645,7 +645,7 @@ function loadStrainBreakdowns() {
           .map(i => i.strain + ' ' + i.type + ' ' + i.on_hand_lbs.toFixed(0))
           .join(' · ');
       }
-    } catch(e) { /* silent fail */ }
+    } catch { /* silent fail */ }
   });
 }
 

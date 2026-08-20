@@ -9,7 +9,7 @@ function safeSend(win, channel, ...args) {
     if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
       win.webContents.send(channel, ...args);
     }
-  } catch (e) {
+  } catch {
     // Window destroyed mid-send — ignore
   }
 }

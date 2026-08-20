@@ -3,6 +3,10 @@ node_modules/
 tests/node_modules/
 api/node_modules/
 workers/node_modules/
+# Nested lockfiles stay out of the repo; only the root one is committed,
+# because CI installs from it with `npm ci`.
+package-lock.json
+!/package-lock.json
 
 # Vercel
 .vercel/

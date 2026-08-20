@@ -32,7 +32,7 @@ const OZ_TO_KG = 0.0283495;
 let currentWeight = 0;
 let currentUnit = 'g';        // Source unit from the indicator — drives bag-size button visibility downstream
 let isConnected = false;
-let useMock = process.argv.includes('--mock');
+const useMock = process.argv.includes('--mock');
 let serialPort = null;
 
 // Parse one line of OHAUS Defender 5000 output.
@@ -129,7 +129,7 @@ async function pushToCloud() {
     if (!response.ok) {
       console.error('API push failed:', response.status);
     }
-  } catch (error) {
+  } catch {
     // Silently fail - local display still works
   }
 }
