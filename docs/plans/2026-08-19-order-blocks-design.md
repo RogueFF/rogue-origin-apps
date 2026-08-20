@@ -9,6 +9,11 @@
 
 ## 1. The problem
 
+> **File references in this section are to the pre-`611da09e` tree.** The
+> Wholesale Orders app was retired hours after this was written (§2a); the
+> paths below no longer exist. The reasoning still holds — it is why the
+> replacement is shaped the way it is — but do not go hunting for the files.
+
 The wholesale Orders app cannot express "N lbs of cultivar X."
 
 `orders` has a single `strain` column and a `commitment_kg` scalar. Real multi-cultivar
@@ -236,6 +241,11 @@ CREATE TABLE IF NOT EXISTS production_runs (
 CREATE INDEX IF NOT EXISTS idx_runs_rank ON production_runs(rank);
 ```
 
+**`order_items.sku` is reserved for Shopify, not a catalogue reference.** It
+originally meant `products.sku`; that table is gone (§2a) and there is no FK to
+restore. `cultivars.sku_prefix` carries the useful fragment. Treat the column as
+free text a future sync may populate.
+
 **Storing both `qty_lbs` and `entered_qty`/`entered_unit`** is deliberate. A kg order displays
 in kg forever and never drifts through repeated round-trip conversion, while every query,
 sum and rate calculation uses one unit.
@@ -426,8 +436,18 @@ approach; it already persists to a server and carries no library weight.
 
 ## 10. Open questions
 
-1. **Which statuses does the floor actually use?** §4 proposes five. Needs a five-minute sanity
-   check against how the crew talks about orders before it is written into a CHECK constraint.
+1. **Which statuses does the floor actually use, and what happens to `'pending'`?** *Blocks the
+   first handler.* §4 proposes `draft → open → in_production → shipped → closed`, and §6's
+   over-commit query filters `status IN ('open','in_production')`. But the one live row,
+   `MO-2026-001`, is still `'pending'` — the only value the retired frontend ever wrote — and
+   `orders.status` carries no CHECK constraint. So the first `getProductionQueue` and
+   `getOverCommitment` will return **zero rows against real data and look correct doing it**.
+   Pick one before writing either handler:
+   (a) migration 0018 backfills `pending → open` and adds the CHECK — note this means recreating
+   `orders`, which has FK dependents in `shipments`, `payments`, `order_items` and
+   `production_runs`;
+   (b) handlers treat `'pending'` as a synonym for `'open'` and the CHECK waits.
+   Having neither is the trap.
 2. ~~Do the two lines run in parallel?~~ **Resolved** — zero line-2 activity in 45 days;
    sequential is correct. Re-open if a second line is brought up. See §3.
 3. **Should `getScoreboardOrderQueue`'s `estimatedHoursRemaining`** (currently hardcoded `0` in
