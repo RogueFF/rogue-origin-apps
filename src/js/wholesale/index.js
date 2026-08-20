@@ -11,6 +11,7 @@
 
 import { state, loadAll, STATUSES, statusLabel, option } from './state.js';
 import { renderBoard, renderFilters } from './render.js';
+import { loadQueue, renderQueue } from './queue.js';
 import {
   openEditor, closeEditor, saveOrder, deleteOrder, addLine,
   fillCustomerSelect, openCustomerModal, closeCustomerModal, saveCustomer,
@@ -55,6 +56,16 @@ registerLabels({
     err_qty: 'quantity must be greater than zero.',
     err_cust_name: 'Enter a contact name or company.',
     load_failed: 'Could not load orders',
+    view_board: 'Orders', view_queue: 'Production queue',
+    crew: 'Crew', crew_use_derived: 'Use derived', recalculate: 'Recalculate',
+    crew_override: 'manual override', crew_derived: 'derived from the last', days: 'production days',
+    clears: 'queue clears', lot: 'lot', pooled: 'Pooled',
+    sized_by: 'sized by', yields: 'yields T/S', done: 'done', per_hr: 'lb/trimmer-hr',
+    no_history: 'No history', loading: 'Loading…',
+    queue_empty: 'Nothing to schedule. Only open and in-production orders are queued.',
+    queue_failed: 'Could not load the queue',
+    queue_note: 'Estimates, not commitments. Built from measured trim rates and the real work calendar — Sunday off, Saturday to noon, breaks removed. It cannot see future crew changes or holidays, and does not model drying, packaging or freight.',
+    est_finish: 'est. finish', held_by: 'held by', soft: '(estimated rate)',
     unlock_title: 'Password required',
     unlock_help: 'Saving changes needs the operations password — the same one Consignment uses.',
     password: 'Password', unlock: 'Unlock',
@@ -96,6 +107,16 @@ registerLabels({
     err_qty: 'la cantidad debe ser mayor que cero.',
     err_cust_name: 'Ingrese un nombre de contacto o empresa.',
     load_failed: 'No se pudieron cargar los pedidos',
+    view_board: 'Pedidos', view_queue: 'Cola de producción',
+    crew: 'Equipo', crew_use_derived: 'Usar calculado', recalculate: 'Recalcular',
+    crew_override: 'ajuste manual', crew_derived: 'calculado de los últimos', days: 'días de producción',
+    clears: 'la cola termina', lot: 'lote', pooled: 'Agrupado',
+    sized_by: 'dimensionado por', yields: 'rinde T/S', done: 'listo', per_hr: 'lb/podador-hr',
+    no_history: 'Sin historial', loading: 'Cargando…',
+    queue_empty: 'Nada que programar. Solo se programan pedidos abiertos y en producción.',
+    queue_failed: 'No se pudo cargar la cola',
+    queue_note: 'Estimaciones, no compromisos. Calculado con tasas de poda medidas y el calendario real — domingo libre, sábado hasta mediodía, descansos descontados. No prevé cambios de equipo ni feriados, y no modela secado, empaque ni flete.',
+    est_finish: 'fin est.', held_by: 'retenido por', soft: '(tasa estimada)',
     unlock_title: 'Se requiere contraseña',
     unlock_help: 'Para guardar cambios se necesita la contraseña de operaciones — la misma que usa Consignación.',
     password: 'Contraseña', unlock: 'Desbloquear',
@@ -117,7 +138,11 @@ async function refresh() {
   try {
     await loadAll();
     fillCustomerSelect();
+    // The cards show a promise date, which only the queue knows. Fetched
+    // alongside rather than on demand so a card never renders a stale one.
+    await loadQueue(Number($('q-crew').value) || undefined);
     renderBoard();
+    if (state.view === 'queue') renderQueue();
   } catch (e) {
     showToast(`${t('load_failed')}: ${e.message || e}`, 'error');
   }
@@ -130,6 +155,24 @@ function paintLock() {
   btn.querySelector('i').className = open ? 'ph-duotone ph-lock-key-open' : 'ph-duotone ph-lock-key';
   btn.classList.toggle('primary', !open);
   btn.title = open ? t('relock') : t('unlock');
+}
+
+function setView(view) {
+  state.view = view;
+  document.querySelectorAll('.view-tab').forEach(tab => {
+    const on = tab.dataset.view === view;
+    tab.classList.toggle('active', on);
+    tab.setAttribute('aria-selected', String(on));
+  });
+  $('board-bar').hidden = view !== 'board';
+  $('board').hidden = view !== 'board';
+  $('queue-bar').hidden = view !== 'queue';
+  $('queue').hidden = view !== 'queue';
+  if (view === 'queue') {
+    // Reload rather than reuse: the queue depends on every open order, so a
+    // stale one here would quietly misprice every date behind it.
+    loadQueue(Number($('q-crew').value) || undefined);
+  }
 }
 
 function wire() {
@@ -154,6 +197,13 @@ function wire() {
       renderBoard();
     };
   });
+
+  document.querySelectorAll('.view-tab').forEach(tab => {
+    tab.onclick = () => setView(tab.dataset.view);
+  });
+
+  $('q-refresh').onclick = () => loadQueue(Number($('q-crew').value) || undefined);
+  $('q-reset').onclick = () => { $('q-crew').value = ''; loadQueue(); };
 
   $('btn-new').onclick = () => openEditor(null);
   $('btn-new-customer').onclick = () => openCustomerModal();
