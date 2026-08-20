@@ -860,7 +860,23 @@
 @media (max-width: 768px) {
   .sidebar { transform: translateX(-260px); }
   .sidebar.open { transform: translateX(0); }
-  .main { margin-left: 0; }
+  .main { margin-left: 0; min-width: 0; }
+
+  /* Four icon buttons plus the brand overflow a 390px viewport. Let the title
+     give way rather than dropping a control the operator needs — the page name
+     is already in the tab and the nav. */
+  .menu-btn { display: flex; }
+  .header { gap: var(--space-sm); }
+  .header-brand { min-width: 0; flex: 1; }
+  .header-logo { display: none; }
+  .header-title {
+    font-size: 1.125rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .header-actions { flex-shrink: 0; }
   .board { grid-template-columns: 1fr; padding: var(--space-md); }
   .board-bar { padding: var(--space-md) var(--space-md) 0; }
   .modal-backdrop { padding: 0; }

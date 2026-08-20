@@ -18,6 +18,7 @@ import {
 import { registerLabels, t, toggleLang } from '../shared/i18n.js';
 import { initTheme, toggleTheme } from '../shared/theme.js';
 import { showToast } from '../shared/toast.js';
+import { ensureUnlocked, forgetPassword, hasPassword } from './auth.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -54,6 +55,14 @@ registerLabels({
     err_qty: 'quantity must be greater than zero.',
     err_cust_name: 'Enter a contact name or company.',
     load_failed: 'Could not load orders',
+    unlock_title: 'Password required',
+    unlock_help: 'Saving changes needs the operations password — the same one Consignment uses.',
+    password: 'Password', unlock: 'Unlock',
+    err_password: 'Enter the password.',
+    err_password_bad: 'Incorrect password.',
+    err_connection: 'Could not reach the server.',
+    unlocked: 'Unlocked — changes can be saved',
+    relock: 'Password cleared',
   },
   es: {
     page_title: 'Pedidos Mayoristas',
@@ -87,6 +96,14 @@ registerLabels({
     err_qty: 'la cantidad debe ser mayor que cero.',
     err_cust_name: 'Ingrese un nombre de contacto o empresa.',
     load_failed: 'No se pudieron cargar los pedidos',
+    unlock_title: 'Se requiere contraseña',
+    unlock_help: 'Para guardar cambios se necesita la contraseña de operaciones — la misma que usa Consignación.',
+    password: 'Contraseña', unlock: 'Desbloquear',
+    err_password: 'Ingrese la contraseña.',
+    err_password_bad: 'Contraseña incorrecta.',
+    err_connection: 'No se pudo conectar con el servidor.',
+    unlocked: 'Desbloqueado — se pueden guardar cambios',
+    relock: 'Contraseña borrada',
   },
 });
 
@@ -106,9 +123,27 @@ async function refresh() {
   }
 }
 
+/** Reflect whether writes are currently possible, so the state is not a guess. */
+function paintLock() {
+  const btn = $('lock-btn');
+  const open = hasPassword();
+  btn.querySelector('i').className = open ? 'ph-duotone ph-lock-key-open' : 'ph-duotone ph-lock-key';
+  btn.classList.toggle('primary', !open);
+  btn.title = open ? t('relock') : t('unlock');
+}
+
 function wire() {
   $('menu-btn').onclick = () => document.getElementById('sidebar').classList.toggle('open');
   $('lang-toggle').onclick = () => { toggleLang(); buildStatusOptions(); renderBoard(); };
+  $('lock-btn').onclick = async () => {
+    if (hasPassword()) {
+      forgetPassword();
+      showToast(t('relock'), 'info');
+    } else if (await ensureUnlocked()) {
+      showToast(t('unlocked'), 'success');
+    }
+    paintLock();
+  };
   $('dark-mode-toggle').onclick = () => toggleTheme();
   $('refresh-btn').onclick = () => refresh();
 
@@ -134,7 +169,7 @@ function wire() {
 
   $('btn-cancel').onclick = () => closeEditor();
   $('modal-close').onclick = () => closeEditor();
-  $('btn-save').onclick = async () => { if (await saveOrder()) refresh(); };
+  $('btn-save').onclick = async () => { if (await saveOrder()) { paintLock(); refresh(); } };
   $('btn-delete').onclick = async () => { if (await deleteOrder()) refresh(); };
   $('btn-add-line').onclick = () => addLine();
 
@@ -142,6 +177,7 @@ function wire() {
   $('c-save').onclick = async () => {
     const id = await saveCustomer();
     if (!id) return;
+    paintLock();
     await refresh();
     $('f-customer').value = id;   // select what was just created
   };
@@ -152,7 +188,8 @@ function wire() {
   }
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    if (!$('customer-modal').hidden) closeCustomerModal();
+    if (!$('unlock-modal').hidden) $('u-cancel').click();
+    else if (!$('customer-modal').hidden) closeCustomerModal();
     else if (!$('modal').hidden) closeEditor();
   });
 }
@@ -161,4 +198,5 @@ initTheme('dark');
 buildStatusOptions();
 renderFilters();
 wire();
+paintLock();
 refresh();
