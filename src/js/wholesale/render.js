@@ -56,7 +56,10 @@ function card(order) {
 
   const foot = el('div', 'oc-foot');
   foot.append(el('span', 'lbs', fmtLbs(order.totalLbs)));
-  foot.append(el('span', 'usd', fmtUsd(order.totalValue)));
+  // An imported order carries no prices by design, so it has no value to show.
+  // Rendering "$0" would state something false rather than nothing.
+  if (order.totalValue > 0) foot.append(el('span', 'usd', fmtUsd(order.totalValue)));
+  else if (order.source === 'shopify') foot.append(el('span', 'usd oc-src', t('imported')));
   node.append(foot);
 
   // The promise date, and which cultivar is holding it up — the number worth

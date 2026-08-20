@@ -20,6 +20,7 @@
  * - GET  ?action=getRates      - per-cultivar trim rate + where it came from
  * - GET  ?action=getQueue      - the production queue: ranked runs + order dates
  * - POST ?action=saveRunOrder  - persist the run ranking
+ * - POST ?action=importOrder   - create an order from Shopify SKUs (bot entry point)
  * - GET  ?action=test          - health check
  *
  * Design: docs/plans/2026-08-19-order-blocks-design.md
@@ -31,9 +32,10 @@ import { createError } from '../lib/errors.js';
 import { requireAuth } from '../lib/auth.js';
 import { toLbs, fromLbs, pickRate, poolDemand } from '../lib/wholesale.js';
 import { scheduleQueue } from '../lib/queue-schedule.js';
+import { parseSku } from '../lib/sku.js';
 import { formatDatePT } from '../lib/production-utils.js';
 
-const WRITE_ACTIONS = new Set(['saveCustomer', 'deleteCustomer', 'saveOrder', 'deleteOrder', 'saveRunOrder']);
+const WRITE_ACTIONS = new Set(['saveCustomer', 'deleteCustomer', 'saveOrder', 'deleteOrder', 'saveRunOrder', 'importOrder']);
 
 const ORDER_STATUSES = new Set(['draft', 'open', 'in_production', 'shipped', 'closed']);
 const FORMS = new Set(['tops', 'smalls']);
@@ -74,6 +76,7 @@ export async function handleWholesaleD1(request, env) {
     case 'getRates': return getRates(db);
     case 'getQueue': return getQueue(db, params);
     case 'saveRunOrder': return saveRunOrder(db, body);
+    case 'importOrder': return importOrder(db, body);
     case 'test': return successResponse({ success: true, message: 'Wholesale API operational' });
     default:
       throw createError('NOT_FOUND', `Unknown wholesale action: ${action}`);
@@ -202,6 +205,7 @@ async function getOrders(db, params) {
       enteredQty: it.entered_qty ?? it.qty_lbs,
       enteredUnit: it.entered_unit ?? 'lb',
       unitPrice: it.unit_price,
+      sku: it.sku,
       lineTotal: (it.entered_qty ?? it.qty_lbs) * (it.unit_price || 0),
       notes: it.notes,
     });
@@ -589,6 +593,143 @@ async function saveRunOrder(db, body) {
   });
   await transaction(db, statements);
   return successResponse({ success: true, ranked: order.length });
+}
+
+// ─── SHOPIFY IMPORT ────────────────────────────────────
+
+/**
+ * The customer every imported order attaches to until someone says otherwise.
+ *
+ * Buyer identity is deliberately not imported. This placeholder exists because
+ * orders.customer_id is a NOT NULL foreign key, not because we want a stand-in
+ * for a name — an operator can reassign the order to a nicknamed customer in
+ * the app afterwards.
+ */
+const IMPORT_CUSTOMER = { id: "CUST-IMPORT", name: "Shopify import" };
+
+async function ensureImportCustomer(db) {
+  const existing = await queryOne(db, "SELECT id FROM customers WHERE id = ?", [IMPORT_CUSTOMER.id]);
+  if (!existing) {
+    await execute(db, "INSERT INTO customers (id, name, company) VALUES (?, ?, ?)",
+      [IMPORT_CUSTOMER.id, IMPORT_CUSTOMER.name, IMPORT_CUSTOMER.name]);
+  }
+  return IMPORT_CUSTOMER.id;
+}
+
+/**
+ * Create an order from Shopify line SKUs. The bots' write surface.
+ *
+ * WHAT THIS DELIBERATELY CANNOT DO:
+ * There is no field here for a customer name, an address, or a dollar amount.
+ * That is the enforcement — not a filter that could be forgotten, but an
+ * endpoint with nowhere to put them. Anything extra in the body is ignored.
+ * Prices are left at zero and the card renders no value at all rather than $0.
+ *
+ * WHY IT REFUSES SO READILY:
+ * These orders are written unattended, at status `open`, which means they are
+ * scheduled immediately and every date behind them moves. A SKU read wrongly
+ * off a screenshot would attach real pounds to the wrong cultivar and quietly
+ * reprice the queue. So every line is parsed and resolved BEFORE anything is
+ * written, and one bad line rejects the whole import naming the line and the
+ * reason. A loud failure the operator can re-shoot is much cheaper than a
+ * plausible wrong number nobody notices.
+ */
+async function importOrder(db, body) {
+  const orderRef = String(body.orderRef || "").trim();
+  if (!orderRef) throw createError("VALIDATION_ERROR", "orderRef is required (the Shopify order number)");
+
+  const lines = Array.isArray(body.lines) ? body.lines : [];
+  if (!lines.length) throw createError("VALIDATION_ERROR", "lines must be a non-empty array of { sku, quantity }");
+
+  // Refuse a re-import rather than creating a second copy of the same order.
+  const dupe = await queryOne(db, "SELECT id FROM orders WHERE shopify_order_id = ?", [orderRef]);
+  if (dupe) {
+    throw createError("VALIDATION_ERROR",
+      `Shopify order ${orderRef} is already imported as ${dupe.id}`);
+  }
+
+  const prefixRows = await query(db,
+    "SELECT id, name, sku_prefix FROM cultivars WHERE sku_prefix IS NOT NULL AND sku_prefix != ''");
+  const byPrefix = new Map(prefixRows.map(r => [r.sku_prefix.toUpperCase(), r]));
+
+  // Parse and resolve everything up front; nothing is written until all of it
+  // succeeds.
+  const resolved = lines.map((line, i) => {
+    const where = `line ${i + 1}`;
+    const qty = Number(line.quantity);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      throw createError("VALIDATION_ERROR", `${where}: quantity must be greater than zero`);
+    }
+    let parsed;
+    try {
+      parsed = parseSku(line.sku);
+    } catch (e) {
+      throw createError("VALIDATION_ERROR", `${where}: ${e.message}`);
+    }
+    const cultivar = byPrefix.get(parsed.prefix);
+    if (!cultivar) {
+      throw createError("VALIDATION_ERROR",
+        `${where}: sku prefix "${parsed.prefix}" matches no cultivar — add it to the cultivars table first`);
+    }
+    return {
+      cultivarId: cultivar.id,
+      cultivarName: cultivar.name,
+      form: parsed.form,
+      qtyLbs: qty * parsed.packLbs,
+      sku: String(line.sku).trim().toUpperCase(),
+      quantity: qty,
+    };
+  });
+
+  // Several pack sizes of the same cultivar and form are one line on the board.
+  const merged = new Map();
+  for (const r of resolved) {
+    const key = `${r.cultivarId}|${r.form}`;
+    const cur = merged.get(key);
+    if (cur) { cur.qtyLbs += r.qtyLbs; cur.skus.push(r.sku); }
+    else merged.set(key, { ...r, skus: [r.sku] });
+  }
+  const items = [...merged.values()];
+
+  const customerId = body.customerId || await ensureImportCustomer(db);
+  const customer = await queryOne(db, "SELECT id FROM customers WHERE id = ?", [customerId]);
+  if (!customer) throw createError("VALIDATION_ERROR", `No customer ${customerId}`);
+
+  const id = await nextId(db, "orders", "MO", new Date().getUTCFullYear());
+  const now = new Date().toISOString();
+
+  const statements = [{
+    sql: `INSERT INTO orders
+            (id, customer_id, order_date, status, source, shopify_order_id, shopify_order_name, notes, updated_at)
+          VALUES (?, ?, ?, 'open', 'shopify', ?, ?, ?, ?)`,
+    params: [id, customerId, now.slice(0, 10), orderRef, orderRef,
+      `Imported from Shopify ${orderRef}`, now],
+  }];
+
+  const stamp = Date.now();
+  items.forEach((it, idx) => {
+    statements.push({
+      sql: `INSERT INTO order_items
+              (id, order_id, cultivar_id, form, qty_lbs, entered_qty, entered_unit, unit_price, sku, sort_order, notes)
+            VALUES (?, ?, ?, ?, ?, ?, 'lb', 0, ?, ?, ?)`,
+      params: [`OI-${stamp}-${idx}`, id, it.cultivarId, it.form,
+        it.qtyLbs, it.qtyLbs, it.skus.join(", "), idx,
+        `${it.quantity} x ${it.skus[0]}`],
+    });
+  });
+
+  await transaction(db, statements);
+
+  return successResponse({
+    success: true,
+    id,
+    orderRef,
+    customerId,
+    items: items.map(i => ({
+      cultivar: i.cultivarName, form: i.form, qtyLbs: Math.round(i.qtyLbs * 100) / 100,
+    })),
+    totalLbs: Math.round(items.reduce((s, i) => s + i.qtyLbs, 0) * 100) / 100,
+  });
 }
 
 export { fromLbs };
