@@ -4,6 +4,7 @@
  * Routes:
  * - /api/production - Production tracking (D1)
  * - /api/orders - Consignment auth only (the orders app was retired)
+ * - /api/wholesale - Wholesale orders with line items + the production queue (D1)
  * - /api/kanban - Kanban board (D1)
  * - /api/sop - Standard operating procedures (D1)
  * - /api/consignment - Consignment inventory tracking (D1)
@@ -24,6 +25,7 @@ import { handlePoolRequest } from './handlers/pool.js';
 import { handleMediaR2 } from './handlers/media-r2.js';
 import { handleSupersackD1 } from './handlers/supersack-d1.js';
 import { handleIrrigationD1 } from './handlers/irrigation-d1.js';
+import { handleWholesaleD1 } from './handlers/wholesale-d1.js';
 import { handleHarvestD1, handleSackScan, handleZoneScan } from './handlers/harvest-d1.js';
 import { corsHeaders, handleCors } from './lib/cors.js';
 import { jsonResponse, errorResponse } from './lib/response.js';
@@ -104,6 +106,8 @@ export default {
 
       if (path.startsWith('/api/production')) {
         response = await handleProductionD1(request, env, ctx);
+      } else if (path.startsWith('/api/wholesale')) {
+        response = await handleWholesaleD1(request, env, ctx);
       } else if (path.startsWith('/api/orders')) {
         response = await handleOrdersD1(request, env, ctx);
       } else if (path.startsWith('/api/kanban')) {
@@ -142,7 +146,7 @@ export default {
           success: true,
           message: 'Rogue Origin API - Cloudflare Workers',
           version: '1.0.0',
-          endpoints: ['/api/production', '/api/orders', '/api/kanban', '/api/sop', '/api/consignment', '/api/complaints', '/api/supersack', '/api/pool', '/api/media', '/api/irrigation', '/api/harvest']
+          endpoints: ['/api/production', '/api/orders', '/api/kanban', '/api/sop', '/api/consignment', '/api/complaints', '/api/supersack', '/api/pool', '/api/media', '/api/irrigation', '/api/harvest', '/api/wholesale']
         });
       } else {
         response = errorResponse('Not found', 'NOT_FOUND', 404);
