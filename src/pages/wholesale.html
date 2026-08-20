@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-theme-default="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <link rel="icon" type="image/png" href="/rogue-origin-apps/favicon.png">
+  <meta name="theme-color" content="#0a0c0b">
+  <title>Wholesale Orders - Rogue Origin</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=optional" rel="stylesheet">
+  <!-- Phosphor Icons -->
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/duotone/style.css">
+  <!-- Styles -->
+  <link rel="stylesheet" href="../css/shared-base.css?h=036524e3">
+  <link rel="stylesheet" href="../css/wholesale.css?h=60320495">
+</head>
+<body class="dark-mode">
+  <!-- RO Home Button -->
+<style>.ro-home-btn{position:fixed;top:12px;left:12px;z-index:9999;width:36px;height:36px;border-radius:50%;background:rgba(26,26,26,.8);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;text-decoration:none;transition:all .2s ease;border:1px solid rgba(255,255,255,.1)}.ro-home-btn:hover{background:rgba(26,26,26,1);transform:scale(1.1)}.ro-home-btn svg{width:18px;height:18px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}</style>
+<a href="index.html" class="ro-home-btn" title="Operations Hub"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></a>
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="sidebar" role="navigation" aria-label="Main navigation">
+      <div class="sidebar-header">
+        <img src="/rogue-origin-apps/favicon.png" alt="Rogue Origin" class="sidebar-logo">
+        <span class="sidebar-brand">Rogue Origin</span>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="index.html" class="nav-item">
+          <i class="ph-duotone ph-chart-pie-slice"></i>
+          <span data-i18n="nav_dashboard">Dashboard</span>
+        </a>
+        <a href="kanban.html" class="nav-item">
+          <i class="ph-duotone ph-package"></i>
+          <span data-i18n="nav_kanban">Supply Kanban</span>
+        </a>
+        <a href="scoreboard-v2.html" class="nav-item">
+          <i class="ph-duotone ph-gauge"></i>
+          <span data-i18n="nav_scoreboard">Scoreboard</span>
+        </a>
+        <a href="sop-manager.html" class="nav-item">
+          <i class="ph-duotone ph-book-open-text"></i>
+          <span data-i18n="nav_sop">SOP Manager</span>
+        </a>
+        <a href="wholesale.html" class="nav-item active" aria-current="page">
+          <i class="ph-duotone ph-invoice"></i>
+          <span data-i18n="nav_wholesale">Wholesale</span>
+        </a>
+        <a href="consignment.html" class="nav-item">
+          <i class="ph-duotone ph-handshake"></i>
+          <span data-i18n="nav_consignment">Consignment</span>
+        </a>
+        <a href="complaints.html" class="nav-item">
+          <i class="ph-duotone ph-warning-diamond"></i>
+          <span data-i18n="nav_complaints">Complaints</span>
+        </a>
+        <a href="hourly-entry.html" class="nav-item">
+          <i class="ph-duotone ph-user-gear"></i>
+          <span data-i18n="nav_floor">Floor Manager</span>
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="sidebar-avatar" style="width:36px;height:36px;background:var(--ro-green);border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:600;font-size:12px;flex-shrink:0">RO</div>
+        <div class="sidebar-user">
+          <strong>Rogue Origin</strong>
+          <small>Operations Hub</small>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main" id="main-content">
+      <header class="header">
+        <button id="menu-btn" class="menu-btn" aria-label="Toggle menu">
+          <i class="ph-duotone ph-list"></i>
+        </button>
+        <div class="header-brand">
+          <img src="/rogue-origin-apps/favicon.png" alt="Rogue Origin" class="header-logo">
+          <h1 class="header-title" data-i18n="page_title">Wholesale Orders</h1>
+        </div>
+        <div class="header-actions">
+          <button id="lang-toggle" class="icon-btn" aria-label="Toggle language" title="EN / ES">
+            <i class="ph-duotone ph-translate"></i>
+          </button>
+          <button id="dark-mode-toggle" class="icon-btn" aria-label="Toggle dark mode">
+            <i class="ph-duotone ph-sun"></i>
+          </button>
+          <button id="refresh-btn" class="icon-btn primary" aria-label="Refresh">
+            <i class="ph-duotone ph-arrows-clockwise"></i>
+          </button>
+        </div>
+      </header>
+
+      <div class="board-bar">
+        <div class="board-filters" role="group" aria-label="Filter orders by status">
+          <button class="chip active" data-filter="active" aria-pressed="true" data-i18n="filter_active">Active</button>
+          <button class="chip" data-filter="draft" aria-pressed="false" data-i18n="filter_draft">Draft</button>
+          <button class="chip" data-filter="open" aria-pressed="false" data-i18n="filter_open">Open</button>
+          <button class="chip" data-filter="in_production" aria-pressed="false" data-i18n="filter_in_production">In production</button>
+          <button class="chip" data-filter="shipped" aria-pressed="false" data-i18n="filter_shipped">Shipped</button>
+          <button class="chip" data-filter="closed" aria-pressed="false" data-i18n="filter_closed">Closed</button>
+        </div>
+        <div class="board-spacer"></div>
+        <button id="btn-new-customer" class="btn btn-secondary" data-i18n="new_customer">New customer</button>
+        <button id="btn-new" class="btn btn-primary" data-i18n="new_order">New order</button>
+      </div>
+
+      <div id="board" class="board" aria-live="polite"></div>
+    </main>
+  </div>
+
+  <!-- ── ORDER EDITOR ────────────────────────────── -->
+  <div id="modal" class="modal-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal">
+      <div class="modal-head">
+        <h2 id="modal-title">New order</h2>
+        <span class="spacer"></span>
+        <button id="modal-close" class="icon-btn" aria-label="Close">
+          <i class="ph-duotone ph-x"></i>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="field-row">
+          <div class="field">
+            <label for="f-customer" data-i18n="customer">Customer</label>
+            <select id="f-customer"></select>
+          </div>
+          <div class="field">
+            <label for="f-status" data-i18n="status">Status</label>
+            <select id="f-status"></select>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="f-date" data-i18n="order_date">Order date</label>
+            <input id="f-date" type="date">
+          </div>
+          <div class="field">
+            <label for="f-terms" data-i18n="terms">Payment terms</label>
+            <input id="f-terms" type="text" placeholder="DAP">
+          </div>
+        </div>
+
+        <div class="lines-head">
+          <h3 data-i18n="line_items">Line items</h3>
+          <button id="btn-add-line" class="btn btn-secondary" data-i18n="add_line">Add line</button>
+        </div>
+
+        <div class="line-labels" aria-hidden="true">
+          <span data-i18n="cultivar">Cultivar</span>
+          <span data-i18n="form">Form</span>
+          <span data-i18n="quantity">Quantity</span>
+          <span data-i18n="unit">Unit</span>
+          <span data-i18n="unit_price">Price/unit</span>
+          <span></span>
+        </div>
+        <div id="line-rows" class="line-rows"></div>
+
+        <div class="modal-total">
+          <span class="lbs" id="total-lbs">0 lb</span>
+          <span class="usd" id="total-usd">$0</span>
+        </div>
+
+        <div class="field">
+          <label for="f-notes" data-i18n="notes">Notes</label>
+          <textarea id="f-notes"></textarea>
+        </div>
+
+        <p id="form-error" class="form-error" role="alert"></p>
+      </div>
+
+      <div class="modal-foot">
+        <button id="btn-delete" class="btn btn-danger" hidden data-i18n="delete">Delete</button>
+        <span class="spacer"></span>
+        <button id="btn-cancel" class="btn btn-secondary" data-i18n="cancel">Cancel</button>
+        <button id="btn-save" class="btn btn-primary" data-i18n="save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CUSTOMER ────────────────────────────────── -->
+  <div id="customer-modal" class="modal-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="c-title">
+    <div class="modal" style="width:min(460px,100%)">
+      <div class="modal-head">
+        <h2 id="c-title" data-i18n="new_customer">New customer</h2>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="c-company" data-i18n="company">Company</label>
+          <input id="c-company" type="text">
+        </div>
+        <div class="field">
+          <label for="c-name" data-i18n="name">Contact name</label>
+          <input id="c-name" type="text">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="c-city" data-i18n="city">City</label>
+            <input id="c-city" type="text">
+          </div>
+          <div class="field">
+            <label for="c-state" data-i18n="region">State / country</label>
+            <input id="c-state" type="text">
+          </div>
+        </div>
+        <p id="c-error" class="form-error" role="alert"></p>
+      </div>
+      <div class="modal-foot">
+        <span class="spacer"></span>
+        <button id="c-cancel" class="btn btn-secondary" data-i18n="cancel">Cancel</button>
+        <button id="c-save" class="btn btn-primary" data-i18n="save">Save</button>
+      </div>
+    </div>
+  </div>
+
+<!-- module-hashes:start -->
+<!-- generated by stamp-modules — do not edit by hand -->
+<script type="importmap">
+{
+  "imports": {
+    "../js/shared/api.js": "../js/shared/api.js?h=55201839",
+    "../js/shared/i18n.js": "../js/shared/i18n.js?h=6c5893f7",
+    "../js/shared/theme.js": "../js/shared/theme.js?h=b4816114",
+    "../js/shared/toast.js": "../js/shared/toast.js?h=2ff39553",
+    "../js/wholesale/editor.js": "../js/wholesale/editor.js?h=c4656419",
+    "../js/wholesale/index.js": "../js/wholesale/index.js?h=b95a0ffd",
+    "../js/wholesale/render.js": "../js/wholesale/render.js?h=eda9112e",
+    "../js/wholesale/state.js": "../js/wholesale/state.js?h=c11a5f81"
+  }
+}
+</script>
+<!-- module-hashes:end -->
+  <script type="module" src="../js/wholesale/index.js?h=b95a0ffd"></script>
+</body>
+</html>
