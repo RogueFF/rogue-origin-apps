@@ -98,38 +98,27 @@
         </div>
       </header>
 
-      <div class="view-tabs" role="tablist" aria-label="View">
-        <button class="view-tab active" data-view="board" role="tab" aria-selected="true" data-i18n="view_board">Orders</button>
-        <button class="view-tab" data-view="queue" role="tab" aria-selected="false" data-i18n="view_queue">Production queue</button>
-      </div>
-
-      <div class="board-bar" id="board-bar">
-        <div class="board-filters" role="group" aria-label="Filter orders by status">
-          <button class="chip active" data-filter="active" aria-pressed="true" data-i18n="filter_active">Active</button>
-          <button class="chip" data-filter="draft" aria-pressed="false" data-i18n="filter_draft">Draft</button>
-          <button class="chip" data-filter="open" aria-pressed="false" data-i18n="filter_open">Open</button>
-          <button class="chip" data-filter="in_production" aria-pressed="false" data-i18n="filter_in_production">In production</button>
-          <button class="chip" data-filter="shipped" aria-pressed="false" data-i18n="filter_shipped">Shipped</button>
-          <button class="chip" data-filter="closed" aria-pressed="false" data-i18n="filter_closed">Closed</button>
-        </div>
-        <div class="board-spacer"></div>
-        <button id="btn-new-customer" class="btn btn-secondary" data-i18n="new_customer">New customer</button>
-        <button id="btn-new" class="btn btn-primary" data-i18n="new_order">New order</button>
-      </div>
-
-      <div id="board" class="board" aria-live="polite"></div>
-
-      <div class="queue-bar" id="queue-bar" hidden>
+      <div class="queue-bar" id="queue-bar">
         <label class="crew-input">
           <span data-i18n="crew">Crew</span>
           <input id="q-crew" type="number" min="1" step="0.5" inputmode="decimal">
         </label>
         <button id="q-reset" class="chip" data-i18n="crew_use_derived">Use derived</button>
         <div class="board-spacer"></div>
-        <button id="q-refresh" class="btn btn-secondary" data-i18n="recalculate">Recalculate</button>
+        <button id="btn-new-customer" class="btn btn-secondary" data-i18n="new_customer">New customer</button>
+        <button id="btn-new" class="btn btn-primary" data-i18n="new_order">New order</button>
       </div>
 
-      <div id="queue" class="queue-view" hidden aria-live="polite"></div>
+      <div id="queue" class="queue-view" aria-live="polite"></div>
+
+      <section class="done-section">
+        <button id="done-toggle" class="done-head" aria-expanded="false" aria-controls="done-list">
+          <span class="done-caret" aria-hidden="true">▸</span>
+          <span data-i18n="completed">Not in the queue</span>
+          <span id="done-count" class="done-count"></span>
+        </button>
+        <div id="done-list" class="done-list" hidden></div>
+      </section>
     </main>
   </div>
 
@@ -263,6 +252,7 @@
       </div>
     </div>
   </div>
+
 
 
 
