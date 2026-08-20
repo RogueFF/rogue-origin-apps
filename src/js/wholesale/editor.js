@@ -9,6 +9,7 @@
 import { state, api, STATUSES, toLbs, fmtLbs, fmtUsd, statusLabel, option, LB_PER_KG } from './state.js';
 import { t } from '../shared/i18n.js';
 import { showToast } from '../shared/toast.js';
+import { ensureUnlocked } from './auth.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -197,6 +198,10 @@ export async function saveOrder() {
     })),
   };
 
+  // Reads are public; writes are not. Ask for the password at the moment it is
+  // needed rather than gating the whole board behind a login.
+  if (!await ensureUnlocked()) return false;
+
   const btn = $('btn-save');
   btn.disabled = true;
   try {
@@ -217,6 +222,7 @@ export async function saveOrder() {
 export async function deleteOrder() {
   if (!state.editing) return false;
   if (!confirm(`${t('confirm_delete')} ${state.editing.id}?`)) return false;
+  if (!await ensureUnlocked()) return false;
   try {
     await api.post('deleteOrder', { id: state.editing.id });
     showToast(`${state.editing.id} ${t('deleted')}`, 'success');
@@ -259,6 +265,7 @@ export async function saveCustomer() {
   const name = $('c-name').value.trim();
   const company = $('c-company').value.trim();
   if (!name && !company) { $('c-error').textContent = t('err_cust_name'); return null; }
+  if (!await ensureUnlocked()) return null;
   try {
     const res = await api.post('saveCustomer', {
       name: name || company,
