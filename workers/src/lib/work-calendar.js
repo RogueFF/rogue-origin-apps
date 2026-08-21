@@ -23,12 +23,21 @@ const H = (h) => Math.round(h * 60);
 /**
  * Schedule from CLAUDE.md. Breaks are [startMinute, endMinute) pairs:
  * 09:00 +10m, 12:00 +30m (lunch), 14:30 +10m, 16:20 +10m (cleanup).
+ *
+ * SATURDAY. The floor used to run Saturday mornings to noon, and this file
+ * carried a `saturdayEndMin` and a half-day branch for it. As of 2026-08-21 the
+ * farm does not work Saturdays at all, so Saturday joins Sunday in `daysOff`
+ * and the half-day machinery is gone rather than left unreachable behind a day
+ * off. If Saturdays come back, this is one entry and one branch to restore —
+ * see git history for the original.
+ *
+ * Every promise date on the board gets later as a result: a week now holds five
+ * working days and 42.5 productive hours instead of six and roughly 47.
  */
 export const WORK_DAY = {
   startMin: H(7),
   endMin: H(16.5),
-  saturdayEndMin: H(12),
-  daysOff: [0],                     // Sunday
+  daysOff: [0, 6],                  // Sunday, Saturday
   breaks: [[H(9), H(9) + 10], [H(12), H(12) + 30], [H(14.5), H(14.5) + 10], [H(16) + 20, H(16) + 30]],
 };
 
@@ -62,18 +71,15 @@ function isDayOff(dateStr, cal) {
   return cal.daysOff.includes(dayOfWeek(dateStr));
 }
 
-function endOfDay(dateStr, cal) {
-  return dayOfWeek(dateStr) === 6 ? cal.saturdayEndMin : cal.endMin;
-}
-
 /** Productive minutes on a given date, breaks removed. */
 export function workMinutesOnDay(dateStr, cal = WORK_DAY) {
   if (isDayOff(dateStr, cal)) return 0;
-  const close = endOfDay(dateStr, cal);
+  const close = cal.endMin;
   let total = close - cal.startMin;
   for (const [bStart, bEnd] of cal.breaks) {
-    // Only the part of a break that falls inside the shift costs anything —
-    // this is why Saturday loses the 09:00 break but not lunch.
+    // Only the part of a break that falls inside the shift costs anything. Every
+    // working day is now a full one, but a caller may still pass a calendar with
+    // a short close, so the clamp stays.
     const overlap = Math.min(bEnd, close) - Math.max(bStart, cal.startMin);
     if (overlap > 0) total -= overlap;
   }
@@ -84,7 +90,7 @@ export function workMinutesOnDay(dateStr, cal = WORK_DAY) {
 
 /**
  * Advance `hours` of actual work from `start`, stepping over breaks, closing
- * time, Saturdays' early finish and days off.
+ * time and days off.
  */
 export function addWorkHours(start, hours, cal = WORK_DAY) {
   if (typeof hours !== 'number' || !Number.isFinite(hours) || hours < 0) {
@@ -102,7 +108,7 @@ export function addWorkHours(start, hours, cal = WORK_DAY) {
   for (let guard = 0; guard < 4000 && remaining > 0; guard++) {
     if (isDayOff(date, cal)) { nextMorning(); continue; }
 
-    const close = endOfDay(date, cal);
+    const close = cal.endMin;
     if (minutes < cal.startMin) minutes = cal.startMin;
     if (minutes >= close) { nextMorning(); continue; }
 

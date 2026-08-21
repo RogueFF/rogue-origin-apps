@@ -373,15 +373,20 @@ test('a long block runs past the end of the day onto the next work day', () => {
   assert.ok(r.blocks[0].workDays !== 0 || r.blocks[0].hours > 8);
 });
 
-test('a block never finishes on a Sunday', () => {
-  for (const lbs of [500, 1500, 3000, 6000]) {
+test('a block never finishes on a weekend', () => {
+  // Saturday was a half day until 2026-08-21 and is now a day off, so this
+  // covers both weekend days rather than Sunday alone.
+  const NAME = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  for (const lbs of [500, 1500, 3000, 6000, 12000]) {
     const r = scheduleQueue({
       ...base,
       blocks: orderBlocks([item('MO-1', 'lifter', 'tops', lbs)]),
     });
-    const d = r.blocks[0].finish.date;
-    const [y, m, day] = d.split('-').map(Number);
-    assert.notEqual(new Date(Date.UTC(y, m - 1, day)).getUTCDay(), 0,
-      `${lbs} lb finished on a Sunday (${d})`);
+    for (const moment of [r.blocks[0].start, r.blocks[0].finish]) {
+      const [y, m, day] = moment.date.split('-').map(Number);
+      const dow = new Date(Date.UTC(y, m - 1, day)).getUTCDay();
+      assert.ok(dow !== 0 && dow !== 6,
+        `${lbs} lb landed on a ${NAME[dow]} (${moment.date})`);
+    }
   }
 });
