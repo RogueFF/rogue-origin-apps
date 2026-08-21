@@ -940,7 +940,9 @@
   pointer-events: none;
 }
 
-.pass-row:hover .pass-detail,
+/* Hover-open only while nothing is pinned, so a pinned detail and a hovered one
+   are never on screen at the same time. */
+body:not(.detail-pinned) .pass-row:hover .pass-detail,
 .pass-row:focus-visible .pass-detail,
 .pass-row.open .pass-detail {
   opacity: 1;
