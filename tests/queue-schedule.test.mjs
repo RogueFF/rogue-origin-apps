@@ -230,6 +230,53 @@ test('a cultivar with no history is flagged as estimated', () => {
   assert.equal(r.blocks[0].passes[0].rateBasis, 'fallback');
 });
 
+test('an all-tops cultivar asked for smalls falls back instead of throwing', () => {
+  // A cultivar whose 20+ hours of history happen to be recorded entirely as
+  // tops yields topsFraction === 1. `lotSize` refuses to fill a smalls order
+  // from a lot with no smalls in it — correctly — and that refusal used to
+  // escape scheduleQueue, taking down the board and the status cron with it.
+  const rates = { ...RATES, 'all-tops': { ratePerTrimmerHour: 1.9, topsFraction: 1, basis: 'all-years' } };
+  const r = scheduleQueue({
+    ...base, rates,
+    blocks: orderBlocks([item('MO-1', 'all-tops', 'smalls', 100)]),
+  });
+  assert.equal(r.blocks[0].passes[0].rateBasis, 'fallback');
+  assert.ok(Number.isFinite(r.blocks[0].passes[0].hours));
+  assert.ok(r.blocks[0].passes[0].lotLbs > 0);
+});
+
+test('an all-smalls cultivar asked for tops falls back the same way', () => {
+  const rates = { ...RATES, 'all-smalls': { ratePerTrimmerHour: 1.9, topsFraction: 0, basis: 'all-years' } };
+  const r = scheduleQueue({
+    ...base, rates,
+    blocks: orderBlocks([item('MO-1', 'all-smalls', 'tops', 100)]),
+  });
+  assert.equal(r.blocks[0].passes[0].rateBasis, 'fallback');
+  assert.ok(Number.isFinite(r.blocks[0].passes[0].hours));
+});
+
+test('an all-tops cultivar asked for TOPS still uses its own measured rate', () => {
+  // The guard must not throw away a rate that fits the form being asked for.
+  const rates = { ...RATES, 'all-tops': { ratePerTrimmerHour: 1.9, topsFraction: 1, basis: 'all-years' } };
+  const r = scheduleQueue({
+    ...base, rates,
+    blocks: orderBlocks([item('MO-1', 'all-tops', 'tops', 100)]),
+  });
+  assert.equal(r.blocks[0].passes[0].rateBasis, 'all-years');
+  near(r.blocks[0].passes[0].lotLbs, 100);
+});
+
+test('a degenerate FALLBACK fraction is clamped rather than trusted', () => {
+  const r = scheduleQueue({
+    ...base,
+    rates: {},
+    fallback: { ratePerTrimmerHour: 1.9, topsFraction: 1 },
+    blocks: orderBlocks([item('MO-1', 'never-grown', 'smalls', 100)]),
+  });
+  assert.ok(Number.isFinite(r.blocks[0].passes[0].hours));
+  assert.ok(r.blocks[0].passes[0].lotLbs > 0);
+});
+
 test('a cultivar with no rate at all falls back rather than dividing by zero', () => {
   const r = scheduleQueue({
     ...base,

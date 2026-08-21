@@ -234,9 +234,18 @@ async function saveOrder(db, body) {
     //
     // `queue_rank` makes "insertion order" mean something. Ordering by a column
     // that is NULL on every row is arbitrary order, not insertion order.
+    //
+    // THE PREFIX IS LOad-BEARING. Ranks written by a drag look like `a0000`,
+    // and SQLite compares TEXT byte by byte: a bare ISO timestamp starts with a
+    // digit, and digits sort before letters. So a new order stamped with its
+    // timestamp landed BEFORE every dragged order — first on the board, first
+    // in the queue, and first claim on every future pound of its cultivars.
+    // Silent, and it armed itself the first time anybody reordered anything.
+    // `z` puts a new order after the ranked ones, which is what the back of the
+    // queue means.
     const at = nowPT();
     orderFields.accrual_start = moment(at.date, at.minutes);
-    orderFields.queue_rank = orderFields.updated_at;
+    orderFields.queue_rank = `z${orderFields.updated_at}`;
 
     const cols = ['id', ...Object.keys(orderFields)];
     statements.push({
@@ -531,10 +540,14 @@ async function rateTable(db) {
 /**
  * The block ranking: order ids, best first.
  *
- * `queue_rank` is stamped at insert with the save timestamp, so an order book
- * nobody has dragged comes back in insertion order — decision 3. Ordering on a
- * column that were all NULL would be arbitrary, not insertion order, which is
- * why saveOrder writes it rather than leaving it to a default.
+ * `queue_rank` is stamped at insert with `z` + the save timestamp, so an order
+ * book nobody has dragged comes back in insertion order — decision 3. Ordering
+ * on a column that were all NULL would be arbitrary, not insertion order, which
+ * is why saveOrder writes it rather than leaving it to a default.
+ *
+ * The `z` matters: a drag rewrites every rank as `a0000`, `a0001`…, and TEXT
+ * comparison is byte-wise, so an unprefixed timestamp would sort ahead of all
+ * of them and silently promote every new order to the front.
  */
 async function savedRank(db) {
   const rows = await query(db, `
@@ -596,43 +609,64 @@ async function computeQueue(db, crewOverride) {
   const rank = await savedRank(db);
   const rankOf = new Map(rank.map((id, i) => [id, i]));
 
-  // Burn-down reaches back only as far as the earliest order still in the queue
-  // could accrue from. Scanning all of monthly_production would be both slower
-  // and wrong — it would credit an order with last season's work.
-  const earliest = queued.reduce(
-    (min, l) => (l.accrualStart && l.accrualStart < min ? l.accrualStart : min),
-    nowPT().date);
-  const since = String(earliest).slice(0, 10);
-
   // FINISHED ORDERS STILL HOLD THEIR CLAIM ON PAST POUNDS.
   //
   // Allocation is a replay, not a ledger: every pound is dealt out again from
-  // scratch on each read. So an order that has left the queue must still be
-  // dealt its share, or the pounds it already consumed are handed to whoever is
-  // next in line for that cultivar — and a second order would be credited with
-  // work that is physically already spent.
+  // scratch on each read. An order that has left the queue must still be dealt
+  // its share, or the pounds it already ate are handed to whoever is next in
+  // line for that cultivar — and that order is credited with work physically
+  // already spent, then auto-finished by the cron on the strength of it.
   //
-  // Bounded to orders accruing inside the same window being replayed. A
-  // finished order older than that settled against entries this scan does not
-  // read, so including it would let last season re-claim this season's work.
+  // WHICH FINISHED ORDERS, AND WHY THIS IS NOT `accrual_start >= since`.
+  // It was, and that was exactly backwards. The replay window used to be
+  // derived from the QUEUED orders alone, and the front of the queue is
+  // normally the oldest — so the moment it finished, the window jumped past its
+  // own accrual start and dropped it from the replay on the very next tick.
+  // One cron cycle after any order completed, the next order wanting the same
+  // cultivar inherited every pound it had consumed.
+  //
+  // A finished order is relevant while the work it consumed is still inside the
+  // window being replayed, which is a question about when it STOPPED consuming,
+  // not when it began. `updated_at` is stamped when the cron finishes it, so
+  // that is the bound — and the horizon below is what keeps last season out
+  // without the window's own start being the thing that decides.
+  const SETTLED_AFTER_DAYS = 60;
+  const horizon = new Date(Date.now() - SETTLED_AFTER_DAYS * 86400000)
+    .toISOString().slice(0, 10);
+
   const claimed = await query(db, `
     SELECT i.id AS lineId, i.order_id AS orderId, i.cultivar_id AS cultivarId,
            i.form, i.qty_lbs AS qtyLbs, i.sort_order AS sortOrder,
            o.accrual_start AS accrualStart, o.queue_rank AS queueRank
     FROM order_items i
     JOIN orders o ON o.id = i.order_id
-    WHERE o.status = 'finished' AND o.accrual_start >= ?
-  `, [since]);
+    WHERE o.status = 'finished' AND COALESCE(o.updated_at, o.created_at) >= ?
+  `, [horizon]);
 
-  // Finished orders rank AHEAD of everything still queued. They took their
-  // pounds while they were at the front, and the replay has to reproduce that
-  // order or it will hand their share to a live order instead.
-  const finishedRank = new Map(
-    [...new Set(claimed.map(l => l.orderId))]
-      .sort((a, b) => String(a).localeCompare(String(b)))
-      .map((id, i) => [id, i - claimed.length - 1]));
+  // The window has to reach back far enough to cover everything being replayed,
+  // finished orders included — otherwise a finished order is in the deal but the
+  // entries it consumed are not, and it arrives empty-handed while a live order
+  // takes them.
+  const earliest = [...queued, ...claimed].reduce(
+    (min, l) => (l.accrualStart && l.accrualStart < min ? l.accrualStart : min),
+    nowPT().date);
+  const since = String(earliest).slice(0, 10);
 
   const entries = await recordedProduction(db, since);
+
+  // Finished orders rank AHEAD of everything still queued: they took their
+  // pounds while they were at the front, and the replay has to reproduce that
+  // order or their share goes to a live order instead. Among themselves they
+  // keep the rank they held, so two orders that finished in sequence are
+  // re-dealt in that sequence.
+  const finishedIds = [...new Set(claimed.map(l => l.orderId))]
+    .sort((a, b) => {
+      const ra = claimed.find(l => l.orderId === a)?.queueRank ?? '';
+      const rb = claimed.find(l => l.orderId === b)?.queueRank ?? '';
+      return String(ra).localeCompare(String(rb)) || String(a).localeCompare(String(b));
+    });
+  const finishedRank = new Map(
+    finishedIds.map((id, i) => [id, i - finishedIds.length - 1]));
 
   const progress = allocate({
     entries,
@@ -971,7 +1005,9 @@ async function importOrder(db, body) {
           VALUES (?, ?, 'in_queue', 'shopify', ?, ?, ?, ?, ?, ?)`,
     params: [id, now.slice(0, 10), orderRef, orderRef,
       `Imported from Shopify ${orderRef}`, now,
-      moment(importedAt.date, importedAt.minutes), now],
+      // Same prefix as a hand-entered order: an unattended import must join the
+      // BACK of the queue, not jump to the front of a board somebody has ranked.
+      moment(importedAt.date, importedAt.minutes), `z${now}`],
   }];
 
   const stamp = Date.now();
