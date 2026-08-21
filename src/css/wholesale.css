@@ -810,7 +810,11 @@
   color: var(--text-muted);
   letter-spacing: 0.04em;
 }
-.queue-meta .qm-spacer { margin-left: auto; }
+/* Used by the queue meta line AND by each block header. It was scoped to
+   `.queue-meta`, so the block header's spacer did nothing and the id, customer,
+   percentage and date all bunched against the left edge with the rest of the
+   card empty. */
+.qm-spacer { margin-left: auto; }
 .queue-meta .qm-clear { color: var(--text-secondary); }
 
 .block-list { display: flex; flex-direction: column; gap: 10px; }
@@ -872,6 +876,36 @@
   font-size: 0.6875rem;
   color: var(--text);
   font-variant-numeric: tabular-nums;
+}
+
+/* Card controls. Quiet until the card is under the pointer — a queue of orders
+   should read as dates and progress, not as a column of buttons — but always
+   present for a keyboard, and always present on touch, where there is no hover
+   to reveal them. */
+.block-action {
+  min-width: 30px;
+  min-height: 30px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.875rem;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.block-card:hover .block-action,
+.block-action:focus-visible { opacity: 1; }
+
+.block-action:hover { color: var(--text); border-color: var(--glass-stroke); }
+.block-del:hover { color: var(--danger); border-color: var(--danger); }
+.block-action:focus-visible { outline: 2px solid var(--ro-green); outline-offset: 1px; }
+
+/* No hover on a touch screen, so the controls simply stay visible. */
+@media (hover: none) {
+  .block-action { opacity: 1; }
 }
 
 .block-card > .run-track { margin: 10px 14px 0 14px; height: 22px; }
