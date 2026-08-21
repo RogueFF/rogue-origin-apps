@@ -223,6 +223,44 @@ test('the morning fills the leading order even when logged after the afternoon',
   near(r.byLine.B.doneLbs, 10);
 });
 
+// --- a finished order keeps its claim ------------------------------------
+
+test('an order that already consumed its pounds keeps them, once it is finished', () => {
+  // Allocation is a replay, not a ledger. A finished order dropped from the
+  // replay releases everything it consumed, and the next order in line is
+  // credited with work that is physically already spent. Live evidence: once
+  // MO-2026-001 flipped to finished, all 22.4 lb of Passion Fruit OG tops read
+  // as unallocated, including the 10 lb it had eaten.
+  const lines = [
+    line({ lineId: 'spent', orderId: 'DONE', rank: -1, qtyLbs: 10 }),
+    line({ lineId: 'live', orderId: 'MO-2', rank: 0, qtyLbs: 100 }),
+  ];
+  const r = allocate({ lines, entries: [entry({ topsLbs: 22.4 })] });
+
+  near(r.byLine.spent.doneLbs, 10);
+  near(r.byLine.live.doneLbs, 12.4, 0.01);
+
+  // Drop the finished order and the live one is handed the full 22.4.
+  const without = allocate({ lines: [lines[1]], entries: [entry({ topsLbs: 22.4 })] });
+  near(without.byLine.live.doneLbs, 22.4, 0.01);
+  assert.ok(without.byLine.live.doneLbs > r.byLine.live.doneLbs,
+    'this is the bug: dropping a finished order inflates the next one');
+});
+
+test('a finished order claims before anything still in the queue', () => {
+  // Negative ranks are how the caller expresses "this already happened". If a
+  // finished order sorted after the live queue it would only get leftovers.
+  const r = allocate({
+    lines: [
+      line({ lineId: 'live', orderId: 'MO-2', rank: 0, qtyLbs: 100 }),
+      line({ lineId: 'spent', orderId: 'DONE', rank: -1, qtyLbs: 10 }),
+    ],
+    entries: [entry({ topsLbs: 10 })],
+  });
+  near(r.byLine.spent.doneLbs, 10);
+  near(r.byLine.live.doneLbs, 0);
+});
+
 // --- what does not get allocated -----------------------------------------
 
 test('production for a cultivar nobody ordered is reported, not discarded', () => {
