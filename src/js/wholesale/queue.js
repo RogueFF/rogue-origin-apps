@@ -77,6 +77,40 @@ function span(queue) {
 const pctText = (p) => `${Math.round(p * 100)}%`;
 
 /**
+ * The pass detail that is currently pinned open, if any.
+ *
+ * Pinning used to be a bare `classList.toggle('open')` with nothing to undo it.
+ * A detail therefore stayed open until the same row was clicked a second time:
+ * clicking away left it up, clicking a different row left BOTH up, Escape did
+ * nothing, and a click that began an abandoned drag pinned one without the
+ * operator ever asking for it. Open state needs somewhere to live and a way out.
+ */
+let pinnedRow = null;
+
+function pin(row) {
+  if (pinnedRow) pinnedRow.classList.remove('open');
+  pinnedRow = row;
+  if (row) row.classList.add('open');
+  // Hover-open is suppressed while something is pinned, so a pinned detail and
+  // a hovered one can never be on screen together.
+  document.body.classList.toggle('detail-pinned', !!row);
+}
+
+// Registered once, at module load, rather than per row — there are as many rows
+// as the queue is long and they are rebuilt on every render.
+document.addEventListener('click', () => pin(null));
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  pin(null);
+  // Unpinning alone does not close it. The row still holds focus, and pressing
+  // a key is exactly what puts the browser into keyboard modality — so
+  // `:focus-visible` starts matching on the way out and the detail stays up.
+  // Escape has to surrender the focus as well as the pin.
+  const active = document.activeElement;
+  if (active && active.classList?.contains('pass-row')) active.blur();
+});
+
+/**
  * 'PDT' or 'PST', whichever the farm is actually on today.
  *
  * Every time on this board is already Pacific — the scheduler carries a civil
@@ -209,9 +243,12 @@ function passRow(pass) {
 
   // Tap to pin the detail open. The card above is a drag surface, so the press
   // must not reach it or dragging would start under the operator's finger.
+  //
+  // stopPropagation here is also what keeps the document listener below from
+  // treating this very click as a click-away and closing what it just opened.
   row.addEventListener('click', (e) => {
     e.stopPropagation();
-    row.classList.toggle('open');
+    pin(row === pinnedRow ? null : row);
   });
   row.addEventListener('mousedown', (e) => e.stopPropagation());
 
@@ -312,6 +349,9 @@ function syncCrewBar() {
 
 export function renderQueue() {
   syncCrewBar();
+  // Every row below is about to be discarded, so a pinned one would leave this
+  // holding a detached node and the body class set forever.
+  pin(null);
   const wrap = $('queue');
   wrap.textContent = '';
   const q = state.queue;
