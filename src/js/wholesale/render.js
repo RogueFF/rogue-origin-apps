@@ -2,8 +2,8 @@
  * Wholesale — the completed-orders list.
  *
  * The queue is the page, and orders are reached from the runs that feed them.
- * But a shipped or closed order has left the queue, so without this it would
- * be unreachable. Deliberately a compact list rather than cards: this is an
+ * But a finished order has left the queue, so without this it would be
+ * unreachable. Deliberately a compact list rather than cards: this is an
  * archive to look something up in, not a working surface.
  *
  * Built with DOM APIs, not innerHTML — customer names and cultivar names are
@@ -16,14 +16,15 @@ import { t } from '../shared/i18n.js';
 /**
  * Statuses the queue schedules. Everything else lands in this list.
  *
- * Defined as the COMPLEMENT of the queue rather than as a fixed list of
- * finished statuses, deliberately: any status that is neither scheduled nor
- * listed here would leave its orders unreachable, since the queue is now the
- * only other route to an order. Spelling it this way makes that impossible —
- * a `draft` row, which nothing creates any more but which older and imported
- * rows still carry, shows up here rather than vanishing.
+ * Defined as the COMPLEMENT of the queue rather than as a fixed list of finished
+ * statuses, deliberately: any status that is neither scheduled nor listed here
+ * would leave its orders unreachable, since the queue is now the only other
+ * route to an order. Spelling it this way makes that impossible — a row carrying
+ * a status this build has not heard of shows up here rather than vanishing.
+ *
+ * Must stay in step with SCHEDULABLE in workers/src/handlers/wholesale-d1.js.
  */
-const QUEUED = ['open', 'in_production'];
+const QUEUED = ['in_queue', 'in_production'];
 
 function el(tag, className, text) {
   const node = document.createElement(tag);

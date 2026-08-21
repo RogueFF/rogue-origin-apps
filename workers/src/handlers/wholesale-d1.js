@@ -31,15 +31,16 @@ import { query, queryOne, execute, transaction } from '../lib/db.js';
 import { successResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
 import { createError } from '../lib/errors.js';
 import { requireAuth } from '../lib/auth.js';
-import { toLbs, fromLbs, pickRate, poolDemand } from '../lib/wholesale.js';
+import { toLbs, fromLbs, pickRate, orderBlocks } from '../lib/wholesale.js';
 import { scheduleQueue } from '../lib/queue-schedule.js';
+import { allocate, moment, impliedStatus } from '../lib/burndown.js';
 import { parseSku } from '../lib/sku.js';
 import { summarizeInventory, assessCoverage } from '../lib/coverage.js';
 import { formatDatePT } from '../lib/production-utils.js';
 
-const WRITE_ACTIONS = new Set(['saveCustomer', 'deleteCustomer', 'saveOrder', 'deleteOrder', 'saveRunOrder', 'importOrder']);
+const WRITE_ACTIONS = new Set(['saveCustomer', 'deleteCustomer', 'saveOrder', 'deleteOrder', 'saveQueueOrder', 'setAccrualStart', 'importOrder']);
 
-const ORDER_STATUSES = new Set(['draft', 'open', 'in_production', 'shipped', 'closed']);
+const ORDER_STATUSES = new Set(['in_queue', 'in_production', 'finished']);
 const FORMS = new Set(['tops', 'smalls']);
 const UNITS = new Set(['lb', 'kg']);
 
@@ -78,7 +79,8 @@ export async function handleWholesaleD1(request, env) {
     case 'getRates': return getRates(db);
     case 'getQueue': return getQueue(db, params);
     case 'getCoverage': return getCoverage(db);
-    case 'saveRunOrder': return saveRunOrder(db, body);
+    case 'saveQueueOrder': return saveQueueOrder(db, body);
+    case 'setAccrualStart': return setAccrualStart(db, body);
     case 'importOrder': return importOrder(db, body);
     case 'test': return successResponse({ success: true, message: 'Wholesale API operational' });
     default:
@@ -177,12 +179,15 @@ async function deleteCustomer(db, body) {
 // ─── ORDERS ────────────────────────────────────────────
 
 async function getOrders(db, params) {
-  const wantClosed = params.includeClosed === 'true';
+  // `includeClosed` is the name migration 0019 retired. Both are accepted so the
+  // two deploys — front end on Pages, worker on Cloudflare — can land in either
+  // order without a window where the board sees no finished orders.
+  const wantFinished = params.includeFinished === 'true' || params.includeClosed === 'true';
   const orders = await query(db, `
     SELECT o.*, COALESCE(NULLIF(c.company,''), c.name) AS customer_name
     FROM orders o
     LEFT JOIN customers c ON c.id = o.customer_id
-    ${wantClosed ? '' : "WHERE o.status != 'closed'"}
+    ${wantFinished ? '' : "WHERE o.status != 'finished'"}
     ORDER BY o.order_date DESC, o.id DESC
   `);
   if (!orders.length) return successResponse({ success: true, orders: [] });
@@ -244,7 +249,7 @@ async function getOrders(db, params) {
  * leave an order with no lines.
  */
 async function saveOrder(db, body) {
-  const status = body.status || 'draft';
+  const status = body.status || 'in_queue';
   if (!ORDER_STATUSES.has(status)) {
     throw createError('VALIDATION_ERROR',
       `Invalid status "${status}" — expected one of: ${[...ORDER_STATUSES].join(', ')}`);
@@ -271,6 +276,19 @@ async function saveOrder(db, body) {
 
   const statements = [];
   if (isNew) {
+    // Both stamped at insert, and neither can be left to a column default.
+    //
+    // `accrual_start` is when this order starts collecting recorded production.
+    // It is the moment of saving, not the order date: order_date is a bare date
+    // and midnight would credit an order typed this afternoon with the whole
+    // morning's trim. Damon corrects it from his bot when the paperwork lagged.
+    //
+    // `queue_rank` makes "insertion order" mean something. Ordering by a column
+    // that is NULL on every row is arbitrary order, not insertion order.
+    const at = nowPT();
+    orderFields.accrual_start = moment(at.date, at.minutes);
+    orderFields.queue_rank = orderFields.updated_at;
+
     const cols = ['id', ...Object.keys(orderFields)];
     statements.push({
       sql: `INSERT INTO orders (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`,
@@ -434,11 +452,13 @@ async function getRates(db) {
 // ─── PRODUCTION QUEUE ──────────────────────────────────
 
 /**
- * Statuses whose demand is real enough to schedule. A draft is a quote being
- * built and has not been promised to anyone; scheduling it would let a
- * hypothetical order push a committed one down the queue.
+ * Statuses whose demand is real enough to schedule — which, since migration 0019
+ * collapsed the vocabulary, is every status except `finished`. Spelled as an
+ * explicit list rather than `!== 'finished'` because the queue and the off-queue
+ * list must partition the same set, and a fourth status added later should have
+ * to be placed in one of them deliberately.
  */
-const SCHEDULABLE = ["open", "in_production"];
+const SCHEDULABLE = ["in_queue", "in_production"];
 
 /**
  * Crew size, derived from what actually happened rather than typed.
@@ -510,92 +530,228 @@ async function rateTable(db) {
 }
 
 /** Persisted run ranking, pooled runs only. */
+/**
+ * The block ranking: order ids, best first.
+ *
+ * `queue_rank` is stamped at insert with the save timestamp, so an order book
+ * nobody has dragged comes back in insertion order — decision 3. Ordering on a
+ * column that were all NULL would be arbitrary, not insertion order, which is
+ * why saveOrder writes it rather than leaving it to a default.
+ */
 async function savedRank(db) {
   const rows = await query(db, `
-    SELECT cultivar_id FROM production_runs
-    WHERE dedicated_order_id IS NULL
-    ORDER BY rank
-  `);
-  return rows.map(r => r.cultivar_id);
+    SELECT id FROM orders
+    WHERE status IN (${SCHEDULABLE.map(() => "?").join(", ")})
+    ORDER BY queue_rank, id
+  `, SCHEDULABLE);
+  return rows.map(r => r.id);
 }
 
-async function getQueue(db, params) {
-  const items = await query(db, `
-    SELECT i.order_id, i.cultivar_id, i.form, i.qty_lbs
+/**
+ * Recorded production, resolved to canonical cultivars.
+ *
+ * The alias join is exact (`a.alias = mp.cultivar1`), matching rateTable. The
+ * bidirectional substring matching used elsewhere in the tree silently counts
+ * "Sour Lifter" toward "Lifter"; here that would credit the wrong order.
+ *
+ * Line 2 is not read. Zero rows in 45 days carry any line-2 signal, and a
+ * second line would need its own crew figure before its pounds could mean
+ * anything. If one is ever brought up, this query is where it starts.
+ */
+async function recordedProduction(db, since) {
+  return query(db, `
+    SELECT mp.production_date AS date, mp.time_slot AS timeSlot,
+           a.cultivar_id AS cultivarId,
+           mp.tops_lbs1 AS topsLbs, mp.smalls_lbs1 AS smallsLbs
+    FROM monthly_production mp
+    JOIN cultivar_aliases a ON a.alias = mp.cultivar1
+    WHERE mp.production_date >= ?
+      AND (COALESCE(mp.tops_lbs1, 0) + COALESCE(mp.smalls_lbs1, 0)) > 0
+  `, [since]);
+}
+
+/** Pacific wall-clock now, as the civil pair the scheduler and burn-down use. */
+function nowPT() {
+  const date = formatDatePT(new Date(), "yyyy-MM-dd");
+  const [h, m] = new Date().toLocaleTimeString("en-GB", {
+    timeZone: "America/Los_Angeles", hour: "2-digit", minute: "2-digit", hour12: false,
+  }).split(":").map(Number);
+  return { date, minutes: h * 60 + m };
+}
+
+/**
+ * Gather everything the queue needs, and run both engines over it.
+ *
+ * Shared by getQueue and the cron that advances statuses, so the board and the
+ * automation can never disagree about how far along an order is.
+ */
+async function computeQueue(db, crewOverride) {
+  const lines = await query(db, `
+    SELECT i.id AS lineId, i.order_id AS orderId, i.cultivar_id AS cultivarId,
+           i.form, i.qty_lbs AS qtyLbs, i.sort_order AS sortOrder,
+           o.accrual_start AS accrualStart
     FROM order_items i
     JOIN orders o ON o.id = i.order_id
     WHERE o.status IN (${SCHEDULABLE.map(() => "?").join(", ")})
   `, SCHEDULABLE);
 
-  const [{ rates, fallback }, crewInfo, rank, names] = await Promise.all([
+  const rank = await savedRank(db);
+  const rankOf = new Map(rank.map((id, i) => [id, i]));
+
+  // Burn-down reaches back only as far as the earliest order still in the queue
+  // could accrue from. Scanning all of monthly_production would be both slower
+  // and wrong — it would credit an order with last season's work.
+  const earliest = lines.reduce(
+    (min, l) => (l.accrualStart && l.accrualStart < min ? l.accrualStart : min),
+    nowPT().date);
+  const entries = await recordedProduction(db, String(earliest).slice(0, 10));
+
+  const progress = allocate({
+    entries,
+    lines: lines.map(l => ({ ...l, rank: rankOf.get(l.orderId) ?? Number.MAX_SAFE_INTEGER })),
+  });
+
+  const [{ rates, fallback }, crewInfo, names] = await Promise.all([
     rateTable(db),
     derivedCrew(db),
-    savedRank(db),
     query(db, "SELECT id, name FROM cultivars"),
   ]);
 
-  const crew = Number(params.crew) > 0 ? Number(params.crew) : crewInfo.crew;
-  const nameOf = new Map(names.map(n => [n.id, n.name]));
+  const crew = Number(crewOverride) > 0 ? Number(crewOverride) : crewInfo.crew;
+  const start = nowPT();
 
-  const pools = poolDemand(items.map(i => ({
-    orderId: i.order_id, cultivarId: i.cultivar_id, form: i.form, qtyLbs: i.qty_lbs,
-  })));
-
-  // Pacific wall-clock. The scheduler is timezone-free by construction, so the
-  // one place a timezone appears is here, choosing where the queue begins.
-  const nowPT = formatDatePT(new Date(), "yyyy-MM-dd");
-  const minutesPT = (() => {
-    const hm = new Date().toLocaleTimeString("en-GB", {
-      timeZone: "America/Los_Angeles", hour: "2-digit", minute: "2-digit", hour12: false,
-    }).split(":").map(Number);
-    return hm[0] * 60 + hm[1];
-  })();
-
-  const { runs, orders } = scheduleQueue({
-    pools, rates, crew, rank, fallback,
-    start: { date: nowPT, minutes: minutesPT },
+  const scheduled = scheduleQueue({
+    blocks: orderBlocks(lines),
+    rates, crew, rank, fallback, start,
+    progress: progress.byLine,
   });
+
+  return { ...scheduled, progress, rates, fallback, crewInfo, crew, start, names };
+}
+
+async function getQueue(db, params) {
+  const q = await computeQueue(db, params.crew);
+  const nameOf = new Map(q.names.map(n => [n.id, n.name]));
 
   return successResponse({
     success: true,
-    crew,
-    crewBasis: Number(params.crew) > 0 ? "override" : crewInfo.basis,
-    crewDays: crewInfo.days,
-    start: { date: nowPT, minutes: minutesPT },
-    fallback,
-    runs: runs.map(r => ({ ...r, cultivarName: nameOf.get(r.cultivarId) || r.cultivarId })),
-    orders,
+    crew: q.crew,
+    crewBasis: Number(params.crew) > 0 ? "override" : q.crewInfo.basis,
+    crewDays: q.crewInfo.days,
+    start: q.start,
+    fallback: q.fallback,
+    blocks: q.blocks.map(b => ({
+      ...b,
+      passes: b.passes.map(p => ({
+        ...p,
+        cultivarName: nameOf.get(p.cultivarId) || p.cultivarId,
+      })),
+    })),
+    orders: q.orders,
+    // Pounds the floor recorded that no waiting order could take. Mostly this is
+    // ordinary — most of what gets trimmed is not against a wholesale order —
+    // but it is the number to look at when a block is not moving.
+    unallocated: q.progress.unallocated,
   });
 }
 
 /**
- * Persist the run ranking.
+ * Persist the block ranking.
  *
  * Every rank is rewritten rather than a fractional key inserted between two
- * neighbours. The schema keeps rank as TEXT so fractional indexing stays
- * available, but with at most a few dozen active cultivars a full rewrite in
- * one batch is simpler and has no contention worth designing around.
+ * neighbours. The column stays TEXT so fractional indexing remains available,
+ * but with a handful of live orders a full rewrite in one batch is simpler and
+ * has no contention worth designing around.
+ *
+ * Ranking moved from cultivars to ORDERS in the 2026-08-20 restructure. The
+ * `production_runs` table this used to write is gone: under order blocks every
+ * pass belongs to exactly one order, so a separate run table had nothing left
+ * to say.
  */
-async function saveRunOrder(db, body) {
+async function saveQueueOrder(db, body) {
   const order = Array.isArray(body.order) ? body.order : null;
-  if (!order) throw createError("VALIDATION_ERROR", "order must be an array of cultivar ids");
+  if (!order) throw createError("VALIDATION_ERROR", "order must be an array of order ids");
 
-  const known = await query(db, "SELECT id FROM cultivars");
+  const known = await query(db, "SELECT id FROM orders");
   const ids = new Set(known.map(k => k.id));
   for (const id of order) {
-    if (!ids.has(id)) throw createError("VALIDATION_ERROR", `Unknown cultivar "${id}"`);
+    if (!ids.has(id)) throw createError("VALIDATION_ERROR", `Unknown order "${id}"`);
   }
 
-  const stamp = Date.now();
-  const statements = [{ sql: "DELETE FROM production_runs WHERE dedicated_order_id IS NULL", params: [] }];
-  order.forEach((cultivarId, i) => {
-    statements.push({
-      sql: `INSERT INTO production_runs (id, cultivar_id, rank) VALUES (?, ?, ?)`,
-      params: [`PR-${stamp}-${i}`, cultivarId, `a${String(i).padStart(4, "0")}`],
-    });
-  });
+  const now = new Date().toISOString();
+  const statements = order.map((orderId, i) => ({
+    sql: "UPDATE orders SET queue_rank = ?, updated_at = ? WHERE id = ?",
+    params: [`a${String(i).padStart(4, "0")}`, now, orderId],
+  }));
   await transaction(db, statements);
   return successResponse({ success: true, ranked: order.length });
+}
+
+/**
+ * Move an order's accrual start.
+ *
+ * An order accrues recorded production from the moment it was saved. That is
+ * right by default and wrong whenever the paperwork lags the floor — an order
+ * agreed on Monday and typed on Wednesday would otherwise ignore two days of
+ * its own trim. This is the correction, and it is Damon's to make from his
+ * Telegram bot.
+ *
+ * Pacific wall-clock 'YYYY-MM-DD HH:MM', matching how hourly entries are
+ * recorded, so no timezone conversion stands between the two.
+ */
+async function setAccrualStart(db, body) {
+  const { orderId, accrualStart } = body;
+  if (!orderId) throw createError("VALIDATION_ERROR", "orderId is required");
+  if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(String(accrualStart || ""))) {
+    throw createError("VALIDATION_ERROR",
+      `accrualStart must be Pacific 'YYYY-MM-DD HH:MM', got "${accrualStart}"`);
+  }
+
+  const order = await queryOne(db, "SELECT id FROM orders WHERE id = ?", [orderId]);
+  if (!order) throw createError("VALIDATION_ERROR", `No order ${orderId}`);
+
+  await execute(db, "UPDATE orders SET accrual_start = ?, updated_at = ? WHERE id = ?",
+    [accrualStart, new Date().toISOString(), orderId]);
+  return successResponse({ success: true, orderId, accrualStart });
+}
+
+/**
+ * Advance statuses from what the floor has actually recorded. Decision 5:
+ * fully automatic — the first pound moves an order to `in_production`, and a
+ * fully trimmed order goes to `finished`.
+ *
+ * THIS IS A WRITE, AND getQueue IS A READ. Doing it inside getQueue would make
+ * an unauthenticated GET mutate the order book, and would only run while
+ * somebody had the page open. It belongs on the cron, which already exists.
+ *
+ * Only forward transitions are applied. Nothing here moves an order backwards,
+ * so a human who marked something finished early keeps that decision.
+ */
+export async function syncOrderStatuses(env) {
+  const db = env.DB;
+  const { progress } = await computeQueue(db);
+  const rows = await query(db, `
+    SELECT id, status FROM orders
+    WHERE status IN (${SCHEDULABLE.map(() => "?").join(", ")})
+  `, SCHEDULABLE);
+
+  const FORWARD = { in_queue: 0, in_production: 1, finished: 2 };
+  const now = new Date().toISOString();
+  const statements = [];
+  const moved = [];
+
+  for (const row of rows) {
+    const next = impliedStatus(progress.byOrder[row.id]);
+    if (!next || FORWARD[next] <= FORWARD[row.status]) continue;
+    statements.push({
+      sql: "UPDATE orders SET status = ?, updated_at = ? WHERE id = ?",
+      params: [next, now, row.id],
+    });
+    moved.push({ id: row.id, from: row.status, to: next });
+  }
+
+  if (statements.length) await transaction(db, statements);
+  return moved;
 }
 
 // ─── COVERAGE ──────────────────────────────────────────
@@ -787,13 +943,16 @@ async function importOrder(db, body) {
 
   const id = await nextId(db, "orders", "MO", new Date().getUTCFullYear());
   const now = new Date().toISOString();
+  const importedAt = nowPT();
 
   const statements = [{
     sql: `INSERT INTO orders
-            (id, customer_id, order_date, status, source, shopify_order_id, shopify_order_name, notes, updated_at)
-          VALUES (?, ?, ?, 'open', 'shopify', ?, ?, ?, ?)`,
+            (id, customer_id, order_date, status, source, shopify_order_id, shopify_order_name,
+             notes, updated_at, accrual_start, queue_rank)
+          VALUES (?, ?, ?, 'in_queue', 'shopify', ?, ?, ?, ?, ?, ?)`,
     params: [id, customerId, now.slice(0, 10), orderRef, orderRef,
-      `Imported from Shopify ${orderRef}`, now],
+      `Imported from Shopify ${orderRef}`, now,
+      moment(importedAt.date, importedAt.minutes), now],
   }];
 
   const stamp = Date.now();

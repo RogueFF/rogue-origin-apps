@@ -1,14 +1,24 @@
 /**
  * Wholesale order board — the production queue view.
  *
- * Ranks cultivar RUNS, not orders. The floor trims a lot, and both tops and
- * smalls come off the same pass, so one run serves every open order needing
- * that cultivar. Dragging a run re-ranks it and every date behind it moves.
+ * Ranks ORDER BLOCKS. One card per order, dragged to re-rank; inside it, one
+ * row per trim pass in the sequence the line items were typed. Dragging a block
+ * moves it and every date behind it.
  *
- * Drag uses native HTML5 DnD rather than a library. The repo already has two
- * incompatible idioms (Muuri on the dashboard, persisting only to localStorage;
- * native DnD in mc-v2, persisting to a server) and this is the one that already
- * writes through to a backend.
+ * Two things inside a block are worth knowing when reading this:
+ *
+ * - A pass can carry more than one line. Tops and smalls of the same cultivar
+ *   come off one lot in one pass, so those two lines share a single time span
+ *   and finish together — but each keeps its own progress bar, because the
+ *   hourly entry records the two forms separately.
+ * - Progress is real. The bars are pounds the floor actually logged, allocated
+ *   by burn-down, not a projection.
+ *
+ * Drag uses native HTML5 DnD rather than a library, for the same reason as
+ * before: the repo has two incompatible idioms and this is the one that already
+ * persists to a server.
+ *
+ * Design: docs/plans/2026-08-20-order-blocks-restructure.md
  */
 
 import { state, api, fmtLbs } from './state.js';
@@ -45,10 +55,10 @@ export function humanDate(dateStr) {
   return `${dow} ${MONTHS[m - 1]} ${d}`;
 }
 
-/** Fraction of the whole queue span that a run occupies, for the timeline bar. */
+/** Fraction of the whole queue span that a block occupies, for the timeline bar. */
 function span(queue) {
-  const first = queue.runs[0]?.start;
-  const last = queue.runs[queue.runs.length - 1]?.finish;
+  const first = queue.blocks[0]?.start;
+  const last = queue.blocks[queue.blocks.length - 1]?.finish;
   if (!first || !last) return () => ({ left: 0, width: 100 });
 
   const toDays = (p) => {
@@ -57,107 +67,137 @@ function span(queue) {
   };
   const a = toDays(first);
   const total = Math.max(toDays(last) - a, 0.5);
-  return (run) => {
-    const s = (toDays(run.start) - a) / total * 100;
-    const e = (toDays(run.finish) - a) / total * 100;
+  return (item) => {
+    const s = (toDays(item.start) - a) / total * 100;
+    const e = (toDays(item.finish) - a) / total * 100;
     return { left: s, width: Math.max(e - s, 1.5) };
   };
 }
 
-function runRow(run, idx, geom, onDrop, onOrder) {
-  const row = el('div', `run-row${run.estimated ? ' estimated' : ''}`);
-  row.draggable = true;
-  row.dataset.cultivarId = run.cultivarId;
-  row.dataset.index = String(idx);
+const pctText = (p) => `${Math.round(p * 100)}%`;
 
-  const handle = el('div', 'run-handle');
-  handle.setAttribute('aria-hidden', 'true');
-  handle.textContent = '⠿';
-  row.append(handle);
+/** A progress bar for one line item: pounds recorded against pounds ordered. */
+function lineRow(line) {
+  const row = el('div', `seg-line${line.pct >= 1 ? ' filled' : ''}`);
+  row.append(el('span', 'sl-form', t(line.form)));
 
-  const main = el('div', 'run-main');
-  const top = el('div', 'run-top');
-  top.append(el('span', 'run-rank', String(idx + 1)));
-  top.append(el('span', 'run-cv', run.cultivarName));
-  if (run.estimated) top.append(el('span', 'run-flag', t('no_history')));
-  top.append(el('span', 'run-lot', `${fmtLbs(run.lotLbs)} ${t('lot')}`));
-  main.append(top);
+  const track = el('div', 'sl-track');
+  const fill = el('div', 'sl-fill');
+  fill.style.width = `${Math.min(100, line.pct * 100)}%`;
+  track.append(fill);
+  row.append(track);
 
-  // Orders are reached from the runs that feed them — this is the only route
-  // to an order that is still in the queue, so the refs have to be live.
-  const feeds = el('div', 'run-feeds');
-  feeds.append(el('span', 'run-pool', t('pooled')));
-  run.orderIds.forEach((oid, i) => {
-    if (i) feeds.append(document.createTextNode(' '));
-    const link = el('button', 'run-order', oid);
-    link.type = 'button';
-    link.dataset.orderId = oid;
-    // Stop the click reaching the row, which is a drag surface.
-    link.addEventListener('click', (e) => { e.stopPropagation(); onOrder(oid); });
-    link.addEventListener('mousedown', (e) => e.stopPropagation());
-    feeds.append(link);
-  });
-  main.append(feeds);
+  row.append(el('span', 'sl-num', `${fmtLbs(line.doneLbs)} / ${fmtLbs(line.qtyLbs)}`));
+  row.append(el('span', 'sl-pct', pctText(line.pct)));
+  return row;
+}
 
-  // Coverage is per cultivar and form — which is exactly what a run is, so it
-  // belongs here rather than on an order. Amber, not red: mid-season most
-  // stock is raw, so being short on packed goods is the ordinary state.
-  const cov = coverageFor(run.cultivarId);
+/** One trim pass inside a block — a lot, its dates, and the lines it fills. */
+function passRow(pass) {
+  const row = el('div', `pass-row${pass.estimated ? ' estimated' : ''}`);
+
+  const top = el('div', 'pass-top');
+  top.append(el('span', 'pass-cv', pass.cultivarName));
+  if (pass.jointPass) {
+    // Worth saying on the card, because it is the one place the board's
+    // arithmetic will look wrong to someone counting line items: two lines,
+    // one stretch of floor time.
+    top.append(el('span', 'pass-joint', t('one_pass')));
+  }
+  if (pass.estimated) top.append(el('span', 'run-flag', t('no_history')));
+  top.append(el('span', 'pass-lot', `${fmtLbs(pass.lotLbs)} ${t('lot')}`));
+  top.append(el('span', 'pass-eta', `${t('done')} ${humanDate(pass.finish.date)}`));
+  row.append(top);
+
+  pass.lines.forEach(l => row.append(lineRow(l)));
+
+  // Coverage is per cultivar and form — which is what a pass is, so it belongs
+  // here rather than on the order. Amber, not red: mid-season most stock is
+  // raw, so being short on packed goods is the ordinary state.
+  const cov = coverageFor(pass.cultivarId);
   if (cov.length) {
-    const flag = el('div', 'run-short');
     const worst = cov[0];
+    const flag = el('div', 'run-short');
     flag.append(el('span', 'rs-icon', '▲'));
-    const sacks = worst.rawSacks
-      ? `${worst.rawSacks} ${t('raw_sacks')}`
-      : t('no_raw');
+    const sacks = worst.rawSacks ? `${worst.rawSacks} ${t('raw_sacks')}` : t('no_raw');
     flag.append(el('span', null,
       `${fmtLbs(worst.shortfallLbs)} ${t('over_packed')} · ${sacks}`));
-    main.append(flag);
+    row.append(flag);
   }
 
-  const bind = run.binding === 'smalls' ? t('smalls') : t('tops');
-  const need = run.binding === 'smalls' ? run.smallsLbs : run.topsLbs;
   const sized = el('div', 'run-sized');
+  // The outstanding figure, not the ordered one — it is what the lot above was
+  // sized on, and showing the ordered amount here would not add up to the hours.
+  const bind = pass.binding === 'smalls' ? t('smalls') : t('tops');
+  const need = pass.binding === 'smalls' ? pass.remainingSmallsLbs : pass.remainingTopsLbs;
   sized.append(document.createTextNode(`${t('sized_by')} `));
   sized.append(el('em', null, `${bind} ${fmtLbs(need)}`));
   sized.append(document.createTextNode(
-    ` · ${t('yields')} ${fmtLbs(run.yieldTops)} / ${fmtLbs(run.yieldSmalls)}`));
-  main.append(sized);
-  row.append(main);
-
-  const tl = el('div', 'run-tl');
-  const track = el('div', 'run-track');
-  const { left, width } = geom(run);
-  const bar = el('div', `run-bar${run.estimated ? ' est' : ''}`);
-  bar.style.left = `${left}%`;
-  bar.style.width = `${width}%`;
-  bar.append(el('span', null, `${run.workDays}d`));
-  track.append(bar);
-  tl.append(track);
-
-  const eta = el('div', 'run-eta');
-  eta.append(el('b', null, `${t('done')} ${humanDate(run.finish.date)}`));
-  eta.append(el('span', null, `· ${run.ratePerTrimmerHour.toFixed(2)} ${t('per_hr')}`));
-  tl.append(eta);
-  row.append(tl);
-
-  // --- drag ---
-  row.addEventListener('dragstart', (e) => {
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', run.cultivarId);
-    row.classList.add('dragging');
-  });
-  row.addEventListener('dragend', () => row.classList.remove('dragging'));
-  row.addEventListener('dragover', (e) => { e.preventDefault(); row.classList.add('drop-target'); });
-  row.addEventListener('dragleave', () => row.classList.remove('drop-target'));
-  row.addEventListener('drop', (e) => {
-    e.preventDefault();
-    row.classList.remove('drop-target');
-    const moved = e.dataTransfer.getData('text/plain');
-    if (moved && moved !== run.cultivarId) onDrop(moved, run.cultivarId);
-  });
+    ` · ${t('yields')} ${fmtLbs(pass.yieldTops)} / ${fmtLbs(pass.yieldSmalls)}`));
+  row.append(sized);
 
   return row;
+}
+
+function blockCard(block, idx, geom, onDrop, onOrder) {
+  const card = el('div', `block-card${block.dependsOnEstimate ? ' estimated' : ''}`);
+  card.draggable = true;
+  card.dataset.orderId = block.orderId;
+
+  const head = el('div', 'block-head');
+  const handle = el('div', 'run-handle');
+  handle.setAttribute('aria-hidden', 'true');
+  handle.textContent = '⠿';
+  head.append(handle);
+  head.append(el('span', 'run-rank', String(idx + 1)));
+
+  // The order id is the route into the editor. It has to stop the click
+  // reaching the card, which is a drag surface.
+  const link = el('button', 'block-id', block.orderId);
+  link.type = 'button';
+  link.addEventListener('click', (e) => { e.stopPropagation(); onOrder(block.orderId); });
+  link.addEventListener('mousedown', (e) => e.stopPropagation());
+  head.append(link);
+
+  head.append(el('span', 'block-customer', block.customerName || ''));
+  head.append(el('span', 'qm-spacer'));
+  head.append(el('span', 'block-pct', pctText(block.pct)));
+  head.append(el('b', 'block-eta', `${t('done')} ${humanDate(block.finish.date)}`));
+  card.append(head);
+
+  const track = el('div', 'run-track');
+  const { left, width } = geom(block);
+  const bar = el('div', `run-bar${block.dependsOnEstimate ? ' est' : ''}`);
+  bar.style.left = `${left}%`;
+  bar.style.width = `${width}%`;
+  const fill = el('div', 'run-bar-fill');
+  fill.style.width = `${Math.min(100, block.pct * 100)}%`;
+  bar.append(fill);
+  bar.append(el('span', null, `${fmtLbs(block.doneLbs)} / ${fmtLbs(block.totalLbs)}`));
+  track.append(bar);
+  card.append(track);
+
+  const passes = el('div', 'block-passes');
+  block.passes.forEach(p => passes.append(passRow(p)));
+  card.append(passes);
+
+  // --- drag ---
+  card.addEventListener('dragstart', (e) => {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', block.orderId);
+    card.classList.add('dragging');
+  });
+  card.addEventListener('dragend', () => card.classList.remove('dragging'));
+  card.addEventListener('dragover', (e) => { e.preventDefault(); card.classList.add('drop-target'); });
+  card.addEventListener('dragleave', () => card.classList.remove('drop-target'));
+  card.addEventListener('drop', (e) => {
+    e.preventDefault();
+    card.classList.remove('drop-target');
+    const moved = e.dataTransfer.getData('text/plain');
+    if (moved && moved !== block.orderId) onDrop(moved, block.orderId);
+  });
+
+  return card;
 }
 
 export function renderQueue() {
@@ -167,7 +207,7 @@ export function renderQueue() {
 
   if (!q) { wrap.append(el('div', 'loading', t('loading'))); return; }
 
-  if (!q.runs.length) {
+  if (!q.blocks?.length) {
     const empty = el('div', 'empty-state');
     empty.append(el('i', 'ph-duotone ph-calendar-blank'));
     empty.append(el('p', null, t('queue_empty')));
@@ -181,21 +221,33 @@ export function renderQueue() {
     ? t('crew_override')
     : `${t('crew_derived')} ${q.crewDays} ${t('days')}`));
   meta.append(el('span', 'qm-spacer'));
-  meta.append(el('span', 'qm-clear', `${t('clears')} ${humanDate(q.runs[q.runs.length - 1].finish.date)}`));
+  meta.append(el('span', 'qm-clear', `${t('clears')} ${humanDate(q.blocks[q.blocks.length - 1].finish.date)}`));
   wrap.append(meta);
 
+  // Customer names live on the order, not on the schedule. Joined here so the
+  // card can show one without the queue endpoint duplicating the order book.
+  const nameOf = new Map(state.orders.map(o => [o.id, o.customerName]));
   const geom = span(q);
-  const list = el('div', 'run-list');
-  q.runs.forEach((run, i) => list.append(runRow(run, i, geom, reorder, openOrder)));
+  const list = el('div', 'block-list');
+  q.blocks.forEach((b, i) =>
+    list.append(blockCard({ ...b, customerName: nameOf.get(b.orderId) }, i, geom, reorder, openOrder)));
   wrap.append(list);
 
-  const note = el('p', 'queue-note', t('queue_note'));
-  wrap.append(note);
+  wrap.append(el('p', 'queue-note', t('queue_note')));
+
+  // Pounds the floor recorded that no waiting order could take. Usually
+  // ordinary — most trim is not against a wholesale order — but it is the first
+  // thing to look at when a block is not moving, so it is not hidden.
+  const stray = (q.unallocated || []).reduce((s, u) => s + u.lbs, 0);
+  if (stray > 0) {
+    wrap.append(el('p', 'queue-note stray',
+      `${fmtLbs(stray)} ${t('unallocated_note')}`));
+  }
 }
 
 /** Move `moved` to sit where `target` currently is, then persist and reload. */
 async function reorder(moved, target) {
-  const ids = state.queue.runs.map(r => r.cultivarId);
+  const ids = state.queue.blocks.map(b => b.orderId);
   const from = ids.indexOf(moved);
   const to = ids.indexOf(target);
   if (from < 0 || to < 0) return;
@@ -204,12 +256,12 @@ async function reorder(moved, target) {
 
   // Repaint immediately from the new order so the drag feels instant, then
   // reconcile against whatever the server actually schedules.
-  state.queue.runs = ids.map(id => state.queue.runs.find(r => r.cultivarId === id));
+  state.queue.blocks = ids.map(id => state.queue.blocks.find(b => b.orderId === id));
   renderQueue();
 
   if (!await ensureUnlocked()) { loadQueue(); return; }
   try {
-    await api.post('saveRunOrder', { order: ids });
+    await api.post('saveQueueOrder', { order: ids });
     await loadQueue();
   } catch (e) {
     showToast(String(e.message || e), 'error');
