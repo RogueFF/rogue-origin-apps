@@ -11,11 +11,13 @@
 
 import { state, loadAll, loadCoverage, STATUSES, statusLabel, option } from './state.js';
 import { renderOffQueue } from './render.js';
-import { loadQueue, renderQueue, onOpenOrder, onDeleteOrder, onEditLines } from './queue.js';
+import {
+  loadQueue, renderQueue, onOpenOrder, onDeleteOrder, onEditLines, onEditOrder,
+} from './queue.js';
 import {
   openEditor, closeEditor, saveOrder, deleteOrder, addLine, onBuildStatus,
   fillCustomerSelect, openCustomerModal, closeCustomerModal, saveCustomer,
-  deleteCustomer, selectedCustomer, patchOrderItems,
+  deleteCustomer, selectedCustomer, patchOrder,
 } from './editor.js';
 import { registerLabels, t, toggleLang } from '../shared/i18n.js';
 import { initTheme, toggleTheme } from '../shared/theme.js';
@@ -51,7 +53,7 @@ registerLabels({
     save: 'Save', cancel: 'Cancel', delete: 'Delete',
     saved: 'saved', deleted: 'deleted',
     confirm_delete: 'Delete order', confirm_delete_customer: 'Delete customer',
-    edit_order: 'Edit order',
+    edit_order: 'Edit order', order_ref: 'Shopify order #',
     edit_customer: 'Edit customer', trim_order: 'Order',
     move_up: 'Move up, line', move_down: 'Move down, line',
     name: 'Contact name', company: 'Company', city: 'City', region: 'State / country',
@@ -112,7 +114,7 @@ registerLabels({
     save: 'Guardar', cancel: 'Cancelar', delete: 'Eliminar',
     saved: 'guardado', deleted: 'eliminado',
     confirm_delete: 'Eliminar pedido', confirm_delete_customer: 'Eliminar cliente',
-    edit_order: 'Editar pedido',
+    edit_order: 'Editar pedido', order_ref: 'Pedido Shopify n.º',
     edit_customer: 'Editar cliente', trim_order: 'Orden',
     move_up: 'Subir, línea', move_down: 'Bajar, línea',
     name: 'Nombre de contacto', company: 'Empresa', city: 'Ciudad', region: 'Estado / país',
@@ -233,7 +235,16 @@ function wire() {
       showToast(t('err_last_line'), 'error');
       return;
     }
-    if (await patchOrderItems(order, items)) {
+    if (await patchOrder(order, { items })) {
+      paintLock();
+      refresh();
+    }
+  });
+
+  onEditOrder(async (orderId, fields) => {
+    const order = state.orders.find(o => o.id === orderId);
+    if (!order) return;
+    if (await patchOrder(order, fields)) {
       paintLock();
       refresh();
     }

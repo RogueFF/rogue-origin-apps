@@ -57,6 +57,47 @@ export function onDeleteOrder(fn) { deleteOrder = fn; }
 let editLines = async () => {};
 export function onEditLines(fn) { editLines = fn; }
 
+/** Commit an order-level field change made on a card. Set by index.js. */
+let editOrder = async () => {};
+export function onEditOrder(fn) { editOrder = fn; }
+
+/**
+ * The order's number, editable in place.
+ *
+ * `MO-2026-002` is an internal key — the operator does not use it. Orders are
+ * referenced by their Shopify order number, so that is what the card shows, and
+ * the generated id is only the fallback while the number is still blank.
+ *
+ * The id used to be a button that opened the editor. It does not need to be:
+ * the card has an explicit edit control now, which frees this to be the field
+ * it should always have been.
+ */
+function orderRefField(block) {
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'block-id';
+  input.value = block.shopifyOrderName || '';
+  input.placeholder = block.orderId;
+  input.size = Math.max(9, (block.shopifyOrderName || block.orderId).length);
+  input.setAttribute('aria-label', t('order_ref'));
+
+  const revert = () => { input.value = block.shopifyOrderName || ''; };
+
+  input.addEventListener('click', (e) => e.stopPropagation());
+  input.addEventListener('mousedown', (e) => e.stopPropagation());
+  input.addEventListener('blur', () => {
+    const next = input.value.trim();
+    if (next === (block.shopifyOrderName || '')) return;
+    editOrder(block.orderId, { shopifyOrderName: next });
+  });
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') { revert(); input.blur(); }
+  });
+  return input;
+}
+
 /**
  * A control on a block card.
  *
@@ -402,13 +443,7 @@ function blockCard(block, idx, geom, onDrop, onOrder) {
   head.append(handle);
   head.append(el('span', 'run-rank', String(idx + 1)));
 
-  // The order id is the route into the editor. It has to stop the click
-  // reaching the card, which is a drag surface.
-  const link = el('button', 'block-id', block.orderId);
-  link.type = 'button';
-  link.addEventListener('click', (e) => { e.stopPropagation(); onOrder(block.orderId); });
-  link.addEventListener('mousedown', (e) => e.stopPropagation());
-  head.append(link);
+  head.append(orderRefField(block));
 
   head.append(el('span', 'block-customer', block.customerName || ''));
   head.append(el('span', 'qm-spacer'));
@@ -517,12 +552,14 @@ export function renderQueue() {
   // card can show one without the queue endpoint duplicating the order book.
   const nameOf = new Map(state.orders.map(o => [o.id, o.customerName]));
   const statusOf = new Map(state.orders.map(o => [o.id, o.status]));
+  const refOf = new Map(state.orders.map(o => [o.id, o.shopifyOrderName]));
   const geom = span(q);
   const list = el('div', 'block-list');
   q.blocks.forEach((b, i) =>
     list.append(blockCard({
       ...b,
       customerName: nameOf.get(b.orderId),
+      shopifyOrderName: refOf.get(b.orderId),
       running: statusOf.get(b.orderId) === 'in_production',
     }, i, geom, reorder, openOrder)));
   wrap.append(list);
