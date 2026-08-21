@@ -46,6 +46,29 @@ function coverageFor(cultivarId) {
 let openOrder = () => {};
 export function onOpenOrder(fn) { openOrder = fn; }
 
+let deleteOrder = () => {};
+export function onDeleteOrder(fn) { deleteOrder = fn; }
+
+/**
+ * A control on a block card.
+ *
+ * The card is a drag surface, so both the press and the click have to be kept
+ * off it — otherwise reaching for a button starts dragging the order under the
+ * operator's hand.
+ */
+function cardAction(cls, icon, label, onActivate) {
+  const btn = el('button', `block-action ${cls}`);
+  btn.type = 'button';
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
+  const i = document.createElement('i');
+  i.className = icon;
+  btn.append(i);
+  btn.addEventListener('click', (e) => { e.stopPropagation(); onActivate(); });
+  btn.addEventListener('mousedown', (e) => e.stopPropagation());
+  return btn;
+}
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /** '2026-09-05' -> 'Sat Sep 5'. Parsed as parts, never through Date's local parsing. */
@@ -284,6 +307,14 @@ function blockCard(block, idx, geom, onDrop, onOrder) {
   head.append(el('span', 'qm-spacer'));
   head.append(el('span', 'block-pct', pctText(block.pct)));
   head.append(el('b', 'block-eta', `${t('done')} ${humanDate(block.finish.date)}`));
+
+  // Until now the only way into an order was clicking its id, which reads as a
+  // label rather than a control. These say what they do.
+  head.append(cardAction('block-edit', 'ph-duotone ph-pencil-simple',
+    `${t('edit_order')} ${block.orderId}`, () => onOrder(block.orderId)));
+  head.append(cardAction('block-del', 'ph-duotone ph-trash',
+    `${t('delete')} ${block.orderId}`, () => deleteOrder(block.orderId)));
+
   card.append(head);
 
   const track = el('div', 'run-track');

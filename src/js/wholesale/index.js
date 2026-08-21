@@ -11,7 +11,7 @@
 
 import { state, loadAll, loadCoverage, STATUSES, statusLabel, option } from './state.js';
 import { renderOffQueue } from './render.js';
-import { loadQueue, renderQueue, onOpenOrder } from './queue.js';
+import { loadQueue, renderQueue, onOpenOrder, onDeleteOrder } from './queue.js';
 import {
   openEditor, closeEditor, saveOrder, deleteOrder, addLine, onBuildStatus,
   fillCustomerSelect, openCustomerModal, closeCustomerModal, saveCustomer,
@@ -51,6 +51,7 @@ registerLabels({
     save: 'Save', cancel: 'Cancel', delete: 'Delete',
     saved: 'saved', deleted: 'deleted',
     confirm_delete: 'Delete order', confirm_delete_customer: 'Delete customer',
+    edit_order: 'Edit order',
     edit_customer: 'Edit customer', trim_order: 'Order',
     move_up: 'Move up, line', move_down: 'Move down, line',
     name: 'Contact name', company: 'Company', city: 'City', region: 'State / country',
@@ -110,6 +111,7 @@ registerLabels({
     save: 'Guardar', cancel: 'Cancelar', delete: 'Eliminar',
     saved: 'guardado', deleted: 'eliminado',
     confirm_delete: 'Eliminar pedido', confirm_delete_customer: 'Eliminar cliente',
+    edit_order: 'Editar pedido',
     edit_customer: 'Editar cliente', trim_order: 'Orden',
     move_up: 'Subir, línea', move_down: 'Bajar, línea',
     name: 'Nombre de contacto', company: 'Empresa', city: 'Ciudad', region: 'Estado / país',
@@ -211,6 +213,11 @@ function wire() {
   onOpenOrder((orderId) => {
     const order = state.orders.find(o => o.id === orderId);
     if (order) openEditor(order);
+  });
+
+  onDeleteOrder(async (orderId) => {
+    const order = state.orders.find(o => o.id === orderId);
+    if (order && await deleteOrder(order)) refresh();
   });
 
   $('done-toggle').onclick = () => {

@@ -265,17 +265,28 @@ export async function saveOrder() {
   }
 }
 
-export async function deleteOrder() {
-  if (!state.editing) return false;
-  if (!confirm(`${t('confirm_delete')} ${state.editing.id}?`)) return false;
+/**
+ * Delete an order, from the editor or straight from its card on the queue.
+ *
+ * Defaults to whatever the editor has open, which is how the modal's Delete
+ * calls it. Passing an order lets the queue delete one without opening it —
+ * and in that case there is no form to write a failure into, so the error goes
+ * to a toast instead of a field nobody is looking at.
+ */
+export async function deleteOrder(order = state.editing) {
+  if (!order) return false;
+  if (!confirm(`${t('confirm_delete')} ${order.id}?`)) return false;
   if (!await ensureUnlocked()) return false;
+  const inEditor = state.editing?.id === order.id;
   try {
-    await api.post('deleteOrder', { id: state.editing.id });
-    showToast(`${state.editing.id} ${t('deleted')}`, 'success');
-    closeEditor();
+    await api.post('deleteOrder', { id: order.id });
+    showToast(`${order.id} ${t('deleted')}`, 'success');
+    if (inEditor) closeEditor();
     return true;
   } catch (e) {
-    $('form-error').textContent = String(e.message || e);
+    const msg = String(e.message || e);
+    if (inEditor) $('form-error').textContent = msg;
+    else showToast(msg, 'error');
     return false;
   }
 }
