@@ -1628,14 +1628,6 @@
 :root { color-scheme: dark; }
 [data-theme="light"] { color-scheme: light; }
 
-/* `.btn` sets `display: inline-flex`, which OUTRANKS the `hidden` attribute's
-   `display: none`. So `$('btn-delete').hidden = true` did nothing and Delete
-   showed on a brand-new order that has nothing to delete. The page already
-   carried one-off `[hidden]` patches for the modal backdrop, the queue bar and
-   the done list, which is the same bug found three times and fixed three times;
-   this is the general rule those were standing in for. */
-[hidden] { display: none !important; }
-
 /* ---- legibility on glass ----
    Measured, not assumed: each of these was screenshotted on the rendered pane
    and its contrast computed, before and after the glass went on.
@@ -1659,32 +1651,6 @@
 [data-theme="light"] .block-pct { color: var(--green-dark); }
 
 /* ---- the quality floor ---- */
-
-/* shared-base.css styles `.skip-link:focus` but never hides the link when it is
-   NOT focused, so it sits in the page as stray blue text. On desktop the fixed
-   sidebar happens to cover it; on a phone the sidebar is off-canvas and it shows
-   at the top of the board. Fixed here rather than in shared-base because this
-   pass is scoped to this page — the other seven apps carry the same bug and
-   should get the same two rules when someone touches them. */
-.skip-link {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-.skip-link:focus {
-  width: auto;
-  height: auto;
-  margin: 0;
-  overflow: visible;
-  clip: auto;
-  clip-path: none;
-}
 
 @media (prefers-reduced-motion: reduce) {
   .app-container::before { animation: none; }
