@@ -20,9 +20,11 @@ const VALID_TABLES = new Set([
   'complaints',
   // Irrigation reporting
   'irrigation_log',
-  // Order blocks — line items, the production-run queue (0014), and the
-  // canonical cultivar dimension the lead-time engine joins through (0017)
-  'order_items', 'production_runs', 'cultivars', 'cultivar_aliases',
+  // Order blocks — line items (0014) and the canonical cultivar dimension the
+  // lead-time engine joins through (0017). `production_runs` was here too until
+  // 0019 dropped it; an allowlist naming a table that no longer exists only
+  // makes it easier to write a query that cannot run.
+  'order_items', 'cultivars', 'cultivar_aliases',
 ]);
 
 /**

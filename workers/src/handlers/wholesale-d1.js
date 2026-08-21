@@ -372,9 +372,13 @@ async function prepareItems(db, items) {
 
 async function deleteOrder(db, body) {
   if (!body.id) throw createError('VALIDATION_ERROR', 'Order id is required');
+  // `production_runs` was dropped by migration 0019 — under order blocks every
+  // pass belongs to exactly one order, so a separate run table had nothing left
+  // to say. This still tried to delete from it, and because the three run in one
+  // batch, "no such table" aborted the whole thing: deleting any order failed
+  // outright rather than partially.
   const statements = [
     { sql: 'DELETE FROM order_items WHERE order_id = ?', params: [body.id] },
-    { sql: 'DELETE FROM production_runs WHERE dedicated_order_id = ?', params: [body.id] },
     { sql: 'DELETE FROM orders WHERE id = ?', params: [body.id] },
   ];
   await transaction(db, statements);
