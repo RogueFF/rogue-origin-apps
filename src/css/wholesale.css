@@ -1186,3 +1186,396 @@
   .done-row { grid-template-columns: 1fr 1fr; gap: 4px 12px; }
   .done-row .dr-cultivars { white-space: normal; }
 }
+
+/* ============================================
+   LIQUID GLASS — "cure room"
+   ============================================
+
+   Appended deliberately rather than woven in: every rule here overrides a solid
+   surface defined above, and keeping the whole treatment in one block means it
+   can be read, judged, or deleted as a unit. Equal specificity, so source order
+   decides — do not move this section up the file.
+
+   The metaphor is the cure room, not a phone OS: cold green panes with the gold
+   of dried flower as the only warm light behind them. The page's one indulgence
+   is the progress bar, where the "liquid" is resin filling a glass tube and the
+   meniscus marks how far the floor has actually got. That is the burn-down this
+   board was built for, so the effect carries information rather than decorating.
+
+   SCOPE: this page only. shared-base.css is untouched, so the other seven apps
+   are exactly as they were.
+   ============================================ */
+
+:root {
+  --glass-pane: rgba(255, 255, 255, 0.055);
+  --glass-pane-strong: rgba(255, 255, 255, 0.085);
+  --glass-stroke: rgba(255, 255, 255, 0.10);
+  --glass-spec: rgba(255, 255, 255, 0.45);
+  --glass-blur: 20px;
+  --glass-sat: 1.5;
+  --resin: 228, 170, 79;          /* --ro-gold, as channels for alpha mixing */
+  --pane-shadow: 0 8px 32px rgba(0, 0, 0, 0.30), 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+}
+
+[data-theme="light"] {
+  /* Light needs far more body in the pane. At dark-theme alpha the type drops
+     under 4.5:1 against the ambient wash, and this board gets read across a
+     bright trim room. */
+  --glass-pane: rgba(255, 255, 255, 0.55);
+  --glass-pane-strong: rgba(255, 255, 255, 0.72);
+  /* Green, not white. A white hairline on a cream page is invisible, which is
+     why the first pass read as flat panels rather than glass. */
+  --glass-stroke: rgba(102, 137, 113, 0.28);
+  --glass-spec: rgba(255, 255, 255, 0.95);
+  --pane-shadow: 0 10px 34px rgba(45, 58, 50, 0.13), 0 1px 0 rgba(255, 255, 255, 0.85) inset;
+}
+
+/* ---- the light behind the glass ----
+   Translucency over a flat colour is just a paler rectangle. This is the field
+   the panes actually refract: two soft sources, green for the room and gold for
+   the flower, fixed so they do not travel with the scroll. */
+
+.app-container { position: relative; isolation: isolate; }
+
+.app-container::before {
+  content: '';
+  position: fixed;
+  inset: -20%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(46% 40% at 16% 10%, rgba(102, 137, 113, 0.55), transparent 68%),
+    radial-gradient(40% 36% at 86% 6%,  rgba(228, 170, 79, 0.38), transparent 70%),
+    radial-gradient(50% 44% at 88% 52%, rgba(102, 137, 113, 0.30), transparent 70%),
+    radial-gradient(58% 50% at 12% 78%, rgba(191, 142, 78, 0.26), transparent 70%),
+    radial-gradient(54% 46% at 62% 96%, rgba(102, 137, 113, 0.34), transparent 70%);
+  filter: blur(22px);
+  animation: cure-drift 48s ease-in-out infinite alternate;
+}
+
+[data-theme="light"] .app-container::before {
+  background:
+    radial-gradient(46% 40% at 16% 10%, rgba(102, 137, 113, 0.40), transparent 68%),
+    radial-gradient(40% 36% at 86% 6%,  rgba(228, 170, 79, 0.34), transparent 70%),
+    radial-gradient(50% 44% at 88% 52%, rgba(102, 137, 113, 0.26), transparent 70%),
+    radial-gradient(58% 50% at 12% 78%, rgba(191, 142, 78, 0.30), transparent 70%),
+    radial-gradient(54% 46% at 62% 96%, rgba(102, 137, 113, 0.24), transparent 70%);
+}
+
+/* One slow breath, not a lava lamp. 48s is below the threshold where the eye
+   tracks it as motion — it reads as the light changing, which is what a room does. */
+@keyframes cure-drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to   { transform: translate3d(-3%, 2%, 0) scale(1.08); }
+}
+
+.main { position: relative; z-index: 1; }
+
+/* ---- panes ----
+   One treatment, applied by hand because there is no build step to give us a mixin. */
+
+.sidebar,
+.header,
+.queue-bar,
+.block-card,
+.done-head,
+.modal-content {
+  background: var(--glass-pane);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  border: 1px solid var(--glass-stroke);
+}
+
+/* A real pane catches light on its top edge only. A uniform 1px border reads as
+   a drawn rectangle; this reads as an edge. */
+.block-card,
+.modal-content,
+.queue-bar,
+.done-head {
+  position: relative;
+  box-shadow: var(--pane-shadow);
+}
+
+.block-card::before,
+.modal-content::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--glass-spec) 22%, var(--glass-spec) 60%, transparent);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.sidebar {
+  background: var(--glass-pane-strong);
+  border-right: 1px solid var(--glass-stroke);
+}
+[data-theme="light"] .sidebar {
+  background: var(--glass-pane-strong);
+  border-right: 1px solid var(--glass-stroke);
+}
+
+.header {
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+}
+
+.queue-bar {
+  border-radius: var(--radius-lg);
+  margin: var(--space-md) var(--space-lg) 0;
+}
+
+/* ---- the block card ---- */
+
+.block-card {
+  border-radius: var(--radius-lg);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.block-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.34), 0 1px 0 rgba(255, 255, 255, 0.07) inset;
+}
+[data-theme="light"] .block-card:hover {
+  box-shadow: 0 14px 40px rgba(45, 58, 50, 0.14), 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+}
+
+.block-card.drop-target {
+  border-color: var(--ro-green);
+  box-shadow: 0 0 0 2px rgba(102, 137, 113, 0.45), var(--pane-shadow);
+}
+
+.block-head { border-bottom: 1px solid var(--glass-stroke); }
+
+/* Passes are panes within a pane — lighter, and with no blur of their own.
+   Stacking a second backdrop-filter inside the first costs an extra composite
+   layer per row and buys nothing visible: the card behind them is already
+   frosted, so there is no fresh backdrop left to sample. */
+.pass-row {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+[data-theme="light"] .pass-row {
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+/* ---- THE SIGNATURE: resin in a glass tube ----
+   The bar is the block's span; the fill is what has actually been trimmed. The
+   glass here is doing the one job that matters on this page. */
+
+.run-track {
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--glass-stroke);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.30);
+}
+[data-theme="light"] .run-track {
+  background: rgba(45, 58, 50, 0.07);
+  box-shadow: inset 0 1px 3px rgba(45, 58, 50, 0.10);
+}
+
+.run-bar {
+  background: linear-gradient(180deg, var(--green-light), rgba(102, 137, 113, 0.92));
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+.run-bar.est {
+  background: linear-gradient(180deg, var(--gold-light), rgba(228, 170, 79, 0.92));
+}
+
+/* The resin. Denser at the bottom, because that is how a liquid sits.
+   The trailing edge is square: rounding it turns a 1% fill into a pill floating
+   in the tube, which reads as a rendering fault rather than as "barely started".
+   min-width keeps a real-but-tiny amount visible instead of rounding to nothing. */
+.run-bar-fill {
+  background: linear-gradient(180deg,
+    rgba(var(--resin), 0.32), rgba(var(--resin), 0.78));
+  box-shadow: inset 0 -6px 14px rgba(var(--resin), 0.42);
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  min-width: 3px;
+}
+
+/* The meniscus — the leading edge, and the only hard specular on the page. It
+   sits exactly at the percentage trimmed, so the brightest thing on the card is
+   also the most load-bearing number on it. */
+.run-bar-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -1px;
+  width: 2px;
+  background: linear-gradient(180deg, transparent, var(--glass-spec), transparent);
+  box-shadow: 0 0 10px 2px rgba(var(--resin), 0.55);
+}
+
+/* Zero progress must not glow. A meniscus at 0% would read as "started". */
+.run-bar-fill[style*="width: 0%"]::after { display: none; }
+
+.run-bar span {
+  position: relative;
+  z-index: 1;
+  color: #08100b;
+  font-weight: 700;
+}
+
+/* ---- the line burn-down ---- */
+
+.sl-track {
+  background: rgba(0, 0, 0, 0.20);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.28);
+}
+[data-theme="light"] .sl-track {
+  background: rgba(45, 58, 50, 0.09);
+  box-shadow: inset 0 1px 2px rgba(45, 58, 50, 0.10);
+}
+
+.sl-fill {
+  background: linear-gradient(90deg, rgba(102, 137, 113, 0.75), var(--ro-green));
+  box-shadow: 0 0 8px rgba(102, 137, 113, 0.45);
+}
+.seg-line.filled .sl-fill {
+  background: linear-gradient(90deg, rgba(var(--resin), 0.7), var(--ro-gold));
+  box-shadow: 0 0 10px rgba(var(--resin), 0.5);
+}
+.seg-line.filled .sl-pct { color: var(--ro-gold); }
+[data-theme="light"] .seg-line.filled .sl-pct { color: var(--ro-gold-text); }
+
+/* ---- controls ---- */
+
+/* The crew number is an input, and the first pass left it with no surface at
+   all — it rendered as a hole in the queue bar. It is also the one field on
+   this page that changes every date below it, so it should look editable. */
+.queue-bar input[type="number"] {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--glass-stroke);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+[data-theme="light"] .queue-bar input[type="number"] {
+  background: rgba(255, 255, 255, 0.85);
+}
+.queue-bar input[type="number"]:focus-visible {
+  outline: 2px solid var(--ro-green);
+  outline-offset: 1px;
+  background: rgba(255, 255, 255, 0.12);
+}
+[data-theme="light"] .queue-bar input[type="number"]:focus-visible {
+  background: #fff;
+}
+
+.icon-btn,
+.btn-secondary,
+.chip {
+  background: var(--glass-pane-strong);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  backdrop-filter: blur(12px) saturate(1.4);
+  border: 1px solid var(--glass-stroke);
+}
+
+.btn-primary {
+  background: linear-gradient(180deg, var(--green-light), var(--ro-green));
+  border: 1px solid rgba(255, 255, 255, 0.20);
+  box-shadow: 0 2px 10px rgba(102, 137, 113, 0.35), 0 1px 0 rgba(255, 255, 255, 0.25) inset;
+}
+
+.modal-backdrop {
+  background: rgba(8, 12, 10, 0.55);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.modal-content { border-radius: var(--radius-lg); }
+
+.done-head { border-radius: var(--radius-md); }
+.done-row {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+[data-theme="light"] .done-row {
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+}
+
+/* ---- legibility on glass ----
+   Measured, not assumed: each of these was screenshotted on the rendered pane
+   and its contrast computed, before and after the glass went on.
+
+   Two things came out of that. The frosted panes cost real contrast on the
+   dark theme — the block's pound count fell from 5.03 to 4.16 and crossed under
+   AA — so the type here is pulled up a step to pay it back. And several of these
+   captions were ALREADY failing before this pass: `sized by …` measured 1.00
+   against its own background, which is invisible, not merely low. Muted grey on
+   a dark surface was the culprit both times, so the muted role is retired on
+   this page in favour of the secondary one. */
+
+.run-sized,
+.queue-note,
+.pass-eta,
+.sl-pct {
+  color: var(--text-secondary);
+}
+
+.sl-num { color: var(--text); }
+
+.block-pct { color: var(--green-light); }
+[data-theme="light"] .block-pct { color: var(--green-dark); }
+
+/* ---- the quality floor ---- */
+
+/* shared-base.css styles `.skip-link:focus` but never hides the link when it is
+   NOT focused, so it sits in the page as stray blue text. On desktop the fixed
+   sidebar happens to cover it; on a phone the sidebar is off-canvas and it shows
+   at the top of the board. Fixed here rather than in shared-base because this
+   pass is scoped to this page — the other seven apps carry the same bug and
+   should get the same two rules when someone touches them. */
+.skip-link {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.skip-link:focus {
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  clip-path: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-container::before { animation: none; }
+  .block-card, .block-card:hover { transition: none; transform: none; }
+}
+
+@media (max-width: 640px) {
+  /* A frosted pane per card is a separate composite layer per card, and this is
+     read on a phone in a trim room. The cards keep their tint and their edge;
+     they stop sampling what is behind them. The ambient field is still visible
+     around them, so the page still reads as glass. */
+  .block-card {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--glass-pane-strong);
+  }
+  .app-container::before { filter: blur(40px); animation: none; }
+}
+
+/* Firefox without the flag, and anything else lacking backdrop-filter, gets
+   solid surfaces rather than near-transparent ones — a fallback has to stay
+   readable, not pretty. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .sidebar, .header, .queue-bar, .block-card, .done-head, .modal-content {
+    background: var(--bg-card);
+  }
+}
