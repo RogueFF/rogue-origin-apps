@@ -1147,18 +1147,6 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
   white-space: nowrap;
 }
 
-.queue-note.stray { border-left-color: var(--warning); color: var(--text-secondary); }
-
-.queue-note {
-  margin: var(--space-lg) 0 0;
-  padding-left: 14px;
-  border-left: 2px solid var(--border);
-  max-width: 70ch;
-  font-size: 0.8125rem;
-  color: var(--text-muted);
-  line-height: 1.5;
-}
-
 /* ---- the promise date on an order card ---- */
 
 .oc-eta {
@@ -1798,7 +1786,6 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
    a dark surface was the culprit both times, so the muted role is retired on
    this page in favour of the secondary one. */
 
-.queue-note,
 .field label,
 .lines-head,
 .line-del {
