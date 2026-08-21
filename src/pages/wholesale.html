@@ -14,7 +14,7 @@
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/duotone/style.css">
   <!-- Styles -->
   <link rel="stylesheet" href="../css/shared-base.css?h=c18beb73">
-  <link rel="stylesheet" href="../css/wholesale.css?h=6c4a0605">
+  <link rel="stylesheet" href="../css/wholesale.css?h=93bb9ac7">
 </head>
 <body class="dark-mode">
   <!-- RO Home Button -->
@@ -103,32 +103,67 @@
 
       <!-- Settings, out of the way until wanted. The board is read far more
            often than it is configured. -->
-      <div class="fab-wrap">
-        <div id="fab-panel" class="fab-panel" hidden role="dialog" aria-label="Board settings">
-          <div class="fab-row">
-            <label for="q-crew" data-i18n="crew">Crew</label>
-            <div class="fab-crew">
-              <input id="q-crew" type="number" min="0.5" step="0.5" inputmode="decimal">
-              <button id="q-reset" class="chip" hidden data-i18n="crew_use_derived">Use derived</button>
-            </div>
-          </div>
-          <p id="q-basis" class="crew-basis"></p>
+      <!-- Settings, out of the way until wanted: the board is read far more
+           often than it is configured.
 
-          <div class="fab-row">
-            <span data-i18n="tg_updates">Telegram updates</span>
-            <button id="bell-btn" class="switch" role="switch" aria-checked="false">
-              <span class="switch-knob"></span>
-            </button>
-          </div>
-
-          <button id="btn-new" class="btn btn-primary fab-new" data-i18n="new_order">New order</button>
+           TWO LAYERS ON PURPOSE. The gooey merge is an SVG blur-and-contrast
+           filter, and a CSS filter applies to an element's whole subtree — put
+           an icon or a number inside the filtered container and it is smeared
+           along with the blob. So `.fab-goo` holds nothing but the shapes, and
+           `.fab-ui` carries the real controls, unfiltered, at the same
+           coordinates. The two are kept in step by one set of custom
+           properties rather than by two lists of numbers. -->
+      <div class="fab-wrap" id="fab-wrap">
+        <div class="fab-goo" aria-hidden="true">
+          <span class="goo goo-crew"></span>
+          <span class="goo goo-bell"></span>
+          <span class="goo goo-new"></span>
+          <span class="goo goo-trigger"></span>
         </div>
 
-        <button id="fab" class="fab" aria-expanded="false" aria-controls="fab-panel"
-                title="Board settings">
-          <i class="ph-duotone ph-sliders-horizontal"></i>
-        </button>
+        <div class="fab-ui">
+          <div class="fab-act act-crew">
+            <button id="q-down" class="crew-step" type="button" aria-label="Fewer trimmers">−</button>
+            <input id="q-crew" type="number" min="0.5" step="0.5" inputmode="decimal"
+                   aria-label="Crew">
+            <button id="q-up" class="crew-step" type="button" aria-label="More trimmers">+</button>
+          </div>
+
+          <button id="bell-btn" class="fab-act act-bell" role="switch" aria-checked="false">
+            <i class="ph-duotone ph-bell-slash"></i>
+          </button>
+
+          <button id="btn-new" class="fab-act act-new" data-i18n-title="new_order" title="New order">
+            <i class="ph-duotone ph-file-plus"></i>
+          </button>
+
+          <button id="fab" class="fab-act act-trigger" aria-expanded="false"
+                  aria-controls="fab-wrap" title="Board settings">
+            <i class="ph-duotone ph-plus"></i>
+          </button>
+        </div>
+
+        <!-- Outside the filter and outside the blobs: prose, which a metaball
+             filter would turn to soup. -->
+        <div class="fab-caption">
+          <p id="q-basis" class="crew-basis"></p>
+          <button id="q-reset" class="chip" hidden data-i18n="crew_use_derived">Use derived</button>
+        </div>
       </div>
+
+      <!-- The metaball filter. Blur first so neighbouring shapes bleed into one
+           another, then crush the alpha ramp so the overlap reads as a single
+           surface with a taut edge rather than a soft gradient. -->
+      <svg class="goo-defs" aria-hidden="true" focusable="false">
+        <defs>
+          <filter id="goo">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="9" result="blur"/>
+            <feColorMatrix in="blur" mode="matrix"
+              values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -10" result="goo"/>
+            <feBlend in="SourceGraphic" in2="goo"/>
+          </filter>
+        </defs>
+      </svg>
 
       <section class="done-section">
         <button id="done-toggle" class="done-head" aria-expanded="false" aria-controls="done-list">
@@ -255,7 +290,7 @@
     "../js/shared/toast.js": "../js/shared/toast.js?h=2ff39553",
     "../js/wholesale/auth.js": "../js/wholesale/auth.js?h=ab61014e",
     "../js/wholesale/editor.js": "../js/wholesale/editor.js?h=a47ad23d",
-    "../js/wholesale/index.js": "../js/wholesale/index.js?h=cdd7bef7",
+    "../js/wholesale/index.js": "../js/wholesale/index.js?h=dfabf291",
     "../js/wholesale/queue.js": "../js/wholesale/queue.js?h=87491b2e",
     "../js/wholesale/render.js": "../js/wholesale/render.js?h=c23704b8",
     "../js/wholesale/state.js": "../js/wholesale/state.js?h=05b152fe"
@@ -263,6 +298,6 @@
 }
 </script>
 <!-- module-hashes:end -->
-  <script type="module" src="../js/wholesale/index.js?h=cdd7bef7"></script>
+  <script type="module" src="../js/wholesale/index.js?h=dfabf291"></script>
 </body>
 </html>

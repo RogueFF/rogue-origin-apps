@@ -2102,141 +2102,200 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
               border-color var(--t-fast) var(--ease);
 }
 
-/* ---- the settings button ----
-   The board is read far more often than it is configured, so the crew figure,
-   the Telegram switch and New order sit behind one button instead of a strip
-   across the top of every screen. */
+
+/* ============================================
+   THE SETTINGS BUTTON — liquid split into a fan of actions
+   ============================================
+
+   One plus that separates into three controls. While they are close together
+   the metaball filter reads them as a single mass; as they travel apart the
+   neck between them thins and snaps, which is the whole effect.
+
+   TWO LAYERS, and it is not optional. A CSS filter applies to the entire
+   subtree, so an icon or a number inside the filtered container is blurred
+   along with the blob behind it. `.fab-goo` therefore holds nothing but
+   shapes, and `.fab-ui` carries the real controls on top, unfiltered. Both are
+   driven by the same `--y` per action, so the shape and the control it stands
+   for cannot drift apart.
+   ============================================ */
+
+.goo-defs { position: absolute; width: 0; height: 0; }
 
 .fab-wrap {
   position: fixed;
   right: var(--space-lg);
   bottom: var(--space-lg);
   z-index: 60;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 10px;
+  width: 60px;
+  height: 60px;
 }
 
-.fab {
-  min-width: 52px;
-  min-height: 52px;
+/* Where each action sits once the mass has split. The trigger stays at 0. */
+.act-new,  .goo-new  { --y: -80px;  --d: 0.02s; }
+.act-bell, .goo-bell { --y: -156px; --d: 0.06s; }
+.act-crew, .goo-crew { --y: -232px; --d: 0.10s; }
+
+.fab-goo,
+.fab-ui {
+  position: absolute;
+  inset: 0;
+}
+
+.fab-goo {
+  filter: url(#goo);
+  /* Chrome will not composite an SVG filter on a layer it thinks is flat. */
+  transform: translateZ(0);
+}
+
+/* ---- the shapes ---- */
+
+.goo {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 60px;
+  height: 60px;
+  border-radius: 30px;
+  background: var(--ro-green);
+  transform: translateY(0) scale(0.6);
+  opacity: 0;
+  transition:
+    transform 0.42s var(--ease-in-out-back) var(--d),
+    opacity 0.2s var(--ease) var(--d);
+}
+.goo-trigger { opacity: 1; transform: none; transition: none; }
+
+/* The crew control is a pill, not a disc — it holds a number and two steppers.
+   The filter does not care what shape it is fed. */
+.goo-crew { width: 150px; border-radius: 30px; }
+
+.fab-wrap.open .goo {
+  transform: translateY(var(--y)) scale(1);
+  opacity: 1;
+}
+
+/* ---- the controls ---- */
+
+.fab-act {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 60px;
+  height: 60px;
   display: grid;
   place-items: center;
   border: 0;
-  border-radius: 50%;
-  background: linear-gradient(180deg, var(--green-light), var(--ro-green));
+  border-radius: 30px;
+  background: transparent;      /* the blob underneath is the surface */
   color: #0a0f0c;
   font-size: 1.375rem;
   cursor: pointer;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.25) inset,
-    0 6px 20px rgba(0, 0, 0, 0.40);
-  transition: transform var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease);
+  transform: translateY(0) scale(0.6);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 0.42s var(--ease-in-out-back) var(--d),
+    opacity 0.2s var(--ease) var(--d);
 }
-.fab:hover { transform: translateY(-2px); box-shadow: 0 1px 0 rgba(255,255,255,0.3) inset, 0 12px 30px rgba(0,0,0,0.5); }
-.fab:active { transform: scale(0.94); }
-.fab:focus-visible { outline: 2px solid var(--ro-gold); outline-offset: 3px; }
-.fab.open i { transform: rotate(90deg); }
-.fab i { transition: transform var(--t-base) var(--ease); }
 
-/* The panel is closed most of the time, so the button that opens it carries the
-   one piece of state worth seeing from outside: whether Telegram is being told. */
-.fab.notifying::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--ro-gold);
-  box-shadow: 0 0 0 2px var(--bg);
+.fab-wrap.open .fab-act {
+  transform: translateY(var(--y)) scale(1);
+  opacity: 1;
+  pointer-events: auto;
 }
-.fab { position: relative; }
 
-.fab-panel {
-  width: min(320px, calc(100vw - 2 * var(--space-md)));
-  padding: 14px;
-  border-radius: var(--r-card);
-  background: rgba(16, 20, 18, 0.97);
-  -webkit-backdrop-filter: blur(18px) saturate(1.4);
-  backdrop-filter: blur(18px) saturate(1.4);
-  border: 1px solid var(--glass-stroke);
-  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55);
-  display: grid;
-  gap: 12px;
-  animation: fab-in var(--t-base) var(--ease);
+.act-trigger {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  transition: transform 0.42s var(--ease-in-out-back);
 }
-[data-theme="light"] .fab-panel {
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 16px 44px rgba(45, 58, 50, 0.24);
-}
-@keyframes fab-in {
-  from { opacity: 0; transform: translateY(10px) scale(0.97); }
-}
-@media (prefers-reduced-motion: reduce) { .fab-panel { animation: none; } }
+/* A plus becomes a close by turning an eighth of a circle. */
+.fab-wrap.open .act-trigger { transform: rotate(135deg); }
+.act-trigger:active { transform: scale(0.92); }
+.fab-wrap.open .act-trigger:active { transform: rotate(135deg) scale(0.92); }
 
-.fab-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 0.875rem;
-  color: var(--text);
-}
-.fab-row label, .fab-row > span { font-weight: 500; }
+.fab-act:focus-visible { outline: 2px solid var(--ro-gold); outline-offset: 4px; }
 
-.fab-crew { display: flex; align-items: center; gap: 8px; }
-.fab-crew input {
-  width: 72px;
-  text-align: right;
+/* Lit when the cron is pushing to Telegram. The blob under it is recoloured
+   rather than the icon, so the state is visible at blob size. */
+.fab-wrap.notifying .goo-bell { background: var(--ro-gold); }
+
+/* ---- the crew pill ---- */
+
+.act-crew {
+  width: 150px;
+  grid-template-columns: 38px 1fr 38px;
+  gap: 0;
+  place-items: stretch;
+}
+
+.crew-step {
+  border: 0;
+  background: transparent;
+  color: #0a0f0c;
+  font-size: 1.125rem;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: 30px;
+  transition: background var(--t-fast) var(--ease);
+}
+.crew-step:hover { background: rgba(0, 0, 0, 0.12); }
+.crew-step:active { background: rgba(0, 0, 0, 0.2); }
+
+#q-crew {
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #0a0f0c;
   font-family: var(--font-mono);
+  font-size: 0.9375rem;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
-  padding: 8px 10px;
-  min-height: 40px;
+  text-align: center;
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
+/* The spinner is what used to set an empty field to its minimum. The steppers
+   either side do the same job without a target small enough to hit by accident. */
+#q-crew::-webkit-outer-spin-button,
+#q-crew::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+#q-crew:focus { outline: none; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.35); background: transparent; }
+#q-crew.overridden { color: #4a2f00; }
 
-.fab-panel .crew-basis {
-  margin: -6px 0 0;
+/* ---- the caption ---- */
+
+.fab-caption {
+  position: absolute;
+  right: 0;
+  bottom: 300px;
+  width: max-content;
+  max-width: 46vw;
+  text-align: right;
+  opacity: 0;
+  transform: translateX(8px);
+  pointer-events: none;
+  transition: opacity var(--t-fast) var(--ease) 0.14s, transform var(--t-base) var(--ease) 0.14s;
+}
+.fab-wrap.open .fab-caption { opacity: 1; transform: none; pointer-events: auto; }
+
+.fab-caption .crew-basis {
+  margin: 0 0 6px;
   font-family: var(--font-mono);
   font-size: 0.6875rem;
   color: var(--text-muted);
   white-space: normal;
 }
 
-.fab-new { width: 100%; justify-content: center; }
-
-/* ---- the Telegram switch ----
-   A switch rather than a bell icon: it is the one control here whose effect
-   lands on somebody else's phone, and a toggle says "on or off" more plainly
-   than an icon that changes shape. */
-.switch {
-  width: 46px;
-  height: 28px;
-  flex: none;
-  border: 0;
-  border-radius: 99px;
-  background: rgba(255, 255, 255, 0.14);
-  cursor: pointer;
-  padding: 3px;
-  display: flex;
-  transition: background var(--t-base) var(--ease);
+/* Reduced motion keeps the split, drops the travel. */
+@media (prefers-reduced-motion: reduce) {
+  .goo, .fab-act, .fab-caption, .act-trigger { transition-duration: 0.01s; }
 }
-[data-theme="light"] .switch { background: rgba(45, 58, 50, 0.18); }
-.switch.on { background: var(--ro-gold); }
-
-.switch-knob {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-  transition: transform var(--t-base) var(--ease);
-}
-.switch.on .switch-knob { transform: translateX(18px); }
-.switch:focus-visible { outline: 2px solid var(--ro-green); outline-offset: 2px; }
 
 @media (max-width: 640px) {
   .fab-wrap { right: var(--space-md); bottom: var(--space-md); }
+  .fab-caption { max-width: 60vw; }
 }
