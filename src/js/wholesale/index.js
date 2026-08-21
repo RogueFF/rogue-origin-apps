@@ -15,6 +15,7 @@ import { loadQueue, renderQueue, onOpenOrder } from './queue.js';
 import {
   openEditor, closeEditor, saveOrder, deleteOrder, addLine, onBuildStatus,
   fillCustomerSelect, openCustomerModal, closeCustomerModal, saveCustomer,
+  deleteCustomer, selectedCustomer,
 } from './editor.js';
 import { registerLabels, t, toggleLang } from '../shared/i18n.js';
 import { initTheme, toggleTheme } from '../shared/theme.js';
@@ -49,7 +50,9 @@ registerLabels({
     pick_cultivar: 'Select cultivar…', pick_customer: 'Select customer…',
     save: 'Save', cancel: 'Cancel', delete: 'Delete',
     saved: 'saved', deleted: 'deleted',
-    confirm_delete: 'Delete order',
+    confirm_delete: 'Delete order', confirm_delete_customer: 'Delete customer',
+    edit_customer: 'Edit customer', trim_order: 'Order',
+    move_up: 'Move up, line', move_down: 'Move down, line',
     name: 'Contact name', company: 'Company', city: 'City', region: 'State / country',
     err_customer: 'Pick a customer first.',
     err_cultivar: 'pick a cultivar.',
@@ -106,7 +109,9 @@ registerLabels({
     pick_cultivar: 'Seleccione cultivar…', pick_customer: 'Seleccione cliente…',
     save: 'Guardar', cancel: 'Cancelar', delete: 'Eliminar',
     saved: 'guardado', deleted: 'eliminado',
-    confirm_delete: 'Eliminar pedido',
+    confirm_delete: 'Eliminar pedido', confirm_delete_customer: 'Eliminar cliente',
+    edit_customer: 'Editar cliente', trim_order: 'Orden',
+    move_up: 'Subir, línea', move_down: 'Bajar, línea',
     name: 'Nombre de contacto', company: 'Empresa', city: 'Ciudad', region: 'Estado / país',
     err_customer: 'Seleccione un cliente primero.',
     err_cultivar: 'seleccione un cultivar.',
@@ -229,13 +234,43 @@ function wire() {
   $('btn-delete').onclick = async () => { if (await deleteOrder()) refresh(); };
   $('btn-add-line').onclick = () => addLine();
 
+  // Only offer to edit a customer once one is chosen.
+  const syncEditCustomer = () => { $('btn-edit-customer').disabled = !$('f-customer').value; };
+
+  // The shared i18n helper walks [data-i18n] and [data-i18n-placeholder] but not
+  // titles, and a tooltip is user-facing text like any other. Rather than extend
+  // the shared module for all eight apps over one button, this page keeps its
+  // own titles in step.
+  const applyTitles = () => {
+    $('btn-edit-customer').title = t('edit_customer');
+    $('btn-edit-customer').setAttribute('aria-label', t('edit_customer'));
+  };
+  applyTitles();
+  document.addEventListener('ro:langchange', applyTitles);
+  $('f-customer').addEventListener('change', syncEditCustomer);
+  $('btn-edit-customer').onclick = () => {
+    const c = selectedCustomer();
+    if (c) openCustomerModal(c);
+  };
+
   $('c-cancel').onclick = () => closeCustomerModal();
+  $('c-delete').onclick = async () => {
+    if (!await deleteCustomer()) return;
+    paintLock();
+    // The order editor is still open behind this, holding a customer that no
+    // longer exists, so its selection has to be cleared rather than left
+    // pointing at a deleted row.
+    $('f-customer').value = '';
+    syncEditCustomer();
+    await refresh();
+  };
   $('c-save').onclick = async () => {
     const id = await saveCustomer();
     if (!id) return;
     paintLock();
     await refresh();
-    $('f-customer').value = id;   // select what was just created
+    $('f-customer').value = id;   // select what was just created or corrected
+    syncEditCustomer();
   };
 
   // Clicking the backdrop or pressing Escape closes whichever modal is open.
