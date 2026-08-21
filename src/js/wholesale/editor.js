@@ -291,6 +291,58 @@ export async function deleteOrder(order = state.editing) {
   }
 }
 
+/**
+ * Rewrite an order's line items without opening the editor.
+ *
+ * `saveOrder` replaces the whole item set, so every quick edit on a card has to
+ * send the complete list with one thing changed — send a subset and the rest of
+ * the order is deleted. Rebuilding from `order.items` keeps each line's ENTERED
+ * quantity and unit rather than its canonical pounds: a line typed as 100 kg
+ * must go back as 100 kg, or a round-trip through this quietly restates it as
+ * 220.462 lb.
+ */
+export async function patchOrderItems(order, items) {
+  if (!await ensureUnlocked()) return false;
+  try {
+    await api.post('saveOrder', {
+      id: order.id,
+      customerId: order.customerId,
+      status: order.status,
+      orderDate: order.orderDate,
+      paymentTerms: order.paymentTerms,
+      notes: order.notes,
+      items: items.map(i => ({
+        cultivarId: i.cultivarId,
+        form: i.form,
+        qty: Number(i.enteredQty ?? i.qtyLbs),
+        unit: i.enteredUnit || 'lb',
+        unitPrice: Number(i.unitPrice) || 0,
+      })),
+    });
+    return true;
+  } catch (e) {
+    showToast(String(e.message || e), 'error');
+    return false;
+  }
+}
+
+/**
+ * The order's lines grouped by cultivar, in the order the floor runs them.
+ *
+ * This is the same grouping `orderBlocks` does on the server, reproduced here so
+ * the card's reorder arrows move a whole PASS. Tops and smalls of one cultivar
+ * come off a single lot, so moving one without the other would be asking the
+ * floor to run the same lot twice.
+ */
+export function passGroups(order) {
+  const groups = new Map();
+  for (const item of order.items) {
+    if (!groups.has(item.cultivarId)) groups.set(item.cultivarId, []);
+    groups.get(item.cultivarId).push(item);
+  }
+  return [...groups.values()];
+}
+
 // ─── CUSTOMERS ─────────────────────────────────────────
 
 export function fillCustomerSelect() {
