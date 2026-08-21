@@ -840,6 +840,9 @@
   flex-wrap: wrap;
 }
 
+/* The order's number, as a field. It reads as text until touched — a card of
+   orders should not look like a form — but it is a real input, so it is
+   reachable by tab and by tap without a hidden click-to-edit mode. */
 .block-id {
   font-family: var(--font-mono);
   font-size: 0.8125rem;
@@ -847,14 +850,25 @@
   color: var(--text);
   background: none;
   border: none;
+  border-radius: 7px;
+  padding: 2px 6px;
+  min-width: 8ch;
   /* No dashed underline. It was there to say "this is clickable" back when the
      id was the ONLY way into an order; the card now carries an explicit edit
      control, and a link-styled identifier just reads as decoration. */
   padding: 0;
   cursor: pointer;
 }
-.block-id:hover { color: var(--ro-green); }
-[data-theme="light"] .block-id:hover { color: var(--green-dark); }
+.block-id:hover { background: rgba(255, 255, 255, 0.08); }
+[data-theme="light"] .block-id:hover { background: rgba(45, 58, 50, 0.08); }
+.block-id:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 0 2px var(--ro-green);
+}
+[data-theme="light"] .block-id:focus { background: #fff; }
+/* The generated MO key, shown only while no real number has been typed. */
+.block-id::placeholder { color: var(--text-muted); font-weight: 400; }
 .block-id:focus-visible { outline: 2px solid var(--ro-green); outline-offset: 2px; }
 
 .block-customer {

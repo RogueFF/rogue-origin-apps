@@ -229,6 +229,11 @@ async function getOrders(db, params) {
         customerName: o.customer_name,
         orderDate: o.order_date,
         status: o.status,
+        // The number the operator actually uses. `MO-2026-002` is an internal
+        // key; orders are referenced by their Shopify order number, which
+        // `importOrder` already writes and which is now editable by hand for
+        // orders that were entered rather than imported.
+        shopifyOrderName: o.shopify_order_name,
         paymentTerms: o.payment_terms,
         notes: o.notes,
         source: o.source,
@@ -273,6 +278,14 @@ async function saveOrder(db, body) {
     notes: body.notes ?? '',
     updated_at: new Date().toISOString(),
   };
+
+  // Only written when the caller says something about it. An absent key must
+  // leave an imported order's number alone rather than blanking it — the
+  // difference between "no opinion" and "clear this" matters here, because
+  // importOrder sets this and a later edit from anywhere else would wipe it.
+  if (body.shopifyOrderName !== undefined) {
+    orderFields.shopify_order_name = String(body.shopifyOrderName || '').trim() || null;
+  }
 
   const statements = [];
   if (isNew) {

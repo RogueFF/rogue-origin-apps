@@ -30,6 +30,7 @@ export function openEditor(order) {
 
   $('modal-title').textContent = order ? order.id : t('new_order');
   buildStatus(order?.status);
+  $('f-ref').value = order?.shopifyOrderName || '';
   $('f-customer').value = order?.customerId || '';
   // Setting .value in script does not fire `change`, so the edit affordance has
   // to be synced here or it stays disabled on an order that has a customer.
@@ -231,6 +232,7 @@ export async function saveOrder() {
   const payload = {
     id: state.editing?.id,
     customerId,
+    shopifyOrderName: $('f-ref').value.trim(),
     status: $('f-status').value,
     orderDate: $('f-date').value,
     paymentTerms: $('f-terms').value,
@@ -292,7 +294,7 @@ export async function deleteOrder(order = state.editing) {
 }
 
 /**
- * Rewrite an order's line items without opening the editor.
+ * Rewrite part of an order without opening the editor.
  *
  * `saveOrder` replaces the whole item set, so every quick edit on a card has to
  * send the complete list with one thing changed — send a subset and the rest of
@@ -301,8 +303,9 @@ export async function deleteOrder(order = state.editing) {
  * must go back as 100 kg, or a round-trip through this quietly restates it as
  * 220.462 lb.
  */
-export async function patchOrderItems(order, items) {
+export async function patchOrder(order, overrides = {}) {
   if (!await ensureUnlocked()) return false;
+  const items = overrides.items || order.items;
   try {
     await api.post('saveOrder', {
       id: order.id,
@@ -311,6 +314,7 @@ export async function patchOrderItems(order, items) {
       orderDate: order.orderDate,
       paymentTerms: order.paymentTerms,
       notes: order.notes,
+      shopifyOrderName: overrides.shopifyOrderName ?? order.shopifyOrderName ?? '',
       items: items.map(i => ({
         cultivarId: i.cultivarId,
         form: i.form,
