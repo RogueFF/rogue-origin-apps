@@ -31,6 +31,9 @@ export function openEditor(order) {
   $('modal-title').textContent = order ? order.id : t('new_order');
   buildStatus(order?.status);
   $('f-customer').value = order?.customerId || '';
+  // Setting .value in script does not fire `change`, so the edit affordance has
+  // to be synced here or it stays disabled on an order that has a customer.
+  $('btn-edit-customer').disabled = !$('f-customer').value;
   $('f-status').value = order?.status || 'in_queue';
   $('f-date').value = order?.orderDate || new Date().toISOString().slice(0, 10);
   $('f-terms').value = order?.paymentTerms || '';
@@ -76,6 +79,44 @@ function renderLines() {
   lines.forEach((line, idx) => {
     const row = document.createElement('div');
     row.className = 'line-row';
+
+    // TRIM ORDER. The position of a line in this list is the order the floor
+    // runs it in — `sort_order` is written as the index on save, and the
+    // scheduler sequences a block's passes by it. That has been true since the
+    // restructure, but nothing here could change a position: the only way to
+    // put a strain first was to delete every line and retype them in order.
+    const rank = document.createElement('div');
+    rank.className = 'line-rank';
+
+    const move = (from, to) => {
+      lines.splice(to, 0, lines.splice(from, 1)[0]);
+      renderLines();
+      // Keep the keyboard on the control that was just used, at its new home.
+      const rows = $('line-rows').querySelectorAll('.line-row');
+      rows[to]?.querySelector(from > to ? '.line-up' : '.line-down')?.focus();
+    };
+
+    const up = document.createElement('button');
+    up.type = 'button';
+    up.className = 'line-move line-up';
+    up.textContent = '↑';
+    up.disabled = idx === 0;
+    up.setAttribute('aria-label', `${t('move_up')} ${idx + 1}`);
+    up.onclick = () => move(idx, idx - 1);
+
+    const down = document.createElement('button');
+    down.type = 'button';
+    down.className = 'line-move line-down';
+    down.textContent = '↓';
+    down.disabled = idx === lines.length - 1;
+    down.setAttribute('aria-label', `${t('move_down')} ${idx + 1}`);
+    down.onclick = () => move(idx, idx + 1);
+
+    const num = document.createElement('span');
+    num.className = 'line-num';
+    num.textContent = String(idx + 1);
+
+    rank.append(up, num, down);
 
     const cultivar = document.createElement('select');
     cultivar.setAttribute('aria-label', t('cultivar'));
@@ -126,7 +167,7 @@ function renderLines() {
       renderLines();
     };
 
-    row.append(cultivar, form, qty, unit, price, del);
+    row.append(rank, cultivar, form, qty, unit, price, del);
 
     updateConv(row, line);
     wrap.append(row);
@@ -252,14 +293,61 @@ export function fillCustomerSelect() {
   });
 }
 
-export function openCustomerModal() {
-  $('c-name').value = '';
-  $('c-company').value = '';
-  $('c-city').value = '';
-  $('c-state').value = '';
+/**
+ * The customer being edited, or null when creating one.
+ *
+ * `saveCustomer` and `deleteCustomer` have always existed on the API — the
+ * latter even refuses politely when the customer still has orders — but nothing
+ * on the page could reach either. A customer could be created and then never
+ * corrected or removed, which is how a buyer called "test" ends up attached to
+ * real orders.
+ */
+let editingCustomer = null;
+
+export function openCustomerModal(customer = null) {
+  editingCustomer = customer;
+  $('c-name').value = customer?.name || '';
+  $('c-company').value = customer?.company || '';
+  $('c-city').value = customer?.city || '';
+  $('c-state').value = customer?.state || '';
   $('c-error').textContent = '';
+  $('c-title').textContent = customer
+    ? (customer.company || customer.name)
+    : t('new_customer');
+  // Nothing to delete when the record does not exist yet.
+  $('c-delete').hidden = !customer;
   $('customer-modal').hidden = false;
   $('c-name').focus();
+}
+
+/** The customer currently chosen in the order editor, or null. */
+export function selectedCustomer() {
+  const id = $('f-customer').value;
+  return state.customers.find(c => c.id === id) || null;
+}
+
+/**
+ * Delete the customer being edited.
+ *
+ * The refusal path matters more than the happy one: orders.customer_id is a
+ * hard foreign key, so the server refuses while any order still points here and
+ * says how many. That message is the useful part, so it is shown in the form
+ * rather than swallowed into a toast that disappears.
+ */
+export async function deleteCustomer() {
+  if (!editingCustomer) return false;
+  const label = editingCustomer.company || editingCustomer.name;
+  if (!confirm(`${t('confirm_delete_customer')} ${label}?`)) return false;
+  if (!await ensureUnlocked()) return false;
+  try {
+    await api.post('deleteCustomer', { id: editingCustomer.id });
+    showToast(`${label} ${t('deleted')}`, 'success');
+    closeCustomerModal();
+    return true;
+  } catch (e) {
+    $('c-error').textContent = String(e.message || e);
+    return false;
+  }
 }
 
 export function closeCustomerModal() {
@@ -273,14 +361,19 @@ export async function saveCustomer() {
   if (!await ensureUnlocked()) return null;
   try {
     const res = await api.post('saveCustomer', {
+      // Sending the id is what turns this into an update; without it the server
+      // inserts a second customer with the corrected details and the orders stay
+      // pointed at the old one.
+      id: editingCustomer?.id,
       name: name || company,
       company,
       city: $('c-city').value.trim(),
       state: $('c-state').value.trim(),
     });
     showToast(`${company || name} ${t('saved')}`, 'success');
+    const id = editingCustomer?.id || res.id;
     closeCustomerModal();
-    return res.id;
+    return id;
   } catch (e) {
     $('c-error').textContent = String(e.message || e);
     return null;

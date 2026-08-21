@@ -576,10 +576,54 @@
 .line-labels,
 .line-row {
   display: grid;
-  grid-template-columns: minmax(140px, 2.2fr) minmax(96px, 1fr) minmax(84px, 0.9fr) minmax(74px, 0.8fr) minmax(90px, 1fr) 44px;
+  grid-template-columns: 76px minmax(130px, 2.1fr) minmax(92px, 1fr) minmax(80px, 0.9fr) minmax(70px, 0.8fr) minmax(86px, 1fr) 44px;
   gap: 8px;
   align-items: center;
 }
+
+/* Trim order. A line's position in this list IS the order the floor runs the
+   strains in — `sort_order` is written as the index on save and the scheduler
+   sequences a block's passes by it. Until now that was an invisible consequence
+   of the order lines happened to be typed in, with no way to change it short of
+   deleting them all and retyping. */
+.line-rank {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.line-num {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  min-width: 16px;
+  text-align: center;
+}
+
+.line-move {
+  min-width: 26px;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.875rem;
+  line-height: 1;
+}
+.line-move:hover:not(:disabled) { color: var(--text); border-color: var(--glass-stroke); }
+.line-move:disabled { opacity: 0.25; cursor: default; }
+.line-move:focus-visible { outline: 2px solid var(--ro-green); outline-offset: 1px; }
+
+/* A select with a button hung off its right edge. */
+.field-with-action { display: flex; gap: 6px; align-items: stretch; }
+.field-with-action select { flex: 1; min-width: 0; }
+.icon-btn.small { min-width: 44px; padding: 0 10px; flex: none; }
+.icon-btn.small:disabled { opacity: 0.35; cursor: default; }
 
 .line-labels {
   font-family: var(--font-mono);

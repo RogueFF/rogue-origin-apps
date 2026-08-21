@@ -14,7 +14,7 @@
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/duotone/style.css">
   <!-- Styles -->
   <link rel="stylesheet" href="../css/shared-base.css?h=c18beb73">
-  <link rel="stylesheet" href="../css/wholesale.css?h=ee550b95">
+  <link rel="stylesheet" href="../css/wholesale.css?h=aa29488f">
 </head>
 <body class="dark-mode">
   <!-- RO Home Button -->
@@ -138,7 +138,13 @@
         <div class="field-row">
           <div class="field">
             <label for="f-customer" data-i18n="customer">Customer</label>
-            <select id="f-customer"></select>
+            <div class="field-with-action">
+              <select id="f-customer"></select>
+              <button id="btn-edit-customer" class="icon-btn small" type="button"
+                      title="Edit customer" disabled>
+                <i class="ph-duotone ph-pencil-simple"></i>
+              </button>
+            </div>
           </div>
           <div class="field">
             <label for="f-status" data-i18n="status">Status</label>
@@ -163,6 +169,7 @@
         </div>
 
         <div class="line-labels" aria-hidden="true">
+          <span data-i18n="trim_order">Order</span>
           <span data-i18n="cultivar">Cultivar</span>
           <span data-i18n="form">Form</span>
           <span data-i18n="quantity">Quantity</span>
@@ -223,6 +230,8 @@
       </div>
       <div class="modal-foot">
         <span class="spacer"></span>
+        <button id="c-delete" class="btn btn-danger" hidden data-i18n="delete">Delete</button>
+        <span class="spacer"></span>
         <button id="c-cancel" class="btn btn-secondary" data-i18n="cancel">Cancel</button>
         <button id="c-save" class="btn btn-primary" data-i18n="save">Save</button>
       </div>
@@ -267,8 +276,8 @@
     "../js/shared/theme.js": "../js/shared/theme.js?h=b4816114",
     "../js/shared/toast.js": "../js/shared/toast.js?h=2ff39553",
     "../js/wholesale/auth.js": "../js/wholesale/auth.js?h=ab61014e",
-    "../js/wholesale/editor.js": "../js/wholesale/editor.js?h=d0d5e858",
-    "../js/wholesale/index.js": "../js/wholesale/index.js?h=908b5259",
+    "../js/wholesale/editor.js": "../js/wholesale/editor.js?h=7a7e9369",
+    "../js/wholesale/index.js": "../js/wholesale/index.js?h=f673cd67",
     "../js/wholesale/queue.js": "../js/wholesale/queue.js?h=749be103",
     "../js/wholesale/render.js": "../js/wholesale/render.js?h=9cb004aa",
     "../js/wholesale/state.js": "../js/wholesale/state.js?h=5590411d"
@@ -276,6 +285,6 @@
 }
 </script>
 <!-- module-hashes:end -->
-  <script type="module" src="../js/wholesale/index.js?h=908b5259"></script>
+  <script type="module" src="../js/wholesale/index.js?h=f673cd67"></script>
 </body>
 </html>
