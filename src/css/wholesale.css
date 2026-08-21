@@ -1348,7 +1348,9 @@
   box-shadow: 0 0 0 2px rgba(102, 137, 113, 0.45), var(--pane-shadow);
 }
 
-.block-head { border-bottom: 1px solid var(--glass-stroke); }
+.block-head,
+.modal-head { border-bottom: 1px solid var(--glass-stroke); }
+.modal-foot { border-top: 1px solid var(--glass-stroke); }
 
 /* Passes are panes within a pane — lighter, and with no blur of their own.
    Stacking a second backdrop-filter inside the first costs an extra composite
@@ -1446,29 +1448,6 @@
 
 /* ---- controls ---- */
 
-/* The crew number is an input, and the first pass left it with no surface at
-   all — it rendered as a hole in the queue bar. It is also the one field on
-   this page that changes every date below it, so it should look editable. */
-.queue-bar input[type="number"] {
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid var(--glass-stroke);
-  border-radius: var(--radius-sm);
-  color: var(--text);
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-}
-[data-theme="light"] .queue-bar input[type="number"] {
-  background: rgba(255, 255, 255, 0.85);
-}
-.queue-bar input[type="number"]:focus-visible {
-  outline: 2px solid var(--ro-green);
-  outline-offset: 1px;
-  background: rgba(255, 255, 255, 0.12);
-}
-[data-theme="light"] .queue-bar input[type="number"]:focus-visible {
-  background: #fff;
-}
-
 .icon-btn,
 .btn-secondary,
 .chip {
@@ -1501,6 +1480,73 @@
   border: 1px solid rgba(255, 255, 255, 0.75);
 }
 
+/* ---- controls on glass ----
+   Every input on this page was `background: var(--bg)`, which is #141816 in
+   dark. Against a frosted pane that is not a field, it is a hole — the crew box
+   and every control in the order editor read as gaps punched through the glass.
+   They get a pane of their own instead: lighter than what is behind them, which
+   is how a recessed surface actually behaves under a light source. */
+
+.field input,
+.field select,
+.field textarea,
+.line-row input,
+.line-row select,
+.queue-bar input[type="number"] {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--glass-stroke);
+  color: var(--text);
+}
+[data-theme="light"] .field input,
+[data-theme="light"] .field select,
+[data-theme="light"] .field textarea,
+[data-theme="light"] .line-row input,
+[data-theme="light"] .line-row select,
+[data-theme="light"] .queue-bar input[type="number"] {
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus,
+.line-row input:focus,
+.line-row select:focus,
+.queue-bar input[type="number"]:focus {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: var(--ro-green);
+  box-shadow: 0 0 0 3px rgba(102, 137, 113, 0.22);
+}
+[data-theme="light"] .field input:focus,
+[data-theme="light"] .field select:focus,
+[data-theme="light"] .field textarea:focus,
+[data-theme="light"] .line-row input:focus,
+[data-theme="light"] .line-row select:focus,
+[data-theme="light"] .queue-bar input[type="number"]:focus {
+  background: #fff;
+}
+
+.queue-bar input[type="number"] {
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+::placeholder { color: var(--text-muted); opacity: 1; }
+
+/* Native widgets — the date picker, the select popup, the number spinners — are
+   drawn by the browser, not by this stylesheet. Without this they render in the
+   OS's default scheme and a light dropdown drops out of a dark board. */
+:root { color-scheme: dark; }
+[data-theme="light"] { color-scheme: light; }
+
+/* `.btn` sets `display: inline-flex`, which OUTRANKS the `hidden` attribute's
+   `display: none`. So `$('btn-delete').hidden = true` did nothing and Delete
+   showed on a brand-new order that has nothing to delete. The page already
+   carried one-off `[hidden]` patches for the modal backdrop, the queue bar and
+   the done list, which is the same bug found three times and fixed three times;
+   this is the general rule those were standing in for. */
+[hidden] { display: none !important; }
+
 /* ---- legibility on glass ----
    Measured, not assumed: each of these was screenshotted on the rendered pane
    and its contrast computed, before and after the glass went on.
@@ -1516,7 +1562,10 @@
 .run-sized,
 .queue-note,
 .pass-eta,
-.sl-pct {
+.sl-pct,
+.field label,
+.lines-head,
+.line-del {
   color: var(--text-secondary);
 }
 
