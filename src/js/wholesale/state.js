@@ -21,7 +21,6 @@ export const STATUSES = ['in_queue', 'in_production', 'finished'];
 
 export const state = {
   orders: [],
-  customers: [],
   cultivars: [],
   editing: null,      // the order being edited, or null
   queue: null,        // last getQueue response
@@ -76,12 +75,10 @@ export async function loadCoverage() {
 }
 
 export async function loadAll() {
-  const [cultivars, customers, orders] = await Promise.all([
+  const [cultivars, orders] = await Promise.all([
     api.get('getCultivars'),
-    api.get('getCustomers'),
     api.get('getOrders', { includeFinished: 'true' }),
   ]);
   state.cultivars = cultivars.cultivars || [];
-  state.customers = customers.customers || [];
   state.orders = orders.orders || [];
 }

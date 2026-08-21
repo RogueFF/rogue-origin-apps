@@ -57,6 +57,36 @@ export function onDeleteOrder(fn) { deleteOrder = fn; }
 let editLines = async () => {};
 export function onEditLines(fn) { editLines = fn; }
 
+/**
+ * The order's nickname, editable in place.
+ *
+ * What the floor calls this order — the free-text label that replaced the
+ * customer dimension. Blank is normal, so it shows a prompt rather than
+ * collapsing to nothing and leaving a gap in the header.
+ */
+function nicknameField(block) {
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'block-customer';
+  input.value = block.nickname || '';
+  input.placeholder = t('nickname');
+  input.setAttribute('aria-label', t('nickname'));
+
+  input.addEventListener('click', (e) => e.stopPropagation());
+  input.addEventListener('mousedown', (e) => e.stopPropagation());
+  input.addEventListener('blur', () => {
+    const next = input.value.trim();
+    if (next === (block.nickname || '')) return;
+    editOrder(block.orderId, { nickname: next });
+  });
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') { input.value = block.nickname || ''; input.blur(); }
+  });
+  return input;
+}
+
 /** Commit an order-level field change made on a card. Set by index.js. */
 let editOrder = async () => {};
 export function onEditOrder(fn) { editOrder = fn; }
@@ -445,7 +475,7 @@ function blockCard(block, idx, geom, onDrop, onOrder) {
 
   head.append(orderRefField(block));
 
-  head.append(el('span', 'block-customer', block.customerName || ''));
+  head.append(nicknameField(block));
   head.append(el('span', 'qm-spacer'));
   head.append(el('span', 'block-pct', pctText(block.pct)));
   head.append(el('b', 'block-eta', `${t('done')} ${humanDate(block.finish.date)}`));
@@ -550,7 +580,7 @@ export function renderQueue() {
 
   // Customer names live on the order, not on the schedule. Joined here so the
   // card can show one without the queue endpoint duplicating the order book.
-  const nameOf = new Map(state.orders.map(o => [o.id, o.customerName]));
+  const nameOf = new Map(state.orders.map(o => [o.id, o.nickname]));
   const statusOf = new Map(state.orders.map(o => [o.id, o.status]));
   const refOf = new Map(state.orders.map(o => [o.id, o.shopifyOrderName]));
   const geom = span(q);
@@ -558,7 +588,7 @@ export function renderQueue() {
   q.blocks.forEach((b, i) =>
     list.append(blockCard({
       ...b,
-      customerName: nameOf.get(b.orderId),
+      nickname: nameOf.get(b.orderId),
       shopifyOrderName: refOf.get(b.orderId),
       running: statusOf.get(b.orderId) === 'in_production',
     }, i, geom, reorder, openOrder)));

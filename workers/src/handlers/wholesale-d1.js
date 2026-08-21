@@ -11,10 +11,8 @@
  *
  * Endpoints:
  * - GET  ?action=getCultivars  - the order picker's source of truth
- * - GET  ?action=getCustomers  - customer list
- * - POST ?action=saveCustomer  - create/update a customer
  * - POST ?action=deleteCustomer
- * - GET  ?action=getOrders     - orders with their line items and customer
+ * - GET  ?action=getOrders     - orders with their line items
  * - POST ?action=saveOrder     - upsert an order and replace its line items
  * - POST ?action=deleteOrder
  * - GET  ?action=getRates      - per-cultivar trim rate + where it came from
@@ -38,7 +36,7 @@ import { parseSku } from '../lib/sku.js';
 import { summarizeInventory, assessCoverage } from '../lib/coverage.js';
 import { formatDatePT } from '../lib/production-utils.js';
 
-const WRITE_ACTIONS = new Set(['saveCustomer', 'deleteCustomer', 'saveOrder', 'deleteOrder', 'saveQueueOrder', 'setAccrualStart', 'importOrder']);
+const WRITE_ACTIONS = new Set(['saveOrder', 'deleteOrder', 'saveQueueOrder', 'setAccrualStart', 'importOrder']);
 
 const ORDER_STATUSES = new Set(['in_queue', 'in_production', 'finished']);
 const FORMS = new Set(['tops', 'smalls']);
@@ -70,9 +68,6 @@ export async function handleWholesaleD1(request, env) {
 
   switch (action) {
     case 'getCultivars': return getCultivars(db, params);
-    case 'getCustomers': return getCustomers(db);
-    case 'saveCustomer': return saveCustomer(db, body);
-    case 'deleteCustomer': return deleteCustomer(db, body);
     case 'getOrders': return getOrders(db, params);
     case 'saveOrder': return saveOrder(db, body);
     case 'deleteOrder': return deleteOrder(db, body);
@@ -119,63 +114,6 @@ async function getCultivars(db, params) {
   });
 }
 
-// ─── CUSTOMERS ─────────────────────────────────────────
-
-async function getCustomers(db) {
-  const rows = await query(db, `
-    SELECT id, name, company, email, phone, address, city, state, zip, notes
-    FROM customers ORDER BY COALESCE(NULLIF(company,''), name)
-  `);
-  return successResponse({ success: true, customers: rows });
-}
-
-async function saveCustomer(db, body) {
-  const name = String(body.name || '').trim();
-  if (!name) throw createError('VALIDATION_ERROR', 'Customer name is required');
-
-  const fields = {
-    name,
-    company: body.company ?? '',
-    email: body.email ?? '',
-    phone: body.phone ?? '',
-    address: body.address ?? '',
-    city: body.city ?? '',
-    state: body.state ?? '',
-    zip: body.zip ?? '',
-    notes: body.notes ?? '',
-  };
-
-  if (body.id) {
-    const sets = Object.keys(fields).map(k => `${k} = ?`).join(', ');
-    const res = await execute(db,
-      `UPDATE customers SET ${sets} WHERE id = ?`, [...Object.values(fields), body.id]);
-    if (!res.changes) throw createError('NOT_FOUND', `No customer ${body.id}`);
-    return successResponse({ success: true, id: body.id });
-  }
-
-  const id = await nextId(db, 'customers', 'CUST', new Date().getUTCFullYear());
-  const cols = ['id', ...Object.keys(fields)];
-  await execute(db,
-    `INSERT INTO customers (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`,
-    [id, ...Object.values(fields)]);
-  return successResponse({ success: true, id });
-}
-
-async function deleteCustomer(db, body) {
-  if (!body.id) throw createError('VALIDATION_ERROR', 'Customer id is required');
-  // orders.customer_id is a hard FK; deleting out from under an order would
-  // leave a dangling reference. Refuse with a message that says why.
-  const used = await queryOne(db,
-    'SELECT COUNT(*) n FROM orders WHERE customer_id = ?', [body.id]);
-  if (used && used.n > 0) {
-    throw createError('VALIDATION_ERROR',
-      `Customer ${body.id} still has ${used.n} order(s) — delete or reassign them first`);
-  }
-  const res = await execute(db, 'DELETE FROM customers WHERE id = ?', [body.id]);
-  if (!res.changes) throw createError('NOT_FOUND', `No customer ${body.id}`);
-  return successResponse({ success: true, id: body.id });
-}
-
 // ─── ORDERS ────────────────────────────────────────────
 
 async function getOrders(db, params) {
@@ -184,11 +122,9 @@ async function getOrders(db, params) {
   // order without a window where the board sees no finished orders.
   const wantFinished = params.includeFinished === 'true' || params.includeClosed === 'true';
   const orders = await query(db, `
-    SELECT o.*, COALESCE(NULLIF(c.company,''), c.name) AS customer_name
-    FROM orders o
-    LEFT JOIN customers c ON c.id = o.customer_id
-    ${wantFinished ? '' : "WHERE o.status != 'finished'"}
-    ORDER BY o.order_date DESC, o.id DESC
+    SELECT * FROM orders
+    ${wantFinished ? '' : "WHERE status != 'finished'"}
+    ORDER BY order_date DESC, id DESC
   `);
   if (!orders.length) return successResponse({ success: true, orders: [] });
 
@@ -225,8 +161,9 @@ async function getOrders(db, params) {
       const lines = byOrder.get(o.id) || [];
       return {
         id: o.id,
-        customerId: o.customer_id,
-        customerName: o.customer_name,
+        // What the floor calls this order. The customer dimension it replaced
+        // held two rows, one of them called "test".
+        nickname: o.nickname,
         orderDate: o.order_date,
         status: o.status,
         // The number the operator actually uses. `MO-2026-002` is an internal
@@ -259,11 +196,6 @@ async function saveOrder(db, body) {
     throw createError('VALIDATION_ERROR',
       `Invalid status "${status}" — expected one of: ${[...ORDER_STATUSES].join(', ')}`);
   }
-  if (!body.customerId) throw createError('VALIDATION_ERROR', 'customerId is required');
-
-  const customer = await queryOne(db, 'SELECT id FROM customers WHERE id = ?', [body.customerId]);
-  if (!customer) throw createError('VALIDATION_ERROR', `No customer ${body.customerId}`);
-
   const items = Array.isArray(body.items) ? body.items : [];
   const prepared = await prepareItems(db, items);
 
@@ -271,7 +203,7 @@ async function saveOrder(db, body) {
   const id = body.id || await nextId(db, 'orders', 'MO', new Date().getUTCFullYear());
 
   const orderFields = {
-    customer_id: body.customerId,
+    nickname: String(body.nickname || '').trim() || null,
     order_date: body.orderDate || new Date().toISOString().slice(0, 10),
     status,
     payment_terms: body.paymentTerms ?? '',
@@ -896,25 +828,6 @@ async function getCoverage(db) {
 // ─── SHOPIFY IMPORT ────────────────────────────────────
 
 /**
- * The customer every imported order attaches to until someone says otherwise.
- *
- * Buyer identity is deliberately not imported. This placeholder exists because
- * orders.customer_id is a NOT NULL foreign key, not because we want a stand-in
- * for a name — an operator can reassign the order to a nicknamed customer in
- * the app afterwards.
- */
-const IMPORT_CUSTOMER = { id: "CUST-IMPORT", name: "Shopify import" };
-
-async function ensureImportCustomer(db) {
-  const existing = await queryOne(db, "SELECT id FROM customers WHERE id = ?", [IMPORT_CUSTOMER.id]);
-  if (!existing) {
-    await execute(db, "INSERT INTO customers (id, name, company) VALUES (?, ?, ?)",
-      [IMPORT_CUSTOMER.id, IMPORT_CUSTOMER.name, IMPORT_CUSTOMER.name]);
-  }
-  return IMPORT_CUSTOMER.id;
-}
-
-/**
  * Create an order from Shopify line SKUs. The bots' write surface.
  *
  * WHAT THIS DELIBERATELY CANNOT DO:
@@ -989,20 +902,16 @@ async function importOrder(db, body) {
   }
   const items = [...merged.values()];
 
-  const customerId = body.customerId || await ensureImportCustomer(db);
-  const customer = await queryOne(db, "SELECT id FROM customers WHERE id = ?", [customerId]);
-  if (!customer) throw createError("VALIDATION_ERROR", `No customer ${customerId}`);
-
   const id = await nextId(db, "orders", "MO", new Date().getUTCFullYear());
   const now = new Date().toISOString();
   const importedAt = nowPT();
 
   const statements = [{
     sql: `INSERT INTO orders
-            (id, customer_id, order_date, status, source, shopify_order_id, shopify_order_name,
+            (id, order_date, status, source, shopify_order_id, shopify_order_name,
              notes, updated_at, accrual_start, queue_rank)
-          VALUES (?, ?, ?, 'in_queue', 'shopify', ?, ?, ?, ?, ?, ?)`,
-    params: [id, customerId, now.slice(0, 10), orderRef, orderRef,
+          VALUES (?, ?, 'in_queue', 'shopify', ?, ?, ?, ?, ?, ?)`,
+    params: [id, now.slice(0, 10), orderRef, orderRef,
       `Imported from Shopify ${orderRef}`, now,
       moment(importedAt.date, importedAt.minutes), now],
   }];
@@ -1025,7 +934,6 @@ async function importOrder(db, body) {
     success: true,
     id,
     orderRef,
-    customerId,
     items: items.map(i => ({
       cultivar: i.cultivarName, form: i.form, qtyLbs: Math.round(i.qtyLbs * 100) / 100,
     })),
