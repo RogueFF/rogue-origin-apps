@@ -41,6 +41,11 @@ export const toLbs = (qty, unit) => (unit === 'kg' ? qty * LB_PER_KG : qty);
 export const fmtLbs = (n) =>
   `${n.toLocaleString('en-US', { maximumFractionDigits: 1 })} lb`;
 
+/** Whole pounds, for figures a tenth of a pound cannot honestly resolve — a lot
+ *  size derived from a measured trim rate, or a shortfall against sack counts. */
+export const fmtLbs0 = (n) =>
+  `${Math.round(n).toLocaleString('en-US')} lb`;
+
 export const fmtUsd = (n) =>
   n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 

@@ -21,7 +21,7 @@
  * Design: docs/plans/2026-08-20-order-blocks-restructure.md
  */
 
-import { state, api, fmtLbs } from './state.js';
+import { state, api, fmtLbs, fmtLbs0 } from './state.js';
 import { t } from '../shared/i18n.js';
 import { showToast } from '../shared/toast.js';
 import { ensureUnlocked } from './auth.js';
@@ -87,7 +87,9 @@ function lineRow(line) {
   track.append(fill);
   row.append(track);
 
-  row.append(el('span', 'sl-num', `${fmtLbs(line.doneLbs)} / ${fmtLbs(line.qtyLbs)}`));
+  // The unit belongs on the pair, not on each half of it.
+  const done = line.doneLbs.toLocaleString('en-US', { maximumFractionDigits: 1 });
+  row.append(el('span', 'sl-num', `${done} / ${fmtLbs(line.qtyLbs)}`));
   row.append(el('span', 'sl-pct', pctText(line.pct)));
   return row;
 }
@@ -105,36 +107,51 @@ function passRow(pass) {
     top.append(el('span', 'pass-joint', t('one_pass')));
   }
   if (pass.estimated) top.append(el('span', 'run-flag', t('no_history')));
-  top.append(el('span', 'pass-lot', `${fmtLbs(pass.lotLbs)} ${t('lot')}`));
+  // Whole pounds. A lot is a heap of plant material on a line; half a pound of
+  // stated precision on 1,682 of them is a claim the number cannot support.
+  top.append(el('span', 'pass-lot', `${fmtLbs0(pass.lotLbs)} ${t('lot')}`));
   top.append(el('span', 'pass-eta', `${t('done')} ${humanDate(pass.finish.date)}`));
   row.append(top);
 
   pass.lines.forEach(l => row.append(lineRow(l)));
 
+  // THE BYPRODUCT, and the only thing this line used to say that was not
+  // already said elsewhere.
+  //
+  // What was here before read: "sized by Tops 891.1 lb · yields T/S 891.1 lb /
+  // 790.4 lb". Four numbers, one fact. `891.1` is the outstanding tops, which
+  // the bar above already shows as 8.9 of 900; it then appears a second time as
+  // the tops yield, because the binding form's yield IS its need — that is what
+  // binding means, so printing it is circular. And 891.1 + 790.4 is the lot,
+  // already on the line above. Only the smalls that fall out were new.
+  //
+  // Shown only when there is a byproduct: a pass whose lot is fully spoken for
+  // has nothing to say here.
+  const spareLbs = pass.binding === 'smalls' ? pass.surplusTops : pass.surplusSmalls;
+  const spareForm = pass.binding === 'smalls' ? t('tops') : t('smalls');
+  if (spareLbs >= 1) {
+    row.append(el('div', 'pass-spare',
+      `+${fmtLbs0(spareLbs)} ${spareForm.toLowerCase()} ${t('spare')}`));
+  }
+
   // Coverage is per cultivar and form — which is what a pass is, so it belongs
   // here rather than on the order. Amber, not red: mid-season most stock is
   // raw, so being short on packed goods is the ordinary state.
+  //
+  // "900 lb over what is packed" was the order's own size whenever nothing was
+  // packed, which is most of the season. Say that plainly instead.
   const cov = coverageFor(pass.cultivarId);
   if (cov.length) {
     const worst = cov[0];
     const flag = el('div', 'run-short');
     flag.append(el('span', 'rs-icon', '▲'));
     const sacks = worst.rawSacks ? `${worst.rawSacks} ${t('raw_sacks')}` : t('no_raw');
-    flag.append(el('span', null,
-      `${fmtLbs(worst.shortfallLbs)} ${t('over_packed')} · ${sacks}`));
+    const gap = worst.packedLbs
+      ? `${fmtLbs0(worst.shortfallLbs)} ${t('short')}`
+      : t('none_packed');
+    flag.append(el('span', null, `${gap} · ${sacks}`));
     row.append(flag);
   }
-
-  const sized = el('div', 'run-sized');
-  // The outstanding figure, not the ordered one — it is what the lot above was
-  // sized on, and showing the ordered amount here would not add up to the hours.
-  const bind = pass.binding === 'smalls' ? t('smalls') : t('tops');
-  const need = pass.binding === 'smalls' ? pass.remainingSmallsLbs : pass.remainingTopsLbs;
-  sized.append(document.createTextNode(`${t('sized_by')} `));
-  sized.append(el('em', null, `${bind} ${fmtLbs(need)}`));
-  sized.append(document.createTextNode(
-    ` · ${t('yields')} ${fmtLbs(pass.yieldTops)} / ${fmtLbs(pass.yieldSmalls)}`));
-  row.append(sized);
 
   return row;
 }

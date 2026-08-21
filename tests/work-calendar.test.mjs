@@ -28,8 +28,9 @@ import {
 const at = (date, h, m = 0) => ({ date, minutes: h * 60 + m });
 const show = (p) => `${p.date} ${String(Math.floor(p.minutes / 60)).padStart(2, '0')}:${String(p.minutes % 60).padStart(2, '0')}`;
 
-// 2026-08-20 is a Thursday; 08-22 Saturday; 08-23 Sunday; 08-24 Monday.
+// 2026-08-20 is a Thursday; 08-21 Friday; 08-22 Saturday; 08-23 Sunday; 08-24 Monday.
 const THU = '2026-08-20';
+const FRI = '2026-08-21';
 const SAT = '2026-08-22';
 const SUN = '2026-08-23';
 const MON = '2026-08-24';
@@ -54,9 +55,10 @@ test('a weekday yields 8.5 productive hours after breaks', () => {
   assert.equal(workMinutesOnDay(THU, WORK_DAY), 510);
 });
 
-test('Saturday is a half day and loses only the breaks that fall inside it', () => {
-  // 07:00-12:00 is 300 minutes, minus the 09:00 ten-minute break.
-  assert.equal(workMinutesOnDay(SAT, WORK_DAY), 290);
+test('Saturday is not a work day', () => {
+  // It was a half day to noon until 2026-08-21. The farm stopped running
+  // Saturdays, so a week now holds five working days, not six.
+  assert.equal(workMinutesOnDay(SAT, WORK_DAY), 0);
 });
 
 test('Sunday is not a work day', () => {
@@ -98,11 +100,17 @@ test('work that outruns the day continues the next morning', () => {
   assert.equal(show(addWorkHours(at(THU, 16), 1, WORK_DAY)), `2026-08-21 07:40`);
 });
 
-test('Saturday stops at noon and the remainder skips Sunday entirely', () => {
-  // 11:00 Sat + 3h: one hour to noon, then Sunday is off, so two hours land on
-  // Monday — 07:00 to 09:00 exactly, stopping at the lip of the morning break
-  // rather than stepping over it, because the work is already done.
-  assert.equal(show(addWorkHours(at(SAT, 11), 3, WORK_DAY)), `${MON} 09:00`);
+test('work landing on a Saturday carries over the whole weekend to Monday', () => {
+  // 11:00 Sat + 3h: nothing is worked Saturday or Sunday, so all three hours
+  // land on Monday — 07:00 to 10:10, the extra ten minutes being the 09:00
+  // break stepped over on the way.
+  assert.equal(show(addWorkHours(at(SAT, 11), 3, WORK_DAY)), `${MON} 10:10`);
+});
+
+test('Friday afternoon work resumes Monday, skipping both weekend days', () => {
+  // 16:00 Fri + 1h: 20 minutes to the cleanup break ends the week, so the
+  // remaining 40 minutes are the first of Monday.
+  assert.equal(show(addWorkHours(at(FRI, 16), 1, WORK_DAY)), `${MON} 07:40`);
 });
 
 test('a full weekday of work ends at 16:20, not the 16:30 closing bell', () => {

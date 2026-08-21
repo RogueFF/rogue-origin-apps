@@ -855,6 +855,14 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The byproduct: what comes off this lot that nobody ordered. Neutral, not a
+   warning — it is future inventory, and it sits beside the caution below it. */
+.pass-spare {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---- a line item's burn-down ---- */
 
 .seg-line {
@@ -1560,6 +1568,7 @@
    this page in favour of the secondary one. */
 
 .run-sized,
+.pass-spare,
 .queue-note,
 .pass-eta,
 .sl-pct,
