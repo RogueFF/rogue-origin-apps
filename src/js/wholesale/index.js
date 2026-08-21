@@ -313,7 +313,7 @@ function wire() {
     // The fan is collapsed most of the time, so the state rides on the blob
     // itself — visible the moment the mass splits, at blob size.
     $('fab-wrap').classList.toggle('notifying', bellOn);
-    btn.querySelector('i').className = bellOn ? 'ph-duotone ph-bell' : 'ph-duotone ph-bell-slash';
+    btn.querySelector('i').className = bellOn ? 'ph ph-bell' : 'ph ph-bell-slash';
   };
 
   api.get('getNotify')
