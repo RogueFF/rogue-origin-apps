@@ -683,9 +683,35 @@
 .queue-bar {
   display: flex;
   align-items: center;
-  gap: var(--space-md);
+  gap: 14px;
   flex-wrap: wrap;
-  padding: var(--space-md) var(--space-lg) 0;
+  /* Symmetric. This read `var(--space-md) var(--space-lg) 0` — no bottom
+     padding at all — which was invisible while the bar was a transparent strip
+     and became the whole problem once it gained a border: every control sat
+     25px below the top edge and 1px above the bottom one. */
+  padding: 14px 18px;
+}
+
+/* The sentence explaining the number in the box, now beside it rather than in a
+   separate row underneath. It also fills the dead span the bar used to carry
+   between the crew control and the actions. */
+.crew-basis {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* An override replaces measured data with a typed guess, so it must not look
+   like the resting state. */
+#q-crew.overridden {
+  border-color: var(--warning);
+  box-shadow: 0 0 0 2px rgba(228, 170, 79, 0.18);
+  color: var(--warning);
+  font-weight: 700;
 }
 .queue-bar[hidden] { display: none; }
 
@@ -1083,7 +1109,10 @@
 }
 
 @media (max-width: 768px) {
-  .queue-bar { padding-left: var(--space-md); padding-right: var(--space-md); }
+  .queue-bar { padding: 12px 14px; margin-left: var(--space-md); margin-right: var(--space-md); }
+  /* On a phone the sentence would push the actions onto a third row; the box
+     and its highlight already say whether an override is in force. */
+  .crew-basis { display: none; }
   .queue-view { padding: var(--space-md); }
 }
 

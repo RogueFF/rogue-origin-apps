@@ -284,7 +284,34 @@ function blockCard(block, idx, geom, onDrop, onOrder) {
   return card;
 }
 
+/**
+ * Keep the crew control telling the truth about the queue below it.
+ *
+ * This has to run wherever the queue is rendered, not wherever the page is
+ * refreshed. Changing the crew box calls loadQueue() directly, so when this
+ * lived in the refresh path the two could disagree indefinitely: typing 4
+ * rebuilt every date on the board while the bar went on claiming the crew was
+ * derived from the last seven production days. The number in the box has to
+ * mean the number the dates were built from.
+ */
+function syncCrewBar() {
+  const q = state.queue;
+  const override = q?.crewBasis === 'override';
+  const crew = $('q-crew');
+  const basis = $('q-basis');
+  if (!crew || !basis) return;
+
+  crew.placeholder = q?.crew ?? '';
+  crew.classList.toggle('overridden', override);
+  basis.textContent = q
+    ? (override ? t('crew_override') : `${t('crew_derived')} ${q.crewDays} ${t('days')}`)
+    : '';
+  // Nothing to reset when nothing is overridden.
+  $('q-reset').hidden = !override;
+}
+
 export function renderQueue() {
+  syncCrewBar();
   const wrap = $('queue');
   wrap.textContent = '';
   const q = state.queue;
@@ -299,11 +326,10 @@ export function renderQueue() {
     return;
   }
 
+  // Crew and its basis moved into the queue bar, next to the control that sets
+  // them. What is left here is about the QUEUE rather than the crew: which
+  // clock these times are on, and when the whole thing clears.
   const meta = el('div', 'queue-meta');
-  meta.append(el('span', 'qm-crew', `${t('crew')}: ${q.crew}`));
-  meta.append(el('span', 'qm-basis', q.crewBasis === 'override'
-    ? t('crew_override')
-    : `${t('crew_derived')} ${q.crewDays} ${t('days')}`));
   meta.append(el('span', 'qm-tz', `${t('times')} ${zoneLabel()}`));
   meta.append(el('span', 'qm-spacer'));
   meta.append(el('span', 'qm-clear', `${t('clears')} ${humanDate(q.blocks[q.blocks.length - 1].finish.date)}`));
