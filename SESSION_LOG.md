@@ -34,7 +34,7 @@ morning of 08-21, continuing the order-blocks build logged the day before.
   had every new order jumping ahead of hand-dragged ones; Telegram events are recorded
   per-send rather than per-batch; free text is stripped of Markdown markers before
   interpolation; empty item sets are refused; an absent status means "no opinion".
-- `tests/` — 237 → 321. New suites for burn-down allocation, notification derivation,
+- `tests/` — 288 → 321. New suites for burn-down allocation, notification derivation,
   the status vocabulary (a drift guard across migration, worker and browser), and a check
   that no handler references a dropped table.
 
