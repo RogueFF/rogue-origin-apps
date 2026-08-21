@@ -9,7 +9,7 @@
  * Design: docs/plans/2026-08-19-order-blocks-design.md
  */
 
-import { state, loadAll, loadCoverage, STATUSES, statusLabel, option } from './state.js';
+import { api, state, loadAll, loadCoverage, STATUSES, statusLabel, option } from './state.js';
 import { renderOffQueue } from './render.js';
 import {
   loadQueue, renderQueue, onOpenOrder, onDeleteOrder, onEditLines, onEditOrder,
@@ -54,6 +54,9 @@ registerLabels({
     confirm_delete: 'Delete order',
     edit_order: 'Edit order', order_ref: 'Shopify order #',
     trim_order: 'Order',
+    bell_on: 'Telegram updates on — tap to mute',
+    bell_off: 'Telegram updates off — tap to enable',
+    bell_enabled: 'Telegram updates on', bell_disabled: 'Telegram updates off',
     move_up: 'Move up, line', move_down: 'Move down, line',
     err_cultivar: 'pick a cultivar.',
     err_qty: 'quantity must be greater than zero.',
@@ -110,6 +113,9 @@ registerLabels({
     confirm_delete: 'Eliminar pedido',
     edit_order: 'Editar pedido', order_ref: 'Pedido Shopify n.º',
     trim_order: 'Orden',
+    bell_on: 'Avisos de Telegram activados — toque para silenciar',
+    bell_off: 'Avisos de Telegram desactivados — toque para activar',
+    bell_enabled: 'Avisos de Telegram activados', bell_disabled: 'Avisos de Telegram desactivados',
     move_up: 'Subir, línea', move_down: 'Bajar, línea',
     err_cultivar: 'seleccione un cultivar.',
     err_qty: 'la cantidad debe ser mayor que cero.',
@@ -236,6 +242,41 @@ function wire() {
       refresh();
     }
   });
+
+  // --- Telegram updates ---------------------------------------------------
+  //
+  // Reads its own state from the server rather than remembering it locally: the
+  // bell controls what a CRON does, so a switch that only existed in this
+  // browser would go on claiming to be off while messages kept arriving.
+  let bellOn = false;
+  const paintBell = () => {
+    const btn = $('bell-btn');
+    btn.setAttribute('aria-pressed', String(bellOn));
+    btn.classList.toggle('on', bellOn);
+    btn.title = t(bellOn ? 'bell_on' : 'bell_off');
+    btn.setAttribute('aria-label', btn.title);
+    btn.querySelector('i').className = bellOn ? 'ph-duotone ph-bell' : 'ph-duotone ph-bell-slash';
+  };
+
+  api.get('getNotify')
+    .then(r => { bellOn = !!r.enabled; paintBell(); })
+    .catch(() => paintBell());
+
+  $('bell-btn').onclick = async () => {
+    if (!await ensureUnlocked()) return;
+    const next = !bellOn;
+    try {
+      const res = await api.post('setNotify', { enabled: next });
+      bellOn = !!res.enabled;
+      paintBell();
+      paintLock();
+      showToast(t(bellOn ? 'bell_enabled' : 'bell_disabled'), 'success');
+    } catch (e) {
+      showToast(String(e.message || e), 'error');
+    }
+  };
+
+  document.addEventListener('ro:langchange', paintBell);
 
   $('done-toggle').onclick = () => {
     const list = $('done-list');

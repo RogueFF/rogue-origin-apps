@@ -2085,6 +2085,16 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
 .block-action:active, .line-move:active:not(:disabled) { transform: scale(0.96); }
 
 .btn, .chip, .icon-btn { border-radius: var(--r-ctl); }
+
+/* The bell, lit when the cron is pushing to Telegram. Gold rather than green:
+   it is the one control on this page whose effect lands somewhere other than
+   this page, and it should not read like the rest of the chrome. */
+.icon-btn.on {
+  color: var(--ro-gold);
+  background: rgba(228, 170, 79, 0.16);
+  box-shadow: 0 0 0 1px rgba(228, 170, 79, 0.35) inset;
+}
+[data-theme="light"] .icon-btn.on { color: var(--ro-gold-text); }
 .btn { padding: 11px 22px; }
 
 .block-action {
