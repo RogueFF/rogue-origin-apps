@@ -76,82 +76,118 @@ function span(queue) {
 
 const pctText = (p) => `${Math.round(p * 100)}%`;
 
-/** A progress bar for one line item: pounds recorded against pounds ordered. */
-function lineRow(line) {
-  const row = el('div', `seg-line${line.pct >= 1 ? ' filled' : ''}`);
-  row.append(el('span', 'sl-form', t(line.form)));
-
-  const track = el('div', 'sl-track');
-  const fill = el('div', 'sl-fill');
-  fill.style.width = `${Math.min(100, line.pct * 100)}%`;
-  track.append(fill);
-  row.append(track);
-
-  // The unit belongs on the pair, not on each half of it.
-  const done = line.doneLbs.toLocaleString('en-US', { maximumFractionDigits: 1 });
-  row.append(el('span', 'sl-num', `${done} / ${fmtLbs(line.qtyLbs)}`));
-  row.append(el('span', 'sl-pct', pctText(line.pct)));
-  return row;
+/**
+ * '2026-09-07' + 872 -> '9/7 14:32'. The lead time, to the minute.
+ *
+ * 24-hour, deliberately. The floor's hourly entry is written in AM/PM, but a
+ * bare "2:32" on a card is ambiguous and this number is the one somebody might
+ * repeat to a buyer. Twenty-four hour also reads the same in both languages the
+ * board is used in.
+ */
+export function humanMoment(m) {
+  const [, mo, d] = m.date.split('-').map(Number);
+  const hh = String(Math.floor(m.minutes / 60)).padStart(2, '0');
+  const mm = String(m.minutes % 60).padStart(2, '0');
+  return `${mo}/${d} ${hh}:${mm}`;
 }
 
-/** One trim pass inside a block — a lot, its dates, and the lines it fills. */
-function passRow(pass) {
-  const row = el('div', `pass-row${pass.estimated ? ' estimated' : ''}`);
+/**
+ * Everything a pass knows that is not its burn-down or its lead time.
+ *
+ * Opened on hover, on keyboard focus, and on tap. Hover alone would put all of
+ * this out of reach on a phone, which is where this board is most often read.
+ */
+function passDetail(pass) {
+  const box = el('div', 'pass-detail');
+  box.setAttribute('role', 'tooltip');
 
-  const top = el('div', 'pass-top');
-  top.append(el('span', 'pass-cv', pass.cultivarName));
-  if (pass.jointPass) {
-    // Worth saying on the card, because it is the one place the board's
-    // arithmetic will look wrong to someone counting line items: two lines,
-    // one stretch of floor time.
-    top.append(el('span', 'pass-joint', t('one_pass')));
-  }
-  if (pass.estimated) top.append(el('span', 'run-flag', t('no_history')));
-  // Whole pounds. A lot is a heap of plant material on a line; half a pound of
-  // stated precision on 1,682 of them is a claim the number cannot support.
-  top.append(el('span', 'pass-lot', `${fmtLbs0(pass.lotLbs)} ${t('lot')}`));
-  top.append(el('span', 'pass-eta', `${t('done')} ${humanDate(pass.finish.date)}`));
-  row.append(top);
+  const line = (label, value) => {
+    const r = el('div', 'pd-row');
+    r.append(el('span', 'pd-k', label));
+    r.append(el('span', 'pd-v', value));
+    box.append(r);
+  };
 
-  pass.lines.forEach(l => row.append(lineRow(l)));
+  line(t('lot'), fmtLbs0(pass.lotLbs));
 
-  // THE BYPRODUCT, and the only thing this line used to say that was not
-  // already said elsewhere.
-  //
-  // What was here before read: "sized by Tops 891.1 lb · yields T/S 891.1 lb /
-  // 790.4 lb". Four numbers, one fact. `891.1` is the outstanding tops, which
-  // the bar above already shows as 8.9 of 900; it then appears a second time as
-  // the tops yield, because the binding form's yield IS its need — that is what
-  // binding means, so printing it is circular. And 891.1 + 790.4 is the lot,
-  // already on the line above. Only the smalls that fall out were new.
-  //
-  // Shown only when there is a byproduct: a pass whose lot is fully spoken for
-  // has nothing to say here.
   const spareLbs = pass.binding === 'smalls' ? pass.surplusTops : pass.surplusSmalls;
   const spareForm = pass.binding === 'smalls' ? t('tops') : t('smalls');
-  if (spareLbs >= 1) {
-    row.append(el('div', 'pass-spare',
-      `+${fmtLbs0(spareLbs)} ${spareForm.toLowerCase()} ${t('spare')}`));
-  }
+  if (spareLbs >= 1) line(`${spareForm} ${t('spare')}`, `+${fmtLbs0(spareLbs)}`);
 
-  // Coverage is per cultivar and form — which is what a pass is, so it belongs
-  // here rather than on the order. Amber, not red: mid-season most stock is
-  // raw, so being short on packed goods is the ordinary state.
-  //
-  // "900 lb over what is packed" was the order's own size whenever nothing was
-  // packed, which is most of the season. Say that plainly instead.
+  line(t('takes'), `${pass.workDays} ${t('work_days')}`);
+
+  // Provenance. A date built on the farm average is a materially weaker claim
+  // than one built on this cultivar's own history, and the card should be able
+  // to say which without the operator opening the console.
+  line(t('rate'), `${pass.ratePerTrimmerHour.toFixed(2)} ${t('per_hr')}`);
+  line(t('basis'), pass.estimated ? t('no_history') : t('measured'));
+
   const cov = coverageFor(pass.cultivarId);
   if (cov.length) {
     const worst = cov[0];
-    const flag = el('div', 'run-short');
-    flag.append(el('span', 'rs-icon', '▲'));
-    const sacks = worst.rawSacks ? `${worst.rawSacks} ${t('raw_sacks')}` : t('no_raw');
     const gap = worst.packedLbs
       ? `${fmtLbs0(worst.shortfallLbs)} ${t('short')}`
       : t('none_packed');
-    flag.append(el('span', null, `${gap} · ${sacks}`));
-    row.append(flag);
+    const sacks = worst.rawSacks ? `${worst.rawSacks} ${t('raw_sacks')}` : t('no_raw');
+    line(t('stock'), `${gap} · ${sacks}`);
   }
+
+  return box;
+}
+
+/**
+ * One trim pass. The row states only what the operator asked it to: pounds done
+ * against pounds ordered with a percentage, and the lead time. Everything the
+ * row used to spell out — lot size, byproduct, rate, coverage — moved into the
+ * detail, which opens on hover, focus or tap.
+ *
+ * The one exception is the shortfall marker. A warning that is only reachable by
+ * hovering is a warning nobody sees on a phone, so a bare glyph stays on the
+ * row and its wording lives in the detail.
+ *
+ * A pass carries one row per line item, because tops and smalls fill at
+ * different speeds. They share a lead time — one lot, one pass — so it is
+ * printed once, on the first of them.
+ */
+function passRow(pass) {
+  const row = el('div', `pass-row${pass.estimated ? ' estimated' : ''}`);
+  row.tabIndex = 0;
+  row.setAttribute('aria-label', `${pass.cultivarName}, ${t('details')}`);
+
+  const short = coverageFor(pass.cultivarId).length > 0;
+
+  pass.lines.forEach((line, i) => {
+    const r = el('div', `pass-line${line.pct >= 1 ? ' filled' : ''}`);
+    r.append(el('span', 'pl-cv', i === 0 ? pass.cultivarName : ''));
+    r.append(el('span', 'pl-form', t(line.form)));
+
+    const track = el('div', 'sl-track');
+    const fill = el('div', 'sl-fill');
+    fill.style.width = `${Math.min(100, line.pct * 100)}%`;
+    track.append(fill);
+    r.append(track);
+
+    const done = line.doneLbs.toLocaleString('en-US', { maximumFractionDigits: 1 });
+    r.append(el('span', 'pl-num', `${done} / ${fmtLbs(line.qtyLbs)}`));
+    r.append(el('span', 'pl-pct', `(${pctText(line.pct)})`));
+    r.append(el('span', 'pl-eta', i === 0 ? humanMoment(pass.finish) : ''));
+
+    const warn = el('span', 'pl-warn', i === 0 && short ? '▲' : '');
+    if (i === 0 && short) warn.setAttribute('aria-label', t('stock'));
+    r.append(warn);
+
+    row.append(r);
+  });
+
+  row.append(passDetail(pass));
+
+  // Tap to pin the detail open. The card above is a drag surface, so the press
+  // must not reach it or dragging would start under the operator's finger.
+  row.addEventListener('click', (e) => {
+    e.stopPropagation();
+    row.classList.toggle('open');
+  });
+  row.addEventListener('mousedown', (e) => e.stopPropagation());
 
   return row;
 }
