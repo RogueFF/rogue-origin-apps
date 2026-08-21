@@ -264,12 +264,24 @@ function wire() {
   // The board is read far more often than it is configured, so the crew figure,
   // the Telegram switch and New order live behind one button instead of a strip
   // across the top of every screen.
+  const fabOpen = () => $('fab-wrap').classList.contains('open');
   const setFab = (open) => {
-    $('fab-panel').hidden = !open;
+    $('fab-wrap').classList.toggle('open', open);
     $('fab').setAttribute('aria-expanded', String(open));
-    $('fab').classList.toggle('open', open);
   };
-  $('fab').onclick = () => setFab($('fab-panel').hidden);
+  $('fab').onclick = () => setFab(!fabOpen());
+
+  // The steppers replace the number input's own spinner, which is what used to
+  // turn an empty field into a crew of 1. A step commits immediately — there is
+  // no blur to wait for when the control is a button.
+  const stepCrew = (by) => {
+    const input = $('q-crew');
+    const next = Math.max(0.5, Math.round(((Number(input.value) || 0) + by) * 2) / 2);
+    input.value = String(next);
+    loadQueue(crewOverride());
+  };
+  $('q-up').onclick = () => stepCrew(0.5);
+  $('q-down').onclick = () => stepCrew(-0.5);
 
   // CAPTURE phase, not bubble. A pass row stops propagation so that clicking it
   // pins its detail without disturbing anything else — which also meant a click
@@ -278,12 +290,12 @@ function wire() {
   // anything can stop it, so the only thing that has to be excluded is the
   // panel itself and the button that opens it.
   document.addEventListener('click', (e) => {
-    if ($('fab-panel').hidden) return;
+    if (!fabOpen()) return;
     if (e.target.closest('.fab-wrap')) return;
     setFab(false);
   }, true);
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !$('fab-panel').hidden) { setFab(false); $('fab').focus(); }
+    if (e.key === 'Escape' && fabOpen()) { setFab(false); $('fab').focus(); }
   });
 
   // --- Telegram updates ---------------------------------------------------
@@ -298,9 +310,10 @@ function wire() {
     btn.classList.toggle('on', bellOn);
     btn.title = t(bellOn ? 'bell_on' : 'bell_off');
     btn.setAttribute('aria-label', btn.title);
-    // The panel is shut most of the time, so the button that opens it carries
-    // the one piece of state worth seeing from outside it.
-    $('fab').classList.toggle('notifying', bellOn);
+    // The fan is collapsed most of the time, so the state rides on the blob
+    // itself — visible the moment the mass splits, at blob size.
+    $('fab-wrap').classList.toggle('notifying', bellOn);
+    btn.querySelector('i').className = bellOn ? 'ph-duotone ph-bell' : 'ph-duotone ph-bell-slash';
   };
 
   api.get('getNotify')
