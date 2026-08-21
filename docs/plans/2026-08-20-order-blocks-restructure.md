@@ -174,3 +174,14 @@ bracketed as one pass. Coverage warnings move to the segment.
 - **Re-ranking rewrites history.** Allocation is computed from current rank, so
   dragging a block changes who got credited for last week's pounds. Fine while
   the queue is short; it will want a frozen ledger before it is long.
+- **Allocation is a replay, not a ledger**, and that is the root of the above.
+  Every pound is dealt out again from scratch on each read. The immediate
+  consequence was a live bug: a finished order dropped out of the replay and
+  released everything it had consumed, so all 22.4 lb of Passion Fruit OG tops
+  read as unallocated including the 10 lb `MO-2026-001` had already eaten — and
+  a second PFOG order would have been credited with work physically already
+  spent. Fixed by keeping finished orders in the replay, ranked ahead of the
+  live queue, bounded to those accruing inside the same window. That bound is
+  the seam: a finished order older than the window is assumed settled. A real
+  ledger — recording which order each hour's pounds went to, once — removes both
+  this and the re-ranking problem, and is the right next structural change.

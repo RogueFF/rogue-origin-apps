@@ -586,7 +586,7 @@ function nowPT() {
  * automation can never disagree about how far along an order is.
  */
 async function computeQueue(db, crewOverride) {
-  const lines = await query(db, `
+  const queued = await query(db, `
     SELECT i.id AS lineId, i.order_id AS orderId, i.cultivar_id AS cultivarId,
            i.form, i.qty_lbs AS qtyLbs, i.sort_order AS sortOrder,
            o.accrual_start AS accrualStart
@@ -601,14 +601,47 @@ async function computeQueue(db, crewOverride) {
   // Burn-down reaches back only as far as the earliest order still in the queue
   // could accrue from. Scanning all of monthly_production would be both slower
   // and wrong — it would credit an order with last season's work.
-  const earliest = lines.reduce(
+  const earliest = queued.reduce(
     (min, l) => (l.accrualStart && l.accrualStart < min ? l.accrualStart : min),
     nowPT().date);
-  const entries = await recordedProduction(db, String(earliest).slice(0, 10));
+  const since = String(earliest).slice(0, 10);
+
+  // FINISHED ORDERS STILL HOLD THEIR CLAIM ON PAST POUNDS.
+  //
+  // Allocation is a replay, not a ledger: every pound is dealt out again from
+  // scratch on each read. So an order that has left the queue must still be
+  // dealt its share, or the pounds it already consumed are handed to whoever is
+  // next in line for that cultivar — and a second order would be credited with
+  // work that is physically already spent.
+  //
+  // Bounded to orders accruing inside the same window being replayed. A
+  // finished order older than that settled against entries this scan does not
+  // read, so including it would let last season re-claim this season's work.
+  const claimed = await query(db, `
+    SELECT i.id AS lineId, i.order_id AS orderId, i.cultivar_id AS cultivarId,
+           i.form, i.qty_lbs AS qtyLbs, i.sort_order AS sortOrder,
+           o.accrual_start AS accrualStart, o.queue_rank AS queueRank
+    FROM order_items i
+    JOIN orders o ON o.id = i.order_id
+    WHERE o.status = 'finished' AND o.accrual_start >= ?
+  `, [since]);
+
+  // Finished orders rank AHEAD of everything still queued. They took their
+  // pounds while they were at the front, and the replay has to reproduce that
+  // order or it will hand their share to a live order instead.
+  const finishedRank = new Map(
+    [...new Set(claimed.map(l => l.orderId))]
+      .sort((a, b) => String(a).localeCompare(String(b)))
+      .map((id, i) => [id, i - claimed.length - 1]));
+
+  const entries = await recordedProduction(db, since);
 
   const progress = allocate({
     entries,
-    lines: lines.map(l => ({ ...l, rank: rankOf.get(l.orderId) ?? Number.MAX_SAFE_INTEGER })),
+    lines: [
+      ...claimed.map(l => ({ ...l, rank: finishedRank.get(l.orderId) })),
+      ...queued.map(l => ({ ...l, rank: rankOf.get(l.orderId) ?? Number.MAX_SAFE_INTEGER })),
+    ],
   });
 
   const [{ rates, fallback }, crewInfo, names] = await Promise.all([
@@ -620,8 +653,10 @@ async function computeQueue(db, crewOverride) {
   const crew = Number(crewOverride) > 0 ? Number(crewOverride) : crewInfo.crew;
   const start = nowPT();
 
+  // Only the queue is scheduled. A finished order claims pounds but occupies no
+  // floor time, so it must not appear as a block or push live orders back.
   const scheduled = scheduleQueue({
-    blocks: orderBlocks(lines),
+    blocks: orderBlocks(queued),
     rates, crew, rank, fallback, start,
     progress: progress.byLine,
   });
