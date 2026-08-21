@@ -738,22 +738,150 @@
 .queue-meta .qm-spacer { margin-left: auto; }
 .queue-meta .qm-clear { color: var(--text-secondary); }
 
-.run-list { display: flex; flex-direction: column; gap: 9px; }
+.block-list { display: flex; flex-direction: column; gap: 10px; }
 
-.run-row {
-  display: grid;
-  grid-template-columns: 30px minmax(240px, 340px) 1fr;
-  gap: 14px;
-  align-items: stretch;
+/* A block is an order. The card is the drag surface; the passes inside it are
+   not draggable, because line order comes from how the order was typed. */
+.block-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   overflow: hidden;
   cursor: grab;
 }
-.run-row.estimated { border-color: var(--warning); }
-.run-row.dragging { opacity: 0.4; cursor: grabbing; }
-.run-row.drop-target { border-color: var(--ro-green); box-shadow: 0 0 0 2px rgba(102, 137, 113, 0.25); }
+.block-card.estimated { border-color: var(--warning); }
+.block-card.dragging { opacity: 0.4; cursor: grabbing; }
+.block-card.drop-target { border-color: var(--ro-green); box-shadow: 0 0 0 2px rgba(102, 137, 113, 0.25); }
+
+.block-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 14px 9px 0;
+  border-bottom: 1px solid var(--border-light);
+  flex-wrap: wrap;
+}
+
+.block-id {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--text);
+  background: none;
+  border: none;
+  border-bottom: 1px dashed var(--text-muted);
+  padding: 0;
+  cursor: pointer;
+}
+.block-id:hover { border-bottom-color: var(--text); }
+.block-id:focus-visible { outline: 2px solid var(--ro-green); outline-offset: 2px; }
+
+.block-customer {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.block-pct {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ro-green);
+}
+
+.block-eta {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.block-card > .run-track { margin: 10px 14px 0 14px; height: 22px; }
+
+.block-passes {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 10px 14px 12px;
+}
+
+/* ---- one trim pass ---- */
+
+.pass-row {
+  padding: 8px 10px;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.pass-row.estimated { box-shadow: inset 2px 0 0 var(--warning); }
+
+.pass-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.pass-cv { font-weight: 600; font-size: 0.875rem; color: var(--text); }
+
+/* Says out loud that two lines share one stretch of floor time — otherwise the
+   arithmetic looks wrong to anyone counting line items. */
+.pass-joint {
+  font-family: var(--font-mono);
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ro-green);
+  background: rgba(102, 137, 113, 0.16);
+  border-radius: var(--radius-sm);
+  padding: 1px 6px;
+}
+
+.pass-lot {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.pass-eta {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- a line item's burn-down ---- */
+
+.seg-line {
+  display: grid;
+  grid-template-columns: 52px 1fr auto auto;
+  gap: 9px;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.sl-form { text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.5625rem; font-weight: 700; }
+
+.sl-track {
+  height: 7px;
+  background: var(--border-light);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.sl-fill { height: 100%; background: var(--ro-green); border-radius: 4px; }
+.seg-line.filled .sl-fill { background: var(--info); }
+.seg-line.filled .sl-pct { color: var(--info); font-weight: 700; }
+
+.sl-num { color: var(--text-secondary); }
+.sl-pct { min-width: 34px; text-align: right; }
 
 .run-handle {
   display: grid;
@@ -765,16 +893,6 @@
   letter-spacing: -2px;
 }
 
-.run-main {
-  padding: 11px 0 11px 2px;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
-}
-
-.run-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-
 .run-rank {
   font-family: var(--font-mono);
   font-size: 0.6875rem;
@@ -785,8 +903,6 @@
   padding: 2px 7px;
   font-variant-numeric: tabular-nums;
 }
-
-.run-cv { font-weight: 600; font-size: 0.9375rem; color: var(--text); }
 
 .run-flag {
   font-family: var(--font-mono);
@@ -800,45 +916,13 @@
   padding: 2px 6px;
 }
 
-.run-lot {
-  margin-left: auto;
-  padding-right: 6px;
-  font-family: var(--font-mono);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--text);
-}
-
-.run-feeds, .run-sized {
+.run-sized {
   font-family: var(--font-mono);
   font-size: 0.6875rem;
   color: var(--text-muted);
   overflow-wrap: anywhere;
 }
 .run-sized em { font-style: normal; font-weight: 600; color: var(--text-secondary); }
-
-.run-pool {
-  font-size: 0.5625rem;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--ro-green);
-  background: rgba(102, 137, 113, 0.16);
-  border-radius: var(--radius-sm);
-  padding: 1px 6px;
-  margin-right: 6px;
-}
-
-.run-tl {
-  border-left: 1px solid var(--border-light);
-  padding: 11px 16px 11px 14px;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 6px;
-}
 
 .run-track {
   position: relative;
@@ -859,6 +943,14 @@
   padding: 0 6px;
 }
 .run-bar.est { background: var(--warning); }
+/* The bar is the block's span; the fill inside it is what has actually been
+   trimmed. Two different claims, so they must not look like one. */
+.run-bar-fill {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: rgba(10, 12, 11, 0.22);
+  border-radius: var(--radius-sm);
+}
 .run-bar span {
   font-family: var(--font-mono);
   font-size: 0.625rem;
@@ -867,17 +959,7 @@
   white-space: nowrap;
 }
 
-.run-eta {
-  display: flex;
-  gap: 7px;
-  align-items: baseline;
-  flex-wrap: wrap;
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-}
-.run-eta b { color: var(--text); font-weight: 600; }
+.queue-note.stray { border-left-color: var(--warning); color: var(--text-secondary); }
 
 .queue-note {
   margin: var(--space-lg) 0 0;
@@ -924,13 +1006,16 @@
 }
 .oc-short svg { flex: none; margin-top: 2px; }
 
-@media (max-width: 900px) {
-  .run-row { grid-template-columns: 30px 1fr; }
-  .run-tl {
-    grid-column: 1 / -1;
-    border-left: 0;
-    border-top: 1px solid var(--border-light);
-  }
+@media (max-width: 640px) {
+  /* The boss reads this on a phone. The block card is already a vertical stack,
+     so only the two grid rows need loosening: the pounds column is the first
+     thing to drop, because the bar and the percentage already say it. */
+  .seg-line { grid-template-columns: 44px 1fr auto; gap: 7px; }
+  .seg-line .sl-num { display: none; }
+  .block-head { row-gap: 4px; padding-right: 10px; }
+  .block-customer { flex-basis: 100%; order: 3; }
+  .block-passes { padding: 8px 9px 10px; }
+  .pass-lot { margin-left: 0; }
 }
 
 @media (max-width: 768px) {
@@ -990,7 +1075,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .run-row, .chip, .nav-item, .done-row { transition: none; }
+  .block-card, .chip, .nav-item, .done-row { transition: none; }
 }
 
 /* ============================================
@@ -1012,20 +1097,6 @@
 .run-short .rs-icon { font-size: 0.5625rem; }
 
 /* An order reference on a run — the only route to an order still in the queue. */
-.run-order {
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  color: var(--ro-green);
-  background: transparent;
-  border: none;
-  border-bottom: 1px dotted var(--ro-green);
-  padding: 0;
-  margin: 0;
-  cursor: pointer;
-}
-.run-order:hover { color: var(--text); border-bottom-color: var(--text); }
-.run-order:focus-visible { outline: 2px solid var(--ro-green); outline-offset: 2px; }
-
 /* ============================================
    COMPLETED ORDERS
    ============================================ */
@@ -1092,7 +1163,7 @@
   text-transform: uppercase;
   color: var(--text-muted);
 }
-.done-row .dr-status.s-shipped { color: var(--info); }
+.done-row .dr-status.s-finished { color: var(--info); }
 .done-row .dr-cultivars {
   color: var(--text-muted);
   overflow: hidden;

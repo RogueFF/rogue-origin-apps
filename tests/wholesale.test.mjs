@@ -20,7 +20,7 @@ import {
   fromLbs,
   lotSize,
   pickRate,
-  poolDemand,
+  orderBlocks,
 } from '../workers/src/lib/wholesale.js';
 
 const near = (a, b, tol = 0.01) =>
@@ -140,37 +140,67 @@ test('zero trimmer-hours never produces a divide-by-zero rate', () => {
   assert.ok(Number.isFinite(r.ratePerTrimmerHour));
 });
 
-// --- demand pooling ------------------------------------------------------
+// --- order blocks --------------------------------------------------------
 
 const ITEMS = [
-  { orderId: 'MO-1', cultivarId: 'sour-lifter', form: 'tops', qtyLbs: 308 },
-  { orderId: 'MO-1', cultivarId: 'lifter', form: 'tops', qtyLbs: 143 },
-  { orderId: 'MO-1', cultivarId: 'lifter', form: 'smalls', qtyLbs: 220 },
-  { orderId: 'MO-2', cultivarId: 'lifter', form: 'tops', qtyLbs: 88 },
-  { orderId: 'MO-3', cultivarId: 'sour-lifter', form: 'tops', qtyLbs: 176 },
+  { lineId: 'a', orderId: 'MO-1', cultivarId: 'sour-lifter', form: 'tops', qtyLbs: 308, sortOrder: 0 },
+  { lineId: 'b', orderId: 'MO-1', cultivarId: 'lifter', form: 'tops', qtyLbs: 143, sortOrder: 1 },
+  { lineId: 'c', orderId: 'MO-1', cultivarId: 'lifter', form: 'smalls', qtyLbs: 220, sortOrder: 2 },
+  { lineId: 'd', orderId: 'MO-2', cultivarId: 'lifter', form: 'tops', qtyLbs: 88, sortOrder: 0 },
+  { lineId: 'e', orderId: 'MO-3', cultivarId: 'sour-lifter', form: 'tops', qtyLbs: 176, sortOrder: 0 },
 ];
 
-test('demand pools by cultivar, not by cultivar and form', () => {
-  const pools = poolDemand(ITEMS);
-  assert.deepEqual(pools.map(p => p.cultivarId).sort(), ['lifter', 'sour-lifter']);
+test('line items group into one block per ORDER', () => {
+  const blocks = orderBlocks(ITEMS);
+  assert.deepEqual(blocks.map(b => b.orderId).sort(), ['MO-1', 'MO-2', 'MO-3']);
 });
 
-test('a pool sums both forms across every order that needs the cultivar', () => {
-  const lifter = poolDemand(ITEMS).find(p => p.cultivarId === 'lifter');
-  near(lifter.topsLbs, 231);   // 143 + 88, two different orders
+test('a cultivar wanted by two orders appears in both, not pooled into one', () => {
+  // The 2026-08-20 reversal, asserted at the grouping layer. Lifter is wanted by
+  // MO-1 and MO-2; under the old poolDemand it collapsed into a single 231 lb
+  // demand pool. It must now stay separate, because the floor runs it twice.
+  const blocks = orderBlocks(ITEMS);
+  const inOne = blocks.find(b => b.orderId === 'MO-1').passes.find(p => p.cultivarId === 'lifter');
+  const inTwo = blocks.find(b => b.orderId === 'MO-2').passes.find(p => p.cultivarId === 'lifter');
+  near(inOne.topsLbs, 143);
+  near(inTwo.topsLbs, 88);
+});
+
+test('tops and smalls of one cultivar in one order become a single pass', () => {
+  const lifter = orderBlocks(ITEMS)
+    .find(b => b.orderId === 'MO-1').passes.find(p => p.cultivarId === 'lifter');
+  near(lifter.topsLbs, 143);
   near(lifter.smallsLbs, 220);
+  assert.equal(lifter.lines.length, 2, 'one pass, but still two lines inside it');
 });
 
-test('a pool records which orders it feeds, so a run can name them', () => {
-  const lifter = poolDemand(ITEMS).find(p => p.cultivarId === 'lifter');
-  assert.deepEqual([...lifter.orderIds].sort(), ['MO-1', 'MO-2']);
+test('each line keeps its own identity so the board can show its own progress', () => {
+  const lifter = orderBlocks(ITEMS)
+    .find(b => b.orderId === 'MO-1').passes.find(p => p.cultivarId === 'lifter');
+  assert.deepEqual(lifter.lines.map(l => l.lineId).sort(), ['b', 'c']);
+  assert.deepEqual(lifter.lines.map(l => l.form), ['tops', 'smalls']);
 });
 
-test('pooling an empty order book yields no runs rather than throwing', () => {
-  assert.deepEqual(poolDemand([]), []);
+test('passes run in the typed order of their earliest line', () => {
+  const mo1 = orderBlocks(ITEMS).find(b => b.orderId === 'MO-1');
+  assert.deepEqual(mo1.passes.map(p => p.cultivarId), ['sour-lifter', 'lifter']);
+});
+
+test('a pass takes the position of its earliest line, not its last', () => {
+  const blocks = orderBlocks([
+    { lineId: '1', orderId: 'MO-1', cultivarId: 'berry-bliss', form: 'tops', qtyLbs: 10, sortOrder: 0 },
+    { lineId: '2', orderId: 'MO-1', cultivarId: 'lifter', form: 'tops', qtyLbs: 10, sortOrder: 1 },
+    { lineId: '3', orderId: 'MO-1', cultivarId: 'berry-bliss', form: 'smalls', qtyLbs: 10, sortOrder: 2 },
+  ]);
+  assert.deepEqual(blocks[0].passes.map(p => p.cultivarId), ['berry-bliss', 'lifter']);
+  assert.equal(blocks[0].passes[0].seq, 0);
+});
+
+test('an empty order book yields no blocks rather than throwing', () => {
+  assert.deepEqual(orderBlocks([]), []);
 });
 
 test('an unknown form is rejected rather than being silently dropped from demand', () => {
-  const bad = [{ orderId: 'MO-1', cultivarId: 'lifter', form: 'biomass', qtyLbs: 5 }];
-  assert.throws(() => poolDemand(bad), /form/i);
+  const bad = [{ lineId: 'x', orderId: 'MO-1', cultivarId: 'lifter', form: 'biomass', qtyLbs: 5, sortOrder: 0 }];
+  assert.throws(() => orderBlocks(bad), /form/i);
 });

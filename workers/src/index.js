@@ -89,6 +89,22 @@ export default {
       } catch (e) {
         console.error(`[Cron] JD ingest failed: ${e.message}`);
       }
+
+      // Wholesale order statuses, advanced from what the floor recorded: the
+      // first pound moves an order to in_production, a fully trimmed one to
+      // finished. It lives here rather than in getQueue because it is a write,
+      // and a GET that mutates the order book would be both a surprise and
+      // dependent on somebody having the page open. Forward-only, so a status
+      // set by hand is never walked back.
+      try {
+        const { syncOrderStatuses } = await import('./handlers/wholesale-d1.js');
+        const moved = await syncOrderStatuses(env);
+        if (moved.length) {
+          console.log(`[Cron] Wholesale statuses: ${moved.map(m => `${m.id} ${m.from}->${m.to}`).join(', ')}`);
+        }
+      } catch (e) {
+        console.error(`[Cron] Wholesale status sync failed: ${e.message}`);
+      }
     }
   },
 

@@ -35,8 +35,8 @@ registerLabels({
     nav_complaints: 'Complaints',
     nav_floor: 'Floor Manager',
     new_order: 'New order', new_customer: 'New customer',
-    filter_active: 'Active', filter_draft: 'Draft', filter_open: 'Open',
-    filter_in_production: 'In production', filter_shipped: 'Shipped', filter_closed: 'Closed',
+    status_in_queue: 'In queue', status_in_production: 'In production',
+    status_finished: 'Finished',
     no_orders: 'No orders yet. Create the first one.',
     none_match: 'No orders match this filter.',
     no_lines: 'No line items yet',
@@ -59,13 +59,13 @@ registerLabels({
     view_board: 'Orders', view_queue: 'Production queue',
     crew: 'Crew', crew_use_derived: 'Use derived', recalculate: 'Recalculate',
     crew_override: 'manual override', crew_derived: 'derived from the last', days: 'production days',
-    clears: 'queue clears', lot: 'lot', pooled: 'Pooled',
-    sized_by: 'sized by', yields: 'yields T/S', done: 'done', per_hr: 'lb/trimmer-hr',
+    clears: 'queue clears', lot: 'lot', one_pass: 'one pass',
+    unallocated_note: 'trimmed with no order waiting for it.',
+    sized_by: 'sized by', yields: 'yields T/S', done: 'done',
     no_history: 'No history', loading: 'Loading…',
     queue_empty: 'Nothing to schedule. Only open and in-production orders are queued.',
     queue_failed: 'Could not load the queue',
     queue_note: 'Estimates, not commitments. Built from measured trim rates and the real work calendar — Sunday off, Saturday to noon, breaks removed. It cannot see future crew changes or holidays, and does not model drying, packaging or freight.',
-    est_finish: 'est. finish', held_by: 'held by', soft: '(estimated rate)',
     imported: 'imported',
     completed: 'Not in the queue', none_off_queue: 'Every order is in the queue.',
     over_packed: 'over what is packed', raw_sacks: 'raw sacks', no_raw: 'no raw sacks',
@@ -89,8 +89,8 @@ registerLabels({
     nav_complaints: 'Quejas',
     nav_floor: 'Gestor de Piso',
     new_order: 'Nuevo pedido', new_customer: 'Nuevo cliente',
-    filter_active: 'Activos', filter_draft: 'Borrador', filter_open: 'Abierto',
-    filter_in_production: 'En producción', filter_shipped: 'Enviado', filter_closed: 'Cerrado',
+    status_in_queue: 'En cola', status_in_production: 'En producción',
+    status_finished: 'Terminado',
     no_orders: 'Aún no hay pedidos. Cree el primero.',
     none_match: 'Ningún pedido coincide con este filtro.',
     no_lines: 'Sin renglones todavía',
@@ -113,13 +113,13 @@ registerLabels({
     view_board: 'Pedidos', view_queue: 'Cola de producción',
     crew: 'Equipo', crew_use_derived: 'Usar calculado', recalculate: 'Recalcular',
     crew_override: 'ajuste manual', crew_derived: 'calculado de los últimos', days: 'días de producción',
-    clears: 'la cola termina', lot: 'lote', pooled: 'Agrupado',
-    sized_by: 'dimensionado por', yields: 'rinde T/S', done: 'listo', per_hr: 'lb/podador-hr',
+    clears: 'la cola termina', lot: 'lote', one_pass: 'una pasada',
+    unallocated_note: 'podado sin pedido que lo espere.',
+    sized_by: 'dimensionado por', yields: 'rinde T/S', done: 'listo',
     no_history: 'Sin historial', loading: 'Cargando…',
     queue_empty: 'Nada que programar. Solo se programan pedidos abiertos y en producción.',
     queue_failed: 'No se pudo cargar la cola',
     queue_note: 'Estimaciones, no compromisos. Calculado con tasas de poda medidas y el calendario real — domingo libre, sábado hasta mediodía, descansos descontados. No prevé cambios de equipo ni feriados, y no modela secado, empaque ni flete.',
-    est_finish: 'fin est.', held_by: 'retenido por', soft: '(tasa estimada)',
     imported: 'importado',
     completed: 'Fuera de la cola', none_off_queue: 'Todos los pedidos están en la cola.',
     over_packed: 'más de lo empacado', raw_sacks: 'sacos crudos', no_raw: 'sin sacos crudos',
@@ -137,9 +137,9 @@ registerLabels({
 function buildStatusOptions(current) {
   const sel = $('f-status');
   sel.textContent = '';
-  // An older or imported row may hold a status the picker no longer offers
-  // (`draft`). Include it when present, so opening that order does not
-  // silently rewrite its status on the next save.
+  // A row may hold a status this build does not offer — a mid-deploy front end
+  // against a newer worker. Include it when present, so opening that order does
+  // not silently rewrite its status on the next save.
   const list = current && !STATUSES.includes(current) ? [current, ...STATUSES] : STATUSES;
   list.forEach(s => sel.append(option(statusLabel(s), s)));
 }

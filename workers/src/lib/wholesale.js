@@ -132,14 +132,30 @@ export function pickRate({ sameYear, allYears, minHours, fallback }) {
 }
 
 /**
- * Collapse open line items into one demand pool per cultivar.
+ * Group open line items into ORDER blocks, and each block into trim passes.
  *
- * Pooling is by cultivar alone. Demand is per (cultivar, form) because that is
- * what a customer buys, but production is not — which is why the run queue and
- * this function key on the cultivar only.
+ * This replaces the pooled-by-cultivar model. A block is an order; the floor
+ * works one order at a time, so a cultivar wanted by two orders is trimmed
+ * twice. Inside a block, line items run in the order they were typed
+ * (`sortOrder`), which is what the operator asked for and what
+ * `order_items.sort_order` has been storing all along.
+ *
+ * PASSES, and why they are not just line items. Tops and smalls of the SAME
+ * cultivar within the SAME order come off one lot in one pass — 45 days of
+ * monthly_production record both against the same cultivar and the same trimmer
+ * count. So lines are grouped by cultivar into a pass, which is what gets
+ * scheduled and sized. Each line keeps its own identity inside the pass so the
+ * board can show a separate progress bar per line, which is the whole reason the
+ * lines stay separate.
+ *
+ * A pass sits at the position of its EARLIEST line: if Berry Bliss tops is line
+ * 1 and Berry Bliss smalls is line 4, the pass runs first and both lines finish
+ * together.
+ *
+ * Design: docs/plans/2026-08-20-order-blocks-restructure.md §4
  */
-export function poolDemand(items) {
-  const pools = new Map();
+export function orderBlocks(items) {
+  const blocks = new Map();
 
   for (const item of items) {
     if (!FORMS.has(item.form)) {
@@ -147,16 +163,40 @@ export function poolDemand(items) {
     }
     assertQty(item.qtyLbs);
 
-    let pool = pools.get(item.cultivarId);
-    if (!pool) {
-      pool = { cultivarId: item.cultivarId, topsLbs: 0, smallsLbs: 0, orderIds: new Set() };
-      pools.set(item.cultivarId, pool);
+    let block = blocks.get(item.orderId);
+    if (!block) {
+      block = { orderId: item.orderId, passes: new Map() };
+      blocks.set(item.orderId, block);
     }
 
-    if (item.form === 'tops') pool.topsLbs += item.qtyLbs;
-    else pool.smallsLbs += item.qtyLbs;
-    pool.orderIds.add(item.orderId);
+    let pass = block.passes.get(item.cultivarId);
+    if (!pass) {
+      pass = {
+        cultivarId: item.cultivarId,
+        seq: item.sortOrder,
+        topsLbs: 0,
+        smallsLbs: 0,
+        lines: [],
+      };
+      block.passes.set(item.cultivarId, pass);
+    }
+
+    if (item.form === 'tops') pass.topsLbs += item.qtyLbs;
+    else pass.smallsLbs += item.qtyLbs;
+
+    pass.seq = Math.min(pass.seq, item.sortOrder);
+    pass.lines.push({
+      lineId: item.lineId,
+      form: item.form,
+      qtyLbs: item.qtyLbs,
+      sortOrder: item.sortOrder,
+    });
   }
 
-  return [...pools.values()];
+  return [...blocks.values()].map(b => ({
+    orderId: b.orderId,
+    passes: [...b.passes.values()]
+      .sort((x, y) => x.seq - y.seq || x.cultivarId.localeCompare(y.cultivarId))
+      .map(p => ({ ...p, lines: [...p.lines].sort((x, y) => x.sortOrder - y.sortOrder) })),
+  }));
 }

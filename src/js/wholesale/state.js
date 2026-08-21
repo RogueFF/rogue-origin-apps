@@ -5,19 +5,19 @@
  */
 
 import { makeApi } from '../shared/api.js';
+import { t } from '../shared/i18n.js';
 
 export const api = makeApi('wholesale', { auth: true });
 
 /**
- * Mirrors the CHECK constraint on orders.status (migration 0018), minus
- * `draft`.
+ * Mirrors the CHECK constraint on orders.status (migration 0019) exactly — every
+ * status the database accepts is offered here, and nothing else is.
  *
- * An order is only entered once it is ready to be queued, so there is no
- * drafting stage to represent. `draft` stays valid in the database — dropping
- * it would be a migration to remove something harmless, and imported or older
- * rows may still carry it — it is simply not offered here.
+ * The five-word vocabulary 0018 guessed at is gone: `draft` was never created by
+ * anything, and `shipped` vs `closed` was a distinction nothing downstream ever
+ * branched on. These three are the words the floor says.
  */
-export const STATUSES = ['open', 'in_production', 'shipped', 'closed'];
+export const STATUSES = ['in_queue', 'in_production', 'finished'];
 
 export const state = {
   orders: [],
@@ -54,8 +54,16 @@ export function option(label, value, selected = false) {
   return o;
 }
 
+/**
+ * Translated, unlike the sentence-case fallback this replaced — the status is
+ * the one word on a card that says what to do about it, and the floor reads the
+ * board in Spanish. The fallback still covers a value the database has but this
+ * build has not heard of, which is what a mid-deploy front end sees.
+ */
 export function statusLabel(s) {
-  return s === 'in_production' ? 'In production' : s.charAt(0).toUpperCase() + s.slice(1);
+  const key = `status_${s}`;
+  const label = t(key);
+  return label === key ? s.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase()) : label;
 }
 
 export async function loadCoverage() {
@@ -66,7 +74,7 @@ export async function loadAll() {
   const [cultivars, customers, orders] = await Promise.all([
     api.get('getCultivars'),
     api.get('getCustomers'),
-    api.get('getOrders', { includeClosed: 'true' }),
+    api.get('getOrders', { includeFinished: 'true' }),
   ]);
   state.cultivars = cultivars.cultivars || [];
   state.customers = customers.customers || [];

@@ -31,7 +31,7 @@ export function openEditor(order) {
   $('modal-title').textContent = order ? order.id : t('new_order');
   buildStatus(order?.status);
   $('f-customer').value = order?.customerId || '';
-  $('f-status').value = order?.status || 'open';
+  $('f-status').value = order?.status || 'in_queue';
   $('f-date').value = order?.orderDate || new Date().toISOString().slice(0, 10);
   $('f-terms').value = order?.paymentTerms || '';
   $('f-notes').value = order?.notes || '';
