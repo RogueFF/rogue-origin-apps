@@ -151,13 +151,40 @@ textarea:focus-visible,
   border-radius: 4px;
 }
 
-/* Skip link visibility */
+/* Skip link.
+   This sheet used to style only `:focus`, so a page that did not supply its own
+   hiding rule rendered the link inline as stray text — which is what happened on
+   the wholesale board, where the fixed sidebar covered it on desktop and nothing
+   covered it once the sidebar went off-canvas on a phone. The other page sheets
+   each hide it themselves with `top: -40px` or `left: -9999px`, so they were
+   never visibly broken; they were each re-deriving a rule that belongs here. The
+   base rule lands here so the shared sheet is correct on its own and a new page
+   inherits it instead of having to remember. Clip rather than off-screen offset:
+   it leaves no box outside the viewport to extend a scroll region. */
+.skip-link {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .skip-link:focus {
   position: absolute;
   top: 8px;
   left: 8px;
   z-index: 9999;
+  width: auto;
+  height: auto;
+  margin: 0;
   padding: 12px 16px;
+  overflow: visible;
+  clip: auto;
+  clip-path: none;
   background: var(--ro-green);
   color: white;
   text-decoration: none;
@@ -258,6 +285,21 @@ textarea:focus-visible,
 .text-secondary { color: var(--text-secondary); }
 
 /* Display utilities */
+
+/* The `hidden` attribute only hides via a UA default of `display: none`, which
+   any component rule outranks. `.btn` sets `display: inline-flex`, so on the
+   wholesale board `$('btn-delete').hidden = true` did nothing and Delete showed
+   on a brand-new order that has nothing to delete. That sheet had already grown
+   three one-off `[hidden]` patches — modal backdrop, queue bar, done list — which
+   is the same bug found and worked around three times; this is the general rule
+   they were standing in for. Today it is a no-op on the other pages (nothing
+   there sets `hidden` on a flex or grid component), so it is a floor, not a fix:
+   it makes `el.hidden = true` mean what it reads like everywhere.
+   The `!important` also beats an inline `style.display`, so an element authored
+   with `hidden` must be un-hidden by clearing the attribute, not by inline
+   style. Nothing in this repo does the latter — checked before this landed. */
+[hidden] { display: none !important; }
+
 .hidden { display: none !important; }
 .flex { display: flex; }
 .flex-center { display: flex; align-items: center; justify-content: center; }
