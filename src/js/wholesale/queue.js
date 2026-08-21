@@ -84,6 +84,29 @@ const pctText = (p) => `${Math.round(p * 100)}%`;
  * repeat to a buyer. Twenty-four hour also reads the same in both languages the
  * board is used in.
  */
+/**
+ * 'PDT' or 'PST', whichever the farm is actually on today.
+ *
+ * Every time on this board is already Pacific — the scheduler carries a civil
+ * date and minutes-since-midnight and never constructs a local Date, and the
+ * worker seeds it from America/Los_Angeles. The board simply never said so, and
+ * an unlabelled clock time on a figure that gets quoted to a buyer is the kind
+ * of ambiguity that costs somebody a day.
+ *
+ * Derived rather than written down: "PST" is wrong from March to November, and
+ * a hardcoded label would be wrong for two thirds of a season.
+ */
+export function zoneLabel(now = new Date()) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Los_Angeles', timeZoneName: 'short',
+    }).formatToParts(now);
+    return parts.find(p => p.type === 'timeZoneName')?.value || 'PT';
+  } catch {
+    return 'PT';
+  }
+}
+
 export function humanMoment(m) {
   const [, mo, d] = m.date.split('-').map(Number);
   const hh = String(Math.floor(m.minutes / 60)).padStart(2, '0');
@@ -273,6 +296,7 @@ export function renderQueue() {
   meta.append(el('span', 'qm-basis', q.crewBasis === 'override'
     ? t('crew_override')
     : `${t('crew_derived')} ${q.crewDays} ${t('days')}`));
+  meta.append(el('span', 'qm-tz', `${t('times')} ${zoneLabel()}`));
   meta.append(el('span', 'qm-spacer'));
   meta.append(el('span', 'qm-clear', `${t('clears')} ${humanDate(q.blocks[q.blocks.length - 1].finish.date)}`));
   wrap.append(meta);

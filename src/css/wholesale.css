@@ -735,6 +735,11 @@
   color: var(--text-muted);
 }
 .queue-meta .qm-crew { color: var(--text); font-weight: 600; }
+.queue-meta .qm-tz {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
 .queue-meta .qm-spacer { margin-left: auto; }
 .queue-meta .qm-clear { color: var(--text-secondary); }
 
