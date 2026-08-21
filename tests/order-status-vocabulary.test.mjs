@@ -77,7 +77,11 @@ test('the worker validates against the same three, and defaults to the same one'
   const src = read('workers/src/handlers/wholesale-d1.js');
   assert.deepEqual(words(src, /const ORDER_STATUSES = new Set\(\[([^\]]*)\]\)/), EXPECTED);
 
-  const m = src.match(/const status = body\.status \|\| '([a-z_]+)'/);
+  // Matched at the END of the fallback chain rather than at a fixed shape:
+  // saveOrder now prefers the status already on the row before falling back to
+  // the vocabulary's first, and the guard has an opinion about the fallback,
+  // not about how many steps precede it.
+  const m = src.match(/const status = body\.status \|\|[^;]*'([a-z_]+)';/);
   assert.ok(m, 'saveOrder no longer defaults a status');
   assert.equal(m[1], EXPECTED[0]);
 });

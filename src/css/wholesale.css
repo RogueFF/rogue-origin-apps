@@ -2397,3 +2397,7 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
   .pl-tool { min-width: 44px; min-height: 44px; }
   .pl-tool-gap { min-width: 44px; }
 }
+
+/* A gap in the data, not a setting. Amber because unread production looks
+   exactly like a floor that has stopped trimming. */
+.fab-caption .crew-basis.warn { color: var(--ro-gold); }

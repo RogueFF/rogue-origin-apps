@@ -11,7 +11,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { deriveEvents, orderLabel, shortDate } from '../workers/src/lib/wholesale-notify.js';
+import { deriveEvents, orderLabel, shortDate, safeLabel } from '../workers/src/lib/wholesale-notify.js';
 
 const TODAY = '2026-08-21';
 
@@ -145,6 +145,42 @@ test('status changes become order started and order finished', () => {
 
 // --- the slipping date, which is the one that speaks twice ----------------
 
+test('operator text cannot break the message it is placed in', () => {
+  // A nickname is free text dropped inside `*…*`. One unbalanced marker makes
+  // Telegram reject the whole message with a 400.
+  assert.equal(safeLabel('Bill_s *big* [order]'), 'Bills big order');
+  assert.equal(safeLabel('  spaced  '), 'spaced');
+  assert.equal(safeLabel(null), '');
+  assert.equal(orderLabel({ nickname: '*_[' }), 'order', 'a label of nothing but markers falls back');
+});
+
+test('a strain name is sanitised too, not just the order label', () => {
+  const blocks = [block({ passes: [pass({
+    cultivarName: 'Berry *Bliss*', lines: [line({ doneLbs: 10, pct: 0.1 })],
+  })] })];
+  const ev = spoken(deriveEvents({ blocks, orders: [order()], today: TODAY }))[0];
+  assert.ok(!/\*Berry \*Bliss\*\*/.test(ev.text), 'nested markers would 400');
+  assert.match(ev.text, /Berry Bliss/);
+});
+
+test('THE SLIP BASELINE IS THE LAST DATE ANNOUNCED, NOT THE LAST SEEN', () => {
+  // Re-recording the date every tick made the comparison meaningless: the
+  // baseline was never more than one tick old, so the ordinary slip — days
+  // drifting a few minutes at a time — could never accumulate into a day.
+  let ledger = new Map([['promise_date:MO-1', { finish: '2026-09-09' }]]);
+
+  // Three ticks of small drift, none of them a day.
+  for (const d of ['2026-09-09', '2026-09-09', '2026-09-09']) {
+    const ev = deriveEvents({ blocks: [block({ finish: { date: d, minutes: 700 } })], orders: [order()], sent: ledger, today: TODAY });
+    assert.equal(spoken(ev).length, 0);
+    ledger = new Map([...ledger, ...ledgerFrom(ev)]);
+  }
+  // The baseline has NOT moved, so a day of accumulated drift still reads as a slip.
+  assert.equal(ledger.get('promise_date:MO-1').finish, '2026-09-09');
+  const slip = deriveEvents({ blocks: [block({ finish: { date: '2026-09-10', minutes: 700 } })], orders: [order()], sent: ledger, today: TODAY });
+  assert.equal(spoken(slip).filter(e => e.rule === 'running_behind').length, 1);
+});
+
 test('a date says nothing the first time it is seen', () => {
   const events = deriveEvents({ blocks: [block()], orders: [order()], today: TODAY });
   assert.equal(spoken(events).filter(e => e.rule === 'running_behind').length, 0);
@@ -192,16 +228,29 @@ test('the same slip is not reported twice, but a further one is', () => {
 
 // --- an empty floor --------------------------------------------------------
 
-test('an empty queue says so, once a day rather than once ever', () => {
+test('an empty queue announces the CLEARING, not the emptiness', () => {
+  // Keyed by day, this used to fire at the first tick past midnight for as long
+  // as the queue stayed empty — every morning, about nothing having happened.
   const first = deriveEvents({ blocks: [], orders: [], today: TODAY });
   assert.equal(spoken(first).filter(e => e.rule === 'queue_clear').length, 1);
 
-  const same = deriveEvents({ blocks: [], orders: [], sent: ledgerFrom(first), today: TODAY });
-  assert.equal(spoken(same).length, 0);
+  const ledger = ledgerFrom(first);
+  assert.equal(spoken(deriveEvents({ blocks: [], orders: [], sent: ledger, today: TODAY })).length, 0);
 
-  // Cleared again another day: worth saying again.
-  const later = deriveEvents({ blocks: [], orders: [], sent: ledgerFrom(first), today: '2026-09-30' });
-  assert.equal(spoken(later).filter(e => e.rule === 'queue_clear').length, 1);
+  // The next day, and the day after. Still empty, still not news.
+  assert.equal(spoken(deriveEvents({ blocks: [], orders: [], sent: ledger, today: '2026-08-22' })).length, 0);
+  assert.equal(spoken(deriveEvents({ blocks: [], orders: [], sent: ledger, today: '2026-09-30' })).length, 0);
+});
+
+test('work arriving and then finishing makes a clearing newsworthy again', () => {
+  let ledger = ledgerFrom(deriveEvents({ blocks: [], orders: [], today: TODAY }));
+  // Work arrives: the board is no longer empty, which is recorded silently.
+  const busy = deriveEvents({ blocks: [block()], orders: [order()], sent: ledger, today: TODAY });
+  assert.equal(spoken(busy).filter(e => e.rule === 'queue_clear').length, 0);
+  ledger = new Map([...ledger, ...ledgerFrom(busy)]);
+  // And empties again.
+  const cleared = deriveEvents({ blocks: [], orders: [order()], sent: ledger, today: TODAY });
+  assert.equal(spoken(cleared).filter(e => e.rule === 'queue_clear').length, 1);
 });
 
 test('a queue with work in it does not announce that it is clear', () => {

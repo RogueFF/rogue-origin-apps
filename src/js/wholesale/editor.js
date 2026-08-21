@@ -18,7 +18,7 @@ export function onBuildStatus(fn) { buildStatus = fn; }
 const $ = (id) => document.getElementById(id);
 
 function blankLine() {
-  return { cultivarId: '', form: 'tops', qty: '', unit: 'lb', unitPrice: '' };
+  return { cultivarId: '', form: 'tops', qty: '', unit: 'lb', unitPrice: '', sku: null, notes: null };
 }
 
 let lines = [];
@@ -45,6 +45,11 @@ export function openEditor(order) {
         qty: String(i.enteredQty),
         unit: i.enteredUnit,
         unitPrice: i.unitPrice ? String(i.unitPrice) : '',
+        // Carried, not shown. `importOrder` writes the SKU it matched and a
+        // note reading "12 x RO-LIF-5LB-T"; saving is replace-all, so a field
+        // this form does not round-trip is a field the first edit destroys.
+        sku: i.sku ?? null,
+        notes: i.notes ?? null,
       }))
     : [blankLine()];
 
@@ -238,6 +243,8 @@ export async function saveOrder() {
       qty: Number(l.qty),
       unit: l.unit,
       unitPrice: Number(l.unitPrice) || 0,
+      sku: l.sku ?? null,
+      notes: l.notes ?? null,
     })),
   };
 
@@ -304,7 +311,10 @@ export async function patchOrder(order, overrides = {}) {
   try {
     await api.post('saveOrder', {
       id: order.id,
-      status: order.status,
+      // Status deliberately not sent. The board's copy can be up to a minute
+      // old, and the cron advances statuses on its own — sending a stale one
+      // back would drag a finished order into the queue. The server keeps
+      // whatever it currently holds when the field is absent.
       orderDate: order.orderDate,
       paymentTerms: order.paymentTerms,
       notes: order.notes,
@@ -316,6 +326,10 @@ export async function patchOrder(order, overrides = {}) {
         qty: Number(i.enteredQty ?? i.qtyLbs),
         unit: i.enteredUnit || 'lb',
         unitPrice: Number(i.unitPrice) || 0,
+        // Same reason as the editor: a quantity nudged on a card round-trips
+        // every line, so anything not carried here is deleted by it.
+        sku: i.sku ?? null,
+        notes: i.notes ?? null,
       })),
     });
     return true;

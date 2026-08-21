@@ -21,9 +21,25 @@
 /** A day of slip below which nobody needs telling. */
 const SLIP_DAYS = 1;
 
+/**
+ * Make operator text safe to interpolate into a Telegram Markdown message.
+ *
+ * Nicknames and cultivar names are free text, and they are placed inside `*…*`
+ * for bold. A single unbalanced `_`, `*`, `[` or backtick makes Telegram reject
+ * the whole message with a 400 — which, before the send loop was made
+ * per-event, wedged every notification behind it forever.
+ *
+ * The characters are removed rather than backslash-escaped: legacy Markdown's
+ * escaping is inconsistent about which ones it honours, and a nickname is a
+ * label, not a place anyone means to write emphasis.
+ */
+export function safeLabel(text) {
+  return String(text ?? '').replace(/[*_`[\]]/g, '').trim();
+}
+
 /** What to call an order in a message: what the floor calls it, else its number. */
 export function orderLabel(order) {
-  return order?.nickname || order?.shopifyOrderName || order?.id || 'order';
+  return safeLabel(order?.nickname || order?.shopifyOrderName || order?.id) || 'order';
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -92,7 +108,7 @@ export function deriveEvents({ blocks = [], orders = [], moved = [], sent = new 
 
       if (done > 0) {
         push('strain_started', key,
-          `▶️ Now trimming *${pass.cultivarName}* for ${label} — ${fmt(total)}.`);
+          `▶️ Now trimming *${safeLabel(pass.cultivarName)}* for ${label} — ${fmt(total)}.`);
       }
 
       // Complete means every line of the pass, not just the binding one: tops
@@ -101,32 +117,58 @@ export function deriveEvents({ blocks = [], orders = [], moved = [], sent = new 
         const next = block.passes[pi + 1]?.cultivarName
           || blocks[bi + 1]?.passes[0]?.cultivarName;
         push('strain_finished', key,
-          `✅ *${pass.cultivarName}* done for ${label}${next ? `. Next up: *${next}*` : ''}.`);
+          `✅ *${safeLabel(pass.cultivarName)}* done for ${label}${next ? `. Next up: *${safeLabel(next)}*` : ''}.`);
       }
     });
 
     // --- a date that has moved the wrong way -------------------------------
+    //
+    // THE BASELINE IS THE LAST DATE ANNOUNCED, NOT THE LAST DATE SEEN. It used
+    // to be re-recorded on every tick, which made the comparison meaningless:
+    // the baseline was never more than five minutes old, so only a slip that
+    // landed entirely inside one tick could ever fire. The ordinary slip — days
+    // passing with no trim against this order — drifts by minutes per tick and
+    // announced nothing, ever. Now the baseline only moves when something is
+    // said about it, so drift accumulates against a fixed point until it is
+    // worth a day.
 
     const slipKey = block.orderId;
     const prior = sent.get(`promise_date:${slipKey}`)?.finish;
     const now = block.finish.date;
-    if (prior && daysBetween(prior, now) >= SLIP_DAYS) {
+
+    if (!prior) {
+      // First sight: establish the baseline, say nothing. There is nothing to
+      // have slipped from yet.
+      out.push({ rule: 'promise_date', key: slipKey, text: null, meta: { finish: now }, silent: true });
+    } else if (daysBetween(prior, now) >= SLIP_DAYS) {
       // Not deduped on the order alone — a further slip is news again, so the
-      // key carries the date being reported.
+      // key carries the date being reported. The baseline moves with it.
       push('running_behind', `${slipKey}:${now}`,
         `⚠️ *${label}* slipped to ${shortDate(now)} — was ${shortDate(prior)}.`,
         { finish: now });
+      out.push({ rule: 'promise_date', key: slipKey, text: null, meta: { finish: now }, silent: true });
     }
-    // Always record where the date stands, whether or not anything was said.
-    out.push({ rule: 'promise_date', key: slipKey, text: null, meta: { finish: now }, silent: true });
   });
 
   // --- nothing left to run -------------------------------------------------
 
-  if (!blocks.length) {
-    // Keyed by day so it can be said again the next time the floor clears,
-    // rather than once and never.
-    push('queue_clear', today, '📭 Queue is clear — no wholesale orders waiting.');
+  // A TRANSITION, NOT A STATE. Keyed by day, this announced itself at the first
+  // tick past midnight for as long as the queue stayed empty — every morning,
+  // forever, about nothing having happened. It should fire when the floor
+  // CLEARS, so it needs to know whether there was work a moment ago.
+  const wasEmpty = sent.get('queue_state:board')?.empty === true;
+  const isEmpty = blocks.length === 0;
+
+  if (isEmpty && !wasEmpty) {
+    // Pushed directly rather than through `push`, which consults the ledger.
+    // The transition IS the dedup here, and the ledger would defeat it: a
+    // second clearing on the same day would find the first day-keyed record
+    // already there and stay silent about a real event.
+    out.push({ rule: 'queue_clear', key: today, text: '📭 Queue is clear — no wholesale orders waiting.' });
+  }
+  if (isEmpty !== wasEmpty) {
+    // Recorded whichever way it went, so the next clearing is news again.
+    out.push({ rule: 'queue_state', key: 'board', text: null, meta: { empty: isEmpty }, silent: true });
   }
 
   return out;
