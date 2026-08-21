@@ -77,14 +77,6 @@ function span(queue) {
 const pctText = (p) => `${Math.round(p * 100)}%`;
 
 /**
- * '2026-09-07' + 872 -> '9/7 14:32'. The lead time, to the minute.
- *
- * 24-hour, deliberately. The floor's hourly entry is written in AM/PM, but a
- * bare "2:32" on a card is ambiguous and this number is the one somebody might
- * repeat to a buyer. Twenty-four hour also reads the same in both languages the
- * board is used in.
- */
-/**
  * 'PDT' or 'PST', whichever the farm is actually on today.
  *
  * Every time on this board is already Pacific — the scheduler carries a civil
@@ -107,11 +99,22 @@ export function zoneLabel(now = new Date()) {
   }
 }
 
+/**
+ * '2026-09-07' + 872 -> '9/7 2:32 PM'. The lead time, to the minute.
+ *
+ * AM/PM, matching how the floor writes the hourly entry. The suffix is what
+ * makes the figure safe to read aloud; a bare "2:32" would not be, which was
+ * the only argument for 24-hour.
+ *
+ * Midnight and noon are where a hand-written version of this goes wrong: hour 0
+ * is 12 AM and hour 12 is 12 PM, but a plain `% 12` renders both as "0".
+ */
 export function humanMoment(m) {
   const [, mo, d] = m.date.split('-').map(Number);
-  const hh = String(Math.floor(m.minutes / 60)).padStart(2, '0');
+  const h24 = Math.floor(m.minutes / 60);
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
   const mm = String(m.minutes % 60).padStart(2, '0');
-  return `${mo}/${d} ${hh}:${mm}`;
+  return `${mo}/${d} ${h12}:${mm} ${h24 < 12 ? 'AM' : 'PM'}`;
 }
 
 /**
@@ -216,7 +219,12 @@ function passRow(pass) {
 }
 
 function blockCard(block, idx, geom, onDrop, onOrder) {
-  const card = el('div', `block-card${block.dependsOnEstimate ? ' estimated' : ''}`);
+  // `running` is what the pulse is for. An order the floor has actually started
+  // breathes; the ones queued behind it sit still. The effect carries the one
+  // piece of state a glance at this board should answer first — what is on the
+  // line right now — rather than decorating every card equally.
+  const card = el('div', `block-card${block.dependsOnEstimate ? ' estimated' : ''}`
+    + (block.running ? ' running' : ''));
   card.draggable = true;
   card.dataset.orderId = block.orderId;
 
@@ -304,10 +312,15 @@ export function renderQueue() {
   // Customer names live on the order, not on the schedule. Joined here so the
   // card can show one without the queue endpoint duplicating the order book.
   const nameOf = new Map(state.orders.map(o => [o.id, o.customerName]));
+  const statusOf = new Map(state.orders.map(o => [o.id, o.status]));
   const geom = span(q);
   const list = el('div', 'block-list');
   q.blocks.forEach((b, i) =>
-    list.append(blockCard({ ...b, customerName: nameOf.get(b.orderId) }, i, geom, reorder, openOrder)));
+    list.append(blockCard({
+      ...b,
+      customerName: nameOf.get(b.orderId),
+      running: statusOf.get(b.orderId) === 'in_production',
+    }, i, geom, reorder, openOrder)));
   wrap.append(list);
 
   wrap.append(el('p', 'queue-note', t('queue_note')));
