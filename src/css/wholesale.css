@@ -1008,7 +1008,8 @@
 
 .pass-detail {
   position: absolute;
-  right: 8px;
+  left: 10px;
+  right: auto;
   top: calc(100% - 6px);
   z-index: 30;
   min-width: 236px;
@@ -1989,6 +1990,8 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
 [data-theme="light"] .pl-qty:focus { background: #fff; }
 
 .pl-tools {
+  position: relative;
+  z-index: 40;
   display: inline-flex;
   align-items: center;
   gap: 1px;
@@ -2000,9 +2003,13 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
 .pass-row:focus-within .pl-tools { opacity: 1; transform: none; }
 @media (hover: none) { .pl-tools { opacity: 1; transform: none; } }
 
+/* 26px was under the 44px minimum this project sets for touch targets, and
+   these are the controls somebody reaches for on a barn tablet with gloves on.
+   Bigger everywhere, and full size where there is no pointer to be precise
+   with. */
 .pl-tool {
-  min-width: 26px;
-  min-height: 26px;
+  min-width: 32px;
+  min-height: 32px;
   display: grid;
   place-items: center;
   background: transparent;
@@ -2020,7 +2027,7 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
 .pl-remove:hover { color: var(--danger); }
 .pl-tool:active { transform: scale(0.88); }
 .pl-tool:focus-visible { outline: 2px solid var(--ro-green); outline-offset: 1px; }
-.pl-tool-gap { min-width: 26px; }
+.pl-tool-gap { min-width: 32px; }
 
 /* ---- the detail arrives rather than appears ---- */
 
@@ -2028,12 +2035,19 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
   border: 0;
   border-radius: 18px;
   transform: translateY(-8px) scale(0.96);
-  transform-origin: top right;
+  transform-origin: top left;
   transition:
     opacity var(--t-fast) var(--ease),
     transform var(--t-base) var(--ease-in-out-back),
     visibility var(--t-base);
 }
+
+/* Hover waits; a tap or a keyboard focus does not. Reaching across a row for
+   its arrows is a movement, not a request to read the detail, and 400ms is
+   longer than that movement takes. */
+.pass-row:hover .pass-detail { transition-delay: 0.4s; }
+.pass-row.open .pass-detail,
+.pass-row:focus-visible .pass-detail { transition-delay: 0s; }
 body:not(.detail-pinned) .pass-row:hover .pass-detail,
 .pass-row:focus-visible .pass-detail,
 .pass-row.open .pass-detail { transform: none; }
@@ -2372,4 +2386,12 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
   /* The title already truncates on a phone; the timestamp is the first thing
      that can go. */
   .freshness { display: none; }
+}
+
+/* Full-size targets where there is no pointer to be precise with. Placed at the
+   end deliberately: `@media` adds no specificity, so this has to come after the
+   base `.pl-tool` rule to win — sitting above it, it silently did nothing. */
+@media (hover: none) {
+  .pl-tool { min-width: 44px; min-height: 44px; }
+  .pl-tool-gap { min-width: 44px; }
 }
