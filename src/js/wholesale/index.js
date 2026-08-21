@@ -55,6 +55,7 @@ registerLabels({
     edit_order: 'Edit order', order_ref: 'Shopify order #',
     trim_order: 'Order',
     just_now: 'just now', updated: 'updated', forget_password: 'Clear password',
+    today: 'today',
     bell_on: 'Telegram updates on — tap to mute',
     bell_off: 'Telegram updates off — tap to enable',
     bell_enabled: 'Telegram updates on', bell_disabled: 'Telegram updates off',
@@ -114,6 +115,7 @@ registerLabels({
     edit_order: 'Editar pedido', order_ref: 'Pedido Shopify n.º',
     trim_order: 'Orden',
     just_now: 'ahora', updated: 'hace', forget_password: 'Borrar contraseña',
+    today: 'hoy',
     bell_on: 'Avisos de Telegram activados — toque para silenciar',
     bell_off: 'Avisos de Telegram desactivados — toque para activar',
     bell_enabled: 'Avisos de Telegram activados', bell_disabled: 'Avisos de Telegram desactivados',
@@ -258,6 +260,12 @@ function wire() {
   // sitting next to an edited number would be misleading.
   $('q-crew').onchange = () => loadQueue(crewOverride());
   $('q-reset').onclick = () => { $('q-crew').value = state.queue?.derivedCrew ?? ''; loadQueue(); };
+  $('q-live').onclick = () => {
+    const now = state.queue?.liveCrew;
+    if (now == null) return;
+    $('q-crew').value = String(now);
+    loadQueue(crewOverride());
+  };
 
   $('btn-new').onclick = () => openEditor(null);
 

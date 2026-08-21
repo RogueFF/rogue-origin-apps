@@ -424,19 +424,64 @@ const SCHEDULABLE = ["in_queue", "in_production"];
  * figure moved between 3.8 and 12.3. A single number cannot be right for every
  * day, which is exactly why the board shows it and lets it be overridden.
  */
+/**
+ * Crew size, derived from what actually happened rather than typed.
+ *
+ * FIVE PRODUCTION DAYS, WEIGHTED BY HOURS WORKED. Both halves of that were
+ * measured on real data rather than chosen:
+ *
+ * - The window was seven days and it lagged badly. Across the last ten
+ *   production days the daily average ran 3.8, 7.5, 7.6, 7.7, 8.5, 8.6, 9.7,
+ *   11.7, 12.3, 14.25 — a crew that has been growing. Seven days reported 9.7
+ *   while the floor was running 14. Five reports 10.9.
+ * - Weighting is by slot, so a five-slot half day counts for half a full one.
+ *   On today's data that barely moves the number (9.70 to 9.74 over seven
+ *   days), which says the lag was the window and not the short days — worth
+ *   recording so nobody re-litigates it.
+ *
+ * The spread is the reason this is not simply today's count. A single light day
+ * of four people would stretch every date in the queue by weeks, and an order
+ * spanning twelve work days depends on the crew across those days, not on this
+ * morning's. Today's figure is reported separately so the operator can see the
+ * gap and take it deliberately.
+ */
 async function derivedCrew(db) {
-  const rows = await query(db, `
-    SELECT production_date,
-           AVG(COALESCE(effective_trimmers_line1, trimmers_line1)) AS crew
-    FROM monthly_production
-    WHERE COALESCE(effective_trimmers_line1, trimmers_line1) > 0
-    GROUP BY production_date
-    ORDER BY production_date DESC
-    LIMIT 7
+  const row = await queryOne(db, `
+    WITH d AS (
+      SELECT DISTINCT production_date FROM monthly_production
+      WHERE COALESCE(effective_trimmers_line1, trimmers_line1) > 0
+      ORDER BY production_date DESC LIMIT 5
+    )
+    SELECT AVG(COALESCE(m.effective_trimmers_line1, m.trimmers_line1)) AS crew,
+           COUNT(DISTINCT m.production_date) AS days
+    FROM monthly_production m
+    JOIN d ON d.production_date = m.production_date
+    WHERE COALESCE(m.effective_trimmers_line1, m.trimmers_line1) > 0
   `);
-  if (!rows.length) return { crew: 6, basis: "default", days: 0 };
-  const crew = rows.reduce((s, r) => s + r.crew, 0) / rows.length;
-  return { crew: Math.round(crew * 10) / 10, basis: "trailing-7", days: rows.length };
+  if (!row || !row.crew) return { crew: 6, basis: "default", days: 0 };
+  return { crew: Math.round(row.crew * 10) / 10, basis: "trailing-5", days: row.days };
+}
+
+/**
+ * Who is on the line on the most recent day anything was recorded.
+ *
+ * Reported, never used to schedule. It is the number to reach for when the
+ * floor is plainly busier or thinner than usual, and the operator is better
+ * placed than an average to judge whether today is going to hold.
+ */
+async function liveCrew(db) {
+  const row = await queryOne(db, `
+    SELECT AVG(COALESCE(effective_trimmers_line1, trimmers_line1)) AS crew,
+           COUNT(*) AS slots,
+           production_date AS date
+    FROM monthly_production
+    WHERE production_date = (
+            SELECT MAX(production_date) FROM monthly_production
+            WHERE COALESCE(effective_trimmers_line1, trimmers_line1) > 0)
+      AND COALESCE(effective_trimmers_line1, trimmers_line1) > 0
+  `);
+  if (!row || !row.crew) return null;
+  return { crew: Math.round(row.crew * 10) / 10, slots: row.slots, date: row.date };
 }
 
 /** Per-cultivar rate table keyed for the scheduler, plus the farm fallback. */
@@ -597,9 +642,10 @@ async function computeQueue(db, crewOverride) {
     ],
   });
 
-  const [{ rates, fallback }, crewInfo, names] = await Promise.all([
+  const [{ rates, fallback }, crewInfo, live, names] = await Promise.all([
     rateTable(db),
     derivedCrew(db),
+    liveCrew(db),
     query(db, "SELECT id, name FROM cultivars"),
   ]);
 
@@ -614,7 +660,7 @@ async function computeQueue(db, crewOverride) {
     progress: progress.byLine,
   });
 
-  return { ...scheduled, progress, rates, fallback, crewInfo, crew, start, names };
+  return { ...scheduled, progress, rates, fallback, crewInfo, live, crew, start, names };
 }
 
 async function getQueue(db, params) {
@@ -628,6 +674,10 @@ async function getQueue(db, params) {
     // otherwise the board cannot offer to go back to it, or tell whether a
     // typed number differs from it at all.
     derivedCrew: q.crewInfo.crew,
+    // Today's actual count, reported so the gap between it and the trailing
+    // figure is visible. Never used to schedule.
+    liveCrew: q.live?.crew ?? null,
+    liveCrewDate: q.live?.date ?? null,
     crewBasis: Number(params.crew) > 0 ? "override" : q.crewInfo.basis,
     crewDays: q.crewInfo.days,
     start: q.start,
