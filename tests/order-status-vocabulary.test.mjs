@@ -84,7 +84,11 @@ test('the worker validates against the same three, and defaults to the same one'
 
 test('an unattended Shopify import writes a real status, not one of its own', () => {
   const src = read('workers/src/handlers/wholesale-d1.js');
-  const m = src.match(/VALUES \(\?, \?, \?, '([a-z_]+)', 'shopify'/);
+  // Matched on the two literals rather than the placeholder count, which
+  // changes whenever a column is added or removed — it lost one when the
+  // customer dimension went, and a guard that breaks on unrelated edits is a
+  // guard people start ignoring.
+  const m = src.match(/'([a-z_]+)',\s*'shopify'/);
   assert.ok(m, 'importOrder no longer inserts a literal status');
   assert.ok(EXPECTED.includes(m[1]), `importOrder writes "${m[1]}", not in the vocabulary`);
 });

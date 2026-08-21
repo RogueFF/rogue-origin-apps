@@ -31,10 +31,7 @@ export function openEditor(order) {
   $('modal-title').textContent = order ? order.id : t('new_order');
   buildStatus(order?.status);
   $('f-ref').value = order?.shopifyOrderName || '';
-  $('f-customer').value = order?.customerId || '';
-  // Setting .value in script does not fire `change`, so the edit affordance has
-  // to be synced here or it stays disabled on an order that has a customer.
-  $('btn-edit-customer').disabled = !$('f-customer').value;
+  $('f-nickname').value = order?.nickname || '';
   $('f-status').value = order?.status || 'in_queue';
   $('f-date').value = order?.orderDate || new Date().toISOString().slice(0, 10);
   $('f-terms').value = order?.paymentTerms || '';
@@ -54,7 +51,8 @@ export function openEditor(order) {
   $('btn-delete').hidden = !order;
   renderLines();
   $('modal').hidden = false;
-  $('f-customer').focus();
+  // The number is the first thing anyone types on a new order.
+  $('f-ref').focus();
 }
 
 export function closeEditor() {
@@ -219,9 +217,6 @@ export async function saveOrder() {
   const err = $('form-error');
   err.textContent = '';
 
-  const customerId = $('f-customer').value;
-  if (!customerId) { err.textContent = t('err_customer'); return; }
-
   // Drop rows the operator started and abandoned; validate whatever is left.
   const filled = lines.filter(l => l.cultivarId || l.qty);
   for (const [i, l] of filled.entries()) {
@@ -231,8 +226,8 @@ export async function saveOrder() {
 
   const payload = {
     id: state.editing?.id,
-    customerId,
     shopifyOrderName: $('f-ref').value.trim(),
+    nickname: $('f-nickname').value.trim(),
     status: $('f-status').value,
     orderDate: $('f-date').value,
     paymentTerms: $('f-terms').value,
@@ -309,12 +304,12 @@ export async function patchOrder(order, overrides = {}) {
   try {
     await api.post('saveOrder', {
       id: order.id,
-      customerId: order.customerId,
       status: order.status,
       orderDate: order.orderDate,
       paymentTerms: order.paymentTerms,
       notes: order.notes,
       shopifyOrderName: overrides.shopifyOrderName ?? order.shopifyOrderName ?? '',
+      nickname: overrides.nickname ?? order.nickname ?? '',
       items: items.map(i => ({
         cultivarId: i.cultivarId,
         form: i.form,
@@ -345,106 +340,6 @@ export function passGroups(order) {
     groups.get(item.cultivarId).push(item);
   }
   return [...groups.values()];
-}
-
-// ─── CUSTOMERS ─────────────────────────────────────────
-
-export function fillCustomerSelect() {
-  const sel = $('f-customer');
-  const current = sel.value;
-  sel.textContent = '';
-  sel.append(option(t('pick_customer'), ''));
-  state.customers.forEach(c => {
-    const label = c.company || c.name;
-    sel.append(option(label, c.id, c.id === current));
-  });
-}
-
-/**
- * The customer being edited, or null when creating one.
- *
- * `saveCustomer` and `deleteCustomer` have always existed on the API — the
- * latter even refuses politely when the customer still has orders — but nothing
- * on the page could reach either. A customer could be created and then never
- * corrected or removed, which is how a buyer called "test" ends up attached to
- * real orders.
- */
-let editingCustomer = null;
-
-export function openCustomerModal(customer = null) {
-  editingCustomer = customer;
-  $('c-name').value = customer?.name || '';
-  $('c-company').value = customer?.company || '';
-  $('c-city').value = customer?.city || '';
-  $('c-state').value = customer?.state || '';
-  $('c-error').textContent = '';
-  $('c-title').textContent = customer
-    ? (customer.company || customer.name)
-    : t('new_customer');
-  // Nothing to delete when the record does not exist yet.
-  $('c-delete').hidden = !customer;
-  $('customer-modal').hidden = false;
-  $('c-name').focus();
-}
-
-/** The customer currently chosen in the order editor, or null. */
-export function selectedCustomer() {
-  const id = $('f-customer').value;
-  return state.customers.find(c => c.id === id) || null;
-}
-
-/**
- * Delete the customer being edited.
- *
- * The refusal path matters more than the happy one: orders.customer_id is a
- * hard foreign key, so the server refuses while any order still points here and
- * says how many. That message is the useful part, so it is shown in the form
- * rather than swallowed into a toast that disappears.
- */
-export async function deleteCustomer() {
-  if (!editingCustomer) return false;
-  const label = editingCustomer.company || editingCustomer.name;
-  if (!confirm(`${t('confirm_delete_customer')} ${label}?`)) return false;
-  if (!await ensureUnlocked()) return false;
-  try {
-    await api.post('deleteCustomer', { id: editingCustomer.id });
-    showToast(`${label} ${t('deleted')}`, 'success');
-    closeCustomerModal();
-    return true;
-  } catch (e) {
-    $('c-error').textContent = String(e.message || e);
-    return false;
-  }
-}
-
-export function closeCustomerModal() {
-  $('customer-modal').hidden = true;
-}
-
-export async function saveCustomer() {
-  const name = $('c-name').value.trim();
-  const company = $('c-company').value.trim();
-  if (!name && !company) { $('c-error').textContent = t('err_cust_name'); return null; }
-  if (!await ensureUnlocked()) return null;
-  try {
-    const res = await api.post('saveCustomer', {
-      // Sending the id is what turns this into an update; without it the server
-      // inserts a second customer with the corrected details and the orders stay
-      // pointed at the old one.
-      id: editingCustomer?.id,
-      name: name || company,
-      company,
-      city: $('c-city').value.trim(),
-      state: $('c-state').value.trim(),
-    });
-    showToast(`${company || name} ${t('saved')}`, 'success');
-    const id = editingCustomer?.id || res.id;
-    closeCustomerModal();
-    return id;
-  } catch (e) {
-    $('c-error').textContent = String(e.message || e);
-    return null;
-  }
 }
 
 export { STATUSES, statusLabel };

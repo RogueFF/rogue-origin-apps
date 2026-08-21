@@ -16,8 +16,7 @@ import {
 } from './queue.js';
 import {
   openEditor, closeEditor, saveOrder, deleteOrder, addLine, onBuildStatus,
-  fillCustomerSelect, openCustomerModal, closeCustomerModal, saveCustomer,
-  deleteCustomer, selectedCustomer, patchOrder,
+  patchOrder,
 } from './editor.js';
 import { registerLabels, t, toggleLang } from '../shared/i18n.js';
 import { initTheme, toggleTheme } from '../shared/theme.js';
@@ -37,31 +36,28 @@ registerLabels({
     nav_consignment: 'Consignment',
     nav_complaints: 'Complaints',
     nav_floor: 'Floor Manager',
-    new_order: 'New order', new_customer: 'New customer',
+    new_order: 'New order', nickname: 'Nickname',
     status_in_queue: 'In queue', status_in_production: 'In production',
     status_finished: 'Finished',
     no_orders: 'No orders yet. Create the first one.',
     none_match: 'No orders match this filter.',
     no_lines: 'No line items yet',
-    customer: 'Customer', status: 'Status', order_date: 'Order date',
+    status: 'Status', order_date: 'Order date',
     terms: 'Payment terms', notes: 'Notes',
     line_items: 'Line items', add_line: 'Add line', line: 'Line',
     cultivar: 'Cultivar', form: 'Form', quantity: 'Quantity', unit: 'Unit',
     unit_price: 'Price/unit', remove_line: 'Remove line',
     tops: 'Tops', smalls: 'Smalls',
-    pick_cultivar: 'Select cultivar…', pick_customer: 'Select customer…',
+    pick_cultivar: 'Select cultivar…',
     save: 'Save', cancel: 'Cancel', delete: 'Delete',
     saved: 'saved', deleted: 'deleted',
-    confirm_delete: 'Delete order', confirm_delete_customer: 'Delete customer',
+    confirm_delete: 'Delete order',
     edit_order: 'Edit order', order_ref: 'Shopify order #',
-    edit_customer: 'Edit customer', trim_order: 'Order',
+    trim_order: 'Order',
     move_up: 'Move up, line', move_down: 'Move down, line',
-    name: 'Contact name', company: 'Company', city: 'City', region: 'State / country',
-    err_customer: 'Pick a customer first.',
     err_cultivar: 'pick a cultivar.',
     err_qty: 'quantity must be greater than zero.',
     err_last_line: 'An order needs at least one line. Delete the order instead.',
-    err_cust_name: 'Enter a contact name or company.',
     load_failed: 'Could not load orders',
     view_board: 'Orders', view_queue: 'Production queue',
     crew: 'Crew', crew_use_derived: 'Use derived', recalculate: 'Recalculate',
@@ -98,31 +94,28 @@ registerLabels({
     nav_consignment: 'Consignación',
     nav_complaints: 'Quejas',
     nav_floor: 'Gestor de Piso',
-    new_order: 'Nuevo pedido', new_customer: 'Nuevo cliente',
+    new_order: 'Nuevo pedido', nickname: 'Apodo',
     status_in_queue: 'En cola', status_in_production: 'En producción',
     status_finished: 'Terminado',
     no_orders: 'Aún no hay pedidos. Cree el primero.',
     none_match: 'Ningún pedido coincide con este filtro.',
     no_lines: 'Sin renglones todavía',
-    customer: 'Cliente', status: 'Estado', order_date: 'Fecha del pedido',
+    status: 'Estado', order_date: 'Fecha del pedido',
     terms: 'Términos de pago', notes: 'Notas',
     line_items: 'Renglones', add_line: 'Agregar renglón', line: 'Renglón',
     cultivar: 'Cultivar', form: 'Tipo', quantity: 'Cantidad', unit: 'Unidad',
     unit_price: 'Precio/unidad', remove_line: 'Quitar renglón',
     tops: 'Tops', smalls: 'Smalls',
-    pick_cultivar: 'Seleccione cultivar…', pick_customer: 'Seleccione cliente…',
+    pick_cultivar: 'Seleccione cultivar…',
     save: 'Guardar', cancel: 'Cancelar', delete: 'Eliminar',
     saved: 'guardado', deleted: 'eliminado',
-    confirm_delete: 'Eliminar pedido', confirm_delete_customer: 'Eliminar cliente',
+    confirm_delete: 'Eliminar pedido',
     edit_order: 'Editar pedido', order_ref: 'Pedido Shopify n.º',
-    edit_customer: 'Editar cliente', trim_order: 'Orden',
+    trim_order: 'Orden',
     move_up: 'Subir, línea', move_down: 'Bajar, línea',
-    name: 'Nombre de contacto', company: 'Empresa', city: 'Ciudad', region: 'Estado / país',
-    err_customer: 'Seleccione un cliente primero.',
     err_cultivar: 'seleccione un cultivar.',
     err_qty: 'la cantidad debe ser mayor que cero.',
     err_last_line: 'Un pedido necesita al menos una línea. Elimine el pedido.',
-    err_cust_name: 'Ingrese un nombre de contacto o empresa.',
     load_failed: 'No se pudieron cargar los pedidos',
     view_board: 'Pedidos', view_queue: 'Cola de producción',
     crew: 'Equipo', crew_use_derived: 'Usar calculado', recalculate: 'Recalcular',
@@ -164,7 +157,6 @@ function buildStatusOptions(current) {
 async function refresh() {
   try {
     await loadAll();
-    fillCustomerSelect();
     // The cards show a promise date, which only the queue knows. Fetched
     // alongside rather than on demand so a card never renders a stale one.
     await Promise.all([
@@ -210,7 +202,6 @@ function wire() {
   $('q-reset').onclick = () => { $('q-crew').value = ''; loadQueue(); };
 
   $('btn-new').onclick = () => openEditor(null);
-  $('btn-new-customer').onclick = () => openCustomerModal();
 
   // Orders in the queue are reached from their runs; this covers the ones that
   // have left it.
@@ -271,53 +262,11 @@ function wire() {
   $('btn-delete').onclick = async () => { if (await deleteOrder()) refresh(); };
   $('btn-add-line').onclick = () => addLine();
 
-  // Only offer to edit a customer once one is chosen.
-  const syncEditCustomer = () => { $('btn-edit-customer').disabled = !$('f-customer').value; };
-
-  // The shared i18n helper walks [data-i18n] and [data-i18n-placeholder] but not
-  // titles, and a tooltip is user-facing text like any other. Rather than extend
-  // the shared module for all eight apps over one button, this page keeps its
-  // own titles in step.
-  const applyTitles = () => {
-    $('btn-edit-customer').title = t('edit_customer');
-    $('btn-edit-customer').setAttribute('aria-label', t('edit_customer'));
-  };
-  applyTitles();
-  document.addEventListener('ro:langchange', applyTitles);
-  $('f-customer').addEventListener('change', syncEditCustomer);
-  $('btn-edit-customer').onclick = () => {
-    const c = selectedCustomer();
-    if (c) openCustomerModal(c);
-  };
-
-  $('c-cancel').onclick = () => closeCustomerModal();
-  $('c-delete').onclick = async () => {
-    if (!await deleteCustomer()) return;
-    paintLock();
-    // The order editor is still open behind this, holding a customer that no
-    // longer exists, so its selection has to be cleared rather than left
-    // pointing at a deleted row.
-    $('f-customer').value = '';
-    syncEditCustomer();
-    await refresh();
-  };
-  $('c-save').onclick = async () => {
-    const id = await saveCustomer();
-    if (!id) return;
-    paintLock();
-    await refresh();
-    $('f-customer').value = id;   // select what was just created or corrected
-    syncEditCustomer();
-  };
-
   // Clicking the backdrop or pressing Escape closes whichever modal is open.
-  for (const [backdrop, close] of [['modal', closeEditor], ['customer-modal', closeCustomerModal]]) {
-    $(backdrop).addEventListener('click', (e) => { if (e.target.id === backdrop) close(); });
-  }
+  $('modal').addEventListener('click', (e) => { if (e.target.id === 'modal') closeEditor(); });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (!$('unlock-modal').hidden) $('u-cancel').click();
-    else if (!$('customer-modal').hidden) closeCustomerModal();
     else if (!$('modal').hidden) closeEditor();
   });
 }

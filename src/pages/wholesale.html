@@ -14,7 +14,7 @@
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/duotone/style.css">
   <!-- Styles -->
   <link rel="stylesheet" href="../css/shared-base.css?h=c18beb73">
-  <link rel="stylesheet" href="../css/wholesale.css?h=ac7f39dc">
+  <link rel="stylesheet" href="../css/wholesale.css?h=75d5cb07">
 </head>
 <body class="dark-mode">
   <!-- RO Home Button -->
@@ -106,7 +106,6 @@
         <span id="q-basis" class="crew-basis"></span>
         <button id="q-reset" class="chip" hidden data-i18n="crew_use_derived">Use derived</button>
         <div class="board-spacer"></div>
-        <button id="btn-new-customer" class="btn btn-secondary" data-i18n="new_customer">New customer</button>
         <button id="btn-new" class="btn btn-primary" data-i18n="new_order">New order</button>
       </div>
 
@@ -141,14 +140,8 @@
             <input id="f-ref" type="text" placeholder="#1234">
           </div>
           <div class="field">
-            <label for="f-customer" data-i18n="customer">Customer</label>
-            <div class="field-with-action">
-              <select id="f-customer"></select>
-              <button id="btn-edit-customer" class="icon-btn small" type="button"
-                      title="Edit customer" disabled>
-                <i class="ph-duotone ph-pencil-simple"></i>
-              </button>
-            </div>
+            <label for="f-nickname" data-i18n="nickname">Nickname</label>
+            <input id="f-nickname" type="text" placeholder="Bill's tops">
           </div>
           <div class="field">
             <label for="f-status" data-i18n="status">Status</label>
@@ -206,44 +199,6 @@
   </div>
 
   <!-- ── CUSTOMER ────────────────────────────────── -->
-  <div id="customer-modal" class="modal-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="c-title">
-    <div class="modal" style="width:min(460px,100%)">
-      <div class="modal-head">
-        <h2 id="c-title" data-i18n="new_customer">New customer</h2>
-      </div>
-      <div class="modal-body">
-        <div class="field">
-          <label for="c-company" data-i18n="company">Company</label>
-          <input id="c-company" type="text">
-        </div>
-        <div class="field">
-          <label for="c-name" data-i18n="name">Contact name</label>
-          <input id="c-name" type="text">
-        </div>
-        <div class="field-row">
-          <div class="field">
-            <label for="c-city" data-i18n="city">City</label>
-            <input id="c-city" type="text">
-          </div>
-          <div class="field">
-            <label for="c-state" data-i18n="region">State / country</label>
-            <input id="c-state" type="text">
-          </div>
-        </div>
-        <p id="c-error" class="form-error" role="alert"></p>
-      </div>
-      <div class="modal-foot">
-        <span class="spacer"></span>
-        <button id="c-delete" class="btn btn-danger" hidden data-i18n="delete">Delete</button>
-        <span class="spacer"></span>
-        <button id="c-cancel" class="btn btn-secondary" data-i18n="cancel">Cancel</button>
-        <button id="c-save" class="btn btn-primary" data-i18n="save">Save</button>
-      </div>
-    </div>
-  </div>
-
-
-  <!-- ── UNLOCK ─────────────────────────────────── -->
   <div id="unlock-modal" class="modal-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="u-title">
     <div class="modal" style="width:min(420px,100%)">
       <div class="modal-head">
@@ -280,15 +235,15 @@
     "../js/shared/theme.js": "../js/shared/theme.js?h=b4816114",
     "../js/shared/toast.js": "../js/shared/toast.js?h=2ff39553",
     "../js/wholesale/auth.js": "../js/wholesale/auth.js?h=ab61014e",
-    "../js/wholesale/editor.js": "../js/wholesale/editor.js?h=dfd00dba",
-    "../js/wholesale/index.js": "../js/wholesale/index.js?h=139e892f",
-    "../js/wholesale/queue.js": "../js/wholesale/queue.js?h=b4b2e734",
-    "../js/wholesale/render.js": "../js/wholesale/render.js?h=9cb004aa",
-    "../js/wholesale/state.js": "../js/wholesale/state.js?h=5590411d"
+    "../js/wholesale/editor.js": "../js/wholesale/editor.js?h=a47ad23d",
+    "../js/wholesale/index.js": "../js/wholesale/index.js?h=9519ba8f",
+    "../js/wholesale/queue.js": "../js/wholesale/queue.js?h=5ff6b912",
+    "../js/wholesale/render.js": "../js/wholesale/render.js?h=c23704b8",
+    "../js/wholesale/state.js": "../js/wholesale/state.js?h=05b152fe"
   }
 }
 </script>
 <!-- module-hashes:end -->
-  <script type="module" src="../js/wholesale/index.js?h=139e892f"></script>
+  <script type="module" src="../js/wholesale/index.js?h=9519ba8f"></script>
 </body>
 </html>

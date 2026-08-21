@@ -6,7 +6,7 @@
  * unreachable. Deliberately a compact list rather than cards: this is an
  * archive to look something up in, not a working surface.
  *
- * Built with DOM APIs, not innerHTML — customer names and cultivar names are
+ * Built with DOM APIs, not innerHTML — nicknames and cultivar names are
  * operator-entered free text, and this page ingests Shopify data.
  */
 
@@ -42,9 +42,9 @@ function row(order) {
   node.type = 'button';
   node.dataset.orderId = order.id;
 
-  node.append(el('span', 'dr-id', order.id));
+  node.append(el('span', 'dr-id', order.shopifyOrderName || order.id));
   node.append(el('span', `dr-status s-${order.status}`, statusLabel(order.status)));
-  node.append(el('span', 'dr-customer', order.customerName || '—'));
+  node.append(el('span', 'dr-customer', order.nickname || '—'));
   node.append(el('span', 'dr-cultivars',
     order.items.map(i => i.cultivarName || i.cultivarId).join(', ') || t('no_lines')));
   node.append(el('span', 'dr-lbs', fmtLbs(order.totalLbs)));
