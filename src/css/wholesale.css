@@ -2131,9 +2131,12 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
 }
 
 /* Where each action sits once the mass has split. The trigger stays at 0. */
-.act-new,  .goo-new  { --y: -80px;  --d: 0.02s; }
-.act-bell, .goo-bell { --y: -156px; --d: 0.06s; }
-.act-crew, .goo-crew { --y: -232px; --d: 0.10s; }
+/* Radius 98px, swept from due up to due left. Angles rather than a column, so
+   the mass opens like a hand rather than a list. The crew pill takes the left
+   position because it is the wide one and that is where the room is. */
+.act-new,  .goo-new  { --x:  -8px;  --y: -98px; --d: 0.02s; }
+.act-bell, .goo-bell { --x: -72px;  --y: -70px; --d: 0.06s; }
+.act-crew, .goo-crew { --x: -88px;  --y:   0px; --d: 0.10s; }
 
 .fab-goo,
 .fab-ui {
@@ -2156,8 +2159,9 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
   width: 60px;
   height: 60px;
   border-radius: 30px;
-  background: var(--ro-green);
-  transform: translateY(0) scale(0.6);
+  background: #242825;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  transform: translate(0, 0) scale(0.6);
   opacity: 0;
   transition:
     transform 0.42s var(--ease-in-out-back) var(--d),
@@ -2170,7 +2174,7 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
 .goo-crew { width: 150px; border-radius: 30px; }
 
 .fab-wrap.open .goo {
-  transform: translateY(var(--y)) scale(1);
+  transform: translate(var(--x), var(--y)) scale(1);
   opacity: 1;
 }
 
@@ -2187,10 +2191,10 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
   border: 0;
   border-radius: 30px;
   background: transparent;      /* the blob underneath is the surface */
-  color: #0a0f0c;
+  color: rgba(255, 255, 255, 0.92);
   font-size: 1.375rem;
   cursor: pointer;
-  transform: translateY(0) scale(0.6);
+  transform: translate(0, 0) scale(0.6);
   opacity: 0;
   pointer-events: none;
   transition:
@@ -2199,7 +2203,7 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
 }
 
 .fab-wrap.open .fab-act {
-  transform: translateY(var(--y)) scale(1);
+  transform: translate(var(--x), var(--y)) scale(1);
   opacity: 1;
   pointer-events: auto;
 }
@@ -2219,7 +2223,7 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
 
 /* Lit when the cron is pushing to Telegram. The blob under it is recoloured
    rather than the icon, so the state is visible at blob size. */
-.fab-wrap.notifying .goo-bell { background: var(--ro-gold); }
+.fab-wrap.notifying .act-bell { color: var(--ro-gold); }
 
 /* ---- the crew pill ---- */
 
@@ -2233,15 +2237,15 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
 .crew-step {
   border: 0;
   background: transparent;
-  color: #0a0f0c;
+  color: rgba(255, 255, 255, 0.75);
   font-size: 1.125rem;
   font-weight: 700;
   cursor: pointer;
   border-radius: 30px;
   transition: background var(--t-fast) var(--ease);
 }
-.crew-step:hover { background: rgba(0, 0, 0, 0.12); }
-.crew-step:active { background: rgba(0, 0, 0, 0.2); }
+.crew-step:hover { background: rgba(255, 255, 255, 0.10); color: #fff; }
+.crew-step:active { background: rgba(255, 255, 255, 0.16); }
 
 #q-crew {
   width: 100%;
@@ -2250,7 +2254,7 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
   border: 0;
   background: transparent;
   box-shadow: none;
-  color: #0a0f0c;
+  color: rgba(255, 255, 255, 0.95);
   font-family: var(--font-mono);
   font-size: 0.9375rem;
   font-weight: 700;
@@ -2263,15 +2267,15 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
    either side do the same job without a target small enough to hit by accident. */
 #q-crew::-webkit-outer-spin-button,
 #q-crew::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-#q-crew:focus { outline: none; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.35); background: transparent; }
-#q-crew.overridden { color: #4a2f00; }
+#q-crew:focus { outline: none; box-shadow: inset 0 -2px 0 rgba(255, 255, 255, 0.4); background: transparent; }
+#q-crew.overridden { color: var(--ro-gold); }
 
 /* ---- the caption ---- */
 
 .fab-caption {
   position: absolute;
   right: 0;
-  bottom: 300px;
+  bottom: 176px;
   width: max-content;
   max-width: 46vw;
   text-align: right;
@@ -2295,7 +2299,20 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
   .goo, .fab-act, .fab-caption, .act-trigger { transition-duration: 0.01s; }
 }
 
+[data-theme="light"] .goo {
+  background: #ffffff;
+  box-shadow: 0 1px 0 rgba(45, 58, 50, 0.06) inset;
+}
+[data-theme="light"] .fab-act { color: var(--text); }
+[data-theme="light"] .crew-step { color: var(--text-secondary); }
+[data-theme="light"] .crew-step:hover { background: rgba(45, 58, 50, 0.08); color: var(--text); }
+[data-theme="light"] #q-crew { color: var(--text); }
+[data-theme="light"] #q-crew:focus { box-shadow: inset 0 -2px 0 rgba(45, 58, 50, 0.4); }
+[data-theme="light"] .fab-wrap.notifying .act-bell { color: var(--ro-gold-text); }
+
 @media (max-width: 640px) {
   .fab-wrap { right: var(--space-md); bottom: var(--space-md); }
   .fab-caption { max-width: 60vw; }
+  /* The arc has to tuck in where a phone has no room to its left. */
+  .act-crew, .goo-crew { --x: -76px; }
 }
