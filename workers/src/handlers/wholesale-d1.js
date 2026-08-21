@@ -35,8 +35,10 @@ import { allocate, moment, impliedStatus } from '../lib/burndown.js';
 import { parseSku } from '../lib/sku.js';
 import { summarizeInventory, assessCoverage } from '../lib/coverage.js';
 import { formatDatePT } from '../lib/production-utils.js';
+import { sendTelegramMessage } from '../lib/telegram.js';
+import { deriveEvents } from '../lib/wholesale-notify.js';
 
-const WRITE_ACTIONS = new Set(['saveOrder', 'deleteOrder', 'saveQueueOrder', 'setAccrualStart', 'importOrder']);
+const WRITE_ACTIONS = new Set(['saveOrder', 'deleteOrder', 'saveQueueOrder', 'setAccrualStart', 'importOrder', 'setNotify']);
 
 const ORDER_STATUSES = new Set(['in_queue', 'in_production', 'finished']);
 const FORMS = new Set(['tops', 'smalls']);
@@ -74,6 +76,8 @@ export async function handleWholesaleD1(request, env) {
     case 'getRates': return getRates(db);
     case 'getQueue': return getQueue(db, params);
     case 'getCoverage': return getCoverage(db);
+    case 'getNotify': return getNotify(db);
+    case 'setNotify': return setNotify(db, body);
     case 'saveQueueOrder': return saveQueueOrder(db, body);
     case 'setAccrualStart': return setAccrualStart(db, body);
     case 'importOrder': return importOrder(db, body);
@@ -942,3 +946,134 @@ async function importOrder(db, body) {
 }
 
 export { fromLbs };
+
+// ─── NOTIFICATIONS ─────────────────────────────────────
+
+const NOTIFY_KEY = 'wholesale_notify';
+
+/** Every rule this feature owns, so reads and clears never touch other alerts. */
+const NOTIFY_RULES = [
+  'order_started', 'order_finished', 'strain_started', 'strain_finished',
+  'running_behind', 'queue_clear', 'promise_date',
+];
+
+async function notifyEnabled(db) {
+  const row = await queryOne(db, 'SELECT value FROM system_config WHERE key = ?', [NOTIFY_KEY]);
+  return row?.value === 'true';
+}
+
+async function getNotify(db) {
+  return successResponse({ success: true, enabled: await notifyEnabled(db) });
+}
+
+/**
+ * Turn the bell on or off.
+ *
+ * TURNING IT ON DOES NOT REPLAY HISTORY. Every strain already running would
+ * otherwise be announced at once, because "this has started" is true of all of
+ * them. So enabling records the current state as already-said and sends
+ * nothing; the first real message is the next thing that actually changes.
+ */
+async function setNotify(db, body) {
+  const enabled = body.enabled === true || body.enabled === 'true';
+  await execute(db, `
+    INSERT INTO system_config (key, value, value_type, category, description, updated_at)
+    VALUES (?, ?, 'boolean', 'wholesale', 'Push wholesale queue updates to Telegram', datetime('now'))
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
+  `, [NOTIFY_KEY, enabled ? 'true' : 'false']);
+
+  let seeded = 0;
+  if (enabled) {
+    const events = await deriveWholesaleEvents(db, []);
+    seeded = await recordEvents(db, events);
+  }
+  return successResponse({ success: true, enabled, seeded });
+}
+
+/** What has already been said, as deriveEvents wants it. */
+async function sentLedger(db) {
+  const rows = await query(db, `
+    SELECT rule, dedup_key, metadata_json FROM alerts_sent
+    WHERE rule IN (${NOTIFY_RULES.map(() => '?').join(', ')})
+  `, NOTIFY_RULES);
+  return new Map(rows.map(r => {
+    let meta = {};
+    try { meta = r.metadata_json ? JSON.parse(r.metadata_json) : {}; } catch { meta = {}; }
+    return [`${r.rule}:${r.dedup_key}`, meta];
+  }));
+}
+
+/** Write events to the ledger so they are never said twice. */
+async function recordEvents(db, events) {
+  if (!events.length) return 0;
+  await transaction(db, events.map(e => ({
+    sql: `INSERT INTO alerts_sent (rule, dedup_key, last_sent_ts, metadata_json)
+          VALUES (?, ?, datetime('now'), ?)
+          ON CONFLICT(rule, dedup_key) DO UPDATE SET
+            last_sent_ts = excluded.last_sent_ts,
+            metadata_json = excluded.metadata_json`,
+    params: [e.rule, e.key, e.meta ? JSON.stringify(e.meta) : null],
+  })));
+  return events.length;
+}
+
+async function deriveWholesaleEvents(db, moved) {
+  const [q, orders, sent] = await Promise.all([
+    computeQueue(db),
+    query(db, 'SELECT id, nickname, shopify_order_name FROM orders'),
+    sentLedger(db),
+  ]);
+  const items = await query(db, 'SELECT order_id, qty_lbs FROM order_items');
+  const totals = new Map();
+  for (const i of items) totals.set(i.order_id, (totals.get(i.order_id) || 0) + i.qty_lbs);
+
+  const nameOf = new Map(q.names.map(n => [n.id, n.name]));
+  return deriveEvents({
+    blocks: q.blocks.map(b => ({
+      ...b,
+      passes: b.passes.map(p => ({ ...p, cultivarName: nameOf.get(p.cultivarId) || p.cultivarId })),
+    })),
+    orders: orders.map(o => ({
+      id: o.id,
+      nickname: o.nickname,
+      shopifyOrderName: o.shopify_order_name,
+      totalLbs: totals.get(o.id) || 0,
+    })),
+    moved,
+    sent,
+    today: nowPT().date,
+  });
+}
+
+/**
+ * The whole wholesale cron: advance statuses, then say what changed.
+ *
+ * Notifications run after the status sync and are handed its result, because
+ * "this order has started" is a status transition rather than something
+ * visible in the queue — an order that has begun is still sitting in it.
+ *
+ * A failure to send must not roll back the statuses, so each half is caught
+ * separately by the caller.
+ */
+export async function runWholesaleCron(env) {
+  const db = env.DB;
+  const moved = await syncOrderStatuses(env);
+
+  if (!await notifyEnabled(db)) return { moved, sent: 0 };
+
+  const events = await deriveWholesaleEvents(db, moved);
+  const speak = events.filter(e => e.text);
+
+  for (const e of speak) {
+    await sendTelegramMessage(env, {
+      chatId: env.TELEGRAM_CASEY_CHAT_ID,
+      text: e.text,
+    });
+  }
+
+  // Recorded only after a successful send. A Telegram outage should mean the
+  // message arrives late, not that it is lost — the next tick will retry it,
+  // because nothing was written to say it had already gone out.
+  await recordEvents(db, events);
+  return { moved, sent: speak.length };
+}
