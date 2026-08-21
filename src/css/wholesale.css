@@ -847,11 +847,14 @@
   color: var(--text);
   background: none;
   border: none;
-  border-bottom: 1px dashed var(--text-muted);
+  /* No dashed underline. It was there to say "this is clickable" back when the
+     id was the ONLY way into an order; the card now carries an explicit edit
+     control, and a link-styled identifier just reads as decoration. */
   padding: 0;
   cursor: pointer;
 }
-.block-id:hover { border-bottom-color: var(--text); }
+.block-id:hover { color: var(--ro-green); }
+[data-theme="light"] .block-id:hover { color: var(--green-dark); }
 .block-id:focus-visible { outline: 2px solid var(--ro-green); outline-offset: 2px; }
 
 .block-customer {
@@ -942,7 +945,8 @@
 
 .pass-line {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 46px minmax(60px, 1.5fr) auto 46px 104px 12px;
+  /* cultivar · form · bar · quantity · percent · lead time · warning · tools */
+  grid-template-columns: minmax(0, 1fr) 46px minmax(60px, 1.4fr) auto 46px 104px 12px 84px;
   gap: 10px;
   align-items: center;
   font-family: var(--font-mono);
@@ -1172,18 +1176,29 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
      and the figures under it. Squeezing seven columns into 414px would drop the
      lead time, which is half of what the row exists to say. */
   .pass-line {
-    grid-template-columns: 1fr auto;
-    grid-template-areas: "cv eta" "bar num";
-    row-gap: 5px;
+    grid-template-columns: 1fr auto auto;
+    grid-template-areas:
+      "cv  cv  eta"
+      "bar num tools";
+    row-gap: 6px;
+    column-gap: 8px;
   }
   .pl-cv { grid-area: cv; }
   .pl-eta { grid-area: eta; }
-  .sl-track { grid-area: bar; }
+  .sl-track { grid-area: bar; align-self: center; }
   .pl-num { grid-area: num; }
-  .pl-form, .pl-pct, .pl-warn { display: none; }
+  .pl-tools { grid-area: tools; }
+  .pl-form, .pl-pct, .pl-warn, .pl-tool-gap { display: none; }
   .pass-detail { right: 4px; left: 4px; min-width: 0; }
-  .block-head { row-gap: 4px; padding-right: 10px; }
-  .block-customer { flex-basis: 100%; order: 3; }
+  .block-head { row-gap: 2px; padding-right: 8px; gap: 7px; }
+  /* The auto-margin spacer pushes everything after it hard right, which on a
+     narrow card forces the last control onto a line of its own. Without it the
+     header simply wraps where it runs out of room. */
+  .block-head .qm-spacer { display: none; }
+  /* The customer takes the second line, after the controls rather than between
+     them. */
+  .block-customer { flex-basis: 100%; order: 9; }
+  .block-id { font-size: 0.75rem; }
   .block-passes { padding: 8px 9px 10px; }
   .pass-lot { margin-left: 0; }
 }
@@ -1839,4 +1854,261 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
   .sidebar, .header, .queue-bar, .block-card, .done-head, .modal {
     background: var(--bg-card);
   }
+}
+
+/* ============================================
+   MOTION AND FORM
+   ============================================
+
+   The board read as flat panels with hairlines: everything appeared instantly,
+   nothing acknowledged a press, and every surface was separated by a 1px line.
+   That is what makes an interface feel drawn rather than built.
+
+   Three changes, applied everywhere rather than case by case:
+
+   1. ONE EASING CURVE. Every transition on this page uses the same decelerating
+      curve, and the same two durations. Mixed curves are what make motion feel
+      arbitrary — a single one makes unrelated elements feel like parts of the
+      same object.
+   2. HAIRLINES BECOME LAYERS. Depth comes from a tinted surface plus a soft
+      shadow and a light-catching top edge, not from a drawn border. A border
+      says "here is a rectangle"; a shadow says "here is something on top of
+      something else".
+   3. EVERY CONTROL ANSWERS A PRESS. A control that does not move under the
+      finger feels like a picture of a control.
+
+   Appended last on purpose, same as the glass section: equal specificity, so
+   source order decides. Do not move this up the file.
+   ============================================ */
+
+:root {
+  /* Decelerating, and slightly long. Interfaces feel cheap when they move
+     linearly or finish too fast to be seen. */
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  /* A little overshoot, for things that ARRIVE rather than change. */
+  --ease-in-out-back: cubic-bezier(0.34, 1.35, 0.64, 1);
+  --t-fast: 0.18s;
+  --t-base: 0.34s;
+
+  --r-card: 22px;
+  --r-row: 14px;
+  --r-ctl: 11px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --t-fast: 0.01s; --t-base: 0.01s; }
+}
+
+/* ---- surfaces ---- */
+
+.block-card {
+  border: 0;
+  border-radius: var(--r-card);
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
+    0 1px 2px rgba(0, 0, 0, 0.20),
+    0 8px 28px rgba(0, 0, 0, 0.28);
+  transition:
+    transform var(--t-base) var(--ease),
+    box-shadow var(--t-base) var(--ease);
+}
+[data-theme="light"] .block-card {
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.9) inset,
+    0 1px 2px rgba(45, 58, 50, 0.07),
+    0 8px 28px rgba(45, 58, 50, 0.10);
+}
+
+.block-card:hover {
+  transform: translateY(-3px);
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.09) inset,
+    0 2px 6px rgba(0, 0, 0, 0.24),
+    0 18px 44px rgba(0, 0, 0, 0.34);
+}
+[data-theme="light"] .block-card:hover {
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.95) inset,
+    0 2px 6px rgba(45, 58, 50, 0.09),
+    0 18px 44px rgba(45, 58, 50, 0.14);
+}
+
+/* The drawn top edge is replaced by the inset highlight above. */
+.block-card::before { display: none; }
+
+.block-head { border-bottom: 0; }
+.block-list { gap: 14px; }
+.block-passes { gap: 6px; padding: 8px 12px 14px; }
+
+.queue-bar,
+.done-head,
+.modal {
+  border: 0;
+  border-radius: var(--r-card);
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
+    0 8px 28px rgba(0, 0, 0, 0.26);
+}
+[data-theme="light"] .queue-bar,
+[data-theme="light"] .done-head,
+[data-theme="light"] .modal {
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.9) inset,
+    0 8px 28px rgba(45, 58, 50, 0.10);
+}
+.modal::before { display: none; }
+
+/* ---- pass rows ---- */
+
+.pass-row {
+  border-radius: var(--r-row);
+  padding: 9px 12px;
+  transition: background var(--t-fast) var(--ease);
+}
+.pass-row:hover { background: rgba(255, 255, 255, 0.055); }
+[data-theme="light"] .pass-row:hover { background: rgba(255, 255, 255, 0.75); }
+.pass-row.estimated { box-shadow: inset 2px 0 0 var(--warning); }
+
+.pass-line { font-size: 0.78125rem; letter-spacing: -0.005em; }
+
+/* Bars grow into place, so recorded production reads as something that
+   happened rather than something that was always there. */
+.sl-track { height: 8px; border-radius: 99px; }
+.sl-fill {
+  border-radius: 99px;
+  transition: width var(--t-base) var(--ease);
+}
+
+/* ---- inline editing ---- */
+
+/* Reads as text until touched. A field that always looks like a field turns a
+   row of numbers into a form. */
+.pl-num { display: inline-flex; align-items: baseline; gap: 2px; }
+.pl-done { color: var(--text-secondary); }
+.pl-unit { color: var(--text-secondary); }
+
+.pl-qty {
+  width: auto;
+  min-width: 3ch;
+  padding: 2px 5px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  transition: background var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+.pl-qty:hover { background: rgba(255, 255, 255, 0.07); }
+[data-theme="light"] .pl-qty:hover { background: rgba(45, 58, 50, 0.07); }
+.pl-qty:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.10);
+  box-shadow: 0 0 0 2px var(--ro-green);
+}
+[data-theme="light"] .pl-qty:focus { background: #fff; }
+
+.pl-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  opacity: 0;
+  transform: translateX(4px);
+  transition: opacity var(--t-fast) var(--ease), transform var(--t-base) var(--ease);
+}
+.pass-row:hover .pl-tools,
+.pass-row:focus-within .pl-tools { opacity: 1; transform: none; }
+@media (hover: none) { .pl-tools { opacity: 1; transform: none; } }
+
+.pl-tool {
+  min-width: 26px;
+  min-height: 26px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.8125rem;
+  line-height: 1;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease),
+              transform var(--t-fast) var(--ease);
+}
+.pl-tool:hover { background: rgba(255, 255, 255, 0.10); color: var(--text); }
+[data-theme="light"] .pl-tool:hover { background: rgba(45, 58, 50, 0.09); color: var(--text); }
+.pl-remove:hover { color: var(--danger); }
+.pl-tool:active { transform: scale(0.88); }
+.pl-tool:focus-visible { outline: 2px solid var(--ro-green); outline-offset: 1px; }
+.pl-tool-gap { min-width: 26px; }
+
+/* ---- the detail arrives rather than appears ---- */
+
+.pass-detail {
+  border: 0;
+  border-radius: 18px;
+  transform: translateY(-8px) scale(0.96);
+  transform-origin: top right;
+  transition:
+    opacity var(--t-fast) var(--ease),
+    transform var(--t-base) var(--ease-in-out-back),
+    visibility var(--t-base);
+}
+body:not(.detail-pinned) .pass-row:hover .pass-detail,
+.pass-row:focus-visible .pass-detail,
+.pass-row.open .pass-detail { transform: none; }
+
+/* ---- controls answer a press ---- */
+
+.btn, .chip, .icon-btn, .block-action, .line-move, .done-row, .block-id {
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease);
+}
+.btn:active, .chip:active, .icon-btn:active,
+.block-action:active, .line-move:active:not(:disabled) { transform: scale(0.96); }
+
+.btn, .chip, .icon-btn { border-radius: var(--r-ctl); }
+.btn { padding: 11px 22px; }
+
+.block-action {
+  transform: translateX(4px);
+  transition: opacity var(--t-fast) var(--ease), transform var(--t-base) var(--ease),
+              color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
+.block-card:hover .block-action,
+.block-action:focus-visible { transform: none; }
+.block-action:hover { background: rgba(255, 255, 255, 0.10); border-color: transparent; }
+[data-theme="light"] .block-action:hover { background: rgba(45, 58, 50, 0.09); }
+
+/* ---- the archive ---- */
+
+.done-row {
+  border: 0;
+  border-radius: var(--r-row);
+  padding: 11px 14px;
+}
+.done-row:hover { background: rgba(255, 255, 255, 0.07); transform: translateX(2px); }
+[data-theme="light"] .done-row:hover { background: rgba(255, 255, 255, 0.85); }
+
+/* ---- the modal settles in ---- */
+
+.modal-backdrop { transition: opacity var(--t-base) var(--ease); }
+.modal { animation: modal-in var(--t-base) var(--ease); }
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.985); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .modal { animation: none; }
+}
+
+.field input, .field select, .field textarea,
+.line-row input, .line-row select,
+.queue-bar input[type="number"] {
+  border-radius: var(--r-ctl);
+  transition: background var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease);
 }

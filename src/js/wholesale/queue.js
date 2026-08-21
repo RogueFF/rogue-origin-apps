@@ -50,6 +50,14 @@ let deleteOrder = () => {};
 export function onDeleteOrder(fn) { deleteOrder = fn; }
 
 /**
+ * Commit a change to an order's lines, made from the card rather than the
+ * editor. Set by index.js — this module must not import the editor and cycle.
+ * `mutate` receives the order's items and returns the new list.
+ */
+let editLines = async () => {};
+export function onEditLines(fn) { editLines = fn; }
+
+/**
  * A control on a block card.
  *
  * The card is a drag surface, so both the press and the click have to be kept
@@ -218,6 +226,84 @@ function passDetail(pass) {
   return box;
 }
 
+/** A small control on a pass line. Kept off the row's click and the card's drag. */
+function lineTool(cls, glyph, label, onActivate) {
+  const btn = el('button', `pl-tool ${cls}`, glyph);
+  btn.type = 'button';
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
+  btn.addEventListener('click', (e) => { e.stopPropagation(); onActivate(); });
+  btn.addEventListener('mousedown', (e) => e.stopPropagation());
+  return btn;
+}
+
+/**
+ * Move a whole cultivar earlier or later in its order's trim sequence.
+ *
+ * Returns a mutation over the order's items. Grouping by cultivar in
+ * first-appearance order reproduces exactly what the scheduler does, so the
+ * arrows move what the card shows rather than something next to it. It moves
+ * the whole PASS because tops and smalls of one cultivar come off a single lot
+ * — moving one without the other would ask the floor to run that lot twice.
+ */
+function movePass(cultivarId, delta) {
+  return (items) => {
+    const groups = [];
+    const index = new Map();
+    for (const item of items) {
+      if (!index.has(item.cultivarId)) { index.set(item.cultivarId, groups.length); groups.push([]); }
+      groups[index.get(item.cultivarId)].push(item);
+    }
+    const from = index.get(cultivarId);
+    if (from == null) return items;
+    const to = from + delta;
+    if (to < 0 || to >= groups.length) return items;
+    groups.splice(to, 0, groups.splice(from, 1)[0]);
+    return groups.flat();
+  };
+}
+
+/**
+ * The ordered quantity, editable in place.
+ *
+ * An input that reads as text until it is touched. Enter or blur commits;
+ * Escape puts back what was there. Rendered as an input rather than swapped in
+ * on click, so it is reachable by keyboard and by tap without a hidden mode to
+ * get wrong.
+ */
+function qtyField(orderId, pass, line) {
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.inputMode = 'decimal';
+  input.className = 'pl-qty';
+  input.value = String(line.qtyLbs);
+  input.size = Math.max(3, String(line.qtyLbs).length);
+  input.setAttribute('aria-label', `${pass.cultivarName} ${t(line.form)} ${t('quantity')}`);
+
+  const revert = () => { input.value = String(line.qtyLbs); };
+
+  const commit = () => {
+    const next = Number(input.value);
+    if (!(next > 0)) { revert(); return; }
+    if (next === line.qtyLbs) return;
+    editLines(orderId, (items) => items.map(x => (
+      // Canonical pounds, so the entered unit goes with it — the number just
+      // typed is pounds, whatever the line was originally quoted in.
+      x.id === line.lineId ? { ...x, enteredQty: next, enteredUnit: 'lb', qtyLbs: next } : x
+    )));
+  };
+
+  input.addEventListener('click', (e) => e.stopPropagation());
+  input.addEventListener('mousedown', (e) => e.stopPropagation());
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') { revert(); input.blur(); }
+  });
+  return input;
+}
+
 /**
  * One trim pass. The row states only what the operator asked it to: pounds done
  * against pounds ordered with a percentage, and the lead time. Everything the
@@ -232,7 +318,7 @@ function passDetail(pass) {
  * different speeds. They share a lead time — one lot, one pass — so it is
  * printed once, on the first of them.
  */
-function passRow(pass) {
+function passRow(pass, orderId) {
   const row = el('div', `pass-row${pass.estimated ? ' estimated' : ''}`);
   row.tabIndex = 0;
   row.setAttribute('aria-label', `${pass.cultivarName}, ${t('details')}`);
@@ -251,13 +337,34 @@ function passRow(pass) {
     r.append(track);
 
     const done = line.doneLbs.toLocaleString('en-US', { maximumFractionDigits: 1 });
-    r.append(el('span', 'pl-num', `${done} / ${fmtLbs(line.qtyLbs)}`));
+    const num = el('span', 'pl-num');
+    num.append(el('span', 'pl-done', `${done} / `));
+    num.append(qtyField(orderId, pass, line));
+    num.append(el('span', 'pl-unit', 'lb'));
+    r.append(num);
+
     r.append(el('span', 'pl-pct', `(${pctText(line.pct)})`));
     r.append(el('span', 'pl-eta', i === 0 ? humanMoment(pass.finish) : ''));
 
     const warn = el('span', 'pl-warn', i === 0 && short ? '▲' : '');
     if (i === 0 && short) warn.setAttribute('aria-label', t('stock'));
     r.append(warn);
+
+    // Reorder sits on the first line of a pass only — it moves the whole
+    // cultivar. Remove sits on every line, because it acts on that one line.
+    const tools = el('div', 'pl-tools');
+    if (i === 0) {
+      tools.append(lineTool('pl-up', '↑', `${t('move_up')} ${pass.cultivarName}`,
+        () => editLines(orderId, movePass(pass.cultivarId, -1))));
+      tools.append(lineTool('pl-down', '↓', `${t('move_down')} ${pass.cultivarName}`,
+        () => editLines(orderId, movePass(pass.cultivarId, 1))));
+    } else {
+      tools.append(el('span', 'pl-tool-gap'));
+      tools.append(el('span', 'pl-tool-gap'));
+    }
+    tools.append(lineTool('pl-remove', '×', `${t('remove_line')} ${pass.cultivarName}`,
+      () => editLines(orderId, (items) => items.filter(x => x.id !== line.lineId))));
+    r.append(tools);
 
     row.append(r);
   });
@@ -330,7 +437,7 @@ function blockCard(block, idx, geom, onDrop, onOrder) {
   card.append(track);
 
   const passes = el('div', 'block-passes');
-  block.passes.forEach(p => passes.append(passRow(p)));
+  block.passes.forEach(p => passes.append(passRow(p, block.orderId)));
   card.append(passes);
 
   // --- drag ---

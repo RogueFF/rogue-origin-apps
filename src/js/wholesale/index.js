@@ -11,11 +11,11 @@
 
 import { state, loadAll, loadCoverage, STATUSES, statusLabel, option } from './state.js';
 import { renderOffQueue } from './render.js';
-import { loadQueue, renderQueue, onOpenOrder, onDeleteOrder } from './queue.js';
+import { loadQueue, renderQueue, onOpenOrder, onDeleteOrder, onEditLines } from './queue.js';
 import {
   openEditor, closeEditor, saveOrder, deleteOrder, addLine, onBuildStatus,
   fillCustomerSelect, openCustomerModal, closeCustomerModal, saveCustomer,
-  deleteCustomer, selectedCustomer,
+  deleteCustomer, selectedCustomer, patchOrderItems,
 } from './editor.js';
 import { registerLabels, t, toggleLang } from '../shared/i18n.js';
 import { initTheme, toggleTheme } from '../shared/theme.js';
@@ -58,6 +58,7 @@ registerLabels({
     err_customer: 'Pick a customer first.',
     err_cultivar: 'pick a cultivar.',
     err_qty: 'quantity must be greater than zero.',
+    err_last_line: 'An order needs at least one line. Delete the order instead.',
     err_cust_name: 'Enter a contact name or company.',
     load_failed: 'Could not load orders',
     view_board: 'Orders', view_queue: 'Production queue',
@@ -118,6 +119,7 @@ registerLabels({
     err_customer: 'Seleccione un cliente primero.',
     err_cultivar: 'seleccione un cultivar.',
     err_qty: 'la cantidad debe ser mayor que cero.',
+    err_last_line: 'Un pedido necesita al menos una línea. Elimine el pedido.',
     err_cust_name: 'Ingrese un nombre de contacto o empresa.',
     load_failed: 'No se pudieron cargar los pedidos',
     view_board: 'Pedidos', view_queue: 'Cola de producción',
@@ -218,6 +220,23 @@ function wire() {
   onDeleteOrder(async (orderId) => {
     const order = state.orders.find(o => o.id === orderId);
     if (order && await deleteOrder(order)) refresh();
+  });
+
+  // Quick edits made on a card. `mutate` returns the order's new line-up; an
+  // unchanged list means the arrows hit an end and there is nothing to write.
+  onEditLines(async (orderId, mutate) => {
+    const order = state.orders.find(o => o.id === orderId);
+    if (!order) return;
+    const items = mutate(order.items);
+    if (items === order.items) return;
+    if (!items.length) {
+      showToast(t('err_last_line'), 'error');
+      return;
+    }
+    if (await patchOrderItems(order, items)) {
+      paintLock();
+      refresh();
+    }
   });
 
   $('done-toggle').onclick = () => {
