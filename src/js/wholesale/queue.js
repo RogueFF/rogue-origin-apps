@@ -583,6 +583,18 @@ function syncCrewBar() {
   // differs from the figure in use — otherwise it is a button that does nothing
   // — and it is how the operator takes a busy day deliberately instead of
   // discovering the dates were built on an average that had not caught up.
+  // Hourly entries whose cultivar spelling maps to nothing are not merely
+  // unallocated — they are unread, and they look exactly like a floor that has
+  // stopped trimming. The alias table is seeded per crop year, so the first
+  // 2026-spelled entry will do this silently unless something says so.
+  const um = $('q-unmatched');
+  const unmatched = q?.unmatched || [];
+  um.hidden = !unmatched.length;
+  if (unmatched.length) {
+    const lbs = unmatched.reduce((s2, u) => s2 + u.lbs, 0);
+    um.textContent = `${t('unmatched')}: ${unmatched.map(u => u.spelling).join(', ')} (${fmtLbs0(lbs)})`;
+  }
+
   const live = $('q-live');
   const now = q?.liveCrew;
   const differs = now != null && Math.abs(now - (q?.crew ?? 0)) >= 0.5;

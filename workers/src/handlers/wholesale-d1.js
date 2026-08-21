@@ -195,12 +195,30 @@ async function getOrders(db, params) {
  * leave an order with no lines.
  */
 async function saveOrder(db, body) {
-  const status = body.status || 'in_queue';
+  // An absent status means "no opinion", not "reset it". The board's copy of an
+  // order can be up to a minute old, so a quick edit made while the cron was
+  // advancing that order would otherwise write the stale status back and drag a
+  // finished order into the queue, moving every date behind it.
+  const existing = body.id
+    ? await queryOne(db, 'SELECT status FROM orders WHERE id = ?', [body.id])
+    : null;
+  const status = body.status || existing?.status || 'in_queue';
   if (!ORDER_STATUSES.has(status)) {
     throw createError('VALIDATION_ERROR',
       `Invalid status "${status}" — expected one of: ${[...ORDER_STATUSES].join(', ')}`);
   }
   const items = Array.isArray(body.items) ? body.items : [];
+
+  // AN ORDER WITH NO LINES CANNOT BE SEEN. The queue is built from line items,
+  // so it produces no block; and the off-queue list is the complement of the
+  // queue, so a still-queued status excludes it from there too. It exists, it
+  // is scheduled against nothing, and no screen shows it. Refused here rather
+  // than in one client, because the bot writes through this path as well.
+  if (!items.length) {
+    throw createError('VALIDATION_ERROR',
+      'An order needs at least one line item — delete the order instead');
+  }
+
   const prepared = await prepareItems(db, items);
 
   const isNew = !body.id;
@@ -289,6 +307,18 @@ async function saveOrder(db, body) {
  * kept alongside so a kg order redisplays as kg forever.
  */
 async function prepareItems(db, items) {
+  // Validated before the lookup below binds them: a line with no cultivar used
+  // to reach the query as `undefined` and fail as a 500, where the operator
+  // deserves the sentence that says which line is wrong.
+  for (const [i, it] of items.entries()) {
+    if (!it.cultivarId) {
+      throw createError('VALIDATION_ERROR', `Line ${i + 1}: pick a cultivar`);
+    }
+    if (!(Number(it.qty) > 0)) {
+      throw createError('VALIDATION_ERROR', `Line ${i + 1}: quantity must be greater than zero`);
+    }
+  }
+
   if (!items.length) return [];
 
   const ids = [...new Set(items.map(i => i.cultivarId))];
@@ -422,17 +452,6 @@ async function getRates(db) {
  */
 const SCHEDULABLE = ["in_queue", "in_production"];
 
-/**
- * Crew size, derived from what actually happened rather than typed.
- *
- * Trailing seven PRODUCTION days, not calendar days — a week with a holiday in
- * it would otherwise read as a smaller crew. Prefers effective_trimmers_line1,
- * which is already weighted for people joining or leaving mid-hour.
- *
- * Worth knowing when reading a date off this: across 2026-08-12..19 the real
- * figure moved between 3.8 and 12.3. A single number cannot be right for every
- * day, which is exactly why the board shows it and lets it be overridden.
- */
 /**
  * Crew size, derived from what actually happened rather than typed.
  *
@@ -581,6 +600,34 @@ async function recordedProduction(db, since) {
   `, [since]);
 }
 
+/**
+ * Production the burn-down could not read, because nothing maps its spelling.
+ *
+ * `recordedProduction` joins `cultivar_aliases` on an exact match, which is
+ * right — substring matching silently counts Sour Lifter toward Lifter. But an
+ * inner join DROPS what it cannot match, and nothing inserts aliases at run
+ * time: migration 0017 seeded them through the 2025 crop year. The first entry
+ * spelled `2026 - Lifter / Sungrown` therefore stops counting toward any order,
+ * appears in neither progress nor `unallocated`, and looks exactly like a floor
+ * that has stopped trimming.
+ *
+ * Reported so it is a visible gap rather than an invisible one.
+ */
+async function unmatchedSpellings(db, since) {
+  return query(db, `
+    SELECT mp.cultivar1 AS spelling,
+           ROUND(SUM(COALESCE(mp.tops_lbs1, 0) + COALESCE(mp.smalls_lbs1, 0)), 1) AS lbs
+    FROM monthly_production mp
+    LEFT JOIN cultivar_aliases a ON a.alias = mp.cultivar1
+    WHERE mp.production_date >= ?
+      AND a.alias IS NULL
+      AND mp.cultivar1 IS NOT NULL AND TRIM(mp.cultivar1) != ''
+      AND (COALESCE(mp.tops_lbs1, 0) + COALESCE(mp.smalls_lbs1, 0)) > 0
+    GROUP BY mp.cultivar1
+    ORDER BY lbs DESC
+  `, [since]);
+}
+
 /** Pacific wall-clock now, as the civil pair the scheduler and burn-down use. */
 function nowPT() {
   const date = formatDatePT(new Date(), "yyyy-MM-dd");
@@ -652,7 +699,10 @@ async function computeQueue(db, crewOverride) {
     nowPT().date);
   const since = String(earliest).slice(0, 10);
 
-  const entries = await recordedProduction(db, since);
+  const [entries, unmatched] = await Promise.all([
+    recordedProduction(db, since),
+    unmatchedSpellings(db, since),
+  ]);
 
   // Finished orders rank AHEAD of everything still queued: they took their
   // pounds while they were at the front, and the replay has to reproduce that
@@ -694,7 +744,7 @@ async function computeQueue(db, crewOverride) {
     progress: progress.byLine,
   });
 
-  return { ...scheduled, progress, rates, fallback, crewInfo, live, crew, start, names };
+  return { ...scheduled, progress, rates, fallback, crewInfo, live, crew, start, names, unmatched };
 }
 
 async function getQueue(db, params) {
@@ -728,6 +778,9 @@ async function getQueue(db, params) {
     // ordinary — most of what gets trimmed is not against a wholesale order —
     // but it is the number to look at when a block is not moving.
     unallocated: q.progress.unallocated,
+    // Hourly entries whose cultivar spelling maps to nothing. These are not
+    // merely unallocated — they are unread, and without this they are invisible.
+    unmatched: q.unmatched,
   });
 }
 
@@ -804,8 +857,23 @@ async function setAccrualStart(db, body) {
  * so a human who marked something finished early keeps that decision.
  */
 export async function syncOrderStatuses(env) {
-  const db = env.DB;
-  const { progress } = await computeQueue(db);
+  const q = await computeQueue(env.DB);
+  return applyStatuses(env.DB, q.progress);
+}
+
+/**
+ * Move orders forward to match what the floor has recorded. Decision 5: fully
+ * automatic — the first pound moves an order to `in_production`, a fully
+ * trimmed one to `finished`.
+ *
+ * THIS IS A WRITE, AND getQueue IS A READ. Doing it inside getQueue would make
+ * an unauthenticated GET mutate the order book, and would only run while
+ * somebody had the page open. It belongs on the cron.
+ *
+ * Only forward transitions are applied, so a human who marked something
+ * finished early keeps that decision.
+ */
+async function applyStatuses(db, progress) {
   const rows = await query(db, `
     SELECT id, status FROM orders
     WHERE status IN (${SCHEDULABLE.map(() => "?").join(", ")})
@@ -1035,7 +1103,6 @@ async function importOrder(db, body) {
   });
 }
 
-export { fromLbs };
 
 // ─── NOTIFICATIONS ─────────────────────────────────────
 
@@ -1074,8 +1141,8 @@ async function setNotify(db, body) {
 
   let seeded = 0;
   if (enabled) {
-    const events = await deriveWholesaleEvents(db, []);
-    seeded = await recordEvents(db, events);
+    const q = await computeQueue(db);
+    seeded = await recordEvents(db, await buildEvents(db, q, []));
   }
   return successResponse({ success: true, enabled, seeded });
 }
@@ -1093,27 +1160,35 @@ async function sentLedger(db) {
   }));
 }
 
+const RECORD_SQL = `
+  INSERT INTO alerts_sent (rule, dedup_key, last_sent_ts, metadata_json)
+  VALUES (?, ?, datetime('now'), ?)
+  ON CONFLICT(rule, dedup_key) DO UPDATE SET
+    last_sent_ts = excluded.last_sent_ts,
+    metadata_json = excluded.metadata_json`;
+
 /** Write events to the ledger so they are never said twice. */
 async function recordEvents(db, events) {
   if (!events.length) return 0;
   await transaction(db, events.map(e => ({
-    sql: `INSERT INTO alerts_sent (rule, dedup_key, last_sent_ts, metadata_json)
-          VALUES (?, ?, datetime('now'), ?)
-          ON CONFLICT(rule, dedup_key) DO UPDATE SET
-            last_sent_ts = excluded.last_sent_ts,
-            metadata_json = excluded.metadata_json`,
+    sql: RECORD_SQL,
     params: [e.rule, e.key, e.meta ? JSON.stringify(e.meta) : null],
   })));
   return events.length;
 }
 
-async function deriveWholesaleEvents(db, moved) {
-  const [q, orders, sent] = await Promise.all([
-    computeQueue(db),
+/** Record a single event, immediately after it has actually been delivered. */
+async function recordEvent(db, e) {
+  await execute(db, RECORD_SQL, [e.rule, e.key, e.meta ? JSON.stringify(e.meta) : null]);
+}
+
+async function buildEvents(db, q, moved) {
+  const [orders, sent, items] = await Promise.all([
     query(db, 'SELECT id, nickname, shopify_order_name FROM orders'),
     sentLedger(db),
+    query(db, 'SELECT order_id, qty_lbs FROM order_items'),
   ]);
-  const items = await query(db, 'SELECT order_id, qty_lbs FROM order_items');
+
   const totals = new Map();
   for (const i of items) totals.set(i.order_id, (totals.get(i.order_id) || 0) + i.qty_lbs);
 
@@ -1147,23 +1222,39 @@ async function deriveWholesaleEvents(db, moved) {
  */
 export async function runWholesaleCron(env) {
   const db = env.DB;
-  const moved = await syncOrderStatuses(env);
+
+  // ONE computation, and the events are derived from it BEFORE the statuses
+  // move. Deriving afterwards cost the last pass of every order its
+  // "✅ done — Next up: …": finishing the order takes it out of the queue, so
+  // the pass that finished it was no longer in `blocks` to be noticed.
+  const q = await computeQueue(db);
+  const moved = await applyStatuses(db, q.progress);
 
   if (!await notifyEnabled(db)) return { moved, sent: 0 };
 
-  const events = await deriveWholesaleEvents(db, moved);
+  const events = await buildEvents(db, q, moved);
   const speak = events.filter(e => e.text);
+  const silent = events.filter(e => !e.text);
 
+  let sent = 0;
   for (const e of speak) {
-    await sendTelegramMessage(env, {
-      chatId: env.TELEGRAM_CASEY_CHAT_ID,
-      text: e.text,
-    });
+    try {
+      await sendTelegramMessage(env, { chatId: env.TELEGRAM_CASEY_CHAT_ID, text: e.text });
+    } catch (err) {
+      // ONE BAD MESSAGE MUST NOT WEDGE THE REST. Recording used to happen once,
+      // after the whole loop, so a single message Telegram refused meant nothing
+      // was written at all — and the same message was retried, and refused,
+      // every five minutes forever, with every later event stuck behind it.
+      // Now each event is recorded the moment it lands, and a failure costs
+      // only itself.
+      console.error(`[Cron] Telegram send failed for ${e.rule}:${e.key}: ${err.message}`);
+      continue;
+    }
+    await recordEvent(db, e);
+    sent += 1;
   }
 
-  // Recorded only after a successful send. A Telegram outage should mean the
-  // message arrives late, not that it is lost — the next tick will retry it,
-  // because nothing was written to say it had already gone out.
-  await recordEvents(db, events);
-  return { moved, sent: speak.length };
+  // Bookkeeping rows carry no message, so nothing can have failed to deliver.
+  await recordEvents(db, silent);
+  return { moved, sent };
 }
