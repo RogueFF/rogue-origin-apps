@@ -2316,3 +2316,60 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
   /* The arc has to tuck in where a phone has no room to its left. */
   .act-crew, .goo-crew { --x: -76px; }
 }
+
+/* ---- the header, quieted ----
+   Four boxed buttons became two ghost controls and a line of text. The two that
+   went were doing work the page already does: unlocking happens by itself at
+   the first write that needs it, and the board now refreshes on its own. */
+
+.ghost-btn {
+  min-width: 38px;
+  min-height: 38px;
+  padding: 0 10px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-ctl);
+  color: var(--header-text);
+  opacity: 0.65;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: opacity var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
+.ghost-btn i { font-size: 1.125rem; }
+.ghost-btn:hover { opacity: 1; background: rgba(255, 255, 255, 0.08); }
+.ghost-btn:active { transform: scale(0.94); }
+.ghost-btn:focus-visible { outline: 2px solid var(--ro-green); outline-offset: 2px; }
+[data-theme="light"] .ghost-btn:hover { background: rgba(45, 58, 50, 0.08); }
+
+/* Reports rather than commands, so it is text — but still a button, because
+   the honest answer to "is this current?" is sometimes "make it current now". */
+.freshness {
+  background: transparent;
+  border: 0;
+  padding: 4px 8px;
+  border-radius: var(--r-ctl);
+  color: var(--header-text);
+  opacity: 0.45;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: opacity var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+.freshness:hover { opacity: 1; }
+.freshness:focus-visible { outline: 2px solid var(--ro-green); outline-offset: 2px; }
+.freshness.stale { color: var(--ro-gold); opacity: 0.9; }
+
+.header-actions { gap: 2px; align-items: center; }
+
+@media (max-width: 640px) {
+  /* The title already truncates on a phone; the timestamp is the first thing
+     that can go. */
+  .freshness { display: none; }
+}

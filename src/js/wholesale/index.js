@@ -18,7 +18,7 @@ import {
   openEditor, closeEditor, saveOrder, deleteOrder, addLine, onBuildStatus,
   patchOrder,
 } from './editor.js';
-import { registerLabels, t, toggleLang } from '../shared/i18n.js';
+import { registerLabels, t, toggleLang, getLang } from '../shared/i18n.js';
 import { initTheme, toggleTheme } from '../shared/theme.js';
 import { showToast } from '../shared/toast.js';
 import { ensureUnlocked, forgetPassword, hasPassword } from './auth.js';
@@ -54,7 +54,7 @@ registerLabels({
     confirm_delete: 'Delete order',
     edit_order: 'Edit order', order_ref: 'Shopify order #',
     trim_order: 'Order',
-    tg_updates: 'Telegram updates',
+    just_now: 'just now', updated: 'updated', forget_password: 'Clear password',
     bell_on: 'Telegram updates on — tap to mute',
     bell_off: 'Telegram updates off — tap to enable',
     bell_enabled: 'Telegram updates on', bell_disabled: 'Telegram updates off',
@@ -83,7 +83,6 @@ registerLabels({
     err_password: 'Enter the password.',
     err_password_bad: 'Incorrect password.',
     err_connection: 'Could not reach the server.',
-    unlocked: 'Unlocked — changes can be saved',
     relock: 'Password cleared',
   },
   es: {
@@ -114,7 +113,7 @@ registerLabels({
     confirm_delete: 'Eliminar pedido',
     edit_order: 'Editar pedido', order_ref: 'Pedido Shopify n.º',
     trim_order: 'Orden',
-    tg_updates: 'Avisos de Telegram',
+    just_now: 'ahora', updated: 'hace', forget_password: 'Borrar contraseña',
     bell_on: 'Avisos de Telegram activados — toque para silenciar',
     bell_off: 'Avisos de Telegram desactivados — toque para activar',
     bell_enabled: 'Avisos de Telegram activados', bell_disabled: 'Avisos de Telegram desactivados',
@@ -143,7 +142,6 @@ registerLabels({
     err_password: 'Ingrese la contraseña.',
     err_password_bad: 'Contraseña incorrecta.',
     err_connection: 'No se pudo conectar con el servidor.',
-    unlocked: 'Desbloqueado — se pueden guardar cambios',
     relock: 'Contraseña borrada',
   },
 });
@@ -172,6 +170,42 @@ function crewOverride() {
   return derived != null && Math.abs(typed - derived) < 0.001 ? undefined : typed;
 }
 
+/**
+ * When the board last agreed with the server.
+ *
+ * The queue is not static — burn-down moves as the floor records hours, and the
+ * cron advances statuses every five minutes. A board that only updated when
+ * somebody pressed a button was quietly wrong most of the day, and the button
+ * was the only thing admitting it.
+ */
+let lastLoaded = 0;
+
+function paintFreshness() {
+  const el = $('freshness');
+  if (!el) return;
+  if (!lastLoaded) { el.textContent = ''; return; }
+  const mins = Math.floor((Date.now() - lastLoaded) / 60000);
+  el.textContent = mins < 1 ? t('just_now') : `${t('updated')} ${mins}m`;
+  // Past a quarter of an hour the number stops being reassuring and starts
+  // being a warning, which is worth looking different.
+  el.classList.toggle('stale', mins >= 15);
+}
+
+/**
+ * True while a refresh would destroy something the operator is in the middle of.
+ *
+ * `renderQueue` rebuilds every row, so an automatic reload during an inline edit
+ * would take the half-typed quantity out from under them. This is the whole
+ * reason the board did not refresh itself before, and it is a guard rather than
+ * a reason not to.
+ */
+function midEdit() {
+  if (!$('modal').hidden || !$('unlock-modal').hidden) return true;
+  if ($('fab-wrap').classList.contains('open')) return true;
+  const a = document.activeElement;
+  return !!(a && ['INPUT', 'TEXTAREA', 'SELECT'].includes(a.tagName));
+}
+
 async function refresh() {
   try {
     await loadAll();
@@ -181,6 +215,8 @@ async function refresh() {
       loadQueue(crewOverride()),
       loadCoverage(),
     ]);
+    lastLoaded = Date.now();
+    paintFreshness();
     renderQueue();
     renderOffQueue();
   } catch (e) {
@@ -188,30 +224,34 @@ async function refresh() {
   }
 }
 
-/** Reflect whether writes are currently possible, so the state is not a guess. */
+/**
+ * The only thing the password control ever did that nothing else does is
+ * FORGET one. Unlocking happens by itself at the first write that needs it, so
+ * a permanent button in the header was offering a step the page already takes.
+ * It shows in the settings fan, and only while there is something to clear.
+ */
 function paintLock() {
   const btn = $('lock-btn');
-  const open = hasPassword();
-  btn.querySelector('i').className = open ? 'ph-duotone ph-lock-key-open' : 'ph-duotone ph-lock-key';
-  btn.classList.toggle('primary', !open);
-  btn.title = open ? t('relock') : t('unlock');
+  btn.hidden = !hasPassword();
+  btn.textContent = t('forget_password');
 }
 
 function wire() {
   onBuildStatus(buildStatusOptions);
   $('menu-btn').onclick = () => document.getElementById('sidebar').classList.toggle('open');
-  $('lang-toggle').onclick = () => { toggleLang(); renderQueue(); renderOffQueue(); };
-  $('lock-btn').onclick = async () => {
-    if (hasPassword()) {
-      forgetPassword();
-      showToast(t('relock'), 'info');
-    } else if (await ensureUnlocked()) {
-      showToast(t('unlocked'), 'success');
-    }
+  $('q-crew').setAttribute('aria-label', t('crew'));
+  const paintLang = () => { $('lang-toggle').textContent = getLang() === 'es' ? 'ES' : 'EN'; };
+  paintLang();
+  $('lang-toggle').onclick = () => { toggleLang(); paintLang(); renderQueue(); renderOffQueue(); };
+
+  $('lock-btn').onclick = () => {
+    forgetPassword();
+    showToast(t('relock'), 'info');
     paintLock();
   };
+
   $('dark-mode-toggle').onclick = () => toggleTheme();
-  $('refresh-btn').onclick = () => refresh();
+  $('freshness').onclick = () => refresh();
 
   // Recalculate when the crew figure actually changes, rather than behind a
   // separate button — the whole queue is a function of it, so a stale board
@@ -370,3 +410,19 @@ initTheme('dark');
 wire();
 paintLock();
 refresh();
+
+// Keep the board current without anybody asking. Only while the tab is on
+// screen: a board nobody is looking at does not need polling, and a barn tablet
+// left open all night should not spend the night calling the API.
+setInterval(() => {
+  if (document.visibilityState !== 'visible' || midEdit()) return;
+  refresh();
+}, 60_000);
+
+// Coming back to the tab is exactly the moment the answer is most likely stale.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && !midEdit()) refresh();
+});
+
+// The label ages between refreshes, so it has to tick on its own.
+setInterval(paintFreshness, 20_000);
