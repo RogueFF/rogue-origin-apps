@@ -477,7 +477,9 @@ function blockCard(block, idx, geom, onDrop, onOrder) {
 
   head.append(nicknameField(block));
   head.append(el('span', 'qm-spacer'));
-  head.append(el('span', 'block-pct', pctText(block.pct)));
+  const done = block.doneLbs.toLocaleString('en-US', { maximumFractionDigits: 1 });
+  head.append(el('span', 'block-lbs', `${done} / ${fmtLbs(block.totalLbs)}`));
+  head.append(el('span', 'block-pct', `(${pctText(block.pct)})`));
   head.append(el('b', 'block-eta', `${t('done')} ${humanDate(block.finish.date)}`));
 
   // Until now the only way into an order was clicking its id, which reads as a
@@ -497,7 +499,11 @@ function blockCard(block, idx, geom, onDrop, onOrder) {
   const fill = el('div', 'run-bar-fill');
   fill.style.width = `${Math.min(100, block.pct * 100)}%`;
   bar.append(fill);
-  bar.append(el('span', null, `${fmtLbs(block.doneLbs)} / ${fmtLbs(block.totalLbs)}`));
+  // The pounds used to be printed INSIDE this bar, which is sized by the
+  // order's share of the queue's timeline and clipped to it. A short order got
+  // a bar a few pixels wide and a label reading "0 l". The figure now lives in
+  // the header, where nothing can crop it and it matches how every strain row
+  // states the same thing.
   track.append(bar);
   card.append(track);
 

@@ -867,9 +867,18 @@
 [data-theme="light"] .block-customer:focus { background: #fff; }
 .block-customer::placeholder { color: var(--text-muted); font-style: italic; }
 
+/* The order's pounds, stated the same way every strain row states its own. */
+.block-lbs {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  white-space: nowrap;
+}
+
 .block-pct {
   font-family: var(--font-mono);
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--ro-green);
@@ -1603,13 +1612,6 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
 
 /* Zero progress must not glow. A meniscus at 0% would read as "started". */
 .run-bar-fill[style*="width: 0%"]::after { display: none; }
-
-.run-bar span {
-  position: relative;
-  z-index: 1;
-  color: var(--text);
-  font-weight: 700;
-}
 
 /* ---- the line burn-down ---- */
 
