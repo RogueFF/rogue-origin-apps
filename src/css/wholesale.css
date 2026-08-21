@@ -718,19 +718,7 @@
 }
 .chip:hover { color: var(--text); border-color: var(--border-strong); }
 
-.board-spacer { margin-left: auto; }
 
-.queue-bar {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-  /* Symmetric. This read `var(--space-md) var(--space-lg) 0` — no bottom
-     padding at all — which was invisible while the bar was a transparent strip
-     and became the whole problem once it gained a border: every control sat
-     25px below the top edge and 1px above the bottom one. */
-  padding: 14px 18px;
-}
 
 /* The sentence explaining the number in the box, now beside it rather than in a
    separate row underneath. It also fills the dead span the bar used to carry
@@ -753,19 +741,7 @@
   color: var(--warning);
   font-weight: 700;
 }
-.queue-bar[hidden] { display: none; }
 
-.crew-input {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
 .crew-input input {
   width: 88px;
   min-height: 44px;
@@ -800,7 +776,6 @@
   font-size: 0.75rem;
   color: var(--text-muted);
 }
-.queue-meta .qm-crew { color: var(--text); font-weight: 600; }
 .queue-meta .qm-tz {
   font-family: var(--font-mono);
   color: var(--text-muted);
@@ -1218,8 +1193,7 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
 }
 
 @media (max-width: 768px) {
-  .queue-bar { padding: 12px 14px; margin-left: var(--space-md); margin-right: var(--space-md); }
-  /* On a phone the sentence would push the actions onto a third row; the box
+    /* On a phone the sentence would push the actions onto a third row; the box
      and its highlight already say whether an override is in force. */
   .crew-basis { display: none; }
   .queue-view { padding: var(--space-md); }
@@ -1474,7 +1448,6 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
 
 .sidebar,
 .header,
-.queue-bar,
 .block-card,
 .done-head,
 .modal {
@@ -1488,7 +1461,6 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
    a drawn rectangle; this reads as an edge. */
 .block-card,
 .modal,
-.queue-bar,
 .done-head {
   position: relative;
   box-shadow: var(--pane-shadow);
@@ -1520,10 +1492,6 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
   border-top: 0;
 }
 
-.queue-bar {
-  border-radius: var(--radius-lg);
-  margin: var(--space-md) var(--space-lg) 0;
-}
 
 /* ---- the block card ---- */
 
@@ -1727,7 +1695,7 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
 .field textarea,
 .line-row input,
 .line-row select,
-.queue-bar input[type="number"] {
+#q-crew {
   background: rgba(255, 255, 255, 0.07);
   border: 1px solid var(--glass-stroke);
   color: var(--text);
@@ -1737,7 +1705,7 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
 [data-theme="light"] .field textarea,
 [data-theme="light"] .line-row input,
 [data-theme="light"] .line-row select,
-[data-theme="light"] .queue-bar input[type="number"] {
+[data-theme="light"] #q-crew {
   background: rgba(255, 255, 255, 0.85);
 }
 
@@ -1746,7 +1714,7 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
 .field textarea:focus,
 .line-row input:focus,
 .line-row select:focus,
-.queue-bar input[type="number"]:focus {
+#q-crew:focus {
   background: rgba(255, 255, 255, 0.12);
   border-color: var(--ro-green);
   box-shadow: 0 0 0 3px rgba(102, 137, 113, 0.22);
@@ -1756,11 +1724,11 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
 [data-theme="light"] .field textarea:focus,
 [data-theme="light"] .line-row input:focus,
 [data-theme="light"] .line-row select:focus,
-[data-theme="light"] .queue-bar input[type="number"]:focus {
+[data-theme="light"] #q-crew:focus {
   background: #fff;
 }
 
-.queue-bar input[type="number"] {
+#q-crew {
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
@@ -1864,7 +1832,7 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
    solid surfaces rather than near-transparent ones — a fallback has to stay
    readable, not pretty. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .sidebar, .header, .queue-bar, .block-card, .done-head, .modal {
+  .sidebar, .header, .block-card, .done-head, .modal {
     background: var(--bg-card);
   }
 }
@@ -1953,7 +1921,6 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
 .block-list { gap: 14px; }
 .block-passes { gap: 6px; padding: 8px 12px 14px; }
 
-.queue-bar,
 .done-head,
 .modal {
   border: 0;
@@ -1962,7 +1929,6 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
     0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
     0 8px 28px rgba(0, 0, 0, 0.26);
 }
-[data-theme="light"] .queue-bar,
 [data-theme="light"] .done-head,
 [data-theme="light"] .modal {
   box-shadow:
@@ -2130,8 +2096,147 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
 
 .field input, .field select, .field textarea,
 .line-row input, .line-row select,
-.queue-bar input[type="number"] {
+#q-crew {
   border-radius: var(--r-ctl);
   transition: background var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease),
               border-color var(--t-fast) var(--ease);
+}
+
+/* ---- the settings button ----
+   The board is read far more often than it is configured, so the crew figure,
+   the Telegram switch and New order sit behind one button instead of a strip
+   across the top of every screen. */
+
+.fab-wrap {
+  position: fixed;
+  right: var(--space-lg);
+  bottom: var(--space-lg);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.fab {
+  min-width: 52px;
+  min-height: 52px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: linear-gradient(180deg, var(--green-light), var(--ro-green));
+  color: #0a0f0c;
+  font-size: 1.375rem;
+  cursor: pointer;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    0 6px 20px rgba(0, 0, 0, 0.40);
+  transition: transform var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease);
+}
+.fab:hover { transform: translateY(-2px); box-shadow: 0 1px 0 rgba(255,255,255,0.3) inset, 0 12px 30px rgba(0,0,0,0.5); }
+.fab:active { transform: scale(0.94); }
+.fab:focus-visible { outline: 2px solid var(--ro-gold); outline-offset: 3px; }
+.fab.open i { transform: rotate(90deg); }
+.fab i { transition: transform var(--t-base) var(--ease); }
+
+/* The panel is closed most of the time, so the button that opens it carries the
+   one piece of state worth seeing from outside: whether Telegram is being told. */
+.fab.notifying::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ro-gold);
+  box-shadow: 0 0 0 2px var(--bg);
+}
+.fab { position: relative; }
+
+.fab-panel {
+  width: min(320px, calc(100vw - 2 * var(--space-md)));
+  padding: 14px;
+  border-radius: var(--r-card);
+  background: rgba(16, 20, 18, 0.97);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  backdrop-filter: blur(18px) saturate(1.4);
+  border: 1px solid var(--glass-stroke);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55);
+  display: grid;
+  gap: 12px;
+  animation: fab-in var(--t-base) var(--ease);
+}
+[data-theme="light"] .fab-panel {
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 16px 44px rgba(45, 58, 50, 0.24);
+}
+@keyframes fab-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+}
+@media (prefers-reduced-motion: reduce) { .fab-panel { animation: none; } }
+
+.fab-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.875rem;
+  color: var(--text);
+}
+.fab-row label, .fab-row > span { font-weight: 500; }
+
+.fab-crew { display: flex; align-items: center; gap: 8px; }
+.fab-crew input {
+  width: 72px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  padding: 8px 10px;
+  min-height: 40px;
+}
+
+.fab-panel .crew-basis {
+  margin: -6px 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  white-space: normal;
+}
+
+.fab-new { width: 100%; justify-content: center; }
+
+/* ---- the Telegram switch ----
+   A switch rather than a bell icon: it is the one control here whose effect
+   lands on somebody else's phone, and a toggle says "on or off" more plainly
+   than an icon that changes shape. */
+.switch {
+  width: 46px;
+  height: 28px;
+  flex: none;
+  border: 0;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.14);
+  cursor: pointer;
+  padding: 3px;
+  display: flex;
+  transition: background var(--t-base) var(--ease);
+}
+[data-theme="light"] .switch { background: rgba(45, 58, 50, 0.18); }
+.switch.on { background: var(--ro-gold); }
+
+.switch-knob {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform var(--t-base) var(--ease);
+}
+.switch.on .switch-knob { transform: translateX(18px); }
+.switch:focus-visible { outline: 2px solid var(--ro-green); outline-offset: 2px; }
+
+@media (max-width: 640px) {
+  .fab-wrap { right: var(--space-md); bottom: var(--space-md); }
 }

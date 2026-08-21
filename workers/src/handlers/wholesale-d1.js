@@ -624,6 +624,10 @@ async function getQueue(db, params) {
   return successResponse({
     success: true,
     crew: q.crew,
+    // The trailing-seven figure, reported even while an override is in force —
+    // otherwise the board cannot offer to go back to it, or tell whether a
+    // typed number differs from it at all.
+    derivedCrew: q.crewInfo.crew,
     crewBasis: Number(params.crew) > 0 ? "override" : q.crewInfo.basis,
     crewDays: q.crewInfo.days,
     start: q.start,
