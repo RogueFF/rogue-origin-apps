@@ -154,6 +154,10 @@ async function refresh() {
       loadQueue(Number($('q-crew').value) || undefined),
       loadCoverage(),
     ]);
+    // The crew box is empty until somebody types an override, which on a glass
+    // surface reads as a broken field rather than an optional one. Showing the
+    // derived figure as a placeholder says what the queue is actually using.
+    $('q-crew').placeholder = state.queue?.crew ?? '';
     renderQueue();
     renderOffQueue();
   } catch (e) {
