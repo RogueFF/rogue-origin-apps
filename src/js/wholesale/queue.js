@@ -245,12 +245,29 @@ export function zoneLabel(now = new Date()) {
  * Midnight and noon are where a hand-written version of this goes wrong: hour 0
  * is 12 AM and hour 12 is 12 PM, but a plain `% 12` renders both as "0".
  */
+export function clockTime(minutes) {
+  const h24 = Math.floor(minutes / 60);
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  const mm = String(minutes % 60).padStart(2, '0');
+  return `${h12}:${mm} ${h24 < 12 ? 'AM' : 'PM'}`;
+}
+
 export function humanMoment(m) {
   const [, mo, d] = m.date.split('-').map(Number);
-  const h24 = Math.floor(m.minutes / 60);
-  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
-  const mm = String(m.minutes % 60).padStart(2, '0');
-  return `${mo}/${d} ${h12}:${mm} ${h24 < 12 ? 'AM' : 'PM'}`;
+  return `${mo}/${d} ${clockTime(m.minutes)}`;
+}
+
+/**
+ * 'Fri Aug 21 3:54 PM' — the same instant a strain row states as '8/21 3:54 PM',
+ * spelled out.
+ *
+ * The order's promise date keeps its weekday: it is the figure most likely to
+ * be said out loud to a buyer, and "Friday" carries more than "8/21" does. The
+ * time was always in the data — `finish` has carried minutes since the queue
+ * was built — and this line was throwing it away.
+ */
+export function humanDateTime(m) {
+  return `${humanDate(m.date)} ${clockTime(m.minutes)}`;
 }
 
 /**
@@ -480,7 +497,7 @@ function blockCard(block, idx, geom, onDrop, onOrder) {
   const done = block.doneLbs.toLocaleString('en-US', { maximumFractionDigits: 1 });
   head.append(el('span', 'block-lbs', `${done} / ${fmtLbs(block.totalLbs)}`));
   head.append(el('span', 'block-pct', `(${pctText(block.pct)})`));
-  head.append(el('b', 'block-eta', `${t('done')} ${humanDate(block.finish.date)}`));
+  head.append(el('b', 'block-eta', `${t('done')} ${humanDateTime(block.finish)}`));
 
   // Until now the only way into an order was clicking its id, which reads as a
   // label rather than a control. These say what they do.
@@ -598,7 +615,8 @@ export function renderQueue() {
   const meta = el('div', 'queue-meta');
   meta.append(el('span', 'qm-tz', `${t('times')} ${zoneLabel()}`));
   meta.append(el('span', 'qm-spacer'));
-  meta.append(el('span', 'qm-clear', `${t('clears')} ${humanDate(q.blocks[q.blocks.length - 1].finish.date)}`));
+  meta.append(el('span', 'qm-clear',
+    `${t('clears')} ${humanDateTime(q.blocks[q.blocks.length - 1].finish)}`));
   wrap.append(meta);
 
   // Customer names live on the order, not on the schedule. Joined here so the
