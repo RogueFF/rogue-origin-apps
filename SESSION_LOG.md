@@ -6,6 +6,42 @@ History of significant changes to this repo, written by `/close`. Companion to t
 
 ---
 
+## 2026-08-21 — Log the wholesale board's glass, bell, and review pass
+
+Twenty-eight commits (`b5c9cc03` → `995b0a81`) across the evening of 08-20 and the
+morning of 08-21, continuing the order-blocks build logged the day before.
+
+- `src/css/wholesale.css`, `src/js/wholesale/queue.js` — the board gets a liquid-glass
+  treatment, then a quieter near-monochrome palette, then a motion pass so state changes
+  ease rather than snap. A pass row states only its burn-down and its lead time; the rest
+  moved to hover. Quantity, trim order and line removal became inline edits **on the
+  block** rather than a modal.
+- `src/css/shared-base.css` — `.btn { display: inline-flex }` was overriding the `hidden`
+  attribute across every app; `hidden` now means hidden. The skip link hides itself.
+- `workers/migrations/0020-drop-customers.sql` — customers dropped entirely. An order is a
+  Shopify order number plus a nickname, both editable in place. Applied to prod D1.
+- `workers/src/lib/wholesale-notify.js` (new) — pure derivation of six queue events
+  (order started, next strain, strain finished, order finished, running behind, queue
+  clear), deduped through an `alerts_sent` ledger keyed `UNIQUE(rule, dedup_key)`.
+  `TELEGRAM_CASEY_CHAT_ID` is not yet set, so nothing sends.
+- `workers/src/lib/queue-schedule.js` — crew derives from five weighted days with today's
+  live count shown alongside; the empty-input trap that always read 1 is gone. Lot sizing
+  no longer throws when an all-tops cultivar is asked for smalls.
+- `workers/src/handlers/wholesale-d1.js` — nine fixes from a review. The load-bearing
+  ones: finished orders stay in the allocation replay (bounded on `updated_at`, not
+  `accrual_start`) so a completed order no longer hands its pounds to the next in line;
+  `queue_rank` carries a letter prefix because SQLite sorts digits before letters, which
+  had every new order jumping ahead of hand-dragged ones; Telegram events are recorded
+  per-send rather than per-batch; free text is stripped of Markdown markers before
+  interpolation; empty item sets are refused; an absent status means "no opinion".
+- `tests/` — 237 → 321. New suites for burn-down allocation, notification derivation,
+  the status vocabulary (a drift guard across migration, worker and browser), and a check
+  that no handler references a dropped table.
+
+- Wiki context: wiki/seasons/2026/journal/2026-08-21.md
+
+---
+
 ## 2026-08-20 — Replace the retired wholesale app with a production queue
 
 The Wholesale Orders app could only express one strain and one kg total per order, so
