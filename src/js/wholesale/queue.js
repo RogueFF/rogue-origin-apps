@@ -541,7 +541,14 @@ function syncCrewBar() {
   const basis = $('q-basis');
   if (!crew || !basis) return;
 
-  crew.placeholder = q?.crew ?? '';
+  // The field carries the number in force, not a placeholder over an empty box.
+  //
+  // It used to be empty with the derived figure as a placeholder, and the input
+  // is `type=number` with a minimum — so a single nudge of the spinner on an
+  // empty field set it to the minimum, which was 1. Every date on the board
+  // then rebuilt around a crew of one and stretched by months. An empty numeric
+  // field with a spinner is a trap; a field holding the real value is not.
+  if (document.activeElement !== crew) crew.value = q?.crew ?? '';
   crew.classList.toggle('overridden', override);
   basis.textContent = q
     ? (override ? t('crew_override') : `${t('crew_derived')} ${q.crewDays} ${t('days')}`)

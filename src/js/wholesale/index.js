@@ -54,6 +54,7 @@ registerLabels({
     confirm_delete: 'Delete order',
     edit_order: 'Edit order', order_ref: 'Shopify order #',
     trim_order: 'Order',
+    tg_updates: 'Telegram updates',
     bell_on: 'Telegram updates on — tap to mute',
     bell_off: 'Telegram updates off — tap to enable',
     bell_enabled: 'Telegram updates on', bell_disabled: 'Telegram updates off',
@@ -113,6 +114,7 @@ registerLabels({
     confirm_delete: 'Eliminar pedido',
     edit_order: 'Editar pedido', order_ref: 'Pedido Shopify n.º',
     trim_order: 'Orden',
+    tg_updates: 'Avisos de Telegram',
     bell_on: 'Avisos de Telegram activados — toque para silenciar',
     bell_off: 'Avisos de Telegram desactivados — toque para activar',
     bell_enabled: 'Avisos de Telegram activados', bell_disabled: 'Avisos de Telegram desactivados',
@@ -156,13 +158,27 @@ function buildStatusOptions(current) {
   list.forEach(s => sel.append(option(statusLabel(s), s)));
 }
 
+/**
+ * The crew to ask the queue for, or undefined to let it derive one.
+ *
+ * The field now holds the number in force rather than sitting empty, so an
+ * override has to be recognised by VALUE: typing the derived figure back in is
+ * not an override, it is agreeing with the measurement.
+ */
+function crewOverride() {
+  const typed = Number($('q-crew').value);
+  if (!(typed > 0)) return undefined;
+  const derived = state.queue?.derivedCrew;
+  return derived != null && Math.abs(typed - derived) < 0.001 ? undefined : typed;
+}
+
 async function refresh() {
   try {
     await loadAll();
     // The cards show a promise date, which only the queue knows. Fetched
     // alongside rather than on demand so a card never renders a stale one.
     await Promise.all([
-      loadQueue(Number($('q-crew').value) || undefined),
+      loadQueue(crewOverride()),
       loadCoverage(),
     ]);
     renderQueue();
@@ -200,8 +216,8 @@ function wire() {
   // Recalculate when the crew figure actually changes, rather than behind a
   // separate button — the whole queue is a function of it, so a stale board
   // sitting next to an edited number would be misleading.
-  $('q-crew').onchange = () => loadQueue(Number($('q-crew').value) || undefined);
-  $('q-reset').onclick = () => { $('q-crew').value = ''; loadQueue(); };
+  $('q-crew').onchange = () => loadQueue(crewOverride());
+  $('q-reset').onclick = () => { $('q-crew').value = state.queue?.derivedCrew ?? ''; loadQueue(); };
 
   $('btn-new').onclick = () => openEditor(null);
 
@@ -243,6 +259,33 @@ function wire() {
     }
   });
 
+  // --- the settings panel -------------------------------------------------
+  //
+  // The board is read far more often than it is configured, so the crew figure,
+  // the Telegram switch and New order live behind one button instead of a strip
+  // across the top of every screen.
+  const setFab = (open) => {
+    $('fab-panel').hidden = !open;
+    $('fab').setAttribute('aria-expanded', String(open));
+    $('fab').classList.toggle('open', open);
+  };
+  $('fab').onclick = () => setFab($('fab-panel').hidden);
+
+  // CAPTURE phase, not bubble. A pass row stops propagation so that clicking it
+  // pins its detail without disturbing anything else — which also meant a click
+  // on one never reached a listener waiting at the document, and the panel
+  // stayed open over half the board. Capture runs on the way DOWN, before
+  // anything can stop it, so the only thing that has to be excluded is the
+  // panel itself and the button that opens it.
+  document.addEventListener('click', (e) => {
+    if ($('fab-panel').hidden) return;
+    if (e.target.closest('.fab-wrap')) return;
+    setFab(false);
+  }, true);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !$('fab-panel').hidden) { setFab(false); $('fab').focus(); }
+  });
+
   // --- Telegram updates ---------------------------------------------------
   //
   // Reads its own state from the server rather than remembering it locally: the
@@ -251,11 +294,13 @@ function wire() {
   let bellOn = false;
   const paintBell = () => {
     const btn = $('bell-btn');
-    btn.setAttribute('aria-pressed', String(bellOn));
+    btn.setAttribute('aria-checked', String(bellOn));
     btn.classList.toggle('on', bellOn);
     btn.title = t(bellOn ? 'bell_on' : 'bell_off');
     btn.setAttribute('aria-label', btn.title);
-    btn.querySelector('i').className = bellOn ? 'ph-duotone ph-bell' : 'ph-duotone ph-bell-slash';
+    // The panel is shut most of the time, so the button that opens it carries
+    // the one piece of state worth seeing from outside it.
+    $('fab').classList.toggle('notifying', bellOn);
   };
 
   api.get('getNotify')

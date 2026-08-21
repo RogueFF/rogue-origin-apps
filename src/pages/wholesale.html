@@ -14,7 +14,7 @@
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/duotone/style.css">
   <!-- Styles -->
   <link rel="stylesheet" href="../css/shared-base.css?h=c18beb73">
-  <link rel="stylesheet" href="../css/wholesale.css?h=5e4a716a">
+  <link rel="stylesheet" href="../css/wholesale.css?h=6c4a0605">
 </head>
 <body class="dark-mode">
   <!-- RO Home Button -->
@@ -86,9 +86,6 @@
           <button id="lang-toggle" class="icon-btn" aria-label="Toggle language" title="EN / ES">
             <i class="ph-duotone ph-translate"></i>
           </button>
-          <button id="bell-btn" class="icon-btn" aria-pressed="false" title="Telegram updates">
-            <i class="ph-duotone ph-bell-slash"></i>
-          </button>
           <button id="lock-btn" class="icon-btn" aria-label="Set API password" title="Set API password">
             <i class="ph-duotone ph-lock-key"></i>
           </button>
@@ -101,18 +98,37 @@
         </div>
       </header>
 
-      <div class="queue-bar" id="queue-bar">
-        <label class="crew-input">
-          <span data-i18n="crew">Crew</span>
-          <input id="q-crew" type="number" min="1" step="0.5" inputmode="decimal">
-        </label>
-        <span id="q-basis" class="crew-basis"></span>
-        <button id="q-reset" class="chip" hidden data-i18n="crew_use_derived">Use derived</button>
-        <div class="board-spacer"></div>
-        <button id="btn-new" class="btn btn-primary" data-i18n="new_order">New order</button>
-      </div>
 
       <div id="queue" class="queue-view" aria-live="polite"></div>
+
+      <!-- Settings, out of the way until wanted. The board is read far more
+           often than it is configured. -->
+      <div class="fab-wrap">
+        <div id="fab-panel" class="fab-panel" hidden role="dialog" aria-label="Board settings">
+          <div class="fab-row">
+            <label for="q-crew" data-i18n="crew">Crew</label>
+            <div class="fab-crew">
+              <input id="q-crew" type="number" min="0.5" step="0.5" inputmode="decimal">
+              <button id="q-reset" class="chip" hidden data-i18n="crew_use_derived">Use derived</button>
+            </div>
+          </div>
+          <p id="q-basis" class="crew-basis"></p>
+
+          <div class="fab-row">
+            <span data-i18n="tg_updates">Telegram updates</span>
+            <button id="bell-btn" class="switch" role="switch" aria-checked="false">
+              <span class="switch-knob"></span>
+            </button>
+          </div>
+
+          <button id="btn-new" class="btn btn-primary fab-new" data-i18n="new_order">New order</button>
+        </div>
+
+        <button id="fab" class="fab" aria-expanded="false" aria-controls="fab-panel"
+                title="Board settings">
+          <i class="ph-duotone ph-sliders-horizontal"></i>
+        </button>
+      </div>
 
       <section class="done-section">
         <button id="done-toggle" class="done-head" aria-expanded="false" aria-controls="done-list">
@@ -239,14 +255,14 @@
     "../js/shared/toast.js": "../js/shared/toast.js?h=2ff39553",
     "../js/wholesale/auth.js": "../js/wholesale/auth.js?h=ab61014e",
     "../js/wholesale/editor.js": "../js/wholesale/editor.js?h=a47ad23d",
-    "../js/wholesale/index.js": "../js/wholesale/index.js?h=1de216ab",
-    "../js/wholesale/queue.js": "../js/wholesale/queue.js?h=b17c2168",
+    "../js/wholesale/index.js": "../js/wholesale/index.js?h=cdd7bef7",
+    "../js/wholesale/queue.js": "../js/wholesale/queue.js?h=87491b2e",
     "../js/wholesale/render.js": "../js/wholesale/render.js?h=c23704b8",
     "../js/wholesale/state.js": "../js/wholesale/state.js?h=05b152fe"
   }
 }
 </script>
 <!-- module-hashes:end -->
-  <script type="module" src="../js/wholesale/index.js?h=1de216ab"></script>
+  <script type="module" src="../js/wholesale/index.js?h=cdd7bef7"></script>
 </body>
 </html>
