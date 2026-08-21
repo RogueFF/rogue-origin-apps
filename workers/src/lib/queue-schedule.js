@@ -72,10 +72,37 @@ export function scheduleQueue({
 
     for (const p of block.passes) {
       const rate = rates[p.cultivarId];
-      const usable = rate && Number.isFinite(rate.ratePerTrimmerHour) && rate.ratePerTrimmerHour > 0;
+
+      // A rate is only usable if it can actually SIZE THIS PASS. Checking the
+      // pounds-per-hour alone was not enough: a cultivar whose history happens
+      // to be recorded entirely as tops yields a tops fraction of exactly 1,
+      // and `lotSize` refuses — correctly — to fill a smalls order from a lot
+      // that produces no smalls. That refusal is a throw, and nothing here
+      // caught it, so one such line item took down `computeQueue` — which means
+      // the whole board AND the cron that advances every order's status.
+      //
+      // Twenty hours of a single form is entirely ordinary early in a season.
+      // A cultivar that cannot serve the form being asked for falls back to the
+      // farm average, which is what the fallback is for.
+      const needsTops = p.topsLbs > 0;
+      const needsSmalls = p.smallsLbs > 0;
+      const fits = (f) => Number.isFinite(f)
+        && (!needsTops || f > 0)
+        && (!needsSmalls || f < 1);
+
+      const usable = rate
+        && Number.isFinite(rate.ratePerTrimmerHour)
+        && rate.ratePerTrimmerHour > 0
+        && fits(rate.topsFraction);
+
       const basis = usable ? (rate.basis || 'all-years') : 'fallback';
       const ratePerTrimmerHour = usable ? rate.ratePerTrimmerHour : fallback.ratePerTrimmerHour;
-      const topsFraction = usable ? rate.topsFraction : fallback.topsFraction;
+      // Even the fallback is not guaranteed to fit — a farm average of exactly
+      // 0 or 1 is possible on a thin table — so it is clamped rather than
+      // trusted. A lot sized on a clamped fraction is wrong by a little; a
+      // board that will not load is wrong entirely.
+      const raw = usable ? rate.topsFraction : fallback.topsFraction;
+      const topsFraction = fits(raw) ? raw : Math.min(0.99, Math.max(0.01, raw || 0.5));
 
       // The lot is sized on what is still OUTSTANDING, not on what was ordered.
       // Without this the promise date never moves: an order 90% trimmed would
