@@ -594,16 +594,10 @@ export function renderQueue() {
     }, i, geom, reorder, openOrder)));
   wrap.append(list);
 
-  wrap.append(el('p', 'queue-note', t('queue_note')));
-
-  // Pounds the floor recorded that no waiting order could take. Usually
-  // ordinary — most trim is not against a wholesale order — but it is the first
-  // thing to look at when a block is not moving, so it is not hidden.
-  const stray = (q.unallocated || []).reduce((s, u) => s + u.lbs, 0);
-  if (stray > 0) {
-    wrap.append(el('p', 'queue-note stray',
-      `${fmtLbs(stray)} ${t('unallocated_note')}`));
-  }
+  // Both footnotes removed at the operator's request: the estimates disclaimer
+  // and the unallocated-pounds line. The API still returns `unallocated`, so
+  // the number is there for anything that wants it later — it is only the
+  // board that has stopped saying it.
 }
 
 /** Move `moved` to sit where `target` currently is, then persist and reload. */
