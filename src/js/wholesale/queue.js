@@ -561,6 +561,16 @@ function syncCrewBar() {
     : '';
   // Nothing to reset when nothing is overridden.
   $('q-reset').hidden = !override;
+
+  // Today's actual count, offered rather than applied. It is shown only when it
+  // differs from the figure in use — otherwise it is a button that does nothing
+  // — and it is how the operator takes a busy day deliberately instead of
+  // discovering the dates were built on an average that had not caught up.
+  const live = $('q-live');
+  const now = q?.liveCrew;
+  const differs = now != null && Math.abs(now - (q?.crew ?? 0)) >= 0.5;
+  live.hidden = !differs;
+  if (differs) live.textContent = `${t('today')} ${now}`;
 }
 
 export function renderQueue() {
