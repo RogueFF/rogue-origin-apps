@@ -12,9 +12,17 @@
  * - GET  ?zone=Z4&action=headcount&session_id=&count=    - Headcount tap (HTML)
  * - GET  ?action=barn_intake                             - Barn-intake form (HTML)
  * - POST ?action=barn_log            (body: zone, bins)  - Barn-intake submit (HTML)
+ * - GET  ?action=crew                                     - Crew roster form (HTML)
+ * - POST ?action=crew_set   (drivers,cutter_water_spiders,
+ *                            hangers,hanging_water_spiders) - Update roster (HTML)
  * - GET  ?action=test                                    - Health check (JSON)
  * - GET  ?action=status                                  - Current active zone (JSON)
  * - GET  ?action=logs&zone=&event_type=&limit=            - Raw rows (JSON)
+ * - GET  ?action=rollup&season=                          - Derived lot ledger (JSON)
+ *
+ * The zone-sign scan target /z/<zone> is routed in index.js -> handleZoneScan;
+ * multi-cultivar zones show a cultivar picker before the session opens.
+ * Crew-facing SOP: wiki/operations/sop-harvest-tracking.md
  *
  * Supersack tags (see docs/plans/2026-08-06-supersack-tag-design.md):
  * - GET  ?action=sack_print                              - Lot picker, starts a takedown session (HTML)
