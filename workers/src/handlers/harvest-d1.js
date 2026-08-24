@@ -98,7 +98,7 @@ const PUBLIC_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev';
 const HTML_ACTIONS = new Set([
   'enter', 'headcount', 'barn_intake', 'barn_log',
   'sack_print', 'sack_session_start', 'sack_session', 'sack_label', 'sack_weigh',
-  'crew', 'crew_set', 'sack_note',
+  'crew', 'crew_set', 'sack_note', 'find',
 ]);
 
 export async function handleHarvestD1(request, env, ctx) {
@@ -137,6 +137,8 @@ export async function handleHarvestD1(request, env, ctx) {
           return await handleCrewSet(ui, db, env, ctx, body);
         case 'sack_note':
           return await handleSackNote(ui, db, env, ctx, body);
+        case 'find':
+          return await handleSackFind(ui, db, env, request.method === 'POST' ? body : params);
       }
     } catch (e) {
       const { message, status } = formatError(e);
@@ -699,6 +701,58 @@ async function getSackView(db, sackId) {
   };
 }
 
+/**
+ * Turn whatever someone typed or scanned into a sack id.
+ *
+ * A torn tag is read by eye under barn light, and a USB imager types the whole
+ * URL. So accept all of it: the printed form, the digits without the dash, a
+ * bare serial (current season assumed), a leading #, and a full scan URL.
+ * Being strict here would mean a damaged tag has no recovery path at all.
+ */
+function normalizeSackId(raw, season) {
+  let q = String(raw || '').trim();
+  if (!q) return null;
+
+  const fromUrl = q.match(/\/s\/([^/?#\s]+)/i);   // a scanner typed the URL
+  if (fromUrl) q = fromUrl[1];
+
+  q = q.toUpperCase().replace(/\s+/g, '').replace(/^#+/, '');
+  const yy = String(season).slice(-2);
+
+  if (/^\d{2}-\d{1,6}$/.test(q)) {
+    const [a, b] = q.split('-');
+    return `${a}-${b.padStart(4, '0')}`;
+  }
+  if (/^\d{6,8}$/.test(q)) return `${q.slice(0, 2)}-${q.slice(2).padStart(4, '0')}`;
+  if (/^\d{1,5}$/.test(q)) return `${yy}-${q.padStart(4, '0')}`;   // bare serial
+  return q;
+}
+
+async function handleSackFind(ui, db, env, input) {
+  const raw = input.q !== undefined ? input.q : input.sack_id;
+  const isTest = isTestMode(env) ? 1 : 0;
+
+  if (raw === undefined || String(raw).trim() === '') {
+    const recent = await query(db, `
+      SELECT sack_id, cultivar, zone, cut_number FROM harvest_sacks
+      WHERE is_test = ? AND voided_at IS NULL ORDER BY serial DESC LIMIT 8
+    `, [isTest]);
+    return renderPage(ui, ui.t('findSack'), sackFindBody(ui, { recent }));
+  }
+
+  const id = normalizeSackId(raw, getSeason());
+  const view = id ? await getSackView(db, id) : null;
+  if (view) {
+    return renderPage(ui, `${ui.t('sack')} ${view.sack.sack_id}`, sackDetailBody(ui, view));
+  }
+
+  const recent = await query(db, `
+    SELECT sack_id, cultivar, zone, cut_number FROM harvest_sacks
+    WHERE is_test = ? AND voided_at IS NULL ORDER BY serial DESC LIMIT 8
+  `, [isTest]);
+  return renderPage(ui, ui.t('findSack'), sackFindBody(ui, { recent, missing: id, typed: raw }), 404);
+}
+
 async function handleSackNote(ui, db, env, ctx, body) {
   const sackId = String(body.sack_id || '').trim();
   const note = String(body.note || '').trim().substring(0, 500);
@@ -1178,6 +1232,8 @@ function renderPage(ui, title, bodyHtml, status = 200) {
      full-width targets beats a cramped grid for a gloved thumb. */
   .cvgrid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 14px; }
   a.cvbtn { padding: 20px 14px; font-size: 1.15rem; text-align: left; }
+  a.findrow { text-align: left; padding: 14px; }
+  a.findrow .hint { display: block; margin-top: 3px; }
 
   /* Takedown lot picker — the highest-stakes input in the system, so each
      candidate carries its own plausibility rather than being one line in a
@@ -1325,7 +1381,7 @@ function barnLogConfirmBody(ui, { zone, bins, loadNumber, hasActiveSession }) {
 <h1>${ui.t('loggedLoad', { bins, zone })}</h1>
 <p class="sub">${ui.t('loadNumToday', { n: loadNumber, zone })}</p>
 ${hasActiveSession ? '' : `<p class="note">${ui.t('noSessionWarn', { zone })}</p>`}
-<div class="footer"><a href="?action=barn_intake">${ui.t('logAnother')}</a> · <a href="?action=crew">${ui.t('crewChanged')}</a></div>`;
+<div class="footer"><a href="?action=barn_intake">${ui.t('logAnother')}</a> · <a href="?action=crew">${ui.t('crewChanged')}</a> · <a href="?action=find">${ui.t('findLink')}</a></div>`;
 }
 
 // ─── CREW ROSTER RENDERING ──────────────────────────────
@@ -1485,7 +1541,7 @@ function sackSessionBody(ui, { lot, cultivar, stats }) {
   </div>
 </details>
 
-<div class="footer"><a href="?action=sack_print">${ui.t('changeLot')}</a> · <a href="?action=sacks&limit=20">${ui.t('viewTags')}</a></div>
+<div class="footer"><a href="?action=sack_print">${ui.t('changeLot')}</a> · <a href="?action=find">${ui.t('findLink')}</a></div>
 
 <iframe id="printFrame" title="print" style="position:absolute;width:0;height:0;border:0;left:-9999px"></iframe>
 
@@ -1691,6 +1747,43 @@ function formatTagDate(lang, iso) {
   return lang === 'es'
     ? `${d.getUTCDate()} ${m} ${d.getUTCFullYear()}`
     : `${m} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+}
+
+function sackFindBody(ui, { recent, missing, typed }) {
+  const list = recent.length
+    ? recent.map(r => `<a class="btn alt findrow" href="/s/${encodeURIComponent(r.sack_id)}?lang=${ui.lang}">
+         <strong>#&nbsp;${escapeHtml(r.sack_id)}</strong>
+         <span class="hint">${escapeHtml(r.cultivar || '')} · ${escapeHtml(r.zone)} · ${ui.t('cut', { n: r.cut_number ?? '?' })}</span>
+       </a>`).join('')
+    : '';
+
+  return `
+<h1>${ui.t('findSack')}</h1>
+${missing ? `<p class="note">⚠️ ${ui.t('findNotFound', { id: escapeHtml(missing) })}</p>` : ''}
+<p class="note">${ui.t('findHelp')}</p>
+<form method="GET" action="/api/harvest" onsubmit="this.querySelector('button').disabled=true">
+  <input type="hidden" name="action" value="find">
+  <input type="hidden" name="lang" value="${ui.lang}">
+  <input id="q" name="q" autocomplete="off" autocapitalize="off" autocorrect="off"
+         inputmode="numeric" placeholder="${ui.t('findPlaceholder')}"
+         value="${typed ? escapeHtml(String(typed)) : ''}" autofocus required>
+  <button class="btn" type="submit">${ui.t('findGo')}</button>
+</form>
+<p class="note"><span class="hint">${ui.t('findUnreadable')}</span></p>
+${list ? `<h2>${ui.t('findRecent')}</h2><div class="cvgrid">${list}</div>` : ''}
+<div class="footer"><a href="?action=sack_print">${ui.t('printTags')} →</a></div>
+<script>
+  // A USB imager types the code then presses Enter, so the box submits itself.
+  // Select the existing text immediately, not just on focus: the box is
+  // autofocused, so a re-render after a failed search leaves the old value
+  // there already focused — no focus event fires, and the next scan would
+  // append to it instead of replacing it.
+  (function () {
+    var q = document.getElementById('q');
+    q.select();
+    q.addEventListener('focus', function () { q.select(); });
+  })();
+</script>`;
 }
 
 function sackDetailBody(ui, view, flash) {
