@@ -157,6 +157,8 @@ export async function handleHarvestD1(request, env, ctx) {
       return await getSacks(db, env, params);
     case 'rollup':
       return await getRollup(db, env, params);
+    case 'provenance':
+      return await getProvenance(db, env, params);
     case 'sack_alloc':
       return await handleSackAlloc(db, env, ctx, body);
     case 'sack_void':
@@ -1021,6 +1023,82 @@ async function impliedDrivers(db, isTest, dayIso, rosteredAvg) {
       : 'No roster set for this day, so utilisation is unknown.',
     caveat: 'Cadence-derived: idle time between loads reads as fewer drivers needed.',
   };
+}
+
+// ─── PROVENANCE (downstream) ────────────────────────────
+//
+// Which field lots fed a given day of processing.
+//
+// Derived, with NO new capture: a sack already records when it was opened and
+// what it yielded, and it already knows its lot. So a processing day's
+// composition is just the lots of the sacks opened that day, weighted by what
+// they gave up. Pooling breaks the one-sack-to-one-bag link, but it does not
+// break this — the day is the unit that survives it.
+//
+// That constraint is deliberate. The previous attempt at seed-to-sale here
+// (the "Field Tracking Hub", migrations 0004-0007) built nine tables covering
+// germination through lineage, required somebody to fill them, and never went
+// live. Anything downstream that needs a new data-entry step will die the same
+// way, so this asks for nothing.
+
+async function getProvenance(db, env, params) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const limitDays = Math.min(Math.max(parseInt(params.days, 10) || 60, 1), 400);
+
+  const rows = await query(db, `
+    SELECT date(s.opened_at) AS day,
+           s.zone_session_id, s.zone, s.cultivar, s.cut_number, s.season,
+           COUNT(*) AS sacks,
+           COALESCE(SUM(s.tops_lbs), 0) AS tops_lbs,
+           COALESCE(SUM(s.smalls_lbs), 0) AS smalls_lbs
+    FROM harvest_sacks s
+    WHERE s.opened_at IS NOT NULL AND s.voided_at IS NULL AND s.is_test = ?
+      AND julianday('now') - julianday(s.opened_at) <= ?
+    GROUP BY day, s.zone_session_id
+    ORDER BY day DESC, tops_lbs DESC
+  `, [isTest, limitDays]);
+
+  const byDay = new Map();
+  for (const r of rows) {
+    if (!byDay.has(r.day)) {
+      byDay.set(r.day, { date: r.day, sacks_opened: 0, tops_lbs: 0, smalls_lbs: 0, lots: [] });
+    }
+    const d = byDay.get(r.day);
+    d.sacks_opened += r.sacks;
+    d.tops_lbs += r.tops_lbs;
+    d.smalls_lbs += r.smalls_lbs;
+    d.lots.push({
+      lot_id: lotId(r),
+      zone: r.zone, cultivar: r.cultivar, cut_number: r.cut_number,
+      sacks: r.sacks, tops_lbs: round1(r.tops_lbs), smalls_lbs: round1(r.smalls_lbs),
+    });
+  }
+
+  const days = [...byDay.values()].map(d => {
+    const total = d.tops_lbs + d.smalls_lbs;
+    return {
+      ...d,
+      tops_lbs: round1(d.tops_lbs),
+      smalls_lbs: round1(d.smalls_lbs),
+      finished_lbs: round1(total),
+      // Share of the day's finished weight, so a bag from this day can be
+      // described honestly as "mostly Z4, some Z5" rather than guessed at.
+      lots: d.lots.map(l => ({
+        ...l,
+        share_pct: total > 0 ? +(((l.tops_lbs + l.smalls_lbs) / total) * 100).toFixed(1) : null,
+      })),
+      single_lot: d.lots.length === 1,
+    };
+  });
+
+  return successResponse({
+    success: true,
+    is_test: !!isTest,
+    generated_at: new Date().toISOString(),
+    basis: 'Sacks opened per day, grouped by field lot. No separate capture — derived from the sack tags themselves.',
+    limits: 'Stops at the trim floor: which buyer received which lot is not tracked, because that needs a batch-to-order link nobody records today.',
+    days,
+  });
 }
 
 // ─── ROLLUP LEDGER ──────────────────────────────────────
