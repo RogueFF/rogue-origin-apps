@@ -203,6 +203,20 @@ export async function handleZoneScan(request, env, ctx) {
 }
 
 /**
+ * GET /b — the barn-intake QR target. Short for the same reason as /z/ and /s/:
+ * this code is posted on a barn wall for a whole season and scanned dozens of
+ * times a day, often in poor light with dusty hands.
+ */
+export async function handleBarnScan(request, env, ctx) {
+  try {
+    return await handleBarnIntakeForm(env.DB, env, ctx);
+  } catch (e) {
+    const { message, status } = formatError(e);
+    return errorPage(message, status);
+  }
+}
+
+/**
  * GET /s/<sack_id> — the QR scan target. Routed separately in index.js so the
  * encoded URL stays short: a shorter payload means a lower-version QR with
  * bigger modules, which is what survives a scuffed label in barn lighting.
