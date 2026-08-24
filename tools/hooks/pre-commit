@@ -36,6 +36,11 @@ if ! command -v node >/dev/null 2>&1; then
   exit 0
 fi
 
+# Which pages already had unstaged edits BEFORE stamping. Anything in this list
+# carries work that is not part of this commit, so the stamper's rewrite is now
+# mixed in with it and the file must not be staged wholesale — see below.
+DIRTY_BEFORE=$(git diff --name-only -- 'src/pages/*.html' | sort)
+
 # --staged: hash the index, not the working tree. Without it, unrelated
 # uncommitted edits get baked into the committed HTML, and the file later takes
 # on the hash the page already carries — so the cache never busts.
@@ -46,10 +51,28 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-RESTAMPED=$(git diff --name-only -- 'src/pages/*.html')
-if [ -n "$RESTAMPED" ]; then
-  git add $RESTAMPED
-  echo "[stamp-modules] re-hashed:$(echo $RESTAMPED | tr '\n' ' ')"
+DIRTY_AFTER=$(git diff --name-only -- 'src/pages/*.html' | sort)
+
+# Stage ONLY pages the stamper itself dirtied. A blanket `git add` here used to
+# sweep whatever unrelated work-in-progress those pages happened to be holding
+# into somebody else's commit — which is exactly what --staged above exists to
+# prevent, undone one line later.
+SAFE=$(comm -13 <(echo "$DIRTY_BEFORE") <(echo "$DIRTY_AFTER"))
+if [ -n "$SAFE" ]; then
+  git add $SAFE
+  echo "[stamp-modules] re-hashed:$(echo $SAFE | tr '\n' ' ')"
+fi
+
+# Pages that were already dirty and still need a stamp: leave them entirely
+# alone and say so. Their drift predates this commit, so this commit is not
+# making it worse and should not be blocked — but it must not silently absorb
+# the work either. `npm run stamp:check` in CI is the backstop.
+CONFLICT=$(comm -12 <(echo "$DIRTY_BEFORE") <(echo "$DIRTY_AFTER"))
+if [ -n "$CONFLICT" ]; then
+  echo "[stamp-modules] NOT staged — these pages have their own uncommitted work:" >&2
+  for f in $CONFLICT; do echo "                  $f" >&2; done
+  echo "                Their asset hashes may be stale. Commit or stash that" >&2
+  echo "                work, then run 'npm run stamp' to re-hash them." >&2
 fi
 
 exit 0
