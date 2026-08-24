@@ -46,6 +46,7 @@ import { VALID_ZONES, normalizeZone } from '../lib/zones.js';
 import { cultivarsFor, isMultiCultivar } from '../lib/zone-cultivars.js';
 import { zoneFacts, plantCountFor, PLANTS_PER_ACRE, PLANT_SPACING_FT } from '../lib/zone-facts.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
+import { pickLang, t as translate, langCookie } from '../lib/i18n.js';
 
 const DEBOUNCE_MS = 5 * 60 * 1000;       // re-scanning the same active zone within this window is a no-op
 const CUT_RESUME_GRACE_HOURS = 8;        // re-entering a zone within this many hours of its last close = same cut
@@ -105,6 +106,7 @@ export async function handleHarvestD1(request, env, ctx) {
   const action = getAction(request, body);
   const params = getQueryParams(request);
   const db = env.DB;
+  const ui = makeUi(request);
 
   // HTML-rendering actions are phone/tablet-facing — never let an error
   // fall through to the JSON errorResponse in index.js's global catch.
@@ -112,31 +114,31 @@ export async function handleHarvestD1(request, env, ctx) {
     try {
       switch (action) {
         case 'enter':
-          return await handleEnter(db, env, ctx, params);
+          return await handleEnter(ui, db, env, ctx, params);
         case 'headcount':
-          return await handleHeadcount(db, env, ctx, params);
+          return await handleHeadcount(ui, db, env, ctx, params);
         case 'barn_intake':
-          return await handleBarnIntakeForm(db, env, ctx);
+          return await handleBarnIntakeForm(ui, db, env, ctx);
         case 'barn_log':
-          return await handleBarnLog(db, env, ctx, body);
+          return await handleBarnLog(ui, db, env, ctx, body);
         case 'sack_print':
-          return await handleSackPrintForm(db, env);
+          return await handleSackPrintForm(ui, db, env);
         case 'sack_session_start':
-          return await handleSackSession(db, env, body);
+          return await handleSackSession(ui, db, env, body);
         case 'sack_session':
-          return await handleSackSession(db, env, params);
+          return await handleSackSession(ui, db, env, params);
         case 'sack_label':
-          return await handleSackLabel(db, env, params);
+          return await handleSackLabel(ui, db, env, params);
         case 'sack_weigh':
-          return await handleSackWeigh(db, env, ctx, body);
+          return await handleSackWeigh(ui, db, env, ctx, body);
         case 'crew':
-          return await handleCrewForm(db, env);
+          return await handleCrewForm(ui, db, env);
         case 'crew_set':
-          return await handleCrewSet(db, env, ctx, body);
+          return await handleCrewSet(ui, db, env, ctx, body);
       }
     } catch (e) {
       const { message, status } = formatError(e);
-      return errorPage(message, status);
+      return errorPage(ui, message, status);
     }
   }
 
@@ -156,7 +158,7 @@ export async function handleHarvestD1(request, env, ctx) {
     case 'sack_void':
       return await handleSackVoid(db, env, ctx, body);
     default:
-      throw createError('NOT_FOUND', `Unknown harvest action: ${action}`);
+      throw createError('NOT_FOUND', ui.t('unknownAction', { a: action }));
   }
 }
 
@@ -168,11 +170,12 @@ export async function handleHarvestD1(request, env, ctx) {
  * anywhere else in the system — and the URL can't be changed after printing.
  */
 export async function handleZoneScan(request, env, ctx) {
+  const ui = makeUi(request);
   try {
     const url = new URL(request.url);
     const zone = normalizeZone(url.pathname.replace(/^\/z\//, '').trim());
     if (!zone || !VALID_ZONES.has(zone)) {
-      throw createError('VALIDATION_ERROR', `Unknown zone "${zone ?? ''}". Check the QR code and try again.`);
+      throw createError('VALIDATION_ERROR', ui.t('unknownZone', { z: zone ?? '' }));
     }
 
     const params = { zone };
@@ -184,21 +187,21 @@ export async function handleZoneScan(request, env, ctx) {
       // Trial / split zone: a lot is zone x cultivar x cut, so we can't open a
       // session until we know which cultivar is being cut. One sign per zone
       // with a picker beats a separate QR per cultivar — no wrong code to scan.
-      return renderPage(`${zone} — pick cultivar`, cultivarPickerBody(zone, options));
+      return renderPage(ui, zone, cultivarPickerBody(ui, zone, options));
     }
     if (picked) {
       if (!options.includes(picked)) {
-        throw createError('VALIDATION_ERROR', `"${picked}" isn't planted in ${zone}.`);
+        throw createError('VALIDATION_ERROR', ui.t('notPlantedHere', { cv: picked, zone }));
       }
       params.cultivar = picked;
     } else {
       params.cultivar = options[0] || null;   // single-cultivar zone: auto-fill
     }
 
-    return await handleEnter(env.DB, env, ctx, params);
+    return await handleEnter(ui, env.DB, env, ctx, params);
   } catch (e) {
     const { message, status } = formatError(e);
-    return errorPage(message, status);
+    return errorPage(ui, message, status);
   }
 }
 
@@ -208,11 +211,12 @@ export async function handleZoneScan(request, env, ctx) {
  * times a day, often in poor light with dusty hands.
  */
 export async function handleBarnScan(request, env, ctx) {
+  const ui = makeUi(request);
   try {
-    return await handleBarnIntakeForm(env.DB, env, ctx);
+    return await handleBarnIntakeForm(ui, env.DB, env, ctx);
   } catch (e) {
     const { message, status } = formatError(e);
-    return errorPage(message, status);
+    return errorPage(ui, message, status);
   }
 }
 
@@ -222,16 +226,17 @@ export async function handleBarnScan(request, env, ctx) {
  * bigger modules, which is what survives a scuffed label in barn lighting.
  */
 export async function handleSackScan(request, env, ctx) {
+  const ui = makeUi(request);
   try {
     const sackId = new URL(request.url).pathname.replace(/^\/s\//, '').trim();
     const sack = await queryOne(env.DB, `SELECT * FROM harvest_sacks WHERE sack_id = ?`, [sackId]);
     if (!sack) {
-      return errorPage(`No sack found with ID "${sackId}". Check the tag and try again.`, 404);
+      return errorPage(ui, ui.t('noSackCheck', { id: sackId }), 404);
     }
-    return renderPage(`Sack ${sack.sack_id}`, sackDetailBody(sack));
+    return renderPage(ui, `${ui.t('sack')} ${sack.sack_id}`, sackDetailBody(ui, sack));
   } catch (e) {
     const { message, status } = formatError(e);
-    return errorPage(message, status);
+    return errorPage(ui, message, status);
   }
 }
 
@@ -254,10 +259,10 @@ function parseSqliteUtc(ts) {
 
 // ─── ZONE-ENTRY (cutters) ───────────────────────────────
 
-async function handleEnter(db, env, ctx, params) {
+async function handleEnter(ui, db, env, ctx, params) {
   const zone = normalizeZone(params.zone);
   if (!zone || !VALID_ZONES.has(zone)) {
-    throw createError('VALIDATION_ERROR', `Unknown zone "${params.zone ?? ''}". Check the QR code and try again.`);
+    throw createError('VALIDATION_ERROR', ui.t('unknownZone', { z: params.zone ?? '' }));
   }
 
   const isTest = isTestMode(env) ? 1 : 0;
@@ -275,7 +280,7 @@ async function handleEnter(db, env, ctx, params) {
   // lot rather than being swallowed as a duplicate scan.
   if (active && active.zone === zone && active.cultivar === cultivar &&
       (now - parseSqliteUtc(active.occurred_at)) < DEBOUNCE_MS) {
-    return renderPage('Already entered', alreadyEnteredBody(active));
+    return renderPage(ui, ui.t('alreadyEntered', { zone }), alreadyEnteredBody(ui, active));
   }
 
   if (active) {
@@ -298,7 +303,7 @@ async function handleEnter(db, env, ctx, params) {
     text: `🌿 Entered *${zone}*${cultivar ? ` — ${cultivar}` : ''} — Cut ${cutNumber}\n${prevNote}`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
-  return renderPage(`Entered ${zone}`, enterBody({
+  return renderPage(ui, ui.t('entered', { zone }), enterBody(ui, {
     zone, cultivar, cutNumber, sessionId,
     prevZone: active ? `${active.zone}${active.cultivar ? ` ${active.cultivar}` : ''}` : null,
   }));
@@ -341,7 +346,7 @@ async function computeCutNumber(db, zone, cultivar, season, isTest, testCutParam
 
 // ─── HEADCOUNT (cutters, one-tap follow-up) ────────────
 
-async function handleHeadcount(db, env, ctx, params) {
+async function handleHeadcount(ui, db, env, ctx, params) {
   const sessionId = parseInt(params.session_id, 10);
   const count = parseInt(params.count, 10);
 
@@ -349,12 +354,12 @@ async function handleHeadcount(db, env, ctx, params) {
     throw createError('VALIDATION_ERROR', 'Missing or invalid session_id.');
   }
   if (!Number.isInteger(count) || count < 1 || count > 20) {
-    throw createError('VALIDATION_ERROR', 'Headcount must be a number between 1 and 20.');
+    throw createError('VALIDATION_ERROR', ui.t('headcountRange'));
   }
 
   const session = await queryOne(db, `SELECT * FROM harvest_scan_log WHERE id = ? AND event_type = 'enter'`, [sessionId]);
   if (!session) {
-    throw createError('NOT_FOUND', `No zone-entry session found for id ${sessionId}.`);
+    throw createError('NOT_FOUND', ui.t('noSessionFound', { id: sessionId }));
   }
 
   await execute(db, `UPDATE harvest_scan_log SET headcount = ?, headcount_at = datetime('now') WHERE id = ?`, [count, sessionId]);
@@ -364,25 +369,25 @@ async function handleHeadcount(db, env, ctx, params) {
     text: `👥 ${count} cutter${count === 1 ? '' : 's'} in *${session.zone}* (cut ${session.cut_number})`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
-  return renderPage('Headcount logged', headcountBody({ zone: session.zone, cutNumber: session.cut_number, sessionId, count }));
+  return renderPage(ui, ui.t('crew'), headcountBody(ui, { zone: session.zone, cutNumber: session.cut_number, sessionId, count }));
 }
 
 // ─── BARN INTAKE ────────────────────────────────────────
 
-async function handleBarnIntakeForm(db, env, ctx) {
+async function handleBarnIntakeForm(ui, db, env, ctx) {
   const isTest = isTestMode(env) ? 1 : 0;
   const active = await getActiveSession(db, isTest);
-  return renderPage('Barn Intake', barnIntakeFormBody(active));
+  return renderPage(ui, ui.t('barnIntake'), barnIntakeFormBody(ui, active));
 }
 
-async function handleBarnLog(db, env, ctx, body) {
+async function handleBarnLog(ui, db, env, ctx, body) {
   const zone = normalizeZone(body.zone);
   if (!zone || !VALID_ZONES.has(zone)) {
-    throw createError('VALIDATION_ERROR', `Unknown zone "${body.zone ?? ''}".`);
+    throw createError('VALIDATION_ERROR', ui.t('unknownZone', { z: body.zone ?? '' }));
   }
   const bins = parseInt(body.bins, 10);
   if (!Number.isInteger(bins) || bins < 1 || bins > 500) {
-    throw createError('VALIDATION_ERROR', 'Bins must be a number between 1 and 500.');
+    throw createError('VALIDATION_ERROR', ui.t('binsRange'));
   }
 
   const isTest = isTestMode(env) ? 1 : 0;
@@ -409,7 +414,7 @@ async function handleBarnLog(db, env, ctx, body) {
     text: `🚚 Load: ${bins} bins → *${zone}* (${cutNote}). Load #${loadNumber} today for this zone.`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
-  return renderPage('Load logged', barnLogConfirmBody({ zone, bins, loadNumber, hasActiveSession: !!zoneSession }));
+  return renderPage(ui, ui.t('barnIntake'), barnLogConfirmBody(ui, { zone, bins, loadNumber, hasActiveSession: !!zoneSession }));
 }
 
 // ─── SUPERSACK TAGS ─────────────────────────────────────
@@ -418,10 +423,10 @@ async function handleBarnLog(db, env, ctx, body) {
 // ever attribute a sack to the "currently active" zone the way barn intake
 // does; the operator explicitly picks which lot is coming down.
 
-async function handleSackPrintForm(db, env) {
+async function handleSackPrintForm(ui, db, env) {
   const isTest = isTestMode(env) ? 1 : 0;
   const lots = await getRecentLots(db, isTest);
-  return renderPage('Print Sack Tags', sackPrintFormBody(lots));
+  return renderPage(ui, ui.t('printTags'), sackPrintFormBody(ui, lots));
 }
 
 /**
@@ -471,18 +476,18 @@ async function getRecentLots(db, isTest) {
  * Advisory only — the operator can always override, because the tape and their
  * eyes beat our heuristic. We warn, we don't block.
  */
-function lotPlausibility(lot) {
+function lotPlausibility(ui, lot) {
   const d = lot.days_since_cut;
   if (d < DRY_DAYS_MIN) {
-    return { level: 'green', note: `only ${d}d drying — too green to be coming down (dry cycle ~${DRY_DAYS_TYPICAL}d)` };
+    return { level: 'green', note: ui.t('noteGreen', { d, typical: DRY_DAYS_TYPICAL }) };
   }
   if (lot.sacks_printed > 0) {
-    return { level: 'started', note: `${lot.sacks_printed} sack${lot.sacks_printed === 1 ? '' : 's'} already tagged from this lot` };
+    return { level: 'started', note: ui.t('noteStarted', { n: lot.sacks_printed }) };
   }
   if (d > DRY_DAYS_MAX) {
-    return { level: 'old', note: `${d}d drying — past the usual window, check this is right` };
+    return { level: 'old', note: ui.t('noteOld', { d }) };
   }
-  return { level: 'ready', note: `${d}d drying — ready` };
+  return { level: 'ready', note: ui.t('noteReady', { d }) };
 }
 
 /**
@@ -490,22 +495,22 @@ function lotPlausibility(lot) {
  * worker fills sack after sack — the PRINT TAG button allocates and prints
  * without navigating, so nobody loses their place mid-rack with gloves on.
  */
-async function handleSackSession(db, env, input) {
+async function handleSackSession(ui, db, env, input) {
   const sessionId = parseInt(input.session_id, 10);
   const cultivar = String(input.cultivar || '').trim().substring(0, 60);
 
   if (!Number.isInteger(sessionId) || sessionId <= 0) {
-    throw createError('VALIDATION_ERROR', 'Pick which lot is coming down before printing.');
+    throw createError('VALIDATION_ERROR', ui.t('pickLotFirst'));
   }
   if (!cultivar) {
-    throw createError('VALIDATION_ERROR', 'Cultivar is required — it prints on the tag.');
+    throw createError('VALIDATION_ERROR', ui.t('cultivarRequired'));
   }
 
   const lot = await requireLot(db, sessionId);
   const isTest = isTestMode(env) ? 1 : 0;
   const stats = await getLotTagStats(db, sessionId, isTest);
 
-  return renderPage(`Takedown — ${lot.zone}`, sackSessionBody({ lot, cultivar, stats }));
+  return renderPage(ui, `${ui.t('printTags')} — ${lot.zone}`, sackSessionBody(ui, { lot, cultivar, stats }));
 }
 
 async function requireLot(db, sessionId) {
@@ -606,16 +611,16 @@ async function handleSackVoid(db, env, ctx, body) {
 // Reprint path — looks the sack up and reuses its EXISTING serial. Never
 // allocates a new one: two physical tags carrying different IDs for the same
 // sack is unrecoverable once they're in the barn.
-async function handleSackLabel(db, env, params) {
+async function handleSackLabel(ui, db, env, params) {
   // ?id= for a single reprint, ?ids=a,b,c for a freshly-allocated run. The
   // session screen loads this into a hidden iframe, which prints itself.
   const raw = String(params.ids || params.id || '').trim();
   const ids = raw.split(',').map(s => s.trim()).filter(Boolean).slice(0, MAX_PRINT_QTY);
-  if (!ids.length) throw createError('VALIDATION_ERROR', 'No sack ID given.');
+  if (!ids.length) throw createError('VALIDATION_ERROR', ui.t('noSackId'));
 
   const placeholders = ids.map(() => '?').join(',');
   const rows = await query(db, `SELECT * FROM harvest_sacks WHERE sack_id IN (${placeholders})`, ids);
-  if (!rows.length) throw createError('NOT_FOUND', `No sack found with ID "${ids[0]}".`);
+  if (!rows.length) throw createError('NOT_FOUND', ui.t('noSack', { id: ids[0] }));
 
   // Preserve the requested order (SQL IN doesn't guarantee it).
   const byId = new Map(rows.map(r => [r.sack_id, r]));
@@ -623,19 +628,19 @@ async function handleSackLabel(db, env, params) {
 
   // ?preview=1 renders without firing the print dialog — for eyeballing a
   // label (or checking a long cultivar name fits) before committing paper.
-  return renderLabelSheet(sacks, null, { autoPrint: params.preview !== '1' });
+  return renderLabelSheet(ui, sacks, null, { autoPrint: params.preview !== '1' });
 }
 
-async function handleSackWeigh(db, env, ctx, body) {
+async function handleSackWeigh(ui, db, env, ctx, body) {
   const sackId = String(body.sack_id || '').trim();
   const tops = parseFloat(body.tops_lbs);
   const smalls = parseFloat(body.smalls_lbs);
 
   if (!Number.isFinite(tops) || tops < 0 || tops > 500) {
-    throw createError('VALIDATION_ERROR', 'Tops lbs must be a number between 0 and 500.');
+    throw createError('VALIDATION_ERROR', ui.t('weightRange', { field: ui.t('topsLbs') }));
   }
   if (!Number.isFinite(smalls) || smalls < 0 || smalls > 500) {
-    throw createError('VALIDATION_ERROR', 'Smalls lbs must be a number between 0 and 500.');
+    throw createError('VALIDATION_ERROR', ui.t('weightRange', { field: ui.t('smallsLbs') }));
   }
 
   const sack = await queryOne(db, `SELECT * FROM harvest_sacks WHERE sack_id = ?`, [sackId]);
@@ -651,7 +656,7 @@ async function handleSackWeigh(db, env, ctx, body) {
   }).catch(e => console.error('[harvest][telegram]', e)));
 
   const updated = await queryOne(db, `SELECT * FROM harvest_sacks WHERE sack_id = ?`, [sackId]);
-  return renderPage(`Sack ${sackId}`, sackDetailBody(updated, 'Weights recorded.'));
+  return renderPage(ui, `${ui.t('sack')} ${sackId}`, sackDetailBody(ui, updated, ui.t('weightsRecorded')));
 }
 
 function formatSackId(season, serial) {
@@ -751,10 +756,10 @@ async function getSacks(db, env, params) {
 // on a timer.
 
 const CREW_ROLES = [
-  { key: 'drivers',               label: 'Drivers',               where: 'Field ↔ barn' },
-  { key: 'cutter_water_spiders',  label: 'Cutter water spiders',  where: 'Field — bins to trailer' },
-  { key: 'hangers',               label: 'Hangers',               where: 'Barn' },
-  { key: 'hanging_water_spiders', label: 'Hanging water spiders', where: 'Barn — bins to hangers' },
+  { key: 'drivers',               labelKey: 'roleDrivers',   whereKey: 'whereDrivers' },
+  { key: 'cutter_water_spiders',  labelKey: 'roleCutterWS',  whereKey: 'whereCutterWS' },
+  { key: 'hangers',               labelKey: 'roleHangers',   whereKey: 'whereHangers' },
+  { key: 'hanging_water_spiders', labelKey: 'roleHangingWS', whereKey: 'whereHangingWS' },
 ];
 
 async function getOpenRoster(db, isTest) {
@@ -765,13 +770,13 @@ async function getOpenRoster(db, isTest) {
   `, [isTest]);
 }
 
-async function handleCrewForm(db, env) {
+async function handleCrewForm(ui, db, env) {
   const isTest = isTestMode(env) ? 1 : 0;
   const current = await getOpenRoster(db, isTest);
-  return renderPage('Crew', crewFormBody(current));
+  return renderPage(ui, ui.t('crew'), crewFormBody(ui, current));
 }
 
-async function handleCrewSet(db, env, ctx, body) {
+async function handleCrewSet(ui, db, env, ctx, body) {
   const isTest = isTestMode(env) ? 1 : 0;
   const current = await getOpenRoster(db, isTest);
 
@@ -786,14 +791,14 @@ async function handleCrewSet(db, env, ctx, body) {
     }
     const n = parseInt(raw, 10);
     if (!Number.isInteger(n) || n < 0 || n > 99) {
-      throw createError('VALIDATION_ERROR', `${r.label} must be a whole number from 0 to 99.`);
+      throw createError('VALIDATION_ERROR', ui.t('roleRange', { role: ui.t(r.labelKey) }));
     }
     counts[r.key] = n;
   }
 
   const unchanged = current && CREW_ROLES.every(r => current[r.key] === counts[r.key]);
   if (unchanged) {
-    return renderPage('Crew', crewConfirmBody(counts, 'No change — roster left as it was.'));
+    return renderPage(ui, ui.t('crew'), crewConfirmBody(ui, counts, ui.t('crewNoChange')));
   }
 
   if (current) {
@@ -813,7 +818,7 @@ async function handleCrewSet(db, env, ctx, body) {
     text: `👷 Crew updated\n${summary}${note ? `\n_${note}_` : ''}`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
-  return renderPage('Crew', crewConfirmBody(counts, 'Crew updated.'));
+  return renderPage(ui, ui.t('crew'), crewConfirmBody(ui, counts, ui.t('crewUpdated')));
 }
 
 /**
@@ -1056,13 +1061,14 @@ function summarizeConstants() {
 
 // ─── HTML RENDERING ─────────────────────────────────────
 
-function renderPage(title, bodyHtml, status = 200) {
+function renderPage(ui, title, bodyHtml, status = 200) {
+  const lang = ui.lang;
   const html = `<!doctype html>
-<html>
+<html lang="${lang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>${escapeHtml(title)} — Harvest Test</title>
+<title>${escapeHtml(title)} — Harvest</title>
 <style>
   body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 24px 20px; background: #14251a; color: #f2f6f2; }
   h1 { font-size: 1.5rem; margin: 0 0 4px; }
@@ -1124,161 +1130,196 @@ function renderPage(title, bodyHtml, status = 200) {
   .badge.ok   { background: #2f7a4f; color: #fff; }
   .badge.warn { background: #8a6d1f; color: #fff; }
   .badge.bad  { background: #7a3a3a; color: #fff; }
+  /* Language toggle — small and out of the way. Spanish is the default, so
+     this is an escape hatch for an English reader, not a decision the crew is
+     asked to make on every screen. */
+  .lang { position: fixed; top: 8px; right: 10px; font-size: 0.8rem; }
+  .lang a { color: #9fc2ac; text-decoration: none; border: 1px solid #2c4a36;
+            padding: 5px 9px; border-radius: 999px; background: #1b3123; }
+  @media print { .lang { display: none; } }
 </style>
 </head>
 <body>
+<div class="lang"><a href="${ui.toggle}">${ui.t('langOther')}</a></div>
 ${bodyHtml}
 </body>
 </html>`;
   return new Response(html, {
     status,
-    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
+      // Remember the choice so a toggle survives the next scan.
+      'Set-Cookie': langCookie(lang),
+    },
   });
 }
 
-function errorPage(message, status = 400) {
-  return renderPage('Error', `<h1>⚠️ ${escapeHtml(message)}</h1><p class="note">Check the QR code / link and try again.</p>`, status);
+/**
+ * Per-request UI context. Carries the language, a translator already bound to
+ * it, and a toggle link that KEEPS the current query string — a bare
+ * `?lang=en` would drop `action=` and dump the user on an unknown-action error.
+ */
+function makeUi(request) {
+  const lang = pickLang(request);
+  const url = new URL(request.url);
+  const other = lang === 'es' ? 'en' : 'es';
+  url.searchParams.set('lang', other);
+  return {
+    lang,
+    toggle: url.pathname + url.search,
+    t: (key, vars) => translate(lang, key, vars),
+  };
+}
+
+function errorPage(ui, message, status = 400) {
+  return renderPage(ui, ui.t('error'),
+    `<h1>⚠️ ${escapeHtml(message)}</h1><p class="note">${ui.t('checkQR')}</p>`, status);
 }
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-function headcountGrid(zone, sessionId) {
+function headcountGrid(ui, zone, sessionId) {
+  const q = `?lang=${ui.lang}&zone=${zone}&action=headcount&session_id=${sessionId}`;
   const cells = HEADCOUNT_OPTIONS
-    .map(n => `<a class="btn" href="?zone=${zone}&action=headcount&session_id=${sessionId}&count=${n}">${n}</a>`)
+    .map(n => `<a class="btn" href="${q}&count=${n}">${n}</a>`)
     .join('');
-  return `${cells}<a class="btn alt" href="?zone=${zone}&action=headcount&session_id=${sessionId}&count=13">13+</a>`;
+  return `${cells}<a class="btn alt" href="${q}&count=13">13+</a>`;
 }
 
 /**
  * Cultivar picker — shown after scanning a trial/split zone's sign, before the
  * session opens. Big tap targets: this is a gloved thumb in a field.
  */
-function cultivarPickerBody(zone, options) {
+function cultivarPickerBody(ui, zone, options) {
   const buttons = options.map(cv =>
-    `<a class="btn cvbtn" href="/z/${encodeURIComponent(zone)}?cultivar=${encodeURIComponent(cv)}">${escapeHtml(cv)}</a>`
+    `<a class="btn cvbtn" href="/z/${encodeURIComponent(zone)}?lang=${ui.lang}&cultivar=${encodeURIComponent(cv)}">${escapeHtml(cv)}</a>`
   ).join('');
   return `
 <h1>${escapeHtml(zone)}</h1>
-<p class="sub">${options.length} cultivars planted here</p>
-<p class="note">Which one are you cutting?</p>
+<p class="sub">${ui.t('nCultivars', { n: options.length })}</p>
+<p class="note">${ui.t('whichCutting')}</p>
 <div class="cvgrid">${buttons}</div>`;
 }
 
-function enterBody({ zone, cultivar, cutNumber, sessionId, prevZone }) {
+function enterBody(ui, { zone, cultivar, cutNumber, sessionId, prevZone }) {
   return `
-<h1>✅ Entered ${zone}</h1>
-<p class="sub">${cultivar ? `${escapeHtml(cultivar)} · ` : ''}Cut ${cutNumber}</p>
-${prevZone ? `<p class="note">Previous lot <strong>${escapeHtml(prevZone)}</strong> auto-closed.</p>` : `<p class="note">No prior zone was open.</p>`}
-<p class="note">How many cutters here now?</p>
-<div class="grid">${headcountGrid(zone, sessionId)}</div>
-<div class="footer"><a href="?action=logs&zone=${zone}">View log →</a></div>`;
+<h1>${ui.t('entered', { zone })}</h1>
+<p class="sub">${cultivar ? `${escapeHtml(cultivar)} · ` : ''}${ui.t('cut', { n: cutNumber })}</p>
+<p class="note">${prevZone ? ui.t('prevClosed', { lot: escapeHtml(prevZone) }) : ui.t('noPrior')}</p>
+<p class="note">${ui.t('howManyCutters')}</p>
+<div class="grid">${headcountGrid(ui, zone, sessionId)}</div>
+<div class="footer"><a href="?action=logs&zone=${zone}">${ui.t('viewLog')}</a></div>`;
 }
 
-function alreadyEnteredBody(active) {
+function alreadyEnteredBody(ui, active) {
   return `
-<h1>Already entered ${active.zone}</h1>
-<p class="sub">${active.cultivar ? `${escapeHtml(active.cultivar)} · ` : ''}Cut ${active.cut_number}</p>
-<p class="note">Entered at ${active.occurred_at} UTC — scan again in a few minutes if you meant to re-enter.</p>
-<p class="note">How many cutters here now?</p>
-<div class="grid">${headcountGrid(active.zone, active.id)}</div>`;
+<h1>${ui.t('alreadyEntered', { zone: active.zone })}</h1>
+<p class="sub">${active.cultivar ? `${escapeHtml(active.cultivar)} · ` : ''}${ui.t('cut', { n: active.cut_number })}</p>
+<p class="note">${ui.t('alreadyEnteredAt', { t: active.occurred_at })}</p>
+<p class="note">${ui.t('howManyCutters')}</p>
+<div class="grid">${headcountGrid(ui, active.zone, active.id)}</div>`;
 }
 
-function headcountBody({ zone, cutNumber, sessionId, count }) {
+function headcountBody(ui, { zone, cutNumber, sessionId, count }) {
   return `
-<h1>Logged: ${count} cutter${count === 1 ? '' : 's'}</h1>
-<p class="sub">${zone} — Cut ${cutNumber}</p>
-<p class="note">Wrong number? Tap the right one:</p>
-<div class="grid">${headcountGrid(zone, sessionId)}</div>
-<div class="footer"><a href="?action=status">View status →</a></div>`;
+<h1>${count === 1 ? ui.t('loggedCutter') : ui.t('loggedCutters', { n: count })}</h1>
+<p class="sub">${zone} — ${ui.t('cut', { n: cutNumber })}</p>
+<p class="note">${ui.t('wrongNumber')}</p>
+<div class="grid">${headcountGrid(ui, zone, sessionId)}</div>
+<div class="footer"><a href="?action=status">${ui.t('viewStatus')}</a></div>`;
 }
 
-function barnIntakeFormBody(active) {
+function barnIntakeFormBody(ui, active) {
   const options = [...VALID_ZONES].sort().map(z =>
     `<option value="${z}" ${active && active.zone === z ? 'selected' : ''}>${z}</option>`
   ).join('');
   const activeNote = active
-    ? `<p class="note">Currently active: <strong>${active.zone}${active.cultivar ? ` · ${escapeHtml(active.cultivar)}` : ''}</strong> (cut ${active.cut_number})</p>`
-    : `<p class="note">No zone is currently open — pick one below.</p>`;
+    ? `<p class="note">${ui.t('activeNow', {
+        lot: `${active.zone}${active.cultivar ? ` · ${escapeHtml(active.cultivar)}` : ''}`,
+        n: active.cut_number,
+      })}</p>`
+    : `<p class="note">${ui.t('noZoneOpen')}</p>`;
   return `
-<h1>Barn Intake</h1>
+<h1>${ui.t('barnIntake')}</h1>
 ${activeNote}
-<form method="POST" action="?action=barn_log" onsubmit="this.querySelector('button').disabled=true">
-  <label for="zone">Zone</label>
+<form method="POST" action="?action=barn_log&lang=${ui.lang}" onsubmit="this.querySelector('button').disabled=true">
+  <label for="zone">${ui.t('zone')}</label>
   <select id="zone" name="zone" required>${options}</select>
-  <label for="bins">Bins on this load</label>
-  <input id="bins" name="bins" type="number" min="1" max="500" required autofocus>
-  <button class="btn" type="submit">Log load</button>
+  <label for="bins">${ui.t('binsOnLoad')}</label>
+  <input id="bins" name="bins" type="number" min="1" max="500" inputmode="numeric" required autofocus>
+  <button class="btn" type="submit">${ui.t('logLoad')}</button>
 </form>`;
 }
 
-function barnLogConfirmBody({ zone, bins, loadNumber, hasActiveSession }) {
+function barnLogConfirmBody(ui, { zone, bins, loadNumber, hasActiveSession }) {
   return `
-<h1>Logged: ${bins} bins → ${zone}</h1>
-<p class="sub">Load #${loadNumber} today for ${zone}</p>
-${hasActiveSession ? '' : `<p class="note">⚠️ No active session was open for ${zone} — logged with no zone-session attribution.</p>`}
-<div class="footer"><a href="?action=barn_intake">Log another load →</a> · <a href="?action=crew">Crew changed? →</a></div>`;
+<h1>${ui.t('loggedLoad', { bins, zone })}</h1>
+<p class="sub">${ui.t('loadNumToday', { n: loadNumber, zone })}</p>
+${hasActiveSession ? '' : `<p class="note">${ui.t('noSessionWarn', { zone })}</p>`}
+<div class="footer"><a href="?action=barn_intake">${ui.t('logAnother')}</a> · <a href="?action=crew">${ui.t('crewChanged')}</a></div>`;
 }
 
 // ─── CREW ROSTER RENDERING ──────────────────────────────
 
-function crewFormBody(current) {
+function crewFormBody(ui, current) {
   const fields = CREW_ROLES.map(r => `
-  <label for="${r.key}">${r.label} <span class="hint">${r.where}</span></label>
+  <label for="${r.key}">${ui.t(r.labelKey)} <span class="hint">${ui.t(r.whereKey)}</span></label>
   <input id="${r.key}" name="${r.key}" type="number" min="0" max="99" inputmode="numeric"
          value="${current && current[r.key] !== null ? current[r.key] : ''}">`).join('');
 
   const since = current
-    ? `<p class="note">Current roster, set ${escapeHtml(current.effective_from)} UTC. Change only what changed.</p>`
-    : `<p class="note">No roster set yet today. Fill in who's working.</p>`;
+    ? `<p class="note">${ui.t('rosterSince', { t: escapeHtml(current.effective_from) })}</p>`
+    : `<p class="note">${ui.t('rosterNone')}</p>`;
 
   return `
-<h1>Crew</h1>
-<p class="sub">Update when it changes — not on a schedule</p>
+<h1>${ui.t('crew')}</h1>
+<p class="sub">${ui.t('crewSub')}</p>
 ${since}
-<form method="POST" action="?action=crew_set" onsubmit="this.querySelector('button').disabled=true">
+<form method="POST" action="?action=crew_set&lang=${ui.lang}" onsubmit="this.querySelector('button').disabled=true">
   ${fields}
-  <label for="note">Note <span class="hint">(optional — e.g. "driver pulled to trim")</span></label>
+  <label for="note">${ui.t('note')} <span class="hint">${ui.t('noteHint')}</span></label>
   <input id="note" name="note" maxlength="200" autocomplete="off">
-  <button class="btn" type="submit">Save crew</button>
+  <button class="btn" type="submit">${ui.t('saveCrew')}</button>
 </form>
-<p class="note"><span class="hint">Cutters aren't here — they're counted by the zone-entry scan.</span></p>`;
+<p class="note"><span class="hint">${ui.t('cuttersNotHere')}</span></p>`;
 }
 
-function crewConfirmBody(counts, flash) {
+function crewConfirmBody(ui, counts, flash) {
   const rows = CREW_ROLES.map(r =>
-    `<div class="lotmeta"><strong>${r.label}:</strong> ${counts[r.key] ?? '—'} <span class="hint">${r.where}</span></div>`
+    `<div class="lotmeta"><strong>${ui.t(r.labelKey)}:</strong> ${counts[r.key] ?? '—'} <span class="hint">${ui.t(r.whereKey)}</span></div>`
   ).join('');
   return `
 <h1>✅ ${escapeHtml(flash)}</h1>
 <div class="status">${rows}</div>
-<div class="footer"><a href="?action=crew">Change again →</a> · <a href="?action=barn_intake">Barn intake →</a></div>`;
+<div class="footer"><a href="?action=crew">${ui.t('changeAgain')}</a> · <a href="?action=barn_intake">${ui.t('toBarnIntake')}</a></div>`;
 }
 
 // ─── SUPERSACK TAG RENDERING ────────────────────────────
 
-function sackPrintFormBody(lots) {
+function sackPrintFormBody(ui, lots) {
   if (!lots.length) {
     return `
-<h1>Print Sack Tags</h1>
-<p class="note">No harvest lots recorded in the last ${LOT_PICKER_DAYS} days, so there's nothing to take down yet. Scan a zone QR to open a lot first.</p>`;
+<h1>${ui.t('printTags')}</h1>
+<p class="note">${ui.t('noLots', { n: LOT_PICKER_DAYS })}</p>`;
   }
 
   const BADGE = {
-    ready:   { cls: 'ok',    text: 'READY' },
-    started: { cls: 'warn',  text: 'STARTED' },
-    green:   { cls: 'bad',   text: 'TOO GREEN' },
-    old:     { cls: 'warn',  text: 'OVERDUE' },
+    ready:   { cls: 'ok',   text: ui.t('badgeReady') },
+    started: { cls: 'warn', text: ui.t('badgeStarted') },
+    green:   { cls: 'bad',  text: ui.t('badgeGreen') },
+    old:     { cls: 'warn', text: ui.t('badgeOld') },
   };
 
   // Pre-select ONLY when the best candidate is genuinely plausible. If the top
   // of the list is overdue/green/already-started, pre-filling it would make the
   // dangerous option the default — force a deliberate choice instead.
-  const topIsReady = lots.length > 0 && lotPlausibility(lots[0]).level === 'ready';
+  const topIsReady = lots.length > 0 && lotPlausibility(ui, lots[0]).level === 'ready';
 
   const cards = lots.map((l, i) => {
-    const p = lotPlausibility(l);
+    const p = lotPlausibility(ui, l);
     const b = BADGE[p.level];
     const cv = l.cultivar || '';
     return `
@@ -1286,13 +1327,16 @@ function sackPrintFormBody(lots) {
       <input type="radio" name="session_id" value="${l.id}"
              data-cultivar="${escapeHtml(cv)}" data-level="${p.level}"
              data-desc="${escapeHtml(`${l.zone}${cv ? ` · ${cv}` : ''} cut ${l.cut_number}`)}"
-             data-note="${escapeHtml(p.note)}" ${i === 0 && topIsReady ? 'checked' : ''} required>
+             data-confirm="${escapeHtml(ui.t('confirmLot', {
+               lot: `${l.zone}${cv ? ` · ${cv}` : ''} ${ui.t('cut', { n: l.cut_number })}`,
+               note: p.note,
+             }))}" ${i === 0 && topIsReady ? 'checked' : ''} required>
       <span class="lotbody">
         <span class="lothead">
           <strong>${escapeHtml(l.zone)}${cv ? ` · ${escapeHtml(cv)}` : ''}</strong>
           <span class="badge ${b.cls}">${b.text}</span>
         </span>
-        <span class="lotmeta">Cut ${l.cut_number} · cut ${escapeHtml(String(l.occurred_at).substring(0, 10))} · ${escapeHtml(p.note)}</span>
+        <span class="lotmeta">${ui.t('cut', { n: l.cut_number })} · ${escapeHtml(String(l.occurred_at).substring(0, 10))} · ${escapeHtml(p.note)}</span>
       </span>
     </label>`;
   }).join('');
@@ -1300,14 +1344,14 @@ function sackPrintFormBody(lots) {
   const firstCv = topIsReady ? (lots[0].cultivar || '') : '';
 
   return `
-<h1>Print Sack Tags</h1>
-<p class="note">Pick the lot that's <strong>coming down now</strong> — match it against the tape on the rack. This is not the zone being cut today; material bags ~${DRY_DAYS_TYPICAL} days after it was cut.</p>
+<h1>${ui.t('printTags')}</h1>
+<p class="note">${ui.t('pickLotHelp', { n: DRY_DAYS_TYPICAL })}</p>
 
-<form method="POST" action="?action=sack_session_start" id="lotForm">
+<form method="POST" action="?action=sack_session_start&lang=${ui.lang}" id="lotForm">
   <div class="lotlist">${cards}</div>
-  <label for="cultivar">Cultivar <span class="hint">(from the lot — change only if wrong)</span></label>
-  <input id="cultivar" name="cultivar" required autocomplete="off" value="${escapeHtml(firstCv)}" placeholder="e.g. Sour Lifter">
-  <button class="btn" type="submit">Start takedown →</button>
+  <label for="cultivar">${ui.t('cultivar')} <span class="hint">${ui.t('cultivarHint')}</span></label>
+  <input id="cultivar" name="cultivar" required autocomplete="off" value="${escapeHtml(firstCv)}" placeholder="Sour Lifter">
+  <button class="btn" type="submit">${ui.t('startTakedown')}</button>
 </form>
 
 <script>
@@ -1332,8 +1376,7 @@ function sackPrintFormBody(lots) {
     if (!r) return;
     var lvl = r.getAttribute('data-level');
     if (lvl === 'green' || lvl === 'old') {
-      var msg = r.getAttribute('data-desc') + '\\n' + r.getAttribute('data-note') +
-                '\\n\\nTag sacks against this lot anyway?';
+      var msg = r.getAttribute('data-confirm');
       if (!confirm(msg)) { e.preventDefault(); return; }
     }
     form.querySelector('button').disabled = true;
@@ -1348,41 +1391,51 @@ function sackPrintFormBody(lots) {
  * yields until it's empty, and pre-printing leaves orphan serials that can end
  * up on the next rack's sacks.
  */
-function sackSessionBody({ lot, cultivar, stats }) {
-  const q = `session_id=${lot.id}&cultivar=${encodeURIComponent(cultivar)}`;
+function sackSessionBody(ui, { lot, cultivar, stats }) {
+  const q = `session_id=${lot.id}&cultivar=${encodeURIComponent(cultivar)}&lang=${ui.lang}`;
   return `
 <div class="lot">
   <div class="lot-cultivar">${escapeHtml(cultivar)}</div>
-  <div class="lot-meta">${escapeHtml(lot.zone)} · Cut ${escapeHtml(String(lot.cut_number ?? '?'))} · cut ${escapeHtml(formatTagDate(String(lot.occurred_at).substring(0, 10)))}</div>
+  <div class="lot-meta">${escapeHtml(lot.zone)} · ${ui.t('cut', { n: lot.cut_number ?? '?' })} · ${escapeHtml(formatTagDate(ui.lang, String(lot.occurred_at).substring(0, 10)))}</div>
 </div>
 
-<button id="printBtn" class="bigbtn">PRINT TAG</button>
+<button id="printBtn" class="bigbtn">${ui.t('printTag')}</button>
 
 <div class="status">
-  <div id="count"><strong>${stats.printed}</strong> tag${stats.printed === 1 ? '' : 's'} printed for this lot</div>
-  <div id="last" class="last">${stats.lastSackId ? `Last: <strong>#&nbsp;${escapeHtml(stats.lastSackId)}</strong>` : 'No tags printed yet'}</div>
+  <div id="count">${stats.printed === 1 ? ui.t('tagForLot') : ui.t('tagsForLot', { n: stats.printed })}</div>
+  <div id="last" class="last">${stats.lastSackId ? ui.t('lastTag', { id: escapeHtml(stats.lastSackId) }) : ui.t('noTagsYet')}</div>
   <div id="lastActions" class="lastActions" ${stats.lastSackId ? '' : 'hidden'}>
-    <a id="reprintLink" class="mini" href="#">Reprint</a>
-    <a id="voidLink" class="mini danger" href="#">Void</a>
+    <a id="reprintLink" class="mini" href="#">${ui.t('reprint')}</a>
+    <a id="voidLink" class="mini danger" href="#">${ui.t('void')}</a>
   </div>
 </div>
 
 <details class="batch">
-  <summary>Print several at once</summary>
-  <p class="note">Only if you're tagging a batch of already-filled sacks. Extra tags with no sack must be voided, or the lot count drifts.</p>
+  <summary>${ui.t('printSeveral')}</summary>
+  <p class="note">${ui.t('printSeveralHelp')}</p>
   <div class="batchrow">
-    <input id="batchQty" type="number" min="2" max="${MAX_PRINT_QTY}" value="5">
-    <button id="batchBtn" class="btn">Print batch</button>
+    <input id="batchQty" type="number" min="2" max="${MAX_PRINT_QTY}" inputmode="numeric" value="5">
+    <button id="batchBtn" class="btn">${ui.t('printBatch')}</button>
   </div>
 </details>
 
-<div class="footer"><a href="?action=sack_print">← Change lot</a> · <a href="?action=sacks&limit=20">View tags →</a></div>
+<div class="footer"><a href="?action=sack_print">${ui.t('changeLot')}</a> · <a href="?action=sacks&limit=20">${ui.t('viewTags')}</a></div>
 
 <iframe id="printFrame" title="print" style="position:absolute;width:0;height:0;border:0;left:-9999px"></iframe>
 
 <script>
 (function () {
   var Q = '${q}';
+  // Strings injected as data rather than assembled in JS — keeps every
+  // translation in one table and avoids escaping through two template layers.
+  var T = ${JSON.stringify({
+    printTag: ui.t('printTag'), printing: ui.t('printing'), voiding: ui.t('voiding'),
+    tagForLot: ui.t('tagForLot'), tagsForLot: ui.t('tagsForLot', { n: '{n}' }),
+    lastTag: ui.t('lastTag', { id: '{id}' }), noTagsYet: ui.t('noTagsYet'),
+    printFailed: ui.t('printFailed', { e: '{e}' }),
+    voidFailed: ui.t('voidFailed', { e: '{e}' }),
+    confirmVoid: ui.t('confirmVoid', { id: '{id}' }),
+  })};
   var btn = document.getElementById('printBtn');
   var batchBtn = document.getElementById('batchBtn');
   var frame = document.getElementById('printFrame');
@@ -1397,19 +1450,19 @@ function sackSessionBody({ lot, cultivar, stats }) {
   function setBusy(b, label) {
     busy = b;
     btn.disabled = b; batchBtn.disabled = b;
-    btn.textContent = b ? (label || 'PRINTING…') : 'PRINT TAG';
+    btn.textContent = b ? (label || T.printing) : T.printTag;
   }
 
   function refresh(data) {
     var n = data.printed;
-    countEl.innerHTML = '<strong>' + n + '</strong> tag' + (n === 1 ? '' : 's') + ' printed for this lot';
+    countEl.innerHTML = (n === 1 ? T.tagForLot : T.tagsForLot.replace('{n}', n));
     lastId = data.last_sack_id;
     if (lastId) {
-      lastEl.innerHTML = 'Last: <strong>#&nbsp;' + lastId + '</strong>';
+      lastEl.innerHTML = T.lastTag.replace('{id}', lastId);
       actions.hidden = false;
       reprint.href = '?action=sack_label&id=' + encodeURIComponent(lastId);
     } else {
-      lastEl.textContent = 'No tags printed yet';
+      lastEl.textContent = T.noTagsYet;
       actions.hidden = true;
     }
   }
@@ -1431,7 +1484,7 @@ function sackSessionBody({ lot, cultivar, stats }) {
       })
       .catch(function (e) {
         setBusy(false);
-        alert('Could not print: ' + e.message + '\\n\\nNothing was tagged — try again.');
+        alert(T.printFailed.replace('{e}', e.message));
       });
   }
 
@@ -1449,8 +1502,8 @@ function sackSessionBody({ lot, cultivar, stats }) {
   voidLink.addEventListener('click', function (e) {
     e.preventDefault();
     if (!lastId || busy) return;
-    if (!confirm('Void tag # ' + lastId + '?\\n\\nUse this if a tag printed with no sack to put it on. The number is retired, not reused.')) return;
-    setBusy(true, 'VOIDING…');
+    if (!confirm(T.confirmVoid.replace('{id}', lastId))) return;
+    setBusy(true, T.voiding);
     fetch('?action=sack_void', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1461,7 +1514,7 @@ function sackSessionBody({ lot, cultivar, stats }) {
         if (!d.success) throw new Error(d.error || 'Void failed');
         refresh(d); setBusy(false);
       })
-      .catch(function (e) { setBusy(false); alert('Could not void: ' + e.message); });
+      .catch(function (e) { setBusy(false); alert(T.voidFailed.replace('{e}', e.message)); });
   });
 })();
 </script>`;
@@ -1472,7 +1525,7 @@ function sackSessionBody({ lot, cultivar, stats }) {
  * once every QR image has loaded; with Chrome's --kiosk-printing flag on the
  * barn PC that goes straight to the ZP-450 with no dialog to dismiss.
  */
-function renderLabelSheet(sacks, printCtx, opts = {}) {
+function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
   const autoPrint = opts.autoPrint !== false;
   const labels = sacks.map(s => `
   <div class="label">
@@ -1480,15 +1533,13 @@ function renderLabelSheet(sacks, printCtx, opts = {}) {
     <div class="row">
       <div class="left">
         <div class="bagno">#&nbsp;${escapeHtml(s.sack_id)}</div>
-        <div class="meta">${escapeHtml(formatTagDate(s.harvest_date))} · ${escapeHtml(s.zone)} · Cut ${escapeHtml(String(s.cut_number ?? '?'))}</div>
+        <div class="meta">${escapeHtml(formatTagDate(ui.lang, s.harvest_date))} · ${escapeHtml(s.zone)} · ${escapeHtml(ui.t('cut', { n: s.cut_number ?? '?' }))}</div>
       </div>
       <img class="qr" src="${qrUrlFor(s.sack_id)}" alt="">
     </div>
   </div>`).join('');
 
-  const backLink = printCtx
-    ? `<a href="?action=sack_print">← Print more tags</a>`
-    : `<a href="?action=sack_print">← Print tags</a>`;
+  const backLink = `<a href="?action=sack_print">${ui.t('changeLot')}</a>`;
 
   const html = `<!doctype html>
 <html><head><meta charset="utf-8"><title>Sack tags</title>
@@ -1519,7 +1570,7 @@ function renderLabelSheet(sacks, printCtx, opts = {}) {
   }
 </style></head>
 <body>
-<div class="toolbar">${sacks.length} label${sacks.length === 1 ? '' : 's'} · ${backLink} · <a href="javascript:window.print()">Print again</a></div>
+<div class="toolbar">${sacks.length} · ${backLink} · <a href="javascript:window.print()">${ui.t('printTag')}</a></div>
 ${labels}
 ${autoPrint ? `<script>
   // Wait for QR images before printing — printing early yields blank squares.
@@ -1556,46 +1607,58 @@ function cultivarFontPt(name) {
   return 12.5;
 }
 
-function formatTagDate(iso) {
+const MONTHS = {
+  en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+  es: ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'],
+};
+
+/**
+ * Date as it appears on the printed tag and on screen. Spanish puts the day
+ * first — "3 oct 2026" — which is what a Spanish-reading crew expects to see
+ * on a sack they are trying to identify quickly.
+ */
+function formatTagDate(lang, iso) {
   if (!iso) return '';
   const d = new Date(String(iso).substring(0, 10) + 'T00:00:00Z');
   if (isNaN(d)) return String(iso).substring(0, 10);
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${months[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+  const m = (MONTHS[lang] || MONTHS.en)[d.getUTCMonth()];
+  return lang === 'es'
+    ? `${d.getUTCDate()} ${m} ${d.getUTCFullYear()}`
+    : `${m} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
 }
 
-function sackDetailBody(sack, flash) {
+function sackDetailBody(ui, sack, flash) {
   const opened = !!sack.opened_at;
   // floor, not round — a sack cut this morning is "today", not "1 day ago".
   const daysInBarn = sack.harvest_date
     ? Math.max(0, Math.floor((Date.now() - new Date(sack.harvest_date + 'T00:00:00Z')) / 86400000))
     : null;
   const daysLabel = daysInBarn === null ? ''
-    : daysInBarn === 0 ? ' · today'
-    : daysInBarn === 1 ? ' · 1 day ago'
-    : ` · ${daysInBarn} days ago`;
+    : daysInBarn === 0 ? ` · ${ui.t('today')}`
+    : daysInBarn === 1 ? ` · ${ui.t('dayAgo')}`
+    : ` · ${ui.t('daysAgo', { n: daysInBarn })}`;
 
   const weights = opened
-    ? `<p class="note">Opened ${escapeHtml(sack.opened_at)} UTC<br><strong>${sack.tops_lbs} lb tops · ${sack.smalls_lbs} lb smalls</strong></p>`
+    ? `<p class="note">${ui.t('openedAt', { t: escapeHtml(sack.opened_at) })}<br><strong>${ui.t('weights', { tops: sack.tops_lbs, smalls: sack.smalls_lbs })}</strong></p>`
     : `
-<p class="note">Not yet opened. Record weights when this sack is bucked:</p>
-<form method="POST" action="/api/harvest?action=sack_weigh" onsubmit="this.querySelector('button').disabled=true">
+<p class="note">${ui.t('notOpened')}</p>
+<form method="POST" action="/api/harvest?action=sack_weigh&lang=${ui.lang}" onsubmit="this.querySelector('button').disabled=true">
   <input type="hidden" name="sack_id" value="${escapeHtml(sack.sack_id)}">
-  <label for="tops_lbs">Tops (lbs)</label>
-  <input id="tops_lbs" name="tops_lbs" type="number" step="0.01" min="0" max="500" required autofocus>
-  <label for="smalls_lbs">Smalls (lbs)</label>
-  <input id="smalls_lbs" name="smalls_lbs" type="number" step="0.01" min="0" max="500" required>
-  <button class="btn" type="submit">Record weights</button>
+  <label for="tops_lbs">${ui.t('topsLbs')}</label>
+  <input id="tops_lbs" name="tops_lbs" type="number" step="0.01" min="0" max="500" inputmode="decimal" required autofocus>
+  <label for="smalls_lbs">${ui.t('smallsLbs')}</label>
+  <input id="smalls_lbs" name="smalls_lbs" type="number" step="0.01" min="0" max="500" inputmode="decimal" required>
+  <button class="btn" type="submit">${ui.t('recordWeights')}</button>
 </form>`;
 
   return `
 ${flash ? `<p class="note">✅ ${escapeHtml(flash)}</p>` : ''}
-<h1>${escapeHtml(sack.cultivar || 'Sack')}</h1>
+<h1>${escapeHtml(sack.cultivar || ui.t('sack'))}</h1>
 <p class="sub">#&nbsp;${escapeHtml(sack.sack_id)}</p>
 <p class="note">
-  Zone <strong>${escapeHtml(sack.zone)}</strong> · Cut ${escapeHtml(String(sack.cut_number ?? '?'))}<br>
-  Harvested ${escapeHtml(formatTagDate(sack.harvest_date))}${daysLabel}
+  ${ui.t('zoneCut', { zone: escapeHtml(sack.zone), n: escapeHtml(String(sack.cut_number ?? '?')) })}<br>
+  ${ui.t('harvested', { d: escapeHtml(formatTagDate(ui.lang, sack.harvest_date)) })}${daysLabel}
 </p>
 ${weights}
-<div class="footer"><a href="/api/harvest?action=sack_label&id=${encodeURIComponent(sack.sack_id)}">Reprint this tag →</a></div>`;
+<div class="footer"><a href="/api/harvest?action=sack_label&lang=${ui.lang}&id=${encodeURIComponent(sack.sack_id)}">${ui.t('reprintTag')}</a></div>`;
 }
