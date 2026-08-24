@@ -128,6 +128,15 @@ const S = {
     saveNote: 'Guardar nota', noNotes: 'Sin notas todavía.',
     noteSaved: 'Nota guardada.', noteEmpty: 'Escribe algo antes de guardar.',
     approx: 'aprox.',
+    // — buscar bolsa —
+    findSack: 'Buscar bolsa',
+    findHelp: 'Escanea la etiqueta o escribe el número. Sirve <strong>26-0847</strong>, <strong>260847</strong> o nada más <strong>847</strong>.',
+    findPlaceholder: '26-0847',
+    findGo: 'Buscar',
+    findNotFound: 'No existe la bolsa <strong>{id}</strong>. Revisa el número en la etiqueta.',
+    findRecent: 'Últimas etiquetadas',
+    findLink: 'Buscar bolsa →',
+    findUnreadable: '¿Etiqueta rota o borrada? Si no se alcanza a leer el número, la bolsa no se puede identificar sola — búscala por el lote de donde salió.',
 
     // — errors —
     error: 'Error',
@@ -245,6 +254,14 @@ const S = {
     saveNote: 'Save note', noNotes: 'No notes yet.',
     noteSaved: 'Note saved.', noteEmpty: 'Write something before saving.',
     approx: 'approx.',
+    findSack: 'Find a sack',
+    findHelp: 'Scan the tag or type the number. <strong>26-0847</strong>, <strong>260847</strong> or just <strong>847</strong> all work.',
+    findPlaceholder: '26-0847',
+    findGo: 'Find',
+    findNotFound: 'No sack <strong>{id}</strong>. Check the number on the tag.',
+    findRecent: 'Recently tagged',
+    findLink: 'Find a sack →',
+    findUnreadable: 'Tag torn or faded? If the number cannot be read at all, the sack cannot identify itself — work back from the lot it came from.',
 
     error: 'Error',
     checkQR: 'Check the QR code / link and try again.',
