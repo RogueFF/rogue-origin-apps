@@ -45,6 +45,7 @@ import { createError, formatError } from '../lib/errors.js';
 import { VALID_ZONES, normalizeZone } from '../lib/zones.js';
 import { cultivarsFor, isMultiCultivar } from '../lib/zone-cultivars.js';
 import { zoneFacts, plantCountFor, PLANTS_PER_ACRE, PLANT_SPACING_FT } from '../lib/zone-facts.js';
+import { cultivarCode } from '../lib/cultivar-codes.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
 import { pickLang, t as translate, langCookie } from '../lib/i18n.js';
 
@@ -558,23 +559,28 @@ async function handleSackAlloc(db, env, ctx, body) {
   const season = getSeason();
   const harvestDate = String(lot.occurred_at).substring(0, 10);
 
-  // MAX+1 per season. The UNIQUE(season, serial) index means two simultaneous
+  // MAX+1 per (season, cultivar): each cultivar counts from 1. The
+  // UNIQUE(season, cultivar_code, serial) index means two simultaneous
   // allocations fail loudly rather than silently issuing two physical tags
   // carrying the same number.
-  const row = await queryOne(db, `SELECT COALESCE(MAX(serial), 0) AS max_serial FROM harvest_sacks WHERE season = ?`, [season]);
+  const code = cultivarCode(cultivar);
+  const row = await queryOne(db, `
+    SELECT COALESCE(MAX(serial), 0) AS max_serial FROM harvest_sacks
+    WHERE season = ? AND cultivar_code = ?
+  `, [season, code]);
   const startSerial = (row?.max_serial || 0) + 1;
 
   const ids = [];
   const statements = [];
   for (let i = 0; i < qty; i++) {
     const serial = startSerial + i;
-    const sackId = formatSackId(season, serial);
+    const sackId = formatSackId(season, code, serial);
     ids.push(sackId);
     statements.push({
       sql: `INSERT INTO harvest_sacks
-              (sack_id, season, serial, zone, cultivar, cut_number, harvest_date, zone_session_id, is_test)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      params: [sackId, season, serial, lot.zone, cultivar, lot.cut_number, harvestDate, lot.id, isTest],
+              (sack_id, season, serial, cultivar_code, zone, cultivar, cut_number, harvest_date, zone_session_id, is_test)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [sackId, season, serial, code, lot.zone, cultivar, lot.cut_number, harvestDate, lot.id, isTest],
     });
   }
   await transaction(db, statements);
@@ -721,12 +727,21 @@ function normalizeSackId(raw, season) {
   q = q.toUpperCase().replace(/\s+/g, '').replace(/^#+/, '');
   const yy = String(season).slice(-2);
 
-  if (/^\d{2}-\d{1,6}$/.test(q)) {
-    const [a, b] = q.split('-');
-    return `${a}-${b.padStart(4, '0')}`;
-  }
-  if (/^\d{6,8}$/.test(q)) return `${q.slice(0, 2)}-${q.slice(2).padStart(4, '0')}`;
-  if (/^\d{1,5}$/.test(q)) return `${yy}-${q.padStart(4, '0')}`;   // bare serial
+  // 26-SL-12 — already whole.
+  let m = q.match(/^(\d{2})-([A-Z]+\d*)-(\d{1,6})$/);
+  if (m) return `${m[1]}-${m[2]}-${parseInt(m[3], 10)}`;
+
+  // SL-12 / SL12 — cultivar and number, season assumed. What someone reading a
+  // torn tag will most often manage: the code and the number are the two things
+  // still legible.
+  m = q.match(/^([A-Z]+\d*?)-?(\d{1,6})$/);
+  if (m && /[A-Z]/.test(m[1])) return `${yy}-${m[1]}-${parseInt(m[2], 10)}`;
+
+  // A bare number can no longer identify a bag on its own — 1 is a valid number
+  // for every cultivar. Hand it back so the caller can say so rather than
+  // guessing a cultivar and confidently returning the wrong sack.
+  if (/^\d+$/.test(q)) return { ambiguous: parseInt(q, 10) };
+
   return q;
 }
 
@@ -742,7 +757,32 @@ async function handleSackFind(ui, db, env, input) {
     return renderPage(ui, ui.t('findSack'), sackFindBody(ui, { recent }));
   }
 
-  const id = normalizeSackId(raw, getSeason());
+  const parsed = normalizeSackId(raw, getSeason());
+
+  // A bare number matches one bag per cultivar now, so offer the candidates
+  // instead of picking one. Guessing here would hand back a confidently wrong
+  // sack, which is worse than asking.
+  if (parsed && typeof parsed === 'object' && parsed.ambiguous !== undefined) {
+    const matches = await query(db, `
+      SELECT sack_id, cultivar, zone, cut_number FROM harvest_sacks
+      WHERE serial = ? AND season = ? AND is_test = ? AND voided_at IS NULL
+      ORDER BY cultivar
+    `, [parsed.ambiguous, getSeason(), isTest]);
+    if (matches.length === 1) {
+      const only = await getSackView(db, matches[0].sack_id);
+      return renderPage(ui, `${ui.t('sack')} ${only.sack.sack_id}`, sackDetailBody(ui, only));
+    }
+    const recentA = await query(db, `
+      SELECT sack_id, cultivar, zone, cut_number FROM harvest_sacks
+      WHERE is_test = ? AND voided_at IS NULL ORDER BY id DESC LIMIT 8
+    `, [isTest]);
+    return renderPage(ui, ui.t('findSack'),
+      sackFindBody(ui, { recent: matches.length ? matches : recentA, typed: raw,
+                         ambiguous: parsed.ambiguous, missing: matches.length ? null : String(parsed.ambiguous) }),
+      matches.length ? 300 : 404);
+  }
+
+  const id = typeof parsed === 'string' ? parsed : null;
   const view = id ? await getSackView(db, id) : null;
   if (view) {
     return renderPage(ui, `${ui.t('sack')} ${view.sack.sack_id}`, sackDetailBody(ui, view));
@@ -775,8 +815,9 @@ async function handleSackNote(ui, db, env, ctx, body) {
   return renderPage(ui, `${ui.t('sack')} ${sackId}`, sackDetailBody(ui, updated, ui.t('noteSaved')));
 }
 
-function formatSackId(season, serial) {
-  return `${String(season).slice(-2)}-${String(serial).padStart(4, '0')}`;
+/** e.g. 26-SL-1. Unpadded on purpose (Koa): "1, 2, 3", not "0001". */
+function formatSackId(season, code, serial) {
+  return `${String(season).slice(-2)}-${code}-${serial}`;
 }
 
 function qrUrlFor(sackId) {
@@ -1827,7 +1868,7 @@ function formatTagDate(lang, iso) {
     : `${m} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
 }
 
-function sackFindBody(ui, { recent, missing, typed }) {
+function sackFindBody(ui, { recent, missing, typed, ambiguous }) {
   const list = recent.length
     ? recent.map(r => `<a class="btn alt findrow" href="/s/${encodeURIComponent(r.sack_id)}?lang=${ui.lang}">
          <strong>#&nbsp;${escapeHtml(r.sack_id)}</strong>
@@ -1838,6 +1879,7 @@ function sackFindBody(ui, { recent, missing, typed }) {
   return `
 <h1>${ui.t('findSack')}</h1>
 ${missing ? `<p class="note">⚠️ ${ui.t('findNotFound', { id: escapeHtml(missing) })}</p>` : ''}
+${ambiguous !== undefined && !missing ? `<p class="note">⚠️ ${ui.t('findAmbiguous', { n: ambiguous })}</p>` : ''}
 <p class="note">${ui.t('findHelp')}</p>
 <form method="GET" action="/api/harvest" onsubmit="this.querySelector('button').disabled=true">
   <input type="hidden" name="action" value="find">
