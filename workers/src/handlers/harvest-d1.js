@@ -98,7 +98,7 @@ const PUBLIC_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev';
 const HTML_ACTIONS = new Set([
   'enter', 'headcount', 'barn_intake', 'barn_log',
   'sack_print', 'sack_session_start', 'sack_session', 'sack_label', 'sack_weigh',
-  'crew', 'crew_set',
+  'crew', 'crew_set', 'sack_note',
 ]);
 
 export async function handleHarvestD1(request, env, ctx) {
@@ -135,6 +135,8 @@ export async function handleHarvestD1(request, env, ctx) {
           return await handleCrewForm(ui, db, env);
         case 'crew_set':
           return await handleCrewSet(ui, db, env, ctx, body);
+        case 'sack_note':
+          return await handleSackNote(ui, db, env, ctx, body);
       }
     } catch (e) {
       const { message, status } = formatError(e);
@@ -229,11 +231,11 @@ export async function handleSackScan(request, env, ctx) {
   const ui = makeUi(request);
   try {
     const sackId = new URL(request.url).pathname.replace(/^\/s\//, '').trim();
-    const sack = await queryOne(env.DB, `SELECT * FROM harvest_sacks WHERE sack_id = ?`, [sackId]);
-    if (!sack) {
+    const view = await getSackView(env.DB, sackId);
+    if (!view) {
       return errorPage(ui, ui.t('noSackCheck', { id: sackId }), 404);
     }
-    return renderPage(ui, `${ui.t('sack')} ${sack.sack_id}`, sackDetailBody(ui, sack));
+    return renderPage(ui, `${ui.t('sack')} ${view.sack.sack_id}`, sackDetailBody(ui, view));
   } catch (e) {
     const { message, status } = formatError(e);
     return errorPage(ui, message, status);
@@ -655,8 +657,66 @@ async function handleSackWeigh(ui, db, env, ctx, body) {
     text: `⚖️ Sack *${sackId}* opened — ${tops} lb tops / ${smalls} lb smalls (${sack.cultivar || '?'} ${sack.zone} cut ${sack.cut_number})`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
-  const updated = await queryOne(db, `SELECT * FROM harvest_sacks WHERE sack_id = ?`, [sackId]);
+  const updated = await getSackView(db, sackId);
   return renderPage(ui, `${ui.t('sack')} ${sackId}`, sackDetailBody(ui, updated, ui.t('weightsRecorded')));
+}
+
+/**
+ * Everything a scan should show — the sack, where it came from, and what
+ * anyone has noted about it. Scanning a tag is the one moment the whole chain
+ * is visible in one place, so it pulls the field side (plant date, acreage)
+ * rather than only the harvest side the sack row happens to carry.
+ */
+async function getSackView(db, sackId) {
+  const sack = await queryOne(db, `SELECT * FROM harvest_sacks WHERE sack_id = ?`, [sackId]);
+  if (!sack) return null;
+
+  const facts = zoneFacts(sack.zone);
+  const notes = await query(db, `
+    SELECT note, created_at FROM harvest_sack_notes
+    WHERE sack_id = ? ORDER BY created_at DESC, id DESC LIMIT 50
+  `, [sackId]);
+
+  const lot = sack.zone_session_id
+    ? await queryOne(db, `
+        SELECT COUNT(*) AS sacks FROM harvest_sacks
+        WHERE zone_session_id = ? AND is_test = ? AND voided_at IS NULL
+      `, [sack.zone_session_id, sack.is_test])
+    : null;
+
+  const growDays = (facts?.plantDate && sack.harvest_date)
+    ? Math.round((new Date(sack.harvest_date + 'T00:00:00Z') - new Date(facts.plantDate + 'T00:00:00Z')) / 86400000)
+    : null;
+
+  return {
+    sack, notes,
+    plantDate: facts?.plantDate || null,
+    plantDateApprox: !!facts?.multiDay,
+    acres: facts?.acres ?? null,
+    plants: plantCountFor(sack.zone),
+    growDays,
+    lotSacks: lot?.sacks ?? null,
+  };
+}
+
+async function handleSackNote(ui, db, env, ctx, body) {
+  const sackId = String(body.sack_id || '').trim();
+  const note = String(body.note || '').trim().substring(0, 500);
+  if (!note) throw createError('VALIDATION_ERROR', ui.t('noteEmpty'));
+
+  const view = await getSackView(db, sackId);
+  if (!view) throw createError('NOT_FOUND', ui.t('noSack', { id: sackId }));
+
+  await execute(db, `INSERT INTO harvest_sack_notes (sack_id, note, is_test) VALUES (?, ?, ?)`,
+    [sackId, note, view.sack.is_test]);
+
+  ctx.waitUntil(sendTelegramMessage(env, {
+    chatId: env.TELEGRAM_TEST_CHAT_ID,
+    text: `📝 *${sackId}* (${view.sack.cultivar || '?'} ${view.sack.zone}) — ${note}`,
+  }).catch(e => console.error('[harvest][telegram]', e)));
+
+  const updated = await getSackView(db, sackId);
+  return renderPage(ui, `${ui.t('sack')} ${sackId}`, sackDetailBody(ui, updated, ui.t('noteSaved')));
 }
 
 function formatSackId(season, serial) {
@@ -1107,6 +1167,12 @@ function renderPage(ui, title, bodyHtml, status = 200) {
   .batchrow input { margin: 0; max-width: 110px; }
   .batchrow .btn { margin: 0; white-space: nowrap; padding: 12px 18px; font-size: 1rem; }
   .hint { color: #9fc2ac; font-size: 0.85rem; font-weight: normal; }
+  h2 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.09em;
+       color: #7fae91; margin: 22px 0 8px; font-weight: 700; }
+  .kv { display: flex; justify-content: space-between; gap: 14px; padding: 7px 0;
+        border-bottom: 1px solid #223b29; font-size: 1.02rem; }
+  .kv span { color: #9fc2ac; }
+  .kv strong { text-align: right; }
 
   /* Cultivar picker — trial zones can hold 15 cultivars, so a single column of
      full-width targets beats a cramped grid for a gloved thumb. */
@@ -1627,38 +1693,75 @@ function formatTagDate(lang, iso) {
     : `${m} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
 }
 
-function sackDetailBody(ui, sack, flash) {
+function sackDetailBody(ui, view, flash) {
+  const { sack, notes, plantDate, plantDateApprox, acres, plants, growDays, lotSacks } = view;
   const opened = !!sack.opened_at;
+
   // floor, not round — a sack cut this morning is "today", not "1 day ago".
-  const daysInBarn = sack.harvest_date
+  const days = sack.harvest_date
     ? Math.max(0, Math.floor((Date.now() - new Date(sack.harvest_date + 'T00:00:00Z')) / 86400000))
     : null;
-  const daysLabel = daysInBarn === null ? ''
-    : daysInBarn === 0 ? ` · ${ui.t('today')}`
-    : daysInBarn === 1 ? ` · ${ui.t('dayAgo')}`
-    : ` · ${ui.t('daysAgo', { n: daysInBarn })}`;
+  const drying = days === null ? ''
+    : days === 0 ? ui.t('dryingToday')
+    : days === 1 ? ui.t('dryingOne')
+    : ui.t('dryingFor', { n: days });
+
+  const row = (label, value) =>
+    `<div class="kv"><span>${label}</span><strong>${value}</strong></div>`;
+
+  const origin = [
+    row(ui.t('zone'), `${escapeHtml(sack.zone)} · ${ui.t('cut', { n: sack.cut_number ?? '?' })}`),
+    plantDate ? row(ui.t('planted'),
+      `${escapeHtml(formatTagDate(ui.lang, plantDate))}${plantDateApprox ? ' ~' : ''}`) : '',
+    row(ui.t('harvested', { d: '' }).trim(), escapeHtml(formatTagDate(ui.lang, sack.harvest_date))),
+    growDays !== null ? row('', ui.t('growTime', { n: growDays })) : '',
+    acres ? row(ui.t('area'), ui.t('areaVal', {
+      ac: acres.toFixed(3), plants: plants ? plants.toLocaleString('en-US') : '?' })) : '',
+  ].join('');
 
   const weights = opened
-    ? `<p class="note">${ui.t('openedAt', { t: escapeHtml(sack.opened_at) })}<br><strong>${ui.t('weights', { tops: sack.tops_lbs, smalls: sack.smalls_lbs })}</strong></p>`
+    ? `<p class="note"><strong>${ui.t('weights', { tops: sack.tops_lbs, smalls: sack.smalls_lbs })}</strong><br>
+       <span class="hint">${ui.t('openedAt', { t: escapeHtml(sack.opened_at) })}</span></p>`
     : `
 <p class="note">${ui.t('notOpened')}</p>
 <form method="POST" action="/api/harvest?action=sack_weigh&lang=${ui.lang}" onsubmit="this.querySelector('button').disabled=true">
   <input type="hidden" name="sack_id" value="${escapeHtml(sack.sack_id)}">
   <label for="tops_lbs">${ui.t('topsLbs')}</label>
-  <input id="tops_lbs" name="tops_lbs" type="number" step="0.01" min="0" max="500" inputmode="decimal" required autofocus>
+  <input id="tops_lbs" name="tops_lbs" type="number" step="0.01" min="0" max="500" inputmode="decimal" required>
   <label for="smalls_lbs">${ui.t('smallsLbs')}</label>
   <input id="smalls_lbs" name="smalls_lbs" type="number" step="0.01" min="0" max="500" inputmode="decimal" required>
   <button class="btn" type="submit">${ui.t('recordWeights')}</button>
 </form>`;
 
+  const noteList = notes.length
+    ? notes.map(n => `<div class="lotmeta">• ${escapeHtml(n.note)}
+        <span class="hint">${escapeHtml(String(n.created_at).substring(0, 10))}</span></div>`).join('')
+    : `<p class="note"><span class="hint">${ui.t('noNotes')}</span></p>`;
+
   return `
 ${flash ? `<p class="note">✅ ${escapeHtml(flash)}</p>` : ''}
 <h1>${escapeHtml(sack.cultivar || ui.t('sack'))}</h1>
-<p class="sub">#&nbsp;${escapeHtml(sack.sack_id)}</p>
-<p class="note">
-  ${ui.t('zoneCut', { zone: escapeHtml(sack.zone), n: escapeHtml(String(sack.cut_number ?? '?')) })}<br>
-  ${ui.t('harvested', { d: escapeHtml(formatTagDate(ui.lang, sack.harvest_date)) })}${daysLabel}
-</p>
+<p class="sub">#&nbsp;${escapeHtml(sack.sack_id)}${sack.voided_at ? ` · ${ui.t('void')}` : ''}</p>
+
+<h2>${ui.t('secOrigin')}</h2>
+${origin}
+
+<h2>${ui.t('secBarn')}</h2>
+<div class="kv"><span>${drying}</span><strong>${lotSacks ? (lotSacks === 1 ? ui.t('lotTotalOne') : ui.t('lotTotal', { n: lotSacks })) : ''}</strong></div>
+
+<h2>${ui.t('secWeights')}</h2>
 ${weights}
+
+<h2>${ui.t('secNotes')}</h2>
+${noteList}
+<details class="batch">
+  <summary>${ui.t('addNote')}</summary>
+  <form method="POST" action="/api/harvest?action=sack_note&lang=${ui.lang}" onsubmit="this.querySelector('button').disabled=true">
+    <input type="hidden" name="sack_id" value="${escapeHtml(sack.sack_id)}">
+    <input name="note" maxlength="500" autocomplete="off" placeholder="${ui.t('notePlaceholder')}" required>
+    <button class="btn" type="submit">${ui.t('saveNote')}</button>
+  </form>
+</details>
+
 <div class="footer"><a href="/api/harvest?action=sack_label&lang=${ui.lang}&id=${encodeURIComponent(sack.sack_id)}">${ui.t('reprintTag')}</a></div>`;
 }
