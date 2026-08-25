@@ -81,3 +81,18 @@ export function cultivarsFor(zone) {
 export function isMultiCultivar(zone) {
   return cultivarsFor(zone).length > 1;
 }
+
+/**
+ * Does harvest track this zone at all?
+ *
+ * Driven by the data, not a hardcoded list: a zone with no cultivars here is
+ * not part of harvest. That covers the greenhouses (GH1/GH2), which are grown
+ * and irrigated but deliberately not counted at harvest (Koa 2026-08-25), and
+ * it will cover anything else dropped from the plan without a code change.
+ *
+ * The shared VALID_ZONES cannot be used for this — irrigation legitimately
+ * logs the greenhouses, so the zone is valid there and untracked here.
+ */
+export function isHarvestTracked(zone) {
+  return cultivarsFor(zone).length > 0;
+}
