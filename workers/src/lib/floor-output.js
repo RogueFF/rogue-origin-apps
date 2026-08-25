@@ -42,9 +42,24 @@ async function resolveCultivars(db, titles) {
 }
 
 /**
- * @returns { byCultivar: Map<name,{tops,smalls,hours}>, unresolved: string[] }
- * Titles with no alias are REPORTED, not guessed at — an unresolved strain
- * means that day's output silently belongs to nobody.
+ * Season off the front of a strain title: "2025 - Lifter / Sungrown" -> 2025.
+ *
+ * The year prefix is structural and safe to read directly, unlike the cultivar
+ * name, which needs the alias table. Keeping it is not optional: the floor
+ * spends part of 2026 trimming 2025 material, and a 2025 Lifter day whose
+ * output landed on 2026 Lifter bags would invent yield for a crop that had not
+ * been processed yet.
+ */
+function seasonFromStrainTitle(title) {
+  const m = String(title || '').match(/^\s*(\d{4})\s*-/);
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * @returns { byKey: Map<"season|cultivar",{season,cultivar,tops,smalls,hours}>,
+ *            unresolved: string[] }
+ * Keyed by season AND cultivar. Titles with no alias are REPORTED, not guessed
+ * at — an unresolved strain means that day's output belongs to nobody.
  */
 export async function floorOutputByCultivar(db, env, dayIso, apiBase) {
   const base = apiBase || 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api';
@@ -67,19 +82,23 @@ export async function floorOutputByCultivar(db, env, dayIso, apiBase) {
   }
 
   const names = await resolveCultivars(db, raw.map(r => r.title));
-  const byCultivar = new Map();
+  const byKey = new Map();
   const unresolved = new Set();
 
   for (const r of raw) {
     const name = names.get(String(r.title || '').toLowerCase());
-    if (!name) { if (r.title) unresolved.add(r.title); continue; }
-    const cur = byCultivar.get(name) || { tops: 0, smalls: 0, hours: 0 };
+    const season = seasonFromStrainTitle(r.title);
+    // A title without a resolvable cultivar OR without a year cannot be
+    // attributed to a bag. Report it rather than pick a season.
+    if (!name || !season) { if (r.title) unresolved.add(r.title); continue; }
+    const key = `${season}|${name}`;
+    const cur = byKey.get(key) || { season, cultivar: name, tops: 0, smalls: 0, hours: 0 };
     cur.tops += r.tops; cur.smalls += r.smalls; cur.hours += 1;
-    byCultivar.set(name, cur);
+    byKey.set(key, cur);
   }
-  for (const v of byCultivar.values()) {
+  for (const v of byKey.values()) {
     v.tops = Math.round(v.tops * 10) / 10;
     v.smalls = Math.round(v.smalls * 10) / 10;
   }
-  return { byCultivar, unresolved: [...unresolved] };
+  return { byKey, unresolved: [...unresolved] };
 }
