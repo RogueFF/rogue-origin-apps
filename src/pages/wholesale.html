@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/regular/style.css">
   <!-- Styles -->
   <link rel="stylesheet" href="../css/shared-base.css?h=c18beb73">
-  <link rel="stylesheet" href="../css/wholesale.css?h=e5141020">
+  <link rel="stylesheet" href="../css/wholesale.css?h=92b3d27b">
 </head>
 <body class="dark-mode">
   <!-- RO Home Button -->
@@ -195,7 +195,15 @@
           </div>
           <div class="field">
             <label for="f-nickname" data-i18n="nickname">Nickname</label>
-            <input id="f-nickname" type="text" placeholder="Bill's tops">
+            <!--
+              The nickname rides on unauthenticated reads: getOrders returns it,
+              and the queue widget and hourly-entry banner put it on screens the
+              whole floor sees. A first name or a shortened company is fine —
+              a full name is a buyer identity, which §9 keeps off open surfaces.
+            -->
+            <input id="f-nickname" type="text" placeholder="Bill's tops"
+                   aria-describedby="f-nickname-hint">
+            <small id="f-nickname-hint" class="field-hint" data-i18n="nickname_hint">First name or short label — no last names</small>
           </div>
           <div class="field">
             <label for="f-status" data-i18n="status">Status</label>
@@ -290,7 +298,7 @@
     "../js/shared/toast.js": "../js/shared/toast.js?h=2ff39553",
     "../js/wholesale/auth.js": "../js/wholesale/auth.js?h=ab61014e",
     "../js/wholesale/editor.js": "../js/wholesale/editor.js?h=192c9c42",
-    "../js/wholesale/index.js": "../js/wholesale/index.js?h=eec52275",
+    "../js/wholesale/index.js": "../js/wholesale/index.js?h=8c803b1a",
     "../js/wholesale/queue.js": "../js/wholesale/queue.js?h=c2d7ed86",
     "../js/wholesale/render.js": "../js/wholesale/render.js?h=c23704b8",
     "../js/wholesale/state.js": "../js/wholesale/state.js?h=05b152fe"
@@ -298,6 +306,6 @@
 }
 </script>
 <!-- module-hashes:end -->
-  <script type="module" src="../js/wholesale/index.js?h=eec52275"></script>
+  <script type="module" src="../js/wholesale/index.js?h=8c803b1a"></script>
 </body>
 </html>

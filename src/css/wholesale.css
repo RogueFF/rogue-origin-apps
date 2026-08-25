@@ -522,6 +522,15 @@
   gap: var(--space-md);
 }
 
+/* Sits under an input, quieter than the label but still readable in both
+   themes — tokens only, so it follows the theme rather than pinning a colour. */
+.field-hint {
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
 .field label {
   font-family: var(--font-mono);
   font-size: 0.6875rem;
