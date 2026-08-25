@@ -46,6 +46,7 @@ import { VALID_ZONES, normalizeZone } from '../lib/zones.js';
 import { cultivarsFor, isMultiCultivar } from '../lib/zone-cultivars.js';
 import { zoneFacts, plantCountFor, PLANTS_PER_ACRE, PLANT_SPACING_FT } from '../lib/zone-facts.js';
 import { cultivarCode, supersackSku } from '../lib/cultivar-codes.js';
+import { adjustSupersackCount, listSupersackVariants, variantTitle, harvestTypeForZone } from '../lib/supersack-inventory.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
 import { pickLang, t as translate, langCookie } from '../lib/i18n.js';
 
@@ -160,6 +161,8 @@ export async function handleHarvestD1(request, env, ctx) {
       return await getRollup(db, env, params);
     case 'provenance':
       return await getProvenance(db, env, params);
+    case 'reconcile':
+      return await getReconcile(db, env, params);
     case 'sack_alloc':
       return await handleSackAlloc(db, env, ctx, body);
     case 'sack_void':
@@ -675,6 +678,25 @@ async function handleSackWeigh(ui, db, env, ctx, body) {
     text: `⚖️ Sack *${sackId}* opened — ${tops} lb tops / ${smalls} lb smalls (${sack.cultivar || '?'} ${sack.zone} cut ${sack.cut_number})`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
+  // Opening a bag takes one off the Super Sack Inventory count. Deliberately
+  // AFTER the weights are committed and inside waitUntil: the measurement is
+  // the thing that cannot be lost, and it must not wait on — or fail because
+  // of — an external bookkeeping call. Test rows never touch real inventory.
+  if (!isTestMode(env)) {
+    ctx.waitUntil((async () => {
+      const r = await adjustSupersackCount(env, {
+        season: sack.season, cultivar: sack.cultivar, zone: sack.zone, delta: -1,
+        note: `[Harvest] ${sackId} opened — ${tops} lb tops / ${smalls} lb smalls (${sack.zone} cut ${sack.cut_number})`,
+      });
+      await execute(db, `
+        UPDATE harvest_sacks
+        SET shopify_synced_at = ?, shopify_sync_error = ?, shopify_variant_id = ?
+        WHERE sack_id = ?
+      `, [r.ok ? new Date().toISOString() : null, r.error, r.variantId, sackId]);
+      if (!r.ok) console.error(`[harvest][inventory] ${sackId}: ${r.error}`);
+    })().catch(e => console.error('[harvest][inventory]', e)));
+  }
+
   const updated = await getSackView(db, sackId);
   return renderPage(ui, `${ui.t('sack')} ${sackId}`, sackDetailBody(ui, updated, ui.t('weightsRecorded')));
 }
@@ -1072,6 +1094,76 @@ async function impliedDrivers(db, isTest, dayIso, rosteredAvg) {
       : 'No roster set for this day, so utilisation is unknown.',
     caveat: 'Cadence-derived: idle time between loads reads as fewer drivers needed.',
   };
+}
+
+// ─── RECONCILE ──────────────────────────────────────────
+//
+// Tagged-and-unopened bags vs the Shopify count, per cultivar-year.
+//
+// The two are independent measurements of one population: harvest_sacks counts
+// individuals we printed tags for, Shopify counts sacks on hand. They should
+// agree, and where they do not, the gap is the interesting number — that is the
+// standing raw-sack question (system ~1,318 vs whiteboard 1,232) made
+// answerable rather than argued about.
+//
+// Read-only. It never adjusts anything to make the numbers match.
+
+async function getReconcile(db, env, params) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const season = parseInt(params.season, 10) || getSeason();
+
+  const rows = await query(db, `
+    SELECT cultivar, zone,
+           COUNT(*) AS tagged,
+           SUM(CASE WHEN opened_at IS NULL THEN 1 ELSE 0 END) AS unopened,
+           SUM(CASE WHEN opened_at IS NOT NULL THEN 1 ELSE 0 END) AS opened,
+           SUM(CASE WHEN opened_at IS NOT NULL AND shopify_synced_at IS NULL THEN 1 ELSE 0 END) AS unsynced
+    FROM harvest_sacks
+    WHERE season = ? AND is_test = ? AND voided_at IS NULL
+    GROUP BY cultivar, CASE WHEN zone LIKE 'GH%' THEN 'GH' ELSE 'FIELD' END
+    ORDER BY cultivar
+  `, [season, isTest]);
+
+  let variants = [];
+  let variantsError = null;
+  try { variants = await listSupersackVariants(env); }
+  catch (e) { variantsError = String(e.message || e); }
+
+  const byTitle = new Map(variants.map(v =>
+    [String(v.title || '').trim().toLowerCase().replace(/\s+/g, ' '), v]));
+
+  const lines = rows.map(r => {
+    const title = variantTitle(season, r.cultivar, harvestTypeForZone(r.zone));
+    const v = byTitle.get(title.toLowerCase().replace(/\s+/g, ' '));
+    const shopify = v ? Number(v.quantity) || 0 : null;
+    return {
+      cultivar: r.cultivar,
+      variant_title: title,
+      variant_exists: !!v,
+      tagged: r.tagged,
+      unopened: r.unopened,
+      opened: r.opened,
+      opened_but_not_counted: r.unsynced,
+      shopify_on_hand: shopify,
+      // Our unopened bags should equal what Shopify says is on hand.
+      drift: shopify === null ? null : r.unopened - shopify,
+    };
+  });
+
+  return successResponse({
+    success: true,
+    season,
+    is_test: !!isTest,
+    generated_at: new Date().toISOString(),
+    variants_error: variantsError,
+    basis: 'Bags tagged and not yet opened, against the Super Sack Inventory count for the same cultivar-year.',
+    note: 'Read-only. Drift is reported, never corrected — a mismatch is a question about the physical count, not something to paper over.',
+    lines,
+    unmatched_variants: variants
+      .filter(v => String(v.title || '').startsWith(`${season} -`))
+      .filter(v => !lines.some(l => l.variant_title.toLowerCase() === String(v.title).toLowerCase()))
+      .map(v => ({ title: v.title, on_hand: Number(v.quantity) || 0 })),
+  });
 }
 
 // ─── PROVENANCE (downstream) ────────────────────────────
