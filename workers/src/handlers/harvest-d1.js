@@ -47,6 +47,7 @@ import { cultivarsFor, isMultiCultivar } from '../lib/zone-cultivars.js';
 import { zoneFacts, plantCountFor, PLANTS_PER_ACRE, PLANT_SPACING_FT } from '../lib/zone-facts.js';
 import { cultivarCode, supersackSku } from '../lib/cultivar-codes.js';
 import { adjustSupersackCount, listSupersackVariants, variantTitle, harvestTypeForZone } from '../lib/supersack-inventory.js';
+import { floorOutputByCultivar } from '../lib/floor-output.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
 import { pickLang, t as translate, langCookie } from '../lib/i18n.js';
 
@@ -100,7 +101,7 @@ const PUBLIC_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev';
 const HTML_ACTIONS = new Set([
   'enter', 'headcount', 'barn_intake', 'barn_log',
   'sack_print', 'sack_session_start', 'sack_session', 'sack_label', 'sack_weigh',
-  'crew', 'crew_set', 'sack_note', 'find',
+  'crew', 'crew_set', 'sack_note', 'find', 'sack_open',
 ]);
 
 export async function handleHarvestD1(request, env, ctx) {
@@ -139,6 +140,8 @@ export async function handleHarvestD1(request, env, ctx) {
           return await handleCrewSet(ui, db, env, ctx, body);
         case 'sack_note':
           return await handleSackNote(ui, db, env, ctx, body);
+        case 'sack_open':
+          return await handleSackOpen(ui, db, env, ctx, body);
         case 'find':
           return await handleSackFind(ui, db, env, request.method === 'POST' ? body : params);
       }
@@ -163,6 +166,8 @@ export async function handleHarvestD1(request, env, ctx) {
       return await getProvenance(db, env, params);
     case 'reconcile':
       return await getReconcile(db, env, params);
+    case 'allocate':
+      return await handleAllocate(db, env, params);
     case 'sack_alloc':
       return await handleSackAlloc(db, env, ctx, body);
     case 'sack_void':
@@ -859,6 +864,110 @@ async function handleSackFind(ui, db, env, input) {
     WHERE is_test = ? AND voided_at IS NULL ORDER BY serial DESC LIMIT 8
   `, [isTest]);
   return renderPage(ui, ui.t('findSack'), sackFindBody(ui, { recent, missing: id, typed: raw }), 404);
+}
+
+/**
+ * Mark a bag opened. One tap at bucking — the crew scans the tag anyway, and
+ * this replaces typing weights, which nobody does per bag: the floor reports a
+ * daily total per strain and each bag's share is allocated from it.
+ */
+async function handleSackOpen(ui, db, env, ctx, body) {
+  const sackId = String(body.sack_id || '').trim();
+  const view = await getSackView(db, sackId);
+  if (!view) throw createError('NOT_FOUND', ui.t('noSack', { id: sackId }));
+  const sack = view.sack;
+
+  if (sack.voided_at) throw createError('VALIDATION_ERROR', ui.t('noSack', { id: sackId }));
+  if (sack.opened_at) {
+    // Already open — say so rather than decrementing the count a second time.
+    return renderPage(ui, `${ui.t('sack')} ${sackId}`, sackDetailBody(ui, view, ui.t('alreadyOpen')));
+  }
+
+  await execute(db, `UPDATE harvest_sacks SET opened_at = datetime('now') WHERE sack_id = ?`, [sackId]);
+
+  ctx.waitUntil(sendTelegramMessage(env, {
+    chatId: env.TELEGRAM_TEST_CHAT_ID,
+    text: `📂 Abierta *${sackId}* — ${sack.cultivar || '?'} ${sack.zone} corte ${sack.cut_number}`,
+  }).catch(e => console.error('[harvest][telegram]', e)));
+
+  if (!isTestMode(env)) {
+    ctx.waitUntil((async () => {
+      const r = await adjustSupersackCount(env, {
+        season: sack.season, cultivar: sack.cultivar, zone: sack.zone, delta: -1,
+        note: `[Harvest] ${sackId} opened (${sack.zone} cut ${sack.cut_number})`,
+      });
+      await execute(db, `
+        UPDATE harvest_sacks SET shopify_synced_at = ?, shopify_sync_error = ? WHERE sack_id = ?
+      `, [r.ok ? new Date().toISOString() : null, r.error, sackId]);
+      if (!r.ok) console.error(`[harvest][inventory] open ${sackId}: ${r.error}`);
+    })().catch(e => console.error('[harvest][inventory]', e)));
+  }
+
+  const updated = await getSackView(db, sackId);
+  return renderPage(ui, `${ui.t('sack')} ${sackId}`, sackDetailBody(ui, updated, ui.t('sackOpened')));
+}
+
+/**
+ * Share the floor's daily output across the bags opened that day.
+ *
+ * Equal split, and exact rather than approximate: every supersack is filled TO
+ * 37 lb, so the bags really are the same size. Re-runnable — a day still in
+ * progress gets a partial share, and running it again once the day closes
+ * replaces it.
+ *
+ * Never touches a bag whose weights were actually measured.
+ */
+async function handleAllocate(db, env, params) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const day = String(params.date || '').substring(0, 10) || new Date().toISOString().substring(0, 10);
+
+  const rows = await query(db, `
+    SELECT cultivar, COUNT(*) AS n FROM harvest_sacks
+    WHERE date(opened_at) = ? AND is_test = ? AND voided_at IS NULL
+      AND (weights_source IS NULL OR weights_source = 'allocated')
+    GROUP BY cultivar
+  `, [day, isTest]);
+
+  if (!rows.length) {
+    return successResponse({ success: true, date: day, allocated: [], note: 'No bags opened that day.' });
+  }
+
+  let floor, unresolved;
+  try {
+    ({ byCultivar: floor, unresolved } = await floorOutputByCultivar(db, env, day));
+  } catch (e) {
+    throw createError('EXTERNAL_API_ERROR', `Could not read floor output for ${day}: ${e.message}`);
+  }
+
+  const done = [];
+  for (const r of rows) {
+    const f = floor.get(r.cultivar);
+    if (!f) {
+      done.push({ cultivar: r.cultivar, sacks: r.n, skipped: 'floor logged no output for this cultivar that day' });
+      continue;
+    }
+    const tops = Math.round((f.tops / r.n) * 100) / 100;
+    const smalls = Math.round((f.smalls / r.n) * 100) / 100;
+    await execute(db, `
+      UPDATE harvest_sacks
+      SET tops_lbs = ?, smalls_lbs = ?, weights_source = 'allocated', weights_allocated_at = datetime('now')
+      WHERE date(opened_at) = ? AND cultivar = ? AND is_test = ? AND voided_at IS NULL
+        AND (weights_source IS NULL OR weights_source = 'allocated')
+    `, [tops, smalls, day, r.cultivar, isTest]);
+    done.push({
+      cultivar: r.cultivar, sacks: r.n,
+      floor_tops: f.tops, floor_smalls: f.smalls,
+      per_sack_tops: tops, per_sack_smalls: smalls,
+    });
+  }
+
+  return successResponse({
+    success: true, date: day, is_test: !!isTest, allocated: done,
+    // Surfaced, not swallowed: a strain the alias table does not know means that
+    // day's output belongs to nobody and the bags stay unallocated.
+    unresolved_floor_strains: unresolved,
+    basis: 'Floor output for the day, split equally across the bags of that cultivar opened the same day. Equal is exact — every sack is filled to 37 lb.',
+  });
 }
 
 async function handleSackNote(ui, db, env, ctx, body) {
@@ -2068,19 +2177,24 @@ function sackDetailBody(ui, view, flash) {
       ac: acres.toFixed(3), plants: plants ? plants.toLocaleString('en-US') : '?' })) : '',
   ].join('');
 
-  const weights = opened
-    ? `<p class="note"><strong>${ui.t('weights', { tops: sack.tops_lbs, smalls: sack.smalls_lbs })}</strong><br>
-       <span class="hint">${ui.t('openedAt', { t: escapeHtml(sack.opened_at) })}</span></p>`
-    : `
+  const hasWeights = sack.tops_lbs !== null && sack.tops_lbs !== undefined;
+  const src = sack.weights_source === 'measured' ? ui.t('weightsMeasured') : ui.t('weightsAllocated');
+
+  // No weight entry here on purpose. Nobody weighs a bag's output on its own —
+  // the floor reports a daily total per strain and each bag's share is
+  // allocated from it, so this screen shows the result instead of asking.
+  const weights = !opened
+    ? `
 <p class="note">${ui.t('notOpened')}</p>
-<form method="POST" action="/api/harvest?action=sack_weigh&lang=${ui.lang}" onsubmit="this.querySelector('button').disabled=true">
+<form method="POST" action="/api/harvest?action=sack_open&lang=${ui.lang}" onsubmit="this.querySelector('button').disabled=true">
   <input type="hidden" name="sack_id" value="${escapeHtml(sack.sack_id)}">
-  <label for="tops_lbs">${ui.t('topsLbs')}</label>
-  <input id="tops_lbs" name="tops_lbs" type="number" step="0.01" min="0" max="500" inputmode="decimal" required>
-  <label for="smalls_lbs">${ui.t('smallsLbs')}</label>
-  <input id="smalls_lbs" name="smalls_lbs" type="number" step="0.01" min="0" max="500" inputmode="decimal" required>
-  <button class="btn" type="submit">${ui.t('recordWeights')}</button>
-</form>`;
+  <button class="bigbtn" type="submit">${ui.t('openSack')}</button>
+</form>`
+    : hasWeights
+      ? `<p class="note"><strong>${ui.t('weights', { tops: sack.tops_lbs, smalls: sack.smalls_lbs })}</strong><br>
+         <span class="hint">${src} · ${ui.t('openedAt', { t: escapeHtml(sack.opened_at) })}</span></p>`
+      : `<p class="note">${ui.t('weightsPending')}<br>
+         <span class="hint">${ui.t('openedAt', { t: escapeHtml(sack.opened_at) })}</span></p>`;
 
   const noteList = notes.length
     ? notes.map(n => `<div class="lotmeta">• ${escapeHtml(n.note)}
