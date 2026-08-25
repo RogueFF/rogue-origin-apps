@@ -921,11 +921,14 @@ async function handleAllocate(db, env, params) {
   const isTest = isTestMode(env) ? 1 : 0;
   const day = String(params.date || '').substring(0, 10) || new Date().toISOString().substring(0, 10);
 
+  // Grouped by season AND cultivar. The floor spends part of 2026 trimming
+  // 2025 material, so "Lifter" alone is not a lot — 2025 Lifter and 2026
+  // Lifter are different crops that happen to share a name.
   const rows = await query(db, `
-    SELECT cultivar, COUNT(*) AS n FROM harvest_sacks
+    SELECT season, cultivar, COUNT(*) AS n FROM harvest_sacks
     WHERE date(opened_at) = ? AND is_test = ? AND voided_at IS NULL
       AND (weights_source IS NULL OR weights_source = 'allocated')
-    GROUP BY cultivar
+    GROUP BY season, cultivar
   `, [day, isTest]);
 
   if (!rows.length) {
@@ -934,16 +937,19 @@ async function handleAllocate(db, env, params) {
 
   let floor, unresolved;
   try {
-    ({ byCultivar: floor, unresolved } = await floorOutputByCultivar(db, env, day));
+    ({ byKey: floor, unresolved } = await floorOutputByCultivar(db, env, day));
   } catch (e) {
     throw createError('EXTERNAL_API_ERROR', `Could not read floor output for ${day}: ${e.message}`);
   }
 
   const done = [];
   for (const r of rows) {
-    const f = floor.get(r.cultivar);
+    const f = floor.get(`${r.season}|${r.cultivar}`);
     if (!f) {
-      done.push({ cultivar: r.cultivar, sacks: r.n, skipped: 'floor logged no output for this cultivar that day' });
+      done.push({
+        season: r.season, cultivar: r.cultivar, sacks: r.n,
+        skipped: `floor logged no ${r.season} ${r.cultivar} that day`,
+      });
       continue;
     }
     const tops = Math.round((f.tops / r.n) * 100) / 100;
@@ -951,22 +957,30 @@ async function handleAllocate(db, env, params) {
     await execute(db, `
       UPDATE harvest_sacks
       SET tops_lbs = ?, smalls_lbs = ?, weights_source = 'allocated', weights_allocated_at = datetime('now')
-      WHERE date(opened_at) = ? AND cultivar = ? AND is_test = ? AND voided_at IS NULL
+      WHERE date(opened_at) = ? AND season = ? AND cultivar = ? AND is_test = ? AND voided_at IS NULL
         AND (weights_source IS NULL OR weights_source = 'allocated')
-    `, [tops, smalls, day, r.cultivar, isTest]);
+    `, [tops, smalls, day, r.season, r.cultivar, isTest]);
     done.push({
-      cultivar: r.cultivar, sacks: r.n,
+      season: r.season, cultivar: r.cultivar, sacks: r.n,
       floor_tops: f.tops, floor_smalls: f.smalls,
       per_sack_tops: tops, per_sack_smalls: smalls,
     });
   }
+
+  // Floor output with no tagged bags behind it. During the changeover that is
+  // the ordinary case — 2025 sacks are untagged — but it is worth seeing,
+  // because it is also what a missed scan looks like.
+  const untagged = [...floor.values()]
+    .filter(f => !rows.some(r => r.season === f.season && r.cultivar === f.cultivar))
+    .map(f => ({ season: f.season, cultivar: f.cultivar, floor_tops: f.tops, floor_smalls: f.smalls }));
 
   return successResponse({
     success: true, date: day, is_test: !!isTest, allocated: done,
     // Surfaced, not swallowed: a strain the alias table does not know means that
     // day's output belongs to nobody and the bags stay unallocated.
     unresolved_floor_strains: unresolved,
-    basis: 'Floor output for the day, split equally across the bags of that cultivar opened the same day. Equal is exact — every sack is filled to 37 lb.',
+    floor_output_without_tagged_bags: untagged,
+    basis: 'Floor output for the day, matched on SEASON and cultivar, split equally across the bags opened the same day. Equal is exact — every sack is filled to 37 lb.',
   });
 }
 
