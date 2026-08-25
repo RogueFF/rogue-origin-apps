@@ -37,6 +37,7 @@ import { summarizeInventory, assessCoverage } from '../lib/coverage.js';
 import { formatDatePT } from '../lib/production-utils.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
 import { deriveEvents } from '../lib/wholesale-notify.js';
+import { buildQueueBrief } from '../lib/queue-brief.js';
 
 const WRITE_ACTIONS = new Set(['saveOrder', 'deleteOrder', 'saveQueueOrder', 'setAccrualStart', 'importOrder', 'setNotify']);
 
@@ -75,6 +76,7 @@ export async function handleWholesaleD1(request, env) {
     case 'deleteOrder': return deleteOrder(db, body);
     case 'getRates': return getRates(db);
     case 'getQueue': return getQueue(db, params);
+    case 'getQueueBrief': return getQueueBrief(db, params);
     case 'getCoverage': return getCoverage(db);
     case 'getNotify': return getNotify(db);
     case 'setNotify': return setNotify(db, body);
@@ -782,6 +784,47 @@ async function getQueue(db, params) {
     // merely unallocated — they are unread, and without this they are invisible.
     unmatched: q.unmatched,
   });
+}
+
+/**
+ * The small read of the queue, for surfaces that are not the board: the Ops Hub
+ * widget and the hourly-entry banner.
+ *
+ * Same `computeQueue` the board uses — the derivation is never duplicated — but
+ * projected down to what fits on a phone. `getQueue`'s `unallocated` array
+ * alone was most of its payload and grows with the 60-day replay window.
+ *
+ * ALIASES ARE NOT FILTERED BY CROP YEAR HERE, deliberately. The client matches
+ * these against the options its own dropdown already holds, so a spelling from
+ * a year it is not showing simply matches nothing and costs a few bytes.
+ * Choosing a year on this side would mean hardcoding one — and the entry app
+ * already hardcodes 2025 in `loadCultivars()`, which is exactly the thing that
+ * will need finding at the crop-year rollover. Two of them would be worse.
+ * Newest spellings sort first so the current year's wins the top slot.
+ */
+async function getQueueBrief(db, params) {
+  const q = await computeQueue(db, params.crew);
+  const nameOf = new Map(q.names.map(n => [n.id, n.name]));
+
+  const [orders, aliases] = await Promise.all([
+    query(db, 'SELECT id, nickname, shopify_order_name FROM orders'),
+    query(db, 'SELECT alias, cultivar_id AS cultivarId FROM cultivar_aliases ORDER BY crop_year DESC, alias'),
+  ]);
+
+  const brief = buildQueueBrief({
+    blocks: q.blocks.map(b => ({
+      ...b,
+      passes: b.passes.map(p => ({ ...p, cultivarName: nameOf.get(p.cultivarId) || p.cultivarId })),
+    })),
+    orders: orders.map(o => ({
+      id: o.id,
+      nickname: o.nickname,
+      shopifyOrderName: o.shopify_order_name,
+    })),
+    aliases,
+  });
+
+  return successResponse({ success: true, ...brief });
 }
 
 /**

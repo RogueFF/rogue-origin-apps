@@ -7,6 +7,7 @@ import { makeApi } from '../shared/api.js';
 
 const productionApi = makeApi('production');
 const poolApi = makeApi('pool');
+const wholesaleApi = makeApi('wholesale');
 
 // Default time slots (will be dynamically updated based on shift start)
 let TIME_SLOTS = [
@@ -129,6 +130,12 @@ const LABELS = {
     tzero: 'T-Zero',
     qcperson: 'QC',
     cultivar: 'Cultivar',
+    queueNow: 'Now trimming',
+    queueNext: 'Next up',
+    queueClear: 'Queue is clear',
+    queueInQueue: 'in queue',
+    queueAll: 'all',
+    queueReady: 'ready',
     tops: 'Tops (lbs)',
     smalls: 'Smalls (lbs)',
     qcNotes: 'QC Notes',
@@ -227,6 +234,12 @@ const LABELS = {
     tzero: 'T-Zero',
     qcperson: 'QC',
     cultivar: 'Cultivar',
+    queueNow: 'Podando ahora',
+    queueNext: 'Siguiente',
+    queueClear: 'No hay pedidos en cola',
+    queueInQueue: 'en cola',
+    queueAll: 'todos',
+    queueReady: 'listo',
     tops: 'Tops (lbs)',
     smalls: 'Smalls (lbs)',
     qcNotes: 'Notas QC',
@@ -318,6 +331,8 @@ let currentDate = formatDateLocal(new Date());
 let currentSlotIndex = -1;
 let dayData = {};
 let cultivarOptions = [];
+let queueAliases = [];
+let queueBrief = null;
 let saveTimeout = null;
 let targetRate = 0.9; // Default, will be updated from API
 let dailyTargetFromBackend = 0; // Backend-calculated daily target (matches scoreboard)
@@ -991,6 +1006,9 @@ function openEditor(slotIndex) {
 
   // Show editor
   showView('editor');
+
+  // Not awaited — the editor must open at once whether or not the board answers.
+  loadQueueBrief();
 }
 
 function populateForm(slot) {
@@ -1675,19 +1693,122 @@ async function loadCultivars() {
 function populateCultivarSelects() {
   const selects = [document.getElementById('cultivar1'), document.getElementById('cultivar2')];
 
+  // Cultivars the board is waiting on, in queue order, spelled the way this
+  // dropdown spells them. REORDER ONLY: an alias with no matching option is
+  // dropped, because offering a string the production API does not accept
+  // would only produce a 400 on save.
+  const queued = queueAliases.filter((a) => cultivarOptions.includes(a));
+  const rest = cultivarOptions.filter((c) => !queued.includes(c));
+
   selects.forEach((select) => {
     const currentValue = select.value;
     select.innerHTML = '<option value="">Select...</option>';
 
-    cultivarOptions.forEach((cultivar) => {
+    const addTo = (parent, cultivar) => {
       const option = document.createElement('option');
       option.value = cultivar;
       option.textContent = cultivar;
-      select.appendChild(option);
-    });
+      parent.appendChild(option);
+    };
 
+    if (queued.length) {
+      // The group labels are load-bearing, not decoration. Nothing else on this
+      // screen says the list has been reordered, and a silently reordered list
+      // makes tapping the queue's guess easier rather than more deliberate.
+      const inQueue = document.createElement('optgroup');
+      inQueue.label = `— ${tr('queueInQueue')} —`;
+      queued.forEach((c) => addTo(inQueue, c));
+      select.appendChild(inQueue);
+
+      const all = document.createElement('optgroup');
+      all.label = `— ${tr('queueAll')} —`;
+      rest.forEach((c) => addTo(all, c));
+      select.appendChild(all);
+    } else {
+      rest.forEach((c) => addTo(select, c));
+    }
+
+    // Never write a value. The queue is a prediction; the burn-down reads these
+    // entries back, so a prefilled field would let it feed on its own guess.
     select.value = currentValue;
   });
+}
+
+/** Short-hand for a label in the active language. */
+const tr = (key) => (LABELS[currentLang] && LABELS[currentLang][key]) || key;
+
+/** One line of the banner: a tag, then what is being trimmed. */
+function bannerRow(tag, spot) {
+  const who = spot.nickname || spot.orderRef;
+  return `
+    <div class="queue-banner-row">
+      <span class="queue-banner-tag">${escapeHtml(tag)}</span>
+      <span class="queue-banner-main">${escapeHtml(spot.cultivarName || '—')}${
+  spot.form ? ` · ${escapeHtml(spot.form)}` : ''}${
+  who ? ` <span class="queue-banner-who">${escapeHtml(who)}</span>` : ''}</span>
+    </div>`;
+}
+
+/**
+ * What the board says is being trimmed, and what follows it.
+ *
+ * Strictly read-only. It never touches the form, and it deliberately says
+ * nothing when the cultivar being entered is not the one it names — the floor
+ * is right and the queue is what is out of date, but surfacing that was
+ * declined as noise on this screen.
+ */
+function renderQueueBanner() {
+  const el = document.getElementById('queue-banner');
+  if (!el) return;
+
+  if (!queueBrief || !queueBrief.headline) {
+    el.hidden = true;
+    return;
+  }
+
+  const { headline, next } = queueBrief;
+  if (headline.mode === 'clear') {
+    el.innerHTML = `<div class="queue-banner-row"><span class="queue-banner-clear">${
+      escapeHtml(tr('queueClear'))}</span></div>`;
+    el.hidden = false;
+    return;
+  }
+
+  const pct = Math.max(0, Math.min(1, Number(headline.pct) || 0));
+  const done = Math.round((Number(headline.doneLbs) || 0) * 10) / 10;
+  const total = Math.round((Number(headline.totalLbs) || 0) * 10) / 10;
+
+  el.innerHTML = [
+    bannerRow(tr(headline.mode === 'now' ? 'queueNow' : 'queueNext'), headline),
+    `<div class="queue-banner-meter">
+       <div class="queue-banner-bar"><div class="queue-banner-fill" style="width:${(pct * 100).toFixed(1)}%"></div></div>
+       <span class="queue-banner-lbs">${done}/${total} lb</span>
+     </div>`,
+    next ? bannerRow(tr('queueNext'), next) : '',
+  ].join('');
+  el.hidden = false;
+}
+
+/**
+ * Read the queue for this screen.
+ *
+ * Fetched when the editor opens and on every slot change — not on a timer. A
+ * failure is silent by design: the banner simply does not appear, and the
+ * dropdown falls back to its plain alphabetical list. Nothing about entering
+ * production depends on the board being reachable.
+ */
+async function loadQueueBrief() {
+  try {
+    const brief = await wholesaleApi.get('getQueueBrief');
+    queueBrief = brief || null;
+    queueAliases = Array.isArray(brief?.queueAliases) ? brief.queueAliases : [];
+  } catch (error) {
+    console.error('Queue brief unavailable:', error);
+    queueBrief = null;
+    queueAliases = [];
+  }
+  renderQueueBanner();
+  populateCultivarSelects();
 }
 
 function updateTimelineSummary() {

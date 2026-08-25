@@ -4487,3 +4487,76 @@ body.sidebar-open .sidebar-backdrop {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* ── Production Queue widget ──────────────────────────────────────────────
+   Reads the wholesale board's burn-down. Colours come from tokens only — the
+   older .integration-stat-label hardcodes rgba(255,255,255,.4), which is
+   invisible on the cream light theme; not repeating that here. */
+.integration-icon.queue { background: rgba(102, 137, 113, 0.12); color: var(--ro-green); }
+.widget-item[data-widget-id="widget-queue"] .queue-card { border-bottom: 2px solid rgba(102, 137, 113, 0.3); }
+
+.queue-list { display: flex; flex-direction: column; gap: 10px; }
+
+.queue-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-light);
+  background: var(--surface-alt, transparent);
+}
+.queue-row.front { border-color: var(--border-strong); }
+
+.queue-row-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.queue-row-title {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.queue-marker { color: var(--ro-green); }
+.queue-row-pct { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); flex-shrink: 0; }
+
+.queue-row-cultivar {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-bar {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--border-light);
+  overflow: hidden;
+}
+.queue-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--ro-green);
+  transition: width 0.4s var(--ease-smooth, ease);
+}
+
+.queue-row-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.queue-empty,
+.queue-more {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 6px 0;
+}

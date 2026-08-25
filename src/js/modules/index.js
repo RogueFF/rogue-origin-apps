@@ -202,6 +202,7 @@ import {
   toggleKPIExpand,
   updateKPIValues,
   updateDataWidgets,
+  renderQueueWidget,
   getExpandedKPI,
   resetExpandedKPI
 } from './widgets.js';
@@ -361,6 +362,10 @@ function renderAll() {
     );
     updateDataWidgets(data, periodTotals);
   }
+
+  // Reads a different API than everything above, so it fetches for itself and
+  // is deliberately not awaited — the queue must never hold up the render.
+  renderQueueWidget();
 
   // Update hero section
   renderHeroSection(data);
