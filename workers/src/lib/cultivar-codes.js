@@ -1,62 +1,51 @@
 /**
- * Short code per cultivar, used in printed bag numbers: 26-SL-1, 26-L-1.
+ * Cultivar code used in printed bag numbers — 26-SLIFT-1.
  *
- * Bag numbers restart at 1 for each cultivar (Koa 2026-08-24), so the number
- * alone is NOT unique — 26-SL-1 and 26-L-1 are different bags. The code is what
- * keeps them apart, which makes collisions a correctness bug, not a cosmetic
- * one: two cultivars sharing a code would share a sequence and their counts
- * would both be wrong.
+ * THE CODE IS cultivars.sku_prefix. Not a scheme of our own.
  *
- * Plain initials collide on this list (Lemon/Lifter, Sauciere/Snickerdoodle,
- * Spruce Dough/Strawberry Doughnuts), so codes extend until unique. Sour Lifter
- * and Lifter are pinned to SL and L: they are the main crop and will carry most
- * of the tags.
+ * That table already defines the universal cultivar code for this farm: it is
+ * what builds Shopify SKUs (SLIFT-SG-SUPRSAK-2026, PFOG-SG-SUPRSAK-2025) and
+ * what the wholesale board joins orders on. Using anything else here would put
+ * a second, competing set of cultivar codes into circulation — which is exactly
+ * what an earlier version of this file did, inventing SL for Sour Lifter when
+ * the farm has said SLIFT for years.
  *
- * APPEND-ONLY. Changing an existing code invalidates every tag already printed
- * with it. Add new cultivars; never edit an existing line.
+ * So there is no map in this file. It reads the database, because the database
+ * is the source of truth and a copy here would drift from it.
+ *
+ * Trial cultivars that had never been sold were registered in `cultivars` with
+ * active=0 (2026-08-24): they get a real prefix for harvest without appearing
+ * in the wholesale order picker.
  */
-
-export const CULTIVAR_CODES = {
-  "Animal Muffins": "AM",
-  "Blue Pineapple Quik": "BPQ",
-  "Demi Glaze": "DG",
-  "GMO Belly": "GB",
-  "Key Lime CBG": "KLC",
-  "Lemon": "LEM",
-  "Lifter": "L",
-  "Limey Lifter": "LL",
-  "Mandarin Chocolate": "MC",
-  "Mountain Apple": "MA",
-  "Orange Fritter": "OF",
-  "Orange Pineapple Quik": "OPQ",
-  "Platinum": "P",
-  "Platinum M A4": "PMA",
-  "Puff Pastries": "PP",
-  "Purple Snow": "PS",
-  "Rainbow Cake": "RC",
-  "Rainbow GMO Quik": "RGQ",
-  "Rocket Sauce": "RS",
-  "Sauciere": "S",
-  "Snickerdoodle": "SNI",
-  "Sour Lifter": "SL",
-  "Spruce Dough": "SD",
-  "Strawberry Cream": "SC",
-  "Strawberry Doughnuts": "STD",
-  "Strawberry Fritter": "SF",
-  "Strawberry Sauce": "SS",
-  "Tahitian": "T",
-};
 
 /**
- * Code for a cultivar. Unknown cultivars fall back to initials so a new one
- * still prints, but it is logged: an unmapped name risks colliding with a
- * mapped code and silently sharing its sequence.
+ * Look up a cultivar's SKU prefix.
+ *
+ * Refuses rather than guesses. A derived code would look plausible, print onto
+ * physical tags, and silently disagree with the SKU the same cultivar uses
+ * everywhere else — and bag numbers restart per cultivar, so a wrong code also
+ * means a wrong sequence. Better to fail loudly while it is still on screen.
  */
-export function cultivarCode(cultivar) {
+export async function cultivarCode(db, cultivar) {
   const name = String(cultivar || '').trim();
-  if (CULTIVAR_CODES[name]) return CULTIVAR_CODES[name];
-  const derived = (name.match(/[A-Za-z0-9]+/g) || [])
-    .map(w => w[0]).join('').toUpperCase() || 'XX';
-  console.warn(`[harvest] cultivar "${name}" is not in CULTIVAR_CODES — using "${derived}". Add it to src/lib/cultivar-codes.js.`);
-  return derived;
+  if (!name) throw new Error('cultivarCode: no cultivar given');
+
+  const row = await db
+    .prepare(`SELECT sku_prefix FROM cultivars WHERE name = ? COLLATE NOCASE`)
+    .bind(name)
+    .first();
+
+  if (!row || !row.sku_prefix) {
+    throw new Error(
+      `Cultivar "${name}" has no sku_prefix in the cultivars table. ` +
+      `Add it (active=0 if it is not sold yet) before tagging bags — the prefix ` +
+      `is what makes the bag number unique and what links it to the Shopify SKU.`
+    );
+  }
+  return String(row.sku_prefix).trim().toUpperCase();
+}
+
+/** Supersack SKU for a cultivar+season, e.g. SLIFT-SG-SUPRSAK-2026. */
+export function supersackSku(prefix, season, harvestType = 'SG') {
+  return `${prefix}-${harvestType}-SUPRSAK-${season}`;
 }
