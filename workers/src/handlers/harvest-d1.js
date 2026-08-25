@@ -598,6 +598,26 @@ async function handleSackAlloc(db, env, ctx, body) {
 
   const stats = await getLotTagStats(db, sessionId, isTest);
 
+  // A printed tag means a sack now exists, so the count goes up by one each.
+  // One call for the batch, not one per tag. After the rows are committed and
+  // inside waitUntil: printing must not wait on, or fail because of, an
+  // external call — the crew is standing at the printer.
+  if (!isTestMode(env)) {
+    ctx.waitUntil((async () => {
+      const r = await adjustSupersackCount(env, {
+        season, cultivar, zone: lot.zone, delta: qty,
+        note: `[Harvest] ${qty} tag${qty === 1 ? '' : 's'} printed — ${ids[0]}${qty > 1 ? `–${ids[ids.length - 1]}` : ''} (${lot.zone} cut ${lot.cut_number})`,
+      });
+      const ph = ids.map(() => '?').join(',');
+      await execute(db, `
+        UPDATE harvest_sacks
+        SET shopify_added_at = ?, shopify_add_error = ?, shopify_variant_id = COALESCE(shopify_variant_id, ?)
+        WHERE sack_id IN (${ph})
+      `, [r.ok ? new Date().toISOString() : null, r.error, r.variantId, ...ids]);
+      if (!r.ok) console.error(`[harvest][inventory] add ${ids.length}: ${r.error}`);
+    })().catch(e => console.error('[harvest][inventory]', e)));
+  }
+
   ctx.waitUntil(sendTelegramMessage(env, {
     chatId: env.TELEGRAM_TEST_CHAT_ID,
     text: `🏷️ ${qty} sack tag${qty === 1 ? '' : 's'} — *${cultivar}* ${lot.zone} cut ${lot.cut_number} (${ids[0]}${qty > 1 ? `–${ids[ids.length - 1]}` : ''}). ${stats.printed} for this lot.`,
@@ -627,6 +647,22 @@ async function handleSackVoid(db, env, ctx, body) {
     chatId: env.TELEGRAM_TEST_CHAT_ID,
     text: `🚫 Voided tag *${sackId}* (${sack.cultivar || '?'} ${sack.zone}). ${stats.printed} for this lot.`,
   }).catch(e => console.error('[harvest][telegram]', e)));
+
+  // Take back the +1 that printing added. A voided tag is a retired number with
+  // no sack behind it; leaving the increment would be phantom inventory. Only
+  // undo it if the add actually landed.
+  if (!isTestMode(env) && sack.shopify_added_at) {
+    ctx.waitUntil((async () => {
+      const r = await adjustSupersackCount(env, {
+        season: sack.season, cultivar: sack.cultivar, zone: sack.zone, delta: -1,
+        note: `[Harvest] ${sackId} voided — tag retired with no sack`,
+      });
+      await execute(db, `
+        UPDATE harvest_sacks SET shopify_added_at = NULL, shopify_add_error = ? WHERE sack_id = ?
+      `, [r.ok ? null : `void rollback failed: ${r.error}`, sackId]);
+      if (!r.ok) console.error(`[harvest][inventory] void ${sackId}: ${r.error}`);
+    })().catch(e => console.error('[harvest][inventory]', e)));
+  }
 
   return successResponse({ success: true, voided: sackId, printed: stats.printed, last_sack_id: stats.lastSackId });
 }
