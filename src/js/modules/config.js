@@ -27,6 +27,7 @@ export const widgetDefinitions = [
   { id: 'scoreboard', label: 'Live Scoreboard', icon: 'ph-duotone ph-gauge', color: 'gold', default: false, visible: false },
   { id: 'bags', label: '5KG Bag Timer', icon: 'ph-duotone ph-timer', color: 'sungrown', default: false, visible: false },
   { id: 'sop', label: 'SOP Manager', icon: 'ph-duotone ph-book-open-text', color: 'indoor', default: false, visible: false },
+  { id: 'queue', label: 'Production Queue', icon: 'ph-duotone ph-list-numbers', color: 'green', default: true, visible: true },
   { id: 'current', label: 'Current Production', icon: 'ph-duotone ph-pulse', color: 'green', default: true, visible: true },
   { id: 'hourlyChart', label: 'Hourly Chart', icon: 'ph-duotone ph-chart-bar', color: 'indoor', default: true, visible: true },
   { id: 'rateChart', label: 'Rate Chart', icon: 'ph-duotone ph-trend-up', color: 'indoor', default: true, visible: true },

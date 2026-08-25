@@ -6,6 +6,7 @@
 import { kpiDefinitions, widgetDefinitions } from './config.js';
 import { getGrid, getData } from './state.js';
 import { saveSettings } from './settings.js';
+import { apiGet } from '../shared/api.js';
 
 // Track currently expanded KPI for accordion behavior
 let expandedKPI = null;
@@ -734,6 +735,90 @@ function renderPeriodSummary(daily, totals, fallbackActive) {
  * @param {Object} data - Full dashboard payload
  * @param {Object} totals - Period totals from getPeriodTotals()
  */
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g,
+  (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/**
+ * 'Mon 11:41 AM' from the queue's { date, minutes }.
+ *
+ * Built from the parts rather than parsed — `new Date('2026-08-24')` is UTC
+ * midnight, which reads as the day before anywhere west of Greenwich, and this
+ * whole board is Pacific.
+ */
+function readyAt(finish) {
+  if (!finish || !finish.date) return '';
+  const [y, m, d] = String(finish.date).split('-').map(Number);
+  const dow = DOW[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  const mins = num(finish.minutes);
+  const h24 = Math.floor(mins / 60);
+  const h = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${dow} ${h}:${String(mins % 60).padStart(2, '0')} ${h24 >= 12 ? 'PM' : 'AM'}`;
+}
+
+const queueLbs = (n) => (Math.round(num(n) * 10) / 10).toLocaleString('en-US');
+
+function queueRow(b, isFront) {
+  const pct = Math.max(0, Math.min(1, num(b.pct)));
+  const title = b.nickname
+    ? `${escapeHtml(b.nickname)}${b.orderRef ? ` · ${escapeHtml(b.orderRef)}` : ''}`
+    : escapeHtml(b.orderRef || b.orderId || 'order');
+
+  return `
+    <div class="queue-row${isFront ? ' front' : ''}" role="listitem">
+      <div class="queue-row-head">
+        <span class="queue-row-title">${isFront ? '<span class="queue-marker" aria-hidden="true">▶</span> ' : ''}${title}</span>
+        <span class="queue-row-pct">${Math.round(pct * 100)}%</span>
+      </div>
+      <div class="queue-row-cultivar">${escapeHtml(b.cultivarName || '—')}${b.form ? ` · ${escapeHtml(b.form)}` : ''}</div>
+      <div class="queue-bar" role="img" aria-label="${Math.round(pct * 100)} percent trimmed">
+        <div class="queue-bar-fill" style="width:${(pct * 100).toFixed(1)}%"></div>
+      </div>
+      <div class="queue-row-foot">
+        <span>${queueLbs(b.doneLbs)}/${queueLbs(b.totalLbs)} lb</span>
+        <span>${b.finish ? `ready ${readyAt(b.finish)}` : ''}</span>
+      </div>
+    </div>`;
+}
+
+/**
+ * The production queue widget.
+ *
+ * Reads `/api/wholesale`, which is NOT the payload the rest of the dashboard
+ * runs on — so it fetches for itself and swallows its own failures. A wholesale
+ * outage must render an error inside this one card, never take down the
+ * dashboard refresh that called it.
+ */
+export async function renderQueueWidget() {
+  const body = document.getElementById('queueWidgetBody');
+  if (!body) return;
+
+  let brief;
+  try {
+    brief = await apiGet('wholesale', 'getQueueBrief');
+  } catch (error) {
+    console.error('Queue widget failed to load:', error);
+    body.innerHTML = '<div class="queue-empty">Queue unavailable</div>';
+    return;
+  }
+
+  const rows = Array.isArray(brief?.blocks) ? brief.blocks : [];
+  if (!rows.length) {
+    body.innerHTML = '<div class="queue-empty">Queue is clear — nothing scheduled</div>';
+    return;
+  }
+
+  // `blocksTotal` is the uncapped count from the server. Counting `rows` here
+  // would always report the cap and the overflow line would never appear.
+  const hidden = num(brief.blocksTotal) - rows.length;
+  const more = hidden > 0
+    ? `<div class="queue-more">+${hidden} more on the board</div>`
+    : '';
+
+  body.innerHTML = rows.map((b, i) => queueRow(b, i === 0)).join('') + more;
+}
+
 export function updateDataWidgets(data, totals) {
   try {
     if (!data || !totals) return;

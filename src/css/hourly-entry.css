@@ -3703,3 +3703,69 @@ input[type="number"] {
   background: rgba(80, 80, 80, 0.1) !important;
   transform: none !important;
 }
+
+/* ── Production queue banner ──────────────────────────────────────────────
+   What the board says is being trimmed, at the top of the editor. Read-only:
+   no controls, no focusable children, nothing that writes to the form. */
+.queue-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-light);
+  border-left: 3px solid var(--ro-green);
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt, transparent);
+}
+.queue-banner[hidden] { display: none; }
+
+.queue-banner-row { display: flex; align-items: baseline; gap: 8px; }
+
+.queue-banner-tag {
+  flex-shrink: 0;
+  min-width: 3.5em;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.queue-banner-main {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.queue-banner-who { font-weight: 400; color: var(--text-muted); }
+
+.queue-banner-meter { display: flex; align-items: center; gap: 8px; }
+.queue-banner-bar {
+  flex: 1;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--border-light);
+  overflow: hidden;
+}
+.queue-banner-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--ro-green);
+  transition: width 0.4s ease;
+}
+.queue-banner-lbs {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.queue-banner-clear {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--text-muted);
+}
