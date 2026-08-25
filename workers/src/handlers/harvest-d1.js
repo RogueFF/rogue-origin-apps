@@ -45,7 +45,7 @@ import { createError, formatError } from '../lib/errors.js';
 import { VALID_ZONES, normalizeZone } from '../lib/zones.js';
 import { cultivarsFor, isMultiCultivar } from '../lib/zone-cultivars.js';
 import { zoneFacts, plantCountFor, PLANTS_PER_ACRE, PLANT_SPACING_FT } from '../lib/zone-facts.js';
-import { cultivarCode } from '../lib/cultivar-codes.js';
+import { cultivarCode, supersackSku } from '../lib/cultivar-codes.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
 import { pickLang, t as translate, langCookie } from '../lib/i18n.js';
 
@@ -563,7 +563,14 @@ async function handleSackAlloc(db, env, ctx, body) {
   // UNIQUE(season, cultivar_code, serial) index means two simultaneous
   // allocations fail loudly rather than silently issuing two physical tags
   // carrying the same number.
-  const code = cultivarCode(cultivar);
+  let code;
+  try {
+    code = await cultivarCode(db, cultivar);
+  } catch (e) {
+    // Surfaced to the operator rather than swallowed: a wrong code prints onto
+    // physical tags and puts the bag on the wrong per-cultivar sequence.
+    throw createError('VALIDATION_ERROR', e.message);
+  }
   const row = await queryOne(db, `
     SELECT COALESCE(MAX(serial), 0) AS max_serial FROM harvest_sacks
     WHERE season = ? AND cultivar_code = ?
@@ -578,9 +585,10 @@ async function handleSackAlloc(db, env, ctx, body) {
     ids.push(sackId);
     statements.push({
       sql: `INSERT INTO harvest_sacks
-              (sack_id, season, serial, cultivar_code, zone, cultivar, cut_number, harvest_date, zone_session_id, is_test)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      params: [sackId, season, serial, code, lot.zone, cultivar, lot.cut_number, harvestDate, lot.id, isTest],
+              (sack_id, season, serial, cultivar_code, sku, zone, cultivar, cut_number, harvest_date, zone_session_id, is_test)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [sackId, season, serial, code, supersackSku(code, season),
+               lot.zone, cultivar, lot.cut_number, harvestDate, lot.id, isTest],
     });
   }
   await transaction(db, statements);
