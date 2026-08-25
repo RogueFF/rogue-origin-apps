@@ -43,7 +43,7 @@ import { query, queryOne, execute, transaction } from '../lib/db.js';
 import { successResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
 import { createError, formatError } from '../lib/errors.js';
 import { VALID_ZONES, normalizeZone } from '../lib/zones.js';
-import { cultivarsFor, isMultiCultivar } from '../lib/zone-cultivars.js';
+import { cultivarsFor, isMultiCultivar, isHarvestTracked } from '../lib/zone-cultivars.js';
 import { zoneFacts, plantCountFor, PLANTS_PER_ACRE, PLANT_SPACING_FT } from '../lib/zone-facts.js';
 import { cultivarCode, supersackSku } from '../lib/cultivar-codes.js';
 import { adjustSupersackCount, listSupersackVariants, variantTitle, harvestTypeForZone } from '../lib/supersack-inventory.js';
@@ -193,6 +193,13 @@ export async function handleZoneScan(request, env, ctx) {
       throw createError('VALIDATION_ERROR', ui.t('unknownZone', { z: zone ?? '' }));
     }
 
+    // Refuse before touching state. Opening a session here would close whatever
+    // field zone is actually being cut, corrupting the timeline and
+    // mis-attributing barn loads — a stray greenhouse scan must be inert.
+    if (!isHarvestTracked(zone)) {
+      return errorPage(ui, ui.t('zoneNotTracked', { zone }), 404);
+    }
+
     const params = { zone };
     const picked = url.searchParams.get('cultivar');
     if (url.searchParams.get('test_cut')) params.test_cut = url.searchParams.get('test_cut');
@@ -278,6 +285,10 @@ async function handleEnter(ui, db, env, ctx, params) {
   const zone = normalizeZone(params.zone);
   if (!zone || !VALID_ZONES.has(zone)) {
     throw createError('VALIDATION_ERROR', ui.t('unknownZone', { z: params.zone ?? '' }));
+  }
+
+  if (!isHarvestTracked(zone)) {
+    throw createError('NOT_FOUND', ui.t('zoneNotTracked', { zone }));
   }
 
   const isTest = isTestMode(env) ? 1 : 0;
@@ -399,6 +410,9 @@ async function handleBarnLog(ui, db, env, ctx, body) {
   const zone = normalizeZone(body.zone);
   if (!zone || !VALID_ZONES.has(zone)) {
     throw createError('VALIDATION_ERROR', ui.t('unknownZone', { z: body.zone ?? '' }));
+  }
+  if (!isHarvestTracked(zone)) {
+    throw createError('VALIDATION_ERROR', ui.t('zoneNotTracked', { zone }));
   }
   const bins = parseInt(body.bins, 10);
   if (!Number.isInteger(bins) || bins < 1 || bins > 500) {
@@ -1733,7 +1747,9 @@ function headcountBody(ui, { zone, cutNumber, sessionId, count }) {
 }
 
 function barnIntakeFormBody(ui, active) {
-  const options = [...VALID_ZONES].sort().map(z =>
+  // Only zones harvest actually counts — offering GH here would let a load be
+  // logged against a zone no bag will ever be tagged from.
+  const options = [...VALID_ZONES].filter(isHarvestTracked).sort().map(z =>
     `<option value="${z}" ${active && active.zone === z ? 'selected' : ''}>${z}</option>`
   ).join('');
   const activeNote = active
