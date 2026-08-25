@@ -7,6 +7,21 @@
  */
 
 import { jsonResponse, errorResponse } from '../lib/response.js';
+import { requireAuth } from '../lib/auth.js';
+
+/**
+ * Writes require the operator password; reads do not.
+ *
+ * Until 2026-08-25 this handler was the only one in the tree that never
+ * imported requireAuth, so an anonymous caller could push 250 MB into the
+ * bucket and get back a URL on our own domain. The password travels in the
+ * Authorization header rather than the body because these requests carry
+ * multipart form data and raw part bytes — there is no JSON body to put it in.
+ *
+ * `serve` and `list` stay open: 142 SOP images render from them today, and
+ * gating reads is a separate decision with a separate blast radius.
+ */
+const WRITE_ACTIONS = new Set(['upload', 'create-upload-url', 'upload-part', 'confirm-upload']);
 
 const ALLOWED_TYPES = {
   'image/jpeg': 'jpg',
@@ -37,6 +52,11 @@ function sanitizeFolder(s) {
 export async function handleMediaR2(request, env) {
   const url = new URL(request.url);
   const action = url.searchParams.get('action');
+
+  // Before any body is read and before R2 is touched.
+  if (WRITE_ACTIONS.has(action)) {
+    requireAuth(request, {}, env, `media-${action}`);
+  }
 
   if (action === 'upload' && request.method === 'POST') {
     return handleUpload(request, env);
