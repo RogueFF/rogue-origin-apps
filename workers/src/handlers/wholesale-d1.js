@@ -1295,9 +1295,11 @@ export async function runWholesaleCron(env) {
   const silent = events.filter(e => !e.text);
 
   let sent = 0;
+  let undelivered = 0;
   for (const e of speak) {
+    let delivered;
     try {
-      await sendTelegramMessage(env, { chatId: env.TELEGRAM_CASEY_CHAT_ID, text: e.text });
+      delivered = await sendTelegramMessage(env, { chatId: env.TELEGRAM_CASEY_CHAT_ID, text: e.text });
     } catch (err) {
       // ONE BAD MESSAGE MUST NOT WEDGE THE REST. Recording used to happen once,
       // after the whole loop, so a single message Telegram refused meant nothing
@@ -1308,8 +1310,22 @@ export async function runWholesaleCron(env) {
       console.error(`[Cron] Telegram send failed for ${e.rule}:${e.key}: ${err.message}`);
       continue;
     }
+
+    // NOT SENT IS NOT SAID. The ledger exists so the board never repeats
+    // itself, so writing to it is a promise that somebody actually saw the
+    // message. sendTelegramMessage returns false when the token or chat id is
+    // unset — and this loop used to read that quiet return as success and burn
+    // the event. With TELEGRAM_CASEY_CHAT_ID never set, 30 notifications were
+    // generated, marked delivered, and seen by nobody. Leaving the event
+    // unrecorded means it is still waiting the moment the secret is set.
+    if (!delivered) { undelivered += 1; continue; }
+
     await recordEvent(db, e);
     sent += 1;
+  }
+  if (undelivered) {
+    console.warn(`[Cron] Wholesale: ${undelivered} notification(s) not delivered — ` +
+      'TELEGRAM_CASEY_CHAT_ID or TELEGRAM_BOT_TOKEN is unset. Nothing was recorded as sent.');
   }
 
   // Bookkeeping rows carry no message, so nothing can have failed to deliver.
