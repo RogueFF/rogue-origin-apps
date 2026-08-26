@@ -1,0 +1,31 @@
+-- Credited pounds: quantity owed that the trim line will never produce.
+--
+-- WHY: "Lifter was already in stock so they did not have to trim it."
+--
+-- Burn-down credits an order by replaying monthly_production, so a line only
+-- moves off 0% when somebody logs an hour against that cultivar. Pounds that
+-- ship out of existing stock are never logged — the customer is satisfied and
+-- no hour exists. Left alone that line sits at 0% forever, keeps its place in
+-- the queue, and pushes every promise date behind it out by work nobody is
+-- going to do.
+--
+-- WHAT THIS IS NOT: it is not production. Nothing here writes to
+-- monthly_production and no rate, crew figure or scoreboard number reads it.
+-- The credit is demand-side only — it reduces what a line still WANTS. The
+-- practical consequence is the one the operator asked for: the cultivar the
+-- floor trims next runs past the satisfied line to the order behind it.
+--
+-- WHY A NUMBER AND NOT A FLAG: half a line is the ordinary case — six pounds on
+-- the shelf and four still to trim. A boolean cannot say that, and the column
+-- would need replacing the first time it happened. Zero means "nothing
+-- credited", which is every row that exists today.
+--
+-- The allocator clamps the value to the line's own qty_lbs, so a fat-fingered
+-- 100 on a 10 lb line cannot make an order report more done than was ordered.
+-- The clamp lives there rather than in a CHECK because qty_lbs can be edited
+-- afterwards, and a CHECK would reject that edit instead of absorbing it.
+--
+-- ADD COLUMN only. No table rebuild, no foreign keys touched, nothing parked.
+-- Rollback is an ALTER TABLE ... DROP COLUMN, or simply leaving it at 0.
+
+ALTER TABLE order_items ADD COLUMN credited_lbs REAL NOT NULL DEFAULT 0;

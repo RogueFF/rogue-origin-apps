@@ -129,6 +129,9 @@ export function scheduleQueue({
         return {
           ...l,
           doneLbs: done,
+          // Of `done`, the part that was never trimmed — already in stock. The
+          // card shows it differently so a full bar is not read as floor output.
+          creditedLbs: progress[l.lineId]?.creditedLbs || 0,
           remainingLbs: Math.max(0, l.qtyLbs - done),
           pct: l.qtyLbs > 0 ? Math.min(1, done / l.qtyLbs) : 1,
         };

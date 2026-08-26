@@ -28,6 +28,29 @@ import { ensureUnlocked } from './auth.js';
 
 const $ = (id) => document.getElementById(id);
 
+/**
+ * Shopify admin, for the "open this order" link on a block card.
+ *
+ * A SEARCH URL, NOT A DIRECT ONE. A direct link needs the numeric order id
+ * (admin.shopify.com/store/<handle>/orders/<id>), and `orders.shopify_order_id`
+ * is reserved but written by nothing — every order on this board is typed in by
+ * hand. What we do have is the number the operator types, so the link hands that
+ * to the admin's own order search, which lands on the order in one more click.
+ * When the Shopify sync starts populating shopify_order_id, this can become a
+ * direct link without changing anything else.
+ */
+// Verified, not guessed: rogueorigin.com serves rogue-origin.myshopify.com, and
+// the admin handle is that subdomain.
+const SHOPIFY_STORE_HANDLE = 'rogue-origin';
+
+/** Null when there is no reference to look up — the card then shows no link. */
+function shopifyOrderUrl(ref) {
+  // The operator types "#35188"; the admin search wants the digits.
+  const q = String(ref || '').trim().replace(/^#/, '');
+  if (!q) return null;
+  return `https://admin.shopify.com/store/${SHOPIFY_STORE_HANDLE}/orders?query=${encodeURIComponent(q)}`;
+}
+
 function el(tag, cls, text) {
   const n = document.createElement(tag);
   if (cls) n.className = cls;
@@ -126,6 +149,32 @@ function orderRefField(block) {
     if (e.key === 'Escape') { revert(); input.blur(); }
   });
   return input;
+}
+
+/**
+ * Open-in-Shopify affordance, beside the reference rather than on it.
+ *
+ * The reference is an editable input, so it cannot double as a link without
+ * taking the click away from typing. This is a separate target, and it stops
+ * propagation for the same reason the input does — the card underneath is
+ * draggable and clickable.
+ */
+function shopifyLink(block) {
+  const href = shopifyOrderUrl(block.shopifyOrderName);
+  if (!href) return null;
+
+  const a = document.createElement('a');
+  a.className = 'block-shopify';
+  a.href = href;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  a.title = t('open_in_shopify');
+  a.setAttribute('aria-label', `${t('open_in_shopify')} ${block.shopifyOrderName}`);
+  a.innerHTML = '<i class="ph ph-arrow-square-out" aria-hidden="true"></i>';
+
+  a.addEventListener('click', (e) => e.stopPropagation());
+  a.addEventListener('mousedown', (e) => e.stopPropagation());
+  return a;
 }
 
 /**
@@ -393,6 +442,77 @@ function qtyField(orderId, pass, line) {
 }
 
 /**
+ * Pounds done, editable in place.
+ *
+ * WHY THIS IS EDITABLE AT ALL: "Lifter was already in stock so they did not
+ * have to trim it." Burn-down only moves a line off 0% when somebody logs an
+ * hour against that cultivar, and pounds shipped from existing stock are never
+ * logged. Left alone the line sits at 0% forever, holds its place in the queue,
+ * and pushes every date behind it out by work nobody will do.
+ *
+ * WHAT IT WRITES is not doneLbs — that is replayed from production on every
+ * read and cannot be stored. It writes a CREDIT: the gap between what the floor
+ * has actually trimmed and the number just typed. Production keeps filling the
+ * rest, so a line credited 6 of 10 still shows 10/10 once the other 4 are
+ * trimmed, without the credit being touched again.
+ *
+ * Typing a number BELOW what the floor has already trimmed is refused rather
+ * than clamped silently — those hours exist, and this field cannot un-log them.
+ */
+function doneField(orderId, pass, line) {
+  const credited = Number(line.creditedLbs) || 0;
+  // What production actually put here. The rest of `doneLbs` is credit.
+  const trimmed = Math.max(0, (Number(line.doneLbs) || 0) - credited);
+  const shown = (Number(line.doneLbs) || 0).toLocaleString('en-US', { maximumFractionDigits: 1 });
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.inputMode = 'decimal';
+  input.className = `pl-done-edit${credited > 0 ? ' credited' : ''}`;
+  input.value = shown;
+  input.size = Math.max(3, shown.length);
+  input.setAttribute('aria-label',
+    `${pass.cultivarName} ${t(line.form)} ${t('done_lbs')}`);
+  if (credited > 0) {
+    input.title = `${credited.toLocaleString('en-US', { maximumFractionDigits: 1 })} ${t('from_stock')}`;
+  }
+
+  const revert = () => { input.value = shown; };
+
+  const commit = () => {
+    const next = Number(input.value);
+    if (!Number.isFinite(next) || next < 0) { revert(); return; }
+    if (Math.abs(next - (Number(line.doneLbs) || 0)) < 0.001) return;
+
+    if (next < trimmed - 0.001) {
+      showToast(`${t('err_below_trimmed')} ${fmtLbs(trimmed)}`, 'error');
+      revert();
+      return;
+    }
+    if (next > line.qtyLbs + 0.001) {
+      showToast(`${t('err_above_ordered')} ${fmtLbs(line.qtyLbs)}`, 'error');
+      revert();
+      return;
+    }
+
+    const nextCredit = Math.max(0, next - trimmed);
+    editLines(orderId, (items) => items.map(x => (
+      x.id === line.lineId ? { ...x, creditedLbs: nextCredit } : x
+    )));
+  };
+
+  input.addEventListener('click', (e) => e.stopPropagation());
+  input.addEventListener('mousedown', (e) => e.stopPropagation());
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') { revert(); input.blur(); }
+  });
+  return input;
+}
+
+/**
  * One trim pass. The row states only what the operator asked it to: pounds done
  * against pounds ordered with a percentage, and the lead time. Everything the
  * row used to spell out — lot size, byproduct, rate, coverage — moved into the
@@ -419,14 +539,26 @@ function passRow(pass, orderId) {
     r.append(el('span', 'pl-form', t(line.form)));
 
     const track = el('div', 'sl-track');
+    // Two segments, not one. Credited pounds were never trimmed, and a solid
+    // bar would read as floor output that does not exist.
+    const credited = Number(line.creditedLbs) || 0;
+    if (credited > 0 && line.qtyLbs > 0) {
+      const cr = el('div', 'sl-credit');
+      cr.style.width = `${Math.min(100, (credited / line.qtyLbs) * 100)}%`;
+      cr.title = t('from_stock');
+      track.append(cr);
+    }
     const fill = el('div', 'sl-fill');
-    fill.style.width = `${Math.min(100, line.pct * 100)}%`;
+    const trimmedPct = line.qtyLbs > 0
+      ? Math.max(0, (line.doneLbs - credited) / line.qtyLbs)
+      : 0;
+    fill.style.width = `${Math.min(100, trimmedPct * 100)}%`;
     track.append(fill);
     r.append(track);
 
-    const done = line.doneLbs.toLocaleString('en-US', { maximumFractionDigits: 1 });
     const num = el('span', 'pl-num');
-    num.append(el('span', 'pl-done', `${done} / `));
+    num.append(doneField(orderId, pass, line));
+    num.append(el('span', 'pl-done', ' / '));
     num.append(qtyField(orderId, pass, line));
     num.append(el('span', 'pl-unit', 'lb'));
     r.append(num);
@@ -491,6 +623,11 @@ function blockCard(block, idx, geom, onDrop, onOrder) {
   head.append(el('span', 'run-rank', String(idx + 1)));
 
   head.append(orderRefField(block));
+
+  // Only when there is a reference to open — a hand-entered order with no
+  // Shopify number gets no dead link.
+  const link = shopifyLink(block);
+  if (link) head.append(link);
 
   head.append(nicknameField(block));
   head.append(el('span', 'qm-spacer'));

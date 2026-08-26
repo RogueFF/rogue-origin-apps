@@ -150,6 +150,10 @@ async function getOrders(db, params) {
       cultivarName: it.cultivar_name,
       form: it.form,
       qtyLbs: it.qty_lbs,
+      // Pounds covered from stock rather than trimmed. Carried to the client so
+      // a card edit can round-trip it — saveOrder replaces every line, so a
+      // field absent here is a field deleted by the next quantity nudge.
+      creditedLbs: it.credited_lbs ?? 0,
       // Redisplay in the unit the operator typed. Older rows may predate the
       // entered_* columns being populated, so fall back to pounds.
       enteredQty: it.entered_qty ?? it.qty_lbs,
@@ -288,11 +292,12 @@ async function saveOrder(db, body) {
     statements.push({
       sql: `INSERT INTO order_items
               (id, order_id, cultivar_id, form, qty_lbs, entered_qty, entered_unit,
-               unit_price, sku, sort_order, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+               unit_price, sku, sort_order, notes, credited_lbs)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       params: [
         `OI-${stamp}-${idx}`, id, it.cultivarId, it.form, it.qtyLbs,
         it.enteredQty, it.enteredUnit, it.unitPrice, it.sku, idx, it.notes,
+        it.creditedLbs,
       ],
     });
   });
@@ -347,6 +352,15 @@ async function prepareItems(db, items) {
       throw createError('VALIDATION_ERROR', `${where}: quantity must be greater than zero`);
     }
 
+    // Pounds already in stock, which the floor will never trim. Absent means
+    // zero, so every existing caller — the editor, the Telegram bot, the
+    // Shopify importer — keeps working untouched.
+    const credited = Number(raw.creditedLbs ?? 0);
+    if (!Number.isFinite(credited) || credited < 0) {
+      throw createError('VALIDATION_ERROR',
+        `${where}: creditedLbs must be zero or more, got "${raw.creditedLbs}"`);
+    }
+
     return {
       cultivarId: raw.cultivarId,
       form: raw.form,
@@ -356,6 +370,7 @@ async function prepareItems(db, items) {
       unitPrice: Number(raw.unitPrice) || 0,
       sku: raw.sku ?? null,
       notes: raw.notes ?? null,
+      creditedLbs: credited,
     };
   });
 }
@@ -648,7 +663,7 @@ function nowPT() {
 async function computeQueue(db, crewOverride) {
   const queued = await query(db, `
     SELECT i.id AS lineId, i.order_id AS orderId, i.cultivar_id AS cultivarId,
-           i.form, i.qty_lbs AS qtyLbs, i.sort_order AS sortOrder,
+           i.form, i.qty_lbs AS qtyLbs, i.credited_lbs AS creditedLbs, i.sort_order AS sortOrder,
            o.accrual_start AS accrualStart
     FROM order_items i
     JOIN orders o ON o.id = i.order_id
@@ -685,7 +700,7 @@ async function computeQueue(db, crewOverride) {
 
   const claimed = await query(db, `
     SELECT i.id AS lineId, i.order_id AS orderId, i.cultivar_id AS cultivarId,
-           i.form, i.qty_lbs AS qtyLbs, i.sort_order AS sortOrder,
+           i.form, i.qty_lbs AS qtyLbs, i.credited_lbs AS creditedLbs, i.sort_order AS sortOrder,
            o.accrual_start AS accrualStart, o.queue_rank AS queueRank
     FROM order_items i
     JOIN orders o ON o.id = i.order_id
