@@ -851,6 +851,33 @@
 .block-id::placeholder { color: var(--text-muted); font-weight: 400; }
 .block-id:focus-visible { outline: 2px solid var(--ro-green); outline-offset: 2px; }
 
+/* Open-in-Shopify, beside the reference. Quiet until hovered: it sits in a
+   header the operator reads dozens of times a day and clicks rarely, so it
+   should not compete with the number itself. */
+.block-shopify {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-left: -2px;
+  border-radius: 6px;
+  color: var(--text-muted);
+  text-decoration: none;
+  opacity: 0.55;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.block-shopify i { font-size: 0.9375rem; }
+.block-shopify:hover,
+.block-shopify:focus-visible {
+  opacity: 1;
+  color: var(--ro-green);
+  background: rgba(255, 255, 255, 0.08);
+}
+[data-theme="light"] .block-shopify:hover,
+[data-theme="light"] .block-shopify:focus-visible { background: rgba(45, 58, 50, 0.08); }
+.block-shopify:focus-visible { outline: 2px solid var(--ro-green); outline-offset: 1px; }
+
 /* The nickname, as a field. Blank is the normal state — most orders will only
    ever have a number — so it shows a prompt rather than collapsing and leaving
    a hole in the header. */
@@ -993,12 +1020,28 @@
 }
 
 .sl-track {
+  display: flex;
   height: 7px;
   background: var(--border-light);
   border-radius: 4px;
   overflow: hidden;
 }
-.sl-fill { height: 100%; background: var(--ro-green); border-radius: 4px; }
+.sl-fill { flex: 0 0 auto; height: 100%; background: var(--ro-green); border-radius: 4px; }
+
+/* Pounds credited from stock, never trimmed. Hatched rather than solid, and in
+   a neutral tone rather than the production green, so a full bar is not read as
+   a full shift's output. */
+.sl-credit {
+  flex: 0 0 auto;
+  height: 100%;
+  border-radius: 4px;
+  background: repeating-linear-gradient(
+    135deg,
+    var(--text-muted) 0 3px,
+    transparent 3px 6px
+  );
+  opacity: 0.65;
+}
 
 .pl-num { color: var(--text); text-align: right; white-space: nowrap; }
 .pl-pct { text-align: right; }
@@ -1999,6 +2042,34 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
   box-shadow: 0 0 0 2px var(--ro-green);
 }
 [data-theme="light"] .pl-qty:focus { background: #fff; }
+
+/* Pounds done, editable. Deliberately identical to .pl-qty: the two numbers sit
+   either side of a slash and would look broken if only one of them invited a
+   click. */
+.pl-done-edit {
+  width: auto;
+  min-width: 3ch;
+  padding: 2px 5px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  transition: background var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+.pl-done-edit:hover { background: rgba(255, 255, 255, 0.07); }
+[data-theme="light"] .pl-done-edit:hover { background: rgba(45, 58, 50, 0.07); }
+.pl-done-edit:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.10);
+  box-shadow: 0 0 0 2px var(--ro-green);
+}
+[data-theme="light"] .pl-done-edit:focus { background: #fff; }
+/* A dotted underline marks a figure a human set by hand rather than one the
+   floor produced, so the two are never confused at a glance. */
+.pl-done-edit.credited { text-decoration: underline dotted currentColor; text-underline-offset: 3px; }
 
 .pl-tools {
   position: relative;

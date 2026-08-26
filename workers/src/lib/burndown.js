@@ -83,7 +83,20 @@ export function allocate({ entries = [], lines = [] }) {
   // inner loop never re-sorts: for a given cultivar and form, the eligible lines
   // are always encountered best-first.
   const open = lines
-    .map(l => ({ ...l, doneLbs: 0, remaining: Math.max(0, l.qtyLbs) }))
+    .map(l => {
+      const qty = Math.max(0, l.qtyLbs);
+      // A CREDIT: pounds the order is owed that the trim line will never
+      // produce, because they were already in stock. Demand-side only — it
+      // reduces what this line still wants and never invents production, so
+      // crew rate and floor output are untouched.
+      //
+      // Clamped to the line's own quantity. A credit typed as 100 on a 10 lb
+      // line, or a credit entered and then the cultivar trimmed anyway, must
+      // not let a line report more done than was ordered; the surplus pounds
+      // surface as unallocated, which is the honest answer.
+      const credit = Math.min(qty, Math.max(0, Number(l.creditedLbs) || 0));
+      return { ...l, creditedLbs: credit, doneLbs: credit, remaining: qty - credit };
+    })
     .sort((a, b) =>
       (a.rank - b.rank) || (a.sortOrder - b.sortOrder) || String(a.lineId).localeCompare(String(b.lineId)));
 
@@ -160,6 +173,9 @@ export function allocate({ entries = [], lines = [] }) {
       lineId: l.lineId,
       orderId: l.orderId,
       doneLbs: l.doneLbs,
+      // Surfaced separately so the board can show credited pounds differently
+      // from trimmed ones. They are both "done", but only one of them was work.
+      creditedLbs: l.creditedLbs,
       remainingLbs: l.remaining,
       qtyLbs: l.qtyLbs,
       pct: l.qtyLbs > 0 ? l.doneLbs / l.qtyLbs : 1,

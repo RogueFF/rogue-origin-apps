@@ -50,6 +50,9 @@ export function openEditor(order) {
         // this form does not round-trip is a field the first edit destroys.
         sku: i.sku ?? null,
         notes: i.notes ?? null,
+        // Same reason: pounds credited from stock are set on the queue card and
+        // have no field in this form, so they must ride through it untouched.
+        creditedLbs: Number(i.creditedLbs) || 0,
       }))
     : [blankLine()];
 
@@ -245,6 +248,10 @@ export async function saveOrder() {
       unitPrice: Number(l.unitPrice) || 0,
       sku: l.sku ?? null,
       notes: l.notes ?? null,
+      // Carried, not edited, here. The editor has no field for it — the credit
+      // is set on the queue card — but Save rewrites every line, so leaving it
+      // out would clear it on any unrelated edit.
+      creditedLbs: Number(l.creditedLbs) || 0,
     })),
   };
 
@@ -330,6 +337,7 @@ export async function patchOrder(order, overrides = {}) {
         // every line, so anything not carried here is deleted by it.
         sku: i.sku ?? null,
         notes: i.notes ?? null,
+        creditedLbs: Number(i.creditedLbs) || 0,
       })),
     });
     return true;

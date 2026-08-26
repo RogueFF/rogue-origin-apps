@@ -335,3 +335,93 @@ test('no production implies nothing, so a hand-set status is left alone', () => 
   assert.equal(impliedStatus({ doneLbs: 0, totalLbs: 100, complete: false }), null);
   assert.equal(impliedStatus(null), null);
 });
+
+// --- credited pounds: work the floor never had to do ----------------------
+//
+// "Lifter was already in stock so they did not have to trim it." The pounds are
+// owed to the customer and will ship, but no hour on the trim line will ever be
+// logged against them — so left alone the line sits at 0% forever, holds its
+// place in the queue, and pushes every promise date behind it out.
+//
+// A credit is DEMAND-SIDE. It reduces what the line still wants; it never
+// invents production. Nothing here writes to monthly_production, so crew rate
+// and floor output are untouched — the only thing that moves is what the queue
+// still has to do.
+
+test('a credited line needs nothing trimmed and shows as done', () => {
+  const r = allocate({
+    lines: [line({ qtyLbs: 10, creditedLbs: 10 })],
+    entries: [],
+  });
+  near(r.byLine.L1.doneLbs, 10);
+  near(r.byLine.L1.remainingLbs, 0);
+  near(r.byLine.L1.pct, 1);
+});
+
+test('a partial credit still leaves the rest to trim', () => {
+  const r = allocate({
+    lines: [line({ qtyLbs: 10, creditedLbs: 6 })],
+    entries: [entry({ topsLbs: 4 })],
+  });
+  near(r.byLine.L1.doneLbs, 10);
+  near(r.byLine.L1.remainingLbs, 0);
+  assert.equal(r.unallocated.length, 0, 'the 4 lb trimmed should land on the gap');
+});
+
+test('THE POINT: production skips a credited line and runs to the next order', () => {
+  // Lifter is covered from stock on the leading order. What the floor trims
+  // today belongs to the order behind it, not to the one already satisfied.
+  const r = allocate({
+    lines: [
+      line({ lineId: 'A', orderId: 'MO-1', rank: 0, qtyLbs: 10, creditedLbs: 10 }),
+      line({ lineId: 'B', orderId: 'MO-2', rank: 1, qtyLbs: 10 }),
+    ],
+    entries: [entry({ topsLbs: 10 })],
+  });
+  near(r.byLine.A.doneLbs, 10);
+  near(r.byLine.B.doneLbs, 10);
+  assert.equal(r.unallocated.length, 0);
+});
+
+test('a credit never lets a line exceed what was ordered', () => {
+  // Fat-fingered 100 on a 10 lb line, or a credit typed and then the cultivar
+  // trimmed anyway. Either way the line is capped at its own quantity.
+  const r = allocate({
+    lines: [line({ qtyLbs: 10, creditedLbs: 100 })],
+    entries: [entry({ topsLbs: 5 })],
+  });
+  near(r.byLine.L1.doneLbs, 10);
+  near(r.byLine.L1.remainingLbs, 0);
+  near(r.byLine.L1.pct, 1);
+  assert.equal(r.unallocated.length, 1, 'the 5 lb trimmed had nowhere to go');
+  assert.equal(r.unallocated[0].reason, 'no-open-line');
+});
+
+test('a negative credit is ignored rather than inflating what is owed', () => {
+  const r = allocate({ lines: [line({ qtyLbs: 10, creditedLbs: -5 })], entries: [] });
+  near(r.byLine.L1.doneLbs, 0);
+  near(r.byLine.L1.remainingLbs, 10);
+});
+
+test('an order whose every line is credited counts as complete', () => {
+  const r = allocate({
+    lines: [
+      line({ lineId: 'A', form: 'tops', qtyLbs: 10, creditedLbs: 10 }),
+      line({ lineId: 'B', form: 'smalls', qtyLbs: 10, creditedLbs: 10 }),
+    ],
+    entries: [],
+  });
+  near(r.byOrder['MO-1'].doneLbs, 20);
+  near(r.byOrder['MO-1'].pct, 1);
+  assert.equal(r.byOrder['MO-1'].complete, true);
+  assert.equal(impliedStatus(r.byOrder['MO-1']), 'finished');
+});
+
+test('a line with no credit behaves exactly as before', () => {
+  const r = allocate({
+    lines: [line({ qtyLbs: 100 })],
+    entries: [entry({ topsLbs: 30 })],
+  });
+  near(r.byLine.L1.doneLbs, 30);
+  near(r.byLine.L1.remainingLbs, 70);
+});
