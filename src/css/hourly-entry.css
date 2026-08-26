@@ -3711,15 +3711,22 @@ input[type="number"] {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  /* Capped on purpose. Full-width on a shop monitor pushed the weight a
-     thousand pixels from the cultivar it belongs to. */
+  /* Capped on purpose. Full-width on a shop monitor pushed the weight most of a
+     screen away from the cultivar it belongs to. */
   max-width: 560px;
   margin-bottom: 14px;
   padding: 10px 12px;
-  border: 1px solid var(--border-light);
-  border-left: 3px solid var(--ro-green);
-  border-radius: var(--radius-sm);
-  background: var(--surface-alt, transparent);
+  /* TOKENS ARE PAGE-LOCAL HERE. hourly-entry.html does not load
+     shared-base.css — it carries its own :root at the top of this file. The
+     first version of this banner was written against shared-base names
+     (--border-light, --ro-green, --text, --surface-alt, --font-ui), every one
+     of which resolves to nothing on this page: the panel had no background, no
+     border, and the progress track came out fully transparent. Measured:
+     getComputedStyle(bar).backgroundColor === "rgba(0, 0, 0, 0)". */
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--green);
+  border-radius: 8px;
+  background: var(--bg-card);
 }
 .queue-banner[hidden] { display: none; }
 
@@ -3737,64 +3744,71 @@ input[type="number"] {
 
 .queue-banner-tag {
   flex-shrink: 0;
-  /* Wide enough for "NOW TRIMMING" / "PODANDO AHORA" on one line, so the two
-     rows' text starts at the same x. */
-  width: 6.5em;
+  /* Fixed column so both rows' text starts at the same x, wide enough that
+     neither "NOW TRIMMING" nor the longer "PODANDO AHORA" wraps to two lines.
+     The previous 6.5em was sized against this element's own 10px font, giving
+     65px against ~92px of text — hence the wrap. Measured at 7rem: 112px, one
+     line. */
+  width: 7rem;
+  white-space: nowrap;
   padding-top: 2px;
   line-height: 1.25;
-  font-family: var(--font-ui);
+  font-family: 'Outfit', system-ui, sans-serif;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .queue-banner-main {
-  font-family: var(--font-ui);
+  font-family: 'Outfit', system-ui, sans-serif;
   font-size: 14px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.queue-banner-who { font-weight: 400; color: var(--text-muted); }
+.queue-banner-who { font-weight: 400; color: var(--text-secondary); }
+
+/* The number the question was about. Was 11px, muted, and right-aligned across
+   the whole banner; now it sits directly under its own cultivar. */
+.queue-banner-lbs {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--text-primary);
+}
 
 .queue-banner-meter { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
 .queue-banner-bar {
-  flex: 1;
+  /* Short, not full-bleed. Stretched across the banner it put the percentage a
+     third of a screen from the pounds it describes; with the track transparent
+     on top of that, the number read as floating on its own. */
+  flex: 0 1 180px;
   height: 6px;
   border-radius: 3px;
-  background: var(--border-light);
+  background: var(--bg-input);
   overflow: hidden;
 }
 .queue-banner-fill {
   height: 100%;
   border-radius: 3px;
-  background: var(--ro-green);
+  background: var(--green-bright);
   transition: width 0.4s ease;
-}
-/* The number the question was about. Was 11px muted and right-aligned across
-   the whole banner; now it sits under its own cultivar and is actually read. */
-.queue-banner-lbs {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  color: var(--text);
 }
 
 .queue-banner-pct {
   flex-shrink: 0;
   min-width: 2.5em;
-  text-align: right;
-  font-family: var(--font-mono);
+  font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .queue-banner-clear {
-  font-family: var(--font-ui);
+  font-family: 'Outfit', system-ui, sans-serif;
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
