@@ -3710,7 +3710,10 @@ input[type="number"] {
 .queue-banner {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 12px;
+  /* Capped on purpose. Full-width on a shop monitor pushed the weight a
+     thousand pixels from the cultivar it belongs to. */
+  max-width: 560px;
   margin-bottom: 14px;
   padding: 10px 12px;
   border: 1px solid var(--border-light);
@@ -3720,11 +3723,25 @@ input[type="number"] {
 }
 .queue-banner[hidden] { display: none; }
 
-.queue-banner-row { display: flex; align-items: baseline; gap: 8px; }
+.queue-banner-row { display: flex; align-items: flex-start; gap: 10px; }
+
+/* Name, weight and bar stack in one column under the tag, so everything on a
+   row is visually owned by that row. */
+.queue-banner-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
 
 .queue-banner-tag {
   flex-shrink: 0;
-  min-width: 3.5em;
+  /* Wide enough for "NOW TRIMMING" / "PODANDO AHORA" on one line, so the two
+     rows' text starts at the same x. */
+  width: 6.5em;
+  padding-top: 2px;
+  line-height: 1.25;
   font-family: var(--font-ui);
   font-size: 10px;
   font-weight: 700;
@@ -3743,10 +3760,10 @@ input[type="number"] {
 }
 .queue-banner-who { font-weight: 400; color: var(--text-muted); }
 
-.queue-banner-meter { display: flex; align-items: center; gap: 8px; }
+.queue-banner-meter { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
 .queue-banner-bar {
   flex: 1;
-  height: 5px;
+  height: 6px;
   border-radius: 3px;
   background: var(--border-light);
   overflow: hidden;
@@ -3757,8 +3774,20 @@ input[type="number"] {
   background: var(--ro-green);
   transition: width 0.4s ease;
 }
+/* The number the question was about. Was 11px muted and right-aligned across
+   the whole banner; now it sits under its own cultivar and is actually read. */
 .queue-banner-lbs {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--text);
+}
+
+.queue-banner-pct {
   flex-shrink: 0;
+  min-width: 2.5em;
+  text-align: right;
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-muted);
