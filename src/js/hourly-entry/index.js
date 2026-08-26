@@ -1738,14 +1738,49 @@ function populateCultivarSelects() {
 const tr = (key) => (LABELS[currentLang] && LABELS[currentLang][key]) || key;
 
 /** One line of the banner: a tag, then what is being trimmed. */
-function bannerRow(tag, spot) {
+/** One decimal, but never a dangling `.0` — 10.0 reads as 10, 10.5 stays 10.5. */
+function lbsText(n) {
+  const v = Math.round((Number(n) || 0) * 10) / 10;
+  return Number.isInteger(v) ? String(v) : v.toFixed(1);
+}
+
+/**
+ * A row carries its OWN weight.
+ *
+ * The first version put one meter on its own full-width line beneath both rows,
+ * which on a wide screen stranded "0/10 lb" a thousand pixels from the cultivar
+ * it described — and at 0% the bar behind it is invisible, so the number read as
+ * belonging to nothing. Weight now sits directly under the name it measures, and
+ * the bar only appears on the row actually being worked.
+ */
+function bannerRow(tag, spot, { bar = false } = {}) {
   const who = spot.nickname || spot.orderRef;
+  const total = Number(spot.totalLbs) || 0;
+  const pct = Math.max(0, Math.min(1, Number(spot.pct) || 0));
+
+  const weight = total > 0
+    ? `<div class="queue-banner-lbs">${lbsText(spot.doneLbs)} / ${lbsText(total)} lb</div>`
+    : '';
+
+  // The percentage is spelled out because a bar at 0% is indistinguishable from
+  // an empty track — the number is what still reads at a glance.
+  const meter = bar && total > 0
+    ? `<div class="queue-banner-meter">
+         <div class="queue-banner-bar"><div class="queue-banner-fill" style="width:${(pct * 100).toFixed(1)}%"></div></div>
+         <span class="queue-banner-pct">${Math.round(pct * 100)}%</span>
+       </div>`
+    : '';
+
   return `
     <div class="queue-banner-row">
       <span class="queue-banner-tag">${escapeHtml(tag)}</span>
-      <span class="queue-banner-main">${escapeHtml(spot.cultivarName || '—')}${
+      <div class="queue-banner-body">
+        <div class="queue-banner-main">${escapeHtml(spot.cultivarName || '—')}${
   spot.form ? ` · ${escapeHtml(spot.form)}` : ''}${
-  who ? ` <span class="queue-banner-who">${escapeHtml(who)}</span>` : ''}</span>
+  who ? ` <span class="queue-banner-who">${escapeHtml(who)}</span>` : ''}</div>
+        ${weight}
+        ${meter}
+      </div>
     </div>`;
 }
 
@@ -1774,16 +1809,10 @@ function renderQueueBanner() {
     return;
   }
 
-  const pct = Math.max(0, Math.min(1, Number(headline.pct) || 0));
-  const done = Math.round((Number(headline.doneLbs) || 0) * 10) / 10;
-  const total = Math.round((Number(headline.totalLbs) || 0) * 10) / 10;
-
   el.innerHTML = [
-    bannerRow(tr(headline.mode === 'now' ? 'queueNow' : 'queueNext'), headline),
-    `<div class="queue-banner-meter">
-       <div class="queue-banner-bar"><div class="queue-banner-fill" style="width:${(pct * 100).toFixed(1)}%"></div></div>
-       <span class="queue-banner-lbs">${done}/${total} lb</span>
-     </div>`,
+    // Only the row being worked gets a bar; the one behind it has no progress
+    // to show, and a second empty track just reads as noise.
+    bannerRow(tr(headline.mode === 'now' ? 'queueNow' : 'queueNext'), headline, { bar: true }),
     next ? bannerRow(tr('queueNext'), next) : '',
   ].join('');
   el.hidden = false;
