@@ -4,10 +4,14 @@
  */
 
 import { makeApi } from '../shared/api.js';
+import { showToast } from '../shared/toast.js';
 
 const productionApi = makeApi('production');
 const poolApi = makeApi('pool');
 const wholesaleApi = makeApi('wholesale');
+// Reads are public; setting a credit is not. Same ro_api_password the SOP
+// manager and the wholesale board already use.
+const wholesaleWrite = makeApi('wholesale', { auth: true });
 
 // Default time slots (will be dynamically updated based on shift start)
 let TIME_SLOTS = [
@@ -138,6 +142,11 @@ const LABELS = {
     queueReady: 'ready',
     orderQueue: 'Order Queue',
     qtDone: 'done', qtLeft: 'lb left', qtNow: 'now', qtOrderDone: 'order done',
+    done_lbs: 'pounds done',
+    err_below_trimmed: 'Already trimmed on the floor:',
+    err_above_ordered: 'More than the line ordered:',
+    err_save_credit: 'Could not save — try again',
+    err_password_needed: 'Operations password needed to change this',
     queueUnavailable: 'Queue unavailable', moreOnBoard: 'more on the board',
     tops: 'Tops (lbs)',
     smalls: 'Smalls (lbs)',
@@ -245,6 +254,11 @@ const LABELS = {
     queueReady: 'listo',
     orderQueue: 'Cola de Pedidos',
     qtDone: 'listo', qtLeft: 'lb faltan', qtNow: 'ahora', qtOrderDone: 'pedido listo',
+    done_lbs: 'libras hechas',
+    err_below_trimmed: 'Ya podado en el piso:',
+    err_above_ordered: 'Más de lo pedido en la línea:',
+    err_save_credit: 'No se pudo guardar — intente de nuevo',
+    err_password_needed: 'Se necesita la contraseña de operaciones',
     queueUnavailable: 'Cola no disponible', moreOnBoard: 'más en el tablero',
     tops: 'Tops (lbs)',
     smalls: 'Smalls (lbs)',
@@ -1886,12 +1900,33 @@ function renderQueueTab() {
         : `${lbsText(left)} ${escapeHtml(tr('qtLeft'))}`;
       const eta = pct >= 1 ? '' : etaText(p.finish);
 
+      // The done figure is EDITABLE, one field per order line. A pass can hold
+      // two lines — tops and smalls off one lot — and a credit is stored per
+      // line, so a single field on the pass would have to guess how to split.
+      // Every pass on the board today is one line, so this usually renders as
+      // the single number it looks like.
+      const lines = Array.isArray(p.lines) ? p.lines : [];
+      const numbers = lines.length
+        ? lines.map(l => `
+            <span class="qt-edit-row">
+              ${lines.length > 1 ? `<span class="qt-edit-form">${escapeHtml(tr(l.form) || l.form || '')}</span>` : ''}
+              <input type="text" inputmode="decimal" class="qt-done-edit${(Number(l.creditedLbs) || 0) > 0 ? ' credited' : ''}"
+                     value="${lbsText(l.doneLbs)}"
+                     data-line-id="${escapeHtml(l.lineId || '')}"
+                     data-qty="${Number(l.qtyLbs) || 0}"
+                     data-credited="${Number(l.creditedLbs) || 0}"
+                     data-done="${Number(l.doneLbs) || 0}"
+                     aria-label="${escapeHtml(p.cultivarName || '')} ${escapeHtml(l.form || '')} ${escapeHtml(tr('done_lbs'))}">
+              <span class="qt-of">/ ${lbsText(l.qtyLbs)} lb</span>
+            </span>`).join('')
+        : `<span class="qt-lbs">${lbsText(p.doneLbs)} / ${lbsText(p.totalLbs)} lb</span>`;
+
       return `
         <div class="qt-pass${pct >= 1 ? ' done' : ''}${isLive ? ' live' : ''}" role="listitem">
           <span class="qt-cv">${escapeHtml(p.cultivarName || '—')}</span>
           <span class="qt-form">${escapeHtml(p.form || '')}</span>
           ${isLive ? `<span class="qt-now">${escapeHtml(tr('qtNow'))}</span>` : ''}
-          <span class="qt-lbs">${lbsText(p.doneLbs)} / ${lbsText(p.totalLbs)} lb</span>
+          <span class="qt-nums">${numbers}</span>
           <span class="qt-state">${state}</span>
           <div class="qt-bar"><div class="qt-fill" style="width:${(pct * 100).toFixed(1)}%"></div></div>
           ${eta ? `<span class="qt-eta">${escapeHtml(eta)}</span>` : ''}
@@ -1916,6 +1951,73 @@ function renderQueueTab() {
     ? `<div class="qt-more">+${hidden} ${escapeHtml(tr('moreOnBoard'))}</div>`
     : '';
   body.innerHTML = html + more;
+  wireCreditFields(body);
+}
+
+/**
+ * Commit a typed "pounds done" as a CREDIT.
+ *
+ * doneLbs is replayed from recorded production on every read and cannot be
+ * written to. What is stored is the gap between what the floor actually trimmed
+ * and the number just typed — pounds the order no longer needs the line to
+ * produce, because they were already in stock or the lot overran. Production
+ * keeps filling whatever is left, so a line credited part-way still reaches its
+ * total as the rest is trimmed, without the credit being touched again.
+ */
+function wireCreditFields(root) {
+  root.querySelectorAll('.qt-done-edit').forEach((input) => {
+    const lineId = input.dataset.lineId;
+    const qty = Number(input.dataset.qty) || 0;
+    const credited = Number(input.dataset.credited) || 0;
+    const done = Number(input.dataset.done) || 0;
+    // What production actually put here. The rest of `done` is credit already.
+    const trimmed = Math.max(0, done - credited);
+    const shown = lbsText(done);
+
+    const revert = () => { input.value = shown; };
+
+    const commit = async () => {
+      const next = Number(input.value);
+      if (!Number.isFinite(next) || next < 0) { revert(); return; }
+      if (Math.abs(next - done) < 0.001) return;
+
+      // Typing below what the floor already trimmed is refused rather than
+      // clamped: those hours exist and this field cannot un-log them.
+      if (next < trimmed - 0.001) {
+        showToast(`${tr('err_below_trimmed')} ${lbsText(trimmed)} lb`, 'error');
+        revert();
+        return;
+      }
+      if (next > qty + 0.001) {
+        showToast(`${tr('err_above_ordered')} ${lbsText(qty)} lb`, 'error');
+        revert();
+        return;
+      }
+
+      input.disabled = true;
+      try {
+        await wholesaleWrite.post('setLineCredit', {
+          lineId, creditedLbs: Math.max(0, next - trimmed),
+        });
+        await loadQueueBrief();
+      } catch (err) {
+        console.error('Could not set credit:', err);
+        showToast(tr(/unauthor|401|password/i.test(String(err && err.message))
+          ? 'err_password_needed' : 'err_save_credit'), 'error');
+        revert();
+      } finally {
+        input.disabled = false;
+      }
+    };
+
+    input.addEventListener('click', (e) => e.stopPropagation());
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+      if (e.key === 'Escape') { revert(); input.blur(); }
+    });
+  });
 }
 
 /**

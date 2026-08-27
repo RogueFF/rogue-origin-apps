@@ -155,6 +155,20 @@ export function buildQueueBrief({ blocks = [], orders = [], aliases = [], limit 
           totalLbs: passTotal,
           pct: passTotal > 0 ? passDone / passTotal : 1,
           finish: p.finish ?? null,
+
+          // The lines under the pass, because a CREDIT is stored per line and a
+          // pass can hold two of them — tops and smalls off one lot. Crediting
+          // "the pass" would have to guess how to split between them, so the
+          // client edits a line and needs its id. `creditedLbs` rides along
+          // because the field shows total done while writing only the credit:
+          // without both numbers the client cannot work out the gap to set.
+          lines: lines.map((l) => ({
+            lineId: l.lineId ?? null,
+            form: l.form ?? null,
+            qtyLbs: Number(l.qtyLbs) || 0,
+            doneLbs: Number(l.doneLbs) || 0,
+            creditedLbs: Number(l.creditedLbs) || 0,
+          })),
         };
       }),
     };

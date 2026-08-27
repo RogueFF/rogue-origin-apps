@@ -17,6 +17,20 @@
   --border-color: #404040;
   --success: #4ade80;
   --error: #f87171;
+
+  /* Aliases for SHARED components. src/js/shared/toast.js injects its own CSS
+     using shared-base token names with light-theme fallbacks — `--text` falls
+     back to #1a1a1a, which on this page's dark --bg-card is black text on a
+     near-black panel. Defining the names here is what makes a shared component
+     render correctly on a page that does not load shared-base.css. */
+  --text: #ffffff;
+  --text-muted: #a0a0a0;
+  --font-ui: 'Outfit', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --border-light: #404040;
+  --info: #62758d;
+  --ro-green: #668971;
+  --ro-gold: #e4aa4f;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -3964,4 +3978,53 @@ input[type="number"] {
 }
 @media (max-width: 600px) {
   .queue-strip { display: none; }
+}
+
+
+/* Pounds done, editable per order line. Same affordance as the wholesale
+   board's field: reads as text until touched. */
+.qt-nums {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.qt-edit-row { display: inline-flex; align-items: baseline; gap: 4px; }
+.qt-edit-form {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+.qt-done-edit {
+  width: 4.5ch;
+  padding: 1px 4px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+.qt-done-edit:hover { background: var(--bg-input); }
+.qt-done-edit:focus {
+  outline: none;
+  background: var(--bg-input);
+  box-shadow: 0 0 0 2px var(--green);
+}
+.qt-done-edit:disabled { opacity: 0.5; }
+/* A dotted underline marks a figure a human set by hand rather than one the
+   floor produced, so the two are never confused at a glance. */
+.qt-done-edit.credited { text-decoration: underline dotted currentColor; text-underline-offset: 3px; }
+.qt-of {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-primary);
+  white-space: nowrap;
 }
