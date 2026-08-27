@@ -42,7 +42,17 @@ export async function sendTelegramMessage(env, { chatId, text, parseMode = 'Mark
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`Telegram API error ${res.status}: ${err.slice(0, 200)}`);
+    // NAME THE BOT AND THE CHAT. "chat not found" is the same message whether
+    // the id is wrong, the user never started the bot, or the TOKEN belongs to
+    // a different bot than the one the chat is with — and on 2026-08-26 that
+    // ambiguity cost hours: every direct API call with the operator's token
+    // reached the chat, while the worker refused it, and nothing in the error
+    // said the two were using different bots. The id before the colon is the
+    // bot's own public id (it is what getMe returns); the secret half is never
+    // logged.
+    const botId = String(token).split(':')[0];
+    throw new Error(
+      `Telegram API error ${res.status} (bot ${botId} -> chat ${chatId}): ${err.slice(0, 200)}`);
   }
   return true;
 }
