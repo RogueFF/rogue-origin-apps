@@ -371,3 +371,100 @@ test('the headline reports the pass lbs, not the whole order', () => {
   assert.equal(b.headline.totalLbs, 50);
   assert.equal(b.headline.pct, 0.2);
 });
+
+// --- passes on a block row -------------------------------------------------
+//
+// The hourly-entry Order Queue tab lists each order with the strains under it,
+// so the lead can see the whole board without leaving the entry screen. The
+// banner above the fields answers "what now"; the tab answers "what after
+// that". Both read this one projection rather than a second API call.
+
+test('a block row carries its passes, in queue order', () => {
+  const b = brief({
+    blocks: [block({
+      orderId: 'MO-1', doneLbs: 30, totalLbs: 60, pct: 0.5,
+      passes: [
+        pass({ cultivarId: 'lifter', cultivarName: 'Lifter',
+          lines: [line({ qtyLbs: 30, doneLbs: 30, remainingLbs: 0, pct: 1 })] }),
+        pass({ cultivarId: 'berry-bliss', cultivarName: 'Berry Bliss',
+          lines: [line({ qtyLbs: 30, doneLbs: 0, remainingLbs: 30, pct: 0 })] }),
+      ],
+    })],
+    orders: [order({ id: 'MO-1' })],
+  });
+
+  assert.equal(b.blocks[0].passes.length, 2);
+  assert.deepEqual(b.blocks[0].passes.map(p => p.cultivarName), ['Lifter', 'Berry Bliss']);
+});
+
+test('each pass reports its own pounds and share, not the order total', () => {
+  const b = brief({
+    blocks: [block({
+      orderId: 'MO-1', doneLbs: 30, totalLbs: 60, pct: 0.5,
+      passes: [
+        pass({ cultivarId: 'lifter', cultivarName: 'Lifter',
+          lines: [line({ qtyLbs: 30, doneLbs: 30, remainingLbs: 0, pct: 1 })] }),
+        pass({ cultivarId: 'berry-bliss', cultivarName: 'Berry Bliss',
+          lines: [line({ qtyLbs: 40, doneLbs: 10, remainingLbs: 30, pct: 0.25 })] }),
+      ],
+    })],
+    orders: [order({ id: 'MO-1' })],
+  });
+
+  const [a, c] = b.blocks[0].passes;
+  assert.equal(a.doneLbs, 30);
+  assert.equal(a.totalLbs, 30);
+  assert.equal(a.pct, 1);
+  assert.equal(c.doneLbs, 10);
+  assert.equal(c.totalLbs, 40);
+  assert.equal(c.pct, 0.25);
+});
+
+test('a joint pass sums both forms into one row', () => {
+  // Tops and smalls of one cultivar are one pass on one lot, so the tab shows
+  // them as a single strain line rather than implying two stretches of work.
+  const b = brief({
+    blocks: [block({
+      orderId: 'MO-1', doneLbs: 0, totalLbs: 50,
+      passes: [pass({
+        cultivarId: 'lifter', cultivarName: 'Lifter',
+        lines: [
+          line({ lineId: 'T', form: 'tops', qtyLbs: 30, doneLbs: 10, remainingLbs: 20 }),
+          line({ lineId: 'S', form: 'smalls', qtyLbs: 20, doneLbs: 0, remainingLbs: 20 }),
+        ],
+      })],
+    })],
+    orders: [order({ id: 'MO-1' })],
+  });
+
+  assert.equal(b.blocks[0].passes.length, 1);
+  assert.equal(b.blocks[0].passes[0].totalLbs, 50);
+  assert.equal(b.blocks[0].passes[0].doneLbs, 10);
+  assert.equal(b.blocks[0].passes[0].form, 'tops + smalls');
+});
+
+test('a finished pass still appears inside an order still running', () => {
+  // Unlike the headline, which names only work still to do, the tab is a
+  // picture of the order — hiding what is done would make a half-finished
+  // order look smaller than it is.
+  //
+  // The order itself must still be open: a block whose every pass is finished
+  // leaves the queue altogether, which is the separate behaviour asserted by
+  // 'an all-finished block is not in the queue at all'.
+  const b = brief({
+    blocks: [block({
+      orderId: 'MO-1', doneLbs: 10, totalLbs: 40, pct: 0.25,
+      passes: [
+        pass({ cultivarId: 'lifter', cultivarName: 'Lifter',
+          lines: [line({ qtyLbs: 10, doneLbs: 10, remainingLbs: 0, pct: 1 })] }),
+        pass({ cultivarId: 'berry-bliss', cultivarName: 'Berry Bliss',
+          lines: [line({ qtyLbs: 30, doneLbs: 0, remainingLbs: 30, pct: 0 })] }),
+      ],
+    })],
+    orders: [order({ id: 'MO-1' })],
+  });
+
+  const done = b.blocks[0].passes.find(p => p.cultivarName === 'Lifter');
+  assert.equal(done.pct, 1, 'the finished strain is still listed');
+  assert.equal(b.blocks[0].passes.length, 2);
+});

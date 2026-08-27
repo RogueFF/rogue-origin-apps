@@ -136,6 +136,9 @@ const LABELS = {
     queueInQueue: 'in queue',
     queueAll: 'all',
     queueReady: 'ready',
+    orderQueue: 'Order Queue',
+    qtDone: 'done', qtLeft: 'lb left', qtNow: 'now', qtOrderDone: 'order done',
+    queueUnavailable: 'Queue unavailable', moreOnBoard: 'more on the board',
     tops: 'Tops (lbs)',
     smalls: 'Smalls (lbs)',
     qcNotes: 'QC Notes',
@@ -240,6 +243,9 @@ const LABELS = {
     queueInQueue: 'en cola',
     queueAll: 'todos',
     queueReady: 'listo',
+    orderQueue: 'Cola de Pedidos',
+    qtDone: 'listo', qtLeft: 'lb faltan', qtNow: 'ahora', qtOrderDone: 'pedido listo',
+    queueUnavailable: 'Cola no disponible', moreOnBoard: 'más en el tablero',
     tops: 'Tops (lbs)',
     smalls: 'Smalls (lbs)',
     qcNotes: 'Notas QC',
@@ -1745,77 +1751,171 @@ function lbsText(n) {
 }
 
 /**
- * A row carries its OWN weight.
+ * One line in the header: what is on the line now, and what follows it.
  *
- * The first version put one meter on its own full-width line beneath both rows,
- * which on a wide screen stranded "0/10 lb" a thousand pixels from the cultivar
- * it described — and at 0% the bar behind it is invisible, so the number read as
- * belonging to nothing. Weight now sits directly under the name it measures, and
- * the bar only appears on the row actually being worked.
- */
-function bannerRow(tag, spot, { bar = false } = {}) {
-  const who = spot.nickname || spot.orderRef;
-  const total = Number(spot.totalLbs) || 0;
-  const pct = Math.max(0, Math.min(1, Number(spot.pct) || 0));
-
-  const weight = total > 0
-    ? `<div class="queue-banner-lbs">${lbsText(spot.doneLbs)} / ${lbsText(total)} lb</div>`
-    : '';
-
-  // The percentage is spelled out because a bar at 0% is indistinguishable from
-  // an empty track — the number is what still reads at a glance.
-  const meter = bar && total > 0
-    ? `<div class="queue-banner-meter">
-         <div class="queue-banner-bar"><div class="queue-banner-fill" style="width:${(pct * 100).toFixed(1)}%"></div></div>
-         <span class="queue-banner-pct">${Math.round(pct * 100)}%</span>
-       </div>`
-    : '';
-
-  return `
-    <div class="queue-banner-row">
-      <span class="queue-banner-tag">${escapeHtml(tag)}</span>
-      <div class="queue-banner-body">
-        <div class="queue-banner-main">${escapeHtml(spot.cultivarName || '—')}${
-  spot.form ? ` · ${escapeHtml(spot.form)}` : ''}${
-  who ? ` <span class="queue-banner-who">${escapeHtml(who)}</span>` : ''}</div>
-        ${weight}
-        ${meter}
-      </div>
-    </div>`;
-}
-
-/**
- * What the board says is being trimmed, and what follows it.
+ * IN THE HEADER, NOT THE EDITOR. This used to be a panel above the entry
+ * fields, which meant it existed only while a slot was open — the lead reading
+ * the timeline could not see it, and it pushed the fields down on the one
+ * screen built for typing quickly. The header is the single strip present in
+ * both views.
  *
- * Strictly read-only. It never touches the form, and it deliberately says
- * nothing when the cultivar being entered is not the one it names — the floor
- * is right and the queue is what is out of date, but surfacing that was
- * declined as noise on this screen.
+ * Deliberately only two facts. The full board — every order, every strain, with
+ * dates and pounds remaining — is the Order Queue tab; repeating that here
+ * would make a header that has to be read rather than glanced at.
+ *
+ * Strictly read-only. It never touches the form, and it says nothing when the
+ * cultivar being entered is not the one it names: the floor is right and the
+ * queue is what is out of date, and surfacing that was declined as noise.
  */
-function renderQueueBanner() {
-  const el = document.getElementById('queue-banner');
+function renderQueueStrip() {
+  const el = document.getElementById('queue-strip');
   if (!el) return;
 
-  if (!queueBrief || !queueBrief.headline) {
-    el.hidden = true;
-    return;
-  }
+  if (!queueBrief || !queueBrief.headline) { el.hidden = true; return; }
 
   const { headline, next } = queueBrief;
   if (headline.mode === 'clear') {
-    el.innerHTML = `<div class="queue-banner-row"><span class="queue-banner-clear">${
-      escapeHtml(tr('queueClear'))}</span></div>`;
+    el.innerHTML = `<span class="qs-clear">${escapeHtml(tr('queueClear'))}</span>`;
     el.hidden = false;
     return;
   }
 
-  el.innerHTML = [
-    // Only the row being worked gets a bar; the one behind it has no progress
-    // to show, and a second empty track just reads as noise.
-    bannerRow(tr(headline.mode === 'now' ? 'queueNow' : 'queueNext'), headline, { bar: true }),
-    next ? bannerRow(tr('queueNext'), next) : '',
-  ].join('');
+  const pct = Math.max(0, Math.min(1, Number(headline.pct) || 0));
+  const strain = (spot) => `${escapeHtml(spot.cultivarName || '—')}${
+    spot.form ? ` · ${escapeHtml(spot.form)}` : ''}`;
+
+  // WHOSE order. Two orders wanting the same cultivar is ordinary — the live
+  // board has Sugar Shaker on both #35110 and #35179 — and without this the
+  // strip reads "now Sugar Shaker, next Sugar Shaker" and looks broken. The
+  // nickname is what the floor says; the number is the fallback.
+  const whose = (spot) => {
+    const who = spot.nickname || spot.orderRef;
+    return who ? `<span class="qs-who">${escapeHtml(who)}</span>` : '';
+  };
+
+  const nowPart = `
+    <span class="qs-item qs-current">
+      <span class="qs-tag">${escapeHtml(tr(headline.mode === 'now' ? 'queueNow' : 'queueNext'))}</span>
+      <span class="qs-strain">${strain(headline)}</span>
+      ${whose(headline)}
+      <span class="qs-lbs">${lbsText(headline.doneLbs)} / ${lbsText(headline.totalLbs)} lb</span>
+      <span class="qs-pct">${Math.round(pct * 100)}%</span>
+    </span>`;
+
+  const nextPart = next ? `
+    <span class="qs-sep" aria-hidden="true">→</span>
+    <span class="qs-item qs-next">
+      <span class="qs-tag">${escapeHtml(tr('queueNext'))}</span>
+      <span class="qs-strain">${strain(next)}</span>
+      ${whose(next)}
+    </span>` : '';
+
+  el.innerHTML = nowPart + nextPart;
   el.hidden = false;
+}
+
+const QT_DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const QT_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * 'Thu Aug 27 9:56 AM' from { date, minutes }.
+ *
+ * BUILT FROM PARTS, never `new Date('2026-08-27')`. That form is parsed as UTC
+ * midnight, which west of Greenwich renders as the previous day — a promise
+ * date a day early is exactly the kind of wrong nobody notices.
+ */
+function etaText(finish) {
+  if (!finish || !finish.date) return '';
+  const [y, m, d] = String(finish.date).split('-').map(Number);
+  if (!y || !m || !d) return '';
+  const dow = QT_DOW[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  const mins = Number(finish.minutes) || 0;
+  const h24 = Math.floor(mins / 60);
+  const h = h24 % 12 === 0 ? 12 : h24 % 12;
+  const mm = String(mins % 60).padStart(2, '0');
+  return `${dow} ${QT_MON[m - 1]} ${d} ${h}:${mm} ${h24 >= 12 ? 'PM' : 'AM'}`;
+}
+
+/**
+ * The Order Queue tab: the whole board, not just the next thing.
+ *
+ * The banner above the entry fields answers "what am I trimming now"; this
+ * answers "what is behind it, and when does it land". Read-only — nothing here
+ * writes to the board, which lives on the wholesale page.
+ *
+ * Every pass is listed, finished ones included, because this is a picture of
+ * the order rather than a worklist. Tops and smalls of one cultivar are one row
+ * for the same reason the board treats them as one pass: they come off a single
+ * lot in a single stretch of floor time.
+ */
+function renderQueueTab() {
+  const body = document.getElementById('queue-tab-body');
+  if (!body) return;
+
+  if (!queueBrief) {
+    body.innerHTML = `<div class="qt-empty">${escapeHtml(tr('queueUnavailable'))}</div>`;
+    return;
+  }
+
+  const rows = Array.isArray(queueBrief.blocks) ? queueBrief.blocks : [];
+  if (!rows.length) {
+    body.innerHTML = `<div class="qt-empty">${escapeHtml(tr('queueClear'))}</div>`;
+    return;
+  }
+
+  // The strain actually on the line, so the tab agrees with the banner instead
+  // of leaving the lead to work out which row is the live one.
+  const head = queueBrief.headline;
+  const liveKey = head && head.mode !== 'clear'
+    ? `${head.orderId}|${head.cultivarId}` : null;
+
+  const html = rows.map((b, i) => {
+    const ref = b.orderRef ? escapeHtml(b.orderRef) : '';
+    const nick = b.nickname ? escapeHtml(b.nickname) : '';
+    const who = ref && nick ? `${ref} · ${nick}` : (ref || nick || escapeHtml(b.orderId || ''));
+
+    const passes = Array.isArray(b.passes) ? b.passes : [];
+    const passHtml = passes.map((p) => {
+      const pct = Math.max(0, Math.min(1, Number(p.pct) || 0));
+      const left = Math.max(0, (Number(p.totalLbs) || 0) - (Number(p.doneLbs) || 0));
+      const isLive = liveKey && `${b.orderId}|${p.cultivarId}` === liveKey;
+      // A finished strain says so rather than showing "0 lb left", which reads
+      // as a quantity when it is a state.
+      const state = pct >= 1
+        ? escapeHtml(tr('qtDone'))
+        : `${lbsText(left)} ${escapeHtml(tr('qtLeft'))}`;
+      const eta = pct >= 1 ? '' : etaText(p.finish);
+
+      return `
+        <div class="qt-pass${pct >= 1 ? ' done' : ''}${isLive ? ' live' : ''}" role="listitem">
+          <span class="qt-cv">${escapeHtml(p.cultivarName || '—')}</span>
+          <span class="qt-form">${escapeHtml(p.form || '')}</span>
+          ${isLive ? `<span class="qt-now">${escapeHtml(tr('qtNow'))}</span>` : ''}
+          <span class="qt-lbs">${lbsText(p.doneLbs)} / ${lbsText(p.totalLbs)} lb</span>
+          <span class="qt-state">${state}</span>
+          <div class="qt-bar"><div class="qt-fill" style="width:${(pct * 100).toFixed(1)}%"></div></div>
+          ${eta ? `<span class="qt-eta">${escapeHtml(eta)}</span>` : ''}
+        </div>`;
+    }).join('');
+
+    const orderEta = etaText(b.finish);
+    return `
+      <div class="qt-order">
+        <div class="qt-head">
+          <span class="qt-rank">${i + 1}</span>
+          <span class="qt-who">${who}</span>
+          <span class="qt-pct">${Math.round((Number(b.pct) || 0) * 100)}%</span>
+        </div>
+        ${passHtml}
+        ${orderEta ? `<div class="qt-order-eta">${escapeHtml(tr('qtOrderDone'))} ${escapeHtml(orderEta)}</div>` : ''}
+      </div>`;
+  }).join('');
+
+  const hidden = (Number(queueBrief.blocksTotal) || 0) - rows.length;
+  const more = hidden > 0
+    ? `<div class="qt-more">+${hidden} ${escapeHtml(tr('moreOnBoard'))}</div>`
+    : '';
+  body.innerHTML = html + more;
 }
 
 /**
@@ -1836,7 +1936,8 @@ async function loadQueueBrief() {
     queueBrief = null;
     queueAliases = [];
   }
-  renderQueueBanner();
+  renderQueueStrip();
+  renderQueueTab();
   populateCultivarSelects();
 }
 
@@ -2414,6 +2515,10 @@ async function initBarcodeCard() {
   populateBarcodeStrainSelect();
   initBarcodePrintButtons();
   initBarcodeTabs();
+  // The Order Queue tab sits on the dashboard, which is on screen without the
+  // editor ever being opened — so the board has to be fetched here too, not
+  // only from openEditor(). Not awaited: the card must never delay the page.
+  loadQueueBrief();
   initScannerTab();
   initBagCompleteButton();
   initBagComplete10lbButton();

@@ -3707,108 +3707,261 @@ input[type="number"] {
 /* ── Production queue banner ──────────────────────────────────────────────
    What the board says is being trimmed, at the top of the editor. Read-only:
    no controls, no focusable children, nothing that writes to the form. */
-.queue-banner {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  /* Capped on purpose. Full-width on a shop monitor pushed the weight most of a
-     screen away from the cultivar it belongs to. */
-  max-width: 560px;
-  margin-bottom: 14px;
-  padding: 10px 12px;
-  /* TOKENS ARE PAGE-LOCAL HERE. hourly-entry.html does not load
-     shared-base.css — it carries its own :root at the top of this file. The
-     first version of this banner was written against shared-base names
-     (--border-light, --ro-green, --text, --surface-alt, --font-ui), every one
-     of which resolves to nothing on this page: the panel had no background, no
-     border, and the progress track came out fully transparent. Measured:
-     getComputedStyle(bar).backgroundColor === "rgba(0, 0, 0, 0)". */
+
+
+/* ===================
+   ORDER QUEUE TAB
+   Page-local tokens only — hourly-entry.html does not load shared-base.css.
+   =================== */
+
+.queue-tab-body { display: flex; flex-direction: column; gap: 10px; }
+
+.qt-order {
+  padding: 8px;
   border: 1px solid var(--border-color);
   border-left: 3px solid var(--green);
   border-radius: 8px;
   background: var(--bg-card);
 }
-.queue-banner[hidden] { display: none; }
 
-.queue-banner-row { display: flex; align-items: flex-start; gap: 10px; }
-
-/* Name, weight and bar stack in one column under the tag, so everything on a
-   row is visually owned by that row. */
-.queue-banner-body {
+.qt-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+/* Queue position. The board is ranked, and "which of these is first" is the
+   question a lead asks before "how far along is it". */
+.qt-rank {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+}
+.qt-who {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.queue-banner-tag {
-  flex-shrink: 0;
-  /* Fixed column so both rows' text starts at the same x, wide enough that
-     neither "NOW TRIMMING" nor the longer "PODANDO AHORA" wraps to two lines.
-     The previous 6.5em was sized against this element's own 10px font, giving
-     65px against ~92px of text — hence the wrap. Measured at 7rem: 112px, one
-     line. */
-  width: 7rem;
-  white-space: nowrap;
-  padding-top: 2px;
-  line-height: 1.25;
-  font-family: 'Outfit', system-ui, sans-serif;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-}
-
-.queue-banner-main {
-  font-family: 'Outfit', system-ui, sans-serif;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.queue-banner-who { font-weight: 400; color: var(--text-secondary); }
-
-/* The number the question was about. Was 11px, muted, and right-aligned across
-   the whole banner; now it sits directly under its own cultivar. */
-.queue-banner-lbs {
-  font-family: 'JetBrains Mono', monospace;
+  white-space: nowrap;
+  font-family: 'Outfit', system-ui, sans-serif;
   font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
+  font-weight: 600;
   color: var(--text-primary);
 }
-
-.queue-banner-meter { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
-.queue-banner-bar {
-  /* Short, not full-bleed. Stretched across the banner it put the percentage a
-     third of a screen from the pounds it describes; with the track transparent
-     on top of that, the number read as floating on its own. */
-  flex: 0 1 180px;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--bg-input);
-  overflow: hidden;
-}
-.queue-banner-fill {
-  height: 100%;
-  border-radius: 3px;
-  background: var(--green-bright);
-  transition: width 0.4s ease;
-}
-
-.queue-banner-pct {
-  flex-shrink: 0;
-  min-width: 2.5em;
+.qt-pct {
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
   color: var(--text-secondary);
 }
 
-.queue-banner-clear {
+/* One row per pass. Tops and smalls of a cultivar share a row because they
+   share a lot — see the brief.
+   Two columns: what it is on the left, numbers on the right; the bar and the
+   date span both. */
+.qt-pass {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1px 8px;
+  padding: 5px 0;
+  border-top: 1px solid var(--border-color);
+}
+.qt-order .qt-pass:first-of-type { border-top: 0; }
+
+.qt-cv {
+  grid-column: 1;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.qt-form {
+  grid-column: 1;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+.qt-lbs {
+  grid-column: 2;
+  grid-row: 1;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  text-align: right;
+}
+/* "23 lb left" / "done" — the actionable half of the pair above it. */
+.qt-state {
+  grid-column: 2;
+  grid-row: 2;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  text-align: right;
+}
+.qt-bar {
+  grid-column: 1 / -1;
+  height: 4px;
+  margin-top: 4px;
+  border-radius: 2px;
+  background: var(--bg-input);
+  overflow: hidden;
+}
+.qt-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--green-bright);
+  transition: width 0.4s ease;
+}
+/* When this strain is expected to finish. Absent once it has. */
+.qt-eta {
+  grid-column: 1 / -1;
+  margin-top: 3px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+/* The strain actually on the line, so the tab agrees with the banner. */
+.qt-now {
+  grid-column: 1;
+  justify-self: start;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: var(--green-dark);
+  color: var(--text-primary);
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.qt-pass.live .qt-cv { color: var(--green-bright); }
+
+/* A finished strain is stated, not celebrated — it is context for what is left. */
+.qt-pass.done .qt-fill { background: var(--text-secondary); }
+.qt-pass.done .qt-cv { color: var(--text-secondary); }
+
+.qt-order-eta {
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px solid var(--border-color);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-primary);
+}
+
+.qt-empty,
+.qt-more {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 6px 0;
+}
+
+
+/* ===================
+   QUEUE STRIP (header)
+   Page-local tokens only — hourly-entry.html does not load shared-base.css.
+   =================== */
+
+.queue-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  /* Takes the empty middle of the header and yields it back when the header
+     is tight, so it can never push the clock or the date off the strip. */
+  flex: 1 1 auto;
+  margin: 0 16px;
+  overflow: hidden;
+}
+.queue-strip[hidden] { display: none; }
+
+.qs-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.qs-current { flex: 0 1 auto; }
+/* Next is the first thing to go when the header runs out of room — it is
+   context, where the current strain is the answer to the question. */
+.qs-next { flex: 0 1 auto; overflow: hidden; }
+
+.qs-tag {
+  flex: 0 0 auto;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.qs-strain {
   font-family: 'Outfit', system-ui, sans-serif;
   font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Whose order, so two orders wanting the same cultivar are distinguishable.
+   Quieter than the strain — it is the qualifier, not the answer. */
+.qs-who {
+  flex: 0 1 auto;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 12px;
   color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.qs-lbs {
+  flex: 0 0 auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+.qs-pct {
+  flex: 0 0 auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--green-bright);
+  white-space: nowrap;
+}
+.qs-sep { flex: 0 0 auto; color: var(--text-secondary); font-size: 12px; }
+.qs-clear {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* On a phone the header is already carrying a title, a clock, a language
+   toggle and a date. Two strains do not fit; the current one still does. */
+@media (max-width: 900px) {
+  .queue-strip { margin: 0 8px; gap: 6px; }
+  .qs-next, .qs-sep { display: none; }
+  .qs-lbs { font-size: 11px; }
+}
+@media (max-width: 600px) {
+  .queue-strip { display: none; }
 }
