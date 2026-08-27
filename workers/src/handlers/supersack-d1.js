@@ -12,6 +12,7 @@
  */
 
 import { successResponse, errorResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
+import { buildRates } from '../lib/sack-rates.js';
 import { constantTimeEqual } from '../lib/auth.js';
 
 const SACK_WEIGHT = 37;
@@ -437,27 +438,12 @@ async function topsBreakdown(request, env, ctx) {
  * suspiciously-LOW rates are trusted as-is so the estimate never over-promises.
  */
 export function projectFinishedTops(strainStats, inventory) {
-  const rateMap = new Map();
-  const sacksMap = new Map();          // strain → clean-history sack count
-  for (const s of strainStats) {
-    const sacks = Number(s.sacks) || 0;
-    const tops = Number(s.tops) || 0;
-    sacksMap.set(s.strain, sacks);
-    if (sacks > 0) rateMap.set(s.strain, tops / sacks);
-  }
-
-  const rates = [...rateMap.values()];
-
-  // High-side outlier fence — only meaningful with enough cultivars and spread.
-  let upperFence = Infinity;
-  if (rates.length >= 5) {
-    const med = median(rates);
-    const mad = median(rates.map(r => Math.abs(r - med))) * 1.4826;
-    if (mad > 0) upperFence = med + 3 * mad;
-  }
-
-  const trusted = rates.filter(r => r <= upperFence);
-  const floor = trusted.length ? Math.min(...trusted) : 0;
+  // The rate table, the outlier fence and the pessimistic floor now live in
+  // lib/sack-rates.js. The order board asks the inverse question — "this line
+  // wants N pounds, how much raw is that" — and the two answers must never
+  // disagree, which they cannot if there is only one implementation.
+  const { rateMap, sacksMap, upperFence, floor } =
+    buildRates(strainStats.map(s => ({ key: s.strain, sacks: s.sacks, tops: s.tops })));
 
   const r2 = x => Math.round(x * 100) / 100;   // rate display: 2 dp
   const r1 = x => Math.round(x * 10) / 10;     // projected lbs: 1 dp
@@ -507,13 +493,6 @@ export function projectFinishedTops(strainStats, inventory) {
     upper_fence: upperFence === Infinity ? null : r2(upperFence),
     cultivars,
   };
-}
-
-function median(arr) {
-  const a = [...arr].sort((x, y) => x - y);
-  const n = a.length;
-  if (n === 0) return 0;
-  return n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2;
 }
 
 /** One-time backfill from pool API change logs + monthly_production */

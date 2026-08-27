@@ -38,6 +38,7 @@ import { formatDatePT } from '../lib/production-utils.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
 import { deriveEvents } from '../lib/wholesale-notify.js';
 import { buildQueueBrief } from '../lib/queue-brief.js';
+import { buildRates, effectiveRate, sacksFor } from '../lib/sack-rates.js';
 
 const WRITE_ACTIONS = new Set(['saveOrder', 'deleteOrder', 'saveQueueOrder', 'setAccrualStart', 'importOrder', 'setNotify', 'setLineCredit']);
 
@@ -756,13 +757,58 @@ async function computeQueue(db, crewOverride) {
 
   // Only the queue is scheduled. A finished order claims pounds but occupies no
   // floor time, so it must not appear as a block or push live orders back.
+  // RAW SACKS PER CULTIVAR, measured. Joined through cultivar_aliases because
+  // supersack_entries.strain holds the production-sheet spelling verbatim while
+  // the board speaks cultivar ids — the same seam the hourly-entry dropdown
+  // uses. Aliases are SUMMED, not picked between: a cultivar spelled two ways
+  // across seasons has its history in both rows.
+  const sackHistory = await query(db, `
+    SELECT a.cultivar_id AS key,
+           SUM(s.sacks_opened) AS sacks,
+           SUM(s.tops_lbs)     AS tops
+    FROM supersack_entries s
+    JOIN cultivar_aliases a ON a.alias = s.strain
+    WHERE s.tops_lbs > 0 AND s.sacks_opened > 0
+      AND s.tops_lbs <= s.raw_lbs * 0.5
+    GROUP BY a.cultivar_id
+    HAVING SUM(s.sacks_opened) > 0
+  `);
+  const sackRates = buildRates(sackHistory);
+
   const scheduled = scheduleQueue({
     blocks: orderBlocks(queued),
     rates, crew, rank, fallback, start,
     progress: progress.byLine,
   });
 
-  return { ...scheduled, progress, rates, fallback, crewInfo, live, crew, start, names, unmatched };
+  // How much RAW each pass still needs. Tops only — smalls are the byproduct of
+  // the same lot, not a separate demand on raw material — so the count is driven
+  // by the tops still outstanding and the smalls fall out of it.
+  const withSacks = {
+    ...scheduled,
+    blocks: (scheduled.blocks || []).map(b => ({
+      ...b,
+      passes: (b.passes || []).map(p => {
+        const own = sackRates.rateMap.get(p.cultivarId);
+        const { rate, source } = effectiveRate(own ?? null, sackRates);
+        // The schedule already sized the lot on what is OUTSTANDING and left the
+        // figure on the pass. Recomputing it here would be a second definition
+        // of "left to trim" free to drift from the one the dates are built on.
+        const need = sacksFor(p.remainingTopsLbs, rate);
+        return {
+          ...p,
+          sacksNeeded: need == null ? null : Math.round(need * 10) / 10,
+          // Where the number came from, so a surface can distinguish a
+          // measurement from a fallback rather than showing both the same way.
+          sackRateSource: source,
+          sackRatePerSack: rate ? Math.round(rate * 100) / 100 : null,
+          sackHistoryCount: sackRates.sacksMap.get(p.cultivarId) || 0,
+        };
+      }),
+    })),
+  };
+
+  return { ...withSacks, progress, rates, fallback, crewInfo, live, crew, start, names, unmatched };
 }
 
 async function getQueue(db, params) {
