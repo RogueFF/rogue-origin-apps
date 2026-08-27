@@ -39,7 +39,7 @@ import { sendTelegramMessage } from '../lib/telegram.js';
 import { deriveEvents } from '../lib/wholesale-notify.js';
 import { buildQueueBrief } from '../lib/queue-brief.js';
 
-const WRITE_ACTIONS = new Set(['saveOrder', 'deleteOrder', 'saveQueueOrder', 'setAccrualStart', 'importOrder', 'setNotify']);
+const WRITE_ACTIONS = new Set(['saveOrder', 'deleteOrder', 'saveQueueOrder', 'setAccrualStart', 'importOrder', 'setNotify', 'setLineCredit']);
 
 const ORDER_STATUSES = new Set(['in_queue', 'in_production', 'finished']);
 const FORMS = new Set(['tops', 'smalls']);
@@ -82,6 +82,7 @@ export async function handleWholesaleD1(request, env) {
     case 'setNotify': return setNotify(db, body);
     case 'saveQueueOrder': return saveQueueOrder(db, body);
     case 'setAccrualStart': return setAccrualStart(db, body);
+    case 'setLineCredit': return setLineCredit(db, body);
     case 'importOrder': return importOrder(db, body);
     case 'test': return successResponse({ success: true, message: 'Wholesale API operational' });
     default:
@@ -1042,6 +1043,51 @@ async function getCoverage(db) {
     skippedSkus: [...new Set(inv.skipped)],
   });
 }
+
+/**
+ * Set the credited pounds on ONE order line.
+ *
+ * WHY THIS EXISTS RATHER THAN GOING THROUGH saveOrder. saveOrder replaces every
+ * line of an order, so any client using it has to round-trip fields it does not
+ * care about — the trap already documented on the board's patchOrder, where a
+ * quantity nudge deletes anything the caller forgot to carry. The hourly-entry
+ * screen only ever wants to change this one number, and it does not hold the
+ * rest of the order to send back. A targeted UPDATE cannot lose what it never
+ * loaded.
+ *
+ * The value is NOT clamped here. A credit larger than the line is clamped by
+ * the allocator on every read, where qty_lbs is known at the time it matters —
+ * qty can be edited afterwards, and a clamp written into storage would silently
+ * disagree with a quantity raised later.
+ */
+async function setLineCredit(db, body) {
+  const lineId = String(body.lineId || '').trim();
+  if (!lineId) throw createError('VALIDATION_ERROR', 'lineId is required');
+
+  const credited = Number(body.creditedLbs);
+  if (!Number.isFinite(credited) || credited < 0) {
+    throw createError('VALIDATION_ERROR',
+      `creditedLbs must be zero or more, got "${body.creditedLbs}"`);
+  }
+
+  const line = await queryOne(db,
+    'SELECT id, order_id, qty_lbs FROM order_items WHERE id = ?', [lineId]);
+  if (!line) throw createError('NOT_FOUND', `No order line ${lineId}`);
+
+  const now = new Date().toISOString();
+  await transaction(db, [
+    { sql: 'UPDATE order_items SET credited_lbs = ? WHERE id = ?', params: [credited, lineId] },
+    // Touched so the 60-day replay window keeps a finished order in the deal —
+    // the window is keyed on updated_at, and a credit can be what finishes it.
+    { sql: 'UPDATE orders SET updated_at = ? WHERE id = ?', params: [now, line.order_id] },
+  ]);
+
+  return successResponse({
+    success: true, lineId, orderId: line.order_id,
+    creditedLbs: credited, qtyLbs: line.qty_lbs,
+  });
+}
+
 
 // ─── SHOPIFY IMPORT ────────────────────────────────────
 

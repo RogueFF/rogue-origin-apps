@@ -468,3 +468,64 @@ test('a finished pass still appears inside an order still running', () => {
   assert.equal(done.pct, 1, 'the finished strain is still listed');
   assert.equal(b.blocks[0].passes.length, 2);
 });
+
+// --- lines inside a pass, so a credit has something to aim at ---------------
+//
+// The hourly-entry tab lets the lead set pounds done when a cultivar was
+// already in stock or overproduced. A credit is stored per ORDER LINE, and a
+// pass can hold two of them — tops and smalls off one lot. Crediting "the pass"
+// would have to guess how to split between them, so the tab edits the line and
+// the brief has to name it.
+
+test('a pass carries its lines, each with the id a credit is written against', () => {
+  const b = brief({
+    blocks: [block({
+      orderId: 'MO-1',
+      passes: [pass({
+        cultivarId: 'lifter', cultivarName: 'Lifter',
+        lines: [
+          line({ lineId: 'OI-1', form: 'tops', qtyLbs: 30, doneLbs: 10, remainingLbs: 20 }),
+          line({ lineId: 'OI-2', form: 'smalls', qtyLbs: 20, doneLbs: 0, remainingLbs: 20 }),
+        ],
+      })],
+    })],
+    orders: [order({ id: 'MO-1' })],
+  });
+
+  const lines = b.blocks[0].passes[0].lines;
+  assert.equal(lines.length, 2);
+  assert.deepEqual(lines.map(l => l.lineId), ['OI-1', 'OI-2']);
+  assert.deepEqual(lines.map(l => l.form), ['tops', 'smalls']);
+});
+
+test('a line reports credited pounds separately from trimmed ones', () => {
+  // The field shows total done; what it WRITES is the credit. Editing needs
+  // both numbers or it cannot work out the gap it is meant to set.
+  const b = brief({
+    blocks: [block({
+      orderId: 'MO-1',
+      passes: [pass({
+        cultivarId: 'lifter', cultivarName: 'Lifter',
+        lines: [line({ lineId: 'OI-1', qtyLbs: 30, doneLbs: 25, creditedLbs: 15, remainingLbs: 5 })],
+      })],
+    })],
+    orders: [order({ id: 'MO-1' })],
+  });
+
+  const l = b.blocks[0].passes[0].lines[0];
+  assert.equal(l.doneLbs, 25);
+  assert.equal(l.creditedLbs, 15);
+  assert.equal(l.qtyLbs, 30);
+});
+
+test('a line with no credit reports zero rather than undefined', () => {
+  const b = brief({
+    blocks: [block({
+      orderId: 'MO-1',
+      passes: [pass({ cultivarId: 'lifter', cultivarName: 'Lifter',
+        lines: [line({ lineId: 'OI-1', qtyLbs: 10, doneLbs: 0, remainingLbs: 10 })] })],
+    })],
+    orders: [order({ id: 'MO-1' })],
+  });
+  assert.equal(b.blocks[0].passes[0].lines[0].creditedLbs, 0);
+});
