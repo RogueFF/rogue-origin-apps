@@ -136,6 +136,27 @@ export function buildQueueBrief({ blocks = [], orders = [], aliases = [], limit 
       totalLbs,
       pct: typeof b.pct === "number" ? b.pct : (totalLbs > 0 ? doneLbs / totalLbs : 0),
       finish: b.finish ?? null,
+
+      // EVERY pass, finished ones included. The headline names only work still
+      // to do, because it answers "what now"; this list is a picture of the
+      // order, and dropping the finished strains would make a half-done order
+      // look smaller than it is. Tops and smalls of one cultivar stay ONE row —
+      // they come off a single lot in a single pass, so splitting them would
+      // imply two stretches of floor time that do not exist.
+      passes: (b.passes || []).map((p) => {
+        const lines = p.lines || [];
+        const passTotal = lines.reduce((s, l) => s + (Number(l.qtyLbs) || 0), 0);
+        const passDone = lines.reduce((s, l) => s + (Number(l.doneLbs) || 0), 0);
+        return {
+          cultivarId: p.cultivarId ?? null,
+          cultivarName: p.cultivarName ?? null,
+          form: formsOf(p),
+          doneLbs: passDone,
+          totalLbs: passTotal,
+          pct: passTotal > 0 ? passDone / passTotal : 1,
+          finish: p.finish ?? null,
+        };
+      }),
     };
   });
 

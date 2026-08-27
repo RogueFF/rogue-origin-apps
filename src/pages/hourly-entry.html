@@ -9,8 +9,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@300;400;500;600;700&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
 
   <!-- Non-critical CSS: Deferred for faster initial render -->
-  <link rel="preload" href="../css/hourly-entry.css?h=a9aaa5a8" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link rel="stylesheet" href="../css/hourly-entry.css?h=a9aaa5a8"></noscript>
+  <link rel="preload" href="../css/hourly-entry.css?h=8b8cd9c2" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/hourly-entry.css?h=8b8cd9c2"></noscript>
 </head>
 <body>
   <!-- RO Home Button -->
@@ -25,6 +25,11 @@
         <h1 data-i18n="floorManager">Floor Manager</h1>
         <a href="index.html" class="home-icon" title="Back to Dashboard">⌂</a>
       </div>
+      <!-- What the board says is on the line, and what follows it. Lives in the
+           header rather than in the editor because the lead reads it from both
+           views, and the header is the one strip that is always on screen. -->
+      <div id="queue-strip" class="queue-strip" role="status" aria-live="polite" hidden></div>
+
       <div class="header-right">
         <!-- Shift Start (shared with scoreboard) -->
         <button id="start-day-btn" class="start-day-btn" data-i18n="startDay">Start Day</button>
@@ -101,7 +106,6 @@
           <div id="editor-content" class="card-view">
             <!-- Production queue: what the board says is being trimmed, and what
                  follows it. Read-only — this never writes to the entry. -->
-            <div id="queue-banner" class="queue-banner" role="status" aria-live="polite" hidden></div>
 
             <!-- Crew Entry Section -->
             <section class="editor-section crew-section">
@@ -273,9 +277,16 @@
             <!-- Printer tab hidden — barcodes deprecated, using pools now -->
             <button type="button" class="barcode-tab" data-tab="printer" data-i18n="printer" style="display: none;">Printer</button>
             <button type="button" class="barcode-tab active" data-tab="scanner" data-i18n="inventory">Inventory</button>
+            <button type="button" class="barcode-tab" data-tab="queue" data-i18n="orderQueue">Order Queue</button>
           </div>
         </div>
         <div class="card-content">
+          <!-- Order Queue Tab — read-only view of the wholesale board, so the
+               lead can see what is coming without leaving the entry screen. -->
+          <div class="barcode-tab-content hidden" id="tab-queue">
+            <div class="queue-tab-body" id="queue-tab-body" role="list" aria-live="polite"></div>
+          </div>
+
           <!-- Printer Tab (hidden — kept for rollback) -->
           <div class="barcode-tab-content hidden" id="tab-printer">
             <div class="barcode-controls">
@@ -662,12 +673,12 @@
 <script type="importmap">
 {
   "imports": {
-    "../js/hourly-entry/index.js": "../js/hourly-entry/index.js?h=89cb055b",
+    "../js/hourly-entry/index.js": "../js/hourly-entry/index.js?h=fc324798",
     "../js/shared/api.js": "../js/shared/api.js?h=55201839"
   }
 }
 </script>
 <!-- module-hashes:end -->
-  <script type="module" src="../js/hourly-entry/index.js?h=89cb055b"></script>
+  <script type="module" src="../js/hourly-entry/index.js?h=fc324798"></script>
 </body>
 </html>
