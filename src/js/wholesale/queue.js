@@ -65,6 +65,19 @@ function coverageFor(cultivarId) {
     .sort((a, b) => b.shortfallLbs - a.shortfallLbs);
 }
 
+/**
+ * Raw sacks on hand for a cultivar, whether or not it is short.
+ *
+ * coverageFor() answers a different question — it filters to lines that are
+ * SHORT, because that is what drives the row marker. "How much raw is on hand"
+ * has to be answerable for a cultivar that is perfectly covered too, or the
+ * board can only tell you about raw when something is already wrong.
+ */
+function rawSacksOnHand(cultivarId) {
+  const row = (state.coverage?.coverage || []).find(c => c.cultivarId === cultivarId);
+  return row ? (Number(row.rawSacks) || 0) : null;
+}
+
 /** Set by index.js so this module does not import the editor and cycle. */
 let openOrder = () => {};
 export function onOpenOrder(fn) { openOrder = fn; }
@@ -349,6 +362,28 @@ function passDetail(pass) {
   // to say which without the operator opening the console.
   line(t('rate'), `${pass.ratePerTrimmerHour.toFixed(2)} ${t('per_hr')}`);
   line(t('basis'), pass.estimated ? t('no_history') : t('measured'));
+
+  // HOW MUCH RAW IS STILL NEEDED, measured — tops outstanding over this
+  // cultivar's own tops-per-sack. Smalls are the byproduct of the same lot, not
+  // a second demand on raw, so they do not appear here.
+  //
+  // Paired with what is actually on hand, because the number that matters is
+  // not "4 sacks" but "4 sacks and none in the barn".
+  if (pass.sacksNeeded != null && pass.sacksNeeded > 0) {
+    const onHand = rawSacksOnHand(pass.cultivarId);
+    // "raw" is already in the label; "Raw needed: 0.2 raw sacks" says it twice.
+    const need = `${pass.sacksNeeded} ${t('sacks')}`;
+    const have = onHand == null ? '' : ` · ${onHand} ${t('on_hand')}`;
+    const shortRaw = onHand != null && onHand < pass.sacksNeeded;
+    const r = el('div', `pd-row${shortRaw ? ' pd-short' : ''}`);
+    r.append(el('span', 'pd-k', t('raw_needed')));
+    // A projection built on the farm floor rate rather than this cultivar's own
+    // history is a materially weaker claim, and says so rather than passing for
+    // a measurement.
+    const est = pass.sackRateSource && pass.sackRateSource !== 'own' ? ` (${t('estimate')})` : '';
+    r.append(el('span', 'pd-v', `${need}${have}${est}${shortRaw ? ' ⚠' : ''}`));
+    box.append(r);
+  }
 
   const cov = coverageFor(pass.cultivarId);
   if (cov.length) {

@@ -1106,6 +1106,11 @@ body:not(.detail-pinned) .pass-row:hover .pass-detail,
 .pd-k { color: var(--text-muted); white-space: nowrap; }
 .pd-v { margin-left: auto; color: var(--text); text-align: right; }
 
+/* Raw needed exceeds raw on hand — the order cannot be finished from the barn
+   as it stands. Coloured rather than merely marked, because this is the one row
+   in the detail that is a problem rather than a fact. */
+.pd-row.pd-short .pd-v { color: var(--warning); font-weight: 600; }
+
 .pass-row:focus-visible { outline: 2px solid var(--ro-green); outline-offset: 2px; }
 
 .run-handle {
