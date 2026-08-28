@@ -110,6 +110,18 @@ function referencedTables() {
       for (const lit of literals) {
         if (!/^\s*(?:WITH|SELECT|INSERT|UPDATE|DELETE|REPLACE)\b/i.test(lit)) continue;
 
+        // A LEADING VERB IS NOT ENOUGH. The label "Update when it changes — not
+        // on a schedule" in lib/i18n.js begins with UPDATE, and the extractor
+        // below then read "when" as a table name and reported the worker
+        // querying something the migrations never created — a false alarm on
+        // the one test whose whole job is to be believed.
+        //
+        // Every statement that can name a table carries a second keyword:
+        // UPDATE...SET, DELETE...FROM, INSERT...INTO, SELECT...FROM,
+        // REPLACE...INTO. A SELECT with no FROM ("SELECT 1") names no table
+        // either way, so requiring one loses nothing real.
+        if (!/^\s*WITH\b/i.test(lit) && !/\b(?:FROM|INTO|SET|VALUES)\b/i.test(lit)) continue;
+
         // Common table expressions are named like tables and are not tables.
         const cte = new Set(
           [...lit.matchAll(/(?:WITH(?:\s+RECURSIVE)?|,)\s+([a-z_][a-z0-9_]*)\s+AS\s*\(/gi)]
