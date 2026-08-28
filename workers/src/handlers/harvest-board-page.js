@@ -433,6 +433,60 @@ export const BOARD_PAGE = `<!doctype html>
   .mark.doc      { color: var(--slate); background: var(--slate-soft); }
   .mark.note     { color: var(--amber); background: var(--amber-soft); }
 
+
+  /* ---- grouped duplicates ------------------------------------------------
+     One cultivar in several zones is one row until you open it. The group is
+     a container, not a lot: only the zone rows inside it drag. */
+  .group { display: flex; flex-direction: column; gap: .25rem; }
+
+  .card.grouphead { cursor: pointer; border-left-style: dashed; }
+  .group.open .card.grouphead { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+
+  .caret {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .7rem;
+    line-height: 1;
+    color: var(--ink-3);
+  }
+
+  .zcount {
+    margin-left: auto;
+    font-family: "IBM Plex Mono", monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: .66rem;
+    letter-spacing: .02em;
+    color: var(--ink-3);
+    background: var(--surface-2);
+    border-radius: 999px;
+    padding: .05rem .35rem;
+    white-space: nowrap;
+  }
+
+  .zones {
+    display: flex;
+    flex-direction: column;
+    gap: .2rem;
+    margin-left: .5rem;
+    padding-left: .4rem;
+    border-left: 1px solid var(--line-soft);
+  }
+
+  .zrow {
+    display: flex;
+    align-items: center;
+    gap: .3rem;
+    flex-wrap: wrap;
+    background: var(--paper);
+    border: 1px solid var(--line-soft);
+    border-radius: var(--radius);
+    padding: .25rem .35rem;
+    cursor: grab;
+  }
+  .zrow:hover { border-color: var(--line); }
+  .zrow[aria-selected="true"] { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .zrow.dragging { opacity: .4; cursor: grabbing; }
+  .zrow .marks { gap: .2rem; }
+
   /* ---- drawer ---- */
   aside.drawer {
     position: absolute;
@@ -737,6 +791,10 @@ export const BOARD_PAGE = `<!doctype html>
 
     /* Roomier tap targets, and larger type now that width is not scarce. */
     .card { padding: .5rem .6rem .55rem; }
+    .zrow { padding: .45rem .5rem; min-height: 44px; }   /* touch target */
+    .zones { margin-left: .6rem; padding-left: .5rem; }
+    .zcount { font-size: .74rem; }
+    .caret { font-size: .8rem; }
     .cultivar { font-size: 1.05rem; line-height: 1.25rem; }
     .zone { font-size: .78rem; }
     .mark { font-size: .74rem; }
@@ -832,6 +890,7 @@ export const BOARD_PAGE = `<!doctype html>
   var selected = null;
   var dragId = null;
   var folded = {};
+  var expanded = {};   // "<stage>|<cultivar>" -> group open
 
   var boardEl   = document.getElementById("board");
   var drawerEl  = document.getElementById("drawer");
@@ -1006,20 +1065,7 @@ export const BOARD_PAGE = `<!doctype html>
     return n > 0.3 ? "thc-fail" : "thc-pass";
   }
 
-  function makeCard(lot) {
-    var card = el("div", "card");
-    card.tabIndex = 0;
-    card.draggable = true;
-    card.dataset.id = lot.lot_id;
-    card.setAttribute("role", "button");
-    card.setAttribute("aria-selected", selected === lot.lot_id ? "true" : "false");
-
-    var top = el("div", "top");
-    top.appendChild(el("span", "zone", lot.zone));
-    card.appendChild(top);
-    card.appendChild(el("div", "cultivar", lot.cultivar));
-    card.title = lot.cultivar + " — " + lot.zone + ", " + lot.farm;
-
+  function marksFor(lot) {
     var marks = el("div", "marks");
     if (lot.test_date) { marks.appendChild(el("span", "mark date", lot.test_date)); }
     if (lot.thc !== null && lot.thc !== undefined && lot.thc !== "") {
@@ -1031,22 +1077,91 @@ export const BOARD_PAGE = `<!doctype html>
     }
     if ((lot.notes || "").trim()) { marks.appendChild(el("span", "mark note", "note")); }
     if (lot.updated_by === "timber") { marks.appendChild(el("span", "mark bot", "timber")); }
-    if (marks.childNodes.length) { card.appendChild(marks); }
+    return marks.childNodes.length ? marks : null;
+  }
 
-    card.addEventListener("click", function () { openDrawer(lot.lot_id); });
-    card.addEventListener("keydown", function (ev) {
+  // Drag and open behave identically on a whole card and on a zone row inside
+  // an expanded group, so both are wired here.
+  function wireLot(node, lot) {
+    node.tabIndex = 0;
+    node.draggable = true;
+    node.dataset.id = lot.lot_id;
+    node.setAttribute("role", "button");
+    node.setAttribute("aria-selected", selected === lot.lot_id ? "true" : "false");
+    node.title = lot.cultivar + " — " + lot.zone + ", " + lot.farm;
+    node.addEventListener("click", function () { openDrawer(lot.lot_id); });
+    node.addEventListener("keydown", function (ev) {
       if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); openDrawer(lot.lot_id); }
     });
-    card.addEventListener("dragstart", function (ev) {
+    node.addEventListener("dragstart", function (ev) {
       dragId = lot.lot_id;
-      card.classList.add("dragging");
+      node.classList.add("dragging");
       ev.dataTransfer.effectAllowed = "move";
       try { ev.dataTransfer.setData("text/plain", lot.lot_id); } catch (e) { /* older browsers */ }
     });
-    card.addEventListener("dragend", function () {
+    node.addEventListener("dragend", function () {
       dragId = null;
-      card.classList.remove("dragging");
+      node.classList.remove("dragging");
     });
+    return node;
+  }
+
+  // One cultivar planted across several zones collapses to a single row; the
+  // biggest such group is well over a dozen lots. Expanding picks the zone.
+  // The group header is deliberately not draggable: moving a dozen compliance
+  // lots in one gesture is not something anyone should do by accident.
+  // (Deliberately names no cultivar -- this file is served pre-auth, and the
+  // public shell must carry no lot data. test-harvest-board.mjs asserts it.)
+  function makeGroup(stage, group) {
+    var key = stage.id + "|" + group.cultivar;
+    var open = !!expanded[key];
+    var wrap = el("div", "group" + (open ? " open" : ""));
+
+    var head = el("div", "card grouphead");
+    head.tabIndex = 0;
+    head.setAttribute("role", "button");
+    head.setAttribute("aria-expanded", open ? "true" : "false");
+
+    var top = el("div", "top");
+    top.appendChild(el("span", "caret", open ? "▾" : "▸"));
+    top.appendChild(el("span", "zcount", group.lots.length + " zones"));
+    head.appendChild(top);
+    head.appendChild(el("div", "cultivar", group.cultivar));
+    head.title = group.cultivar + " — " +
+      group.lots.map(function (l) { return l.zone; }).join(", ");
+
+    function toggle() { expanded[key] = !expanded[key]; render(); }
+    head.addEventListener("click", toggle);
+    head.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggle(); }
+    });
+    wrap.appendChild(head);
+
+    if (open) {
+      var zones = el("div", "zones");
+      group.lots.forEach(function (lot) {
+        var row = wireLot(el("div", "zrow"), lot);
+        row.appendChild(el("span", "zone", lot.zone));
+        var m = marksFor(lot);
+        if (m) { row.appendChild(m); }
+        zones.appendChild(row);
+      });
+      wrap.appendChild(zones);
+    }
+    return wrap;
+  }
+
+  function makeCard(lot) {
+    var card = wireLot(el("div", "card"), lot);
+
+    var top = el("div", "top");
+    top.appendChild(el("span", "zone", lot.zone));
+    card.appendChild(top);
+    card.appendChild(el("div", "cultivar", lot.cultivar));
+
+    var marks = marksFor(lot);
+    if (marks) { card.appendChild(marks); }
+
     return card;
   }
 
@@ -1124,7 +1239,17 @@ export const BOARD_PAGE = `<!doctype html>
       if (!mine.length) {
         stack.appendChild(el("div", "empty", "Nothing here."));
       } else {
-        mine.forEach(function (l) { stack.appendChild(makeCard(l)); });
+        // Grouped by cultivar *within this stage* — the same cultivar can sit
+        // in several stages at once and must stay a separate row in each.
+        var groups = [], byName = {};
+        mine.forEach(function (l) {
+          var gr = byName[l.cultivar];
+          if (!gr) { gr = byName[l.cultivar] = { cultivar: l.cultivar, lots: [] }; groups.push(gr); }
+          gr.lots.push(l);
+        });
+        groups.forEach(function (gr) {
+          stack.appendChild(gr.lots.length === 1 ? makeCard(gr.lots[0]) : makeGroup(stage, gr));
+        });
       }
       col.appendChild(stack);
 
