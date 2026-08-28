@@ -50,6 +50,7 @@ import { adjustSupersackCount, listSupersackVariants, variantTitle, harvestTypeF
 import { floorOutputByCultivar } from '../lib/floor-output.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
 import { pickLang, t as translate, langCookie } from '../lib/i18n.js';
+import { handleHarvestBoard, BOARD_ACTIONS } from './harvest-board-d1.js';
 
 const DEBOUNCE_MS = 5 * 60 * 1000;       // re-scanning the same active zone within this window is a no-op
 const CUT_RESUME_GRACE_HOURS = 8;        // re-entering a zone within this many hours of its last close = same cut
@@ -110,6 +111,12 @@ export async function handleHarvestD1(request, env, ctx) {
   const params = getQueryParams(request);
   const db = env.DB;
   const ui = makeUi(request);
+
+  // The lot stage board is its own module (D1-backed, password-gated) so this
+  // file doesn't grow another 400 lines. See harvest-board-d1.js.
+  if (BOARD_ACTIONS.has(action)) {
+    return await handleHarvestBoard(request, env, ctx, { action, params, body });
+  }
 
   // HTML-rendering actions are phone/tablet-facing — never let an error
   // fall through to the JSON errorResponse in index.js's global catch.
