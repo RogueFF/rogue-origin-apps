@@ -40,7 +40,7 @@ const STAGE_ORDER = [
 
 const SELECT = `
   SELECT lot_id, farm, zone, cultivar, cultivar_slug, map, stage,
-         test_date, thc, sacks, notes, docs, updated_at, updated_by
+         test_date, thc, cbd, sacks, notes, docs, updated_at, updated_by
     FROM harvest_lots
 `;
 
@@ -202,6 +202,13 @@ async function setBoard(db, body, actor) {
     changed.thc = v;
   }
 
+  if (has('cbd')) {
+    const v = numberOrNull(body.cbd, 'cbd');
+    sets.push('cbd = ?');
+    args.push(v);
+    changed.cbd = v;
+  }
+
   if (has('sacks')) {
     const v = numberOrNull(body.sacks, 'sacks');
     sets.push('sacks = ?');
@@ -226,7 +233,7 @@ async function setBoard(db, body, actor) {
   if (!sets.length) {
     throw createError(
       'VALIDATION_ERROR',
-      'Nothing to change. Send at least one of: stage, test_date, thc, sacks, notes, docs',
+      'Nothing to change. Send at least one of: stage, test_date, thc, cbd, sacks, notes, docs',
     );
   }
 
