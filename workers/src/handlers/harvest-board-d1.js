@@ -27,7 +27,7 @@ import { createError } from '../lib/errors.js';
 import { requireAuth } from '../lib/auth.js';
 import { BOARD_PAGE } from './harvest-board-page.js';
 
-export const BOARD_ACTIONS = new Set(['board', 'board_set', 'board_page']);
+export const BOARD_ACTIONS = new Set(['board', 'board_set', 'board_page', 'board_doc']);
 
 const STAGES = new Set([
   'untested', 'scheduled', 'cleared', 'harvesting', 'drying', 'supersacked', 'failed',
@@ -50,6 +50,49 @@ function boardPage() {
       'Content-Type': 'text/html; charset=utf-8',
       'Cache-Control': 'no-store',
       // The page holds test results; keep it out of shared caches and referers.
+      'Referrer-Policy': 'no-referrer',
+      'X-Robots-Tag': 'noindex, nofollow',
+    },
+  });
+}
+
+/**
+ * Stream a lot's document so it can be read and printed from the board itself.
+ *
+ * Cards store a repo path (raw/coas/2026/x.pdf); git is the system of record but
+ * a browser can't open it, so a copy lives in R2 under harvest-coa/ and is
+ * served from here. Inline disposition so it opens in the browser's PDF viewer
+ * -- which is also where Print lives -- rather than downloading.
+ *
+ * The page fetches this with the password in a header and opens the result as a
+ * blob, so the credential never rides in a URL the way an <a href> would force.
+ */
+async function serveDoc(env, params, body) {
+  const ref = String(params.ref || body.ref || '').trim();
+  if (!ref) {
+    throw createError('VALIDATION_ERROR', 'ref is required');
+  }
+  // Only ever reach into the COA area, and never let a ref climb out of it.
+  if (!/^raw\/coas\/[A-Za-z0-9._/-]+\.pdf$/.test(ref) || ref.includes('..')) {
+    throw createError('VALIDATION_ERROR',
+      'Only committed COA paths can be opened from the board (raw/coas/....pdf)');
+  }
+  if (!env.MEDIA_BUCKET) {
+    throw createError('INTERNAL_ERROR', 'Document storage not configured');
+  }
+
+  const key = 'harvest-coa/' + ref.replace(/^raw\/coas\//, '');
+  const object = await env.MEDIA_BUCKET.get(key);
+  if (!object) {
+    throw createError('NOT_FOUND',
+      'That COA is in the repo but has not been copied to the board yet: ' + ref);
+  }
+
+  return new Response(object.body, {
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="' + key.split('/').pop() + '"',
+      'Cache-Control': 'private, no-store',
       'Referrer-Policy': 'no-referrer',
       'X-Robots-Tag': 'noindex, nofollow',
     },
@@ -272,6 +315,8 @@ export async function handleHarvestBoard(request, env, ctx, { action, params, bo
   }
 
   switch (action) {
+    case 'board_doc':
+      return await serveDoc(env, params, body);
     case 'board':
       return await getBoard(db, { ...params, ...body });
     case 'board_set':

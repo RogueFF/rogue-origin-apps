@@ -585,28 +585,56 @@ export const BOARD_PAGE = `<!doctype html>
 
   .docs { display: flex; flex-direction: column; gap: .3rem; }
 
+  /* Label over path, actions pinned right. The path used to sit in a flex row
+     beside a long label, which squeezed it to a few pixels and -- with
+     word-break: break-all -- wrapped it one character per line into an
+     800px-tall card. It now gets its own row and truncates instead. */
   .doc {
-    display: flex;
-    align-items: baseline;
-    gap: .4rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: .1rem .4rem;
     background: var(--paper);
     border: 1px solid var(--line-soft);
     border-radius: var(--radius);
-    padding: .3rem .4rem;
+    padding: .35rem .45rem;
   }
-  .doc .name { font-size: .8rem; font-weight: 500; }
+  .doc .name {
+    grid-column: 1;
+    font-size: .8rem;
+    font-weight: 500;
+    line-height: 1.25;
+    min-width: 0;
+  }
   .doc .ref {
+    grid-column: 1;
     font-family: "IBM Plex Mono", monospace;
     font-size: .68rem;
     color: var(--ink-3);
-    word-break: break-all;
-    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    direction: rtl;          /* keep the filename visible, clip the folders */
+    text-align: left;
+  }
+  .doc .acts {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    display: flex;
+    align-items: center;
+    gap: .15rem;
   }
   .doc a { color: var(--slate); }
   .doc button {
     all: unset; cursor: pointer; color: var(--ink-3);
-    font-family: "IBM Plex Mono", monospace; font-size: .8rem; padding: 0 .2rem;
+    font-family: "Barlow Condensed", sans-serif;
+    font-weight: 600; font-size: .78rem; letter-spacing: .05em;
+    text-transform: uppercase;
+    padding: .2rem .35rem; border-radius: var(--radius);
   }
+  .doc button:hover { color: var(--slate); background: var(--slate-soft); }
+  .doc button.rm:hover { color: var(--rust); background: var(--rust-soft); }
   .doc button:hover { color: var(--rust); }
   .doc button:focus-visible { outline: 2px solid var(--focus); }
 
@@ -1052,6 +1080,38 @@ export const BOARD_PAGE = `<!doctype html>
     });
   }
 
+  // A committed COA path isn't something a browser can open, so the Worker
+  // serves a copy from R2. It's fetched with the password in a header and
+  // handed to the browser as a blob, so the credential never sits in a URL --
+  // and the PDF opens in the built-in viewer, where Print already lives.
+  function openDoc(doc, btn) {
+    var label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "…";
+    fetch(API + "?action=board_doc&ref=" + encodeURIComponent(doc.ref), {
+      headers: { "Authorization": "Bearer " + pass }
+    }).then(function (r) {
+      if (!r.ok) {
+        return r.json().then(function (j) {
+          throw new Error((j && j.error) || ("HTTP " + r.status));
+        }, function () { throw new Error("HTTP " + r.status); });
+      }
+      return r.blob();
+    }).then(function (blob) {
+      var url = URL.createObjectURL(blob);
+      var w = window.open(url, "_blank");
+      if (!w) {
+        notify("Your browser blocked the popup — allow popups for this page to read COAs.", true);
+      }
+      setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+    })["catch"](function (e) {
+      notify("Couldn't open that document: " + e.message, true);
+    })["finally"](function () {
+      btn.disabled = false;
+      btn.textContent = label;
+    });
+  }
+
   // ---- render ------------------------------------------------------------
   function matches(lot) {
     if (farmEl.value && lot.farm !== farmEl.value) { return false; }
@@ -1392,8 +1452,11 @@ export const BOARD_PAGE = `<!doctype html>
     if (!lot.docs.length) { docWrap.appendChild(el("div", "hint", "No documents linked yet.")); }
     lot.docs.forEach(function (doc, i) {
       var r = el("div", "doc");
+      var isUrl = /^https?:\\/\\//i.test(doc.ref || "");
+      var isCoa = /^raw\\/coas\\/.+\\.pdf$/i.test(doc.ref || "");
+
       r.appendChild(el("span", "name", doc.label || "Document"));
-      if (/^https?:\\/\\//i.test(doc.ref || "")) {
+      if (isUrl) {
         var a = document.createElement("a");
         a.className = "ref";
         a.href = doc.ref;
@@ -1404,7 +1467,16 @@ export const BOARD_PAGE = `<!doctype html>
       } else {
         r.appendChild(el("span", "ref", doc.ref));
       }
-      var del = el("button", null, "✕");
+
+      var acts = el("div", "acts");
+      if (isCoa) {
+        var open = el("button", null, "View");
+        open.type = "button";
+        open.title = "Open the COA to read or print";
+        open.addEventListener("click", function () { openDoc(doc, open); });
+        acts.appendChild(open);
+      }
+      var del = el("button", "rm", "✕");
       del.type = "button";
       del.title = "Remove this link";
       del.setAttribute("aria-label", "Remove " + (doc.label || "document"));
@@ -1413,7 +1485,8 @@ export const BOARD_PAGE = `<!doctype html>
         next.splice(i, 1);
         patch(id, { docs: next });
       });
-      r.appendChild(del);
+      acts.appendChild(del);
+      r.appendChild(acts);
       docWrap.appendChild(r);
     });
 
