@@ -56,6 +56,14 @@ function boardPage() {
   });
 }
 
+// Repo paths the board is allowed to open, and where each is mirrored in R2.
+// Git stays the system of record; these are serving copies kept in step by
+// rogue-farm-wiki/scripts/sync-coas-to-board.py.
+const DOC_ROOTS = [
+  { repo: 'raw/coas/', bucket: 'harvest-coa/' },              // lab results
+  { repo: 'outputs/compliance/pdf/', bucket: 'harvest-map/' }, // ODA turn-in maps
+];
+
 /**
  * Stream a lot's document so it can be read and printed from the board itself.
  *
@@ -72,20 +80,24 @@ async function serveDoc(env, params, body) {
   if (!ref) {
     throw createError('VALIDATION_ERROR', 'ref is required');
   }
-  // Only ever reach into the COA area, and never let a ref climb out of it.
-  if (!/^raw\/coas\/[A-Za-z0-9._/-]+\.pdf$/.test(ref) || ref.includes('..')) {
+  // An allow-list of repo roots, each mapped to its own R2 prefix. Anything
+  // outside them is refused, so this can never be walked into the rest of the
+  // bucket or the rest of the repo's mirrored content.
+  const root = DOC_ROOTS.find((r) => ref.startsWith(r.repo));
+  if (!root || ref.includes('..') || !/^[A-Za-z0-9._/-]+\.pdf$/.test(ref)) {
     throw createError('VALIDATION_ERROR',
-      'Only committed COA paths can be opened from the board (raw/coas/....pdf)');
+      'Only committed PDFs under ' + DOC_ROOTS.map((r) => r.repo).join(' or ') +
+      ' can be opened from the board');
   }
   if (!env.MEDIA_BUCKET) {
     throw createError('INTERNAL_ERROR', 'Document storage not configured');
   }
 
-  const key = 'harvest-coa/' + ref.replace(/^raw\/coas\//, '');
+  const key = root.bucket + ref.slice(root.repo.length);
   const object = await env.MEDIA_BUCKET.get(key);
   if (!object) {
     throw createError('NOT_FOUND',
-      'That COA is in the repo but has not been copied to the board yet: ' + ref);
+      'That document is in the repo but has not been mirrored to the board yet: ' + ref);
   }
 
   return new Response(object.body, {
