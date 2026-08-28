@@ -24,7 +24,7 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
     --line-soft:    #d6d9cf;
     --ink:          #191d1a;
     --ink-2:        #4b5250;
-    --ink-3:        #6f7772;
+    --ink-3:        #5c655f;
 
     --slate:        #2f5d7c;
     --slate-soft:   #d7e2ea;
@@ -37,8 +37,11 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
 
     --shadow:       0 1px 2px rgba(25, 29, 26, .10), 0 6px 16px -10px rgba(25, 29, 26, .22);
     --focus:        #2f5d7c;
+    --bar:          #b9bfb2;
+    --bar-hover:    #98a08f;
 
-    --col-w:        17.5rem;
+    --col-min:      8.5rem;   /* floor before the rail starts scrolling */
+    --col-max:      20rem;    /* stop columns ballooning on a wide screen */
     --radius:       3px;
   }
 
@@ -51,7 +54,7 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
       --line-soft:  #2a2f2b;
       --ink:        #e6e9e2;
       --ink-2:      #a8b0a9;
-      --ink-3:      #7e8880;
+      --ink-3:      #98a29a;
 
       --slate:      #7fb0cf;
       --slate-soft: #1e3140;
@@ -64,6 +67,8 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
 
       --shadow:     0 1px 2px rgba(0, 0, 0, .45), 0 6px 16px -10px rgba(0, 0, 0, .7);
       --focus:      #7fb0cf;
+      --bar:        #3d443e;
+      --bar-hover:  #555e56;
     }
   }
 
@@ -75,7 +80,7 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
     --line-soft:  #2a2f2b;
     --ink:        #e6e9e2;
     --ink-2:      #a8b0a9;
-    --ink-3:      #7e8880;
+    --ink-3:      #98a29a;
 
     --slate:      #7fb0cf;
     --slate-soft: #1e3140;
@@ -88,6 +93,8 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
 
     --shadow:     0 1px 2px rgba(0, 0, 0, .45), 0 6px 16px -10px rgba(0, 0, 0, .7);
     --focus:      #7fb0cf;
+    --bar:        #3d443e;
+    --bar-hover:  #555e56;
   }
 
   * { box-sizing: border-box; }
@@ -129,8 +136,8 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: .75rem 1.25rem;
-    padding: .7rem 1rem;
+    gap: .5rem .9rem;
+    padding: .45rem .7rem;
     background: var(--surface);
     border-bottom: 1px solid var(--line);
   }
@@ -141,9 +148,9 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
     margin: 0;
     font-family: "Barlow Condensed", "Public Sans", sans-serif;
     font-weight: 700;
-    font-size: 1.5rem;
+    font-size: 1.2rem;
     letter-spacing: .01em;
-    text-wrap: balance;
+    white-space: nowrap;
   }
 
   .brand .season {
@@ -207,7 +214,7 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
     font-size: .7rem;
     letter-spacing: .04em;
     color: var(--ink-3);
-    min-width: 7.5rem;
+    min-width: 5rem;
     text-align: right;
   }
   .save[data-tone="working"] { color: var(--amber); }
@@ -230,6 +237,7 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
     flex: 1;
     display: flex;
     min-height: 0;
+    position: relative;   /* the drawer overlays, so columns keep full width */
   }
 
   .board {
@@ -238,15 +246,19 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
        would push the page sideways instead of scrolling inside the rail */
     min-width: 0;
     display: flex;
-    gap: .6rem;
-    padding: .8rem 1rem 1rem;
+    gap: .35rem;
+    padding: .55rem .7rem .7rem;
     overflow-x: auto;
     overflow-y: hidden;
     align-items: stretch;
   }
 
   .col {
-    flex: 0 0 var(--col-w);
+    /* Every stage shares the rail so all 7 fit without sideways scrolling;
+       below --col-min the rail scrolls rather than crushing the cards. */
+    flex: 1 1 0;
+    min-width: var(--col-min);
+    max-width: var(--col-max);
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -256,24 +268,28 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
   }
 
   .col.drop { border-color: var(--slate); background: var(--slate-soft); }
-  .col.aside { flex-basis: 15rem; border-style: dashed; }
+  .col.aside { flex: 0 1 9rem; border-style: dashed; }
 
   .col > h2 {
     margin: 0;
     display: flex;
     align-items: center;
     gap: .5rem;
-    padding: .5rem .6rem;
+    padding: .35rem .4rem;
     border-bottom: 1px solid var(--line-soft);
     /* stage stripe: a real sequence, so the ramp carries order */
     border-top: 3px solid var(--stage, var(--line));
     font-family: "Barlow Condensed", sans-serif;
     font-weight: 600;
-    font-size: .95rem;
+    font-size: .8rem;
     text-transform: uppercase;
-    letter-spacing: .06em;
+    letter-spacing: .04em;
     color: var(--ink-2);
+    white-space: nowrap;
+    overflow: hidden;
   }
+
+  .col > h2 .label { overflow: hidden; text-overflow: ellipsis; }
 
   .col > h2 .count {
     margin-left: auto;
@@ -303,14 +319,14 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: .45rem;
+    padding: .3rem;
     display: flex;
     flex-direction: column;
-    gap: .4rem;
+    gap: .3rem;
   }
 
   /* collapsed column: narrow spine, roster still reachable */
-  .col.folded { flex-basis: 3.1rem; }
+  .col.folded { flex: 0 0 2.6rem; min-width: 2.6rem; }
   .col.folded .stack { display: none; }
   .col.folded > h2 {
     flex-direction: column;
@@ -338,10 +354,10 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
     border: 1px solid var(--line-soft);
     border-left: 3px solid var(--stage, var(--line));
     border-radius: var(--radius);
-    padding: .45rem .55rem .5rem;
+    padding: .35rem .45rem .4rem;
     cursor: grab;
     display: grid;
-    gap: .3rem;
+    gap: .2rem;
     text-align: left;
     font: inherit;
     color: inherit;
@@ -356,8 +372,8 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
   .zone {
     font-family: "Barlow Condensed", sans-serif;
     font-weight: 700;
-    font-size: .78rem;
-    letter-spacing: .05em;
+    font-size: .7rem;
+    letter-spacing: .04em;
     text-transform: uppercase;
     color: var(--slate);
     background: var(--slate-soft);
@@ -378,8 +394,8 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
   .cultivar {
     font-family: "Barlow Condensed", sans-serif;
     font-weight: 600;
-    font-size: 1.02rem;
-    line-height: 1.15;
+    font-size: .95rem;
+    line-height: 1.1;
     text-wrap: balance;
   }
 
@@ -402,7 +418,14 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
 
   /* ---- drawer ---- */
   aside.drawer {
-    flex: 0 0 21rem;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 21rem;
+    max-width: 100%;
+    z-index: 4;
+    box-shadow: var(--shadow);
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -536,6 +559,77 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
   }
 
 
+  /* ---- scrollbars: the OS bar ate 16px of a 180px column ---- */
+  .stack, .board, .drawer .body, .grp textarea {
+    scrollbar-width: thin;
+    scrollbar-color: var(--bar) transparent;
+  }
+  .stack::-webkit-scrollbar,
+  .board::-webkit-scrollbar,
+  .drawer .body::-webkit-scrollbar,
+  .grp textarea::-webkit-scrollbar { width: 8px; height: 8px; }
+
+  .stack::-webkit-scrollbar-track,
+  .board::-webkit-scrollbar-track,
+  .drawer .body::-webkit-scrollbar-track,
+  .grp textarea::-webkit-scrollbar-track { background: transparent; }
+
+  .stack::-webkit-scrollbar-thumb,
+  .board::-webkit-scrollbar-thumb,
+  .drawer .body::-webkit-scrollbar-thumb,
+  .grp textarea::-webkit-scrollbar-thumb {
+    background: var(--bar);
+    border-radius: 999px;
+  }
+  .stack::-webkit-scrollbar-thumb:hover,
+  .board::-webkit-scrollbar-thumb:hover,
+  .drawer .body::-webkit-scrollbar-thumb:hover,
+  .grp textarea::-webkit-scrollbar-thumb:hover { background: var(--bar-hover); }
+
+  .stack::-webkit-scrollbar-corner,
+  .board::-webkit-scrollbar-corner { background: transparent; }
+
+  /* ---- selects: the native popup inherited a transparent option
+     background, which renders as unreadable pale-on-white on Windows.
+     Paint the control and every option explicitly, and draw our own caret. ---- */
+  .sel { position: relative; display: block; }
+  .sel::after {
+    content: "";
+    position: absolute;
+    right: .5rem;
+    top: 50%;
+    width: 0;
+    height: 0;
+    margin-top: -1px;
+    pointer-events: none;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid var(--ink-3);
+  }
+  .sel select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 100%;
+    padding-right: 1.5rem;
+    cursor: pointer;
+  }
+  .field .sel::after { right: .1rem; }
+  .field .sel select { padding-right: 1.1rem; }
+
+  /* Applies to the dropdown list itself in Chromium/Windows. */
+  select option,
+  select optgroup {
+    background: var(--surface);
+    color: var(--ink);
+  }
+
+  /* ---- small text was down at 10.5px; nudge the floor up ---- */
+  .mark { font-size: .7rem; }
+  .col > h2 .count { font-size: .76rem; }
+  .grp .hint { font-size: .74rem; }
+
+
   /* ---- password gate ---- */
   .gate {
     min-height: 100vh;
@@ -612,12 +706,14 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
       </div>
       <div class="field">
         <label for="farm">Farm</label>
-        <select id="farm">
-          <option value="">All</option>
-          <option value="Rogue">Rogue</option>
-          <option value="Gary">Gary</option>
-          <option value="McLoughlin">McLoughlin</option>
-        </select>
+        <span class="sel">
+          <select id="farm">
+            <option value="">All</option>
+            <option value="Rogue">Rogue</option>
+            <option value="Gary">Gary</option>
+            <option value="McLoughlin">McLoughlin</option>
+          </select>
+        </span>
       </div>
       <button class="act" id="export" type="button">Export</button>
       <span class="save" id="save">&nbsp;</span>
@@ -646,13 +742,13 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
   var KEY = "rff-harvest-board-key";
 
   var STAGES = [
-    { id: "untested",    name: "Not yet tested", color: "var(--line)" },
-    { id: "scheduled",   name: "Test scheduled", color: "var(--slate)" },
-    { id: "cleared",     name: "Test cleared",   color: "var(--leaf)" },
-    { id: "harvesting",  name: "Harvesting",     color: "var(--amber)" },
-    { id: "drying",      name: "Drying",         color: "var(--amber)" },
-    { id: "supersacked", name: "Supersacked",    color: "var(--ink-2)" },
-    { id: "failed",      name: "Failed / destroyed", color: "var(--rust)", aside: true }
+    { id: "untested",    name: "Untested",   full: "Not yet tested", color: "var(--line)" },
+    { id: "scheduled",   name: "Scheduled",  full: "Test scheduled", color: "var(--slate)" },
+    { id: "cleared",     name: "Cleared",    full: "Test cleared",   color: "var(--leaf)" },
+    { id: "harvesting",  name: "Cutting",    full: "Harvesting",     color: "var(--amber)" },
+    { id: "drying",      name: "Drying",     full: "Drying",         color: "var(--amber)" },
+    { id: "supersacked", name: "Sacked",     full: "Supersacked",    color: "var(--ink-2)" },
+    { id: "failed",      name: "Failed",     full: "Failed / destroyed", color: "var(--rust)", aside: true }
   ];
 
   var lots = [];        // rows from D1, in board order
@@ -845,9 +941,9 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
 
     var top = el("div", "top");
     top.appendChild(el("span", "zone", lot.zone));
-    top.appendChild(el("span", "farm", lot.farm));
     card.appendChild(top);
     card.appendChild(el("div", "cultivar", lot.cultivar));
+    card.title = lot.cultivar + " — " + lot.zone + ", " + lot.farm;
 
     var marks = el("div", "marks");
     if (lot.test_date) { marks.appendChild(el("span", "mark date", lot.test_date)); }
@@ -894,7 +990,7 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
       var h = el("h2");
       var fold = el("button", "fold", isFolded ? "▸" : "▾");
       fold.type = "button";
-      fold.title = (isFolded ? "Expand " : "Collapse ") + stage.name;
+      fold.title = (isFolded ? "Expand " : "Collapse ") + (stage.full || stage.name);
       fold.setAttribute("aria-expanded", isFolded ? "false" : "true");
       fold.addEventListener("click", function (ev) {
         ev.stopPropagation();
@@ -997,12 +1093,14 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
     STAGES.forEach(function (s) {
       var o = document.createElement("option");
       o.value = s.id;
-      o.textContent = s.name;
+      o.textContent = s.full || s.name;
       sel.appendChild(o);
     });
     sel.value = lot.stage;
     sel.addEventListener("change", function () { patch(id, { stage: sel.value }); });
-    body.appendChild(group("Stage", sel, "Drag the card, or set it here on a phone."));
+    var selWrap = el("span", "sel");
+    selWrap.appendChild(sel);
+    body.appendChild(group("Stage", selWrap, "Drag the card, or set it here on a phone."));
 
     var row = el("div", "row2");
     var d = document.createElement("input");
