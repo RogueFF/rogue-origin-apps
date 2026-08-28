@@ -396,7 +396,13 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
     font-weight: 600;
     font-size: .95rem;
     line-height: 1.1;
-    text-wrap: balance;
+    /* One line, always: a wrapped name gives the column ragged card heights
+       and costs a row of scanning. At full width every name fits outright;
+       only when columns hit their narrow floor does anything clip, and the
+       full name stays in the card's tooltip and the drawer. */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .marks { display: flex; flex-wrap: wrap; gap: .25rem; align-items: center; }
