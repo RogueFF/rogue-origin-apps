@@ -395,11 +395,14 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
     font-family: "Barlow Condensed", sans-serif;
     font-weight: 600;
     font-size: .95rem;
-    line-height: 1.1;
+    /* Fixed, not a multiplier: fitNames() shrinks the font on long names, and
+       a line box that scaled with it would give the column ragged card
+       heights again. */
+    line-height: 1.05rem;
     /* One line, always: a wrapped name gives the column ragged card heights
-       and costs a row of scanning. At full width every name fits outright;
-       only when columns hit their narrow floor does anything clip, and the
-       full name stays in the card's tooltip and the drawer. */
+       and costs a row of scanning. A name too wide for its column is shrunk
+       to fit by fitNames() rather than clipped; the ellipsis below is only a
+       backstop for a name still too long at the minimum size. */
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -981,6 +984,48 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
     return card;
   }
 
+
+  // ---- fit long names -----------------------------------------------------
+  // A name wider than its column is shrunk until it fits rather than clipped,
+  // so nothing is lost to an ellipsis. Reads and writes are batched: measuring
+  // one element at a time while also setting styles would force a reflow per
+  // card, 82 times per render.
+  var NAME_BASE = 0.95;   // rem — must track .cultivar's font-size
+  var NAME_MIN  = 0.68;   // rem — below this it stops shrinking and clips
+
+  function fitNames() {
+    var els = boardEl.querySelectorAll(".cultivar");
+    if (!els.length) { return; }
+    var i, e, over = [], scales = [];
+
+    for (i = 0; i < els.length; i++) { els[i].style.fontSize = ""; }
+    for (i = 0; i < els.length; i++) {
+      e = els[i];
+      if (e.scrollWidth > e.clientWidth && e.clientWidth > 0) {
+        over.push(e);
+        scales.push(e.clientWidth / e.scrollWidth);
+      }
+    }
+    if (!over.length) { return; }
+    for (i = 0; i < over.length; i++) {
+      over[i].style.fontSize = Math.max(NAME_MIN, NAME_BASE * scales[i]).toFixed(3) + "rem";
+    }
+
+    // Glyph widths don't scale perfectly linearly, so one corrective pass
+    // catches the hair of overflow that rounding leaves behind.
+    var still = [], again = [];
+    for (i = 0; i < over.length; i++) {
+      e = over[i];
+      if (e.scrollWidth > e.clientWidth) {
+        still.push(e);
+        again.push(parseFloat(e.style.fontSize) * (e.clientWidth / e.scrollWidth));
+      }
+    }
+    for (i = 0; i < still.length; i++) {
+      still[i].style.fontSize = Math.max(NAME_MIN, again[i]).toFixed(3) + "rem";
+    }
+  }
+
   function render() {
     boardEl.textContent = "";
     var visible = lots.filter(matches);
@@ -1035,6 +1080,7 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
     });
 
     if (selected && byId[selected]) { drawLot(selected); }
+    fitNames();
   }
 
   // ---- drawer ------------------------------------------------------------
@@ -1203,6 +1249,13 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
   // ---- controls ----------------------------------------------------------
   qEl.addEventListener("input", render);
   farmEl.addEventListener("change", render);
+
+  // Columns are flexible, so a resize changes how much room each name has.
+  var fitTimer = null;
+  window.addEventListener("resize", function () {
+    if (fitTimer) { clearTimeout(fitTimer); }
+    fitTimer = setTimeout(fitNames, 120);
+  });
   document.addEventListener("keydown", function (ev) {
     if (ev.key === "Escape" && selected) { closeDrawer(); }
   });
