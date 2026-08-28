@@ -6,6 +6,21 @@ History of significant changes to this repo, written by `/close`. Companion to t
 
 ---
 
+## 2026-08-28 — surface the wholesale queue on the floor, and credit what was not trimmed
+
+- `workers/src/handlers/media-r2.js` — the four write actions now require the operator password. `/api/media` was the only handler that never imported `requireAuth`: an anonymous caller could enumerate the bucket and upload 250 MB to it. Reads deliberately left open (142 SOP images render from them). `tests/media-auth.test.mjs`.
+- `workers/src/lib/queue-brief.js` — one projection of the board, feeding the Ops Hub widget, the hourly-entry header strip and the Order Queue tab. Grew `passes` then `lines` as the screens needed them, rather than a second caller running the same expensive queue computation.
+- `workers/migrations/0021-order-items-credited.sql` + `workers/src/lib/burndown.js` — `credited_lbs`: pounds the trim line will never produce because they were already in stock. Demand-side only; nothing writes to `monthly_production`, so crew rate and floor output are untouched. The cultivar trimmed next runs past the satisfied line to the order behind it.
+- `workers/src/handlers/wholesale-d1.js` — `setLineCredit`, a targeted UPDATE. Deliberately not `saveOrder`, which replaces every line and would make a second client round-trip fields it does not hold.
+- `workers/src/lib/sack-rates.js` — measured tops-per-sack, extracted from `projectFinishedTops` so the forward projection and the board's inverse ("this line needs N lb, how much raw is that") cannot drift. Its six existing tests pass unchanged.
+- `src/js/hourly-entry/index.js`, `src/pages/hourly-entry.html` — header strip (now/next) and an Order Queue tab beside Pools, with pounds-done editable per line.
+- `src/js/wholesale/queue.js` — raw needed vs raw on hand in the pass detail, flagged when short; open-in-Shopify link per order.
+- `workers/src/lib/telegram.js` — the sender reports whether it delivered, and names the bot id on failure. Undelivered notifications are no longer recorded as sent.
+- `tests/table-references.test.mjs` — the guard was reading a UI label beginning "Update" as SQL. Suite 383/383.
+- Wiki context: wiki/seasons/2026/journal/2026-08-28.md
+
+---
+
 ## 2026-08-21 — Log the wholesale board's glass, bell, and review pass
 
 Twenty-eight commits (`b5c9cc03` → `995b0a81`) across the evening of 08-20 and the
