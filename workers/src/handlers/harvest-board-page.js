@@ -9,7 +9,14 @@
  * password, then pulls everything from D1 via /api/harvest?action=board.
  */
 
-export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
+export const BOARD_PAGE = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex, nofollow">
+<title>Rogue 2026 Lot Board</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:wght@400;500;600&display=swap">
@@ -128,6 +135,7 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
     display: flex;
     flex-direction: column;
     height: 100vh;
+    height: 100dvh;   /* the mobile URL bar eats a slice of 100vh */
     min-height: 30rem;
   }
 
@@ -686,21 +694,79 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
     * { animation: none !important; transition: none !important; }
   }
 
+  /* ---- phones: one stage per screen, swipe between them ----------------
+     A 7-column rail on a 375px screen is unusable, so each stage becomes a
+     near-full-width panel on a snap track. Drag-and-drop doesn't exist on
+     touch anyway -- the drawer's stage picker is the way cards move here. */
   @media (max-width: 46rem) {
+    header.bar { padding: .4rem .5rem; gap: .35rem .5rem; }
+    .brand h1 { font-size: 1.1rem; }
+    .brand .season { display: none; }
+    .controls { width: 100%; gap: .35rem; flex-wrap: nowrap; }
+    .controls .field:first-child { flex: 1 1 auto; min-width: 0; }
+    .field { padding: .25rem .4rem; }
+    .field input, .field select { min-width: 0; }
+    /* Exporting board JSON is a desk job; on a phone it only costs a row. */
+    #export { display: none; }
+    .save { min-width: 0; white-space: nowrap; }
+
+    .board {
+      gap: .5rem;
+      padding: .5rem;
+      scroll-snap-type: x mandatory;
+      overscroll-behavior-x: contain;
+    }
+    .col, .col.aside {
+      flex: 0 0 86vw;
+      min-width: 86vw;
+      max-width: 86vw;
+      scroll-snap-align: center;
+    }
+
+    /* Folding is a desktop affordance; full-width panels have nothing to gain
+       from it, and a folded panel would break the snap track. */
+    .col > h2 button.fold { display: none; }
+    .col.folded { flex: 0 0 86vw; min-width: 86vw; max-width: 86vw; }
+    .col.folded .stack { display: flex; }
+    .col.folded > h2 { flex-direction: row; height: auto; padding: .45rem .55rem; }
+    .col.folded > h2 .label { writing-mode: horizontal-tb; }
+    .col.folded > h2 .count { margin-left: auto; }
+
+    .col > h2 { padding: .45rem .55rem; font-size: .9rem; }
+    .stack { padding: .4rem; gap: .4rem; }
+
+    /* Roomier tap targets, and larger type now that width is not scarce. */
+    .card { padding: .5rem .6rem .55rem; }
+    .cultivar { font-size: 1.05rem; line-height: 1.25rem; }
+    .zone { font-size: .78rem; }
+    .mark { font-size: .74rem; }
+
     aside.drawer {
       position: fixed;
       inset: auto 0 0 0;
-      height: 70vh;
-      flex-basis: auto;
+      width: auto;
+      max-width: none;
+      height: 78dvh;
       border-left: 0;
       border-top: 1px solid var(--line);
-      box-shadow: var(--shadow);
       z-index: 5;
     }
-    .brand h1 { font-size: 1.25rem; }
+    .drawer .head button { font-size: 1.15rem; padding: .25rem .5rem; }
+
+    /* iOS zooms the page when a focused control is under 16px. */
+    .field input, .field select,
+    .grp input, .grp select, .grp textarea,
+    .gate-card input { font-size: 16px; }
+  }
+
+  /* Touch pointers get the bigger hit areas regardless of window width. */
+  @media (pointer: coarse) {
+    .col > h2 button.fold { padding: .3rem .45rem; }
+    .doc button { padding: .2rem .45rem; }
   }
 </style>
-
+</head>
+<body>
 <div class="shell" hidden>
   <header class="bar">
     <div class="brand">
@@ -990,25 +1056,26 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
   // so nothing is lost to an ellipsis. Reads and writes are batched: measuring
   // one element at a time while also setting styles would force a reflow per
   // card, 82 times per render.
-  var NAME_BASE = 0.95;   // rem — must track .cultivar's font-size
-  var NAME_MIN  = 0.68;   // rem — below this it stops shrinking and clips
+  var NAME_MIN = 11;   // px — below this it stops shrinking and clips
 
   function fitNames() {
     var els = boardEl.querySelectorAll(".cultivar");
     if (!els.length) { return; }
     var i, e, over = [], scales = [];
 
+    // Clear first, then measure: the CSS base size differs between the desktop
+    // and phone layouts, so it is read per element rather than assumed.
     for (i = 0; i < els.length; i++) { els[i].style.fontSize = ""; }
     for (i = 0; i < els.length; i++) {
       e = els[i];
       if (e.scrollWidth > e.clientWidth && e.clientWidth > 0) {
         over.push(e);
-        scales.push(e.clientWidth / e.scrollWidth);
+        scales.push(parseFloat(getComputedStyle(e).fontSize) * (e.clientWidth / e.scrollWidth));
       }
     }
     if (!over.length) { return; }
     for (i = 0; i < over.length; i++) {
-      over[i].style.fontSize = Math.max(NAME_MIN, NAME_BASE * scales[i]).toFixed(3) + "rem";
+      over[i].style.fontSize = Math.max(NAME_MIN, scales[i]).toFixed(2) + "px";
     }
 
     // Glyph widths don't scale perfectly linearly, so one corrective pass
@@ -1022,7 +1089,7 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
       }
     }
     for (i = 0; i < still.length; i++) {
-      still[i].style.fontSize = Math.max(NAME_MIN, again[i]).toFixed(3) + "rem";
+      still[i].style.fontSize = Math.max(NAME_MIN, again[i]).toFixed(2) + "px";
     }
   }
 
@@ -1315,4 +1382,6 @@ export const BOARD_PAGE = `<title>Rogue 2026 Lot Board</title>
   }
 })();
 </script>
+</body>
+</html>
 `;
