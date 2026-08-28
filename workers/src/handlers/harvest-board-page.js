@@ -1453,7 +1453,8 @@ export const BOARD_PAGE = `<!doctype html>
     lot.docs.forEach(function (doc, i) {
       var r = el("div", "doc");
       var isUrl = /^https?:\\/\\//i.test(doc.ref || "");
-      var isCoa = /^raw\\/coas\\/.+\\.pdf$/i.test(doc.ref || "");
+      // Mirrors the server's allow-list: lab results and ODA turn-in maps.
+      var isViewable = /^(raw\\/coas\\/|outputs\\/compliance\\/pdf\\/).+\\.pdf$/i.test(doc.ref || "");
 
       r.appendChild(el("span", "name", doc.label || "Document"));
       if (isUrl) {
@@ -1469,10 +1470,10 @@ export const BOARD_PAGE = `<!doctype html>
       }
 
       var acts = el("div", "acts");
-      if (isCoa) {
+      if (isViewable) {
         var open = el("button", null, "View");
         open.type = "button";
-        open.title = "Open the COA to read or print";
+        open.title = "Open this document to read or print";
         open.addEventListener("click", function () { openDoc(doc, open); });
         acts.appendChild(open);
       }
