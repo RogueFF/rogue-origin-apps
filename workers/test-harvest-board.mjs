@@ -6,11 +6,11 @@
 import { handleHarvestBoard } from './src/handlers/harvest-board-d1.js';
 
 const ROWS = [
-  { lot_id: 'gary-z16-sour-lifter', farm: 'Gary', zone: 'Z16', cultivar: 'Sour Lifter', cultivar_slug: 'sour-lifter', map: 'gary-z16-sour-lifter.png', stage: 'scheduled', test_date: null, thc: null, sacks: null, notes: null, docs: '[]', updated_at: null, updated_by: 'migration' },
-  { lot_id: 'gary-z14-lifter', farm: 'Gary', zone: 'Z14', cultivar: 'Lifter', cultivar_slug: 'lifter', map: null, stage: 'untested', test_date: null, thc: null, sacks: null, notes: null, docs: '[]', updated_at: null, updated_by: 'migration' },
-  { lot_id: 'gary-z14-sour-lifter', farm: 'Gary', zone: 'Z14', cultivar: 'Sour Lifter', cultivar_slug: 'sour-lifter', map: null, stage: 'untested', test_date: null, thc: null, sacks: null, notes: null, docs: '[]', updated_at: null, updated_by: 'migration' },
-  { lot_id: 'rogue-z8-lemon', farm: 'Rogue', zone: 'Z8', cultivar: 'Lemon', cultivar_slug: 'lemon', map: null, stage: 'untested', test_date: null, thc: null, sacks: null, notes: null, docs: '[]', updated_at: null, updated_by: 'migration' },
-  { lot_id: 'rogue-gh1c-animal-muffins', farm: 'Rogue', zone: 'GH1C', cultivar: 'Animal Muffins', cultivar_slug: 'animal-muffins', map: null, stage: 'failed', test_date: '2026-08-11', thc: 0.7, sacks: null, notes: 'FAILED', docs: '[{"label":"CWD","ref":"raw/x.pdf"}]', updated_at: null, updated_by: 'migration' },
+  { lot_id: 'gary-z16-sour-lifter', farm: 'Gary', zone: 'Z16', cultivar: 'Sour Lifter', cultivar_slug: 'sour-lifter', map: 'gary-z16-sour-lifter.png', stage: 'scheduled', test_date: null, thc: null, cbd: null, sacks: null, notes: null, docs: '[]', updated_at: null, updated_by: 'migration' },
+  { lot_id: 'gary-z14-lifter', farm: 'Gary', zone: 'Z14', cultivar: 'Lifter', cultivar_slug: 'lifter', map: null, stage: 'untested', test_date: null, thc: null, cbd: null, sacks: null, notes: null, docs: '[]', updated_at: null, updated_by: 'migration' },
+  { lot_id: 'gary-z14-sour-lifter', farm: 'Gary', zone: 'Z14', cultivar: 'Sour Lifter', cultivar_slug: 'sour-lifter', map: null, stage: 'untested', test_date: null, thc: null, cbd: null, sacks: null, notes: null, docs: '[]', updated_at: null, updated_by: 'migration' },
+  { lot_id: 'rogue-z8-lemon', farm: 'Rogue', zone: 'Z8', cultivar: 'Lemon', cultivar_slug: 'lemon', map: null, stage: 'untested', test_date: null, thc: null, cbd: null, sacks: null, notes: null, docs: '[]', updated_at: null, updated_by: 'migration' },
+  { lot_id: 'rogue-gh1c-animal-muffins', farm: 'Rogue', zone: 'GH1C', cultivar: 'Animal Muffins', cultivar_slug: 'animal-muffins', map: null, stage: 'failed', test_date: '2026-08-11', thc: 0.7, cbd: null, sacks: null, notes: 'FAILED', docs: '[{"label":"CWD","ref":"raw/x.pdf"}]', updated_at: null, updated_by: 'migration' },
 ];
 
 let rows = ROWS.map((r) => ({ ...r }));
@@ -158,6 +158,20 @@ await check('docs round-trip and a doc without a ref is refused', async () => {
 await check('clearing a field with null works', async () => {
   const d = (await body(await call('board_set', { lot: 'gary-z14-lifter', thc: null })));
   eq(d.lot.thc, null, 'thc cleared');
+});
+
+await check('cbd is stored and validated like thc', async () => {
+  const d = (await body(await call('board_set', { lot: 'gary-z14-lifter', cbd: 6.25 })));
+  eq(d.lot.cbd, 6.25, 'cbd stored');
+  await expectThrow(() => call('board_set', { lot: 'gary-z14-lifter', cbd: -2 }), 'non-negative');
+  const cleared = (await body(await call('board_set', { lot: 'gary-z14-lifter', cbd: null })));
+  eq(cleared.lot.cbd, null, 'cbd cleared');
+});
+
+await check('a lot carries both cannabinoids at once', async () => {
+  const d = (await body(await call('board_set', { lot: 'rogue-z8-lemon', thc: 0.137, cbd: 4.87 })));
+  eq(d.lot.thc, 0.137, 'thc');
+  eq(d.lot.cbd, 4.87, 'cbd');
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

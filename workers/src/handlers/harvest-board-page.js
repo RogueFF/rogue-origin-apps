@@ -432,6 +432,7 @@ export const BOARD_PAGE = `<!doctype html>
   .mark.date     { color: var(--ink-3); background: var(--surface-2); }
   .mark.doc      { color: var(--slate); background: var(--slate-soft); }
   .mark.note     { color: var(--amber); background: var(--amber-soft); }
+  .mark.cbd      { color: var(--slate); background: var(--slate-soft); }
 
 
   /* ---- grouped duplicates ------------------------------------------------
@@ -1071,6 +1072,11 @@ export const BOARD_PAGE = `<!doctype html>
     if (lot.thc !== null && lot.thc !== undefined && lot.thc !== "") {
       marks.appendChild(el("span", "mark " + (thcTone(lot.thc) || "date"), lot.thc + "% THC"));
     }
+    // CBD carries no limit, so it gets no pass/fail colour -- it says what the
+    // lot is worth, next to the number that says whether it is legal.
+    if (lot.cbd !== null && lot.cbd !== undefined && lot.cbd !== "") {
+      marks.appendChild(el("span", "mark cbd", lot.cbd + "% CBD"));
+    }
     if (lot.sacks) { marks.appendChild(el("span", "mark date", lot.sacks + " sacks")); }
     if (lot.docs.length) {
       marks.appendChild(el("span", "mark doc", lot.docs.length + " doc" + (lot.docs.length > 1 ? "s" : "")));
@@ -1360,6 +1366,17 @@ export const BOARD_PAGE = `<!doctype html>
     t.value = (lot.thc === null || lot.thc === undefined) ? "" : lot.thc;
     row.appendChild(group("Total THC %", bindField(t, "thc", id)));
     body.appendChild(row);
+
+    var cannabinoids = el("div", "row2");
+    var cb = document.createElement("input");
+    cb.type = "number";
+    cb.step = "0.01";
+    cb.min = "0";
+    cb.placeholder = "0.00";
+    cb.value = (lot.cbd === null || lot.cbd === undefined) ? "" : lot.cbd;
+    cannabinoids.appendChild(group("Total CBD %", bindField(cb, "cbd", id),
+      "Both come off the same COA."));
+    body.appendChild(cannabinoids);
 
     if (lot.stage === "drying" || lot.stage === "supersacked") {
       var s = document.createElement("input");
