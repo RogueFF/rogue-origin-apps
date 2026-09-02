@@ -31,12 +31,14 @@ Where the line lead logs the hour: crew counts per line, cultivar, and tops and
 smalls weights. The bag timer and pool inventory live on the same screen, so
 nobody switches apps mid-shift. Bilingual, because the floor is.
 
-### Operations Dashboard
+### Ops Hub
 
-![Operations Dashboard](assets/screenshots/dashboard.png)
+![Ops Hub](assets/screenshots/dashboard.png)
 
-The hub. It embeds the other apps as panes so the whole operation is one tab,
-and adds date-range comparison across the metrics that matter to a shift.
+The foreman's view. Pace against today's target, an hour-by-hour shift ledger
+with the crew changes and QC notes on it, the order queue and what it is short
+of, a watchlist of things that need a person, and the 30-day trend. Every
+figure carries its change against the equivalent prior period.
 
 ### Supply Kanban
 
@@ -79,7 +81,7 @@ GitHub Pages (Frontend)  ←→  Cloudflare Workers (API)  ←→  Cloudflare D1
 
 | App | Path | Description |
 |-----|------|-------------|
-| **Dashboard** | `src/pages/index.html` | Operations hub — KPIs, widgets, and the shell that embeds Kanban / Scoreboard / SOP |
+| **Ops Hub** | `src/pages/index.html` | Foreman's view of the trim line — live pace against target, an hour-by-hour shift ledger, the order queue, a watchlist, 30-day trend, and an AI assistant |
 | **Scoreboard** | `src/pages/scoreboard-v2.html` | Real-time production scoreboard (lbs/hr, crew, targets, order queue) |
 | **Floor Manager** | `src/pages/hourly-entry.html` | Hourly production entry — crew counts, bag timer, shift adjustments |
 | **Supply Kanban** | `src/pages/kanban.html` | Supply-closet reorder board with vendor carts and reorder alerts |

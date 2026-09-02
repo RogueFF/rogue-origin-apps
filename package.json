@@ -42,7 +42,7 @@
     "playwright:install": "playwright install",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "lint:dashboard": "eslint src/js/modules/",
+    "lint:dashboard": "eslint src/js/hub/",
     "lint:scoreboard": "eslint src/js/scoreboard-v2/",
     "deploy": "wrangler deploy",
     "preview": "wrangler dev",
