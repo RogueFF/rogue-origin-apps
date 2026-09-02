@@ -53,6 +53,7 @@ import { floorOutputByCultivar } from '../lib/floor-output.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
 import { pickLang, t as translate, langCookie } from '../lib/i18n.js';
 import { handleHarvestBoard, BOARD_ACTIONS } from './harvest-board-d1.js';
+import { withinBarnGrace, suggestedIntakeZone } from '../lib/barn-attribution.js';
 
 const DEBOUNCE_MS = 5 * 60 * 1000;       // re-scanning the same active zone within this window is a no-op
 const CUT_RESUME_GRACE_HOURS = 8;        // re-entering a zone within this many hours of its last close = same cut
@@ -359,6 +360,25 @@ async function getActiveSession(db, isTest) {
   `, [isTest]);
 }
 
+// The most recently closed session — for a given zone, or anywhere. Deliberately
+// cultivar-agnostic: at the barn nobody knows which cultivar of a trial zone a
+// load came off, and the closed session already carries it.
+async function getLastClosedAnyCultivar(db, isTest, zone = null) {
+  const where = zone ? 'AND zone = ?' : '';
+  const args = zone ? [zone, isTest] : [isTest];
+  return queryOne(db, `
+    SELECT * FROM harvest_scan_log
+    WHERE event_type = 'enter' AND closed_at IS NOT NULL ${where} AND is_test = ?
+    ORDER BY closed_at DESC, id DESC LIMIT 1
+  `, args);
+}
+
+// A session still inside the barn grace window (see lib/barn-attribution.js).
+function inBarnGrace(session) {
+  if (!session || !session.closed_at) return false;
+  return withinBarnGrace(parseSqliteUtc(session.closed_at).getTime(), Date.now());
+}
+
 async function getLastClosedSession(db, zone, cultivar, season, isTest) {
   return queryOne(db, `
     SELECT * FROM harvest_scan_log
@@ -419,7 +439,21 @@ async function handleHeadcount(ui, db, env, ctx, params) {
 async function handleBarnIntakeForm(ui, db, env, ctx) {
   const isTest = isTestMode(env) ? 1 : 0;
   const active = await getActiveSession(db, isTest);
-  return renderPage(ui, ui.t('barnIntake'), barnIntakeFormBody(ui, active));
+
+  // Just after a zone change, any trailer pulling in was almost certainly
+  // loaded in the zone before — it was already on the road when the crew
+  // scanned. Pre-select that zone and say why; the dropdown still overrides.
+  const lastClosed = await getLastClosedAnyCultivar(db, isTest);
+  const suggested = suggestedIntakeZone({
+    activeZone: active ? active.zone : null,
+    lastClosedZone: lastClosed ? lastClosed.zone : null,
+    lastClosedAtMs: lastClosed && lastClosed.closed_at
+      ? parseSqliteUtc(lastClosed.closed_at).getTime() : null,
+    nowMs: Date.now(),
+  });
+
+  return renderPage(ui, ui.t('barnIntake'),
+    barnIntakeFormBody(ui, active, suggested ? lastClosed : null));
 }
 
 async function handleBarnLog(ui, db, env, ctx, body) {
@@ -436,11 +470,25 @@ async function handleBarnLog(ui, db, env, ctx, body) {
   }
 
   const isTest = isTestMode(env) ? 1 : 0;
-  const zoneSession = await queryOne(db, `
+  let zoneSession = await queryOne(db, `
     SELECT * FROM harvest_scan_log
     WHERE event_type = 'enter' AND zone = ? AND closed_at IS NULL AND is_test = ?
     ORDER BY occurred_at DESC LIMIT 1
   `, [zone, isTest]);
+
+  // No open session for this zone — the crew has moved on. If it closed within
+  // the grace window the load was cut there and is only now arriving, so it
+  // belongs to that closed lot. Attributing it to nothing would be worse than
+  // attributing it to the wrong zone: the lot ledger counts bins by joining on
+  // this FK, so a NULL drops those bins off every lot rather than misplacing them.
+  let viaGrace = false;
+  if (!zoneSession) {
+    const recent = await getLastClosedAnyCultivar(db, isTest, zone);
+    if (inBarnGrace(recent)) {
+      zoneSession = recent;
+      viaGrace = true;
+    }
+  }
 
   await execute(db, `
     INSERT INTO harvest_scan_log (event_type, zone, season, bins, attributed_zone_session_id, is_test)
@@ -453,13 +501,19 @@ async function handleBarnLog(ui, db, env, ctx, body) {
   `, [zone, isTest]);
   const loadNumber = (todayCount?.n) || 1;
 
-  const cutNote = zoneSession ? `cut ${zoneSession.cut_number}` : 'no active session for this zone';
+  const cutNote = zoneSession
+    ? `cut ${zoneSession.cut_number}${viaGrace ? ', just-closed lot' : ''}`
+    : 'no active session for this zone';
   ctx.waitUntil(sendTelegramMessage(env, {
     chatId: env.TELEGRAM_TEST_CHAT_ID,
     text: `🚚 Load: ${bins} bins → *${zone}* (${cutNote}). Load #${loadNumber} today for this zone.`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
-  return renderPage(ui, ui.t('barnIntake'), barnLogConfirmBody(ui, { zone, bins, loadNumber, hasActiveSession: !!zoneSession }));
+  return renderPage(ui, ui.t('barnIntake'), barnLogConfirmBody(ui, {
+    zone, bins, loadNumber,
+    hasActiveSession: !!zoneSession,
+    grace: viaGrace ? { zone, cut: zoneSession.cut_number } : null,
+  }));
 }
 
 // ─── SUPERSACK TAGS ─────────────────────────────────────
@@ -2002,11 +2056,15 @@ function headcountBody(ui, { zone, cutNumber, sessionId, count }) {
 <div class="footer"><a href="?action=status">${ui.t('viewStatus')}</a></div>`;
 }
 
-function barnIntakeFormBody(ui, active) {
+function barnIntakeFormBody(ui, active, justClosed = null) {
+  // Within the grace window the just-closed zone is the better default — the
+  // trailer at the door left that zone before the crew moved.
+  const preselect = justClosed ? justClosed.zone : (active ? active.zone : null);
+
   // Only zones harvest actually counts — offering GH here would let a load be
   // logged against a zone no bag will ever be tagged from.
   const options = [...VALID_ZONES].filter(isHarvestTracked).sort().map(z =>
-    `<option value="${z}" ${active && active.zone === z ? 'selected' : ''}>${z}</option>`
+    `<option value="${z}" ${preselect === z ? 'selected' : ''}>${z}</option>`
   ).join('');
   const activeNote = active
     ? `<p class="note">${ui.t('activeNow', {
@@ -2014,9 +2072,16 @@ function barnIntakeFormBody(ui, active) {
         n: active.cut_number,
       })}</p>`
     : `<p class="note">${ui.t('noZoneOpen')}</p>`;
+  const graceNote = justClosed
+    ? `<p class="note">${ui.t('justMoved', {
+        newZone: active ? active.zone : '?',
+        prevZone: justClosed.zone,
+      })}</p>`
+    : '';
   return `
 <h1>${ui.t('barnIntake')}</h1>
 ${activeNote}
+${graceNote}
 <form method="POST" action="?action=barn_log&lang=${ui.lang}" onsubmit="this.querySelector('button').disabled=true">
   <label for="zone">${ui.t('zone')}</label>
   <select id="zone" name="zone" required>${options}</select>
@@ -2026,11 +2091,17 @@ ${activeNote}
 </form>`;
 }
 
-function barnLogConfirmBody(ui, { zone, bins, loadNumber, hasActiveSession }) {
+function barnLogConfirmBody(ui, { zone, bins, loadNumber, hasActiveSession, grace = null }) {
+  // Three outcomes, and the crew should be able to tell them apart: attributed
+  // to the open lot (silent), attributed to a lot that just closed (say so, it
+  // is a correction), or attributed to nothing (warn — that one loses bins).
+  const attribution = grace
+    ? `<p class="note">${ui.t('graceAttributed', { zone: grace.zone, n: grace.cut })}</p>`
+    : (hasActiveSession ? '' : `<p class="note">${ui.t('noSessionWarn', { zone })}</p>`);
   return `
 <h1>${ui.t('loggedLoad', { bins, zone })}</h1>
 <p class="sub">${ui.t('loadNumToday', { n: loadNumber, zone })}</p>
-${hasActiveSession ? '' : `<p class="note">${ui.t('noSessionWarn', { zone })}</p>`}
+${attribution}
 <div class="footer"><a href="?action=barn_intake">${ui.t('logAnother')}</a> · <a href="?action=crew">${ui.t('crewChanged')}</a> · <a href="?action=find">${ui.t('findLink')}</a></div>`;
 }
 
