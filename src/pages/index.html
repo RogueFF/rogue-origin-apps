@@ -21,22 +21,22 @@
   <style>
     /* Loader only — everything else lives in hub.css */
     .loader{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;background:#141816}
-    .loader img{width:96px;height:96px;border-radius:20px}
+    .loader img{width:96px;height:96px;border-radius:50%}
     .loader i{width:96px;height:2px;background:rgba(102,137,113,.2);position:relative;overflow:hidden;display:block}
     .loader i::after{content:"";position:absolute;inset:0;width:40%;background:#668971;animation:ld 1.2s ease-in-out infinite}
     @keyframes ld{0%{transform:translateX(-100%)}100%{transform:translateX(260%)}}
     :root[data-theme="light"] .loader{background:#faf8f5}
   </style>
   <link rel="stylesheet" href="../css/shared-base.css?h=c18beb73">
-  <link rel="stylesheet" href="../css/hub.css?h=532021f1">
+  <link rel="stylesheet" href="../css/hub.css?h=1b361731">
 </head>
 <body>
   <a href="#nowBody" class="skip-link">Skip to content</a>
-  <div class="loader" id="loader" role="progressbar" aria-label="Loading the hub"><img src="../assets/ro-logo-square.png" alt="Rogue Origin" width="96" height="96"><i></i></div>
+  <div class="loader" id="loader" role="progressbar" aria-label="Loading the hub"><img src="../assets/ro-logo-horizontal.png" alt="Rogue Origin" width="96" height="96"><i></i></div>
 
   <aside class="rail" id="rail" aria-label="Apps">
     <div class="rail-brand">
-      <img src="../assets/ro-logo-square.png" alt="" width="36" height="36">
+      <img src="../assets/ro-logo-horizontal.png" alt="" width="36" height="36">
       <div><strong>Rogue Origin</strong><span>Ops Hub</span></div>
     </div>
     <nav class="rail-group" aria-label="Floor">

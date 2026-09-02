@@ -118,7 +118,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   padding: 22px 20px 18px;
   border-bottom: 1px solid var(--rail-line);
 }
-.rail-brand img { width: 36px; height: 36px; border-radius: 9px; }
+.rail-brand img { width: 36px; height: 36px; border-radius: 50%; }
 .rail-brand strong { display: block; font-weight: 600; font-size: 15px; letter-spacing: 0.01em; }
 .rail-brand span { display: block; font-size: 11px; color: var(--rail-ink-2); font-family: var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; }
 .rail-group { padding: 14px 12px 4px; }
