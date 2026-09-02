@@ -2089,7 +2089,7 @@ function labelInner(ui, s) {
     <div class="cultivar" style="font-size:${cultivarFontPt(s.cultivar)}pt">${escapeHtml(s.cultivar || '')}</div>
     <div class="row">
       <div class="left">
-        <div class="bagno">#&nbsp;${escapeHtml(s.sack_id)}</div>
+        <div class="bagno" style="font-size:${bagnoFontPt(s.sack_id)}pt">#&nbsp;${escapeHtml(s.sack_id)}</div>
         <div class="meta">${escapeHtml(formatTagDate(ui.lang, s.harvest_date))} · ${escapeHtml(s.zone)} · ${escapeHtml(ui.t('cut', { n: s.cut_number ?? '?' }))}</div>
       </div>
       <img class="qr" src="${qrUrlFor(s.sack_id)}" alt="">
@@ -2174,7 +2174,7 @@ function renderAverySheet(ui, sacks, opts = {}) {
               white-space: nowrap; overflow: hidden; }
   .row { display: flex; align-items: flex-end; justify-content: space-between; flex: 1; gap: 0.08in; }
   .left { min-width: 0; }
-  .bagno { font-size: 30pt; font-weight: 800; line-height: 1.05; white-space: nowrap; }
+  .bagno { font-weight: 800; line-height: 1.05; white-space: nowrap; }
   .meta { font-size: 10.5pt; margin-top: 0.03in; white-space: nowrap; }
   .qr { width: 1in; height: 1in; flex: none; }
 
@@ -2225,10 +2225,17 @@ ${pages.join('')}
  */
 function specimenSacks() {
   const today = new Date().toISOString().slice(0, 10);
+  // Real cultivar/sku_prefix pairs from the 2026 roster, not invented ones, so
+  // the proof exercises widths that can actually occur.
   return [
-    { sack_id: '26-SLIFT-1',    cultivar: 'Sour Lifter',           zone: 'Z4',  cut_number: 1, harvest_date: today },
-    { sack_id: '26-STRWD-88',   cultivar: 'Strawberry Doughnuts',  zone: 'Z10', cut_number: 2, harvest_date: today },
-    { sack_id: '26-ORNGPQ-123', cultivar: 'Orange Pineapple Quik', zone: 'Z8',  cut_number: 3, harvest_date: today },
+    // Short name, short id: the roomiest case. 25pt name, ~28pt number.
+    { sack_id: '26-SLIFT-1',       cultivar: 'Sour Lifter',           zone: 'Z4',  cut_number: 1, harvest_date: today },
+    // Longest name in the roster, so the name font drops to its smallest step.
+    { sack_id: '26-ORNGPQ-12',     cultivar: 'Orange Pineapple Quik', zone: 'Z8',  cut_number: 2, harvest_date: today },
+    // The realistic worst case, and both squeezes at once: an 8-character
+    // prefix (the longest planted this year) with a 3-digit serial, under a
+    // 20-character name. This is the pairing that overlapped the QR.
+    { sack_id: '26-STRAWDNT-123',  cultivar: 'Strawberry Doughnuts',  zone: 'Z10', cut_number: 3, harvest_date: today },
   ];
 }
 
@@ -2272,7 +2279,7 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
               white-space: nowrap; overflow: hidden; }
   .row { display: flex; align-items: flex-end; justify-content: space-between; flex: 1; gap: 0.08in; }
   .left { min-width: 0; }
-  .bagno { font-size: 30pt; font-weight: 800; line-height: 1.05; white-space: nowrap; }
+  .bagno { font-weight: 800; line-height: 1.05; white-space: nowrap; }
   .meta { font-size: 10.5pt; margin-top: 0.03in; white-space: nowrap; }
   .qr { width: 1in; height: 1in; flex: none; }
   .toolbar { padding: 14px; font: 14px system-ui; }
@@ -2320,6 +2327,47 @@ ${autoPrint ? `<script>
  * looks correct until someone needs it. Step the size down instead; ~17 chars
  * is where 25pt stops fitting the 3.74in text column.
  */
+/**
+ * Rough advance width of a bag number in em, Arial Bold.
+ *
+ * Deliberately pessimistic: every capital is charged the width of a wide one
+ * (0.722) even though I and L are far narrower. Erring large here shrinks the
+ * text a little; erring small lets it run under the QR, which is what the
+ * printed proof caught. Cheap direction to be wrong in.
+ */
+function bagnoEmWidth(str) {
+  let w = 0;
+  for (const ch of String(str)) {
+    if (ch >= '0' && ch <= '9') w += 0.556;
+    else if (ch >= 'A' && ch <= 'Z') w += 0.722;
+    else if (ch === '-') w += 0.333;
+    else if (ch === '#') w += 0.556;
+    else if (ch === ' ' || ch === ' ') w += 0.278;
+    else w += 0.6;
+  }
+  return w;
+}
+
+/**
+ * Fit the bag number to the column left of the QR.
+ *
+ * A fixed 30pt worked for 26-SLIFT-1 and silently overlapped the QR on longer
+ * ids -- the real worst case is 26-SKUNKCAND-999 at 16 characters, since
+ * sku_prefix runs to 9. Computed rather than bucketed by length, because a
+ * digit is 0.556em and a capital 0.722em, so two ids of equal length can need
+ * different sizes.
+ *
+ * Never clips instead. A truncated bag number still looks like a valid bag
+ * number -- 26-SLIFT-12 cut to 26-SLIFT-1 is a different sack -- so the text
+ * must always shrink to fit, never be cut off.
+ */
+function bagnoFontPt(sackId) {
+  const COLUMN_PT = 191;      // 4in - padding - 1in QR - gap, in points
+  const em = bagnoEmWidth('# ' + (sackId || ''));
+  const fit = COLUMN_PT / Math.max(em, 0.001);
+  return Math.max(14, Math.min(30, Math.floor(fit * 2) / 2));
+}
+
 function cultivarFontPt(name) {
   const len = (name || '').length;
   if (len <= 16) return 25;
