@@ -6,6 +6,18 @@ History of significant changes to this repo, written by `/close`. Companion to t
 
 ---
 
+## 2026-09-02 — rebuild the dashboard as Ops Hub v3 and retire the v2 shell
+
+- `src/pages/index.html`, `src/css/hub.css`, `src/js/hub/` — the Ops Hub rewrite: Right now (pace against target, rate, crew, last bag), the Shift Ledger (one column per hour with tops, smalls, rate vs target, crew, note flags), In the pipe (order queue, committed-vs-finished coverage, finished tops on hand), Watchlist (open complaints, reorder requests, cart, supersack QA), 30-day trend, cultivars, cost and labor, daily table with CSV export. Every period figure carries its change against the equivalent prior period, which replaces Compare mode.
+- Charts are hand-drawn SVG (`svg.js`, `ledger.js`) — no Chart.js, Muuri or Phosphor. Series colours were run through the CVD validator; smalls is gray because green-vs-gold fails.
+- `src/js/hub/auth.js`, `chat.js` — the assistant gets its own unlock dialog on the shared password; chat and TTS both send `Authorization: Bearer`. Model dropdown and feedback thumbs removed (neither reached the worker).
+- Deleted: `src/js/modules/` (25 files, including the never-imported briefing engine), `dashboard.css`, `ai-chat.css`, `shared/api-cache.js`, and nine Playwright specs that asserted on the v2 widget DOM. `test:dashboard*` scripts and their `testIgnore` entries went with them.
+- `sw.js` → v3.42; README, CLAUDE.md, CODEBASE_MAP.md, docs/README.md describe `src/js/hub/`. README screenshot recaptured.
+- Design: `docs/plans/2026-09-01-ops-hub-v3-design.md`. Commits 18b11e43, 22d00c83, 1cdb173b; live on Pages.
+- Wiki context: wiki/seasons/2026/journal/2026-09-02.md
+
+---
+
 ## 2026-08-28 — surface the wholesale queue on the floor, and credit what was not trimmed
 
 - `workers/src/handlers/media-r2.js` — the four write actions now require the operator password. `/api/media` was the only handler that never imported `requireAuth`: an anonymous caller could enumerate the bucket and upload 250 MB to it. Reads deliberately left open (142 SOP images render from them). `tests/media-auth.test.mjs`.
