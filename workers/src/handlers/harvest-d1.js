@@ -846,15 +846,20 @@ function demoBanner(ui, url, msg) {
     : (es
         ? 'Bolsa de <strong>ejemplo</strong> — no existe. Los números son de la Z4 real para que las proporciones sean honestas.'
         : '<strong>Example</strong> sack — it does not exist. The figures come from the real Z4 so the proportions are honest.');
-  return `<div style="background:#fff4d6;border:1px solid #e0c86a;border-radius:6px;padding:10px 12px;margin:0 0 14px;font-size:14px;line-height:1.5">
-    ${line}<br><a href="${other}" style="color:#7a5c00">${otherLabel} →</a>
+  // Explicit dark text: the page body is white-on-dark-green, so a light
+  // banner without its own colour inherits white and disappears.
+  return `<div style="background:#fff4d6;border:1px solid #e0c86a;border-radius:6px;padding:11px 13px;margin:0 0 16px;font-size:14px;line-height:1.5;color:#3a2f05">
+    ${line}<br><a href="${other}" style="color:#6b5200;font-weight:600">${otherLabel} →</a>
   </div>`;
 }
 
 function demoSackView(opened) {
   const facts = zoneFacts('Z4') || {};
   const today = new Date();
-  const cut = new Date(today.getTime() - 6 * 86400000).toISOString().slice(0, 10);
+  // Cut 16 days ago, bagged after the typical dry cycle, opened yesterday —
+  // so the journey on the page shows the shape of a real sack's timeline.
+  const cut = new Date(today.getTime() - (DRY_DAYS_TYPICAL + 6) * 86400000).toISOString().slice(0, 10);
+  const bagged = new Date(today.getTime() - 6 * 86400000).toISOString().slice(0, 10);
   const growDays = (facts.plantDate)
     ? Math.round((new Date(cut + 'T00:00:00Z') - new Date(facts.plantDate + 'T00:00:00Z')) / 86400000)
     : null;
@@ -863,7 +868,7 @@ function demoSackView(opened) {
       sack_id: DEMO_SACK_ID, season: 2026, serial: 7, cultivar_code: 'SLIFT',
       cultivar: 'Sour Lifter', zone: 'Z4', cut_number: 1,
       harvest_date: cut,
-      printed_at: cut + ' 14:20:00',
+      printed_at: bagged + ' 14:20:00',
       opened_at: opened ? new Date(today.getTime() - 86400000).toISOString().slice(0, 19).replace('T', ' ') : null,
       tops_lbs: opened ? 21.4 : null,
       smalls_lbs: opened ? 11.9 : null,
@@ -871,8 +876,8 @@ function demoSackView(opened) {
       voided_at: null, is_test: 1,
     },
     notes: [
-      { note: 'Bottom of the rack was still damp — held back a day.', created_at: cut + ' 16:05:00' },
-      { note: 'Tape said Z4 cut 1, matches the lot picker.', created_at: cut + ' 14:22:00' },
+      { note: 'Bottom of the rack was still damp — held back a day.', created_at: bagged + ' 16:05:00' },
+      { note: 'Tape said Z4 cut 1, matches the lot picker.', created_at: bagged + ' 14:22:00' },
     ],
     plantDate: facts.plantDate || null,
     plantDateApprox: !!facts.multiDay,
@@ -1783,6 +1788,63 @@ function renderPage(ui, title, bodyHtml, status = 200) {
   .badge.ok   { background: #2f7a4f; color: #fff; }
   .badge.warn { background: #8a6d1f; color: #fff; }
   .badge.bad  { background: #7a3a3a; color: #fff; }
+  /* Sack scan page — a crew member holding a sack, phone at arm's length,
+     gloves on, barn light. Every surface added here is DARK and sets its own
+     ink, so nothing can inherit its way to invisible. Charts are plain CSS:
+     the page must load on one bar of signal, so no libraries, no fonts. */
+  .sd-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .sd-head .badge { margin-top: 10px; font-size: 0.82rem; padding: 7px 11px; }
+  .badge.neutral { background: #3a5f4c; color: #fff; }
+  .flash { background: #21402c; border: 1px solid #4a9d6a; border-radius: 10px; padding: 12px 14px;
+           margin: 0 0 16px; font-size: 1.05rem; color: #f2f6f2; }
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 6px 0 4px; }
+  .tile { background: #1b3123; border: 1px solid #2c4a36; border-radius: 10px; padding: 10px 10px 9px;
+          min-width: 0; color: #f2f6f2; display: flex; flex-direction: column; justify-content: flex-end; }
+  .tile .tl { display: block; font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.06em; color: #9fc2ac; }
+  .tile .tv { display: block; font-size: 1.55rem; font-weight: 800; line-height: 1.15; margin-top: 3px;
+              overflow-wrap: anywhere; }
+  .tile .ts { display: block; font-size: 0.85rem; color: #cfe3d6; margin-top: 2px; }
+  .card { background: #1b3123; border: 1px solid #2c4a36; border-radius: 12px; padding: 14px; color: #f2f6f2; }
+  .card .bigbtn { min-height: 120px; }
+  /* Weights: tops + smalls stacked on a 37-lb track. The track is the full
+     sack; the unfilled part is what did not come out as tops or smalls. Two
+     steps of one green (ordered tiers), 2px surface gap between them. */
+  .wtop { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .wtop .tv { font-size: 2rem; font-weight: 800; line-height: 1; }
+  .wtop .badge { font-size: 0.78rem; padding: 5px 9px; align-self: center; }
+  .wbar { position: relative; display: flex; gap: 2px; height: 26px; background: #26402f;
+          border-radius: 6px; overflow: hidden; }
+  .seg { height: 100%; flex: 0 0 auto; }
+  .seg.tops { background: #45b374; }
+  .seg.smalls { background: #a6e6b8; border-radius: 0 4px 4px 0; }
+  .wbar .tick { position: absolute; top: 0; bottom: 0; width: 2px; background: #f2f6f2; opacity: 0.8; }
+  .wscale { display: flex; justify-content: space-between; font-size: 0.82rem; color: #9fc2ac;
+            margin-top: 5px; font-variant-numeric: tabular-nums; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; font-size: 1rem; }
+  .legend .sw { display: inline-block; width: 14px; height: 14px; border-radius: 4px; margin-right: 7px;
+                vertical-align: -2px; }
+  .legend .sw.tops { background: #45b374; }
+  .legend .sw.smalls { background: #a6e6b8; }
+  .legend strong { font-weight: 800; }
+  .empty { font-size: 1.8rem; font-weight: 800; color: #9fc2ac; margin: 0 0 6px; line-height: 1; }
+  /* Journey: planted → cut → bagged → opened / today. Vertical so it never
+     cramps on a phone; the spans between nodes carry the day counts. */
+  .journey { list-style: none; margin: 4px 0 0; padding: 0; }
+  .journey li { display: grid; grid-template-columns: 22px 1fr; column-gap: 12px; }
+  .journey .node { align-items: center; padding: 2px 0; font-size: 1.05rem; }
+  .journey .dot { width: 14px; height: 14px; border-radius: 50%; background: #45b374; justify-self: center;
+                  box-sizing: border-box; }
+  .journey .dot.open { background: transparent; border: 3px solid #9fc2ac; }
+  .journey .dot.none { background: transparent; border: 2px solid #3a5f4c; }
+  .journey .node > span { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+  .journey .node .when { color: #cfe3d6; text-align: right; }
+  .journey .span { min-height: 36px; }
+  .journey .line { width: 2px; background: #2c4a36; justify-self: center; height: 100%; }
+  .journey .span .dur { align-self: center; color: #9fc2ac; font-size: 0.95rem; padding: 6px 0; }
+  .journey .span .dur strong { color: #f2f6f2; font-size: 1.05rem; }
+  .notecard { background: #1b3123; border-left: 3px solid #3a5f4c; border-radius: 0 8px 8px 0;
+              padding: 10px 12px; margin: 8px 0; font-size: 1rem; line-height: 1.4; color: #f2f6f2; }
+  .notecard .hint { display: block; margin-top: 3px; }
   /* Language toggle — small and out of the way. Spanish is the default, so
      this is an escape hatch for an English reader, not a decision the crew is
      asked to make on every screen. */
@@ -2581,67 +2643,174 @@ ${list ? `<h2>${ui.t('findRecent')}</h2><div class="cvgrid">${list}</div>` : ''}
 function sackDetailBody(ui, view, flash) {
   const { sack, notes, plantDate, plantDateApprox, acres, plants, growDays, lotSacks } = view;
   const opened = !!sack.opened_at;
+  const voided = !!sack.voided_at;
+  const DASH = '—';
+  const fmtDate = iso => escapeHtml(formatTagDate(ui.lang, iso));
 
-  // floor, not round — a sack cut this morning is "today", not "1 day ago".
-  const days = sack.harvest_date
-    ? Math.max(0, Math.floor((Date.now() - new Date(sack.harvest_date + 'T00:00:00Z')) / 86400000))
-    : null;
-  const drying = days === null ? ''
-    : days === 0 ? ui.t('dryingToday')
-    : days === 1 ? ui.t('dryingOne')
-    : ui.t('dryingFor', { n: days });
+  // Whole days between two timestamps by date part, floored: a sack cut this
+  // morning is "today", not "1 day ago". Null in, null out — never a guess.
+  const daysBetween = (a, b) => {
+    if (!a || !b) return null;
+    const da = new Date(String(a).substring(0, 10) + 'T00:00:00Z');
+    const db = new Date(String(b).substring(0, 10) + 'T00:00:00Z');
+    if (isNaN(da) || isNaN(db)) return null;
+    return Math.max(0, Math.floor((db - da) / 86400000));
+  };
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const sinceCut = daysBetween(sack.harvest_date, todayIso);
+  const rackDays = daysBetween(sack.harvest_date, sack.printed_at);        // cut → bagged
+  const sackDays = daysBetween(sack.printed_at, sack.opened_at || todayIso); // bagged → opened / today
+  const dShort = n => (n === null ? DASH : ui.t('daysShort', { n }));
 
-  const row = (label, value) =>
-    `<div class="kv"><span>${label}</span><strong>${value}</strong></div>`;
+  // ── Header: cultivar, serial, and one state pill ──
+  const state = voided ? ['bad', ui.t('stateVoided')]
+    : opened ? ['ok', ui.t('stateOpened')]
+    : ['neutral', ui.t('stateUnopened')];
+  const serial = sack.serial ?? String(sack.sack_id || '').split('-').pop();
+  const head = `
+<div class="sd-head">
+  <div>
+    <h1>${escapeHtml(sack.cultivar || ui.t('sack'))}${sack.cultivar_code ? ` <span class="code">(${escapeHtml(sack.cultivar_code)})</span>` : ''}</h1>
+    <p class="serial">#${escapeHtml(String(serial))}</p>
+    <p class="fullid">${escapeHtml(sack.sack_id)}</p>
+  </div>
+  <span class="badge ${state[0]}">${state[1]}</span>
+</div>`;
 
-  const origin = [
-    row(ui.t('zone'), `${escapeHtml(sack.zone)} · ${ui.t('cut', { n: sack.cut_number ?? '?' })}`),
-    plantDate ? row(ui.t('planted'),
-      `${escapeHtml(formatTagDate(ui.lang, plantDate))}${plantDateApprox ? ' ~' : ''}`) : '',
-    row(ui.t('harvested', { d: '' }).trim(), escapeHtml(formatTagDate(ui.lang, sack.harvest_date))),
-    growDays !== null ? row('', ui.t('growTime', { n: growDays })) : '',
-    acres ? row(ui.t('area'), ui.t('areaVal', {
-      ac: acres.toFixed(3), plants: plants ? plants.toLocaleString('en-US') : '?' })) : '',
-  ].join('');
+  // ── Three tiles: the answers someone holding the sack wants first ──
+  const tiles = `
+<div class="tiles">
+  <div class="tile"><span class="tl">${ui.t('zone')}</span><strong class="tv">${escapeHtml(sack.zone || DASH)}</strong><span class="ts">${sack.cut_number != null ? ui.t('cut', { n: sack.cut_number }) : DASH}</span></div>
+  <div class="tile"><span class="tl">${ui.t('kSinceCut')}</span><strong class="tv">${dShort(sinceCut)}</strong><span class="ts">${sack.harvest_date ? fmtDate(sack.harvest_date) : DASH}</span></div>
+  <div class="tile"><span class="tl">${ui.t('kInLot')}</span><strong class="tv">${lotSacks != null ? Number(lotSacks).toLocaleString('en-US') : DASH}</strong><span class="ts">${lotSacks === 1 ? ui.t('kSack') : ui.t('kSacks')}</span></div>
+</div>`;
 
-  const hasWeights = sack.tops_lbs !== null && sack.tops_lbs !== undefined;
-  const src = sack.weights_source === 'measured' ? ui.t('weightsMeasured') : ui.t('weightsAllocated');
-
+  // ── Weights ──
   // No weight entry here on purpose. Nobody weighs a bag's output on its own —
   // the floor reports a daily total per strain and each bag's share is
   // allocated from it, so this screen shows the result instead of asking.
-  const weights = !opened
-    ? `
-<p class="note">${ui.t('notOpened')}</p>
-<form method="POST" action="/api/harvest?action=sack_open&lang=${ui.lang}" onsubmit="this.querySelector('button').disabled=true">
-  <input type="hidden" name="sack_id" value="${escapeHtml(sack.sack_id)}">
-  <button class="bigbtn" type="submit">${ui.t('openSack')}</button>
-</form>`
-    : hasWeights
-      ? `<p class="note"><strong>${ui.t('weights', { tops: sack.tops_lbs, smalls: sack.smalls_lbs })}</strong><br>
-         <span class="hint">${src} · ${ui.t('openedAt', { t: escapeHtml(sack.opened_at) })}</span></p>`
-      : `<p class="note">${ui.t('weightsPending')}<br>
-         <span class="hint">${ui.t('openedAt', { t: escapeHtml(sack.opened_at) })}</span></p>`;
+  // The bar is drawn only when BOTH figures exist; a missing figure is an
+  // explicit empty state, never a zero-length segment.
+  const num = v => ((v === null || v === undefined || v === '' || !Number.isFinite(Number(v))) ? null : Number(v));
+  const tops = num(sack.tops_lbs), smalls = num(sack.smalls_lbs);
+  const hasWeights = tops !== null && smalls !== null;
+  const fill = CONSTANTS.supersackLbs.value;   // 37 lb; null would hide the reference, not fake it
+  const measured = sack.weights_source === 'measured';
+  const srcBadge = `<span class="badge ${measured ? 'ok' : 'warn'}">${measured ? ui.t('srcMeasuredBadge') : ui.t('srcAllocatedBadge')}</span>`;
+  const srcLine = measured ? ui.t('weightsMeasured') : ui.t('weightsAllocated');
+  // Date only, in the page's language. Every other date on the page reads
+  // "Aug 17, 2026"; a raw "2026-09-01 21:02:58 UTC" beside them is machine
+  // output leaking into a page a crew member reads at arm's length, and the
+  // seconds a sack was opened have never mattered to anyone.
+  const openedLine = opened
+    ? ui.t('openedAt', { t: escapeHtml(formatTagDate(ui.lang, String(sack.opened_at).slice(0, 10))) })
+    : '';
+  const lb = n => n.toFixed(1).replace(/\.0$/, '');
+
+  let weights;
+  if (!opened) {
+    weights = `<div class="card">
+  <p class="note" style="margin:0 0 12px">${ui.t('notOpened')}</p>
+  <form method="POST" action="/api/harvest?action=sack_open&lang=${ui.lang}" onsubmit="this.querySelector('button').disabled=true">
+    <input type="hidden" name="sack_id" value="${escapeHtml(sack.sack_id)}">
+    <button class="bigbtn" type="submit">${ui.t('openSack')}</button>
+  </form>
+</div>`;
+  } else if (hasWeights) {
+    const total = tops + smalls;
+    // The track is the full sack (37 lb). If the allocated share ever exceeds
+    // it, the scale stretches to the total and a tick marks 37 — the overrun
+    // is real information about the day's split, not something to clip.
+    const scaleMax = fill ? Math.max(fill, total) : total;
+    const pct = n => (scaleMax > 0 ? (n / scaleMax) * 100 : 0);
+    const topsShare = total > 0 ? Math.round((tops / total) * 100) : null;
+    const smallsShare = topsShare === null ? null : 100 - topsShare;
+    const recovered = (fill && total > 0) ? Math.round((total / fill) * 100) : null;
+    const overTick = (fill && total > fill) ? `<i class="tick" style="left:${pct(fill).toFixed(2)}%"></i>` : '';
+    const scaleEnd = fill
+      ? `${lb(scaleMax)} lb${total <= fill ? ` · ${ui.t('wFull')}` : ''}`
+      : `${lb(total)} lb`;
+    weights = `<div class="card">
+  <div class="wtop"><strong class="tv">${lb(total)} lb</strong><span class="hint">${ui.t('wTotal')}</span>${srcBadge}</div>
+  <div class="wbar" role="img" aria-label="Tops ${lb(tops)} lb · Smalls ${lb(smalls)} lb">
+    <div class="seg tops" style="flex-basis:${pct(tops).toFixed(2)}%"></div>
+    <div class="seg smalls" style="flex-basis:${pct(smalls).toFixed(2)}%"></div>${overTick}
+  </div>
+  <div class="wscale"><span>0</span><span>${scaleEnd}</span></div>
+  <div class="legend">
+    <span><i class="sw tops"></i>Tops <strong>${lb(tops)} lb</strong>${topsShare !== null ? ` · ${topsShare}%` : ''}</span>
+    <span><i class="sw smalls"></i>Smalls <strong>${lb(smalls)} lb</strong>${smallsShare !== null ? ` · ${smallsShare}%` : ''}</span>
+  </div>
+  <p class="hint" style="margin:12px 0 0">${recovered !== null ? `${ui.t('wRecovered', { pct: recovered, fill })}<br>` : ''}${srcLine} · ${openedLine}</p>
+</div>`;
+  } else {
+    weights = `<div class="card">
+  <p class="empty">${DASH}</p>
+  <p class="note" style="margin:0">${ui.t('weightsPending')}</p>
+  <p class="hint" style="margin:8px 0 0">${openedLine}</p>
+</div>`;
+  }
+
+  // ── Journey: planted → cut → bagged → opened / today ──
+  // Vertical, so the day counts sit on the spans between nodes at full size
+  // instead of being squeezed proportionally (112 days growing next to 10 on
+  // the rack would leave the barn part a sliver). A node with no date is drawn
+  // hollow and labelled "—", not dropped.
+  let journey;
+  if (!sack.harvest_date) {
+    journey = `<p class="note"><span class="hint">${ui.t('tlNoDates')}</span></p>`;
+  } else {
+    const node = (cls, label, when) =>
+      `<li class="node"><i class="dot ${cls}"></i><span><strong>${label}</strong><span class="when">${when}</span></span></li>`;
+    const span = text => `<li class="span"><i class="line"></i><span class="dur">${text}</span></li>`;
+    const dur = (key, n) => (n === null ? DASH : ui.t(key, { d: `<strong>${ui.t('daysShort', { n })}</strong>` }));
+    const rows = [];
+    if (plantDate) {
+      rows.push(node('', ui.t('tlPlanted'),
+        fmtDate(plantDate) + (plantDateApprox ? ` <span class="hint">(${ui.t('approx')})</span>` : '')));
+      rows.push(span(dur('tlGrow', growDays)));
+    } else {
+      rows.push(node('none', ui.t('tlPlanted'), `<span class="hint">${ui.t('tlNoPlant')}</span>`));
+      rows.push(span(DASH));
+    }
+    rows.push(node('', ui.t('tlCut'), fmtDate(sack.harvest_date)));
+    if (sack.printed_at) {
+      rows.push(span(dur('tlRack', rackDays)));
+      rows.push(node('', ui.t('tlBagged'), fmtDate(sack.printed_at)));
+      rows.push(span(dur('tlSack', sackDays)));
+    } else {
+      rows.push(span(DASH));
+      rows.push(node('none', ui.t('tlBagged'), DASH));
+      rows.push(span(DASH));
+    }
+    rows.push(opened
+      ? node('', ui.t('tlOpened'), fmtDate(sack.opened_at))
+      : node('open', ui.t('tlToday'), fmtDate(todayIso)));
+    journey = `<ol class="journey">${rows.join('')}</ol>`;
+  }
+
+  const areaRow = acres
+    ? `<div class="kv"><span>${ui.t('area')}</span><strong>${plants
+        ? ui.t('areaVal', { ac: acres.toFixed(3), plants: plants.toLocaleString('en-US') })
+        : `${acres.toFixed(3)} ac`}</strong></div>`
+    : '';
 
   const noteList = notes.length
-    ? notes.map(n => `<div class="lotmeta">• ${escapeHtml(n.note)}
+    ? notes.map(n => `<div class="notecard">${escapeHtml(n.note)}
         <span class="hint">${escapeHtml(String(n.created_at).substring(0, 10))}</span></div>`).join('')
     : `<p class="note"><span class="hint">${ui.t('noNotes')}</span></p>`;
 
-  return `
-${flash ? `<p class="note">✅ ${escapeHtml(flash)}</p>` : ''}
-<h1>${escapeHtml(sack.cultivar || ui.t('sack'))}${sack.cultivar_code ? ` <span class="code">(${escapeHtml(sack.cultivar_code)})</span>` : ''}</h1>
-<p class="serial">#${escapeHtml(String(sack.serial ?? String(sack.sack_id || '').split('-').pop()))}${sack.voided_at ? ` · ${ui.t('void')}` : ''}</p>
-<p class="fullid">${escapeHtml(sack.sack_id)}</p>
-
-<h2>${ui.t('secOrigin')}</h2>
-${origin}
-
-<h2>${ui.t('secBarn')}</h2>
-<div class="kv"><span>${drying}</span><strong>${lotSacks ? (lotSacks === 1 ? ui.t('lotTotalOne') : ui.t('lotTotal', { n: lotSacks })) : ''}</strong></div>
+  return `<div class="sd">
+${flash ? `<div class="flash">✅ ${escapeHtml(flash)}</div>` : ''}
+${head}
+${tiles}
 
 <h2>${ui.t('secWeights')}</h2>
 ${weights}
+
+<h2>${ui.t('secOrigin')}</h2>
+${journey}
+${areaRow}
 
 <h2>${ui.t('secNotes')}</h2>
 ${noteList}
@@ -2654,5 +2823,6 @@ ${noteList}
   </form>
 </details>
 
-<div class="footer"><a href="/api/harvest?action=sack_label&lang=${ui.lang}&id=${encodeURIComponent(sack.sack_id)}">${ui.t('reprintTag')}</a></div>`;
+<div class="footer"><a href="/api/harvest?action=sack_label&lang=${ui.lang}&id=${encodeURIComponent(sack.sack_id)}">${ui.t('reprintTag')}</a></div>
+</div>`;
 }
