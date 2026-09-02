@@ -326,6 +326,11 @@ body[data-loading="1"] .sec-body.stale { opacity: 0.55; }
 .ledger .base { stroke: var(--line-strong); stroke-width: 1; }
 .ledger .bar-tops { fill: var(--chart-tops); }
 .ledger .bar-smalls { fill: var(--chart-smalls); }
+.ledger .bar-val { font-size: 10px; font-weight: 600; letter-spacing: 0.02em; pointer-events: none; }
+.ledger .bar-val.tops { fill: #ffffff; }
+.ledger .bar-val.smalls { fill: #1f2521; }
+.ledger .bar-val.above { fill: var(--ink-2); font-weight: 500; }
+:root[data-theme="dark"] .ledger .bar-val.smalls { fill: rgba(255, 255, 255, 0.92); }
 .ledger .tgt { stroke: var(--chart-target); stroke-width: 1.5; }
 .ledger .dot { stroke: var(--surface); stroke-width: 2; }
 .ledger .dot.good { fill: var(--chart-tops); }
