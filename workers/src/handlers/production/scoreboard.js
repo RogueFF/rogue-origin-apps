@@ -594,6 +594,7 @@ async function dashboard(params, env) {
     label: h.timeSlot,
     rate: h.rate,
     target: h.target,
+    strain: h.strain || '',
     trimmers: h.trimmers,
     buckers: h.buckers || 0,
     lbs: h.lbs,
