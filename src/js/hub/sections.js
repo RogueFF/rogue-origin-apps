@@ -165,6 +165,24 @@ export function renderNow(state) {
     ${tile({ label: single ? 'Labor cost' : 'Days worked', value: single ? money(t.laborCost) : int(t.days), sub: single ? `${money(t.costPerLb, 2)} per lb blended` : `${money(t.laborCost)} labor` })}`;
 }
 
+/**
+ * Every cultivar a day ran, not just the one it is filed under.
+ *
+ * The API sends a `cultivars` breakdown whenever a day ran more than one, and
+ * `cultivar` alone names whichever the day is labelled with - so reading that
+ * field on its own under-reports any mixed day, and mixed days are routine
+ * (2026-09-02 ran four). `fmt` renders each entry when there are several; a
+ * single-cultivar day keeps the fuller name-and-grow form, since there is room
+ * for it. Returns an empty string when nothing is logged rather than the em
+ * dash `cultivarShort` hands back for an absent value, which callers would
+ * otherwise render as if it were a cultivar name.
+ */
+function dayCultivars(d, fmt = (c) => cultivarParts(c.cultivar).name) {
+  const many = (d.cultivars || []).filter((c) => c.cultivar);
+  if (many.length > 1) return many.map(fmt).join(', ');
+  return d.cultivar ? cultivarShort(d.cultivar) : '';
+}
+
 // ---------------------------------------------------------------- Ledger
 
 export function renderShift(state) {
@@ -212,7 +230,7 @@ export function renderShift(state) {
     tipTitle: dayLabel(d.date),
     tops: d.totalTops, smalls: d.totalSmalls, rate: d.avgRate,
     crew: d.totalCrew,
-    cultivar: (d.cultivars || []).length > 1 ? d.cultivars.map((c) => cultivarParts(c.cultivar).name).join(', ') : cultivarShort(d.cultivar),
+    cultivar: dayCultivars(d),
     notes: noteLines(d.notes).join('\n'),
   }));
   renderLedger(host, { columns, mode: 'day' });
@@ -328,7 +346,7 @@ export function renderTrend(state) {
   // reference is the 7-day average of tops instead.
   const avg7 = days.length >= 3 ? days.slice(-7).reduce((a, d) => a + (d.totalTops || 0), 0) / Math.min(7, days.length) : null;
   columnChart(cols, {
-    rows: days.map((d) => ({ label: dayShort(d.date), sub: `${dayLabel(d.date)} · ${cultivarShort(d.cultivar)}`, tops: d.totalTops || 0, smalls: d.totalSmalls || 0 })),
+    rows: days.map((d) => ({ label: dayShort(d.date), sub: `${dayLabel(d.date)} · ${dayCultivars(d)}`, tops: d.totalTops || 0, smalls: d.totalSmalls || 0 })),
     target: avg7,
     targetLabel: '7-day avg tops',
   });
@@ -341,7 +359,7 @@ export function renderTrend(state) {
   });
   const rateTarget = score?.scoreboard?.targetRate || null;
   lineChart(line, {
-    rows: days.map((d, i) => ({ label: dayShort(d.date), sub: `${dayLabel(d.date)} · ${cultivarShort(d.cultivar)}`, value: d.avgRate, ma: ma[i] })),
+    rows: days.map((d, i) => ({ label: dayShort(d.date), sub: `${dayLabel(d.date)} · ${dayCultivars(d)}`, value: d.avgRate, ma: ma[i] })),
     target: rateTarget,
     unit: 'lb/tr/hr',
     valueLabel: 'Rate',
@@ -403,7 +421,7 @@ export function renderDaily(state) {
   host.innerHTML = `<div class="table-scroll"><table class="grid-table">
     <thead><tr><th>Date</th><th>Cultivar</th><th class="n">Tops</th><th class="n">Smalls</th><th class="n">Total</th><th class="n">Rate</th><th class="n">Crew</th><th class="n">$/lb tops</th><th class="n">Labor</th><th>Notes</th></tr></thead>
     <tbody>${days.map((d) => {
-      const cult = (d.cultivars || []).length > 1 ? d.cultivars.map((c) => `${cultivarParts(c.cultivar).name} ${num(c.tops, 0)}`).join(', ') : cultivarShort(d.cultivar);
+      const cult = dayCultivars(d, (c) => `${cultivarParts(c.cultivar).name} ${num(c.tops, 0)}`);
       const note = noteLines(d.notes).join(' · ');
       return `<tr><td class="num">${esc(dayLabel(d.date))}</td><td>${esc(cult)}</td><td class="n">${num(d.totalTops)}</td><td class="n dim">${num(d.totalSmalls, 0)}</td><td class="n">${num(d.totalLbs)}</td><td class="n">${num(d.avgRate, 2)}</td><td class="n dim">${int(d.totalCrew)}</td><td class="n">${money(d.topsCostPerLb, 2)}</td><td class="n dim">${money(d.laborCost)}</td><td class="dim" title="${esc(note)}">${esc(note.length > 70 ? `${note.slice(0, 70)}…` : note)}</td></tr>`;
     }).join('')}</tbody></table></div>`;
@@ -414,6 +432,10 @@ export function dailyCsv(state) {
   const days = workedDays(source?.daily).filter((d) => d.date <= state.range.end);
   const head = ['date', 'cultivar', 'tops_lbs', 'smalls_lbs', 'total_lbs', 'rate_lb_per_trimmer_hr', 'crew', 'trimmer_hours', 'operator_hours', 'labor_cost', 'cost_per_lb', 'tops_cost_per_lb', 'smalls_cost_per_lb', 'notes'];
   const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const rows = days.map((d) => [d.date, d.cultivar, d.totalTops, d.totalSmalls, d.totalLbs, d.avgRate, d.totalCrew, d.trimmerHours, d.operatorHours, d.laborCost, d.costPerLb, d.topsCostPerLb, d.smallsCostPerLb, noteLines(d.notes).join(' | ')].map(q).join(','));
+  const cultivarCell = (d) => {
+    const many = (d.cultivars || []).filter((c) => c.cultivar);
+    return many.length > 1 ? many.map((c) => c.cultivar).join('; ') : (d.cultivar || '');
+  };
+  const rows = days.map((d) => [d.date, cultivarCell(d), d.totalTops, d.totalSmalls, d.totalLbs, d.avgRate, d.totalCrew, d.trimmerHours, d.operatorHours, d.laborCost, d.costPerLb, d.topsCostPerLb, d.smallsCostPerLb, noteLines(d.notes).join(' | ')].map(q).join(','));
   return `${head.join(',')}\n${rows.join('\n')}`;
 }

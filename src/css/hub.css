@@ -370,6 +370,9 @@ body[data-loading="1"] .sec-body.stale { opacity: 0.55; }
   z-index: 5;
   pointer-events: none;
   min-width: 140px;
+  /* A mixed day can name four cultivars in the title; without a ceiling the
+     whole box stretches to fit one line. */
+  max-width: 280px;
   padding: 8px 10px;
   border-radius: 8px;
   background: var(--surface);
