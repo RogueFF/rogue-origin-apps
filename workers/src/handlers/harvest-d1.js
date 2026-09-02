@@ -707,6 +707,21 @@ async function handleSackLabel(ui, db, env, params) {
     return renderAverySheet(ui, [], { calibrate: true });
   }
 
+  // ?calibrate=1 on the thermal path: specimen tags for proving a printer
+  // without burning a bag number. Never auto-prints, never writes.
+  if (params.calibrate === '1') {
+    const banner = `<div style="padding:0 14px 14px;font:13px system-ui;max-width:6in">
+      <strong>Specimen tags — not real bags.</strong> Nothing was allocated and no number was used up.
+      One tag per cultivar-name length, because the name font steps down as it gets longer.
+      <br><br><strong>Check, in this order:</strong> the tag measures 4&Prime; × 2&Prime; — no cultivar name is clipped —
+      then <strong>scan each QR with a phone</strong>. The QRs point at bags that do not exist, so a
+      <em>&ldquo;no sack&rdquo;</em> page means the code scanned <strong>correctly</strong>. If one will not scan,
+      raise the print density in the driver before changing anything else.
+      </div>`;
+    return renderLabelSheet(ui, specimenSacks(), null,
+      { autoPrint: false, banner, stock: params.stock });
+  }
+
   const raw = String(params.ids || params.id || '').trim();
   const ids = raw.split(',').map(s => s.trim()).filter(Boolean).slice(0, MAX_PRINT_QTY);
   if (!ids.length) throw createError('VALIDATION_ERROR', ui.t('noSackId'));
@@ -2196,10 +2211,45 @@ ${pages.join('')}
   });
 }
 
+/**
+ * Three specimen tags for proving a printer, allocating nothing.
+ *
+ * Deliberately not one sample. The cultivar font steps down as the name grows
+ * (cultivarFontPt), so a printer that renders "Sour Lifter" beautifully can
+ * still clip "Orange Pineapple Quik" — the longest name in the 2026 roster.
+ * One tag per bracket is the only way to see that on real hardware.
+ *
+ * The last one also carries the longest plausible bag number, which is the
+ * densest QR the season can produce: if that one scans off the printed tag,
+ * every real tag will.
+ */
+function specimenSacks() {
+  const today = new Date().toISOString().slice(0, 10);
+  return [
+    { sack_id: '26-SLIFT-1',    cultivar: 'Sour Lifter',           zone: 'Z4',  cut_number: 1, harvest_date: today },
+    { sack_id: '26-STRWD-88',   cultivar: 'Strawberry Doughnuts',  zone: 'Z10', cut_number: 2, harvest_date: today },
+    { sack_id: '26-ORNGPQ-123', cultivar: 'Orange Pineapple Quik', zone: 'Z8',  cut_number: 3, harvest_date: today },
+  ];
+}
+
 function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
   const autoPrint = opts.autoPrint !== false;
-  const labels = sacks.map(s => `
-  <div class="label">${labelInner(ui, s)}
+
+  // ?stock=4x6 prints the same 4x2 tag on 4x6 media. The tag is unchanged --
+  // only the page grows -- so a printer can be proven on whatever roll is
+  // already loaded, before committing to an order of 4x2. The dashed line
+  // marks where the real label ends, so the footprint can be eyeballed against
+  // a Uline tag without owning the right stock yet.
+  const oversize = String(opts.stock || '') === '4x6';
+  const pageH = oversize ? 6 : 2;
+
+  const labels = sacks.map(s => oversize
+    ? `<div class="page">
+         <div class="label">${labelInner(ui, s)}
+         </div>
+         <div class="cutline"><span>real 4&Prime; × 2&Prime; tag ends here</span></div>
+       </div>`
+    : `<div class="label">${labelInner(ui, s)}
   </div>`).join('');
 
   const backLink = `<a href="?action=sack_print">${ui.t('changeLot')}</a>`;
@@ -2207,14 +2257,17 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
   const html = `<!doctype html>
 <html><head><meta charset="utf-8"><title>Sack tags</title>
 <style>
-  @page { size: 4in 2in; margin: 0; }
+  @page { size: 4in ${pageH}in; margin: 0; }
   * { box-sizing: border-box; }
   body { margin: 0; font-family: Arial, Helvetica, sans-serif; background: #eee; }
+  .page { width: 4in; height: ${pageH}in; background: #fff; }
   .label {
     width: 4in; height: 2in; padding: 0.11in 0.13in;
     background: #fff; color: #000; overflow: hidden;
     display: flex; flex-direction: column;
   }
+  .cutline { border-top: 1pt dashed #999; text-align: center; }
+  .cutline span { font-size: 7pt; color: #777; letter-spacing: .04em; }
   .cultivar { font-size: 25pt; font-weight: 800; line-height: 1.0; letter-spacing: -0.01em;
               white-space: nowrap; overflow: hidden; }
   .row { display: flex; align-items: flex-end; justify-content: space-between; flex: 1; gap: 0.08in; }
@@ -2224,16 +2277,21 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
   .qr { width: 1in; height: 1in; flex: none; }
   .toolbar { padding: 14px; font: 14px system-ui; }
   .toolbar a { color: #036; }
-  @media screen { .label { margin: 12px auto; box-shadow: 0 1px 6px rgba(0,0,0,.3); } }
+  @media screen {
+    .label, .page { margin: 12px auto; box-shadow: 0 1px 6px rgba(0,0,0,.3); }
+    .page .label { margin: 0; box-shadow: none; }
+  }
   @media print {
     .toolbar { display: none; }
     body { background: #fff; }
-    .label { margin: 0; page-break-after: always; box-shadow: none; }
-    .label:last-child { page-break-after: auto; }
+    .label, .page { margin: 0; page-break-after: always; box-shadow: none; }
+    .label:last-child, .page:last-child { page-break-after: auto; }
+    .page .label { page-break-after: auto; }
   }
 </style></head>
 <body>
 <div class="toolbar">${sacks.length} · ${backLink} · <a href="javascript:window.print()">${ui.t('printTag')}</a></div>
+${opts.banner || ''}
 ${labels}
 ${autoPrint ? `<script>
   // Wait for QR images before printing — printing early yields blank squares.
