@@ -905,6 +905,7 @@ export const BOARD_PAGE = `<!doctype html>
 
   var STAGES = [
     { id: "untested",    name: "Untested",   full: "Not yet tested", color: "var(--line)" },
+    { id: "to_schedule", name: "To schedule", full: "Needs scheduling", color: "var(--ink-3)" },
     { id: "scheduled",   name: "Scheduled",  full: "Test scheduled", color: "var(--slate)" },
     { id: "cleared",     name: "Cleared",    full: "Test cleared",   color: "var(--leaf)" },
     { id: "harvesting",  name: "Cutting",    full: "Harvesting",     color: "var(--amber)" },
