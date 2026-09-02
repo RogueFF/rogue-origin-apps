@@ -6,6 +6,13 @@ History of significant changes to this repo, written by `/close`. Companion to t
 
 ---
 
+## 2026-09-02 — try pounds inside the ledger bars, then revert
+
+- `src/js/hub/ledger.js`, `src/css/hub.css` — figures printed inside each tops/smalls bar (rotated, above-the-cap fallback for short bars); reverted the same hour because the rows beneath already carry the numbers and two copies read as noise. `02914d5d` → `da7c5c65`. Nothing changes for the reader.
+- Wiki context: wiki/seasons/2026/journal/2026-09-02.md
+
+---
+
 ## 2026-09-02 — attribute supersacks by title, add the 2026 greenhouse cultivars, polish the hub
 
 - `workers/src/lib/coverage.js`, `workers/src/handlers/wholesale-d1.js` — raw supersacks resolve through `cultivar_aliases` on the variant title, falling back to the SKU prefix. Shopify's sack SKUs were coded by hand (SCOOK, SSHAKER) and did not match the catalogue prefixes (SUGCOOK, SUGSHAKE), so Sugar Cookez (186 sacks) and Sugar Shaker (50) read as zero on the coverage card. Finished goods still resolve by SKU, where `parseSku` needs it. Two tests; suite 385/385. Worker `c4fbd192`.
