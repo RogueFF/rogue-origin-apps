@@ -2084,7 +2084,21 @@ function sackSessionBody(ui, { lot, cultivar, stats }) {
  * copies of this markup would drift, and the drift would only show up as two
  * tags on one rack that don't match.
  */
-function labelInner(ui, s) {
+/**
+ * The printed tag is always English, whatever language the screen is in.
+ *
+ * The crew screens are Spanish because the field and barn crew read them. The
+ * tag is different: it is stuck to a sack that outlives the shift and gets read
+ * downstream by bucking, the trim floor, inventory and sales, where English is
+ * the working language. A tag whose language depends on whoever happened to be
+ * at the barn PC when it printed would leave a rack of sacks labelled two ways.
+ *
+ * `labelInner` deliberately takes no `ui`, so the tag cannot accidentally be
+ * localised by a caller that has one.
+ */
+const TAG_LANG = 'en';
+
+function labelInner(s) {
   // Serial only, not the whole id. '#1' beside 'Sour Lifter (SLIFT)' is what a
   // person actually needs, and it removes the width pressure that used to push
   // a long id under the QR. The full id still travels in the QR, and stays
@@ -2096,7 +2110,7 @@ function labelInner(ui, s) {
     <div class="txt">
       <div class="cultivar" style="font-size:${cultivarLineFontPt(s.cultivar, code)}pt">${escapeHtml(s.cultivar || '')}${code ? ` <span class="code">(${escapeHtml(code)})</span>` : ''}</div>
       <div class="bagno" style="font-size:${bagnoFontPt(serial)}pt">#${escapeHtml(String(serial))}</div>
-      <div class="meta">${escapeHtml(formatTagDate(ui.lang, s.harvest_date))} · ${escapeHtml(s.zone)} · ${escapeHtml(ui.t('cut', { n: s.cut_number ?? '?' }))}</div>
+      <div class="meta">${escapeHtml(formatTagDate(TAG_LANG, s.harvest_date))} · ${escapeHtml(s.zone)} · ${escapeHtml(translate(TAG_LANG, 'cut', { n: s.cut_number ?? '?' }))}</div>
     </div>`;
 }
 
@@ -2141,7 +2155,7 @@ function renderAverySheet(ui, sacks, opts = {}) {
       cells.push(`<div class="cell cal"><span class="calnum">${i + 1}</span></div>`);
     }
   } else {
-    for (const sack of sacks) cells.push(`<div class="cell">${labelInner(ui, sack)}</div>`);
+    for (const sack of sacks) cells.push(`<div class="cell">${labelInner(sack)}</div>`);
   }
 
   const pages = [];
@@ -2256,11 +2270,11 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
 
   const labels = sacks.map(s => oversize
     ? `<div class="page">
-         <div class="label">${labelInner(ui, s)}
+         <div class="label">${labelInner(s)}
          </div>
          <div class="cutline"><span>real 4&Prime; × 2&Prime; tag ends here</span></div>
        </div>`
-    : `<div class="label">${labelInner(ui, s)}
+    : `<div class="label">${labelInner(s)}
   </div>`).join('');
 
   const backLink = `<a href="?action=sack_print">${ui.t('changeLot')}</a>`;
