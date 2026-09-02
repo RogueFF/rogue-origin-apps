@@ -30,12 +30,18 @@ import { BOARD_PAGE } from './harvest-board-page.js';
 export const BOARD_ACTIONS = new Set(['board', 'board_set', 'board_page', 'board_doc']);
 
 const STAGES = new Set([
-  'untested', 'scheduled', 'cleared', 'harvesting', 'drying', 'supersacked', 'failed',
+  // `to_schedule` is ripe and queued for a Pinnacle booking that has not been
+  // made yet — the gap between "untested" and a real appointment.
+  'untested', 'to_schedule', 'scheduled', 'cleared', 'harvesting', 'drying', 'supersacked', 'failed',
 ]);
 
 // Column order on the board, so the page never has to sort.
+// BOTH LISTS, ALWAYS. This one drives the column ranking and the per-stage
+// counts; the Set above is what board_set validates against. A stage added to
+// only one of them either cannot be saved or sorts to `undefined` and is
+// counted nowhere.
 const STAGE_ORDER = [
-  'untested', 'scheduled', 'cleared', 'harvesting', 'drying', 'supersacked', 'failed',
+  'untested', 'to_schedule', 'scheduled', 'cleared', 'harvesting', 'drying', 'supersacked', 'failed',
 ];
 
 const SELECT = `
