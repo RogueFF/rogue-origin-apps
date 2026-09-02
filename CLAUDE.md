@@ -56,7 +56,7 @@ When you notice a pattern or the user explicitly states a preference:
 - **Git**: Initialized (January 4, 2026)
 - **Structure**: Organized and documented
 - **Production**: ✅ Live and operational
-- **Main Dashboard**: `index.html` (ES6 modules + Muuri.js + dual themes + AI chat)
+- **Main Dashboard**: `index.html` — Ops Hub v3 (`src/js/hub/`, hand-drawn SVG charts, no CDN libraries, dual themes, AI chat). Design: `docs/plans/2026-09-01-ops-hub-v3-design.md`
 
 ---
 
@@ -106,7 +106,7 @@ rogue-origin-apps/
 ├── src/
 │   ├── pages/              HTML applications
 │   ├── js/
-│   │   ├── modules/        ES6 modules (index.html)
+│   │   ├── hub/            Ops Hub modules (index.html)
 │   │   ├── scoreboard/     Scoreboard modules
 │   │   └── shared/         Shared utilities
 │   ├── css/                Per-page stylesheets
@@ -124,8 +124,8 @@ rogue-origin-apps/
 ```
 
 **Key Files:**
-- `src/pages/index.html` - Main dashboard (Muuri drag-drop, dual theme, AI chat)
-- `src/js/modules/` - ES6 modular architecture (11 modules)
+- `src/pages/index.html` - Ops Hub (foreman's view: pace, shift ledger, queue, watchlist, trend, AI chat)
+- `src/js/hub/` - Hub modules (main, api, range, format, svg, ledger, sections, chat, auth)
 - `src/css/shared-base.css` - Master CSS variables (all colors, spacing, animations)
 - `workers/src/index.js` - API router with feature flags
 - `workers/schema.sql` - D1 database schema (15 tables)

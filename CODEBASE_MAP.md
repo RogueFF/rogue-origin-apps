@@ -7,7 +7,7 @@
 ### Frontend Entry Points
 | App | HTML | JS Entry | CSS |
 |-----|------|----------|-----|
-| Dashboard | `src/pages/index.html` | `src/js/modules/index.js` | `src/css/dashboard.css` |
+| Ops Hub | `src/pages/index.html` | `src/js/hub/main.js` | `src/css/hub.css` |
 | Scoreboard | `src/pages/scoreboard.html` | `src/js/scoreboard/main.js` | `src/css/scoreboard.css` |
 | Orders | `src/pages/orders.html` | `src/js/orders/index.js` | `src/css/orders.css` |
 | SOP Manager | `src/pages/sop-manager.html` | inline | `src/css/sop-manager.css` |
@@ -34,28 +34,19 @@
 
 ---
 
-## Dashboard Modules (`src/js/modules/`)
+## Ops Hub Modules (`src/js/hub/`)
 
 | Module | Purpose |
 |--------|---------|
-| `config.js` | API URL, KPI definitions, widget config, work schedule, colors |
-| `state.js` | Centralized state, interval registry, cleanup |
-| `api.js` | Data fetching, AbortController, version polling |
-| `utils.js` | Formatters, date helpers, safe accessors |
-| `theme.js` | Dark/light mode, Chart.js theme switching |
-| `navigation.js` | View switching, sidebar |
-| `settings.js` | localStorage persistence |
-| `grid.js` | Muuri drag-drop grids |
-| `charts.js` | Chart.js initialization |
-| `panels.js` | Settings & AI chat panels |
-| `widgets.js` | KPI & widget rendering |
-| `date.js` | Date range selection |
-| `memory.js` | AI chat conversation memory |
-| `voice.js` | Voice input/output for AI chat |
-| `status.js` | Connection status bar |
-| `event-cleanup.js` | Event listener tracking & cleanup |
-| `install-prompt.js` | PWA install prompt |
-| `lazy-loader.js` | Lazy loading for Chart.js / Muuri |
+| `main.js` | Entry: state, fetch orchestration, range chips, timers, theme, collapse |
+| `api.js` | Every endpoint the hub calls; `settle()` never-reject fan-out |
+| `range.js` | Date ranges in Pacific time, with the comparison period |
+| `format.js` | Number/date/cultivar/note formatters, `niceScale` |
+| `svg.js` | Hand-drawn column and line charts with hover tooltips |
+| `ledger.js` | The Shift Ledger (one column per hour or day) |
+| `sections.js` | Renderers for Right now, shift, pipe, watchlist, trend, cultivars, cost, daily table, CSV |
+| `chat.js` | "Ask the line" drawer: chat, speech-to-text, spoken replies |
+| `auth.js` | Shared-password unlock dialog (`ro_api_password`) |
 
 ---
 
@@ -121,10 +112,9 @@ orders/
 
 | Config | File |
 |--------|------|
-| API URL | `src/js/modules/config.js` |
-| Brand colors | `src/js/modules/config.js` |
-| Widget definitions | `src/js/modules/config.js` |
-| Break schedule | `src/js/modules/config.js` |
+| API URL | `src/js/shared/api.js` (`API_ROOT`) |
+| Brand colors | `src/css/shared-base.css`; chart series in `src/css/hub.css` |
+| Break schedule | `workers/src/handlers/production/` |
 | D1 binding | `workers/wrangler.toml` |
 | D1 schema | `workers/schema.sql` |
 | D1 config schema | `workers/config-schema.sql` |
@@ -140,14 +130,14 @@ orders/
 
 | Task | File(s) |
 |------|---------|
-| API endpoint URL | `src/js/modules/config.js` |
-| Dashboard widget | `src/js/modules/config.js` + `widgets.js` |
-| Theme colors | `src/js/modules/theme.js` + `src/css/dashboard.css` |
+| API endpoint URL | `src/js/shared/api.js` |
+| Hub section | `src/js/hub/sections.js` (+ `main.js` for its data) |
+| Theme colors | `src/css/shared-base.css` + `src/css/hub.css` |
 | Scoreboard timer | `src/js/scoreboard/timer.js` |
 | Cycle time display | `src/js/scoreboard/cycle-history.js` |
-| Break times | `src/js/modules/config.js` + `workers/src/handlers/production-d1.js` |
+| Break times | `workers/src/handlers/production/` |
 | Order workflow | `src/js/orders/features/orders.js` |
-| AI chat UI | `src/js/modules/panels.js` |
+| AI chat UI | `src/js/hub/chat.js` |
 | AI chat backend | `workers/src/handlers/production-d1.js` (chat function) |
 | D1 database table | `workers/schema.sql` |
 | CORS settings | `workers/src/lib/cors.js` |
@@ -159,8 +149,8 @@ orders/
 |------|---------|
 | New API action | `workers/src/handlers/[feature]-d1.js` |
 | New D1 table | `workers/schema.sql` → `wrangler d1 execute` → add to `workers/src/lib/db.js` VALID_TABLES |
-| New dashboard KPI | `src/js/modules/config.js` (kpiDefinitions) |
-| New widget | `src/js/modules/config.js` + `widgets.js` |
+| New hub tile | `src/js/hub/sections.js` (`renderNow`) |
+| New hub section | `src/pages/index.html` + `src/js/hub/sections.js` + `main.js` |
 | New scoreboard section | `src/js/scoreboard/render.js` |
 | New order feature | `src/js/orders/features/` (new file) |
 
@@ -168,12 +158,12 @@ orders/
 
 | Issue | Start Here |
 |-------|------------|
-| Dashboard not loading | `src/js/modules/index.js` → `api.js` |
+| Hub not loading | `src/js/hub/main.js` → `api.js`; check `npm run stamp:check` |
 | Scoreboard stuck | `src/js/scoreboard/main.js` → `api.js` |
 | API 500 error | `workers/src/handlers/[feature]-d1.js` |
 | D1 query failing | `workers/src/lib/db.js` |
 | Timer wrong | `src/js/scoreboard/timer.js` |
-| Memory leaks | `src/js/modules/event-cleanup.js` + `state.js` |
+| Hub timers | `src/js/hub/main.js` (`initTimers`) |
 | CORS error | `workers/src/lib/cors.js` |
 
 ---

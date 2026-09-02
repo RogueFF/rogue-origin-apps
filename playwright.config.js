@@ -60,7 +60,7 @@ module.exports = defineConfig({
   },
 
   /* Ignore legacy puppeteer-based tests */
-  testIgnore: ['**/page-loading.test.js', '**/baseline.test.js', '**/iframe-navigation.test.js', '**/quick-visual-test.js', '**/automated-dashboard-tests.js'],
+  testIgnore: ['**/page-loading.test.js'],
 
   /* Configure projects for major browsers */
   projects: [

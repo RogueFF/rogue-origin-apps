@@ -120,8 +120,8 @@ Performance benchmarks in [`/reports/lighthouse/`](./reports/lighthouse/).
 ## 🏗️ Architecture Quick Links
 
 ### Frontend Architecture
-- **Main Dashboard**: `src/pages/index.html` (Muuri drag-drop, dual themes, AI chat)
-- **ES6 Modules**: `src/js/modules/` (11 modules, see below)
+- **Ops Hub**: `src/pages/index.html` (foreman's view; design in `plans/2026-09-01-ops-hub-v3-design.md`)
+- **Hub Modules**: `src/js/hub/` (see below)
 - **Shared Styles**: `src/css/shared-base.css` (CSS variables, theme system)
 
 ### Backend Architecture
@@ -130,18 +130,16 @@ Performance benchmarks in [`/reports/lighthouse/`](./reports/lighthouse/).
 - **Legacy Backend**: Google Apps Script (production data entry only)
 - **Schema**: `workers/schema.sql`
 
-### Key Modules (ES6)
-1. **config.js** - KPI/widget definitions, API URLs
-2. **state.js** - Centralized state manager (replaces 30+ globals)
-3. **api.js** - Data fetching with AbortController
-4. **grid.js** - Muuri drag-drop grids
-5. **charts.js** - Chart.js initialization
-6. **theme.js** - Dark/light mode switching
-7. **panels.js** - Settings/AI chat panels
-8. **widgets.js** - KPI/widget rendering
-9. **navigation.js** - View switching, sidebar
-10. **utils.js** - Safe helpers, formatters
-11. **index.js** - Main entry point
+### Key Modules (`src/js/hub/`)
+1. **main.js** - Entry point: state, fetching, timers, chrome
+2. **api.js** - Endpoint calls and never-reject fan-out
+3. **range.js** - Date ranges and comparison periods
+4. **format.js** - Formatters
+5. **svg.js** - Hand-drawn charts with tooltips
+6. **ledger.js** - The Shift Ledger
+7. **sections.js** - Section renderers and CSV export
+8. **chat.js** - Ask the line (AI chat drawer)
+9. **auth.js** - Shared-password unlock
 
 ---
 
@@ -210,9 +208,7 @@ For complete design tokens, see `/design/VISUAL_DESIGN_SYSTEM.md` or `src/css/sh
 ## 📚 Additional Resources
 
 ### External Dependencies
-- **Muuri.js** - Drag-and-drop grid library
-- **Chart.js** - Data visualization
-- **Phosphor Icons** - UI icon system
+- **Chart.js** - Data visualization (Supersack Analytics; the hub draws its own SVG)
 - **Google Fonts** - DM Serif Display, JetBrains Mono, Outfit
 
 ### External Services
