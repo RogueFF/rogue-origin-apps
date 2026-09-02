@@ -22,86 +22,128 @@ export const BOARD_PAGE = `<!doctype html>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:wght@400;500;600&display=swap">
 
 <style>
-  /* ---- tokens: complete light palette on bare :root ---- */
+  /* =====================================================================
+     Tokens. The complete light palette lives on bare :root; the two dark
+     blocks below redefine the same names and nothing else. Never introduce
+     a colour inside a media or [data-theme] block only.
+     ===================================================================== */
   :root {
     --paper:        #e8eae3;
-    --surface:      #f4f6f0;
-    --surface-2:    #dee1d8;
-    --line:         #c6cabd;
-    --line-soft:    #d6d9cf;
-    --ink:          #191d1a;
-    --ink-2:        #4b5250;
-    --ink-3:        #5c655f;
+    --surface:      #f5f6f1;
+    --surface-2:    #dcdfd6;
+    --line:         #c2c7ba;
+    --line-soft:    #d4d8ce;
+    --ink:          #171b18;
+    --ink-2:        #454c49;
+    --ink-3:        #626b65;
+    --accent-ink:   #f7f8f4;   /* text on a solid stage/accent fill */
 
     --slate:        #2f5d7c;
-    --slate-soft:   #d7e2ea;
+    --slate-soft:   #d6e1e9;
     --amber:        #a9762a;
     --amber-soft:   #efe1c6;
-    --leaf:         #42704a;
-    --leaf-soft:    #d8e6d8;
+    --leaf:         #3f6f48;
+    --leaf-soft:    #d6e5d6;
     --rust:         #93392e;
     --rust-soft:    #efd8d3;
 
-    --shadow:       0 1px 2px rgba(25, 29, 26, .10), 0 6px 16px -10px rgba(25, 29, 26, .22);
+    /* Stage ramp: dormant grey -> flagged ochre -> booked slate -> cleared
+       leaf -> cutting amber -> drying tobacco -> sacked deep green. Failed
+       sits aside in rust. The ramp is the board's sequence, read left to
+       right, so every stage gets its own hue rather than sharing. */
+    --st-untested:     #8d948d;
+    --st-to-schedule:  #b3892b;
+    --st-scheduled:    #2f5d7c;
+    --st-cleared:      #3f8a4f;
+    --st-harvesting:   #c9772a;
+    --st-drying:       #8a5a2c;
+    --st-supersacked:  #23392b;
+    --st-failed:       #93392e;
+
+    --shadow:       0 1px 2px rgba(23, 27, 24, .10), 0 6px 16px -10px rgba(23, 27, 24, .22);
+    --shadow-lift:  0 2px 4px rgba(23, 27, 24, .12), 0 12px 24px -12px rgba(23, 27, 24, .32);
     --focus:        #2f5d7c;
     --bar:          #b9bfb2;
     --bar-hover:    #98a08f;
 
-    --col-min:      8.5rem;   /* floor before the rail starts scrolling */
-    --col-max:      20rem;    /* stop columns ballooning on a wide screen */
-    --radius:       3px;
+    --col-min:      8.75rem;  /* floor before the rail starts scrolling */
+    --col-max:      36rem;    /* the heaviest stage may go two cards wide */
+    --spine:        2.75rem;  /* a folded or empty stage */
+    --radius:       4px;
   }
 
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --paper:      #141715;
-      --surface:    #1c201d;
-      --surface-2:  #262b27;
-      --line:       #343a35;
-      --line-soft:  #2a2f2b;
-      --ink:        #e6e9e2;
-      --ink-2:      #a8b0a9;
-      --ink-3:      #98a29a;
+      --paper:        #131614;
+      --surface:      #1b1f1c;
+      --surface-2:    #262b27;
+      --line:         #353b36;
+      --line-soft:    #2a2f2b;
+      --ink:          #e6e9e2;
+      --ink-2:        #aab2ab;
+      --ink-3:        #8f9a92;
+      --accent-ink:   #111412;
 
-      --slate:      #7fb0cf;
-      --slate-soft: #1e3140;
-      --amber:      #d6a256;
-      --amber-soft: #3a2e19;
-      --leaf:       #7fb185;
-      --leaf-soft:  #1e2f21;
-      --rust:       #d4796b;
-      --rust-soft:  #3a221e;
+      --slate:        #7fb0cf;
+      --slate-soft:   #1e3140;
+      --amber:        #d6a256;
+      --amber-soft:   #3a2e19;
+      --leaf:         #7fb185;
+      --leaf-soft:    #1e2f21;
+      --rust:         #d4796b;
+      --rust-soft:    #3a221e;
 
-      --shadow:     0 1px 2px rgba(0, 0, 0, .45), 0 6px 16px -10px rgba(0, 0, 0, .7);
-      --focus:      #7fb0cf;
-      --bar:        #3d443e;
-      --bar-hover:  #555e56;
+      --st-untested:     #737b74;
+      --st-to-schedule:  #d0a545;
+      --st-scheduled:    #7fb0cf;
+      --st-cleared:      #7fc38a;
+      --st-harvesting:   #e39a4f;
+      --st-drying:       #c2894f;
+      --st-supersacked:  #a3cbb0;
+      --st-failed:       #d4796b;
+
+      --shadow:       0 1px 2px rgba(0, 0, 0, .45), 0 6px 16px -10px rgba(0, 0, 0, .7);
+      --shadow-lift:  0 2px 4px rgba(0, 0, 0, .5), 0 12px 24px -12px rgba(0, 0, 0, .8);
+      --focus:        #7fb0cf;
+      --bar:          #3d443e;
+      --bar-hover:    #555e56;
     }
   }
 
   :root[data-theme="dark"] {
-    --paper:      #141715;
-    --surface:    #1c201d;
-    --surface-2:  #262b27;
-    --line:       #343a35;
-    --line-soft:  #2a2f2b;
-    --ink:        #e6e9e2;
-    --ink-2:      #a8b0a9;
-    --ink-3:      #98a29a;
+    --paper:        #131614;
+    --surface:      #1b1f1c;
+    --surface-2:    #262b27;
+    --line:         #353b36;
+    --line-soft:    #2a2f2b;
+    --ink:          #e6e9e2;
+    --ink-2:        #aab2ab;
+    --ink-3:        #8f9a92;
+    --accent-ink:   #111412;
 
-    --slate:      #7fb0cf;
-    --slate-soft: #1e3140;
-    --amber:      #d6a256;
-    --amber-soft: #3a2e19;
-    --leaf:       #7fb185;
-    --leaf-soft:  #1e2f21;
-    --rust:       #d4796b;
-    --rust-soft:  #3a221e;
+    --slate:        #7fb0cf;
+    --slate-soft:   #1e3140;
+    --amber:        #d6a256;
+    --amber-soft:   #3a2e19;
+    --leaf:         #7fb185;
+    --leaf-soft:    #1e2f21;
+    --rust:         #d4796b;
+    --rust-soft:    #3a221e;
 
-    --shadow:     0 1px 2px rgba(0, 0, 0, .45), 0 6px 16px -10px rgba(0, 0, 0, .7);
-    --focus:      #7fb0cf;
-    --bar:        #3d443e;
-    --bar-hover:  #555e56;
+    --st-untested:     #737b74;
+    --st-to-schedule:  #d0a545;
+    --st-scheduled:    #7fb0cf;
+    --st-cleared:      #7fc38a;
+    --st-harvesting:   #e39a4f;
+    --st-drying:       #c2894f;
+    --st-supersacked:  #a3cbb0;
+    --st-failed:       #d4796b;
+
+    --shadow:       0 1px 2px rgba(0, 0, 0, .45), 0 6px 16px -10px rgba(0, 0, 0, .7);
+    --shadow-lift:  0 2px 4px rgba(0, 0, 0, .5), 0 12px 24px -12px rgba(0, 0, 0, .8);
+    --focus:        #7fb0cf;
+    --bar:          #3d443e;
+    --bar-hover:    #555e56;
   }
 
   * { box-sizing: border-box; }
@@ -130,7 +172,7 @@ export const BOARD_PAGE = `<!doctype html>
     letter-spacing: .02em;
   }
 
-  /* ---- shell ---- */
+  /* ---- shell ---------------------------------------------------------- */
   .shell {
     display: flex;
     flex-direction: column;
@@ -139,13 +181,13 @@ export const BOARD_PAGE = `<!doctype html>
     min-height: 30rem;
   }
 
-  /* ---- command bar ---- */
+  /* ---- command bar ---------------------------------------------------- */
   header.bar {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: .5rem .9rem;
-    padding: .45rem .7rem;
+    padding: .45rem .8rem;
     background: var(--surface);
     border-bottom: 1px solid var(--line);
   }
@@ -156,17 +198,18 @@ export const BOARD_PAGE = `<!doctype html>
     margin: 0;
     font-family: "Barlow Condensed", "Public Sans", sans-serif;
     font-weight: 700;
-    font-size: 1.2rem;
+    font-size: 1.25rem;
     letter-spacing: .01em;
     white-space: nowrap;
   }
 
-  .brand .season {
+  .brand .season-tag {
     font-family: "IBM Plex Mono", monospace;
-    font-size: .7rem;
+    font-size: .68rem;
     color: var(--ink-3);
-    letter-spacing: .06em;
+    letter-spacing: .08em;
     text-transform: uppercase;
+    white-space: nowrap;
   }
 
   .controls { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
@@ -186,7 +229,7 @@ export const BOARD_PAGE = `<!doctype html>
     font-weight: 600;
     font-size: .78rem;
     text-transform: uppercase;
-    letter-spacing: .07em;
+    letter-spacing: .08em;
     color: var(--ink-3);
   }
 
@@ -206,16 +249,26 @@ export const BOARD_PAGE = `<!doctype html>
     font-weight: 600;
     font-size: .85rem;
     text-transform: uppercase;
-    letter-spacing: .07em;
+    letter-spacing: .08em;
     color: var(--ink-2);
     background: var(--paper);
     border: 1px solid var(--line);
     border-radius: var(--radius);
-    padding: .38rem .7rem;
+    padding: .38rem .75rem;
     cursor: pointer;
+    transition: border-color .12s, color .12s, background-color .12s;
   }
   button.act:hover { border-color: var(--slate); color: var(--slate); }
   button.act[hidden] { display: none; }
+  button.act:disabled { opacity: .55; cursor: default; }
+
+  /* The one solid button on the page: the action most likely to be wanted. */
+  button.act.primary {
+    background: var(--slate);
+    border-color: var(--slate);
+    color: var(--accent-ink);
+  }
+  button.act.primary:hover { color: var(--accent-ink); filter: brightness(1.08); }
 
   .save {
     font-family: "IBM Plex Mono", monospace;
@@ -229,7 +282,7 @@ export const BOARD_PAGE = `<!doctype html>
   .save[data-tone="ok"]      { color: var(--leaf); }
   .save[data-tone="bad"]     { color: var(--rust); }
 
-  /* ---- notices ---- */
+  /* ---- notices -------------------------------------------------------- */
   .notice {
     padding: .5rem 1rem;
     font-size: .82rem;
@@ -240,7 +293,110 @@ export const BOARD_PAGE = `<!doctype html>
   .notice[hidden] { display: none; }
   .notice.bad { background: var(--rust-soft); }
 
-  /* ---- board ---- */
+  /* ---- season rail ------------------------------------------------------
+     One strip that says where the season is. The bar's segments are the
+     stage counts drawn to scale, in stage order; the chips beneath name and
+     count them, and jump to the stage when tapped -- on a phone that is the
+     way between panels. It is filled in by the app; the shell ships it empty. */
+  .season {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .4rem 1.1rem;
+    padding: .5rem .8rem .45rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+  }
+  .season:empty { display: none; }
+
+  .season .stat {
+    display: flex;
+    align-items: baseline;
+    gap: .35rem;
+    white-space: nowrap;
+  }
+  .season .stat .big {
+    font-family: "Barlow Condensed", sans-serif;
+    font-weight: 700;
+    font-size: 1.45rem;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: .01em;
+  }
+  .season .stat .of {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .68rem;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+
+  .season .track {
+    flex: 1 1 14rem;
+    display: flex;
+    gap: 2px;
+    height: 10px;
+    min-width: 0;
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--surface-2);
+  }
+  .season .seg {
+    flex: 0 0 auto;      /* width is set inline, to scale */
+    min-width: 0;
+    background: var(--stage, var(--line));
+    cursor: pointer;
+    transition: filter .12s;
+  }
+  .season .seg:hover { filter: brightness(1.15); }
+  .season .seg.aside { margin-left: 6px; border-radius: 999px; }
+
+  .season .chips {
+    display: flex;
+    gap: .3rem;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+  .season .chip {
+    all: unset;
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    cursor: pointer;
+    padding: .12rem .5rem .12rem .4rem;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    font-family: "Barlow Condensed", sans-serif;
+    font-weight: 600;
+    font-size: .76rem;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--ink-2);
+    white-space: nowrap;
+    transition: background-color .12s, border-color .12s, color .12s;
+  }
+  .season .chip::before {
+    content: "";
+    width: .5rem;
+    height: .5rem;
+    border-radius: 999px;
+    background: var(--stage, var(--line));
+  }
+  .season .chip .n {
+    font-family: "IBM Plex Mono", monospace;
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+    font-size: .72rem;
+    color: var(--ink-3);
+  }
+  .season .chip:hover { border-color: var(--line); background: var(--paper); }
+  .season .chip.zero { color: var(--ink-3); }
+  .season .chip.zero::before { background: transparent; box-shadow: inset 0 0 0 1.5px var(--stage, var(--line)); }
+  .season .chip.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .season .chip.on .n { color: var(--paper); }
+  .season .chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+  /* ---- board ------------------------------------------------------------ */
   main {
     flex: 1;
     display: flex;
@@ -254,16 +410,18 @@ export const BOARD_PAGE = `<!doctype html>
        would push the page sideways instead of scrolling inside the rail */
     min-width: 0;
     display: flex;
-    gap: .35rem;
-    padding: .55rem .7rem .7rem;
+    gap: .4rem;
+    padding: .6rem .8rem .75rem;
     overflow-x: auto;
     overflow-y: hidden;
     align-items: stretch;
   }
 
+  /* Each stage's width is its weight: the app sets flex-grow from how many
+     rows the column holds, so the heavy end of the season gets the room and
+     an empty stage folds to a labelled spine. The board's silhouette is the
+     season's shape. */
   .col {
-    /* Every stage shares the rail so all 7 fit without sideways scrolling;
-       below --col-min the rail scrolls rather than crushing the cards. */
     flex: 1 1 0;
     min-width: var(--col-min);
     max-width: var(--col-max);
@@ -273,25 +431,27 @@ export const BOARD_PAGE = `<!doctype html>
     background: var(--surface);
     border: 1px solid var(--line-soft);
     border-radius: var(--radius);
+    transition: flex-basis .18s ease, min-width .18s ease, background-color .12s, border-color .12s;
   }
 
-  .col.drop { border-color: var(--slate); background: var(--slate-soft); }
-  .col.aside { flex: 0 1 9rem; border-style: dashed; }
+  .col.drop { border-color: var(--stage, var(--slate)); background: var(--slate-soft); }
+  .col.aside { border-style: dashed; }
+  .col.pulse { box-shadow: 0 0 0 2px var(--stage, var(--focus)); }
 
   .col > h2 {
     margin: 0;
     display: flex;
     align-items: center;
-    gap: .5rem;
-    padding: .35rem .4rem;
+    gap: .4rem;
+    padding: .38rem .45rem .35rem;
     border-bottom: 1px solid var(--line-soft);
     /* stage stripe: a real sequence, so the ramp carries order */
     border-top: 3px solid var(--stage, var(--line));
     font-family: "Barlow Condensed", sans-serif;
     font-weight: 600;
-    font-size: .8rem;
+    font-size: .82rem;
     text-transform: uppercase;
-    letter-spacing: .04em;
+    letter-spacing: .06em;
     color: var(--ink-2);
     white-space: nowrap;
     overflow: hidden;
@@ -319,6 +479,7 @@ export const BOARD_PAGE = `<!doctype html>
     font-size: .8rem;
     line-height: 1;
     padding: .15rem .25rem;
+    border-radius: 2px;
   }
   .col > h2 button.fold:hover { color: var(--slate); }
   .col > h2 button.fold:focus-visible { outline: 2px solid var(--focus); }
@@ -327,86 +488,121 @@ export const BOARD_PAGE = `<!doctype html>
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: .3rem;
-    display: flex;
-    flex-direction: column;
-    gap: .3rem;
+    padding: .35rem;
+    /* A wide column lays cards two abreast; a narrow one stays single. The
+       floor keeps a card wide enough for a name to fit at a readable size,
+       and the min() stops that floor from pushing the column wider than the
+       rail gave it. */
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(10rem, 100%), 1fr));
+    align-content: start;
+    align-items: start;
+    gap: .32rem;
   }
 
-  /* collapsed column: narrow spine, roster still reachable */
-  .col.folded { flex: 0 0 2.6rem; min-width: 2.6rem; }
+  /* Folded stage: a narrow spine. The roster is still a drop target, and the
+     label reads down the spine so the sequence stays legible. */
+  .col.folded { flex: 0 0 var(--spine); min-width: var(--spine); }
   .col.folded .stack { display: none; }
   .col.folded > h2 {
     flex-direction: column;
-    gap: .6rem;
+    gap: .55rem;
     height: 100%;
     align-items: center;
-    padding: .6rem .2rem;
+    padding: .55rem .2rem;
+    cursor: pointer;
+    border-bottom: 0;
   }
+  .col.folded > h2:hover { color: var(--ink); }
   .col.folded > h2 .label {
     writing-mode: vertical-rl;
     text-orientation: mixed;
   }
   .col.folded > h2 .count { margin-left: 0; }
+  .col.folded > h2 .count.zero { background: transparent; color: var(--ink-3); }
+
+  /* While a card is in the air, every spine widens so it can be hit; the one
+     under the pointer opens fully. */
+  .shell.lifting .col.folded { flex-basis: 4rem; min-width: 4rem; }
+  .shell.lifting .col.folded.drop { flex-basis: 8rem; min-width: 8rem; }
+  .shell.lifting .col.folded.drop > h2 .label { writing-mode: horizontal-tb; }
 
   .empty {
+    grid-column: 1 / -1;
+    margin: .1rem;
+    padding: .9rem .5rem;
+    border: 1px dashed var(--line);
+    border-radius: var(--radius);
     color: var(--ink-3);
-    font-size: .78rem;
-    font-style: italic;
-    padding: .5rem .3rem;
+    font-size: .76rem;
+    text-align: center;
+    line-height: 1.4;
   }
+  .empty b { display: block; font-weight: 600; color: var(--ink-2); }
 
-  /* ---- card ---- */
+  /* ---- card ------------------------------------------------------------- */
   .card {
     background: var(--paper);
     border: 1px solid var(--line-soft);
     border-left: 3px solid var(--stage, var(--line));
     border-radius: var(--radius);
-    padding: .35rem .45rem .4rem;
+    padding: .36rem .5rem .42rem;
     cursor: grab;
     display: grid;
-    gap: .2rem;
+    gap: .16rem;
     text-align: left;
     font: inherit;
     color: inherit;
+    min-width: 0;
     box-shadow: var(--shadow);
+    transition: border-color .12s, box-shadow .12s, transform .12s;
   }
-  .card:hover { border-color: var(--line); }
+  .card:hover { border-color: var(--line); box-shadow: var(--shadow-lift); transform: translateY(-1px); }
   .card[aria-selected="true"] { outline: 2px solid var(--focus); outline-offset: 1px; }
-  .card.dragging { opacity: .4; cursor: grabbing; }
+  .card.dragging { opacity: .4; cursor: grabbing; transform: none; }
 
-  .card .top { display: flex; align-items: center; gap: .4rem; }
+  .card .top {
+    display: flex;
+    align-items: center;
+    gap: .3rem;
+    min-width: 0;
+    min-height: 1rem;
+  }
 
+  /* The zone is the lot's address. Mono and quiet: it needs to be found, not
+     to be the first thing seen. */
   .zone {
-    font-family: "Barlow Condensed", sans-serif;
-    font-weight: 700;
-    font-size: .7rem;
-    letter-spacing: .04em;
+    font-family: "IBM Plex Mono", monospace;
+    font-weight: 500;
+    font-size: .68rem;
+    letter-spacing: .05em;
     text-transform: uppercase;
-    color: var(--slate);
-    background: var(--slate-soft);
-    border-radius: var(--radius);
-    padding: .05rem .35rem;
+    color: var(--ink-2);
+    background: var(--surface-2);
+    border-radius: 2px;
+    padding: .03rem .3rem;
     white-space: nowrap;
   }
 
   .farm {
     font-family: "IBM Plex Mono", monospace;
-    font-size: .64rem;
-    letter-spacing: .05em;
+    font-size: .62rem;
+    letter-spacing: .06em;
     text-transform: uppercase;
     color: var(--ink-3);
     margin-left: auto;
+    white-space: nowrap;
   }
 
+  /* The name is what the eye lands on. */
   .cultivar {
     font-family: "Barlow Condensed", sans-serif;
     font-weight: 600;
-    font-size: .95rem;
+    font-size: 1.02rem;
     /* Fixed, not a multiplier: fitNames() shrinks the font on long names, and
        a line box that scaled with it would give the column ragged card
        heights again. */
-    line-height: 1.05rem;
+    line-height: 1.15rem;
     /* One line, always: a wrapped name gives the column ragged card heights
        and costs a row of scanning. A name too wide for its column is shrunk
        to fit by fitNames() rather than clipped; the ellipsis below is only a
@@ -416,31 +612,48 @@ export const BOARD_PAGE = `<!doctype html>
     text-overflow: ellipsis;
   }
 
-  .marks { display: flex; flex-wrap: wrap; gap: .25rem; align-items: center; }
+  /* The data line. Only the THC result is coloured, because only THC has a
+     legal line to be on the right side of; everything else is plain figures. */
+  .marks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .1rem .5rem;
+    align-items: baseline;
+    min-width: 0;
+  }
 
   .mark {
     font-family: "IBM Plex Mono", monospace;
     font-variant-numeric: tabular-nums;
-    font-size: .66rem;
+    font-size: .7rem;
     letter-spacing: .02em;
-    border-radius: var(--radius);
-    padding: .05rem .3rem;
-    border: 1px solid transparent;
+    color: var(--ink-3);
+    white-space: nowrap;
+  }
+  .mark b { font-weight: 500; color: var(--ink-2); }
+  .mark.thc-pass, .mark.thc-fail {
+    font-weight: 500;
+    border-radius: 2px;
+    padding: 0 .3rem;
+    margin-left: -.3rem;
   }
   .mark.thc-pass { color: var(--leaf); background: var(--leaf-soft); }
   .mark.thc-fail { color: var(--rust); background: var(--rust-soft); }
-  .mark.date     { color: var(--ink-3); background: var(--surface-2); }
-  .mark.doc      { color: var(--slate); background: var(--slate-soft); }
-  .mark.note     { color: var(--amber); background: var(--amber-soft); }
-  .mark.cbd      { color: var(--slate); background: var(--slate-soft); }
-
+  .mark.sacks b   { color: var(--ink); }
+  .mark.meta {
+    font-size: .62rem;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  .mark.meta.note { color: var(--amber); }
 
   /* ---- grouped duplicates ------------------------------------------------
      One cultivar in several zones is one row until you open it. The group is
      a container, not a lot: only the zone rows inside it drag. */
-  .group { display: flex; flex-direction: column; gap: .25rem; }
+  .group { display: flex; flex-direction: column; gap: .25rem; min-width: 0; }
 
   .card.grouphead { cursor: pointer; border-left-style: dashed; }
+  .card.grouphead:hover { transform: none; }
   .group.open .card.grouphead { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 
   .caret {
@@ -448,10 +661,24 @@ export const BOARD_PAGE = `<!doctype html>
     font-size: .7rem;
     line-height: 1;
     color: var(--ink-3);
+    flex: 0 0 auto;
+  }
+
+  /* A closed group previews its zones and clips what won't fit; the count
+     pinned right says how many there are in all. */
+  .zlist {
+    display: flex;
+    gap: .15rem;
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent);
+            mask-image: linear-gradient(90deg, #000 85%, transparent);
   }
 
   .zcount {
     margin-left: auto;
+    flex: 0 0 auto;
     font-family: "IBM Plex Mono", monospace;
     font-variant-numeric: tabular-nums;
     font-size: .66rem;
@@ -459,7 +686,7 @@ export const BOARD_PAGE = `<!doctype html>
     color: var(--ink-3);
     background: var(--surface-2);
     border-radius: 999px;
-    padding: .05rem .35rem;
+    padding: .05rem .4rem;
     white-space: nowrap;
   }
 
@@ -469,35 +696,36 @@ export const BOARD_PAGE = `<!doctype html>
     gap: .2rem;
     margin-left: .5rem;
     padding-left: .4rem;
-    border-left: 1px solid var(--line-soft);
+    border-left: 2px solid var(--stage, var(--line-soft));
   }
 
   .zrow {
     display: flex;
-    align-items: center;
-    gap: .3rem;
+    align-items: baseline;
+    gap: .3rem .5rem;
     flex-wrap: wrap;
     background: var(--paper);
     border: 1px solid var(--line-soft);
     border-radius: var(--radius);
-    padding: .25rem .35rem;
+    padding: .28rem .4rem;
     cursor: grab;
+    transition: border-color .12s, box-shadow .12s;
   }
-  .zrow:hover { border-color: var(--line); }
+  .zrow:hover { border-color: var(--line); box-shadow: var(--shadow); }
   .zrow[aria-selected="true"] { outline: 2px solid var(--focus); outline-offset: 1px; }
   .zrow.dragging { opacity: .4; cursor: grabbing; }
-  .zrow .marks { gap: .2rem; }
+  .zrow .marks { gap: .1rem .45rem; }
 
-  /* ---- drawer ---- */
+  /* ---- drawer ------------------------------------------------------------ */
   aside.drawer {
     position: absolute;
     top: 0;
     right: 0;
     bottom: 0;
-    width: 21rem;
+    width: 23rem;
     max-width: 100%;
     z-index: 4;
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow-lift);
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -507,55 +735,90 @@ export const BOARD_PAGE = `<!doctype html>
   aside.drawer[hidden] { display: none; }
 
   .drawer .head {
-    display: flex;
-    align-items: flex-start;
-    gap: .5rem;
-    padding: .75rem .9rem .6rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: .25rem .5rem;
+    padding: .8rem 1rem .7rem;
     border-bottom: 1px solid var(--line-soft);
+    border-top: 3px solid var(--stage, var(--line));
+  }
+  .drawer .head .eyebrow {
+    grid-column: 1;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .35rem .5rem;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .68rem;
+    letter-spacing: .04em;
+    color: var(--ink-3);
   }
   .drawer .head h2 {
+    grid-column: 1;
     margin: 0;
     font-family: "Barlow Condensed", sans-serif;
     font-weight: 700;
-    font-size: 1.3rem;
+    font-size: 1.5rem;
     line-height: 1.1;
     text-wrap: balance;
   }
-  .drawer .head .sub {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: .68rem;
-    color: var(--ink-3);
-    letter-spacing: .03em;
-    display: block;
-    margin-top: .15rem;
+  .drawer .head .stagepill {
+    font-family: "Barlow Condensed", sans-serif;
+    font-weight: 600;
+    font-size: .7rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--accent-ink);
+    background: var(--stage, var(--ink-2));
+    border-radius: 999px;
+    padding: .08rem .5rem;
   }
-  .drawer .head button {
+  .drawer .head button.close {
     all: unset;
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: start;
     cursor: pointer;
-    margin-left: auto;
     color: var(--ink-3);
     font-family: "IBM Plex Mono", monospace;
-    padding: .1rem .3rem;
+    font-size: .95rem;
+    line-height: 1;
+    padding: .25rem .4rem;
+    border-radius: var(--radius);
   }
-  .drawer .head button:hover { color: var(--rust); }
-  .drawer .head button:focus-visible { outline: 2px solid var(--focus); }
+  .drawer .head button.close:hover { color: var(--rust); background: var(--rust-soft); }
+  .drawer .head button.close:focus-visible { outline: 2px solid var(--focus); }
 
   .drawer .body {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: .8rem .9rem 1.2rem;
+    padding: .9rem 1rem 1.3rem;
     display: flex;
     flex-direction: column;
-    gap: .9rem;
+    gap: 1.15rem;
   }
 
-  .grp { display: flex; flex-direction: column; gap: .3rem; }
-
-  .grp > .lbl {
+  /* Sections: a small-caps heading with a rule running out to the edge. */
+  .sec { display: flex; flex-direction: column; gap: .55rem; }
+  .sec > .sh {
+    display: flex;
+    align-items: center;
+    gap: .55rem;
     font-family: "Barlow Condensed", sans-serif;
     font-weight: 600;
-    font-size: .8rem;
+    font-size: .78rem;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--ink-3);
+  }
+  .sec > .sh::after { content: ""; flex: 1; height: 1px; background: var(--line-soft); }
+
+  .grp { display: flex; flex-direction: column; gap: .28rem; min-width: 0; }
+
+  .grp > .lbl {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .64rem;
     text-transform: uppercase;
     letter-spacing: .08em;
     color: var(--ink-3);
@@ -571,19 +834,46 @@ export const BOARD_PAGE = `<!doctype html>
     color: var(--ink);
     border: 1px solid var(--line);
     border-radius: var(--radius);
-    padding: .38rem .45rem;
+    padding: .4rem .5rem;
     font: inherit;
-    font-size: .85rem;
+    font-size: .86rem;
   }
-  .grp textarea { min-height: 6.5rem; resize: vertical; line-height: 1.5; }
+  .grp input[type="number"], .grp input[type="date"] {
+    font-family: "IBM Plex Mono", monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: .84rem;
+  }
+  .grp textarea { min-height: 5.5rem; resize: vertical; line-height: 1.5; }
   .grp input:focus, .grp select:focus, .grp textarea:focus {
     outline: none; border-color: var(--focus);
   }
-  .grp .hint { font-size: .72rem; color: var(--ink-3); }
+  .grp .hint { font-size: .74rem; color: var(--ink-3); line-height: 1.4; }
 
   .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+  .row3 { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: .5rem; }
+  .stagerow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; align-items: stretch; }
+  .stagerow button.act { white-space: nowrap; }
 
-  .docs { display: flex; flex-direction: column; gap: .3rem; }
+  /* The verdict: the lab number read against the line that matters. */
+  .verdict {
+    display: flex;
+    align-items: baseline;
+    gap: .45rem;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .74rem;
+    line-height: 1.4;
+    padding: .4rem .55rem;
+    border-radius: var(--radius);
+    background: var(--surface-2);
+    color: var(--ink-2);
+  }
+  .verdict::before { content: ""; flex: 0 0 .5rem; width: .5rem; height: .5rem; border-radius: 999px; background: var(--line); }
+  .verdict.pass { background: var(--leaf-soft); color: var(--leaf); }
+  .verdict.pass::before { background: var(--leaf); }
+  .verdict.fail { background: var(--rust-soft); color: var(--rust); }
+  .verdict.fail::before { background: var(--rust); }
+
+  .docs { display: flex; flex-direction: column; gap: .35rem; }
 
   /* Label over path, actions pinned right. The path used to sit in a flex row
      beside a long label, which squeezed it to a few pixels and -- with
@@ -597,7 +887,7 @@ export const BOARD_PAGE = `<!doctype html>
     background: var(--paper);
     border: 1px solid var(--line-soft);
     border-radius: var(--radius);
-    padding: .35rem .45rem;
+    padding: .38rem .5rem;
   }
   .doc .name {
     grid-column: 1;
@@ -629,14 +919,35 @@ export const BOARD_PAGE = `<!doctype html>
   .doc button {
     all: unset; cursor: pointer; color: var(--ink-3);
     font-family: "Barlow Condensed", sans-serif;
-    font-weight: 600; font-size: .78rem; letter-spacing: .05em;
+    font-weight: 600; font-size: .78rem; letter-spacing: .06em;
     text-transform: uppercase;
-    padding: .2rem .35rem; border-radius: var(--radius);
+    padding: .22rem .4rem; border-radius: var(--radius);
   }
   .doc button:hover { color: var(--slate); background: var(--slate-soft); }
   .doc button.rm:hover { color: var(--rust); background: var(--rust-soft); }
-  .doc button:hover { color: var(--rust); }
   .doc button:focus-visible { outline: 2px solid var(--focus); }
+  .doc button:disabled { opacity: .5; cursor: default; }
+
+  .drawer .meta {
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+    padding-top: .8rem;
+    border-top: 1px solid var(--line-soft);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .66rem;
+    line-height: 1.4;
+    color: var(--ink-3);
+    word-break: break-all;
+  }
+  .drawer .meta .k {
+    font-family: "Barlow Condensed", sans-serif;
+    font-size: .7rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin-right: .35rem;
+  }
 
   .readonly .card { cursor: default; }
   .readonly .grp input,
@@ -644,11 +955,11 @@ export const BOARD_PAGE = `<!doctype html>
   .readonly .grp textarea { opacity: .65; }
 
   footer.foot {
-    padding: .55rem 1rem .7rem;
+    padding: .5rem 1rem .65rem;
     border-top: 1px solid var(--line);
     background: var(--surface);
     color: var(--ink-3);
-    font-size: .74rem;
+    font-size: .72rem;
     line-height: 1.5;
   }
   footer.foot strong { color: var(--ink-2); font-weight: 600; }
@@ -658,25 +969,27 @@ export const BOARD_PAGE = `<!doctype html>
     color: var(--ink-2);
   }
 
-
-  /* ---- scrollbars: the OS bar ate 16px of a 180px column ---- */
-  .stack, .board, .drawer .body, .grp textarea {
+  /* ---- scrollbars: the OS bar ate 16px of a 180px column ---------------- */
+  .stack, .board, .drawer .body, .grp textarea, .season .chips {
     scrollbar-width: thin;
     scrollbar-color: var(--bar) transparent;
   }
   .stack::-webkit-scrollbar,
   .board::-webkit-scrollbar,
   .drawer .body::-webkit-scrollbar,
+  .season .chips::-webkit-scrollbar,
   .grp textarea::-webkit-scrollbar { width: 8px; height: 8px; }
 
   .stack::-webkit-scrollbar-track,
   .board::-webkit-scrollbar-track,
   .drawer .body::-webkit-scrollbar-track,
+  .season .chips::-webkit-scrollbar-track,
   .grp textarea::-webkit-scrollbar-track { background: transparent; }
 
   .stack::-webkit-scrollbar-thumb,
   .board::-webkit-scrollbar-thumb,
   .drawer .body::-webkit-scrollbar-thumb,
+  .season .chips::-webkit-scrollbar-thumb,
   .grp textarea::-webkit-scrollbar-thumb {
     background: var(--bar);
     border-radius: 999px;
@@ -684,6 +997,7 @@ export const BOARD_PAGE = `<!doctype html>
   .stack::-webkit-scrollbar-thumb:hover,
   .board::-webkit-scrollbar-thumb:hover,
   .drawer .body::-webkit-scrollbar-thumb:hover,
+  .season .chips::-webkit-scrollbar-thumb:hover,
   .grp textarea::-webkit-scrollbar-thumb:hover { background: var(--bar-hover); }
 
   .stack::-webkit-scrollbar-corner,
@@ -696,7 +1010,7 @@ export const BOARD_PAGE = `<!doctype html>
   .sel::after {
     content: "";
     position: absolute;
-    right: .5rem;
+    right: .55rem;
     top: 50%;
     width: 0;
     height: 0;
@@ -713,9 +1027,10 @@ export const BOARD_PAGE = `<!doctype html>
     width: 100%;
     padding-right: 1.5rem;
     cursor: pointer;
+    background: var(--paper);
   }
   .field .sel::after { right: .1rem; }
-  .field .sel select { padding-right: 1.1rem; }
+  .field .sel select { padding-right: 1.1rem; background: transparent; }
 
   /* Applies to the dropdown list itself in Chromium/Windows. */
   select option,
@@ -723,11 +1038,6 @@ export const BOARD_PAGE = `<!doctype html>
     background: var(--surface);
     color: var(--ink);
   }
-
-  /* ---- small text was down at 10.5px; nudge the floor up ---- */
-  .mark { font-size: .7rem; }
-  .col > h2 .count { font-size: .76rem; }
-  .grp .hint { font-size: .74rem; }
 
 
   /* ---- password gate ---- */
@@ -742,21 +1052,34 @@ export const BOARD_PAGE = `<!doctype html>
   .gate-card {
     display: flex;
     flex-direction: column;
-    gap: .7rem;
+    gap: .75rem;
     width: min(24rem, 100%);
     background: var(--surface);
     border: 1px solid var(--line);
-    border-top: 3px solid var(--slate);
     border-radius: var(--radius);
-    padding: 1.4rem 1.3rem 1.5rem;
-    box-shadow: var(--shadow);
+    padding: 1.5rem 1.4rem 1.6rem;
+    box-shadow: var(--shadow-lift);
+    position: relative;
+    overflow: hidden;
+  }
+  /* The stage ramp, as a stripe: the board's sequence before you're in. */
+  .gate-card::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    background: linear-gradient(90deg,
+      var(--st-untested) 0 14%, var(--st-to-schedule) 14% 28%, var(--st-scheduled) 28% 42%,
+      var(--st-cleared) 42% 56%, var(--st-harvesting) 56% 70%, var(--st-drying) 70% 84%,
+      var(--st-supersacked) 84% 100%);
   }
   .gate-card h1 {
     margin: 0;
     font-family: "Barlow Condensed", "Public Sans", sans-serif;
     font-weight: 700;
-    font-size: 1.6rem;
+    font-size: 1.7rem;
     letter-spacing: .01em;
+    line-height: 1.1;
   }
   .gate-card p { margin: 0; color: var(--ink-2); font-size: .86rem; line-height: 1.5; }
   .gate-card input {
@@ -764,7 +1087,7 @@ export const BOARD_PAGE = `<!doctype html>
     color: var(--ink);
     border: 1px solid var(--line);
     border-radius: var(--radius);
-    padding: .5rem .55rem;
+    padding: .55rem .6rem;
     font: inherit;
   }
   .gate-card input:focus { outline: none; border-color: var(--focus); }
@@ -777,21 +1100,42 @@ export const BOARD_PAGE = `<!doctype html>
     * { animation: none !important; transition: none !important; }
   }
 
-  /* ---- phones: one stage per screen, swipe between them ----------------
-     A 7-column rail on a 375px screen is unusable, so each stage becomes a
-     near-full-width panel on a snap track. Drag-and-drop doesn't exist on
-     touch anyway -- the drawer's stage picker is the way cards move here. */
+  /* ---- phones: one stage per screen, swipe between them ------------------
+     An 8-column rail on a 375px screen is unusable, so each populated stage
+     becomes a near-full-width panel on a snap track, and an empty stage stays
+     a spine that the track scrolls past without snapping. Drag-and-drop
+     doesn't exist on touch anyway -- the drawer's stage controls are the way
+     cards move here, and the season chips are the way between panels. */
   @media (max-width: 46rem) {
-    header.bar { padding: .4rem .5rem; gap: .35rem .5rem; }
+    header.bar { padding: .4rem .55rem; gap: .35rem .5rem; }
     .brand h1 { font-size: 1.1rem; }
-    .brand .season { display: none; }
+    .brand .season-tag { display: none; }
     .controls { width: 100%; gap: .35rem; flex-wrap: nowrap; }
-    .controls .field:first-child { flex: 1 1 auto; min-width: 0; }
+    .controls .field:first-child { flex: 1 1 0; min-width: 0; }
+    /* The placeholder already says what the box is for. */
+    .controls .field:first-child label { display: none; }
     .field { padding: .25rem .4rem; }
-    .field input, .field select { min-width: 0; }
+    .field input, .field select { min-width: 0; width: 100%; }
     /* Exporting board JSON is a desk job; on a phone it only costs a row. */
     #export { display: none; }
-    .save { min-width: 0; white-space: nowrap; }
+    .save { flex: 0 0 auto; min-width: 0; white-space: nowrap; }
+    /* The footer is a reader's caveat; on a phone the rows go to the cards. */
+    footer.foot { display: none; }
+
+    .season { padding: .45rem .55rem .4rem; gap: .4rem .7rem; }
+    .season .stat .big { font-size: 1.3rem; }
+    .season .chips {
+      flex: 1 0 100%;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      padding-bottom: .15rem;
+      margin: 0 -.55rem;
+      padding-left: .55rem;
+      padding-right: .55rem;
+      scrollbar-width: none;
+    }
+    .season .chips::-webkit-scrollbar { display: none; }
+    .season .chip { font-size: .8rem; padding: .22rem .6rem .22rem .5rem; }
 
     .board {
       gap: .5rem;
@@ -806,39 +1150,59 @@ export const BOARD_PAGE = `<!doctype html>
       scroll-snap-align: center;
     }
 
-    /* Folding is a desktop affordance; full-width panels have nothing to gain
-       from it, and a folded panel would break the snap track. */
+    /* A spine on the track: narrow, not a snap point, still a marker. */
     .col > h2 button.fold { display: none; }
-    .col.folded { flex: 0 0 86vw; min-width: 86vw; max-width: 86vw; }
-    .col.folded .stack { display: flex; }
-    .col.folded > h2 { flex-direction: row; height: auto; padding: .45rem .55rem; }
-    .col.folded > h2 .label { writing-mode: horizontal-tb; }
-    .col.folded > h2 .count { margin-left: auto; }
+    .col.folded {
+      flex: 0 0 var(--spine);
+      min-width: var(--spine);
+      max-width: var(--spine);
+      scroll-snap-align: none;
+    }
 
-    .col > h2 { padding: .45rem .55rem; font-size: .9rem; }
-    .stack { padding: .4rem; gap: .4rem; }
+    .col > h2 { padding: .5rem .6rem; font-size: .92rem; }
+    .stack { padding: .4rem; gap: .4rem; grid-template-columns: 1fr; }
 
     /* Roomier tap targets, and larger type now that width is not scarce. */
-    .card { padding: .5rem .6rem .55rem; }
+    .card { padding: .5rem .6rem .55rem; gap: .2rem; }
+    .card:hover { transform: none; }
     .zrow { padding: .45rem .5rem; min-height: 44px; }   /* touch target */
     .zones { margin-left: .6rem; padding-left: .5rem; }
     .zcount { font-size: .74rem; }
     .caret { font-size: .8rem; }
-    .cultivar { font-size: 1.05rem; line-height: 1.25rem; }
-    .zone { font-size: .78rem; }
-    .mark { font-size: .74rem; }
+    .cultivar { font-size: 1.1rem; line-height: 1.3rem; }
+    .zone { font-size: .76rem; }
+    .mark { font-size: .76rem; }
+    .mark.meta { font-size: .66rem; }
+    .empty { font-size: .84rem; padding: 1.2rem .6rem; }
 
     aside.drawer {
       position: fixed;
       inset: auto 0 0 0;
       width: auto;
       max-width: none;
-      height: 78dvh;
+      height: 80dvh;
       border-left: 0;
       border-top: 1px solid var(--line);
+      border-radius: 12px 12px 0 0;
       z-index: 5;
     }
-    .drawer .head button { font-size: 1.15rem; padding: .25rem .5rem; }
+    .drawer .head { border-radius: 12px 12px 0 0; padding-top: .95rem; position: relative; }
+    .drawer .head::before {
+      content: "";
+      position: absolute;
+      top: .35rem;
+      left: 50%;
+      width: 2.4rem;
+      height: 4px;
+      margin-left: -1.2rem;
+      border-radius: 999px;
+      background: var(--line);
+    }
+    .drawer .head button.close { font-size: 1.15rem; padding: .3rem .55rem; }
+    .row3 { grid-template-columns: 1fr 1fr; }
+    .row3 > :first-child { grid-column: 1 / -1; }
+    .stagerow { grid-template-columns: 1fr; }
+    .stagerow button.act { padding: .6rem .75rem; font-size: .95rem; }
 
     /* iOS zooms the page when a focused control is under 16px. */
     .field input, .field select,
@@ -849,7 +1213,8 @@ export const BOARD_PAGE = `<!doctype html>
   /* Touch pointers get the bigger hit areas regardless of window width. */
   @media (pointer: coarse) {
     .col > h2 button.fold { padding: .3rem .45rem; }
-    .doc button { padding: .2rem .45rem; }
+    .doc button { padding: .3rem .5rem; }
+    .season .chip { padding: .22rem .6rem .22rem .5rem; }
   }
 </style>
 </head>
@@ -858,7 +1223,7 @@ export const BOARD_PAGE = `<!doctype html>
   <header class="bar">
     <div class="brand">
       <h1>Rogue Lot Board</h1>
-      <span class="season">2026 &middot; 82 lots</span>
+      <span class="season-tag" id="season-tag">2026</span>
     </div>
 
     <div class="controls">
@@ -884,6 +1249,8 @@ export const BOARD_PAGE = `<!doctype html>
 
   <div class="notice" id="notice" hidden></div>
 
+  <div class="season" id="season" aria-label="Season progress"></div>
+
   <main>
     <div class="board" id="board"></div>
     <aside class="drawer" id="drawer" hidden aria-label="Lot detail"></aside>
@@ -896,6 +1263,10 @@ export const BOARD_PAGE = `<!doctype html>
     <code>raw/compliance/2026/</code> and the compliance Drive; cards hold the link, not the file.
   </footer>
 </div>
+
+<!-- The generator cuts the shell here and grafts the D1-backed app script on
+     in its place (scripts/build-harvest-board-worker-page.py). Nothing below
+     this marker is served. -->
 <script>
 (function () {
   "use strict";
@@ -903,33 +1274,61 @@ export const BOARD_PAGE = `<!doctype html>
   var API = "/api/harvest";
   var KEY = "rff-harvest-board-key";
 
+  // Board order. The colours are the stage ramp from the stylesheet, one hue
+  // per stage, so the same colour means the same stage on the rail, the
+  // column stripe, the card edge and the drawer.
   var STAGES = [
-    { id: "untested",    name: "Untested",   full: "Not yet tested", color: "var(--line)" },
-    { id: "to_schedule", name: "To schedule", full: "Needs scheduling", color: "var(--ink-3)" },
-    { id: "scheduled",   name: "Scheduled",  full: "Test scheduled", color: "var(--slate)" },
-    { id: "cleared",     name: "Cleared",    full: "Test cleared",   color: "var(--leaf)" },
-    { id: "harvesting",  name: "Cutting",    full: "Harvesting",     color: "var(--amber)" },
-    { id: "drying",      name: "Drying",     full: "Drying",         color: "var(--amber)" },
-    { id: "supersacked", name: "Sacked",     full: "Supersacked",    color: "var(--ink-2)" },
-    { id: "failed",      name: "Failed",     full: "Failed / destroyed", color: "var(--rust)", aside: true }
+    { id: "untested",    name: "Untested",    full: "Not yet tested",    color: "var(--st-untested)" },
+    { id: "to_schedule", name: "To schedule", full: "Needs scheduling",  color: "var(--st-to-schedule)" },
+    { id: "scheduled",   name: "Scheduled",   full: "Test scheduled",    color: "var(--st-scheduled)" },
+    { id: "cleared",     name: "Cleared",     full: "Test cleared",      color: "var(--st-cleared)" },
+    { id: "harvesting",  name: "Cutting",     full: "Harvesting",        color: "var(--st-harvesting)" },
+    { id: "drying",      name: "Drying",      full: "Drying",            color: "var(--st-drying)" },
+    { id: "supersacked", name: "Sacked",      full: "Supersacked",       color: "var(--st-supersacked)" },
+    { id: "failed",      name: "Failed",      full: "Failed / destroyed", color: "var(--st-failed)", aside: true }
   ];
+  var STAGE_BY_ID = {};
+  STAGES.forEach(function (s) { STAGE_BY_ID[s.id] = s; });
+
+  // The forward path. "failed" is off it: nothing advances into failure, it
+  // is chosen on purpose from the stage picker.
+  function nextStage(id) {
+    var i = -1;
+    for (var k = 0; k < STAGES.length; k++) { if (STAGES[k].id === id) { i = k; } }
+    var n = STAGES[i + 1];
+    return (i === -1 || !n || n.aside) ? null : n;
+  }
+
+  var THC_LIMIT = 0.3;   // ODA total-THC line, percent
 
   var lots = [];        // rows from D1, in board order
   var byId = {};
   var pass = "";
   var selected = null;
   var dragId = null;
+  // Per stage: true = folded by hand, false = opened by hand, absent = automatic
+  // (a stage with nothing in it folds to a spine until something lands there).
   var folded = {};
   var expanded = {};   // "<stage>|<cultivar>" -> group open
 
   var boardEl   = document.getElementById("board");
   var drawerEl  = document.getElementById("drawer");
+  var seasonEl  = document.getElementById("season");
+  var tagEl     = document.getElementById("season-tag");
   var qEl       = document.getElementById("q");
   var farmEl    = document.getElementById("farm");
   var saveEl    = document.getElementById("save");
   var noticeEl  = document.getElementById("notice");
   var exportEl  = document.getElementById("export");
   var shell     = document.querySelector(".shell");
+  var phone     = window.matchMedia ? window.matchMedia("(max-width: 46rem)") : { matches: false };
+
+  var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function fmtDate(s) {
+    var m = /^(\\d{4})-(\\d{2})-(\\d{2})/.exec(s || "");
+    return m ? MONTHS[+m[2] - 1] + " " + (+m[3]) : (s || "");
+  }
+  function isSet(v) { return v !== null && v !== undefined && v !== ""; }
 
   function setSave(text, tone) {
     saveEl.textContent = text;
@@ -1127,23 +1526,29 @@ export const BOARD_PAGE = `<!doctype html>
     return n > 0.3 ? "thc-fail" : "thc-pass";
   }
 
+  // A figure with a quiet unit: "0.24 <b>THC</b>" reads as a number first.
+  function figure(cls, value, unit) {
+    var m = el("span", "mark " + cls);
+    m.appendChild(document.createTextNode(value + " "));
+    m.appendChild(el("b", null, unit));
+    return m;
+  }
+
+  // The data line under a name. THC is the only coloured figure, because it
+  // is the only one with a legal line to be on the right side of; CBD says
+  // what the lot is worth, the date says when it was tested, and the rest
+  // is small-caps housekeeping.
   function marksFor(lot) {
     var marks = el("div", "marks");
-    if (lot.test_date) { marks.appendChild(el("span", "mark date", lot.test_date)); }
-    if (lot.thc !== null && lot.thc !== undefined && lot.thc !== "") {
-      marks.appendChild(el("span", "mark " + (thcTone(lot.thc) || "date"), lot.thc + "% THC"));
-    }
-    // CBD carries no limit, so it gets no pass/fail colour -- it says what the
-    // lot is worth, next to the number that says whether it is legal.
-    if (lot.cbd !== null && lot.cbd !== undefined && lot.cbd !== "") {
-      marks.appendChild(el("span", "mark cbd", lot.cbd + "% CBD"));
-    }
-    if (lot.sacks) { marks.appendChild(el("span", "mark date", lot.sacks + " sacks")); }
+    if (isSet(lot.thc)) { marks.appendChild(figure(thcTone(lot.thc) || "", lot.thc, "THC")); }
+    if (isSet(lot.cbd)) { marks.appendChild(figure("cbd", lot.cbd, "CBD")); }
+    if (lot.sacks) { marks.appendChild(figure("sacks", lot.sacks, lot.sacks === 1 ? "sack" : "sacks")); }
+    if (lot.test_date) { marks.appendChild(el("span", "mark date", fmtDate(lot.test_date))); }
     if (lot.docs.length) {
-      marks.appendChild(el("span", "mark doc", lot.docs.length + " doc" + (lot.docs.length > 1 ? "s" : "")));
+      marks.appendChild(el("span", "mark meta docs", lot.docs.length + " doc" + (lot.docs.length > 1 ? "s" : "")));
     }
-    if ((lot.notes || "").trim()) { marks.appendChild(el("span", "mark note", "note")); }
-    if (lot.updated_by === "timber") { marks.appendChild(el("span", "mark bot", "timber")); }
+    if ((lot.notes || "").trim()) { marks.appendChild(el("span", "mark meta note", "note")); }
+    if (lot.updated_by === "timber") { marks.appendChild(el("span", "mark meta bot", "timber")); }
     return marks.childNodes.length ? marks : null;
   }
 
@@ -1163,15 +1568,21 @@ export const BOARD_PAGE = `<!doctype html>
     node.addEventListener("dragstart", function (ev) {
       dragId = lot.lot_id;
       node.classList.add("dragging");
+      shell.classList.add("lifting");   // folded stages widen into targets
       ev.dataTransfer.effectAllowed = "move";
       try { ev.dataTransfer.setData("text/plain", lot.lot_id); } catch (e) { /* older browsers */ }
     });
     node.addEventListener("dragend", function () {
       dragId = null;
       node.classList.remove("dragging");
+      shell.classList.remove("lifting");
     });
     return node;
   }
+
+  // Zones repeat across farms, so with every farm on the board a card names
+  // its farm too; filtered to one farm, the label would only be noise.
+  function multiFarm() { return !farmEl.value; }
 
   // One cultivar planted across several zones collapses to a single row; the
   // biggest such group is well over a dozen lots. Expanding picks the zone.
@@ -1191,6 +1602,13 @@ export const BOARD_PAGE = `<!doctype html>
 
     var top = el("div", "top");
     top.appendChild(el("span", "caret", open ? "▾" : "▸"));
+    if (!open) {
+      // Closed, the row previews its zones; what won't fit fades out and the
+      // count says how many there really are.
+      var zl = el("span", "zlist");
+      group.lots.forEach(function (l) { zl.appendChild(el("span", "zone", l.zone)); });
+      top.appendChild(zl);
+    }
     top.appendChild(el("span", "zcount", group.lots.length + " zones"));
     head.appendChild(top);
     head.appendChild(el("div", "cultivar", group.cultivar));
@@ -1223,6 +1641,7 @@ export const BOARD_PAGE = `<!doctype html>
 
     var top = el("div", "top");
     top.appendChild(el("span", "zone", lot.zone));
+    if (multiFarm()) { top.appendChild(el("span", "farm", lot.farm)); }
     card.appendChild(top);
     card.appendChild(el("div", "cultivar", lot.cultivar));
 
@@ -1275,45 +1694,159 @@ export const BOARD_PAGE = `<!doctype html>
     }
   }
 
+  // Grouped by cultivar *within this stage* — the same cultivar can sit in
+  // several stages at once and must stay a separate row in each.
+  function groupsOf(mine) {
+    var groups = [], byName = {};
+    mine.forEach(function (l) {
+      var gr = byName[l.cultivar];
+      if (!gr) { gr = byName[l.cultivar] = { cultivar: l.cultivar, lots: [] }; groups.push(gr); }
+      gr.lots.push(l);
+    });
+    return groups;
+  }
+
+  function isFolded(stage, count) {
+    if (folded[stage.id] === true) { return true; }
+    if (folded[stage.id] === false) { return false; }
+    return count === 0;
+  }
+
+  // Open a stage and bring it into view: from the season rail, or on a phone
+  // where the rail is the way between panels.
+  function jumpTo(stageId) {
+    if (folded[stageId] !== false) { folded[stageId] = false; render(); }
+    var col = boardEl.querySelector('.col[data-stage="' + stageId + '"]');
+    if (!col) { return; }
+    try {
+      col.scrollIntoView({ behavior: "smooth", inline: phone.matches ? "center" : "nearest", block: "nearest" });
+    } catch (e) { col.scrollIntoView(); }
+    col.classList.add("pulse");
+    setTimeout(function () { col.classList.remove("pulse"); markActive(); }, 900);
+  }
+
+  // The season rail: counts to scale, in stage order, over a one-line tally.
+  function drawSeason(visible) {
+    seasonEl.textContent = "";
+    var total = visible.length;
+    var counts = {};
+    STAGES.forEach(function (s) { counts[s.id] = 0; });
+    visible.forEach(function (l) { if (counts[l.stage] !== undefined) { counts[l.stage] += 1; } });
+
+    var stat = el("div", "stat");
+    stat.appendChild(el("span", "big num", String(counts.supersacked)));
+    stat.appendChild(el("span", "of", "of " + total + " sacked"));
+    seasonEl.appendChild(stat);
+
+    var track = el("div", "track");
+    track.setAttribute("role", "img");
+    track.setAttribute("aria-label", STAGES.map(function (s) { return s.name + " " + counts[s.id]; }).join(", "));
+    STAGES.forEach(function (s) {
+      var n = counts[s.id];
+      if (!n) { return; }
+      var seg = el("span", "seg" + (s.aside ? " aside" : ""));
+      seg.style.setProperty("--stage", s.color);
+      seg.style.width = (100 * n / total).toFixed(2) + "%";
+      seg.title = s.name + ": " + n;
+      seg.addEventListener("click", function () { jumpTo(s.id); });
+      track.appendChild(seg);
+    });
+    seasonEl.appendChild(track);
+
+    var chips = el("div", "chips");
+    STAGES.forEach(function (s) {
+      var n = counts[s.id];
+      var chip = el("button", "chip" + (n ? "" : " zero"));
+      chip.type = "button";
+      chip.dataset.stage = s.id;
+      chip.style.setProperty("--stage", s.color);
+      chip.title = (s.full || s.name) + " — " + n + (n === 1 ? " lot" : " lots");
+      chip.appendChild(document.createTextNode(s.name));
+      chip.appendChild(el("span", "n num", String(n)));
+      chip.addEventListener("click", function () { jumpTo(s.id); });
+      chips.appendChild(chip);
+    });
+    seasonEl.appendChild(chips);
+
+    if (tagEl) { tagEl.textContent = "2026 · " + lots.length + " lots"; }
+    markActive();
+  }
+
+  // On the phone track, the chip for the panel in view is lit.
+  var activeTimer = null;
+  function markActive() {
+    if (!phone.matches) {
+      seasonEl.querySelectorAll(".chip.on").forEach(function (c) { c.classList.remove("on"); });
+      return;
+    }
+    var cols = boardEl.querySelectorAll(".col:not(.folded)");
+    var mid = boardEl.scrollLeft + boardEl.clientWidth / 2;
+    var best = null, bestD = Infinity;
+    for (var i = 0; i < cols.length; i++) {
+      var c = cols[i];
+      var d = Math.abs(c.offsetLeft + c.offsetWidth / 2 - mid);
+      if (d < bestD) { bestD = d; best = c; }
+    }
+    seasonEl.querySelectorAll(".chip").forEach(function (chip) {
+      chip.classList.toggle("on", !!best && chip.dataset.stage === best.dataset.stage);
+    });
+  }
+  boardEl.addEventListener("scroll", function () {
+    if (activeTimer) { return; }
+    activeTimer = setTimeout(function () { activeTimer = null; markActive(); }, 80);
+  }, { passive: true });
+
   function render() {
     boardEl.textContent = "";
     var visible = lots.filter(matches);
+    drawSeason(visible);
 
     STAGES.forEach(function (stage) {
       var col = el("div", "col" + (stage.aside ? " aside" : ""));
+      col.dataset.stage = stage.id;
       col.style.setProperty("--stage", stage.color);
-      var isFolded = !!folded[stage.id];
-      if (isFolded) { col.classList.add("folded"); }
 
       var mine = visible.filter(function (l) { return l.stage === stage.id; });
+      var groups = groupsOf(mine);
+      var fold = isFolded(stage, mine.length);
+      if (fold) { col.classList.add("folded"); }
+
+      // Width follows weight: a stage holding a dozen rows gets several times
+      // the room of one holding a single card, and the heaviest may go two
+      // cards abreast. Square root keeps the biggest from crowding out the
+      // rest. The failed stage sits aside and never grows.
+      var rows = groups.length + mine.length / 4;
+      col.style.flexGrow = (fold || stage.aside) ? "0" : (0.6 + Math.sqrt(Math.min(rows, 30))).toFixed(2);
 
       var h = el("h2");
-      var fold = el("button", "fold", isFolded ? "▸" : "▾");
-      fold.type = "button";
-      fold.title = (isFolded ? "Expand " : "Collapse ") + (stage.full || stage.name);
-      fold.setAttribute("aria-expanded", isFolded ? "false" : "true");
-      fold.addEventListener("click", function (ev) {
+      var foldBtn = el("button", "fold", fold ? "▸" : "▾");
+      foldBtn.type = "button";
+      foldBtn.title = (fold ? "Expand " : "Collapse ") + (stage.full || stage.name);
+      foldBtn.setAttribute("aria-expanded", fold ? "false" : "true");
+      foldBtn.addEventListener("click", function (ev) {
         ev.stopPropagation();
-        folded[stage.id] = !folded[stage.id];
+        folded[stage.id] = !fold;
         render();
       });
-      h.appendChild(fold);
+      h.appendChild(foldBtn);
       h.appendChild(el("span", "label", stage.name));
-      h.appendChild(el("span", "count num", String(mine.length)));
+      h.appendChild(el("span", "count num" + (mine.length ? "" : " zero"), String(mine.length)));
+      if (fold) {
+        // The whole spine opens the stage; the arrow alone is a small target.
+        h.title = "Open " + (stage.full || stage.name);
+        h.addEventListener("click", function () { folded[stage.id] = false; render(); });
+      }
       col.appendChild(h);
 
       var stack = el("div", "stack");
       if (!mine.length) {
-        stack.appendChild(el("div", "empty", "Nothing here."));
+        var empty = el("div", "empty");
+        empty.appendChild(el("b", null, "No lots " + (stage.aside ? "failed" : stage.name.toLowerCase()) + "."));
+        empty.appendChild(document.createTextNode(phone.matches
+          ? "Set a lot's stage from its detail to move it here."
+          : "Drop a card here to move it."));
+        stack.appendChild(empty);
       } else {
-        // Grouped by cultivar *within this stage* — the same cultivar can sit
-        // in several stages at once and must stay a separate row in each.
-        var groups = [], byName = {};
-        mine.forEach(function (l) {
-          var gr = byName[l.cultivar];
-          if (!gr) { gr = byName[l.cultivar] = { cultivar: l.cultivar, lots: [] }; groups.push(gr); }
-          gr.lots.push(l);
-        });
         groups.forEach(function (gr) {
           stack.appendChild(gr.lots.length === 1 ? makeCard(gr.lots[0]) : makeGroup(stage, gr));
         });
@@ -1332,6 +1865,7 @@ export const BOARD_PAGE = `<!doctype html>
         ev.preventDefault();
         var id = dragId || ev.dataTransfer.getData("text/plain");
         if (!id || !byId[id] || byId[id].stage === stage.id) { return; }
+        if (folded[stage.id] === true) { folded[stage.id] = false; }   // show where it went
         patch(id, { stage: stage.id });
       });
 
@@ -1340,6 +1874,7 @@ export const BOARD_PAGE = `<!doctype html>
 
     if (selected && byId[selected]) { drawLot(selected); }
     fitNames();
+    markActive();
   }
 
   // ---- drawer ------------------------------------------------------------
@@ -1376,21 +1911,29 @@ export const BOARD_PAGE = `<!doctype html>
     return node;
   }
 
+  function section(title) {
+    var s = el("div", "sec");
+    s.appendChild(el("div", "sh", title));
+    return s;
+  }
+
   function drawLot(id) {
     var lot = byId[id];
+    var stage = STAGE_BY_ID[lot.stage] || STAGES[0];
     drawerEl.textContent = "";
+    drawerEl.style.setProperty("--stage", stage.color);
 
+    // Head: where it is, what it is, which stage it's in.
     var head = el("div", "head");
-    var title = el("div");
-    title.appendChild(el("h2", null, lot.cultivar));
-    var sub = el("span", "sub", lot.zone + " · " + lot.farm);
-    if (lot.updated_at) {
-      sub.textContent += " · last touched " + lot.updated_at.slice(0, 16).replace("T", " ") +
-        (lot.updated_by ? " by " + lot.updated_by : "");
-    }
-    title.appendChild(sub);
-    head.appendChild(title);
-    var x = el("button", null, "✕");
+    var eyebrow = el("div", "eyebrow");
+    eyebrow.appendChild(el("span", "zone", lot.zone));
+    eyebrow.appendChild(document.createTextNode(lot.farm));
+    var pill = el("span", "stagepill", stage.full || stage.name);
+    pill.style.setProperty("--stage", stage.color);
+    eyebrow.appendChild(pill);
+    head.appendChild(eyebrow);
+    head.appendChild(el("h2", null, lot.cultivar));
+    var x = el("button", "close", "✕");
     x.type = "button";
     x.title = "Close";
     x.setAttribute("aria-label", "Close lot detail");
@@ -1400,6 +1943,10 @@ export const BOARD_PAGE = `<!doctype html>
 
     var body = el("div", "body");
 
+    // Stage: the picker for any move, and one solid button for the move that
+    // is nearly always the one wanted -- the next step along the path.
+    var stageSec = section("Stage");
+    var stagerow = el("div", "stagerow");
     var sel = document.createElement("select");
     STAGES.forEach(function (s) {
       var o = document.createElement("option");
@@ -1408,47 +1955,80 @@ export const BOARD_PAGE = `<!doctype html>
       sel.appendChild(o);
     });
     sel.value = lot.stage;
+    sel.setAttribute("aria-label", "Stage");
     sel.addEventListener("change", function () { patch(id, { stage: sel.value }); });
     var selWrap = el("span", "sel");
     selWrap.appendChild(sel);
-    body.appendChild(group("Stage", selWrap, "Drag the card, or set it here on a phone."));
+    var selGrp = el("div", "grp");
+    selGrp.appendChild(selWrap);
+    stagerow.appendChild(selGrp);
+    var next = nextStage(lot.stage);
+    if (next) {
+      var adv = el("button", "act primary", "Advance → " + next.name);
+      adv.type = "button";
+      adv.title = "Move to " + (next.full || next.name);
+      adv.addEventListener("click", function () { patch(id, { stage: next.id }); });
+      stagerow.appendChild(adv);
+    }
+    stageSec.appendChild(stagerow);
+    if (lot.stage === "failed") {
+      stageSec.appendChild(el("div", "hint", "Failed lots stay here as the record of the destroy."));
+    }
+    body.appendChild(stageSec);
 
-    var row = el("div", "row2");
+    // The ODA test: date and the two figures off the same COA, then the
+    // number read against the line.
+    var testSec = section("ODA test");
+    var row = el("div", "row3");
     var d = document.createElement("input");
     d.type = "date";
     d.value = lot.test_date || "";
-    row.appendChild(group("ODA test date", bindField(d, "test_date", id)));
+    row.appendChild(group("Test date", bindField(d, "test_date", id)));
 
     var t = document.createElement("input");
     t.type = "number";
     t.step = "0.01";
     t.min = "0";
     t.placeholder = "0.00";
-    t.value = (lot.thc === null || lot.thc === undefined) ? "" : lot.thc;
+    t.inputMode = "decimal";
+    t.value = isSet(lot.thc) ? lot.thc : "";
     row.appendChild(group("Total THC %", bindField(t, "thc", id)));
-    body.appendChild(row);
 
-    var cannabinoids = el("div", "row2");
     var cb = document.createElement("input");
     cb.type = "number";
     cb.step = "0.01";
     cb.min = "0";
     cb.placeholder = "0.00";
-    cb.value = (lot.cbd === null || lot.cbd === undefined) ? "" : lot.cbd;
-    cannabinoids.appendChild(group("Total CBD %", bindField(cb, "cbd", id),
-      "Both come off the same COA."));
-    body.appendChild(cannabinoids);
+    cb.inputMode = "decimal";
+    cb.value = isSet(lot.cbd) ? lot.cbd : "";
+    row.appendChild(group("Total CBD %", bindField(cb, "cbd", id)));
+    testSec.appendChild(row);
+
+    var verdict;
+    if (!isSet(lot.thc)) {
+      verdict = el("div", "verdict", "No result on file. The limit is " + THC_LIMIT + "% total THC.");
+    } else if (parseFloat(lot.thc) > THC_LIMIT) {
+      verdict = el("div", "verdict fail", lot.thc + "% total THC — over the " + THC_LIMIT + "% limit.");
+    } else {
+      verdict = el("div", "verdict pass", lot.thc + "% total THC — under the " + THC_LIMIT + "% limit.");
+    }
+    testSec.appendChild(verdict);
+    body.appendChild(testSec);
 
     if (lot.stage === "drying" || lot.stage === "supersacked") {
+      var harvestSec = section("Harvest");
       var s = document.createElement("input");
       s.type = "number";
       s.min = "0";
       s.placeholder = "0";
-      s.value = (lot.sacks === null || lot.sacks === undefined) ? "" : lot.sacks;
-      body.appendChild(group("Supersacks", bindField(s, "sacks", id),
+      s.inputMode = "numeric";
+      s.value = isSet(lot.sacks) ? lot.sacks : "";
+      harvestSec.appendChild(group("Supersacks", bindField(s, "sacks", id),
         "Rough count for the board. Sack tags remain the record."));
+      body.appendChild(harvestSec);
     }
 
+    var docSec = section("Documents");
     var docWrap = el("div", "docs");
     if (!lot.docs.length) { docWrap.appendChild(el("div", "hint", "No documents linked yet.")); }
     lot.docs.forEach(function (doc, i) {
@@ -1511,21 +2091,43 @@ export const BOARD_PAGE = `<!doctype html>
       patch(id, { docs: lot.docs.concat([{ label: lab.value.trim() || "Document", ref: v }]) });
     });
     docWrap.appendChild(add);
-    body.appendChild(group("Documents", docWrap,
+    var docGrp = el("div", "grp");
+    docGrp.appendChild(docWrap);
+    docGrp.appendChild(el("div", "hint",
       "Paste the Drive link or the repo path — the PDF itself stays where it lives."));
+    docSec.appendChild(docGrp);
+    body.appendChild(docSec);
 
+    var noteSec = section("Notes");
     var n = document.createElement("textarea");
     n.value = lot.notes || "";
     n.placeholder = "What the crew saw. Log gaps honestly — don't guess a clean number.";
-    body.appendChild(group("Notes", bindField(n, "notes", id)));
+    n.setAttribute("aria-label", "Notes");
+    var noteGrp = el("div", "grp");
+    noteGrp.appendChild(bindField(n, "notes", id));
+    noteSec.appendChild(noteGrp);
+    body.appendChild(noteSec);
 
-    var links = el("div", "grp");
-    links.appendChild(el("div", "lbl", "In the wiki"));
-    links.appendChild(el("div", "hint", "wiki/products/cultivars/" + lot.cultivar_slug + ".md"));
-    if (lot.map) {
-      links.appendChild(el("div", "hint", "wiki/products/cultivars/images/" + lot.map));
+    // Housekeeping, last: who touched it and where it lives in the wiki.
+    var meta = el("div", "meta");
+    if (lot.updated_at) {
+      var touched = el("div");
+      touched.appendChild(el("span", "k", "Last touched"));
+      touched.appendChild(document.createTextNode(
+        lot.updated_at.slice(0, 16).replace("T", " ") + (lot.updated_by ? " by " + lot.updated_by : "")));
+      meta.appendChild(touched);
     }
-    body.appendChild(links);
+    var wiki = el("div");
+    wiki.appendChild(el("span", "k", "Wiki"));
+    wiki.appendChild(document.createTextNode("wiki/products/cultivars/" + lot.cultivar_slug + ".md"));
+    meta.appendChild(wiki);
+    if (lot.map) {
+      var map = el("div");
+      map.appendChild(el("span", "k", "Map"));
+      map.appendChild(document.createTextNode("wiki/products/cultivars/images/" + lot.map));
+      meta.appendChild(map);
+    }
+    body.appendChild(meta);
 
     drawerEl.appendChild(body);
   }
@@ -1538,7 +2140,7 @@ export const BOARD_PAGE = `<!doctype html>
   var fitTimer = null;
   window.addEventListener("resize", function () {
     if (fitTimer) { clearTimeout(fitTimer); }
-    fitTimer = setTimeout(fitNames, 120);
+    fitTimer = setTimeout(function () { fitNames(); markActive(); }, 120);
   });
   document.addEventListener("keydown", function (ev) {
     if (ev.key === "Escape" && selected) { closeDrawer(); }
