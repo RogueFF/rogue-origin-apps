@@ -6,6 +6,16 @@ History of significant changes to this repo, written by `/close`. Companion to t
 
 ---
 
+## 2026-09-02 — attribute supersacks by title, add the 2026 greenhouse cultivars, polish the hub
+
+- `workers/src/lib/coverage.js`, `workers/src/handlers/wholesale-d1.js` — raw supersacks resolve through `cultivar_aliases` on the variant title, falling back to the SKU prefix. Shopify's sack SKUs were coded by hand (SCOOK, SSHAKER) and did not match the catalogue prefixes (SUGCOOK, SUGSHAKE), so Sugar Cookez (186 sacks) and Sugar Shaker (50) read as zero on the coverage card. Finished goods still resolve by SKU, where `parseSku` needs it. Two tests; suite 385/385. Worker `c4fbd192`.
+- `workers/migrations/0026-greenhouse-2026-cultivars.sql` — Gravy Train (GT) and Legendary Banana Mac (LBM) enter the cultivars dimension with their sack titles as aliases. Applied to rogue-origin-db statement by statement. `MIX-SG-SUPRSAK-2025` remains skipped on purpose: a mixed sack is not a cultivar.
+- `src/js/hub/sections.js`, `src/css/hub.css`, `src/pages/index.html` — hero says ahead/behind pace against the hours-adjusted target alongside pounds to the goal; unit no longer clips; rail and loader use the round badge. Note the asset names are swapped: `ro-logo-horizontal.png` is the circle, `ro-logo-square.png` the wordmark.
+- `assets/screenshots/dashboard.png` — the Today view at the end of the Sep 1 shift (real data, clock frozen), no cost tiles.
+- Wiki context: wiki/seasons/2026/journal/2026-09-02.md
+
+---
+
 ## 2026-09-02 — rebuild the dashboard as Ops Hub v3 and retire the v2 shell
 
 - `src/pages/index.html`, `src/css/hub.css`, `src/js/hub/` — the Ops Hub rewrite: Right now (pace against target, rate, crew, last bag), the Shift Ledger (one column per hour with tops, smalls, rate vs target, crew, note flags), In the pipe (order queue, committed-vs-finished coverage, finished tops on hand), Watchlist (open complaints, reorder requests, cart, supersack QA), 30-day trend, cultivars, cost and labor, daily table with CSV export. Every period figure carries its change against the equivalent prior period, which replaces Compare mode.
