@@ -957,7 +957,7 @@ async function handleSackFind(ui, db, env, input) {
 
   if (raw === undefined || String(raw).trim() === '') {
     const recent = await query(db, `
-      SELECT sack_id, cultivar, zone, cut_number FROM harvest_sacks
+      SELECT sack_id, serial, cultivar, zone, cut_number FROM harvest_sacks
       WHERE is_test = ? AND voided_at IS NULL ORDER BY serial DESC LIMIT 8
     `, [isTest]);
     return renderPage(ui, ui.t('findSack'), sackFindBody(ui, { recent }));
@@ -970,7 +970,7 @@ async function handleSackFind(ui, db, env, input) {
   // sack, which is worse than asking.
   if (parsed && typeof parsed === 'object' && parsed.ambiguous !== undefined) {
     const matches = await query(db, `
-      SELECT sack_id, cultivar, zone, cut_number FROM harvest_sacks
+      SELECT sack_id, serial, cultivar, zone, cut_number FROM harvest_sacks
       WHERE serial = ? AND season = ? AND is_test = ? AND voided_at IS NULL
       ORDER BY cultivar
     `, [parsed.ambiguous, getSeason(), isTest]);
@@ -979,7 +979,7 @@ async function handleSackFind(ui, db, env, input) {
       return renderPage(ui, `${ui.t('sack')} ${only.sack.sack_id}`, sackDetailBody(ui, only));
     }
     const recentA = await query(db, `
-      SELECT sack_id, cultivar, zone, cut_number FROM harvest_sacks
+      SELECT sack_id, serial, cultivar, zone, cut_number FROM harvest_sacks
       WHERE is_test = ? AND voided_at IS NULL ORDER BY id DESC LIMIT 8
     `, [isTest]);
     return renderPage(ui, ui.t('findSack'),
@@ -995,7 +995,7 @@ async function handleSackFind(ui, db, env, input) {
   }
 
   const recent = await query(db, `
-    SELECT sack_id, cultivar, zone, cut_number FROM harvest_sacks
+    SELECT sack_id, serial, cultivar, zone, cut_number FROM harvest_sacks
     WHERE is_test = ? AND voided_at IS NULL ORDER BY serial DESC LIMIT 8
   `, [isTest]);
   return renderPage(ui, ui.t('findSack'), sackFindBody(ui, { recent, missing: id, typed: raw }), 404);
@@ -1714,6 +1714,10 @@ function renderPage(ui, title, bodyHtml, status = 200) {
   body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 24px 20px; background: #14251a; color: #f2f6f2; }
   h1 { font-size: 1.5rem; margin: 0 0 4px; }
   .sub { color: #9fc2ac; margin: 0 0 20px; }
+  h1 .code { font-size: 0.62em; font-weight: 700; color: #9fc2ac; }
+  .serial { font-size: 2.4rem; font-weight: 800; line-height: 1; margin: 2px 0 2px; }
+  .fullid { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem;
+            color: #7fa78e; letter-spacing: .04em; margin: 0 0 20px; }
   .note { color: #cfe3d6; margin: 8px 0; }
   .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 12px; }
   a.btn, button.btn { display: block; text-align: center; padding: 18px 8px; font-size: 1.2rem; font-weight: 600;
@@ -2546,8 +2550,8 @@ function formatTagDate(lang, iso) {
 function sackFindBody(ui, { recent, missing, typed, ambiguous }) {
   const list = recent.length
     ? recent.map(r => `<a class="btn alt findrow" href="/s/${encodeURIComponent(r.sack_id)}?lang=${ui.lang}">
-         <strong>#&nbsp;${escapeHtml(r.sack_id)}</strong>
-         <span class="hint">${escapeHtml(r.cultivar || '')} · ${escapeHtml(r.zone)} · ${ui.t('cut', { n: r.cut_number ?? '?' })}</span>
+         <strong>${escapeHtml(r.cultivar || '')} #${escapeHtml(String(r.serial ?? String(r.sack_id || '').split('-').pop()))}</strong>
+         <span class="hint">${escapeHtml(r.sack_id)} · ${escapeHtml(r.zone)} · ${ui.t('cut', { n: r.cut_number ?? '?' })}</span>
        </a>`).join('')
     : '';
 
@@ -2633,8 +2637,9 @@ function sackDetailBody(ui, view, flash) {
 
   return `
 ${flash ? `<p class="note">✅ ${escapeHtml(flash)}</p>` : ''}
-<h1>${escapeHtml(sack.cultivar || ui.t('sack'))}</h1>
-<p class="sub">#&nbsp;${escapeHtml(sack.sack_id)}${sack.voided_at ? ` · ${ui.t('void')}` : ''}</p>
+<h1>${escapeHtml(sack.cultivar || ui.t('sack'))}${sack.cultivar_code ? ` <span class="code">(${escapeHtml(sack.cultivar_code)})</span>` : ''}</h1>
+<p class="serial">#${escapeHtml(String(sack.serial ?? String(sack.sack_id || '').split('-').pop()))}${sack.voided_at ? ` · ${ui.t('void')}` : ''}</p>
+<p class="fullid">${escapeHtml(sack.sack_id)}</p>
 
 <h2>${ui.t('secOrigin')}</h2>
 ${origin}
