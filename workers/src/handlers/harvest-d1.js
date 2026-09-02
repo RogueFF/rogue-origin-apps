@@ -2085,14 +2085,18 @@ function sackSessionBody(ui, { lot, cultivar, stats }) {
  * tags on one rack that don't match.
  */
 function labelInner(ui, s) {
+  // Serial only, not the whole id. '#1' beside 'Sour Lifter (SLIFT)' is what a
+  // person actually needs, and it removes the width pressure that used to push
+  // a long id under the QR. The full id still travels in the QR, and stays
+  // reconstructable by eye: code + serial + the year off the harvest date.
+  const serial = s.serial ?? String(s.sack_id || '').split('-').pop();
+  const code = s.cultivar_code || '';
   return `
-    <div class="cultivar" style="font-size:${cultivarFontPt(s.cultivar)}pt">${escapeHtml(s.cultivar || '')}</div>
-    <div class="row">
-      <div class="left">
-        <div class="bagno" style="font-size:${bagnoFontPt(s.sack_id)}pt">#&nbsp;${escapeHtml(s.sack_id)}</div>
-        <div class="meta">${escapeHtml(formatTagDate(ui.lang, s.harvest_date))} · ${escapeHtml(s.zone)} · ${escapeHtml(ui.t('cut', { n: s.cut_number ?? '?' }))}</div>
-      </div>
-      <img class="qr" src="${qrUrlFor(s.sack_id)}" alt="">
+    <img class="qr" src="${qrUrlFor(s.sack_id)}" alt="">
+    <div class="txt">
+      <div class="cultivar" style="font-size:${cultivarLineFontPt(s.cultivar, code)}pt">${escapeHtml(s.cultivar || '')}${code ? ` <span class="code">(${escapeHtml(code)})</span>` : ''}</div>
+      <div class="bagno" style="font-size:${bagnoFontPt(serial)}pt">#${escapeHtml(String(serial))}</div>
+      <div class="meta">${escapeHtml(formatTagDate(ui.lang, s.harvest_date))} · ${escapeHtml(s.zone)} · ${escapeHtml(ui.t('cut', { n: s.cut_number ?? '?' }))}</div>
     </div>`;
 }
 
@@ -2167,15 +2171,15 @@ function renderAverySheet(ui, sacks, opts = {}) {
   .cell {
     width: ${G.labelW}in; height: ${G.labelH}in;
     padding: 0.11in 0.13in; overflow: hidden; color: #000;
-    display: flex; flex-direction: column;
+    display: flex; flex-direction: row; align-items: center; gap: 0.1in;
   }
+  .txt { min-width: 0; flex: 1; }
   .cell.blank { visibility: hidden; }
-  .cultivar { font-size: 25pt; font-weight: 800; line-height: 1.0; letter-spacing: -0.01em;
+  .cultivar { font-weight: 800; line-height: 1.05; letter-spacing: -0.01em;
               white-space: nowrap; overflow: hidden; }
-  .row { display: flex; align-items: flex-end; justify-content: space-between; flex: 1; gap: 0.08in; }
-  .left { min-width: 0; }
-  .bagno { font-weight: 800; line-height: 1.05; white-space: nowrap; }
-  .meta { font-size: 10.5pt; margin-top: 0.03in; white-space: nowrap; }
+  .code { font-size: 0.55em; font-weight: 700; }
+  .bagno { font-weight: 800; line-height: 1.0; white-space: nowrap; margin-top: 0.02in; }
+  .meta { font-size: 10.5pt; margin-top: 0.04in; white-space: nowrap; }
   .qr { width: 1in; height: 1in; flex: none; }
 
   /* Calibration: outline every slot so a test print can be held against a
@@ -2229,13 +2233,13 @@ function specimenSacks() {
   // the proof exercises widths that can actually occur.
   return [
     // Short name, short id: the roomiest case. 25pt name, ~28pt number.
-    { sack_id: '26-SLIFT-1',       cultivar: 'Sour Lifter',           zone: 'Z4',  cut_number: 1, harvest_date: today },
+    { sack_id: '26-SLIFT-1',      serial: 1,   cultivar_code: 'SLIFT',    cultivar: 'Sour Lifter',           zone: 'Z4',  cut_number: 1, harvest_date: today },
     // Longest name in the roster, so the name font drops to its smallest step.
-    { sack_id: '26-ORNGPQ-12',     cultivar: 'Orange Pineapple Quik', zone: 'Z8',  cut_number: 2, harvest_date: today },
+    { sack_id: '26-ORNGPQ-12',    serial: 12,  cultivar_code: 'ORNGPQ',   cultivar: 'Orange Pineapple Quik', zone: 'Z8',  cut_number: 2, harvest_date: today },
     // The realistic worst case, and both squeezes at once: an 8-character
     // prefix (the longest planted this year) with a 3-digit serial, under a
     // 20-character name. This is the pairing that overlapped the QR.
-    { sack_id: '26-STRAWDNT-123',  cultivar: 'Strawberry Doughnuts',  zone: 'Z10', cut_number: 3, harvest_date: today },
+    { sack_id: '26-STRAWDNT-123', serial: 123, cultivar_code: 'STRAWDNT', cultivar: 'Strawberry Doughnuts',  zone: 'Z10', cut_number: 3, harvest_date: today },
   ];
 }
 
@@ -2271,16 +2275,16 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
   .label {
     width: 4in; height: 2in; padding: 0.11in 0.13in;
     background: #fff; color: #000; overflow: hidden;
-    display: flex; flex-direction: column;
+    display: flex; flex-direction: row; align-items: center; gap: 0.1in;
   }
+  .txt { min-width: 0; flex: 1; }
   .cutline { border-top: 1pt dashed #999; text-align: center; }
   .cutline span { font-size: 7pt; color: #777; letter-spacing: .04em; }
-  .cultivar { font-size: 25pt; font-weight: 800; line-height: 1.0; letter-spacing: -0.01em;
+  .cultivar { font-weight: 800; line-height: 1.05; letter-spacing: -0.01em;
               white-space: nowrap; overflow: hidden; }
-  .row { display: flex; align-items: flex-end; justify-content: space-between; flex: 1; gap: 0.08in; }
-  .left { min-width: 0; }
-  .bagno { font-weight: 800; line-height: 1.05; white-space: nowrap; }
-  .meta { font-size: 10.5pt; margin-top: 0.03in; white-space: nowrap; }
+  .code { font-size: 0.55em; font-weight: 700; }
+  .bagno { font-weight: 800; line-height: 1.0; white-space: nowrap; margin-top: 0.02in; }
+  .meta { font-size: 10.5pt; margin-top: 0.04in; white-space: nowrap; }
   .qr { width: 1in; height: 1in; flex: none; }
   .toolbar { padding: 14px; font: 14px system-ui; }
   .toolbar a { color: #036; }
@@ -2335,18 +2339,47 @@ ${autoPrint ? `<script>
  * text a little; erring small lets it run under the QR, which is what the
  * printed proof caught. Cheap direction to be wrong in.
  */
-function bagnoEmWidth(str) {
+function emWidth(str) {
   let w = 0;
   for (const ch of String(str)) {
     if (ch >= '0' && ch <= '9') w += 0.556;
     else if (ch >= 'A' && ch <= 'Z') w += 0.722;
+    else if (ch >= 'a' && ch <= 'z') w += 0.580;
     else if (ch === '-') w += 0.333;
+    else if (ch === '(' || ch === ')') w += 0.333;
     else if (ch === '#') w += 0.556;
     else if (ch === ' ' || ch === ' ') w += 0.278;
     else w += 0.6;
   }
   return w;
 }
+
+/** Text column beside the 1in QR: 4in less padding, the QR, and the gap. */
+const TAG_COLUMN_PT = 191;
+
+/**
+ * Fit to 96% of the column, not 100%.
+ *
+ * The widths above are estimates from a metrics table, and the printer's own
+ * font may differ by a percent or two. Without headroom the longest cultivar
+ * line lands within a fraction of a point of the edge, which is not a margin
+ * so much as a coincidence. Costs half a point of type; buys certainty.
+ */
+const FIT_SAFETY = 0.96;
+
+/**
+ * The cultivar line carries the name plus its SKU code -- "Sour Lifter
+ * (SLIFT)" -- so a person can rebuild the full bag id from the printed tag
+ * alone when a QR won't scan: the code, the serial, and the year off the
+ * harvest date give back 26-SLIFT-1. The code is set smaller than the name
+ * because it is a lookup key, not what anyone reads across a barn.
+ */
+function cultivarLineFontPt(name, code) {
+  const em = emWidth(name || '') + (code ? emWidth(' (' + code + ')') * CODE_SCALE : 0);
+  const fit = (TAG_COLUMN_PT * FIT_SAFETY) / Math.max(em, 0.001);
+  return Math.max(11, Math.min(25, Math.floor(fit * 2) / 2));
+}
+const CODE_SCALE = 0.55;
 
 /**
  * Fit the bag number to the column left of the QR.
@@ -2361,11 +2394,12 @@ function bagnoEmWidth(str) {
  * number -- 26-SLIFT-12 cut to 26-SLIFT-1 is a different sack -- so the text
  * must always shrink to fit, never be cut off.
  */
-function bagnoFontPt(sackId) {
-  const COLUMN_PT = 191;      // 4in - padding - 1in QR - gap, in points
-  const em = bagnoEmWidth('# ' + (sackId || ''));
-  const fit = COLUMN_PT / Math.max(em, 0.001);
-  return Math.max(14, Math.min(30, Math.floor(fit * 2) / 2));
+function bagnoFontPt(serial) {
+  const em = emWidth('#' + (serial ?? ''));
+  const fit = (TAG_COLUMN_PT * FIT_SAFETY) / Math.max(em, 0.001);
+  // Capped by the label's height, not its width -- '#999' would fit far larger
+  // across, but the line has to sit above the meta and below the name.
+  return Math.max(20, Math.min(44, Math.floor(fit * 2) / 2));
 }
 
 function cultivarFontPt(name) {
