@@ -259,7 +259,13 @@ export async function handleBarnScan(request, env, ctx) {
 export async function handleSackScan(request, env, ctx) {
   const ui = makeUi(request);
   try {
-    const sackId = new URL(request.url).pathname.replace(/^\/s\//, '').trim();
+    const url = new URL(request.url);
+    const sackId = url.pathname.replace(/^\/s\//, '').trim();
+    if (isDemoSack(sackId)) {
+      const view = demoSackView(url.searchParams.get('opened') === '1');
+      return renderPage(ui, `${ui.t('sack')} ${DEMO_SACK_ID}`,
+        demoBanner(ui, url) + sackDetailBody(ui, view));
+    }
     const view = await getSackView(env.DB, sackId);
     if (!view) {
       return errorPage(ui, ui.t('noSackCheck', { id: sackId }), 404);
@@ -713,10 +719,13 @@ async function handleSackLabel(ui, db, env, params) {
     const banner = `<div style="padding:0 14px 14px;font:13px system-ui;max-width:6in">
       <strong>Specimen tags — not real bags.</strong> Nothing was allocated and no number was used up.
       One tag per cultivar-name length, because the name font steps down as it gets longer.
-      <br><br><strong>Check, in this order:</strong> the tag measures 4&Prime; × 2&Prime; — no cultivar name is clipped —
-      then <strong>scan each QR with a phone</strong>. The QRs point at bags that do not exist, so a
-      <em>&ldquo;no sack&rdquo;</em> page means the code scanned <strong>correctly</strong>. If one will not scan,
-      raise the print density in the driver before changing anything else.
+      <br><br><strong>Scan the first one</strong> (Sour Lifter #7) — it opens the sack page with example data, so you
+      can see what a scan actually shows. Nothing is saved from that page, including the buttons.
+      <br><br><strong>The other two are print checks:</strong> they carry the longest name and the widest bag number the
+      season can produce, and their QRs point at bags that do not exist — so a <em>&ldquo;no sack&rdquo;</em> page means
+      the code scanned <strong>correctly</strong>.
+      <br><br><strong>Check:</strong> the tag measures 4&Prime; × 2&Prime;, no cultivar name is clipped, and every QR reads
+      first time. If one will not scan, raise the print density in the driver before changing anything else.
       </div>`;
     return renderLabelSheet(ui, specimenSacks(), null,
       { autoPrint: false, banner, stock: params.stock });
@@ -799,6 +808,81 @@ async function handleSackWeigh(ui, db, env, ctx, body) {
  * is visible in one place, so it pulls the field side (plant date, acreage)
  * rather than only the harvest side the sack row happens to carry.
  */
+/**
+ * A scannable sack that does not exist.
+ *
+ * Showing someone the scan screen used to mean tagging a real bag, which burns
+ * a serial that can only be voided, never reused -- an expensive way to look at
+ * a layout. /s/DEMO renders the same page from synthetic data: no row, no
+ * serial, nothing to clean up afterwards, and it keeps working after every
+ * clear-down of test data.
+ *
+ * Numbers come from the real Z4 facts so the proportions are honest -- a demo
+ * with invented acreage teaches the wrong thing about what the page shows.
+ *
+ * ?opened=1 shows the state after ABRIR BOLSA, with floor-allocated weights.
+ */
+const DEMO_SACK_ID = 'DEMO';
+
+function isDemoSack(id) {
+  return String(id || '').trim().toUpperCase() === DEMO_SACK_ID;
+}
+
+/**
+ * Says plainly that the page is a demo, and offers the other state.
+ *
+ * Without this the page is indistinguishable from a real sack, which is how a
+ * demo ends up quoted as a measurement later.
+ */
+function demoBanner(ui, url, msg) {
+  const es = ui.lang === 'es';
+  const opened = url ? url.searchParams.get('opened') === '1' : true;
+  const other = opened ? '/s/DEMO' : '/s/DEMO?opened=1';
+  const otherLabel = opened
+    ? (es ? 'ver sin abrir' : 'see it unopened')
+    : (es ? 'ver ya abierta, con pesos' : 'see it opened, with weights');
+  const line = msg
+    ? msg
+    : (es
+        ? 'Bolsa de <strong>ejemplo</strong> — no existe. Los números son de la Z4 real para que las proporciones sean honestas.'
+        : '<strong>Example</strong> sack — it does not exist. The figures come from the real Z4 so the proportions are honest.');
+  return `<div style="background:#fff4d6;border:1px solid #e0c86a;border-radius:6px;padding:10px 12px;margin:0 0 14px;font-size:14px;line-height:1.5">
+    ${line}<br><a href="${other}" style="color:#7a5c00">${otherLabel} →</a>
+  </div>`;
+}
+
+function demoSackView(opened) {
+  const facts = zoneFacts('Z4') || {};
+  const today = new Date();
+  const cut = new Date(today.getTime() - 6 * 86400000).toISOString().slice(0, 10);
+  const growDays = (facts.plantDate)
+    ? Math.round((new Date(cut + 'T00:00:00Z') - new Date(facts.plantDate + 'T00:00:00Z')) / 86400000)
+    : null;
+  return {
+    sack: {
+      sack_id: DEMO_SACK_ID, season: 2026, serial: 7, cultivar_code: 'SLIFT',
+      cultivar: 'Sour Lifter', zone: 'Z4', cut_number: 1,
+      harvest_date: cut,
+      printed_at: cut + ' 14:20:00',
+      opened_at: opened ? new Date(today.getTime() - 86400000).toISOString().slice(0, 19).replace('T', ' ') : null,
+      tops_lbs: opened ? 21.4 : null,
+      smalls_lbs: opened ? 11.9 : null,
+      weights_source: opened ? 'allocated' : null,
+      voided_at: null, is_test: 1,
+    },
+    notes: [
+      { note: 'Bottom of the rack was still damp — held back a day.', created_at: cut + ' 16:05:00' },
+      { note: 'Tape said Z4 cut 1, matches the lot picker.', created_at: cut + ' 14:22:00' },
+    ],
+    plantDate: facts.plantDate || null,
+    plantDateApprox: !!facts.multiDay,
+    acres: facts.acres ?? null,
+    plants: plantCountFor('Z4'),
+    growDays,
+    lotSacks: 14,
+  };
+}
+
 async function getSackView(db, sackId) {
   const sack = await queryOne(db, `SELECT * FROM harvest_sacks WHERE sack_id = ?`, [sackId]);
   if (!sack) return null;
@@ -924,6 +1008,13 @@ async function handleSackFind(ui, db, env, input) {
  */
 async function handleSackOpen(ui, db, env, ctx, body) {
   const sackId = String(body.sack_id || '').trim();
+  if (isDemoSack(sackId)) {
+    const msg = ui.lang === 'es'
+      ? 'Así se ve después de <strong>ABRIR BOLSA</strong>. No se guardó nada — es la bolsa de ejemplo.'
+      : 'This is how it looks after <strong>OPEN SACK</strong>. Nothing was saved — it is the example sack.';
+    return renderPage(ui, `${ui.t('sack')} ${DEMO_SACK_ID}`,
+      demoBanner(ui, null, msg) + sackDetailBody(ui, demoSackView(true)));
+  }
   const view = await getSackView(db, sackId);
   if (!view) throw createError('NOT_FOUND', ui.t('noSack', { id: sackId }));
   const sack = view.sack;
@@ -1037,6 +1128,13 @@ async function handleAllocate(db, env, params) {
 
 async function handleSackNote(ui, db, env, ctx, body) {
   const sackId = String(body.sack_id || '').trim();
+  if (isDemoSack(sackId)) {
+    const msg = ui.lang === 'es'
+      ? 'La nota no se guardó — es la bolsa de ejemplo.'
+      : 'The note was not saved — it is the example sack.';
+    return renderPage(ui, `${ui.t('sack')} ${DEMO_SACK_ID}`,
+      demoBanner(ui, null, msg) + sackDetailBody(ui, demoSackView(false)));
+  }
   const note = String(body.note || '').trim().substring(0, 500);
   if (!note) throw createError('VALIDATION_ERROR', ui.t('noteEmpty'));
 
@@ -2106,7 +2204,7 @@ function labelInner(s) {
   const serial = s.serial ?? String(s.sack_id || '').split('-').pop();
   const code = s.cultivar_code || '';
   return `
-    <img class="qr" src="${qrUrlFor(s.sack_id)}" alt="">
+    <img class="qr" src="${qrUrlFor(s.qr_id || s.sack_id)}" alt="">
     <div class="txt">
       <div class="cultivar" style="font-size:${cultivarLineFontPt(s.cultivar, code)}pt">${escapeHtml(s.cultivar || '')}${code ? ` <span class="code">(${escapeHtml(code)})</span>` : ''}</div>
       <div class="bagno" style="font-size:${bagnoFontPt(serial)}pt">#${escapeHtml(String(serial))}</div>
@@ -2246,8 +2344,9 @@ function specimenSacks() {
   // Real cultivar/sku_prefix pairs from the 2026 roster, not invented ones, so
   // the proof exercises widths that can actually occur.
   return [
-    // Short name, short id: the roomiest case. 25pt name, ~28pt number.
-    { sack_id: '26-SLIFT-1',      serial: 1,   cultivar_code: 'SLIFT',    cultivar: 'Sour Lifter',           zone: 'Z4',  cut_number: 1, harvest_date: today },
+    // The one to scan: its QR opens the demo sack page, so the printed tag and
+    // the screen it leads to can both be judged from one sheet.
+    { sack_id: '26-SLIFT-7', qr_id: DEMO_SACK_ID, serial: 7, cultivar_code: 'SLIFT', cultivar: 'Sour Lifter', zone: 'Z4', cut_number: 1, harvest_date: today },
     // Longest name in the roster, so the name font drops to its smallest step.
     { sack_id: '26-ORNGPQ-12',    serial: 12,  cultivar_code: 'ORNGPQ',   cultivar: 'Orange Pineapple Quik', zone: 'Z8',  cut_number: 2, harvest_date: today },
     // The realistic worst case, and both squeezes at once: an 8-character
