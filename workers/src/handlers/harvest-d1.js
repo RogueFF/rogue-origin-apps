@@ -1809,9 +1809,14 @@ function renderPage(ui, title, bodyHtml, status = 200) {
 
   /* The tag plate: what they just scanned, set the way it reads on the bag.
      Straw edge and straw number — the one place the accent is loud. */
-  .sd-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;
-             padding: 14px 16px 14px 18px; border-left: 6px solid var(--straw);
+  /* The stamp sits on its own row rather than beside the name. Sharing a row
+     meant a nowrap pill took its width first and pushed the cultivar onto two
+     lines -- "NOT OPENED" is wide enough to do it at 375px. Shrinking the pill
+     would have fixed the symptom by dropping it under 13px, which is the one
+     thing this page cannot trade away. */
+  .sd-head { display: block; padding: 12px 16px 14px 18px; border-left: 6px solid var(--straw);
              border-radius: 6px 12px 12px 6px; background: linear-gradient(180deg, #203828, var(--card)); }
+  .sd-head .sd-state { display: flex; justify-content: flex-end; margin: 0 0 8px; }
   .sd-head h1 { font-size: 1.15rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
                 margin: 0; color: var(--ink2); }
   .sd-head h1 .code { font-size: 0.82em; font-weight: 600; letter-spacing: 0.08em; color: var(--muted); }
@@ -2719,12 +2724,10 @@ function sackDetailBody(ui, view, flash) {
   const serial = sack.serial ?? String(sack.sack_id || '').split('-').pop();
   const head = `
 <div class="sd-head">
-  <div>
-    <h1>${escapeHtml(sack.cultivar || ui.t('sack'))}${sack.cultivar_code ? ` <span class="code">(${escapeHtml(sack.cultivar_code)})</span>` : ''}</h1>
-    <p class="serial">#${escapeHtml(String(serial))}</p>
-    <p class="fullid">${escapeHtml(sack.sack_id)}</p>
-  </div>
-  <span class="badge ${state[0]}">${state[1]}</span>
+  <div class="sd-state"><span class="badge ${state[0]}">${state[1]}</span></div>
+  <h1>${escapeHtml(sack.cultivar || ui.t('sack'))}${sack.cultivar_code ? ` <span class="code">(${escapeHtml(sack.cultivar_code)})</span>` : ''}</h1>
+  <p class="serial">#${escapeHtml(String(serial))}</p>
+  <p class="fullid">${escapeHtml(sack.sack_id)}</p>
 </div>`;
 
   // ── Three tiles: the answers someone holding the sack wants first ──
