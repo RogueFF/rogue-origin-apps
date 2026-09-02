@@ -6,6 +6,14 @@ History of significant changes to this repo, written by `/close`. Companion to t
 
 ---
 
+## 2026-09-02 — name the cultivar on every ledger hour, and kill the theme flash on refresh
+
+- `workers/src/handlers/production/scoreboard.js`, `src/js/hub/sections.js` — the Shift Ledger names the cultivar on each hour, and the shift header lists every cultivar worked instead of only `current.strain`, which is whichever one the last logged hour happened to be. 2026-09-02 ran four (Lifter Early Harvest, Berry Bliss for five hours, Sugar Shaker, Godfather OG) and Godfather OG was taking credit for the day. The per-hour `strain` already existed in `hourlyRates`, and `ledger.js` already rendered a Cultivar row when handed one — the dashboard mapper was dropping the field on the way out. Guarded both ends, since `cultivarShort('')` returns a truthy em dash. `caa82f4f`, worker `affb418c`.
+- `src/pages/index.html`, `src/pages/{complaints,consignment,wholesale,sop-manager}.html` — blocking pre-paint theme script in `<head>`, ahead of the stylesheets. `theme.js` only ever reached a page as an import of a deferred module, so the markup default was what painted first and the theme visibly flipped once the module graph landed — a light-mode user watched a fully dark page on every refresh. The script mirrors theme.js's own resolution order, legacy keys included, so nobody flashes once and is then fixed; theme.js keeps ownership of writing and migration. try/catch because `localStorage` throws in private mode and an uncaught throw in a blocking head script takes the page with it. `sop-manager` flashed the other way (declared `data-theme-default="dark"` but never stamped `data-theme`, so it fell through to light) and now stamps the attribute. `kanban.html` imports theme.js but is unconditionally dark — `body` overrides `--bg` to #141816 and `body.dark-mode` is an explicit no-op — so it has nothing to flash and was left alone. `4d8d6907`, `0147c03a`.
+- `src/js/hub/main.js` — `markStale` dims only when there is data on screen to go stale. On a cold load the loader hides immediately and was revealing an empty shell at 0.55 opacity for the length of the first API round trip, which read as the page washing out. The cue still fires on a range switch, where it means something. `4d8d6907`.
+- Wiki context: wiki/seasons/2026/journal/2026-09-02.md
+
+---
 ## 2026-09-02 — try pounds inside the ledger bars, then revert
 
 - `src/js/hub/ledger.js`, `src/css/hub.css` — figures printed inside each tops/smalls bar (rotated, above-the-cap fallback for short bars); reverted the same hour because the rows beneath already carry the numbers and two copies read as noise. `02914d5d` → `da7c5c65`. Nothing changes for the reader.
