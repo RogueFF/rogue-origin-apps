@@ -89,12 +89,16 @@ export function renderNow(state) {
         ? `No hours logged yet. Yesterday (${esc(y.dateDisplay)}): <strong>${num(y.tops)} lbs tops</strong>, ${num(y.smalls, 0)} smalls, ${num(y.rate, 2)} lb/trimmer/hr.`
         : 'No hours logged yet. The first entry from the floor manager will start the ledger.';
     } else if (pctv >= 100) {
-      pace = `<strong>Target met</strong> — ${pct(pctv, 0)} of ${num(target, 0)} lbs after ${num(cur.effectiveHours, 1)} effective hours.`;
+      pace = `<strong>Goal met</strong> — ${pct(pctv, 0)} of ${num(target, 0)} lbs after ${num(cur.effectiveHours, 1)} effective hours.`;
     } else {
+      // `todayTarget` is the goal scaled to the hours worked so far, so
+      // todayPercentage says whether the line is ahead of or behind pace.
       const remaining = target - tops;
-      const perHr = cur.effectiveHours > 0 ? tops / cur.effectiveHours : 0;
-      const hrs = perHr > 0 ? remaining / perHr : null;
-      pace = `Projected <strong>${num(cur.projectedTotal || tops)} lbs</strong> · ${num(remaining)} lbs to target${hrs ? ` ≈ ${num(hrs, 1)} h at the current pace` : ''}.`;
+      const paceP = cur.todayPercentage;
+      const paceText = isNum(paceP) && cur.todayTarget > 0
+        ? ` · <strong>${paceP >= 100 ? 'ahead of pace' : 'behind pace'}</strong> at ${pct(paceP, 0)} of target so far`
+        : '';
+      pace = `Projected <strong>${num(cur.projectedTotal || tops)} lbs</strong> · ${num(remaining)} lbs to the ${num(target, 0)} lb goal${paceText}.`;
     }
 
     const rateTarget = sb.targetRate || (data.hourly || []).slice(-1)[0]?.target || null;
@@ -105,7 +109,7 @@ export function renderNow(state) {
     host.innerHTML = `
       <div class="card hero">
         <div class="strain">${esc(cultivarShort(cur.strain) || 'No cultivar logged')}</div>
-        <div class="big"><span class="n">${num(tops)}</span><span class="u">lbs tops today</span></div>
+        <div class="big"><span class="n">${num(tops)}</span><span class="u">lbs tops</span></div>
         <div class="sub">Total ${num(today.totalLbs)} lbs incl. ${num(today.totalSmalls, 0)} smalls ${hoursLogged ? deltaChip(tops, prev?.tops, { vs }) : ''}</div>
         <div class="meter${pctv >= 100 ? '' : pctv < 60 && hoursLogged > 5 ? ' warn' : ''}" role="progressbar" aria-valuenow="${Math.round(pctv)}" aria-valuemin="0" aria-valuemax="100" aria-label="Progress to daily target"><span style="width:${Math.min(100, pctv).toFixed(1)}%"></span></div>
         <div class="pace">${pace}</div>
