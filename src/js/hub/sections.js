@@ -178,12 +178,19 @@ export function renderShift(state) {
   const hourly = (data.hourly || []).filter((h) => (h.lbs || 0) > 0 || (h.trimmers || 0) > 0);
   if (range.live && hourly.length) {
     title.textContent = 'This shift';
-    meta.textContent = `${hourly.length} hour${hourly.length === 1 ? '' : 's'} logged · ${cultivarShort(data.current?.strain)}`;
+    // A shift often runs several cultivars. Name every one worked, in the
+    // order the floor hit them: `current.strain` only ever names the last.
+    const worked = [...new Set(hourly.map((h) => h.strain).filter(Boolean))];
+    const workedLabel = worked.length > 1
+      ? worked.map((s) => cultivarParts(s).name).join(', ')
+      : cultivarShort(worked[0] || data.current?.strain);
+    meta.textContent = `${hourly.length} hour${hourly.length === 1 ? '' : 's'} logged · ${workedLabel}`;
     const columns = hourly.map((h, i) => ({
       label: hourShort(h.label),
       tipTitle: h.label,
       tops: h.tops, smalls: h.smalls, rate: h.rate, target: h.target,
       trimmers: h.trimmers, buckers: h.buckers,
+      cultivar: h.strain ? cultivarShort(h.strain) : '',
       notes: noteLines(h.notes).join('\n'),
       current: i === hourly.length - 1,
     }));
