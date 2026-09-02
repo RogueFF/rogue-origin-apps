@@ -58,6 +58,8 @@ const S = {
     loggedLoad: 'Anotado: {bins} cajas → {zone}',
     loadNumToday: 'Carga #{n} hoy para {zone}',
     noSessionWarn: '⚠️ No había sesión abierta para {zone} — se anotó sin lote.',
+    justMoved: '↩️ La cuadrilla acaba de entrar a {newZone}. Si esta traila se cargó en <strong>{prevZone}</strong>, déjala así — ya viene seleccionada.',
+    graceAttributed: '↩️ Anotado al lote de <strong>{zone}</strong> (corte {n}), que acaba de cerrar — la traila ya venía en camino.',
     logAnother: 'Anotar otra carga →',
     crewChanged: '¿Cambió la cuadrilla? →',
 
@@ -207,6 +209,8 @@ const S = {
     loggedLoad: 'Logged: {bins} bins → {zone}',
     loadNumToday: 'Load #{n} today for {zone}',
     noSessionWarn: '⚠️ No active session was open for {zone} — logged with no lot.',
+    justMoved: '↩️ The crew just moved into {newZone}. If this trailer was loaded in <strong>{prevZone}</strong>, leave it — that is already selected.',
+    graceAttributed: '↩️ Logged to the <strong>{zone}</strong> lot (cut {n}), which just closed — this trailer was already in transit.',
     logAnother: 'Log another load →',
     crewChanged: 'Crew changed? →',
 
