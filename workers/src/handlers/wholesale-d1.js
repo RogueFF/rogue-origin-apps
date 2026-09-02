@@ -1033,14 +1033,17 @@ async function getCoverage(db) {
 
   // Latest count per (sku, location) — an adjustment feed carries a running
   // total, so anything but the newest row per pair double-counts.
+  // variant_title rides along for the supersack rows: their SKUs were coded by
+  // hand and do not all carry the catalogue prefix, but the title is the
+  // production-sheet spelling cultivar_aliases maps (see summarizeInventory).
   const invRows = await query(db, `
     WITH latest AS (
-      SELECT sku, location, new_total_available,
+      SELECT sku, location, new_total_available, variant_title,
              ROW_NUMBER() OVER (PARTITION BY sku, location ORDER BY timestamp DESC, id DESC) rn
       FROM inventory_adjustments
       WHERE sku IS NOT NULL AND sku != ''
     )
-    SELECT sku, SUM(new_total_available) AS units
+    SELECT sku, SUM(new_total_available) AS units, MAX(variant_title) AS title
     FROM latest WHERE rn = 1
     GROUP BY sku
   `);
@@ -1052,7 +1055,16 @@ async function getCoverage(db) {
   for (const r of prefixRows) prefixMap[r.sku_prefix.toUpperCase()] = r.id;
   for (const r of await query(db, "SELECT id, name FROM cultivars")) nameOf.set(r.id, r.name);
 
-  const inv = summarizeInventory(invRows.map(r => ({ sku: r.sku, units: r.units })), prefixMap);
+  const aliasMap = {};
+  for (const r of await query(db, "SELECT alias, cultivar_id FROM cultivar_aliases")) {
+    aliasMap[String(r.alias).trim().toUpperCase()] = r.cultivar_id;
+  }
+
+  const inv = summarizeInventory(
+    invRows.map(r => ({ sku: r.sku, units: r.units, title: r.title })),
+    prefixMap,
+    aliasMap,
+  );
 
   const coverage = assessCoverage(
     demandRows.map(r => ({ cultivarId: r.cultivar_id, form: r.form, committedLbs: r.committed })),
