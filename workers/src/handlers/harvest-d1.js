@@ -2206,11 +2206,10 @@ function labelInner(s) {
   // a long id under the QR. The full id still travels in the QR, and stays
   // reconstructable by eye: code + serial + the year off the harvest date.
   const serial = s.serial ?? String(s.sack_id || '').split('-').pop();
-  const code = s.cultivar_code || '';
   return `
     <img class="qr" src="${qrUrlFor(s.qr_id || s.sack_id)}" alt="">
     <div class="txt">
-      <div class="cultivar" style="font-size:${cultivarLineFontPt(s.cultivar, code)}pt">${escapeHtml(s.cultivar || '')}${code ? ` <span class="code">(${escapeHtml(code)})</span>` : ''}</div>
+      <div class="cultivar" style="font-size:${cultivarFontPt(s.cultivar)}pt">${escapeHtml(s.cultivar || '')}</div>
       <div class="bagno" style="font-size:${bagnoFontPt(serial)}pt">#${escapeHtml(String(serial))}</div>
       <div class="meta">${escapeHtml(formatTagDate(TAG_LANG, s.harvest_date))} · ${escapeHtml(s.zone)} · ${escapeHtml(translate(TAG_LANG, 'cut', { n: s.cut_number ?? '?' }))}</div>
     </div>`;
@@ -2293,7 +2292,6 @@ function renderAverySheet(ui, sacks, opts = {}) {
   .cell.blank { visibility: hidden; }
   .cultivar { font-weight: 800; line-height: 1.05; letter-spacing: -0.01em;
               white-space: nowrap; overflow: hidden; }
-  .code { font-size: 0.55em; font-weight: 700; }
   .bagno { font-weight: 800; line-height: 1.0; white-space: nowrap; margin-top: 0.02in; }
   .meta { font-size: 10.5pt; margin-top: 0.04in; white-space: nowrap; }
   .qr { width: 1in; height: 1in; flex: none; }
@@ -2399,7 +2397,6 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
   .cutline span { font-size: 7pt; color: #777; letter-spacing: .04em; }
   .cultivar { font-weight: 800; line-height: 1.05; letter-spacing: -0.01em;
               white-space: nowrap; overflow: hidden; }
-  .code { font-size: 0.55em; font-weight: 700; }
   .bagno { font-weight: 800; line-height: 1.0; white-space: nowrap; margin-top: 0.02in; }
   .meta { font-size: 10.5pt; margin-top: 0.04in; white-space: nowrap; }
   .qr { width: 1in; height: 1in; flex: none; }
@@ -2485,20 +2482,6 @@ const TAG_COLUMN_PT = 191;
 const FIT_SAFETY = 0.96;
 
 /**
- * The cultivar line carries the name plus its SKU code -- "Sour Lifter
- * (SLIFT)" -- so a person can rebuild the full bag id from the printed tag
- * alone when a QR won't scan: the code, the serial, and the year off the
- * harvest date give back 26-SLIFT-1. The code is set smaller than the name
- * because it is a lookup key, not what anyone reads across a barn.
- */
-function cultivarLineFontPt(name, code) {
-  const em = emWidth(name || '') + (code ? emWidth(' (' + code + ')') * CODE_SCALE : 0);
-  const fit = (TAG_COLUMN_PT * FIT_SAFETY) / Math.max(em, 0.001);
-  return Math.max(11, Math.min(25, Math.floor(fit * 2) / 2));
-}
-const CODE_SCALE = 0.55;
-
-/**
  * Fit the bag number to the column left of the QR.
  *
  * A fixed 30pt worked for 26-SLIFT-1 and silently overlapped the QR on longer
@@ -2519,12 +2502,22 @@ function bagnoFontPt(serial) {
   return Math.max(20, Math.min(44, Math.floor(fit * 2) / 2));
 }
 
+/**
+ * Fit the cultivar name to the column beside the QR.
+ *
+ * Width-aware rather than bucketed by length: "Orange Pineapple Quik" and
+ * "Strawberry Doughnuts" are a character apart but not the same width, since a
+ * capital is 0.722em against 0.58em for lowercase.
+ *
+ * The SKU code used to share this line in brackets and is off the tag now
+ * (Koa, 2026-09-02). Nothing in the barn needed it -- Find takes the bare
+ * serial that is printed, and the scan page still shows the code -- and
+ * dropping it hands the width back to the name, which is the thing actually
+ * read across a barn.
+ */
 function cultivarFontPt(name) {
-  const len = (name || '').length;
-  if (len <= 16) return 25;
-  if (len <= 20) return 20;
-  if (len <= 26) return 15.5;
-  return 12.5;
+  const fit = (TAG_COLUMN_PT * FIT_SAFETY) / Math.max(emWidth(name || ''), 0.001);
+  return Math.max(11, Math.min(25, Math.floor(fit * 2) / 2));
 }
 
 const MONTHS = {
