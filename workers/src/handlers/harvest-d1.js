@@ -1790,63 +1790,111 @@ function renderPage(ui, title, bodyHtml, status = 200) {
   .badge.ok   { background: #2f7a4f; color: #fff; }
   .badge.warn { background: #8a6d1f; color: #fff; }
   .badge.bad  { background: #7a3a3a; color: #fff; }
-  /* Sack scan page — a crew member holding a sack, phone at arm's length,
-     gloves on, barn light. Every surface added here is DARK and sets its own
-     ink, so nothing can inherit its way to invisible. Charts are plain CSS:
-     the page must load on one bar of signal, so no libraries, no fonts. */
-  .sd-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-  .sd-head .badge { margin-top: 10px; font-size: 0.82rem; padding: 7px 11px; }
-  .badge.neutral { background: #3a5f4c; color: #fff; }
-  .flash { background: #21402c; border: 1px solid #4a9d6a; border-radius: 10px; padding: 12px 14px;
-           margin: 0 0 16px; font-size: 1.05rem; color: #f2f6f2; }
-  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 6px 0 4px; }
-  .tile { background: #1b3123; border: 1px solid #2c4a36; border-radius: 10px; padding: 10px 10px 9px;
-          min-width: 0; color: #f2f6f2; display: flex; flex-direction: column; justify-content: flex-end; }
-  .tile .tl { display: block; font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.06em; color: #9fc2ac; }
-  .tile .tv { display: block; font-size: 1.55rem; font-weight: 800; line-height: 1.15; margin-top: 3px;
-              overflow-wrap: anywhere; }
-  .tile .ts { display: block; font-size: 0.85rem; color: #cfe3d6; margin-top: 2px; }
-  .card { background: #1b3123; border: 1px solid #2c4a36; border-radius: 12px; padding: 14px; color: #f2f6f2; }
-  .card .bigbtn { min-height: 120px; }
-  /* Weights: tops + smalls stacked on a 37-lb track. The track is the full
-     sack; the unfilled part is what did not come out as tops or smalls. Two
-     steps of one green (ordered tiers), 2px surface gap between them. */
-  .wtop { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
-  .wtop .tv { font-size: 2rem; font-weight: 800; line-height: 1; }
-  .wtop .badge { font-size: 0.78rem; padding: 5px 9px; align-self: center; }
-  .wbar { position: relative; display: flex; gap: 2px; height: 26px; background: #26402f;
-          border-radius: 6px; overflow: hidden; }
+  /* ── Sack scan page ──────────────────────────────────────────────────
+     A crew member holding a sack, phone at arm's length, gloves on, barn
+     light. Built like field signage: three dark planes (page → card →
+     raised), warm off-white ink, and straw for the one thing that matters
+     most — the number on the tag — and for "allocated, not weighed".
+     Every ink/surface pair below was checked numerically (body ink ≥ 6.7:1,
+     nothing under 13px). No fonts, no assets: it loads on one bar. */
+  .sd { color: #f4f1e8; --card: #1c3123; --raised: #27412f; --line: #35513e; --ink2: #d3e2d3;
+        --muted: #9fbcaa; --straw: #e9c462; --tops: #4fbd7c; --smalls: #b5e9c3;
+        --lift: inset 0 1px 0 rgba(255,255,255,.05), 0 1px 0 rgba(0,0,0,.35), 0 12px 26px -16px rgba(0,0,0,.75); }
+  .sd .hint { color: var(--muted); font-size: 0.9rem; }
+  .sd .note { color: var(--ink2); font-size: 1.05rem; line-height: 1.45; }
+  .sd h2 { font-size: 0.82rem; letter-spacing: 0.14em; color: var(--muted); margin: 30px 0 10px;
+           padding-bottom: 8px; border-bottom: 2px solid var(--line); }
+  .sd .card, .sd .tile, .sd .notecard, .sd .sd-head {
+    background: var(--card); border: 1px solid var(--line); color: #f4f1e8; box-shadow: var(--lift); }
+
+  /* The tag plate: what they just scanned, set the way it reads on the bag.
+     Straw edge and straw number — the one place the accent is loud. */
+  .sd-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;
+             padding: 14px 16px 14px 18px; border-left: 6px solid var(--straw);
+             border-radius: 6px 12px 12px 6px; background: linear-gradient(180deg, #203828, var(--card)); }
+  .sd-head h1 { font-size: 1.15rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+                margin: 0; color: var(--ink2); }
+  .sd-head h1 .code { font-size: 0.82em; font-weight: 600; letter-spacing: 0.08em; color: var(--muted); }
+  .sd-head .serial { font-size: 3.4rem; font-weight: 900; letter-spacing: -0.03em; line-height: 1;
+                     margin: 8px 0 6px; color: var(--straw); }
+  .sd-head .fullid { margin: 0; font-size: 0.88rem; color: var(--muted); }
+  .sd-head .badge { margin-top: 2px; flex: none; }
+
+  /* Stamps: bordered, uppercase, tracked. State on the plate, source on the weights. */
+  .sd .badge { font-size: 0.82rem; font-weight: 800; letter-spacing: 0.1em; padding: 8px 12px;
+               border-radius: 6px; border: 2px solid transparent; }
+  .sd .badge.ok      { background: #1f5a39; border-color: #3f9a66; color: #f4f1e8; }
+  .sd .badge.neutral { background: var(--raised); border-color: #5f8069; color: #f4f1e8; }
+  .sd .badge.bad     { background: #5a2424; border-color: #c25a5a; color: #ffe6e6; }
+  .sd .badge.warn    { background: var(--straw); border-color: var(--straw); color: #2a2007; }
+  .flash { background: #1f4a2f; border: 1px solid #3f9a66; border-left: 6px solid #3f9a66; border-radius: 8px;
+           padding: 14px 16px; margin: 0 0 18px; font-size: 1.08rem; font-weight: 600; color: #f4f1e8; }
+
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0 0; }
+  .tile { border-radius: 10px; padding: 12px 12px 11px; min-width: 0;
+          display: flex; flex-direction: column; justify-content: flex-end; }
+  .tile .tl { display: block; font-size: 0.82rem; font-weight: 700; text-transform: uppercase;
+              letter-spacing: 0.1em; color: var(--muted); }
+  .tile .tv { display: block; font-size: 1.7rem; font-weight: 800; line-height: 1.1; margin-top: 4px;
+              letter-spacing: -0.01em; overflow-wrap: anywhere; }
+  .tile .ts { display: block; font-size: 0.9rem; color: var(--ink2); margin-top: 3px; }
+
+  .card { border-radius: 12px; padding: 16px; }
+  /* A button with an edge: pressable at a glance, and it visibly goes down. */
+  .sd .bigbtn { min-height: 120px; border-radius: 12px; letter-spacing: 0.06em;
+                box-shadow: inset 0 -5px 0 rgba(0,0,0,.28), 0 2px 0 rgba(0,0,0,.45); }
+  .sd .bigbtn:active { box-shadow: inset 0 2px 0 rgba(0,0,0,.3); transform: translateY(2px); }
+
+  /* Weights: tops + smalls stacked on a 37-lb track, the track recessed into
+     the card. Two steps of one green (ordered tiers), a 2px surface gap. */
+  .wtop { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .wtop .tv { font-size: 2.3rem; font-weight: 900; line-height: 1; letter-spacing: -0.02em; }
+  .wtop .hint { font-size: 0.95rem; }
+  .wtop .badge { margin-left: auto; align-self: center; }
+  .wbar { position: relative; display: flex; gap: 2px; height: 32px; background: var(--raised);
+          border-radius: 7px; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,.45); }
   .seg { height: 100%; flex: 0 0 auto; }
-  .seg.tops { background: #45b374; }
-  .seg.smalls { background: #a6e6b8; border-radius: 0 4px 4px 0; }
-  .wbar .tick { position: absolute; top: 0; bottom: 0; width: 2px; background: #f2f6f2; opacity: 0.8; }
-  .wscale { display: flex; justify-content: space-between; font-size: 0.82rem; color: #9fc2ac;
-            margin-top: 5px; font-variant-numeric: tabular-nums; }
-  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; font-size: 1rem; }
-  .legend .sw { display: inline-block; width: 14px; height: 14px; border-radius: 4px; margin-right: 7px;
+  .seg.tops { background: var(--tops); }
+  .seg.smalls { background: var(--smalls); border-radius: 0 5px 5px 0; }
+  .wbar .tick { position: absolute; top: 0; bottom: 0; width: 3px; background: #f4f1e8; }
+  .wscale { display: flex; justify-content: space-between; font-size: 0.88rem; color: var(--muted);
+            margin-top: 6px; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+  .legend { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 12px; font-size: 1.05rem; color: var(--ink2); }
+  .legend .sw { display: inline-block; width: 16px; height: 16px; border-radius: 4px; margin-right: 8px;
                 vertical-align: -2px; }
-  .legend .sw.tops { background: #45b374; }
-  .legend .sw.smalls { background: #a6e6b8; }
-  .legend strong { font-weight: 800; }
-  .empty { font-size: 1.8rem; font-weight: 800; color: #9fc2ac; margin: 0 0 6px; line-height: 1; }
+  .legend .sw.tops { background: var(--tops); }
+  .legend .sw.smalls { background: var(--smalls); }
+  .legend strong { font-weight: 800; color: #f4f1e8; }
+  .empty { font-size: 2.3rem; font-weight: 900; color: var(--muted); margin: 0 0 8px; line-height: 1; }
+
   /* Journey: planted → cut → bagged → opened / today. Vertical so it never
-     cramps on a phone; the spans between nodes carry the day counts. */
-  .journey { list-style: none; margin: 4px 0 0; padding: 0; }
-  .journey li { display: grid; grid-template-columns: 22px 1fr; column-gap: 12px; }
-  .journey .node { align-items: center; padding: 2px 0; font-size: 1.05rem; }
-  .journey .dot { width: 14px; height: 14px; border-radius: 50%; background: #45b374; justify-self: center;
-                  box-sizing: border-box; }
-  .journey .dot.open { background: transparent; border: 3px solid #9fc2ac; }
-  .journey .dot.none { background: transparent; border: 2px solid #3a5f4c; }
+     cramps on a phone; the spans between nodes carry the day counts. Done
+     nodes are green with a ring; "today" is a straw ring — now, not yet. */
+  .journey { list-style: none; margin: 6px 0 0; padding: 0; }
+  .journey li { display: grid; grid-template-columns: 26px 1fr; column-gap: 14px; }
+  .journey .node { align-items: center; padding: 4px 0; font-size: 1.08rem; }
+  .journey .dot { width: 16px; height: 16px; border-radius: 50%; background: var(--tops); justify-self: center;
+                  box-sizing: border-box; box-shadow: 0 0 0 3px #14251a, 0 0 0 5px var(--line); }
+  .journey .dot.open { background: transparent; border: 3px solid var(--straw);
+                       box-shadow: 0 0 0 3px #14251a, 0 0 0 5px var(--line); }
+  .journey .dot.none { background: transparent; border: 2px solid var(--line); box-shadow: none; }
   .journey .node > span { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
-  .journey .node .when { color: #cfe3d6; text-align: right; }
-  .journey .span { min-height: 36px; }
-  .journey .line { width: 2px; background: #2c4a36; justify-self: center; height: 100%; }
-  .journey .span .dur { align-self: center; color: #9fc2ac; font-size: 0.95rem; padding: 6px 0; }
-  .journey .span .dur strong { color: #f2f6f2; font-size: 1.05rem; }
-  .notecard { background: #1b3123; border-left: 3px solid #3a5f4c; border-radius: 0 8px 8px 0;
-              padding: 10px 12px; margin: 8px 0; font-size: 1rem; line-height: 1.4; color: #f2f6f2; }
-  .notecard .hint { display: block; margin-top: 3px; }
+  .journey .node strong { font-weight: 800; }
+  .journey .node .when { color: var(--ink2); text-align: right; font-variant-numeric: tabular-nums; }
+  .journey .span { min-height: 40px; }
+  .journey .line { width: 3px; background: var(--line); justify-self: center; height: 100%; border-radius: 2px; }
+  .journey .span .dur { align-self: center; color: var(--muted); font-size: 0.98rem; padding: 6px 0; }
+  .journey .span .dur strong { color: #f4f1e8; font-size: 1.12rem; font-weight: 800; }
+  .sd .kv { border-bottom: 0; border-top: 2px solid var(--line); margin-top: 12px; padding: 12px 0 0; font-size: 1.02rem; }
+  .sd .kv span { color: var(--muted); }
+
+  .notecard { border-left: 4px solid #5f8069; border-radius: 0 10px 10px 0; padding: 12px 14px; margin: 10px 0;
+              font-size: 1.02rem; line-height: 1.45; }
+  .notecard .hint { display: block; margin-top: 4px; }
+  .sd .batch { margin-top: 14px; color: var(--ink2); }
+  .sd .batch summary { font-size: 1.05rem; font-weight: 600; padding: 14px 0; }
+  .sd .batch input { background: #f4f1e8; color: #14251a; }
+  .sd .footer a { color: var(--muted); font-weight: 600; font-size: 1rem; }
   /* Language toggle — small and out of the way. Spanish is the default, so
      this is an escape hatch for an English reader, not a decision the crew is
      asked to make on every screen. */
