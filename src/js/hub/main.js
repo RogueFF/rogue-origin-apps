@@ -139,8 +139,12 @@ function initTheme() {
 
 function markStale(on) {
   state.loading = on;
-  document.body.dataset.loading = on ? '1' : '';
-  document.querySelectorAll('.sec-body').forEach((b) => b.classList.toggle('stale', on));
+  // Dimming says "what you are looking at is about to be replaced". On a cold
+  // load there is nothing on screen to be stale, so dimming the empty shell just
+  // reads as the page washing out between the loader and the first response.
+  const dim = on && Boolean(state.data);
+  document.body.dataset.loading = dim ? '1' : '';
+  document.querySelectorAll('.sec-body').forEach((b) => b.classList.toggle('stale', dim));
 }
 
 let retryTimer = null;
