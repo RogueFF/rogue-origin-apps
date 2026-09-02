@@ -92,10 +92,6 @@ export function renderLedger(host, { columns, mode = 'hour' }) {
     const xs = cx + gap / 2;
     if (ht > 0) svg.appendChild(el('path', { class: 'bar-tops', d: capPath(xt, yLb(c.tops), barW, ht) }));
     if (hs > 0) svg.appendChild(el('path', { class: 'bar-smalls', d: capPath(xs, yLb(c.smalls), barW, hs) }));
-    // The pounds ride inside the bar, running up it. A bar too short to hold
-    // the text gets the figure just above its cap instead — never clipped.
-    barLabel(svg, xt, yLb(c.tops), barW, ht, num(c.tops, 1), 'tops');
-    barLabel(svg, xs, yLb(c.smalls), barW, hs, num(c.smalls, 0), 'smalls');
 
     // rate marker vs target tick
     if (Number.isFinite(c.target) && c.target > 0) {
@@ -141,22 +137,6 @@ export function renderLedger(host, { columns, mode = 'hour' }) {
   });
 
   host.appendChild(svg);
-}
-
-const MIN_INSIDE = 30; // px of bar needed before a rotated label fits with padding
-
-function barLabel(svg, x, top, w, h, text, kind) {
-  if (!(h > 0) || text === '—') return;
-  const cx = x + w / 2;
-  if (h >= MIN_INSIDE) {
-    const cy = top + h / 2;
-    svg.appendChild(el('text', {
-      class: `bar-val ${kind}`, x: cx, y: cy, 'text-anchor': 'middle', 'dominant-baseline': 'central',
-      transform: `rotate(-90 ${cx} ${cy})`, text,
-    }));
-  } else {
-    svg.appendChild(el('text', { class: 'bar-val above', x: cx, y: top - 4, 'text-anchor': 'middle', text }));
-  }
 }
 
 function ensureTip(host) {
