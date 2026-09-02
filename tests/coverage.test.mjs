@@ -58,6 +58,29 @@ test('raw supersacks are counted as sacks, never as finished pounds', () => {
   assert.equal(r.rawSacks['lifter'], 85);
 });
 
+test('a supersack whose SKU prefix is unknown is still counted when its title is a known alias', () => {
+  // Shopify's supersack variants were coded by hand and do not always reuse the
+  // catalogue prefix: Sugar Cookez is SUGCOOK on finished goods but SCOOK on
+  // the sack. The variant title, though, is the production-sheet spelling the
+  // alias table already maps — so the title is the join, not the prefix.
+  const ALIASES = { '2025 - SUGAR COOKEZ (COOKIES) / SUNGROWN': 'sugar-cookez' };
+  const r = summarizeInventory(
+    [{ sku: 'SCOOK-SG-SUPRSAK-2025', units: 186, title: '2025 - Sugar Cookez (Cookies) / Sungrown' }],
+    PREFIXES, ALIASES,
+  );
+  assert.equal(r.rawSacks['sugar-cookez'], 186);
+  assert.deepEqual(r.skipped, []);
+});
+
+test('a supersack with neither a known prefix nor a known title is skipped and reported', () => {
+  const r = summarizeInventory(
+    [{ sku: 'GT-GH-SUPRSAK-2026', units: 2, title: '2026 - Gravy Train / Greenhouse' }],
+    PREFIXES, {},
+  );
+  assert.deepEqual(r.rawSacks, {});
+  assert.ok(r.skipped.includes('GT-GH-SUPRSAK-2026'));
+});
+
 test('a SKU that does not parse is skipped and reported, not guessed at', () => {
   const r = summarizeInventory([
     { sku: 'TEST-SKU-001', units: 100 },

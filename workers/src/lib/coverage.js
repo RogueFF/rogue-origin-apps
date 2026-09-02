@@ -31,10 +31,21 @@ const key = (cultivarId, form) => `${cultivarId}|${form}`;
  * Fold live inventory rows into finished pounds per (cultivar, form) and raw
  * sacks per cultivar.
  *
- * @param rows      [{ sku, units }] — latest count per sku
+ * Finished goods resolve by SKU prefix: the catalogue SKU is the contract, and
+ * `parseSku` reads form and pack size out of it. Supersacks resolve by their
+ * variant TITLE first. The sack variants in Shopify were coded by hand and do
+ * not always reuse the catalogue prefix (Sugar Cookez is SUGCOOK on a bag of
+ * tops but SCOOK on the sack), so by prefix alone two of the biggest raw
+ * inventories read as zero. Their titles, though, are the production-sheet
+ * spelling ("2025 - Sugar Cookez (Cookies) / Sungrown") that cultivar_aliases
+ * already maps — the same seam the rate lookups and the queue's sack history
+ * join on. The prefix stays as the fallback for a sack with no usable title.
+ *
+ * @param rows      [{ sku, units, title? }] — latest count per sku
  * @param prefixMap { SKU_PREFIX: cultivarId }
+ * @param aliasMap  { UPPERCASED ALIAS: cultivarId } — from cultivar_aliases
  */
-export function summarizeInventory(rows, prefixMap) {
+export function summarizeInventory(rows, prefixMap, aliasMap = {}) {
   const finished = {};
   const rawSacks = {};
   const skipped = [];
@@ -45,15 +56,20 @@ export function summarizeInventory(rows, prefixMap) {
     if (!sku || !Number.isFinite(units) || units <= 0) continue;
 
     const prefix = sku.split('-')[0];
-    const cultivarId = prefixMap[prefix];
-    if (!cultivarId) { skipped.push(sku); continue; }
+    const byPrefix = prefixMap[prefix];
 
     // A supersack is unprocessed. Counting one as packed inventory would say an
     // order can ship when nothing has been trimmed for it.
     if (sku.includes(RAW_MARKER)) {
+      const title = String(row.title || '').trim().toUpperCase();
+      const cultivarId = (title && aliasMap[title]) || byPrefix;
+      if (!cultivarId) { skipped.push(sku); continue; }
       rawSacks[cultivarId] = (rawSacks[cultivarId] || 0) + units;
       continue;
     }
+
+    const cultivarId = byPrefix;
+    if (!cultivarId) { skipped.push(sku); continue; }
 
     let parsed;
     try {
