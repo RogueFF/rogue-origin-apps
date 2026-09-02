@@ -262,7 +262,8 @@ export async function handleSackScan(request, env, ctx) {
     const url = new URL(request.url);
     const sackId = url.pathname.replace(/^\/s\//, '').trim();
     if (isDemoSack(sackId)) {
-      const view = demoSackView(url.searchParams.get('opened') === '1');
+      const view = demoSackView(url.searchParams.get('opened') === '1',
+                                url.searchParams.get('voided') === '1');
       return renderPage(ui, `${ui.t('sack')} ${DEMO_SACK_ID}`,
         demoBanner(ui, url) + sackDetailBody(ui, view));
     }
@@ -821,6 +822,7 @@ async function handleSackWeigh(ui, db, env, ctx, body) {
  * with invented acreage teaches the wrong thing about what the page shows.
  *
  * ?opened=1 shows the state after ABRIR BOLSA, with floor-allocated weights.
+ * ?voided=1 shows a retired number, which has no sack behind it to open.
  */
 const DEMO_SACK_ID = 'DEMO';
 
@@ -853,7 +855,7 @@ function demoBanner(ui, url, msg) {
   </div>`;
 }
 
-function demoSackView(opened) {
+function demoSackView(opened, voided) {
   const facts = zoneFacts('Z4') || {};
   const today = new Date();
   // Cut 16 days ago, bagged after the typical dry cycle, opened yesterday —
@@ -873,7 +875,7 @@ function demoSackView(opened) {
       tops_lbs: opened ? 21.4 : null,
       smalls_lbs: opened ? 11.9 : null,
       weights_source: opened ? 'allocated' : null,
-      voided_at: null, is_test: 1,
+      voided_at: voided ? cut + ' 15:10:00' : null, is_test: 1,
     },
     notes: [
       { note: 'Bottom of the rack was still damp — held back a day.', created_at: bagged + ' 16:05:00' },
@@ -2708,7 +2710,14 @@ function sackDetailBody(ui, view, flash) {
   const lb = n => n.toFixed(1).replace(/\.0$/, '');
 
   let weights;
-  if (!opened) {
+  if (voided && !opened) {
+    // A voided number was retired without a sack behind it, so there is
+    // nothing to open. The backend refuses it anyway; showing the button
+    // just invites someone to press it and read an error as a fault.
+    weights = `<div class="card">
+  <p class="note" style="margin:0">${ui.t('voidedNoOpen')}</p>
+</div>`;
+  } else if (!opened) {
     weights = `<div class="card">
   <p class="note" style="margin:0 0 12px">${ui.t('notOpened')}</p>
   <form method="POST" action="/api/harvest?action=sack_open&lang=${ui.lang}" onsubmit="this.querySelector('button').disabled=true">
