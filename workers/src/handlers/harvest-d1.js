@@ -31,6 +31,8 @@
  * - POST ?action=sack_alloc      (session_id,cultivar,qty) - Allocate serial(s) (JSON, called by fetch)
  * - POST ?action=sack_void       (sack_id)               - Void a mis-printed tag (JSON)
  * - GET  ?action=sack_label&id=|ids=                     - Label sheet; reprint reuses SAME serial (HTML)
+ * - GET  ?action=sack_label&...&sheet=avery5163[&skip=N]  - Same tags on an Avery 5163 laser sheet (fallback)
+ * - GET  ?action=sack_label&sheet=avery5163&calibrate=1   - Empty slot outlines, to check printer alignment
  * - POST ?action=sack_weigh      (sack_id,tops,smalls)   - Record weights at bucking (HTML)
  * - GET  ?action=sacks&...                               - Raw sack rows (JSON)
  * The scan target /s/<sack_id> is routed in index.js and handled by
@@ -699,6 +701,12 @@ async function handleSackVoid(db, env, ctx, body) {
 async function handleSackLabel(ui, db, env, params) {
   // ?id= for a single reprint, ?ids=a,b,c for a freshly-allocated run. The
   // session screen loads this into a hidden iframe, which prints itself.
+  // The calibration sheet prints empty outlines to check printer alignment,
+  // so it deliberately needs no sacks — and must not allocate any.
+  if (String(params.sheet || '') === 'avery5163' && params.calibrate === '1') {
+    return renderAverySheet(ui, [], { calibrate: true });
+  }
+
   const raw = String(params.ids || params.id || '').trim();
   const ids = raw.split(',').map(s => s.trim()).filter(Boolean).slice(0, MAX_PRINT_QTY);
   if (!ids.length) throw createError('VALIDATION_ERROR', ui.t('noSackId'));
@@ -710,6 +718,13 @@ async function handleSackLabel(ui, db, env, params) {
   // Preserve the requested order (SQL IN doesn't guarantee it).
   const byId = new Map(rows.map(r => [r.sack_id, r]));
   const sacks = ids.map(id => byId.get(id)).filter(Boolean);
+
+  // ?sheet=avery5163 lays the same tags on a laser sheet instead of the
+  // thermal roll — the fallback for a dead ZP-450 or a dropped connection.
+  // Never auto-prints: a sheet costs ten labels, so it waits to be told.
+  if (String(params.sheet || '') === 'avery5163') {
+    return renderAverySheet(ui, sacks, { skip: params.skip });
+  }
 
   // ?preview=1 renders without firing the print dialog — for eyeballing a
   // label (or checking a long cultivar name fits) before committing paper.
@@ -2048,10 +2063,14 @@ function sackSessionBody(ui, { lot, cultivar, stats }) {
  * once every QR image has loaded; with Chrome's --kiosk-printing flag on the
  * barn PC that goes straight to the ZP-450 with no dialog to dismiss.
  */
-function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
-  const autoPrint = opts.autoPrint !== false;
-  const labels = sacks.map(s => `
-  <div class="label">
+/**
+ * The printed face of one tag. Shared verbatim by the thermal roll and the
+ * Avery sheet so a bag looks identical whichever printer produced it — two
+ * copies of this markup would drift, and the drift would only show up as two
+ * tags on one rack that don't match.
+ */
+function labelInner(ui, s) {
+  return `
     <div class="cultivar" style="font-size:${cultivarFontPt(s.cultivar)}pt">${escapeHtml(s.cultivar || '')}</div>
     <div class="row">
       <div class="left">
@@ -2059,7 +2078,128 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
         <div class="meta">${escapeHtml(formatTagDate(ui.lang, s.harvest_date))} · ${escapeHtml(s.zone)} · ${escapeHtml(ui.t('cut', { n: s.cut_number ?? '?' }))}</div>
       </div>
       <img class="qr" src="${qrUrlFor(s.sack_id)}" alt="">
-    </div>
+    </div>`;
+}
+
+/**
+ * Avery 5163 — 2in x 4in, 10 to a US Letter sheet, laser.
+ *
+ * The numbers are Avery's own and they close exactly, which is the check that
+ * they are right: 0.15625 + 4 + 0.1875 + 4 + 0.15625 = 8.5in across, and
+ * 0.5 + (5 x 2) + 0.5 = 11in down. A template whose margins don't sum to the
+ * sheet is a template that will creep a little further off with every row.
+ */
+const AVERY_5163 = {
+  name: 'Avery 5163', cols: 2, rows: 5, perSheet: 10,
+  labelW: 4, labelH: 2, marginTop: 0.5, marginLeft: 0.15625, gutterX: 0.1875, gutterY: 0,
+};
+
+/**
+ * The same tags laid out on an Avery 5163 sheet, for a plain laser printer.
+ *
+ * This is the FALLBACK path, not the everyday one. The Zebra prints one tag as
+ * one sack is filled, which is what keeps a number attached to the bag it was
+ * allocated for. A sheet printer cannot do that \u2014 it emits ten at a time \u2014 so
+ * using this means labels exist before their sacks do, and a sheet left on the
+ * bench can end up on the wrong lot. That is the failure the on-demand design
+ * avoids, and it is worth accepting only when the alternative is not printing:
+ * a dead ZP-450, or the barn connection dropping mid-takedown.
+ *
+ * `skip` leaves the first N slots blank so a part-used sheet can be re-fed
+ * rather than binned \u2014 without it, three tags cost a whole sheet of ten.
+ */
+function renderAverySheet(ui, sacks, opts = {}) {
+  const G = AVERY_5163;
+  const skip = Math.min(Math.max(parseInt(opts.skip, 10) || 0, 0), G.perSheet - 1);
+  const calibrate = opts.calibrate === true;
+
+  // Blank leading slots, then the tags, chunked one sheet per page.
+  const cells = [];
+  for (let i = 0; i < skip; i++) cells.push('<div class="cell blank"></div>');
+  if (calibrate) {
+    cells.length = 0;   // a calibration sheet is every slot, ignoring skip
+    for (let i = 0; i < G.perSheet; i++) {
+      cells.push(`<div class="cell cal"><span class="calnum">${i + 1}</span></div>`);
+    }
+  } else {
+    for (const sack of sacks) cells.push(`<div class="cell">${labelInner(ui, sack)}</div>`);
+  }
+
+  const pages = [];
+  for (let i = 0; i < cells.length; i += G.perSheet) {
+    pages.push(`<div class="sheet">${cells.slice(i, i + G.perSheet).join('')}</div>`);
+  }
+
+  const used = skip + sacks.length;
+  const leftOver = calibrate ? 0 : (G.perSheet - (used % G.perSheet)) % G.perSheet;
+  const nextSkip = (used % G.perSheet);
+
+  const html = `<!doctype html>
+<html><head><meta charset="utf-8"><title>${G.name}</title>
+<style>
+  @page { size: letter portrait; margin: 0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Arial, Helvetica, sans-serif; background: #eee; }
+  .sheet {
+    width: 8.5in; height: 11in; background: #fff;
+    padding: ${G.marginTop}in 0 0 ${G.marginLeft}in;
+    display: grid;
+    grid-template-columns: repeat(${G.cols}, ${G.labelW}in);
+    grid-auto-rows: ${G.labelH}in;
+    column-gap: ${G.gutterX}in; row-gap: ${G.gutterY}in;
+    align-content: start;
+  }
+  .cell {
+    width: ${G.labelW}in; height: ${G.labelH}in;
+    padding: 0.11in 0.13in; overflow: hidden; color: #000;
+    display: flex; flex-direction: column;
+  }
+  .cell.blank { visibility: hidden; }
+  .cultivar { font-size: 25pt; font-weight: 800; line-height: 1.0; letter-spacing: -0.01em;
+              white-space: nowrap; overflow: hidden; }
+  .row { display: flex; align-items: flex-end; justify-content: space-between; flex: 1; gap: 0.08in; }
+  .left { min-width: 0; }
+  .bagno { font-size: 30pt; font-weight: 800; line-height: 1.05; white-space: nowrap; }
+  .meta { font-size: 10.5pt; margin-top: 0.03in; white-space: nowrap; }
+  .qr { width: 1in; height: 1in; flex: none; }
+
+  /* Calibration: outline every slot so a test print can be held against a
+     real sheet. If these boxes do not sit on the die-cuts, the printer is
+     scaling and no amount of template tweaking will fix it. */
+  .cell.cal { border: 1pt solid #000; align-items: center; justify-content: center; }
+  .calnum { font-size: 28pt; font-weight: 700; color: #000; }
+
+  .toolbar { padding: 14px; font: 14px system-ui; background: #fff; }
+  .toolbar a { color: #036; }
+  .toolbar .warn { color: #a33; font-weight: 600; }
+  @media screen { .sheet { margin: 12px auto; box-shadow: 0 1px 6px rgba(0,0,0,.3); } }
+  @media print {
+    .toolbar { display: none; }
+    body { background: #fff; }
+    .sheet { margin: 0; box-shadow: none; page-break-after: always; }
+    .sheet:last-child { page-break-after: auto; }
+  }
+</style></head>
+<body>
+<div class="toolbar">
+  <strong>${G.name}</strong> &middot; ${calibrate ? 'calibration sheet' : `${sacks.length} ${ui.t('sack')}${skip ? ` · skipped ${skip}` : ''}`}
+  &middot; <a href="javascript:window.print()">${ui.t('printTag')}</a>
+  ${!calibrate && leftOver ? `&middot; <strong>${leftOver} slot(s) left on this sheet</strong> — keep it, next run use <code>&amp;skip=${nextSkip}</code>` : ''}
+  <div class="warn">Print at 100% scale, margins None, headers/footers off — anything else shifts every label.</div>
+</div>
+${pages.join('')}
+</body></html>`;
+
+  return new Response(html, {
+    status: 200,
+    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+  });
+}
+
+function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
+  const autoPrint = opts.autoPrint !== false;
+  const labels = sacks.map(s => `
+  <div class="label">${labelInner(ui, s)}
   </div>`).join('');
 
   const backLink = `<a href="?action=sack_print">${ui.t('changeLot')}</a>`;
