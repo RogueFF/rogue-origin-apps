@@ -394,6 +394,19 @@
     .strain-weight-input input::-webkit-outer-spin-button,
     .strain-weight-input input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
     .strain-weight-unit { font-size: 10px; color: var(--text-faint); flex-shrink: 0; }
+    .strain-weight-input.invalid { border-color: var(--red); }
+    .strain-weight-input.invalid input { color: var(--red); }
+    .strain-warning {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      padding: 0 2px 2px; font-size: 11px; line-height: 1.3; color: var(--red);
+      font-family: var(--font-ui);
+    }
+    .strain-warning[hidden] { display: none; }
+    .strain-swap-btn {
+      flex-shrink: 0; background: transparent; border: 1px solid var(--red);
+      border-radius: var(--radius-sm); color: var(--red); font-size: 11px; font-weight: 600;
+      font-family: var(--font-ui); padding: 4px 10px; cursor: pointer;
+    }
     .strain-row:hover { background: rgba(102, 137, 113, 0.06); }
     .strain-row:last-child { border-bottom: none; }
     .strain-name {
@@ -714,7 +727,7 @@
   // i18n
   const LANG = { en: {
     title: 'Supersack Tracker', supersacksOpened: 'Supersacks Opened',
-    waterSpiderEntry: 'Water Spider Entry', biomass: 'Biomass (trim)',
+    waterSpiderEntry: 'Water Spider Entry', biomass: 'Biomass #2 Trim',
     premiumTrim: 'Premium #1 Trim', productionData: 'Production Data (auto-pulled)',
     tops: 'Tops', smalls: 'Smalls', materialBalance: 'Material Balance',
     rawInput: 'Raw Input', waste: 'Waste (sticks + mold)',
@@ -723,10 +736,12 @@
     enterCount: 'Enter supersack count first', loading: 'loading...',
     mappingSaved: 'Mapping saved', today: 'Today',
     zeroWeights: 'Enter biomass and trim weights — zero is treated as missing data',
-    bioShort: 'Bio', trimShort: 'Trim',
+    bioShort: 'Biomass #2', trimShort: 'Premium #1',
+    trimExceedsBio: 'Premium #1 cannot weigh more than Biomass #2 — check which box is which',
+    swap: 'Swap', saveFailed: 'Entry not saved',
   }, es: {
     title: 'Rastreador de Supersacos', supersacksOpened: 'Supersacos Abiertos',
-    waterSpiderEntry: 'Entrada del Water Spider', biomass: 'Biomasa (recorte)',
+    waterSpiderEntry: 'Entrada del Water Spider', biomass: 'Biomasa #2 (recorte)',
     premiumTrim: 'Recorte Premium #1', productionData: 'Datos de Producción (automático)',
     tops: 'Tops', smalls: 'Smalls', materialBalance: 'Balance de Materiales',
     rawInput: 'Entrada Bruta', waste: 'Desperdicio (palos + moho)',
@@ -735,7 +750,9 @@
     enterCount: 'Ingrese la cantidad de supersacos primero', loading: 'cargando...',
     mappingSaved: 'Mapeo guardado', today: 'Hoy',
     zeroWeights: 'Ingrese pesos de biomasa y recorte — cero se trata como datos faltantes',
-    bioShort: 'Bio', trimShort: 'Recorte',
+    bioShort: 'Biomasa #2', trimShort: 'Premium #1',
+    trimExceedsBio: 'Premium #1 no puede pesar más que Biomasa #2 — revise qué casilla es cuál',
+    swap: 'Intercambiar', saveFailed: 'Entrada no guardada',
   }};
   function applyLang() {
     const l = (window.getLang && window.getLang()) || 'en';
@@ -780,6 +797,7 @@
   const statusMsg = document.getElementById('status-msg');
 
   function todayStr() { return new Date().toLocaleDateString('en-CA'); }
+  function shortStrain(name) { return name.replace(/^\d{4} - /, '').replace(/ \/ Sungrown$/, ''); }
 
   function initDate() {
     dateInput.value = todayStr();
@@ -821,13 +839,13 @@
       return;
     }
 
-    const lang = (window.getLang && window.getLang()) || 'en';
-    const bioLabel = LANG[lang].bioShort;
-    const trimLabel = LANG[lang].trimShort;
+    const t = LANG[(window.getLang && window.getLang()) || 'en'];
+    const bioLabel = t.bioShort;
+    const trimLabel = t.trimShort;
 
     container.innerHTML = strains.map(name => {
       const s = strainData[name];
-      const shortName = name.replace(/^\d{4} - /, '').replace(/ \/ Sungrown$/, '');
+      const shortName = shortStrain(name);
       const weightsRow = s.sacks > 0 ? `
         <div class="strain-row-weights">
           <div class="strain-weight-input">
@@ -844,6 +862,10 @@
               onclick="this.select()">
             <span class="strain-weight-unit">lbs</span>
           </div>
+        </div>
+        <div class="strain-warning" hidden>
+          <span>⚠ ${t.trimExceedsBio}</span>
+          <button type="button" class="strain-swap-btn" onclick="window._strainSwap('${name}')">⇄ ${t.swap}</button>
         </div>` : '';
       return `
         <div class="strain-row" data-strain="${name}">
@@ -881,6 +903,25 @@
   };
   window._strainSetBio = (name, val) => { strainData[name].biomass = Math.max(0, parseFloat(val) || 0); recalc(); };
   window._strainSetTrim = (name, val) => { strainData[name].trim = Math.max(0, parseFloat(val) || 0); recalc(); };
+  window._strainSwap = (name) => {
+    const s = strainData[name];
+    [s.biomass, s.trim] = [s.trim || 0, s.biomass || 0];
+    renderStrainCounters(); recalc();
+  };
+
+  // Premium #1 Trim never outweighs Biomass #2. When a strain says otherwise the
+  // two boxes were typed into each other — every such row in 2026 was — so flag
+  // the row and offer the swap. Submit refuses it, and so does the API.
+  function strainSwapped(s) { return (s.sacks || 0) > 0 && (s.trim || 0) > (s.biomass || 0); }
+  function updateStrainWarnings() {
+    document.querySelectorAll('.strain-row').forEach(row => {
+      const s = strainData[row.dataset.strain];
+      const bad = !!s && strainSwapped(s);
+      row.querySelectorAll('.strain-weight-input').forEach(el => el.classList.toggle('invalid', bad));
+      const warn = row.querySelector('.strain-warning');
+      if (warn) warn.hidden = !bad;
+    });
+  }
 
   // Recalculate totals + per-strain averages
   function recalc() {
@@ -892,6 +933,7 @@
     const trim = Object.values(strainData).reduce((sum, s) => sum + (s.trim || 0), 0);
     biomassInput.value = biomass;
     trimInput.value = trim;
+    updateStrainWarnings();
 
     // Totals from all strains
     topsLbs = Object.values(strainData).reduce((sum, s) => sum + s.tops, 0);
@@ -1296,7 +1338,7 @@
   }
 
   // Lock/unlock form for edit mode
-  const LOCKABLE_SELECTOR = '.counter-btn, .mini-btn, .strain-counter input, .strain-weight-input input';
+  const LOCKABLE_SELECTOR = '.counter-btn, .mini-btn, .strain-counter input, .strain-weight-input input, .strain-swap-btn';
   function lockForm() {
     document.querySelectorAll(LOCKABLE_SELECTOR).forEach(el => {
       el.disabled = true;
@@ -1423,11 +1465,19 @@
     const sackCount = totalSacks();
     if (sackCount === 0 && !editMode) { setStatus('Enter supersack count first', 'error'); return; }
 
+    const t = LANG[(window.getLang && window.getLang()) || 'en'];
     const biomass = parseFloat(biomassInput.value) || 0;
     const trim = parseFloat(trimInput.value) || 0;
     if (sackCount > 0 && biomass === 0 && trim === 0) {
-      const l = (window.getLang && window.getLang()) || 'en';
-      setStatus(LANG[l].zeroWeights, 'error');
+      setStatus(t.zeroWeights, 'error');
+      return;
+    }
+    // Refuse a swapped strain before any pool is touched — one that reaches
+    // the pools has to be unwound by hand.
+    const swapped = Object.entries(strainData).filter(([, s]) => strainSwapped(s)).map(([name]) => shortStrain(name));
+    if (swapped.length > 0) {
+      updateStrainWarnings();
+      setStatus(t.trimExceedsBio + ': ' + swapped.join(', '), 'error');
       return;
     }
 
@@ -1516,9 +1566,11 @@
       }
     }
 
-    // 4. Save to D1 supersack_entries table
+    // 4. Save to D1 supersack_entries table. The API re-checks premium vs
+    //    biomass and answers 400 — a day that did not save must not read as saved.
+    let saveError = null;
     try {
-      await fetch(`${SS_API}?action=submit`, {
+      const res = await fetch(`${SS_API}?action=submit`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           date, supersack_count: sackCount, biomass_lbs: biomass,
@@ -1527,16 +1579,23 @@
           strains: Object.fromEntries(Object.entries(strainData).map(([k, v]) => [k, { sacks: v.sacks, tops: v.tops, smalls: v.smalls, biomass: v.biomass || 0, trim: v.trim || 0 }])),
         }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) throw new Error(data.error || `HTTP ${res.status}`);
     } catch (e) {
       console.warn('[Supersack] D1 save failed:', e.message);
+      saveError = e.message;
     }
 
     submitBtn.disabled = false;
     submitBtn.classList.remove('saving');
 
-    if (poolErrors.length > 0) {
+    if (poolErrors.length > 0 || saveError) {
+      const problems = [];
+      if (poolErrors.length > 0) problems.push('Pool errors: ' + poolErrors.join('; '));
+      if (saveError) problems.push(t.saveFailed + ': ' + saveError);
+      submitBtn.textContent = editMode ? 'Update Entry' : t.submit;
       submitBtn.classList.add('error');
-      setStatus('Pool errors: ' + poolErrors.join('; '), 'error');
+      setStatus(problems.join(' — '), 'error');
       setTimeout(() => submitBtn.classList.remove('error'), 2000);
     } else {
       submitBtn.textContent = '✓ Saved';
@@ -1679,6 +1738,7 @@
   loadAll().then(() => checkExistingEntry()); // load strains first, then pre-fill saved counts
 })();
 </script>
+
 <!-- module-hashes:start -->
 <!-- generated by stamp-modules — do not edit by hand -->
 <script type="importmap">
