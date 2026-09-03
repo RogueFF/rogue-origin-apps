@@ -1189,7 +1189,11 @@ async function handleAllocate(db, env, params) {
     // two over-credits every bag, invisibly and permanently. Divide by the
     // TAGGED count, because those are the bags being written, and report the
     // disagreement rather than let it settle into the ledger unremarked.
-    if (f.floorSacks && f.floorSacks !== r.n) {
+    // No truthiness guard on floorSacks: `sacks_opened` is NOT NULL DEFAULT 0,
+    // so a back-entered row where someone filled in the weights and left the
+    // count reads as 0 — which is wrong whenever there are pounds behind it,
+    // and skipping the check there would be a silent pass rather than a number.
+    if (f.floorSacks !== r.n) {
       countMismatches.push({
         season: r.season, cultivar: r.cultivar,
         floor_sacks_opened: f.floorSacks, tagged_bags_opened: r.n,

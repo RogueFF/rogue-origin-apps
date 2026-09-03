@@ -179,6 +179,23 @@ test('a floor/tagged count disagreement is reported, not silently divided', asyn
   assert.equal(sackRows(sqlite)[0].tops_lbs, Math.round((200 / 6) * 100) / 100);
 });
 
+test('a tracker row with weights but no sack count is caught, not skipped', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  seedAlias(sqlite, `${SEASON} - Lifter / Sungrown`, 2);
+  // Real pounds, sacks_opened left at its NOT NULL DEFAULT 0 — what a
+  // back-entered row looks like when someone fills weights and forgets the
+  // count. Skipping the check here would be a silent pass.
+  seedFloor(sqlite, { strain: `${SEASON} - Lifter / Sungrown`, sacks: 0, tops: 60, smalls: 30, waste: 0 });
+  seedOpenedSacks(sqlite, { n: 3, cultivar: 'Lifter' });
+
+  const res = await allocate(env, ctx);
+  assert.equal(res.sack_count_mismatches.length, 1);
+  assert.equal(res.sack_count_mismatches[0].floor_sacks_opened, 0);
+  assert.match(res.sack_count_mismatches[0].effect, /3 tagged bag\(s\) the floor did not count/);
+  // The share is still written — the pounds are real, only the count is missing.
+  assert.equal(sackRows(sqlite)[0].tops_lbs, 20);
+});
+
 test('matching counts raise nothing', async () => {
   const { sqlite, env, ctx } = freshDb();
   seedAlias(sqlite, `${SEASON} - Lifter / Sungrown`, 2);
