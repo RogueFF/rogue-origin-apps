@@ -17,6 +17,32 @@ import { constantTimeEqual } from '../lib/auth.js';
 
 const SACK_WEIGHT = 37;
 
+/**
+ * Premium #1 Trim never outweighs Biomass (#2 trim). A sack's premium
+ * fraction is a small share of its bulk trim — about 0.17× biomass across
+ * every clean 2026 row, never above 0.27× — and the only rows that ever
+ * broke this were the two weights typed into each other's box (49 rows,
+ * 2026-07-27..09-02, all 2.5×–10×; corrected by migration 0028). The
+ * tracker refuses the swap before it touches a pool; refusing it here too
+ * means a stale page or any other caller cannot write it either.
+ */
+function premiumOutweighsBiomass(biomass, trim) {
+  return Number(trim) > Number(biomass);
+}
+
+function premiumOutweighsBiomassError(strains) {
+  const names = strains.map(shortStrain).join(', ');
+  return errorResponse(
+    `Premium #1 Trim cannot weigh more than Biomass #2 — check which box is which: ${names}`,
+    'VALIDATION_ERROR', 400, { strains },
+  );
+}
+
+/** "2025 - Lifter / Sungrown" → "Lifter", the way the tracker shows it. */
+function shortStrain(name) {
+  return String(name || '').replace(/^\d{4} - /, '').replace(/ \/ Sungrown$/, '');
+}
+
 export async function handleSupersackD1(request, env, ctx) {
   const body = request.method === 'POST' ? await parseBody(request) : {};
   const action = getAction(request, body);
@@ -65,17 +91,26 @@ async function submit(body, env) {
 
     const totalSacks = normalized.reduce((sum, [, sacks]) => sum + sacks, 0);
 
-    for (const [strain, sacks, perStrainTops, perStrainSmalls, perStrainBio, perStrainTrim] of normalized) {
+    // Resolve what every row will store before writing any of it: the
+    // premium-vs-biomass check then sees the stored values, and one bad
+    // strain blocks the whole day instead of half of it.
+    const rows = normalized.map(([strain, sacks, perStrainTops, perStrainSmalls, perStrainBio, perStrainTrim]) => {
       const ratio = sacks / totalSacks;
       const raw = sacks * SACK_WEIGHT;
       // Use per-strain values when supplied; otherwise ratio-split the day-totals.
       // Per-strain entry eliminates the multi-strain attribution error.
-      const strainTops = perStrainTops != null ? perStrainTops : tops_lbs * ratio;
-      const strainSmalls = perStrainSmalls != null ? perStrainSmalls : smalls_lbs * ratio;
-      const strainBio = perStrainBio != null ? perStrainBio : biomass_lbs * ratio;
-      const strainTrim = perStrainTrim != null ? perStrainTrim : trim_lbs * ratio;
-      const strainWaste = Math.max(0, raw - strainTops - strainSmalls - strainBio - strainTrim);
+      const tops = perStrainTops != null ? perStrainTops : tops_lbs * ratio;
+      const smalls = perStrainSmalls != null ? perStrainSmalls : smalls_lbs * ratio;
+      const biomass = perStrainBio != null ? perStrainBio : biomass_lbs * ratio;
+      const trim = perStrainTrim != null ? perStrainTrim : trim_lbs * ratio;
+      const waste = Math.max(0, raw - tops - smalls - biomass - trim);
+      return { strain, sacks, tops, smalls, biomass, trim, waste, raw };
+    });
 
+    const swapped = rows.filter(r => premiumOutweighsBiomass(r.biomass, r.trim));
+    if (swapped.length > 0) return premiumOutweighsBiomassError(swapped.map(r => r.strain));
+
+    for (const r of rows) {
       await db.prepare(`
         INSERT INTO supersack_entries (date, strain, sacks_opened, tops_lbs, smalls_lbs, biomass_lbs, trim_lbs, waste_lbs, raw_lbs)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -88,15 +123,16 @@ async function submit(body, env) {
           waste_lbs = excluded.waste_lbs,
           raw_lbs = excluded.raw_lbs,
           updated_at = datetime('now')
-      `).bind(date, strain, sacks, strainTops, strainSmalls, strainBio, strainTrim, strainWaste, raw).run();
+      `).bind(date, r.strain, r.sacks, r.tops, r.smalls, r.biomass, r.trim, r.waste, r.raw).run();
     }
 
-    return successResponse({ success: true, entries: normalized.length });
+    return successResponse({ success: true, entries: rows.length });
   }
 
   // Single-strain fallback
   const raw = supersack_count * SACK_WEIGHT;
   const strain = body.strain || 'Unknown';
+  if (premiumOutweighsBiomass(biomass_lbs, trim_lbs)) return premiumOutweighsBiomassError([strain]);
   const computedWaste = waste_lbs || Math.max(0, raw - tops_lbs - smalls_lbs - biomass_lbs - trim_lbs);
 
   await db.prepare(`
