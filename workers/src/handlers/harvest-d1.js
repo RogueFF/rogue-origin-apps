@@ -1113,10 +1113,16 @@ async function handleSackOpen(ui, db, env, ctx, body) {
 /**
  * Share the floor's daily output across the bags opened that day.
  *
- * Equal split, and exact rather than approximate: every supersack is filled TO
- * 37 lb, so the bags really are the same size. Re-runnable — a day still in
- * progress gets a partial share, and running it again once the day closes
- * replaces it.
+ * Equal split. Near-exact rather than exact: product is weighed into every sack
+ * at 37 lb, so the bags really are the same size — except the LAST sack of a
+ * lot, which goes out light and still takes a full share here. One sack in ~48,
+ * always over-crediting, and knowingly accepted (Koa, 2026-09-02) rather than
+ * ask the crew to type a fill weight for one bag. The real figure is written in
+ * that tag's notes; it is deliberately not summed, because free-text notes are
+ * not a number this can add up without guessing at units.
+ *
+ * Re-runnable — a day still in progress gets a partial share, and running it
+ * again once the day closes replaces it.
  *
  * Never touches a bag whose weights were actually measured.
  */
@@ -1183,7 +1189,7 @@ async function handleAllocate(db, env, params) {
     // day's output belongs to nobody and the bags stay unallocated.
     unresolved_floor_strains: unresolved,
     floor_output_without_tagged_bags: untagged,
-    basis: 'Floor output for the day, matched on SEASON and cultivar, split equally across the bags opened the same day. Equal is exact — every sack is filled to 37 lb.',
+    basis: 'Floor output for the day, matched on SEASON and cultivar, split equally across the bags opened the same day. Sacks are filled to 37 lb, so equal is near-exact — the last sack of a lot runs light and still takes a full share.',
   });
 }
 
@@ -1695,6 +1701,21 @@ function buildLotRow(l) {
   const smalls = round1(l.smalls_lbs);
   const finished = round1(tops + smalls);
 
+  // Dry biomass, and the ONLY yield figure available at takedown. Product is
+  // weighed into every sack at 37 lb, so the sack count IS a measurement — no
+  // bucking, no trim floor, no allocation needed. That matters because the
+  // finished figures below are gated on every sack having been opened, and
+  // sacks are only bucked when there is an order for that strain: a lot cut in
+  // October can sit with no yield row until the following spring while this
+  // number was knowable the day the rack came down.
+  //
+  // Reads UP TO 37 LB HIGH per lot: the last sack of a lot goes out light and
+  // is counted as full. One sack in ~48 (3,965 sacks / 82 lots), always in the
+  // same direction. Accepted by Koa 2026-09-02 rather than ask the crew to
+  // record a fill weight for one sack; the real figure is written in that
+  // tag's notes if anyone needs it.
+  const dryLbs = l.sacks ? round1(l.sacks * CONSTANTS.supersackLbs.value) : null;
+
   // Yields are only honest once every tagged sack has actually been weighed —
   // a partially-opened lot would read as a catastrophic yield miss.
   const complete = l.sacks > 0 && l.sacks_opened === l.sacks;
@@ -1719,6 +1740,11 @@ function buildLotRow(l) {
     wet_lbs: CONSTANTS.binWeightLbsWet.value === null ? null : round1(l.bins * CONSTANTS.binWeightLbsWet.value),
     sacks: l.sacks,
     sacks_opened: l.sacks_opened,
+    dry_lbs: dryLbs,
+    dry_lbs_basis: dryLbs === null ? null
+      : `${l.sacks} sacks x ${CONSTANTS.supersackLbs.value} lb; last sack of the lot runs light, so up to 37 lb high`,
+    dry_lbs_per_acre: dryLbs !== null && acres ? round1(dryLbs / acres) : null,
+    dry_lbs_per_plant: dryLbs !== null && plants ? +(dryLbs / plants).toFixed(3) : null,
     tops_lbs: tops,
     smalls_lbs: smalls,
     finished_lbs: finished,
@@ -1747,6 +1773,8 @@ function rollupTotals(rows) {
     acres: round1(rows.reduce((t, r) => t + (r.acres || 0), 0)),
     bins: rows.reduce((t, r) => t + (r.bins || 0), 0),
     sacks: rows.reduce((t, r) => t + (r.sacks || 0), 0),
+    // Every tagged lot contributes, opened or not — that is the point of it.
+    dry_lbs: sum(rows, 'dry_lbs'),
     tops_lbs: sum(rows, 'tops_lbs'),
     smalls_lbs: sum(rows, 'smalls_lbs'),
     finished_lbs: sum(rows, 'finished_lbs'),
