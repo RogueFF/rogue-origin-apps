@@ -2566,6 +2566,7 @@ function labelInner(s) {
     <img class="qr" src="${qrUrlFor(s.qr_id || s.sack_id)}" alt="">
     <div class="txt">
       <div class="cultivar" style="font-size:${cultivarFontPt(s.cultivar)}pt">${escapeHtml(s.cultivar || '')}</div>
+      ${s.cultivar_code ? `<div class="code">${escapeHtml(s.cultivar_code)}</div>` : ''}
       <div class="bagno" style="font-size:${bagnoFontPt(serial)}pt">#${escapeHtml(String(serial))}</div>
       <div class="meta">${escapeHtml(formatTagDate(TAG_LANG, s.harvest_date))} · ${escapeHtml(s.zone)} · ${escapeHtml(translate(TAG_LANG, 'cut', { n: s.cut_number ?? '?' }))}</div>
     </div>`;
@@ -2648,6 +2649,15 @@ function renderAverySheet(ui, sacks, opts = {}) {
   .cell.blank { visibility: hidden; }
   .cultivar { font-weight: 800; line-height: 1.05; letter-spacing: -0.01em;
               white-space: nowrap; overflow: hidden; }
+  /* The cultivar abbreviation, on its own line under the name (Koa, 2026-09-03).
+     Its own line is the point: sharing one with the name is what cost the name
+     3-7pt when this last lived on the tag, and the name is what gets read
+     across a barn. Sized well below the name so it reads as a subtitle rather
+     than competing with it; letter-spaced because a short all-caps code is
+     easier to pick apart at arm's length with the letters opened up.
+     KEEP IN SYNC with the same rules in the other renderer. */
+  .code { font-size: 13pt; font-weight: 700; line-height: 1.1; letter-spacing: .06em;
+          white-space: nowrap; overflow: hidden; margin-top: 0.01in; }
   .bagno { font-weight: 800; line-height: 1.0; white-space: nowrap; margin-top: 0.02in; }
   /* Bold, because at 203dpi a normal-weight 10.5pt stroke falls between dots
      and prints noticeably lighter than the rest of the tag. This is the ONLY
@@ -2759,6 +2769,15 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
   .cutline span { font-size: 7pt; color: #777; letter-spacing: .04em; }
   .cultivar { font-weight: 800; line-height: 1.05; letter-spacing: -0.01em;
               white-space: nowrap; overflow: hidden; }
+  /* The cultivar abbreviation, on its own line under the name (Koa, 2026-09-03).
+     Its own line is the point: sharing one with the name is what cost the name
+     3-7pt when this last lived on the tag, and the name is what gets read
+     across a barn. Sized well below the name so it reads as a subtitle rather
+     than competing with it; letter-spaced because a short all-caps code is
+     easier to pick apart at arm's length with the letters opened up.
+     KEEP IN SYNC with the same rules in the other renderer. */
+  .code { font-size: 13pt; font-weight: 700; line-height: 1.1; letter-spacing: .06em;
+          white-space: nowrap; overflow: hidden; margin-top: 0.01in; }
   .bagno { font-weight: 800; line-height: 1.0; white-space: nowrap; margin-top: 0.02in; }
   /* Bold: at 203dpi a normal-weight 10.5pt stroke falls between dots and prints
      lighter than the rest of the tag (Koa, 2026-09-03). This is the only line
