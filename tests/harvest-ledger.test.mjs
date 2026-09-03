@@ -51,6 +51,7 @@ const MIGRATIONS = [
   '0014-harvest-sack-notes.sql', '0015-harvest-sacks-per-cultivar-serial.sql',
   '0016-harvest-sacks-sku.sql', '0017-harvest-sacks-shopify-sync.sql',
   '0018-harvest-sacks-shopify-add.sql', '0019-harvest-sacks-weight-source.sql',
+  '0027-harvest-sacks-all-parts.sql',
 ];
 
 /**
@@ -251,6 +252,26 @@ test('a lot with no sacks reports no dry weight rather than zero', async () => {
   assert.equal(lot.dry_lbs, null);
   assert.equal(lot.dry_lbs_per_acre, null);
   assert.equal(lot.dry_lbs_basis, null);
+});
+
+test('the lot ledger carries every part, with waste named as derived', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  const z4 = seedEnter(sqlite, { zone: 'Z4', cultivar: 'Sour Lifter', openedMinAgo: 60, closedMinAgo: 30 });
+  seedSacks(sqlite, { n: 2, zone: 'Z4', cultivar: 'Sour Lifter', sessionId: z4 });
+  sqlite.prepare(`UPDATE harvest_sacks
+    SET tops_lbs = 21, smalls_lbs = 12, biomass_lbs = 2, trim_lbs = 1, waste_lbs = 1,
+        opened_at = datetime('now'), weights_source = 'allocated'`).run();
+
+  const lot = (await rollup(env, ctx)).lots.find(r => r.zone === 'Z4');
+  assert.equal(lot.biomass_lbs, 4);
+  assert.equal(lot.trim_lbs, 2);
+  // Named apart from the weighed parts, because it is a residual that absorbs
+  // their error. A plain `waste_lbs` beside the rest would read as measured.
+  assert.equal(lot.waste_lbs_derived, 2);
+  // finished_lbs stays tops + smalls. Widening it to include biomass and trim
+  // would silently change every lbs/acre figure already recorded against it.
+  assert.equal(lot.finished_lbs, 66);
+  assert.equal(lot.lbs_per_acre > 0, true);
 });
 
 test('season totals carry dry lbs from every tagged lot, opened or not', async () => {

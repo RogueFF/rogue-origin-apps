@@ -63,6 +63,18 @@ export default {
       }
     }
 
+    // Daily 6 AM PT: share the trim floor's output across the bags opened.
+    // Nothing else calls handleAllocate, so without this every opened sack
+    // shows a dash where its weights go until somebody runs it by hand.
+    if (isDailyCron) {
+      try {
+        const { runNightlyAllocation } = await import('./handlers/harvest-d1.js');
+        await runNightlyAllocation(env);
+      } catch (e) {
+        console.error(`[Cron] Harvest weight allocation failed: ${e.message}`);
+      }
+    }
+
     // Friday 9 AM PT: Friday cart reminder via Telegram
     if (isFridayCron) {
       try {

@@ -61,6 +61,10 @@ const HEADCOUNT_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1); // 1-12, 
 
 const MAX_PRINT_QTY = 40;                // sanity cap on one print run
 const LOT_PICKER_DAYS = 45;              // how far back the takedown lot picker looks
+// How many days back the nightly allocation replays. Long enough that a
+// supersack_entries row entered late still reaches its bags, short enough that
+// the job stays a handful of queries.
+const ALLOCATION_WINDOW_DAYS = 7;
 
 // Drying window, used only to sanity-check the takedown lot pick (advisory,
 // never blocking). 10 days/batch confirmed by Koa 2026-08-04; the min/max are
@@ -926,8 +930,14 @@ function demoSackView(opened, voided) {
       harvest_date: cut,
       printed_at: bagged + ' 14:20:00',
       opened_at: opened ? new Date(today.getTime() - 86400000).toISOString().slice(0, 19).replace('T', ' ') : null,
+      // The five parts sum to the 37 lb that went into the sack, because that
+      // is how the real figures behave — waste is the remainder, not a reading.
+      // A demo that did not add up would teach the wrong thing.
       tops_lbs: opened ? 21.4 : null,
       smalls_lbs: opened ? 11.9 : null,
+      biomass_lbs: opened ? 2.1 : null,
+      trim_lbs: opened ? 1.2 : null,
+      waste_lbs: opened ? 0.4 : null,
       weights_source: opened ? 'allocated' : null,
       voided_at: voided ? cut + ' 15:10:00' : null, is_test: 1,
     },
@@ -1111,7 +1121,10 @@ async function handleSackOpen(ui, db, env, ctx, body) {
 }
 
 /**
- * Share the floor's daily output across the bags opened that day.
+ * Share the floor's daily output across the bags opened that day — ALL FIVE
+ * PARTS a supersack breaks into (tops, smalls, biomass, trim, waste), not just
+ * the finished flower. Waste rides along as a derived residual and never as a
+ * measurement; see the note in lib/floor-output.js.
  *
  * Equal split. Near-exact rather than exact: product is weighed into every sack
  * at 37 lb, so the bags really are the same size — except the LAST sack of a
@@ -1148,10 +1161,18 @@ async function handleAllocate(db, env, params) {
   try {
     ({ byKey: floor, unresolved } = await floorOutputByCultivar(db, env, day));
   } catch (e) {
-    throw createError('EXTERNAL_API_ERROR', `Could not read floor output for ${day}: ${e.message}`);
+    // INTERNAL_ERROR because that is what this actually is now: floor output
+    // is read from supersack_entries, not fetched from the scoreboard over
+    // HTTP, so a failure here is ours. (The previous 'EXTERNAL_API_ERROR' was
+    // not in ErrorCodes either and fell through to a 500 anyway — same status,
+    // but it pointed a debugger at a network call that no longer happens.)
+    throw createError('INTERNAL_ERROR', `Could not read floor output for ${day}: ${e.message}`);
   }
 
+  const per = (total, n) => Math.round((total / n) * 100) / 100;
+
   const done = [];
+  const countMismatches = [];
   for (const r of rows) {
     const f = floor.get(`${r.season}|${r.cultivar}`);
     if (!f) {
@@ -1161,18 +1182,39 @@ async function handleAllocate(db, env, params) {
       });
       continue;
     }
-    const tops = Math.round((f.tops / r.n) * 100) / 100;
-    const smalls = Math.round((f.smalls / r.n) * 100) / 100;
+
+    // The floor counts the sacks it opened; this counts the sacks carrying tags.
+    // They should be the same number. When they are not, someone missed an
+    // ABRIR BOLSA or missed a tracker row — and dividing by the smaller of the
+    // two over-credits every bag, invisibly and permanently. Divide by the
+    // TAGGED count, because those are the bags being written, and report the
+    // disagreement rather than let it settle into the ledger unremarked.
+    if (f.floorSacks && f.floorSacks !== r.n) {
+      countMismatches.push({
+        season: r.season, cultivar: r.cultivar,
+        floor_sacks_opened: f.floorSacks, tagged_bags_opened: r.n,
+        effect: f.floorSacks > r.n
+          ? `each tagged bag credited ~${Math.round((f.floorSacks / r.n) * 100 - 100)}% high`
+          : `${r.n - f.floorSacks} tagged bag(s) the floor did not count`,
+      });
+    }
+
+    const share = {
+      tops: per(f.tops, r.n), smalls: per(f.smalls, r.n), biomass: per(f.biomass, r.n),
+      trim: per(f.trim, r.n), waste: per(f.waste, r.n),
+    };
     await execute(db, `
       UPDATE harvest_sacks
-      SET tops_lbs = ?, smalls_lbs = ?, weights_source = 'allocated', weights_allocated_at = datetime('now')
+      SET tops_lbs = ?, smalls_lbs = ?, biomass_lbs = ?, trim_lbs = ?, waste_lbs = ?,
+          weights_source = 'allocated', weights_allocated_at = datetime('now')
       WHERE date(opened_at) = ? AND season = ? AND cultivar = ? AND is_test = ? AND voided_at IS NULL
         AND (weights_source IS NULL OR weights_source = 'allocated')
-    `, [tops, smalls, day, r.season, r.cultivar, isTest]);
+    `, [share.tops, share.smalls, share.biomass, share.trim, share.waste,
+        day, r.season, r.cultivar, isTest]);
     done.push({
       season: r.season, cultivar: r.cultivar, sacks: r.n,
-      floor_tops: f.tops, floor_smalls: f.smalls,
-      per_sack_tops: tops, per_sack_smalls: smalls,
+      floor: { tops: f.tops, smalls: f.smalls, biomass: f.biomass, trim: f.trim, waste: f.waste },
+      per_sack: share,
     });
   }
 
@@ -1181,7 +1223,11 @@ async function handleAllocate(db, env, params) {
   // because it is also what a missed scan looks like.
   const untagged = [...floor.values()]
     .filter(f => !rows.some(r => r.season === f.season && r.cultivar === f.cultivar))
-    .map(f => ({ season: f.season, cultivar: f.cultivar, floor_tops: f.tops, floor_smalls: f.smalls }));
+    .map(f => ({
+      season: f.season, cultivar: f.cultivar,
+      floor: { tops: f.tops, smalls: f.smalls, biomass: f.biomass, trim: f.trim, waste: f.waste },
+      floor_sacks_opened: f.floorSacks,
+    }));
 
   return successResponse({
     success: true, date: day, is_test: !!isTest, allocated: done,
@@ -1189,8 +1235,68 @@ async function handleAllocate(db, env, params) {
     // day's output belongs to nobody and the bags stay unallocated.
     unresolved_floor_strains: unresolved,
     floor_output_without_tagged_bags: untagged,
-    basis: 'Floor output for the day, matched on SEASON and cultivar, split equally across the bags opened the same day. Sacks are filled to 37 lb, so equal is near-exact — the last sack of a lot runs light and still takes a full share.',
+    // The floor's sack count against the tagged-bag count. A disagreement means
+    // the per-bag figures for that cultivar are scaled wrong, so it belongs in
+    // the result rather than in a log line nobody reads.
+    sack_count_mismatches: countMismatches,
+    basis: "All five parts of the day's floor output (supersack_entries: tops, smalls, biomass, trim, waste), matched on SEASON and cultivar, split equally across the TAGGED bags opened the same day. Sacks are filled to 37 lb, so equal is near-exact — the last sack of a lot runs light and still takes a full share. Waste is a derived residual, not a weighed figure.",
   });
+}
+
+/**
+ * Nightly allocation — the thing that actually calls handleAllocate.
+ *
+ * Runs a TRAILING WINDOW rather than yesterday alone. A `supersack_entries` row
+ * is entered by hand per day and can lag or be back-entered, so a job that only
+ * ever looked at yesterday would leave a late row's bags permanently empty.
+ * Replaying is safe by construction: allocation is idempotent and refuses to
+ * touch a bag whose weights were measured, so a day that was already correct is
+ * simply rewritten with the same figures.
+ *
+ * The window ends YESTERDAY. Today's floor day is still open, and allocating a
+ * half-finished day only to overwrite it tomorrow makes the ledger flicker for
+ * anyone reading it in between.
+ *
+ * Logs per day rather than one total: a week where five days did nothing looks
+ * identical to a clean week in an aggregate line.
+ */
+export async function runNightlyAllocation(env, { days = ALLOCATION_WINDOW_DAYS } = {}) {
+  const db = env.DB;
+  const summary = [];
+
+  for (let back = 1; back <= days; back++) {
+    const d = new Date(Date.now() - back * 86400000).toISOString().substring(0, 10);
+    try {
+      const res = await handleAllocate(db, env, { date: d });
+      const body = await res.json();
+      const data = body.data || body;
+      const wrote = (data.allocated || []).filter(a => !a.skipped);
+      summary.push({ date: d, cultivars: wrote.length });
+
+      if (wrote.length) {
+        console.log(`[Cron][allocate] ${d}: ${wrote.map(a => `${a.cultivar} x${a.sacks}`).join(', ')}`);
+      }
+      // Three things that are normal once and alarming twice. Logged per day so
+      // they can be traced to one, rather than summed into a number nobody can
+      // act on.
+      for (const m of (data.sack_count_mismatches || [])) {
+        console.error(`[Cron][allocate] ${d}: ${m.cultivar} — floor opened ${m.floor_sacks_opened}, ` +
+          `${m.tagged_bags_opened} tagged; ${m.effect}`);
+      }
+      for (const strain of (data.unresolved_floor_strains || [])) {
+        console.error(`[Cron][allocate] ${d}: no cultivar alias for "${strain}" — that output reached no bag`);
+      }
+      for (const u of (data.floor_output_without_tagged_bags || [])) {
+        console.log(`[Cron][allocate] ${d}: ${u.season} ${u.cultivar} floor output with no tagged bags ` +
+          '(ordinary during the 2025 changeover, otherwise a missed scan)');
+      }
+    } catch (e) {
+      // One bad day must not stop the rest of the window.
+      summary.push({ date: d, error: e.message });
+      console.error(`[Cron][allocate] ${d} failed: ${e.message}`);
+    }
+  }
+  return summary;
 }
 
 async function handleSackNote(ui, db, env, ctx, body) {
@@ -1644,7 +1750,13 @@ async function getRollup(db, env, params) {
       (SELECT COALESCE(SUM(s.tops_lbs), 0) FROM harvest_sacks s
         WHERE s.zone_session_id = l.id AND s.is_test = l.is_test AND s.voided_at IS NULL) AS tops_lbs,
       (SELECT COALESCE(SUM(s.smalls_lbs), 0) FROM harvest_sacks s
-        WHERE s.zone_session_id = l.id AND s.is_test = l.is_test AND s.voided_at IS NULL) AS smalls_lbs
+        WHERE s.zone_session_id = l.id AND s.is_test = l.is_test AND s.voided_at IS NULL) AS smalls_lbs,
+      (SELECT COALESCE(SUM(s.biomass_lbs), 0) FROM harvest_sacks s
+        WHERE s.zone_session_id = l.id AND s.is_test = l.is_test AND s.voided_at IS NULL) AS biomass_lbs,
+      (SELECT COALESCE(SUM(s.trim_lbs), 0) FROM harvest_sacks s
+        WHERE s.zone_session_id = l.id AND s.is_test = l.is_test AND s.voided_at IS NULL) AS trim_lbs,
+      (SELECT COALESCE(SUM(s.waste_lbs), 0) FROM harvest_sacks s
+        WHERE s.zone_session_id = l.id AND s.is_test = l.is_test AND s.voided_at IS NULL) AS waste_lbs
     FROM harvest_scan_log l
     WHERE l.event_type = 'enter' AND l.season = ? AND l.is_test = ?
     ORDER BY l.occurred_at ASC
@@ -1747,6 +1859,15 @@ function buildLotRow(l) {
     dry_lbs_per_plant: dryLbs !== null && plants ? +(dryLbs / plants).toFixed(3) : null,
     tops_lbs: tops,
     smalls_lbs: smalls,
+    biomass_lbs: round1(l.biomass_lbs),
+    trim_lbs: round1(l.trim_lbs),
+    // Derived residual, not weighed — it absorbs the error in the other four
+    // and the light last sack. Named apart from the rest so a reader of the
+    // ledger cannot mistake it for something that went on a scale.
+    waste_lbs_derived: round1(l.waste_lbs),
+    // Deliberately still tops + smalls. Biomass and trim are real output but
+    // they are not finished flower, and widening this would silently change
+    // every lbs/acre figure already recorded against it.
     finished_lbs: finished,
     tops_smalls_ratio: smalls > 0 ? +(tops / smalls).toFixed(2) : null,
     yield_complete: complete,
@@ -1777,6 +1898,9 @@ function rollupTotals(rows) {
     dry_lbs: sum(rows, 'dry_lbs'),
     tops_lbs: sum(rows, 'tops_lbs'),
     smalls_lbs: sum(rows, 'smalls_lbs'),
+    biomass_lbs: sum(rows, 'biomass_lbs'),
+    trim_lbs: sum(rows, 'trim_lbs'),
+    waste_lbs_derived: sum(rows, 'waste_lbs_derived'),
     finished_lbs: sum(rows, 'finished_lbs'),
   };
 }
@@ -1881,6 +2005,10 @@ function renderPage(ui, title, bodyHtml, status = 200) {
      nothing under 13px). No fonts, no assets: it loads on one bar. */
   .sd { color: #f4f1e8; --card: #1c3123; --raised: #27412f; --line: #35513e; --ink2: #d3e2d3;
         --muted: #9fbcaa; --straw: #e9c462; --tops: #4fbd7c; --smalls: #b5e9c3;
+        /* Biomass and trim are real output, so they keep saturated colour.
+           Waste is a derived residual and is deliberately the dullest thing
+           on the bar — it must never read as a weighed part. */
+        --biomass: #7aa7d8; --trim: #d8b45f; --waste: #55705f;
         --lift: inset 0 1px 0 rgba(255,255,255,.05), 0 1px 0 rgba(0,0,0,.35), 0 12px 26px -16px rgba(0,0,0,.75); }
   .sd .hint { color: var(--muted); font-size: 0.9rem; }
   .sd .note { color: var(--ink2); font-size: 1.05rem; line-height: 1.45; }
@@ -1942,7 +2070,12 @@ function renderPage(ui, title, bodyHtml, status = 200) {
           border-radius: 7px; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,.45); }
   .seg { height: 100%; flex: 0 0 auto; }
   .seg.tops { background: var(--tops); }
-  .seg.smalls { background: var(--smalls); border-radius: 0 5px 5px 0; }
+  .seg.smalls { background: var(--smalls); }
+  .seg.biomass { background: var(--biomass); }
+  .seg.trim { background: var(--trim); }
+  /* Hatched, not solid: a derived residual should not look measured. */
+  .seg.waste { background: repeating-linear-gradient(45deg, var(--waste) 0 4px, #47614f 4px 8px); }
+  .seg:last-child { border-radius: 0 5px 5px 0; }
   .wbar .tick { position: absolute; top: 0; bottom: 0; width: 3px; background: #f4f1e8; }
   .wscale { display: flex; justify-content: space-between; font-size: 0.88rem; color: var(--muted);
             margin-top: 6px; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
@@ -1951,6 +2084,9 @@ function renderPage(ui, title, bodyHtml, status = 200) {
                 vertical-align: -2px; }
   .legend .sw.tops { background: var(--tops); }
   .legend .sw.smalls { background: var(--smalls); }
+  .legend .sw.biomass { background: var(--biomass); }
+  .legend .sw.trim { background: var(--trim); }
+  .legend .sw.waste { background: repeating-linear-gradient(45deg, var(--waste) 0 3px, #47614f 3px 6px); }
   .legend strong { font-weight: 800; color: #f4f1e8; }
   .empty { font-size: 2.3rem; font-weight: 900; color: var(--muted); margin: 0 0 8px; line-height: 1; }
 
@@ -2845,7 +2981,18 @@ function sackDetailBody(ui, view, flash) {
   // explicit empty state, never a zero-length segment.
   const num = v => ((v === null || v === undefined || v === '' || !Number.isFinite(Number(v))) ? null : Number(v));
   const tops = num(sack.tops_lbs), smalls = num(sack.smalls_lbs);
-  const hasWeights = tops !== null && smalls !== null;
+  // Every part the sack broke into. A part with no figure is left out entirely
+  // rather than drawn as a zero-length segment — absent must read as absent.
+  // Order is the order they matter in, and waste is last because it is the
+  // residual the other four leave behind.
+  const parts = [
+    { cls: 'tops', label: ui.t('wTops'), v: tops },
+    { cls: 'smalls', label: ui.t('wSmalls'), v: smalls },
+    { cls: 'biomass', label: ui.t('wBiomass'), v: num(sack.biomass_lbs) },
+    { cls: 'trim', label: ui.t('wTrim'), v: num(sack.trim_lbs) },
+    { cls: 'waste', label: ui.t('wWaste'), v: num(sack.waste_lbs), derived: true },
+  ].filter(p => p.v !== null);
+  const hasWeights = parts.length > 0;
   const fill = CONSTANTS.supersackLbs.value;   // 37 lb; null would hide the reference, not fake it
   const measured = sack.weights_source === 'measured';
   const srcBadge = `<span class="badge ${measured ? 'ok' : 'warn'}">${measured ? ui.t('srcMeasuredBadge') : ui.t('srcAllocatedBadge')}</span>`;
@@ -2876,31 +3023,37 @@ function sackDetailBody(ui, view, flash) {
   </form>
 </div>`;
   } else if (hasWeights) {
-    const total = tops + smalls;
-    // The track is the full sack (37 lb). If the allocated share ever exceeds
-    // it, the scale stretches to the total and a tick marks 37 — the overrun
-    // is real information about the day's split, not something to clip.
+    const total = parts.reduce((t, p) => t + p.v, 0);
+    // The headline stays TOPS + SMALLS as a share of the sack. With all five
+    // parts present the total is 37 by construction — waste is defined as the
+    // remainder — so "% of the sack accounted for" would always read 100% and
+    // say nothing. How much of the sack became flower is the real question.
+    const flower = (tops || 0) + (smalls || 0);
+    // The track is the full sack (37 lb). If the shares ever exceed it, the
+    // scale stretches to the total and a tick marks 37 — an overrun is real
+    // information about the day's split, not something to clip.
     const scaleMax = fill ? Math.max(fill, total) : total;
     const pct = n => (scaleMax > 0 ? (n / scaleMax) * 100 : 0);
-    const topsShare = total > 0 ? Math.round((tops / total) * 100) : null;
-    const smallsShare = topsShare === null ? null : 100 - topsShare;
-    const recovered = (fill && total > 0) ? Math.round((total / fill) * 100) : null;
+    const share = v => (total > 0 ? Math.round((v / total) * 100) : null);
+    const recovered = (fill && flower > 0) ? Math.round((flower / fill) * 100) : null;
     const overTick = (fill && total > fill) ? `<i class="tick" style="left:${pct(fill).toFixed(2)}%"></i>` : '';
     const scaleEnd = fill
       ? `${lb(scaleMax)} lb${total <= fill ? ` · ${ui.t('wFull')}` : ''}`
       : `${lb(total)} lb`;
+    const wasteShown = parts.some(p => p.derived);
     weights = `<div class="card">
   <div class="wtop"><strong class="tv">${lb(total)} lb</strong><span class="hint">${ui.t('wTotal')}</span>${srcBadge}</div>
-  <div class="wbar" role="img" aria-label="Tops ${lb(tops)} lb · Smalls ${lb(smalls)} lb">
-    <div class="seg tops" style="flex-basis:${pct(tops).toFixed(2)}%"></div>
-    <div class="seg smalls" style="flex-basis:${pct(smalls).toFixed(2)}%"></div>${overTick}
+  <div class="wbar" role="img" aria-label="${parts.map(p => `${p.label} ${lb(p.v)} lb`).join(' · ')}">
+    ${parts.map(p => `<div class="seg ${p.cls}" style="flex-basis:${pct(p.v).toFixed(2)}%"></div>`).join('')}${overTick}
   </div>
   <div class="wscale"><span>0</span><span>${scaleEnd}</span></div>
   <div class="legend">
-    <span><i class="sw tops"></i>Tops <strong>${lb(tops)} lb</strong>${topsShare !== null ? ` · ${topsShare}%` : ''}</span>
-    <span><i class="sw smalls"></i>Smalls <strong>${lb(smalls)} lb</strong>${smallsShare !== null ? ` · ${smallsShare}%` : ''}</span>
+    ${parts.map(p => {
+      const sh = share(p.v);
+      return `<span><i class="sw ${p.cls}"></i>${p.label} <strong>${lb(p.v)} lb</strong>${sh !== null ? ` · ${sh}%` : ''}</span>`;
+    }).join('')}
   </div>
-  <p class="hint" style="margin:12px 0 0">${recovered !== null ? `${ui.t('wRecovered', { pct: recovered, fill })}<br>` : ''}${srcLine} · ${openedLine}</p>
+  <p class="hint" style="margin:12px 0 0">${recovered !== null ? `${ui.t('wRecovered', { pct: recovered, fill })}<br>` : ''}${wasteShown ? `${ui.t('wWasteNote', { fill })}<br>` : ''}${srcLine} · ${openedLine}</p>
 </div>`;
   } else {
     weights = `<div class="card">

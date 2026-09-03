@@ -1,19 +1,31 @@
 /**
- * What the trim floor actually produced, per strain, on a given day.
+ * What the trim floor actually produced, per strain, on a given day — every
+ * part a supersack breaks into, not just the finished flower.
  *
- * Nobody weighs a supersack's output on its own. The floor records finished
- * pounds hour by hour with the strain being run, so the day's total per strain
- * is the real measurement — and a bag's share is that total divided among the
- * bags of that strain opened the same day.
+ * Nobody weighs a supersack's output on its own. The floor records a day's
+ * total per strain, and a bag's share is that total divided among the bags of
+ * that strain opened the same day.
  *
- * The hourly rows carry `strain` in Shopify variant-title form
- * ("2025 - Sugar Cookez (Cookies) / Sungrown"), which is the same key the
- * Super Sack Inventory uses, so floor output joins to a cultivar without a
- * separate mapping.
+ * SOURCE: `supersack_entries`, the trim floor's own daily row per (date,
+ * strain). It carries all five parts — tops, smalls, biomass, trim, waste —
+ * plus the floor's own count of sacks opened. The production scoreboard, which
+ * this used to read, only carries tops and smalls; taking those from one source
+ * and the rest from another would be two readers of one number computing it two
+ * ways, which is the drift this file exists to avoid.
  *
- * This reads the production scoreboard rather than the hourly table directly:
- * the scoreboard is what the supersack tracker already reads for exactly this
- * purpose, and two readers of one number should not compute it two ways.
+ * The trade-off, taken deliberately: the scoreboard is written live from the
+ * floor, while a `supersack_entries` row is entered per day and can lag or be
+ * back-entered. The allocator answers that by replaying a trailing window
+ * rather than only ever looking at yesterday, so a late row still lands.
+ *
+ * WASTE IS DERIVED, NOT WEIGHED — `raw - tops - smalls - biomass - trim`, with
+ * `raw = sacks x 37`. It absorbs every error in the other four. Carried through
+ * so the material balance survives, and kept labelled so it is never read as a
+ * measurement.
+ *
+ * Rows carry `strain` in Shopify variant-title form ("2025 - Sugar Cookez
+ * (Cookies) / Sungrown"), the same key the Super Sack Inventory uses, so floor
+ * output joins to a cultivar without a separate mapping.
  */
 
 /**
@@ -56,30 +68,36 @@ function seasonFromStrainTitle(title) {
 }
 
 /**
- * @returns { byKey: Map<"season|cultivar",{season,cultivar,tops,smalls,hours}>,
+ * @returns { byKey: Map<"season|cultivar", {season, cultivar, tops, smalls,
+ *                       biomass, trim, waste, floorSacks}>,
  *            unresolved: string[] }
+ *
+ * `floorSacks` is the FLOOR'S OWN count of sacks opened that day. It is a
+ * cross-check, never the divisor — the share goes to the bags that carry tags,
+ * and those are counted from `harvest_sacks`. When the two disagree, somebody
+ * missed an ABRIR BOLSA or missed a tracker row, and dividing quietly by the
+ * smaller number over-credits every bag.
+ *
  * Keyed by season AND cultivar. Titles with no alias are REPORTED, not guessed
- * at — an unresolved strain means that day's output belongs to nobody.
+ * at — an unresolved strain means that day's output belongs to nobody. The
+ * season prefix matters just as much: the floor spends part of 2026 trimming
+ * 2025 material, and that output must not land on 2026 bags.
  */
-export async function floorOutputByCultivar(db, env, dayIso, apiBase) {
-  const base = apiBase || 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api';
-  const res = await fetch(`${base}/production?action=scoreboard&date=${encodeURIComponent(dayIso)}`,
-    { headers: { 'User-Agent': 'harvest-allocator/1.0' } });
-  if (!res.ok) throw new Error(`scoreboard ${res.status} for ${dayIso}`);
-  const data = await res.json();
-  const sb = data.scoreboard || data;
+export async function floorOutputByCultivar(db, env, dayIso) {
+  const rows = await db.prepare(`
+    SELECT strain, sacks_opened, tops_lbs, smalls_lbs, biomass_lbs, trim_lbs, waste_lbs
+    FROM supersack_entries WHERE date = ?
+  `).bind(dayIso).all();
 
-  const hours = Array.isArray(sb.hourlyRates) ? sb.hourlyRates : [];
-  const raw = [];
-  for (const h of hours) {
-    if (!h || (!h.lbs && !h.smalls)) continue;
-    raw.push({ title: h.strain || sb.strain, tops: Number(h.lbs) || 0, smalls: Number(h.smalls) || 0 });
-  }
-  // No hourly breakdown: fall back to day totals, safe only because such a day
-  // has a single strain to attribute to.
-  if (!raw.length && (sb.todayLbs || sb.todaySmalls)) {
-    raw.push({ title: sb.strain, tops: Number(sb.todayLbs) || 0, smalls: Number(sb.todaySmalls) || 0 });
-  }
+  const raw = (rows.results || []).map(r => ({
+    title: r.strain,
+    tops: Number(r.tops_lbs) || 0,
+    smalls: Number(r.smalls_lbs) || 0,
+    biomass: Number(r.biomass_lbs) || 0,
+    trim: Number(r.trim_lbs) || 0,
+    waste: Number(r.waste_lbs) || 0,
+    floorSacks: Number(r.sacks_opened) || 0,
+  })).filter(r => r.tops || r.smalls || r.biomass || r.trim || r.waste);
 
   const names = await resolveCultivars(db, raw.map(r => r.title));
   const byKey = new Map();
@@ -92,13 +110,17 @@ export async function floorOutputByCultivar(db, env, dayIso, apiBase) {
     // attributed to a bag. Report it rather than pick a season.
     if (!name || !season) { if (r.title) unresolved.add(r.title); continue; }
     const key = `${season}|${name}`;
-    const cur = byKey.get(key) || { season, cultivar: name, tops: 0, smalls: 0, hours: 0 };
-    cur.tops += r.tops; cur.smalls += r.smalls; cur.hours += 1;
+    const cur = byKey.get(key)
+      || { season, cultivar: name, tops: 0, smalls: 0, biomass: 0, trim: 0, waste: 0, floorSacks: 0 };
+    // Summed rather than assigned: one cultivar can appear under several strain
+    // titles that all alias to it (a cultivar renamed mid-season, say).
+    for (const k of ['tops', 'smalls', 'biomass', 'trim', 'waste', 'floorSacks']) cur[k] += r[k];
     byKey.set(key, cur);
   }
   for (const v of byKey.values()) {
-    v.tops = Math.round(v.tops * 10) / 10;
-    v.smalls = Math.round(v.smalls * 10) / 10;
+    for (const k of ['tops', 'smalls', 'biomass', 'trim', 'waste']) {
+      v[k] = Math.round(v[k] * 10) / 10;
+    }
   }
   return { byKey, unresolved: [...unresolved] };
 }
