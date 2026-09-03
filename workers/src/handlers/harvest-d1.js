@@ -2649,7 +2649,13 @@ function renderAverySheet(ui, sacks, opts = {}) {
   .cultivar { font-weight: 800; line-height: 1.05; letter-spacing: -0.01em;
               white-space: nowrap; overflow: hidden; }
   .bagno { font-weight: 800; line-height: 1.0; white-space: nowrap; margin-top: 0.02in; }
-  .meta { font-size: 10.5pt; margin-top: 0.04in; white-space: nowrap; }
+  /* Bold, because at 203dpi a normal-weight 10.5pt stroke falls between dots
+     and prints noticeably lighter than the rest of the tag. This is the ONLY
+     line on the label CSS can darken: the cultivar and bag number are already
+     at 800, and the stack is Arial/Helvetica, which has no face heavier than
+     Bold — asking for 900 there would change nothing. Everything else is a
+     printer density question. */
+  .meta { font-size: 10.5pt; margin-top: 0.04in; white-space: nowrap; font-weight: 700; }
   .qr { width: 1in; height: 1in; flex: none; }
 
   /* Calibration: outline every slot so a test print can be held against a
@@ -2754,7 +2760,12 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
   .cultivar { font-weight: 800; line-height: 1.05; letter-spacing: -0.01em;
               white-space: nowrap; overflow: hidden; }
   .bagno { font-weight: 800; line-height: 1.0; white-space: nowrap; margin-top: 0.02in; }
-  .meta { font-size: 10.5pt; margin-top: 0.04in; white-space: nowrap; }
+  /* Bold: at 203dpi a normal-weight 10.5pt stroke falls between dots and prints
+     lighter than the rest of the tag (Koa, 2026-09-03). This is the only line
+     CSS can darken — cultivar and bag number are already 800, and Arial has no
+     face heavier than Bold, so 900 there would change nothing. The rest is
+     printer density. KEEP IN SYNC with the same rule in renderAverySheet. */
+  .meta { font-size: 10.5pt; margin-top: 0.04in; white-space: nowrap; font-weight: 700; }
   .qr { width: 1in; height: 1in; flex: none; }
   .toolbar { padding: 14px; font: 14px system-ui; }
   .toolbar a { color: #036; }
