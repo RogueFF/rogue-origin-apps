@@ -369,47 +369,49 @@
     .strain-row-main {
       display: flex; align-items: center; justify-content: space-between;
     }
-    .strain-row-weights {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
-      padding: 0 2px 2px;
-    }
-    .strain-weight-input {
-      display: flex; align-items: center; gap: 6px;
+    /* Day-total boxes — the whole day's two piles. This is the entry the Water
+       Spider makes on a phone at 4:20, so the figures are big and the swap is
+       a thumb-sized target. */
+    .day-weights { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .weight-box {
+      display: flex; flex-direction: column; gap: 4px;
       background: var(--bg-warm); border: 1px solid var(--card-border);
-      border-radius: var(--radius-sm); padding: 4px 8px;
+      border-radius: var(--radius-sm); padding: 10px 12px;
+      transition: border-color 0.2s;
     }
-    .strain-weight-input label {
-      font-size: 10px; font-weight: 600; color: var(--text-dim);
+    .weight-box:focus-within { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold-dim); }
+    .weight-box label {
+      font-size: 11px; font-weight: 600; color: var(--text-dim);
       text-transform: uppercase; letter-spacing: 0.05em;
       font-family: var(--font-ui);
-      flex-shrink: 0;
     }
-    .strain-weight-input input {
-      flex: 1; min-width: 0; width: 100%;
+    .weight-box input, .weight-box input[type="number"] {
+      width: 100%; min-width: 0;
       background: transparent; border: none; outline: none;
-      font-size: 14px; font-weight: 600; color: var(--gold-text);
-      font-family: var(--font-mono);
-      text-align: right;
+      font-size: 26px; font-weight: 600; color: var(--gold-text);
+      font-family: var(--font-mono); line-height: 1.2;
     }
-    .strain-weight-input input::-webkit-outer-spin-button,
-    .strain-weight-input input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-    .strain-weight-unit { font-size: 10px; color: var(--text-faint); flex-shrink: 0; }
-    .strain-weight-input.invalid { border-color: var(--red); }
-    .strain-weight-input.invalid input { color: var(--red); }
-    /* Phone first: the Water Spider taps this at 4:20 with a glove off — the
-       message has to read at arm's length and the swap needs a thumb-sized target. */
-    .strain-warning {
+    .weight-box input::-webkit-outer-spin-button,
+    .weight-box input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .weight-unit { font-size: 11px; color: var(--text-faint); font-family: var(--font-ui); }
+    .weight-box.invalid { border-color: var(--red); }
+    .weight-box.invalid input { color: var(--red); }
+    .weight-warning {
       display: flex; align-items: center; justify-content: space-between; gap: 10px;
-      padding: 2px 2px 4px; font-size: 12px; line-height: 1.35; color: var(--red);
+      padding: 10px 2px 0; font-size: 12px; line-height: 1.35; color: var(--red);
       font-family: var(--font-ui);
     }
-    .strain-warning[hidden] { display: none; }
-    .strain-swap-btn {
+    .weight-warning[hidden] { display: none; }
+    .swap-btn {
       flex-shrink: 0; min-height: 36px; background: transparent; border: 1px solid var(--red);
       border-radius: var(--radius-sm); color: var(--red); font-size: 12px; font-weight: 600;
       font-family: var(--font-ui); padding: 6px 14px; cursor: pointer;
     }
-    .strain-swap-btn:active { background: rgba(196, 92, 74, 0.15); }
+    .swap-btn:active { background: rgba(196, 92, 74, 0.15); }
+    .weight-hint {
+      margin-top: 10px; font-size: 11px; line-height: 1.4; color: var(--text-faint);
+      font-family: var(--font-ui);
+    }
     .strain-row:hover { background: rgba(102, 137, 113, 0.06); }
     .strain-row:last-child { border-bottom: none; }
     .strain-name {
@@ -635,9 +637,29 @@
     </div>
   </div>
 
-  <!-- Day Totals (auto from per-strain) — hidden inputs used by submit handler -->
-  <input type="hidden" id="biomass-input" value="0">
-  <input type="hidden" id="trim-input" value="0">
+  <!-- Day totals. The floor weighs two piles for the whole day — Biomass #2 and
+       Premium #1 — and never splits either by strain; the API divides them
+       across the day's strains by sack share. -->
+  <div class="card">
+    <div class="card-title" data-i18n="waterSpiderEntry">Water Spider Entry</div>
+    <div class="day-weights">
+      <div class="weight-box" id="biomass-box">
+        <label for="biomass-input" data-i18n="bioShort">Biomass #2</label>
+        <input type="number" id="biomass-input" placeholder="0.0" min="0" step="0.1" inputmode="decimal" onclick="this.select()">
+        <span class="weight-unit">lbs</span>
+      </div>
+      <div class="weight-box" id="trim-box">
+        <label for="trim-input" data-i18n="trimShort">Premium #1</label>
+        <input type="number" id="trim-input" placeholder="0.0" min="0" step="0.1" inputmode="decimal" onclick="this.select()">
+        <span class="weight-unit">lbs</span>
+      </div>
+    </div>
+    <div class="weight-warning" id="weight-warning" hidden>
+      <span>⚠ <span data-i18n="trimExceedsBio">Premium #1 cannot weigh more than Biomass #2 — check which box is which</span></span>
+      <button type="button" class="swap-btn" id="swap-btn">⇄ <span data-i18n="swap">Swap</span></button>
+    </div>
+    <div class="weight-hint" data-i18n="dayTotalsHint">Whole day, every strain together — the floor separates by quality, not by strain.</div>
+  </div>
 
   <!-- Submit / Edit Buttons -->
   <div style="display:flex;gap:8px;flex-direction:column">
@@ -742,6 +764,7 @@
     bioShort: 'Biomass #2', trimShort: 'Premium #1',
     trimExceedsBio: 'Premium #1 cannot weigh more than Biomass #2 — check which box is which',
     swap: 'Swap', saveFailed: 'Entry not saved',
+    dayTotalsHint: 'Whole day, every strain together — the floor separates by quality, not by strain.',
   }, es: {
     title: 'Rastreador de Supersacos', supersacksOpened: 'Supersacos Abiertos',
     waterSpiderEntry: 'Entrada del Water Spider', biomass: 'Biomasa #2 (recorte)',
@@ -756,6 +779,7 @@
     bioShort: 'Biomasa #2', trimShort: 'Premium #1',
     trimExceedsBio: 'Premium #1 no puede pesar más que Biomasa #2 — revise qué casilla es cuál',
     swap: 'Intercambiar', saveFailed: 'Entrada no guardada',
+    dayTotalsHint: 'Todo el día, todas las variedades juntas — el piso separa por calidad, no por variedad.',
   }};
   function applyLang() {
     const l = (window.getLang && window.getLang()) || 'en';
@@ -842,34 +866,9 @@
       return;
     }
 
-    const t = LANG[(window.getLang && window.getLang()) || 'en'];
-    const bioLabel = t.bioShort;
-    const trimLabel = t.trimShort;
-
     container.innerHTML = strains.map(name => {
       const s = strainData[name];
       const shortName = shortStrain(name);
-      const weightsRow = s.sacks > 0 ? `
-        <div class="strain-row-weights">
-          <div class="strain-weight-input">
-            <label>${bioLabel}</label>
-            <input type="number" value="${s.biomass || ''}" placeholder="0.0" min="0" step="0.1" inputmode="decimal"
-              onchange="window._strainSetBio('${name}', this.value)"
-              onclick="this.select()">
-            <span class="strain-weight-unit">lbs</span>
-          </div>
-          <div class="strain-weight-input">
-            <label>${trimLabel}</label>
-            <input type="number" value="${s.trim || ''}" placeholder="0.0" min="0" step="0.1" inputmode="decimal"
-              onchange="window._strainSetTrim('${name}', this.value)"
-              onclick="this.select()">
-            <span class="strain-weight-unit">lbs</span>
-          </div>
-        </div>
-        <div class="strain-warning" hidden>
-          <span>⚠ ${t.trimExceedsBio}</span>
-          <button type="button" class="strain-swap-btn" onclick="window._strainSwap('${name}')">⇄ ${t.swap}</button>
-        </div>` : '';
       return `
         <div class="strain-row" data-strain="${name}">
           <div class="strain-row-main">
@@ -887,7 +886,6 @@
               <button class="mini-btn" onclick="window._strainInc('${name}')">+</button>
             </div>
           </div>
-          ${weightsRow}
         </div>`;
     }).join('');
   }
@@ -896,47 +894,44 @@
   window._strainInc = (name) => { strainData[name].sacks++; renderStrainCounters(); recalc(); };
   window._strainDec = (name) => {
     if (strainData[name].sacks > 0) strainData[name].sacks--;
-    if (strainData[name].sacks === 0) { strainData[name].biomass = 0; strainData[name].trim = 0; }
     renderStrainCounters(); recalc();
   };
   window._strainSet = (name, val) => {
     strainData[name].sacks = Math.max(0, parseInt(val) || 0);
-    if (strainData[name].sacks === 0) { strainData[name].biomass = 0; strainData[name].trim = 0; }
-    renderStrainCounters(); recalc();
-  };
-  window._strainSetBio = (name, val) => { strainData[name].biomass = Math.max(0, parseFloat(val) || 0); recalc(); };
-  window._strainSetTrim = (name, val) => { strainData[name].trim = Math.max(0, parseFloat(val) || 0); recalc(); };
-  window._strainSwap = (name) => {
-    const s = strainData[name];
-    [s.biomass, s.trim] = [s.trim || 0, s.biomass || 0];
     renderStrainCounters(); recalc();
   };
 
-  // Premium #1 Trim never outweighs Biomass #2. When a strain says otherwise the
-  // two boxes were typed into each other — every such row in 2026 was — so flag
-  // the row and offer the swap. Submit refuses it, and so does the API.
-  function strainSwapped(s) { return (s.sacks || 0) > 0 && (s.trim || 0) > (s.biomass || 0); }
-  function updateStrainWarnings() {
-    document.querySelectorAll('.strain-row').forEach(row => {
-      const s = strainData[row.dataset.strain];
-      const bad = !!s && strainSwapped(s);
-      row.querySelectorAll('.strain-weight-input').forEach(el => el.classList.toggle('invalid', bad));
-      const warn = row.querySelector('.strain-warning');
-      if (warn) warn.hidden = !bad;
-    });
+  // The day's two piles. Premium #1 never outweighs Biomass #2; when the boxes
+  // say otherwise they were typed into each other — every such row in 2026 was —
+  // so flag both boxes and offer the swap. Submit refuses it, and so does the API.
+  function dayTotals() {
+    return {
+      biomass: Math.max(0, parseFloat(biomassInput.value) || 0),
+      trim: Math.max(0, parseFloat(trimInput.value) || 0),
+    };
   }
+  function premiumOutweighsBiomass() { const d = dayTotals(); return d.trim > d.biomass; }
+  function updateWeightWarning() {
+    const bad = premiumOutweighsBiomass();
+    document.getElementById('biomass-box').classList.toggle('invalid', bad);
+    document.getElementById('trim-box').classList.toggle('invalid', bad);
+    document.getElementById('weight-warning').hidden = !bad;
+  }
+  document.getElementById('swap-btn').addEventListener('click', () => {
+    const d = dayTotals();
+    biomassInput.value = d.trim || '';
+    trimInput.value = d.biomass || '';
+    recalc();
+  });
 
   // Recalculate totals + per-strain averages
   function recalc() {
     const sackCount = totalSacks();
     const raw = sackCount * SACK_WEIGHT;
 
-    // Day-total biomass/trim derived from per-strain values
-    const biomass = Object.values(strainData).reduce((sum, s) => sum + (s.biomass || 0), 0);
-    const trim = Object.values(strainData).reduce((sum, s) => sum + (s.trim || 0), 0);
-    biomassInput.value = biomass;
-    trimInput.value = trim;
-    updateStrainWarnings();
+    // The day's two piles, entered once
+    const { biomass, trim } = dayTotals();
+    updateWeightWarning();
 
     // Totals from all strains
     topsLbs = Object.values(strainData).reduce((sum, s) => sum + s.tops, 0);
@@ -1172,12 +1167,8 @@
 
     // Build strainData — merge production with supersack variants
     const oldSacks = {};    // Preserve user-entered sack counts
-    const oldBio = {};      // Preserve user-entered per-strain biomass
-    const oldTrim = {};     // Preserve user-entered per-strain trim
     Object.entries(strainData).forEach(([name, s]) => {
       if (s.sacks > 0) oldSacks[name] = s.sacks;
-      if (s.biomass) oldBio[name] = s.biomass;
-      if (s.trim) oldTrim[name] = s.trim;
     });
 
     // Build 2-day per-strain history from dashboard strainSnapshot
@@ -1197,8 +1188,6 @@
       const hist = strainHistory[strain];
       strainData[strain] = {
         sacks: oldSacks[strain] || 0,
-        biomass: oldBio[strain] || 0,
-        trim: oldTrim[strain] || 0,
         tops: prod.tops,
         smalls: prod.smalls,
         // 2-day history for averages (falls back to today-only)
@@ -1341,7 +1330,7 @@
   }
 
   // Lock/unlock form for edit mode
-  const LOCKABLE_SELECTOR = '.counter-btn, .mini-btn, .strain-counter input, .strain-weight-input input, .strain-swap-btn';
+  const LOCKABLE_SELECTOR = '.counter-btn, .mini-btn, .strain-counter input, #biomass-input, #trim-input, #swap-btn';
   function lockForm() {
     document.querySelectorAll(LOCKABLE_SELECTOR).forEach(el => {
       el.disabled = true;
@@ -1391,17 +1380,20 @@
         biomassInput.value = '';
         trimInput.value = '';
         statusMsg.textContent = '';
+        recalc();
         return;
       }
 
-      // Existing entry found — pre-fill per-strain values and lock
+      // Existing entry found — pre-fill sack counts, sum the rows back into the
+      // day's two totals (the rows are the API's sack-share split), and lock
+      let savedBio = 0, savedTrim = 0;
       entries.forEach(e => {
-        if (strainData[e.strain]) {
-          strainData[e.strain].sacks = e.sacks_opened || 0;
-          strainData[e.strain].biomass = Math.round((e.biomass_lbs || 0) * 10) / 10;
-          strainData[e.strain].trim = Math.round((e.trim_lbs || 0) * 10) / 10;
-        }
+        if (strainData[e.strain]) strainData[e.strain].sacks = e.sacks_opened || 0;
+        savedBio += e.biomass_lbs || 0;
+        savedTrim += e.trim_lbs || 0;
       });
+      biomassInput.value = Math.round(savedBio * 10) / 10;
+      trimInput.value = Math.round(savedTrim * 10) / 10;
 
       renderStrainCounters();
       recalc();
@@ -1475,12 +1467,11 @@
       setStatus(t.zeroWeights, 'error');
       return;
     }
-    // Refuse a swapped strain before any pool is touched — one that reaches
+    // Refuse swapped totals before any pool is touched — a swap that reaches
     // the pools has to be unwound by hand.
-    const swapped = Object.entries(strainData).filter(([, s]) => strainSwapped(s)).map(([name]) => shortStrain(name));
-    if (swapped.length > 0) {
-      updateStrainWarnings();
-      setStatus(t.trimExceedsBio + ': ' + swapped.join(', '), 'error');
+    if (premiumOutweighsBiomass()) {
+      updateWeightWarning();
+      setStatus(t.trimExceedsBio, 'error');
       return;
     }
 
@@ -1579,7 +1570,9 @@
           date, supersack_count: sackCount, biomass_lbs: biomass,
           trim_lbs: trim, tops_lbs: topsLbs, smalls_lbs: smallsLbs,
           waste_lbs: Math.max(0, (sackCount * SACK_WEIGHT) - topsLbs - smallsLbs - biomass - trim),
-          strains: Object.fromEntries(Object.entries(strainData).map(([k, v]) => [k, { sacks: v.sacks, tops: v.tops, smalls: v.smalls, biomass: v.biomass || 0, trim: v.trim || 0 }])),
+          // Per-strain sacks/tops/smalls only — biomass and trim travel as day
+          // totals and the API splits them by sack share.
+          strains: Object.fromEntries(Object.entries(strainData).map(([k, v]) => [k, { sacks: v.sacks, tops: v.tops, smalls: v.smalls }])),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -1741,6 +1734,7 @@
   loadAll().then(() => checkExistingEntry()); // load strains first, then pre-fill saved counts
 })();
 </script>
+
 
 
 <!-- module-hashes:start -->

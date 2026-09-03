@@ -80,4 +80,19 @@ describe('supersack submit — premium trim above biomass', () => {
     assert.equal(r.status, 400);
     assert.equal(r.writes.length, 0);
   });
+  test('splits day totals across the strains by sack share when no per-strain weights are sent', async () => {
+    // The tracker sends the two day totals only; the floor never weighs trim per strain.
+    const r = await submit({ date: '2026-09-03', biomass_lbs: 100, trim_lbs: 20, strains: {
+      [LIFTER]: { sacks: 3, tops: 30, smalls: 12 },
+      [BLISS]: { sacks: 1, tops: 10, smalls: 4 },
+    } });
+    assert.equal(r.status, 200);
+    assert.equal(r.writes.length, 2);
+    const [lifter, bliss] = r.writes.map(w => w.params);
+    // [date, strain, sacks, tops, smalls, biomass, trim, waste, raw]
+    assert.deepEqual(lifter.slice(0, 7), ['2026-09-03', LIFTER, 3, 30, 12, 75, 15]);
+    assert.deepEqual(bliss.slice(0, 7), ['2026-09-03', BLISS, 1, 10, 4, 25, 5]);
+    assert.equal(lifter[8], 111);
+    assert.equal(bliss[8], 37);
+  });
 });
