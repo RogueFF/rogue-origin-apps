@@ -78,6 +78,13 @@ test('desk loads the live shape: tiles, three lanes, counts, no console errors',
   expect(opened.length).toBe(1); expect(opened[0]).toMatch(/^https:\/\/www\.uline\.com\/QuickOrder#ro=S-/);
   expect(decodeURIComponent(opened[0].split('#ro=')[1]).split('\n').every(l => /^S-[\w-]+ \d+$/.test(l))).toBe(true);
   expect(await page.$eval('.copyline pre.paste', e => e.innerText.split('\n').length)).toBeGreaterThan(1);
+  await page.click('.vt[data-v="Amazon"]'); await page.waitForTimeout(300);
+  const amz = await page.$eval('#actbar [data-cartgo="Amazon"]', a => a.href);
+  expect(amz).toMatch(/^https:\/\/www\.amazon\.com\/gp\/aws\/cart\/add\.html\?ASIN\.1=[A-Z0-9]{10}&Quantity\.1=\d+/);
+  await page.click('.vt[data-v="Walmart"]'); await page.waitForTimeout(300);
+  const wm = await page.$eval('#actbar [data-cartgo="Walmart"]', a => a.href);
+  expect(wm).toMatch(/^https:\/\/affil\.walmart\.com\/cart\/addToCart\?items=\d+(%7C|\|)\d+/);
+  await page.click('.vt[data-v="Uline"]'); await page.waitForTimeout(300);
   await page.click('.tabs [data-view="cards"]');
   expect(await page.$$eval('.pc', e => e.length)).toBe(93);
   await page.click('.tabs [data-view="print"]');

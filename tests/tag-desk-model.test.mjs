@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   checkDays, nextCheckAfter, addDays, localDay, zoneOf, deliveryDays, parsePrice,
-  normalizeCard, toRawCard, buildModel, cardState, scanPlan, orderedMap, ulinePasteText, ULINE_QUICK_ORDER_URL, ulineQuickOrderUrl,
+  normalizeCard, toRawCard, buildModel, cardState, scanPlan, orderedMap, ulinePasteText, ULINE_QUICK_ORDER_URL, ulineQuickOrderUrl, amazonCartUrl, walmartCartUrl,
 } from '../src/js/tag-desk/model.js';
 
 const card = (o) => ({ id: 1, item: 'Packing Tape', supplier: 'Uline', orderQty: 'x72', orderWhen: '36', deliveryTime: '1 Day', price: '$2.10', crumbtrail: 'Supply Rack > A-1', url: '', picture: '', imageFile: '', ...o });
@@ -144,6 +144,21 @@ test('Uline quick-order paste text is one MODEL QTY per line; cards without a mo
   assert.equal(ulineQuickOrderUrl(''), 'https://www.uline.com/QuickOrder');
   const m = normalizeCard(card({ url: 'https://www.uline.com/Product/Detail/S-23309-L/Disposable-Nitrile-Gloves/Uline-Black-Industrial-Nitrile-Gloves-Powder-Free-4-Mil-Large' }));
   assert.equal(m.model, 'S-23309-L');
+});
+
+test('Amazon and Walmart cart links come from the product URLs; cards without an id are named', () => {
+  const a = normalizeCard(card({ supplier: 'Amazon', url: 'https://www.amazon.com/Reli-ProGrade/dp/B0BHF5WFHW/ref=sr_1_1?crid=X&th=1' }));
+  const a2 = normalizeCard(card({ id: 2, supplier: 'Amazon', url: 'https://www.amazon.com/gp/product/B01FV0F5HG?ref=ppx' }));
+  const a3 = normalizeCard(card({ id: 3, supplier: 'Amazon', url: 'https://www.amazon.com/s?k=trash+bags' }));
+  assert.equal(a.asin, 'B0BHF5WFHW'); assert.equal(a2.asin, 'B01FV0F5HG'); assert.equal(a3.asin, null);
+  const r = amazonCartUrl([{ asin: a.asin, qty: 2 }, { asin: a3.asin, qty: 1, item: 'Trash bags' }, { asin: a2.asin, qty: 1 }]);
+  assert.equal(r.url, 'https://www.amazon.com/gp/aws/cart/add.html?ASIN.1=B0BHF5WFHW&Quantity.1=2&ASIN.2=B01FV0F5HG&Quantity.2=1');
+  assert.equal(r.count, 2); assert.equal(r.missing[0].item, 'Trash bags');
+  assert.equal(amazonCartUrl([{ asin: null, qty: 1 }]).url, null);
+  const w = normalizeCard(card({ supplier: 'Walmart', url: 'https://www.walmart.com/ip/Great-Value-Paper-Towels/14600911831?athcpid=1' }));
+  const w2 = normalizeCard(card({ id: 2, supplier: 'Walmart', url: 'https://www.walmart.com/ip/899409911' }));
+  assert.equal(w.wmId, '14600911831'); assert.equal(w2.wmId, '899409911');
+  assert.equal(walmartCartUrl([{ wmId: w.wmId, qty: 3 }, { wmId: w2.wmId, qty: 1 }]).url, 'https://affil.walmart.com/cart/addToCart?items=14600911831|3,899409911|1');
 });
 
 test('hidden cards leave the model; an open Grove request shows as requested', () => {

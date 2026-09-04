@@ -78,13 +78,15 @@ export function normalizeCard(raw) {
   let model = null;
   const m = /\/([SH]-\d+[A-Z0-9-]*)/.exec(raw.url || '') || /([SH]-\d{3,}[A-Z0-9-]*)/.exec(raw.url || '');
   if (m && raw.supplier === 'Uline') model = m[1];
+  const asin = (/\/(?:dp|gp\/product|gp\/aw\/d)\/([A-Z0-9]{10})(?=[/?]|$)/.exec(raw.url || '') || [])[1] || null;
+  const wmId = (/\/ip\/(?:[^/?#]+\/)?(\d{6,})(?=[/?#]|$)/.exec(raw.url || '') || [])[1] || null;
   const c = {
     id: raw.id, item: String(raw.item || '').trim(), vendor: String(raw.supplier || '').trim() || '(Unspecified)',
     zone, slot, crumbtrailRaw: raw.crumbtrail || '',
     fill, reorder, numericLevels, orderQtyRaw: raw.orderQty || '', orderWhenRaw: raw.orderWhen || '',
     leadDays: deliveryDays(raw.deliveryTime) || 1, deliveryRaw: raw.deliveryTime || '',
     unitPrice: perUnit == null ? null : (packSize ? Math.round(perUnit * packSize * 100) / 100 : perUnit), priceRaw: raw.price || '', packSize,
-    url: raw.url || '', picture: raw.picture || '', imageFile: raw.imageFile || '', model,
+    url: raw.url || '', picture: raw.picture || '', imageFile: raw.imageFile || '', model, asin, wmId,
   };
   if (c.vendor.toUpperCase() === 'ULINE') c.vendor = 'Uline';
   if (c.numericLevels && c.fill && c.reorder != null) {
@@ -214,6 +216,21 @@ export const ULINE_HELPER_URL = 'https://rogueff.github.io/rogue-origin-apps/src
 /** A bookmarklet with the same behaviour for browsers without a userscript manager: click it on the Uline page the desk opened. A script URL is the whole point here. */
 // eslint-disable-next-line no-script-url
 export const ULINE_BOOKMARKLET = "javascript:(function(){var m=location.hash.match(/ro=([^&]+)/);if(!m)return alert('Open Uline from the Supply Kanban desk first');var t=decodeURIComponent(m[1]);var L=t.split('\\n').map(function(l){return l.trim()}).filter(Boolean);if(!L.every(function(l){return /^[A-Z]{1,3}-[A-Z0-9-]{1,24} \\d{1,6}$/i.test(l)}))return;var ta=document.getElementById('txtPaste'),b=document.getElementById('btnAddPastedItemsToCart'),md=document.getElementById('IsPasteMode');if(!ta||!b)return;try{PageScript.ShowPaste()}catch(e){}ta.value=L.join('\\n');ta.classList.remove('empty');if(md)md.value='True';history.replaceState(null,'',location.pathname);setTimeout(function(){b.click()},400)})();";
+
+/**
+ * Amazon's add-to-cart link (ASIN.n / Quantity.n). Amazon asks for sign-in if needed and returns to the add,
+ * then lands on the cart. Rows without an ASIN come back in `missing`.
+ */
+export function amazonCartUrl(rows) {
+  const ok = rows.filter(r => r.asin), missing = rows.filter(r => !r.asin);
+  const qs = ok.map((r, i) => `ASIN.${i + 1}=${encodeURIComponent(r.asin)}&Quantity.${i + 1}=${Math.max(1, r.qty | 0)}`).join('&');
+  return { url: ok.length ? `https://www.amazon.com/gp/aws/cart/add.html?${qs}` : null, count: ok.length, missing };
+}
+/** Walmart's affiliate add-to-cart link (items=ID|QTY,…). Walmart may show a "Robot or human?" check first; the fallback is the product pages. */
+export function walmartCartUrl(rows) {
+  const ok = rows.filter(r => r.wmId), missing = rows.filter(r => !r.wmId);
+  return { url: ok.length ? `https://affil.walmart.com/cart/addToCart?items=${ok.map(r => `${r.wmId}|${Math.max(1, r.qty | 0)}`).join(',')}` : null, count: ok.length, missing };
+}
 
 /** What a Tag scan should do, decided from the cart alone (idempotent by construction). */
 export function scanPlan(c, { red = false } = {}) {
