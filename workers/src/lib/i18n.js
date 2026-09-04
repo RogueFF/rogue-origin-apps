@@ -46,6 +46,8 @@ const S = {
     loggedCutters: 'Anotado: {n} cortadores',
     loggedCutter: 'Anotado: 1 cortador',
     wrongNumber: '¿Número equivocado? Toca el correcto:',
+    hcSaving: 'Guardando…',
+    hcFailed: '⚠️ No se guardó — toca otra vez',
     viewStatus: 'Ver estado →',
 
     // — barn intake —
@@ -208,6 +210,8 @@ const S = {
     loggedCutters: 'Logged: {n} cutters',
     loggedCutter: 'Logged: 1 cutter',
     wrongNumber: 'Wrong number? Tap the right one:',
+    hcSaving: 'Saving…',
+    hcFailed: '⚠️ Not saved — tap again',
     viewStatus: 'View status →',
 
     barnIntake: 'Barn Intake',

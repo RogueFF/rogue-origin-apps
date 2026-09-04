@@ -1992,6 +1992,18 @@ function renderPage(ui, title, bodyHtml, status = 200) {
             color: #7fa78e; letter-spacing: .04em; margin: 0 0 20px; }
   .note { color: #cfe3d6; margin: 8px 0; }
   .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 12px; }
+  /* The chosen number changes HUE, not shade: at arm's length in daylight a
+     darker green reads as a shadow, amber reads as "this one". */
+  .grid a.btn { position: relative; }
+  .grid a.btn:active { transform: scale(0.96); }
+  .grid a.btn.sel { background: #e9c462; color: #1b2b20; font-weight: 800;
+                    box-shadow: inset 0 0 0 3px #fff3d1; }
+  .grid a.btn.sel::after { content: '✓'; position: absolute; top: 3px; right: 7px;
+                           font-size: 0.72rem; font-weight: 800; }
+  .grid a.btn.saving { opacity: 0.55; }
+  .hcstat { margin-top: 14px; font-size: 1.15rem; font-weight: 700; min-height: 1.5em; }
+  .hcstat.ok { color: #8fe3ad; }
+  .hcstat.bad { color: #ffb3b3; }
   a.btn, button.btn { display: block; text-align: center; padding: 18px 8px; font-size: 1.2rem; font-weight: 600;
     background: #2f7a4f; color: #fff; text-decoration: none; border-radius: 10px; border: none; }
   a.btn.alt { background: #3a5f4c; }
@@ -2228,12 +2240,85 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-function headcountGrid(ui, zone, sessionId) {
+/**
+ * The cutter grid, showing WHICH number is currently set.
+ *
+ * It used to render identically before and after a tap, so the only evidence
+ * anything had happened was a headline above a grid that looked untouched --
+ * and the crew lead's eye is on the grid, because that is what they just
+ * pressed. Koa, using it: "I pick the cutter amount but I'm unsure if it's
+ * entered." Marking the selection is what answers that.
+ */
+function headcountGrid(ui, zone, sessionId, current = null) {
   const q = `?lang=${ui.lang}&zone=${zone}&action=headcount&session_id=${sessionId}`;
-  const cells = HEADCOUNT_OPTIONS
-    .map(n => `<a class="btn" href="${q}&count=${n}">${n}</a>`)
-    .join('');
-  return `${cells}<a class="btn alt" href="${q}&count=13">13+</a>`;
+  const cell = (n, extra = '') => {
+    const on = Number(current) === n;
+    return `<a class="btn${extra}${on ? ' sel' : ''}" data-n="${n}" href="${q}&count=${n}"`
+      + ` aria-pressed="${on}">${n === 13 ? '13+' : n}</a>`;
+  };
+  return HEADCOUNT_OPTIONS.map(n => cell(n)).join('') + cell(13, ' alt');
+}
+
+/**
+ * Instant feedback on tap, then save in the background.
+ *
+ * Without this the tap starts a page load, and on one bar in a field that gap
+ * is silent -- which is the other half of "did that go through?". The button
+ * lights up before the network is touched, so the answer never depends on
+ * signal.
+ *
+ * Progressive enhancement on purpose: the cells stay real links, so with no JS
+ * (or if fetch throws) the old navigation still records the headcount and the
+ * page it lands on now shows the selection too.
+ */
+function headcountScript(ui) {
+  const T = JSON.stringify({
+    saving: ui.t('hcSaving'),
+    saved: ui.t('loggedCutters', { n: '{n}' }),
+    saved1: ui.t('loggedCutter'),
+    failed: ui.t('hcFailed'),
+  });
+  return `<script>
+(function () {
+  var grid = document.querySelector('.grid');
+  var stat = document.getElementById('hcstat');
+  if (!grid || !stat || !window.fetch) return;
+  var T = ${T}, busy = false;
+
+  grid.addEventListener('click', function (e) {
+    var a = e.target.closest ? e.target.closest('a.btn') : null;
+    if (!a || busy) return;
+    e.preventDefault();
+    busy = true;
+
+    var prev = grid.querySelector('a.btn.sel');
+    if (prev) { prev.classList.remove('sel'); prev.setAttribute('aria-pressed', 'false'); }
+    a.classList.add('sel', 'saving');
+    a.setAttribute('aria-pressed', 'true');
+    stat.className = 'hcstat';
+    stat.textContent = T.saving;
+
+    var n = a.getAttribute('data-n');
+    fetch(a.href, { credentials: 'same-origin' })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+      .then(function () {
+        a.classList.remove('saving');
+        stat.className = 'hcstat ok';
+        stat.textContent = (n === '1' ? T.saved1 : T.saved.replace('{n}', n));
+        busy = false;
+      })
+      .catch(function () {
+        // Never leave it looking saved when it is not.
+        a.classList.remove('sel', 'saving');
+        a.setAttribute('aria-pressed', 'false');
+        if (prev) { prev.classList.add('sel'); prev.setAttribute('aria-pressed', 'true'); }
+        stat.className = 'hcstat bad';
+        stat.textContent = T.failed;
+        busy = false;
+      });
+  });
+})();
+</script>`;
 }
 
 /**
@@ -2258,7 +2343,9 @@ function enterBody(ui, { zone, cultivar, cutNumber, sessionId, prevZone }) {
 <p class="note">${prevZone ? ui.t('prevClosed', { lot: escapeHtml(prevZone) }) : ui.t('noPrior')}</p>
 <p class="note">${ui.t('howManyCutters')}</p>
 <div class="grid">${headcountGrid(ui, zone, sessionId)}</div>
-<div class="footer"><a href="?action=logs&zone=${zone}">${ui.t('viewLog')}</a></div>`;
+<div id="hcstat" class="hcstat"></div>
+<div class="footer"><a href="?action=logs&zone=${zone}">${ui.t('viewLog')}</a></div>
+${headcountScript(ui)}`;
 }
 
 function alreadyEnteredBody(ui, active) {
@@ -2267,16 +2354,23 @@ function alreadyEnteredBody(ui, active) {
 <p class="sub">${active.cultivar ? `${escapeHtml(active.cultivar)} · ` : ''}${ui.t('cut', { n: active.cut_number })}</p>
 <p class="note">${ui.t('alreadyEnteredAt', { t: active.occurred_at })}</p>
 <p class="note">${ui.t('howManyCutters')}</p>
-<div class="grid">${headcountGrid(ui, active.zone, active.id)}</div>`;
+<div class="grid">${headcountGrid(ui, active.zone, active.id, active.headcount)}</div>
+<div id="hcstat" class="hcstat"></div>
+${headcountScript(ui)}`;
 }
 
 function headcountBody(ui, { zone, cutNumber, sessionId, count }) {
+  // The no-JS landing page. The grid now carries `count`, so even here the
+  // number that was set is visibly the one selected rather than being asserted
+  // only by the headline.
   return `
 <h1>${count === 1 ? ui.t('loggedCutter') : ui.t('loggedCutters', { n: count })}</h1>
 <p class="sub">${zone} — ${ui.t('cut', { n: cutNumber })}</p>
 <p class="note">${ui.t('wrongNumber')}</p>
-<div class="grid">${headcountGrid(ui, zone, sessionId)}</div>
-<div class="footer"><a href="?action=status">${ui.t('viewStatus')}</a></div>`;
+<div class="grid">${headcountGrid(ui, zone, sessionId, count)}</div>
+<div id="hcstat" class="hcstat"></div>
+<div class="footer"><a href="?action=status">${ui.t('viewStatus')}</a></div>
+${headcountScript(ui)}`;
 }
 
 function barnIntakeFormBody(ui, active, justClosed = null) {
