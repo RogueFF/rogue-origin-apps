@@ -61,6 +61,13 @@ const HEADCOUNT_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1); // 1-12, 
 
 const MAX_PRINT_QTY = 40;                // sanity cap on one print run
 const LOT_PICKER_DAYS = 45;              // how far back the takedown lot picker looks
+
+// Drying bays, numbered continuously across both barns (Koa, 2026-09-03).
+// The barn is DERIVED from the number rather than stored: two columns that have
+// to agree is one column too many.
+const BAY_MIN = 1;
+const BAY_MAX = 12;
+const BOTTOM_BARN_LAST_BAY = 8;   // 1-8 bottom, 9-12 top
 // How many days back the nightly allocation replays. Long enough that a
 // supersack_entries row entered late still reaches its bags, short enough that
 // the job stays a handful of queries.
@@ -293,6 +300,47 @@ function isTestMode(env) {
 
 function getSeason() {
   return new Date().getUTCFullYear();
+}
+
+/** Which barn a bay is in. Null for anything outside 1-12. */
+function barnForBay(bay) {
+  const n = Number(bay);
+  if (!Number.isInteger(n) || n < BAY_MIN || n > BAY_MAX) return null;
+  return n <= BOTTOM_BARN_LAST_BAY ? 'bottom' : 'top';
+}
+
+/**
+ * Parse a bay from user input. Absent is null; invalid throws.
+ *
+ * Never coerced or clamped: the bay prints on the tag, so a silently-corrected
+ * value gets tied to a physical sack and read as fact months later. `ui` is
+ * optional because the JSON path has no translator — the crew never sees that
+ * message, only the operator's console does.
+ */
+function parseBay(raw, ui = null) {
+  if (raw === undefined || raw === null || String(raw).trim() === '') return null;
+  const n = parseInt(raw, 10);
+  if (!barnForBay(n)) {
+    throw createError('VALIDATION_ERROR', ui
+      ? ui.t('bayRange', { min: BAY_MIN, max: BAY_MAX })
+      : `Bay must be between ${BAY_MIN} and ${BAY_MAX}.`);
+  }
+  return n;
+}
+
+/**
+ * The bay the last tagged sack came out of.
+ *
+ * The picker defaults to this because the crew fills roughly one bay a day, so
+ * a bay sees several takedowns and the common case is confirming the same one
+ * rather than choosing a new one.
+ */
+async function getLastBay(db, isTest) {
+  const row = await queryOne(db, `
+    SELECT bay FROM harvest_sacks
+    WHERE bay IS NOT NULL AND is_test = ? ORDER BY id DESC LIMIT 1
+  `, [isTest]);
+  return row ? row.bay : null;
 }
 
 // SQLite's datetime('now') returns "YYYY-MM-DD HH:MM:SS" (UTC, no offset).
@@ -528,8 +576,8 @@ async function handleBarnLog(ui, db, env, ctx, body) {
 
 async function handleSackPrintForm(ui, db, env) {
   const isTest = isTestMode(env) ? 1 : 0;
-  const lots = await getRecentLots(db, isTest);
-  return renderPage(ui, ui.t('printTags'), sackPrintFormBody(ui, lots));
+  const [lots, lastBay] = await Promise.all([getRecentLots(db, isTest), getLastBay(db, isTest)]);
+  return renderPage(ui, ui.t('printTags'), sackPrintFormBody(ui, lots, lastBay));
 }
 
 /**
@@ -612,8 +660,10 @@ async function handleSackSession(ui, db, env, input) {
   const lot = await requireLot(db, sessionId);
   const isTest = isTestMode(env) ? 1 : 0;
   const stats = await getLotTagStats(db, sessionId, isTest);
+  const bay = parseBay(input.bay, ui);
 
-  return renderPage(ui, `${ui.t('printTags')} — ${lot.zone}`, sackSessionBody(ui, { lot, cultivar, stats }));
+  return renderPage(ui, `${ui.t('printTags')} — ${lot.zone}`,
+    sackSessionBody(ui, { lot, cultivar, stats, bay }));
 }
 
 async function requireLot(db, sessionId) {
@@ -654,6 +704,10 @@ async function handleSackAlloc(db, env, ctx, body) {
   const isTest = isTestMode(env) ? 1 : 0;
   const season = getSeason();
   const harvestDate = String(lot.occurred_at).substring(0, 10);
+  // Bay is set once at Start takedown and rides every sack of the session. It
+  // prints on the tag, so a wrong one is visible on the first label rather than
+  // discovered in analysis — which is the only defence a location field gets.
+  const bay = parseBay(body.bay);
 
   // MAX+1 per (season, cultivar): each cultivar counts from 1. The
   // UNIQUE(season, cultivar_code, serial) index means two simultaneous
@@ -681,10 +735,10 @@ async function handleSackAlloc(db, env, ctx, body) {
     ids.push(sackId);
     statements.push({
       sql: `INSERT INTO harvest_sacks
-              (sack_id, season, serial, cultivar_code, sku, zone, cultivar, cut_number, harvest_date, zone_session_id, is_test)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              (sack_id, season, serial, cultivar_code, sku, zone, cultivar, cut_number, harvest_date, zone_session_id, bay, is_test)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       params: [sackId, season, serial, code, supersackSku(code, season),
-               lot.zone, cultivar, lot.cut_number, harvestDate, lot.id, isTest],
+               lot.zone, cultivar, lot.cut_number, harvestDate, lot.id, bay, isTest],
     });
   }
   await transaction(db, statements);
@@ -928,6 +982,7 @@ function demoSackView(opened, voided) {
       sack_id: DEMO_SACK_ID, season: 2026, serial: 7, cultivar_code: 'SLIFT',
       cultivar: 'Sour Lifter', zone: 'Z4', cut_number: 1,
       harvest_date: cut,
+      bay: 7,
       printed_at: bagged + ' 14:20:00',
       opened_at: opened ? new Date(today.getTime() - 86400000).toISOString().slice(0, 19).replace('T', ' ') : null,
       // The five parts sum to the 37 lb that went into the sack, because that
@@ -2310,7 +2365,24 @@ function crewConfirmBody(ui, counts, flash) {
 
 // ─── SUPERSACK TAG RENDERING ────────────────────────────
 
-function sackPrintFormBody(ui, lots) {
+/**
+ * Bay select, grouped by barn. Defaulted rather than blank because the crew
+ * fills roughly one bay a day, so most takedowns are the same bay as the last
+ * one — the common action should be confirming, not choosing.
+ */
+function bayOptions(ui, selected) {
+  const group = (labelKey, from, to) => {
+    const opts = [];
+    for (let n = from; n <= to; n++) {
+      opts.push(`<option value="${n}" ${Number(selected) === n ? 'selected' : ''}>${ui.t('bayN', { n })}</option>`);
+    }
+    return `<optgroup label="${ui.t(labelKey)}">${opts.join('')}</optgroup>`;
+  };
+  return group('bottomBarn', BAY_MIN, BOTTOM_BARN_LAST_BAY)
+       + group('topBarn', BOTTOM_BARN_LAST_BAY + 1, BAY_MAX);
+}
+
+function sackPrintFormBody(ui, lots, lastBay = null) {
   if (!lots.length) {
     return `
 <h1>${ui.t('printTags')}</h1>
@@ -2362,6 +2434,8 @@ function sackPrintFormBody(ui, lots) {
   <div class="lotlist">${cards}</div>
   <label for="cultivar">${ui.t('cultivar')} <span class="hint">${ui.t('cultivarHint')}</span></label>
   <input id="cultivar" name="cultivar" required autocomplete="off" value="${escapeHtml(firstCv)}" placeholder="Sour Lifter">
+  <label for="bay">${ui.t('bay')} <span class="hint">${lastBay ? ui.t('bayHintLast', { n: lastBay }) : ui.t('bayHint')}</span></label>
+  <select id="bay" name="bay" required>${bayOptions(ui, lastBay)}</select>
   <button class="btn" type="submit">${ui.t('startTakedown')}</button>
 </form>
 
@@ -2402,12 +2476,19 @@ function sackPrintFormBody(ui, lots) {
  * yields until it's empty, and pre-printing leaves orphan serials that can end
  * up on the next rack's sacks.
  */
-function sackSessionBody(ui, { lot, cultivar, stats }) {
+function sackSessionBody(ui, { lot, cultivar, stats, bay = null }) {
   const q = `session_id=${lot.id}&cultivar=${encodeURIComponent(cultivar)}&lang=${ui.lang}`;
+  const barn = barnForBay(bay);
+  // Bay sits on the lot header rather than tucked away: it prints on every tag
+  // of this session, so it should be visible the whole time tags are printing.
+  const bayLine = bay
+    ? `<div class="lot-meta">${ui.t('bayN', { n: bay })} · ${ui.t(barn === 'bottom' ? 'bottomBarn' : 'topBarn')}</div>`
+    : `<div class="lot-meta">${ui.t('noBaySet')}</div>`;
   return `
 <div class="lot">
   <div class="lot-cultivar">${escapeHtml(cultivar)}</div>
   <div class="lot-meta">${escapeHtml(lot.zone)} · ${ui.t('cut', { n: lot.cut_number ?? '?' })} · ${escapeHtml(formatTagDate(ui.lang, String(lot.occurred_at).substring(0, 10)))}</div>
+  ${bayLine}
 </div>
 
 <button id="printBtn" class="bigbtn">${ui.t('printTag')}</button>
@@ -2486,7 +2567,7 @@ function sackSessionBody(ui, { lot, cultivar, stats }) {
     fetch('?action=sack_alloc', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: ${lot.id}, cultivar: ${JSON.stringify(cultivar)}, qty: qty })
+      body: JSON.stringify({ session_id: ${lot.id}, cultivar: ${JSON.stringify(cultivar)}, qty: qty, bay: ${bay === null ? 'null' : bay} })
     })
       .then(function (r) { return r.json(); })
       .then(function (d) {
@@ -2556,6 +2637,17 @@ function sackSessionBody(ui, { lot, cultivar, stats }) {
  */
 const TAG_LANG = 'en';
 
+/**
+ * The printed face of one tag.
+ *
+ * WIDTH BUDGET on the meta line: date + zone + cut + bay measures 226pt of the
+ * 253pt column at its worst case ("Sep 30, 2026 - Z10 - Cut 9 - Bay 12"), i.e.
+ * 89% full. That is a HARD worst case rather than an estimate, because every
+ * field on it is length-capped -- 3-char month, 2-digit day, 3-char zone,
+ * 1-digit cut, 2-digit bay. It fits, but there is no room for a fifth field:
+ * anything more on that line has to displace something, and the line silently
+ * CLIPS rather than wrapping.
+ */
 function labelInner(s) {
   // Serial only, not the whole id. '#1' beside 'Sour Lifter (SLIFT)' is what a
   // person actually needs, and it removes the width pressure that used to push
@@ -2568,7 +2660,7 @@ function labelInner(s) {
       <div class="cultivar" style="font-size:${cultivarFontPt(s.cultivar)}pt">${escapeHtml(s.cultivar || '')}</div>
       ${s.cultivar_code ? `<div class="code">${escapeHtml(s.cultivar_code)}</div>` : ''}
       <div class="bagno" style="font-size:${bagnoFontPt(serial)}pt">#${escapeHtml(String(serial))}</div>
-      <div class="meta">${escapeHtml(formatTagDate(TAG_LANG, s.harvest_date))} · ${escapeHtml(s.zone)} · ${escapeHtml(translate(TAG_LANG, 'cut', { n: s.cut_number ?? '?' }))}</div>
+      <div class="meta">${escapeHtml(formatTagDate(TAG_LANG, s.harvest_date))} · ${escapeHtml(s.zone)} · ${escapeHtml(translate(TAG_LANG, 'cut', { n: s.cut_number ?? '?' }))}${s.bay ? ` · ${escapeHtml(translate(TAG_LANG, 'bayN', { n: s.bay }))}` : ''}</div>
     </div>`;
 }
 
@@ -2720,13 +2812,13 @@ function specimenSacks() {
   return [
     // The one to scan: its QR opens the demo sack page, so the printed tag and
     // the screen it leads to can both be judged from one sheet.
-    { sack_id: '26-SLIFT-7', qr_id: DEMO_SACK_ID, serial: 7, cultivar_code: 'SLIFT', cultivar: 'Sour Lifter', zone: 'Z4', cut_number: 1, harvest_date: today },
+    { sack_id: '26-SLIFT-7', qr_id: DEMO_SACK_ID, serial: 7, cultivar_code: 'SLIFT', cultivar: 'Sour Lifter', zone: 'Z4', cut_number: 1, harvest_date: today, bay: 7 },
     // Longest name in the roster, so the name font drops to its smallest step.
-    { sack_id: '26-ORNGPQ-12',    serial: 12,  cultivar_code: 'ORNGPQ',   cultivar: 'Orange Pineapple Quik', zone: 'Z8',  cut_number: 2, harvest_date: today },
+    { sack_id: '26-ORNGPQ-12',    serial: 12,  cultivar_code: 'ORNGPQ',   cultivar: 'Orange Pineapple Quik', zone: 'Z8',  cut_number: 2, harvest_date: today, bay: 9 },
     // The realistic worst case, and both squeezes at once: an 8-character
     // prefix (the longest planted this year) with a 3-digit serial, under a
     // 20-character name. This is the pairing that overlapped the QR.
-    { sack_id: '26-STRAWDNT-123', serial: 123, cultivar_code: 'STRAWDNT', cultivar: 'Strawberry Doughnuts',  zone: 'Z10', cut_number: 3, harvest_date: today },
+    { sack_id: '26-STRAWDNT-123', serial: 123, cultivar_code: 'STRAWDNT', cultivar: 'Strawberry Doughnuts',  zone: 'Z10', cut_number: 3, harvest_date: today, bay: 12 },
   ];
 }
 
@@ -3121,7 +3213,12 @@ function sackDetailBody(ui, view, flash) {
     }
     rows.push(node('', ui.t('tlCut'), fmtDate(sack.harvest_date)));
     if (sack.printed_at) {
-      rows.push(span(dur('tlRack', rackDays)));
+      // The drying leg already carried both dry dates — Cut is the day it was
+      // hung (same day, Koa 2026-09-03) and Bagged is the day it came down.
+      // The bay joins them here rather than in its own tile, so where it dried
+      // and how long it dried read as one fact instead of two.
+      rows.push(span(dur('tlRack', rackDays)
+        + (sack.bay ? ` <span class="hint">· ${ui.t('tlDriedIn', { n: sack.bay })}</span>` : '')));
       rows.push(node('', ui.t('tlBagged'), fmtDate(sack.printed_at)));
       rows.push(span(dur('tlSack', sackDays)));
     } else {
