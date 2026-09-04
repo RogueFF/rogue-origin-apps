@@ -132,11 +132,52 @@ const PUBLIC_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev';
  */
 const API = '/api/harvest';
 
+/**
+ * The cutting crews, and how a phone says which one it is.
+ *
+ * 2026 runs two crews that can be in the same zone at once. The discriminator
+ * has to travel with the crew, and the zone signs cannot carry it — they are
+ * printed and laminated for the season — so it rides on the crew lead's phone:
+ * scan a Crew A / Crew B card once (PUBLIC_BASE/c/A) and the cookie is set for
+ * the season.
+ *
+ * A phone with no tag is legitimate (a spare handset, a cleared cookie) and
+ * degrades to single-crew behaviour rather than to a wrong crew. It is shown in
+ * the header of every crew screen, so an untagged phone is visibly untagged
+ * instead of quietly wrong.
+ */
+const CREWS = ['A', 'B'];
+
+function pickCrew(request) {
+  const url = new URL(request.url);
+  const q = (url.searchParams.get('crew') || '').toUpperCase();
+  if (CREWS.includes(q)) return q;
+  const m = (request.headers.get('cookie') || '').match(/(?:^|;\s*)rf_crew=([A-Z])/);
+  return m && CREWS.includes(m[1]) ? m[1] : null;
+}
+
+function crewCookie(crew) {
+  return `rf_crew=${crew}; Path=/; Max-Age=31536000; SameSite=Lax`;
+}
+
 const HTML_ACTIONS = new Set([
   'enter', 'headcount', 'barn_intake', 'barn_log',
   'sack_print', 'sack_session_start', 'sack_session', 'sack_label', 'sack_weigh',
   'crew', 'crew_set', 'sack_note', 'find', 'sack_open',
 ]);
+
+/** GET /c/A — the crew card. Its own entry point, like the zone and barn scans. */
+export async function handleCrewScan(request, env, ctx) {
+  const ui = makeUi(request);
+  try {
+    return await handleCrewTag(ui, request);
+  } catch (e) {
+    // An HTML page, not a JSON error: this is reached by a phone camera, and
+    // the crew lead needs to see that the card did not take.
+    const { message, status } = formatError(e);
+    return errorPage(ui, message, status);
+  }
+}
 
 export async function handleHarvestD1(request, env, ctx) {
   const body = request.method === 'POST' ? await parseBody(request) : {};
@@ -395,7 +436,8 @@ async function handleEnter(ui, db, env, ctx, params) {
 
   const isTest = isTestMode(env) ? 1 : 0;
   const season = getSeason();
-  const active = await getActiveSession(db, isTest);
+  const crew = ui.crew;
+  const active = await getActiveSession(db, isTest, crew);
   const now = new Date();
 
   // Cultivar comes from the picker (multi-cultivar zones) or auto-fills from
@@ -418,9 +460,9 @@ async function handleEnter(ui, db, env, ctx, params) {
   const cutNumber = await computeCutNumber(db, zone, cultivar, season, isTest, params.test_cut);
 
   const result = await execute(db, `
-    INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, is_test)
-    VALUES ('enter', ?, ?, ?, ?, ?)
-  `, [zone, cultivar, season, cutNumber, isTest]);
+    INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, crew, is_test)
+    VALUES ('enter', ?, ?, ?, ?, ?, ?)
+  `, [zone, cultivar, season, cutNumber, crew, isTest]);
   const sessionId = result.lastRowId;
 
   const prevNote = active
@@ -428,7 +470,8 @@ async function handleEnter(ui, db, env, ctx, params) {
     : 'No prior zone was open.';
   ctx.waitUntil(sendTelegramMessage(env, {
     chatId: env.TELEGRAM_TEST_CHAT_ID,
-    text: `🌿 Entered *${zone}*${cultivar ? ` — ${cultivar}` : ''} — Cut ${cutNumber}\n${prevNote}`,
+    text: `🌿 Entered *${zone}*${cultivar ? ` — ${cultivar}` : ''} — Cut ${cutNumber}`
+      + `${crew ? ` (Crew ${crew})` : ''}\n${prevNote}`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
   return renderPage(ui, ui.t('entered', { zone }), enterBody(ui, {
@@ -437,12 +480,30 @@ async function handleEnter(ui, db, env, ctx, params) {
   }));
 }
 
-async function getActiveSession(db, isTest) {
+/**
+ * This crew's open session. `IS` rather than `=` so an untagged phone (crew
+ * NULL) matches only other untagged sessions — the whole point of the scoping
+ * is that one crew's scan can never close another's, and a missing tag must
+ * degrade to single-crew behaviour instead of hijacking crew A's zone.
+ */
+async function getActiveSession(db, isTest, crew = null) {
   return queryOne(db, `
     SELECT * FROM harvest_scan_log
-    WHERE event_type = 'enter' AND closed_at IS NULL AND is_test = ?
+    WHERE event_type = 'enter' AND closed_at IS NULL AND crew IS ? AND is_test = ?
     ORDER BY occurred_at DESC, id DESC LIMIT 1
-  `, [isTest]);
+  `, [crew, isTest]);
+}
+
+/** Any crew's open session in a zone — what the barn needs, where the trailer
+ *  is the only fact and nobody knows which crew cut it. */
+async function getOpenSessionForZone(db, isTest, zone, crew = undefined) {
+  const scoped = crew !== undefined;
+  return queryOne(db, `
+    SELECT * FROM harvest_scan_log
+    WHERE event_type = 'enter' AND zone = ? AND closed_at IS NULL
+      ${scoped ? 'AND crew IS ?' : ''} AND is_test = ?
+    ORDER BY occurred_at DESC, id DESC LIMIT 1
+  `, scoped ? [zone, crew, isTest] : [zone, isTest]);
 }
 
 // The most recently closed session — for a given zone, or anywhere. Deliberately
@@ -484,6 +545,19 @@ async function computeCutNumber(db, zone, cultivar, season, isTest, testCutParam
   const forced = parseInt(testCutParam, 10);
   if (Number.isInteger(forced) && forced >= 1 && forced <= 9) return forced;
 
+  // Someone is already cutting this zone and cultivar — the second crew is
+  // joining THAT cut, not starting a new one. Without this, crew B walking into
+  // a zone crew A opened would read the last CLOSED session (a cut from weeks
+  // ago), add one, and split one rack of plants across two lot numbers — a
+  // number that ends up printed on a supersack tag.
+  const concurrent = await queryOne(db, `
+    SELECT cut_number FROM harvest_scan_log
+    WHERE event_type = 'enter' AND zone = ? AND cultivar IS ? AND season = ?
+      AND closed_at IS NULL AND is_test = ?
+    ORDER BY occurred_at DESC, id DESC LIMIT 1
+  `, [zone, cultivar, season, isTest]);
+  if (concurrent) return concurrent.cut_number;
+
   const last = await getLastClosedSession(db, zone, cultivar, season, isTest);
   if (!last) return 1;
 
@@ -517,6 +591,26 @@ async function handleHeadcount(ui, db, env, ctx, params) {
   }).catch(e => console.error('[harvest][telegram]', e)));
 
   return renderPage(ui, ui.t('crew'), headcountBody(ui, { zone: session.zone, cutNumber: session.cut_number, sessionId, count }));
+}
+
+// ─── CREW CARD ──────────────────────────────────────────
+// Scanned once per phone, off a laminated card on the crew lead's clipboard.
+// Nothing is written to the database here — the tag lives on the handset and
+// stamps every session that phone opens from then on.
+
+async function handleCrewTag(ui, request) {
+  const raw = (new URL(request.url).pathname.split('/')[2] || '').toUpperCase();
+  if (!CREWS.includes(raw)) {
+    throw createError('VALIDATION_ERROR', ui.t('crewTagBad'));
+  }
+  // renderPage already sets the language cookie; append rather than replace so
+  // a crew lead who switched to English does not lose it by scanning the card.
+  const res = renderPage(ui, ui.t('crewTagSet', { crew: raw }), `
+<h1>${ui.t('crewTagSet', { crew: raw })}</h1>
+<p class="sub">${ui.t('crewTagSetSub')}</p>
+<div class="footer"><a href="${API}?action=barn_intake">${ui.t('toBarnIntake')}</a></div>`);
+  res.headers.append('Set-Cookie', crewCookie(raw));
+  return res;
 }
 
 // ─── BARN INTAKE ────────────────────────────────────────
@@ -1517,20 +1611,34 @@ function qrUrlFor(sackId) {
 
 async function getStatus(db, env) {
   const isTest = isTestMode(env) ? 1 : 0;
-  const active = await getActiveSession(db, isTest);
+  // Every open session, not one: with two crews there are legitimately two
+  // zones being cut, and asking getActiveSession() here would have reported
+  // only the untagged ones.
+  const open = await query(db, `
+    SELECT * FROM harvest_scan_log
+    WHERE event_type = 'enter' AND closed_at IS NULL AND is_test = ?
+    ORDER BY occurred_at DESC, id DESC
+  `, [isTest]);
+
+  const shape = (a) => ({
+    id: a.id,
+    zone: a.zone,
+    cultivar: a.cultivar,
+    cut_number: a.cut_number,
+    crew: a.crew,
+    occurred_at: a.occurred_at,
+    headcount: a.headcount,
+    headcount_at: a.headcount_at,
+  });
+
   return successResponse({
     success: true,
     season: getSeason(),
     is_test: !!isTest,
-    active_zone: active ? {
-      id: active.id,
-      zone: active.zone,
-      cultivar: active.cultivar,
-      cut_number: active.cut_number,
-      occurred_at: active.occurred_at,
-      headcount: active.headcount,
-      headcount_at: active.headcount_at,
-    } : null,
+    // Kept as the most recent for anything already reading it; active_zones is
+    // the honest answer.
+    active_zone: open.length ? shape(open[0]) : null,
+    active_zones: open.map(shape),
   });
 }
 
@@ -2368,7 +2476,7 @@ function renderPage(ui, title, bodyHtml, status = 200) {
 </style>
 </head>
 <body>
-<div class="lang"><a href="${ui.toggle}">${ui.t('langOther')}</a></div>
+<div class="lang">${ui.crew ? `<span class="crewchip">${ui.t('crewTag', { crew: ui.crew })}</span> ` : ''}<a href="${ui.toggle}">${ui.t('langOther')}</a></div>
 ${bodyHtml}
 </body>
 </html>`;
@@ -2390,11 +2498,15 @@ ${bodyHtml}
  */
 function makeUi(request) {
   const lang = pickLang(request);
+  const crew = pickCrew(request);
   const url = new URL(request.url);
   const other = lang === 'es' ? 'en' : 'es';
   url.searchParams.set('lang', other);
   return {
     lang,
+    // null, never undefined: it is bound straight into the session INSERT, and
+    // undefined is not a value SQLite will take.
+    crew: crew ?? null,
     toggle: url.pathname + url.search,
     t: (key, vars) => translate(lang, key, vars),
   };
