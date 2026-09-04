@@ -211,7 +211,8 @@ export function ulinePasteText(rows) {
 /** The Quick Order URL with the list in the fragment; the one-click helper (src/tools/uline-one-click.user.js) reads it on uline.com. Uline itself never sees a fragment. */
 export function ulineQuickOrderUrl(text) { return text ? `${ULINE_QUICK_ORDER_URL}#ro=${encodeURIComponent(text)}` : ULINE_QUICK_ORDER_URL; }
 export const ULINE_HELPER_URL = 'https://rogueff.github.io/rogue-origin-apps/src/tools/uline-one-click.user.js';
-/** A bookmarklet with the same behaviour for browsers without a userscript manager: click it on the Uline page the desk opened. */
+/** A bookmarklet with the same behaviour for browsers without a userscript manager: click it on the Uline page the desk opened. A script URL is the whole point here. */
+// eslint-disable-next-line no-script-url
 export const ULINE_BOOKMARKLET = "javascript:(function(){var m=location.hash.match(/ro=([^&]+)/);if(!m)return alert('Open Uline from the Supply Kanban desk first');var t=decodeURIComponent(m[1]);var L=t.split('\\n').map(function(l){return l.trim()}).filter(Boolean);if(!L.every(function(l){return /^[A-Z]{1,3}-[A-Z0-9-]{1,24} \\d{1,6}$/i.test(l)}))return;var ta=document.getElementById('txtPaste'),b=document.getElementById('btnAddPastedItemsToCart'),md=document.getElementById('IsPasteMode');if(!ta||!b)return;try{PageScript.ShowPaste()}catch(e){}ta.value=L.join('\\n');ta.classList.remove('empty');if(md)md.value='True';history.replaceState(null,'',location.pathname);setTimeout(function(){b.click()},400)})();";
 
 /** What a Tag scan should do, decided from the cart alone (idempotent by construction). */
