@@ -606,10 +606,82 @@ async function handleSackPrintForm(ui, db, env) {
  * Ready-first ordering, then longest-drying: a lot at the right age with no
  * sacks yet is almost always the answer; a lot cut two days ago almost never is.
  */
+/**
+ * A LOT is season x zone x cultivar x cut. A SESSION is one uninterrupted
+ * stretch of a crew being in that zone. They are NOT the same thing, and
+ * treating them as the same was a real bug:
+ *
+ *   - One crew leaves Z8 for Z7 and comes back the same shift. Inside
+ *     CUT_RESUME_GRACE_HOURS that is deliberately still cut 1, so the second
+ *     entry is a second session of the SAME lot. (See the 2025 log:
+ *     "Finished Z8, partial Z7, partial Z5".)
+ *   - From 2026 two cutting crews can be in one zone at once — same plants,
+ *     same cut, two sessions.
+ *
+ * Keyed on the session, each of those produced its own ledger row carrying the
+ * same lot_id AND the FULL zone acreage, so lb/ac read low by however many
+ * times the zone was entered. Everything downstream groups on the lot instead.
+ */
+function lotKey(l) {
+  return `${l.season || getSeason()}|${l.zone}|${l.cultivar || ''}|${l.cut_number}`;
+}
+
+/**
+ * Sessions -> array of lots, each an array of that lot's sessions.
+ * Input order is preserved, so pass sessions oldest-first and the first session
+ * of each lot is its primary — the one sacks and the picker hang off.
+ */
+function groupSessionsIntoLots(sessions) {
+  const byKey = new Map();
+  for (const s of sessions) {
+    const k = lotKey(s);
+    if (!byKey.has(k)) byKey.set(k, []);
+    byKey.get(k).push(s);
+  }
+  return [...byKey.values()];
+}
+
+/**
+ * Peak cutters on a lot at any one moment.
+ *
+ * Summing headcount across sessions is wrong half the time and right the other
+ * half: one crew of 6 that left and came back is 6 cutters, not 12, while two
+ * crews of 6 and 5 working the same zone at once really is 11. The peak of the
+ * concurrent intervals is correct in both, and reduces to today's single number
+ * for a lot with one session.
+ */
+function peakHeadcount(sessions, nowMs = Date.now()) {
+  const events = [];
+  for (const s of sessions) {
+    if (!s.headcount) continue;
+    const opened = parseSqliteUtc(s.occurred_at).getTime();
+    const closed = s.closed_at ? parseSqliteUtc(s.closed_at).getTime() : nowMs;
+    events.push([opened, s.headcount], [closed, -s.headcount]);
+  }
+  if (!events.length) return null;
+  // At an identical timestamp, close before open: back-to-back sessions are
+  // sequential, and must not read as a moment of double the cutters.
+  events.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  let live = 0, peak = 0;
+  for (const [, delta] of events) { live += delta; if (live > peak) peak = live; }
+  return peak;
+}
+
+// Ranking for the takedown picker, shared by the sort and by lotPlausibility()
+// so the order on screen and the badge on each card can never disagree.
+const LOT_RANK = { ready: 0, old: 1, started: 2, green: 3 };
+
+function lotLevel(lot) {
+  if (lot.days_since_cut < DRY_DAYS_MIN) return 'green';
+  if (lot.sacks_printed > 0) return 'started';
+  if (lot.days_since_cut > DRY_DAYS_MAX) return 'old';
+  return 'ready';
+}
+
 async function getRecentLots(db, isTest) {
-  return query(db, `
+  const sessions = await query(db, `
     SELECT
-      l.id, l.zone, l.cultivar, l.cut_number, l.occurred_at,
+      l.id, l.zone, l.cultivar, l.cut_number, l.season, l.occurred_at,
       CAST(julianday('now') - julianday(l.occurred_at) AS INTEGER) AS days_since_cut,
       COALESCE((
         SELECT COUNT(*) FROM harvest_sacks s
@@ -622,17 +694,30 @@ async function getRecentLots(db, isTest) {
     FROM harvest_scan_log l
     WHERE l.event_type = 'enter' AND l.is_test = ?
       AND julianday('now') - julianday(l.occurred_at) <= ?
-    ORDER BY
-      CASE
-        WHEN CAST(julianday('now') - julianday(l.occurred_at) AS INTEGER) < ${DRY_DAYS_MIN} THEN 3  -- too green
-        WHEN COALESCE((SELECT COUNT(*) FROM harvest_sacks s
-                       WHERE s.zone_session_id = l.id AND s.is_test = l.is_test
-                         AND s.voided_at IS NULL), 0) > 0 THEN 2                                    -- already started
-        WHEN CAST(julianday('now') - julianday(l.occurred_at) AS INTEGER) > ${DRY_DAYS_MAX} THEN 1  -- overdue
-        ELSE 0                                                                                      -- ready, untouched
-      END,
-      l.occurred_at ASC
+    ORDER BY l.occurred_at ASC
   `, [isTest, LOT_PICKER_DAYS]);
+
+  // Ranking moved out of SQL because it now depends on the MERGED sack count:
+  // a lot whose first session has no tags but whose second does is "already
+  // started", and ranking per session would have shown it as untouched.
+  return groupSessionsIntoLots(sessions).map(mergePickerLot).sort((a, b) =>
+    LOT_RANK[lotLevel(a)] - LOT_RANK[lotLevel(b)] ||
+    String(a.occurred_at).localeCompare(String(b.occurred_at)));
+}
+
+function mergePickerLot(sessions) {
+  const primary = sessions[0];
+  return {
+    ...primary,
+    // Sacks hang off ONE session per lot so a re-entered zone cannot split its
+    // tags across two rows depending on which the operator's thumb landed on.
+    id: primary.id,
+    session_ids: sessions.map(s => s.id),
+    sacks_printed: sessions.reduce((t, s) => t + (s.sacks_printed || 0), 0),
+    last_printed_at: sessions.map(s => s.last_printed_at).filter(Boolean).sort().pop() || null,
+    // Dryness is judged from the earliest cut — the oldest material on the rack.
+    days_since_cut: primary.days_since_cut,
+  };
 }
 
 /**
@@ -642,16 +727,14 @@ async function getRecentLots(db, isTest) {
  */
 function lotPlausibility(ui, lot) {
   const d = lot.days_since_cut;
-  if (d < DRY_DAYS_MIN) {
-    return { level: 'green', note: ui.t('noteGreen', { d, typical: DRY_DAYS_TYPICAL }) };
-  }
-  if (lot.sacks_printed > 0) {
-    return { level: 'started', note: ui.t('noteStarted', { n: lot.sacks_printed }) };
-  }
-  if (d > DRY_DAYS_MAX) {
-    return { level: 'old', note: ui.t('noteOld', { d }) };
-  }
-  return { level: 'ready', note: ui.t('noteReady', { d }) };
+  const level = lotLevel(lot);
+  const note = {
+    green:   () => ui.t('noteGreen', { d, typical: DRY_DAYS_TYPICAL }),
+    started: () => ui.t('noteStarted', { n: lot.sacks_printed }),
+    old:     () => ui.t('noteOld', { d }),
+    ready:   () => ui.t('noteReady', { d }),
+  }[level]();
+  return { level, note };
 }
 
 /**
@@ -1809,7 +1892,7 @@ async function getRollup(db, env, params) {
 
   const lots = await query(db, `
     SELECT
-      l.id, l.zone, l.cultivar, l.cut_number, l.occurred_at, l.closed_at, l.headcount,
+      l.id, l.zone, l.cultivar, l.cut_number, l.season, l.occurred_at, l.closed_at, l.headcount,
       (SELECT COUNT(*) FROM harvest_scan_log b
         WHERE b.event_type = 'barn_load' AND b.attributed_zone_session_id = l.id AND b.is_test = l.is_test) AS loads,
       (SELECT COALESCE(SUM(b.bins), 0) FROM harvest_scan_log b
@@ -1834,7 +1917,9 @@ async function getRollup(db, env, params) {
     ORDER BY l.occurred_at ASC
   `, [season, isTest]);
 
-  const rows = lots.map(l => buildLotRow(l));
+  // One row per LOT, not per session. Ordered oldest-first by the query, so
+  // each group's first session is its primary.
+  const rows = groupSessionsIntoLots(lots).map(g => buildLotRow(g));
 
   // Crew is captured per-period, not per-lot — a roster change doesn't line up
   // with lot boundaries — so it rolls up by day alongside the lots.
@@ -1862,7 +1947,14 @@ async function getRollup(db, env, params) {
   });
 }
 
-function buildLotRow(l) {
+/**
+ * One ledger row for one lot, folding together every session that belongs to it
+ * (see lotKey / groupSessionsIntoLots). `sessions` arrives oldest-first.
+ */
+function buildLotRow(sessions) {
+  const l = sessions[0];                       // the lot's primary session
+  const sum = (k) => sessions.reduce((t, s) => t + (s[k] || 0), 0);
+
   const facts = zoneFacts(l.zone);
   const cutDate = String(l.occurred_at).substring(0, 10);
   const plantDate = facts?.plantDate || null;
@@ -1873,16 +1965,30 @@ function buildLotRow(l) {
     ? Math.round((new Date(cutDate + 'T00:00:00Z') - new Date(plantDate + 'T00:00:00Z')) / 86400000)
     : null;
 
-  // Cutter person-hours: headcount x how long the lot stayed open. Only
-  // meaningful once the session is closed, so an in-progress lot reports null
-  // rather than a number that keeps growing.
-  const hoursOpen = l.closed_at
-    ? (parseSqliteUtc(l.closed_at) - parseSqliteUtc(l.occurred_at)) / 3600000
-    : null;
-  const cutterHours = (hoursOpen !== null && l.headcount) ? +(hoursOpen * l.headcount).toFixed(1) : null;
+  // Cutter person-hours: headcount x how long each SESSION stayed open, summed.
+  // Deliberately not (last close - first open) x headcount — a lot the crew
+  // left and came back to has a gap in the middle that was spent somewhere
+  // else, and with two crews the sessions overlap instead. Null unless every
+  // session has closed and carries a headcount, so an in-progress or partly
+  // unrecorded lot reports nothing rather than a number that keeps growing or
+  // one that silently omits a crew.
+  const perSession = sessions.map(s => {
+    const hrs = s.closed_at
+      ? (parseSqliteUtc(s.closed_at) - parseSqliteUtc(s.occurred_at)) / 3600000
+      : null;
+    return {
+      session_id: s.id,
+      headcount: s.headcount,
+      hours_open: hrs === null ? null : +hrs.toFixed(2),
+      cutter_person_hours: (hrs !== null && s.headcount) ? +(hrs * s.headcount).toFixed(1) : null,
+    };
+  });
+  const cutterHours = perSession.some(x => x.cutter_person_hours === null)
+    ? null
+    : round1(perSession.reduce((t, x) => t + x.cutter_person_hours, 0));
 
-  const tops = round1(l.tops_lbs);
-  const smalls = round1(l.smalls_lbs);
+  const tops = round1(sum('tops_lbs'));
+  const smalls = round1(sum('smalls_lbs'));
   const finished = round1(tops + smalls);
 
   // Dry biomass, and the ONLY yield figure available at takedown. Product is
@@ -1898,15 +2004,22 @@ function buildLotRow(l) {
   // same direction. Accepted by Koa 2026-09-02 rather than ask the crew to
   // record a fill weight for one sack; the real figure is written in that
   // tag's notes if anyone needs it.
-  const dryLbs = l.sacks ? round1(l.sacks * CONSTANTS.supersackLbs.value) : null;
+  const sacks = sum('sacks');
+  const sacksOpened = sum('sacks_opened');
+  const dryLbs = sacks ? round1(sacks * CONSTANTS.supersackLbs.value) : null;
 
   // Yields are only honest once every tagged sack has actually been weighed —
   // a partially-opened lot would read as a catastrophic yield miss.
-  const complete = l.sacks > 0 && l.sacks_opened === l.sacks;
+  const complete = sacks > 0 && sacksOpened === sacks;
 
   return {
     lot_id: lotId(l),
+    // The primary session, and every session that made up this lot. Sacks and
+    // the takedown picker hang off the primary; the array is what tells you a
+    // lot was cut in more than one stretch, or by more than one crew.
     session_id: l.id,
+    session_ids: sessions.map(s => s.id),
+    sessions: perSession,
     zone: l.zone,
     cultivar: l.cultivar,
     cut_number: l.cut_number,
@@ -1916,27 +2029,33 @@ function buildLotRow(l) {
     grow_days: growDays,
     acres,
     plants,
-    headcount: l.headcount,
+    // PEAK concurrent cutters, never a sum: one crew that left and came back is
+    // still that one crew, while two crews in the zone at once really do add up.
+    headcount: peakHeadcount(sessions),
+    headcount_basis: sessions.length > 1
+      ? `peak across ${sessions.length} sessions (${perSession.map(x => x.headcount ?? '?').join(' + ')})`
+      : null,
     cutter_person_hours: cutterHours,
-    loads: l.loads,
-    bins: l.bins,
+    loads: sum('loads'),
+    bins: sum('bins'),
     // Blocked on the uncalibrated bin constant — see CONSTANTS.
-    wet_lbs: CONSTANTS.binWeightLbsWet.value === null ? null : round1(l.bins * CONSTANTS.binWeightLbsWet.value),
-    sacks: l.sacks,
-    sacks_opened: l.sacks_opened,
+    wet_lbs: CONSTANTS.binWeightLbsWet.value === null
+      ? null : round1(sum('bins') * CONSTANTS.binWeightLbsWet.value),
+    sacks,
+    sacks_opened: sacksOpened,
     dry_lbs: dryLbs,
     dry_lbs_basis: dryLbs === null ? null
-      : `${l.sacks} sacks x ${CONSTANTS.supersackLbs.value} lb; last sack of the lot runs light, so up to 37 lb high`,
+      : `${sacks} sacks x ${CONSTANTS.supersackLbs.value} lb; last sack of the lot runs light, so up to 37 lb high`,
     dry_lbs_per_acre: dryLbs !== null && acres ? round1(dryLbs / acres) : null,
     dry_lbs_per_plant: dryLbs !== null && plants ? +(dryLbs / plants).toFixed(3) : null,
     tops_lbs: tops,
     smalls_lbs: smalls,
-    biomass_lbs: round1(l.biomass_lbs),
-    trim_lbs: round1(l.trim_lbs),
+    biomass_lbs: round1(sum('biomass_lbs')),
+    trim_lbs: round1(sum('trim_lbs')),
     // Derived residual, not weighed — it absorbs the error in the other four
     // and the light last sack. Named apart from the rest so a reader of the
     // ledger cannot mistake it for something that went on a scale.
-    waste_lbs_derived: round1(l.waste_lbs),
+    waste_lbs_derived: round1(sum('waste_lbs')),
     // Deliberately still tops + smalls. Biomass and trim are real output but
     // they are not finished flower, and widening this would silently change
     // every lbs/acre figure already recorded against it.
