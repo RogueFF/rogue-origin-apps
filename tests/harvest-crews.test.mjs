@@ -471,3 +471,67 @@ test('a door borrowing from an UNTAGGED session still says it is borrowed', asyn
   assert.match(html, /<option value="Z9" selected/);
   assert.match(html, /nothing open yet/);
 });
+
+// --- the print sheet ---------------------------------------------------------
+
+const codeSheet = (env, ctx) => handleHarvestD1(
+  new Request('https://x/api/harvest?action=print_codes&lang=en'), env, ctx).then(r => r.text());
+
+/** What a phone camera would actually be pointed at, decoded out of the QR src. */
+const qrTargets = (html) =>
+  [...html.matchAll(/api\.qrserver\.com[^"]*[?&]data=([^"&]+)/g)]
+    .map(m => decodeURIComponent(m[1]));
+
+test('the print sheet encodes the real scan targets, not a description of them', async () => {
+  const { env, ctx } = freshDb();
+  const targets = qrTargets(await codeSheet(env, ctx));
+
+  // A wrong URL here is the worst kind of typo available: it survives printing,
+  // laminating and staking, and only shows up when a crew lead scans it in a
+  // field in October.
+  assert.deepEqual(targets, [
+    'https://rogue-origin-api.roguefamilyfarms.workers.dev/c/A',
+    'https://rogue-origin-api.roguefamilyfarms.workers.dev/c/B',
+    'https://rogue-origin-api.roguefamilyfarms.workers.dev/b/1',
+    'https://rogue-origin-api.roguefamilyfarms.workers.dev/b/2',
+  ]);
+});
+
+test('every code on the sheet is one this build actually accepts', async () => {
+  const { env, ctx } = freshDb();
+  for (const target of qrTargets(await codeSheet(env, ctx))) {
+    const path = new URL(target).pathname;
+    const res = path.startsWith('/c/')
+      ? await quiet(() => handleCrewScan(new Request(`https://x${path}?lang=en`), env, ctx))
+      : await quiet(() => handleBarnScan(new Request(`https://x${path}?lang=en`), env, ctx));
+    assert.equal(res.status, 200, `${path} does not answer`);
+  }
+});
+
+test('the sheet is one card per crew and one page per door', async () => {
+  const { env, ctx } = freshDb();
+  const html = await codeSheet(env, ctx);
+  // Generated from CREWS and STATION_CREW rather than typed out, so a third
+  // crew or a third intake grows the sheet instead of quietly going unprinted.
+  assert.equal((html.match(/class="card"/g) || []).length, 2);
+  assert.equal((html.match(/class="sheet door"/g) || []).length, 2);
+  assert.match(html, /CUADRILLA A/);
+  assert.match(html, /RECEPCI[ÓO]N 2/);
+  assert.match(html, /Cuadrilla \/ Crew B/);
+});
+
+test('the sheet reads in Spanish first, like the screens the crew use', async () => {
+  const { env, ctx } = freshDb();
+  const html = await codeSheet(env, ctx);
+  // The supersack tag is the deliberate exception to this, not the rule.
+  assert.match(html, /Escan[ée]alo <strong>una vez<\/strong>/);
+  assert.match(html, /Escan[ée]alo <strong>en cada carga<\/strong>/);
+});
+
+test('the sheet does not fire the printer by itself', async () => {
+  const { env, ctx } = freshDb();
+  // The sack sheet auto-prints because a barn PC in kiosk mode runs it dozens
+  // of times a day. This is printed once a season, onto card stock, by someone
+  // who wants to choose the tray first.
+  assert.doesNotMatch(await codeSheet(env, ctx), /window\.print\(\)/);
+});

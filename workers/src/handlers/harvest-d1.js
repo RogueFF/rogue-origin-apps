@@ -18,6 +18,7 @@
  * - GET  ?action=test                                    - Health check (JSON)
  * - GET  ?action=status                                  - Current active zone (JSON)
  * - GET  ?action=logs&zone=&event_type=&limit=            - Raw rows (JSON)
+ * - GET  ?action=print_codes                             - Printable crew cards + barn door codes (HTML)
  * - GET  ?action=rollup&season=                          - Derived lot ledger (JSON)
  *
  * The zone-sign scan target /z/<zone> is routed in index.js -> handleZoneScan;
@@ -189,7 +190,7 @@ function stationCookie(station) {
 const HTML_ACTIONS = new Set([
   'enter', 'headcount', 'barn_intake', 'barn_log',
   'sack_print', 'sack_session_start', 'sack_session', 'sack_label', 'sack_weigh',
-  'crew', 'crew_set', 'sack_note', 'find', 'sack_open',
+  'crew', 'crew_set', 'sack_note', 'find', 'sack_open', 'print_codes',
 ]);
 
 /** GET /c/A — the crew card. Its own entry point, like the zone and barn scans. */
@@ -231,6 +232,8 @@ export async function handleHarvestD1(request, env, ctx) {
           return await handleBarnIntakeForm(ui, db, env, ctx, pickStation(request, body));
         case 'barn_log':
           return await handleBarnLog(ui, db, env, ctx, body, pickStation(request, body));
+        case 'print_codes':
+          return renderPage(ui, ui.t('printCodes'), codeSheetBody(ui), 200);
         case 'sack_print':
           return await handleSackPrintForm(ui, db, env);
         case 'sack_session_start':
@@ -1673,10 +1676,14 @@ function formatSackId(season, code, serial) {
 }
 
 function qrUrlFor(sackId) {
-  const target = `${PUBLIC_BASE}/s/${sackId}`;
   // 203px ≈ 1in at the ZP-450's 203dpi head, so the QR maps ~1:1 to printer
   // dots instead of being resampled.
-  return `https://api.qrserver.com/v1/create-qr-code/?size=203x203&margin=0&data=${encodeURIComponent(target)}`;
+  return qrImageUrl(`${PUBLIC_BASE}/s/${sackId}`, 203);
+}
+
+/** Same QR service the sack tags use, at whatever pixel size the paper wants. */
+function qrImageUrl(target, px) {
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${px}x${px}&margin=0&data=${encodeURIComponent(target)}`;
 }
 
 // ─── JSON ACTIONS ───────────────────────────────────────
@@ -2319,6 +2326,98 @@ function summarizeConstants() {
     out[k] = { value: c.value, label: c.label, pending: c.value === null, unblocks: c.unblocks, how: c.how };
   }
   return out;
+}
+
+/**
+ * The one-off print job: two crew cards and one code per barn door.
+ *
+ * Generated from CREWS and STATION_CREW rather than typed out, so it cannot
+ * drift from what the handler actually accepts — add a Crew C or a third
+ * intake and this sheet grows a page on its own.
+ *
+ * Bilingual, Spanish first, because these are read by the field and barn crew
+ * the same way the screens are. (The supersack TAG is the deliberate exception
+ * — it outlives the shift and is read downstream in English.)
+ *
+ * Deliberately NOT auto-printing the way the sack sheet does: that one fires on
+ * a barn PC in kiosk mode many times a day, this is printed once a season by
+ * someone who wants to pick the tray and the paper first.
+ */
+function codeSheetBody(ui) {
+  const card = (crew) => `
+  <div class="card">
+    <div class="kicker">Rogue Family Farms · 2026</div>
+    <div class="big">CUADRILLA ${crew}</div>
+    <div class="sub">Crew ${crew}</div>
+    <img class="qr" src="${qrImageUrl(`${PUBLIC_BASE}/c/${crew}`, 420)}" alt="">
+    <div class="how">Escanéalo <strong>una vez</strong> con el teléfono del jefe de cuadrilla.
+      Después dirá &ldquo;Cuadrilla ${crew}&rdquo; en cada pantalla.</div>
+    <div class="how en">Scan <strong>once</strong> on the crew lead's phone. Every screen then says Crew ${crew}.</div>
+    <div class="url">${PUBLIC_BASE.replace('https://', '')}/c/${crew}</div>
+  </div>`;
+
+  const door = (n) => `
+<section class="sheet door">
+  <div class="kicker">Rogue Family Farms · 2026</div>
+  <div class="big">RECEPCIÓN ${n}</div>
+  <div class="sub">Barn intake ${n}${STATION_CREW[n] ? ` &middot; Cuadrilla / Crew ${STATION_CREW[n]}` : ''}</div>
+  <img class="qr big-qr" src="${qrImageUrl(`${PUBLIC_BASE}/b/${n}`, 900)}" alt="">
+  <div class="how">Escanéalo <strong>en cada carga</strong>. Escribe las cajas y envía.</div>
+  <div class="how en">Scan on <strong>every load</strong>. Type the bin count and submit.</div>
+  <div class="url">${PUBLIC_BASE.replace('https://', '')}/b/${n}</div>
+</section>`;
+
+  const doors = Object.keys(STATION_CREW).map(n => door(Number(n))).join('');
+
+  return `
+<style>
+  @page { size: letter portrait; margin: 0.4in; }
+  body { background: #fff; color: #111; }
+  .codesheet { font-family: -apple-system, system-ui, sans-serif; }
+  .codesheet .sheet { page-break-after: always; text-align: center; }
+  .codesheet .sheet:last-child { page-break-after: auto; }
+  .kicker { font-size: 11pt; letter-spacing: .18em; text-transform: uppercase; color: #667; }
+  .big { font-size: 46pt; font-weight: 900; letter-spacing: -.02em; line-height: 1; margin: 6pt 0 2pt; }
+  .sub { font-size: 15pt; font-weight: 600; color: #445; margin-bottom: 10pt; }
+  .qr { display: block; margin: 0 auto; width: 2.6in; height: 2.6in; }
+  .how { font-size: 12pt; color: #223; margin: 10pt auto 0; max-width: 5in; line-height: 1.35; }
+  .how.en { font-size: 10.5pt; color: #667; margin-top: 3pt; }
+  .url { font-family: ui-monospace, Menlo, monospace; font-size: 9.5pt; color: #889; margin-top: 8pt; }
+
+  /* Crew cards: two to a page, cut down the middle. 4x6-ish so each one drops
+     straight into a standard laminating pouch and rides a clipboard. */
+  .cards { display: grid; grid-template-rows: 1fr 1fr; height: 10in; }
+  .card { display: flex; flex-direction: column; align-items: center; justify-content: center;
+          border: 1.5pt dashed #bbb; border-radius: 8pt; padding: 12pt; text-align: center; }
+  .card + .card { margin-top: 10pt; }
+  .card .big { font-size: 34pt; }
+  .card .qr { width: 2.1in; height: 2.1in; }
+
+  /* Door codes: read from across the barn, so the QR is the page. */
+  .door { padding-top: 0.5in; }
+  .door .big-qr { width: 5.2in; height: 5.2in; }
+  .door .big { font-size: 54pt; }
+
+  .noprint { max-width: 6.5in; margin: 0 auto 18pt; padding: 12pt 14pt; border: 1pt solid #ccd;
+             border-radius: 8pt; background: #f6f7f9; font-size: 11pt; color: #334; text-align: left; }
+  .noprint ul { margin: 6pt 0 0; padding-left: 18pt; }
+  @media print { .noprint { display: none; } }
+</style>
+<div class="codesheet">
+  <div class="noprint">
+    <strong>${ui.t('printCodes')}</strong> — ${Object.keys(STATION_CREW).length + 1} pages.
+    Print at 100% (no &ldquo;fit to page&rdquo;), then laminate.
+    <ul>
+      <li><strong>Page 1</strong> — the two crew cards. Cut along the dashed line;
+          one for each crew lead's clipboard. Scanned <em>once</em> per phone.</li>
+      <li><strong>Pages 2–${Object.keys(STATION_CREW).length + 1}</strong> — one per barn intake door.
+          Scanned on every load, like the old barn code.</li>
+    </ul>
+  </div>
+
+  <section class="sheet cards">${CREWS.map(card).join('')}</section>
+  ${doors}
+</div>`;
 }
 
 // ─── HTML RENDERING ─────────────────────────────────────

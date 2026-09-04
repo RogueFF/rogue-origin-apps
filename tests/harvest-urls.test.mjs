@@ -113,7 +113,7 @@ test('the sack scan page has no relative action URLs', async () => {
 
 test('the takedown screens have none either', async () => {
   const { env, ctx } = freshDb();
-  for (const action of ['sack_print', 'crew', 'barn_intake', 'find']) {
+  for (const action of ['sack_print', 'crew', 'barn_intake', 'find', 'print_codes']) {
     const html = await (await quiet(() => handleHarvestD1(
       new Request(`https://x/api/harvest?action=${action}&lang=en`), env, ctx))).text();
     assert.deepEqual(relativeActionUrls(html), [], `${action} has relative action URLs`);
