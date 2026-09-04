@@ -662,11 +662,17 @@ async function handleBarnIntakeForm(ui, db, env, ctx, station = null) {
   const isTest = isTestMode(env) ? 1 : 0;
   const crew = station ? STATION_CREW[station] : null;
 
-  // At a station, this crew's zone is the one whose trailers arrive here. With
-  // no station (a single intake, or a bookmark that predates them) fall back to
-  // whichever zone is open, which is exactly what /b did before.
-  const active = (crew ? await getActiveSession(db, isTest, crew) : null)
-    || await getAnyOpenSession(db, isTest);
+  // At a station, this crew's zone is the one whose trailers arrive here.
+  //
+  // The fall-through to ANY open zone is deliberate, not an accident of the
+  // `||`. It covers two real cases: a single unlabelled intake (a bookmark or a
+  // sign that predates the doors), and the first load of a morning before this
+  // door's crew has scanned in. A blank default there would be worse than a
+  // borrowed one — it invites a wrong pick from a scrolling list. But a
+  // borrowed default must never look like this door's own, so it is named.
+  const mine = crew ? await getActiveSession(db, isTest, crew) : null;
+  const active = mine || await getAnyOpenSession(db, isTest);
+  const borrowed = !!(crew && !mine && active);
 
   // Just after a zone change, any trailer pulling in was almost certainly
   // loaded in the zone before — it was already on the road when the crew
@@ -682,7 +688,8 @@ async function handleBarnIntakeForm(ui, db, env, ctx, station = null) {
   });
 
   return renderPage(ui, ui.t('barnIntake'),
-    barnIntakeFormBody(ui, active, suggested ? lastClosed : null, station));
+    barnIntakeFormBody(ui, active, suggested ? lastClosed : null, station,
+      borrowed ? { crew: active.crew || null } : null));
 }
 
 async function handleBarnLog(ui, db, env, ctx, body, station = null) {
@@ -2719,7 +2726,7 @@ function headcountBody(ui, { zone, cutNumber, sessionId, count }) {
 ${headcountScript(ui)}`;
 }
 
-function barnIntakeFormBody(ui, active, justClosed = null, station = null) {
+function barnIntakeFormBody(ui, active, justClosed = null, station = null, borrowed = null) {
   // Within the grace window the just-closed zone is the better default — the
   // trailer at the door left that zone before the crew moved.
   const preselect = justClosed ? justClosed.zone : (active ? active.zone : null);
@@ -2752,10 +2759,22 @@ function barnIntakeFormBody(ui, active, justClosed = null, station = null) {
   // bookmark remember its door, this makes THIS submission unambiguous.
   const stationField = station ? `<input type="hidden" name="station" value="${station}">` : '';
 
+  // The default came from the other crew, or from a phone carrying no crew at
+  // all — a spare handset, or a leftover session from a walkthrough that no
+  // tagged crew will ever close. Either way it is borrowed, and the person at
+  // the door is the only one who can judge it, so both cases say so. An
+  // unnamed source is the one that most needs saying.
+  const borrowedNote = borrowed
+    ? `<p class="note">${borrowed.crew
+        ? ui.t('otherCrewZone', { crew: borrowed.crew })
+        : ui.t('untaggedZone')}</p>`
+    : '';
+
   return `
 <h1>${ui.t('barnIntake')}</h1>
 ${stationNote}
 ${activeNote}
+${borrowedNote}
 ${graceNote}
 <form method="POST" action="${API}?action=barn_log&lang=${ui.lang}" onsubmit="this.querySelector('button').disabled=true">
   ${stationField}

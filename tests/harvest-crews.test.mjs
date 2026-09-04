@@ -435,3 +435,39 @@ test("the 6-minute grace prefers this crew's just-closed zone", async () => {
     'a null here is bins that belong to no lot at all');
   assert.doesNotMatch(html, /logged with no lot/);
 });
+
+test("before its own crew has scanned in, a door borrows the open zone and names it", async () => {
+  const { env, ctx } = freshDb();
+  // Crew B is cutting; crew A has not scanned in yet this morning.
+  await scanZone(env, ctx, 'Z7', 'B');
+
+  const html = await (await barnForm(env, ctx, 1)).text();
+  // Borrowing beats a blank default — an empty dropdown invites a wrong pick
+  // from a long scrolling list — but it must not read as this door's own zone.
+  assert.match(html, /<option value="Z7" selected/);
+  assert.match(html, /Crew B's zone/);
+  assert.match(html, /this intake's crew has nothing open yet/);
+});
+
+test('a door showing its OWN crew\'s zone borrows nothing and says nothing', async () => {
+  const { env, ctx } = freshDb();
+  await scanZone(env, ctx, 'Z4', 'A');
+  await scanZone(env, ctx, 'Z7', 'B');
+
+  const html = await (await barnForm(env, ctx, 1)).text();
+  assert.match(html, /<option value="Z4" selected/);
+  assert.doesNotMatch(html, /nothing open yet/);
+});
+
+test('a door borrowing from an UNTAGGED session still says it is borrowed', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  // Exactly the shape of a leftover walkthrough session: open, crew NULL.
+  // Nothing a tagged crew does will ever close one, so they persist until
+  // someone clears them — which is why the season-start clear-out is a
+  // correctness step now, not housekeeping.
+  await scanZone(env, ctx, 'Z9', null);
+
+  const html = await (await barnForm(env, ctx, 1)).text();
+  assert.match(html, /<option value="Z9" selected/);
+  assert.match(html, /nothing open yet/);
+});
