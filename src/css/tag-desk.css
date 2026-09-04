@@ -553,3 +553,6 @@ details.tech > *:not(summary){margin-top:10px}
   #printArea.fmt-card{--pw:6in}
   #printArea.fmt-sheet .pcard{width:8.5in;height:11in;padding:0.6in 0.7in}
 }
+/* Uline quick-order paste block */
+.copyline pre.paste{margin:0;font-family:var(--font-mono);font-size:13px;line-height:1.5;color:var(--ink);white-space:pre;flex:1 0 100%;padding:8px 10px;border:1px dashed var(--line-strong);border-radius:8px;background:var(--surface);max-height:160px;overflow:auto;user-select:all}
+.copyline .missing{flex:1 0 100%;font-size:13px;color:var(--d-text)}
