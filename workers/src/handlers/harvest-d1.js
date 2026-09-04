@@ -107,6 +107,12 @@ const CONSTANTS = {
     unblocks: 'labor cost, cost/rack, cost/lb',
     how: 'set by the labor contractor; not the trim crew BASE_WAGE_RATE',
   },
+  harvestDayLimits: {
+    value: null,
+    label: 'cutting day starts / ends (Pacific)',
+    unblocks: 'cutter person-hours on a lot the crew slept on',
+    how: 'the crew stops at the end of the day and picks up in the same zone next morning, so the session spans the night; the hours it was actually worked need the day window',
+  },
   supersackLbs: { value: 37, label: '1 supersack = 37 lbs', unblocks: null, how: 'confirmed 2026-08-03' },
   binsPerTrailer: { value: 22, label: '1 trailer = 22 bins', unblocks: null, how: 'recalibrate once 2026 trailers run' },
   plantsPerBin: { value: 1, label: '1 bin = 1 plant', unblocks: null, how: 'recalibrate once real' },
@@ -359,6 +365,20 @@ async function getLastBay(db, isTest) {
 // SQLite's datetime('now') returns "YYYY-MM-DD HH:MM:SS" (UTC, no offset).
 function parseSqliteUtc(ts) {
   return new Date(ts.replace(' ', 'T') + 'Z');
+}
+
+/**
+ * The civil date in Pacific, 'YYYY-MM-DD'. Same approach as the production
+ * handlers: let Intl carry the DST rules rather than an offset that is right
+ * for half of harvest and wrong for the other half — the season runs across the
+ * November change.
+ *
+ * Needed because timestamps are stored UTC, where a perfectly ordinary
+ * afternoon of cutting (2pm-5pm Pacific) already crosses midnight.
+ */
+const HARVEST_TZ = 'America/Los_Angeles';
+function pacificDay(date) {
+  return date.toLocaleDateString('en-CA', { timeZone: HARVEST_TZ });
 }
 
 // ─── ZONE-ENTRY (cutters) ───────────────────────────────
@@ -1973,19 +1993,35 @@ function buildLotRow(sessions) {
   // unrecorded lot reports nothing rather than a number that keeps growing or
   // one that silently omits a crew.
   const perSession = sessions.map(s => {
-    const hrs = s.closed_at
-      ? (parseSqliteUtc(s.closed_at) - parseSqliteUtc(s.occurred_at)) / 3600000
-      : null;
+    const opened = parseSqliteUtc(s.occurred_at);
+    const closed = s.closed_at ? parseSqliteUtc(s.closed_at) : null;
+    // The crew does not leave the last zone of the day — they stop, and pick up
+    // in that same zone next morning, so nothing closes the session until they
+    // move on. Open-to-close therefore contains a night, and multiplying it by
+    // headcount would bill the lot for the crew's sleep. There is no honest
+    // number without the cutting-day window (CONSTANTS.harvestDayLimits), so
+    // this reports nothing rather than something wrong — the same way wet_lbs
+    // waits on the bin weight.
+    const slept = closed ? pacificDay(opened) !== pacificDay(closed) : false;
+    const hrs = closed ? (closed - opened) / 3600000 : null;
     return {
       session_id: s.id,
       headcount: s.headcount,
       hours_open: hrs === null ? null : +hrs.toFixed(2),
-      cutter_person_hours: (hrs !== null && s.headcount) ? +(hrs * s.headcount).toFixed(1) : null,
+      spans_days: slept,
+      cutter_person_hours: (hrs !== null && s.headcount && !slept)
+        ? +(hrs * s.headcount).toFixed(1) : null,
     };
   });
+  const openSessions = perSession.filter(x => x.hours_open === null).length;
+  const sleptSessions = perSession.filter(x => x.spans_days).length;
   const cutterHours = perSession.some(x => x.cutter_person_hours === null)
     ? null
     : round1(perSession.reduce((t, x) => t + x.cutter_person_hours, 0));
+  const cutterHoursBasis = cutterHours !== null ? null
+    : sleptSessions ? `withheld: ${sleptSessions} session(s) ran overnight, and the cutting-day window is not set`
+    : openSessions ? 'withheld: the lot is still being cut'
+    : 'withheld: no cutter count was recorded';
 
   const tops = round1(sum('tops_lbs'));
   const smalls = round1(sum('smalls_lbs'));
@@ -2036,6 +2072,7 @@ function buildLotRow(sessions) {
       ? `peak across ${sessions.length} sessions (${perSession.map(x => x.headcount ?? '?').join(' + ')})`
       : null,
     cutter_person_hours: cutterHours,
+    cutter_person_hours_basis: cutterHoursBasis,
     loads: sum('loads'),
     bins: sum('bins'),
     // Blocked on the uncalibrated bin constant — see CONSTANTS.
