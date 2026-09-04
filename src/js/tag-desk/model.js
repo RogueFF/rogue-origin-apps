@@ -196,6 +196,19 @@ export function cardState(c, M, L = {}) {
 /** Desk memory receipts: which card ids are on order, by vendor. */
 export function orderedMap(receipts = {}) { const m = {}; for (const [v, r] of Object.entries(receipts)) for (const id of r.open || []) m[id] = v; return m; }
 
+/**
+ * Uline Quick Order paste text: one "MODEL QTY" per line, the format the
+ * "Paste Items Page" on uline.com/QuickOrder accepts ("Separate model number
+ * and quantity by a space or comma"). Cards without a Uline model number
+ * cannot be pasted and come back in `missing` so the desk can name them.
+ */
+export const ULINE_QUICK_ORDER_URL = 'https://www.uline.com/QuickOrder';
+export function ulinePasteText(rows) {
+  const lines = [], missing = [];
+  for (const r of rows) { if (r.model) lines.push(`${r.model} ${r.qty}`); else missing.push(r); }
+  return { text: lines.join('\n'), lines: lines.length, missing };
+}
+
 /** What a Tag scan should do, decided from the cart alone (idempotent by construction). */
 export function scanPlan(c, { red = false } = {}) {
   if (!c) return { outcome: 'unknown' };

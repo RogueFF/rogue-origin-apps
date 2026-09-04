@@ -70,6 +70,9 @@ test('desk loads the live shape: tiles, three lanes, counts, no console errors',
   const lanes = await page.$$eval('#view-order .lane .cnt', els => els.map(e => +e.innerText));
   expect(lanes.length).toBe(3); expect(lanes[0]).toBeGreaterThan(0);
   expect(await page.$eval('.board-h .when', e => e.innerText)).toMatch(/Next check/);
+  expect(await page.$eval('#actbar [data-copy]', e => e.dataset.copy)).toMatch(/^S-[\w-]+ \d+(\n|$)/);
+  expect(await page.$('#actbar [data-ulinego]')).not.toBeNull();
+  expect(await page.$eval('.copyline pre.paste', e => e.innerText.split('\n').length)).toBeGreaterThan(1);
   await page.click('.tabs [data-view="cards"]');
   expect(await page.$$eval('.pc', e => e.length)).toBe(93);
   await page.click('.tabs [data-view="print"]');

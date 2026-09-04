@@ -5,7 +5,7 @@ import { spawn } from 'child_process'; import path from 'path'; import fs from '
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/(\w:)/, '$1')), '../..');
 const OUT = path.join(ROOT, 'test-results', 'tag-desk-live'); fs.mkdirSync(OUT, { recursive: true });
 const server = spawn('python', ['-m', 'http.server', '8099'], { cwd: ROOT, stdio: 'ignore' }); await new Promise(r => setTimeout(r, 1200));
-const PAGE = 'http://localhost:8099/src/pages/tag-desk.html';
+const PAGE = process.env.TD_URL || 'http://localhost:8099/src/pages/tag-desk.html';
 const browser = await chromium.launch(); const errs = []; const writes = [];
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } }); const page = await ctx.newPage();
 page.on('pageerror', e => errs.push('PAGEERROR ' + e.message)); page.on('console', m => { if (m.type() === 'error') errs.push('CONSOLE ' + m.text()); });
