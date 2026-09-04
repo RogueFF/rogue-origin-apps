@@ -96,6 +96,27 @@ function enter(sqlite, { zone, cultivar, cut = 1, openedMinAgo, closedMinAgo, he
   return Number(sqlite.prepare('SELECT last_insert_rowid() AS id').get().id);
 }
 
+/**
+ * A UTC timestamp for a wall-clock hour that is unambiguously mid-day Pacific.
+ * 17:00-22:00 UTC is 10:00-15:00 PDT and 09:00-14:00 PST, so a fixture built
+ * from it never straddles a Pacific midnight whatever time the suite runs at,
+ * and stays put across the November DST change in the middle of harvest.
+ */
+function utcAt(daysAgo, utcHour, utcMin = 0) {
+  const t = new Date(Date.now() - daysAgo * 86400000);
+  t.setUTCHours(utcHour, utcMin, 0, 0);
+  return t.toISOString().replace('T', ' ').substring(0, 19);
+}
+
+/** A session pinned to explicit UTC timestamps rather than "N minutes ago". */
+function enterAt(sqlite, { zone, cultivar, cut = 1, opened, closed = null, headcount = null }) {
+  sqlite.prepare(`
+    INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, occurred_at, closed_at, headcount, is_test)
+    VALUES ('enter', ?, ?, ?, ?, ?, ?, ?, 1)
+  `).run(zone, cultivar, SEASON, cut, opened, closed, headcount);
+  return Number(sqlite.prepare('SELECT last_insert_rowid() AS id').get().id);
+}
+
 const load = (sqlite, zone, bins, sessionId) => sqlite.prepare(`
   INSERT INTO harvest_scan_log (event_type, zone, season, bins, attributed_zone_session_id, occurred_at, is_test)
   VALUES ('barn_load', ?, ?, ?, ?, datetime('now'), 1)
@@ -156,14 +177,16 @@ test('the same crew twice is still that one crew', async () => {
 
 test('cutter-hours count time in the zone, not the span across a trip elsewhere', async () => {
   const { sqlite, env, ctx } = freshDb();
-  enter(sqlite, { zone: 'Z4', cultivar: 'Sour Lifter', openedMinAgo: 300, closedMinAgo: 240, headcount: 6 });
-  enter(sqlite, { zone: 'Z7', cultivar: 'Sour Lifter', openedMinAgo: 240, closedMinAgo: 180, headcount: 6 });
-  enter(sqlite, { zone: 'Z4', cultivar: 'Sour Lifter', openedMinAgo: 180, closedMinAgo: 60, headcount: 6 });
+  // One Pacific morning: an hour in Z4, an hour in Z7, two hours back in Z4.
+  enterAt(sqlite, { zone: 'Z4', cultivar: 'Sour Lifter', opened: utcAt(1, 17), closed: utcAt(1, 18), headcount: 6 });
+  enterAt(sqlite, { zone: 'Z7', cultivar: 'Sour Lifter', opened: utcAt(1, 18), closed: utcAt(1, 19), headcount: 6 });
+  enterAt(sqlite, { zone: 'Z4', cultivar: 'Sour Lifter', opened: utcAt(1, 19), closed: utcAt(1, 21), headcount: 6 });
 
   const lot = (await lots(env, ctx)).find(l => l.zone === 'Z4');
   // 1 h x 6 + 2 h x 6. The 4-hour span from first open to last close would give
   // 24 and would be charging Z4 for the hour the crew spent cutting Z7.
   assert.equal(lot.cutter_person_hours, 18);
+  assert.equal(lot.cutter_person_hours_basis, null, 'nothing to withhold, so nothing to explain');
 });
 
 // --- two crews, one zone -----------------------------------------------------
@@ -183,8 +206,8 @@ test('two crews in one zone is ONE lot, with both their loads', async () => {
 
 test('crews working at the same time DO add up', async () => {
   const { sqlite, env, ctx } = freshDb();
-  enter(sqlite, { zone: 'Z9', cultivar: 'Lifter', openedMinAgo: 240, closedMinAgo: 120, headcount: 6 });
-  enter(sqlite, { zone: 'Z9', cultivar: 'Lifter', openedMinAgo: 240, closedMinAgo: 120, headcount: 5 });
+  enterAt(sqlite, { zone: 'Z9', cultivar: 'Lifter', opened: utcAt(1, 18), closed: utcAt(1, 20), headcount: 6 });
+  enterAt(sqlite, { zone: 'Z9', cultivar: 'Lifter', opened: utcAt(1, 18), closed: utcAt(1, 20), headcount: 5 });
 
   const lot = (await lots(env, ctx)).find(l => l.zone === 'Z9');
   // The counterpart to the sequential test above: taking the max would report 6
@@ -202,6 +225,52 @@ test('a single-session lot reports its headcount plainly, with no basis note', a
   assert.equal(lot.headcount, 7);
   assert.equal(lot.headcount_basis, null, 'the explanation is noise when there is nothing to explain');
   assert.deepEqual(lot.session_ids.length, 1);
+});
+
+test('a lot the crew slept on withholds its cutter-hours, and says so', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  // The last zone of the day is where they pick up next morning, so nothing
+  // closes the session until they move on — it runs 16:30 Pacific through to
+  // 08:00 the following day.
+  enterAt(sqlite, {
+    zone: 'Z4', cultivar: 'Sour Lifter',
+    opened: utcAt(2, 23, 30), closed: utcAt(1, 15), headcount: 6,
+  });
+
+  const lot = (await lots(env, ctx)).find(l => l.zone === 'Z4');
+  assert.equal(lot.sessions[0].spans_days, true);
+  // ~15.5 h x 6 = 93 cutter-hours, most of it the crew asleep. Reporting that
+  // is worse than reporting nothing.
+  assert.equal(lot.cutter_person_hours, null);
+  assert.match(lot.cutter_person_hours_basis, /overnight/);
+  assert.match(lot.cutter_person_hours_basis, /cutting-day window is not set/);
+});
+
+test('an ordinary Pacific afternoon is not mistaken for an overnight', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  // 23:00 UTC to 01:00 UTC the next day is 16:00-18:00 Pacific on ONE afternoon
+  // (15:00-17:00 in PST). Timestamps are stored UTC, so judging the day there
+  // would withhold the hours from every late-afternoon session of the season —
+  // which is most of them.
+  enterAt(sqlite, { zone: 'Z4', cultivar: 'Sour Lifter', opened: utcAt(2, 23), closed: utcAt(1, 1), headcount: 6 });
+
+  const lot = (await lots(env, ctx)).find(l => l.zone === 'Z4');
+  assert.equal(lot.sessions[0].spans_days, false);
+  assert.equal(lot.cutter_person_hours, 12);
+});
+
+test('the cutting-day window is declared as a known gap, not left implicit', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  enter(sqlite, { zone: 'Z4', cultivar: 'Sour Lifter', openedMinAgo: 120, closedMinAgo: 60, headcount: 6 });
+
+  const body = await handleHarvestD1(
+    new Request(`https://x/api/harvest?action=rollup&season=${SEASON}`), env, ctx).then(r => r.json());
+  const c = (body.constants || body.data?.constants).harvestDayLimits;
+  // Same treatment as the uncalibrated bin weight: listed, pending, and paired
+  // with what it would unblock, so it cannot quietly become someone's guess.
+  assert.equal(c.value, null);
+  assert.equal(c.pending, true);
+  assert.match(c.unblocks, /cutter person-hours/);
 });
 
 test('an unfinished session leaves the lot with no cutter-hours at all', async () => {
