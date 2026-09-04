@@ -113,6 +113,19 @@ const CONSTANTS = {
 };
 const PUBLIC_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev';
 
+/**
+ * Every action URL must be ABSOLUTE.
+ *
+ * The crew reach these pages through short QR routes -- /z/Z4, /b, /s/<id> --
+ * and a relative `?action=...` resolves against THAT path, not /api/harvest.
+ * So a cutter-count tap from a scanned zone sign went to `/z/Z4?action=
+ * headcount`, which routes to the zone handler, ignores `action`, and answers
+ * "Already entered Z4" while recording nothing. Same for a trailer submitted
+ * from /b. Both looked like they worked and captured nothing (found 2026-09-04,
+ * from Koa noticing the cutter alert never arrived).
+ */
+const API = '/api/harvest';
+
 const HTML_ACTIONS = new Set([
   'enter', 'headcount', 'barn_intake', 'barn_log',
   'sack_print', 'sack_session_start', 'sack_session', 'sack_label', 'sack_weigh',
@@ -2250,7 +2263,7 @@ function escapeHtml(s) {
  * entered." Marking the selection is what answers that.
  */
 function headcountGrid(ui, zone, sessionId, current = null) {
-  const q = `?lang=${ui.lang}&zone=${zone}&action=headcount&session_id=${sessionId}`;
+  const q = `${API}?lang=${ui.lang}&zone=${zone}&action=headcount&session_id=${sessionId}`;
   const cell = (n, extra = '') => {
     const on = Number(current) === n;
     return `<a class="btn${extra}${on ? ' sel' : ''}" data-n="${n}" href="${q}&count=${n}"`
@@ -2344,7 +2357,7 @@ function enterBody(ui, { zone, cultivar, cutNumber, sessionId, prevZone }) {
 <p class="note">${ui.t('howManyCutters')}</p>
 <div class="grid">${headcountGrid(ui, zone, sessionId)}</div>
 <div id="hcstat" class="hcstat"></div>
-<div class="footer"><a href="?action=logs&zone=${zone}">${ui.t('viewLog')}</a></div>
+<div class="footer"><a href="${API}?action=logs&zone=${zone}">${ui.t('viewLog')}</a></div>
 ${headcountScript(ui)}`;
 }
 
@@ -2369,7 +2382,7 @@ function headcountBody(ui, { zone, cutNumber, sessionId, count }) {
 <p class="note">${ui.t('wrongNumber')}</p>
 <div class="grid">${headcountGrid(ui, zone, sessionId, count)}</div>
 <div id="hcstat" class="hcstat"></div>
-<div class="footer"><a href="?action=status">${ui.t('viewStatus')}</a></div>
+<div class="footer"><a href="${API}?action=status">${ui.t('viewStatus')}</a></div>
 ${headcountScript(ui)}`;
 }
 
@@ -2399,7 +2412,7 @@ function barnIntakeFormBody(ui, active, justClosed = null) {
 <h1>${ui.t('barnIntake')}</h1>
 ${activeNote}
 ${graceNote}
-<form method="POST" action="?action=barn_log&lang=${ui.lang}" onsubmit="this.querySelector('button').disabled=true">
+<form method="POST" action="${API}?action=barn_log&lang=${ui.lang}" onsubmit="this.querySelector('button').disabled=true">
   <label for="zone">${ui.t('zone')}</label>
   <select id="zone" name="zone" required>${options}</select>
   <label for="bins">${ui.t('binsOnLoad')}</label>
@@ -2419,7 +2432,7 @@ function barnLogConfirmBody(ui, { zone, bins, loadNumber, hasActiveSession, grac
 <h1>${ui.t('loggedLoad', { bins, zone })}</h1>
 <p class="sub">${ui.t('loadNumToday', { n: loadNumber, zone })}</p>
 ${attribution}
-<div class="footer"><a href="?action=barn_intake">${ui.t('logAnother')}</a> · <a href="?action=crew">${ui.t('crewChanged')}</a> · <a href="?action=find">${ui.t('findLink')}</a></div>`;
+<div class="footer"><a href="${API}?action=barn_intake">${ui.t('logAnother')}</a> · <a href="${API}?action=crew">${ui.t('crewChanged')}</a> · <a href="${API}?action=find">${ui.t('findLink')}</a></div>`;
 }
 
 // ─── CREW ROSTER RENDERING ──────────────────────────────
@@ -2438,7 +2451,7 @@ function crewFormBody(ui, current) {
 <h1>${ui.t('crew')}</h1>
 <p class="sub">${ui.t('crewSub')}</p>
 ${since}
-<form method="POST" action="?action=crew_set&lang=${ui.lang}" onsubmit="this.querySelector('button').disabled=true">
+<form method="POST" action="${API}?action=crew_set&lang=${ui.lang}" onsubmit="this.querySelector('button').disabled=true">
   ${fields}
   <label for="note">${ui.t('note')} <span class="hint">${ui.t('noteHint')}</span></label>
   <input id="note" name="note" maxlength="200" autocomplete="off">
@@ -2454,7 +2467,7 @@ function crewConfirmBody(ui, counts, flash) {
   return `
 <h1>✅ ${escapeHtml(flash)}</h1>
 <div class="status">${rows}</div>
-<div class="footer"><a href="?action=crew">${ui.t('changeAgain')}</a> · <a href="?action=barn_intake">${ui.t('toBarnIntake')}</a></div>`;
+<div class="footer"><a href="${API}?action=crew">${ui.t('changeAgain')}</a> · <a href="${API}?action=barn_intake">${ui.t('toBarnIntake')}</a></div>`;
 }
 
 // ─── SUPERSACK TAG RENDERING ────────────────────────────
@@ -2524,7 +2537,7 @@ function sackPrintFormBody(ui, lots, lastBay = null) {
 <h1>${ui.t('printTags')}</h1>
 <p class="note">${ui.t('pickLotHelp', { n: DRY_DAYS_TYPICAL })}</p>
 
-<form method="POST" action="?action=sack_session_start&lang=${ui.lang}" id="lotForm">
+<form method="POST" action="${API}?action=sack_session_start&lang=${ui.lang}" id="lotForm">
   <div class="lotlist">${cards}</div>
   <label for="cultivar">${ui.t('cultivar')} <span class="hint">${ui.t('cultivarHint')}</span></label>
   <input id="cultivar" name="cultivar" required autocomplete="off" value="${escapeHtml(firstCv)}" placeholder="Sour Lifter">
@@ -2605,7 +2618,7 @@ function sackSessionBody(ui, { lot, cultivar, stats, bay = null }) {
   </div>
 </details>
 
-<div class="footer"><a href="?action=sack_print">${ui.t('changeLot')}</a> · <a href="?action=find">${ui.t('findLink')}</a></div>
+<div class="footer"><a href="${API}?action=sack_print">${ui.t('changeLot')}</a> · <a href="${API}?action=find">${ui.t('findLink')}</a></div>
 
 <iframe id="printFrame" title="print" style="position:absolute;width:0;height:0;border:0;left:-9999px"></iframe>
 
@@ -2646,19 +2659,19 @@ function sackSessionBody(ui, { lot, cultivar, stats, bay = null }) {
     if (lastId) {
       lastEl.innerHTML = T.lastTag.replace('{id}', lastId);
       actions.hidden = false;
-      reprint.href = '?action=sack_label&id=' + encodeURIComponent(lastId);
+      reprint.href = '${API}?action=sack_label&id=' + encodeURIComponent(lastId);
     } else {
       lastEl.textContent = T.noTagsYet;
       actions.hidden = true;
     }
   }
 
-  function print(ids) { frame.src = '?action=sack_label&ids=' + encodeURIComponent(ids.join(',')); }
+  function print(ids) { frame.src = '${API}?action=sack_label&ids=' + encodeURIComponent(ids.join(',')); }
 
   function alloc(qty) {
     if (busy) return;           // guards the double-tap: two serials, one sack
     setBusy(true);
-    fetch('?action=sack_alloc', {
+    fetch('${API}?action=sack_alloc', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: ${lot.id}, cultivar: ${JSON.stringify(cultivar)}, qty: qty, bay: ${bay === null ? 'null' : bay} })
@@ -2690,7 +2703,7 @@ function sackSessionBody(ui, { lot, cultivar, stats, bay = null }) {
     if (!lastId || busy) return;
     if (!confirm(T.confirmVoid.replace('{id}', lastId))) return;
     setBusy(true, T.voiding);
-    fetch('?action=sack_void', {
+    fetch('${API}?action=sack_void', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sack_id: lastId })
@@ -2936,7 +2949,7 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
     : `<div class="label">${labelInner(s)}
   </div>`).join('');
 
-  const backLink = `<a href="?action=sack_print">${ui.t('changeLot')}</a>`;
+  const backLink = `<a href="${API}?action=sack_print">${ui.t('changeLot')}</a>`;
 
   const html = `<!doctype html>
 <html><head><meta charset="utf-8"><title>Sack tags</title>
@@ -3135,7 +3148,7 @@ ${ambiguous !== undefined && !missing ? `<p class="note">⚠️ ${ui.t('findAmbi
 </form>
 <p class="note"><span class="hint">${ui.t('findUnreadable')}</span></p>
 ${list ? `<h2>${ui.t('findRecent')}</h2><div class="cvgrid">${list}</div>` : ''}
-<div class="footer"><a href="?action=sack_print">${ui.t('printTags')} →</a></div>
+<div class="footer"><a href="${API}?action=sack_print">${ui.t('printTags')} →</a></div>
 <script>
   // A USB imager types the code then presses Enter, so the box submits itself.
   // Select the existing text immediately, not just on focus: the box is

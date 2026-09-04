@@ -167,17 +167,31 @@ export default {
         response = await handleIrrigationD1(request, env, ctx);
       } else if (path.startsWith('/api/harvest')) {
         response = await handleHarvestD1(request, env, ctx);
-      } else if (path.startsWith('/s/')) {
-        // Supersack tag QR target — deliberately short so the encoded URL stays
-        // compact, keeping the printed QR low-version and easy to scan.
-        response = await handleSackScan(request, env, ctx);
-      } else if (path === '/b' || path === '/b/') {
-        // Barn-intake QR target — short so the posted code stays low-version.
-        response = await handleBarnScan(request, env, ctx);
-      } else if (path.startsWith('/z/')) {
-        // Zone-sign QR target (/z/Z4). Short for the same reason — these are
-        // laminated and staked outdoors all season and can't be re-printed cheaply.
-        response = await handleZoneScan(request, env, ctx);
+      } else if (path.startsWith('/s/') || path === '/b' || path === '/b/' || path.startsWith('/z/')) {
+        // The three crew QR targets. Short on purpose: these are printed on
+        // laminated signs and barn walls for a whole season, and a shorter URL
+        // means a lower-version QR with bigger modules — what survives dust,
+        // creasing and bad light.
+        //
+        // An `action=` on one of these is dispatched to the API handler, NOT to
+        // the scan handler. Without this a relative `?action=...` on a page
+        // served from /z/Z4 resolves to `/z/Z4?action=...`, lands back on the
+        // zone handler, is ignored, and returns a cheerful page having recorded
+        // nothing — which is exactly how every cutter count and every trailer
+        // logged from a scanned code was silently lost until 2026-09-04.
+        //
+        // The URLs are absolute now, so this should never fire. It exists so
+        // that if one ever goes relative again the request still does its job
+        // instead of disappearing.
+        if (url.searchParams.get('action')) {
+          response = await handleHarvestD1(request, env, ctx);
+        } else if (path.startsWith('/s/')) {
+          response = await handleSackScan(request, env, ctx);
+        } else if (path.startsWith('/z/')) {
+          response = await handleZoneScan(request, env, ctx);
+        } else {
+          response = await handleBarnScan(request, env, ctx);
+        }
       } else if (path.startsWith('/api/pool')) {
         // Shopify pool inventory proxy
         response = await handlePoolRequest(request, env);
