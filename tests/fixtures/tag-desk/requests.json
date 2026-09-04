@@ -1,0 +1,30 @@
+{
+ "success": true,
+ "requests": [
+  {
+   "id": 10,
+   "cardId": 54,
+   "requestedAt": "2026-09-02 22:58:45",
+   "status": "open",
+   "notifyState": "sent",
+   "notifyError": null,
+   "closedAt": null,
+   "closedBy": null,
+   "item": "Custom 1 LB Bags",
+   "supplier": "Grove"
+  },
+  {
+   "id": 9,
+   "cardId": 99,
+   "requestedAt": "2026-08-11 19:25:36",
+   "status": "open",
+   "notifyState": "sent",
+   "notifyError": null,
+   "closedAt": null,
+   "closedBy": null,
+   "item": "10 LB GROVE BAGS",
+   "supplier": "Grove"
+  }
+ ],
+ "count": 2
+}

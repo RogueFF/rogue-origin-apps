@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light" data-theme-default="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <link rel="icon" type="image/png" href="/rogue-origin-apps/favicon.png">
+  <link rel="manifest" href="/rogue-origin-apps/manifest.json">
+  <meta name="theme-color" content="#668971">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="RO Ops">
+  <link rel="apple-touch-icon" href="/rogue-origin-apps/assets/icon-apple-touch.png">
+  <title>Supply Kanban · Tag &amp; Desk - Rogue Origin</title>
+  <script>
+    try {
+      var t = localStorage.getItem('ro-theme');
+      if (t !== 'dark' && t !== 'light') {
+        t = null;
+        var legacy = ['theme', 'sopDarkMode', 'darkMode', 'kanbanDarkMode', 'barcodeDarkMode'];
+        for (var i = 0; i < legacy.length; i++) {
+          var v = localStorage.getItem(legacy[i]);
+          if (v == null) continue;
+          t = (v === 'dark' || v === 'true') ? 'dark' : 'light';
+          break;
+        }
+      }
+      if (t) document.documentElement.setAttribute('data-theme', t);
+    } catch (e) { /* localStorage blocked: keep the markup default */ }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://rogue-origin-api.roguefamilyfarms.workers.dev">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/shared-base.css?h=c18beb73">
+  <link rel="stylesheet" href="../css/tag-desk.css?h=88cd565c">
+</head>
+<body>
+
+<aside class="rail" id="rail" aria-label="Apps">
+  <div class="rail-brand"><img src="../assets/ro-logo-horizontal.png" alt="" width="36" height="36"><div><strong>Rogue Origin</strong><span>Ops Hub</span></div><button class="x" aria-label="Close menu" data-closenav><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 5l10 10M15 5L5 15"/></svg></button></div>
+  <div class="rail-tools"><button id="railLang" type="button">ES</button><button id="railTheme" type="button">Dark / Light</button><button id="railAdd" type="button">+ Add card</button></div>
+  <nav class="rail-group" aria-label="Floor"><div class="eyebrow" data-t="railFloor">Switch app · Floor</div>
+    <a href="index.html"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="11" y="3" width="6" height="6" rx="1"/><rect x="3" y="11" width="6" height="6" rx="1"/><rect x="11" y="11" width="6" height="6" rx="1"/></svg>Hub</a>
+    <a href="hourly-entry.html"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="14" height="14" rx="1"/><path d="M3 8h14M8 8v9"/></svg>Floor Manager</a>
+    <a href="scoreboard-v2.html"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 16V10M8 16V7M12 16V4M16 16V9"/></svg>Scoreboard</a>
+    <a href="supersack-entry.html"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 8h12v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8zM6 8V5a4 4 0 0 1 8 0v3"/></svg>Supersack Tracker</a>
+  </nav>
+  <nav class="rail-group" aria-label="Office"><div class="eyebrow" data-t="railOffice">Office</div>
+    <a href="wholesale.html"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 6h14v11H3zM3 9h14M8 13h5"/></svg>Wholesale</a>
+    <a href="consignment.html"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 10h4l3-3 2 2 3-3h4M7 13l2 2 4-4"/></svg>Consignment</a>
+    <a href="tag-desk.html" aria-current="page"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="4.5" height="14" rx="1"/><rect x="7.75" y="3" width="4.5" height="14" rx="1"/><rect x="13.5" y="3" width="4.5" height="14" rx="1"/></svg>Supply Kanban</a>
+    <a href="kanban.html"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="14" height="12" rx="1"/><path d="M7 4v12"/></svg>Kanban (old page)</a>
+    <a href="sop-manager.html"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="3" width="12" height="15" rx="2"/><path d="M7 9l2 2 4-4"/></svg>SOP Manager</a>
+  </nav>
+  <div class="rail-foot" data-t="deskMemory">Receipts, push-offs and print state live in this browser until the next build gives them a table.</div>
+</aside>
+<div class="scrim" data-closenav></div>
+
+<main class="main">
+  <div class="topbar">
+    <button class="menu-btn" id="menuBtn" type="button" aria-label="Menu"><svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 5h14M3 10h14M3 15h14"/></svg></button>
+    <div class="brandline"><h1>Supply Kanban</h1><span class="eyebrow" id="todayLbl"></span></div>
+    <div class="tabs" role="tablist" id="tabs"></div>
+    <div class="tb-spacer"></div>
+    <button class="search-btn" id="searchBtn" type="button" aria-label="Search"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="9" r="5.5"/><path d="M13 13l4 4"/></svg></button>
+    <label class="search"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="9" r="5.5"/><path d="M13 13l4 4"/></svg><input id="q" type="search" placeholder="Search cards…" aria-label="Search cards"></label>
+    <button class="tb-btn" id="langBtn" type="button" title="Language" aria-label="Switch language">ES</button>
+    <button class="tb-btn" id="themeBtn" type="button" title="Theme" aria-label="Toggle theme"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M15 12.5A6 6 0 0 1 7.5 5a6.5 6.5 0 1 0 7.5 7.5z"/></svg></button>
+    <button class="tb-btn" id="addBtn" type="button"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 4v12M4 10h12"/></svg><span data-t="addCard">Add card</span></button>
+  </div>
+
+  <section id="view-order" role="tabpanel"></section>
+  <section id="view-cards" role="tabpanel" hidden></section>
+  <section id="view-print" role="tabpanel" hidden></section>
+  <section id="view-grove" role="tabpanel" hidden></section>
+  <section id="view-tag" role="tabpanel" hidden></section>
+</main>
+
+<div class="actbar" id="actbar" hidden></div>
+<nav class="bottombar" id="bottombar" aria-label="Views"></nav>
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+<div id="printArea" aria-hidden="true"></div>
+
+<dialog id="editor" aria-labelledby="edTitle">
+  <form method="dialog" id="editorForm">
+    <div class="dlg-head"><h3 id="edTitle">Card</h3><button type="button" class="x" aria-label="Close" data-closedlg><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 5l10 10M15 5L5 15"/></svg></button></div>
+    <div class="dlg-body" id="edBody"></div>
+    <div class="dlg-foot"><button type="button" class="tb-btn" data-closedlg data-t="cancel">Cancel</button><button type="submit" class="tb-btn btn-primary" data-t="save">Save changes</button></div>
+  </form>
+</dialog>
+
+<dialog id="sweep" aria-labelledby="swTitle">
+  <div class="dlg-head"><h3 id="swTitle"></h3><button type="button" class="x" aria-label="Close" data-closedlg><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 5l10 10M15 5L5 15"/></svg></button></div>
+  <div class="dlg-body" id="swBody"></div>
+  <div class="dlg-foot"><button type="button" class="tb-btn" id="swPrint" data-t="printList">Print checklist</button><button type="button" class="tb-btn btn-primary" data-closedlg data-t="done">Done</button></div>
+</dialog>
+
+<dialog id="recv" aria-labelledby="rvTitle">
+  <div class="dlg-head"><h3 id="rvTitle"></h3><button type="button" class="x" aria-label="Close" data-closedlg><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 5l10 10M15 5L5 15"/></svg></button></div>
+  <div class="dlg-body" id="rvBody"></div>
+  <div class="dlg-foot"><button type="button" class="tb-btn" data-closedlg data-t="cancel">Cancel</button><button type="button" class="tb-btn btn-primary" id="rvSave"></button></div>
+</dialog>
+
+<script src="../js/vendor/qrcode-generator.js?h=18ae399f"></script>
+<!-- module-hashes:start -->
+<!-- generated by stamp-modules — do not edit by hand -->
+<script type="importmap">
+{
+  "imports": {
+    "../js/shared/api.js": "../js/shared/api.js?h=55201839",
+    "../js/shared/i18n.js": "../js/shared/i18n.js?h=6c5893f7",
+    "../js/shared/theme.js": "../js/shared/theme.js?h=b4816114",
+    "../js/tag-desk/api.js": "../js/tag-desk/api.js?h=0bd41e79",
+    "../js/tag-desk/labels.js": "../js/tag-desk/labels.js?h=885ec042",
+    "../js/tag-desk/main.js": "../js/tag-desk/main.js?h=58eeabb7",
+    "../js/tag-desk/model.js": "../js/tag-desk/model.js?h=801cda86",
+    "../js/tag-desk/render.js": "../js/tag-desk/render.js?h=f642dfd0",
+    "../js/tag-desk/store.js": "../js/tag-desk/store.js?h=cfc8b860"
+  }
+}
+</script>
+<!-- module-hashes:end -->
+<script type="module" src="../js/tag-desk/main.js?h=58eeabb7"></script>
+</body>
+</html>

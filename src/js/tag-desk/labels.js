@@ -1,0 +1,42 @@
+/**
+ * Tag & Desk — labels. One language at a time; `%var` substitution.
+ * The language itself is owned by shared/i18n.js (localStorage "ro-lang").
+ */
+export const T = {
+  order: ['Order', 'Pedidos'], cards: ['Cards', 'Tarjetas'], print: ['Print', 'Imprimir'], grove: ['Grove', 'Grove'], tag: ['Tag', 'Tag'],
+  addCard: ['Add card', 'Agregar tarjeta'], cancel: ['Cancel', 'Cancelar'], save: ['Save changes', 'Guardar cambios'], printList: ['Print checklist', 'Imprimir la lista'], done: ['Done', 'Listo'],
+  tomorrow: ['tomorrow', 'mañana'], today: ['today', 'hoy'], queued: ['Queued', 'En la lista'], due: ['About to run out', 'Por acabarse'], check: ['Check the shelf', 'Revisar el estante'],
+  queuedSub: ['Scanned since the last check', 'Escaneados desde la última revisión'], dueSub: ['Nobody scanned these, but the order history says they run out before the %d check could restock them — add them now', 'Nadie los escaneó, pero el historial dice que se acaban antes de que la revisión del %d pueda reponerlos — agrégalos ahora'], checkSub: ['Ordered regularly before, silent now — look before you order', 'Antes se pedían seguido, ahora nada — revisa antes de pedir'],
+  emptyQ: ['No scans since the last check', 'Sin escaneos desde la última revisión'], emptyD: ['Nothing runs out before the %d check can restock it', 'Nada se acaba antes de que la revisión del %d pueda reponerlo'], emptyDOnOrder: ['Nothing left — %n are on order above', 'Nada pendiente — %n ya están pedidos arriba'], emptyC: ['Nothing to check', 'Nada que revisar'],
+  redCard: ['Red card · OUT', 'Tarjeta roja · SE ACABÓ'], outHead: ['OUT — %i', 'SE ACABÓ — %i'], outSub: ['Red card scanned %t · completely out. This should never happen: order it today and raise its level.', 'Tarjeta roja escaneada %t · se acabó por completo. No debería pasar: pídelo hoy y sube su nivel.'], outClear: ['Back in stock', 'Ya hay'], fmtRed: ['Red card 6×4', 'Tarjeta roja 6×4'],
+  bothBins: ['both bins', 'los dos bins'], backBin: ['back bin', 'bin de atrás'],
+  railFloor: ['Switch app · Floor', 'Cambiar app · Piso'], railOffice: ['Office', 'Oficina'],
+  fmtCard: ['Stack 6×4', 'Pila 6×4'], fmtSheet: ['Sheet 8.5×11', 'Hoja 8.5×11'], reprint: ['Needs printing', 'Por imprimir'], printed: ['printed', 'impresas'],
+  later: ['%n more %v items should run out between the %a and %b checks — they belong on the %a check', '%n artículos más de %v se acabarán entre las revisiones del %a y el %b — van en la revisión del %a'], laterOne: ['1 more %v item should run out between the %a and %b checks — it belongs on the %a check', '1 artículo más de %v se acabará entre las revisiones del %a y el %b — va en la revisión del %a'], laterNone: ['Nothing else from %v is expected to run out before the %b check', 'Nada más de %v se acabará antes de la revisión del %b'], show: ['Show them', 'Verlos'], hide: ['Hide', 'Ocultar'],
+  addToOrder: ['Add %n to today’s %v order', 'Agregar %n al pedido de hoy · %v'], nextVendor: ['Next: %v · %n to review →', 'Siguiente: %v · %n a revisar →'], allPlaced: ['%n orders placed today — nothing left to review', '%n pedidos hechos hoy — nada más que revisar'],
+  notShipped: ['Not shipped', 'No llegó'], backFlag: ['Not shipped %d — reorder', 'No llegó el %d — volver a pedir'], lateOrder: ['Expected %d · not received — %n days late', 'Se esperaba el %d · sin recibir — %n días tarde'], lateShort: ['late', 'tarde'],
+  urgentFlag: ['Flagged urgent from the floor · %t', 'Marcado urgente desde el piso · %t'], askedToday: ['Asked today ✓', 'Avisado hoy ✓'], orderedWithDamon: ['Ordered with Damon · arrives ~%d', 'Pedido con Damon · llega ~%d'], receiveIntoBins: ['Received → count bins', 'Llegó → contar bins'],
+  archived: ['Hidden', 'Oculta'], restored: ['Restored', 'Restaurada'],
+  addAll: ['Add all', 'Agregar todo'], markOrdered: ['Mark %n ordered', 'Marcar %n pedidos'], items: ['items', 'artículos'], est: ['est.', 'est.'], unpriced: ['no pack price', 'sin precio de paquete'], nothingQueued: ['Nothing queued', 'Nada en la lista'],
+  copy: ['Copy %v list', 'Copiar lista %v'], copied: ['Copied', 'Copiado'], noModel: ['%n item has no Uline number — search it by name', '%n artículo sin número Uline — búscalo por nombre'], noModelN: ['%n items have no Uline number — search them by name', '%n artículos sin número Uline — búscalos por nombre'],
+  whenTriggered: ['When triggered', 'Cuando se active'], byEmail: ['By email', 'Por correo'], noHistory: ['No history', 'Sin historial'],
+  history: ['History', 'Historial'], undo: ['Undo', 'Deshacer'], all: ['All', 'Todas'], requested: ['Requested', 'Solicitado a Damon'], dueS: ['Running out', 'Por acabarse'], nextWeek: ['Due by the next check', 'Vence en la próxima revisión'], ok: ['OK', 'OK'], onOrder: ['On order', 'En camino'],
+  reorderAt: ['Reorder at', 'Pedir a'], fillTo: ['Fill to', 'Llenar a'], edit: ['Edit', 'Editar'], setLevels: ['Set levels', 'Fijar niveles'],
+  everyFriday: ['checked Mon · Wed · Fri', 'se revisa lun · mié · vie'], goesOut: ['Next check', 'Próxima revisión'], remove: ['Remove', 'Quitar'], add: ['Add', 'Agregar'], stocked: ['Stocked · push to %d', 'Hay · pasar al %d'],
+  shelfList: ['Full shelf list (%n)', 'Lista completa del estante (%n)'], sweepTitle: ['Walk the Uline shelf · %n cards (%f flagged)', 'Recorrer el estante Uline · %n tarjetas (%f marcadas)'],
+  bundle: ['Order together', 'Pedir juntos'], bundleSub: ['Add it to the same order for the multi-design discount', 'Agrégalo al mismo pedido por el descuento multi-diseño'], addAllThree: ['Add all three → Sticker Mule', 'Agregar los tres → Sticker Mule'],
+  reqLane: ['With Damon', 'Con Damon'], reqSub: ['Requests emailed to Damon', 'Solicitudes enviadas a Damon'], binLane: ['Bag bins', 'Bins de bolsas'], binSub: ['Counted inventory — one full-sheet card per bin', 'Inventario contado — una tarjeta por bin'],
+  nextLane: ['Due by the %d check', 'Vence antes de la revisión del %d'],
+  scanned: ['Scanned', 'Escaneado'], received: ['Received', 'Recibido'], receivedAll: ['Received — all %n', 'Recibido — los %n'], onOrderArrives: ['On order · %n · arrives %d', 'Pedido · %n · llega %d'],
+  ordered: ['Ordered', 'Pedido'], arrives: ['arrives', 'llega'], nextOrder: ['next check', 'próxima revisión'], allSet: ['all set', 'listo'], toReview: ['to review', 'a revisar'], runningOut: ['running out', 'por acabarse'], toCheck: ['to check', 'a revisar'], toOrderTogether: ['to order together', 'para pedir juntos'], withDamon: ['with Damon', 'con Damon'], opensGrove: ['opens the Grove tab', 'abre la pestaña Grove'], allThree: ['all three together', 'los tres juntos'],
+  overdue: ['Overdue — expected %d', 'Atrasado — se esperaba el %d'], expected: ['Expected %d', 'Se espera el %d'], orders: ['orders', 'pedidos'],
+  receiveBins: ['Receive bins', 'Recibir bins'], askAgain: ['Ask Damon again', 'Volver a pedir a Damon'], markOrderedG: ['Mark ordered', 'Marcar pedido'], noBins: ['No bins counted yet · %n bags per bin', 'Sin bins contados · %n bolsas por bin'], orderWhen: ['Order when 2 bins are left (75-day lead)', 'Pedir cuando queden 2 bins (plazo 75 días)'],
+  loading: ['Loading the live cards, cart and orders…', 'Cargando tarjetas, carrito y pedidos…'], loadFail: ['Could not reach the farm server. Check Wi-Fi and reload.', 'No se pudo llegar al servidor de la granja. Revisa el Wi-Fi y recarga.'], saving: ['Saving…', 'Guardando…'], saveFail: ['Not saved — the server did not answer', 'No se guardó — el servidor no respondió'],
+  deskMemory: ['Receipts, push-offs and print state live in this browser until the next build gives them a table.', 'Recibos, aplazamientos y estado de impresión viven en este navegador hasta que la próxima versión les dé una tabla.'],
+  deleteForever: ['Delete permanently', 'Borrar para siempre'], hideCard: ['Hide from this desk', 'Ocultar en este escritorio'],
+};
+
+let langGetter = () => 'en';
+export function bindLang(fn) { langGetter = fn; }
+export const ES = () => langGetter() === 'es';
+export const t = (k, vars) => { let v = T[k] ? T[k][ES() ? 1 : 0] : k; if (vars) for (const [kk, vv] of Object.entries(vars)) v = v.split('%' + kk).join(vv); return v; };

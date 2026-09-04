@@ -139,6 +139,7 @@ export default [
       'test-*.js',
       'sw.js',
       'src/js/legacy/**',
+      'src/js/vendor/**',
       '*.min.js',
       'playwright.config.js',
       'apps-script/**/*.js',
