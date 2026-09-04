@@ -218,13 +218,18 @@ export const ULINE_HELPER_URL = 'https://rogueff.github.io/rogue-origin-apps/src
 export const ULINE_BOOKMARKLET = "javascript:(function(){var m=location.hash.match(/ro=([^&]+)/);if(!m)return alert('Open Uline from the Supply Kanban desk first');var t=decodeURIComponent(m[1]);var L=t.split('\\n').map(function(l){return l.trim()}).filter(Boolean);if(!L.every(function(l){return /^[A-Z]{1,3}-[A-Z0-9-]{1,24} \\d{1,6}$/i.test(l)}))return;var ta=document.getElementById('txtPaste'),b=document.getElementById('btnAddPastedItemsToCart'),md=document.getElementById('IsPasteMode');if(!ta||!b)return;try{PageScript.ShowPaste()}catch(e){}ta.value=L.join('\\n');ta.classList.remove('empty');if(md)md.value='True';history.replaceState(null,'',location.pathname);setTimeout(function(){b.click()},400)})();";
 
 /**
- * Amazon's add-to-cart link (ASIN.n / Quantity.n). Amazon asks for sign-in if needed and returns to the add,
- * then lands on the cart. Rows without an ASIN come back in `missing`.
+ * Amazon has no working add-to-cart link any more (the old ASIN.n/Quantity.n
+ * form now lands on "Sorry! Something went wrong" — probed 2026-09-03). The
+ * one-click helper walks the product pages instead: the desk opens the first
+ * item with the whole queue in the fragment ("ASIN QTY" per line) and the
+ * helper adds each one, then opens the cart. Rows without an ASIN come back
+ * in `missing`.
  */
-export function amazonCartUrl(rows) {
+export function amazonQueueUrl(rows) {
   const ok = rows.filter(r => r.asin), missing = rows.filter(r => !r.asin);
-  const qs = ok.map((r, i) => `ASIN.${i + 1}=${encodeURIComponent(r.asin)}&Quantity.${i + 1}=${Math.max(1, r.qty | 0)}`).join('&');
-  return { url: ok.length ? `https://www.amazon.com/gp/aws/cart/add.html?${qs}` : null, count: ok.length, missing };
+  if (!ok.length) return { url: null, count: 0, missing };
+  const text = ok.map(r => `${r.asin} ${Math.max(1, r.qty | 0)}`).join('\n');
+  return { url: `https://www.amazon.com/dp/${ok[0].asin}#ro=${encodeURIComponent(text)}`, count: ok.length, missing };
 }
 /** Walmart's affiliate add-to-cart link (items=ID|QTY,…). Walmart may show a "Robot or human?" check first; the fallback is the product pages. */
 export function walmartCartUrl(rows) {
