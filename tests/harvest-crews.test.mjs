@@ -32,7 +32,7 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
 let DatabaseSync = null;
 try { ({ DatabaseSync } = await import('node:sqlite')); } catch { /* Node < 22.5 */ }
 
-const { handleHarvestD1, handleZoneScan, handleCrewScan } = await import(
+const { handleHarvestD1, handleZoneScan, handleCrewScan, handleBarnScan } = await import(
   join(REPO, 'workers/src/handlers/harvest-d1.js').replace(/\\/g, '/').replace(/^/, 'file:///')
 );
 
@@ -94,6 +94,20 @@ const logLoad = (env, ctx, zone, bins) => quiet(() => handleHarvestD1(
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ zone, bins: String(bins) }),
+  }), env, ctx));
+
+/** The barn tablet at a given door. No station = the single-intake /b of 2025. */
+const barnForm = (env, ctx, station) => quiet(() => handleBarnScan(
+  new Request(`https://x/b${station ? `/${station}` : ''}?lang=en`), env, ctx));
+
+/** A load submitted from that door — station carried the way the form carries it. */
+const logLoadAt = (env, ctx, zone, bins, station) => quiet(() => handleHarvestD1(
+  new Request('https://x/api/harvest?action=barn_log&lang=en', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(station
+      ? { zone, bins: String(bins), station: String(station) }
+      : { zone, bins: String(bins) }),
   }), env, ctx));
 
 const sessions = (sqlite) => sqlite.prepare(
@@ -304,4 +318,120 @@ test('every crew screen shows which crew the phone is, so an untagged one is obv
   const { env: env2, ctx: ctx2 } = freshDb();
   const untagged = await (await scanZone(env2, ctx2, 'Z4', null)).text();
   assert.doesNotMatch(untagged, /Crew A|Crew B/);
+});
+
+// --- two barn intakes --------------------------------------------------------
+
+test('each intake pre-selects the zone ITS crew is cutting', async () => {
+  const { env, ctx } = freshDb();
+  await scanZone(env, ctx, 'Z4', 'A');
+  await scanZone(env, ctx, 'Z7', 'B');
+
+  const one = await (await barnForm(env, ctx, 1)).text();
+  assert.match(one, /<option value="Z4" selected/);
+  assert.doesNotMatch(one, /<option value="Z7" selected/);
+
+  const two = await (await barnForm(env, ctx, 2)).text();
+  assert.match(two, /<option value="Z7" selected/);
+  assert.doesNotMatch(two, /<option value="Z4" selected/);
+});
+
+test('the door says which door it is', async () => {
+  const { env, ctx } = freshDb();
+  await scanZone(env, ctx, 'Z4', 'A');
+  const html = await (await barnForm(env, ctx, 2)).text();
+  // Two intakes that look identical are two chances to log at the wrong one.
+  assert.match(html, /Barn intake 2/);
+  assert.match(html, /Crew B/);
+});
+
+test('a single unlabelled intake behaves exactly as it did', async () => {
+  const { env, ctx } = freshDb();
+  await scanZone(env, ctx, 'Z4', 'A');
+  const html = await (await barnForm(env, ctx, null)).text();
+  // /b predates the stations and is still on a wall somewhere. It must fall
+  // back to whichever zone is open rather than to "no crew" and nothing.
+  assert.match(html, /<option value="Z4" selected/);
+  assert.doesNotMatch(html, /Barn intake/);
+});
+
+test('scanning the door QR makes the tablet remember which door it is', async () => {
+  const { env, ctx } = freshDb();
+  const res = await barnForm(env, ctx, 2);
+  const all = res.headers.getSetCookie ? res.headers.getSetCookie() : [res.headers.get('set-cookie')];
+  assert.match(all.join(' | '), /rf_barn=2/);
+});
+
+test("a load at intake 1 lands on crew A's lot while crew B cuts elsewhere", async () => {
+  const { sqlite, env, ctx } = freshDb();
+  await scanZone(env, ctx, 'Z4', 'A');
+  const z4 = openSessions(sqlite).find(s => s.zone === 'Z4');
+  await scanZone(env, ctx, 'Z7', 'B');
+
+  await logLoadAt(env, ctx, 'Z4', 22, 1);
+  assert.equal(lastLoad(sqlite).attributed_zone_session_id, z4.id);
+});
+
+test('with both crews in one zone, each door lands on its own crew', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  await scanZone(env, ctx, 'Z4', 'A');
+  await scanZone(env, ctx, 'Z4', 'B');
+  const [a, b] = ['A', 'B'].map(c => openSessions(sqlite).find(s => s.crew === c));
+
+  await logLoadAt(env, ctx, 'Z4', 22, 1);
+  assert.equal(lastLoad(sqlite).attributed_zone_session_id, a.id);
+
+  await logLoadAt(env, ctx, 'Z4', 18, 2);
+  assert.equal(lastLoad(sqlite).attributed_zone_session_id, b.id);
+  // Both are the same lot in the ledger; the split is only kept so "which crew
+  // moved more bins per cutter-hour" stays answerable after the season.
+  assert.notEqual(a.id, b.id);
+});
+
+test('the load records which crew delivered it', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  await scanZone(env, ctx, 'Z4', 'A');
+  await logLoadAt(env, ctx, 'Z4', 22, 1);
+
+  // Cannot be reconstructed after the season, so it is captured even though the
+  // lot ledger folds the crews back together.
+  assert.equal(lastLoad(sqlite).crew, 'A');
+});
+
+test("a load landing on the other crew's lot says so, rather than looking normal", async () => {
+  const { sqlite, env, ctx } = freshDb();
+  await scanZone(env, ctx, 'Z4', 'A');
+  await scanZone(env, ctx, 'Z7', 'B');
+
+  // Crew B's zone, logged at crew A's door: fine if a trailer really was moved,
+  // a mis-tap otherwise, and only the person at the door can tell which.
+  const html = await (await logLoadAt(env, ctx, 'Z7', 20, 1)).text();
+  assert.match(html, /Crew B/);
+  assert.match(html, /Check the zone if that is wrong/);
+});
+
+test('an ordinary load at the right door says nothing extra', async () => {
+  const { env, ctx } = freshDb();
+  await scanZone(env, ctx, 'Z4', 'A');
+  const html = await (await logLoadAt(env, ctx, 'Z4', 22, 1)).text();
+  // A warning that fires on every load is a warning nobody reads.
+  assert.doesNotMatch(html, /Check the zone if that is wrong/);
+});
+
+test("the 6-minute grace prefers this crew's just-closed zone", async () => {
+  const { sqlite, env, ctx } = freshDb();
+  // Crew A cut Z4 and moved to Z5 four minutes ago; crew B is in Z9. The
+  // trailer at crew A's door was loaded in Z4 before they moved.
+  sqlite.prepare(`
+    INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, occurred_at, closed_at, crew, is_test)
+    VALUES ('enter', 'Z4', 'Sour Lifter', ?, 1, datetime('now','-60 minutes'), datetime('now','-4 minutes'), 'A', 1)
+  `).run(SEASON);
+  const z4 = sessions(sqlite).at(-1);
+  await scanZone(env, ctx, 'Z5', 'A');
+  await scanZone(env, ctx, 'Z9', 'B');
+
+  const html = await (await logLoadAt(env, ctx, 'Z4', 22, 1)).text();
+  assert.equal(lastLoad(sqlite).attributed_zone_session_id, z4.id,
+    'a null here is bins that belong to no lot at all');
+  assert.doesNotMatch(html, /logged with no lot/);
 });

@@ -160,6 +160,32 @@ function crewCookie(crew) {
   return `rf_crew=${crew}; Path=/; Max-Age=31536000; SameSite=Lax`;
 }
 
+/**
+ * Barn intake stations. Two of them in 2026 — PUBLIC_BASE/b/1 and /b/2, one QR
+ * each — and each is worked by the same cutting crew all shift. The station is
+ * therefore what tells the barn whose trailer just pulled in: the crew tag
+ * lives on a phone out in the field and never reaches here.
+ *
+ * The pairing is an arrangement, not something the system can verify, so it
+ * only ever DEFAULTS the zone and scopes the grace. The dropdown still offers
+ * every tracked zone, because the person at the door can see which trailer
+ * arrived and we cannot. If the crews swap stations this is the one line.
+ */
+const STATION_CREW = { 1: 'A', 2: 'B' };
+
+function pickStation(request, body = {}) {
+  const url = new URL(request.url);
+  const fromPath = (url.pathname.match(/^\/b\/(\d+)/) || [])[1];
+  const raw = fromPath ?? body.station ?? url.searchParams.get('station')
+    ?? ((request.headers.get('cookie') || '').match(/(?:^|;\s*)rf_barn=(\d+)/) || [])[1];
+  const n = parseInt(raw, 10);
+  return Object.prototype.hasOwnProperty.call(STATION_CREW, n) ? n : null;
+}
+
+function stationCookie(station) {
+  return `rf_barn=${station}; Path=/; Max-Age=31536000; SameSite=Lax`;
+}
+
 const HTML_ACTIONS = new Set([
   'enter', 'headcount', 'barn_intake', 'barn_log',
   'sack_print', 'sack_session_start', 'sack_session', 'sack_label', 'sack_weigh',
@@ -202,9 +228,9 @@ export async function handleHarvestD1(request, env, ctx) {
         case 'headcount':
           return await handleHeadcount(ui, db, env, ctx, params);
         case 'barn_intake':
-          return await handleBarnIntakeForm(ui, db, env, ctx);
+          return await handleBarnIntakeForm(ui, db, env, ctx, pickStation(request, body));
         case 'barn_log':
-          return await handleBarnLog(ui, db, env, ctx, body);
+          return await handleBarnLog(ui, db, env, ctx, body, pickStation(request, body));
         case 'sack_print':
           return await handleSackPrintForm(ui, db, env);
         case 'sack_session_start':
@@ -316,7 +342,12 @@ export async function handleZoneScan(request, env, ctx) {
 export async function handleBarnScan(request, env, ctx) {
   const ui = makeUi(request);
   try {
-    return await handleBarnIntakeForm(ui, env.DB, env, ctx);
+    const station = pickStation(request);
+    const res = await handleBarnIntakeForm(ui, env.DB, env, ctx, station);
+    // Remember the door, so the tablet at station 2 stays station 2 whether it
+    // was reached by the QR, a bookmark, or the "log another" link.
+    if (station) res.headers.append('Set-Cookie', stationCookie(station));
+    return res;
   } catch (e) {
     const { message, status } = formatError(e);
     return errorPage(ui, message, status);
@@ -506,15 +537,27 @@ async function getOpenSessionForZone(db, isTest, zone, crew = undefined) {
   `, scoped ? [zone, crew, isTest] : [zone, isTest]);
 }
 
-// The most recently closed session — for a given zone, or anywhere. Deliberately
-// cultivar-agnostic: at the barn nobody knows which cultivar of a trial zone a
-// load came off, and the closed session already carries it.
-async function getLastClosedAnyCultivar(db, isTest, zone = null) {
-  const where = zone ? 'AND zone = ?' : '';
-  const args = zone ? [zone, isTest] : [isTest];
+/** The newest open session belonging to ANY crew — what the barn falls back to. */
+async function getAnyOpenSession(db, isTest) {
   return queryOne(db, `
     SELECT * FROM harvest_scan_log
-    WHERE event_type = 'enter' AND closed_at IS NOT NULL ${where} AND is_test = ?
+    WHERE event_type = 'enter' AND closed_at IS NULL AND is_test = ?
+    ORDER BY occurred_at DESC, id DESC LIMIT 1
+  `, [isTest]);
+}
+
+// The most recently closed session — for a given zone, or anywhere, and
+// optionally for one crew. Deliberately cultivar-agnostic: at the barn nobody
+// knows which cultivar of a trial zone a load came off, and the closed session
+// already carries it.
+async function getLastClosedAnyCultivar(db, isTest, zone = null, crew = undefined) {
+  const parts = ["event_type = 'enter'", 'closed_at IS NOT NULL'];
+  const args = [];
+  if (zone) { parts.push('zone = ?'); args.push(zone); }
+  if (crew !== undefined) { parts.push('crew IS ?'); args.push(crew); }
+  parts.push('is_test = ?'); args.push(isTest);
+  return queryOne(db, `
+    SELECT * FROM harvest_scan_log WHERE ${parts.join(' AND ')}
     ORDER BY closed_at DESC, id DESC LIMIT 1
   `, args);
 }
@@ -615,14 +658,21 @@ async function handleCrewTag(ui, request) {
 
 // ─── BARN INTAKE ────────────────────────────────────────
 
-async function handleBarnIntakeForm(ui, db, env, ctx) {
+async function handleBarnIntakeForm(ui, db, env, ctx, station = null) {
   const isTest = isTestMode(env) ? 1 : 0;
-  const active = await getActiveSession(db, isTest);
+  const crew = station ? STATION_CREW[station] : null;
+
+  // At a station, this crew's zone is the one whose trailers arrive here. With
+  // no station (a single intake, or a bookmark that predates them) fall back to
+  // whichever zone is open, which is exactly what /b did before.
+  const active = (crew ? await getActiveSession(db, isTest, crew) : null)
+    || await getAnyOpenSession(db, isTest);
 
   // Just after a zone change, any trailer pulling in was almost certainly
   // loaded in the zone before — it was already on the road when the crew
   // scanned. Pre-select that zone and say why; the dropdown still overrides.
-  const lastClosed = await getLastClosedAnyCultivar(db, isTest);
+  const lastClosed = (crew ? await getLastClosedAnyCultivar(db, isTest, null, crew) : null)
+    || await getLastClosedAnyCultivar(db, isTest);
   const suggested = suggestedIntakeZone({
     activeZone: active ? active.zone : null,
     lastClosedZone: lastClosed ? lastClosed.zone : null,
@@ -632,10 +682,10 @@ async function handleBarnIntakeForm(ui, db, env, ctx) {
   });
 
   return renderPage(ui, ui.t('barnIntake'),
-    barnIntakeFormBody(ui, active, suggested ? lastClosed : null));
+    barnIntakeFormBody(ui, active, suggested ? lastClosed : null, station));
 }
 
-async function handleBarnLog(ui, db, env, ctx, body) {
+async function handleBarnLog(ui, db, env, ctx, body, station = null) {
   const zone = normalizeZone(body.zone);
   if (!zone || !VALID_ZONES.has(zone)) {
     throw createError('VALIDATION_ERROR', ui.t('unknownZone', { z: body.zone ?? '' }));
@@ -649,30 +699,43 @@ async function handleBarnLog(ui, db, env, ctx, body) {
   }
 
   const isTest = isTestMode(env) ? 1 : 0;
-  let zoneSession = await queryOne(db, `
-    SELECT * FROM harvest_scan_log
-    WHERE event_type = 'enter' AND zone = ? AND closed_at IS NULL AND is_test = ?
-    ORDER BY occurred_at DESC LIMIT 1
-  `, [zone, isTest]);
+  const crew = station ? STATION_CREW[station] : null;
 
-  // No open session for this zone — the crew has moved on. If it closed within
-  // the grace window the load was cut there and is only now arriving, so it
-  // belongs to that closed lot. Attributing it to nothing would be worse than
-  // attributing it to the wrong zone: the lot ledger counts bins by joining on
-  // this FK, so a NULL drops those bins off every lot rather than misplacing them.
+  // A WIDENING cascade, narrowest first. Losing the bins is the worst outcome
+  // available — the ledger counts them by joining on this FK, so a NULL drops
+  // them off every lot rather than misplacing them — so every step here trades
+  // a little precision to avoid that, and the screen says which step it took.
+  //
+  //   1. this station's crew, still cutting that zone
+  //   2. any crew still cutting it (both crews can be in one zone)
+  //   3. this crew's zone that closed inside the grace window
+  //   4. any crew's, same window
+  //   5. nothing, and say so loudly
+  let zoneSession = crew ? await getOpenSessionForZone(db, isTest, zone, crew) : null;
+  if (!zoneSession) zoneSession = await getOpenSessionForZone(db, isTest, zone);
+
+  // Nothing open for this zone — the crew has moved on. If it closed within the
+  // grace window the load was cut there and is only now arriving, so it belongs
+  // to that closed lot.
   let viaGrace = false;
+  if (!zoneSession && crew) {
+    const mine = await getLastClosedAnyCultivar(db, isTest, zone, crew);
+    if (inBarnGrace(mine)) { zoneSession = mine; viaGrace = true; }
+  }
   if (!zoneSession) {
     const recent = await getLastClosedAnyCultivar(db, isTest, zone);
-    if (inBarnGrace(recent)) {
-      zoneSession = recent;
-      viaGrace = true;
-    }
+    if (inBarnGrace(recent)) { zoneSession = recent; viaGrace = true; }
   }
 
+  // The load landed on the OTHER crew's session. Legitimate when both crews are
+  // in one zone, and a mistake worth catching when they are not — either way
+  // the person at the door is the only one who can tell, so tell them.
+  const crossedCrew = !!(crew && zoneSession && zoneSession.crew && zoneSession.crew !== crew);
+
   await execute(db, `
-    INSERT INTO harvest_scan_log (event_type, zone, season, bins, attributed_zone_session_id, is_test)
-    VALUES ('barn_load', ?, ?, ?, ?, ?)
-  `, [zone, getSeason(), bins, zoneSession ? zoneSession.id : null, isTest]);
+    INSERT INTO harvest_scan_log (event_type, zone, season, bins, attributed_zone_session_id, crew, is_test)
+    VALUES ('barn_load', ?, ?, ?, ?, ?, ?)
+  `, [zone, getSeason(), bins, zoneSession ? zoneSession.id : null, crew, isTest]);
 
   const todayCount = await queryOne(db, `
     SELECT COUNT(*) as n FROM harvest_scan_log
@@ -682,6 +745,7 @@ async function handleBarnLog(ui, db, env, ctx, body) {
 
   const cutNote = zoneSession
     ? `cut ${zoneSession.cut_number}${viaGrace ? ', just-closed lot' : ''}`
+      + `${crossedCrew ? `, Crew ${zoneSession.crew}` : ''}`
     : 'no active session for this zone';
   ctx.waitUntil(sendTelegramMessage(env, {
     chatId: env.TELEGRAM_TEST_CHAT_ID,
@@ -689,9 +753,10 @@ async function handleBarnLog(ui, db, env, ctx, body) {
   }).catch(e => console.error('[harvest][telegram]', e)));
 
   return renderPage(ui, ui.t('barnIntake'), barnLogConfirmBody(ui, {
-    zone, bins, loadNumber,
+    zone, bins, loadNumber, station,
     hasActiveSession: !!zoneSession,
     grace: viaGrace ? { zone, cut: zoneSession.cut_number } : null,
+    crossedCrew: crossedCrew ? zoneSession.crew : null,
   }));
 }
 
@@ -2654,7 +2719,7 @@ function headcountBody(ui, { zone, cutNumber, sessionId, count }) {
 ${headcountScript(ui)}`;
 }
 
-function barnIntakeFormBody(ui, active, justClosed = null) {
+function barnIntakeFormBody(ui, active, justClosed = null, station = null) {
   // Within the grace window the just-closed zone is the better default — the
   // trailer at the door left that zone before the crew moved.
   const preselect = justClosed ? justClosed.zone : (active ? active.zone : null);
@@ -2676,11 +2741,24 @@ function barnIntakeFormBody(ui, active, justClosed = null) {
         prevZone: justClosed.zone,
       })}</p>`
     : '';
+  // Which door this is, stated on the screen: two intakes that look identical
+  // are two chances to log a load at the wrong one.
+  const stationNote = station
+    ? `<p class="sub">${STATION_CREW[station]
+        ? ui.t('atStation', { n: station, crew: STATION_CREW[station] })
+        : ui.t('atStationNoCrew', { n: station })}</p>`
+    : '';
+  // Carried explicitly rather than trusted to the cookie: the cookie makes a
+  // bookmark remember its door, this makes THIS submission unambiguous.
+  const stationField = station ? `<input type="hidden" name="station" value="${station}">` : '';
+
   return `
 <h1>${ui.t('barnIntake')}</h1>
+${stationNote}
 ${activeNote}
 ${graceNote}
 <form method="POST" action="${API}?action=barn_log&lang=${ui.lang}" onsubmit="this.querySelector('button').disabled=true">
+  ${stationField}
   <label for="zone">${ui.t('zone')}</label>
   <select id="zone" name="zone" required>${options}</select>
   <label for="bins">${ui.t('binsOnLoad')}</label>
@@ -2689,18 +2767,24 @@ ${graceNote}
 </form>`;
 }
 
-function barnLogConfirmBody(ui, { zone, bins, loadNumber, hasActiveSession, grace = null }) {
-  // Three outcomes, and the crew should be able to tell them apart: attributed
-  // to the open lot (silent), attributed to a lot that just closed (say so, it
-  // is a correction), or attributed to nothing (warn — that one loses bins).
+function barnLogConfirmBody(ui, { zone, bins, loadNumber, hasActiveSession, grace = null,
+                                  crossedCrew = null, station = null }) {
+  // Four outcomes, and the person at the door should be able to tell them
+  // apart: attributed to the open lot (silent), to a lot that just closed (say
+  // so — it is a correction), to the OTHER crew's lot (say so — only they can
+  // judge it), or to nothing (warn, that one loses bins).
   const attribution = grace
     ? `<p class="note">${ui.t('graceAttributed', { zone: grace.zone, n: grace.cut })}</p>`
     : (hasActiveSession ? '' : `<p class="note">${ui.t('noSessionWarn', { zone })}</p>`);
+  const crossNote = crossedCrew
+    ? `<p class="note">${ui.t('crossedCrew', { crew: crossedCrew })}</p>`
+    : '';
   return `
 <h1>${ui.t('loggedLoad', { bins, zone })}</h1>
 <p class="sub">${ui.t('loadNumToday', { n: loadNumber, zone })}</p>
 ${attribution}
-<div class="footer"><a href="${API}?action=barn_intake">${ui.t('logAnother')}</a> · <a href="${API}?action=crew">${ui.t('crewChanged')}</a> · <a href="${API}?action=find">${ui.t('findLink')}</a></div>`;
+${crossNote}
+<div class="footer"><a href="${API}?action=barn_intake${station ? `&station=${station}` : ''}">${ui.t('logAnother')}</a> · <a href="${API}?action=crew">${ui.t('crewChanged')}</a> · <a href="${API}?action=find">${ui.t('findLink')}</a></div>`;
 }
 
 // ─── CREW ROSTER RENDERING ──────────────────────────────
