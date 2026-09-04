@@ -80,7 +80,7 @@ test('desk loads the live shape: tiles, three lanes, counts, no console errors',
   expect(await page.$eval('.copyline pre.paste', e => e.innerText.split('\n').length)).toBeGreaterThan(1);
   await page.click('.vt[data-v="Amazon"]'); await page.waitForTimeout(300);
   const amz = await page.$eval('#actbar [data-cartgo="Amazon"]', a => a.href);
-  expect(amz).toMatch(/^https:\/\/www\.amazon\.com\/gp\/aws\/cart\/add\.html\?ASIN\.1=[A-Z0-9]{10}&Quantity\.1=\d+/);
+  expect(amz).toMatch(/^https:\/\/www\.amazon\.com\/dp\/[A-Z0-9]{10}#ro=[A-Z0-9]{10}%20\d+/);
   await page.click('.vt[data-v="Walmart"]'); await page.waitForTimeout(300);
   const wm = await page.$eval('#actbar [data-cartgo="Walmart"]', a => a.href);
   expect(wm).toMatch(/^https:\/\/affil\.walmart\.com\/cart\/addToCart\?items=\d+(%7C|\|)\d+/);
