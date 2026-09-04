@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   checkDays, nextCheckAfter, addDays, localDay, zoneOf, deliveryDays, parsePrice,
-  normalizeCard, toRawCard, buildModel, cardState, scanPlan, orderedMap, ulinePasteText, ULINE_QUICK_ORDER_URL,
+  normalizeCard, toRawCard, buildModel, cardState, scanPlan, orderedMap, ulinePasteText, ULINE_QUICK_ORDER_URL, ulineQuickOrderUrl,
 } from '../src/js/tag-desk/model.js';
 
 const card = (o) => ({ id: 1, item: 'Packing Tape', supplier: 'Uline', orderQty: 'x72', orderWhen: '36', deliveryTime: '1 Day', price: '$2.10', crumbtrail: 'Supply Rack > A-1', url: '', picture: '', imageFile: '', ...o });
@@ -139,6 +139,9 @@ test('Uline quick-order paste text is one MODEL QTY per line; cards without a mo
   const r = ulinePasteText([{ model: 'S-23309-L', qty: 5 }, { model: null, qty: 1, item: 'Bucking Gloves' }, { model: 'S-423', qty: 36 }]);
   assert.equal(r.text, 'S-23309-L 5\nS-423 36'); assert.equal(r.lines, 2); assert.equal(r.missing.length, 1); assert.equal(r.missing[0].item, 'Bucking Gloves');
   assert.equal(ULINE_QUICK_ORDER_URL, 'https://www.uline.com/QuickOrder');
+  assert.equal(ulineQuickOrderUrl(r.text), 'https://www.uline.com/QuickOrder#ro=S-23309-L%205%0AS-423%2036');
+  assert.equal(decodeURIComponent(ulineQuickOrderUrl(r.text).split('#ro=')[1]), r.text);
+  assert.equal(ulineQuickOrderUrl(''), 'https://www.uline.com/QuickOrder');
   const m = normalizeCard(card({ url: 'https://www.uline.com/Product/Detail/S-23309-L/Disposable-Nitrile-Gloves/Uline-Black-Industrial-Nitrile-Gloves-Powder-Free-4-Mil-Large' }));
   assert.equal(m.model, 'S-23309-L');
 });

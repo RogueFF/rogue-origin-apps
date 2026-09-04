@@ -6,7 +6,7 @@
  */
 import { t, ES } from './labels.js';
 import * as api from './api.js';
-import { addDays, daysBetween, localDay, d1Instant, cardState, expectedOf, leadOf, orderedMap, toRawCard, ZONES, ulinePasteText, ULINE_QUICK_ORDER_URL } from './model.js';
+import { addDays, daysBetween, localDay, d1Instant, cardState, expectedOf, leadOf, orderedMap, toRawCard, ZONES, ulinePasteText, ulineQuickOrderUrl, ULINE_HELPER_URL, ULINE_BOOKMARKLET } from './model.js';
 
 // ---------- context (set by init) ----------
 let M = null, L = null, saveL = () => {}, reload = async () => {}, RAW = {}, PAGE_URL = '';
@@ -192,7 +192,7 @@ function laneFoot(v) { const s = summary(v); if (!s.q.length) return ''; return 
 function ulineRows(v) { return summary(v).q.map(c => ({ model: c.model, qty: c.inCart.qty, item: shortName(c) })); }
 function copyText(v) { const q = summary(v).q; if (v === 'Uline') return ulinePasteText(ulineRows(v)).text; return q.map(c => `${shortName(c)} × ${c.inCart.qty}`).join('\n'); }
 function copyLine(v) { const q = summary(v).q; if (!q.length) return '';
-  if (v === 'Uline') { const u = ulinePasteText(ulineRows(v)); return `<div class="copyline"><span class="eyebrow">${t('ulinePasteHead')}</span><pre class="paste">${esc(u.text) || '—'}</pre>${u.missing.length ? `<span class="missing">${t(u.missing.length === 1 ? 'noModel' : 'noModelN', { n: u.missing.length })}: ${u.missing.map(m => `<b>${esc(m.item)}</b> ×${m.qty}`).join(', ')}</span>` : ''}</div>`; }
+  if (v === 'Uline') { const u = ulinePasteText(ulineRows(v)); return `<div class="copyline"><span class="eyebrow">${t('ulinePasteHead')}</span><pre class="paste">${esc(u.text) || '—'}</pre>${u.missing.length ? `<span class="missing">${t(u.missing.length === 1 ? 'noModel' : 'noModelN', { n: u.missing.length })}: ${u.missing.map(m => `<b>${esc(m.item)}</b> ×${m.qty}`).join(', ')}</span>` : ''}<details class="tech setup"><summary>${t('ulineSetup')}</summary><p class="muted" style="font-size:13px;max-width:80ch;margin:0 0 8px">${t('ulineSetupTxt')}</p><p style="margin:0;display:flex;gap:10px;flex-wrap:wrap;align-items:center"><a class="tb-btn btn-sm" href="${ULINE_HELPER_URL}" target="_blank" rel="noopener">${t('ulineHelper')}</a><a class="tb-btn btn-sm bookmarklet" href="${esc(ULINE_BOOKMARKLET)}" title="${ES() ? 'Arrástrame a la barra de marcadores' : 'Drag me to the bookmarks bar'}">${t('ulineBookmarklet')}</a></p></details></div>`; }
   return `<div class="copyline"><span class="eyebrow">${esc(v)}</span><code>${esc(copyText(v)).replace(/\n/g, ' · ')}</code></div>`; }
 function copyToClipboard(txt) { return (navigator.clipboard && navigator.clipboard.writeText) ? navigator.clipboard.writeText(txt) : Promise.reject(new Error('no clipboard')); }
 function selectPaste() { const code = $('.copyline pre, .copyline code'); if (!code) return; const rg = document.createRange(); rg.selectNodeContents(code); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(rg); }
@@ -224,7 +224,8 @@ function wire(el) { const es = ES();
   $$('[data-received]', el).forEach(b => b.onclick = () => receiveOrder(b.dataset.received));
   $$('[data-copy]', el).forEach(b => b.onclick = () => { const txt = b.dataset.copy; copyToClipboard(txt).then(() => toast(t('copied') + ': ' + txt.replace(/\n/g, ' · ').slice(0, 60) + (txt.length > 60 ? '…' : '')), () => { selectPaste(); toast(es ? 'No se pudo copiar — el texto quedó seleccionado abajo, usa Ctrl+C' : 'Copy blocked — the list is selected below, press Ctrl+C'); }); });
   // One click: copy the paste-format list, then open Uline's Quick Order (its form carries an anti-forgery token, so it cannot be posted from here).
-  $$('[data-ulinego]', el).forEach(b => b.onclick = () => { const txt = ulinePasteText(ulineRows('Uline')).text; const win = window.open(ULINE_QUICK_ORDER_URL, '_blank', 'noopener'); copyToClipboard(txt).then(() => toast(t('ulineHow')), () => { selectPaste(); toast(es ? 'Pega la lista de abajo en Uline (Ctrl+C aquí)' : 'Paste the list below into Uline (Ctrl+C here)'); }); if (!win) toast(es ? 'El navegador bloqueó la pestaña — abre uline.com/QuickOrder' : 'The browser blocked the tab — open uline.com/QuickOrder'); });
+  $$('[data-ulinego]', el).forEach(b => b.onclick = () => { const txt = ulinePasteText(ulineRows('Uline')).text; const win = window.open(ulineQuickOrderUrl(txt), '_blank', 'noopener'); copyToClipboard(txt).then(() => toast(t('ulineHow')), () => { selectPaste(); toast(es ? 'Pega la lista de abajo en Uline (Ctrl+C aquí)' : 'Paste the list below into Uline (Ctrl+C here)'); }); if (!win) toast(es ? 'El navegador bloqueó la pestaña — abre uline.com/QuickOrder' : 'The browser blocked the tab — open uline.com/QuickOrder'); });
+  $$('.bookmarklet', el).forEach(a => a.onclick = e => { e.preventDefault(); toast(es ? 'Arrástralo a la barra de marcadores; tócalo en la página de Uline' : 'Drag it to the bookmarks bar; click it on the Uline page'); });
   $$('[data-openpages]', el).forEach(b => b.onclick = () => { const q = summary(b.dataset.openpages).q.filter(c => c.url); q.forEach(c => window.open(c.url, '_blank', 'noopener')); toast(`${es ? 'Abriendo' : 'Opening'} ${q.length} ${es ? 'páginas' : 'pages'}`); });
   $$('[data-sweep]', el).forEach(b => b.onclick = () => openSweep());
   $$('[data-selv]', el).forEach(b => b.onclick = () => { S.sel = b.dataset.selv; render(); window.scrollTo(0, 0); });
