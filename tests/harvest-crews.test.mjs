@@ -535,3 +535,24 @@ test('the sheet does not fire the printer by itself', async () => {
   // who wants to choose the tray first.
   assert.doesNotMatch(await codeSheet(env, ctx), /window\.print\(\)/);
 });
+
+test('the print sheet strips what the screen wrapper adds', async () => {
+  const { env, ctx } = freshDb();
+  const html = await codeSheet(env, ctx);
+
+  // Neither of these shows up on screen, so nothing but a rule catches them:
+  // the wrapper's body padding stacks on the @page margin and pushed the
+  // second crew card onto its own sheet, and the language toggle would print
+  // as a stray "ES" in the corner of a laminated sign.
+  assert.match(html, /@media print \{[\s\S]*body \{ margin: 0; padding: 0; \}/);
+  assert.match(html, /@media print \{[\s\S]*\.lang \{ display: none; \}/);
+});
+
+test('a crew card is sized to the card, not to the page', async () => {
+  const { env, ctx } = freshDb();
+  const html = await codeSheet(env, ctx);
+  // Two 4.6in cards plus the gap fit a letter sheet at any sane margin preset.
+  // Sizing the PAIR to fill the page fit only the default margins.
+  assert.match(html, /\.card \{ height: 4\.6in;/);
+  assert.doesNotMatch(html, /\.cards \{[^}]*height: 10in/);
+});

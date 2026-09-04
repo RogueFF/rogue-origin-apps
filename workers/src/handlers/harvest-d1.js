@@ -2384,12 +2384,18 @@ function codeSheetBody(ui) {
   .how.en { font-size: 10.5pt; color: #667; margin-top: 3pt; }
   .url { font-family: ui-monospace, Menlo, monospace; font-size: 9.5pt; color: #889; margin-top: 8pt; }
 
-  /* Crew cards: two to a page, cut down the middle. 4x6-ish so each one drops
-     straight into a standard laminating pouch and rides a clipboard. */
-  .cards { display: grid; grid-template-rows: 1fr 1fr; height: 10in; }
-  .card { display: flex; flex-direction: column; align-items: center; justify-content: center;
+  /* Crew cards: two to a page, cut down the middle, each a half-letter card
+     that trims into a laminating pouch and rides a clipboard.
+
+     Each card is a FIXED 4.6in rather than the pair filling the page. Sized to
+     the page, the two cards plus the wrapper's body padding came to more than
+     a letter sheet holds and the second card printed on its own sheet — and it
+     would have broken again on any margin preset but the default. 2 x 4.6in
+     plus the gap is 9.35in, inside the printable area even at 0.75in margins. */
+  .cards { display: grid; gap: 0.15in; }
+  .card { height: 4.6in; box-sizing: border-box;
+          display: flex; flex-direction: column; align-items: center; justify-content: center;
           border: 1.5pt dashed #bbb; border-radius: 8pt; padding: 12pt; text-align: center; }
-  .card + .card { margin-top: 10pt; }
   .card .big { font-size: 34pt; }
   .card .qr { width: 2.1in; height: 2.1in; }
 
@@ -2401,7 +2407,15 @@ function codeSheetBody(ui) {
   .noprint { max-width: 6.5in; margin: 0 auto 18pt; padding: 12pt 14pt; border: 1pt solid #ccd;
              border-radius: 8pt; background: #f6f7f9; font-size: 11pt; color: #334; text-align: left; }
   .noprint ul { margin: 6pt 0 0; padding-left: 18pt; }
-  @media print { .noprint { display: none; } }
+  @media print {
+    .noprint { display: none; }
+    /* The page wrapper pads the body and floats a language toggle in the
+       corner. Both are for the screen: the padding stacks on top of the @page
+       margin and steals a quarter inch from every sheet, and the toggle would
+       print as a stray "ES" on a laminated sign. */
+    body { margin: 0; padding: 0; }
+    .lang { display: none; }
+  }
 </style>
 <div class="codesheet">
   <div class="noprint">
