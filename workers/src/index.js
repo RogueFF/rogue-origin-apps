@@ -168,7 +168,7 @@ export default {
         response = await handleIrrigationD1(request, env, ctx);
       } else if (path.startsWith('/api/harvest')) {
         response = await handleHarvestD1(request, env, ctx);
-      } else if (path.startsWith('/s/') || path === '/b' || path === '/b/' || path.startsWith('/z/') || path.startsWith('/c/')) {
+      } else if (path.startsWith('/s/') || path === '/b' || path.startsWith('/b/') || path.startsWith('/z/') || path.startsWith('/c/')) {
         // The three crew QR targets. Short on purpose: these are printed on
         // laminated signs and barn walls for a whole season, and a shorter URL
         // means a lower-version QR with bigger modules — what survives dust,
