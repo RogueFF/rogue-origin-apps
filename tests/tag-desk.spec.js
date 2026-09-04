@@ -72,6 +72,11 @@ test('desk loads the live shape: tiles, three lanes, counts, no console errors',
   expect(await page.$eval('.board-h .when', e => e.innerText)).toMatch(/Next check/);
   expect(await page.$eval('#actbar [data-copy]', e => e.dataset.copy)).toMatch(/^S-[\w-]+ \d+(\n|$)/);
   expect(await page.$('#actbar [data-ulinego]')).not.toBeNull();
+  await page.evaluate(() => { window.__opened = []; window.open = (u) => { window.__opened.push(u); return {}; }; });
+  await page.click('#actbar [data-ulinego]'); await page.waitForTimeout(200);
+  const opened = await page.evaluate(() => window.__opened);
+  expect(opened.length).toBe(1); expect(opened[0]).toMatch(/^https:\/\/www\.uline\.com\/QuickOrder#ro=S-/);
+  expect(decodeURIComponent(opened[0].split('#ro=')[1]).split('\n').every(l => /^S-[\w-]+ \d+$/.test(l))).toBe(true);
   expect(await page.$eval('.copyline pre.paste', e => e.innerText.split('\n').length)).toBeGreaterThan(1);
   await page.click('.tabs [data-view="cards"]');
   expect(await page.$$eval('.pc', e => e.length)).toBe(93);
