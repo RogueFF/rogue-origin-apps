@@ -1,0 +1,22 @@
+-- Which drying bay a sack came down from.
+--
+-- Twelve bays, numbered continuously across both barns (Koa, 2026-09-03):
+--   1-8   bottom barn
+--   9-12  top barn
+-- The barn is therefore derived from the number, never stored -- two columns
+-- that must agree is one column too many.
+--
+-- Drying itself stays untracked (SOP section 4: coloured tape and radio, no
+-- screen). This is NOT a drying-stage capture: it is one field set at takedown,
+-- when the operator is already on the screen picking the lot, and it rides on
+-- every sack from that session.
+--
+-- The bay usually carries over: the crew shoots to fill one bay a day, so a
+-- bay sees several takedowns. That is why the picker defaults to the last bay
+-- used -- the common case is confirming, not choosing.
+--
+-- Nullable on purpose. Every sack tagged before this column existed has no bay
+-- and never will, and a default of 1 would silently claim they all came out of
+-- the first bottom-barn bay.
+
+ALTER TABLE harvest_sacks ADD COLUMN bay INTEGER;
