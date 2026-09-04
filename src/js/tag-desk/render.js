@@ -6,7 +6,7 @@
  */
 import { t, ES } from './labels.js';
 import * as api from './api.js';
-import { addDays, daysBetween, localDay, d1Instant, cardState, expectedOf, leadOf, orderedMap, toRawCard, ZONES, ulinePasteText, ulineQuickOrderUrl, ULINE_HELPER_URL, ULINE_BOOKMARKLET } from './model.js';
+import { addDays, daysBetween, localDay, d1Instant, cardState, expectedOf, leadOf, orderedMap, toRawCard, ZONES, ulinePasteText, ulineQuickOrderUrl, ULINE_HELPER_URL, ULINE_BOOKMARKLET, amazonCartUrl, walmartCartUrl } from './model.js';
 
 // ---------- context (set by init) ----------
 let M = null, L = null, saveL = () => {}, reload = async () => {}, RAW = {}, PAGE_URL = '';
@@ -193,7 +193,9 @@ function ulineRows(v) { return summary(v).q.map(c => ({ model: c.model, qty: c.i
 function copyText(v) { const q = summary(v).q; if (v === 'Uline') return ulinePasteText(ulineRows(v)).text; return q.map(c => `${shortName(c)} × ${c.inCart.qty}`).join('\n'); }
 function copyLine(v) { const q = summary(v).q; if (!q.length) return '';
   if (v === 'Uline') { const u = ulinePasteText(ulineRows(v)); return `<div class="copyline"><span class="eyebrow">${t('ulinePasteHead')}</span><pre class="paste">${esc(u.text) || '—'}</pre>${u.missing.length ? `<span class="missing">${t(u.missing.length === 1 ? 'noModel' : 'noModelN', { n: u.missing.length })}: ${u.missing.map(m => `<b>${esc(m.item)}</b> ×${m.qty}`).join(', ')}</span>` : ''}<details class="tech setup"><summary>${t('ulineSetup')}</summary><p class="muted" style="font-size:13px;max-width:80ch;margin:0 0 8px">${t('ulineSetupTxt')}</p><p style="margin:0;display:flex;gap:10px;flex-wrap:wrap;align-items:center"><a class="tb-btn btn-sm" href="${ULINE_HELPER_URL}" target="_blank" rel="noopener">${t('ulineHelper')}</a><a class="tb-btn btn-sm bookmarklet" href="${esc(ULINE_BOOKMARKLET)}" title="${ES() ? 'Arrástrame a la barra de marcadores' : 'Drag me to the bookmarks bar'}">${t('ulineBookmarklet')}</a></p></details></div>`; }
-  return `<div class="copyline"><span class="eyebrow">${esc(v)}</span><code>${esc(copyText(v)).replace(/\n/g, ' · ')}</code></div>`; }
+  const link = cartLink(v); const miss = link && link.missing.length ? `<span class="missing">${t(link.missing.length === 1 ? 'noId' : 'noIdN', { n: link.missing.length })}: ${link.missing.map(m => `<b>${esc(m.item)}</b> ×${m.qty}`).join(', ')}</span>` : '';
+  return `<div class="copyline"><span class="eyebrow">${esc(v)}</span><code>${esc(copyText(v)).replace(/\n/g, ' · ')}</code>${miss}</div>`; }
+function cartLink(v) { const q = summary(v).q; const rows = q.map(c => ({ asin: c.asin, wmId: c.wmId, qty: c.inCart.qty, item: shortName(c) })); if (v === 'Amazon') return amazonCartUrl(rows); if (v === 'Walmart') return walmartCartUrl(rows); return null; }
 function copyToClipboard(txt) { return (navigator.clipboard && navigator.clipboard.writeText) ? navigator.clipboard.writeText(txt) : Promise.reject(new Error('no clipboard')); }
 function selectPaste() { const code = $('.copyline pre, .copyline code'); if (!code) return; const rg = document.createRange(); rg.selectNodeContents(code); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(rg); }
 function renderActbar() { const es = ES(); const bar = $('#actbar'); if (S.view !== 'order' || !M.vendors[S.sel]) { bar.hidden = true; return; } const v = S.sel; const s = summary(v);
@@ -205,8 +207,10 @@ function renderActbar() { const es = ES(); const bar = $('#actbar'); if (S.view 
     if (nextV) { const sx = summary(nextV); primary = `<button class="tb-btn btn-lg" data-selv="${esc(nextV)}">${t('nextVendor', { v: nextV, n: sx.q.length + sx.due.length })}</button>`; }
     else { const placed = Object.values(L.receipts).filter(r => r.day === M.today).length; const tot = Object.values(L.receipts).filter(r => r.day === M.today).reduce((a, r) => a + r.est, 0); primary = `<button class="tb-btn btn-primary btn-lg" disabled>${placed ? `${t('allPlaced', { n: placed })}${tot > 0 ? ` · ≈ ${money(tot)}` : ''}` : `${t('nothingQueued')} · ${esc(v)}`}</button>`; } }
   else primary = `<button class="tb-btn btn-primary btn-lg" disabled>${t('nothingQueued')} · ${esc(v)} · ${s.due.length} ${t('runningOut')}</button>`;
-  const uline = v === 'Uline' ? ulinePasteText(ulineRows(v)) : null;
-  bar.hidden = false; bar.innerHTML = `<div class="sum">${sum}</div><span class="grow"></span>${s.q.length ? `<button class="tb-btn" data-copy="${esc(copyText(v))}">${t('copy', { v })} (${uline ? uline.lines : s.q.length})</button>${v === 'Uline' ? `<button class="tb-btn" data-ulinego="1" ${uline.lines ? '' : 'disabled'}>${t('ulineGo')}</button>` : `<button class="tb-btn" data-openpages="${esc(v)}">${es ? 'Abrir' : 'Open'} ${s.q.length} ${es ? 'páginas' : 'pages'} ↗</button>`}` : ''}${primary}`; wire(bar); }
+  const uline = v === 'Uline' ? ulinePasteText(ulineRows(v)) : null; const link = cartLink(v);
+  const vendorBtns = v === 'Uline' ? `<button class="tb-btn" data-ulinego="1" ${uline.lines ? '' : 'disabled'}>${t('ulineGo')}</button>`
+    : `${link && link.url ? `<a class="tb-btn" data-cartgo="${esc(v)}" href="${esc(link.url)}" target="_blank" rel="noopener">${t(v === 'Amazon' ? 'amazonGo' : 'walmartGo')}</a>` : ''}<button class="tb-btn" data-openpages="${esc(v)}">${t('openPages', { n: s.q.length })}</button>`;
+  bar.hidden = false; bar.innerHTML = `<div class="sum">${sum}</div><span class="grow"></span>${s.q.length ? `<button class="tb-btn" data-copy="${esc(copyText(v))}">${t('copy', { v })} (${uline ? uline.lines : s.q.length})</button>${vendorBtns}` : ''}${primary}`; wire(bar); }
 
 // ---------- wiring (every handler is a data attribute) ----------
 function wire(el) { const es = ES();
@@ -226,6 +230,7 @@ function wire(el) { const es = ES();
   // One click: copy the paste-format list, then open Uline's Quick Order (its form carries an anti-forgery token, so it cannot be posted from here).
   $$('[data-ulinego]', el).forEach(b => b.onclick = () => { const txt = ulinePasteText(ulineRows('Uline')).text; const win = window.open(ulineQuickOrderUrl(txt), '_blank', 'noopener'); copyToClipboard(txt).then(() => toast(t('ulineHow')), () => { selectPaste(); toast(es ? 'Pega la lista de abajo en Uline (Ctrl+C aquí)' : 'Paste the list below into Uline (Ctrl+C here)'); }); if (!win) toast(es ? 'El navegador bloqueó la pestaña — abre uline.com/QuickOrder' : 'The browser blocked the tab — open uline.com/QuickOrder'); });
   $$('.bookmarklet', el).forEach(a => a.onclick = e => { e.preventDefault(); toast(es ? 'Arrástralo a la barra de marcadores; tócalo en la página de Uline' : 'Drag it to the bookmarks bar; click it on the Uline page'); });
+  $$('[data-cartgo]', el).forEach(a => a.onclick = () => { toast(t(a.dataset.cartgo === 'Amazon' ? 'amazonHow' : 'walmartHow')); });
   $$('[data-openpages]', el).forEach(b => b.onclick = () => { const q = summary(b.dataset.openpages).q.filter(c => c.url); q.forEach(c => window.open(c.url, '_blank', 'noopener')); toast(`${es ? 'Abriendo' : 'Opening'} ${q.length} ${es ? 'páginas' : 'pages'}`); });
   $$('[data-sweep]', el).forEach(b => b.onclick = () => openSweep());
   $$('[data-selv]', el).forEach(b => b.onclick = () => { S.sel = b.dataset.selv; render(); window.scrollTo(0, 0); });
