@@ -594,7 +594,7 @@ test('both example tags print, with their own QR and no serial consumed', async 
   assert.match(html, /SLIFT/);
   assert.match(html, /LIFT/);
   // Each tag's QR points at its OWN page, not both at the same one.
-  for (const id of ['26-SLIFT-DEMO', '26-LIFT-DEMO']) {
+  for (const id of ['26-SLIFT-142', '26-LIFT-87']) {
     assert.ok(html.includes(encodeURIComponent(id)) || html.includes(id), `QR for ${id}`);
   }
   // The whole point of the demo path: nothing is written, so the season still
@@ -603,25 +603,51 @@ test('both example tags print, with their own QR and no serial consumed', async 
   assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM harvest_sacks').get().n, 0);
 });
 
-test('a real bag number can never collide with an example', () => {
-  // Real ids are <yy>-<PREFIX>-<digits>. The example ids end in letters, so
-  // there is no serial a season could reach that would land on one. These tags
-  // get laminated and outlive several seasons — "unlikely" is not good enough.
-  for (const id of ['26-SLIFT-DEMO', '26-LIFT-DEMO']) {
-    assert.doesNotMatch(id, /-\d+$/, id);
-  }
+test('a real bag always beats the example that shares its number', async () => {
+  // The tags carry real bag numbers (Koa: "give it an actual bag #"), so the
+  // ONLY thing keeping a genuine bag off invented weights is the lookup order.
+  // The day the season prints 26-SLIFT-142, that bag has to win its own id.
+  const { sqlite, env, ctx } = freshDb();
+  sqlite.prepare(`
+    INSERT INTO harvest_sacks (sack_id, season, serial, zone, cultivar, cut_number,
+                               bay, printed_at, is_test)
+    VALUES ('26-SLIFT-142', ?, 142, 'Z16', 'Sour Lifter', 2, 4, ?, 1)
+  `).run(SEASON, ago(3));
+
+  const html = await (await handleSackScan(
+    new Request('https://x/s/26-SLIFT-142?lang=en'), env, ctx)).text();
+  assert.match(html, /Z16/, 'the real row, not the example');
+  assert.doesNotMatch(html, /Example.*sack|does not exist/i,
+    'and it must not be labelled an example');
+  assert.doesNotMatch(html, /Z4/, 'no trace of the example lot');
+});
+
+test('a note on a number the season has since printed hits the real bag', async () => {
+  // The write path needs the same ordering as the read path. Falling through to
+  // the example here would silently discard a real note.
+  const { sqlite, env, ctx } = freshDb();
+  sqlite.prepare(`
+    INSERT INTO harvest_sacks (sack_id, season, serial, zone, cultivar, cut_number,
+                               bay, printed_at, is_test)
+    VALUES ('26-LIFT-87', ?, 87, 'Z20', 'Lifter', 1, 5, ?, 1)
+  `).run(SEASON, ago(3));
+
+  await post(env, ctx, 'action=sack_note&lang=en', { sack_id: '26-LIFT-87', note: 'real note' });
+  const n = sqlite.prepare(
+    `SELECT COUNT(*) c FROM harvest_sack_notes WHERE sack_id = '26-LIFT-87'`).get().c;
+  assert.equal(n, 1, 'the note landed on the real bag');
 });
 
 test('scanning either example shows that cultivar, and saves nothing', async () => {
   const { sqlite, env, ctx } = freshDb();
 
   const sl = await (await handleSackScan(
-    new Request('https://x/s/26-SLIFT-DEMO?opened=1&lang=en'), env, ctx)).text();
+    new Request('https://x/s/26-SLIFT-142?opened=1&lang=en'), env, ctx)).text();
   assert.match(sl, /Sour Lifter/);
   assert.match(sl, /Example.*sack|does not exist/i, 'it must say it is not real');
 
   const l = await (await handleSackScan(
-    new Request('https://x/s/26-LIFT-DEMO?opened=1&lang=en'), env, ctx)).text();
+    new Request('https://x/s/26-LIFT-87?opened=1&lang=en'), env, ctx)).text();
   assert.match(l, /Z19/, 'the Lifter example is a real Lifter zone');
   assert.doesNotMatch(l, /Sour Lifter/, 'the two examples are genuinely different sacks');
 
@@ -632,7 +658,7 @@ test('the five parts of each example add up to a full sack', async () => {
   // A demo whose weights did not sum to the 37 lb that went in would teach the
   // wrong thing about what the page is showing.
   const { env, ctx } = freshDb();
-  for (const id of ['26-SLIFT-DEMO', '26-LIFT-DEMO']) {
+  for (const id of ['26-SLIFT-142', '26-LIFT-87']) {
     const html = await (await handleSackScan(
       new Request(`https://x/s/${id}?opened=1&lang=en`), env, ctx)).text();
     const nums = [...html.matchAll(/([\d]+\.[\d])\s*lb/g)].map(m => parseFloat(m[1]));
@@ -654,11 +680,11 @@ test('each example names its own zone, not the other one', async () => {
   // tag — the one line on the page whose whole job is to be trusted.
   const { env, ctx } = freshDb();
   const l = await (await handleSackScan(
-    new Request('https://x/s/26-LIFT-DEMO?lang=en'), env, ctx)).text();
+    new Request('https://x/s/26-LIFT-87?lang=en'), env, ctx)).text();
   assert.match(l, /the real Z19/);
   assert.doesNotMatch(l, /the real Z4/);
 
   const sl = await (await handleSackScan(
-    new Request('https://x/s/26-SLIFT-DEMO?lang=en'), env, ctx)).text();
+    new Request('https://x/s/26-SLIFT-142?lang=en'), env, ctx)).text();
   assert.match(sl, /the real Z4/);
 });
