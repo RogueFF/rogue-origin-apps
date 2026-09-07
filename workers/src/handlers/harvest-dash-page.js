@@ -127,7 +127,12 @@ export function dashPage() {
   .rack.coming::before    { background:var(--sky); }
   .rack.vacant { opacity:.4; }
   .rack .n { font-family:var(--mono); font-size:.72rem; color:var(--muted);
-             display:flex; justify-content:space-between; align-items:baseline; gap:6px; }
+             display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+  /* The bay number is what someone says out loud when they point at the barn,
+     so it is the cell's name and is set like one. Nowrap on both halves: at
+     four columns "Bay 12" and "151 bins" have to stay on one line. */
+  .rack .n .bn { font-size:1.35rem; font-weight:800; color:var(--ink); letter-spacing:-.02em; }
+  .rack .n span { white-space:nowrap; }
   .rack .age { font-size:1.45rem; font-weight:800; font-variant-numeric:tabular-nums;
                line-height:1.15; margin:2px 0 1px; }
   .rack .age small { font-size:.8rem; font-weight:700; color:var(--muted); margin-left:3px; }
@@ -495,7 +500,7 @@ export function dashPage() {
         : '<div class="age">' + r.days + '<small>d</small></div>' +
           '<div class="st">' + word + '</div>' + '<ul>' + lots + '</ul>';
 
-      var cell = '<div class="rack ' + cls + '"><div class="n"><span>Bay ' + r.bay + '</span>' +
+      var cell = '<div class="rack ' + cls + '"><div class="n"><span class="bn">Bay ' + r.bay + '</span>' +
         (r.state === 'empty' ? '' : '<span>' + r.bins + ' bins</span>') + '</div>' + body + '</div>';
       (r.barn === 'top' ? top : bottom).push(cell);
     }
