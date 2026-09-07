@@ -1264,10 +1264,10 @@ async function handleSackLabel(ui, db, env, params) {
   // ?calibrate=1 on the thermal path: specimen tags for proving a printer
   // without burning a bag number. Never auto-prints, never writes.
   if (params.calibrate === '1') {
-    const banner = `<div style="padding:0 14px 14px;font:13px system-ui;max-width:6in">
+    const banner = `<div class="banner">
       <strong>Specimen tags — not real bags.</strong> Nothing was allocated and no number was used up.
       One tag per cultivar-name length, because the name font steps down as it gets longer.
-      <br><br><strong>Scan the first one</strong> (Sour Lifter #7) — it opens the sack page with example data, so you
+      <br><br><strong>Scan the first one</strong> (Sour Lifter #142) — it opens the sack page with example data, so you
       can see what a scan actually shows. Nothing is saved from that page, including the buttons.
       <br><br><strong>The other two are print checks:</strong> they carry the longest name and the widest bag number the
       season can produce, and their QRs point at bags that do not exist — so a <em>&ldquo;no sack&rdquo;</em> page means
@@ -3819,7 +3819,7 @@ function specimenSacks() {
   return [
     // The one to scan: its QR opens the demo sack page, so the printed tag and
     // the screen it leads to can both be judged from one sheet.
-    { sack_id: '26-SLIFT-7', qr_id: DEMO_SACK_ID, serial: 7, cultivar_code: 'SLIFT', cultivar: 'Sour Lifter', zone: 'Z4', cut_number: 1, harvest_date: today, bay: 7 },
+    { sack_id: DEMO_SACK_ID, qr_id: DEMO_SACK_ID, serial: 142, cultivar_code: 'SLIFT', cultivar: 'Sour Lifter', zone: 'Z4', cut_number: 1, harvest_date: today, bay: 7 },
     // Longest name in the roster, so the name font drops to its smallest step.
     { sack_id: '26-ORNGPQ-12',    serial: 12,  cultivar_code: 'ORNGPQ',   cultivar: 'Orange Pineapple Quik', zone: 'Z8',  cut_number: 2, harvest_date: today, bay: 9 },
     // The realistic worst case, and both squeezes at once: an 8-character
@@ -3862,6 +3862,9 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
     width: 4in; height: 2in; padding: 0.11in 0.13in;
     background: #fff; color: #000; overflow: hidden;
     display: flex; flex-direction: row; align-items: center; gap: 0.1in;
+    /* A tag is one physical label. Even if something above it shifts the flow,
+       it must move whole rather than split across the perforation. */
+    break-inside: avoid; page-break-inside: avoid;
   }
   .txt { min-width: 0; flex: 1; }
   .cutline { border-top: 1pt dashed #999; text-align: center; }
@@ -3887,12 +3890,20 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
   .qr { width: 1in; height: 1in; flex: none; }
   .toolbar { padding: 14px; font: 14px system-ui; }
   .toolbar a { color: #036; }
+  /* Explanatory text for whoever opened the sheet — SCREEN ONLY. Left in the
+     print flow it costs a label and, worse, pushes the first tag down so it
+     straddles the page boundary: the Sour Lifter tag came out of a BIXOLON
+     SRP-770III with the name on one label and the QR on the next
+     (Koa, 2026-09-07). The calibration sheet had the same fault. */
+  .banner { max-width: 4in; margin: 12px auto; padding: 12px 14px;
+            background: #fff; border: 1px solid #ccc; border-radius: 6px;
+            font: 13px/1.5 system-ui, sans-serif; color: #222; }
   @media screen {
     .label, .page { margin: 12px auto; box-shadow: 0 1px 6px rgba(0,0,0,.3); }
     .page .label { margin: 0; box-shadow: none; }
   }
   @media print {
-    .toolbar { display: none; }
+    .toolbar, .banner { display: none; }
     body { background: #fff; }
     .label, .page { margin: 0; page-break-after: always; box-shadow: none; }
     .label:last-child, .page:last-child { page-break-after: auto; }
