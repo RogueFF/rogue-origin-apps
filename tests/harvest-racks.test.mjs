@@ -759,3 +759,62 @@ test('the example mark is ink, not a background fill', async () => {
   assert.match(rule[1], /border:[^;]*#000/, 'an outline prints without permission');
   assert.match(rule[1], /color:\s*#000/, 'and the letters have to be ink');
 });
+
+// ─── clipped hours never lift the measured rate ──────────────────────────────
+
+test('a clipped session gets its own rate and never touches the measured one', () => {
+  // THE WHOLE POINT OF THE BUCKETING. Clipped hours are a floor — the crew were
+  // cutting before the first trailer and after the last — so bins divided by
+  // them is a ceiling. Pooled into one figure it would silently lift whichever
+  // crew forgot the end-of-day scan more often, and an overstated rate looks
+  // exactly like a good day.
+  const sessions = [
+    { id: 1, zone: 'Z4', cultivar: 'Sour Lifter', cut_number: 1, crew: 'A',
+      occurred_at: ago(9), closed_at: ago(9, 22), headcount: 5 },
+    { id: 2, zone: 'Z5', cultivar: 'Sour Lifter', cut_number: 1, crew: 'A',
+      occurred_at: ago(8), closed_at: ago(7, 20), headcount: 6 },
+  ];
+  const lots = [{
+    lot_id: 'L1', season: SEASON, zone: 'Z4', cultivar: 'Sour Lifter', cut_number: 1,
+    cut_date: ago(9).slice(0, 10), session_ids: [1, 2], sacks: 0,
+    sessions: [
+      { session_id: 1, cutter_person_hours: 20, hours_basis: 'measured' },
+      { session_id: 2, cutter_person_hours: 36, hours_basis: 'clipped' },
+    ],
+  }];
+  const loads = [
+    L({ id: 1, zone: 'Z4', bay: null, bins: 100, crew: 'A', at: ago(9), session: 1 }),
+    L({ id: 2, zone: 'Z5', bay: null, bins: 200, crew: 'A', at: ago(8), session: 2 }),
+  ];
+
+  const d = buildMetrics({ lots, sessions, loads, sacks: [], dryWindow: DRY,
+    bottomBarnLastBay: 8, bayCount: 12 });
+  const a = d.crew.find(c => c.crew === 'A');
+
+  // Measured only: 100 bins over 20 measured person-hours.
+  assert.equal(a.bins_per_cutter_hour, 5);
+  // Clipped only: 200 bins over 36 clipped person-hours, named a ceiling.
+  assert.equal(a.bins_per_cutter_hour_ceiling, 5.6);
+  // Pooling would give 300/56 = 5.4 — a number that is neither, and that reads
+  // as a measurement.
+  assert.notEqual(a.bins_per_cutter_hour, 5.4);
+  assert.equal(a.sessions_counted, 1);
+  assert.equal(a.sessions_clipped, 1);
+  assert.equal(a.bins, 300, 'the true total is still reported beside them');
+});
+
+test('with no clipped sessions the ceiling is absent, not zero', () => {
+  const sessions = [{ id: 1, zone: 'Z4', cultivar: 'Sour Lifter', cut_number: 1,
+    crew: 'A', occurred_at: ago(9), closed_at: ago(9, 22), headcount: 5 }];
+  const lots = [{
+    lot_id: 'L1', season: SEASON, zone: 'Z4', cultivar: 'Sour Lifter', cut_number: 1,
+    cut_date: ago(9).slice(0, 10), session_ids: [1], sacks: 0,
+    sessions: [{ session_id: 1, cutter_person_hours: 20, hours_basis: 'measured' }],
+  }];
+  const d = buildMetrics({ lots, sessions,
+    loads: [L({ id: 1, zone: 'Z4', bay: null, bins: 100, crew: 'A', at: ago(9), session: 1 })],
+    sacks: [], dryWindow: DRY, bottomBarnLastBay: 8, bayCount: 12 });
+  const a = d.crew.find(c => c.crew === 'A');
+  assert.equal(a.bins_per_cutter_hour, 5);
+  assert.equal(a.bins_per_cutter_hour_ceiling, null, 'nothing to caveat');
+});

@@ -123,6 +123,11 @@ function enterAt(sqlite, { zone, cultivar, cut = 1, opened, closed = null, headc
   return Number(sqlite.prepare('SELECT last_insert_rowid() AS id').get().id);
 }
 
+const loadAt = (sqlite, zone, bins, sessionId, at) => sqlite.prepare(`
+  INSERT INTO harvest_scan_log (event_type, zone, season, bins, attributed_zone_session_id, occurred_at, is_test)
+  VALUES ('barn_load', ?, ?, ?, ?, ?, 1)
+`).run(zone, SEASON, bins, sessionId, at);
+
 const load = (sqlite, zone, bins, sessionId) => sqlite.prepare(`
   INSERT INTO harvest_scan_log (event_type, zone, season, bins, attributed_zone_session_id, occurred_at, is_test)
   VALUES ('barn_load', ?, ?, ?, ?, datetime('now'), 1)
@@ -247,10 +252,73 @@ test('a lot the crew slept on withholds its cutter-hours, and says so', async ()
   const lot = (await lots(env, ctx)).find(l => l.zone === 'Z4');
   assert.equal(lot.sessions[0].spans_days, true);
   // ~15.5 h x 6 = 93 cutter-hours, most of it the crew asleep. Reporting that
-  // is worse than reporting nothing.
+  // is worse than reporting nothing — and with no trailer and no headcount tap
+  // there is nothing observed to clip to either, so it still withholds.
   assert.equal(lot.cutter_person_hours, null);
   assert.match(lot.cutter_person_hours_basis, /overnight/);
-  assert.match(lot.cutter_person_hours_basis, /cutting-day window is not set/);
+  assert.match(lot.cutter_person_hours_basis, /nothing observed to clip to/);
+});
+
+test('an overnight session with trailers is clipped to what was seen', async () => {
+  // The fallback for a forgotten end-of-day scan. Open-to-close spans a night
+  // and cannot be used; the trailers can. Opened 17:00 UTC with loads at 19:00
+  // and 21:00, then closed 20:00 UTC the next day after a load at 18:00.
+  //   day 1: 17:00 -> 21:00 = 4 h
+  //   day 2: 18:00 -> 20:00 = 2 h
+  // 6 h x 6 cutters = 36, against the 27 h x 6 = 162 that open-to-close would
+  // have billed.
+  const { sqlite, env, ctx } = freshDb();
+  const id = enterAt(sqlite, {
+    zone: 'Z4', cultivar: 'Sour Lifter',
+    opened: utcAt(2, 17), closed: utcAt(1, 20), headcount: 6,
+  });
+  loadAt(sqlite, 'Z4', 20, id, utcAt(2, 19));
+  loadAt(sqlite, 'Z4', 20, id, utcAt(2, 21));
+  loadAt(sqlite, 'Z4', 20, id, utcAt(1, 18));
+
+  const lot = (await lots(env, ctx)).find(l => l.zone === 'Z4');
+  assert.equal(lot.sessions[0].spans_days, true);
+  assert.equal(lot.sessions[0].hours_basis, 'clipped');
+  assert.equal(lot.cutter_person_hours, 36);
+  assert.equal(lot.cutter_person_hours_clipped, 36);
+  assert.equal(lot.cutter_person_hours_measured, null);
+  // The number reads like a measurement and half of it is not, so every lot
+  // carrying one has to say so.
+  assert.match(lot.cutter_person_hours_basis, /clipped to observed activity/);
+  assert.match(lot.cutter_person_hours_basis, /floor.*ceiling/);
+});
+
+test('clipped hours are a floor — never more than open-to-close', async () => {
+  // The whole defence. If clipping could ever exceed the raw window it would be
+  // inventing time rather than withholding it, and the rate would go the other
+  // way from the one direction we accept.
+  const { sqlite, env, ctx } = freshDb();
+  const id = enterAt(sqlite, {
+    zone: 'Z4', cultivar: 'Sour Lifter',
+    opened: utcAt(2, 17), closed: utcAt(1, 20), headcount: 6,
+  });
+  for (const [d, h] of [[2, 18], [2, 22], [1, 17], [1, 19]]) loadAt(sqlite, 'Z4', 20, id, utcAt(d, h));
+
+  const lot = (await lots(env, ctx)).find(l => l.zone === 'Z4');
+  const ps = lot.sessions[0];
+  assert.ok(ps.hours_counted < ps.hours_open,
+    `clipped ${ps.hours_counted} must be under the raw ${ps.hours_open}`);
+  assert.ok(ps.hours_counted > 0);
+});
+
+test('a lot mixing a measured and a clipped session reports both, split', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  // Same lot, two visits: one ordinary afternoon, one that ran overnight.
+  enterAt(sqlite, { zone: 'Z4', cultivar: 'Sour Lifter', opened: utcAt(4, 17), closed: utcAt(4, 21), headcount: 5 });
+  const b = enterAt(sqlite, { zone: 'Z4', cultivar: 'Sour Lifter', opened: utcAt(2, 17), closed: utcAt(1, 20), headcount: 6 });
+  loadAt(sqlite, 'Z4', 20, b, utcAt(2, 21));
+  loadAt(sqlite, 'Z4', 20, b, utcAt(1, 18));
+
+  const lot = (await lots(env, ctx)).find(l => l.zone === 'Z4');
+  assert.equal(lot.cutter_person_hours_measured, 20);   // 4 h x 5
+  assert.equal(lot.cutter_person_hours_clipped, 36);    // (4 + 2) h x 6
+  assert.equal(lot.cutter_person_hours, 56);
+  assert.match(lot.cutter_person_hours_basis, /1 of 2 session/);
 });
 
 test('an ordinary Pacific afternoon is not mistaken for an overnight', async () => {
