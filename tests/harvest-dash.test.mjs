@@ -346,6 +346,31 @@ test('the lot board links to the dashboard, and the link is absolute', async () 
   }
 });
 
+test('the dashboard links back to the board, absolutely', async () => {
+  const { env, ctx } = freshDb();
+  const html = await (await fetchApi(env, ctx, 'action=harvest_dash')).text();
+
+  const hrefs = [...html.matchAll(/href="([^"]*action=board_page[^"]*)"/g)].map(m => m[1]);
+  assert.ok(hrefs.length >= 1, 'the pair to the board\'s "Cycle times" link');
+  for (const href of hrefs) {
+    const resolved = new URL(href, 'https://x/api/harvest?action=harvest_dash');
+    assert.equal(resolved.pathname, '/api/harvest');
+    assert.equal(resolved.searchParams.get('action'), 'board_page');
+  }
+});
+
+test('both pages reach each other, so neither is a dead end', async () => {
+  const { env, ctx } = freshDb();
+  const [dash, board] = await Promise.all([
+    fetchApi(env, ctx, 'action=harvest_dash').then(r => r.text()),
+    fetchApi(env, ctx, 'action=board_page').then(r => r.text()),
+  ]);
+  // One tool viewed two ways. A link added in one direction and forgotten in
+  // the other is how a page becomes something you have to know the URL for.
+  assert.match(dash, /action=board_page/);
+  assert.match(board, /action=harvest_dash/);
+});
+
 test('the board still ships no lot data of its own', async () => {
   const { env, ctx } = freshDb();
   const html = await (await fetchApi(env, ctx, 'action=board_page')).text();
