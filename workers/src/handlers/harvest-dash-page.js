@@ -47,6 +47,19 @@ export function dashPage() {
   .testpill { font-size:.7rem; font-weight:800; letter-spacing:.1em; padding:4px 9px;
               border-radius:4px; background:#4a3c12; color:var(--straw); border:1px solid #6b5718; }
 
+  /* Back to the lot board — the pair to the board's own "Cycle times" link, and
+     styled to match it: the two pages are one tool viewed two ways.
+     The explicit line-height is because anchors inherit it and buttons do not,
+     which on the board left this link's twin 4px taller than the button beside
+     it. (Backticks are not available in this comment: the whole page is one JS
+     template literal, and one would end it.) */
+  a.nav { font-weight:600; font-size:.78rem; text-transform:uppercase; letter-spacing:.09em;
+          color:var(--ink2); background:var(--raised); border:1px solid var(--line2);
+          border-radius:8px; padding:7px 12px; text-decoration:none;
+          display:inline-flex; align-items:center; line-height:normal; }
+  a.nav:hover { border-color:var(--leaf); color:var(--leaf); }
+  a.nav:focus-visible { outline:2px solid var(--straw); outline-offset:2px; }
+
   /* ── gate ─────────────────────────────────────────────── */
   #gate { max-width:420px; margin:70px auto; background:var(--panel); border:1px solid var(--line);
           border-radius:12px; padding:26px; }
@@ -151,6 +164,7 @@ export function dashPage() {
         <p class="sub" id="seasonline">&nbsp;</p>
       </div>
       <div class="grow"></div>
+      <a class="nav" id="toboard" href="/api/harvest?action=board_page">Lot board</a>
       <span id="testpill" class="testpill hide">TEST MODE</span>
       <span class="stamp" id="stamp"></span>
     </header>
