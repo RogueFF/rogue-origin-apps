@@ -2464,7 +2464,8 @@ export async function computeRollup(db, env, params) {
 
   const lots = await query(db, `
     SELECT
-      l.id, l.zone, l.cultivar, l.cut_number, l.season, l.occurred_at, l.closed_at, l.headcount,
+      l.id, l.zone, l.cultivar, l.cut_number, l.season, l.occurred_at, l.closed_at,
+      l.headcount, l.headcount_at,
       (SELECT COUNT(*) FROM harvest_scan_log b
         WHERE b.event_type = 'barn_load' AND b.attributed_zone_session_id = l.id AND b.is_test = l.is_test) AS loads,
       (SELECT COALESCE(SUM(b.bins), 0) FROM harvest_scan_log b
@@ -2489,9 +2490,25 @@ export async function computeRollup(db, env, params) {
     ORDER BY l.occurred_at ASC
   `, [season, isTest]);
 
+  // Trailer times per session, for clipping an overnight session to the hours
+  // it can be seen to have worked. Counts and sums come from the subqueries
+  // above; this is the only place the individual timestamps are needed.
+  const loadTimes = await query(db, `
+    SELECT attributed_zone_session_id AS sid, occurred_at
+    FROM harvest_scan_log
+    WHERE event_type = 'barn_load' AND season = ? AND is_test = ?
+      AND attributed_zone_session_id IS NOT NULL
+    ORDER BY occurred_at ASC
+  `, [season, isTest]);
+  const eventsBySession = new Map();
+  for (const r of loadTimes) {
+    if (!eventsBySession.has(r.sid)) eventsBySession.set(r.sid, []);
+    eventsBySession.get(r.sid).push(r.occurred_at);
+  }
+
   // One row per LOT, not per session. Ordered oldest-first by the query, so
   // each group's first session is its primary.
-  const rows = groupSessionsIntoLots(lots).map(g => buildLotRow(g));
+  const rows = groupSessionsIntoLots(lots).map(g => buildLotRow(g, eventsBySession));
 
   // Crew is captured per-period, not per-lot — a roster change doesn't line up
   // with lot boundaries — so it rolls up by day alongside the lots.
@@ -2535,7 +2552,46 @@ async function getRollup(request, db, env, params, body) {
  * One ledger row for one lot, folding together every session that belongs to it
  * (see lotKey / groupSessionsIntoLots). `sessions` arrives oldest-first.
  */
-function buildLotRow(sessions) {
+/**
+ * Hours a spanning session can be SEEN to have worked, day by day.
+ *
+ * The fallback for a forgotten end-of-day scan (see handleDayEnd). Open-to-
+ * close contains a night and cannot be used; this uses only moments the system
+ * actually observed — the zone scan, headcount taps, every trailer logged
+ * against the session, and the close — and takes the span of them within each
+ * Pacific day.
+ *
+ * IT UNDERSTATES, ALWAYS, AND THAT IS THE POINT TO BE HONEST ABOUT. The crew
+ * were cutting before the first trailer of the morning arrived and after the
+ * last one left, and none of that is visible here. So the hours are a FLOOR,
+ * and any rate divided by them is a CEILING. Everything downstream keeps these
+ * in their own bucket for exactly that reason: pooled with measured sessions
+ * they would quietly inflate bins-per-cutter-hour, and an overstated rate just
+ * looks like a good day.
+ *
+ * A day with fewer than two observations contributes nothing rather than a
+ * guess — that is a day we have no evidence about, not a day of no work.
+ */
+function clippedActiveHours(session, loadTimes = []) {
+  const stamps = [session.occurred_at, session.headcount_at, session.closed_at, ...loadTimes]
+    .filter(Boolean)
+    .map(t => parseSqliteUtc(t));
+
+  const byDay = new Map();
+  for (const d of stamps) {
+    const key = pacificDay(d);
+    const ms = d.getTime();
+    const cur = byDay.get(key);
+    if (!cur) byDay.set(key, { min: ms, max: ms });
+    else { if (ms < cur.min) cur.min = ms; if (ms > cur.max) cur.max = ms; }
+  }
+
+  let hours = 0;
+  for (const w of byDay.values()) hours += (w.max - w.min) / 3600000;
+  return { hours: +hours.toFixed(2), days: byDay.size };
+}
+
+function buildLotRow(sessions, eventsBySession = new Map()) {
   const l = sessions[0];                       // the lot's primary session
   const sum = (k) => sessions.reduce((t, s) => t + (s[k] || 0), 0);
 
@@ -2568,24 +2624,60 @@ function buildLotRow(sessions) {
     // waits on the bin weight.
     const slept = closed ? pacificDay(opened) !== pacificDay(closed) : false;
     const hrs = closed ? (closed - opened) / 3600000 : null;
+
+    // Measured when the session closed inside one day — the crew lead scanned
+    // the end-of-day card, or simply moved zones before dark. Clipped when it
+    // spans a night: the observed window instead of the raw one.
+    let personHours = null;
+    let basis = null;
+    let hoursUsed = null;
+    if (hrs !== null && s.headcount) {
+      if (!slept) {
+        hoursUsed = +hrs.toFixed(2);
+        personHours = +(hrs * s.headcount).toFixed(1);
+        basis = 'measured';
+      } else {
+        const c = clippedActiveHours(s, eventsBySession.get(s.id) || []);
+        if (c.hours > 0) {
+          hoursUsed = c.hours;
+          personHours = +(c.hours * s.headcount).toFixed(1);
+          basis = 'clipped';
+        }
+      }
+    }
+
     return {
       session_id: s.id,
       headcount: s.headcount,
       hours_open: hrs === null ? null : +hrs.toFixed(2),
       spans_days: slept,
-      cutter_person_hours: (hrs !== null && s.headcount && !slept)
-        ? +(hrs * s.headcount).toFixed(1) : null,
+      hours_counted: hoursUsed,
+      hours_basis: basis,
+      cutter_person_hours: personHours,
     };
   });
   const openSessions = perSession.filter(x => x.hours_open === null).length;
   const sleptSessions = perSession.filter(x => x.spans_days).length;
+  const measuredS = perSession.filter(x => x.hours_basis === 'measured');
+  const clippedS = perSession.filter(x => x.hours_basis === 'clipped');
+  const total = (xs) => round1(xs.reduce((t, x) => t + x.cutter_person_hours, 0));
+
+  // Still null if ANY session has neither — a partial lot total would be read
+  // as the lot's hours and it is not.
   const cutterHours = perSession.some(x => x.cutter_person_hours === null)
-    ? null
-    : round1(perSession.reduce((t, x) => t + x.cutter_person_hours, 0));
-  const cutterHoursBasis = cutterHours !== null ? null
-    : sleptSessions ? `withheld: ${sleptSessions} session(s) ran overnight, and the cutting-day window is not set`
-    : openSessions ? 'withheld: the lot is still being cut'
-    : 'withheld: no cutter count was recorded';
+    ? null : total(perSession);
+  const cutterHoursMeasured = measuredS.length ? total(measuredS) : null;
+  const cutterHoursClipped = clippedS.length ? total(clippedS) : null;
+
+  const cutterHoursBasis = cutterHours === null
+    ? (openSessions ? 'withheld: the lot is still being cut'
+      : sleptSessions ? `withheld: ${sleptSessions} overnight session(s) with nothing observed to clip to`
+      : 'withheld: no cutter count was recorded')
+    : clippedS.length
+      // Said on every lot that carries one, because the number reads like a
+      // measurement and half of it is not.
+      ? `${clippedS.length} of ${perSession.length} session(s) ran overnight and are clipped to observed activity — those hours are a floor, so a rate from them is a ceiling`
+      : null;
 
   const tops = round1(sum('tops_lbs'));
   const smalls = round1(sum('smalls_lbs'));
@@ -2636,6 +2728,8 @@ function buildLotRow(sessions) {
       ? `peak across ${sessions.length} sessions (${perSession.map(x => x.headcount ?? '?').join(' + ')})`
       : null,
     cutter_person_hours: cutterHours,
+    cutter_person_hours_measured: cutterHoursMeasured,
+    cutter_person_hours_clipped: cutterHoursClipped,
     cutter_person_hours_basis: cutterHoursBasis,
     loads: sum('loads'),
     bins: sum('bins'),

@@ -409,10 +409,25 @@ export function dashPage() {
       return { label: (x.crew ? 'Crew ' + x.crew : 'Untagged phone'), v: x.bins_per_cutter_hour,
         text: x.bins_per_cutter_hour + ' bins/h', fill: x.crew === 'A' ? 'var(--leaf)' : x.crew === 'B' ? 'var(--sky)' : 'var(--muted)' };
     });
+
+    // Its own bar, never folded into the one above. A session that ran overnight
+    // is clipped to the activity actually observed, and those hours are a floor
+    // — the crew were cutting before the first trailer and after the last — so
+    // bins over them is a ceiling. Drawn muted and labelled so it never reads as
+    // the measured figure.
+    var ceilRows = d.crew.filter(function (x) { return x.bins_per_cutter_hour_ceiling != null; })
+      .map(function (x) {
+        return { label: (x.crew ? 'Crew ' + x.crew : 'Untagged') + ' · ceiling',
+          v: x.bins_per_cutter_hour_ceiling,
+          text: '≤ ' + x.bins_per_cutter_hour_ceiling + ' bins/h',
+          fill: 'var(--muted)' };
+      });
     var denom = d.crew.map(function (x) {
       return '<tr><td>' + esc(x.crew ? 'Crew ' + x.crew : 'Untagged') + '</td><td class="t">' + x.bins +
         ' bins (' + x.bins_rated + ' rated)</td><td class="t">' + num(x.cutter_person_hours) + ' cutter-h</td><td class="t">' +
-        x.sessions_counted + ' of ' + x.sessions_total + ' sessions</td></tr>';
+        x.sessions_counted + ' of ' + x.sessions_total + ' sessions' +
+        (x.sessions_clipped ? ' <span class="crewtag">+' + x.sessions_clipped + ' clipped</span>' : '') +
+        '</td></tr>';
     }).join('');
 
     var dwellRows = d.dwell.slice(0, 10).map(function (x) {
@@ -421,12 +436,23 @@ export function dashPage() {
     });
 
     return '<section class="card"><h2>Crews</h2>' +
-      '<p class="lede">Bins delivered per cutter-hour. Cutter-hours come from the ledger, which withholds them ' +
-      'for any session that ran overnight — so the rate covers fewer sessions than the bin count does. ' +
-      'Both are shown; a rate over an unstated subset is worse than no rate.</p>' +
+      '<p class="lede">Bins delivered per cutter-hour, from sessions that closed the same day — the crew lead ' +
+      'scans the end-of-day card, or simply moves zones before dark. The rate covers fewer sessions than the ' +
+      'bin count does, and both are shown; a rate over an unstated subset is worse than no rate.</p>' +
       '<div class="split two"><div>' +
       (rows.length ? hbars(rows, { aria: 'bins per cutter-hour by crew', padL: 118, rowH: 34 })
                    : '<p class="lede">No session yet has both a cutter count and a same-day close.</p>') +
+      (ceilRows.length
+        ? '<h3 style="font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:18px 0 10px">' +
+          'Overnight sessions · ceiling</h3>' +
+          hbars(ceilRows, { aria: 'ceiling rate from clipped sessions', padL: 118, rowH: 34 }) +
+          '<p class="caveat">These sessions were never closed, so their hours are <b>clipped</b> to the ' +
+          'window the system actually saw — first scan or trailer of the day to the last. The crew were ' +
+          'cutting before the first trailer arrived and after the last one left, so the hours are a floor ' +
+          'and the rate above them is a <b>ceiling</b>: the real number is lower. Kept apart from the ' +
+          'measured bars on purpose — averaged together they would quietly reward forgetting the ' +
+          'end-of-day scan.</p>'
+        : '') +
       '<table class="feed" style="margin-top:14px"><thead><tr><th>Crew</th><th>Delivered</th>' +
       '<th>Counted hours</th><th>Rate covers</th></tr></thead><tbody>' + denom + '</tbody></table>' +
       '</div><div><h3 style="font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:0 0 10px">' +

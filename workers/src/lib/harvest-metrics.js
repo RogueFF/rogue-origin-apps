@@ -185,13 +185,24 @@ export function buildMetrics({ lots, sessions, loads, sacks, dryWindow, bottomBa
   // the other. So `bins_rated` counts only loads whose own session has hours,
   // and the rate is built from that pair. `bins` stays the true total, reported
   // beside it, because "how much did this crew move" is a real question too.
+  //
+  // MEASURED AND CLIPPED NEVER MIX. A session that ran overnight now reports
+  // hours clipped to the activity actually observed (see clippedActiveHours),
+  // and those hours are a FLOOR — the crew were cutting before the first
+  // trailer arrived and after the last one left. Divide bins by a floor and the
+  // rate is a ceiling. Pooled into one figure that would silently lift whichever
+  // crew forgot the end-of-day scan more often, and an overstated rate looks
+  // exactly like a good day. So they are two buckets with two rates, and
+  // `bins_per_cutter_hour` keeps its old meaning: measured sessions only.
   const ratedSessions = new Set();
+  const clippedSessions = new Set();
   const crewAgg = new Map();
   const crewOf = (c) => {
     const k = c || 'untagged';
     if (!crewAgg.has(k)) crewAgg.set(k, {
       crew: c || null, bins: 0, bins_rated: 0, loads: 0, cutter_person_hours: 0,
       sessions_counted: 0, sessions_total: 0,
+      bins_clipped: 0, cutter_person_hours_clipped: 0, sessions_clipped: 0,
     });
     return crewAgg.get(k);
   };
@@ -202,9 +213,15 @@ export function buildMetrics({ lots, sessions, loads, sacks, dryWindow, bottomBa
       const agg = crewOf(sess?.crew);
       agg.sessions_total++;
       if (ps.cutter_person_hours !== null && ps.cutter_person_hours !== undefined) {
-        agg.cutter_person_hours += ps.cutter_person_hours;
-        agg.sessions_counted++;
-        ratedSessions.add(ps.session_id);
+        if (ps.hours_basis === 'clipped') {
+          agg.cutter_person_hours_clipped += ps.cutter_person_hours;
+          agg.sessions_clipped++;
+          clippedSessions.add(ps.session_id);
+        } else {
+          agg.cutter_person_hours += ps.cutter_person_hours;
+          agg.sessions_counted++;
+          ratedSessions.add(ps.session_id);
+        }
       }
     }
   }
@@ -213,13 +230,19 @@ export function buildMetrics({ lots, sessions, loads, sacks, dryWindow, bottomBa
     agg.bins += l.bins || 0;
     agg.loads++;
     if (l.session_id && ratedSessions.has(l.session_id)) agg.bins_rated += l.bins || 0;
+    if (l.session_id && clippedSessions.has(l.session_id)) agg.bins_clipped += l.bins || 0;
   }
 
   const crew = [...crewAgg.values()].map(c => ({
     ...c,
     cutter_person_hours: r1(c.cutter_person_hours),
+    cutter_person_hours_clipped: r1(c.cutter_person_hours_clipped),
     bins_per_cutter_hour: c.sessions_counted && c.cutter_person_hours > 0
       ? r1(c.bins_rated / c.cutter_person_hours) : null,
+    // Its own figure, never folded into the one above. Named a ceiling because
+    // that is what dividing by a floor produces.
+    bins_per_cutter_hour_ceiling: c.sessions_clipped && c.cutter_person_hours_clipped > 0
+      ? r1(c.bins_clipped / c.cutter_person_hours_clipped) : null,
   })).sort((a, b) => String(a.crew ?? 'zz').localeCompare(String(b.crew ?? 'zz')));
 
   // ── Bays ───────────────────────────────────────────────────────────────
